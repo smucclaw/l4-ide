@@ -7,20 +7,20 @@ import onlyWarn from "eslint-plugin-only-warn";
  * @type {import("eslint").Linter.Config}
  * */
 export const config = [
-  { 
+  {
     extends: [
-      'eslint:recommended',
-      'plugin:@typescript-eslint/recommended',
-      'prettier'
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended",
+      "prettier",
     ],
     plugins: {
       turbo: turboPlugin,
     },
     rules: {
       "turbo/no-undeclared-env-vars": "warn",
-      "rules": {
-        "prettier/prettier": "error"
-      }
+      rules: {
+        "prettier/prettier": "error",
+      },
     },
   },
   {
