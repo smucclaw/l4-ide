@@ -1,0 +1,12 @@
+{
+  "name": "@repo/prettier-config",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.2",
+    "prettier-plugin-svelte": "^3.2.6"
+  }
+}
