@@ -1,5 +1,6 @@
 {
-  "extends": "@repo/typescript-config/react-library.json",
+  // TODO: Use the Sveltekit versions
+  // "extends": "@repo/typescript-config/react-library.json",
   "compilerOptions": {
     "outDir": "dist"
   },
