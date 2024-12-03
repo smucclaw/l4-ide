@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { sendToLadder } from '$lib/api.js'
+  import { fetchJson, sendToLadder } from '$lib/index.js'
   import { fakeJson } from '$lib/fakeJson.js'
+  import { onMount } from 'svelte'
 
   import LadderDiagramComponent from '$lib/LadderDiagram.svelte'
 
@@ -10,11 +11,16 @@
   // we're using the fake hardcoded json atm
   async function jsonFromApi() {
     try {
+      ladderData = await fetchJson<LadderData>(JSON.stringify(fakeJson))
       await sendToLadder('', ladderData)
     } catch (error) {
-      status = `Error: ${(error as Error).message}`
+      error = `Error: ${(error as Error).message}`
     }
   }
+
+  onMount(() => {
+    jsonFromApi()
+  })
 </script>
 
 {#if ladderData}
