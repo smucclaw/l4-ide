@@ -1,5 +1,5 @@
 {
-  "name": "decision-logic-visualizer",
+  "name": "ladder-diagram",
   "version": "0.0.1",
   "prettier": "./node_modules/@repo/prettier-config/index.js",
   "scripts": {
