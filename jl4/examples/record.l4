@@ -1,0 +1,5 @@
+§ `Type declarations`
+
+DECLARE Folder
+HAS name IS A string
+    colour IS ONE OF red, green, blue
