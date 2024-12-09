@@ -134,7 +134,7 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
   Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<AtomicProposition> => AtomicProposition)
-)
+).annotations({ identifier: 'IRExpr' })
 
 export const BinOp = Schema.Union(Schema.Literal('And'), Schema.Literal('Or'))
 
@@ -145,14 +145,14 @@ export const BinExpr = Schema.Struct({
   right: IRExpr,
   id: IRId,
   annotation: IRNodeAnnotation,
-})
+}).annotations({ identifier: 'BinExpr' })
 
 export const Not = Schema.Struct({
   $type: Schema.tag('Not'),
   value: IRExpr,
   id: IRId,
   annotation: IRNodeAnnotation,
-})
+}).annotations({ identifier: 'Not' })
 
 export const AtomicPropositionAnnotation = Schema.Struct({
   label: Schema.String,
@@ -167,7 +167,7 @@ export const AtomicProposition = Schema.Struct({
   ),
   id: IRId,
   annotation: AtomicPropositionAnnotation,
-})
+}).annotations({ identifier: 'AtomicProposition' })
 
 /***********************************
   Wrapper / Protocol interfaces
@@ -175,7 +175,7 @@ export const AtomicProposition = Schema.Struct({
 
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRExpr,
-})
+}).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
 
 export const VisualizeDecisionLogicResult = Schema.Struct({
   html: Schema.String,
@@ -185,12 +185,191 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
     Utils
 **************************/
 
-/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
-export function exportDecisionLogicIRInfoToJSONSchema() {
-  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo));
-}
-
 /** See https://effect.website/docs/schema/pretty/ */
 export function getDecisionLogicIRPrettyPrinter() {
-  return Pretty.make(VisualizeDecisionLogicIRInfo);
+  return Pretty.make(VisualizeDecisionLogicIRInfo)
 }
+
+/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
+export function exportDecisionLogicIRInfoToJSONSchema() {
+  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
+}
+
+/* 
+As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/$defs/VisualizeDecisionLogicIRInfo",
+  "$defs": {
+    "VisualizeDecisionLogicIRInfo": {
+      "type": "object",
+      "required": [
+        "program"
+      ],
+      "properties": {
+        "program": {
+          "$ref": "#/$defs/IRExpr"
+        }
+      },
+      "additionalProperties": false
+    },
+    "IRExpr": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BinExpr"
+        },
+        {
+          "$ref": "#/$defs/Not"
+        },
+        {
+          "$ref": "#/$defs/AtomicProposition"
+        }
+      ]
+    },
+    "BinExpr": {
+      "type": "object",
+      "required": [
+        "$type",
+        "op",
+        "left",
+        "right",
+        "id",
+        "annotation"
+      ],
+      "properties": {
+        "$type": {
+          "enum": [
+            "BinExpr"
+          ]
+        },
+        "op": {
+          "enum": [
+            "And",
+            "Or"
+          ]
+        },
+        "left": {
+          "$ref": "#/$defs/IRExpr"
+        },
+        "right": {
+          "$ref": "#/$defs/IRExpr"
+        },
+        "id": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotation": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "label": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Not": {
+      "type": "object",
+      "required": [
+        "$type",
+        "value",
+        "id",
+        "annotation"
+      ],
+      "properties": {
+        "$type": {
+          "enum": [
+            "Not"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/IRExpr"
+        },
+        "id": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotation": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "label": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "AtomicProposition": {
+      "type": "object",
+      "required": [
+        "$type",
+        "value",
+        "id",
+        "annotation"
+      ],
+      "properties": {
+        "$type": {
+          "enum": [
+            "AtomicProposition"
+          ]
+        },
+        "value": {
+          "enum": [
+            "False",
+            "True",
+            "Unknown"
+          ]
+        },
+        "id": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotation": {
+          "type": "object",
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+*/
