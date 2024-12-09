@@ -1,0 +1,2 @@
+MkProgram
+    [ MkSection 1 "Section" [] ]

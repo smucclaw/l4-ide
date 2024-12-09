@@ -1,0 +1,69 @@
+cabal-version: 3.0
+name: jl4
+version: 0.1
+build-type: Simple
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall
+  default-extensions:
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  build-depends:
+    containers,
+    megaparsec,
+    mtl,
+    optics,
+    optics-core,
+    optics-extra,
+    optparse-applicative,
+    parser-combinators,
+    pretty-simple,
+    simala,
+    text,
+    transformers,
+    tree-diff
+  exposed-modules:
+    L4.CodeGen
+    L4.Main
+    L4.TypeCheck
+    L4.Scope
+    L4.Syntax
+    L4.Lexer
+    L4.Parser
+
+executable l4
+  import: defaults
+  hs-source-dirs: app
+  build-depends:
+    jl4
+  main-is: Main.hs
+
+test-suite l4-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is: Main.hs
+  other-modules:
+    Paths_jl4
+  build-depends:
+    directory,
+    filepath,
+    Glob,
+    hspec,
+    hspec-golden,
+    silently,
+    simala,
+    jl4
