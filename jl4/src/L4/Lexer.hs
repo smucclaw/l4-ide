@@ -6,6 +6,7 @@ import qualified Base.Map as Map
 import qualified Base.Text as Text
 
 import Data.Char hiding (Space)
+import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import Data.Proxy
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
@@ -185,7 +186,7 @@ symbolic =
 
 symbolString :: Lexer Text
 symbolString =
-  takeWhile1P (Just "symbol char") (\ x -> x `elem` ("=<>+-*/:~&|%§" :: [Char])) 
+  takeWhile1P (Just "symbol char") (\ x -> x `elem` ("=<>+-*/:~&|%§" :: [Char]))
 
 identifierOrKeyword :: Lexer TokenType
 identifierOrKeyword =

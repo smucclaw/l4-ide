@@ -11,6 +11,8 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Void
 import Optics
 import Text.Megaparsec hiding (parseTest)
@@ -374,7 +376,7 @@ example7 =
 example7b :: Text
 example7b =
   Text.unlines
-    [ "               foo" 
+    [ "               foo"
     , "            IS x"
     , "        AND    bar"
     , "            IS y"
@@ -418,7 +420,7 @@ example10 =
   Text.unlines
     [ "     foo"
     , " AND bar"
-    , " AND baz" 
+    , " AND baz"
     ]
 
 -- This looks wrong, should be foo (AND bar) OR baz
@@ -459,7 +461,7 @@ example11e =
     , "     AND baz"
     ]
 
--- 
+--
 -- data Expr =
 --     And  Expr Expr
 --   | Or   Expr Expr
