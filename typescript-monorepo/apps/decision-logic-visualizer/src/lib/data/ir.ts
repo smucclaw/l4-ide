@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Schema, Pretty, JSONSchema } from 'effect'
 
 /**********************
          IR
@@ -126,9 +126,9 @@ export interface AtomicPropositionAnnotation extends IRNodeAnnotation {
   readonly label: string
 }
 
-/*---------------------------------
+/***********************************
   The corresponding Effect Schemas
-  ---------------------------------*/
+************************************/
 
 export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
@@ -180,3 +180,17 @@ export const VisualizeDecisionLogicIRInfo = Schema.Struct({
 export const VisualizeDecisionLogicResult = Schema.Struct({
   html: Schema.String,
 })
+
+/*************************
+    Utils
+**************************/
+
+/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
+export function exportDecisionLogicIRInfoToJSONSchema() {
+  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo));
+}
+
+/** See https://effect.website/docs/schema/pretty/ */
+export function getDecisionLogicIRPrettyPrinter() {
+  return Pretty.make(VisualizeDecisionLogicIRInfo);
+}
