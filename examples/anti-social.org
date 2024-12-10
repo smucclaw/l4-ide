@@ -1,0 +1,92 @@
+#+TITLE: example from anti-social behaviour
+
+https://www.legislation.gov.uk/ukpga/2014/12/part/4/chapter/1
+
+* 43.1
+
+An authorised person may issue a community protection notice to an individual aged 16 or over, or a body, if satisfied on reasonable grounds that—
+
+a. the conduct of the individual or body is having a detrimental effect, of a persistent or continuing nature, on the quality of life of those in the locality, and
+
+b. the conduct is unreasonable.
+
+#+BEGIN_SRC haskell
+
+type Relation a b c = Rel a b c
+
+data Thing = Rec (Map String Thing)
+           | Implicit GroundTerm 
+           | Explicit GroundTerm 
+
+data GroundTerm = MyBool Bool
+                | MyNum  Integer
+                | MyStr  String
+                | MyOr   [GroundTerm]
+                | MyAnd  [GroundTerm]
+
+cpo = fromList [ ("conduct specified", conduct ) ]
+
+conduct :: Thing
+conduct = fromList [ ("exists", Implicit (MyBool True))
+                   , ("effect", Rec $ fromList [ ("detrimental", Explicit (MyBool True)) 
+                                               , ("nature",      Explicit (MyOr [ Explicit (MyStr "persistent")
+                                                                                , Explicit (MyStr "continuing") ]))
+                                               , ("on", Rec (fromList [ ("qol", Explicit (MySTr "quality of lIfe"))
+                                                                      , ("of",  Explicit (MySTr "those in the facility"))
+                                               ] )
+                   ]
+
+conduct' :: Thing
+conduct' = fromList [ ("exists", My True)
+                    , ("effect", fromList [ ("detrimental", Explicit (MyBool True)) ]
+                    , ("nature", Explicit (MyOr [ Explicit (MyStr "persistent")
+                                                , Explicit (MyStr "continuing") ]))
+                    ]
+
+#+END_SRC
+
+#+BEGIN_SRC prolog
+
+% 1st order untyped prolog
+mayIssueCPN(C, IB, E) :- conduct(C), badBoy(IB), badEffect(C).
+badEffect(C) :- effectOfConduct(C,E)
+              , detrimental(E),
+              , (persistent(E, QOL); continuing(E, QOL))
+              , qualityOfLife(E, QOL, T)
+              , thoseInTheLocality(T).
+
+#+END_SRC
+
+The buggy version:
+
+#+BEGIN_SRC prolog
+badEffect(C) :- effectOfConduct(C,E),
+              , detrimental(E),
+              , (persistent(C, QOL); continuing(C, QOL))
+              , qualityOfLife(E, QOL, T)
+              , thoseInTheLocality(T).
+
+#+END_SRC haskell
+
+
+* 46
+
+A person issued with a community protection notice may appeal to a magistrates' court against the notice on any of the following grounds.
+
+1. That the conduct specified in the community protection notice—
+
+a. did not take place,
+
+b. has not had a detrimental effect on the quality of life of those in the locality,
+
+c. has not been of a persistent or continuing nature,
+
+d. is not unreasonable, or
+
+e. is conduct that the person cannot reasonably be expected to control or affect.
+
+2. That any of the requirements in the notice, or any of the periods within which or times by which they are to be complied with, are unreasonable.
+
+3. That there is a material defect or error in, or in connection with, the notice.
+
+4. That the notice was issued to the wrong person.
