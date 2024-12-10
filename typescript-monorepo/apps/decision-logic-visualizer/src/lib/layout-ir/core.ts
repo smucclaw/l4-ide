@@ -1,17 +1,18 @@
 /*********************************************
        Registry
 ***********************************************/
+export type LirRootType = string;
 
 /** Lir := 'Layout IR' */
 export class LirRegistry {
-  #roots: Map<LirId, LirNode> = new Map()
+  #roots: Map<LirRootType, LirNode> = new Map()
 
-  getRoot(id: LirId): LirNode | undefined {
-    return this.#roots.get(id)
+  getRoot(rootType: LirRootType): LirNode | undefined {
+    return this.#roots.get(rootType)
   }
 
-  setRoot(id: LirId, node: LirNode) {
-    this.#roots.set(id, node)
+  setRoot(rootType: LirRootType, node: LirNode) {
+    this.#roots.set(rootType, node)
   }
 }
 
