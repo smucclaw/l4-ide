@@ -1,5 +1,15 @@
-export async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url)
+// export async function fetchJson<T>(url: string): Promise<T> {
+//   const response = await fetch(url)
+//   if (!response.ok) throw new Error('failed to fetch json')
+//   return response.json() as Promise<T>
+// }
+
+export async function fetchJson<T>(input: string | object): Promise<T> {
+  if (typeof input === 'object') {
+    return input as T
+  }
+
+  const response = await fetch(input)
   if (!response.ok) throw new Error('failed to fetch json')
   return response.json() as Promise<T>
 }

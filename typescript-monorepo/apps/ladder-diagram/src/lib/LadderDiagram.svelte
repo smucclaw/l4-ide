@@ -81,4 +81,4 @@
 
 <link rel="stylesheet" href="./node_modules/ladder-diagram/css/ladder.css" />
 
-<div bind:this={ladderHere} />
+<div bind:this={ladderHere}></div>

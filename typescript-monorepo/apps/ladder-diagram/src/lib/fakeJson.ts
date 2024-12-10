@@ -1,12 +1,10 @@
 export const fakeJson = {
   andOr: {
     tag: 'All',
-    nl: {},
     children: [
       {
         andOr: {
           tag: 'Leaf',
-          nl: {},
           contents: 'does the person walk?',
         },
         mark: {
@@ -19,12 +17,11 @@ export const fakeJson = {
       {
         andOr: {
           tag: 'Any',
-          nl: {},
           children: [
             {
               andOr: {
                 tag: 'Leaf',
-                nl: {},
+
                 contents: 'does the person eat?',
               },
               mark: {
@@ -37,7 +34,7 @@ export const fakeJson = {
             {
               andOr: {
                 tag: 'Leaf',
-                nl: {},
+
                 contents: 'does the person drink?',
               },
               mark: {

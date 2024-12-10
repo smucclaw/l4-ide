@@ -11,8 +11,8 @@
   // we're using the fake hardcoded json atm
   async function jsonFromApi() {
     try {
-      ladderData = await fetchJson<LadderData>(JSON.stringify(fakeJson))
-      await sendToLadder('', ladderData)
+      ladderData = await fetchJson((fakeJson))
+      // await sendToLadder('', ladderData)
     } catch (error) {
       error = `Error: ${(error as Error).message}`
     }
