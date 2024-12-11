@@ -36,7 +36,9 @@ library
     transformers,
     tree-diff
   exposed-modules:
+    L4.Annotation
     L4.CodeGen
+    L4.ExactPrint
     L4.Main
     L4.TypeCheck
     L4.Scope
@@ -66,4 +68,5 @@ test-suite l4-test
     hspec-golden,
     silently,
     simala,
+    text,
     jl4

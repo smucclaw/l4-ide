@@ -12,6 +12,7 @@ import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
 import qualified Text.Megaparsec.Char.Lexer as Lexer
+import Data.TreeDiff.Class (ToExpr)
 
 type Lexer = Parsec Void Text
 
@@ -25,6 +26,8 @@ data RawToken =
     , payload :: !TokenType
     , end     :: !Offset
     }
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass ToExpr
 
 -- | A pos token is a token with position information attached.
 data PosToken =
@@ -32,7 +35,8 @@ data PosToken =
     { range   :: !SrcRange
     , payload :: !TokenType
     }
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass ToExpr
 
 -- | A range of source positions. We store the length of a range as well.
 data SrcRange =
@@ -41,7 +45,8 @@ data SrcRange =
     , end     :: !SrcPos -- inclusive
     , length  :: !Int
     }
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass ToExpr
 
 -- | A single source position. Line and column numbers are 1-based.
 data SrcPos =
@@ -50,7 +55,8 @@ data SrcPos =
     , line     :: !Int
     , column   :: !Int
     }
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass ToExpr
 
 -- | The type of token, plus information needed to reconstruct its contents.
 data TokenType =
@@ -112,6 +118,7 @@ data TokenType =
   | TBlockComment !Text
   | EOF
   deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass ToExpr
 
 whitespace :: Lexer Text
 whitespace =

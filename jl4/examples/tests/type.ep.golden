@@ -1,0 +1,13 @@
+§ `Type declarations`
+
+DECLARE bool IS ONE OF
+  true
+  false
+
+DECLARE bool2 IS ONE OF true, false
+
+-- quoting the constructors is necessary because currently,
+-- TRUE and FALSE are keywords
+DECLARE BOOL IS ONE OF
+  `TRUE`
+  `FALSE`

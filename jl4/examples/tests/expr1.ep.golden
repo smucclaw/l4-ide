@@ -1,0 +1,7 @@
+§ `Expression priority`
+
+DECIDE x1 IF     foo
+             AND bar
+
+DECIDE x2 IF     foo
+             AND NOT bar
