@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 module L4.Parser where
 
@@ -23,6 +24,7 @@ import L4.Lexer
 import L4.Syntax
 
 import Text.Pretty.Simple
+import qualified Data.Set as E
 
 type Parser = Parsec Void TokenStream
 
@@ -90,9 +92,21 @@ program =
 
 manyLines :: Parser () -> Parser a -> Parser [a]
 manyLines sc p = do
-  sc
   current <- Lexer.indentLevel
-  many (Lexer.indentGuard sc EQ current *> p)
+  many (withIndent p sc EQ current)
+
+-- | Run the parser only when the indentation is correct and fail otherwise.
+withIndent :: (TraversableStream s, MonadParsec e s m) => m b -> m a -> Ordering -> Pos -> m b
+withIndent p sc ordering current = do
+  actual <- Lexer.indentLevel
+  if compare current actual == ordering
+    then do
+      a <- p
+      _ <- sc
+      pure a
+    else
+      fancyFailure . E.singleton $
+        ErrorIndentation ordering current actual
 
 section :: Parser (Section Name)
 section =
@@ -103,7 +117,7 @@ section =
 
 sectionSymbols :: Parser Int
 sectionSymbols =
-  length <$> lexeme (some (spacedToken_ TParagraph))
+  length <$> lexeme (some (plainToken_ TParagraph))
 
 decl :: Parser (Decl Name)
 decl = Declare <$> declare <|> Decide <$> decide
