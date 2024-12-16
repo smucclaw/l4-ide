@@ -1,15 +1,932 @@
 MkProgram
-    [ MkSection 1 "Type declarations"
+    ( Anno
+        { payload =
+            [ AnnoCsn
+                ( CsnCluster
+                    { payload = ConcreteSyntaxNode
+                        { tokens = []
+                        , visibility = Hidden
+                        }
+                    , trailing = ConcreteSyntaxNode
+                        { tokens = []
+                        , visibility = Hidden
+                        }
+                    }
+                )
+            , AnnoHole
+            ]
+        }
+    )
+    [ MkSection
+        ( Anno
+            { payload =
+                [ AnnoCsn
+                    ( CsnCluster
+                        { payload = ConcreteSyntaxNode
+                            { tokens =
+                                [ MkPosToken
+                                    { range = MkSrcRange
+                                        { start = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                            , line = 1
+                                            , column = 1
+                                            }
+                                        , end = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                            , line = 1
+                                            , column = 2
+                                            }
+                                        , length = 1
+                                        }
+                                    , payload = TParagraph
+                                    }
+                                ]
+                            , visibility = Visible
+                            }
+                        , trailing = ConcreteSyntaxNode
+                            { tokens =
+                                [ MkPosToken
+                                    { range = MkSrcRange
+                                        { start = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                            , line = 1
+                                            , column = 2
+                                            }
+                                        , end = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                            , line = 1
+                                            , column = 3
+                                            }
+                                        , length = 1
+                                        }
+                                    , payload = TSpace " "
+                                    }
+                                ]
+                            , visibility = Visible
+                            }
+                        }
+                    )
+                , AnnoHole
+                , AnnoHole
+                ]
+            }
+        ) 1
+        ( Name
+            ( Anno
+                { payload =
+                    [ AnnoCsn
+                        ( CsnCluster
+                            { payload = ConcreteSyntaxNode
+                                { tokens =
+                                    [ MkPosToken
+                                        { range = MkSrcRange
+                                            { start = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                , line = 1
+                                                , column = 3
+                                                }
+                                            , end = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                , line = 1
+                                                , column = 22
+                                                }
+                                            , length = 19
+                                            }
+                                        , payload = TQuoted "Type declarations"
+                                        }
+                                    ]
+                                , visibility = Visible
+                                }
+                            , trailing = ConcreteSyntaxNode
+                                { tokens =
+                                    [ MkPosToken
+                                        { range = MkSrcRange
+                                            { start = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                , line = 1
+                                                , column = 22
+                                                }
+                                            , end = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                , line = 3
+                                                , column = 1
+                                                }
+                                            , length = 2
+                                            }
+                                        , payload = TSpace "
+
+                                          "
+                                        }
+                                    ]
+                                , visibility = Visible
+                                }
+                            }
+                        )
+                    ]
+                }
+            ) "Type declarations"
+        )
         [ Declare
-            ( MkDeclare "Folder"
+            ( Anno
+                { payload = [ AnnoHole ] }
+            )
+            ( MkDeclare
+                ( Anno
+                    { payload =
+                        [ AnnoCsn
+                            ( CsnCluster
+                                { payload = ConcreteSyntaxNode
+                                    { tokens =
+                                        [ MkPosToken
+                                            { range = MkSrcRange
+                                                { start = MkSrcPos
+                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                    , line = 3
+                                                    , column = 1
+                                                    }
+                                                , end = MkSrcPos
+                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                    , line = 3
+                                                    , column = 8
+                                                    }
+                                                , length = 7
+                                                }
+                                            , payload = TKDeclare
+                                            }
+                                        ]
+                                    , visibility = Visible
+                                    }
+                                , trailing = ConcreteSyntaxNode
+                                    { tokens =
+                                        [ MkPosToken
+                                            { range = MkSrcRange
+                                                { start = MkSrcPos
+                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                    , line = 3
+                                                    , column = 8
+                                                    }
+                                                , end = MkSrcPos
+                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                    , line = 3
+                                                    , column = 9
+                                                    }
+                                                , length = 1
+                                                }
+                                            , payload = TSpace " "
+                                            }
+                                        ]
+                                    , visibility = Visible
+                                    }
+                                }
+                            )
+                        , AnnoHole
+                        , AnnoHole
+                        ]
+                    }
+                )
+                ( Name
+                    ( Anno
+                        { payload =
+                            [ AnnoCsn
+                                ( CsnCluster
+                                    { payload = ConcreteSyntaxNode
+                                        { tokens =
+                                            [ MkPosToken
+                                                { range = MkSrcRange
+                                                    { start = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 3
+                                                        , column = 9
+                                                        }
+                                                    , end = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 3
+                                                        , column = 15
+                                                        }
+                                                    , length = 6
+                                                    }
+                                                , payload = TIdentifier "Folder"
+                                                }
+                                            ]
+                                        , visibility = Visible
+                                        }
+                                    , trailing = ConcreteSyntaxNode
+                                        { tokens =
+                                            [ MkPosToken
+                                                { range = MkSrcRange
+                                                    { start = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 3
+                                                        , column = 15
+                                                        }
+                                                    , end = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 4
+                                                        , column = 1
+                                                        }
+                                                    , length = 1
+                                                    }
+                                                , payload = TSpace "
+                                                  "
+                                                }
+                                            ]
+                                        , visibility = Visible
+                                        }
+                                    }
+                                )
+                            ]
+                        }
+                    ) "Folder"
+                )
                 ( Record
-                    [ MkTypedName "name"
-                        ( NamedType "string" )
-                    , MkTypedName "colour"
+                    ( Anno
+                        { payload =
+                            [ AnnoCsn
+                                ( CsnCluster
+                                    { payload = ConcreteSyntaxNode
+                                        { tokens =
+                                            [ MkPosToken
+                                                { range = MkSrcRange
+                                                    { start = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 4
+                                                        , column = 1
+                                                        }
+                                                    , end = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 4
+                                                        , column = 4
+                                                        }
+                                                    , length = 3
+                                                    }
+                                                , payload = TKHas
+                                                }
+                                            ]
+                                        , visibility = Visible
+                                        }
+                                    , trailing = ConcreteSyntaxNode
+                                        { tokens =
+                                            [ MkPosToken
+                                                { range = MkSrcRange
+                                                    { start = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 4
+                                                        , column = 4
+                                                        }
+                                                    , end = MkSrcPos
+                                                        { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                        , line = 4
+                                                        , column = 5
+                                                        }
+                                                    , length = 1
+                                                    }
+                                                , payload = TSpace " "
+                                                }
+                                            ]
+                                        , visibility = Visible
+                                        }
+                                    }
+                                )
+                            , AnnoHole
+                            ]
+                        }
+                    )
+                    [ MkTypedName
+                        ( Anno
+                            { payload =
+                                [ AnnoHole
+                                , AnnoHole
+                                ]
+                            }
+                        )
+                        ( Name
+                            ( Anno
+                                { payload =
+                                    [ AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 5
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 9
+                                                                }
+                                                            , length = 4
+                                                            }
+                                                        , payload = TIdentifier "name"
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 9
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 10
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    ]
+                                }
+                            ) "name"
+                        )
+                        ( NamedType
+                            ( Anno
+                                { payload =
+                                    [ AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 10
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 12
+                                                                }
+                                                            , length = 2
+                                                            }
+                                                        , payload = TKIs
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 12
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 13
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    , AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 13
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 14
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TKA
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 14
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 4
+                                                                , column = 15
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    , AnnoHole
+                                    ]
+                                }
+                            )
+                            ( Name
+                                ( Anno
+                                    { payload =
+                                        [ AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 4
+                                                                    , column = 15
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 4
+                                                                    , column = 21
+                                                                    }
+                                                                , length = 6
+                                                                }
+                                                            , payload = TIdentifier "string"
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 4
+                                                                    , column = 21
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 5
+                                                                    }
+                                                                , length = 5
+                                                                }
+                                                            , payload = TSpace "
+                                                                  "
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                }
+                                            )
+                                        ]
+                                    }
+                                ) "string"
+                            )
+                        )
+                    , MkTypedName
+                        ( Anno
+                            { payload =
+                                [ AnnoHole
+                                , AnnoHole
+                                ]
+                            }
+                        )
+                        ( Name
+                            ( Anno
+                                { payload =
+                                    [ AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 5
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 11
+                                                                }
+                                                            , length = 6
+                                                            }
+                                                        , payload = TIdentifier "colour"
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 11
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 12
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    ]
+                                }
+                            ) "colour"
+                        )
                         ( Enum
-                            [ "red"
-                            , "green"
-                            , "blue"
+                            ( Anno
+                                { payload =
+                                    [ AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 12
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 14
+                                                                }
+                                                            , length = 2
+                                                            }
+                                                        , payload = TKIs
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 14
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 15
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    , AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 15
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 18
+                                                                }
+                                                            , length = 3
+                                                            }
+                                                        , payload = TKOne
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 18
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 19
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    , AnnoCsn
+                                        ( CsnCluster
+                                            { payload = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 19
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 21
+                                                                }
+                                                            , length = 2
+                                                            }
+                                                        , payload = TKOf
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            , trailing = ConcreteSyntaxNode
+                                                { tokens =
+                                                    [ MkPosToken
+                                                        { range = MkSrcRange
+                                                            { start = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 21
+                                                                }
+                                                            , end = MkSrcPos
+                                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                , line = 5
+                                                                , column = 22
+                                                                }
+                                                            , length = 1
+                                                            }
+                                                        , payload = TSpace " "
+                                                        }
+                                                    ]
+                                                , visibility = Visible
+                                                }
+                                            }
+                                        )
+                                    , AnnoHole
+                                    ]
+                                }
+                            )
+                            [ Name
+                                ( Anno
+                                    { payload =
+                                        [ AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 22
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 25
+                                                                    }
+                                                                , length = 3
+                                                                }
+                                                            , payload = TIdentifier "red"
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens = []
+                                                    , visibility = Hidden
+                                                    }
+                                                }
+                                            )
+                                        , AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 25
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 26
+                                                                    }
+                                                                , length = 1
+                                                                }
+                                                            , payload = TComma
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 26
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 27
+                                                                    }
+                                                                , length = 1
+                                                                }
+                                                            , payload = TSpace " "
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                }
+                                            )
+                                        ]
+                                    }
+                                ) "red"
+                            , Name
+                                ( Anno
+                                    { payload =
+                                        [ AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 27
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 32
+                                                                    }
+                                                                , length = 5
+                                                                }
+                                                            , payload = TIdentifier "green"
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens = []
+                                                    , visibility = Hidden
+                                                    }
+                                                }
+                                            )
+                                        , AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 32
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 33
+                                                                    }
+                                                                , length = 1
+                                                                }
+                                                            , payload = TComma
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 33
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 34
+                                                                    }
+                                                                , length = 1
+                                                                }
+                                                            , payload = TSpace " "
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                }
+                                            )
+                                        ]
+                                    }
+                                ) "green"
+                            , Name
+                                ( Anno
+                                    { payload =
+                                        [ AnnoCsn
+                                            ( CsnCluster
+                                                { payload = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 34
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 38
+                                                                    }
+                                                                , length = 4
+                                                                }
+                                                            , payload = TIdentifier "blue"
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                , trailing = ConcreteSyntaxNode
+                                                    { tokens =
+                                                        [ MkPosToken
+                                                            { range = MkSrcRange
+                                                                { start = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 5
+                                                                    , column = 38
+                                                                    }
+                                                                , end = MkSrcPos
+                                                                    { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/record.l4"
+                                                                    , line = 6
+                                                                    , column = 1
+                                                                    }
+                                                                , length = 1
+                                                                }
+                                                            , payload = TSpace "
+                                                              "
+                                                            }
+                                                        ]
+                                                    , visibility = Visible
+                                                    }
+                                                }
+                                            )
+                                        ]
+                                    }
+                                ) "blue"
                             ]
                         )
                     ]

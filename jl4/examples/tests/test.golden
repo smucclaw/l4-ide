@@ -1,2 +1,128 @@
 MkProgram
-    [ MkSection 1 "Section" [] ]
+    ( Anno
+        { payload =
+            [ AnnoCsn
+                ( CsnCluster
+                    { payload = ConcreteSyntaxNode
+                        { tokens = []
+                        , visibility = Hidden
+                        }
+                    , trailing = ConcreteSyntaxNode
+                        { tokens = []
+                        , visibility = Hidden
+                        }
+                    }
+                )
+            , AnnoHole
+            ]
+        }
+    )
+    [ MkSection
+        ( Anno
+            { payload =
+                [ AnnoCsn
+                    ( CsnCluster
+                        { payload = ConcreteSyntaxNode
+                            { tokens =
+                                [ MkPosToken
+                                    { range = MkSrcRange
+                                        { start = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                            , line = 1
+                                            , column = 1
+                                            }
+                                        , end = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                            , line = 1
+                                            , column = 2
+                                            }
+                                        , length = 1
+                                        }
+                                    , payload = TParagraph
+                                    }
+                                ]
+                            , visibility = Visible
+                            }
+                        , trailing = ConcreteSyntaxNode
+                            { tokens =
+                                [ MkPosToken
+                                    { range = MkSrcRange
+                                        { start = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                            , line = 1
+                                            , column = 2
+                                            }
+                                        , end = MkSrcPos
+                                            { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                            , line = 1
+                                            , column = 3
+                                            }
+                                        , length = 1
+                                        }
+                                    , payload = TSpace " "
+                                    }
+                                ]
+                            , visibility = Visible
+                            }
+                        }
+                    )
+                , AnnoHole
+                , AnnoHole
+                ]
+            }
+        ) 1
+        ( Name
+            ( Anno
+                { payload =
+                    [ AnnoCsn
+                        ( CsnCluster
+                            { payload = ConcreteSyntaxNode
+                                { tokens =
+                                    [ MkPosToken
+                                        { range = MkSrcRange
+                                            { start = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                                , line = 1
+                                                , column = 3
+                                                }
+                                            , end = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                                , line = 1
+                                                , column = 10
+                                                }
+                                            , length = 7
+                                            }
+                                        , payload = TIdentifier "Section"
+                                        }
+                                    ]
+                                , visibility = Visible
+                                }
+                            , trailing = ConcreteSyntaxNode
+                                { tokens =
+                                    [ MkPosToken
+                                        { range = MkSrcRange
+                                            { start = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                                , line = 1
+                                                , column = 10
+                                                }
+                                            , end = MkSrcPos
+                                                { filename = "/home/hugin/Documents/haskell/cclaw/mattwaddington/jl4/./examples/test.l4"
+                                                , line = 2
+                                                , column = 1
+                                                }
+                                            , length = 1
+                                            }
+                                        , payload = TSpace "
+                                          "
+                                        }
+                                    ]
+                                , visibility = Visible
+                                }
+                            }
+                        )
+                    ]
+                }
+            ) "Section"
+        ) []
+    ]

@@ -522,6 +522,6 @@ posTokenCategory =
     TKA -> CKeyword
     TKAn -> CKeyword
     TSpace _ -> CWhitespace
-    TLineComment _ -> CWhitespace
-    TBlockComment _ -> CWhitespace
+    TLineComment _ -> CComment
+    TBlockComment _ -> CComment
     EOF -> CEOF

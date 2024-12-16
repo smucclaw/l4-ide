@@ -196,7 +196,7 @@ standardTokenType = \case
   CSymbol -> Just SemanticTokenTypes_Operator
   COperator -> Just SemanticTokenTypes_Operator
   CKeyword -> Just SemanticTokenTypes_Keyword
-  CComment -> Just SemanticTokenTypes_Keyword
+  CComment -> Just SemanticTokenTypes_Comment
   CWhitespace -> Nothing
   CDirective -> Just SemanticTokenTypes_Macro
   CEOF -> Nothing
