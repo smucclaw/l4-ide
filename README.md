@@ -2,7 +2,7 @@
 
 Private repository for a mattwadd-specific dialect of L*4.
 
-# Reading materials
+## Reading materials
 
 - Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
 
