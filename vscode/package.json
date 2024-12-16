@@ -1,0 +1,68 @@
+{
+  "name": "jl4-lsp-client",
+  "description": "Language Server for the jl4 language",
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "version": "0.0.1",
+  "publisher": "vscode",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "activationEvents": [
+    "onLanguage:l4"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "l4",
+        "aliases": [
+          "l4"
+        ],
+        "extensions": [
+          ".l4"
+        ]
+      }
+    ]
+  },
+  "configuration": {
+    "jl4.trace.server": {
+      "scope": "resource",
+      "type": "string",
+      "enum": [
+        "off",
+        "messages",
+        "verbose"
+      ],
+      "default": "off",
+      "description": "Traces the communication between VS Code and the language server."
+    },
+    "jl4.serverExecutablePath": {
+      "scope": "machine-overridable",
+      "type": "string",
+      "default": "",
+      "markdownDescription": "Manually set a language server executable. Can be something on the $PATH or the full path to the executable itself. "
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.1",
+    "@vscode/test-electron": "^2.3.9",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^18.14.6",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.57.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.3"
+  },
+  "main": "./out/extension",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "lint": "eslint ./src --ext .ts,.tsx",
+    "test": "sh ./scripts/e2e.sh"
+  }
+}

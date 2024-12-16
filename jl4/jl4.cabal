@@ -53,6 +53,24 @@ executable l4
     jl4
   main-is: Main.hs
 
+executable l4-lsp
+  import: defaults
+  hs-source-dirs: lsp
+  build-depends:
+    jl4,
+    aeson,
+    containers,
+    directory,
+    extra,
+    filepath,
+    lens,
+    lsp-types ^>=2.3.0.0,
+    lsp ^>=2.7.0.0,
+    text,
+    text-rope,
+    transformers,
+  main-is: Main.hs
+
 test-suite l4-test
   import: defaults
   type: exitcode-stdio-1.0

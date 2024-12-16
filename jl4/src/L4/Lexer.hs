@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase #-}
 module L4.Lexer where
 
 import Base
@@ -458,3 +459,69 @@ displayPosToken (MkPosToken _r tt) =
     TBlockComment t  -> t
     EOF              -> ""
 
+data TokenCategory
+  = CIdentifier
+  | CStringLit
+  | CNumberLit
+  | CSymbol
+  | COperator
+  | CKeyword
+  | CComment
+  | CWhitespace
+  | CDirective
+  | CEOF
+
+posTokenCategory :: TokenType -> TokenCategory
+posTokenCategory =
+  \case
+    TIdentifier _ -> CIdentifier
+    TQuoted _ -> CIdentifier
+    TIntLit _ _ -> CNumberLit
+    TStringLit _ -> CStringLit
+    TPOpen -> CSymbol
+    TPClose -> CSymbol
+    TCOpen -> CSymbol
+    TCClose -> CSymbol
+    TSOpen -> CSymbol
+    TSClose -> CSymbol
+    TComma -> CSymbol
+    TSemicolon -> CSymbol
+    TDot -> CSymbol
+    TGenitive -> CIdentifier
+    TParagraph -> CSymbol
+    TTimes -> COperator
+    TPlus -> COperator
+    TMinus -> COperator
+    TGreaterEquals -> COperator
+    TLessEquals -> COperator
+    TGreaterThan -> COperator
+    TLessThan -> COperator
+    TEquals -> COperator
+    TEqualsEquals -> COperator
+    TNotEquals -> COperator
+    TAnd -> COperator
+    TOr -> COperator
+    TOtherSymbolic _ -> CSymbol
+    TKGiven -> CKeyword
+    TKGiveth -> CKeyword
+    TKDecide -> CKeyword
+    TKDeclare -> CKeyword
+    TKIf -> CKeyword
+    TKThen -> CKeyword
+    TKElse -> CKeyword
+    TKOtherwise -> CIdentifier
+    TKFalse -> CKeyword
+    TKTrue -> CKeyword
+    TKAnd -> CKeyword
+    TKOr -> CKeyword
+    TKNot -> CKeyword
+    TKIs -> CKeyword
+    TKHas -> CKeyword
+    TKOne -> CKeyword
+    TKOf -> CKeyword
+    TKA -> CKeyword
+    TKAn -> CKeyword
+    TSpace _ -> CWhitespace
+    TLineComment _ -> CWhitespace
+    TBlockComment _ -> CWhitespace
+    EOF -> CEOF
