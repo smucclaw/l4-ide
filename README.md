@@ -18,7 +18,14 @@ Private repository for a mattwadd-specific dialect of L*4.
 - (Fictional) farming act: https://osf.io/bcnje
 - Short parsing exercises: https://osf.io/rjduz 
   - traffic, farming, alcohol, dogs (imaginary); charities, advertising in event (real)
- 
+
+### Questionnaire
+
+* [Sharpening Up your Summing Up](https://supremecourt.nsw.gov.au/documents/Publications/Speeches/2016-Speeches/RAHulme_20160329_QTrails.pdf)
+  * Describes the New Zealand / 'Question Trail' method (which is basically what CRLP seems to favor), with examples, and explains why it's helpful
+* [A short example of a questionnaire for jurors on "Assault Occasioning Actual Bodily Harm", sent along from Leon Qiu](https://slack-files.com/T012Q6P08BY-F0858EU6J8Y-9fb05d409e)
+
+
 ## Slack thread
 
 Probably contains still some relevant links that aren't here yet. https://smucclaw.slack.com/archives/C029JEMBKJB/p1726120969098429
