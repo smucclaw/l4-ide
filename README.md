@@ -36,3 +36,10 @@ Related notes from meetings
 ## Slack thread
 
 Probably contains still some relevant links that aren't here yet. <https://smucclaw.slack.com/archives/C029JEMBKJB/p1726120969098429>
+
+## Relevant examples from other legal DSLs
+
+[The NSW Community Gaming legislation](https://legislation.nsw.gov.au/view/whole/html/inforce/current/sl-2020-0304), formalized in Catala vs. YScript:
+
+- Catala: <https://github.com/CatalaLang/catala-examples/tree/master/NSW_community_gaming>
+- YScript: See page 187 of <https://austlii.community/foswiki/pub/DataLex/WebHome/ys-manual.pdf>
