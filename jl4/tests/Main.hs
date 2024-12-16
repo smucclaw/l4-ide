@@ -56,7 +56,9 @@ jl4ExactPrintGolden dir inputFile = do
   input <- Text.readFile inputFile
   let output_ = case Parser.execParser Parser.program inputFile input of
         Left err -> Text.pack err
-        Right ds -> JL4.exactprint ds
+        Right prog -> case JL4.exactprint prog of
+          Left epError -> JL4.prettyEPError epError
+          Right ep -> ep
   pure
     Golden
       { output = output_

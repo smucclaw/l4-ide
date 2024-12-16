@@ -13,12 +13,12 @@ import qualified L4.Parser as Parser
 import Control.Applicative (Alternative (..))
 import Control.Lens hiding (Iso)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader (Reader, ask, runReader, withReader)
+import Control.Monad.Trans.Reader
 import Data.Maybe qualified as Maybe
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Utf16.Rope.Mixed qualified as Rope
-import GHC.Stack (HasCallStack)
+import GHC.Stack
 import Language.LSP.Diagnostics
 import Language.LSP.Protocol.Lens qualified as J
 import Language.LSP.Protocol.Message
@@ -26,9 +26,12 @@ import Language.LSP.Protocol.Types
 import Language.LSP.Protocol.Types qualified as LSP
 import Language.LSP.Server
 import Language.LSP.VFS (VirtualFile (..))
+import qualified Control.Monad.Extra as Extra
+import Control.Monad.Trans.Except
 import L4.Annotation
 import qualified L4.Lexer as Lexer
-import qualified Control.Monad.Extra as Extra
+import L4.ExactPrint (EPError(..))
+import Control.Monad.Trans.Class
 
 handlers :: Handlers (LspM ())
 handlers =
@@ -70,19 +73,23 @@ handlers =
             case parseJL4WithWithDiagnostics uri contents of
               Left _diags -> responder $ Right $ InR Null
               Right ds -> do
-                let
-                  semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute $ runReader (programToTokens ds) defaultInfo
-                case encodeTokens defaultSemanticTokensLegend semanticTokens of
+                case runExcept $ runReaderT (programToTokens ds) defaultInfo of
                   Left _err -> do
+                    -- TODO: log error
                     responder $ Right $ InR Null
-                  Right semanticTokensData -> do
-                    responder $
-                      Right $
-                        InL $
-                          SemanticTokens
-                            { _resultId = Nothing
-                            , _data_ = semanticTokensData
-                            }
+                  Right semanticTokenstoks -> do
+                    let semanticTokens =  relativizeTokens $ fmap toSemanticTokenAbsolute semanticTokenstoks
+                    case encodeTokens defaultSemanticTokensLegend semanticTokens of
+                      Left _err -> do
+                        responder $ Right $ InR Null
+                      Right semanticTokensData -> do
+                        responder $
+                          Right $
+                            InL $
+                              SemanticTokens
+                                { _resultId = Nothing
+                                , _data_ = semanticTokensData
+                                }
     ]
 
 -- These settings are important!
@@ -216,6 +223,11 @@ parameterType = \case
   CIdentifier -> Just SemanticTokenTypes_Parameter
   _ -> Nothing
 
+nameIsDirective :: TokenCategory -> Maybe SemanticTokenTypes
+nameIsDirective = \case
+  CIdentifier -> Just SemanticTokenTypes_Macro
+  _ -> Nothing
+
 enumType :: TokenCategory -> Maybe SemanticTokenTypes
 enumType = \case
   CIdentifier -> Just SemanticTokenTypes_Enum
@@ -226,20 +238,22 @@ defVar = \case
   CIdentifier -> Just [SemanticTokenModifiers_Declaration, SemanticTokenModifiers_Definition]
   _ -> Nothing
 
-withModifier :: (TokenCategory -> Maybe [SemanticTokenModifiers]) -> Reader (SemanticTokenCtx PosToken) a -> Reader (SemanticTokenCtx PosToken) a
-withModifier f = withReader (\i -> i{getModifiers = \t -> f (Lexer.posTokenCategory t.payload) <|> i.getModifiers t})
+withModifier :: (TokenCategory -> Maybe [SemanticTokenModifiers]) -> SemanticM a -> SemanticM a
+withModifier f act = do
+  local (\i -> i{getModifiers = \t -> f (Lexer.posTokenCategory t.payload) <|> i.getModifiers t}) act
 
-withTokenType :: (TokenCategory -> Maybe SemanticTokenTypes) -> Reader (SemanticTokenCtx PosToken) a -> Reader (SemanticTokenCtx PosToken) a
-withTokenType f = withReader (\i -> i{toSemanticToken = \t -> f (Lexer.posTokenCategory t.payload) <|> i.toSemanticToken t})
+withTokenType :: (TokenCategory -> Maybe SemanticTokenTypes) -> SemanticM a -> SemanticM a
+withTokenType f act = do
+  local (\i -> i{toSemanticToken = \t -> f (Lexer.posTokenCategory t.payload) <|> i.toSemanticToken t}) act
 
 -- ----------------------------------------------------------------------------
 -- Simala AST to Semantic Tokens
 -- ----------------------------------------------------------------------------
 
-traverseCsnWithHoles :: (HasCallStack) => Anno -> [Reader (SemanticTokenCtx PosToken) HoleFit] -> Reader (SemanticTokenCtx PosToken) [SemanticToken]
+traverseCsnWithHoles :: (HasCallStack) => Anno -> [SemanticM HoleFit] -> SemanticM [SemanticToken]
 traverseCsnWithHoles (Anno []) _ = pure []
 traverseCsnWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
-  [] -> error $ "traverseCsnWithHoles: HoleFit requested, but not enough Fits given."
+  [] -> lift $ throwE $ InsufficientHoleFit callStack
   (x : xs) -> do
     toks <- x
     restOfTokens <- traverseCsnWithHoles (Anno cs) xs
@@ -273,7 +287,8 @@ srcPosToPosition s =
 -- Simala AST to Semantic Tokens
 -- ----------------------------------------------------------------------------
 
-type SemanticM a = Reader (SemanticTokenCtx PosToken) a
+
+type SemanticM a = ReaderT (SemanticTokenCtx PosToken) (Except EPError) a
 
 programToTokens :: Program Name -> SemanticM HoleFit
 programToTokens (MkProgram ann sections) =
@@ -283,7 +298,7 @@ sectionToTokens :: Section Name -> SemanticM [SemanticToken]
 sectionToTokens (MkSection ann _lvl name decls) =
   traverseCsnWithHoles
     ann
-    [ nameToTokens name
+    [ withTokenType nameIsDirective $ nameToTokens name
     , Extra.concatMapM declToTokens decls
     ]
 
@@ -305,7 +320,7 @@ declareToTokens (MkDeclare ann name type') =
 typeToTokens :: Type' Name -> SemanticM HoleFit
 typeToTokens = \case
   NamedType ann named -> traverseCsnWithHoles ann [nameToTokens named]
-  Enum ann e -> traverseCsnWithHoles ann [Extra.concatMapM nameToTokens e]
+  Enum ann e -> traverseCsnWithHoles ann [withTokenType enumType $ Extra.concatMapM nameToTokens e]
   Record ann rcs -> traverseCsnWithHoles ann [Extra.concatMapM typedNameToTokens rcs]
   Boolean ann -> traverseCsnWithHoles ann []
 

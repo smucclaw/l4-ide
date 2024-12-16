@@ -6,35 +6,47 @@ import L4.Annotation
 import L4.Lexer
 import L4.Syntax
 
-import Data.List qualified as List
 import Data.Text
 import Data.Text qualified as Text
-import GHC.Stack (HasCallStack)
+import GHC.Stack
+import Control.Monad.Trans.Except
+import qualified Control.Monad.Extra as Extra
 
-exactprint :: Program Name -> Text
+type EPM = Except EPError
+
+data EPError
+  = InsufficientHoleFit CallStack
+  deriving (Show)
+
+prettyEPError :: EPError -> Text
+prettyEPError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
+
+type HoleFit = EPM [PosToken]
+
+exactprint :: Program Name -> Either EPError Text
 exactprint =
-  Text.concat . fmap displayPosToken . progToTokens
+  runExcept . fmap (Text.concat . fmap displayPosToken) . progToTokens
 
-progToTokens :: Program Name -> [PosToken]
+progToTokens :: Program Name -> HoleFit
 progToTokens (MkProgram ann sections) =
-  applyTokensWithHoles ann [List.concatMap sectionToTokens sections]
+  applyTokensWithHoles ann [Extra.concatMapM sectionToTokens sections]
 
-sectionToTokens :: Section Name -> [PosToken]
+sectionToTokens :: Section Name -> HoleFit
 sectionToTokens (MkSection ann _lvl name decls) =
   applyTokensWithHoles
     ann
     [ nameToTokens name
-    , List.concatMap declToTokens decls
+    , Extra.concatMapM declToTokens decls
     ]
 
-declToTokens :: Decl Name -> [PosToken]
+declToTokens :: Decl Name -> HoleFit
 declToTokens = \case
   Declare ann declare ->
     applyTokensWithHoles ann [declareToTokens declare]
   Decide ann decide ->
     applyTokensWithHoles ann [decideToTokens decide]
 
-declareToTokens :: Declare Name -> [PosToken]
+declareToTokens :: Declare Name -> HoleFit
 declareToTokens (MkDeclare ann name type') =
   applyTokensWithHoles
     ann
@@ -45,11 +57,11 @@ declareToTokens (MkDeclare ann name type') =
 typeToTokens :: Type' Name -> HoleFit
 typeToTokens = \case
   NamedType ann named -> applyTokensWithHoles ann [nameToTokens named]
-  Enum ann enum -> applyTokensWithHoles ann [List.concatMap nameToTokens enum]
-  Record ann rcs -> applyTokensWithHoles ann [List.concatMap typedNameToTokens rcs]
+  Enum ann enum -> applyTokensWithHoles ann [Extra.concatMapM nameToTokens enum]
+  Record ann rcs -> applyTokensWithHoles ann [Extra.concatMapM typedNameToTokens rcs]
   Boolean ann -> applyTokensWithHoles ann []
 
-typedNameToTokens :: TypedName Name -> [PosToken]
+typedNameToTokens :: TypedName Name -> HoleFit
 typedNameToTokens (MkTypedName ann name type') =
   applyTokensWithHoles
     ann
@@ -57,15 +69,15 @@ typedNameToTokens (MkTypedName ann name type') =
     , typeToTokens type'
     ]
 
-decideToTokens :: Decide Name -> [PosToken]
+decideToTokens :: Decide Name -> HoleFit
 decideToTokens (MkDecide ann typeSig clauses) =
   applyTokensWithHoles
     ann
     [ typeSigToTokens typeSig
-    , List.concatMap clauseToTokens clauses
+    , Extra.concatMapM clauseToTokens clauses
     ]
 
-clauseToTokens :: Clause Name -> [PosToken]
+clauseToTokens :: Clause Name -> HoleFit
 clauseToTokens (GuardedClause ann e guard) =
   applyTokensWithHoles
     ann
@@ -110,7 +122,7 @@ typeSigToTokens (MkTypeSig ann given mGiveth) =
   applyTokensWithHoles
     ann
     [ givenToTokens given
-    , maybe [] givethToTokens mGiveth
+    , maybe (pure []) givethToTokens mGiveth
     ]
 
 givethToTokens :: GivethSig Name -> HoleFit
@@ -124,17 +136,22 @@ givenToTokens :: GivenSig Name -> HoleFit
 givenToTokens (MkGivenSig ann names) =
   applyTokensWithHoles
     ann
-    [ List.concatMap typedNameToTokens names
+    [ Extra.concatMapM typedNameToTokens names
     ]
 
 nameToTokens :: Name -> HoleFit
 nameToTokens (Name ann _) = applyTokensWithHoles ann []
 
-type HoleFit = [PosToken]
-
-applyTokensWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> [PosToken]
-applyTokensWithHoles (Anno []) _ = []
+applyTokensWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> EPM [PosToken]
+applyTokensWithHoles (Anno []) _ = pure []
 applyTokensWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
-  [] -> error $ "applyTokensWithHoles: HoleFit requested, but not enough Fits given."
-  (x : xs) -> x <> applyTokensWithHoles (Anno cs) xs
-applyTokensWithHoles (Anno (AnnoCsn m : cs)) xs = csnTokens m <> applyTokensWithHoles (Anno cs) xs
+  [] -> do
+    throwE $ InsufficientHoleFit callStack
+  (x : xs) -> do
+    r <- x
+    rs <- applyTokensWithHoles (Anno cs) xs
+    pure (r <> rs)
+applyTokensWithHoles (Anno (AnnoCsn m : cs)) xs = do
+  let r = csnTokens m
+  rs <- applyTokensWithHoles (Anno cs) xs
+  pure (r <> rs)

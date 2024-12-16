@@ -23,6 +23,7 @@ library
   hs-source-dirs: src
   build-depends:
     containers,
+    extra,
     megaparsec,
     mtl,
     optics,
