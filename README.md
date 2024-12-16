@@ -23,7 +23,12 @@ Private repository for a mattwadd-specific dialect of L*4.
 
 - [Sharpening Up your Summing Up](https://supremecourt.nsw.gov.au/documents/Publications/Speeches/2016-Speeches/RAHulme_20160329_QTrails.pdf)
   - Describes the New Zealand / 'Question Trail' method (which is basically what CRLP seems to favor), with examples, and explains why it's helpful
-- [A short example of a questionnaire for jurors on "Assault Occasioning Actual Bodily Harm", sent along from Leon Qiu](https://slack-files.com/T012Q6P08BY-F0858EU6J8Y-9fb05d409e)
+  - Ian Chai, from Dec 12: See especially pages 21 and 16. Not only do they helpfully instantiate the questions with the specific details / facts (which makes it more comprehensible than, e.g., talking about "the accused person" in the abstract), they also provide all the relevant definitions that are needed to answer the questions.
+- [A short example of a questionnaire for jurors on "Assault Occasioning Actual Bodily Harm," sent along from Leon Qiu](https://slack-files.com/T012Q6P08BY-F0858EU6J8Y-9fb05d409e)
+
+Related notes from meetings
+
+- Dec 12 meeting: Can think of the questions as tree where the nodes are in effect sets, so that end users can answer questions independently of each other, but some questions depend on other questions. And re providing the relevant definitions, can imagine providing a transitive closure of the definitions.
 
 ## Slack thread
 
