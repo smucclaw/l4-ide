@@ -13,11 +13,14 @@ Private repository for a mattwadd-specific dialect of L*4.
 
 ## Links to specific examples
 
-- British Nationality Act: <https://osf.io/mt78r>
+- British Nationality Act: <https://osf.io/mt78r>. Note that they have a redraft of s1 at the end in a more modern style.
 - (Fictional) alcohol sales example in the IDE mockup: <https://crlp-jerseyldo.github.io/ilde-mockup/>
 - (Fictional) farming act: <https://osf.io/bcnje>
 - Short parsing exercises: <https://osf.io/rjduz>
   - traffic, farming, alcohol, dogs (imaginary); charities, advertising in event (real)
+- [Charities (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_41_2014) and its [Reg & Orders](https://www.jerseylaw.je/laws/current/search?q=charities&size=n_50_n)
+- [Financial Services Ombudsman (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_14_2014)
+- [Domestic Abuse (Jersey) Law 2022](https://www.jerseylaw.je/laws/current/l_27_2022)
 
 ### Questionnaire
 
