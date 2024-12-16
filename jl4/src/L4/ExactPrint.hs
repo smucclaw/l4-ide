@@ -6,11 +6,11 @@ import L4.Annotation
 import L4.Lexer
 import L4.Syntax
 
+import Control.Monad.Extra qualified as Extra
+import Control.Monad.Trans.Except
 import Data.Text
 import Data.Text qualified as Text
 import GHC.Stack
-import Control.Monad.Trans.Except
-import qualified Control.Monad.Extra as Extra
 
 type EPM = Except EPError
 
@@ -152,6 +152,7 @@ applyTokensWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
     rs <- applyTokensWithHoles (Anno cs) xs
     pure (r <> rs)
 applyTokensWithHoles (Anno (AnnoCsn m : cs)) xs = do
-  let r = csnTokens m
+  let
+    r = csnTokens m
   rs <- applyTokensWithHoles (Anno cs) xs
   pure (r <> rs)
