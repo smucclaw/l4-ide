@@ -252,7 +252,7 @@ enumType =
             <$> ( concat
                     <$> manyLines
                       ( do
-                          (names, commas) <- sepByP name (spacedToken_ TComma)
+                          (names, commas) <- sepBy1P name (spacedToken_ TComma)
                           pure $ zipWithLeftBias names commas
                       )
                 )
