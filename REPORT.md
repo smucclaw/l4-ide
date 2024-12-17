@@ -41,6 +41,10 @@ The tool we are planning to build is centered around a two-window view:
 In the following, we are describing each of these views and visualisations in more
 detail.
 
+## 1K Words
+
+https://docs.google.com/drawings/d/1CaJtpHDnRPQAfC2q3jdXjuXObJu9fN2WrJNfuqawHOk/edit
+
 ## JL4 window
 
 The contents of the left window are essentially programs in a (domain-specific)
