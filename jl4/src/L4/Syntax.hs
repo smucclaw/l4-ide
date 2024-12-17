@@ -19,8 +19,6 @@ data Name = Name Anno Text
 
 instance HasAnno Name where
   type AnnoToken Name = PosToken
-  getAnno (Name ann _) = ann
-  setAnno ann (Name _ n) = Name ann n
 
 data Type' n =
     NamedType Anno n
@@ -32,18 +30,14 @@ data Type' n =
 
 instance HasAnno (Type' n) where
   type AnnoToken (Type' n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr)
 
 instance HasAnno (TypedName n) where
   type AnnoToken (TypedName n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data TypeSig n =
   MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
@@ -62,8 +56,6 @@ data GivenSig n =
 
 instance HasAnno (GivenSig n) where
   type AnnoToken (GivenSig n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data GivethSig n =
   MkGivethSig Anno (TypedName n)
@@ -72,8 +64,6 @@ data GivethSig n =
 
 instance HasAnno (GivethSig n) where
   type AnnoToken (GivethSig n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Decide n =
   MkDecide Anno (TypeSig n) [Clause n]
@@ -82,8 +72,6 @@ data Decide n =
 
 instance HasAnno (Decide n) where
   type AnnoToken (Decide n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Declare n =
   MkDeclare Anno n (Type' n)
@@ -92,8 +80,6 @@ data Declare n =
 
 instance HasAnno (Declare n) where
   type AnnoToken (Declare n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Clause n =
   GuardedClause Anno (Expr n) (Guard n)
@@ -102,8 +88,6 @@ data Clause n =
 
 instance HasAnno (Clause n) where
   type AnnoToken (Clause n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Guard n =
     PlainGuard Anno (Expr n)
@@ -113,8 +97,6 @@ data Guard n =
 
 instance HasAnno (Guard n) where
   type AnnoToken (Guard n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Expr n =
     And  Anno (Expr n) (Expr n)
@@ -128,8 +110,6 @@ data Expr n =
 
 instance HasAnno (Expr n) where
   type AnnoToken (Expr n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Program n =
   MkProgram Anno [Section n]
@@ -145,8 +125,6 @@ type SectionLevel = Int
 
 instance HasAnno (Section n) where
   type AnnoToken (Section n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 data Decl n =
     Declare Anno (Declare n)
@@ -156,8 +134,6 @@ data Decl n =
 
 instance HasAnno (Decl n) where
   type AnnoToken (Decl n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
@@ -166,3 +142,4 @@ instance HasAnno (Decl n) where
 type Anno = Anno_ PosToken
 type AnnoElement = AnnoElement_ PosToken
 type CsnCluster = CsnCluster_ PosToken
+

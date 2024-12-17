@@ -7,6 +7,7 @@ import Data.Foldable qualified as Foldable
 import Data.List qualified as List
 import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
+import Optics
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -87,6 +88,12 @@ class HasAnno t where
   type AnnoToken t
   getAnno :: t -> Anno_ (AnnoToken t)
   setAnno :: Anno_ (AnnoToken t) -> t -> t
+
+  default setAnno :: (GPosition 1 t t a (Anno_ (AnnoToken t))) => Anno_ (AnnoToken t) -> t -> t
+  setAnno ann e = set (gposition @1) ann e
+
+  default getAnno :: (GPosition 1 t t (Anno_ (AnnoToken t)) (Anno_ (AnnoToken t))) => t -> Anno_ (AnnoToken t)
+  getAnno e = e ^. gposition @1
 
 -- ----------------------------------------------------------------------------
 -- Annotation Instances
