@@ -100,6 +100,7 @@ data TokenType =
   | TKGiven
   | TKGiveth
   | TKDecide
+  | TKMeans
   | TKDeclare
   | TKIf
   | TKThen
@@ -236,6 +237,7 @@ keywords =
     [ ("GIVEN"      , TKGiven      )
     , ("GIVETH"     , TKGiveth     )
     , ("DECIDE"     , TKDecide     )
+    , ("MEANS"      , TKMeans      )
     , ("DECLARE"    , TKDeclare    )
     , ("IF"         , TKIf         )
     , ("THEN"       , TKThen       )
@@ -518,6 +520,7 @@ displayPosToken (MkPosToken _r tt) =
     TKGiven          -> "GIVEN"
     TKGiveth         -> "GIVETH"
     TKDecide         -> "DECIDE"
+    TKMeans          -> "MEANS"
     TKDeclare        -> "DECLARE"
     TKIf             -> "IF"
     TKThen           -> "THEN"
@@ -585,6 +588,7 @@ posTokenCategory =
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
     TKDecide -> CKeyword
+    TKMeans -> CKeyword
     TKDeclare -> CKeyword
     TKIf -> CKeyword
     TKThen -> CKeyword

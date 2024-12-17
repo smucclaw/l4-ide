@@ -144,13 +144,40 @@ decide :: Parser (Decide Name)
 decide = do
   sig <- typeSig
   current <- Lexer.indentLevel
-  tkDecide <- spacedToken_ TKDecide
-  clauses <- manyLines (clause current) -- I see room for ambiguity here
-  attachAnno $
-    MkDecide emptyAnno
-      <$> annoHole (pure sig)
-      <*  annoLexeme (pure tkDecide)
-      <*> annoHole (pure clauses)
+  decideKW sig current <|> meansKW sig
+  where
+    decideKW sig current = do
+      tkDecide <- spacedToken_ TKDecide
+      clauses <- manyLines (clause current) -- I see room for ambiguity here
+      attachAnno $
+        MkDecide emptyAnno
+          <$> annoHole (pure sig)
+          <*  annoLexeme (pure tkDecide)
+          <*> annoHole (pure clauses)
+
+    -- We attach the concrete source node of 'TKMeans' to 'GuardedClause'.
+    -- This is necessary as the current exact printing infrastructure
+    -- doesn't allow interleaving of concrete syntax nodes and abstract syntax nodes.
+    -- The problem is that 'Expr' is part of 'GuardedClause', but 'TKMeans'
+    -- likely *should* be part of 'Decide'. Modelling it like this would require us to first
+    -- print the first element of 'GuardedClause' then the concrete syntax node 'TKMeans' from
+    -- 'Decide', followed by the rest of the concrete syntax nodes of 'GuardedClause'.
+    meansKW sig = do
+      e <- baseExpr
+      tkMeans <- spacedToken_ TKMeans
+      clauseGuard <- guard_
+      attachAnno $
+        MkDecide emptyAnno
+          <$> annoHole (pure sig)
+          <*> annoHole (
+                List.singleton <$>
+                  (attachAnno $
+                    GuardedClause emptyAnno
+                      <$> annoHole   (pure e)
+                      <*  annoLexeme (pure tkMeans)
+                      <*> annoHole   (pure clauseGuard)
+                  )
+          )
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
