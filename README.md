@@ -2,14 +2,17 @@
 
 Private repository for a mattwadd-specific dialect of L*4.
 
-## Reading materials
+## Quick links
 
-- Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
-
+- [Proposal for CCLaw work for CRLP, as of 4-11-24](https://drive.google.com/file/d/1KdI_usifYqUDmUpRvCxJfj8utIU8hk8J/view?usp=drive_link)
 - Google drive "CRLP with Matthew Waddington": <https://drive.google.com/drive/folders/1qO7BAUqlI9aawPXsrVeDBhD-hwdo9GLI>
   - General tip: sort by latest modified
-  - Special mention: "various emails from mattwadd" megathread (latest 7 Nov): <https://docs.google.com/document/d/1bdRI-qm9HefUD5Ss98qIQE-3TwqE_Q-OmYCb-fLeo6c/edit?pli=1&tab=t.0>
-  - Our response thread is called "October 2024 Email Response", but latest update is 1 Nov. Content of that document has been repurposed into "[Technical background to CCLaw–CRLP proposal as at 4-11-24](https://drive.google.com/file/d/1KdI_usifYqUDmUpRvCxJfj8utIU8hk8J/view?usp=drive_link)"
+  - "Various emails from mattwadd" megathread (latest 7 Nov): <https://docs.google.com/document/d/1bdRI-qm9HefUD5Ss98qIQE-3TwqE_Q-OmYCb-fLeo6c/edit?pli=1&tab=t.0>
+  - Our response thread is called "October 2024 Email Response", but latest update is 1 Nov. Content of that document has been repurposed into "[Proposal for CCLaw work for CRLP, as of 4-11-24, linked above](https://drive.google.com/file/d/1KdI_usifYqUDmUpRvCxJfj8utIU8hk8J/view?usp=drive_link)"
+
+## Other reading materials
+
+- Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
 
 ## Links to specific examples
 
