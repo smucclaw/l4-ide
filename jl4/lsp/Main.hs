@@ -30,7 +30,7 @@ import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except
 import L4.Annotation
 import qualified L4.Lexer as Lexer
-import L4.ExactPrint (EPError(..))
+import L4.ExactPrint (EPError(..), prettyEPError)
 import Control.Monad.Trans.Class
 
 handlers :: Handlers (LspM ())
@@ -65,23 +65,39 @@ handlers =
         mVirtFile <- getVirtualFile $ toNormalizedUri uri
         case mVirtFile of
           Nothing -> do
-            responder $ Right $ InR Null
+            responder $ Left $ TResponseError
+              { _code = InL LSPErrorCodes_RequestFailed
+              , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
+              , _xdata = Nothing
+              }
           Just (VirtualFile _ _ rope) -> do
             let
               contents = Rope.toText rope
 
             case parseJL4WithWithDiagnostics uri contents of
-              Left _diags -> responder $ Right $ InR Null
+              Left _diags -> responder $ Left $ TResponseError
+                { _code = InL LSPErrorCodes_RequestFailed
+                , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
+                , _xdata = Nothing
+                }
               Right ds -> do
                 case runExcept $ runReaderT (programToTokens ds) defaultInfo of
-                  Left _err -> do
+                  Left err -> do
                     -- TODO: log error
-                    responder $ Right $ InR Null
+                    responder $ Left $ TResponseError
+                      { _code = InL LSPErrorCodes_RequestFailed
+                      , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> prettyEPError err
+                      , _xdata = Nothing
+                      }
                   Right semanticTokenstoks -> do
                     let semanticTokens =  relativizeTokens $ fmap toSemanticTokenAbsolute semanticTokenstoks
                     case encodeTokens defaultSemanticTokensLegend semanticTokens of
-                      Left _err -> do
-                        responder $ Right $ InR Null
+                      Left err -> do
+                        responder $ Left $ TResponseError
+                          { _code = InL LSPErrorCodes_RequestFailed
+                          , _message = "Internal error, failed to encode semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> err
+                          , _xdata = Nothing
+                          }
                       Right semanticTokensData -> do
                         responder $
                           Right $
