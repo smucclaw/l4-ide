@@ -4,6 +4,9 @@ Private repository for a mattwadd-specific dialect of L*4.
 
 ## Quick links
 
+- Drafts of the Dec report for CRLP, started on Tues Dec 17 2024
+  - [The google doc draft](https://docs.google.com/drawings/d/1CaJtpHDnRPQAfC2q3jdXjuXObJu9fN2WrJNfuqawHOk/edit)
+  - [The Github repo draft](./REPORT.md)
 - [Proposal for CCLaw work for CRLP, as of 4-11-24](https://drive.google.com/file/d/1KdI_usifYqUDmUpRvCxJfj8utIU8hk8J/view?usp=drive_link)
 - Google drive "CRLP with Matthew Waddington": <https://drive.google.com/drive/folders/1qO7BAUqlI9aawPXsrVeDBhD-hwdo9GLI>
   - General tip: sort by latest modified
