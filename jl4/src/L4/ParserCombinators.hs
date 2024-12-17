@@ -1,13 +1,15 @@
 module L4.ParserCombinators where
-import Text.Megaparsec (Parsec)
-import Control.Applicative ((<|>), many)
-import Text.Megaparsec.Stream
+
+import Control.Applicative ((<|>), many, Alternative)
+import Control.Monad (MonadPlus)
 
 -- ----------------------------------------------------------------------------
 -- Parser Utilities
 -- ----------------------------------------------------------------------------
 
-between :: Applicative f => f open -> f close -> f b -> f (open, b, close)
+-- | @'between' open close p@ parses @open@, followed by @p@ and @close@.
+-- Returns the parsed values of @open@, @p@ and @close@.
+between :: (Applicative f) => f open -> f close -> f b -> f (open, b, close)
 between open close p =
   (,,)
     <$> open
@@ -15,31 +17,37 @@ between open close p =
     <*> close
 
 -- | @'sepByP' p sep@ parses /zero/ or more occurrences of @p@, separated by
--- @sep@. Returns a list of values returned by @p@.
+-- @sep@. Returns a list of values returned by @p@ and a list of separators
+-- parsed by @sep@.
 --
 -- > commaSep p = p `sepBy` comma
-sepBy :: (Stream s, Ord e) => Parsec e s a -> Parsec e s sep -> Parsec e s ([a], [sep])
+sepBy :: (Alternative m) => m a -> m sep -> m ([a], [sep])
 sepBy p sep = sepBy1 p sep <|> pure ([], [])
 {-# INLINE sepBy #-}
 
 -- | @'sepBy1' p sep@ parses /one/ or more occurrences of @p@, separated by
--- @sep@. Returns a list of values returned by @p@.
-sepBy1 :: (Stream s, Ord e) => Parsec e s a -> Parsec e s sep -> Parsec e s ([a], [sep])
-sepBy1 p sep = do
-  a <- p
-  sepsAndA <- many ((,) <$> sep <*> p)
-  let (seps, as) = unzip sepsAndA
-  pure (a : as, seps)
+-- @sep@. Returns a list of values returned by @p@ and a list of separators
+-- parsed by @sep@.
+sepBy1 :: (Alternative m) => m a -> m sep -> m ([a], [sep])
+sepBy1 p sep = go <$> p <*> many ((,) <$> sep <*> p)
+ where
+  go a sepsAndA =
+    let
+      (seps, as) = unzip sepsAndA
+    in
+      (a : as, seps)
 
 -- | @'sepEndBy' p sep@ parses /zero/ or more occurrences of @p@, separated
--- and optionally ended by @sep@. Returns a list of values returned by @p@.
-sepEndBy :: (Stream s, Ord e) => Parsec e s a -> Parsec e s sep -> Parsec e s ([a], [sep])
+-- and optionally ended by @sep@. Returns a list of values returned by @p@ and a
+-- list of separators parsed by @sep@.
+sepEndBy :: (MonadPlus m) => m a -> m sep -> m ([a], [sep])
 sepEndBy p sep = sepEndBy1 p sep <|> pure ([], [])
 {-# INLINE sepEndBy #-}
 
 -- | @'sepEndBy1' p sep@ parses /one/ or more occurrences of @p@, separated
--- and optionally ended by @sep@. Returns a list of values returned by @p@.
-sepEndBy1 :: (Stream s, Ord e) => Parsec e s a -> Parsec e s sep -> Parsec e s ([a], [sep])
+-- and optionally ended by @sep@. Returns a list of values returned by @p@ and a
+-- list of separators parsed by @sep@.
+sepEndBy1 :: (MonadPlus m) => m a -> m sep -> m ([a], [sep])
 sepEndBy1 p sep = do
   a <- p
   (as, seps) <-

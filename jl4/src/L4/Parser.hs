@@ -49,11 +49,11 @@ isSpaceToken t =
     TBlockComment _ -> True
     _               -> False
 
-lexeme :: Parser a -> Parser (WithWs a)
+lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
   trailingWs <- spaces
-  pure $ WithWs trailingWs a
+  pure $ Lexeme trailingWs a
 
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
@@ -71,13 +71,13 @@ trivialToken tt =
     trivialPos :: SrcPos
     trivialPos = MkSrcPos "" 0 0
 
-spacedToken_ :: TokenType -> Parser (WithWs PosToken)
+spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
   lexeme (plainToken tt)
 
 spacedToken :: (TokenType -> Maybe a) -> String -> Parser (Epa a)
 spacedToken cond lbl =
-  fromWs' <$>
+  lexToEpa' <$>
     lexeme
       (token
         (\ t -> (t,) <$> cond t.payload)
@@ -103,8 +103,8 @@ name = attachEpa (quotedName <|> simpleName) <?> "identifier"
 program :: Parser (Program Name)
 program = do
   initSpace <- spaces
-  let wsSpace = WithWs [] initSpace
-  MkProgram (mkSimpleEpaAnno (toEpa wsSpace) <> mkHoleAnno) <$> many section
+  let wsSpace = Lexeme [] initSpace
+  MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) <$> many section
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -126,14 +126,14 @@ section :: Parser (Section Name)
 section =
   attachAnno $
     MkSection emptyAnno
-      <$> annoFromEpa sectionSymbols
+      <$> annoEpa sectionSymbols
       <*> annoHole name
       <*> annoHole (manyLines decl)
 
 sectionSymbols :: Parser (Epa Int)
 sectionSymbols = do
   paragraphSymbols <- lexeme (some (plainToken TParagraph))
-  pure $ length <$> toEpa paragraphSymbols
+  pure $ length <$> lexesToEpa paragraphSymbols
 
 decl :: Parser (Decl Name)
 decl =
@@ -144,7 +144,7 @@ declare :: Parser (Declare Name)
 declare =
   attachAnno $
     MkDeclare emptyAnno
-      <$ annoFromWs (spacedToken_ TKDeclare)
+      <$  annoLexeme (spacedToken_ TKDeclare)
       <*> annoHole name
       <*> annoHole ofType
 
@@ -157,7 +157,7 @@ decide = do
   attachAnno $
     MkDecide emptyAnno
       <$> annoHole (pure sig)
-      <*  annoFromWs (pure tkDecide)
+      <*  annoLexeme (pure tkDecide)
       <*> annoHole (pure clauses)
 
 typeSig :: Parser (TypeSig Name)
@@ -171,14 +171,14 @@ given :: Parser (GivenSig Name)
 given =
   attachAnno $
     MkGivenSig emptyAnno
-      <$ annoFromWs (spacedToken_ TKGiven)
+      <$  annoLexeme (spacedToken_ TKGiven)
       <*> annoHole (manyLines typedName)
 
 giveth :: Parser (GivethSig Name)
 giveth =
   attachAnno $
     MkGivethSig emptyAnno
-      <$ annoFromWs (spacedToken_ TKGiveth)
+      <$  annoLexeme (spacedToken_ TKGiveth)
       <*> annoHole (typedName)
 
 clause :: Pos -> Parser (Clause Name)
@@ -202,14 +202,15 @@ otherwiseGuard :: Parser (Guard n)
 otherwiseGuard =
   attachAnno $
     Otherwise emptyAnno
-      <$ annoFromWs (spacedToken_ TKOtherwise)
+      <$ annoLexeme (spacedToken_ TKOtherwise)
 
 plainGuard :: Parser (Guard Name)
-plainGuard =   do
+plainGuard = do
   current <- Lexer.indentLevel
-  attachAnno $ PlainGuard emptyAnno
-    <$  annoFromWs (spacedToken_ TKIf)
-    <*> annoHole (indentedExpr current)
+  attachAnno $
+    PlainGuard emptyAnno
+      <$ annoLexeme (spacedToken_ TKIf)
+      <*> annoHole (indentedExpr current)
 
 ofType :: Parser (Type' Name)
 ofType =
@@ -219,7 +220,7 @@ ofType =
 isType :: Parser (Type' Name)
 isType =
   attachAnno $
-    annoFromWs (spacedToken_ TKIs)
+    annoLexeme (spacedToken_ TKIs)
       *> (   namedType
          <|> enumType
          )
@@ -227,15 +228,15 @@ isType =
 namedType :: Compose Parser WithAnno (Type' Name)
 namedType =
   NamedType emptyAnno
-    <$ (annoFromWs (spacedToken_ TKA <|> spacedToken_ TKAn))
-    <*> (annoHole name)
+    <$  annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn)
+    <*> annoHole name
 
 enumType :: Compose Parser WithAnno (Type' Name)
 enumType =
   Enum emptyAnno
-    <$ annoFromWs (spacedToken_ TKOne)
-    <* annoFromWs (spacedToken_ TKOf)
-    <*> ( annoHole
+    <$  annoLexeme (spacedToken_ TKOne)
+    <*  annoLexeme (spacedToken_ TKOf)
+    <*> annoHole
             ( concat
                 <$> manyLines
                   ( do
@@ -243,18 +244,17 @@ enumType =
                       pure $ zipWithLeftovers names commas
                   )
             )
-        )
  where
-  zipWithLeftovers :: [Name] -> [WithWs PosToken] -> [Name]
+  zipWithLeftovers :: [Name] -> [Lexeme PosToken] -> [Name]
   zipWithLeftovers ns [] = ns
   zipWithLeftovers [] _ = []
-  zipWithLeftovers (n : ns) (c : cs) = setAnno (getAnno n <> mkSimpleEpaAnno (toEpa' c)) n : zipWithLeftovers ns cs
+  zipWithLeftovers (n : ns) (c : cs) = setAnno (getAnno n <> mkSimpleEpaAnno (lexToEpa c)) n : zipWithLeftovers ns cs
 
 record :: Parser (Type' Name)
 record =
   attachAnno $
     Record emptyAnno
-      <$ annoFromWs (spacedToken_ TKHas)
+      <$ annoLexeme (spacedToken_ TKHas)
       <*> annoHole (manyLines typedName)
 
 typedName :: Parser (TypedName Name)
@@ -368,9 +368,9 @@ operator =
   <|> (\op -> (3, infix2 Or  op)) <$> spacedToken_ TKOr
   <|> (\op -> (5, infix2 Is  op)) <$> spacedToken_ TKIs
 
-infix2 :: (Anno -> Expr n -> Expr n -> Expr n) -> WithWs PosToken -> Expr n -> Expr n -> Expr n
+infix2 :: (Anno -> Expr n -> Expr n -> Expr n) -> Lexeme PosToken -> Expr n -> Expr n -> Expr n
 infix2 f op l r =
-  f (mkHoleAnno <> mkSimpleEpaAnno (toEpa' op) <> mkHoleAnno) l r
+  f (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnno) l r
 
 baseExpr :: Parser (Expr Name)
 baseExpr =
@@ -379,7 +379,7 @@ baseExpr =
       current <- Lexer.indentLevel
       attachAnno $
         Not emptyAnno
-          <$ annoFromWs (spacedToken_ TKNot)
+          <$ annoLexeme (spacedToken_ TKNot)
           <*> annoHole (indentedExpr current)
 
 -- Some manual left-factoring here to prevent left-recursion;
@@ -390,7 +390,7 @@ projection =
       -- May affect the source span of the name.
       -- E.g. Goto definition of `name's` would be affected, as clicking on `'s` would not be part
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
-      (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (toEpa' gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
+      (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
   <$> name
   <*> many ((,) <$> spacedToken_ TGenitive <*> name)
 
@@ -591,7 +591,7 @@ type WithAnno = WithAnno_ PosToken
 
 type Epa = Epa_ PosToken
 
-type WithWs = WithWs_ PosToken
+type Lexeme = Lexeme_ PosToken
 
 -- ----------------------------------------------------------------------------
 -- Annotation Combinators
@@ -610,11 +610,11 @@ toAnno (WithAnno ann _) = ann
 annoHole :: Parser e -> Compose Parser (WithAnno_ t) e
 annoHole p = Compose $ fmap (WithAnno (mkAnno [mkHole])) p
 
-annoFromEpa :: Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
-annoFromEpa p = Compose $ fmap epaToAnno p
+annoEpa :: Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
+annoEpa p = Compose $ fmap epaToAnno p
 
-annoFromWs :: Parser (WithWs_ t t) -> Compose Parser (WithAnno_ t) t
-annoFromWs = annoFromEpa . fmap toEpa'
+annoLexeme :: Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
+annoLexeme = annoEpa . fmap lexToEpa
 
 instance Applicative (WithAnno_ t) where
   pure a = WithAnno emptyAnno a
@@ -625,7 +625,7 @@ attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
 
 attachEpa :: (HasAnno e, AnnoToken e ~ t) => Parser (Epa_ t e) -> Parser e
 attachEpa =
-  attachAnno . annoFromEpa
+  attachAnno . annoEpa
 
 mkHoleAnno :: Anno_ t
 mkHoleAnno =
@@ -644,12 +644,12 @@ epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
       , trailing = mkConcreteSyntaxNode trailing
       }
 
-data WithWs_ t a = WithWs [t] a
+data Lexeme_ t a = Lexeme [t] a
   deriving stock Show
   deriving (Functor)
 
-unWs :: WithWs a -> a
-unWs (WithWs _ a) = a
+unLexeme :: Lexeme_ t a -> a
+unLexeme (Lexeme _ a) = a
 
 data Epa_ t a = Epa [t] [t] a
   deriving stock Show
@@ -658,14 +658,14 @@ data Epa_ t a = Epa [t] [t] a
 unEpa :: Epa_ t a -> a
 unEpa (Epa _ _ a) = a
 
-fromWs :: WithWs_ t ([t], a) -> Epa_ t a
-fromWs (WithWs trailing (this, a)) = Epa this trailing a
+lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
+lexesToEpa (Lexeme trailing this) = Epa this trailing this
 
-fromWs' :: WithWs_ t (t, a) -> Epa_ t a
-fromWs' (WithWs trailing (this, a)) = Epa [this] trailing a
+lexesToEpa' :: Lexeme_ t ([t], a) -> Epa_ t a
+lexesToEpa' (Lexeme trailing (this, a)) = Epa this trailing a
 
-toEpa :: WithWs_ t [t] -> Epa_ t [t]
-toEpa (WithWs trailing this) = Epa this trailing this
+lexToEpa :: Lexeme_ t t -> Epa_ t t
+lexToEpa (Lexeme trailing this) = Epa [this] trailing this
 
-toEpa' :: WithWs_ t t -> Epa_ t t
-toEpa' (WithWs trailing this) = Epa [this] trailing this
+lexToEpa' :: Lexeme_ t (t, a) -> Epa_ t a
+lexToEpa' (Lexeme trailing (this, a)) = Epa [this] trailing a
