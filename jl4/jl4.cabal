@@ -15,6 +15,8 @@ common defaults
     OverloadedRecordDot
     OverloadedStrings
     OverloadedLabels
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
   build-depends:
     base
 

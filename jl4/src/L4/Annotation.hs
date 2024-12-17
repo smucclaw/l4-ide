@@ -3,8 +3,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 module L4.Annotation where
 
-import Data.Foldable qualified as Foldable
-import Data.List qualified as List
+import qualified Data.Foldable as Foldable
+import qualified Data.List as List
 import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
 import Optics

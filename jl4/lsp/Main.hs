@@ -6,33 +6,33 @@
 
 module Main where
 
-import L4.Syntax
-import L4.Lexer (TokenCategory(..), PosToken(..), SrcPos(..))
+import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
 import qualified L4.Parser as Parser
+import L4.Syntax
 
 import Control.Applicative (Alternative (..))
 import Control.Lens hiding (Iso)
+import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
-import Data.Maybe qualified as Maybe
+import qualified Data.Foldable as Foldable
+import qualified Data.Maybe as Maybe
 import Data.Text (Text)
-import Data.Text qualified as Text
-import Data.Text.Utf16.Rope.Mixed qualified as Rope
+import qualified Data.Text as Text
+import qualified Data.Text.Utf16.Rope.Mixed as Rope
 import GHC.Stack
+import L4.Annotation
+import L4.ExactPrint (EPError (..), prettyEPError)
+import qualified L4.Lexer as Lexer
 import Language.LSP.Diagnostics
-import Language.LSP.Protocol.Lens qualified as J
+import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
-import Language.LSP.Protocol.Types qualified as LSP
+import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 import Language.LSP.VFS (VirtualFile (..))
-import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Except
-import L4.Annotation
-import qualified L4.Lexer as Lexer
-import L4.ExactPrint (EPError(..), prettyEPError)
-import Control.Monad.Trans.Class
-import qualified Data.Foldable as Foldable
 
 handlers :: Handlers (LspM ())
 handlers =
@@ -66,39 +66,49 @@ handlers =
         mVirtFile <- getVirtualFile $ toNormalizedUri uri
         case mVirtFile of
           Nothing -> do
-            responder $ Left $ TResponseError
-              { _code = InL LSPErrorCodes_RequestFailed
-              , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
-              , _xdata = Nothing
-              }
+            responder $
+              Left $
+                TResponseError
+                  { _code = InL LSPErrorCodes_RequestFailed
+                  , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
+                  , _xdata = Nothing
+                  }
           Just (VirtualFile _ _ rope) -> do
             let
               contents = Rope.toText rope
 
             case parseJL4WithWithDiagnostics uri contents of
-              Left _diags -> responder $ Left $ TResponseError
-                { _code = InL LSPErrorCodes_RequestFailed
-                , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
-                , _xdata = Nothing
-                }
+              Left _diags ->
+                responder $
+                  Left $
+                    TResponseError
+                      { _code = InL LSPErrorCodes_RequestFailed
+                      , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
+                      , _xdata = Nothing
+                      }
               Right ds -> do
                 case runExcept $ runReaderT (programToTokens ds) defaultInfo of
                   Left err -> do
                     -- TODO: log error
-                    responder $ Left $ TResponseError
-                      { _code = InL LSPErrorCodes_RequestFailed
-                      , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> prettyEPError err
-                      , _xdata = Nothing
-                      }
-                  Right semanticTokenstoks -> do
-                    let semanticTokens =  relativizeTokens $ fmap toSemanticTokenAbsolute semanticTokenstoks
-                    case encodeTokens defaultSemanticTokensLegend semanticTokens of
-                      Left err -> do
-                        responder $ Left $ TResponseError
+                    responder $
+                      Left $
+                        TResponseError
                           { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Internal error, failed to encode semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> err
+                          , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> prettyEPError err
                           , _xdata = Nothing
                           }
+                  Right semanticTokenstoks -> do
+                    let
+                      semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute semanticTokenstoks
+                    case encodeTokens defaultSemanticTokensLegend semanticTokens of
+                      Left err -> do
+                        responder $
+                          Left $
+                            TResponseError
+                              { _code = InL LSPErrorCodes_RequestFailed
+                              , _message = "Internal error, failed to encode semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> err
+                              , _xdata = Nothing
+                              }
                       Right semanticTokensData -> do
                         responder $
                           Right $
@@ -170,31 +180,33 @@ parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program 
   Right ds ->
     pure ds
  where
-  doDiagnostic pError = Diagnostic
-    (LSP.Range start (nextLine start))
-    (Just LSP.DiagnosticSeverity_Error) -- severity
-    Nothing -- code
-    Nothing
-    (Just pError.origin) -- source
-    pError.message
-    Nothing -- tags
-    (Just [])
-    Nothing
-    where
-      start = sourcePosToPosition pError.start
+  doDiagnostic pError =
+    Diagnostic
+      (LSP.Range start (nextLine start))
+      (Just LSP.DiagnosticSeverity_Error) -- severity
+      Nothing -- code
+      Nothing
+      (Just pError.origin) -- source
+      pError.message
+      Nothing -- tags
+      (Just [])
+      Nothing
+   where
+    start = sourcePosToPosition pError.start
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
 
+  sourcePosToPosition s =
+    LSP.Position
+      { _character = fromIntegral $ s.column - 1
+      , _line = fromIntegral $ s.line - 1
+      }
 
-  sourcePosToPosition s = LSP.Position
-    { _character = fromIntegral $ s.column - 1
-    , _line = fromIntegral $ s.line - 1
-    }
-
-  nextLine p = LSP.Position
-    { _character = 0
-    , _line = p ^. J.line + 1
-    }
+  nextLine p =
+    LSP.Position
+      { _character = 0
+      , _line = p ^. J.line + 1
+      }
 
 -- ----------------------------------------------------------------------------
 -- LSP Helpers
@@ -316,7 +328,6 @@ srcPosToPosition s =
 -- ----------------------------------------------------------------------------
 -- Simala AST to Semantic Tokens
 -- ----------------------------------------------------------------------------
-
 
 type SemanticM a = ReaderT (SemanticTokenCtx PosToken) (Except EPError) a
 

@@ -6,10 +6,10 @@ import L4.Annotation
 import L4.Lexer
 import L4.Syntax
 
-import Control.Monad.Extra qualified as Extra
+import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except
 import Data.Text
-import Data.Text qualified as Text
+import qualified Data.Text as Text
 import GHC.Stack
 
 type EPM = Except EPError

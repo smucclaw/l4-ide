@@ -12,19 +12,20 @@ module L4.Parser (
 import Base
 
 import Data.Functor.Compose
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Set qualified as Set
-import Data.Text qualified as Text
+import qualified Data.Set as Set
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import Optics
 import Text.Megaparsec hiding (parseTest)
-import Text.Megaparsec.Char.Lexer qualified as Lexer
+import qualified Text.Megaparsec.Char.Lexer as Lexer
 import Text.Pretty.Simple
 
 import L4.Annotation
 import L4.Lexer as L
-import L4.ParserCombinators qualified as P
+import qualified L4.ParserCombinators as P
 import L4.Syntax
-import qualified Data.Text.IO as Text
 
 type Parser = Parsec Void TokenStream
 
