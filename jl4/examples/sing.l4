@@ -1,0 +1,7 @@
+§ Example
+
+GIVEN p IS A Person
+DECIDE `must sing`
+    IF        walks
+       AND    eats
+           OR drinks
