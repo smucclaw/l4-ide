@@ -2,18 +2,17 @@ module Main where
 
 import Base
 import L4.Main
+import qualified L4.Parser as Parser
+import qualified L4.ExactPrint as JL4
+import Paths_jl4
 
 import System.FilePath
 import System.FilePath.Glob
 import System.IO.Silently
 import Test.Hspec
 import Test.Hspec.Golden
-
-import Paths_jl4
-import qualified L4.Parser as Parser
 import qualified Data.Text.IO as Text
 import qualified Data.Text as Text
-import qualified L4.ExactPrint as JL4
 
 main :: IO ()
 main = do
@@ -55,7 +54,7 @@ jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   input <- Text.readFile inputFile
   let output_ = case Parser.execParser Parser.program inputFile input of
-        Left err -> Text.pack err
+        Left err -> Text.unlines $ fmap (.message) $ toList err
         Right prog -> case JL4.exactprint prog of
           Left epError -> JL4.prettyEPError epError
           Right ep -> ep

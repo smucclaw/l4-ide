@@ -32,6 +32,7 @@ import L4.Annotation
 import qualified L4.Lexer as Lexer
 import L4.ExactPrint (EPError(..), prettyEPError)
 import Control.Monad.Trans.Class
+import qualified Data.Foldable as Foldable
 
 handlers :: Handlers (LspM ())
 handlers =
@@ -165,22 +166,35 @@ sendDiagnostics fileUri = do
 parseJL4WithWithDiagnostics :: Uri -> Text -> Either [Diagnostic] (Program Name)
 parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program fp content of
   Left err ->
-    Left
-      [ Diagnostic
-          (LSP.Range (LSP.Position 0 0) (LSP.Position 1 0))
-          (Just LSP.DiagnosticSeverity_Error) -- severity
-          Nothing -- code
-          Nothing
-          (Just "parser") -- source
-          ("Failed to parse program: " <> Text.pack err)
-          Nothing -- tags
-          (Just [])
-          Nothing
-      ]
+    Left $ fmap doDiagnostic $ Foldable.toList err
   Right ds ->
     pure ds
  where
+  doDiagnostic pError = Diagnostic
+    (LSP.Range start (nextLine start))
+    (Just LSP.DiagnosticSeverity_Error) -- severity
+    Nothing -- code
+    Nothing
+    (Just pError.origin) -- source
+    pError.message
+    Nothing -- tags
+    (Just [])
+    Nothing
+    where
+      start = sourcePosToPosition pError.start
+
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
+
+
+  sourcePosToPosition s = LSP.Position
+    { _character = fromIntegral $ s.column - 1
+    , _line = fromIntegral $ s.line - 1
+    }
+
+  nextLine p = LSP.Position
+    { _character = 0
+    , _line = p ^. J.line + 1
+    }
 
 -- ----------------------------------------------------------------------------
 -- LSP Helpers

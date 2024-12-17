@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module L4.Lexer where
 
 import Base
@@ -14,6 +15,8 @@ import Text.Megaparsec.Char
 import Text.Megaparsec.State
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import Data.TreeDiff.Class (ToExpr)
+import qualified Control.Monad.Trans.State.Strict as State
+import qualified Data.Set as Set
 
 type Lexer = Parsec Void Text
 
@@ -254,14 +257,14 @@ keywords =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
-execLexer :: FilePath -> Text -> Either String [PosToken]
+execLexer :: FilePath -> Text -> Either (NonEmpty (Text, SourcePos)) [PosToken]
 execLexer file input =
   let
     r = parse (rawTokens <* eof) file input
   in
     case r of
       Right rtoks -> Right (mkPosTokens file input rtoks)
-      Left errs   -> Left (errorBundlePretty errs)
+      Left errs   -> Left (errorBundleToErrorMessages errs)
 
 mkPosTokens :: FilePath -> Text -> [RawToken] -> [PosToken]
 mkPosTokens filepath txt rtoks =
@@ -403,6 +406,83 @@ instance TraversableStream TokenStream where
       restOfLine :: String
       restOfLine = takeWhile (/= '\n') postTxt
 
+errorBundleToErrorMessages ::
+  forall s e.
+  ( VisualStream s
+  , TraversableStream s
+  , ShowErrorComponent e
+  ) =>
+  -- | Parse error bundle to display
+  ParseErrorBundle s e ->
+  -- | Textual rendition of the bundle
+  NonEmpty (Text, SourcePos)
+errorBundleToErrorMessages ParseErrorBundle{..} =
+  let
+    (results, _) = State.runState (traverse format bundleErrors) bundlePosState
+  in
+    results
+ where
+  format :: ParseError s e -> State.State (PosState s) (Text, SourcePos)
+  format e = do
+    pst <- State.get
+    let
+      (msline, pst') = calculateOffset pst
+      epos = pstateSourcePos pst'
+      errMsg = parseErrorTextPretty e
+      parseErrCtx = offendingLine msline epos
+    State.put pst'
+    pure $ (Text.pack $ parseErrCtx <> errMsg, epos)
+   where
+    calculateOffset pst = reachOffset (errorOffset e) pst
+    offendingLine msline epos =
+      case msline of
+        Nothing -> ""
+        Just sline ->
+          let
+            rpadding =
+              if pointerLen > 0
+                then replicate rpshift ' '
+                else ""
+            pointerLen =
+              if rpshift + elen > slineLen
+                then slineLen - rpshift + 1
+                else elen
+            pointer = replicate pointerLen '^'
+            lineNumber = (show . unPos . sourceLine) epos
+            padding = replicate (length lineNumber + 1) ' '
+            rpshift = unPos (sourceColumn epos) - 1
+            slineLen = length sline
+          in
+            padding
+              <> "|\n"
+              <> lineNumber
+              <> " | "
+              <> sline
+              <> "\n"
+              <> padding
+              <> "| "
+              <> rpadding
+              <> pointer
+              <> "\n"
+    pxy = Proxy :: Proxy s
+    elen =
+      case e of
+        TrivialError _ Nothing _ -> 1
+        TrivialError _ (Just x) _ -> errorItemLength pxy x
+        FancyError _ xs ->
+          Set.foldl' (\a b -> max a (errorFancyLength b)) 1 xs
+
+-- | Get length of the “pointer” to display under a given 'ErrorItem'.
+errorItemLength :: (VisualStream s) => Proxy s -> ErrorItem (Token s) -> Int
+errorItemLength pxy = \case
+  Tokens ts -> tokensLength pxy ts
+  _ -> 1
+
+-- | Get length of the “pointer” to display under a given 'ErrorFancy'.
+errorFancyLength :: (ShowErrorComponent e) => ErrorFancy e -> Int
+errorFancyLength = \case
+  ErrorCustom a -> errorComponentLen a
+  _ -> 1
 
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =

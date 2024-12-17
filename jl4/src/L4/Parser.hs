@@ -1,39 +1,30 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 module L4.Parser (
   -- * Public API
   parseFile,
   execParser,
   program,
+  PError(..),
   -- * Testing API
   parseTest,
 ) where
 
 import Base
 
-import Control.Monad
-import Data.Char
 import Data.Functor.Compose
-import Data.List
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Text (Text)
-import qualified Data.Text as Text
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NonEmpty
-import Data.Void
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Optics
 import Text.Megaparsec hiding (parseTest)
-import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as Lexer
+import Text.Megaparsec.Char.Lexer qualified as Lexer
+import Text.Pretty.Simple
 
 import L4.Annotation
-import L4.Lexer
+import L4.Lexer as L
+import L4.ParserCombinators qualified as P
 import L4.Syntax
-import qualified L4.ParserCombinators as P
-
-import Text.Pretty.Simple
+import qualified Data.Text.IO as Text
 
 type Parser = Parsec Void TokenStream
 
@@ -565,23 +556,47 @@ example11e =
 --   | Var  Name
 --   deriving stock Show
 
-execParser :: Parser a -> String -> Text -> Either String a
+execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) a
 execParser p file input =
   case execLexer file input of
-    Left errs -> Left errs
+    Left errs -> Left $ fmap (mkPError "lexer") errs
     Right ts ->
       case parse (p <* eof) file (MkTokenStream (Text.unpack input) ts) of
-        Left err -> Left (errorBundlePretty err)
+        Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
         Right x  -> Right x
 
 parseFile :: Show a => Parser a -> String -> Text -> IO ()
 parseFile p file input =
   case execParser p file input of
-    Left errs -> putStr errs
+    Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right x -> pPrint x
 
 parseTest :: Show a => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
+
+-- ----------------------------------------------------------------------------
+-- Parser error messages
+-- ----------------------------------------------------------------------------
+
+data PError
+  = PError
+    { message :: Text
+    , start :: SrcPos
+    , origin :: Text
+    }
+  deriving (Show, Eq, Ord)
+
+mkPError :: Text -> (Text, SourcePos) -> PError
+mkPError orig (m, s) =
+  PError
+    { message = m
+    , start = MkSrcPos
+        { filename = sourceName s
+        , line = unPos $ sourceLine s
+        , column = unPos $ sourceColumn s
+        }
+    , origin = orig
+    }
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers
