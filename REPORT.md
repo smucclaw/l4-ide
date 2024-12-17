@@ -45,6 +45,16 @@ detail.
 
 https://docs.google.com/drawings/d/1CaJtpHDnRPQAfC2q3jdXjuXObJu9fN2WrJNfuqawHOk/edit
 
+These deliverables come from
+https://docs.google.com/document/d/1hPuBnqTcGm5gicwo06m68GqsP_YSUn8VoZfd7-cbcfI/edit?tab=t.0
+
+``` haskell
+[ d
+| d <- deliverables
+, deadline d ~= "Dec 2024"
+]
+```
+
 ## JL4 window
 
 The contents of the left window are essentially programs in a (domain-specific)
