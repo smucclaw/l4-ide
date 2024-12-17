@@ -1,7 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-module L4.Parser (parseFile, execParser, program) where
+module L4.Parser (
+  -- * Public API
+  parseFile,
+  execParser,
+  program,
+  -- * Testing API
+  parseTest,
+) where
 
 import Base
 
@@ -24,6 +31,7 @@ import qualified Text.Megaparsec.Char.Lexer as Lexer
 import L4.Annotation
 import L4.Lexer
 import L4.Syntax
+import qualified L4.ParserCombinators as P
 
 import Text.Pretty.Simple
 
@@ -90,8 +98,7 @@ simpleName =
   Name mempty <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
 name :: Parser Name
-name = attachEpa <$>
-  (quotedName <|> simpleName) <?> "identifier"
+name = attachEpa (quotedName <|> simpleName) <?> "identifier"
 
 program :: Parser (Program Name)
 program = do
@@ -115,29 +122,13 @@ withIndent ordering current p = do
       fancyFailure . Set.singleton $
         ErrorIndentation ordering current actual
 
-(<:$>) :: (a -> b) -> Parser (WithAnno a) -> Parser (WithAnno b)
-(<:$>) f a = getCompose $ f <$> Compose a
-
-(<:*>) :: Parser (WithAnno (a -> b)) -> Parser (WithAnno a) -> Parser (WithAnno b)
-(<:*>) a b = getCompose $ Compose a <*> Compose b
-
-(<:$) :: a -> Parser (WithAnno b) -> Parser (WithAnno a)
-(<:$) f a = getCompose $ f <$ Compose a
-
-(<:*) :: Parser (WithAnno a) -> Parser (WithAnno b) -> Parser (WithAnno a)
-(<:*) a b = getCompose $ Compose a <* Compose b
-
-(*:>) :: Parser (WithAnno b) -> Parser (WithAnno a) -> Parser (WithAnno a)
-(*:>) b a = getCompose $ Compose b *> Compose a
-
 section :: Parser (Section Name)
 section =
-  attachAnno
-    <$> ( MkSection emptyAnno
-            <:$> (annoFromEpa <$> sectionSymbols)
-            <:*> (annoHole <$> name)
-            <:*> (annoHole <$> (manyLines decl))
-        )
+  attachAnno $
+    MkSection emptyAnno
+      <$> annoFromEpa sectionSymbols
+      <*> annoHole name
+      <*> annoHole (manyLines decl)
 
 sectionSymbols :: Parser (Epa Int)
 sectionSymbols = do
@@ -151,54 +142,51 @@ decl =
 
 declare :: Parser (Declare Name)
 declare =
-  attachAnno
-    <$> ( MkDeclare emptyAnno
-            <:$ (annoFromEpa . toEpa' <$> spacedToken_ TKDeclare)
-            <:*> (annoHole <$> name)
-            <:*> (annoHole <$> ofType)
-        )
+  attachAnno $
+    MkDeclare emptyAnno
+      <$ annoFromWs (spacedToken_ TKDeclare)
+      <*> annoHole name
+      <*> annoHole ofType
 
 decide :: Parser (Decide Name)
-decide = attachAnno <$> do
+decide = do
   sig <- typeSig
   current <- Lexer.indentLevel
   tkDecide <- spacedToken_ TKDecide
   clauses <- manyLines (clause current) -- I see room for ambiguity here
-  MkDecide emptyAnno
-      <:$> pure (annoHole sig)
-      <:*  pure (annoFromEpa $ toEpa' tkDecide)
-      <:*> pure (annoHole clauses)
-
+  attachAnno $
+    MkDecide emptyAnno
+      <$> annoHole (pure sig)
+      <*  annoFromWs (pure tkDecide)
+      <*> annoHole (pure clauses)
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
-  attachAnno
-    <$> ( MkTypeSig emptyAnno
-            <:$> (annoHole <$> option (MkGivenSig emptyAnno []) given)
-            <:*> (annoHole <$> optional giveth)
-        )
+  attachAnno $
+    MkTypeSig emptyAnno
+      <$> annoHole (option (MkGivenSig emptyAnno []) given)
+      <*> annoHole (optional giveth)
 
 given :: Parser (GivenSig Name)
-given = attachAnno <$>
-  (MkGivenSig emptyAnno
-  <:$  (annoFromEpa . toEpa' <$> spacedToken_ TKGiven)
-  <:*> (annoHole <$> manyLines typedName))
+given =
+  attachAnno $
+    MkGivenSig emptyAnno
+      <$ annoFromWs (spacedToken_ TKGiven)
+      <*> annoHole (manyLines typedName)
 
 giveth :: Parser (GivethSig Name)
 giveth =
-  attachAnno
-    <$> ( MkGivethSig emptyAnno
-            <:$ (annoFromEpa . toEpa' <$> spacedToken_ TKGiveth)
-            <:*> (annoHole <$> typedName)
-        )
+  attachAnno $
+    MkGivethSig emptyAnno
+      <$ annoFromWs (spacedToken_ TKGiveth)
+      <*> annoHole (typedName)
 
 clause :: Pos -> Parser (Clause Name)
 clause p =
-  attachAnno
-    <$> ( GuardedClause emptyAnno
-            <:$> (annoHole <$> indentedExpr p)
-            <:*> (annoHole <$> guard_)
-        )
+  attachAnno $
+    GuardedClause emptyAnno
+      <$> annoHole (indentedExpr p)
+      <*> annoHole guard_
 
 -- primarily for testing
 expr :: Parser (Expr Name)
@@ -212,17 +200,16 @@ guard_ =
 
 otherwiseGuard :: Parser (Guard n)
 otherwiseGuard =
-  attachAnno
-    <$> ( Otherwise emptyAnno
-            <:$ (annoFromEpa . toEpa' <$> spacedToken_ TKOtherwise)
-        )
+  attachAnno $
+    Otherwise emptyAnno
+      <$ annoFromWs (spacedToken_ TKOtherwise)
 
 plainGuard :: Parser (Guard Name)
-plainGuard = attachAnno <$> do
+plainGuard =   do
   current <- Lexer.indentLevel
-  PlainGuard emptyAnno
-    <:$  (annoFromEpa . toEpa' <$> spacedToken_ TKIf)
-    <:*> (annoHole <$> indentedExpr current)
+  attachAnno $ PlainGuard emptyAnno
+    <$  annoFromWs (spacedToken_ TKIf)
+    <*> annoHole (indentedExpr current)
 
 ofType :: Parser (Type' Name)
 ofType =
@@ -231,53 +218,51 @@ ofType =
 
 isType :: Parser (Type' Name)
 isType =
-  attachAnno
-    <$> (annoFromEpa . toEpa' <$> spacedToken_ TKIs)
-      *:> (   namedType
-          <|> enumType
-          )
+  attachAnno $
+    annoFromWs (spacedToken_ TKIs)
+      *> (   namedType
+         <|> enumType
+         )
 
-namedType :: Parser (WithAnno (Type' Name))
+namedType :: Compose Parser WithAnno (Type' Name)
 namedType =
   NamedType emptyAnno
-    <:$ (annoFromEpa . toEpa' <$> (spacedToken_ TKA <|> spacedToken_ TKAn))
-    <:*> (annoHole <$> name)
+    <$ (annoFromWs (spacedToken_ TKA <|> spacedToken_ TKAn))
+    <*> (annoHole name)
 
-enumType :: Parser (WithAnno (Type' Name))
+enumType :: Compose Parser WithAnno (Type' Name)
 enumType =
   Enum emptyAnno
-    <:$ (annoFromEpa . toEpa' <$> spacedToken_ TKOne)
-    <:* (annoFromEpa . toEpa' <$> spacedToken_ TKOf)
-    <:*> ( annoHole
-            <$> ( concat
-                    <$> manyLines
-                      ( do
-                          (names, commas) <- sepBy1P name (spacedToken_ TComma)
-                          pure $ zipWithLeftBias names commas
-                      )
-                )
-         )
-  where
-  zipWithLeftBias :: [Name] -> [WithWs PosToken] -> [Name]
-  zipWithLeftBias ns [] = ns
-  zipWithLeftBias [] _ = []
-  zipWithLeftBias (n:ns) (c:cs) = setAnno (getAnno n <> mkSimpleEpaAnno (toEpa' c)) n : zipWithLeftBias ns cs
+    <$ annoFromWs (spacedToken_ TKOne)
+    <* annoFromWs (spacedToken_ TKOf)
+    <*> ( annoHole
+            ( concat
+                <$> manyLines
+                  ( do
+                      (names, commas) <- P.sepBy1 name (spacedToken_ TComma)
+                      pure $ zipWithLeftovers names commas
+                  )
+            )
+        )
+ where
+  zipWithLeftovers :: [Name] -> [WithWs PosToken] -> [Name]
+  zipWithLeftovers ns [] = ns
+  zipWithLeftovers [] _ = []
+  zipWithLeftovers (n : ns) (c : cs) = setAnno (getAnno n <> mkSimpleEpaAnno (toEpa' c)) n : zipWithLeftovers ns cs
 
 record :: Parser (Type' Name)
 record =
-  attachAnno
-    <$> ( Record emptyAnno
-            <:$ (annoFromEpa . toEpa' <$> spacedToken_ TKHas)
-            <:*> (annoHole <$> (manyLines typedName))
-        )
+  attachAnno $
+    Record emptyAnno
+      <$ annoFromWs (spacedToken_ TKHas)
+      <*> annoHole (manyLines typedName)
 
 typedName :: Parser (TypedName Name)
 typedName =
-  attachAnno
-    <$> ( MkTypedName emptyAnno
-            <:$> (annoHole <$> name)
-            <:*> (annoHole <$> ofType)
-        )
+  attachAnno $
+    MkTypedName emptyAnno
+      <$> annoHole name
+      <*> annoHole ofType
 
 -- |
 -- An expression is a base expression followed by
@@ -392,10 +377,10 @@ baseExpr =
   projection
     <|> do
       current <- Lexer.indentLevel
-      attachAnno <$>
-        (Not emptyAnno
-          <:$ ((annoFromEpa . toEpa') <$> spacedToken_ TKNot)
-          <:*> (annoHole <$> indentedExpr current))
+      attachAnno $
+        Not emptyAnno
+          <$ annoFromWs (spacedToken_ TKNot)
+          <*> annoHole (indentedExpr current)
 
 -- Some manual left-factoring here to prevent left-recursion;
 -- projections can be plain variables
@@ -622,22 +607,25 @@ unAnno (WithAnno _ a) = a
 toAnno :: WithAnno_ t a -> Anno_ t
 toAnno (WithAnno ann _) = ann
 
-holeAnno :: a -> WithAnno_ t a
-holeAnno a =  WithAnno (mkAnno [AnnoHole]) a
+annoHole :: Parser e -> Compose Parser (WithAnno_ t) e
+annoHole p = Compose $ fmap (WithAnno (mkAnno [mkHole])) p
 
-annoHole :: e -> WithAnno_ t e
-annoHole e = WithAnno (mkAnno [mkHole]) e
+annoFromEpa :: Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
+annoFromEpa p = Compose $ fmap epaToAnno p
+
+annoFromWs :: Parser (WithWs_ t t) -> Compose Parser (WithAnno_ t) t
+annoFromWs = annoFromEpa . fmap toEpa'
 
 instance Applicative (WithAnno_ t) where
   pure a = WithAnno emptyAnno a
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
-attachAnno :: (HasAnno e, AnnoToken e ~ t) => WithAnno_ t e -> e
-attachAnno (WithAnno ann e) = setAnno ann e
+attachAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
+attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
 
-attachEpa :: (HasAnno e, AnnoToken e ~ t) => Epa_ t e -> e
-attachEpa epa =
-  attachAnno (annoFromEpa epa)
+attachEpa :: (HasAnno e, AnnoToken e ~ t) => Parser (Epa_ t e) -> Parser e
+attachEpa =
+  attachAnno . annoFromEpa
 
 mkHoleAnno :: Anno_ t
 mkHoleAnno =
@@ -645,14 +633,15 @@ mkHoleAnno =
 
 mkSimpleEpaAnno :: Epa_ t a -> Anno_ t
 mkSimpleEpaAnno =
-  toAnno . annoFromEpa
+  toAnno . epaToAnno
 
-annoFromEpa :: Epa_ t e -> WithAnno_ t e
-annoFromEpa (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
-  where
-    cluster = CsnCluster
+epaToAnno :: Epa_ t a -> WithAnno_ t a
+epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
+ where
+  cluster =
+    CsnCluster
       { payload = mkConcreteSyntaxNode this
-      , trailing =  mkConcreteSyntaxNode trailing
+      , trailing = mkConcreteSyntaxNode trailing
       }
 
 data WithWs_ t a = WithWs [t] a
@@ -680,56 +669,3 @@ toEpa (WithWs trailing this) = Epa this trailing this
 
 toEpa' :: WithWs_ t t -> Epa_ t t
 toEpa' (WithWs trailing this) = Epa [this] trailing this
-
--- ----------------------------------------------------------------------------
--- Epa Parser Utilities
--- ----------------------------------------------------------------------------
-
--- ----------------------------------------------------------------------------
--- Parser Utilities
--- ----------------------------------------------------------------------------
-
-betweenP :: Parser open -> Parser close -> Parser b -> Parser (open, b, close)
-betweenP open close p = do
-  openWs <- open
-  pWs <- p
-  closeWs <- close
-  pure (openWs, pWs, closeWs)
-
--- | @'sepByP' p sep@ parses /zero/ or more occurrences of @p@, separated by
--- @sep@. Returns a list of values returned by @p@.
---
--- > commaSep p = p `sepBy` comma
-sepByP :: Parser a -> Parser sep -> Parser ([a], [sep])
-sepByP p sep = sepBy1P p sep <|> pure ([], [])
-{-# INLINE sepByP #-}
-
--- | @'sepBy1P' p sep@ parses /one/ or more occurrences of @p@, separated by
--- @sep@. Returns a list of values returned by @p@.
-sepBy1P :: Parser a -> Parser sep -> Parser ([a], [sep])
-sepBy1P p sep = do
-  a <- p
-  sepsAndA <- many ((,) <$> sep <*> p)
-  let (seps, as) = unzip sepsAndA
-  pure (a : as, seps)
-
--- | @'sepEndByP' p sep@ parses /zero/ or more occurrences of @p@, separated
--- and optionally ended by @sep@. Returns a list of values returned by @p@.
-sepEndByP :: Parser a -> Parser sep -> Parser ([a], [sep])
-sepEndByP p sep = sepEndBy1P p sep <|> pure ([], [])
-{-# INLINE sepEndByP #-}
-
--- | @'sepEndBy1P' p sep@ parses /one/ or more occurrences of @p@, separated
--- and optionally ended by @sep@. Returns a list of values returned by @p@.
-sepEndBy1P :: Parser a -> Parser sep -> Parser ([a], [sep])
-sepEndBy1P p sep = do
-  a <- p
-  (as, seps) <-
-    do
-      s <- sep
-      (as, seps) <- sepEndByP p sep
-      pure (as, s : seps)
-      <|> pure ([], [])
-  pure (a : as, seps)
-{-# INLINEABLE sepEndBy1P #-}
-

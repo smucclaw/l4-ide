@@ -46,6 +46,7 @@ library
     L4.Syntax
     L4.Lexer
     L4.Parser
+    L4.ParserCombinators
 
 executable l4
   import: defaults
