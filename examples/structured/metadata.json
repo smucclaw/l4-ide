@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "_tag": "source_info",
+      "id": "examples_for_parsing",
+      "url": "https://osf.io/rjduz/",
+      "date_accessed": "2024-12-18",
+      "authors": ["crlp"],
+      "description": "Testing different ways to parse and mark up the logical structure of legislation, by using a set of imaginary provisions and chosen enacted legislation. Aiming to publish versions with highlightings and formalisations, alongside versions in QnA Markup, Mermaid Markdown, and Excel spreadsheets, possibly with versions in L4 and Blawx."
+    }
+  ]
+}
