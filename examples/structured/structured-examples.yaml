@@ -11,7 +11,7 @@
 # `name` is best thought of as being a descriptive, readable-to-humans title, rather than an 'id'
 - name: "Dogs Act s9 (Display of signs at homes where dogs are kept)"
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing]
       quote: |-
         (1) A person who keeps a dog at the person's home must display a sign that –
           (a)	is legible from the nearest road that gives access to the home; and
@@ -41,14 +41,14 @@
           I've seen examples of legislation where there's a very explicit phrase like 'commits an offence'.
           But there's also examples where there may not be an explicit phrase like that next to the offence-creating provision or definition of the offence (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing]
       quote: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
-    - source: sg_penal_code_378
+    - sources: [sg_penal_code_378]
       quote: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
       note: "See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
 - name: "Inclusion relationship between entities"
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing]
       quote: '"business" includes trade or profession'
   questions:
     - {
@@ -59,9 +59,8 @@
       }
 - name: "How to handle '... has the meaning given by section ..."
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing, birmingham_commonwealth_games_act_2020]
       quote: '"Games event" has the meaning given by section 1(3)'
-      tags: ["birmingham_commonwealth_games_act_2020"]
   questions:
     - {
         priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
@@ -71,16 +70,16 @@
       }
 - name: "How to handle cross references"
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing, birmingham_commonwealth_games_act_2020]
       quote: |-
         (1) It is an offence for a person—
           (a) to carry out Games location trading (see subsection (2));
-      tags: ["birmingham_commonwealth_games_act_2020", "crossref_between_provisions"]
+      tags: ["crossref_between_provisions"]
   questions:
     - { priority: low, qn: How to handle cross references between provisions }
 - name: "How much support do we want to be able to give for dates and intervals"
   excerpts:
-    - source: examples_for_parsing
+    - sources: [examples_for_parsing]
       quote: |-
         (3) Any period specified for the purposes of this section must—
           (a) begin no earlier than the beginning of the period of 21 days ending immediately before the day on which the Games begin, and
@@ -93,7 +92,7 @@
       }
 - name: "How to model 'has a defence to this or that offence'?"
   excerpts:
-    - source: domestic_abuse_jersey_2022
+    - sources: [domestic_abuse_jersey_2022]
       quote: |-
         (5)  A has a defence to an offence under this Article if –
           (a)  in engaging in the behaviour, A held a reasonable belief that A was acting in B's best interests; and
