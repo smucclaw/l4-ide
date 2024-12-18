@@ -1,0 +1,100 @@
+# ======================================================================================================
+# -- Dec 18 2024: Prioritizing (short) examples
+# where either it's not obvious how it should be handled by our DSL,
+# or there is some flexibility in how it could be handled.
+# I am also mostly ignoring things that are clearly defeasibility-related for now,
+# since that's something that can be tackled after we've got the core language working.
+# Not worrying about syntactical niceties that can probably be resolved as and when they come up either.
+# ======================================================================================================
+
+# Each `source` should correspond to a valid `id` of a `source_info` in `metadata.json`.
+# `name` is best thought of as being a descriptive, readable-to-humans title, rather than an 'id'
+- name: "Dogs Act s9 (Display of signs at homes where dogs are kept)"
+  excerpts:
+    - source: examples_for_parsing
+      quote: |-
+        (1) A person who keeps a dog at the person's home must display a sign that –
+          (a)	is legible from the nearest road that gives access to the home; and
+          (b)	informs the public that a dog is kept at the home.
+        (2)	Paragraph (1) does not apply to a dog that -
+          (a)	is kept by a farmer;
+          (b)	is not a spaniel or a labrador; and
+          (c)	is registered under this Act.
+        (3)	In paragraph (2) "farmer" means a person who works in an agricultural business.
+  questions:
+    - {
+        priority: { "low", reason: "Can probably worked out eventually or not required for v1/v2" },
+        qn: "How do we want to handle indexicals / self-reference like 'this Act' in 2(c)?
+          Do we always want to just replace it with the extensionally equivalent thing? Or are examples where we want to preserve the indexicality?",
+      }
+    - {
+        priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
+        qn: "Observe how ...(3) In para (2) 'farmer' means... comes *after* (2).
+          1. How much 'isomorphism' do we want when formalizing this: do we similarly want to have the program-version of (3) come after the program-version of (2) in the surface syntax, or do we want to just require L4 users to inline the annotation or definition into (2)?
+
+          2. If we do want to have it come after, how would we handle that? Would it be handled by an annotation mechanism where the annotation need not be directly bundled with the thing being annotated in the syntax (e.g. like how you can annotate a top-level expression's type with `::` in Haskell without having to do it at the exact same place that you define the expression)?
+          Or is this better handled by whatever mechanism we will use (in the future) to handle defeasibility/exceptions?",
+      }
+- name: "How to represent offenses / crimes"
+  questions:
+    - { priority: { level: low }, qn: "How explicitly should offences/crimes be represented?
+          I've seen examples of legislation where there's a very explicit phrase like 'commits an offence'.
+          But there's also examples where there may not be an explicit phrase like that next to the offence-creating provision or definition of the offence (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
+  excerpts:
+    - source: examples_for_parsing
+      quote: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
+    - source: sg_penal_code_378
+      quote: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
+      note: "See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
+- name: "Inclusion relationship between entities"
+  excerpts:
+    - source: examples_for_parsing
+      quote: '"business" includes trade or profession'
+  questions:
+    - {
+        priority: { level: "low" },
+        qn:
+          "How do we want to model, e.g., inclusion relationship between entities? CRLP note that inclusion and identity relationships are common in legal texts.
+          There may also not be a one-size-fits-all answer here -- it may also just depend on the legal text in question and what ones want to be able to do with the program.",
+      }
+- name: "How to handle '... has the meaning given by section ..."
+  excerpts:
+    - source: examples_for_parsing
+      quote: '"Games event" has the meaning given by section 1(3)'
+      tags: ["birmingham_commonwealth_games_act_2020"]
+  questions:
+    - {
+        priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
+        qn: "1. How do we want to handle '... has the meaning given by section ...'?
+          As with the fictional dog example, is this best handled by some kind of annotation mechanism? Or is it better handled by whatever mechanism is used to handle defeasibility/exceptions?
+          2. What demos do we envision implementing for this kind of thing in the short to medium term? Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
+      }
+- name: "How to handle cross references"
+  excerpts:
+    - source: examples_for_parsing
+      quote: |-
+        (1) It is an offence for a person—
+          (a) to carry out Games location trading (see subsection (2));
+      tags: ["birmingham_commonwealth_games_act_2020", "crossref_between_provisions"]
+  questions:
+    - { priority: low, qn: How to handle cross references between provisions }
+- name: "How much support do we want to be able to give for dates and intervals"
+  excerpts:
+    - source: examples_for_parsing
+      quote: |-
+        (3) Any period specified for the purposes of this section must—
+          (a) begin no earlier than the beginning of the period of 21 days ending immediately before the day on which the Games begin, and
+          (b) end no later than the end of the period of 5 days beginning with the day after the day on which the Games end.
+      tags: ["birmingham_commonwealth_games_act_2020", "crossref_between_provisions"]
+  questions:
+    - {
+        priority: low,
+        qn: How much support do we want to be able to give for dates and intervals? How granularly do we want to be able to model these things?,
+      }
+- name: "How to model 'has a defence to this or that offence'?"
+  excerpts:
+    - source: domestic_abuse_jersey_2022
+      quote: |-
+        (5)  A has a defence to an offence under this Article if –
+          (a)  in engaging in the behaviour, A held a reasonable belief that A was acting in B's best interests; and
+          (b)  the behaviour was reasonable in the circumstances.
