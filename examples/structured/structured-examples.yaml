@@ -56,6 +56,7 @@
         qn:
           "How do we want to model, e.g., inclusion relationship between entities? CRLP note that inclusion and identity relationships are common in legal texts.
           There may also not be a one-size-fits-all answer here -- it may also just depend on the legal text in question and what ones want to be able to do with the program.",
+        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024)
       }
 - name: "How to handle '... has the meaning given by section ..."
   excerpts:
@@ -67,6 +68,7 @@
         qn: "1. How do we want to handle '... has the meaning given by section ...'?
           As with the fictional dog example, is this best handled by some kind of annotation mechanism? Or is it better handled by whatever mechanism is used to handle defeasibility/exceptions?
           2. What demos do we envision implementing for this kind of thing in the short to medium term? Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
+        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024)
       }
 - name: "How to handle cross references"
   excerpts:
@@ -76,7 +78,7 @@
           (a) to carry out Games location trading (see subsection (2));
       tags: ["crossref_between_provisions"]
   questions:
-    - { priority: low, qn: How to handle cross references between provisions }
+    - { priority: low, qn: How to handle cross references between provisions, answer: Will be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024) }
 - name: "How much support do we want to be able to give for dates and intervals"
   excerpts:
     - sources: [examples_for_parsing]
@@ -90,10 +92,13 @@
         priority: low,
         qn: How much support do we want to be able to give for dates and intervals? How granularly do we want to be able to model these things?,
       }
-- name: "How to model 'has a defence to this or that offence'?"
+- name: "has a defence to an offence"
   excerpts:
     - sources: [domestic_abuse_jersey_2022]
       quote: |-
         (5)  A has a defence to an offence under this Article if –
           (a)  in engaging in the behaviour, A held a reasonable belief that A was acting in B's best interests; and
           (b)  the behaviour was reasonable in the circumstances.
+  questions:
+    - { priority: low,
+        qn: How exactly do we want to model 'A has a defence to an offence under this Article'? Then again I'm guessing we don't really need to capture the fine-grained structure with quantifiers. }
