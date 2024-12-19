@@ -4,7 +4,7 @@ We use the following meta-notation for
 separated lists:
 ```
 foo{sep}* ::=
-    epsilon               (the empty symbol)
+    epsilon             -- the empty symbol
   | foo "sep" foo{sep}*
 ```
 Most of these can be replaced using layout / indentation,
@@ -45,18 +45,19 @@ enumdecl ::=
 condecl ::=
   name recorddecl?
 
--- modulo operator priority
+-- ignoring operator priority
 type ::=
     "TYPE"
-  | name+       (type application)
-  | name "OF" tyargs
-  | FUNCTION FROM tyargs TO type
-    -- probably not needed:
-  | "BOOL"
-  | "NUMBER"
-  | "STRING"
-  | "LIST"
-  | "OPTIONAL"
+  | name+                         -- type application
+  | name "OF" tyargs              -- also type application
+  | name "WITH" namedtyargs       -- also type application
+  | FUNCTION FROM tyargs TO type  -- function type
+    -- probably not needed because can be predefined instead of built-in
+  | "BOOL"                        -- Booleans
+  | "NUMBER"                      -- numbers, potentially some mixed integer / fractional type
+  | "STRING"                      -- strings
+  | "LIST"                        -- homogeneous lists, like lists in Haskell
+  | "OPTIONAL"                    -- like Maybe in Haskell
 
 tyargs ::=
   type{AND}+
@@ -68,7 +69,7 @@ giveth ::=
   "GIVETH" type
 
 binding' ::=
-    "DECIDE" name+ ("IS" | "IF") expr
+    "DECIDE" name+ ("IS" | "IF") expr  -- both forms are equivalent
   | name+ "MEANS" expr
 
 assumption ::=
@@ -77,23 +78,42 @@ assumption ::=
 assumption' ::=
   "ASSUME" name+ "IS" article? type
 
--- module operator priority
+-- ignoring operator priority
 expr ::=
     expr infixop expr
-  | name+                 (function application)
-  | name "OF" args        (also function application)
-  | name "WITH" namedargs (ADT construction / function application)
-  | givens "YIELD" expr   (lambda)
-  | expr "'s" name        (record projection)
-  | "THE" name "OF" expr  (also record projection, under discussion)
-  | "IF" expr "THEN" expr "ELSE" expr
-  | "CONSIDER" expr branches
-  | expr "WHERE" decls
-  | article? "LIST" ("OF"?) expr{,}*
-    -- probably not needed:
-  | "EMPTY"
-  | "MISSING"
-  | "JUST"
+  | name+                 -- constructor / function application
+  | name "OF" args        -- also constructor / function application
+  | name "WITH" namedargs -- also constructor / function application
+  | givens "YIELD" expr   -- anonymous function / lambda
+  | expr "'s" name        -- record projection
+  | "THE" name "OF" expr  -- also record projection (under discussion)
+  | "IF" expr "THEN" expr "ELSE" expr  -- elimination for Booleans
+  | "CONSIDER" expr branches -- elimination for general datatypes
+  | expr "WHERE" decls    -- local declarations
+  | article? "LIST" ("OF"?) expr{,}*   -- literal lists
+    -- probably not needed because can be predefined instead of built-in:
+  | "EMPTY"               -- empty list
+  | "MISSING"             -- like Nothing in Haskell
+  | "JUST"                -- like Just in Haskell
+
+-- All operators have a textual form, but some may also have
+-- a symbolic form. These have to be built-in for now (not *necessarily*
+-- keywords), because operators currently cannot be user-defined.
+infixop ::=
+    "AND" | "&&"
+  | "OR" | "||"
+  | "IMPLIES" | "=>"
+  | "PLUS" | "+"
+  | "MINUS" | "-"
+  | "TIMES" | "*"
+  | "DIVIDED" "BY" | "/"
+  | "EQUALS" | "="
+  | "GREATER" "THAN" | "ABOVE" | ">"
+  | "LESS" "THAN" | "BELOW" | "<"
+  | "AT" "LEAST" | ">"
+  | "AT "MOST" | "<"
+  | "FOLLOWED" "BY"     -- "cons" on lists
+  | ...                 -- we will probably add more operators
 
 branches ::=
   branch{,}*
@@ -101,6 +121,12 @@ branches ::=
 branch ::=
     "WHEN" pattern "THEN" expr
   | "OTHERWISE" expr
+
+pattern ::=
+  | name+
+  | pattern "FOLLOWED" "BY" pattern  (the only infix constructor we have right now)
+  | name "OF" patargs
+  | name "WITH" namedpatargs
 
 namedargs ::=
   namedarg{,}*
@@ -110,6 +136,15 @@ namedarg ::=
   
 args ::=
   expr{AND}+
+
+namedpatargs ::=
+  namedpatarg{,}*
+
+namedarg ::=
+  name "IS" article? pattern
+
+patargs ::=
+  pattern{AND}+
 
 decls ::=
   binding{;}*
