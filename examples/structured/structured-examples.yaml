@@ -12,7 +12,7 @@
 - name: "Dogs Act s9 (Display of signs at homes where dogs are kept)"
   excerpts:
     - sources: [examples_for_parsing]
-      quote: |-
+      example: |-
         (1) A person who keeps a dog at the person's home must display a sign that –
           (a)	is legible from the nearest road that gives access to the home; and
           (b)	informs the public that a dog is kept at the home.
@@ -21,6 +21,7 @@
           (b)	is not a spaniel or a labrador; and
           (c)	is registered under this Act.
         (3)	In paragraph (2) "farmer" means a person who works in an agricultural business.
+      status: fictional
   questions:
     - {
         priority: { "low", reason: "Can probably worked out eventually or not required for v1/v2" },
@@ -42,14 +43,15 @@
           But there's also examples where there may not be an explicit phrase like that next to the offence-creating provision or definition of the offence (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
   excerpts:
     - sources: [examples_for_parsing]
-      quote: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
+      example: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
     - sources: [sg_penal_code_378]
-      quote: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
+      example: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
       note: "See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
+      status: real_legislation
 - name: "Inclusion relationship between entities"
   excerpts:
     - sources: [examples_for_parsing]
-      quote: '"business" includes trade or profession'
+      example: '"business" includes trade or profession'
   questions:
     - {
         priority: { level: "low" },
@@ -61,7 +63,7 @@
 - name: "How to handle '... has the meaning given by section ..."
   excerpts:
     - sources: [examples_for_parsing, birmingham_commonwealth_games_act_2020]
-      quote: '"Games event" has the meaning given by section 1(3)'
+      example: '"Games event" has the meaning given by section 1(3)'
   questions:
     - {
         priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
@@ -73,7 +75,7 @@
 - name: "How to handle cross references"
   excerpts:
     - sources: [examples_for_parsing, birmingham_commonwealth_games_act_2020]
-      quote: |-
+      example: |-
         (1) It is an offence for a person—
           (a) to carry out Games location trading (see subsection (2));
       tags: ["crossref_between_provisions"]
@@ -81,12 +83,12 @@
     - { priority: low, qn: How to handle cross references between provisions, answer: Will be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024) }
 - name: "How much support do we want to be able to give for dates and intervals"
   excerpts:
-    - sources: [examples_for_parsing]
-      quote: |-
+    - sources: [examples_for_parsing, birmingham_commonwealth_games_act_2020]
+      example: |-
         (3) Any period specified for the purposes of this section must—
           (a) begin no earlier than the beginning of the period of 21 days ending immediately before the day on which the Games begin, and
           (b) end no later than the end of the period of 5 days beginning with the day after the day on which the Games end.
-      tags: ["birmingham_commonwealth_games_act_2020", "crossref_between_provisions"]
+      tags: ["crossref_between_provisions"]
   questions:
     - {
         priority: low,
@@ -95,10 +97,67 @@
 - name: "has a defence to an offence"
   excerpts:
     - sources: [domestic_abuse_jersey_2022]
-      quote: |-
+      example: |-
         (5)  A has a defence to an offence under this Article if –
           (a)  in engaging in the behaviour, A held a reasonable belief that A was acting in B's best interests; and
           (b)  the behaviour was reasonable in the circumstances.
   questions:
     - { priority: low,
         qn: How exactly do we want to model 'A has a defence to an offence under this Article'? Then again I'm guessing we don't really need to capture the fine-grained structure with quantifiers. }
+- name: "normative/achievement_obligation"
+  excerpts:
+    - sources: [governatori_llbp]
+      example:   "Customers must pay before the delivery of the good, after receiving the invoice.  Otherwise, an additional fine must be paid. [This might have been slightly paraphrased.]"
+      note: This obligation persists after the deadline if it hasn't been fulfilled by then; it is only when it's been complied with that it terminates. (But such persistence is not required for it to be an achievement obligation, in Governatori's typology.)
+      status: fictional
+    - sources: []
+      example: The wedding cake must be delivered before the wedding party.
+      note: In typical cases where we'd have an obligation like this, we wouldn't have the obligation persist after the deadline.
+      tags: ["normative/achievement_obligation", governatori]      
+- name: "normative/maintenance_obligation"
+  excerpts:
+    - sources: [governatori_llbp]
+      example: "Customers must keep a positive balance for 30 days after opening a bank account. [This might have been slightly paraphrased.]"
+      status: fictional
+      tags: ["normative/maintenance_obligation", governatori]
+- name: "normative/punctual_obligation"
+  excerpts:
+    - sources: [governatori_llbp]
+      example: "When banks do a wire transfer, they must transmit a message, via SWIFT, to the receiving bank requesting that the payment is made according to the instructions given. [This might have been slightly paraphrased.]"
+      status: fictional
+      tags: ["normative/punctual_obligation", governatori]
+- name: "normative/maintenance_permission"
+  excerpts:
+    - sources: [governatori_llbp]
+      example: "Customers may have a negative balance for at most 30 consecutive days. After that period, they will be charged 10% interest. [This might have been slightly paraphrased.]"
+      status: fictional
+      tags: ["normative/maintenance_permission", governatori]
+- name: "anti_money_laundering/defeasibility"
+  excerpts:
+    - sources: [governatori_llbp, anti_money_laundering_counter_terrorism_act]
+      example: |-
+        1. All new customers must be scanned against provided databases for identity checks.
+        ("The obligation resulting from this rule is a non-persistent obligation, i.e. as soon as a check has been performed, the obligation is no longer in force.)
+  
+        2. All identity checks that are performed must be recorded.
+        ("This rule establishes that there is a permanent obligation to keep record of the identity corresponding to the (new) customer identified by x. [...] this obligation is not fulfilled by the achievement of the activity (for example, by storing it in a database). We have a violation of the condition, if for example, the record x is deleted from the database.")
+
+        3. Accounts must maintain a positive balance, unless approved by a bank manager, or for VIP customers.
+        (YM: Nice, relatively simple example of exceptions to norms/rules.)
+      status: real_legislation
+      tags: ["normative/defeasibility", governatori]
+- name: "anti_money_laundering/preemptive_obligation"
+  excerpts:
+    - sources: [hashmi_2015, anti_money_laundering_counter_terrorism_act.clause54]
+      example: |-
+        (1) A report under Section 53 must be given:
+            (a) if the movement of the physical currency is to be effected by a person bringing the physical currency into Australia with the person—at the time worked out under subsection (2); or
+            [...]
+            (d) in any other case—at any time before the movement of the physical currency takes place.
+      note: |-
+        A pre-emptive obligation is (i) an achievement obligation that (ii) can be fulfilled even before the obligation comes into force. (An achievement obligation to phi is an obligation where as long as you phi at least once, you count as fulfilling the obligation.)
+
+        > Clause (d) in this example describes that the preemptive obligation enters into force when a financial transanction happens, and the clause explicitly requires the report to be submitted to the relevant authority before the actual transaction (phyiscal movement of the currency) occurs. Notice that in some situations it might be the case that the transaction never occurres." (Hashmi 436)
+      status: real_legislation
+      tags: ["normative/preemptive_obligation", "normative/achievement_obligation", governatori]
+# TODO: Add some non-preemptive obligations and perduant obligations
