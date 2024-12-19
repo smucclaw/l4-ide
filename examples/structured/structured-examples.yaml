@@ -90,10 +90,13 @@
         priority: low,
         qn: How much support do we want to be able to give for dates and intervals? How granularly do we want to be able to model these things?,
       }
-- name: "How to model 'has a defence to this or that offence'?"
+- name: "has a defence to an offence"
   excerpts:
     - sources: [domestic_abuse_jersey_2022]
       quote: |-
         (5)  A has a defence to an offence under this Article if –
           (a)  in engaging in the behaviour, A held a reasonable belief that A was acting in B's best interests; and
           (b)  the behaviour was reasonable in the circumstances.
+  questions:
+    - { priority: low,
+        qn: How exactly do we want to model 'A has a defence to an offence under this Article'? Then again I'm guessing we don't really need to capture the fine-grained structure with quantifiers.}
