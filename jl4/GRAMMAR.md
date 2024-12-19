@@ -1,8 +1,16 @@
 # JL4 language context-free grammar
 
--- foo{sep}* is short for essentially sepBy
--- deferred: annotations
+We use the following meta-notation for
+separated lists:
+```
+foo{sep}* ::=
+    epsilon               (the empty symbol)
+  | foo "sep" foo{sep}*
+```
+Most of these can be replaced using layout / indentation,
+see further below.
 
+```
 program ::=
   topdecl{;}*
 
@@ -110,33 +118,36 @@ directive ::=
     "#EVAL" expr
   | "#CHECK" expr
   | ...
-
+```
 
 # Some remarks on ambiguity and layout
 
+```
 DECLARE FOO IS ONE OF con1 HAS x IS A BOOL, y IS A NUMBER, con2
+```
 
 Disambiguation with layout:
-
+```
 DECLARE FOO IS ONE OF
   con1 HAS
     x IS A BOOL
     y IS A NUMBER
   con2
+```
 
 Disambiguation with parentheses:
 
 There are in principle two options:
-
+```
 DECLARE FOO IS ONE OF (con1 HAS x IS A BOOL, y IS A NUMBER), con2
 DECLARE FOO IS ONE OF con1 HAS (x IS A BOOL, y IS A NUMBER), con2
-
+```
 We will go for the first option.
 
 Annotations are treated just as lexical comments.
 
-Line comments start with "--".
-Block comments start with "/-" and end with "-/".
+Line comments start with `--`.
+Block comments start with `/-` and end with `-/`.
 
 # Layout
 
@@ -160,10 +171,10 @@ We have initially three kinds of annotations:
 - and references.
 
 For NLG hints, we allow to write them as a comment
-starting with "@nlg" or within square brackets.
+starting with `@nlg` or within square brackets.
 
 For references, we allow to write them as a comment
-starting with "@ref" or within angle brackets.
+starting with `@ref` or within angle brackets.
 
 Annotations for specific entities refer to whatever
 precedes them.
