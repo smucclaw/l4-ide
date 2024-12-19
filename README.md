@@ -7,6 +7,7 @@ Private repository for a mattwadd-specific dialect of L*4.
 - Drafts of the Dec report for CRLP, started on Tues Dec 17 2024
   - [The google doc draft](https://docs.google.com/drawings/d/1CaJtpHDnRPQAfC2q3jdXjuXObJu9fN2WrJNfuqawHOk/edit)
   - [The Github repo draft](./REPORT.md)
+  - [Slack thread](https://smucclaw.slack.com/archives/C080UD79NQH/p1734426129494699)
 - [Proposal for CCLaw work for CRLP, as of 4-11-24](https://drive.google.com/file/d/1KdI_usifYqUDmUpRvCxJfj8utIU8hk8J/view?usp=drive_link)
 - Google drive "CRLP with Matthew Waddington": <https://drive.google.com/drive/folders/1qO7BAUqlI9aawPXsrVeDBhD-hwdo9GLI>
   - General tip: sort by latest modified
@@ -17,14 +18,17 @@ Private repository for a mattwadd-specific dialect of L*4.
 
 - Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
 - Meng's thoughts on L4 syntax: <https://docs.google.com/spreadsheets/d/1RW5wLksZY7BBpjkbYzHDAjAgan994nnTdZiqhTFxoJw/edit?gid=1732775477#gid=1732775477>
+- CSL
+  - Static Analyses of CSL contracts
+    - [A Formally Verified Static Analysis Framework for Compositional Contracts](https://core.ac.uk/download/pdf/322819293.pdf)
 
 ## Links to specific examples
 
+- Short parsing exercises: <https://osf.io/rjduz>
+  - traffic, farming, alcohol, dogs (imaginary); charities, advertising in event (real)
 - British Nationality Act: <https://osf.io/mt78r>. Note that they have a redraft of s1 at the end in a more modern style.
 - (Fictional) alcohol sales example in the IDE mockup: <https://crlp-jerseyldo.github.io/ilde-mockup/>
 - (Fictional) farming act: <https://osf.io/bcnje>
-- Short parsing exercises: <https://osf.io/rjduz>
-  - traffic, farming, alcohol, dogs (imaginary); charities, advertising in event (real)
 - [Charities (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_41_2014) and its [Reg & Orders](https://www.jerseylaw.je/laws/current/search?q=charities&size=n_50_n)
 - [Financial Services Ombudsman (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_14_2014)
 - [Domestic Abuse (Jersey) Law 2022](https://www.jerseylaw.je/laws/current/l_27_2022)
