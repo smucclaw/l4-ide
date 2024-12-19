@@ -16,6 +16,7 @@ Private repository for a mattwadd-specific dialect of L*4.
 ## Other reading materials
 
 - Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
+- Meng's thoughts on L4 syntax: <https://docs.google.com/spreadsheets/d/1RW5wLksZY7BBpjkbYzHDAjAgan994nnTdZiqhTFxoJw/edit?gid=1732775477#gid=1732775477>
 
 ## Links to specific examples
 
