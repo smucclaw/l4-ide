@@ -8,7 +8,8 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 1. Build the project
 
     ```bash
-    npm run compile
+    pnpm install
+    pnpm run compile
     ```
 
 2. Package the extension
