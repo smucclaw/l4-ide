@@ -1,29 +1,38 @@
-import path from 'path';
-import * as vscode from 'vscode';
-import { RuleNode } from './ruleToJson';
+import path from "path"
+import * as vscode from "vscode"
+import { RuleNode } from "./ruleToJson"
 
 export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
-  let panel: vscode.WebviewPanel | undefined;
+  let panel: vscode.WebviewPanel | undefined
 
   if (!panel) {
     panel = vscode.window.createWebviewPanel(
-      'viz',
-      'Visualisation',
+      "viz",
+      "Visualisation",
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
-        retainContextWhenHidden: true
+        retainContextWhenHidden: true,
       }
-    );
+    )
 
-    const ladderDiagramScriptPath = vscode.Uri.file(path.join(context.extensionPath, 'media', 'ladder-diagram.min.js'));
-    const ladderDiagramScriptUri = panel.webview.asWebviewUri(ladderDiagramScriptPath);
+    const ladderDiagramScriptPath = vscode.Uri.file(
+      path.join(context.extensionPath, "media", "ladder-diagram.min.js")
+    )
+    const ladderDiagramScriptUri = panel.webview.asWebviewUri(
+      ladderDiagramScriptPath
+    )
 
-    panel.webview.html = getWebviewContent(context, panel, ladderDiagramScriptUri, ruleJson || DefaultRule() );
+    panel.webview.html = getWebviewContent(
+      context,
+      panel,
+      ladderDiagramScriptUri,
+      ruleJson || DefaultRule()
+    )
 
     panel.onDidDispose(() => {
-      panel = undefined;
-    });
+      panel = undefined
+    })
   }
 }
 
@@ -31,17 +40,17 @@ function getWebviewContent(
   context: vscode.ExtensionContext,
   panel: vscode.WebviewPanel,
   scriptUri: vscode.Uri,
-  ruleJson: RuleNode): string {
-
+  ruleJson: RuleNode
+): string {
   const webviewCssUri = panel.webview.asWebviewUri(
     vscode.Uri.joinPath(
       context.extensionUri,
-      'node_modules',
-      'ladder-diagram',
-      'css',
-      'ladder.css'
+      "node_modules",
+      "ladder-diagram",
+      "css",
+      "ladder.css"
     )
-  );
+  )
 
   return `
     <!DOCTYPE html>
@@ -111,14 +120,14 @@ function getWebviewContent(
       </script>
     </body>
   </html>
-  `;
+  `
 }
 
 function DefaultRule(): RuleNode {
   return {
-    andOr: { tag: 'All', children: [] },
-    mark: { value: 'undefined', source: 'user' },
+    andOr: { tag: "All", children: [] },
+    mark: { value: "undefined", source: "user" },
     prePost: {},
-    shouldView: 'Ask'
-  };
+    shouldView: "Ask",
+  }
 }
