@@ -1,112 +1,144 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
 module L4.Syntax where
+
+import L4.Annotation
 
 import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
+import L4.Lexer (PosToken)
+import Optics.Generic (gposition)
+import Optics ((^.), set)
 
-type Name = Text
 type Label = Name
 
+data Name = Name Anno Text
+  deriving stock (GHC.Generic, Eq, Ord, Show)
+  deriving anyclass ToExpr
+
+instance HasAnno Name where
+  type AnnoToken Name = PosToken
+
 data Type' n =
-    NamedType n
-  | Enum      [n]
-  | Record    [TypedName n]
-  | Boolean -- should perhaps just be a pre-defined NamedType
+    NamedType Anno n
+  | Enum      Anno [n]
+  | Record    Anno [TypedName n]
+  | Boolean   Anno -- should perhaps just be a pre-defined NamedType
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (Type' n) where
+  type AnnoToken (Type' n) = PosToken
 
 data TypedName n =
-  MkTypedName n (Type' n)
+  MkTypedName Anno n (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr)
+
+instance HasAnno (TypedName n) where
+  type AnnoToken (TypedName n) = PosToken
 
 data TypeSig n =
-  MkTypeSig [TypedName n] (Maybe (TypedName n))
+  MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (TypeSig n) where
+  type AnnoToken (TypeSig n) = PosToken
+  getAnno e = e ^. gposition @1
+  setAnno ann e = set (gposition @1) ann e
+
+data GivenSig n =
+  MkGivenSig Anno [TypedName n]
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass ToExpr
+
+instance HasAnno (GivenSig n) where
+  type AnnoToken (GivenSig n) = PosToken
+
+data GivethSig n =
+  MkGivethSig Anno (TypedName n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass ToExpr
+
+instance HasAnno (GivethSig n) where
+  type AnnoToken (GivethSig n) = PosToken
 
 data Decide n =
-  MkDecide (TypeSig n) [Clause n]
+  MkDecide Anno (TypeSig n) [Clause n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (Decide n) where
+  type AnnoToken (Decide n) = PosToken
 
 data Declare n =
-  MkDeclare n (Type' n)
+  MkDeclare Anno n (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (Declare n) where
+  type AnnoToken (Declare n) = PosToken
 
 data Clause n =
-  GuardedClause (Expr n) (Guard n)
+  GuardedClause Anno (Expr n) (Guard n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (Clause n) where
+  type AnnoToken (Clause n) = PosToken
 
 data Guard n =
-    PlainGuard (Expr n)
-  | Otherwise
+    PlainGuard Anno (Expr n)
+  | Otherwise  Anno
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
+
+instance HasAnno (Guard n) where
+  type AnnoToken (Guard n) = PosToken
 
 data Expr n =
-    And  (Expr n) (Expr n)
-  | Or   (Expr n) (Expr n)
-  | Is   (Expr n) (Expr n)
-  | Not  (Expr n)
-  | Proj (Expr n) Label
-  | Var  n
+    And  Anno (Expr n) (Expr n)
+  | Or   Anno (Expr n) (Expr n)
+  | Is   Anno (Expr n) (Expr n)
+  | Not  Anno (Expr n)
+  | Proj Anno (Expr n) Label
+  | Var  Anno n
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
 
+instance HasAnno (Expr n) where
+  type AnnoToken (Expr n) = PosToken
+
 data Program n =
-  MkProgram [Section n]
+  MkProgram Anno [Section n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
 
 data Section n =
-  MkSection SectionLevel n [Decl n]
+  MkSection Anno SectionLevel n [Decl n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
 
 type SectionLevel = Int
 
+instance HasAnno (Section n) where
+  type AnnoToken (Section n) = PosToken
+
 data Decl n =
-    Declare (Declare n)
-  | Decide  (Decide n)
+    Declare Anno (Declare n)
+  | Decide  Anno (Decide n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass ToExpr
 
-pitchDecks :: Program Name
-pitchDecks =
-  MkProgram
-    [ MkSection 1 "types"
-        [ Declare $ MkDeclare "Business"
-            (Record
-              [ MkTypedName "stage"     (Enum ["Pre_Seed", "Seed", "Series A", "Series B", "other stage"])
-              , MkTypedName "stage_com" (Enum ["Pre_Revenue", "Pre_Profit", "Profit", "other stage_com"])
-              , MkTypedName "sector"    (Enum ["Energy", "Healthcare", "Real Estate", "Information Technology", "Financials", "Consumer Discretionary", "Communication", "Industrials", "Consumer Stables", "Energy", "Utilities", "Real Estate", "Materials", "other_sector"])
-              ]
-            )
-        , Declare $ MkDeclare "Investor"
-            (Record
-              [ MkTypedName "wants_ESG" Boolean
-              ]
-            )
-        , Declare $ MkDeclare "Opinion"
-            (Enum ["interesting", "reject", "shrug"])
-        ]
-    , MkSection 1 "interesting cases"
-        [ Decide $ MkDecide
-            (MkTypeSig
-              [ MkTypedName "b"   (NamedType "Business")
-              , MkTypedName "inv" (NamedType "Investor")
-              ]
-              (Just (MkTypedName "opinion" (NamedType "Opinion")))
-            )
-            [ GuardedClause (Is (Var "opinion") (Var "interesting")) (PlainGuard (Var "undefined"))
-            , GuardedClause (Is (Var "opinion") (Var "reject")) Otherwise
-            ]
-        ]
-    ]
+instance HasAnno (Decl n) where
+  type AnnoToken (Decl n) = PosToken
 
-parsed :: Program Name
-parsed =
-  MkProgram [MkSection 1 "types" [Declare (MkDeclare "Business" (Record [MkTypedName "stage" (Enum ["Pre_Seed","Seed","Series A","Series B","other stage"]),MkTypedName "stage_com" (Enum ["Pre_Revenue","Pre_Proft","Profit","other stage_com"]),MkTypedName "sector" (Enum ["Energy","Healthcare","Real Estate","Information Technology","Healthcare","Financials","Consumer Discretionary","Communication","Industrials","Consumer Staples","Energy","Utilities","Real Estate","Materials","other_sector"])])),Declare (MkDeclare "Investor" (Record [MkTypedName "wants_ESG" (NamedType "Boolean")])),Declare (MkDeclare "Opinion" (Enum ["interesting","reject","shrug"]))],MkSection 1 "interesting cases" [Decide (MkDecide (MkTypeSig [MkTypedName "b" (NamedType "Business"),MkTypedName "inv" (NamedType "Investor")] (Just (MkTypedName "opinion" (NamedType "Opinion")))) [GuardedClause (Is (Var "opinion") (Var "interesting")) (PlainGuard (Or (And (Is (Proj (Var "b") "stage") (Var "Seed")) (And (Is (Proj (Var "b") "sector") (Var "Information Technology")) (Is (Proj (Var "b") "stage_com") (Var "Pre_Revenue")))) (Or (And (Is (Proj (Var "b") "stage") (Var "Series A")) (And (Is (Proj (Var "b") "sector") (Var "Information Technology")) (Is (Proj (Var "b") "stage_com") (Var "Pre_Profit")))) (And (Proj (Var "inv") "wants_ESG") (Proj (Var "b") "has_ESG"))))),GuardedClause (Is (Var "opinion") (Var "reject")) Otherwise])]]
+-- ----------------------------------------------------------------------------
+-- Source Annotations
+-- ----------------------------------------------------------------------------
+
+type Anno = Anno_ PosToken
+type AnnoElement = AnnoElement_ PosToken
+type CsnCluster = CsnCluster_ PosToken

@@ -15,6 +15,8 @@ common defaults
     OverloadedRecordDot
     OverloadedStrings
     OverloadedLabels
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
   build-depends:
     base
 
@@ -23,6 +25,7 @@ library
   hs-source-dirs: src
   build-depends:
     containers,
+    extra,
     megaparsec,
     mtl,
     optics,
@@ -36,27 +39,55 @@ library
     transformers,
     tree-diff
   exposed-modules:
+    L4.Annotation
     L4.CodeGen
+    L4.ExactPrint
     L4.Main
     L4.TypeCheck
     L4.Scope
     L4.Syntax
     L4.Lexer
     L4.Parser
+    L4.ParserCombinators
 
-executable l4
+executable jl4-cli
   import: defaults
   hs-source-dirs: app
   build-depends:
     jl4
   main-is: Main.hs
 
-test-suite l4-test
+executable jl4-lsp
+  import: defaults
+  hs-source-dirs: lsp
+  build-depends:
+    jl4,
+    aeson,
+    containers,
+    co-log-core,
+    directory,
+    extra,
+    filepath,
+    lens,
+    lsp-types ^>=2.3.0.0,
+    lsp ^>=2.7.0.0,
+    optics,
+    prettyprinter,
+    stm,
+    text,
+    text-rope,
+    transformers,
+  main-is: Main.hs
+  other-modules: Ladder
+
+test-suite jl4-test
   import: defaults
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
   main-is: Main.hs
   other-modules:
+    Paths_jl4
+  autogen-modules:
     Paths_jl4
   build-depends:
     directory,
@@ -66,4 +97,5 @@ test-suite l4-test
     hspec-golden,
     silently,
     simala,
+    text,
     jl4

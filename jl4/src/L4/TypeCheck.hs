@@ -17,7 +17,7 @@ type TEnv = Map Name (Type' Resolved)
 data TypedExpr =
   MkTypedExpr
     (Expr Resolved)
-    (Type' Resolved) 
+    (Type' Resolved)
 
 data Check a
 
@@ -31,7 +31,7 @@ data Resolved
 instance Eq Resolved
 
 decls :: Traversal' (Program n) (Decl n)
-decls = gposition @1 % traversed % gposition @3 % traversed
+decls = gposition @2 % traversed % gposition @4 % traversed
 
 decls' :: forall n. Traversal' (Program n) (Decl n)
 decls' = gplate @(Decl n)
@@ -52,64 +52,64 @@ withExtendedEnvironment :: KEnv -> TEnv -> Check a -> Check a
 withExtendedEnvironment = undefined
 
 checkProgram :: Program Name -> Check (Program Resolved)
-checkProgram program@(MkProgram sections) = do
+checkProgram program@(MkProgram ann sections) = do
   kenv <- collectProgram program
-  withExtendedEnvironment kenv undefined (MkProgram <$> traverse checkSection sections)
+  withExtendedEnvironment kenv undefined (MkProgram ann <$> traverse checkSection sections)
 
 checkSection = undefined
 
 collectProgram :: Program Name -> Check KEnv
-collectProgram (MkProgram sections) =
+collectProgram (MkProgram ann sections) =
   go Set.empty sections
   where
     go :: KEnv -> [Section Name] -> Check KEnv
     go !acc []                             = pure acc
-    go !acc (MkSection _lvl _n decls : ss) =
+    go !acc (MkSection ann _lvl _n decls : ss) =
       undefined
 
 checkTypeSig :: TypeSig Name -> Check (KEnv, TEnv, TypeSig Resolved, Type' Resolved)
-checkTypeSig (MkTypeSig givens giveth) = undefined
+checkTypeSig (MkTypeSig ann givens giveth) = undefined
 
 checkDecide :: Decide Name -> Check (Decide Resolved)
-checkDecide (MkDecide tsig clauses) = do
+checkDecide (MkDecide ann tsig clauses) = do
   (kenv, tenv, tsig', t) <- checkTypeSig tsig
   clauses' <- withExtendedEnvironment kenv tenv $ traverse (\ clause -> checkClause clause t) clauses
-  pure (MkDecide tsig' clauses')
+  pure (MkDecide ann tsig' clauses')
 
 checkClause :: Clause Name -> Type' Resolved -> Check (Clause Resolved)
-checkClause (GuardedClause e g) t =
-  GuardedClause <$> checkExpr e t <*> checkGuard g
+checkClause (GuardedClause ann e g) t =
+  GuardedClause ann <$> checkExpr e t <*> checkGuard g
 
 checkGuard :: Guard Name -> Check (Guard Resolved)
-checkGuard (PlainGuard e) = PlainGuard <$> checkExpr e Boolean
-checkGuard Otherwise      = pure Otherwise
+checkGuard (PlainGuard ann e) = PlainGuard ann <$> checkExpr e (Boolean mempty)
+checkGuard (Otherwise ann)    = pure $ Otherwise ann
 
 inferExpr :: Expr Name -> Check TypedExpr
-inferExpr (And e1 e2) = do
-  e1' <- checkExpr e1 Boolean
-  e2' <- checkExpr e2 Boolean
-  pure (MkTypedExpr (And e1' e2') Boolean)
-inferExpr (Or e1 e2) = do
-  e1' <- checkExpr e1 Boolean
-  e2' <- checkExpr e2 Boolean
-  pure (MkTypedExpr (Or e1' e2') Boolean)
-inferExpr (Not e) = do
-  e' <- checkExpr e Boolean
-  pure (MkTypedExpr (Not e') Boolean)
-inferExpr (Var n) = do
+inferExpr (And ann e1 e2) = do
+  e1' <- checkExpr e1 (Boolean mempty)
+  e2' <- checkExpr e2 (Boolean mempty)
+  pure (MkTypedExpr (And ann e1' e2') (Boolean mempty))
+inferExpr (Or ann e1 e2) = do
+  e1' <- checkExpr e1 (Boolean mempty)
+  e2' <- checkExpr e2 (Boolean mempty)
+  pure (MkTypedExpr (Or ann e1' e2') (Boolean mempty))
+inferExpr (Not ann e) = do
+  e' <- checkExpr e (Boolean mempty)
+  pure (MkTypedExpr (Not ann e') (Boolean mempty))
+inferExpr (Var ann n) = do
   r <- lookupVar n
   t <- extractType r
-  pure (MkTypedExpr (Var r) t)
-inferExpr (Is e1 e2) = do
+  pure (MkTypedExpr (Var ann r) t)
+inferExpr (Is ann e1 e2) = do
   MkTypedExpr e1' t <- inferExpr e1
   e2' <- checkExpr e2 t -- TODO: not any type is equality-compatible!
-  pure (MkTypedExpr (Is e1' e2') Boolean)
-inferExpr (Proj e l) = do
+  pure (MkTypedExpr (Is ann e1' e2') (Boolean mempty))
+inferExpr (Proj ann e l) = do
   MkTypedExpr e' t <- inferExpr e
   case t of
-    Record rs -> do
+    Record ann rs -> do
       tl <- inferLabel rs l
-      pure (MkTypedExpr (Proj e' l) tl)
+      pure (MkTypedExpr (Proj ann e' l) tl)
     _ -> recordExpectedError
 
 inferLabel :: [TypedName Resolved] -> Label -> Check (Type' Resolved)
@@ -119,7 +119,7 @@ inferLabel rs l =
     Nothing -> recordProjectionError rs l
   where
     go [] = Nothing
-    go (MkTypedName r t : rs')
+    go (MkTypedName ann r t : rs')
       | resolvedName r == l = Just t
       | otherwise           = go rs'
 
@@ -158,27 +158,27 @@ checkExpr e t = do
 --   | Fun [Name] SimalaExpr
 
 translateDecide :: Decide Name -> Simala.Expr
-translateDecide (MkDecide tsig clauses) =
+translateDecide (MkDecide _ann tsig clauses) =
   translateTypeSig tsig (translateClauses clauses)
 
 translateTypeSig :: TypeSig Name -> Simala.Expr -> Simala.Expr
-translateTypeSig (MkTypeSig tns _) e =
+translateTypeSig (MkTypeSig _ann (MkGivenSig _ tns) _) e =
   Simala.Fun Simala.Transparent (extractNames tns) e
 
-extractNames :: [TypedName Name] -> [Name]
-extractNames = map (\ (MkTypedName n _) -> n)
+extractNames :: [TypedName Name] -> [Simala.Name]
+extractNames = map (\ (MkTypedName _ann (Name _  n) _) -> n)
 
 translateClauses :: [Clause Name] -> Simala.Expr
 translateClauses [] = Simala.Undefined
-translateClauses (GuardedClause e Otherwise : _) = translateExpr e
-translateClauses (GuardedClause e (PlainGuard c) : clauses) =
+translateClauses (GuardedClause _ann e (Otherwise _) : _) = translateExpr e
+translateClauses (GuardedClause _ann e (PlainGuard _ c) : clauses) =
   Simala.Builtin Simala.IfThenElse [translateExpr c, translateExpr e, translateClauses clauses]
 
 translateExpr :: Expr Name -> Simala.Expr
-translateExpr (And e1 e2) = Simala.Builtin Simala.And [translateExpr e1, translateExpr e2]
-translateExpr (Or e1 e2)  = Simala.Builtin Simala.Or  [translateExpr e1, translateExpr e2]
-translateExpr (Is e1 e2)  = Simala.Builtin Simala.Eq  [translateExpr e1, translateExpr e2]
-translateExpr (Not e)     = Simala.Builtin Simala.Not [translateExpr e]
-translateExpr (Proj e l)  = Simala.Project (translateExpr e) l
-translateExpr (Var n)     = Simala.Var n
+translateExpr (And _ann e1 e2) = Simala.Builtin Simala.And [translateExpr e1, translateExpr e2]
+translateExpr (Or _ann e1 e2)  = Simala.Builtin Simala.Or  [translateExpr e1, translateExpr e2]
+translateExpr (Is _ann e1 e2)  = Simala.Builtin Simala.Eq  [translateExpr e1, translateExpr e2]
+translateExpr (Not _ann e)     = Simala.Builtin Simala.Not [translateExpr e]
+translateExpr (Proj _ann e (Name _ l))  = Simala.Project (translateExpr e) l
+translateExpr (Var _ann (Name _ n))     = Simala.Var n
 

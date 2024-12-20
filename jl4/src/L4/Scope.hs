@@ -62,7 +62,7 @@ declare n = do
 
 resolve :: Name -> Scope Resolved
 resolve n = do
-  envs <- use #currentScope 
+  envs <- use #currentScope
   case Map.lookup n (Map.unions envs) of
     Nothing -> do
       scopeError n
@@ -115,73 +115,74 @@ withExtendedScope e m = do
   pure x
 
 scopeCheckProgram :: Program Name -> Scope (Program Resolved)
-scopeCheckProgram (MkProgram sections) =
-  MkProgram <$> traverse scopeCheckSection sections
+scopeCheckProgram (MkProgram ann sections) =
+  MkProgram ann <$> traverse scopeCheckSection sections
 
 scopeCheckSection :: Section Name -> Scope (Section Resolved)
-scopeCheckSection (MkSection lvl n decls) = do
+scopeCheckSection (MkSection ann lvl n decls) = do
   r <- declare n -- we do not currently allow to refer to section names
   decls' <- traverse scopeCheckDecl decls
-  pure (MkSection lvl r decls')
+  pure (MkSection ann lvl r decls')
 
 scopeCheckDecl :: Decl Name -> Scope (Decl Resolved)
-scopeCheckDecl (Declare d) = Declare <$> scopeCheckDeclare d
-scopeCheckDecl (Decide d)  = Decide <$> scopeCheckDecide d
+scopeCheckDecl (Declare ann d) = Declare ann <$> scopeCheckDeclare d
+scopeCheckDecl (Decide ann d)  = Decide ann <$> scopeCheckDecide d
 
 scopeCheckDeclare :: Declare Name -> Scope (Declare Resolved)
-scopeCheckDeclare (MkDeclare n t) = do
+scopeCheckDeclare (MkDeclare ann n t) = do
   r <- declare n
   t' <- scopeCheckType r t
   addToScope r
-  pure (MkDeclare r t')
+  pure (MkDeclare ann r t')
 
 scopeCheckType :: Resolved -> Type' Name -> Scope (Type' Resolved)
-scopeCheckType r (NamedType n) = do
+scopeCheckType r (NamedType ann n) = do
   addToScope r
-  NamedType <$> resolve n
-scopeCheckType r (Enum ns) = do
+  NamedType ann <$> resolve n
+scopeCheckType r (Enum ann ns) = do
   addToScope r
-  Enum <$> traverse declare ns
-scopeCheckType r (Record tns) = do
-  (env, t') <- captureScope (Record <$> traverse scopeCheckTypedName tns)
+  Enum ann <$> traverse declare ns
+scopeCheckType r (Record ann tns) = do
+  (env, t') <- captureScope (Record ann <$> traverse scopeCheckTypedName tns)
   addRecordToScope r env
   pure t'
-scopeCheckType r Boolean = do
+scopeCheckType r (Boolean ann) = do
   addToScope r
-  pure Boolean
-  
+  pure $ Boolean ann
+
 scopeCheckTypedName :: TypedName Name -> Scope (TypedName Resolved)
-scopeCheckTypedName (MkTypedName n t) = do
+scopeCheckTypedName (MkTypedName ann n t) = do
   r <- declare n
   t' <- scopeCheckType r t
   addToScope r
-  pure (MkTypedName r t')
-  
+  pure (MkTypedName ann r t')
+
 scopeCheckDecide :: Decide Name -> Scope (Decide Resolved)
-scopeCheckDecide (MkDecide tsig clauses) = do
+scopeCheckDecide (MkDecide ann tsig clauses) = do
   (env, tsig') <- captureScope (scopeCheckTypeSig tsig)
   clauses' <- withExtendedScope env $
     traverse scopeCheckClause clauses
-  pure (MkDecide tsig' clauses')
+  pure (MkDecide ann tsig' clauses')
 
 scopeCheckClause :: Clause Name -> Scope (Clause Resolved)
-scopeCheckClause (GuardedClause e g) =
-  GuardedClause <$> scopeCheckExpr e <*> scopeCheckGuard g
+scopeCheckClause (GuardedClause ann e g) =
+  GuardedClause ann <$> scopeCheckExpr e <*> scopeCheckGuard g
 
 scopeCheckTypeSig :: TypeSig Name -> Scope (TypeSig Resolved)
-scopeCheckTypeSig (MkTypeSig tns tn) = do
+scopeCheckTypeSig (MkTypeSig ann (MkGivenSig annGiven tns) tn) = do
   tns' <- traverse scopeCheckTypedName tns
-  (_env, tn') <- captureScope (traverse scopeCheckTypedName tn) -- TODO
-  pure (MkTypeSig tns' tn')
+  (_env, tn') <- captureScope (do
+    traverse (\(MkGivethSig annGiveth names) -> MkGivethSig annGiveth <$> scopeCheckTypedName names) tn) -- TODO
+  pure (MkTypeSig ann (MkGivenSig annGiven tns') tn')
 
 scopeCheckExpr :: Expr Name -> Scope (Expr Resolved)
-scopeCheckExpr (And e1 e2) = And <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
-scopeCheckExpr (Or e1 e2) = Or <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
-scopeCheckExpr (Is e1 e2) = Is <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
-scopeCheckExpr (Not e) = Not <$> scopeCheckExpr e
-scopeCheckExpr (Proj e label) = Proj <$> scopeCheckExpr e <*> pure label
-scopeCheckExpr (Var n) = Var <$> resolve n
+scopeCheckExpr (And ann e1 e2) = And ann <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
+scopeCheckExpr (Or ann e1 e2) = Or ann <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
+scopeCheckExpr (Is ann e1 e2) = Is ann <$> scopeCheckExpr e1 <*> scopeCheckExpr e2
+scopeCheckExpr (Not ann e) = Not ann <$> scopeCheckExpr e
+scopeCheckExpr (Proj ann e label) = Proj ann <$> scopeCheckExpr e <*> pure label
+scopeCheckExpr (Var ann n) = Var ann <$> resolve n
 
 scopeCheckGuard :: Guard Name -> Scope (Guard Resolved)
-scopeCheckGuard (PlainGuard e) = PlainGuard <$> scopeCheckExpr e
-scopeCheckGuard Otherwise = pure Otherwise
+scopeCheckGuard (PlainGuard ann e) = PlainGuard ann <$> scopeCheckExpr e
+scopeCheckGuard (Otherwise ann) = pure (Otherwise ann)
