@@ -1,17 +1,31 @@
 {
   "name": "jl4-lsp-client",
   "description": "Language Server for the jl4 language",
-  "author": "Microsoft Corporation",
+  "author": "Smucclaw",
   "license": "MIT",
   "version": "0.0.1",
-  "publisher": "vscode",
+  "publisher": "smucclaw",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.94.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smucclaw/mattwaddington.git",
+    "directory": "vscode"
   },
   "activationEvents": [
     "onLanguage:l4"
   ],
   "contributes": {
+    "configuration": {
+      "properties": {
+        "jl4.serverExecutablePath": {
+          "type": "string",
+          "default": null,
+          "description": "Path to the jl4-lsp executable"
+        }
+      }
+    },
     "languages": [
       {
         "id": "l4",
@@ -21,6 +35,12 @@
         "extensions": [
           ".l4"
         ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "viz.showViz",
+        "title": "Show Visualisation"
       }
     ]
   },
@@ -44,22 +64,23 @@
     }
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "ladder-diagram": "^2.0.3"
   },
   "devDependencies": {
-    "@types/vscode": "^1.75.1",
-    "@vscode/test-electron": "^2.3.9",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^18.14.6",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
-    "eslint": "^8.57.0",
-    "mocha": "^10.3.0",
-    "typescript": "^5.3.3"
+    "@babel/preset-env": "^7.26.0",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.94.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "babel-loader": "^9.2.1",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
   },
   "main": "./out/extension",
   "scripts": {
     "vscode:prepublish": "npm run compile",
+    "package": "npx vsce package",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "lint": "eslint ./src --ext .ts,.tsx",
