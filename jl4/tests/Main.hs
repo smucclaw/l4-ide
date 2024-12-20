@@ -1,7 +1,6 @@
 module Main where
 
 import Base
-import L4.Main
 import qualified L4.Parser as Parser
 import qualified L4.ExactPrint as JL4
 import Paths_jl4
@@ -68,3 +67,17 @@ jl4ExactPrintGolden dir inputFile = do
       , actualFile = Just (dir </> "tests" </> (takeFileName inputFile -<.> "ep.actual"))
       , failFirstTime = False
       }
+
+-- ----------------------------------------------------------------------------
+-- Test helpers
+-- ----------------------------------------------------------------------------
+
+parseFile :: String -> Text -> IO ()
+parseFile file input =
+  case Parser.execParser Parser.program file input of
+    Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
+    Right _ -> Text.putStrLn "Parsed successfully"
+
+parseFiles :: [FilePath] -> IO ()
+parseFiles =
+  traverse_ (\ file -> parseFile file =<< Text.readFile file)
