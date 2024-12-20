@@ -228,7 +228,7 @@ plainGuard = do
   current <- Lexer.indentLevel
   attachAnno $
     PlainGuard emptyAnno
-      <$ annoLexeme (spacedToken_ TKIf)
+      <$ annoLexeme (spacedToken_ TKIf <|> spacedToken_ TKIs)
       <*> annoHole (indentedExpr current)
 
 ofType :: Parser (Type' Name)

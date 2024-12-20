@@ -70,10 +70,12 @@ executable l4-lsp
     lens,
     lsp-types ^>=2.3.0.0,
     lsp ^>=2.7.0.0,
+    optics,
     text,
     text-rope,
     transformers,
   main-is: Main.hs
+  other-modules: Ladder
 
 test-suite l4-test
   import: defaults

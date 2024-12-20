@@ -142,4 +142,3 @@ instance HasAnno (Decl n) where
 type Anno = Anno_ PosToken
 type AnnoElement = AnnoElement_ PosToken
 type CsnCluster = CsnCluster_ PosToken
-

@@ -33,6 +33,8 @@ import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 import Language.LSP.VFS (VirtualFile (..))
+import qualified Data.Aeson as Aeson
+import qualified Ladder
 
 handlers :: Handlers (LspM ())
 handlers =
@@ -58,6 +60,29 @@ handlers =
         sendDiagnostics $ LSP.toNormalizedUri doc
     , -- Subscribe to notification changes
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
+    , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
+        let (TRequestMessage _ _ _ (ExecuteCommandParams _ cid xdata)) = req
+        case xdata of
+          Just [uriJson]
+            | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
+              let fileUri = toNormalizedUri uri
+              mfile <- getVirtualFile fileUri
+              case mfile of
+                Nothing -> pure ()
+                Just (VirtualFile _ _ rope) -> do
+                  let
+                    contents = Rope.toText rope
+
+                  case parseJL4WithWithDiagnostics uri contents of
+                    Left _diags -> responder $ Left $ TResponseError
+                      { _code = InL LSPErrorCodes_RequestFailed
+                      , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
+                      , _xdata = Nothing
+                      }
+                    Right prog ->
+                      responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
+          _ ->
+            responder $ Left $ undefined
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \req responder -> do
         let
           TRequestMessage _ _ _ (SemanticTokensParams _ _ doc) = req
@@ -134,7 +159,9 @@ lspOptions :: Options
 lspOptions =
   defaultOptions
     { optTextDocumentSync = Just syncOptions
-    , optExecuteCommandCommands = Just []
+    , optExecuteCommandCommands = Just
+      [ "viz.showViz"
+      ]
     }
 
 main :: IO Int
