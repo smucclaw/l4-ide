@@ -9,12 +9,13 @@
 			"runtimeExecutable": "${execPath}",
 			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
 			"outFiles": [
-				"${workspaceRoot}/out/**/*.js",
+				"${workspaceRoot}/vscode/out/**/*.js",
 			],
 			"autoAttachChildProcesses": true,
 			"preLaunchTask": {
 				"type": "npm",
-				"script": "watch"
+				"script": "compile",
+				"path": "vscode"
 			}
 		}
 	]
