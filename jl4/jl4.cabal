@@ -50,14 +50,14 @@ library
     L4.Parser
     L4.ParserCombinators
 
-executable l4
+executable jl4-cli
   import: defaults
   hs-source-dirs: app
   build-depends:
     jl4
   main-is: Main.hs
 
-executable l4-lsp
+executable jl4-lsp
   import: defaults
   hs-source-dirs: lsp
   build-depends:
@@ -80,7 +80,7 @@ executable l4-lsp
   main-is: Main.hs
   other-modules: Ladder
 
-test-suite l4-test
+test-suite jl4-test
   import: defaults
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
