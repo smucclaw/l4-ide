@@ -6,38 +6,156 @@
 
 module Main where
 
+import L4.Annotation
+import L4.ExactPrint (EPError (..), prettyEPError)
 import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
+import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import L4.Syntax
 
+import qualified Ladder
+
+import Colog.Core (LogAction (..), Severity (..), WithSeverity (..), (<&))
+import qualified Colog.Core as L
 import Control.Applicative (Alternative (..))
+import Control.Concurrent (forkIO)
+import Control.Concurrent.STM
+import qualified Control.Exception as E
 import Control.Lens hiding (Iso)
+import Control.Monad (forever)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson as J
 import qualified Data.Foldable as Foldable
 import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Utf16.Rope.Mixed as Rope
+import GHC.Generics (Generic)
 import GHC.Stack
-import L4.Annotation
-import L4.ExactPrint (EPError (..), prettyEPError)
-import qualified L4.Lexer as Lexer
 import Language.LSP.Diagnostics
+import Language.LSP.Logging
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Message as LSP
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 import Language.LSP.VFS (VirtualFile (..))
-import qualified Data.Aeson as Aeson
-import qualified Ladder
+import Prettyprinter
+import qualified Prettyprinter.Render.Text as Pretty
+import System.Exit
+import System.IO
 
-handlers :: Handlers (LspM ())
-handlers =
+-- ----------------------------------------------------------------------------
+
+main :: IO ()
+main = do
+  run >>= \case
+    0 -> exitSuccess
+    c -> exitWith . ExitFailure $ c
+
+-- ----------------------------------------------------------------------------
+
+data Config = Config
+  { serverExecutablePath :: Maybe Text
+  }
+  deriving (Generic, J.ToJSON, J.FromJSON, Show)
+
+run :: IO Int
+run = flip E.catches handlers $ do
+  rin <- atomically newTChan :: IO (TChan ReactorInput)
+
+  let
+    render = Pretty.renderStrict . layoutPretty defaultLayoutOptions
+
+    prettyMsg :: (Pretty a) => WithSeverity a -> Doc ann
+    prettyMsg l = "[" <> viaShow (L.getSeverity l) <> "] " <> pretty (L.getMsg l)
+    -- Three loggers:
+    -- 1. To stderr
+    -- 2. To the client (filtered by severity)
+    -- 3. To both
+    stderrLogger :: LogAction IO (WithSeverity Text)
+    stderrLogger = L.cmap (show . prettyMsg) L.logStringStderr
+    clientLogger :: LogAction (LspM Config) (WithSeverity Text)
+    clientLogger = defaultClientLogger
+    dualLogger :: LogAction (LspM Config) (WithSeverity Text)
+    dualLogger = clientLogger <> L.hoistLogAction liftIO stderrLogger
+
+    serverDefinition =
+      ServerDefinition
+        { defaultConfig = Config{serverExecutablePath = Nothing}
+        , parseConfig = \_old v -> do
+            case J.fromJSON v of
+              J.Error e -> Left (Text.pack e)
+              J.Success cfg -> Right cfg
+        , onConfigChange = const $ pure ()
+        , configSection = "jl4"
+        , doInitialize = \env _ -> forkIO (reactor stderrLogger rin) >> pure (Right env)
+        , -- Handlers log to both the client and stderr
+          staticHandlers = \_caps -> lspHandlers dualLogger rin
+        , interpretHandler = \env -> Iso (runLspT env) liftIO
+        , options = lspOptions
+        }
+
+  let
+
+  runServerWithHandles
+    -- Log to both the client and stderr when we can, stderr beforehand
+    (L.cmap (fmap (render . pretty)) stderrLogger)
+    (L.cmap (fmap (render . pretty)) dualLogger)
+    stdin
+    stdout
+    serverDefinition
+ where
+  handlers =
+    [ E.Handler ioExcept
+    , E.Handler someExcept
+    ]
+  ioExcept (e :: E.IOException) = print e >> return 1
+  someExcept (e :: E.SomeException) = print e >> return 1
+
+-- ---------------------------------------------------------------------
+
+-- | The reactor is a process that serialises and buffers all requests from the
+-- LSP client, so they can be sent to the backend compiler one at a time, and a
+-- reply senText.
+newtype ReactorInput
+  = ReactorAction (IO ())
+
+-- ---------------------------------------------------------------------
+
+-- | The single point that all events flow through, allowing management of state
+--  to stitch replies and requests together from the two asynchronous sides: lsp
+--  server and backend compiler
+reactor :: LogAction IO (WithSeverity Text) -> TChan ReactorInput -> IO ()
+reactor logger inp = do
+  logger <& "Started the reactor" `WithSeverity` Info
+  forever $ do
+    ReactorAction act <- atomically $ readTChan inp
+    act
+
+-- | Check if we have a handler, and if we create a haskell-lsp handler to pass it as
+--  input into the reactor
+lspHandlers :: (m ~ LspM Config) => LogAction m (WithSeverity Text) -> TChan ReactorInput -> Handlers m
+lspHandlers logger rin = mapHandlers goReq goNot (handle logger)
+ where
+  goReq :: forall (a :: LSP.Method LSP.ClientToServer LSP.Request). Handler (LspM Config) a -> Handler (LspM Config) a
+  goReq f = \msg k -> do
+    env <- getLspEnv
+    liftIO $ atomically $ writeTChan rin $ ReactorAction (runLspT env $ f msg k)
+
+  goNot :: forall (a :: LSP.Method LSP.ClientToServer LSP.Notification). Handler (LspM Config) a -> Handler (LspM Config) a
+  goNot f = \msg -> do
+    env <- getLspEnv
+    liftIO $ atomically $ writeTChan rin $ ReactorAction (runLspT env $ f msg)
+
+handle :: (m ~ LspM Config) => LogAction m (WithSeverity Text) -> Handlers m
+handle logger =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized mempty
@@ -58,29 +176,36 @@ handlers =
         let
           doc = msg ^. J.params . J.textDocument . J.uri
         sendDiagnostics $ LSP.toNormalizedUri doc
+    , notificationHandler SMethod_SetTrace $ \msg -> do
+        pure ()
     , -- Subscribe to notification changes
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
     , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
-        let (TRequestMessage _ _ _ (ExecuteCommandParams _ cid xdata)) = req
+        let
+          (TRequestMessage _ _ _ (ExecuteCommandParams _ cid xdata)) = req
         case xdata of
           Just [uriJson]
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
-              let fileUri = toNormalizedUri uri
-              mfile <- getVirtualFile fileUri
-              case mfile of
-                Nothing -> pure ()
-                Just (VirtualFile _ _ rope) -> do
-                  let
-                    contents = Rope.toText rope
+                let
+                  fileUri = toNormalizedUri uri
+                mfile <- getVirtualFile fileUri
+                case mfile of
+                  Nothing -> pure ()
+                  Just (VirtualFile _ _ rope) -> do
+                    let
+                      contents = Rope.toText rope
 
-                  case parseJL4WithWithDiagnostics uri contents of
-                    Left _diags -> responder $ Left $ TResponseError
-                      { _code = InL LSPErrorCodes_RequestFailed
-                      , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
-                      , _xdata = Nothing
-                      }
-                    Right prog ->
-                      responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
+                    case parseJL4WithWithDiagnostics uri contents of
+                      Left _diags ->
+                        responder $
+                          Left $
+                            TResponseError
+                              { _code = InL LSPErrorCodes_RequestFailed
+                              , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
+                              , _xdata = Nothing
+                              }
+                      Right prog ->
+                        responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
           _ ->
             responder $ Left $ undefined
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \req responder -> do
@@ -159,30 +284,17 @@ lspOptions :: Options
 lspOptions =
   defaultOptions
     { optTextDocumentSync = Just syncOptions
-    , optExecuteCommandCommands = Just
-      [ "viz.showViz"
-      ]
+    , optExecuteCommandCommands =
+        Just
+          [ "viz.showViz"
+          ]
     }
-
-main :: IO Int
-main =
-  runServer $
-    ServerDefinition
-      { parseConfig = const $ const $ Right ()
-      , onConfigChange = const $ pure ()
-      , defaultConfig = ()
-      , configSection = "jl4"
-      , doInitialize = \env _req -> pure $ Right env
-      , staticHandlers = \_caps -> handlers
-      , interpretHandler = \env -> Iso (runLspT env) liftIO
-      , options = lspOptions
-      }
 
 -- ----------------------------------------------------------------------------
 -- LSP Diagnostics
 -- ----------------------------------------------------------------------------
 
-sendDiagnostics :: NormalizedUri -> LspM () ()
+sendDiagnostics :: NormalizedUri -> LspM Config ()
 sendDiagnostics fileUri = do
   mfile <- getVirtualFile fileUri
   case mfile of
@@ -197,7 +309,7 @@ sendDiagnostics fileUri = do
       publishDiagnostics 100 fileUri (Just version) (partitionBySource diags)
 
 -- ----------------------------------------------------------------------------
--- Simala Parser
+-- JL4 Parser
 -- ----------------------------------------------------------------------------
 
 parseJL4WithWithDiagnostics :: Uri -> Text -> Either [Diagnostic] (Program Name)
@@ -275,14 +387,14 @@ simpleTokenType t = standardTokenType (Lexer.posTokenCategory t.payload)
 
 type HoleFit = [SemanticToken]
 
-data SemanticTokenCtx p = Info
+data SemanticTokenCtx p = SemanticTokenCtx
   { toSemanticToken :: p -> Maybe SemanticTokenTypes
   , getModifiers :: p -> Maybe [SemanticTokenModifiers]
   }
 
 defaultInfo :: SemanticTokenCtx PosToken
 defaultInfo =
-  Info
+  SemanticTokenCtx
     { toSemanticToken = simpleTokenType
     , getModifiers = \_ -> pure []
     }
