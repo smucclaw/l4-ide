@@ -1,3 +1,3 @@
 [submodule "simala"]
 	path = simala
-	url = git@github.com:smucclaw/simala.git
+	url = https://github.com/smucclaw/simala.git 
