@@ -50,7 +50,7 @@ function getWebviewContent(
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Rule Ladder Diagram</title>
-      <link rel="stylesheet" href="${webviewCssUri}">
+      <link rel="stylesheet" href="${webviewCssUri.toString()}">
       <style>
         body {
           margin: 0;
@@ -62,7 +62,7 @@ function getWebviewContent(
           height: 100vh;
         }
       </style>
-      <script src="${scriptUri}"></script>
+      <script src="${scriptUri.toString()}"></script>
     </head>
     <body>
       <div id="ladder-container" style="width: 100%; height: 100%;"></div>
