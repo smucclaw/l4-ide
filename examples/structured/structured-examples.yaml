@@ -13,8 +13,8 @@
 #   examples:
 #     - sources: [string]  # Each `source` should correspond to a valid `id` of a `source_info` in `metadata.json`.
 #       excerpt: string
-#       status?: "fictional" | "real_legislation"  # optional
-#       note?: string  # optional
+#       source_status?: "fictional" | "real_legislation" 
+#       note?: string
 #   questions:
 #     - priority: { level: "low" | "medium" | "high", reason?: string }
 #       qn: string
@@ -24,7 +24,7 @@
 #   label: string
 #   sources: [string]
 #   excerpt: string
-#   status?: "fictional" | "real_legislation"
+#   source_status?: "fictional" | "real_legislation"
 #   note?: string
 #   tags?: [string]
 
@@ -41,7 +41,7 @@
           (b)	is not a spaniel or a labrador; and
           (c)	is registered under this Act.
         (3)	In paragraph (2) "farmer" means a person who works in an agricultural business.
-      status: fictional
+      source_status: fictional
   questions:
     - {
         priority: { "low", reason: "Can probably worked out eventually or not required for v1/v2" },
@@ -68,7 +68,7 @@
     - sources: [sg_penal_code_378]
       excerpt: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
       note: "See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
-      status: real_legislation
+      source_status: real_legislation
 - $type: q_and_a
   label: "Inclusion relationship between entities"
   examples:
@@ -141,7 +141,7 @@
   sources: [governatori_llbp]
   excerpt: "Customers must pay before the delivery of the good, after receiving the invoice.  Otherwise, an additional fine must be paid. [This might have been slightly paraphrased.]"
   note: This obligation persists after the deadline if it hasn't been fulfilled by then; it is only when it's been complied with that it terminates. (But such persistence is not required for it to be an achievement obligation, in Governatori's typology.)
-  status: fictional
+  source_status: fictional
   tags: ["normative/achievement_obligation", governatori]
 - $type: example
   label: "normative/achievement_obligation/wedding_cake"
@@ -152,21 +152,21 @@
 - $type: example
   label: "normative/maintenance_obligation/positive_balance"
   sources: [governatori_llbp]
-  excerpt: "Customers must keep a positive balance for 30 days after opening a bank account. [This might have been slightly paraphrased.]"
-  status: fictional
+  excerpt: "[Paraphrased] Customers must keep a positive balance for 30 days after opening a bank account."
+  source_status: fictional
   tags: ["normative/maintenance_obligation", governatori]
 - $type: example
   label: "normative/punctual_obligation/wire_transfer"
   sources: [governatori_llbp]
   excerpt: "[Paraphrased] When banks do a wire transfer, they must transmit a message, via SWIFT, to the receiving bank requesting that the payment is made according to the instructions given."
-  status: fictional
+  source_status: fictional
   note: "What Governatori means by a 'punctual obligation' is an obligation that (i) is in force only at a particular time point (as opposed to obligations that last over an extended interval) and (ii) needs to be complied with the moment it is in force."
   tags: ["normative/punctual_obligation", "governatori"]
 - $type: example
   label: "normative/maintenance_permission/negative_bank_balance"
   sources: [governatori_llbp]
-  excerpt: "Customers may have a negative balance for at most 30 consecutive days. After that period, they will be charged 10% interest. [This might have been slightly paraphrased.]"
-  status: fictional
+  excerpt: "[Paraphrased] Customers may have a negative balance for at most 30 consecutive days. After that period, they will be charged 10% interest."
+  source_status: fictional
   tags: ["normative/maintenance_permission", "governatori"]
 - $type: example
   label: "defeasibility/new_customers_anti_money_laundering"
@@ -180,7 +180,7 @@
 
     3. Accounts must maintain a positive balance, unless approved by a bank manager, or for VIP customers.
     (YM: Nice, relatively simple excerpt of exceptions to norms/rules.)
-  status: real_legislation
+  source_status: real_legislation
   tags: ["normative/defeasibility", "governatori"]
 - $type: example
   label: "preemptive_obligation/anti_money_laundering"
@@ -194,13 +194,13 @@
     A pre-emptive obligation is (i) an achievement obligation that (ii) can be fulfilled even before the obligation comes into force. (An achievement obligation to phi is an obligation where as long as you phi at least once, you count as fulfilling the obligation.)
 
     > Clause (d) in this excerpt describes that the preemptive obligation enters into force when a financial transanction happens, and the clause explicitly requires the report to be submitted to the relevant authority before the actual transaction (phyiscal movement of the currency) occurs. Notice that in some situations it might be the case that the transaction never occurres. (Hashmi 436)
-  status: real_legislation
+  source_status: real_legislation
   tags: ["normative/preemptive_obligation", "normative/achievement_obligation", "governatori"]
 - $type: example
   label: "non_preemptive_obligation/estate_will"
   sources: [governatori_llbp]
   excerpt: "[Paraphrased] Executors and administrators of a deceased's estate must notify all beneficiaries named in the will within 60 days of the signing of a probate order."
   note: "If an executor gives a notice to the beneficiaries before [the signing of the probate order], she will not comply with the above obligation and will have to resend the notification after that. (4)"
+  source_status: fictional
   tags: ["normative/non_preemptive_obligation", governatori]
-  status: fictional
 # TODO: Add some perdurant obligations
