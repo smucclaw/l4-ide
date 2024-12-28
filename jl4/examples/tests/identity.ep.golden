@@ -1,0 +1,9 @@
+§ `The identity function`
+
+DECIDE identity1 IS GIVEN x YIELD x
+
+GIVEN x
+DECIDE identity2 x IS x
+
+GIVEN x
+identity3 x MEANS x

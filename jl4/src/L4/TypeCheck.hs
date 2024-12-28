@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 module L4.TypeCheck where
 
+{-
 import Control.Applicative
 import Control.Monad
 import Data.Map (Map)
@@ -181,4 +182,4 @@ translateExpr (Is _ann e1 e2)  = Simala.Builtin Simala.Eq  [translateExpr e1, tr
 translateExpr (Not _ann e)     = Simala.Builtin Simala.Not [translateExpr e]
 translateExpr (Proj _ann e (Name _ l))  = Simala.Project (translateExpr e) l
 translateExpr (Var _ann (Name _ n))     = Simala.Var n
-
+-}

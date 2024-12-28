@@ -1,0 +1,25 @@
+§ `The constant function`
+
+DECIDE const1 IS
+  GIVEN x
+        y
+  YIELD x
+
+DECIDE const1a IS
+  GIVEN x, y YIELD x
+
+GIVEN x
+      y
+DECIDE const2 x y IS x
+
+GIVEN x
+      y
+const3 x y MEANS x
+
+GIVEN
+  x
+  y
+const4 x y MEANS x
+
+GIVEN x, y
+const4a x y MEANS x

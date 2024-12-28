@@ -4,10 +4,13 @@
 module L4.Annotation where
 
 import qualified Data.Foldable as Foldable
+import Data.Kind
 import qualified Data.List as List
 import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
 import Optics
+
+import L4.Lexer
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -85,7 +88,8 @@ mkHiddenCsnCluster =
     }
 
 class HasAnno t where
-  type AnnoToken t
+  type AnnoToken t :: Type
+  type AnnoToken t = PosToken
   getAnno :: t -> Anno_ (AnnoToken t)
   setAnno :: Anno_ (AnnoToken t) -> t -> t
 

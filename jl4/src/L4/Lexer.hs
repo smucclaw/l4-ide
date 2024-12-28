@@ -117,6 +117,17 @@ data TokenType =
   | TKOf
   | TKA
   | TKAn
+  | TKThe
+  | TKYield
+  | TKConsider
+  | TKWhere
+  | TKList
+  | TKAssume
+  | TKWhen
+  | TKType
+  | TKFunction
+  | TKFrom
+  | TKTo
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -254,6 +265,17 @@ keywords =
     , ("A"          , TKA          )
     , ("AN"         , TKAn         )
     , ("HAS"        , TKHas        )
+    , ("THE"        , TKThe        )
+    , ("YIELD"      , TKYield      )
+    , ("CONSIDER"   , TKConsider   )
+    , ("WHERE"      , TKWhere      )
+    , ("LIST"       , TKList       )
+    , ("ASSUME"     , TKAssume     )
+    , ("WHEN"       , TKWhen       )
+    , ("TYPE"       , TKType       )
+    , ("FUNCTION"   , TKFunction   )
+    , ("FROM"       , TKFrom       )
+    , ("TO"         , TKTo         )
     ]
 
 rawTokens :: Lexer [RawToken]
@@ -537,6 +559,17 @@ displayPosToken (MkPosToken _r tt) =
     TKOf             -> "OF"
     TKA              -> "A"
     TKAn             -> "AN"
+    TKThe            -> "THE"
+    TKYield          -> "YIELD"
+    TKConsider       -> "CONSIDER"
+    TKWhere          -> "WHERE"
+    TKList           -> "LIST"
+    TKAssume         -> "ASSUME"
+    TKWhen           -> "WHEN"
+    TKType           -> "TYPE"
+    TKFunction       -> "FUNCTION"
+    TKFrom           -> "FROM"
+    TKTo             -> "TO"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -605,6 +638,17 @@ posTokenCategory =
     TKOf -> CKeyword
     TKA -> CKeyword
     TKAn -> CKeyword
+    TKThe -> CKeyword
+    TKYield -> CKeyword
+    TKConsider -> CKeyword
+    TKWhere -> CKeyword
+    TKList -> CKeyword
+    TKAssume -> CKeyword
+    TKWhen -> CKeyword
+    TKType -> CKeyword
+    TKFunction -> CKeyword
+    TKFrom -> CKeyword
+    TKTo -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

@@ -479,30 +479,52 @@ sectionToTokens (MkSection ann _lvl name decls) =
   traverseCsnWithHoles
     ann
     [ withTokenType nameIsDirective $ nameToTokens name
-    , Extra.concatMapM declToTokens decls
+    , Extra.concatMapM topdeclToTokens decls
     ]
 
-declToTokens :: Decl Name -> SemanticM HoleFit
-declToTokens = \case
+topdeclToTokens :: TopDecl Name -> SemanticM HoleFit
+topdeclToTokens = \case
   Declare ann declare ->
     traverseCsnWithHoles ann [declareToTokens declare]
   Decide ann decide ->
     traverseCsnWithHoles ann [decideToTokens decide]
+  Assume ann assume ->
+    traverseCsnWithHoles ann [assumeToTokens assume]
 
-declareToTokens :: Declare Name -> SemanticM [SemanticToken]
-declareToTokens (MkDeclare ann name type') =
+assumeToTokens :: Assume Name -> SemanticM HoleFit
+assumeToTokens (MkAssume ann appform type') =
   traverseCsnWithHoles
     ann
-    [ nameToTokens name
+    [ appFormToTokens appform
     , typeToTokens type'
     ]
 
+declareToTokens :: Declare Name -> SemanticM [SemanticToken]
+declareToTokens (MkDeclare ann appform tydecl) =
+  traverseCsnWithHoles
+    ann
+    [ appFormToTokens appform
+    , typeDeclToTokens tydecl
+    ]
+
+typeDeclToTokens :: TypeDecl Name -> SemanticM HoleFit
+typeDeclToTokens = \case
+  RecordDecl ann tns -> traverseCsnWithHoles ann [Extra.concatMapM typedNameToTokens tns]
+  EnumDecl ann cds -> traverseCsnWithHoles ann [Extra.concatMapM conDeclToTokens cds]
+
+conDeclToTokens :: ConDecl Name -> SemanticM HoleFit
+conDeclToTokens (MkConDecl ann n tns) =
+  traverseCsnWithHoles
+    ann
+      [ nameToTokens n
+      , Extra.concatMapM typedNameToTokens tns
+      ]
+
 typeToTokens :: Type' Name -> SemanticM HoleFit
 typeToTokens = \case
-  NamedType ann named -> traverseCsnWithHoles ann [nameToTokens named]
-  Enum ann e -> traverseCsnWithHoles ann [withTokenType enumType $ Extra.concatMapM nameToTokens e]
-  Record ann rcs -> traverseCsnWithHoles ann [Extra.concatMapM typedNameToTokens rcs]
-  Boolean ann -> traverseCsnWithHoles ann []
+  Type ann -> traverseCsnWithHoles ann []
+  TyApp ann n ts -> traverseCsnWithHoles ann [nameToTokens n, Extra.concatMapM typeToTokens ts]
+  Fun ann ts t -> traverseCsnWithHoles ann [Extra.concatMapM typeToTokens ts, typeToTokens t]
 
 typedNameToTokens :: TypedName Name -> SemanticM [SemanticToken]
 typedNameToTokens (MkTypedName ann name type') =
@@ -512,12 +534,29 @@ typedNameToTokens (MkTypedName ann name type') =
     , typeToTokens type'
     ]
 
+optionallyTypedNameToTokens :: OptionallyTypedName Name -> SemanticM [SemanticToken]
+optionallyTypedNameToTokens (MkOptionallyTypedName ann name mType') =
+  traverseCsnWithHoles
+    ann
+    [ nameToTokens name
+    , maybe (pure []) typeToTokens mType'
+    ]
+
 decideToTokens :: Decide Name -> SemanticM HoleFit
-decideToTokens (MkDecide ann typeSig clauses) =
+decideToTokens (MkDecide ann typeSig appForm expr) =
   traverseCsnWithHoles
     ann
     [ typeSigToTokens typeSig
-    , Extra.concatMapM clauseToTokens clauses
+    , appFormToTokens appForm
+    , exprToTokens expr
+    ]
+
+appFormToTokens :: AppForm Name -> SemanticM HoleFit
+appFormToTokens (MkAppForm ann name names) =
+  traverseCsnWithHoles
+    ann
+    [ nameToTokens name
+    , Extra.concatMapM nameToTokens names
     ]
 
 clauseToTokens :: Clause Name -> SemanticM HoleFit
@@ -559,6 +598,18 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [nameToTokens name]
+  Lam ann given expr ->
+    traverseCsnWithHoles
+      ann
+      [givenToTokens given, exprToTokens expr]
+  App ann n es ->
+    traverseCsnWithHoles
+      ann
+      [nameToTokens n, Extra.concatMapM exprToTokens es]
+  IfThenElse ann e1 e2 e3 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2, exprToTokens e3]
 
 typeSigToTokens :: TypeSig Name -> SemanticM HoleFit
 typeSigToTokens (MkTypeSig ann given mGiveth) =
@@ -569,17 +620,17 @@ typeSigToTokens (MkTypeSig ann given mGiveth) =
     ]
 
 givethToTokens :: GivethSig Name -> SemanticM HoleFit
-givethToTokens (MkGivethSig ann typedName) =
+givethToTokens (MkGivethSig ann type') =
   traverseCsnWithHoles
     ann
-    [ typedNameToTokens typedName
+    [ typeToTokens type'
     ]
 
 givenToTokens :: GivenSig Name -> SemanticM HoleFit
 givenToTokens (MkGivenSig ann names) =
   traverseCsnWithHoles
     ann
-    [ Extra.concatMapM typedNameToTokens names
+    [ Extra.concatMapM optionallyTypedNameToTokens names
     ]
 
 nameToTokens :: Name -> SemanticM HoleFit

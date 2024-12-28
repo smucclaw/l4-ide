@@ -33,7 +33,7 @@ article ::=
   "A" | "AN" | "THE"
 
 declare' ::=
-  "DECLARE" name+ (recorddecl | enumdecl)
+  "DECLARE" appform (recorddecl | enumdecl)
 
 recorddecl ::=
   "HAS" reqparam{,}*
@@ -69,14 +69,19 @@ giveth ::=
   "GIVETH" type
 
 binding' ::=
-    "DECIDE" name+ ("IS" | "IF") expr  -- both forms are equivalent
-  | name+ "MEANS" expr
+    "DECIDE" appform ("IS" | "IF") expr  -- both forms are equivalent
+  | appform "MEANS" expr
+
+appform ::=
+    name+
+  | name "OF" nameargs
+  -- possibly allow "WITH" here as well?
 
 assumption ::=
   givens? assumption'
 
 assumption' ::=
-  "ASSUME" name+ "IS" article? type
+  "ASSUME" appform "IS" article? type
 
 -- ignoring operator priority
 expr ::=
@@ -136,6 +141,9 @@ namedarg ::=
   
 args ::=
   expr{AND}+
+
+nameargs ::=
+  name{AND}+
 
 namedpatargs ::=
   namedpatarg{,}*

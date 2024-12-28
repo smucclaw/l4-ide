@@ -1,10 +1,10 @@
 § Example
 
 GIVEN x IS A Person
-x MEANS IF walks
+x MEANS walks
 
 GIVEN p IS A Person
 `must sing` MEANS
-    IF        walks
+              walks
        AND    drinks
            OR eats

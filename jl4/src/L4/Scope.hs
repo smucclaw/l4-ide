@@ -1,5 +1,6 @@
 module L4.Scope where
 
+{-
 import Control.Monad.State
 import Data.Functor.Identity
 import Data.Function
@@ -186,3 +187,4 @@ scopeCheckExpr (Var ann n) = Var ann <$> resolve n
 scopeCheckGuard :: Guard Name -> Scope (Guard Resolved)
 scopeCheckGuard (PlainGuard ann e) = PlainGuard ann <$> scopeCheckExpr e
 scopeCheckGuard (Otherwise ann) = pure (Otherwise ann)
+-}

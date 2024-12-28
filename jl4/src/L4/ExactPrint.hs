@@ -36,30 +36,52 @@ sectionToTokens (MkSection ann _lvl name decls) =
   applyTokensWithHoles
     ann
     [ nameToTokens name
-    , Extra.concatMapM declToTokens decls
+    , Extra.concatMapM topdeclToTokens decls
     ]
 
-declToTokens :: Decl Name -> HoleFit
-declToTokens = \case
+topdeclToTokens :: TopDecl Name -> HoleFit
+topdeclToTokens = \case
   Declare ann declare ->
     applyTokensWithHoles ann [declareToTokens declare]
   Decide ann decide ->
     applyTokensWithHoles ann [decideToTokens decide]
+  Assume ann assume ->
+    applyTokensWithHoles ann [assumeToTokens assume]
 
-declareToTokens :: Declare Name -> HoleFit
-declareToTokens (MkDeclare ann name type') =
+assumeToTokens :: Assume Name -> HoleFit
+assumeToTokens (MkAssume ann appform type') =
   applyTokensWithHoles
     ann
-    [ nameToTokens name
+    [ appFormToTokens appform
     , typeToTokens type'
     ]
 
+declareToTokens :: Declare Name -> HoleFit
+declareToTokens (MkDeclare ann appform tydecl) =
+  applyTokensWithHoles
+    ann
+    [ appFormToTokens appform
+    , typeDeclToTokens tydecl
+    ]
+
+typeDeclToTokens :: TypeDecl Name -> HoleFit
+typeDeclToTokens = \case
+  RecordDecl ann tns -> applyTokensWithHoles ann [Extra.concatMapM typedNameToTokens tns]
+  EnumDecl ann cds -> applyTokensWithHoles ann [Extra.concatMapM conDeclToTokens cds]
+
+conDeclToTokens :: ConDecl Name -> HoleFit
+conDeclToTokens (MkConDecl ann n tns) =
+  applyTokensWithHoles
+    ann
+      [ nameToTokens n
+      , Extra.concatMapM typedNameToTokens tns
+      ]
+
 typeToTokens :: Type' Name -> HoleFit
 typeToTokens = \case
-  NamedType ann named -> applyTokensWithHoles ann [nameToTokens named]
-  Enum ann enum -> applyTokensWithHoles ann [Extra.concatMapM nameToTokens enum]
-  Record ann rcs -> applyTokensWithHoles ann [Extra.concatMapM typedNameToTokens rcs]
-  Boolean ann -> applyTokensWithHoles ann []
+  Type ann -> applyTokensWithHoles ann []
+  TyApp ann n ts -> applyTokensWithHoles ann [nameToTokens n, Extra.concatMapM typeToTokens ts]
+  Fun ann ts t -> applyTokensWithHoles ann [Extra.concatMapM typeToTokens ts, typeToTokens t]
 
 typedNameToTokens :: TypedName Name -> HoleFit
 typedNameToTokens (MkTypedName ann name type') =
@@ -69,12 +91,29 @@ typedNameToTokens (MkTypedName ann name type') =
     , typeToTokens type'
     ]
 
+optionallyTypedNameToTokens :: OptionallyTypedName Name -> HoleFit
+optionallyTypedNameToTokens (MkOptionallyTypedName ann name mType') =
+  applyTokensWithHoles
+    ann
+    [ nameToTokens name
+    , maybe (pure []) typeToTokens mType'
+    ]
+
 decideToTokens :: Decide Name -> HoleFit
-decideToTokens (MkDecide ann typeSig clauses) =
+decideToTokens (MkDecide ann typeSig appForm expr) =
   applyTokensWithHoles
     ann
     [ typeSigToTokens typeSig
-    , Extra.concatMapM clauseToTokens clauses
+    , appFormToTokens appForm
+    , exprToTokens expr
+    ]
+
+appFormToTokens :: AppForm Name -> HoleFit
+appFormToTokens (MkAppForm ann name names) =
+  applyTokensWithHoles
+    ann
+    [ nameToTokens name
+    , Extra.concatMapM nameToTokens names
     ]
 
 clauseToTokens :: Clause Name -> HoleFit
@@ -116,6 +155,18 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [nameToTokens name]
+  Lam ann given e ->
+    applyTokensWithHoles
+      ann
+      [givenToTokens given, exprToTokens e]
+  App ann n es ->
+    applyTokensWithHoles
+      ann
+      [nameToTokens n, Extra.concatMapM exprToTokens es]
+  IfThenElse ann e1 e2 e3 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2, exprToTokens e3]
 
 typeSigToTokens :: TypeSig Name -> HoleFit
 typeSigToTokens (MkTypeSig ann given mGiveth) =
@@ -126,17 +177,17 @@ typeSigToTokens (MkTypeSig ann given mGiveth) =
     ]
 
 givethToTokens :: GivethSig Name -> HoleFit
-givethToTokens (MkGivethSig ann typedName) =
+givethToTokens (MkGivethSig ann type') =
   applyTokensWithHoles
     ann
-    [ typedNameToTokens typedName
+    [ typeToTokens type'
     ]
 
 givenToTokens :: GivenSig Name -> HoleFit
 givenToTokens (MkGivenSig ann names) =
   applyTokensWithHoles
     ann
-    [ Extra.concatMapM typedNameToTokens names
+    [ Extra.concatMapM optionallyTypedNameToTokens names
     ]
 
 nameToTokens :: Name -> HoleFit

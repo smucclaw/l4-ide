@@ -8,95 +8,86 @@ import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import L4.Lexer (PosToken)
-import Optics.Generic (gposition)
-import Optics ((^.), set)
 
 type Label = Name
 
 data Name = Name Anno Text
   deriving stock (GHC.Generic, Eq, Ord, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno Name where
-  type AnnoToken Name = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data Type' n =
-    NamedType Anno n
-  | Enum      Anno [n]
-  | Record    Anno [TypedName n]
-  | Boolean   Anno -- should perhaps just be a pre-defined NamedType
+    Type      Anno
+  | TyApp     Anno n [Type' n]
+  | Fun       Anno [Type' n] (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (Type' n) where
-  type AnnoToken (Type' n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (ToExpr)
+  deriving anyclass (HasAnno, ToExpr)
 
-instance HasAnno (TypedName n) where
-  type AnnoToken (TypedName n) = PosToken
+data OptionallyTypedName n =
+  MkOptionallyTypedName Anno n (Maybe (Type' n))
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
 
 data TypeSig n =
   MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (TypeSig n) where
-  type AnnoToken (TypeSig n) = PosToken
-  getAnno e = e ^. gposition @1
-  setAnno ann e = set (gposition @1) ann e
+  deriving anyclass (HasAnno, ToExpr)
 
 data GivenSig n =
-  MkGivenSig Anno [TypedName n]
+  MkGivenSig Anno [OptionallyTypedName n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (GivenSig n) where
-  type AnnoToken (GivenSig n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data GivethSig n =
-  MkGivethSig Anno (TypedName n)
+  MkGivethSig Anno (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (GivethSig n) where
-  type AnnoToken (GivethSig n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data Decide n =
-  MkDecide Anno (TypeSig n) [Clause n]
+  MkDecide Anno (TypeSig n) (AppForm n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (HasAnno, ToExpr)
 
-instance HasAnno (Decide n) where
-  type AnnoToken (Decide n) = PosToken
+data AppForm n =
+  MkAppForm Anno n [n]
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
 
 data Declare n =
-  MkDeclare Anno n (Type' n)
+  MkDeclare Anno (AppForm n) (TypeDecl n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (HasAnno, ToExpr)
 
-instance HasAnno (Declare n) where
-  type AnnoToken (Declare n) = PosToken
+data Assume n =
+  MkAssume Anno (AppForm n) (Type' n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
+
+data TypeDecl n =
+    RecordDecl Anno [TypedName n]
+  | EnumDecl Anno [ConDecl n]
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
+
+data ConDecl n =
+  MkConDecl Anno n [TypedName n]
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
 
 data Clause n =
   GuardedClause Anno (Expr n) (Guard n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (Clause n) where
-  type AnnoToken (Clause n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data Guard n =
     PlainGuard Anno (Expr n)
   | Otherwise  Anno
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (Guard n) where
-  type AnnoToken (Guard n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data Expr n =
     And  Anno (Expr n) (Expr n)
@@ -105,35 +96,30 @@ data Expr n =
   | Not  Anno (Expr n)
   | Proj Anno (Expr n) Label
   | Var  Anno n
+  | Lam  Anno (GivenSig n) (Expr n)
+  | App  Anno n [Expr n]
+  | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (Expr n) where
-  type AnnoToken (Expr n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 data Program n =
   MkProgram Anno [Section n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (HasAnno, ToExpr)
 
 data Section n =
-  MkSection Anno SectionLevel n [Decl n]
+  MkSection Anno SectionLevel n [TopDecl n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (HasAnno, ToExpr)
 
 type SectionLevel = Int
 
-instance HasAnno (Section n) where
-  type AnnoToken (Section n) = PosToken
-
-data Decl n =
+data TopDecl n =
     Declare Anno (Declare n)
   | Decide  Anno (Decide n)
+  | Assume  Anno (Assume n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass ToExpr
-
-instance HasAnno (Decl n) where
-  type AnnoToken (Decl n) = PosToken
+  deriving anyclass (HasAnno, ToExpr)
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
