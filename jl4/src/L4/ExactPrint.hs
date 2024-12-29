@@ -116,19 +116,6 @@ appFormToTokens (MkAppForm ann name names) =
     , Extra.concatMapM nameToTokens names
     ]
 
-clauseToTokens :: Clause Name -> HoleFit
-clauseToTokens (GuardedClause ann e guard) =
-  applyTokensWithHoles
-    ann
-    [ exprToTokens e
-    , guardToTokens guard
-    ]
-
-guardToTokens :: Guard Name -> HoleFit
-guardToTokens = \case
-  PlainGuard ann e -> applyTokensWithHoles ann [exprToTokens e]
-  Otherwise ann -> applyTokensWithHoles ann []
-
 exprToTokens :: Expr Name -> HoleFit
 exprToTokens = \case
   And ann e1 e2 ->
@@ -167,6 +154,10 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
+  Cons ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
   Proj ann e lbl ->
     applyTokensWithHoles
       ann
@@ -187,6 +178,32 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [exprToTokens e1, exprToTokens e2, exprToTokens e3]
+  Consider ann e bs ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e, Extra.concatMapM branchToTokens bs]
+
+branchToTokens :: Branch Name -> HoleFit
+branchToTokens = \case
+  When ann p e ->
+    applyTokensWithHoles
+      ann
+      [patternToTokens p, exprToTokens e]
+  Otherwise ann e ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e]
+
+patternToTokens :: Pattern Name -> HoleFit
+patternToTokens = \case
+  PatApp ann n ps ->
+    applyTokensWithHoles
+      ann
+      [nameToTokens n, Extra.concatMapM patternToTokens ps]
+  PatCons ann p1 p2 ->
+    applyTokensWithHoles
+      ann
+      [patternToTokens p1, patternToTokens p2]
 
 typeSigToTokens :: TypeSig Name -> HoleFit
 typeSigToTokens (MkTypeSig ann given mGiveth) =

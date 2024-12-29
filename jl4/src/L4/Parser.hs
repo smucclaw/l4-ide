@@ -238,36 +238,10 @@ giveth = do
       <*  article
       <*> annoHole (indentedType current)
 
-clause :: Pos -> Parser (Clause Name)
-clause p =
-  attachAnno $
-    GuardedClause emptyAnno
-      <$> annoHole (indentedExpr p)
-      <*> annoHole guard_
-
 -- primarily for testing
 expr :: Parser (Expr Name)
 expr =
   indentedExpr (mkPos 1)
-
-guard_ :: Parser (Guard Name)
-guard_ =
-      otherwiseGuard
-  <|> plainGuard
-
-otherwiseGuard :: Parser (Guard n)
-otherwiseGuard =
-  attachAnno $
-    Otherwise emptyAnno
-      <$ annoLexeme (spacedToken_ TKOtherwise)
-
-plainGuard :: Parser (Guard Name)
-plainGuard = do
-  current <- Lexer.indentLevel
-  attachAnno $
-    PlainGuard emptyAnno
-      <$ annoLexeme (spacedToken_ TKIf <|> spacedToken_ TKIs)
-      <*> annoHole (indentedExpr current)
 
 indentedType :: Pos -> Parser (Type' Name)
 indentedType p =
@@ -437,10 +411,10 @@ combineExpr s1@(Frame s e1 op1 prio1 p1) e2 (MkExprCont op2 prio2 p2 e3 : efs)
 
 data ExprCont =
   MkExprCont
-    { op   :: Expr Name -> Expr Name -> Expr Name
-    , prio :: Prio
-    , pos  :: Pos
-    , arg  :: Expr Name
+    { _op   :: Expr Name -> Expr Name -> Expr Name
+    , _prio :: Prio
+    , _pos  :: Pos
+    , _arg  :: Expr Name
     }
 
 expressionCont :: Pos -> Parser ExprCont
@@ -473,6 +447,7 @@ baseExpr =
   <|> negation
   <|> ifthenelse
   <|> lam
+  <|> consider
   <|> app
 
 app :: Parser (Expr Name)
@@ -511,8 +486,58 @@ ifthenelse = do
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
 
--- Some manual left-factoring here to prevent left-recursion;
--- projections can be plain variables
+consider :: Parser (Expr Name)
+consider = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Consider emptyAnno
+      <$  annoLexeme (spacedToken_ TKConsider)
+      <*> annoHole (indentedExpr current)
+      <*> annoHole (lsepBy branch (spacedToken_ TComma))
+
+branch :: Parser (Branch Name)
+branch =
+  when' <|> otherwise'
+
+when' :: Parser (Branch Name)
+when' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    When emptyAnno
+      <$  annoLexeme (spacedToken_ TKWhen)
+      <*> annoHole (indentedPattern current)
+      <*  annoLexeme (spacedToken_ TKThen)
+      <*> annoHole (indentedExpr current)
+
+otherwise' :: Parser (Branch Name)
+otherwise' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Otherwise emptyAnno
+      <$  annoLexeme (spacedToken_ TKOtherwise)
+      <*> annoHole (indentedExpr current)
+
+indentedPattern :: Pos -> Parser (Pattern Name)
+indentedPattern p =
+  withIndent GT p $ \_ -> pattern'
+
+pattern' :: Parser (Pattern Name)
+pattern' =
+  patApp
+  -- TODO: cons pattern
+
+patApp :: Parser (Pattern Name)
+patApp = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    PatApp emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedPattern current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedPattern current))
+        )
+
+-- Some manual left-factoring here to prevent left-recursion
+-- TODO: the interaction between projection and application has to be properly sorted out
 projection :: Parser (Expr Name)
 projection =
       -- TODO: should 'TGenitive' be part of 'Name' or 'Proj'?
@@ -523,30 +548,30 @@ projection =
   <$> name
   <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
-example1 :: Text
-example1 =
+_example1 :: Text
+_example1 =
   Text.unlines
     [ "     foo"
     , " AND bar"
     ]
 
-example1b :: Text
-example1b =
+_example1b :: Text
+_example1b =
   Text.unlines
     [ "     foo"
     , " AND NOT bar"
     ]
 
-example2 :: Text
-example2 =
+_example2 :: Text
+_example2 =
   Text.unlines
     [ "        foo"
     , "     OR bar"
     , " AND baz"
     ]
 
-example3 :: Text
-example3 =
+_example3 :: Text
+_example3 =
   Text.unlines
     [ "        foo"
     , "     OR bar"
@@ -554,8 +579,8 @@ example3 =
     , "     OR baz"
     ]
 
-example3b :: Text
-example3b =
+_example3b :: Text
+_example3b =
   Text.unlines
     [ "     NOT    foo"
     , "         OR bar"
@@ -563,16 +588,16 @@ example3b =
     , "     OR NOT baz"
     ]
 
-example4 :: Text
-example4 =
+_example4 :: Text
+_example4 =
   Text.unlines
     [ "        foo"
     , "    AND bar"
     , " OR     baz"
     ]
 
-example5 :: Text
-example5 =
+_example5 :: Text
+_example5 =
   Text.unlines
     [ "        foo"
     , "    AND bar"
@@ -580,8 +605,8 @@ example5 =
     , " OR     baz"
     ]
 
-example6 :: Text
-example6 =
+_example6 :: Text
+_example6 =
   Text.unlines
     [ "            foo"
     , "        AND bar"
@@ -589,16 +614,16 @@ example6 =
     , " AND        foobar"
     ]
 
-example7 :: Text
-example7 =
+_example7 :: Text
+_example7 =
   Text.unlines
     [ "            foo IS x"
     , "        AND bar IS y"
     , "     OR     baz IS z"
     ]
 
-example7b :: Text
-example7b =
+_example7b :: Text
+_example7b =
   Text.unlines
     [ "               foo"
     , "            IS x"
@@ -608,8 +633,8 @@ example7b =
     , "            IS z"
     ]
 
-example8 :: Text
-example8 =
+_example8 :: Text
+_example8 =
   Text.unlines
     [ "          b's stage     IS Seed"
     , "    AND   b's sector    IS `Information Technology`"
@@ -621,8 +646,8 @@ example8 =
     , "    AND   b's has_ESG"
     ]
 
-example9 :: Text
-example9 =
+_example9 :: Text
+_example9 =
   Text.unlines
     [ "     foo"
     , " AND bar"
@@ -630,8 +655,8 @@ example9 =
     , " AND baz"
     ]
 
-example9b :: Text
-example9b =
+_example9b :: Text
+_example9b =
   Text.unlines
     [ "     foo"
     , " OR  bar"
@@ -639,8 +664,8 @@ example9b =
     , " OR  baz"
     ]
 
-example10 :: Text
-example10 =
+_example10 :: Text
+_example10 =
   Text.unlines
     [ "     foo"
     , " AND bar"
@@ -648,21 +673,21 @@ example10 =
     ]
 
 -- This looks wrong, should be foo (AND bar) OR baz
-example11a :: Text
-example11a =
+_example11a :: Text
+_example11a =
       " foo AND bar OR baz"
 
 -- This is unclear
-example11b :: Text
-example11b =
+_example11b :: Text
+_example11b =
   Text.unlines
     [ " foo "
     , "     AND bar"
     , "             OR baz"
     ]
 
-example11c :: Text
-example11c =
+_example11c :: Text
+_example11c =
   Text.unlines
     [ "                foo"
     , "     AND        bar"
@@ -670,16 +695,16 @@ example11c =
     ]
 
 -- This is unclear, probably (foo AND bar) OR baz
-example11d :: Text
-example11d =
+_example11d :: Text
+_example11d =
   Text.unlines
     [ " foo AND bar"
     , "     OR  baz"
     ]
 
 -- Hannes says: (foo OR bar) AND baz
-example11e :: Text
-example11e =
+_example11e :: Text
+_example11e =
   Text.unlines
     [ " foo OR  bar"
     , "     AND baz"

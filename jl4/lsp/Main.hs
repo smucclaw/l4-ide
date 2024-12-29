@@ -42,7 +42,7 @@ import Language.LSP.Logging
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Message as LSP
-import Language.LSP.Protocol.Types
+import Language.LSP.Protocol.Types hiding (Pattern)
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 import Language.LSP.VFS (VirtualFile (..))
@@ -559,19 +559,6 @@ appFormToTokens (MkAppForm ann name names) =
     , Extra.concatMapM nameToTokens names
     ]
 
-clauseToTokens :: Clause Name -> SemanticM HoleFit
-clauseToTokens (GuardedClause ann e guard) =
-  traverseCsnWithHoles
-    ann
-    [ exprToTokens e
-    , guardToTokens guard
-    ]
-
-guardToTokens :: Guard Name -> SemanticM HoleFit
-guardToTokens = \case
-  PlainGuard ann e -> traverseCsnWithHoles ann [exprToTokens e]
-  Otherwise ann -> traverseCsnWithHoles ann []
-
 exprToTokens :: Expr Name -> SemanticM HoleFit
 exprToTokens = \case
   And ann e1 e2 ->
@@ -610,6 +597,10 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
+  Cons ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
   Proj ann e lbl ->
     traverseCsnWithHoles
       ann
@@ -630,7 +621,32 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [exprToTokens e1, exprToTokens e2, exprToTokens e3]
+  Consider ann e bs ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e, Extra.concatMapM branchToTokens bs]
 
+branchToTokens :: Branch Name -> SemanticM HoleFit
+branchToTokens = \case
+  When ann p e ->
+    traverseCsnWithHoles
+      ann
+      [patternToTokens p, exprToTokens e]
+  Otherwise ann e ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e]
+
+patternToTokens :: Pattern Name -> SemanticM HoleFit
+patternToTokens = \case
+  PatApp ann n ps ->
+    traverseCsnWithHoles
+      ann
+      [nameToTokens n, Extra.concatMapM patternToTokens ps]
+  PatCons ann p1 p2 ->
+    traverseCsnWithHoles
+      ann
+      [patternToTokens p1, patternToTokens p2]
 typeSigToTokens :: TypeSig Name -> SemanticM HoleFit
 typeSigToTokens (MkTypeSig ann given mGiveth) =
   traverseCsnWithHoles

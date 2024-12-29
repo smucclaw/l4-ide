@@ -78,17 +78,6 @@ data ConDecl n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)
 
-data Clause n =
-  GuardedClause Anno (Expr n) (Guard n)
-  deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (HasAnno, ToExpr)
-
-data Guard n =
-    PlainGuard Anno (Expr n)
-  | Otherwise  Anno
-  deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (HasAnno, ToExpr)
-
 data Expr n =
     And        Anno (Expr n) (Expr n)
   | Or         Anno (Expr n) (Expr n)
@@ -99,11 +88,25 @@ data Expr n =
   | Minus      Anno (Expr n) (Expr n)
   | Times      Anno (Expr n) (Expr n)
   | DividedBy  Anno (Expr n) (Expr n)
+  | Cons       Anno (Expr n) (Expr n)
   | Proj       Anno (Expr n) Label
   | Var        Anno n
   | Lam        Anno (GivenSig n) (Expr n)
   | App        Anno n [Expr n]
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
+  | Consider   Anno (Expr n) [Branch n]
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
+
+data Branch n =
+    When Anno (Pattern n) (Expr n)
+  | Otherwise Anno (Expr n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
+
+data Pattern n =
+    PatApp Anno n [Pattern n]
+  | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)
 

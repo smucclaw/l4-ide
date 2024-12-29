@@ -22,3 +22,24 @@ DECLARE OPTIONAL a
   IS ONE OF
     Missing
     Just HAS payload IS AN a
+
+GIVEN  a      IS A TYPE
+       b      IS A TYPE
+       c      IS A TYPE
+       left   IS A FUNCTION FROM a TO c
+       right  IS A FUNCTION FROM b TO c
+       choice IS A Choice OF a AND b
+GIVETH A c
+choose left right choice MEANS
+  CONSIDER choice
+    WHEN Left  a THEN left a
+    WHEN Right b THEN right b
+
+GIVEN a IS A TYPE
+      default IS AN a
+      o IS AN OPTIONAL a
+GIVETH AN a
+fromOptional default o MEANS
+  CONSIDER o
+    WHEN Missing THEN default
+    WHEN Just a  THEN a
