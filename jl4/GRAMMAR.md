@@ -115,8 +115,8 @@ infixop ::=
   | "EQUALS" | "="
   | "GREATER" "THAN" | "ABOVE" | ">"
   | "LESS" "THAN" | "BELOW" | "<"
-  | "AT" "LEAST" | ">"
-  | "AT "MOST" | "<"
+  | "AT" "LEAST" | ">="
+  | "AT "MOST" | "<="
   | "FOLLOWED" "BY"     -- "cons" on lists
   | ...                 -- we will probably add more operators
 

@@ -582,7 +582,11 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
-  Is ann e1 e2 ->
+  Implies ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Equals ann e1 e2 ->
     traverseCsnWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
@@ -590,6 +594,22 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [exprToTokens e]
+  Plus ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Minus ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Times ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  DividedBy ann e1 e2 ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
   Proj ann e lbl ->
     traverseCsnWithHoles
       ann

@@ -139,7 +139,11 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
-  Is ann e1 e2 ->
+  Implies ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Equals ann e1 e2 ->
     applyTokensWithHoles
       ann
       [exprToTokens e1, exprToTokens e2]
@@ -147,6 +151,22 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [exprToTokens e]
+  Plus ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Minus ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  Times ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
+  DividedBy ann e1 e2 ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e1, exprToTokens e2]
   Proj ann e lbl ->
     applyTokensWithHoles
       ann

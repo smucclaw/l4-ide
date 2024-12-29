@@ -111,7 +111,7 @@ traverseExpr subject e = case e of
         node Any [rNode | n <- scanOr e, Just rNode <- [traverseExpr subject n]]
   Var _ (Name _ verb) ->
     Just $ ruleNode emptyPrePost $ leaf subject verb
-  Is{} -> Nothing -- Can't handle 'Is' yet
+  Equals{} -> Nothing -- Can't handle 'Is' yet
   Not{} -> Nothing -- Can't handle 'Not' yet
   Proj{} -> Nothing -- Can't handle 'Proj' yet
 

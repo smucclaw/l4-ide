@@ -90,14 +90,19 @@ data Guard n =
   deriving anyclass (HasAnno, ToExpr)
 
 data Expr n =
-    And  Anno (Expr n) (Expr n)
-  | Or   Anno (Expr n) (Expr n)
-  | Is   Anno (Expr n) (Expr n)
-  | Not  Anno (Expr n)
-  | Proj Anno (Expr n) Label
-  | Var  Anno n
-  | Lam  Anno (GivenSig n) (Expr n)
-  | App  Anno n [Expr n]
+    And        Anno (Expr n) (Expr n)
+  | Or         Anno (Expr n) (Expr n)
+  | Implies    Anno (Expr n) (Expr n)
+  | Equals     Anno (Expr n) (Expr n)
+  | Not        Anno (Expr n)
+  | Plus       Anno (Expr n) (Expr n)
+  | Minus      Anno (Expr n) (Expr n)
+  | Times      Anno (Expr n) (Expr n)
+  | DividedBy  Anno (Expr n) (Expr n)
+  | Proj       Anno (Expr n) Label
+  | Var        Anno n
+  | Lam        Anno (GivenSig n) (Expr n)
+  | App        Anno n [Expr n]
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)

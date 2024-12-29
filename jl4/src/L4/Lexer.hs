@@ -95,6 +95,8 @@ data TokenType =
   | TNotEquals
   | TAnd
   | TOr
+  | TImplies
+  | TDividedBy
   | TOtherSymbolic !Text
     -- keywords
   | TKGiven
@@ -128,6 +130,22 @@ data TokenType =
   | TKFunction
   | TKFrom
   | TKTo
+  | TKEquals
+  | TKImplies
+  | TKPlus
+  | TKMinus
+  | TKTimes
+  | TKDivided
+  | TKBy
+  | TKGreater
+  | TKLess
+  | TKThan
+  | TKAbove
+  | TKBelow
+  | TKAt
+  | TKLeast
+  | TKMost
+  | TKFollowed
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -240,6 +258,8 @@ symbols =
     , ("==", TEqualsEquals )
     , ("&&", TAnd          )
     , ("||", TOr           )
+    , ("=>", TImplies      )
+    , ("/" , TDividedBy    )
     ]
 
 keywords :: Map Text TokenType
@@ -276,6 +296,22 @@ keywords =
     , ("FUNCTION"   , TKFunction   )
     , ("FROM"       , TKFrom       )
     , ("TO"         , TKTo         )
+    , ("EQUALS"     , TKEquals     )
+    , ("IMPLIES"    , TKImplies    )
+    , ("PLUS"       , TKPlus       )
+    , ("MINUS"      , TKMinus      )
+    , ("TIMES"      , TKTimes      )
+    , ("DIVIDED"    , TKDivided    )
+    , ("BY"         , TKBy         )
+    , ("GREATER"    , TKGreater    )
+    , ("LESS"       , TKLess       )
+    , ("THAN"       , TKThan       )
+    , ("ABOVE"      , TKAbove      )
+    , ("BELOW"      , TKBelow      )
+    , ("AT"         , TKAt         )
+    , ("LEAST"      , TKLeast      )
+    , ("MOST"       , TKMost       )
+    , ("FOLLOWED"   , TKFollowed   )
     ]
 
 rawTokens :: Lexer [RawToken]
@@ -538,6 +574,8 @@ displayPosToken (MkPosToken _r tt) =
     TNotEquals       -> "/="
     TAnd             -> "&&"
     TOr              -> "||"
+    TImplies         -> "=>"
+    TDividedBy       -> "/"
     TOtherSymbolic t -> t
     TKGiven          -> "GIVEN"
     TKGiveth         -> "GIVETH"
@@ -570,6 +608,22 @@ displayPosToken (MkPosToken _r tt) =
     TKFunction       -> "FUNCTION"
     TKFrom           -> "FROM"
     TKTo             -> "TO"
+    TKEquals         -> "EQUALS"
+    TKImplies        -> "IMPLIES"
+    TKPlus           -> "PLUS"
+    TKMinus          -> "MINUS"
+    TKTimes          -> "TIMES"
+    TKDivided        -> "DIVIDED"
+    TKBy             -> "BY"
+    TKGreater        -> "GREATER"
+    TKLess           -> "LESS"
+    TKThan           -> "THAN"
+    TKAbove          -> "ABOVE"
+    TKBelow          -> "BELOW"
+    TKAt             -> "AT"
+    TKLeast          -> "LEAST"
+    TKMost           -> "MOST"
+    TKFollowed       -> "FOLLOWED"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -617,6 +671,8 @@ posTokenCategory =
     TNotEquals -> COperator
     TAnd -> COperator
     TOr -> COperator
+    TImplies -> COperator
+    TDividedBy -> COperator
     TOtherSymbolic _ -> CSymbol
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
@@ -649,6 +705,22 @@ posTokenCategory =
     TKFunction -> CKeyword
     TKFrom -> CKeyword
     TKTo -> CKeyword
+    TKEquals -> CKeyword
+    TKImplies -> CKeyword
+    TKPlus -> CKeyword
+    TKMinus -> CKeyword
+    TKTimes -> CKeyword
+    TKDivided -> CKeyword
+    TKBy -> CKeyword
+    TKGreater -> CKeyword
+    TKLess -> CKeyword
+    TKThan -> CKeyword
+    TKAbove -> CKeyword
+    TKBelow -> CKeyword
+    TKAt -> CKeyword
+    TKLeast -> CKeyword
+    TKMost -> CKeyword
+    TKFollowed -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

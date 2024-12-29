@@ -17,3 +17,8 @@ DECLARE Choice OF a AND b
   IS ONE OF
     Left  HAS payload IS AN a
     Right HAS payload IS A  b
+
+DECLARE OPTIONAL a
+  IS ONE OF
+    Missing
+    Just HAS payload IS AN a

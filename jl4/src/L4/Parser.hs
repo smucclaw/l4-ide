@@ -286,7 +286,7 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy type' (spacedToken_ TKAnd))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedType current) (spacedToken_ TKAnd))
         <|> annoHole (lmany (indentedType current))
         )
 
@@ -455,9 +455,13 @@ type Prio = Int
 
 operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\op -> (4, infix2 And op)) <$> spacedToken_ TKAnd
-  <|> (\op -> (3, infix2 Or  op)) <$> spacedToken_ TKOr
-  <|> (\op -> (5, infix2 Is  op)) <$> spacedToken_ TKIs
+      (\ op -> (4, infix2 And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (3, infix2 Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (5, infix2 Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (6, infix2 Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
+  <|> (\ op -> (6, infix2 Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
+  <|> (\ op -> (7, infix2 Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
+  <|> (\ op -> (7, infix2 DividedBy op)) <$> ((spacedToken_ TKDivided *> spacedToken_ TKBy) <|> spacedToken_ TDividedBy)
 
 infix2 :: (Anno -> Expr n -> Expr n -> Expr n) -> Lexeme PosToken -> Expr n -> Expr n -> Expr n
 infix2 f op l r =
@@ -465,23 +469,47 @@ infix2 f op l r =
 
 baseExpr :: Parser (Expr Name)
 baseExpr =
-      projection
+      try projection
   <|> negation
+  <|> ifthenelse
   <|> lam
+  <|> app
+
+app :: Parser (Expr Name)
+app = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    App emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedExpr current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedExpr current))
+        )
 
 negation :: Parser (Expr Name)
 negation = do
   current <- Lexer.indentLevel
   attachAnno $
     Not emptyAnno
-    <$ annoLexeme (spacedToken_ TKNot)
-    <*> annoHole (indentedExpr current)
+      <$  annoLexeme (spacedToken_ TKNot)
+      <*> annoHole (indentedExpr current)
 
 lam :: Parser (Expr Name)
 lam = do
   current <- Lexer.indentLevel
   attachAnno $
     Lam emptyAnno <$> annoHole givens <* annoLexeme (spacedToken_ TKYield) <*> annoHole (indentedExpr current)
+
+ifthenelse :: Parser (Expr Name)
+ifthenelse = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    IfThenElse emptyAnno
+      <$  annoLexeme (spacedToken_ TKIf)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKThen)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKElse)
+      <*> annoHole (indentedExpr current)
 
 -- Some manual left-factoring here to prevent left-recursion;
 -- projections can be plain variables
@@ -493,7 +521,7 @@ projection =
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
       (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
   <$> name
-  <*> many ((,) <$> spacedToken_ TGenitive <*> name)
+  <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
 example1 :: Text
 example1 =
