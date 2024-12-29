@@ -91,6 +91,10 @@ simpleName =
 name :: Parser Name
 name = attachEpa (quotedName <|> simpleName) <?> "identifier"
 
+indentedName :: Pos -> Parser Name
+indentedName p =
+  withIndent GT p $ \_ -> name
+
 program :: Parser (Program Name)
 program = do
   initSpace <- spaces
@@ -201,17 +205,15 @@ decide = do
           <*  annoLexeme (spacedToken_ TKMeans)
           <*> annoHole (indentedExpr current)
 
--- TODO: there's quite something wrong with annotations here,
--- and/or we have to allow the of/and form
 appForm :: Parser (AppForm Name)
-appForm =
+appForm = do
+  current <- Lexer.indentLevel
   attachAnno $
-  MkAppForm emptyAnno
-    <$> annoHole name
-    <*> annoHole positional -- <|> annoHole ofAnd
-  where
-    positional :: Parser [Name]
-    positional = many name
+    MkAppForm emptyAnno
+      <$> annoHole name
+      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy name (spacedToken_ TKAnd))
+          <|> annoHole (lmany (indentedName current))
+          )
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
@@ -284,8 +286,8 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole name
-    <*> (   annoHole (manyLines (indentedType current))
-        <|> annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy type' (spacedToken_ TKAnd))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy type' (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedType current))
         )
 
 fun :: Parser (Type' Name)
@@ -310,6 +312,10 @@ enumType =
     <*  annoLexeme (spacedToken_ TKOf)
     <*> annoHole (lsepBy1 name (spacedToken_ TComma))
 -}
+
+lmany :: Parser a -> Parser [a]
+lmany pp =
+  fmap concat $ manyLines $ some pp
 
 lsepBy :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy pp sep =
