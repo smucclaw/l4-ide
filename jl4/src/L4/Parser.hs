@@ -271,7 +271,6 @@ indentedType :: Pos -> Parser (Type' Name)
 indentedType p =
   withIndent GT p $ \_ -> type'
 
--- TODO: there's a problem with left-recursion here! tyapps start with a type?
 type' :: Parser (Type' Name)
 type' =
       (attachAnno $
@@ -280,11 +279,12 @@ type' =
   <|> fun
 
 tyApp :: Parser (Type' Name)
-tyApp = 
+tyApp = do
+  current <- Lexer.indentLevel
   attachAnno $
     TyApp emptyAnno
     <$> annoHole name
-    <*> (   annoHole (manyLines type')
+    <*> (   annoHole (manyLines (indentedType current))
         <|> annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy type' (spacedToken_ TKAnd))
         )
 

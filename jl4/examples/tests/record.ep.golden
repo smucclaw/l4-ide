@@ -1,5 +1,10 @@
 § `Type declarations`
 
-DECLARE Folder
-HAS name IS A string
-    colour IS ONE OF red, green, blue
+DECLARE Colour IS ONE OF red, green, blue
+
+DECLARE Folder1
+HAS name IS A STRING, colour IS A Colour
+
+DECLARE Folder2
+HAS name IS A STRING
+    colour IS A Colour
