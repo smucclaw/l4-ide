@@ -625,6 +625,10 @@ exprToTokens = \case
     traverseCsnWithHoles
       ann
       [exprToTokens e, Extra.concatMapM branchToTokens bs]
+  ParenExpr ann e ->
+    traverseCsnWithHoles
+      ann
+      [exprToTokens e]
 
 branchToTokens :: Branch Name -> SemanticM HoleFit
 branchToTokens = \case

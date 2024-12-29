@@ -182,6 +182,10 @@ exprToTokens = \case
     applyTokensWithHoles
       ann
       [exprToTokens e, Extra.concatMapM branchToTokens bs]
+  ParenExpr ann e ->
+    applyTokensWithHoles
+      ann
+      [exprToTokens e]
 
 branchToTokens :: Branch Name -> HoleFit
 branchToTokens = \case

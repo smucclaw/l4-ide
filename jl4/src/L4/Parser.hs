@@ -458,6 +458,15 @@ baseExpr =
   <|> lam
   <|> consider
   <|> app
+  <|> parenExpr
+
+parenExpr :: Parser (Expr Name)
+parenExpr =
+  attachAnno $
+    ParenExpr emptyAnno
+    <$  annoLexeme (spacedToken_ TPOpen)
+    <*> annoHole expr
+    <*  annoLexeme (spacedToken_ TPClose)
 
 app :: Parser (Expr Name)
 app = do

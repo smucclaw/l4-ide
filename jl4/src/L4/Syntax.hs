@@ -95,6 +95,7 @@ data Expr n =
   | App        Anno n [Expr n]
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | Consider   Anno (Expr n) [Branch n]
+  | ParenExpr  Anno (Expr n) -- temporary
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)
 
