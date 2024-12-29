@@ -346,23 +346,23 @@ indentedExpr p = do
   withIndent GT p $ \_ -> do
     e <- baseExpr
     efs <- many (expressionCont p)
-    pure (combineExpr End e efs)
+    pure (combine End e efs)
 
-data Stack =
-    Frame Stack (Expr Name) (Expr Name -> Expr Name -> Expr Name) Prio Pos
+data Stack a =
+    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos
   | End
 
-combineExpr :: Stack -> Expr Name -> [ExprCont] -> Expr Name
-combineExpr End e [] = e
-combineExpr (Frame s e1 op _ _) e2 [] =
-  combineExpr s (e1 `op` e2) []
-combineExpr End e1 (MkExprCont op1 prio1 p1 e2 : efs) =
-  combineExpr (Frame End e1 op1 prio1 p1) e2 efs
-combineExpr s1@(Frame s e1 op1 prio1 p1) e2 (MkExprCont op2 prio2 p2 e3 : efs)
+combine :: Stack a -> a Name -> [Cont a] -> a Name
+combine End e [] = e
+combine (Frame s e1 op _ _) e2 [] =
+  combine s (e1 `op` e2) []
+combine End e1 (MkCont op1 prio1 p1 e2 : efs) =
+  combine (Frame End e1 op1 prio1 p1) e2 efs
+combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
   | p2 > p1 || p2 == p1 && prio2 >= prio1 = -- (>=) is for *right*-associative operators
-  combineExpr (Frame s1 e2 op2 prio2 p2) e3 efs -- push
+  combine (Frame s1 e2 op2 prio2 p2) e3 efs -- push
   | otherwise =
-  combineExpr s (e1 `op1` e2) (MkExprCont op2 prio2 p2 e3 : efs) -- pop
+  combine s (e1 `op1` e2) (MkCont op2 prio2 p2 e3 : efs) -- pop
 
 -- The real problem is:
 --
@@ -409,37 +409,46 @@ combineExpr s1@(Frame s e1 op1 prio1 p1) e2 (MkExprCont op2 prio2 p2 e3 : efs)
 --
 -- [ (e1 OR (e2 AND e3), OP@2, e4 ]
 
-data ExprCont =
-  MkExprCont
-    { _op   :: Expr Name -> Expr Name -> Expr Name
+data Cont a =
+  MkCont
+    { _op   :: a Name -> a Name -> a Name
     , _prio :: Prio
     , _pos  :: Pos
-    , _arg  :: Expr Name
+    , _arg  :: a Name
     }
 
-expressionCont :: Pos -> Parser ExprCont
-expressionCont p = do
-  withIndent GT p $ \pop -> do
-    (prio, op) <- operator
+cont :: Parser (Prio, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
+cont pop pbase p =
+  withIndent GT p $ \ pos -> do
+    (prio, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
-    arg <- baseExpr
-    pure (MkExprCont op prio pop arg)
+    arg <- pbase
+    pure (MkCont op prio pos arg)
+
+expressionCont :: Pos -> Parser (Cont Expr)
+expressionCont = cont operator baseExpr
 
 type Prio = Int
 
+-- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (4, infix2 And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
-  <|> (\ op -> (3, infix2 Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
-  <|> (\ op -> (5, infix2 Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
-  <|> (\ op -> (6, infix2 Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
-  <|> (\ op -> (6, infix2 Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
-  <|> (\ op -> (7, infix2 Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
-  <|> (\ op -> (7, infix2 DividedBy op)) <$> ((spacedToken_ TKDivided *> spacedToken_ TKBy) <|> spacedToken_ TDividedBy)
+      (\ op -> (3, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (4, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (5, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (5, infix2' Cons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+  <|> (\ op -> (6, infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
+  <|> (\ op -> (6, infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
+  <|> (\ op -> (7, infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
+  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKDivided <*> spacedToken_ TKBy) <|> (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ TDividedBy)
 
-infix2 :: (Anno -> Expr n -> Expr n -> Expr n) -> Lexeme PosToken -> Expr n -> Expr n -> Expr n
+infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
   f (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnno) l r
+
+infix2' :: (Anno -> a n-> a n -> a n) -> Anno -> a n -> a n -> a n
+infix2' f op l r =
+  f (mkHoleAnno <> op <> mkHoleAnno) l r
 
 baseExpr :: Parser (Expr Name)
 baseExpr =
@@ -519,12 +528,22 @@ otherwise' = do
 
 indentedPattern :: Pos -> Parser (Pattern Name)
 indentedPattern p =
-  withIndent GT p $ \_ -> pattern'
+  withIndent GT p $ \ _ -> do
+    pat <- basePattern
+    pfs <- many (patternCont p)
+    pure (combine End pat pfs)
 
-pattern' :: Parser (Pattern Name)
-pattern' =
+basePattern :: Parser (Pattern Name)
+basePattern =
   patApp
-  -- TODO: cons pattern
+
+patternCont :: Pos -> Parser (Cont Pattern)
+patternCont = cont patOperator basePattern
+
+patOperator :: Parser (Prio, Pattern Name -> Pattern Name -> Pattern Name)
+patOperator =
+  (\ op -> (5, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+
 
 patApp :: Parser (Pattern Name)
 patApp = do

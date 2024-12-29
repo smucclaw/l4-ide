@@ -91,15 +91,19 @@ expr ::=
   | name "WITH" namedargs -- also constructor / function application
   | givens "YIELD" expr   -- anonymous function / lambda
   | expr "'s" name        -- record projection
-  | "THE" name "OF" expr  -- also record projection (under discussion)
+  | "THE" name "OF" expr  -- also record projection (under discussion / should perhaps become generally possible as application syntax)
   | "IF" expr "THEN" expr "ELSE" expr  -- elimination for Booleans
   | "CONSIDER" expr branches -- elimination for general datatypes
   | expr "WHERE" decls    -- local declarations
   | article? "LIST" ("OF"?) expr{,}*   -- literal lists
+  | ...                   -- numeric literals (at least integers)
+  | ...                   -- string literals (in double quotes)
     -- probably not needed because can be predefined instead of built-in:
   | "EMPTY"               -- empty list
   | "MISSING"             -- like Nothing in Haskell
   | "JUST"                -- like Just in Haskell
+  | "TRUE"
+  | "FALSE"
 
 -- All operators have a textual form, but some may also have
 -- a symbolic form. These have to be built-in for now (not *necessarily*
