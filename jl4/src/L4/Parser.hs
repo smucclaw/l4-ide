@@ -544,7 +544,6 @@ patOperator :: Parser (Prio, Pattern Name -> Pattern Name -> Pattern Name)
 patOperator =
   (\ op -> (5, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
 
-
 patApp :: Parser (Pattern Name)
 patApp = do
   current <- Lexer.indentLevel

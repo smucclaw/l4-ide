@@ -25,6 +25,27 @@ DECLARE OPTIONAL a
 
 GIVEN  a      IS A TYPE
        b      IS A TYPE
+       f      IS A FUNCTION FROM a TO b
+       list   IS A List OF a
+GIVETH A List OF b
+map f list MEANS
+  CONSIDER list
+    WHEN Nil       THEN Nil
+    WHEN Cons x xs THEN Cons OF f x AND map f xs
+
+-- preliminary experiment with built-in list syntax
+GIVEN  a      IS A TYPE
+       b      IS A TYPE
+       f      IS A FUNCTION FROM a TO b
+       list   IS A List2 OF a
+GIVETH A List2 OF b
+map2 f list MEANS
+  CONSIDER list
+    WHEN EMPTY            THEN EMPTY
+    WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map f xs
+
+GIVEN  a      IS A TYPE
+       b      IS A TYPE
        c      IS A TYPE
        left   IS A FUNCTION FROM a TO c
        right  IS A FUNCTION FROM b TO c
