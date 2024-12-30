@@ -1,4 +1,9 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 module L4.ExactPrint where
 
@@ -8,8 +13,13 @@ import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except
+import Data.Kind
 import Data.Text
 import qualified Data.Text as Text
+import Generics.SOP as SOP
+import Generics.SOP.Constraint
+import Generics.SOP.NP
+import Generics.SOP.NS
 import GHC.Stack
 
 type EPM = Except EPError
@@ -25,214 +35,69 @@ type HoleFit = EPM [PosToken]
 
 exactprint :: Program Name -> Either EPError Text
 exactprint =
-  runExcept . fmap (Text.concat . fmap displayPosToken) . progToTokens
+  runExcept . fmap (Text.concat . fmap displayPosToken) . toTokens
 
-progToTokens :: Program Name -> HoleFit
-progToTokens (MkProgram ann sections) =
-  applyTokensWithHoles ann [Extra.concatMapM sectionToTokens sections]
+class ToTokens a where
+  toTokens :: a -> HoleFit
 
-sectionToTokens :: Section Name -> HoleFit
-sectionToTokens (MkSection ann _lvl name decls) =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , Extra.concatMapM topdeclToTokens decls
-    ]
+  default toTokens ::
+       (SOP.Generic a, All (AnnoFirst ToTokens) (Code a))
+    => a -> HoleFit
+  toTokens =
+    genericToTokens (Proxy @ToTokens) toTokens applyTokensWithHoles
 
-topdeclToTokens :: TopDecl Name -> HoleFit
-topdeclToTokens = \case
-  Declare ann declare ->
-    applyTokensWithHoles ann [declareToTokens declare]
-  Decide ann decide ->
-    applyTokensWithHoles ann [decideToTokens decide]
-  Assume ann assume ->
-    applyTokensWithHoles ann [assumeToTokens assume]
+genericToTokens :: forall c a r. (Generic a, All (AnnoFirst c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno -> [r] -> r) -> a -> r
+genericToTokens _ rec f x =
+    collapse_NS
+  $ cmap_NS
+      (Proxy @(AnnoFirst c))
+      (\ (I anno :* xs) ->
+        K (f anno (collapse_NP (cmap_NP (Proxy @c) (mapIK rec) xs))))
+  $ unSOP
+  $ from x
 
-assumeToTokens :: Assume Name -> HoleFit
-assumeToTokens (MkAssume ann appform type') =
-  applyTokensWithHoles
-    ann
-    [ appFormToTokens appform
-    , typeToTokens type'
-    ]
+-- This constraint enforces that Anno is the first field (of each constructor).
+--
+-- It would be better to unify this with HasAnno somehow.
+class (Head xs ~ Anno, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst c (xs :: [Type])
+instance (Head xs ~ Anno, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst c (xs :: [Type])
 
-declareToTokens :: Declare Name -> HoleFit
-declareToTokens (MkDeclare ann appform tydecl) =
-  applyTokensWithHoles
-    ann
-    [ appFormToTokens appform
-    , typeDeclToTokens tydecl
-    ]
+instance ToTokens a => ToTokens [a] where
+  toTokens =
+    Extra.concatMapM toTokens
 
-typeDeclToTokens :: TypeDecl Name -> HoleFit
-typeDeclToTokens = \case
-  RecordDecl ann tns -> applyTokensWithHoles ann [Extra.concatMapM typedNameToTokens tns]
-  EnumDecl ann cds -> applyTokensWithHoles ann [Extra.concatMapM conDeclToTokens cds]
+instance ToTokens a => ToTokens (Maybe a) where
+  toTokens =
+    maybe (pure []) toTokens
 
-conDeclToTokens :: ConDecl Name -> HoleFit
-conDeclToTokens (MkConDecl ann n tns) =
-  applyTokensWithHoles
-    ann
-      [ nameToTokens n
-      , Extra.concatMapM typedNameToTokens tns
-      ]
+deriving anyclass instance ToTokens (Program Name)
 
-typeToTokens :: Type' Name -> HoleFit
-typeToTokens = \case
-  Type ann -> applyTokensWithHoles ann []
-  TyApp ann n ts -> applyTokensWithHoles ann [nameToTokens n, Extra.concatMapM typeToTokens ts]
-  Fun ann ts t -> applyTokensWithHoles ann [Extra.concatMapM typeToTokens ts, typeToTokens t]
+-- Generic instance does not apply because we exclude the level.
+instance ToTokens (Section Name) where
+  toTokens (MkSection ann _lvl name decls) =
+    applyTokensWithHoles ann [toTokens name, toTokens decls]
 
-typedNameToTokens :: TypedName Name -> HoleFit
-typedNameToTokens (MkTypedName ann name type') =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , typeToTokens type'
-    ]
+deriving anyclass instance ToTokens (TopDecl Name)
+deriving anyclass instance ToTokens (Assume Name)
+deriving anyclass instance ToTokens (Declare Name)
+deriving anyclass instance ToTokens (TypeDecl Name)
+deriving anyclass instance ToTokens (ConDecl Name)
+deriving anyclass instance ToTokens (Type' Name)
+deriving anyclass instance ToTokens (TypedName Name)
+deriving anyclass instance ToTokens (OptionallyTypedName Name)
+deriving anyclass instance ToTokens (Decide Name)
+deriving anyclass instance ToTokens (AppForm Name)
+deriving anyclass instance ToTokens (Expr Name)
+deriving anyclass instance ToTokens (Branch Name)
+deriving anyclass instance ToTokens (Pattern Name)
+deriving anyclass instance ToTokens (TypeSig Name)
+deriving anyclass instance ToTokens (GivethSig Name)
+deriving anyclass instance ToTokens (GivenSig Name)
+deriving anyclass instance ToTokens (Directive Name)
 
-optionallyTypedNameToTokens :: OptionallyTypedName Name -> HoleFit
-optionallyTypedNameToTokens (MkOptionallyTypedName ann name mType') =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , maybe (pure []) typeToTokens mType'
-    ]
-
-decideToTokens :: Decide Name -> HoleFit
-decideToTokens (MkDecide ann typeSig appForm expr) =
-  applyTokensWithHoles
-    ann
-    [ typeSigToTokens typeSig
-    , appFormToTokens appForm
-    , exprToTokens expr
-    ]
-
-appFormToTokens :: AppForm Name -> HoleFit
-appFormToTokens (MkAppForm ann name names) =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , Extra.concatMapM nameToTokens names
-    ]
-
-exprToTokens :: Expr Name -> HoleFit
-exprToTokens = \case
-  And ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Or ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Implies ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Equals ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Not ann e ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e]
-  Plus ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Minus ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Times ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  DividedBy ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Cons ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Proj ann e lbl ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e, nameToTokens lbl]
-  Var ann name ->
-    applyTokensWithHoles
-      ann
-      [nameToTokens name]
-  Lam ann given e ->
-    applyTokensWithHoles
-      ann
-      [givenToTokens given, exprToTokens e]
-  App ann n es ->
-    applyTokensWithHoles
-      ann
-      [nameToTokens n, Extra.concatMapM exprToTokens es]
-  IfThenElse ann e1 e2 e3 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2, exprToTokens e3]
-  Consider ann e bs ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e, Extra.concatMapM branchToTokens bs]
-  ParenExpr ann e ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e]
-
-branchToTokens :: Branch Name -> HoleFit
-branchToTokens = \case
-  When ann p e ->
-    applyTokensWithHoles
-      ann
-      [patternToTokens p, exprToTokens e]
-  Otherwise ann e ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e]
-
-patternToTokens :: Pattern Name -> HoleFit
-patternToTokens = \case
-  PatApp ann n ps ->
-    applyTokensWithHoles
-      ann
-      [nameToTokens n, Extra.concatMapM patternToTokens ps]
-  PatCons ann p1 p2 ->
-    applyTokensWithHoles
-      ann
-      [patternToTokens p1, patternToTokens p2]
-
-typeSigToTokens :: TypeSig Name -> HoleFit
-typeSigToTokens (MkTypeSig ann given mGiveth) =
-  applyTokensWithHoles
-    ann
-    [ givenToTokens given
-    , maybe (pure []) givethToTokens mGiveth
-    ]
-
-givethToTokens :: GivethSig Name -> HoleFit
-givethToTokens (MkGivethSig ann type') =
-  applyTokensWithHoles
-    ann
-    [ typeToTokens type'
-    ]
-
-givenToTokens :: GivenSig Name -> HoleFit
-givenToTokens (MkGivenSig ann names) =
-  applyTokensWithHoles
-    ann
-    [ Extra.concatMapM optionallyTypedNameToTokens names
-    ]
-
-nameToTokens :: Name -> HoleFit
-nameToTokens (Name ann _) = applyTokensWithHoles ann []
+instance ToTokens Name where
+  toTokens (Name ann _) =
+    applyTokensWithHoles ann []
 
 applyTokensWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> EPM [PosToken]
 applyTokensWithHoles (Anno []) _ = pure []

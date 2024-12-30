@@ -27,6 +27,7 @@ library
   build-depends:
     containers,
     extra,
+    generics-sop,
     megaparsec,
     mtl,
     optics,
@@ -69,6 +70,7 @@ executable jl4-lsp
     directory,
     extra,
     filepath,
+    generics-sop,
     lens,
     lsp-types ^>=2.3.0.0,
     lsp ^>=2.7.0.0,

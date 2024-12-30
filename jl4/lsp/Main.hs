@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -7,7 +8,7 @@
 module Main where
 
 import L4.Annotation
-import L4.ExactPrint (EPError (..), prettyEPError)
+import L4.ExactPrint (AnnoFirst, EPError (..), genericToTokens, prettyEPError)
 import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -35,7 +36,8 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Utf16.Rope.Mixed as Rope
-import GHC.Generics (Generic)
+import Generics.SOP as SOP
+import qualified GHC.Generics as GHC
 import GHC.Stack
 import Language.LSP.Diagnostics
 import Language.LSP.Logging
@@ -64,7 +66,7 @@ main = do
 data Config = Config
   { serverExecutablePath :: Maybe Text
   }
-  deriving (Generic, J.ToJSON, J.FromJSON, Show)
+  deriving (GHC.Generic, J.ToJSON, J.FromJSON, Show)
 
 run :: IO Int
 run = flip E.catches handlers $ do
@@ -237,7 +239,7 @@ handle _logger =
                       , _xdata = Nothing
                       }
               Right ds -> do
-                case runExcept $ runReaderT (programToTokens ds) defaultInfo of
+                case runExcept $ runReaderT (toSemTokens ds) defaultInfo of
                   Left err -> do
                     -- TODO: log error
                     responder $
@@ -464,223 +466,57 @@ srcPosToPosition s =
     , _line = fromIntegral s.line - 1
     }
 
--- ----------------------------------------------------------------------------
--- Simala AST to Semantic Tokens
--- ----------------------------------------------------------------------------
-
 type SemanticM a = ReaderT (SemanticTokenCtx PosToken) (Except EPError) a
 
-programToTokens :: Program Name -> SemanticM HoleFit
-programToTokens (MkProgram ann sections) =
-  traverseCsnWithHoles ann [Extra.concatMapM sectionToTokens sections]
+-- I would prefer to avoid the duplication between this class and
+-- the ToTokens class.
+--
+-- We might want to override some functionality here. We should perhaps
+-- try to find another way to do this.
+class ToSemTokens a where
+  toSemTokens :: a -> SemanticM HoleFit
 
-sectionToTokens :: Section Name -> SemanticM HoleFit
-sectionToTokens (MkSection ann _lvl name decls) =
-  traverseCsnWithHoles
-    ann
-    [ withTokenType nameIsDirective $ nameToTokens name
-    , Extra.concatMapM topdeclToTokens decls
-    ]
+  default toSemTokens ::
+       (SOP.Generic a, All (AnnoFirst ToSemTokens) (Code a))
+    => a -> SemanticM HoleFit
+  toSemTokens =
+    genericToTokens (Proxy @ToSemTokens) toSemTokens traverseCsnWithHoles
 
-topdeclToTokens :: TopDecl Name -> SemanticM HoleFit
-topdeclToTokens = \case
-  Declare ann declare ->
-    traverseCsnWithHoles ann [declareToTokens declare]
-  Decide ann decide ->
-    traverseCsnWithHoles ann [decideToTokens decide]
-  Assume ann assume ->
-    traverseCsnWithHoles ann [assumeToTokens assume]
-  Directive ann directive ->
-    traverseCsnWithHoles ann [directiveToTokens directive]
+instance ToSemTokens a => ToSemTokens [a] where
+  toSemTokens =
+    Extra.concatMapM toSemTokens
 
-assumeToTokens :: Assume Name -> SemanticM HoleFit
-assumeToTokens (MkAssume ann appform type') =
-  traverseCsnWithHoles
-    ann
-    [ appFormToTokens appform
-    , typeToTokens type'
-    ]
+instance ToSemTokens a => ToSemTokens (Maybe a) where
+  toSemTokens =
+    maybe (pure []) toSemTokens
 
-declareToTokens :: Declare Name -> SemanticM HoleFit
-declareToTokens (MkDeclare ann appform tydecl) =
-  traverseCsnWithHoles
-    ann
-    [ appFormToTokens appform
-    , typeDeclToTokens tydecl
-    ]
+deriving anyclass instance ToSemTokens (Program Name)
 
-directiveToTokens :: Directive Name -> SemanticM HoleFit
-directiveToTokens = \case
-  Eval ann e ->
-    traverseCsnWithHoles ann [exprToTokens e]
-  Check ann e ->
-    traverseCsnWithHoles ann [exprToTokens e]
+-- Generic instance does not apply because we exclude the level and override
+-- the token type for the name.
+instance ToSemTokens (Section Name) where
+  toSemTokens (MkSection ann _lvl name decls) =
+    traverseCsnWithHoles ann [withTokenType nameIsDirective $ toSemTokens name, toSemTokens decls]
 
-typeDeclToTokens :: TypeDecl Name -> SemanticM HoleFit
-typeDeclToTokens = \case
-  RecordDecl ann tns -> traverseCsnWithHoles ann [Extra.concatMapM typedNameToTokens tns]
-  EnumDecl ann cds -> traverseCsnWithHoles ann [Extra.concatMapM conDeclToTokens cds]
+deriving anyclass instance ToSemTokens (TopDecl Name)
+deriving anyclass instance ToSemTokens (Assume Name)
+deriving anyclass instance ToSemTokens (Declare Name)
+deriving anyclass instance ToSemTokens (TypeDecl Name)
+deriving anyclass instance ToSemTokens (ConDecl Name)
+deriving anyclass instance ToSemTokens (Type' Name)
+deriving anyclass instance ToSemTokens (TypedName Name)
+deriving anyclass instance ToSemTokens (OptionallyTypedName Name)
+deriving anyclass instance ToSemTokens (Decide Name)
+deriving anyclass instance ToSemTokens (AppForm Name)
+deriving anyclass instance ToSemTokens (Expr Name)
+deriving anyclass instance ToSemTokens (Branch Name)
+deriving anyclass instance ToSemTokens (Pattern Name)
+deriving anyclass instance ToSemTokens (TypeSig Name)
+deriving anyclass instance ToSemTokens (GivethSig Name)
+deriving anyclass instance ToSemTokens (GivenSig Name)
+deriving anyclass instance ToSemTokens (Directive Name)
 
-conDeclToTokens :: ConDecl Name -> SemanticM HoleFit
-conDeclToTokens (MkConDecl ann n tns) =
-  traverseCsnWithHoles
-    ann
-      [ nameToTokens n
-      , Extra.concatMapM typedNameToTokens tns
-      ]
+instance ToSemTokens Name where
+  toSemTokens (Name ann _) =
+    traverseCsnWithHoles ann []
 
-typeToTokens :: Type' Name -> SemanticM HoleFit
-typeToTokens = \case
-  Type ann -> traverseCsnWithHoles ann []
-  TyApp ann n ts -> traverseCsnWithHoles ann [nameToTokens n, Extra.concatMapM typeToTokens ts]
-  Fun ann ts t -> traverseCsnWithHoles ann [Extra.concatMapM typeToTokens ts, typeToTokens t]
-
-typedNameToTokens :: TypedName Name -> SemanticM [SemanticToken]
-typedNameToTokens (MkTypedName ann name type') =
-  traverseCsnWithHoles
-    ann
-    [ nameToTokens name
-    , typeToTokens type'
-    ]
-
-optionallyTypedNameToTokens :: OptionallyTypedName Name -> SemanticM [SemanticToken]
-optionallyTypedNameToTokens (MkOptionallyTypedName ann name mType') =
-  traverseCsnWithHoles
-    ann
-    [ nameToTokens name
-    , maybe (pure []) typeToTokens mType'
-    ]
-
-decideToTokens :: Decide Name -> SemanticM HoleFit
-decideToTokens (MkDecide ann typeSig appForm expr) =
-  traverseCsnWithHoles
-    ann
-    [ typeSigToTokens typeSig
-    , appFormToTokens appForm
-    , exprToTokens expr
-    ]
-
-appFormToTokens :: AppForm Name -> SemanticM HoleFit
-appFormToTokens (MkAppForm ann name names) =
-  traverseCsnWithHoles
-    ann
-    [ nameToTokens name
-    , Extra.concatMapM nameToTokens names
-    ]
-
-exprToTokens :: Expr Name -> SemanticM HoleFit
-exprToTokens = \case
-  And ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Or ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Implies ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Equals ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Not ann e ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e]
-  Plus ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Minus ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Times ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  DividedBy ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Cons ann e1 e2 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Proj ann e lbl ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e, nameToTokens lbl]
-  Var ann name ->
-    traverseCsnWithHoles
-      ann
-      [nameToTokens name]
-  Lam ann given expr ->
-    traverseCsnWithHoles
-      ann
-      [givenToTokens given, exprToTokens expr]
-  App ann n es ->
-    traverseCsnWithHoles
-      ann
-      [nameToTokens n, Extra.concatMapM exprToTokens es]
-  IfThenElse ann e1 e2 e3 ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2, exprToTokens e3]
-  Consider ann e bs ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e, Extra.concatMapM branchToTokens bs]
-  ParenExpr ann e ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e]
-
-branchToTokens :: Branch Name -> SemanticM HoleFit
-branchToTokens = \case
-  When ann p e ->
-    traverseCsnWithHoles
-      ann
-      [patternToTokens p, exprToTokens e]
-  Otherwise ann e ->
-    traverseCsnWithHoles
-      ann
-      [exprToTokens e]
-
-patternToTokens :: Pattern Name -> SemanticM HoleFit
-patternToTokens = \case
-  PatApp ann n ps ->
-    traverseCsnWithHoles
-      ann
-      [nameToTokens n, Extra.concatMapM patternToTokens ps]
-  PatCons ann p1 p2 ->
-    traverseCsnWithHoles
-      ann
-      [patternToTokens p1, patternToTokens p2]
-typeSigToTokens :: TypeSig Name -> SemanticM HoleFit
-typeSigToTokens (MkTypeSig ann given mGiveth) =
-  traverseCsnWithHoles
-    ann
-    [ givenToTokens given
-    , maybe (pure []) givethToTokens mGiveth
-    ]
-
-givethToTokens :: GivethSig Name -> SemanticM HoleFit
-givethToTokens (MkGivethSig ann type') =
-  traverseCsnWithHoles
-    ann
-    [ typeToTokens type'
-    ]
-
-givenToTokens :: GivenSig Name -> SemanticM HoleFit
-givenToTokens (MkGivenSig ann names) =
-  traverseCsnWithHoles
-    ann
-    [ Extra.concatMapM optionallyTypedNameToTokens names
-    ]
-
-nameToTokens :: Name -> SemanticM HoleFit
-nameToTokens (Name ann _) = traverseCsnWithHoles ann []
