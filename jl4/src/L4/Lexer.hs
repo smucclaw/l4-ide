@@ -68,6 +68,7 @@ data TokenType =
   | TQuoted       !Text
   | TIntLit       !Text !Int
   | TStringLit    !Text
+  | TDirective    !Text
     -- parentheses
   | TPOpen
   | TPClose
@@ -202,6 +203,7 @@ tokenPayload =
   <|> TStringLit      <$> stringLiteral
   <|> TGenitive       <$ string "'s"
   <|> TQuoted         <$> quoted
+  <|> TDirective      <$> directive
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
@@ -551,6 +553,7 @@ displayPosToken (MkPosToken _r tt) =
     TQuoted t        -> "`" <> t <> "`"
     TIntLit t _i     -> t
     TStringLit s     -> Text.pack (show s) -- ideally, this should be fine, because we use the Haskell escape sequences
+    TDirective t     -> "#" <> t
     TPOpen           -> "("
     TPClose          -> ")"
     TCOpen           -> "{"
@@ -648,6 +651,7 @@ posTokenCategory =
     TQuoted _ -> CIdentifier
     TIntLit _ _ -> CNumberLit
     TStringLit _ -> CStringLit
+    TDirective _ -> CDirective
     TPOpen -> CSymbol
     TPClose -> CSymbol
     TCOpen -> CSymbol

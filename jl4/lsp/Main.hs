@@ -155,7 +155,7 @@ lspHandlers logger rin = mapHandlers goReq goNot (handle logger)
     liftIO $ atomically $ writeTChan rin $ ReactorAction (runLspT env $ f msg)
 
 handle :: (m ~ LspM Config) => LogAction m (WithSeverity Text) -> Handlers m
-handle logger =
+handle _logger =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized mempty
@@ -176,13 +176,13 @@ handle logger =
         let
           doc = msg ^. J.params . J.textDocument . J.uri
         sendDiagnostics $ LSP.toNormalizedUri doc
-    , notificationHandler SMethod_SetTrace $ \msg -> do
+    , notificationHandler SMethod_SetTrace $ \_msg -> do
         pure ()
     , -- Subscribe to notification changes
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
     , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
         let
-          (TRequestMessage _ _ _ (ExecuteCommandParams _ cid xdata)) = req
+          (TRequestMessage _ _ _ (ExecuteCommandParams _ _cid xdata)) = req
         case xdata of
           Just [uriJson]
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
@@ -474,7 +474,7 @@ programToTokens :: Program Name -> SemanticM HoleFit
 programToTokens (MkProgram ann sections) =
   traverseCsnWithHoles ann [Extra.concatMapM sectionToTokens sections]
 
-sectionToTokens :: Section Name -> SemanticM [SemanticToken]
+sectionToTokens :: Section Name -> SemanticM HoleFit
 sectionToTokens (MkSection ann _lvl name decls) =
   traverseCsnWithHoles
     ann
@@ -490,6 +490,8 @@ topdeclToTokens = \case
     traverseCsnWithHoles ann [decideToTokens decide]
   Assume ann assume ->
     traverseCsnWithHoles ann [assumeToTokens assume]
+  Directive ann directive ->
+    traverseCsnWithHoles ann [directiveToTokens directive]
 
 assumeToTokens :: Assume Name -> SemanticM HoleFit
 assumeToTokens (MkAssume ann appform type') =
@@ -499,13 +501,20 @@ assumeToTokens (MkAssume ann appform type') =
     , typeToTokens type'
     ]
 
-declareToTokens :: Declare Name -> SemanticM [SemanticToken]
+declareToTokens :: Declare Name -> SemanticM HoleFit
 declareToTokens (MkDeclare ann appform tydecl) =
   traverseCsnWithHoles
     ann
     [ appFormToTokens appform
     , typeDeclToTokens tydecl
     ]
+
+directiveToTokens :: Directive Name -> SemanticM HoleFit
+directiveToTokens = \case
+  Eval ann e ->
+    traverseCsnWithHoles ann [exprToTokens e]
+  Check ann e ->
+    traverseCsnWithHoles ann [exprToTokens e]
 
 typeDeclToTokens :: TypeDecl Name -> SemanticM HoleFit
 typeDeclToTokens = \case

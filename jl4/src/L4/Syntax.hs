@@ -67,6 +67,12 @@ data Assume n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)
 
+data Directive n =
+    Eval Anno (Expr n)
+  | Check Anno (Expr n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (HasAnno, ToExpr)
+
 data TypeDecl n =
     RecordDecl Anno [TypedName n]
   | EnumDecl Anno [ConDecl n]
@@ -124,9 +130,10 @@ data Section n =
 type SectionLevel = Int
 
 data TopDecl n =
-    Declare Anno (Declare n)
-  | Decide  Anno (Decide n)
-  | Assume  Anno (Assume n)
+    Declare   Anno (Declare n)
+  | Decide    Anno (Decide n)
+  | Assume    Anno (Assume n)
+  | Directive Anno (Directive n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (HasAnno, ToExpr)
 
