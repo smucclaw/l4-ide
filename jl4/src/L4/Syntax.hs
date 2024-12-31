@@ -125,7 +125,7 @@ data Program n =
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 
 data Section n =
-  MkSection Anno SectionLevel n [TopDecl n]
+  MkSection Anno SectionLevel (Maybe n) [TopDecl n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 

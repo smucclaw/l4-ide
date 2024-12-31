@@ -19,13 +19,10 @@ main = do
   exampleSimalaFiles <- globDir1 (compile "*.l4") (dataDir </> "examples")
   hspec $ do
     forM_ exampleSimalaFiles $ \ inputFile -> do
-      describe (takeFileName inputFile) $
-        it "compiles with correct output" $ do
+      describe (takeFileName inputFile) $ do
+        it "parses" $
           l4Golden (dataDir </> "examples") inputFile
-
-    forM_ exampleSimalaFiles $ \ inputFile -> do
-      describe inputFile $
-        it "exactprints" $ do
+        it "exactprints" $
           jl4ExactPrintGolden (dataDir </> "examples") inputFile
 
 l4Golden :: String -> String -> IO (Golden String)
@@ -52,11 +49,7 @@ l4Golden dir inputFile = do
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   input <- Text.readFile inputFile
-  let output_ = case Parser.execParser Parser.program inputFile input of
-        Left err -> Text.unlines $ fmap (.message) $ toList err
-        Right prog -> case JL4.exactprint prog of
-          Left epError -> JL4.prettyEPError epError
-          Right ep -> ep
+  let output_ = JL4.exactprintFile inputFile input
   pure
     Golden
       { output = output_

@@ -7,14 +7,14 @@
 
 module L4.ExactPrint where
 
+import Base
 import L4.Annotation
 import L4.Lexer
+import qualified L4.Parser as Parser
 import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except
-import Data.Kind
-import Data.Text
 import qualified Data.Text as Text
 import Generics.SOP as SOP
 import Generics.SOP.Constraint
@@ -37,6 +37,16 @@ exactprint :: Program Name -> Either EPError Text
 exactprint =
   runExcept . fmap (Text.concat . fmap displayPosToken) . toTokens
 
+-- | Parse a source file and exact-print the result.
+exactprintFile :: String -> Text -> Text
+exactprintFile file input =
+  case Parser.execParser Parser.program file input of
+    Left errs -> Text.unlines $ fmap (.message) $ toList errs
+    Right prog ->
+      case exactprint prog of
+        Left epError -> prettyEPError epError
+        Right ep -> ep
+
 class ToTokens a where
   toTokens :: a -> HoleFit
 
@@ -46,7 +56,7 @@ class ToTokens a where
   toTokens =
     genericToTokens (Proxy @ToTokens) toTokens applyTokensWithHoles
 
-genericToTokens :: forall c a r. (Generic a, All (AnnoFirst c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno -> [r] -> r) -> a -> r
+genericToTokens :: forall c a r. (SOP.Generic a, All (AnnoFirst c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno -> [r] -> r) -> a -> r
 genericToTokens _ rec f x =
     collapse_NS
   $ cmap_NS

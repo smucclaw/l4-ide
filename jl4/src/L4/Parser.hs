@@ -99,7 +99,7 @@ program :: Parser (Program Name)
 program = do
   initSpace <- spaces
   let wsSpace = Lexeme [] initSpace
-  MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) <$> many section
+  (\ s ss -> MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) (s : ss)) <$> anonymousSection <*> many section
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -117,12 +117,18 @@ withIndent ordering current p = do
       fancyFailure . Set.singleton $
         ErrorIndentation ordering current actual
 
+anonymousSection :: Parser (Section Name)
+anonymousSection =
+  attachAnno $
+    MkSection emptyAnno 0 Nothing
+      <$> annoHole (manyLines topdecl)
+
 section :: Parser (Section Name)
 section =
   attachAnno $
     MkSection emptyAnno
       <$> annoEpa sectionSymbols
-      <*> annoHole name
+      <*> annoHole (optional name)
       <*> annoHole (manyLines topdecl)
 
 sectionSymbols :: Parser (Epa Int)
@@ -750,15 +756,6 @@ _example11e =
     , "     AND baz"
     ]
 
---
--- data Expr =
---     And  Expr Expr
---   | Or   Expr Expr
---   | Is   Expr Expr
---   | Proj Name Expr
---   | Var  Name
---   deriving stock Show
-
 execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) a
 execParser p file input =
   case execLexer file input of
@@ -768,6 +765,7 @@ execParser p file input =
         Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
         Right x  -> Right x
 
+-- | Parse a source file and pretty-print the resulting syntax tree.
 parseFile :: Show a => Parser a -> String -> Text -> IO ()
 parseFile p file input =
   case execParser p file input of
