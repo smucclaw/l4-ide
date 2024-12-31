@@ -48,16 +48,17 @@ condecl ::=
 -- ignoring operator priority
 type ::=
     "TYPE"
-  | name+                         -- type application
-  | name "OF" tyargs              -- also type application
-  | name "WITH" namedtyargs       -- also type application
-  | FUNCTION FROM tyargs TO type  -- function type
+  | name+                                 -- type application
+  | name "OF" tyargs                      -- also type application
+  | name "WITH" namedtyargs               -- also type application
+  | "FUNCTION" "FROM" tyargs "TO" type    -- function type
+  | "FOR" "ALL" name+{AND} article? type  -- quantified type
     -- probably not needed because can be predefined instead of built-in
-  | "BOOL"                        -- Booleans
-  | "NUMBER"                      -- numbers, potentially some mixed integer / fractional type
-  | "STRING"                      -- strings
-  | "LIST"                        -- homogeneous lists, like lists in Haskell
-  | "OPTIONAL"                    -- like Maybe in Haskell
+  | "BOOL"                                -- Booleans
+  | "NUMBER"                              -- numbers, potentially some mixed integer / fractional type
+  | "STRING"                              -- strings
+  | "LIST"                                -- homogeneous lists, like lists in Haskell
+  | "OPTIONAL"                            -- like Maybe in Haskell
 
 tyargs ::=
   type{AND}+

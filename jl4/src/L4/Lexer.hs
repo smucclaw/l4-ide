@@ -147,6 +147,8 @@ data TokenType =
   | TKLeast
   | TKMost
   | TKFollowed
+  | TKFor
+  | TKAll
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -314,6 +316,8 @@ keywords =
     , ("LEAST"      , TKLeast      )
     , ("MOST"       , TKMost       )
     , ("FOLLOWED"   , TKFollowed   )
+    , ("FOR"        , TKFor        )
+    , ("ALL"        , TKAll        )
     ]
 
 rawTokens :: Lexer [RawToken]
@@ -627,6 +631,8 @@ displayPosToken (MkPosToken _r tt) =
     TKLeast          -> "LEAST"
     TKMost           -> "MOST"
     TKFollowed       -> "FOLLOWED"
+    TKFor            -> "FOR"
+    TKAll            -> "ALL"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -725,6 +731,8 @@ posTokenCategory =
     TKLeast -> CKeyword
     TKMost -> CKeyword
     TKFollowed -> CKeyword
+    TKFor -> CKeyword
+    TKAll -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

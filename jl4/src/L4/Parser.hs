@@ -144,7 +144,7 @@ assume = do
       <$  annoLexeme (spacedToken_ TKAssume)
       <*> annoHole appForm
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  article
+      <*  optional article
       <*> annoHole (indentedType current)
 
 declare :: Parser (Declare Name)
@@ -235,7 +235,7 @@ giveth = do
   attachAnno $
     MkGivethSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiveth)
-      <*  article
+      <*  optional article
       <*> annoHole (indentedType current)
 
 -- primarily for testing
@@ -253,6 +253,7 @@ type' =
          Type emptyAnno <$ annoLexeme (spacedToken_ TKType))
   <|> tyApp
   <|> fun
+  <|> forall'
 
 tyApp :: Parser (Type' Name)
 tyApp = do
@@ -265,14 +266,26 @@ tyApp = do
         )
 
 fun :: Parser (Type' Name)
-fun =
+fun = do
+  current <- Lexer.indentLevel
   attachAnno $
     Fun emptyAnno
     <$  annoLexeme (spacedToken_ TKFunction)
     <*  annoLexeme (spacedToken_ TKFrom)
-    <*> annoHole (lsepBy1 type' (spacedToken_ TKAnd))
+    <*> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
     <*  annoLexeme (spacedToken_ TKTo)
-    <*> annoHole type'
+    <*> annoHole (indentedType current)
+
+forall' :: Parser (Type' Name)
+forall' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Forall emptyAnno
+    <$  annoLexeme (spacedToken_ TKFor)
+    <*  annoLexeme (spacedToken_ TKAll)
+    <*> annoHole (lsepBy1 name (spacedToken_ TKAnd))
+    <*  optional article
+    <*> annoHole (indentedType current)
 
 article :: Compose Parser (WithAnno_ PosToken) PosToken
 article =
@@ -319,7 +332,7 @@ reqParam =
     MkTypedName emptyAnno
       <$> annoHole name
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  article
+      <*  optional article
       <*> annoHole type'
 
 param :: Parser (OptionallyTypedName Name)
@@ -327,7 +340,7 @@ param =
   attachAnno $
     MkOptionallyTypedName emptyAnno
       <$> annoHole name
-      <*> optional (annoLexeme (spacedToken_ TKIs) *> article *> annoHole type')
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> optional article *> annoHole type')
 
 -- |
 -- An expression is a base expression followed by

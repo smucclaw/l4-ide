@@ -17,9 +17,10 @@ data Name = Name Anno Text
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 
 data Type' n =
-    Type      Anno
-  | TyApp     Anno n [Type' n]
-  | Fun       Anno [Type' n] (Type' n)
+    Type   Anno
+  | TyApp  Anno n [Type' n]
+  | Fun    Anno [Type' n] (Type' n)
+  | Forall Anno [n] (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 
