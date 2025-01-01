@@ -10,9 +10,8 @@ import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import L4.Lexer (PosToken)
 
-type Label = Name
-
 data Name = Name Anno Text
+          | PreDef Anno Text
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 
@@ -21,6 +20,7 @@ data Type' n =
   | TyApp  Anno n [Type' n]
   | Fun    Anno [Type' n] (Type' n)
   | Forall Anno [n] (Type' n)
+  -- | InfVar Anno Text Int
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 
@@ -97,7 +97,7 @@ data Expr n =
   | Times      Anno (Expr n) (Expr n)
   | DividedBy  Anno (Expr n) (Expr n)
   | Cons       Anno (Expr n) (Expr n)
-  | Proj       Anno (Expr n) Label
+  | Proj       Anno (Expr n) n
   | Var        Anno n
   | Lam        Anno (GivenSig n) (Expr n)
   | App        Anno n [Expr n]

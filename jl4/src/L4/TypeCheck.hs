@@ -1,7 +1,31 @@
 {-# LANGUAGE DataKinds #-}
 module L4.TypeCheck where
 
-{-
+-- We perform scope checking and type checking in one go.
+-- The reason is that we employ type-directed name resolution:
+-- we allow the same identifier to be in scope several times,
+-- with different types, and we allow references to be resolved
+-- if only one of the available definitions fits. [We could
+-- theoretically even allow ambiguity, and treat a definition
+-- as being a multi-definition with several different valid
+-- instantiations.]
+--
+-- Within scope and type checking, we perform several passes of
+-- the program / module:
+--
+-- 1a. collect all user-defined types
+--
+--     Types cannot depend on terms, only on other types.
+--     Our kind system is simple: we have a kind TYPE of
+--     inhabited, fully instantiated types, and we allow
+--     abstraction only over TYPE. In other words, the kinds
+--     of types are uniquely determined by their arity.
+--
+--     We allow forward references (and thus in principle
+--     mutually recursive types).
+--
+-- 1b. scope and kind-check the bodies of user-defined types
+
 import Control.Applicative
 import Control.Monad
 import Data.Map (Map)
@@ -15,9 +39,9 @@ import L4.Syntax
 type KEnv = Set Name
 type TEnv = Map Name (Type' Resolved)
 
-data TypedExpr =
-  MkTypedExpr
-    (Expr Resolved)
+data Typed a =
+  MkTyped
+    (a Resolved)
     (Type' Resolved)
 
 data Check a
@@ -27,10 +51,43 @@ instance Applicative Check
 instance Monad Check
 instance Alternative Check
 
-data Resolved
+-- Functionality needed for the Check monad:
+--
+-- error messages (possibly soft and hard errors for non-determinism)
+--
+-- abort :: CheckError -> Check a      -- hard error
+-- throw :: CheckException -> Check a  -- soft error
+-- -- unclear whether we need to be able to catch these
+--
+-- non-determinism (TDNR, multiple types per identifier)
+--
+-- choose :: [Check a] -> Check a
+--
+-- environments (known types and their definitions, known in-scope variables and types)
+--
+-- effectively:
+--
+-- Map Name TypeDecl   -- possibly an extended form of TypeDecl allowing for unknown types
+-- Map Name Type       -- possibly with an extension allowing to identify record labels and constructors
+--
+-- unification variable supply
+--
+-- fresh :: Text -> Check Type
+--
+-- current substitution
+--
+-- effectively:
+--
+-- Map Int Type
+--
+-- potentially logging
 
-instance Eq Resolved
+data Resolved =
+    Def Name
+  | Ref Name Name
+  deriving stock (Eq, Show)
 
+{-
 decls :: Traversal' (Program n) (Decl n)
 decls = gposition @2 % traversed % gposition @4 % traversed
 
@@ -42,6 +99,7 @@ names = gplate @Name
 
 exprs :: forall n. Traversal' (Program n) (Expr n)
 exprs = gplate @(Expr n)
+-}
 
 lookupVar :: Name -> Check Resolved
 lookupVar = undefined
@@ -49,6 +107,7 @@ lookupVar = undefined
 extractType :: Resolved -> Check (Type' Resolved)
 extractType = undefined
 
+{-
 withExtendedEnvironment :: KEnv -> TEnv -> Check a -> Check a
 withExtendedEnvironment = undefined
 
@@ -82,37 +141,82 @@ checkClause (GuardedClause ann e g) t =
   GuardedClause ann <$> checkExpr e t <*> checkGuard g
 
 checkGuard :: Guard Name -> Check (Guard Resolved)
-checkGuard (PlainGuard ann e) = PlainGuard ann <$> checkExpr e (Boolean mempty)
+checkGuard (PlainGuard ann e) = PlainGuard ann <$> checkExpr e boolean
 checkGuard (Otherwise ann)    = pure $ Otherwise ann
+-}
 
-inferExpr :: Expr Name -> Check TypedExpr
-inferExpr (And ann e1 e2) = do
-  e1' <- checkExpr e1 (Boolean mempty)
-  e2' <- checkExpr e2 (Boolean mempty)
-  pure (MkTypedExpr (And ann e1' e2') (Boolean mempty))
-inferExpr (Or ann e1 e2) = do
-  e1' <- checkExpr e1 (Boolean mempty)
-  e2' <- checkExpr e2 (Boolean mempty)
-  pure (MkTypedExpr (Or ann e1' e2') (Boolean mempty))
+boolean :: Type' Resolved
+boolean = TyApp mempty (Def (PreDef mempty "BOOLEAN")) []
+
+number :: Type' Resolved
+number = TyApp mempty (Def (PreDef mempty "NUMBER")) []
+
+checkBinOp ::
+     Type' Resolved
+  -> Type' Resolved
+  -> Type' Resolved
+  -> (Anno -> Expr Resolved -> Expr Resolved -> Expr Resolved)
+  -> Anno
+  -> Expr Name
+  -> Expr Name
+  -> Check (Typed Expr)
+checkBinOp t1 t2 tr op ann e1 e2 = do
+  e1' <- checkExpr e1 t1
+  e2' <- checkExpr e2 t2
+  pure (MkTyped (op ann e1' e2') tr)
+
+inferExpr :: Expr Name -> Check (Typed Expr)
+inferExpr (And ann e1 e2) = 
+  checkBinOp boolean boolean boolean And ann e1 e2
+inferExpr (Or ann e1 e2) =
+  checkBinOp boolean boolean boolean Or ann e1 e2
+inferExpr (Implies ann e1 e2) =
+  checkBinOp boolean boolean boolean Implies ann e1 e2
+inferExpr (Equals ann e1 e2) =
+      checkBinOp boolean boolean boolean Equals ann e1 e2
+  <|> checkBinOp number  number  boolean Equals ann e1 e2
 inferExpr (Not ann e) = do
-  e' <- checkExpr e (Boolean mempty)
-  pure (MkTypedExpr (Not ann e') (Boolean mempty))
+  e' <- checkExpr e boolean
+  pure (MkTyped (Not ann e') boolean)
+inferExpr (Plus ann e1 e2) =
+  checkBinOp number number number Plus ann e1 e2
+inferExpr (Minus ann e1 e2) =
+  checkBinOp number number number Minus ann e1 e2
+inferExpr (Times ann e1 e2) =
+  checkBinOp number number number Times ann e1 e2
+inferExpr (DividedBy ann e1 e2) =
+  checkBinOp number number number DividedBy ann e1 e2
+inferExpr (Cons _ann _e1 _e2) =
+  undefined -- TODO: polymorphism
+inferExpr (Proj ann e l) = do
+  MkTyped e' te <- inferExpr e
+  (l', tl) <- checkRecordLabel te l
+  pure (MkTyped (Proj ann e' l') tl)
 inferExpr (Var ann n) = do
   r <- lookupVar n
   t <- extractType r
-  pure (MkTypedExpr (Var ann r) t)
-inferExpr (Is ann e1 e2) = do
-  MkTypedExpr e1' t <- inferExpr e1
-  e2' <- checkExpr e2 t -- TODO: not any type is equality-compatible!
-  pure (MkTypedExpr (Is ann e1' e2') (Boolean mempty))
-inferExpr (Proj ann e l) = do
-  MkTypedExpr e' t <- inferExpr e
-  case t of
-    Record ann rs -> do
-      tl <- inferLabel rs l
-      pure (MkTypedExpr (Proj ann e' l) tl)
-    _ -> recordExpectedError
+  pure (MkTyped (Var ann r) t)
+inferExpr (Lam _ann _givens _e) =
+  undefined -- TODO: fresh variables
+inferExpr (App _ann _n _es) =
+  undefined
+inferExpr (IfThenElse ann e1 e2 e3) = do
+  e1' <- checkExpr e1 boolean
+  MkTyped e2' t2 <- inferExpr e2
+  e3' <- checkExpr e3 t2
+  pure (MkTyped (IfThenElse ann e1' e2' e3') t2)
+inferExpr (Consider _ann _e _branches) =
+  undefined
+inferExpr (ParenExpr ann e) = do
+  MkTyped e' t <- inferExpr e
+  pure (MkTyped (ParenExpr ann e') t)
 
+checkRecordLabel :: Type' Resolved -> Name -> Check (Resolved, Type' Resolved)
+checkRecordLabel = undefined
+
+
+
+{-
 inferLabel :: [TypedName Resolved] -> Label -> Check (Type' Resolved)
 inferLabel rs l =
   case go rs of
@@ -134,12 +238,15 @@ recordExpectedError =
 recordProjectionError :: [TypedName Resolved] -> Label -> Check a
 recordProjectionError =
   undefined
+-}
+
 checkExpr :: Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr e t = do
-  MkTypedExpr e' t' <- inferExpr e
+  MkTyped e' t' <- inferExpr e
   guard (t == t')
   pure e'
 
+{-
 -- traversals:
 --
 -- 1. build map of user-defined types
