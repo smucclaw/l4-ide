@@ -106,6 +106,11 @@ manyLines p = do
   current <- Lexer.indentLevel
   many (withIndent EQ current (const p))
 
+someLines :: Parser a -> Parser [a]
+someLines p = do
+  current <- Lexer.indentLevel
+  some (withIndent EQ current (const p))
+
 -- | Run the parser only when the indentation is correct and fail otherwise.
 withIndent :: (TraversableStream s, MonadParsec e s m) => Ordering -> Pos -> (Pos -> m b) -> m b
 withIndent ordering current p = do
@@ -217,7 +222,7 @@ appForm = do
   attachAnno $
     MkAppForm emptyAnno
       <$> annoHole name
-      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy name (spacedToken_ TKAnd))
+      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TKAnd))
           <|> annoHole (lmany (indentedName current))
           )
 
@@ -267,7 +272,7 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedType current) (spacedToken_ TKAnd))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
         <|> annoHole (lmany (indentedType current))
         )
 
@@ -313,7 +318,7 @@ lmany pp =
 lsepBy :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy pp sep =
   fmap concat $ manyLines $ do
-    (ps, seps) <- P.sepBy pp sep
+    (ps, seps) <- P.sepBy1 pp sep
     pure $ zipWithLeftovers ps seps
   where
     zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
@@ -323,7 +328,7 @@ lsepBy pp sep =
 
 lsepBy1 :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
-  fmap concat $ manyLines $ do
+  fmap concat $ someLines $ do
     (ps, seps) <- P.sepBy1 pp sep
     pure $ zipWithLeftovers ps seps
   where
@@ -493,7 +498,7 @@ app = do
   attachAnno $
     App emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedExpr current) (spacedToken_ TKAnd))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedToken_ TKAnd))
         <|> annoHole (lmany (indentedExpr current))
         )
 
