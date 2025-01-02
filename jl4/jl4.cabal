@@ -30,6 +30,7 @@ library
     generics-sop,
     megaparsec,
     mtl,
+    logict,
     optics,
     optics-core,
     optics-extra,

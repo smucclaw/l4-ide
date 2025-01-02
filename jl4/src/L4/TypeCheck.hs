@@ -28,12 +28,15 @@ module L4.TypeCheck where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Except
+import Control.Monad.Logic
+import Control.Monad.Identity
+import Control.Monad.State
 import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Optics.Core
 
-import qualified Simala.Expr.Type as Simala
 import L4.Syntax
 
 type KEnv = Set Name
@@ -44,12 +47,42 @@ data Typed a =
     (a Resolved)
     (Type' Resolved)
 
-data Check a
+newtype Check a =
+  MkCheck (LogicT (StateT CheckState (ExceptT CheckError Identity)) a)
+  deriving newtype
+    ( Functor, Applicative, Monad
+    , Alternative
+    , MonadState CheckState
+    , MonadError CheckError
+    , MonadLogic
+    )
 
-instance Functor Check
-instance Applicative Check
-instance Monad Check
-instance Alternative Check
+data CheckError
+data CheckState =
+  MkCheckState
+    { environment  :: !(Map Name [CheckEntity])
+    , substitution :: !(Map Int (Type' Resolved))
+    , supply       :: !Int
+    }
+  deriving stock (Eq, Show)
+
+data CheckEntity =
+    KnownType (TypeDecl Resolved)
+  | KnownTerm (Type' Resolved) TermKind
+  | QuantifiedType
+  deriving stock (Eq, Show)
+
+data TermKind =
+    Computable
+  | Constructor
+  | Selector
+  deriving stock (Eq, Show)
+
+abort :: CheckError -> Check a
+abort = throwError
+
+choose :: [Check a] -> Check a
+choose = asum
 
 -- Functionality needed for the Check monad:
 --
