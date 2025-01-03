@@ -28,9 +28,24 @@ import L4.Syntax
 
 type Parser = Parsec Void TokenStream
 
+spacesOrAnnotations :: Parser [PosToken]
+spacesOrAnnotations =  concat <$> many (spaces1 <|> blockNlgAnnotation <|> blockRefAnnotation)
+
 spaces :: Parser [PosToken]
 spaces =
-  takeWhileP (Just "space token") isSpaceToken
+  takeWhileP (Just "space token") (\t -> isSpaceToken t || isAnnotationToken t)
+
+spaces1 :: Parser [PosToken]
+spaces1 =
+  takeWhile1P (Just "space token") (\t -> isSpaceToken t || isAnnotationToken t)
+
+blockNlgAnnotation :: Parser [PosToken]
+blockNlgAnnotation =
+  (\open (mid, close) -> [open] <> mid <> [close] ) <$> plainToken TSOpen <*> manyTill_ (anySingle <?> "NLG Block Annotation") (plainToken TSClose)
+
+blockRefAnnotation :: Parser [PosToken]
+blockRefAnnotation =
+  (\open (mid, close) -> [open] <> mid <> [close] ) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
 
 isSpaceToken :: PosToken -> Bool
 isSpaceToken t =
@@ -40,11 +55,18 @@ isSpaceToken t =
     TBlockComment _ -> True
     _               -> False
 
+isAnnotationToken :: PosToken -> Bool
+isAnnotationToken t =
+  case t.payload of
+    TNlg _ -> True
+    TRef _ -> True
+    _      -> False
+
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
-  trailingWs <- spaces
-  pure $ Lexeme trailingWs a
+  trailingTokens <- spacesOrAnnotations
+  pure $ Lexeme trailingTokens a
 
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
@@ -97,8 +119,8 @@ indentedName p =
 
 program :: Parser (Program Name)
 program = do
-  initSpace <- spaces
-  let wsSpace = Lexeme [] initSpace
+  leadingTokens <- spacesOrAnnotations
+  let wsSpace = Lexeme [] leadingTokens
   (\ s ss -> MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) (s : ss)) <$> anonymousSection <*> many section
 
 manyLines :: Parser a -> Parser [a]

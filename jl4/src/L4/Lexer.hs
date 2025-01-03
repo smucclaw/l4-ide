@@ -76,6 +76,8 @@ data TokenType =
   | TCClose
   | TSOpen
   | TSClose
+  | TAOpen
+  | TAClose
     -- punctuation
   | TComma
   | TSemicolon
@@ -149,6 +151,9 @@ data TokenType =
   | TKFollowed
   | TKFor
   | TKAll
+    -- annotations
+  | TNlg          !Text
+  | TRef          !Text
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -156,6 +161,14 @@ data TokenType =
   | EOF
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass ToExpr
+
+nlgAnnotation :: Lexer Text
+nlgAnnotation =
+  (<>) <$> string "@nlg" <*> takeWhileP (Just "character") (/= '\n')
+
+refAnnotation :: Lexer Text
+refAnnotation =
+  (<>) <$> string "@ref" <*> takeWhileP (Just "character") (/= '\n')
 
 whitespace :: Lexer Text
 whitespace =
@@ -206,6 +219,8 @@ tokenPayload =
   <|> TGenitive       <$ string "'s"
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directive
+  <|> TNlg            <$> nlgAnnotation
+  <|> TRef            <$> refAnnotation
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
@@ -564,6 +579,8 @@ displayPosToken (MkPosToken _r tt) =
     TCClose          -> "}"
     TSOpen           -> "["
     TSClose          -> "]"
+    TAOpen           -> "<"
+    TAClose          -> ">"
     TComma           -> ","
     TSemicolon       -> ";"
     TDot             -> "."
@@ -633,6 +650,8 @@ displayPosToken (MkPosToken _r tt) =
     TKFollowed       -> "FOLLOWED"
     TKFor            -> "FOR"
     TKAll            -> "ALL"
+    TNlg t           -> t
+    TRef t           -> t
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -648,6 +667,7 @@ data TokenCategory
   | CComment
   | CWhitespace
   | CDirective
+  | CAnnotation
   | CEOF
 
 posTokenCategory :: TokenType -> TokenCategory
@@ -664,6 +684,8 @@ posTokenCategory =
     TCClose -> CSymbol
     TSOpen -> CSymbol
     TSClose -> CSymbol
+    TAOpen -> CSymbol
+    TAClose -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
     TDot -> CSymbol
@@ -733,6 +755,8 @@ posTokenCategory =
     TKFollowed -> CKeyword
     TKFor -> CKeyword
     TKAll -> CKeyword
+    TNlg _ -> CAnnotation
+    TRef _ -> CAnnotation
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment
