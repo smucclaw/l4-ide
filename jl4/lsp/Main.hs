@@ -382,12 +382,13 @@ standardTokenType = \case
   CComment -> Just SemanticTokenTypes_Comment
   CWhitespace -> Nothing
   CDirective -> Just SemanticTokenTypes_Macro
+  CAnnotation -> Just SemanticTokenTypes_Decorator
   CEOF -> Nothing
 
 simpleTokenType :: PosToken -> Maybe SemanticTokenTypes
 simpleTokenType t = standardTokenType (Lexer.posTokenCategory t.payload)
 
-type HoleFit = [SemanticToken]
+type HoleFit = SemanticM [SemanticToken]
 
 data SemanticTokenCtx p = SemanticTokenCtx
   { toSemanticToken :: p -> Maybe SemanticTokenTypes
@@ -433,7 +434,7 @@ withTokenType f act = do
 -- Simala AST to Semantic Tokens
 -- ----------------------------------------------------------------------------
 
-traverseCsnWithHoles :: (HasCallStack) => Anno -> [SemanticM HoleFit] -> SemanticM [SemanticToken]
+traverseCsnWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> SemanticM [SemanticToken]
 traverseCsnWithHoles (Anno []) _ = pure []
 traverseCsnWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
@@ -474,11 +475,11 @@ type SemanticM a = ReaderT (SemanticTokenCtx PosToken) (Except EPError) a
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
 class ToSemTokens a where
-  toSemTokens :: a -> SemanticM HoleFit
+  toSemTokens :: a -> HoleFit
 
   default toSemTokens ::
        (SOP.Generic a, All (AnnoFirst ToSemTokens) (Code a))
-    => a -> SemanticM HoleFit
+    => a -> HoleFit
   toSemTokens =
     genericToTokens (Proxy @ToSemTokens) toSemTokens traverseCsnWithHoles
 
@@ -519,4 +520,5 @@ deriving anyclass instance ToSemTokens (Directive Name)
 instance ToSemTokens Name where
   toSemTokens (Name ann _) =
     traverseCsnWithHoles ann []
-
+  toSemTokens (PreDef ann _) =
+    traverseCsnWithHoles ann []

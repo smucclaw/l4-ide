@@ -108,6 +108,8 @@ deriving anyclass instance ToTokens (Directive Name)
 instance ToTokens Name where
   toTokens (Name ann _) =
     applyTokensWithHoles ann []
+  toTokens (PreDef ann _) =
+    applyTokensWithHoles ann []
 
 applyTokensWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> EPM [PosToken]
 applyTokensWithHoles (Anno []) _ = pure []
