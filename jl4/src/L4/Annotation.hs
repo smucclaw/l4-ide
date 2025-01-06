@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 module L4.Annotation where
 
 import qualified Data.Foldable as Foldable
@@ -11,6 +13,7 @@ import qualified GHC.Generics as GHC
 import Optics
 
 import L4.Lexer
+import Generics.SOP.Constraint
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -98,6 +101,12 @@ class HasAnno t where
 
   default getAnno :: (GPosition 1 t t (Anno_ (AnnoToken t)) (Anno_ (AnnoToken t))) => t -> Anno_ (AnnoToken t)
   getAnno e = e ^. gposition @1
+
+-- This constraint enforces that Anno is the first field (of each constructor).
+--
+-- It would be better to unify this with HasAnno somehow.
+class (Head xs ~ Anno_ t, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst t c (xs :: [Type])
+instance (Head xs ~ Anno_ t, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst t c (xs :: [Type])
 
 -- ----------------------------------------------------------------------------
 -- Annotation Instances

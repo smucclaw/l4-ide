@@ -233,7 +233,7 @@ handle _logger =
                       , _xdata = Nothing
                       }
               Right ds -> do
-                case runExcept $ runReaderT (SemanticTokens.toSemTokens ds) SemanticTokens.defaultInfo of
+                case runExcept $ runReaderT (SemanticTokens.toSemTokens ds) SemanticTokens.defaultSemanticTokenCtx of
                   Left err -> do
                     -- TODO: log error
                     responder $

@@ -41,11 +41,11 @@ spaces1 =
 
 blockNlgAnnotation :: Parser [PosToken]
 blockNlgAnnotation =
-  (\open (mid, close) -> [open] <> mid <> [close] ) <$> plainToken TSOpen <*> manyTill_ (anySingle <?> "NLG Block Annotation") (plainToken TSClose)
+  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TSOpen <*> manyTill_ (anySingle <?> "NLG Block Annotation") (plainToken TSClose)
 
 blockRefAnnotation :: Parser [PosToken]
 blockRefAnnotation =
-  (\open (mid, close) -> [open] <> mid <> [close] ) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
+  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
 
 isSpaceToken :: PosToken -> Bool
 isSpaceToken t =
