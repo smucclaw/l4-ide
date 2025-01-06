@@ -82,7 +82,9 @@ executable jl4-lsp
     text-rope,
     transformers,
   main-is: Main.hs
-  other-modules: Ladder
+  other-modules:
+    Ladder
+    SemanticTokens
 
 test-suite jl4-test
   import: defaults
