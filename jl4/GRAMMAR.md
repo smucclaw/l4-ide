@@ -143,7 +143,7 @@ namedargs ::=
 
 namedarg ::=
   name "IS" article? expr
-  
+
 args ::=
   expr{AND}+
 
@@ -153,7 +153,7 @@ nameargs ::=
 namedpatargs ::=
   namedpatarg{,}*
 
-namedarg ::=
+namedpatarg ::=
   name "IS" article? pattern
 
 patargs ::=

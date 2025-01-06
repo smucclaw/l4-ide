@@ -114,6 +114,7 @@ deriving anyclass instance ToTokens PosToken (OptionallyTypedName Name)
 deriving anyclass instance ToTokens PosToken (Decide Name)
 deriving anyclass instance ToTokens PosToken (AppForm Name)
 deriving anyclass instance ToTokens PosToken (Expr Name)
+deriving anyclass instance ToTokens PosToken (NamedValue Name)
 deriving anyclass instance ToTokens PosToken (Branch Name)
 deriving anyclass instance ToTokens PosToken (Pattern Name)
 deriving anyclass instance ToTokens PosToken (TypeSig Name)
@@ -125,4 +126,10 @@ instance ToTokens PosToken Name where
   toTokens (Name ann _) =
     applyTokensWithHoles ann []
   toTokens (PreDef ann _) =
+    applyTokensWithHoles ann []
+
+instance ToTokens PosToken Lit where
+  toTokens (NumericLit ann _) =
+    applyTokensWithHoles ann []
+  toTokens (StringLit ann _) =
     applyTokensWithHoles ann []

@@ -101,9 +101,22 @@ data Expr n =
   | Var        Anno n
   | Lam        Anno (GivenSig n) (Expr n)
   | App        Anno n [Expr n]
+  | AppNamed   Anno n [NamedValue n]
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | Consider   Anno (Expr n) [Branch n]
   | ParenExpr  Anno (Expr n) -- temporary
+  | Lit        Anno Lit
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, HasAnno, ToExpr)
+
+data NamedValue n =
+  MkNamedValue Anno n (Expr n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, HasAnno, ToExpr)
+
+data Lit =
+    NumericLit Anno Int
+  | StringLit  Anno Text
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, HasAnno, ToExpr)
 

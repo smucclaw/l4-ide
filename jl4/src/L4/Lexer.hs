@@ -120,6 +120,7 @@ data TokenType =
   | TKHas
   | TKOne
   | TKOf
+  | TKWith
   | TKA
   | TKAn
   | TKThe
@@ -193,8 +194,8 @@ quoted :: Lexer Text
 quoted =
   char '`' *> takeWhile1P (Just "printable char except backticks") (\ x -> isPrint x && not (x `elem` ("`" :: String))) <* char '`'
 
-directive :: Lexer Text
-directive =
+directiveLiteral :: Lexer Text
+directiveLiteral =
   char '#' *> identifier
 
 integerLiteral :: Lexer (Text, Int)
@@ -218,7 +219,7 @@ tokenPayload =
   <|> TStringLit      <$> stringLiteral
   <|> TGenitive       <$ string "'s"
   <|> TQuoted         <$> quoted
-  <|> TDirective      <$> directive
+  <|> TDirective      <$> directiveLiteral
   <|> TNlg            <$> nlgAnnotation
   <|> TRef            <$> refAnnotation
   <|> TSpace          <$> whitespace
@@ -301,6 +302,7 @@ keywords =
     , ("IS"         , TKIs         )
     , ("ONE"        , TKOne        )
     , ("OF"         , TKOf         )
+    , ("WITH"       , TKWith       )
     , ("A"          , TKA          )
     , ("AN"         , TKAn         )
     , ("HAS"        , TKHas        )
@@ -619,6 +621,7 @@ displayPosToken (MkPosToken _r tt) =
     TKHas            -> "HAS"
     TKOne            -> "ONE"
     TKOf             -> "OF"
+    TKWith           -> "WITH"
     TKA              -> "A"
     TKAn             -> "AN"
     TKThe            -> "THE"
@@ -724,6 +727,7 @@ posTokenCategory =
     TKHas -> CKeyword
     TKOne -> CKeyword
     TKOf -> CKeyword
+    TKWith -> CKeyword
     TKA -> CKeyword
     TKAn -> CKeyword
     TKThe -> CKeyword

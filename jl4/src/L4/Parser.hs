@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -119,9 +120,15 @@ indentedName p =
 
 program :: Parser (Program Name)
 program = do
-  leadingTokens <- spacesOrAnnotations
-  let wsSpace = Lexeme [] leadingTokens
-  (\ s ss -> MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) (s : ss)) <$> anonymousSection <*> many section
+  attachAnno $
+    MkProgram emptyAnno
+      <$  annoLexemes ((\ts -> Lexeme ts ts) <$> spacesOrAnnotations)
+      <*> annoHole
+          ((\s ss -> s:ss)
+            <$> anonymousSection
+            <*> many section
+          )
+
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -165,9 +172,21 @@ sectionSymbols = do
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
-      Declare mkHoleAnno <$> declare
-  <|> Decide  mkHoleAnno <$> decide
-  <|> Assume  mkHoleAnno <$> assume
+      Declare   mkHoleAnno <$> declare
+  <|> Decide    mkHoleAnno <$> decide
+  <|> Assume    mkHoleAnno <$> assume
+  <|> Directive mkHoleAnno <$> directive
+
+directive :: Parser (Directive Name)
+directive = do
+  attachAnno $
+    choice
+      [ Eval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective "EVAL"))
+      , Check emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
+      ]
+      <*> annoHole expr
 
 assume :: Parser (Assume Name)
 assume = do
@@ -503,8 +522,26 @@ baseExpr =
   <|> ifthenelse
   <|> lam
   <|> consider
+  <|> try namedApp -- This is not nice
   <|> app
+  <|> lit
   <|> parenExpr
+
+lit :: Parser (Expr Name)
+lit = attachAnno $
+  Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+
+numericLit :: Parser Lit
+numericLit =
+  attachAnno $
+    NumericLit emptyAnno
+      <$> annoEpa (spacedToken (fmap snd <$> preview #_TIntLit) "Numeric Literal")
+
+stringLit :: Parser Lit
+stringLit =
+  attachAnno $
+    StringLit emptyAnno
+      <$> annoEpa (spacedToken (preview #_TStringLit) "String Literal")
 
 parenExpr :: Parser (Expr Name)
 parenExpr =
@@ -523,6 +560,24 @@ app = do
     <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedToken_ TKAnd))
         <|> annoHole (lmany (indentedExpr current))
         )
+
+namedApp :: Parser (Expr Name)
+namedApp = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    AppNamed emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedValue current) (spacedToken_ TComma))
+        )
+
+namedValue :: Pos -> Parser (NamedValue Name)
+namedValue current  =
+  attachAnno $
+    MkNamedValue emptyAnno
+      <$> annoHole   name
+      <*  annoLexeme (spacedToken_ TKIs)
+      <*  optional article
+      <*> annoHole   (indentedExpr current)
 
 negation :: Parser (Expr Name)
 negation = do
@@ -858,6 +913,9 @@ annoEpa p = Compose $ fmap epaToAnno p
 
 annoLexeme :: Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
 annoLexeme = annoEpa . fmap lexToEpa
+
+annoLexemes :: Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
+annoLexemes = annoEpa . fmap lexesToEpa
 
 instance Applicative (WithAnno_ t) where
   pure a = WithAnno emptyAnno a

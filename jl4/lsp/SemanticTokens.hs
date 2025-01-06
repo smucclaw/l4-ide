@@ -196,6 +196,7 @@ deriving anyclass instance ToSemTokens PosToken (OptionallyTypedName Name)
 deriving anyclass instance ToSemTokens PosToken (Decide Name)
 deriving anyclass instance ToSemTokens PosToken (AppForm Name)
 deriving anyclass instance ToSemTokens PosToken (Expr Name)
+deriving anyclass instance ToSemTokens PosToken (NamedValue Name)
 deriving anyclass instance ToSemTokens PosToken (Branch Name)
 deriving anyclass instance ToSemTokens PosToken (Pattern Name)
 deriving anyclass instance ToSemTokens PosToken (TypeSig Name)
@@ -207,4 +208,10 @@ instance ToSemTokens PosToken Name where
   toSemTokens (Name ann _) =
     traverseCsnWithHoles ann []
   toSemTokens (PreDef ann _) =
+    traverseCsnWithHoles ann []
+
+instance ToSemTokens PosToken Lit where
+  toSemTokens (NumericLit ann _) =
+    traverseCsnWithHoles ann []
+  toSemTokens (StringLit ann _) =
     traverseCsnWithHoles ann []
