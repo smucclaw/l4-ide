@@ -44,7 +44,7 @@
       source_status: fictional
   questions:
     - {
-        priority: { "low", reason: "Can probably worked out eventually or not required for v1/v2" },
+        priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
         qn: "How do we want to handle indexicals / self-reference like 'this Act' in 2(c)?
           Do we always want to just replace it with the extensionally equivalent thing? Or are examples where we want to preserve the indexicality?",
       }
@@ -56,10 +56,12 @@
           2. If we do want to have it come after, how would we handle that? Would it be handled by an annotation mechanism where the annotation need not be directly bundled with the thing being annotated in the syntax (e.g. like how you can annotate a top-level expression's type with `::` in Haskell without having to do it at the exact same place that you define the expression)?
           Or is this better handled by whatever mechanism we will use (in the future) to handle defeasibility/exceptions?",
       }
+  tags: ["matt_waddington"]
 - $type: q_and_a
   label: "How to represent offenses / crimes"
   questions:
-    - { priority: { level: low }, qn: "How explicitly should offences/crimes be represented?
+    - { priority: { level: low }, 
+        qn: "How explicitly should offences/crimes be represented?
           I've seen examples of legislation where there's a very explicit phrase like 'commits an offence'.
           But there's also examples where there may not be an explicit phrase like that next to the offence-creating provision or definition of the offence (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
   examples:
@@ -67,8 +69,9 @@
       excerpt: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
     - sources: [sg_penal_code_378]
       excerpt: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
-      note: "See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
+      note: "I came across this example when reading Alex Woon's textbook. See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
       source_status: real_legislation
+  tags: ["matt_waddington", "alex_woon"]
 - $type: q_and_a
   label: "Inclusion relationship between entities"
   examples:
@@ -80,8 +83,9 @@
         qn:
           "How do we want to model, e.g., inclusion relationship between entities? CRLP note that inclusion and identity relationships are common in legal texts.
           There may also not be a one-size-fits-all answer here -- it may also just depend on the legal text in question and what ones want to be able to do with the program.",
-        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024),
+        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024)
       }
+  tags: ["matt_waddington"]
 - $type: q_and_a
   label: "How to handle '... has the meaning given by section ..."
   examples:
@@ -95,6 +99,7 @@
           2. What demos do we envision implementing for this kind of thing in the short to medium term? Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
         answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024),
       }
+  tags: ["matt_waddington"]
 - $type: q_and_a
   label: "How to handle cross references"
   examples:
@@ -102,7 +107,7 @@
       excerpt: |-
         (1) It is an offence for a person—
           (a) to carry out Games location trading (see subsection (2));
-  tags: ["crossref_between_provisions"]
+  tags: ["crossref_between_provisions", "matt_waddington"]
   questions:
     - {
         priority: low,
@@ -117,7 +122,7 @@
         (3) Any period specified for the purposes of this section must—
           (a) begin no earlier than the beginning of the period of 21 days ending immediately before the day on which the Games begin, and
           (b) end no later than the end of the period of 5 days beginning with the day after the day on which the Games end.
-  tags: ["crossref_between_provisions"]
+  tags: ["crossref_between_provisions", "matt_waddington"]
   questions:
     - {
         priority: low,
@@ -136,6 +141,7 @@
         priority: low,
         qn: How exactly do we want to model 'A has a defence to an offence under this Article'? Then again I'm guessing we don't really need to capture the fine-grained structure with quantifiers.,
       }
+  tags: ["matt_waddington"]
 - $type: example
   label: "normative/achievement_obligation/good_delivery"
   sources: [governatori_llbp]
