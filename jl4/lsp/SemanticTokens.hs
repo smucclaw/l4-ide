@@ -143,7 +143,7 @@ parameterType t = case Lexer.posTokenCategory t.payload of
 
 nameIsDirective :: PosToken -> Maybe SemanticTokenTypes
 nameIsDirective t = case Lexer.posTokenCategory t.payload of
-  CIdentifier -> Just SemanticTokenTypes_Macro
+  CIdentifier -> Just SemanticTokenTypes_Interface
   _ -> Nothing
 
 enumType :: PosToken -> Maybe SemanticTokenTypes
