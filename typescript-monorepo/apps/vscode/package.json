@@ -93,7 +93,7 @@
     "dev": "tsc -b -w",
     "lint": "eslint ./src",
     "format": "prettier --write .",
-    "prettier:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\"",
     "lint-fix": "eslint ./src --fix"
   }
 }

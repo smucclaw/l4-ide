@@ -107,7 +107,7 @@ jobs:
       - run: pnpm run lint
         working-directory: typescript-monorepo/apps/vscode/
         # Check that files are formatted according to (shared) Prettier config
-      - run: pnpm run prettier:check
+      - run: pnpm run format:check
         working-directory: typescript-monorepo/apps/vscode/
       # - run: npm test
       #   working-directory: vscode/
