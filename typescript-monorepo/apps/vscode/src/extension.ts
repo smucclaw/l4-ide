@@ -22,7 +22,7 @@ export async function activate(context: ExtensionContext) {
   const langName = "jl4 LSP"
   const outputChannel: vscode.OutputChannel = window.createOutputChannel(
     langName,
-    langId
+    langId,
   )
   // The server is implemented in node
   const serverCmd: string =
@@ -55,7 +55,7 @@ export async function activate(context: ExtensionContext) {
           args.push(editor.document.uri.toString())
           const result: unknown = await next(command, args)
           outputChannel.appendLine(
-            `Received command response ${JSON.stringify(result)}`
+            `Received command response ${JSON.stringify(result)}`,
           )
           const nodeVisualisation: RuleNode[] = result as RuleNode[]
           if (nodeVisualisation.length >= 1) {
@@ -71,13 +71,13 @@ export async function activate(context: ExtensionContext) {
   }
 
   outputChannel.appendLine(
-    `[client] Starting server from the client: ${serverCmd}`
+    `[client] Starting server from the client: ${serverCmd}`,
   )
 
   // on Button. the button is at the bottom right of the status bar.
   const button = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
-    100
+    100,
   )
   button.command = command.showVisualisation
   button.text = "Update Diagram"

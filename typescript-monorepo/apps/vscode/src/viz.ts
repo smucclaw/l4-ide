@@ -13,21 +13,21 @@ export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-      }
+      },
     )
 
     const ladderDiagramScriptPath = vscode.Uri.file(
-      path.join(context.extensionPath, "media", "ladder-diagram.min.js")
+      path.join(context.extensionPath, "media", "ladder-diagram.min.js"),
     )
     const ladderDiagramScriptUri = panel.webview.asWebviewUri(
-      ladderDiagramScriptPath
+      ladderDiagramScriptPath,
     )
 
     panel.webview.html = getWebviewContent(
       context,
       panel,
       ladderDiagramScriptUri,
-      ruleJson || DefaultRule()
+      ruleJson || DefaultRule(),
     )
 
     panel.onDidDispose(() => {
@@ -40,7 +40,7 @@ function getWebviewContent(
   context: vscode.ExtensionContext,
   panel: vscode.WebviewPanel,
   scriptUri: vscode.Uri,
-  ruleJson: RuleNode
+  ruleJson: RuleNode,
 ): string {
   const webviewCssUri = panel.webview.asWebviewUri(
     vscode.Uri.joinPath(
@@ -48,8 +48,8 @@ function getWebviewContent(
       "node_modules",
       "ladder-diagram",
       "css",
-      "ladder.css"
-    )
+      "ladder.css",
+    ),
   )
 
   return `

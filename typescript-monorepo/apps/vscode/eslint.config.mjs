@@ -43,5 +43,5 @@ export default tseslint.config(
     // disable typechecking for this file only
     files: ["**/*.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
-  }
+  },
 )
