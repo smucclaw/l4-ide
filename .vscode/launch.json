@@ -14,7 +14,7 @@
 			"autoAttachChildProcesses": true,
 			"preLaunchTask": {
 				"type": "npm",
-				"script": "compile",
+				"script": "build",
 				"path": "typescript-monorepo/apps/vscode"
 			}
 		}
