@@ -4,15 +4,15 @@ export default {
   useTabs: false,
   bracketSpacing: true,
   singleQuote: true,
-  trailingComma: "es5",
+  trailingComma: 'es5',
   semi: false,
-  plugins: ["prettier-plugin-svelte"],
+  plugins: ['prettier-plugin-svelte'],
   overrides: [
     {
-      files: "*.svelte",
+      files: '*.svelte',
       options: {
-        parser: "svelte",
+        parser: 'svelte',
       },
     },
   ],
-};
+}

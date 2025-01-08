@@ -4,11 +4,10 @@ const extensionConfig = [
   ...baseConfig,
   {
     ignores: ['build/', 'out/', 'dist/', 'eslint.config.mjs'],
-  }  
+  },
 ]
 
 export default extensionConfig
-
 
 // export default tseslint.config(
 //   eslint.configs.recommended,

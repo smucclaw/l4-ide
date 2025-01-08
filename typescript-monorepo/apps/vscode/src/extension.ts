@@ -3,30 +3,30 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 
-import { ExtensionContext, workspace, window } from "vscode"
-import * as vscode from "vscode"
+import { ExtensionContext, workspace, window } from 'vscode'
+import * as vscode from 'vscode'
 import {
   LanguageClient,
   LanguageClientOptions,
   RevealOutputChannelOn,
   ServerOptions,
-} from "vscode-languageclient/node"
-import * as command from "./commands"
-import { RuleNode } from "./ruleToJson"
-import { showViz } from "./viz"
+} from 'vscode-languageclient/node'
+import * as command from './commands'
+import { RuleNode } from './ruleToJson'
+import { showViz } from './viz'
 
 let client: LanguageClient
 
 export async function activate(context: ExtensionContext) {
-  const langId = "l4"
-  const langName = "jl4 LSP"
+  const langId = 'l4'
+  const langName = 'jl4 LSP'
   const outputChannel: vscode.OutputChannel = window.createOutputChannel(
     langName,
-    langId,
+    langId
   )
   // The server is implemented in node
   const serverCmd: string =
-    workspace.getConfiguration("jl4").get("serverExecutablePath") ?? "jl4-lsp"
+    workspace.getConfiguration('jl4').get('serverExecutablePath') ?? 'jl4-lsp'
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
   const serverOptions: ServerOptions = {
@@ -39,7 +39,7 @@ export async function activate(context: ExtensionContext) {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for plain text documents
-    documentSelector: [{ scheme: "file", language: langId, pattern: "**/*" }],
+    documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
     diagnosticCollectionName: langName,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
     outputChannel,
@@ -55,7 +55,7 @@ export async function activate(context: ExtensionContext) {
           args.push(editor.document.uri.toString())
           const result: unknown = await next(command, args)
           outputChannel.appendLine(
-            `Received command response ${JSON.stringify(result)}`,
+            `Received command response ${JSON.stringify(result)}`
           )
           const nodeVisualisation: RuleNode[] = result as RuleNode[]
           if (nodeVisualisation.length >= 1) {
@@ -71,17 +71,17 @@ export async function activate(context: ExtensionContext) {
   }
 
   outputChannel.appendLine(
-    `[client] Starting server from the client: ${serverCmd}`,
+    `[client] Starting server from the client: ${serverCmd}`
   )
 
   // on Button. the button is at the bottom right of the status bar.
   const button = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
-    100,
+    100
   )
   button.command = command.showVisualisation
-  button.text = "Update Diagram"
-  button.tooltip = "Show visualisation"
+  button.text = 'Update Diagram'
+  button.tooltip = 'Show visualisation'
   button.show()
 
   // Create the language client and start the client.

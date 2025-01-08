@@ -1,1 +1,1 @@
-export const showVisualisation = "viz.showViz"
+export const showVisualisation = 'viz.showViz'

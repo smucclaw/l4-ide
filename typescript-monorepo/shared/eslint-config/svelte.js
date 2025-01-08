@@ -17,5 +17,5 @@ export const config = [
   },
   {
     ignores: ['build/', '.svelte-kit/', 'dist/'],
-  }
+  },
 ]
