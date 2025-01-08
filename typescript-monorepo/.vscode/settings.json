@@ -4,5 +4,12 @@
       "mode": "auto"
     }
   ],
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
+  "prettier.documentSelectors": ["**/*.svelte", "**/*.ts"],
+  "[svelte]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
 }

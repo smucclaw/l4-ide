@@ -1,7 +1,6 @@
 {
   "name": "decision-logic-visualizer",
   "version": "0.0.1",
-  "prettier": "./node_modules/@repo/prettier-config/index.js",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && npm run package",
@@ -32,6 +31,7 @@
       "svelte": "./dist/index.js"
     }
   },
+  "prettier": "@repo/prettier-config",
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
