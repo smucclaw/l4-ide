@@ -9,7 +9,7 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 
    ```bash
    pnpm install
-   pnpm run compile
+   pnpm run build
    ```
 
 2. Package the extension
@@ -60,10 +60,6 @@ npx esbuild node_modules/ladder-diagram/js/ladder.js --bundle --format=iife --gl
 ```
 
 This produces a file named `ladder-diagram.min.js`, located in the `media` folder, which is referenced by the extension.
-
-### L4 Rule Parsing
-
-TODO: rewrite
 
 ### Displaying the Diagram
 

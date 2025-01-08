@@ -1,7 +1,7 @@
 /*********************************************
        Registry
 ***********************************************/
-export type LirRootType = string;
+export type LirRootType = string
 
 /** Lir := 'Layout IR' */
 export class LirRegistry {
