@@ -11,14 +11,9 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write .",
-    "lint": "prettier --check . && eslint .",
+    "lint": "eslint .",
     "test": "vitest",
     "coverage": "vitest run --coverage"
-  },
-  "eslintConfig": {
-    "extends": [
-      "@repo/eslint-config/base"
-    ]
   },
   "files": [
     "dist",

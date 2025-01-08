@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "exports": {
-    "./base": "./base.js"
+    "./base": "./base.js",
+    "./svelte": "./svelte.js"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^15.0.3",

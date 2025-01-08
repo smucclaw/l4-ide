@@ -1,35 +1,13 @@
-// @ts-check
+import { config as baseConfig } from '@repo/eslint-config/base'
 
-import prettier from 'eslint-config-prettier'
-import js from '@eslint/js'
-import globals from 'globals'
-import ts from 'typescript-eslint'
-
-export default ts.config(
-  js.configs.recommended,
-  ...ts.configs.recommended,
-  ...ts.configs.recommendedTypeChecked,
-  prettier,
-  {
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-      },
-    },
-  },
-  {
-
-    languageOptions: {
-      parserOptions: {
-        parser: ts.parser,
-      },
-    },
-  },
+const extensionConfig = [
+  ...baseConfig,
   {
     ignores: ['build/', 'out/', 'dist/', 'eslint.config.mjs'],
-  }
-)
+  }  
+]
+
+export default extensionConfig
 
 
 // export default tseslint.config(
