@@ -5,3 +5,11 @@ cabal.project.local~
 
 ## golden actual files
 *.actual
+
+# Typescript-monorepo stuff
+
+## Turbo
+
+#--- For some reason, turbo creates its cookie files in the root of the entire repo. 
+#    This might be a turbo bug; for now, just going to gitignore it.
+.turbo
