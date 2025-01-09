@@ -87,7 +87,7 @@
   },
   "main": "./out/extension",
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "pnpm run build",
     "package": "npx vsce package",
     "build": "tsc -b",
     "dev": "tsc -b -w",
