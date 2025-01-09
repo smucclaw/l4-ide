@@ -1,0 +1,11 @@
+§ `Some Assumptions`
+
+-- While there are three errors we only report one.
+-- Reason being that the delayed errors are overwritten by
+-- the hard error when we fail to parse any top-level declarations.
+-- TODO: fix that.
+ASSUME zero IS A
+
+ASSUME one IS A
+
+ASSUME three IS A

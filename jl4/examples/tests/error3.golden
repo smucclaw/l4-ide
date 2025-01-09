@@ -1,0 +1,10 @@
+  |
+5 | ASSUME one IS A NUMBER
+  | ^
+incorrect indentation (got 1, should be greater than 1)
+
+  |
+7 | 
+  | ^
+incorrect indentation (got 1, should be greater than 1)
+

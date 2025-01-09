@@ -32,13 +32,12 @@ type Parser = Parsec Void TokenStream
 spacesOrAnnotations :: Parser [PosToken]
 spacesOrAnnotations =  concat <$> many (spaces1 <|> blockNlgAnnotation <|> blockRefAnnotation)
 
-spaces :: Parser [PosToken]
-spaces =
-  takeWhileP (Just "space token") (\t -> isSpaceToken t || isAnnotationToken t)
-
 spaces1 :: Parser [PosToken]
 spaces1 =
-  takeWhile1P (Just "space token") (\t -> isSpaceToken t || isAnnotationToken t)
+  takeWhile1P (Just "space token") isWhiteSpaceToken
+
+isWhiteSpaceToken :: PosToken -> Bool
+isWhiteSpaceToken t = isSpaceToken t || isAnnotationToken t
 
 blockNlgAnnotation :: Parser [PosToken]
 blockNlgAnnotation =
@@ -155,7 +154,7 @@ anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
     MkSection emptyAnno 0 Nothing
-      <$> annoHole (manyLines topdecl)
+      <$> annoHole (manyLines topdeclWithRecovery)
 
 section :: Parser (Section Name)
 section =
@@ -163,12 +162,30 @@ section =
     MkSection emptyAnno
       <$> annoEpa sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdecl)
+      <*> annoHole (manyLines topdeclWithRecovery)
 
 sectionSymbols :: Parser (Epa Int)
 sectionSymbols = do
   paragraphSymbols <- lexeme (some (plainToken TParagraph))
   pure $ length <$> lexesToEpa paragraphSymbols
+
+topdeclWithRecovery :: Parser (TopDecl Name)
+topdeclWithRecovery = do
+  start <- lookAhead anySingle
+  withRecovery
+    (\e -> do
+      -- Ignoring tokens here is fine, as we will fail parsing any way.
+      _ <- takeWhileP Nothing (\t -> not (isWhiteSpaceToken t) && t.range.start.column > 1)
+      current <- lookAhead anySingle
+      registerParseError e
+      -- If we didn't make any progress whatsoever,
+      -- end parsing to avoid endless loops.
+      if start == current
+        then
+          parseError e
+        else do
+          topdeclWithRecovery)
+    topdecl
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
