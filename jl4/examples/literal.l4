@@ -1,0 +1,15 @@
+§ Literals
+
+DECIDE primes IS
+    2 FOLLOWED BY
+    3 FOLLOWED BY
+    5 FOLLOWED BY
+    7 FOLLOWED BY
+    11
+
+DECIDE countries IS
+    "Germany" FOLLOWED BY
+    "Österreich" FOLLOWED BY
+    "新加坡共和国" FOLLOWED BY -- Unicode test
+    "Some \"country\"" -- escapes
+
