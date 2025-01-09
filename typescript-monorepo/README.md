@@ -1,14 +1,28 @@
-# Turborepo starter
+# README
 
-This is an official starter Turborepo.
+## Installation
 
-## Using this example
+You'll want to install `turbo` *both* globally and locally.
 
-Run the following command:
+To install it *globally*: `pnpm install turbo --global`
 
-```sh
-npx create-turbo@latest
-```
+[TODO] Add more details.
+
+## Key scripts
+
+- To lint: `turbo lint`
+- To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
+
+### Notes on configs setup
+
+* There are shared `eslint` and `prettier` configs in `./shared`.
+* ESLint: We're using the flat config file format.
+* Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
+* Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
+because my experience with VSCode Prettier extensions hasn't always been positive.
+Will try to think about what a good local dev setup might be, 
+wrt formatting --- perhaps we could use pre-commit / commit hooks?
+
 
 ## What's inside?
 
@@ -16,21 +30,10 @@ This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
+- `@repo/ui`: a stub component library
 - `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+- `@repo/prettier-config`
+- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo. [TODO: Might not be using this right now.]
 
 ### Build
 

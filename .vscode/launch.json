@@ -7,15 +7,15 @@
 			"request": "launch",
 			"name": "Launch Client",
 			"runtimeExecutable": "${execPath}",
-			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
+			"args": ["--extensionDevelopmentPath=${workspaceRoot}/typescript-monorepo/apps/vscode"],
 			"outFiles": [
-				"${workspaceRoot}/vscode/out/**/*.js",
+				"${workspaceRoot}/typescript-monorepo/apps/vscode/out/**/*.js",
 			],
 			"autoAttachChildProcesses": true,
 			"preLaunchTask": {
 				"type": "npm",
-				"script": "compile",
-				"path": "vscode"
+				"script": "build",
+				"path": "typescript-monorepo/apps/vscode"
 			}
 		}
 	]

@@ -7,21 +7,21 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 
 1. Build the project
 
-    ```bash
-    pnpm install
-    pnpm run compile
-    ```
+   ```bash
+   pnpm install
+   pnpm run build
+   ```
 
 2. Package the extension
 
-    ```bash
-    npx vsce package
-    ```
+   ```bash
+   npx vsce package
+   ```
 
-    During this process, you may be prompted to create the package without a license. Confirm by responding `y` to proceed.
+   During this process, you may be prompted to create the package without a license. Confirm by responding `y` to proceed.
 
 3. Install the extension
-   The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the *Install from VSIX* option, and install the file.
+   The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.
    > Note: After installation, the extension might initially appear inactive. To activate it, load or write an L4 rule (see details below).
 
 Alternatively:
@@ -43,7 +43,7 @@ At last, you can specify the location of the binary via `.vscode/settings.json` 
 
 ```json
 {
-    "jl4.serverExecutablePath": "<path-to-l4-lsp>",
+  "jl4.serverExecutablePath": "<path-to-l4-lsp>"
 }
 ```
 
@@ -61,10 +61,6 @@ npx esbuild node_modules/ladder-diagram/js/ladder.js --bundle --format=iife --gl
 
 This produces a file named `ladder-diagram.min.js`, located in the `media` folder, which is referenced by the extension.
 
-### L4 Rule Parsing
-
-TODO: rewrite
-
 ### Displaying the Diagram
 
 To visualize your rule as a ladder diagram:
@@ -72,5 +68,4 @@ To visualize your rule as a ladder diagram:
 - Save the file containing your rule.
 
 - Alternatively, use the "Update Diagram" button in the bottom-right status bar of VSCode (near the notification bell or Prettier controls). Clicking this button generates the diagram in a new panel.
-![alt text](screenshots/update-viz.png)
-
+  ![alt text](screenshots/update-viz.png)

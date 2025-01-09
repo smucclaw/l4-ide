@@ -1,24 +1,18 @@
 {
   "name": "decision-logic-visualizer",
   "version": "0.0.1",
-  "prettier": "./node_modules/@repo/prettier-config/index.js",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && npm run package",
+    "build": "vite build && pnpm run package",
     "preview": "vite preview",
     "package": "svelte-kit sync && svelte-package && publint",
-    "prepublishOnly": "npm run package",
+    "prepublishOnly": "pnpm run package",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write .",
-    "lint": "prettier --check . && eslint .",
+    "lint": "eslint .",
     "test": "vitest",
     "coverage": "vitest run --coverage"
-  },
-  "eslintConfig": {
-    "extends": [
-      "@repo/eslint-config/base"
-    ]
   },
   "files": [
     "dist",
@@ -37,6 +31,7 @@
       "svelte": "./dist/index.js"
     }
   },
+  "prettier": "@repo/prettier-config",
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
@@ -51,7 +46,6 @@
     "@vitest/coverage-v8": "^2.1.6",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-svelte": "^2.46.1",
     "globals": "^15.13.0",
     "jsdom": "^25.0.1",
     "prettier": "^3.4.1",
