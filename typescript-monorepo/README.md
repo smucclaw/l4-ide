@@ -5,6 +5,17 @@
 - To lint: `turbo lint`
 - To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
 
+### Notes on configs setup
+
+* There are shared `eslint` and `prettier` configs in `./shared`.
+* ESLint: We're using the flat config file format.
+* Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
+* Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
+because my experience with VSCode Prettier extensions hasn't always been positive.
+Will try to think about what a good local dev setup might be, 
+wrt formatting --- perhaps we could use pre-commit / commit hooks?
+
+
 ## What's inside?
 
 This Turborepo includes the following packages/apps:
