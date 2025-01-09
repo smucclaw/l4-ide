@@ -75,7 +75,8 @@
     - sources: [examples_for_parsing]
       excerpt: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
     - sources: [sg_penal_code_378]
-      excerpt: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
+      excerpt: "378.  Whoever, intending to take dishonestly any movable property out of the possession of any person without that person’s consent, moves that property in order to such taking, is said to commit theft [...] 
+                379.  Whoever commits theft shall be punished with imprisonment for a term which may extend to 3 years, or with fine, or with both."
       note: "I came across this example when reading Alex Woon's textbook. See also Section 40 https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr40-,pr379-&WiAl=1"
       source_status: real_legislation
   tags: ["matt_waddington", "alex_woon"]
@@ -230,7 +231,8 @@
   label: "non_preemptive_obligation/estate_will"
   sources: [governatori_llbp]
   excerpt: "[Paraphrased] Executors and administrators of a deceased's estate must notify all beneficiaries named in the will within 60 days of the signing of a probate order."
-  note: "If an executor gives a notice to the beneficiaries before [the signing of the probate order], she will not comply with the above obligation and will have to resend the notification after that. (4)"
+  note: "If an executor gives a notice to the beneficiaries before [the signing of the probate order], 
+        she will not comply with the above obligation and will have to resend the notification after that. (4)"
   source_status: fictional
   tags: ["normative/non_preemptive_obligation", governatori]
 # TODO: Add some perdurant obligations
