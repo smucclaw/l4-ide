@@ -4,8 +4,10 @@ GIVEN x IS A NUMBER
       y IS A NUMBER
 adder x y MEANS y + x
 
-#EVAL adder OF four AND five
-#EVAL adder four five
+#EVAL adder OF 4 AND 6
+#EVAL adder
+        4
+        6
 
 DECLARE Person
   HAS name IS A STRING
