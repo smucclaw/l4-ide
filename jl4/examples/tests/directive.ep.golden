@@ -1,0 +1,21 @@
+§ `Directive Examples`
+
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+adder x y MEANS y + x
+
+#EVAL adder OF 4 AND 6
+#EVAL adder
+        4
+        6
+
+DECLARE Person
+  HAS name IS A STRING
+
+GIVEN p IS A Person
+DECIDE `must sing` OF p
+    IF        walks
+       AND    eats
+           OR drinks
+
+#CHECK `must sing` OF Person WITH name IS "Taylor Swift"

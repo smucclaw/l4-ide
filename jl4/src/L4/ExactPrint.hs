@@ -1,18 +1,29 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module L4.ExactPrint where
 
+import Base
 import L4.Annotation
 import L4.Lexer
+import qualified L4.Parser as Parser
 import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Except
-import Data.Text
 import qualified Data.Text as Text
+import Generics.SOP as SOP
+import Generics.SOP.NP
+import Generics.SOP.NS
 import GHC.Stack
 
-type EPM = Except EPError
+-- ----------------------------------------------------------------------------
+-- ExactPrinting Interface
+-- ----------------------------------------------------------------------------
+
+type ExactPrintM = Except EPError
 
 data EPError
   = InsufficientHoleFit CallStack
@@ -21,132 +32,42 @@ data EPError
 prettyEPError :: EPError -> Text
 prettyEPError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
 
-type HoleFit = EPM [PosToken]
+type AnyHoleFit_ m t = m t
 
-exactprint :: Program Name -> Either EPError Text
-exactprint =
-  runExcept . fmap (Text.concat . fmap displayPosToken) . progToTokens
+type HoleFit_ t = AnyHoleFit_ ExactPrintM [t]
 
-progToTokens :: Program Name -> HoleFit
-progToTokens (MkProgram ann sections) =
-  applyTokensWithHoles ann [Extra.concatMapM sectionToTokens sections]
+class ToTokens t a where
+  toTokens :: a -> HoleFit_ t
 
-sectionToTokens :: Section Name -> HoleFit
-sectionToTokens (MkSection ann _lvl name decls) =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , Extra.concatMapM declToTokens decls
-    ]
+  default toTokens ::
+       (SOP.Generic a, All (AnnoFirst t (ToTokens t)) (Code a))
+    => a -> HoleFit_ t
+  toTokens =
+    genericToTokens (Proxy @(ToTokens t)) toTokens applyTokensWithHoles
 
-declToTokens :: Decl Name -> HoleFit
-declToTokens = \case
-  Declare ann declare ->
-    applyTokensWithHoles ann [declareToTokens declare]
-  Decide ann decide ->
-    applyTokensWithHoles ann [decideToTokens decide]
+genericToTokens :: forall c a t r. (SOP.Generic a, All (AnnoFirst t c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno_ t -> [r] -> r) -> a -> r
+genericToTokens _ rec f x =
+    collapse_NS
+  $ cmap_NS
+      (Proxy @(AnnoFirst t c))
+      (\ (I anno :* xs) ->
+        K (f anno (collapse_NP (cmap_NP (Proxy @c) (mapIK rec) xs))))
+  $ unSOP
+  $ from x
 
-declareToTokens :: Declare Name -> HoleFit
-declareToTokens (MkDeclare ann name type') =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , typeToTokens type'
-    ]
+instance ToTokens t a => ToTokens t [a] where
+  toTokens =
+    Extra.concatMapM toTokens
 
-typeToTokens :: Type' Name -> HoleFit
-typeToTokens = \case
-  NamedType ann named -> applyTokensWithHoles ann [nameToTokens named]
-  Enum ann enum -> applyTokensWithHoles ann [Extra.concatMapM nameToTokens enum]
-  Record ann rcs -> applyTokensWithHoles ann [Extra.concatMapM typedNameToTokens rcs]
-  Boolean ann -> applyTokensWithHoles ann []
+instance ToTokens t a => ToTokens t (Maybe a) where
+  toTokens =
+    maybe (pure []) toTokens
 
-typedNameToTokens :: TypedName Name -> HoleFit
-typedNameToTokens (MkTypedName ann name type') =
-  applyTokensWithHoles
-    ann
-    [ nameToTokens name
-    , typeToTokens type'
-    ]
-
-decideToTokens :: Decide Name -> HoleFit
-decideToTokens (MkDecide ann typeSig clauses) =
-  applyTokensWithHoles
-    ann
-    [ typeSigToTokens typeSig
-    , Extra.concatMapM clauseToTokens clauses
-    ]
-
-clauseToTokens :: Clause Name -> HoleFit
-clauseToTokens (GuardedClause ann e guard) =
-  applyTokensWithHoles
-    ann
-    [ exprToTokens e
-    , guardToTokens guard
-    ]
-
-guardToTokens :: Guard Name -> HoleFit
-guardToTokens = \case
-  PlainGuard ann e -> applyTokensWithHoles ann [exprToTokens e]
-  Otherwise ann -> applyTokensWithHoles ann []
-
-exprToTokens :: Expr Name -> HoleFit
-exprToTokens = \case
-  And ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Or ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Is ann e1 e2 ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e1, exprToTokens e2]
-  Not ann e ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e]
-  Proj ann e lbl ->
-    applyTokensWithHoles
-      ann
-      [exprToTokens e, nameToTokens lbl]
-  Var ann name ->
-    applyTokensWithHoles
-      ann
-      [nameToTokens name]
-
-typeSigToTokens :: TypeSig Name -> HoleFit
-typeSigToTokens (MkTypeSig ann given mGiveth) =
-  applyTokensWithHoles
-    ann
-    [ givenToTokens given
-    , maybe (pure []) givethToTokens mGiveth
-    ]
-
-givethToTokens :: GivethSig Name -> HoleFit
-givethToTokens (MkGivethSig ann typedName) =
-  applyTokensWithHoles
-    ann
-    [ typedNameToTokens typedName
-    ]
-
-givenToTokens :: GivenSig Name -> HoleFit
-givenToTokens (MkGivenSig ann names) =
-  applyTokensWithHoles
-    ann
-    [ Extra.concatMapM typedNameToTokens names
-    ]
-
-nameToTokens :: Name -> HoleFit
-nameToTokens (Name ann _) = applyTokensWithHoles ann []
-
-applyTokensWithHoles :: (HasCallStack) => Anno -> [HoleFit] -> EPM [PosToken]
+applyTokensWithHoles :: (HasCallStack, MonadError EPError m) => Anno_ t -> [AnyHoleFit_ m [t]] -> m [t]
 applyTokensWithHoles (Anno []) _ = pure []
 applyTokensWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
   [] -> do
-    throwE $ InsufficientHoleFit callStack
+    throwError $ InsufficientHoleFit callStack
   (x : xs) -> do
     r <- x
     rs <- applyTokensWithHoles (Anno cs) xs
@@ -156,3 +77,59 @@ applyTokensWithHoles (Anno (AnnoCsn m : cs)) xs = do
     r = csnTokens m
   rs <- applyTokensWithHoles (Anno cs) xs
   pure (r <> rs)
+
+-- ----------------------------------------------------------------------------
+-- JL4 specific implementation
+-- ----------------------------------------------------------------------------
+
+exactprint :: Program Name -> Either EPError Text
+exactprint =
+  runExcept . fmap (Text.concat . fmap displayPosToken) . toTokens
+
+-- | Parse a source file and exact-print the result.
+exactprintFile :: String -> Text -> Text
+exactprintFile file input =
+  case Parser.execParser Parser.program file input of
+    Left errs -> Text.unlines $ fmap (.message) $ toList errs
+    Right prog ->
+      case exactprint prog of
+        Left epError -> prettyEPError epError
+        Right ep -> ep
+
+deriving anyclass instance ToTokens PosToken (Program Name)
+
+-- Generic instance does not apply because we exclude the level.
+instance ToTokens PosToken (Section Name) where
+  toTokens (MkSection ann _lvl name decls) =
+    applyTokensWithHoles ann [toTokens name, toTokens decls]
+
+deriving anyclass instance ToTokens PosToken (TopDecl Name)
+deriving anyclass instance ToTokens PosToken (Assume Name)
+deriving anyclass instance ToTokens PosToken (Declare Name)
+deriving anyclass instance ToTokens PosToken (TypeDecl Name)
+deriving anyclass instance ToTokens PosToken (ConDecl Name)
+deriving anyclass instance ToTokens PosToken (Type' Name)
+deriving anyclass instance ToTokens PosToken (TypedName Name)
+deriving anyclass instance ToTokens PosToken (OptionallyTypedName Name)
+deriving anyclass instance ToTokens PosToken (Decide Name)
+deriving anyclass instance ToTokens PosToken (AppForm Name)
+deriving anyclass instance ToTokens PosToken (Expr Name)
+deriving anyclass instance ToTokens PosToken (NamedValue Name)
+deriving anyclass instance ToTokens PosToken (Branch Name)
+deriving anyclass instance ToTokens PosToken (Pattern Name)
+deriving anyclass instance ToTokens PosToken (TypeSig Name)
+deriving anyclass instance ToTokens PosToken (GivethSig Name)
+deriving anyclass instance ToTokens PosToken (GivenSig Name)
+deriving anyclass instance ToTokens PosToken (Directive Name)
+
+instance ToTokens PosToken Name where
+  toTokens (Name ann _) =
+    applyTokensWithHoles ann []
+  toTokens (PreDef ann _) =
+    applyTokensWithHoles ann []
+
+instance ToTokens PosToken Lit where
+  toTokens (NumericLit ann _) =
+    applyTokensWithHoles ann []
+  toTokens (StringLit ann _) =
+    applyTokensWithHoles ann []

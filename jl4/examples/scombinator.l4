@@ -1,0 +1,10 @@
+§ `The S combinator`
+
+GIVEN t1 IS A TYPE
+      t2 IS A TYPE
+      t3 IS A TYPE
+      f IS A FUNCTION FROM t1 AND t2 TO t3
+      g IS A FUNCTION FROM t1 TO t2
+GIVETH A t3
+s f g x MEANS
+  f OF x AND g x

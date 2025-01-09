@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -12,7 +13,6 @@ module L4.Parser (
 import Base
 
 import Data.Functor.Compose
-import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -29,9 +29,23 @@ import L4.Syntax
 
 type Parser = Parsec Void TokenStream
 
-spaces :: Parser [PosToken]
-spaces =
-  takeWhileP (Just "space token") isSpaceToken
+spacesOrAnnotations :: Parser [PosToken]
+spacesOrAnnotations =  concat <$> many (spaces1 <|> blockNlgAnnotation <|> blockRefAnnotation)
+
+spaces1 :: Parser [PosToken]
+spaces1 =
+  takeWhile1P (Just "space token") isWhiteSpaceToken
+
+isWhiteSpaceToken :: PosToken -> Bool
+isWhiteSpaceToken t = isSpaceToken t || isAnnotationToken t
+
+blockNlgAnnotation :: Parser [PosToken]
+blockNlgAnnotation =
+  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TSOpen <*> manyTill_ (anySingle <?> "NLG Block Annotation") (plainToken TSClose)
+
+blockRefAnnotation :: Parser [PosToken]
+blockRefAnnotation =
+  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
 
 isSpaceToken :: PosToken -> Bool
 isSpaceToken t =
@@ -41,11 +55,18 @@ isSpaceToken t =
     TBlockComment _ -> True
     _               -> False
 
+isAnnotationToken :: PosToken -> Bool
+isAnnotationToken t =
+  case t.payload of
+    TNlg _ -> True
+    TRef _ -> True
+    _      -> False
+
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
-  trailingWs <- spaces
-  pure $ Lexeme trailingWs a
+  trailingTokens <- spacesOrAnnotations
+  pure $ Lexeme trailingTokens a
 
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
@@ -92,16 +113,31 @@ simpleName =
 name :: Parser Name
 name = attachEpa (quotedName <|> simpleName) <?> "identifier"
 
+indentedName :: Pos -> Parser Name
+indentedName p =
+  withIndent GT p $ \_ -> name
+
 program :: Parser (Program Name)
 program = do
-  initSpace <- spaces
-  let wsSpace = Lexeme [] initSpace
-  MkProgram (mkSimpleEpaAnno (lexesToEpa wsSpace) <> mkHoleAnno) <$> many section
+  attachAnno $
+    MkProgram emptyAnno
+      <$  annoLexemes ((\ts -> Lexeme ts ts) <$> spacesOrAnnotations)
+      <*> annoHole
+          ((\s ss -> s:ss)
+            <$> anonymousSection
+            <*> many section
+          )
+
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
   current <- Lexer.indentLevel
   many (withIndent EQ current (const p))
+
+someLines :: Parser a -> Parser [a]
+someLines p = do
+  current <- Lexer.indentLevel
+  some (withIndent EQ current (const p))
 
 -- | Run the parser only when the indentation is correct and fail otherwise.
 withIndent :: (TraversableStream s, MonadParsec e s m) => Ordering -> Pos -> (Pos -> m b) -> m b
@@ -114,174 +150,272 @@ withIndent ordering current p = do
       fancyFailure . Set.singleton $
         ErrorIndentation ordering current actual
 
+anonymousSection :: Parser (Section Name)
+anonymousSection =
+  attachAnno $
+    MkSection emptyAnno 0 Nothing
+      <$> annoHole (manyLines topdeclWithRecovery)
+
 section :: Parser (Section Name)
 section =
   attachAnno $
     MkSection emptyAnno
       <$> annoEpa sectionSymbols
-      <*> annoHole name
-      <*> annoHole (manyLines decl)
+      <*> annoHole (optional name)
+      <*> annoHole (manyLines topdeclWithRecovery)
 
 sectionSymbols :: Parser (Epa Int)
 sectionSymbols = do
-  paragraphSymbols <- lexeme (some (plainToken TParagraph))
-  pure $ length <$> lexesToEpa paragraphSymbols
+  paragraphSymbols <- lexeme $
+    token
+      (\ t -> do
+        symbol <- preview #_TOtherSymbolic t.payload
+        guard (Text.all (== '§') symbol)
+        pure t)
+      (Set.singleton (Tokens (trivialToken (TOtherSymbolic "§") :| [])))
+  pure $ (.range.length) <$> lexToEpa paragraphSymbols
 
-decl :: Parser (Decl Name)
-decl =
-      Declare mkHoleAnno <$> declare
-  <|> Decide  mkHoleAnno <$> decide
+topdeclWithRecovery :: Parser (TopDecl Name)
+topdeclWithRecovery = do
+  start <- lookAhead anySingle
+  withRecovery
+    (\e -> do
+      -- Ignoring tokens here is fine, as we will fail parsing any way.
+      _ <- takeWhileP Nothing (\t -> not (isWhiteSpaceToken t) && t.range.start.column > 1)
+      current <- lookAhead anySingle
+      registerParseError e
+      -- If we didn't make any progress whatsoever,
+      -- end parsing to avoid endless loops.
+      if start == current
+        then
+          parseError e
+        else do
+          topdeclWithRecovery)
+    topdecl
+
+topdecl :: Parser (TopDecl Name)
+topdecl =
+      Declare   mkHoleAnno <$> declare
+  <|> Decide    mkHoleAnno <$> decide
+  <|> Assume    mkHoleAnno <$> assume
+  <|> Directive mkHoleAnno <$> directive
+
+directive :: Parser (Directive Name)
+directive = do
+  attachAnno $
+    choice
+      [ Eval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective "EVAL"))
+      , Check emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
+      ]
+      <*> annoHole expr
+
+assume :: Parser (Assume Name)
+assume = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    MkAssume emptyAnno
+      <$  annoLexeme (spacedToken_ TKAssume)
+      <*> annoHole appForm
+      <*  annoLexeme (spacedToken_ TKIs)
+      <*  optional article
+      <*> annoHole (indentedType current)
 
 declare :: Parser (Declare Name)
 declare =
   attachAnno $
     MkDeclare emptyAnno
       <$  annoLexeme (spacedToken_ TKDeclare)
-      <*> annoHole name
-      <*> annoHole ofType
+      <*> annoHole appForm
+      <*> annoHole typeDecl
+
+typeDecl :: Parser (TypeDecl Name)
+typeDecl =
+  recordDecl <|> enumDecl
+
+recordDecl :: Parser (TypeDecl Name)
+recordDecl =
+  attachAnno $
+    RecordDecl emptyAnno
+      <$  annoLexeme (spacedToken_ TKHas)
+      <*> annoHole (lsepBy reqParam (spacedToken_ TComma))
+
+enumDecl :: Parser (TypeDecl Name)
+enumDecl =
+  attachAnno $
+    EnumDecl emptyAnno
+      <$  annoLexeme (spacedToken_ TKIs)
+      <*  annoLexeme (spacedToken_ TKOne)
+      <*  annoLexeme (spacedToken_ TKOf)
+      <*> annoHole (lsepBy conDecl (spacedToken_ TComma))
+
+conDecl :: Parser (ConDecl Name)
+conDecl =
+  attachAnno $
+    MkConDecl emptyAnno
+      <$> annoHole name
+      <*> option [] (annoLexeme (spacedToken_ TKHas) *> annoHole (lsepBy reqParam (spacedToken_ TComma)))
 
 decide :: Parser (Decide Name)
 decide = do
   sig <- typeSig
   current <- Lexer.indentLevel
-  decideKW sig current <|> meansKW sig
+  decideKW sig current <|> meansKW sig current
   where
-    decideKW sig current = do
-      tkDecide <- spacedToken_ TKDecide
-      clauses <- manyLines (clause current) -- I see room for ambiguity here
+    decideKW sig current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
-          <*  annoLexeme (pure tkDecide)
-          <*> annoHole (pure clauses)
+          <*  annoLexeme (spacedToken_ TKDecide)
+          <*> annoHole appForm
+          <*  annoLexeme (spacedToken_ TKIs <|> spacedToken_ TKIf)
+          <*> annoHole (indentedExpr current)
 
-    -- We attach the concrete source node of 'TKMeans' to 'GuardedClause'.
-    -- This is necessary as the current exact printing infrastructure
-    -- doesn't allow interleaving of concrete syntax nodes and abstract syntax nodes.
-    -- The problem is that 'Expr' is part of 'GuardedClause', but 'TKMeans'
-    -- likely *should* be part of 'Decide'. Modelling it like this would require us to first
-    -- print the first element of 'GuardedClause' then the concrete syntax node 'TKMeans' from
-    -- 'Decide', followed by the rest of the concrete syntax nodes of 'GuardedClause'.
-    meansKW sig = do
-      e <- baseExpr
-      tkMeans <- spacedToken_ TKMeans
-      clauseGuard <- guard_
+    meansKW sig current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
-          <*> annoHole (
-                List.singleton <$>
-                  (attachAnno $
-                    GuardedClause emptyAnno
-                      <$> annoHole   (pure e)
-                      <*  annoLexeme (pure tkMeans)
-                      <*> annoHole   (pure clauseGuard)
-                  )
+          <*> annoHole appForm
+          <*  annoLexeme (spacedToken_ TKMeans)
+          <*> annoHole (indentedExpr current)
+
+appForm :: Parser (AppForm Name)
+appForm = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    MkAppForm emptyAnno
+      <$> annoHole name
+      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TKAnd))
+          <|> annoHole (lmany (indentedName current))
           )
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
   attachAnno $
     MkTypeSig emptyAnno
-      <$> annoHole (option (MkGivenSig emptyAnno []) given)
+      <$> annoHole (option (MkGivenSig emptyAnno []) givens)
       <*> annoHole (optional giveth)
 
-given :: Parser (GivenSig Name)
-given =
+givens :: Parser (GivenSig Name)
+givens =
   attachAnno $
     MkGivenSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiven)
-      <*> annoHole (manyLines typedName)
+      <*> annoHole (lsepBy param (spacedToken_ TComma))
 
 giveth :: Parser (GivethSig Name)
-giveth =
+giveth = do
+  current <- Lexer.indentLevel
   attachAnno $
     MkGivethSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiveth)
-      <*> annoHole (typedName)
-
-clause :: Pos -> Parser (Clause Name)
-clause p =
-  attachAnno $
-    GuardedClause emptyAnno
-      <$> annoHole (indentedExpr p)
-      <*> annoHole guard_
+      <*  optional article
+      <*> annoHole (indentedType current)
 
 -- primarily for testing
 expr :: Parser (Expr Name)
 expr =
   indentedExpr (mkPos 1)
 
-guard_ :: Parser (Guard Name)
-guard_ =
-      otherwiseGuard
-  <|> plainGuard
+indentedType :: Pos -> Parser (Type' Name)
+indentedType p =
+  withIndent GT p $ \_ -> type'
 
-otherwiseGuard :: Parser (Guard n)
-otherwiseGuard =
-  attachAnno $
-    Otherwise emptyAnno
-      <$ annoLexeme (spacedToken_ TKOtherwise)
+type' :: Parser (Type' Name)
+type' =
+      (attachAnno $
+         Type emptyAnno <$ annoLexeme (spacedToken_ TKType))
+  <|> tyApp
+  <|> fun
+  <|> forall'
 
-plainGuard :: Parser (Guard Name)
-plainGuard = do
+tyApp :: Parser (Type' Name)
+tyApp = do
   current <- Lexer.indentLevel
   attachAnno $
-    PlainGuard emptyAnno
-      <$ annoLexeme (spacedToken_ TKIf <|> spacedToken_ TKIs)
-      <*> annoHole (indentedExpr current)
+    TyApp emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedType current))
+        )
 
-ofType :: Parser (Type' Name)
-ofType =
-      isType
-  <|> record
-
-isType :: Parser (Type' Name)
-isType =
+fun :: Parser (Type' Name)
+fun = do
+  current <- Lexer.indentLevel
   attachAnno $
-    annoLexeme (spacedToken_ TKIs)
-      *> (   namedType
-         <|> enumType
-         )
+    Fun emptyAnno
+    <$  annoLexeme (spacedToken_ TKFunction)
+    <*  annoLexeme (spacedToken_ TKFrom)
+    <*> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
+    <*  annoLexeme (spacedToken_ TKTo)
+    <*> annoHole (indentedType current)
 
-namedType :: Compose Parser WithAnno (Type' Name)
-namedType =
-  NamedType emptyAnno
-    <$  annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn)
-    <*> annoHole name
+forall' :: Parser (Type' Name)
+forall' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Forall emptyAnno
+    <$  annoLexeme (spacedToken_ TKFor)
+    <*  annoLexeme (spacedToken_ TKAll)
+    <*> annoHole (lsepBy1 name (spacedToken_ TKAnd))
+    <*  optional article
+    <*> annoHole (indentedType current)
 
+article :: Compose Parser (WithAnno_ PosToken) PosToken
+article =
+  annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
+
+{-
 enumType :: Compose Parser WithAnno (Type' Name)
 enumType =
   Enum emptyAnno
     <$  annoLexeme (spacedToken_ TKOne)
     <*  annoLexeme (spacedToken_ TKOf)
-    <*> annoHole
-            ( concat
-                <$> manyLines
-                  ( do
-                      (names, commas) <- P.sepBy1 name (spacedToken_ TComma)
-                      pure $ zipWithLeftovers names commas
-                  )
-            )
- where
-  zipWithLeftovers :: [Name] -> [Lexeme PosToken] -> [Name]
-  zipWithLeftovers ns [] = ns
-  zipWithLeftovers [] _ = []
-  zipWithLeftovers (n : ns) (c : cs) = setAnno (getAnno n <> mkSimpleEpaAnno (lexToEpa c)) n : zipWithLeftovers ns cs
+    <*> annoHole (lsepBy1 name (spacedToken_ TComma))
+-}
 
-record :: Parser (Type' Name)
-record =
-  attachAnno $
-    Record emptyAnno
-      <$ annoLexeme (spacedToken_ TKHas)
-      <*> annoHole (manyLines typedName)
+lmany :: Parser a -> Parser [a]
+lmany pp =
+  fmap concat $ manyLines $ some pp
 
-typedName :: Parser (TypedName Name)
-typedName =
+lsepBy :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy pp sep =
+  fmap concat $ manyLines $ do
+    (ps, seps) <- P.sepBy1 pp sep
+    pure $ zipWithLeftovers ps seps
+  where
+    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
+    zipWithLeftovers ps [] = ps
+    zipWithLeftovers [] _  = []
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+
+lsepBy1 :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy1 pp sep =
+  fmap concat $ someLines $ do
+    (ps, seps) <- P.sepBy1 pp sep
+    pure $ zipWithLeftovers ps seps
+  where
+    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
+    zipWithLeftovers ps [] = ps
+    zipWithLeftovers [] _  = []
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+
+reqParam :: Parser (TypedName Name)
+reqParam =
   attachAnno $
     MkTypedName emptyAnno
       <$> annoHole name
-      <*> annoHole ofType
+      <*  annoLexeme (spacedToken_ TKIs)
+      <*  optional article
+      <*> annoHole type'
+
+param :: Parser (OptionallyTypedName Name)
+param =
+  attachAnno $
+    MkOptionallyTypedName emptyAnno
+      <$> annoHole name
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> optional article *> annoHole type')
 
 -- |
 -- An expression is a base expression followed by
@@ -300,23 +434,23 @@ indentedExpr p = do
   withIndent GT p $ \_ -> do
     e <- baseExpr
     efs <- many (expressionCont p)
-    pure (combineExpr End e efs)
+    pure (combine End e efs)
 
-data Stack =
-    Frame Stack (Expr Name) (Expr Name -> Expr Name -> Expr Name) Prio Pos
+data Stack a =
+    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos
   | End
 
-combineExpr :: Stack -> Expr Name -> [ExprCont] -> Expr Name
-combineExpr End e [] = e
-combineExpr (Frame s e1 op _ _) e2 [] =
-  combineExpr s (e1 `op` e2) []
-combineExpr End e1 (MkExprCont op1 prio1 p1 e2 : efs) =
-  combineExpr (Frame End e1 op1 prio1 p1) e2 efs
-combineExpr s1@(Frame s e1 op1 prio1 p1) e2 (MkExprCont op2 prio2 p2 e3 : efs)
+combine :: Stack a -> a Name -> [Cont a] -> a Name
+combine End e [] = e
+combine (Frame s e1 op _ _) e2 [] =
+  combine s (e1 `op` e2) []
+combine End e1 (MkCont op1 prio1 p1 e2 : efs) =
+  combine (Frame End e1 op1 prio1 p1) e2 efs
+combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
   | p2 > p1 || p2 == p1 && prio2 >= prio1 = -- (>=) is for *right*-associative operators
-  combineExpr (Frame s1 e2 op2 prio2 p2) e3 efs -- push
+  combine (Frame s1 e2 op2 prio2 p2) e3 efs -- push
   | otherwise =
-  combineExpr s (e1 `op1` e2) (MkExprCont op2 prio2 p2 e3 : efs) -- pop
+  combine s (e1 `op1` e2) (MkCont op2 prio2 p2 e3 : efs) -- pop
 
 -- The real problem is:
 --
@@ -363,46 +497,198 @@ combineExpr s1@(Frame s e1 op1 prio1 p1) e2 (MkExprCont op2 prio2 p2 e3 : efs)
 --
 -- [ (e1 OR (e2 AND e3), OP@2, e4 ]
 
-data ExprCont =
-  MkExprCont
-    { op   :: Expr Name -> Expr Name -> Expr Name
-    , prio :: Prio
-    , pos  :: Pos
-    , arg  :: Expr Name
+data Cont a =
+  MkCont
+    { _op   :: a Name -> a Name -> a Name
+    , _prio :: Prio
+    , _pos  :: Pos
+    , _arg  :: a Name
     }
 
-expressionCont :: Pos -> Parser ExprCont
-expressionCont p = do
-  withIndent GT p $ \pop -> do
-    (prio, op) <- operator
+cont :: Parser (Prio, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
+cont pop pbase p =
+  withIndent GT p $ \ pos -> do
+    (prio, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
-    arg <- baseExpr
-    pure (MkExprCont op prio pop arg)
+    arg <- pbase
+    pure (MkCont op prio pos arg)
+
+expressionCont :: Pos -> Parser (Cont Expr)
+expressionCont = cont operator baseExpr
 
 type Prio = Int
 
+-- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\op -> (4, infix2 And op)) <$> spacedToken_ TKAnd
-  <|> (\op -> (3, infix2 Or  op)) <$> spacedToken_ TKOr
-  <|> (\op -> (5, infix2 Is  op)) <$> spacedToken_ TKIs
+      (\ op -> (3, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (4, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (5, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (5, infix2' Cons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+  <|> (\ op -> (6, infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
+  <|> (\ op -> (6, infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
+  <|> (\ op -> (7, infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
+  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKDivided <*> spacedToken_ TKBy) <|> (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ TDividedBy)
 
-infix2 :: (Anno -> Expr n -> Expr n -> Expr n) -> Lexeme PosToken -> Expr n -> Expr n -> Expr n
+infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
   f (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnno) l r
 
+infix2' :: (Anno -> a n-> a n -> a n) -> Anno -> a n -> a n -> a n
+infix2' f op l r =
+  f (mkHoleAnno <> op <> mkHoleAnno) l r
+
 baseExpr :: Parser (Expr Name)
 baseExpr =
-  projection
-    <|> do
-      current <- Lexer.indentLevel
-      attachAnno $
-        Not emptyAnno
-          <$ annoLexeme (spacedToken_ TKNot)
-          <*> annoHole (indentedExpr current)
+      try projection
+  <|> negation
+  <|> ifthenelse
+  <|> lam
+  <|> consider
+  <|> try namedApp -- This is not nice
+  <|> app
+  <|> lit
+  <|> parenExpr
 
--- Some manual left-factoring here to prevent left-recursion;
--- projections can be plain variables
+lit :: Parser (Expr Name)
+lit = attachAnno $
+  Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+
+numericLit :: Parser Lit
+numericLit =
+  attachAnno $
+    NumericLit emptyAnno
+      <$> annoEpa (spacedToken (fmap snd <$> preview #_TIntLit) "Numeric Literal")
+
+stringLit :: Parser Lit
+stringLit =
+  attachAnno $
+    StringLit emptyAnno
+      <$> annoEpa (spacedToken (preview #_TStringLit) "String Literal")
+
+parenExpr :: Parser (Expr Name)
+parenExpr =
+  attachAnno $
+    ParenExpr emptyAnno
+    <$  annoLexeme (spacedToken_ TPOpen)
+    <*> annoHole expr
+    <*  annoLexeme (spacedToken_ TPClose)
+
+app :: Parser (Expr Name)
+app = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    App emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedExpr current))
+        )
+
+namedApp :: Parser (Expr Name)
+namedApp = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    AppNamed emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedValue current) (spacedToken_ TComma))
+        )
+
+namedValue :: Pos -> Parser (NamedValue Name)
+namedValue current  =
+  attachAnno $
+    MkNamedValue emptyAnno
+      <$> annoHole   name
+      <*  annoLexeme (spacedToken_ TKIs)
+      <*  optional article
+      <*> annoHole   (indentedExpr current)
+
+negation :: Parser (Expr Name)
+negation = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Not emptyAnno
+      <$  annoLexeme (spacedToken_ TKNot)
+      <*> annoHole (indentedExpr current)
+
+lam :: Parser (Expr Name)
+lam = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Lam emptyAnno <$> annoHole givens <* annoLexeme (spacedToken_ TKYield) <*> annoHole (indentedExpr current)
+
+ifthenelse :: Parser (Expr Name)
+ifthenelse = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    IfThenElse emptyAnno
+      <$  annoLexeme (spacedToken_ TKIf)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKThen)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKElse)
+      <*> annoHole (indentedExpr current)
+
+consider :: Parser (Expr Name)
+consider = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Consider emptyAnno
+      <$  annoLexeme (spacedToken_ TKConsider)
+      <*> annoHole (indentedExpr current)
+      <*> annoHole (lsepBy branch (spacedToken_ TComma))
+
+branch :: Parser (Branch Name)
+branch =
+  when' <|> otherwise'
+
+when' :: Parser (Branch Name)
+when' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    When emptyAnno
+      <$  annoLexeme (spacedToken_ TKWhen)
+      <*> annoHole (indentedPattern current)
+      <*  annoLexeme (spacedToken_ TKThen)
+      <*> annoHole (indentedExpr current)
+
+otherwise' :: Parser (Branch Name)
+otherwise' = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Otherwise emptyAnno
+      <$  annoLexeme (spacedToken_ TKOtherwise)
+      <*> annoHole (indentedExpr current)
+
+indentedPattern :: Pos -> Parser (Pattern Name)
+indentedPattern p =
+  withIndent GT p $ \ _ -> do
+    pat <- basePattern
+    pfs <- many (patternCont p)
+    pure (combine End pat pfs)
+
+basePattern :: Parser (Pattern Name)
+basePattern =
+  patApp
+
+patternCont :: Pos -> Parser (Cont Pattern)
+patternCont = cont patOperator basePattern
+
+patOperator :: Parser (Prio, Pattern Name -> Pattern Name -> Pattern Name)
+patOperator =
+  (\ op -> (5, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+
+patApp :: Parser (Pattern Name)
+patApp = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    PatApp emptyAnno
+    <$> annoHole name
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedPattern current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indentedPattern current))
+        )
+
+-- Some manual left-factoring here to prevent left-recursion
+-- TODO: the interaction between projection and application has to be properly sorted out
 projection :: Parser (Expr Name)
 projection =
       -- TODO: should 'TGenitive' be part of 'Name' or 'Proj'?
@@ -411,32 +697,32 @@ projection =
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
       (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
   <$> name
-  <*> many ((,) <$> spacedToken_ TGenitive <*> name)
+  <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
-example1 :: Text
-example1 =
+_example1 :: Text
+_example1 =
   Text.unlines
     [ "     foo"
     , " AND bar"
     ]
 
-example1b :: Text
-example1b =
+_example1b :: Text
+_example1b =
   Text.unlines
     [ "     foo"
     , " AND NOT bar"
     ]
 
-example2 :: Text
-example2 =
+_example2 :: Text
+_example2 =
   Text.unlines
     [ "        foo"
     , "     OR bar"
     , " AND baz"
     ]
 
-example3 :: Text
-example3 =
+_example3 :: Text
+_example3 =
   Text.unlines
     [ "        foo"
     , "     OR bar"
@@ -444,8 +730,8 @@ example3 =
     , "     OR baz"
     ]
 
-example3b :: Text
-example3b =
+_example3b :: Text
+_example3b =
   Text.unlines
     [ "     NOT    foo"
     , "         OR bar"
@@ -453,16 +739,16 @@ example3b =
     , "     OR NOT baz"
     ]
 
-example4 :: Text
-example4 =
+_example4 :: Text
+_example4 =
   Text.unlines
     [ "        foo"
     , "    AND bar"
     , " OR     baz"
     ]
 
-example5 :: Text
-example5 =
+_example5 :: Text
+_example5 =
   Text.unlines
     [ "        foo"
     , "    AND bar"
@@ -470,8 +756,8 @@ example5 =
     , " OR     baz"
     ]
 
-example6 :: Text
-example6 =
+_example6 :: Text
+_example6 =
   Text.unlines
     [ "            foo"
     , "        AND bar"
@@ -479,16 +765,16 @@ example6 =
     , " AND        foobar"
     ]
 
-example7 :: Text
-example7 =
+_example7 :: Text
+_example7 =
   Text.unlines
     [ "            foo IS x"
     , "        AND bar IS y"
     , "     OR     baz IS z"
     ]
 
-example7b :: Text
-example7b =
+_example7b :: Text
+_example7b =
   Text.unlines
     [ "               foo"
     , "            IS x"
@@ -498,8 +784,8 @@ example7b =
     , "            IS z"
     ]
 
-example8 :: Text
-example8 =
+_example8 :: Text
+_example8 =
   Text.unlines
     [ "          b's stage     IS Seed"
     , "    AND   b's sector    IS `Information Technology`"
@@ -511,8 +797,8 @@ example8 =
     , "    AND   b's has_ESG"
     ]
 
-example9 :: Text
-example9 =
+_example9 :: Text
+_example9 =
   Text.unlines
     [ "     foo"
     , " AND bar"
@@ -520,8 +806,8 @@ example9 =
     , " AND baz"
     ]
 
-example9b :: Text
-example9b =
+_example9b :: Text
+_example9b =
   Text.unlines
     [ "     foo"
     , " OR  bar"
@@ -529,8 +815,8 @@ example9b =
     , " OR  baz"
     ]
 
-example10 :: Text
-example10 =
+_example10 :: Text
+_example10 =
   Text.unlines
     [ "     foo"
     , " AND bar"
@@ -538,21 +824,21 @@ example10 =
     ]
 
 -- This looks wrong, should be foo (AND bar) OR baz
-example11a :: Text
-example11a =
+_example11a :: Text
+_example11a =
       " foo AND bar OR baz"
 
 -- This is unclear
-example11b :: Text
-example11b =
+_example11b :: Text
+_example11b =
   Text.unlines
     [ " foo "
     , "     AND bar"
     , "             OR baz"
     ]
 
-example11c :: Text
-example11c =
+_example11c :: Text
+_example11c =
   Text.unlines
     [ "                foo"
     , "     AND        bar"
@@ -560,29 +846,20 @@ example11c =
     ]
 
 -- This is unclear, probably (foo AND bar) OR baz
-example11d :: Text
-example11d =
+_example11d :: Text
+_example11d =
   Text.unlines
     [ " foo AND bar"
     , "     OR  baz"
     ]
 
 -- Hannes says: (foo OR bar) AND baz
-example11e :: Text
-example11e =
+_example11e :: Text
+_example11e =
   Text.unlines
     [ " foo OR  bar"
     , "     AND baz"
     ]
-
---
--- data Expr =
---     And  Expr Expr
---   | Or   Expr Expr
---   | Is   Expr Expr
---   | Proj Name Expr
---   | Var  Name
---   deriving stock Show
 
 execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) a
 execParser p file input =
@@ -593,6 +870,7 @@ execParser p file input =
         Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
         Right x  -> Right x
 
+-- | Parse a source file and pretty-print the resulting syntax tree.
 parseFile :: Show a => Parser a -> String -> Text -> IO ()
 parseFile p file input =
   case execParser p file input of
@@ -658,6 +936,9 @@ annoEpa p = Compose $ fmap epaToAnno p
 
 annoLexeme :: Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
 annoLexeme = annoEpa . fmap lexToEpa
+
+annoLexemes :: Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
+annoLexemes = annoEpa . fmap lexesToEpa
 
 instance Applicative (WithAnno_ t) where
   pure a = WithAnno emptyAnno a

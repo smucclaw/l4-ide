@@ -27,8 +27,10 @@ library
   build-depends:
     containers,
     extra,
+    generics-sop,
     megaparsec,
     mtl,
+    logict,
     optics,
     optics-core,
     optics-extra,
@@ -69,6 +71,7 @@ executable jl4-lsp
     directory,
     extra,
     filepath,
+    generics-sop,
     lens,
     lsp-types ^>=2.3.0.0,
     lsp ^>=2.7.0.0,
@@ -79,7 +82,9 @@ executable jl4-lsp
     text-rope,
     transformers,
   main-is: Main.hs
-  other-modules: Ladder
+  other-modules:
+    Ladder
+    SemanticTokens
 
 test-suite jl4-test
   import: defaults

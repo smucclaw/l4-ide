@@ -68,6 +68,7 @@ data TokenType =
   | TQuoted       !Text
   | TIntLit       !Text !Int
   | TStringLit    !Text
+  | TDirective    !Text
     -- parentheses
   | TPOpen
   | TPClose
@@ -75,6 +76,8 @@ data TokenType =
   | TCClose
   | TSOpen
   | TSClose
+  | TAOpen
+  | TAClose
     -- punctuation
   | TComma
   | TSemicolon
@@ -82,7 +85,6 @@ data TokenType =
     -- genitive
   | TGenitive
     -- symbolic operators
-  | TParagraph
   | TTimes
   | TPlus
   | TMinus
@@ -95,6 +97,8 @@ data TokenType =
   | TNotEquals
   | TAnd
   | TOr
+  | TImplies
+  | TDividedBy
   | TOtherSymbolic !Text
     -- keywords
   | TKGiven
@@ -115,8 +119,41 @@ data TokenType =
   | TKHas
   | TKOne
   | TKOf
+  | TKWith
   | TKA
   | TKAn
+  | TKThe
+  | TKYield
+  | TKConsider
+  | TKWhere
+  | TKList
+  | TKAssume
+  | TKWhen
+  | TKType
+  | TKFunction
+  | TKFrom
+  | TKTo
+  | TKEquals
+  | TKImplies
+  | TKPlus
+  | TKMinus
+  | TKTimes
+  | TKDivided
+  | TKBy
+  | TKGreater
+  | TKLess
+  | TKThan
+  | TKAbove
+  | TKBelow
+  | TKAt
+  | TKLeast
+  | TKMost
+  | TKFollowed
+  | TKFor
+  | TKAll
+    -- annotations
+  | TNlg          !Text
+  | TRef          !Text
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -124,6 +161,14 @@ data TokenType =
   | EOF
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass ToExpr
+
+nlgAnnotation :: Lexer Text
+nlgAnnotation =
+  (<>) <$> string "@nlg" <*> takeWhileP (Just "character") (/= '\n')
+
+refAnnotation :: Lexer Text
+refAnnotation =
+  (<>) <$> string "@ref" <*> takeWhileP (Just "character") (/= '\n')
 
 whitespace :: Lexer Text
 whitespace =
@@ -148,8 +193,8 @@ quoted :: Lexer Text
 quoted =
   char '`' *> takeWhile1P (Just "printable char except backticks") (\ x -> isPrint x && not (x `elem` ("`" :: String))) <* char '`'
 
-directive :: Lexer Text
-directive =
+directiveLiteral :: Lexer Text
+directiveLiteral =
   char '#' *> identifier
 
 integerLiteral :: Lexer (Text, Int)
@@ -173,6 +218,9 @@ tokenPayload =
   <|> TStringLit      <$> stringLiteral
   <|> TGenitive       <$ string "'s"
   <|> TQuoted         <$> quoted
+  <|> TDirective      <$> directiveLiteral
+  <|> TNlg            <$> nlgAnnotation
+  <|> TRef            <$> refAnnotation
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
@@ -217,8 +265,7 @@ identifier =
 symbols :: Map Text TokenType
 symbols =
   Map.fromList
-    [ ("§" , TParagraph    )
-    , ("*" , TTimes        )
+    [ ("*" , TTimes        )
     , ("+" , TPlus         )
     , ("-" , TMinus        )
     , (">=", TGreaterEquals)
@@ -229,6 +276,8 @@ symbols =
     , ("==", TEqualsEquals )
     , ("&&", TAnd          )
     , ("||", TOr           )
+    , ("=>", TImplies      )
+    , ("/" , TDividedBy    )
     ]
 
 keywords :: Map Text TokenType
@@ -251,9 +300,39 @@ keywords =
     , ("IS"         , TKIs         )
     , ("ONE"        , TKOne        )
     , ("OF"         , TKOf         )
+    , ("WITH"       , TKWith       )
     , ("A"          , TKA          )
     , ("AN"         , TKAn         )
     , ("HAS"        , TKHas        )
+    , ("THE"        , TKThe        )
+    , ("YIELD"      , TKYield      )
+    , ("CONSIDER"   , TKConsider   )
+    , ("WHERE"      , TKWhere      )
+    , ("LIST"       , TKList       )
+    , ("ASSUME"     , TKAssume     )
+    , ("WHEN"       , TKWhen       )
+    , ("TYPE"       , TKType       )
+    , ("FUNCTION"   , TKFunction   )
+    , ("FROM"       , TKFrom       )
+    , ("TO"         , TKTo         )
+    , ("EQUALS"     , TKEquals     )
+    , ("IMPLIES"    , TKImplies    )
+    , ("PLUS"       , TKPlus       )
+    , ("MINUS"      , TKMinus      )
+    , ("TIMES"      , TKTimes      )
+    , ("DIVIDED"    , TKDivided    )
+    , ("BY"         , TKBy         )
+    , ("GREATER"    , TKGreater    )
+    , ("LESS"       , TKLess       )
+    , ("THAN"       , TKThan       )
+    , ("ABOVE"      , TKAbove      )
+    , ("BELOW"      , TKBelow      )
+    , ("AT"         , TKAt         )
+    , ("LEAST"      , TKLeast      )
+    , ("MOST"       , TKMost       )
+    , ("FOLLOWED"   , TKFollowed   )
+    , ("FOR"        , TKFor        )
+    , ("ALL"        , TKAll        )
     ]
 
 rawTokens :: Lexer [RawToken]
@@ -493,17 +572,19 @@ displayPosToken (MkPosToken _r tt) =
     TQuoted t        -> "`" <> t <> "`"
     TIntLit t _i     -> t
     TStringLit s     -> Text.pack (show s) -- ideally, this should be fine, because we use the Haskell escape sequences
+    TDirective t     -> "#" <> t
     TPOpen           -> "("
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
     TSOpen           -> "["
     TSClose          -> "]"
+    TAOpen           -> "<"
+    TAClose          -> ">"
     TComma           -> ","
     TSemicolon       -> ";"
     TDot             -> "."
     TGenitive        -> "'s"
-    TParagraph       -> "§"
     TTimes           -> "*"
     TPlus            -> "+"
     TMinus           -> "-"
@@ -516,6 +597,8 @@ displayPosToken (MkPosToken _r tt) =
     TNotEquals       -> "/="
     TAnd             -> "&&"
     TOr              -> "||"
+    TImplies         -> "=>"
+    TDividedBy       -> "/"
     TOtherSymbolic t -> t
     TKGiven          -> "GIVEN"
     TKGiveth         -> "GIVETH"
@@ -535,8 +618,40 @@ displayPosToken (MkPosToken _r tt) =
     TKHas            -> "HAS"
     TKOne            -> "ONE"
     TKOf             -> "OF"
+    TKWith           -> "WITH"
     TKA              -> "A"
     TKAn             -> "AN"
+    TKThe            -> "THE"
+    TKYield          -> "YIELD"
+    TKConsider       -> "CONSIDER"
+    TKWhere          -> "WHERE"
+    TKList           -> "LIST"
+    TKAssume         -> "ASSUME"
+    TKWhen           -> "WHEN"
+    TKType           -> "TYPE"
+    TKFunction       -> "FUNCTION"
+    TKFrom           -> "FROM"
+    TKTo             -> "TO"
+    TKEquals         -> "EQUALS"
+    TKImplies        -> "IMPLIES"
+    TKPlus           -> "PLUS"
+    TKMinus          -> "MINUS"
+    TKTimes          -> "TIMES"
+    TKDivided        -> "DIVIDED"
+    TKBy             -> "BY"
+    TKGreater        -> "GREATER"
+    TKLess           -> "LESS"
+    TKThan           -> "THAN"
+    TKAbove          -> "ABOVE"
+    TKBelow          -> "BELOW"
+    TKAt             -> "AT"
+    TKLeast          -> "LEAST"
+    TKMost           -> "MOST"
+    TKFollowed       -> "FOLLOWED"
+    TKFor            -> "FOR"
+    TKAll            -> "ALL"
+    TNlg t           -> t
+    TRef t           -> t
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -552,6 +667,7 @@ data TokenCategory
   | CComment
   | CWhitespace
   | CDirective
+  | CAnnotation
   | CEOF
 
 posTokenCategory :: TokenType -> TokenCategory
@@ -561,17 +677,19 @@ posTokenCategory =
     TQuoted _ -> CIdentifier
     TIntLit _ _ -> CNumberLit
     TStringLit _ -> CStringLit
+    TDirective _ -> CDirective
     TPOpen -> CSymbol
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
     TSOpen -> CSymbol
     TSClose -> CSymbol
+    TAOpen -> CSymbol
+    TAClose -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
     TDot -> CSymbol
     TGenitive -> CIdentifier
-    TParagraph -> CSymbol
     TTimes -> COperator
     TPlus -> COperator
     TMinus -> COperator
@@ -584,6 +702,8 @@ posTokenCategory =
     TNotEquals -> COperator
     TAnd -> COperator
     TOr -> COperator
+    TImplies -> COperator
+    TDividedBy -> COperator
     TOtherSymbolic _ -> CSymbol
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
@@ -603,8 +723,40 @@ posTokenCategory =
     TKHas -> CKeyword
     TKOne -> CKeyword
     TKOf -> CKeyword
+    TKWith -> CKeyword
     TKA -> CKeyword
     TKAn -> CKeyword
+    TKThe -> CKeyword
+    TKYield -> CKeyword
+    TKConsider -> CKeyword
+    TKWhere -> CKeyword
+    TKList -> CKeyword
+    TKAssume -> CKeyword
+    TKWhen -> CKeyword
+    TKType -> CKeyword
+    TKFunction -> CKeyword
+    TKFrom -> CKeyword
+    TKTo -> CKeyword
+    TKEquals -> CKeyword
+    TKImplies -> CKeyword
+    TKPlus -> CKeyword
+    TKMinus -> CKeyword
+    TKTimes -> CKeyword
+    TKDivided -> CKeyword
+    TKBy -> CKeyword
+    TKGreater -> CKeyword
+    TKLess -> CKeyword
+    TKThan -> CKeyword
+    TKAbove -> CKeyword
+    TKBelow -> CKeyword
+    TKAt -> CKeyword
+    TKLeast -> CKeyword
+    TKMost -> CKeyword
+    TKFollowed -> CKeyword
+    TKFor -> CKeyword
+    TKAll -> CKeyword
+    TNlg _ -> CAnnotation
+    TRef _ -> CAnnotation
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

@@ -33,7 +33,7 @@ article ::=
   "A" | "AN" | "THE"
 
 declare' ::=
-  "DECLARE" name+ (recorddecl | enumdecl)
+  "DECLARE" appform (recorddecl | enumdecl)
 
 recorddecl ::=
   "HAS" reqparam{,}*
@@ -48,16 +48,17 @@ condecl ::=
 -- ignoring operator priority
 type ::=
     "TYPE"
-  | name+                         -- type application
-  | name "OF" tyargs              -- also type application
-  | name "WITH" namedtyargs       -- also type application
-  | FUNCTION FROM tyargs TO type  -- function type
+  | name+                                 -- type application
+  | name "OF" tyargs                      -- also type application
+  | name "WITH" namedtyargs               -- also type application
+  | "FUNCTION" "FROM" tyargs "TO" type    -- function type
+  | "FOR" "ALL" name+{AND} article? type  -- quantified type
     -- probably not needed because can be predefined instead of built-in
-  | "BOOL"                        -- Booleans
-  | "NUMBER"                      -- numbers, potentially some mixed integer / fractional type
-  | "STRING"                      -- strings
-  | "LIST"                        -- homogeneous lists, like lists in Haskell
-  | "OPTIONAL"                    -- like Maybe in Haskell
+  | "BOOL"                                -- Booleans
+  | "NUMBER"                              -- numbers, potentially some mixed integer / fractional type
+  | "STRING"                              -- strings
+  | "LIST"                                -- homogeneous lists, like lists in Haskell
+  | "OPTIONAL"                            -- like Maybe in Haskell
 
 tyargs ::=
   type{AND}+
@@ -69,14 +70,19 @@ giveth ::=
   "GIVETH" type
 
 binding' ::=
-    "DECIDE" name+ ("IS" | "IF") expr  -- both forms are equivalent
-  | name+ "MEANS" expr
+    "DECIDE" appform ("IS" | "IF") expr  -- both forms are equivalent
+  | appform "MEANS" expr
+
+appform ::=
+    name+
+  | name "OF" nameargs
+  -- possibly allow "WITH" here as well?
 
 assumption ::=
   givens? assumption'
 
 assumption' ::=
-  "ASSUME" name+ "IS" article? type
+  "ASSUME" appform "IS" article? type
 
 -- ignoring operator priority
 expr ::=
@@ -86,15 +92,19 @@ expr ::=
   | name "WITH" namedargs -- also constructor / function application
   | givens "YIELD" expr   -- anonymous function / lambda
   | expr "'s" name        -- record projection
-  | "THE" name "OF" expr  -- also record projection (under discussion)
+  | "THE" name "OF" expr  -- also record projection (under discussion / should perhaps become generally possible as application syntax)
   | "IF" expr "THEN" expr "ELSE" expr  -- elimination for Booleans
   | "CONSIDER" expr branches -- elimination for general datatypes
   | expr "WHERE" decls    -- local declarations
   | article? "LIST" ("OF"?) expr{,}*   -- literal lists
+  | ...                   -- numeric literals (at least integers)
+  | ...                   -- string literals (in double quotes)
     -- probably not needed because can be predefined instead of built-in:
   | "EMPTY"               -- empty list
   | "MISSING"             -- like Nothing in Haskell
   | "JUST"                -- like Just in Haskell
+  | "TRUE"
+  | "FALSE"
 
 -- All operators have a textual form, but some may also have
 -- a symbolic form. These have to be built-in for now (not *necessarily*
@@ -110,8 +120,8 @@ infixop ::=
   | "EQUALS" | "="
   | "GREATER" "THAN" | "ABOVE" | ">"
   | "LESS" "THAN" | "BELOW" | "<"
-  | "AT" "LEAST" | ">"
-  | "AT "MOST" | "<"
+  | "AT" "LEAST" | ">="
+  | "AT "MOST" | "<="
   | "FOLLOWED" "BY"     -- "cons" on lists
   | ...                 -- we will probably add more operators
 
@@ -133,14 +143,17 @@ namedargs ::=
 
 namedarg ::=
   name "IS" article? expr
-  
+
 args ::=
   expr{AND}+
+
+nameargs ::=
+  name{AND}+
 
 namedpatargs ::=
   namedpatarg{,}*
 
-namedarg ::=
+namedpatarg ::=
   name "IS" article? pattern
 
 patargs ::=

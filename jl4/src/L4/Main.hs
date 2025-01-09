@@ -5,6 +5,7 @@ import qualified Base.Text as Text
 
 import Options.Applicative as Options
 
+import L4.ExactPrint
 import L4.Parser
 
 data Options =
@@ -31,7 +32,13 @@ main = do
     then do
       hPutStrLn stderr "l4: no input files given; use --help for help"
     else
-      parseFiles options.files
+      exactprintFiles options.files
+
+exactprintFiles :: [FilePath] -> IO ()
+exactprintFiles =
+  traverse_ $ \ file -> do
+    input <- Text.readFile file
+    Text.putStr (exactprintFile file input)
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =

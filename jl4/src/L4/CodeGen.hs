@@ -1,5 +1,6 @@
 module L4.CodeGen where
 
+{-
 import qualified Simala.Expr.Type as Simala
 import L4.Syntax
 
@@ -27,5 +28,4 @@ translateExpr (Is _ e1 e2)  = Simala.Builtin Simala.Eq  [translateExpr e1, trans
 translateExpr (Not _ e)     = Simala.Builtin Simala.Not [translateExpr e]
 translateExpr (Proj _ e (Name _ l))  = Simala.Project (translateExpr e) l
 translateExpr (Var _ (Name _ n))     = Simala.Var n
-
-
+-}

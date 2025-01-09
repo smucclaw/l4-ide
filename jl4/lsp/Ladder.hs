@@ -63,8 +63,9 @@ visualise prog =
     toListOf (gplate @(Decide Name)) prog
 
 decideToRuleNode :: Decide Name -> [RuleNode]
-decideToRuleNode (MkDecide _ sig clauses) =
-  Maybe.mapMaybe (clauseToRuleNode sig) clauses
+decideToRuleNode (MkDecide _ sig appForm expr) =
+  []
+  -- Maybe.mapMaybe (clauseToRuleNode sig) clauses
 
 -- | Turn a single clause into a boolean circuit.
 -- We support only a tiny subset of possible representations, in particular
@@ -79,6 +80,7 @@ decideToRuleNode (MkDecide _ sig clauses) =
 --
 -- These limitations are arbitrary, mostly to make sure we have something to show rather
 -- than being complete. So, feel free to lift these limitations at your convenience :)
+{-
 clauseToRuleNode :: TypeSig Name -> Clause Name -> Maybe RuleNode
 clauseToRuleNode (MkTypeSig _ givenSig _) (GuardedClause _ e guard_) =
   case givenSig of
@@ -95,6 +97,7 @@ clauseToRuleNode (MkTypeSig _ givenSig _) (GuardedClause _ e guard_) =
             Nothing
         _ -> Nothing
     _ -> Nothing
+-}
 
 traverseExpr :: Text -> Expr Name -> Maybe RuleNode
 traverseExpr subject e = case e of
@@ -108,7 +111,7 @@ traverseExpr subject e = case e of
         node Any [rNode | n <- scanOr e, Just rNode <- [traverseExpr subject n]]
   Var _ (Name _ verb) ->
     Just $ ruleNode emptyPrePost $ leaf subject verb
-  Is{} -> Nothing -- Can't handle 'Is' yet
+  Equals{} -> Nothing -- Can't handle 'Is' yet
   Not{} -> Nothing -- Can't handle 'Not' yet
   Proj{} -> Nothing -- Can't handle 'Proj' yet
 
