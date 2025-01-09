@@ -5,8 +5,8 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
-    "format": "prettier --write \"**/*.{js,ts,jsx,tsx,json,css,scss,md,html,svelte}\"",
-    "prettier-check": "prettier --plugin-search-dir . --check ."
+    "format": "prettier --write \"**/*.{js,ts,jsx,tsx,json,css,scss,md,html,yaml,svelte}\"",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@repo/prettier-config": "workspace:^",
