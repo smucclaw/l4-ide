@@ -1,0 +1,15 @@
+§ `Paragraph 1`
+§§ `Paragraph 1.1`
+§§ `Paragraph 1.2`
+
+§ `Paragraph 2`
+§§ `Paragraph 2.1`
+§§§ `Paragraph 2.1.1`
+§§§§ `Paragraph 2.1.1.1`
+§§§§§ `Paragraph 2.1.1.1.1`
+§§ `Paragraph 2.2`
+
+§§§ `Paragraph 2.2.1`
+§§§§§§§§§§§§§§§§§§§§§§§§§§ `Out-of-place paragraph`
+
+§§ `2` -- Quoted numbers work

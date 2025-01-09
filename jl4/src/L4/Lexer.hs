@@ -85,7 +85,6 @@ data TokenType =
     -- genitive
   | TGenitive
     -- symbolic operators
-  | TParagraph
   | TTimes
   | TPlus
   | TMinus
@@ -266,8 +265,7 @@ identifier =
 symbols :: Map Text TokenType
 symbols =
   Map.fromList
-    [ ("§" , TParagraph    )
-    , ("*" , TTimes        )
+    [ ("*" , TTimes        )
     , ("+" , TPlus         )
     , ("-" , TMinus        )
     , (">=", TGreaterEquals)
@@ -587,7 +585,6 @@ displayPosToken (MkPosToken _r tt) =
     TSemicolon       -> ";"
     TDot             -> "."
     TGenitive        -> "'s"
-    TParagraph       -> "§"
     TTimes           -> "*"
     TPlus            -> "+"
     TMinus           -> "-"
@@ -693,7 +690,6 @@ posTokenCategory =
     TSemicolon -> CSymbol
     TDot -> CSymbol
     TGenitive -> CIdentifier
-    TParagraph -> CSymbol
     TTimes -> COperator
     TPlus -> COperator
     TMinus -> COperator

@@ -166,8 +166,14 @@ section =
 
 sectionSymbols :: Parser (Epa Int)
 sectionSymbols = do
-  paragraphSymbols <- lexeme (some (plainToken TParagraph))
-  pure $ length <$> lexesToEpa paragraphSymbols
+  paragraphSymbols <- lexeme $
+    token
+      (\ t -> do
+        symbol <- preview #_TOtherSymbolic t.payload
+        guard (Text.all (== '§') symbol)
+        pure t)
+      (Set.singleton (Tokens (trivialToken (TOtherSymbolic "§") :| [])))
+  pure $ (.range.length) <$> lexToEpa paragraphSymbols
 
 topdeclWithRecovery :: Parser (TopDecl Name)
 topdeclWithRecovery = do
