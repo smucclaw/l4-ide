@@ -1,0 +1,7 @@
+§ `Type-directed name resolution`
+
+ASSUME foo IS A NUMBER
+ASSUME foo IS A BOOLEAN
+
+DECIDE bar
+  IS foo

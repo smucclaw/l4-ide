@@ -1,15 +1,11 @@
 § `The factorial function`
 
--- at the time of creating this test, we do not yet have numeric literals
-ASSUME zero IS A NUMBER
-ASSUME one IS A NUMBER
-
 GIVEN n IS A NUMBER
 GIVETH A NUMBER
 DECIDE factorial OF n
   IS
-    IF n EQUALS zero
-    THEN one
+    IF n EQUALS 0
+    THEN 1
     ELSE       n
          TIMES factorial OF       n
-                            MINUS one
+                            MINUS 1

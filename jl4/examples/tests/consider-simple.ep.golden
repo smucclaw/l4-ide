@@ -1,0 +1,13 @@
+§ `Example of CONSIDER construct`
+
+DECLARE TwoNumbers
+  IS ONE OF
+    MkTwoNumbers HAS
+      num1 IS A NUMBER
+      num2 IS A NUMBER
+
+GIVEN tn IS TwoNumbers
+GIVETH A NUMBER
+test tn MEANS
+  CONSIDER tn
+  WHEN MkTwoNumbers OF x, y THEN x + y + 3

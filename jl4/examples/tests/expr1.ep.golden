@@ -1,7 +1,10 @@
 § `Expression priority`
 
-DECIDE x1 IF     foo
+ASSUME foo IS A BOOLEAN
+ASSUME bar IS A BOOLEAN
+
+DECIDE x1 IS     foo
              AND bar
 
-DECIDE x2 IF     foo
+DECIDE x2 IS     foo
              AND NOT bar

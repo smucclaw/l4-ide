@@ -1,5 +1,10 @@
 § Example
 
+ASSUME Person IS A TYPE
+ASSUME walks  IS A BOOLEAN
+ASSUME drinks IS A BOOLEAN
+ASSUME eats   IS A BOOLEAN
+
 GIVEN p [person] IS A Person
 DECIDE `must sing`
     IF        walks [the person must walk]

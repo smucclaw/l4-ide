@@ -1,1 +1,13 @@
-Parsed successfully
+Parsing successful
+sing.l4:3:14-20:
+while checking DECIDE/MEANS of must sing:
+out of scope: Person, of type: TYPE
+sing.l4:5:15-20:
+while checking DECIDE/MEANS of must sing:
+out of scope: walks, of type: _walks1
+sing.l4:6:15-19:
+while checking DECIDE/MEANS of must sing:
+out of scope: eats, of type: _eats3
+sing.l4:7:15-21:
+while checking DECIDE/MEANS of must sing:
+out of scope: drinks, of type: _drinks5

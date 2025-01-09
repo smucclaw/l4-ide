@@ -1,0 +1,13 @@
+§ `The replicate function`
+
+GIVEN a IS A TYPE
+      n IS A NUMBER
+      x IS AN a
+GIVETH A LIST OF a
+replicate n x MEANS
+  IF n EQUALS 0
+  THEN EMPTY
+  ELSE x FOLLOWED BY replicate (n - 1) x
+
+GIVETH A LIST OF STRING
+example MEANS replicate 42 "example"

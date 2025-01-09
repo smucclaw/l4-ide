@@ -5,13 +5,16 @@ import qualified Base.Text as Text
 
 import Options.Applicative as Options
 
-import L4.ExactPrint
 import L4.Parser
+import L4.TypeCheck
 
 data Options =
   MkOptions
     { files :: [FilePath]
     }
+
+progName :: String
+progName = "l4"
 
 optionsDescription :: Options.Parser Options
 optionsDescription =
@@ -22,7 +25,7 @@ optionsConfig :: Options.ParserInfo Options
 optionsConfig =
   info (optionsDescription <**> helper)
     (  fullDesc
-    <> header "l4"
+    <> header progName
     )
 
 main :: IO ()
@@ -30,7 +33,7 @@ main = do
   options <- Options.execParser optionsConfig
   if null options.files
     then do
-      hPutStrLn stderr "l4: no input files given; use --help for help"
+      hPutStrLn stderr (progName <> ": no input files given; use --help for help")
     else
       exactprintFiles options.files
 
@@ -38,7 +41,7 @@ exactprintFiles :: [FilePath] -> IO ()
 exactprintFiles =
   traverse_ $ \ file -> do
     input <- Text.readFile file
-    Text.putStr (exactprintFile file input)
+    Text.putStr (checkAndExactPrintFile file input)
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =
