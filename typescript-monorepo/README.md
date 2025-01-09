@@ -1,5 +1,13 @@
 # README
 
+## Installation
+
+You'll want to install `turbo` *both* globally and locally.
+
+To install it *globally*: `pnpm install turbo --global`
+
+[TODO] Add more details.
+
 ## Key scripts
 
 - To lint: `turbo lint`
