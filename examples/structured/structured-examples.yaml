@@ -60,6 +60,7 @@
           Would it be handled by an annotation mechanism where the annotation need not be directly bundled with the thing being annotated in the syntax 
           (e.g. like how you can annotate a top-level expression's type with `::` in Haskell without having to do it at the exact same place that you define the expression)?
           Or is this better handled by whatever mechanism we will use (in the future) to handle defeasibility/exceptions?",
+        answer: "Andres Jan 9: Current intent is to allow use before definition"
       }
   tags: ["matt_waddington"]
 - $type: q_and_a
@@ -70,7 +71,8 @@
           I've seen examples of legislation where there's a very explicit phrase like 'commits an offence'.
           But there's also examples where there may not be an explicit phrase like that 
           next to the offence-creating provision or definition of the offence 
-          (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
+          (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision).",
+        answer: TBD}
   examples:
     - sources: [examples_for_parsing]
       excerpt: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
@@ -93,7 +95,7 @@
           CRLP note that inclusion and identity relationships are common in legal texts.
           There may also not be a one-size-fits-all answer here -- it may also 
           just depend on the legal text in question and what ones want to be able to do with the program.",
-        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024)
+        
       }
   tags: ["matt_waddington"]
 - $type: q_and_a
@@ -109,7 +111,7 @@
           Or is it better handled by whatever mechanism is used to handle defeasibility/exceptions?
           2. What demos do we envision implementing for this kind of thing in the short to medium term? 
           Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
-        answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024),
+        answer: Can either treat it like a reference in a program or use type synonym / alias.
       }
   tags: ["matt_waddington"]
 - $type: q_and_a
@@ -124,7 +126,7 @@
     - {
         priority: low,
         qn: How to handle cross references between provisions,
-        answer: Will be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024),
+        answer: Ah this is also a use before definition thing.
       }
 - $type: q_and_a
   label: "How much support do we want to be able to give for dates and intervals"
@@ -152,6 +154,7 @@
     - {
         priority: low,
         qn: How exactly do we want to model 'A has a defence to an offence under this Article'? Then again I'm guessing we don't really need to capture the fine-grained structure with quantifiers.,
+        answer: "Not important for now. Leave it to user."
       }
   tags: ["matt_waddington"]
 - $type: example
