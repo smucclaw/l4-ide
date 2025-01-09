@@ -46,14 +46,19 @@
     - {
         priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
         qn: "How do we want to handle indexicals / self-reference like 'this Act' in 2(c)?
-          Do we always want to just replace it with the extensionally equivalent thing? Or are examples where we want to preserve the indexicality?",
+          Do we always want to just replace it with the extensionally equivalent thing? 
+          Or are examples where we want to preserve the indexicality?",
       }
     - {
         priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
         qn: "Observe how ...(3) In para (2) 'farmer' means... comes *after* (2).
-          1. How much 'isomorphism' do we want when formalizing this: do we similarly want to have the program-version of (3) come after the program-version of (2) in the surface syntax, or do we want to just require L4 users to inline the annotation or definition into (2)?
+          1. How much 'isomorphism' do we want when formalizing this: 
+          do we similarly want to have the program-version of (3) come after the program-version of (2) in the surface syntax, 
+          or do we want to just require L4 users to inline the annotation or definition into (2)?
 
-          2. If we do want to have it come after, how would we handle that? Would it be handled by an annotation mechanism where the annotation need not be directly bundled with the thing being annotated in the syntax (e.g. like how you can annotate a top-level expression's type with `::` in Haskell without having to do it at the exact same place that you define the expression)?
+          2. If we do want to have it come after, how would we handle that? 
+          Would it be handled by an annotation mechanism where the annotation need not be directly bundled with the thing being annotated in the syntax 
+          (e.g. like how you can annotate a top-level expression's type with `::` in Haskell without having to do it at the exact same place that you define the expression)?
           Or is this better handled by whatever mechanism we will use (in the future) to handle defeasibility/exceptions?",
       }
   tags: ["matt_waddington"]
@@ -63,7 +68,9 @@
     - { priority: { level: low }, 
         qn: "How explicitly should offences/crimes be represented?
           I've seen examples of legislation where there's a very explicit phrase like 'commits an offence'.
-          But there's also examples where there may not be an explicit phrase like that next to the offence-creating provision or definition of the offence (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
+          But there's also examples where there may not be an explicit phrase like that 
+          next to the offence-creating provision or definition of the offence 
+          (but it's either clear from the nature of the penalty or logically implied by the conjunction of the provisions with some auxiliary provision)." }
   examples:
     - sources: [examples_for_parsing]
       excerpt: "An entity or other person, that contravenes paragraph (2), (4) or (6), commits an offence and is liable to imprisonment for a term of 2 years and to a fine."
@@ -81,8 +88,10 @@
     - {
         priority: { level: "low" },
         qn:
-          "How do we want to model, e.g., inclusion relationship between entities? CRLP note that inclusion and identity relationships are common in legal texts.
-          There may also not be a one-size-fits-all answer here -- it may also just depend on the legal text in question and what ones want to be able to do with the program.",
+          "How do we want to model, e.g., inclusion relationship between entities? 
+          CRLP note that inclusion and identity relationships are common in legal texts.
+          There may also not be a one-size-fits-all answer here -- it may also 
+          just depend on the legal text in question and what ones want to be able to do with the program.",
         answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024)
       }
   tags: ["matt_waddington"]
@@ -95,8 +104,10 @@
     - {
         priority: { level: "low", reason: "Can probably worked out eventually or not required for v1/v2" },
         qn: "1. How do we want to handle '... has the meaning given by section ...'?
-          As with the fictional dog excerpt, is this best handled by some kind of annotation mechanism? Or is it better handled by whatever mechanism is used to handle defeasibility/exceptions?
-          2. What demos do we envision implementing for this kind of thing in the short to medium term? Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
+          As with the fictional dog excerpt, is this best handled by some kind of annotation mechanism? 
+          Or is it better handled by whatever mechanism is used to handle defeasibility/exceptions?
+          2. What demos do we envision implementing for this kind of thing in the short to medium term? 
+          Is it just about being able to see the associated definitions / 'meanings' on hover or upon clicking?",
         answer: At least part of this will likely be handled by a sophisticated sectioning system. But that probably won't be done before Jun. (discussed on Dec 19 2024),
       }
   tags: ["matt_waddington"]
@@ -146,7 +157,9 @@
   label: "normative/achievement_obligation/good_delivery"
   sources: [governatori_llbp]
   excerpt: "Customers must pay before the delivery of the good, after receiving the invoice.  Otherwise, an additional fine must be paid. [This might have been slightly paraphrased.]"
-  note: This obligation persists after the deadline if it hasn't been fulfilled by then; it is only when it's been complied with that it terminates. (But such persistence is not required for it to be an achievement obligation, in Governatori's typology.)
+  note: This obligation persists after the deadline if it hasn't been fulfilled by then; 
+        it is only when it's been complied with that it terminates. 
+        (But such persistence is not required for it to be an achievement obligation, in Governatori's typology.)
   source_status: fictional
   tags: ["normative/achievement_obligation", governatori]
 - $type: example
@@ -182,7 +195,11 @@
     ("The obligation resulting from this rule is a non-persistent obligation, i.e. as soon as a check has been performed, the obligation is no longer in force.)
 
     2. All identity checks that are performed must be recorded.
-    ("This rule establishes that there is a permanent obligation to keep record of the identity corresponding to the (new) customer identified by x. [...] this obligation is not fulfilled by the achievement of the activity (for excerpt, by storing it in a database). We have a violation of the condition, if for excerpt, the record x is deleted from the database.")
+    ("This rule establishes that there is a permanent obligation 
+    to keep record of the identity corresponding to the (new) customer identified by x. 
+    [...] 
+    this obligation is not fulfilled by the achievement of the activity (for excerpt, by storing it in a database). 
+    We have a violation of the condition, if for excerpt, the record x is deleted from the database.")
 
     3. Accounts must maintain a positive balance, unless approved by a bank manager, or for VIP customers.
     (YM: Nice, relatively simple excerpt of exceptions to norms/rules.)
@@ -197,9 +214,16 @@
         [...]
         (d) in any other case—at any time before the movement of the physical currency takes place.
   note: |-
-    A pre-emptive obligation is (i) an achievement obligation that (ii) can be fulfilled even before the obligation comes into force. (An achievement obligation to phi is an obligation where as long as you phi at least once, you count as fulfilling the obligation.)
+    A pre-emptive obligation is 
+    (i) an achievement obligation 
+    that (ii) can be fulfilled even before the obligation comes into force. 
+    (An achievement obligation to phi is an obligation 
+    where as long as you phi at least once, you count as fulfilling the obligation.)
 
-    > Clause (d) in this excerpt describes that the preemptive obligation enters into force when a financial transanction happens, and the clause explicitly requires the report to be submitted to the relevant authority before the actual transaction (phyiscal movement of the currency) occurs. Notice that in some situations it might be the case that the transaction never occurres. (Hashmi 436)
+    > Clause (d) in this excerpt describes that the preemptive obligation enters into force 
+    > when a financial transanction happens, and the clause explicitly requires the report 
+    > to be submitted to the relevant authority before the actual transaction (phyiscal movement of the currency) occurs. 
+    > Notice that in some situations it might be the case that the transaction never occurres. (Hashmi 436)
   source_status: real_legislation
   tags: ["normative/preemptive_obligation", "normative/achievement_obligation", "governatori"]
 - $type: example
