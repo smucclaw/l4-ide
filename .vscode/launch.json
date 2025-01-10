@@ -1,18 +1,16 @@
 // A launch configuration that compiles the extension and then opens it inside a new window
 {
-	"version": "0.2.0",
-	"configurations": [
-		{
-			"type": "extensionHost",
-			"request": "launch",
-			"name": "Launch Client",
-			"runtimeExecutable": "${execPath}",
-			"args": ["--extensionDevelopmentPath=${workspaceRoot}/typescript-monorepo/apps/vscode"],
-			"outFiles": [
-				"${workspaceRoot}/typescript-monorepo/apps/vscode/dist/**/*.js",
-			],
-			"autoAttachChildProcesses": true,
-			"preLaunchTask": "Build JL4 VSCode extension"
-		}
-	]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Launch Client",
+      "runtimeExecutable": "${execPath}",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/typescript-monorepo/apps/vscode"],
+      "outFiles": ["${workspaceFolder}/typescript-monorepo/apps/vscode/dist/**/*.js"],
+      "autoAttachChildProcesses": true,
+      "preLaunchTask": "Build JL4 VSCode extension"
+    }
+  ]
 }
