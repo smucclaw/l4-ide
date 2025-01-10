@@ -56,6 +56,17 @@ not supporting `pnpm` (when used in a naive way),
 I wouldn't call this a 'workaround' --- it's something
 we have independent reason to do anyway.
 
+#### Why use `tsup` for bundling the VSCode extension dependencies?
+
+You might wonder why `tsup` is being used for bundling the VSCode extension dependencies,
+given that we also are using `vite` when bundling the `decision-logic-visualizer`.
+
+The answer is:
+
+- Vite's CJS Node API is being deprecated (https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated),
+  which makes it non-ideal for bundling VSCode extensions (they require CJS)
+- It may be possible to replace `vite` with `tsup` as well, but that will require some looking into --- the reason why `vite` came into the picture in the first place is because it's what `sveltekit` uses.
+
 #### Prettier and ESLint
 
 - There are shared `eslint` and `prettier` configs in `./shared`.
