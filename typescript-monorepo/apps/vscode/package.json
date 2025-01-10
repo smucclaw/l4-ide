@@ -97,7 +97,7 @@
     "dev": "pnpm build --watch",
     "lint": "eslint ./src",
     "format": "prettier --write .",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint-fix": "eslint ./src --fix"
   }
 }
