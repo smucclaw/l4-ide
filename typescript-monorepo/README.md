@@ -6,13 +6,15 @@ Install node.js (>= 18) if you don't already have it.
 
 Then do the following from `typescript-monorepo`.
 
-Corepack (this ensures that we're using the same version of the same package manager):
-* Enable corepack with `corepack enable`
+To ensure that we're using the same version of the same package manager
+
+* Enable corepack with `corepack enable`.
+
 * Then `corepack install` to install the package manager used by this monorepo.
 
 Then `pnpm install`, again from `typescript-monorepo`.
 
-Turbo: You'll want to install `turbo` _both_ globally and locally.
+Finally, you'll want to install `turbo` _both_ globally and locally.
 
 * To install it _globally_: `pnpm install turbo --global` or `npm install turbo --global`. 
 
@@ -26,6 +28,7 @@ from the `typescript-monorepo` dir.
 
 - To lint: `turbo lint`
 - To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
+  - There is also a VSCode task for formatting the monorepo.
 - To develop all apps and packages: `turbo dev`
 
 ### Further notes on setup / build process / configs for developers of the TS monorepo
