@@ -1,19 +1,33 @@
 # README
 
-## Installation
+## Installation for contributors
 
-You'll want to install `turbo` _both_ globally and locally.
+Install node.js if you don't already have it.
 
-To install it _globally_: `pnpm install turbo --global`
+Then do the following from `typescript-monorepo`.
 
-[TODO] Add more details.
+Corepack (this ensures that we're using the same version of the same package manager):
+* Enable corepack with `corepack enable`
+* Then `corepack install` to install the package manager used by this monorepo.
+
+Then `pnpm install`, again from `typescript-monorepo`.
+
+Turbo: You'll want to install `turbo` _both_ globally and locally.
+
+* To install it _globally_: `pnpm install turbo --global` or `npm install turbo --global`. 
+
+(See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
+
+Build with `turbo build` (again, from the `typescript-monorepo` dir).
+
 
 ## Key scripts
 
 - To lint: `turbo lint`
 - To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
+- To develop all apps and packages: `turbo dev`
 
-### Notes on setup / build process / configs for developers of the TS monorepo
+### Further notes on setup / build process / configs for developers of the TS monorepo
 
 #### VSCode extension build related
 
@@ -30,8 +44,8 @@ To get around this, we bundle the dependencies (with tsup) and package with `pnp
 - Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
 - Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
   because my experience with VSCode Prettier extensions hasn't always been positive.
-  Will try to think about what a good local dev setup might be,
-  wrt formatting --- perhaps we could use pre-commit / commit hooks?
+  But note that there's a `Format TS Monorepo` VSCode task that can be activated from the Command Palette.
+  And perhaps we could use pre-commit / commit hooks?
 
 ## What's inside?
 
@@ -44,42 +58,12 @@ This Turborepo includes the following packages/apps:
 - `@repo/prettier-config`
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo. [TODO: Might not be using this right now.]
 
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm build
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-pnpm dev
-```
 
 ### Remote Caching
 
 Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
-
-```
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-npx turbo link
-```
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. 
 
 ## Useful Links
 
