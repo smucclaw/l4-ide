@@ -9,14 +9,10 @@
 			"runtimeExecutable": "${execPath}",
 			"args": ["--extensionDevelopmentPath=${workspaceRoot}/typescript-monorepo/apps/vscode"],
 			"outFiles": [
-				"${workspaceRoot}/typescript-monorepo/apps/vscode/out/**/*.js",
+				"${workspaceRoot}/typescript-monorepo/apps/vscode/dist/**/*.js",
 			],
 			"autoAttachChildProcesses": true,
-			"preLaunchTask": {
-				"type": "npm",
-				"script": "build",
-				"path": "typescript-monorepo/apps/vscode"
-			}
+			"preLaunchTask": "Build JL4 VSCode extension"
 		}
 	]
 }
