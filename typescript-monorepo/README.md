@@ -2,7 +2,7 @@
 
 ## Installation for contributors
 
-Install node.js if you don't already have it.
+Install node.js (>= 18) if you don't already have it.
 
 Then do the following from `typescript-monorepo`.
 
@@ -18,7 +18,9 @@ Turbo: You'll want to install `turbo` _both_ globally and locally.
 
 (See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
 
-Make sure you can build with `turbo build` from the `typescript-monorepo` dir.
+Once the dependencies have been installed,
+the TS projects can be built by running `turbo build` 
+from the `typescript-monorepo` dir.
 
 ## Key scripts
 

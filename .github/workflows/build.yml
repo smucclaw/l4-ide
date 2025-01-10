@@ -83,7 +83,9 @@ jobs:
     strategy:
       matrix:
         node-version: ["20.x"]
-        pnpm-version: [9]
+        # Once we generalize the GH workflow to the whole TS mono repo, 
+        # we won't need `pnpm-version`, since it'll be able to get it from the packageManager field in the top-level package.json
+        pnpm-version: [9.0.0]
 
         os: [ubuntu-latest]
 
