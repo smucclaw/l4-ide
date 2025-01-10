@@ -18,8 +18,7 @@ Turbo: You'll want to install `turbo` _both_ globally and locally.
 
 (See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
 
-Build with `turbo build` (again, from the `typescript-monorepo` dir).
-
+Make sure you can build with `turbo build` from the `typescript-monorepo` dir.
 
 ## Key scripts
 
