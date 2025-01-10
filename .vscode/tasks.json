@@ -1,33 +1,71 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "npm",
-			"script": "compile",
-			"group": "build",
-			"presentation": {
-				"panel": "dedicated",
-				"reveal": "never"
-			},
-			"problemMatcher": [
-				"$tsc"
-			]
-		},
-		{
-			"type": "npm",
-			"script": "watch",
-			"isBackground": true,
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"presentation": {
-				"panel": "dedicated",
-				"reveal": "never"
-			},
-			"problemMatcher": [
-				"$tsc-watch"
-			]
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build JL4 VSCode extension",
+      "type": "shell",
+      "command": "pnpm run build",
+      "group": "build",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "never"
+      },
+      "problemMatcher": [
+        "$tsc"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+      }
+    },
+    {
+      "label": "Package JL4 VSCode extension",
+      "type": "shell",
+      "command": "pnpm package",
+      "group": "build",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "never"
+      },
+      "problemMatcher": [
+        "$tsc"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+      }
+    },
+    {
+      "label": "Start Development Server for JL4 VSCode Extension",
+      "type": "shell",
+      "command": "pnpm run dev",
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "never"
+      },
+      "problemMatcher": [
+        "$tsc-watch"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+      }
+    },
+    {
+      "label": "Format TS Monorepo",
+      "type": "shell",
+      "command": "pnpm format",
+      "group": "build",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}/typescript-monorepo"
+      }
+    }
+  ]
 }

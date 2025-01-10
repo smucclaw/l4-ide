@@ -2,9 +2,9 @@
 
 ## Installation
 
-You'll want to install `turbo` *both* globally and locally.
+You'll want to install `turbo` _both_ globally and locally.
 
-To install it *globally*: `pnpm install turbo --global`
+To install it _globally_: `pnpm install turbo --global`
 
 [TODO] Add more details.
 
@@ -13,16 +13,25 @@ To install it *globally*: `pnpm install turbo --global`
 - To lint: `turbo lint`
 - To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
 
-### Notes on configs setup
+### Notes on setup / build process / configs for developers of the TS monorepo
 
-* There are shared `eslint` and `prettier` configs in `./shared`.
-* ESLint: We're using the flat config file format.
-* Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
-* Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
-because my experience with VSCode Prettier extensions hasn't always been positive.
-Will try to think about what a good local dev setup might be, 
-wrt formatting --- perhaps we could use pre-commit / commit hooks?
+#### VSCode extension build related
 
+What follows are notes on the bundling implementation --- ignore this if you are an end user as opposed to contributor to the VSCode extension.
+
+There is an issue using `pnpm` with `vsce` that has to do with how vsce+pnpm cannot correctly resolve node_modules and include them in the VSIX file.
+
+To get around this, we bundle the dependencies (with tsup) and package with `pnpm dlx vsce package --no-dependencies`.
+
+#### Prettier and ESLint
+
+- There are shared `eslint` and `prettier` configs in `./shared`.
+- ESLint: We're using the flat config file format.
+- Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
+- Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
+  because my experience with VSCode Prettier extensions hasn't always been positive.
+  Will try to think about what a good local dev setup might be,
+  wrt formatting --- perhaps we could use pre-commit / commit hooks?
 
 ## What's inside?
 
