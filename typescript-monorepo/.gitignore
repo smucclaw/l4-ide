@@ -27,6 +27,9 @@ out/
 build
 dist
 
+## Built Visual Studio Code Extensions
+*.vsix
+
 
 # Debug
 npm-debug.log*
