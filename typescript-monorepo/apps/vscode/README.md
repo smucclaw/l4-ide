@@ -15,7 +15,7 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 2. Package the extension
 
    ```bash
-   npx vsce package
+   pnpm package
    ```
 
    During this process, you may be prompted to create the package without a license. Confirm by responding `y` to proceed.
