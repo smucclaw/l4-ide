@@ -8,20 +8,20 @@ Then do the following from `typescript-monorepo`.
 
 To ensure that we're using the same version of the same package manager
 
-* Enable corepack with `corepack enable`.
+- Enable corepack with `corepack enable`.
 
-* Then `corepack install` to install the package manager used by this monorepo.
+- Then `corepack install` to install the package manager used by this monorepo.
 
 Then `pnpm install`, again from `typescript-monorepo`.
 
 Finally, you'll want to install `turbo` _both_ globally and locally.
 
-* To install it _globally_: `pnpm install turbo --global` or `npm install turbo --global`. 
+- To install it _globally_: `pnpm install turbo --global` or `npm install turbo --global`.
 
 (See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
 
 Once the dependencies have been installed,
-the TS projects can be built by running `turbo build` 
+the TS projects can be built by running `turbo build`
 from the `typescript-monorepo` dir.
 
 ## Key scripts
@@ -35,11 +35,26 @@ from the `typescript-monorepo` dir.
 
 #### VSCode extension build related
 
-What follows are notes on the bundling implementation --- ignore this if you are an end user as opposed to contributor to the VSCode extension.
+What follows are notes on the bundling implementation --- ignore this
+if you are an end user as opposed to contributor to the VSCode extension.
 
-There is an issue using `pnpm` with `vsce` that has to do with how vsce+pnpm cannot correctly resolve node_modules and include them in the VSIX file.
+As of Jan 11 2025, we bundle the dependencies for the VSCode extension
+and package the extension with `pnpm dlx vsce package --no-dependencies`.
 
-To get around this, we bundle the dependencies (with tsup) and package with `pnpm dlx vsce package --no-dependencies`.
+The initial motivation for this had to do with how `vsce` cannot be used naively with `pnpm`;
+in particular, vsce+pnpm (when you don't do the bundling yourself) cannot
+correctly resolve `node_modules` and include them in the VSIX file.
+
+That said, there's also independent reasons to do this sort of bundling; e.g.:
+
+- it allows you to use ESM in your extension-related code (but still compile to CommonJS for VSCode extensions)
+- you'll need to do bundling if you want to target the browser
+- in general it's probably better to control the bundling process yourself, instead of letting `vsce` guess at how you want to bundle your dependencies
+
+That is, even though the bundling was initially prompted by `vsce`
+not supporting `pnpm` (when used in a naive way),
+I wouldn't call this a 'workaround' --- it's something
+we have independent reason to do anyway.
 
 #### Prettier and ESLint
 
@@ -62,12 +77,11 @@ This Turborepo includes the following packages/apps:
 - `@repo/prettier-config`
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo. [TODO: Might not be using this right now.]
 
-
 ### Remote Caching
 
 Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. 
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel.
 
 ## Useful Links
 
