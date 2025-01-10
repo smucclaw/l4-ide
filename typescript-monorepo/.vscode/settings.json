@@ -4,5 +4,5 @@
       "mode": "auto"
     }
   ],
-  "prettier.documentSelectors": ["**/*.svelte", "**/*.ts"],
+  "prettier.documentSelectors": ["**/*.svelte", "**/*.ts"]
 }
