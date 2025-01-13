@@ -8,7 +8,7 @@
       "name": "Launch Client",
       "runtimeExecutable": "${execPath}",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/typescript-monorepo/apps/vscode"],
-      "outFiles": ["${workspaceFolder}/typescript-monorepo/apps/vscode/dist/**/*.js"],
+      "outFiles": ["${workspaceFolder}/typescript-monorepo/apps/vscode/out/**/*.js"],
       "autoAttachChildProcesses": true,
       "preLaunchTask": "Build JL4 VSCode extension"
     }

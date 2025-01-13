@@ -1,0 +1,26 @@
+.DS_Store
+
+**/*.ts
+**/*.map
+.vscode/**
+.gitignore
+**/tsconfig.json
+**/tsconfig.base.json
+*.vsix
+
+node_modules/**
+!node_modules/vscode-jsonrpc/**
+!node_modules/vscode-languageclient/**
+!node_modules/vscode-languageserver-protocol/**
+!node_modules/vscode-languageserver-types/**
+
+.turbo
+
+out/**
+!out/*.js
+
+# this is a short-term hack. 
+# Better solution is to use something like webpack
+.../../../
+../../
+../

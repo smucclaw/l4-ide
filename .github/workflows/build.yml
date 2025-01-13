@@ -76,40 +76,32 @@ jobs:
       # - name: Build documentation
       #   run: cabal haddock all
 
-  build-vscode-extension:
-    name: VSCode ${{ matrix.node-version }} on ${{ matrix.os }}
+  build-ts-monorepo:
+    name: TS Monorepo (including VSCode Extension) ${{ matrix.node-version }} on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         node-version: ["20.x"]
-        # Once we generalize the GH workflow to the whole TS mono repo, 
-        # we won't need `pnpm-version`, since it'll be able to get it from the packageManager field in the top-level package.json
-        pnpm-version: [9.0.0]
-
         os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ matrix.pnpm-version }}
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
+          cache-dependency-path: typescript-monorepo/package-lock.json 
           node-version: ${{ matrix.node-version }}
-          cache: pnpm
-          cache-dependency-path: |
-            typescript-monorepo/apps/vscode/pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-        working-directory: typescript-monorepo/apps/vscode/
-      - run: pnpm run build
-        working-directory: typescript-monorepo/apps/vscode/
-      - run: pnpm run lint
-        working-directory: typescript-monorepo/apps/vscode/
-        # Check that files are formatted according to (shared) Prettier config
-      - run: pnpm run format:check
-        working-directory: typescript-monorepo/apps/vscode/
+          cache: npm
+      - run: npm ci
+        working-directory: typescript-monorepo/
+      - run: npm run build
+        working-directory: typescript-monorepo/
+      - run: npm run lint
+        working-directory: typescript-monorepo/
+      # Check that files are formatted according to (shared) Prettier config
+      # This needs to be run from the ts-monorepo dir, where the .prettierignore is
+      - run: npm run format:check
+        working-directory: typescript-monorepo
       # - run: npm test
       #   working-directory: vscode/
