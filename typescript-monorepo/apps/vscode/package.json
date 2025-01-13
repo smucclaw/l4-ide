@@ -112,8 +112,5 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint ./src",
     "lint-fix": "eslint ./src --fix"
-  },
-  "overrides": {
-    "minimatch": "^10.0.1"
   }
 }

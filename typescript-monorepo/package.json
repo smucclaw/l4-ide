@@ -10,7 +10,8 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{js,ts,jsx,tsx,json,css,scss,md,html,yaml,svelte}\"",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "postinstall": "npm rm @types/glob @types/minimatch"
   },
   "devDependencies": {
     "prettier": "3.4.2",
@@ -21,5 +22,9 @@
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {}
+  "overrides": {
+    "rimraf": "^4.0.0",
+    "glob": "^11.0.0",
+    "minimatch": "^10.0.1"
+  }
 }
