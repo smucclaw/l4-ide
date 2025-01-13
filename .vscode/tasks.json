@@ -3,8 +3,8 @@
   "tasks": [
     {
       "label": "Build JL4 VSCode extension",
-      "type": "shell",
-      "command": "pnpm run build",
+      "type": "npm",
+      "script": "build",
       "group": "build",
       "presentation": {
         "panel": "dedicated",
@@ -18,9 +18,9 @@
       }
     },
     {
-      "label": "Package JL4 VSCode extension",
-      "type": "shell",
-      "command": "pnpm package",
+      "label": "Package (and prepublish) JL4 VSCode extension",
+      "type": "npm",
+      "script": "package",
       "group": "build",
       "presentation": {
         "panel": "dedicated",
@@ -35,8 +35,8 @@
     },
     {
       "label": "Start Development Server for JL4 VSCode Extension",
-      "type": "shell",
-      "command": "pnpm run dev",
+      "type": "npm",
+      "script": "dev",
       "isBackground": true,
       "group": {
         "kind": "build",
@@ -55,8 +55,8 @@
     },
     {
       "label": "Format TS Monorepo",
-      "type": "shell",
-      "command": "pnpm format",
+      "type": "npm",
+      "script": "format",
       "group": "build",
       "presentation": {
         "panel": "dedicated",
