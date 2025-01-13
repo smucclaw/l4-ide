@@ -76,7 +76,6 @@
   "dependencies": {
     "glob": "^11.0.1",
     "ladder-diagram": "^2.0.3",
-    "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
@@ -102,7 +101,6 @@
   },
   "main": "./out/extension.js",
   "scripts": {
-    "postinstall": "npm rm @types/glob @types/minimatch",
     "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
     "build": "tsc -b tsconfig.json && npm run esbuild-base",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
