@@ -1,13 +1,13 @@
-import ts from 'typescript-eslint'
-import svelte from 'eslint-plugin-svelte'
-import { config as baseConfig } from './base.js'
+import ts from "typescript-eslint";
+import svelte from "eslint-plugin-svelte";
+import { config as baseConfig } from "./base.js";
 
 // Note that the base config already has the browser and node globals
 export const config = [
   ...baseConfig,
-  ...svelte.configs['flat/prettier'],
+  ...svelte.configs["flat/prettier"],
   {
-    files: ['**/*.svelte'],
+    files: ["**/*.svelte"],
 
     languageOptions: {
       parserOptions: {
@@ -16,6 +16,6 @@ export const config = [
     },
   },
   {
-    ignores: ['build/', '.svelte-kit/', 'dist/'],
+    ignores: ["build/", ".svelte-kit/", "dist/"],
   },
-]
+];
