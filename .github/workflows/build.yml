@@ -95,8 +95,8 @@ jobs:
           cache: npm
       - run: npm ci
         working-directory: typescript-monorepo/
-      - run: npm run build
-        working-directory: typescript-monorepo/apps/vscode/
+      - run: turbo build
+        working-directory: typescript-monorepo/
       # TODO: Should check npm run package too
       - run: npm run lint
         working-directory: typescript-monorepo/apps/vscode/
