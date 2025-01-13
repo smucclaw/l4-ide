@@ -104,7 +104,7 @@
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
-    "build": "tsc -b tsconfig.json && node esbuild.mjs",
+    "build": "tsc -b tsconfig.json && npm run esbuild-base",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",
