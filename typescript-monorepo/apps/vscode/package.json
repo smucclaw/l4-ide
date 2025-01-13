@@ -94,7 +94,6 @@
     "esbuild": "^0.24.2",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
-    "esno": "^4.8.0",
     "fs-extra": "^11.2.0",
     "globals": "^15.13.0",
     "prettier": "^3.4.1",
@@ -103,6 +102,7 @@
   },
   "main": "./out/extension.js",
   "scripts": {
+    "postinstall": "npm rm @types/glob @types/minimatch",
     "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
     "build": "tsc -b tsconfig.json && npm run esbuild-base",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
