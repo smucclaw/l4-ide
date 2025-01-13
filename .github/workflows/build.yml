@@ -90,10 +90,11 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
+          cache-dependency-path: typescript-monorepo/package-lock.json 
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-        working-directory: typescript-monorepo/apps/vscode/
+        working-directory: typescript-monorepo/
       - run: npm run build
         working-directory: typescript-monorepo/apps/vscode/
       # TODO: Should check npm run package too
