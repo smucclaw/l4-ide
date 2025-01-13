@@ -2,7 +2,7 @@
 
 ## Installation for contributors
 
-Install node.js (>= 18) if you don't already have it.
+Install node.js (>= 20) if you don't already have it.
 
 Then do the following from `typescript-monorepo`.
 
@@ -35,7 +35,7 @@ from the `typescript-monorepo` dir.
 
 #### VSCode extension build related
 
-Right now we use esbuild (see the package.json in apps/vscode), 
+Right now we use esbuild (see the package.json in apps/vscode),
 but this needs to be looked at more / improved.
 
 Something worth noting is that
@@ -50,8 +50,8 @@ improve this might be to improve the bundling situation.
 
 See
 
-* https://github.com/microsoft/vscode-vsce/issues/777
-* https://github.com/eclipse-langium/langium/pull/1520
+- https://github.com/microsoft/vscode-vsce/issues/777
+- https://github.com/eclipse-langium/langium/pull/1520
 
 #### Prettier and ESLint
 
