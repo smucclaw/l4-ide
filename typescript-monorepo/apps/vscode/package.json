@@ -75,7 +75,9 @@
   "prettier": "@repo/prettier-config",
   "dependencies": {
     "@types/minimatch": "^5.1.2",
+    "glob": "^11.0.1",
     "ladder-diagram": "^2.0.3",
+    "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
