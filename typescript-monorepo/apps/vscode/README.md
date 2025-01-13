@@ -8,14 +8,14 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 1. Build the project
 
    ```bash
-   pnpm install
-   pnpm run build
+   npm install
+   npm run build
    ```
 
 2. Package the extension
 
    ```bash
-   pnpm package
+   npm package
    ```
 
    During this process, you may be prompted to create the package without a license. Confirm by responding `y` to proceed.

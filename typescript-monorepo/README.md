@@ -12,11 +12,11 @@ To ensure that we're using the same version of the same package manager
 
 - Then `corepack install` to install the package manager used by this monorepo.
 
-Then `pnpm install`, again from `typescript-monorepo`.
+Then `npm install`, again from `typescript-monorepo`.
 
 Finally, you'll want to install `turbo` _both_ globally and locally.
 
-- To install it _globally_: `pnpm install turbo --global` or `npm install turbo --global`.
+- To install it _globally_: `npm install turbo --global` or `npm install turbo --global`.
 
 (See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
 
@@ -27,7 +27,7 @@ from the `typescript-monorepo` dir.
 ## Key scripts
 
 - To lint: `turbo lint`
-- To format with Prettier: `pnpm format` (TODO: May want to make this a Turbo task instead)
+- To format with Prettier: `npm format` (TODO: May want to make this a Turbo task instead)
   - There is also a VSCode task for formatting the monorepo.
 - To develop all apps and packages: `turbo dev`
 
@@ -35,43 +35,29 @@ from the `typescript-monorepo` dir.
 
 #### VSCode extension build related
 
-What follows are notes on the bundling implementation --- ignore this
-if you are an end user as opposed to contributor to the VSCode extension.
+Right now we use esbuild (see the package.json in apps/vscode), 
+but this needs to be looked at more / improved.
 
-As of Jan 11 2025, we bundle the dependencies for the VSCode extension
-and package the extension with `pnpm dlx vsce package --no-dependencies`.
+Something worth noting is that
 
-The initial motivation for this had to do with how `vsce` cannot be used naively with `pnpm`;
-in particular, vsce+pnpm (when you don't do the bundling yourself) cannot
-correctly resolve `node_modules` and include them in the VSIX file.
+`npm run esbuild-base`
 
-That said, there's also independent reasons to do this sort of bundling; e.g.:
+was required for me to not get an error about how vscode-languageclient/node could not be found when starting the extension in VSCode.
 
-- it allows you to use ESM in your extension-related code (but still compile to CommonJS for VSCode extensions)
-- you'll need to do bundling if you want to target the browser
-- in general it's probably better to control the bundling process yourself, instead of letting `vsce` guess at how you want to bundle your dependencies
+**TODO**: There is also a hack-y attempt in .vscodeignore
+to stop `vsce` from trying to bundle files from ancestor directories. The way to
+improve this might be to improve the bundling situation.
 
-That is, even though the bundling was initially prompted by `vsce`
-not supporting `pnpm` (when used in a naive way),
-I wouldn't call this a 'workaround' --- it's something
-we have independent reason to do anyway.
+See
 
-#### Why use `tsup` for bundling the VSCode extension dependencies?
-
-You might wonder why `tsup` is being used for bundling the VSCode extension dependencies,
-given that we also are using `vite` when bundling the `decision-logic-visualizer`.
-
-The answer is:
-
-- Vite's CJS Node API is being deprecated (https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated),
-  which makes it non-ideal for bundling VSCode extensions (they require CJS)
-- It may be possible to replace `vite` with `tsup` as well, but that will require some looking into --- the reason why `vite` came into the picture in the first place is because it's what `sveltekit` uses.
+* https://github.com/microsoft/vscode-vsce/issues/777
+* https://github.com/eclipse-langium/langium/pull/1520
 
 #### Prettier and ESLint
 
 - There are shared `eslint` and `prettier` configs in `./shared`.
 - ESLint: We're using the flat config file format.
-- Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `pnpm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
+- Prettier: Not sure yet what should be done in the sub-package/app package.json vs. the top-level package.json. But for now, you can `npm format` from `mattwaddington/typescript-monorepo` as well as from the vscode extension directory.
 - Haven't tried to add Prettier/ESLint extensions to `.vscode/settings.json` yet,
   because my experience with VSCode Prettier extensions hasn't always been positive.
   But note that there's a `Format TS Monorepo` VSCode task that can be activated from the Command Palette.

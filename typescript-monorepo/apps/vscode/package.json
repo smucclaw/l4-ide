@@ -5,6 +5,15 @@
   "license": "MIT",
   "version": "0.0.1",
   "publisher": "smucclaw",
+  "publishConfig": {
+    "files": [
+      "!**/.DS_Store",
+      "!**/.vscode/**",
+      "media",
+      "out",
+      "src"
+    ]
+  },
   "engines": {
     "vscode": "^1.94.0"
   },
@@ -65,39 +74,42 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
+    "@types/minimatch": "^5.1.2",
     "ladder-diagram": "^2.0.3",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.26.0",
     "@eslint/js": "^9.17.0",
-    "@repo/eslint-config": "workspace:*",
-    "@repo/prettier-config": "workspace:*",
+    "@repo/eslint-config": "*",
+    "@repo/prettier-config": "*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.11",
     "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
+    "@vscode/vsce": "^3.2.1",
     "babel-loader": "^9.2.1",
+    "esbuild": "^0.24.2",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "esno": "^4.8.0",
     "fs-extra": "^11.2.0",
     "globals": "^15.13.0",
     "prettier": "^3.4.1",
-    "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1"
   },
-  "main": "./dist/extension",
+  "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "pnpm run build",
-    "package": "pnpm run lint && pnpm dlx vsce package --no-dependencies",
-    "build": "esno scripts/build.ts",
-    "dev": "pnpm build --watch",
-    "lint": "eslint ./src",
+    "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
+    "build": "tsc -b tsconfig.json && node esbuild.mjs",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "package": "npm run lint && npx vsce package",
+    "dev": "npm run build --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
+    "lint": "eslint ./src",
     "lint-fix": "eslint ./src --fix"
   }
 }

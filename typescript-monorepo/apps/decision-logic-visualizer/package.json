@@ -3,10 +3,10 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-kit sync && vite build && pnpm run package",
+    "build": "svelte-kit sync && vite build && npm run package",
     "preview": "vite preview",
     "package": "svelte-kit sync && svelte-package && publint",
-    "prepublishOnly": "pnpm run package",
+    "prepublishOnly": "npm run package",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write .",
@@ -36,8 +36,8 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/prettier-config": "workspace:*",
+    "@repo/eslint-config": "*",
+    "@repo/prettier-config": "*",
     "@sveltejs/adapter-auto": "^3.3.1",
     "@sveltejs/kit": "^2.9.0",
     "@sveltejs/package": "^2.3.7",
