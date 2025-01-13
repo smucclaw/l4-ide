@@ -83,33 +83,24 @@ jobs:
     strategy:
       matrix:
         node-version: ["20.x"]
-        # Once we generalize the GH workflow to the whole TS mono repo, 
-        # we won't need `pnpm-version`, since it'll be able to get it from the packageManager field in the top-level package.json
-        pnpm-version: [9.0.0]
-
         os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ matrix.pnpm-version }}
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: pnpm
-          cache-dependency-path: |
-            typescript-monorepo/apps/vscode/pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
+          cache: npm
+      - run: npm ci
         working-directory: typescript-monorepo/apps/vscode/
-      - run: pnpm run build
+      - run: npm run build
         working-directory: typescript-monorepo/apps/vscode/
-      - run: pnpm run lint
+      # TODO: Should check npm run package too
+      - run: npm run lint
         working-directory: typescript-monorepo/apps/vscode/
-        # Check that files are formatted according to (shared) Prettier config
-      - run: pnpm run format:check
+      # Check that files are formatted according to (shared) Prettier config
+      - run: npm run format:check
         working-directory: typescript-monorepo/apps/vscode/
       # - run: npm test
       #   working-directory: vscode/
