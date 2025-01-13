@@ -74,7 +74,6 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
-    "@types/minimatch": "^5.1.2",
     "glob": "^11.0.1",
     "ladder-diagram": "^2.0.3",
     "minimatch": "^10.0.1",
@@ -113,5 +112,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint ./src",
     "lint-fix": "eslint ./src --fix"
+  },
+  "overrides": {
+    "minimatch": "^10.0.1"
   }
 }
