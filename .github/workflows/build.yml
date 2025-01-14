@@ -90,7 +90,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          cache-dependency-path: typescript-monorepo/package-lock.json 
+          cache-dependency-path: typescript-monorepo/package-lock.json
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
@@ -99,8 +99,6 @@ jobs:
         working-directory: typescript-monorepo/
       - run: npm run lint
         working-directory: typescript-monorepo/
-      # Check that files are formatted according to (shared) Prettier config
-      # This needs to be run from the ts-monorepo dir, where the .prettierignore is
       - run: npm run format:check
         working-directory: typescript-monorepo
       # - run: npm test

@@ -2,6 +2,43 @@
 
 Private repository for a mattwadd-specific dialect of L*4.
 
+## How To Build
+
+Minimal Requirements:
+
+* Haskell
+  * [GHCup](https://www.haskell.org/ghcup/)
+  * ghc 9.6.6
+  * cabal 3.10 (or newer)
+* npm >= 10.9.2
+  * installed via `corepack` or `nvm` or your package manager
+  * See the instructions in `typescript-monorepo/README.md` for more details
+
+To build the `mattwaddington` project, all you have to do is this:
+
+```sh
+git submodule update --init
+cabal update
+cabal build all
+cd typescript-monorepo && npm install && npm run build && cd ..
+```
+
+Setting up a development run for the Language Server:
+
+```sh
+cabal install exe:jl4-lsp --overwrite-policy=always
+# Make sure the installation directory is on the `$PATH`
+code .
+# Press F5 from within VSCode to launch the JL4 extension
+# Open folder ./jl4/examples to see the Language Server in action
+```
+
+Running the Haskell tests:
+
+```sh
+cabal test test:jl4-test
+```
+
 ## Quick links
 
 - Drafts of the Dec report for CRLP, started on Tues Dec 17 2024

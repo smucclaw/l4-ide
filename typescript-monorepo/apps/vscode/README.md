@@ -5,6 +5,20 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 
 ## Running the Extension
 
+```bash
+cd typescript-monorepo
+npm install
+cd ..
+code .
+# In VSCode, press 'F5'
+```
+
+Pressing 'F5' will launch an `Extension Development Host` Editor with the extension installed.
+
+Make sure to open the root directory of this project in VSCode, to make sure `.vscode/launch.json` is picked up.
+
+### Installing the Extension
+
 1. Build the project
 
 It is best to build starting from the parent `typescript-monorepo` directory: please
@@ -18,10 +32,8 @@ npm run build
 2. Package the extension
 
    ```bash
-   npm package
+   npm run package
    ```
-
-   During this process, you may be prompted to create the package without a license. Confirm by responding `y` to proceed.
 
 3. Install the extension
    The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.
@@ -30,28 +42,36 @@ npm run build
 
    You can also install the extension from the command line with `code --install-extension *.vsix`.
 
-Alternatively:
-
-Pressing `F5` in VSCode while `vscode/src/extension.ts` is open in your buffer.
-Make sure to open the root directory of this project in VSCode, to make sure `.vscode/launch.json` is picked up.
 
 ### Configuring the Language Server
 
-The extension expects to find `l4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
+The extension expects to find `jl4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
 
 ```sh
-$ cabal install exe:l4-lsp
+$ cabal install exe:lj4-lsp --overwrite-policy=always
 ```
 
 and make sure `cabal`'s `/bin` directory is part of your `$PATH`.
 
-At last, you can specify the location of the binary via `.vscode/settings.json` like this:
+Alternatively, you can specify the location of the binary via `.vscode/settings.json` like this:
 
 ```json
 {
-  "jl4.serverExecutablePath": "<path-to-l4-lsp>"
+  "jl4.serverExecutablePath": "<path-to-jl4-lsp>"
 }
 ```
+
+### Development
+
+It can be faster for development to use a workflow as follows:
+
+```sh
+cabal build exe:jl4-lsp
+cabal list-bin exe:jl4-lsp
+```
+
+and use the obtained path for `"jl4.serverExecutablePath": "<path-to-jl4-lsp>"`.
+Running `cabal build exe:jl4-lsp` and restarting the `Extension Development Host` Editor is sufficient to use the latest version of the JL4 Language Server.
 
 ## Features and Functionalities
 
