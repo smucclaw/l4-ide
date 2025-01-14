@@ -7,6 +7,9 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 
 1. Build the project
 
+It is best to build starting from the parent `typescript-monorepo` directory: please
+see the README there, especially the use of `corepack`.
+
    ```bash
    npm install
    npm run build
@@ -23,6 +26,8 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 3. Install the extension
    The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.
    > Note: After installation, the extension might initially appear inactive. To activate it, load or write an L4 rule (see details below).
+
+   You can also install the extension from the command line with `code --install-extension *.vsix`.
 
 Alternatively:
 
