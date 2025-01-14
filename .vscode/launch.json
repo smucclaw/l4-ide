@@ -7,8 +7,8 @@
       "request": "launch",
       "name": "Launch Client",
       "runtimeExecutable": "${execPath}",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/typescript-monorepo/apps/vscode"],
-      "outFiles": ["${workspaceFolder}/typescript-monorepo/apps/vscode/out/**/*.js"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/frontend/vscode"],
+      "outFiles": ["${workspaceFolder}/frontend/vscode/out/**/*.js"],
       "autoAttachChildProcesses": true,
       "preLaunchTask": "npm: build - typescript-monorepo/apps/vscode"
     }

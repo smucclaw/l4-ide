@@ -14,3 +14,7 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 package-lock.json
 yarn.lock
+simala/
+jl4/
+examples/
+hie.yaml

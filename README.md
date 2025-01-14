@@ -1,18 +1,18 @@
 # mattwaddington
 
-Private repository for a mattwadd-specific dialect of L*4.
+Private repository for a mattwadd-specific dialect of L\*4.
 
 ## How To Build
 
 Minimal Requirements:
 
-* Haskell
-  * [GHCup](https://www.haskell.org/ghcup/)
-  * ghc 9.6.6
-  * cabal 3.10 (or newer)
-* npm >= 10.9.2
-  * installed via `corepack` or `nvm` or your package manager
-  * See the instructions in `typescript-monorepo/README.md` for more details
+- Haskell
+  - [GHCup](https://www.haskell.org/ghcup/)
+  - ghc 9.6.6
+  - cabal 3.10 (or newer)
+- npm >= 10.9.2
+  - installed via `corepack` or `nvm` or your package manager
+  - See the instructions in `typescript-monorepo/README.md` for more details
 
 To build the `mattwaddington` project, all you have to do is this:
 
