@@ -19,6 +19,5 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.20.0"
   },
-  "dependencies": {
-  }
+  "dependencies": {}
 }
