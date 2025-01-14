@@ -14,22 +14,16 @@ To ensure that we're using the same version of the same package manager
 
 Then `npm install`, again from `typescript-monorepo`.
 
-Finally, you'll want to install `turbo` _both_ globally and locally.
-
-- To install it _globally_: `npm install turbo --global` or `npm install turbo --global`.
-
-(See https://turbo.build/repo/docs/getting-started/installation if you need more help with turbo installation.)
-
 Once the dependencies have been installed,
-the TS projects can be built by running `turbo build`
+the TS projects can be built by running `npm run build`
 from the `typescript-monorepo` dir.
 
 ## Key scripts
 
-- To lint: `turbo lint`
-- To format with Prettier: `npm format` (TODO: May want to make this a Turbo task instead)
+- To lint: `npm run lint`
+- To format with Prettier: `npm run format`
   - There is also a VSCode task for formatting the monorepo.
-- To develop all apps and packages: `turbo dev`
+- To develop all apps and packages: `npm run dev`
 
 ### Further notes on setup / build process / configs for developers of the TS monorepo
 
