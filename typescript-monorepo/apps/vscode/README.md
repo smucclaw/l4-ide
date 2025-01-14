@@ -42,7 +42,6 @@ npm run build
 
    You can also install the extension from the command line with `code --install-extension *.vsix`.
 
-
 ### Configuring the Language Server
 
 The extension expects to find `jl4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
