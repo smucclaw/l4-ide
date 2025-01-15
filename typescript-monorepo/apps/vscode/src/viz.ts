@@ -42,12 +42,13 @@ function getWebviewContent(
   scriptUri: vscode.Uri,
   ruleJson: RuleNode
 ): string {
+
+  // TODO: Temporarily putting the CSS in `media` of the extension
+  // Will clean this up and put it all under the decision-logic-visualizer later
   const webviewCssUri = panel.webview.asWebviewUri(
     vscode.Uri.joinPath(
       context.extensionUri,
-      'node_modules',
-      'ladder-diagram',
-      'css',
+      'media',
       'ladder.css'
     )
   )
