@@ -5,133 +5,133 @@
  */
 
 .ladder-diagram-box-half {
-    width: 100%;
-    height: 50%;
-    position: absolute;
-    box-sizing: border-box;
-    display: none;
-    margin: auto;
+  width: 100%;
+  height: 50%;
+  position: absolute;
+  box-sizing: border-box;
+  display: none;
+  margin: auto;
 }
 
 /* Upper Nothing is blank */
 
 .ladder-diagram-box-half-Upper-True {
-    /* Just True */
-    top: 0em;
-    left: 0em;
-    border-left: var(--border-color-default);
-    border-top: var(--border-color-default);
-    border-right: var(--border-color-default);
-    border-color: var(--border-color-positive);
+  /* Just True */
+  top: 0em;
+  left: 0em;
+  border-left: var(--border-color-default);
+  border-top: var(--border-color-default);
+  border-right: var(--border-color-default);
+  border-color: var(--border-color-positive);
 }
 
 /* Lower True is blank */
 
 .ladder-diagram-box-half-Upper-False {
-    /* Just False */
-    top: 0em;
-    left: 0em;
-    border-left: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* Just False */
+  top: 0em;
+  left: 0em;
+  border-left: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 .ladder-diagram-box-half-Lower-False {
-    /* Just False, lower */
-    bottom: 0em;
-    left: 0em;
-    border-left: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* Just False, lower */
+  bottom: 0em;
+  left: 0em;
+  border-left: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 /* under a NOT combinator */
 
 .ladder-diagram-box-half-Upper-Not {
-    /* NOT Nothing, upper */
-    top: 0em;
-    left: 0em;
-    border-right: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* NOT Nothing, upper */
+  top: 0em;
+  left: 0em;
+  border-right: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 .ladder-diagram-box-half-Lower-Not {
-    /* NOT Nothing, lower */
-    bottom: 0em;
-    left: 0em;
-    border-right: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* NOT Nothing, lower */
+  bottom: 0em;
+  left: 0em;
+  border-right: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 /* upper not false is blank */
 
 .ladder-diagram-box-half-Lower-NotFalse {
-    /* NOT Just False, lower */
-    bottom: 0em;
-    left: 0em;
-    border-left: var(--border-color-default);
-    border-right: var(--border-color-default);
-    border-bottom: var(--border-color-default);
-    border-color: var(--border-color-positive);
+  /* NOT Just False, lower */
+  bottom: 0em;
+  left: 0em;
+  border-left: var(--border-color-default);
+  border-right: var(--border-color-default);
+  border-bottom: var(--border-color-default);
+  border-color: var(--border-color-positive);
 }
 
 .ladder-diagram-box-half-Upper-NotTrue {
-    /* NOT Just True, upper */
-    top: 0em;
-    left: 0em;
-    border-left: var(--border-color-default);
-    border-right: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* NOT Just True, upper */
+  top: 0em;
+  left: 0em;
+  border-left: var(--border-color-default);
+  border-right: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 /* lower Not True is the same as Not Nothing */
 .ladder-diagram-box-half-Lower-NotTrue {
-    /* NOT Just True, lower */
-    bottom: 0em;
-    left: 0em;
-    border-right: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  /* NOT Just True, lower */
+  bottom: 0em;
+  left: 0em;
+  border-right: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 .ladder-diagram-box-isnotnegated.ladder-diagram-box-bool-T
-> .ladder-diagram-box-half-Upper-True {
-    display: initial;
+  > .ladder-diagram-box-half-Upper-True {
+  display: initial;
 }
 
 .ladder-diagram-box-isnotnegated.ladder-diagram-box-bool-F
-> .ladder-diagram-box-half-Upper-False {
-    display: initial;
+  > .ladder-diagram-box-half-Upper-False {
+  display: initial;
 }
 
 .ladder-diagram-box-isnotnegated.ladder-diagram-box-bool-F
-> .ladder-diagram-box-half-Lower-False {
-    display: initial;
+  > .ladder-diagram-box-half-Lower-False {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-U
-> .ladder-diagram-box-half-Upper-Not {
-    display: initial;
+  > .ladder-diagram-box-half-Upper-Not {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-U
-> .ladder-diagram-box-half-Lower-Not {
-    display: initial;
+  > .ladder-diagram-box-half-Lower-Not {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-F
-> .ladder-diagram-box-half-Upper-NotFalse {
-    display: initial;
+  > .ladder-diagram-box-half-Upper-NotFalse {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-F
-> .ladder-diagram-box-half-Lower-NotFalse {
-    display: initial;
+  > .ladder-diagram-box-half-Lower-NotFalse {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-T
-> .ladder-diagram-box-half-Upper-NotTrue {
-    display: initial;
+  > .ladder-diagram-box-half-Upper-NotTrue {
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated.ladder-diagram-box-bool-T
-> .ladder-diagram-box-half-Lower-NotTrue {
-    display: initial;
+  > .ladder-diagram-box-half-Lower-NotTrue {
+  display: initial;
 }

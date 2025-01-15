@@ -5,53 +5,57 @@
  */
 
 .ladder-diagram-box-corner {
-    width: 50%;
-    height: 50%;
-    position: absolute;
-    box-sizing: content-box; /* or border-box? */
-    display: none;
+  width: 50%;
+  height: 50%;
+  position: absolute;
+  box-sizing: content-box; /* or border-box? */
+  display: none;
 }
 
 .ladder-diagram-box-corner-TL {
-    top: -.1em; left: -.1em;
-    border-left: var(--border-color-default);
-    border-top: var(--border-color-default);
-    border-color: var(--border-color-positive);
+  top: -0.1em;
+  left: -0.1em;
+  border-left: var(--border-color-default);
+  border-top: var(--border-color-default);
+  border-color: var(--border-color-positive);
 }
 
 .ladder-diagram-box-corner-BL {
-    bottom: -.1em; left: -.1em;
-    border-left: var(--border-color-default);
-    border-bottom: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  bottom: -0.1em;
+  left: -0.1em;
+  border-left: var(--border-color-default);
+  border-bottom: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 .ladder-diagram-box-corner-TR {
-    top: -.1em; right: -.1em;
-    border-right: var(--border-color-default);
-    border-top: var(--border-color-default);
-    border-color: var(--border-color-positive);
+  top: -0.1em;
+  right: -0.1em;
+  border-right: var(--border-color-default);
+  border-top: var(--border-color-default);
+  border-color: var(--border-color-positive);
 }
 
 .ladder-diagram-box-corner-BR {
-    bottom: -.1em; right: -.1em;
-    border-right: var(--border-color-default);
-    border-bottom: var(--border-color-default);
-    border-color: var(--border-color-negative);
+  bottom: -0.1em;
+  right: -0.1em;
+  border-right: var(--border-color-default);
+  border-bottom: var(--border-color-default);
+  border-color: var(--border-color-negative);
 }
 
 .ladder-diagram-box-bool-T > .ladder-diagram-box-corner-TL {
-    display: initial;
+  display: initial;
 }
 
 .ladder-diagram-box-bool-F > .ladder-diagram-box-corner-BL {
-    display: initial;
+  display: initial;
 }
 
 .ladder-diagram-box-isnegated > .ladder-diagram-box-corner-BR {
-    display: initial;
+  display: initial;
 }
 
 .ladder-diagram-box-isnotnegated > .ladder-diagram-box-corner-TR {
-    display: initial;
+  display: initial;
 }
