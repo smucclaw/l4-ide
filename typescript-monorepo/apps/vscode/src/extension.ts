@@ -24,7 +24,7 @@ export async function activate(context: ExtensionContext) {
     langName,
     langId
   )
-  // The server is implemented in node
+
   const serverCmd: string =
     workspace.getConfiguration('jl4').get('serverExecutablePath') ?? 'jl4-lsp'
   // If the extension is launched in debug mode then the debug server options are used
@@ -38,7 +38,6 @@ export async function activate(context: ExtensionContext) {
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
     diagnosticCollectionName: langName,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
