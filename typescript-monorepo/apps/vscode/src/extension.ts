@@ -60,7 +60,7 @@ export async function activate(context: ExtensionContext) {
           if (nodeVisualisation.length >= 1) {
             showViz(context, nodeVisualisation[0])
           } else {
-            outputChannel.appendLine("Can't visualise, none available")
+            outputChannel.appendLine(`Can't visualise ${editor.document.uri.toString()}, none available`)
           }
           return result
         }
