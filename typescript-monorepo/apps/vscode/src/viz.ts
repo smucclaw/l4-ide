@@ -1,6 +1,6 @@
 import path from 'path'
 import * as vscode from 'vscode'
-import { RuleNode } from './ruleToJson'
+import { RuleNode } from './rule-to-json'
 
 export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
   let panel: vscode.WebviewPanel | undefined
