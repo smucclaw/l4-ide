@@ -12,7 +12,7 @@ import {
   ServerOptions,
 } from 'vscode-languageclient/node'
 import * as command from './commands'
-import { RuleNode } from './ruleToJson'
+import { RuleNode } from './rule-to-json'
 import { showViz } from './viz'
 
 let client: LanguageClient
