@@ -18,13 +18,13 @@ npx sv create my-app
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+Once you've created a project and installed dependencies with `npm install` (or `npm install` or `yarn`), start a development server:
 
 ```bash
-pnpm run dev
+npm run dev
 
 # or start the server and open the app in a new browser tab
-pnpm run dev -- --open
+npm run dev -- --open
 ```
 
 Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
@@ -34,13 +34,13 @@ Everything inside `src/lib` is part of your library, everything inside `src/rout
 To build your library:
 
 ```bash
-pnpm run package
+npm run package
 ```
 
 To create a production version of your showcase app:
 
 ```bash
-pnpm run build
+npm run build
 ```
 
 You can preview the production build with `npm run preview`.
@@ -54,5 +54,5 @@ Go into the `package.json` and give your package the desired name through the `"
 To publish your library to [npm](https://www.npmjs.com):
 
 ```bash
-pnpm publish
+npm publish
 ```
