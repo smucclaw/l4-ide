@@ -5,10 +5,10 @@ It includes a webview extension designed to visualize L4 programs as ladder diag
 
 ## Running the Extension
 
+From the root `mattwaddington` directory:
+
 ```bash
-cd typescript-monorepo
-npm install
-cd ..
+npm install # if you haven't installed already
 code .
 # In VSCode, press 'F5'
 ```
@@ -19,10 +19,9 @@ Make sure to open the root directory of this project in VSCode, to make sure `.v
 
 ### Installing the Extension
 
-1. Build the project
+1. Install dependencies and build the project
 
-It is best to build starting from the parent `typescript-monorepo` directory: please
-see the README there, especially the use of `corepack`.
+It is best to install starting from the root directory.
 
 ```bash
 npm install
@@ -31,9 +30,14 @@ npm run build
 
 2. Package the extension
 
-   ```bash
-   npm run package
-   ```
+From this (i.e., the `vscode`) directory:
+
+```bash
+npm run package
+```
+
+(If you get a `npm error Missing script: "package"` error,
+that means you aren't in the right directory.)
 
 3. Install the extension
    The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.

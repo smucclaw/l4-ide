@@ -12,7 +12,7 @@ Minimal Requirements:
   - cabal 3.10 (or newer)
 - npm >= 10.9.2
   - installed via `corepack` or `nvm` or your package manager
-  - See the instructions in `typescript-monorepo/README.md` for more details
+  - See the README in `frontend/vscode` for more details on working with the VSCode extension.
 
 To build the `mattwaddington` project, all you have to do is this:
 
@@ -20,7 +20,7 @@ To build the `mattwaddington` project, all you have to do is this:
 git submodule update --init
 cabal update
 cabal build all
-cd typescript-monorepo && npm install && npm run build && cd ..
+npm install && npm run build
 ```
 
 Setting up a development run for the Language Server:
