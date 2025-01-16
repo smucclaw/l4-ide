@@ -12,7 +12,7 @@ import {
   ServerOptions,
 } from 'vscode-languageclient/node'
 import * as command from './commands'
-import { RuleNode } from './ruleToJson'
+import { RuleNode } from './rule-to-json'
 import { showViz } from './viz'
 
 let client: LanguageClient
@@ -24,7 +24,7 @@ export async function activate(context: ExtensionContext) {
     langName,
     langId
   )
-  // The server is implemented in node
+
   const serverCmd: string =
     workspace.getConfiguration('jl4').get('serverExecutablePath') ?? 'jl4-lsp'
   // If the extension is launched in debug mode then the debug server options are used
@@ -38,7 +38,6 @@ export async function activate(context: ExtensionContext) {
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
-    // Register the server for plain text documents
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
     diagnosticCollectionName: langName,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
@@ -61,7 +60,9 @@ export async function activate(context: ExtensionContext) {
           if (nodeVisualisation.length >= 1) {
             showViz(context, nodeVisualisation[0])
           } else {
-            outputChannel.appendLine("Can't visualise, none available")
+            outputChannel.appendLine(
+              `Can't visualise ${editor.document.uri.toString()}, none available`
+            )
           }
           return result
         }
