@@ -58,7 +58,7 @@
       },
       "problemMatcher": [],
       "options": {
-        "cwd": "${workspaceFolder}/typescript-monorepo"
+        "cwd": "${workspaceFolder}"
       }
     }
   ]

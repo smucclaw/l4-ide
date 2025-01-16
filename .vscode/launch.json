@@ -10,7 +10,7 @@
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/frontend/vscode"],
       "outFiles": ["${workspaceFolder}/frontend/vscode/out/**/*.js"],
       "autoAttachChildProcesses": true,
-      "preLaunchTask": "npm: build - typescript-monorepo/apps/vscode"
+      "preLaunchTask": "npm: build - frontend/vscode"
     }
   ]
 }
