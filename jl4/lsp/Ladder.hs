@@ -108,7 +108,7 @@ exprToRuleNode (Name _ name) (MkTypeSig _ givenSig _) body =
             { prePost = Map.fromList [("Pre", "Does the " <> subject <> " " <> name <> "?")]
             }
     MkGivenSig _ [] -> traverseExpr name body
-    MkGivenSig _ _xs -> error $ "DECIDEs with more than one GIVEN not currently supported"
+    MkGivenSig _ _xs -> Nothing -- "DECIDEs with more than one GIVEN not currently supported"
 exprToRuleNode _ _ _ = Nothing
 
 traverseExpr :: Text -> Expr Name -> Maybe RuleNode
@@ -128,7 +128,8 @@ traverseExpr subject e = case e of
   Not{}    -> Nothing -- Can't handle 'Not' yet
   Proj{}   -> Nothing -- Can't handle 'Proj' yet
   App _ (Name _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject leafName
-  x        -> error $ "[fallthru]\n" <> show x
+  x        -> Nothing
+    -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
 scanAnd :: Expr Name -> [Expr Name]
 scanAnd (And _ e1 e2) =
