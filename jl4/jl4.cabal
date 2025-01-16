@@ -25,6 +25,7 @@ library
   import: defaults
   hs-source-dirs: src
   build-depends:
+    aeson,
     containers,
     extra,
     generics-sop,
@@ -66,6 +67,8 @@ executable jl4-lsp
   build-depends:
     jl4,
     aeson,
+    -- putting aeson here again in order to :l lsp/Ladder.hs when REPL dev-ing
+    pretty-simple,
     containers,
     co-log-core,
     directory,

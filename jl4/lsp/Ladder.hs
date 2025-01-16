@@ -6,12 +6,20 @@ module Ladder where
 import L4.Syntax as S
 
 import Data.Aeson
+import Data.List.NonEmpty (toList)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Optics
+
+------- Imports for testing -------------
+import Text.Pretty.Simple
+import L4.Parser 
+-----------------------------------------
 
 data AndOrTag = All | Any | Leaf
   deriving stock (Show, Ord, Eq, Generic)
@@ -52,7 +60,11 @@ undefinedUserMark =
     , source = "user"
     }
 
--- | Generate boolean circuits of the 'Program'.
+----------------------------
+  -- Entrypoint: Visualise
+----------------------------
+
+-- | Entrypoint: Generate boolean circuits of the 'Program'.
 --
 -- Generates one diagram for each 'Decide' statement.
 visualise :: Program Name -> [RuleNode]
@@ -62,10 +74,16 @@ visualise prog =
   decides =
     toListOf (gplate @(Decide Name)) prog
 
+-- Currently using the simplest possible implementation
 decideToRuleNode :: Decide Name -> [RuleNode]
-decideToRuleNode (MkDecide _ sig appForm expr) =
-  []
-  -- Maybe.mapMaybe (clauseToRuleNode sig) clauses
+decideToRuleNode (MkDecide _ sig appform body) =
+  case appform of
+    MkAppForm _ name _ ->
+      Maybe.maybeToList $ exprToRuleNode name sig body
+
+------------------------
+  -- Traversals
+------------------------
 
 -- | Turn a single clause into a boolean circuit.
 -- We support only a tiny subset of possible representations, in particular
@@ -80,31 +98,26 @@ decideToRuleNode (MkDecide _ sig appForm expr) =
 --
 -- These limitations are arbitrary, mostly to make sure we have something to show rather
 -- than being complete. So, feel free to lift these limitations at your convenience :)
-{-
-clauseToRuleNode :: TypeSig Name -> Clause Name -> Maybe RuleNode
-clauseToRuleNode (MkTypeSig _ givenSig _) (GuardedClause _ e guard_) =
+exprToRuleNode :: Name -> TypeSig Name -> Expr Name -> Maybe RuleNode
+exprToRuleNode (Name _ name) (MkTypeSig _ givenSig _) body =
   case givenSig of
-    MkGivenSig _ [MkTypedName _ (Name _ subject) _] ->
-      case e of
-        Var _ (Name _ what) -> case guard_ of
-          PlainGuard _ g -> do
-            rNode <- traverseExpr subject g
-            pure
-              rNode
-                { prePost = Map.fromList [("Pre", "Does the " <> subject <> " " <> what <> "?")]
-                }
-          _ ->
-            Nothing
-        _ -> Nothing
-    _ -> Nothing
--}
+    MkGivenSig _ [MkOptionallyTypedName _ (Name _ subject) _] -> do
+        rNode <- traverseExpr subject body
+        pure
+          rNode
+            { prePost = Map.fromList [("Pre", "Does the " <> subject <> " " <> name <> "?")]
+            }
+    MkGivenSig _ [] -> traverseExpr name body
+    MkGivenSig _ _xs -> Nothing -- "DECIDEs with more than one GIVEN not currently supported"
+exprToRuleNode _ _ _ = Nothing
 
 traverseExpr :: Text -> Expr Name -> Maybe RuleNode
 traverseExpr subject e = case e of
   And{} ->
     Just $
       ruleNode andPrePost $
-        node All [rNode | n <- scanAnd e, Just rNode <- [traverseExpr subject n]]
+        node All [rNode | n <- scanAnd e, 
+                          Just rNode <- [traverseExpr subject n]]
   Or{} ->
     Just $
       ruleNode orPrePost $
@@ -112,8 +125,26 @@ traverseExpr subject e = case e of
   Var _ (Name _ verb) ->
     Just $ ruleNode emptyPrePost $ leaf subject verb
   Equals{} -> Nothing -- Can't handle 'Is' yet
-  Not{} -> Nothing -- Can't handle 'Not' yet
-  Proj{} -> Nothing -- Can't handle 'Proj' yet
+  Not{}    -> Nothing -- Can't handle 'Not' yet
+  Proj{}   -> Nothing -- Can't handle 'Proj' yet
+  App _ (Name _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject leafName
+  x        -> Nothing
+    -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
+
+scanAnd :: Expr Name -> [Expr Name]
+scanAnd (And _ e1 e2) =
+  scanAnd e1 <> scanAnd e2
+scanAnd e = [e]
+
+scanOr :: Expr Name -> [Expr Name]
+scanOr (Or _ e1 e2) =
+  scanOr e1 <> scanOr e2
+scanOr e = [e]
+
+
+------------------------
+  -- RuleNode makers
+------------------------
 
 andPrePost :: Map Text Text
 andPrePost = Map.fromList [("Pre", "all of:")]
@@ -125,12 +156,15 @@ emptyPrePost :: Map Text Text
 emptyPrePost = mempty
 
 leaf :: Text -> Text -> AndOrNode
-leaf subject t =
+leaf subject complement =
   AndOrNode
     { tag = Leaf
     , children = Nothing
-    , contents = Just $ "does the " <> subject <> " " <> t <> "?"
+    , contents = Just complement
     }
+    where
+      makeMessage subject = ""
+      -- "does the " <> subject <> " " <> t <> "?"
 
 node :: AndOrTag -> [RuleNode] -> AndOrNode
 node tag chs =
@@ -149,12 +183,15 @@ ruleNode prePost n =
     , shouldView = View
     }
 
-scanAnd :: Expr Name -> [Expr Name]
-scanAnd (And _ e1 e2) =
-  scanAnd e1 <> scanAnd e2
-scanAnd e = [e]
+------------------------
+  -- Dev utils
+------------------------
 
-scanOr :: Expr Name -> [Expr Name]
-scanOr (Or _ e1 e2) =
-  scanOr e1 <> scanOr e2
-scanOr e = [e]
+programToRuleNodes :: Text -> [RuleNode]
+programToRuleNodes prog =
+  case execParser program "" prog of
+    Left errs -> error $ unlines $ fmap (Text.unpack . (.message)) (toList errs)
+    Right x -> visualise x
+
+vizTest :: Text -> IO ()
+vizTest = pPrint . programToRuleNodes

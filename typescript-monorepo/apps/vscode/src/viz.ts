@@ -1,6 +1,6 @@
 import path from 'path'
 import * as vscode from 'vscode'
-import { RuleNode } from './ruleToJson'
+import { RuleNode } from './rule-to-json'
 
 export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
   let panel: vscode.WebviewPanel | undefined
@@ -42,14 +42,10 @@ function getWebviewContent(
   scriptUri: vscode.Uri,
   ruleJson: RuleNode
 ): string {
+  // TODO: Temporarily putting the CSS in `media` of the extension
+  // Will clean this up and put it all under the decision-logic-visualizer later
   const webviewCssUri = panel.webview.asWebviewUri(
-    vscode.Uri.joinPath(
-      context.extensionUri,
-      'node_modules',
-      'ladder-diagram',
-      'css',
-      'ladder.css'
-    )
+    vscode.Uri.joinPath(context.extensionUri, 'media', 'ladder.css')
   )
 
   return `
