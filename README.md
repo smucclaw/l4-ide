@@ -1,6 +1,6 @@
 # mattwaddington
 
-Private repository for a mattwadd-specific dialect of L*4.
+Private repository for a mattwadd-specific dialect of L4.
 
 ## How To Build
 
