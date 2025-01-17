@@ -174,8 +174,10 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno 0 Nothing
-      <$> annoHole (manyLines topdeclWithRecovery)
+    MkSection emptyAnno
+      <$> pure 0
+      <*> annoHole (pure Nothing)
+      <*> annoHole (manyLines topdeclWithRecovery)
 
 section :: Parser (Section Name)
 section =
