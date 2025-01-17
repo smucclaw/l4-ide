@@ -2,8 +2,8 @@
   "name": "typescript-monorepo",
   "private": true,
   "workspaces": [
-    "frontend/*",
-    "frontend-shared/*"
+    "ts-apps/*",
+    "ts-shared/*"
   ],
   "scripts": {
     "build": "turbo build",

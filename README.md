@@ -12,7 +12,7 @@ Minimal Requirements:
   - cabal 3.10 (or newer)
 - npm >= 10.9.2
   - installed via `corepack` or `nvm` or your package manager
-  - See the README in `frontend/vscode` for more details on working with the VSCode extension.
+  - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 
 To build the `mattwaddington` project, all you have to do is this:
 
