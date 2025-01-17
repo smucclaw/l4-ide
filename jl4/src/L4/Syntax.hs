@@ -26,7 +26,7 @@ data Type' n =
   | Fun    Anno [OptionallyNamedType n] (Type' n) -- ^ a function type, with possibly named arguments
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
-  | ParenType Anno (Type' n) -- temporary
+  -- | ParenType Anno (Type' n) -- temporary
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)
 
@@ -118,7 +118,7 @@ data Expr n =
   | AppNamed   Anno n [NamedExpr n]
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | Consider   Anno (Expr n) [Branch n]
-  | ParenExpr  Anno (Expr n) -- temporary
+  -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)

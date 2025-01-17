@@ -360,8 +360,8 @@ atomicType =
 
 parenType :: Parser (Type' Name)
 parenType =
-  attachAnno $
-    ParenType emptyAnno
+  mergeAnno $
+    id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole type'
     <*  annoLexeme (spacedToken_ TPClose)
@@ -632,8 +632,8 @@ stringLit =
 
 parenExpr :: Parser (Expr Name)
 parenExpr =
-  attachAnno $
-    ParenExpr emptyAnno
+  mergeAnno $
+    id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole expr
     <*  annoLexeme (spacedToken_ TPClose)
@@ -1051,6 +1051,13 @@ instance Applicative (WithAnno_ t) where
 
 attachAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
 attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
+
+mergeAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
+mergeAnno p = (\ (WithAnno ann e) -> setAnno (mkAnno (mergeInto ann.payload (getAnno e).payload)) e) <$> getCompose p
+  where
+    mergeInto []               _   = []
+    mergeInto (AnnoHole : as1) as2 = as2 ++ as1
+    mergeInto (a : as1)        as2 = a : mergeInto as1 as2
 
 attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
 attachEpa =

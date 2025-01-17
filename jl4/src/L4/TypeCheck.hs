@@ -433,7 +433,7 @@ substituteType s (Fun ann onts t)         =
 substituteType _ (Forall ann ns t)        =
   Forall ann ns t -- TODO!! Inner Forall needs some form of alpha renaming.
 substituteType _ (InfVar ann prefix i)    = InfVar ann prefix i
-substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
+-- substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
 
 substituteOptionallyNamedType :: Map RawName (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
 substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
@@ -742,9 +742,9 @@ inferType g = scope $ do
         inferType t
       pure (Forall ann dns rt)
     InfVar ann prefix i -> pure (InfVar ann prefix i)
-    ParenType ann t -> do
-      rt <- inferType t
-      pure (ParenType ann rt)
+--    ParenType ann t -> do
+--      rt <- inferType t
+--      pure (ParenType ann rt)
 
 inferFunArg :: OptionallyNamedType Name -> Check (OptionallyNamedType Resolved)
 inferFunArg (MkOptionallyNamedType ann mn t) = do
@@ -925,9 +925,9 @@ checkExpr (IfThenElse ann e1 e2 e3) t =
   checkIfThenElse ann e1 e2 e3 t
 checkExpr (Consider ann e branches) t =
   checkConsider ann e branches t
-checkExpr (ParenExpr ann e) t = do
-  re <- checkExpr e t
-  pure (ParenExpr ann re)
+-- checkExpr (ParenExpr ann e) t = do
+--   re <- checkExpr e t
+--   pure (ParenExpr ann re)
 checkExpr e t = scope $ do
   setErrorContext (WhileCheckingExpression e)
   (re, rt) <- inferExpr e
@@ -1027,9 +1027,9 @@ inferExpr g = scope $ do
       v <- fresh (NormalName "consider")
       re <- checkConsider ann e branches v
       pure (re, v)
-    ParenExpr ann e -> do
-      (e', t) <- inferExpr e
-      pure (ParenExpr ann e', t)
+--    ParenExpr ann e -> do
+--      (e', t) <- inferExpr e
+--      pure (ParenExpr ann e', t)
     Lit ann l -> do
       t <- inferLit l
       pure (Lit ann l, t)
@@ -1150,7 +1150,7 @@ infVars (TyApp _ _ ts)  = concatMap infVars ts
 infVars (Fun _ onts t)  = concatMap (infVars . optionallyNamedTypeType) onts ++ infVars t
 infVars (Forall _ _ t)  = infVars t
 infVars (InfVar _ _ i)  = [i]
-infVars (ParenType _ t) = infVars t
+-- infVars (ParenType _ t) = infVars t
 
 bind :: Int -> Type' Resolved -> Check ()
 bind i t = do
@@ -1248,7 +1248,7 @@ instance SimplePrint a => SimplePrint (Type' a) where
   simpleprint (Fun _ onts t)  = "(FUNCTION FROM " <> Text.intercalate " AND " (map simpleprint onts) <> " TO " <> simpleprint t <> ")"
   simpleprint (Forall _ ns t) = "(FORALL " <> Text.intercalate ", " (map simpleprint ns) <> " " <> simpleprint t <> ")"
   simpleprint (InfVar _ n i)  = "_" <> simpleprint n <> Text.pack (show i)
-  simpleprint (ParenType _ t) = "(" <> simpleprint t <> ")"
+--  simpleprint (ParenType _ t) = "(" <> simpleprint t <> ")"
 
 instance SimplePrint a => SimplePrint (OptionallyNamedType a) where
   simpleprint (MkOptionallyNamedType _ _ t) = simpleprint t
