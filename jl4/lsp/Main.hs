@@ -324,7 +324,7 @@ checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
 checkErrorToDiagnostic checkError =
   Diagnostic
     (srcRangeToLSPRange r)
-    (Just LSP.DiagnosticSeverity_Error) -- severity
+    (Just (translateSeverity (severity checkError))) -- LSP.DiagnosticSeverity_Error) -- severity
     Nothing -- code
     Nothing
     (Just "check") -- source (i.e., a string describing the source component of this diagnostic)
@@ -334,6 +334,10 @@ checkErrorToDiagnostic checkError =
     Nothing
   where
     r = rangeOf checkError
+
+    translateSeverity SInfo  = LSP.DiagnosticSeverity_Information
+    translateSeverity SWarn  = LSP.DiagnosticSeverity_Warning
+    translateSeverity SError = LSP.DiagnosticSeverity_Error
 
     srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
     srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)

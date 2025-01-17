@@ -20,3 +20,10 @@ and list MEANS
   CONSIDER list
   WHEN EMPTY THEN TRUE
   WHEN x FOLLOWED BY xs THEN x AND and xs
+
+#CHECK inc
+#CHECK singleton
+#CHECK five
+#CHECK six
+#CHECK sum
+#CHECK and

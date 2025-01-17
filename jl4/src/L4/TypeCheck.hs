@@ -157,7 +157,7 @@ runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckS
 runCheckUnique c s =
   case runCheck c s of
     [] -> error "internal error: expected unique result, got none"
-    [(w, s)] -> (w, s)
+    [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
 
 preDef :: Text -> Name
@@ -281,6 +281,7 @@ data CheckError =
   | InternalAmbiguityError
   | IllegalAppNamed (Type' Resolved)
   | IncompleteAppNamed [OptionallyNamedType Resolved]
+  | CheckInfo (Type' Resolved)
   deriving stock (Eq, Generic, Show)
 
 data CheckErrorContext =
@@ -550,8 +551,10 @@ inferDirective :: Directive Name -> Check (Directive Resolved)
 inferDirective (Eval ann e) = do
   (re, _) <- inferExpr e
   pure (Eval ann re)
-inferDirective (Check ann e) = do
-  (re, _) <- inferExpr e
+inferDirective (Check ann e) = scope $ do
+  setErrorContext (WhileCheckingExpression e)
+  (re, te) <- inferExpr e
+  addError (CheckInfo te)
   pure (Check ann re)
 
 inferSection :: Section Name -> Check (Section Resolved)
@@ -1227,6 +1230,14 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOfNode n
   rangeOf _                                 = Nothing
 
+data Severity = SWarn | SError | SInfo
+
+severity :: CheckErrorWithContext -> Severity
+severity (MkCheckErrorWithContext e _) =
+  case e of
+    CheckInfo {} -> SInfo
+    _            -> SError
+
 prettyCheckErrorWithContext :: CheckErrorWithContext -> Text
 prettyCheckErrorWithContext (MkCheckErrorWithContext e ctx) =
   Text.unlines (prettyCheckErrorContext ctx) <> prettyCheckError e
@@ -1255,6 +1266,7 @@ prettyCheckError InternalAmbiguityError                    = "ambiguous [interna
 prettyCheckError (NonDistinctError _)                      = "non-distinct names"
 prettyCheckError (IllegalAppNamed t)                       = "named application to a non-function: " <> simpleprint t
 prettyCheckError (IncompleteAppNamed _onts)                = "missing arguments in named application"
+prettyCheckError (CheckInfo t)                             = simpleprint t
 
 class SimplePrint a where
   simpleprint :: a -> Text
