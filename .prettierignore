@@ -8,9 +8,15 @@ dist
 .env.*
 !.env.example
 vite.config.js*
+**/tsconfig.tsbuildinfo
 
 # Ignore files for PNPM, NPM and YARN
 pnpm-lock.yaml
 pnpm-workspace.yaml
 package-lock.json
 yarn.lock
+# Ignore Haskell sources
+simala/
+jl4/
+examples/
+hie.yaml

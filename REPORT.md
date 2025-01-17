@@ -1,4 +1,3 @@
-
 # <Does this project have a title? Should we invent one?>
 
 In the following, we are describing our current vision for the development of the
@@ -48,7 +47,7 @@ https://docs.google.com/drawings/d/1CaJtpHDnRPQAfC2q3jdXjuXObJu9fN2WrJNfuqawHOk/
 These deliverables come from
 https://docs.google.com/document/d/1hPuBnqTcGm5gicwo06m68GqsP_YSUn8VoZfd7-cbcfI/edit?tab=t.0
 
-``` haskell
+```haskell
 [ d
 | d <- deliverables
 , deadline d ~= "Dec 2024"
@@ -85,7 +84,7 @@ There are further features of the JL4 language:
 - Any concept or value can be annotated with natural language phrases that
   explain them further and which will be used in the natural language view.
 
-- Whenever a concept or value is referred to, the tool will check *where* it is
+- Whenever a concept or value is referred to, the tool will check _where_ it is
   being defined, and allow to display information about the location of definition
   and the kind of definition it is by hovering over the identifier.
 

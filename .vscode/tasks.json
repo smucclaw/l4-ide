@@ -10,11 +10,9 @@
         "panel": "dedicated",
         "reveal": "never"
       },
-      "problemMatcher": [
-        "$tsc"
-      ],
+      "problemMatcher": ["$tsc"],
       "options": {
-        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+        "cwd": "${workspaceFolder}/ts-apps/vscode"
       }
     },
     {
@@ -26,11 +24,9 @@
         "panel": "dedicated",
         "reveal": "never"
       },
-      "problemMatcher": [
-        "$tsc"
-      ],
+      "problemMatcher": ["$tsc"],
       "options": {
-        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+        "cwd": "${workspaceFolder}/ts-apps/vscode"
       }
     },
     {
@@ -46,11 +42,9 @@
         "panel": "dedicated",
         "reveal": "never"
       },
-      "problemMatcher": [
-        "$tsc-watch"
-      ],
+      "problemMatcher": ["$tsc-watch"],
       "options": {
-        "cwd": "${workspaceFolder}/typescript-monorepo/apps/vscode"
+        "cwd": "${workspaceFolder}/ts-apps/vscode"
       }
     },
     {
@@ -64,7 +58,7 @@
       },
       "problemMatcher": [],
       "options": {
-        "cwd": "${workspaceFolder}/typescript-monorepo"
+        "cwd": "${workspaceFolder}"
       }
     }
   ]
