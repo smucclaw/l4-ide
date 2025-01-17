@@ -272,6 +272,7 @@ data CheckErrorContext =
   | WhileCheckingDecide Name CheckErrorContext
   | WhileCheckingExpression (Expr Name) CheckErrorContext
   | WhileCheckingPattern (Pattern Name) CheckErrorContext
+  | WhileCheckingType (Type' Name) CheckErrorContext
   | None
   deriving stock (Eq, Show)
 
@@ -432,6 +433,7 @@ substituteType s (Fun ann onts t)         =
 substituteType _ (Forall ann ns t)        =
   Forall ann ns t -- TODO!! Inner Forall needs some form of alpha renaming.
 substituteType _ (InfVar ann prefix i)    = InfVar ann prefix i
+substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
 
 substituteOptionallyNamedType :: Map RawName (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
 substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
@@ -613,10 +615,14 @@ checkAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns) (MkTypeSig tann (MkGiv
     (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName mempty n Nothing) <$> ns)) mgiveth)
 checkAppFormTypeSigConsistency (MkAppForm aann n []) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkAppFormTypeSigConsistency'
-    (MkAppForm aann n (getName <$> otns))
+    (MkAppForm aann n (getName <$> filter isTerm otns))
     tysig
 checkAppFormTypeSigConsistency appForm tysig =
   checkAppFormTypeSigConsistency' appForm tysig
+
+isTerm :: OptionallyTypedName Name -> Bool
+isTerm (MkOptionallyTypedName _ _ (Just (Type _))) = False
+isTerm _                                           = True
 
 checkAppFormTypeSigConsistency' :: AppForm Name -> TypeSig Name -> Check (AppForm Resolved, TypeSig Resolved)
 checkAppFormTypeSigConsistency' (MkAppForm aann n ns) (MkTypeSig tann (MkGivenSig gann otns) mgiveth) = do
@@ -715,24 +721,30 @@ inferSelector rappForm (MkTypedName ann n t) = do
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)
-inferType (Type ann)            = pure (Type ann)
-inferType (TyApp ann n ts)      = do
-  (rn, kind) <- resolveType n
-  checkKind kind ts
-  rts <- traverse inferType ts
-  pure (TyApp ann rn rts)
-inferType (Fun ann onts t)      = do
-  ronts <- traverse inferFunArg onts
-  rt <- inferType t
-  pure (Fun ann ronts rt)
-inferType (Forall ann ns t)     = do
-  ensureDistinct ns
-  dns <- traverse def ns
-  rt <- scope $ do
-    traverse_ (flip makeKnown KnownTypeVariable) dns
-    inferType t
-  pure (Forall ann dns rt)
-inferType (InfVar ann prefix i) = pure (InfVar ann prefix i)
+inferType g = scope $ do
+  setErrorContext (WhileCheckingType g)
+  case g of
+    Type ann -> pure (Type ann)
+    TyApp ann n ts -> do
+      (rn, kind) <- resolveType n
+      checkKind kind ts
+      rts <- traverse inferType ts
+      pure (TyApp ann rn rts)
+    Fun ann onts t -> do
+      ronts <- traverse inferFunArg onts
+      rt <- inferType t
+      pure (Fun ann ronts rt)
+    Forall ann ns t -> do
+      ensureDistinct ns
+      dns <- traverse def ns
+      rt <- scope $ do
+        traverse_ (flip makeKnown KnownTypeVariable) dns
+        inferType t
+      pure (Forall ann dns rt)
+    InfVar ann prefix i -> pure (InfVar ann prefix i)
+    ParenType ann t -> do
+      rt <- inferType t
+      pure (ParenType ann rt)
 
 inferFunArg :: OptionallyNamedType Name -> Check (OptionallyNamedType Resolved)
 inferFunArg (MkOptionallyNamedType ann mn t) = do
@@ -951,6 +963,18 @@ inferExpr g = scope $ do
         , checkBinOp number  number  boolean Equals ann e1 e2
         , checkBinOp string  string  boolean Equals ann e1 e2
         ]
+    Leq ann e1 e2 ->
+      choose
+        [ checkBinOp boolean boolean boolean Leq ann e1 e2
+        , checkBinOp number  number  boolean Leq ann e1 e2
+        , checkBinOp string  string  boolean Leq ann e1 e2
+        ]
+    Geq ann e1 e2 ->
+      choose
+        [ checkBinOp boolean boolean boolean Geq ann e1 e2
+        , checkBinOp number  number  boolean Geq ann e1 e2
+        , checkBinOp string  string  boolean Geq ann e1 e2
+        ]
     Not ann e -> do
       e' <- checkExpr e boolean
       pure (Not ann e', boolean)
@@ -962,6 +986,8 @@ inferExpr g = scope $ do
       checkBinOp number number number Times ann e1 e2
     DividedBy ann e1 e2 ->
       checkBinOp number number number DividedBy ann e1 e2
+    Modulo ann e1 e2 ->
+      checkBinOp number number number Modulo ann e1 e2
     Cons ann e1 e2 -> do
       (re1, rt1) <- inferExpr e1
       let listType = list rt1
@@ -1119,11 +1145,12 @@ unify t1 t2@(InfVar _ann2 _pre2 i2)
 unify t1 t2 = addError (UnificationError t1 t2)
 
 infVars :: Type' Resolved -> [Int]
-infVars (Type _)       = []
-infVars (TyApp _ _ ts) = concatMap infVars ts
-infVars (Fun _ onts t) = concatMap (infVars . optionallyNamedTypeType) onts ++ infVars t
-infVars (Forall _ _ t) = infVars t
-infVars (InfVar _ _ i) = [i]
+infVars (Type _)        = []
+infVars (TyApp _ _ ts)  = concatMap infVars ts
+infVars (Fun _ onts t)  = concatMap (infVars . optionallyNamedTypeType) onts ++ infVars t
+infVars (Forall _ _ t)  = infVars t
+infVars (InfVar _ _ i)  = [i]
+infVars (ParenType _ t) = infVars t
 
 bind :: Int -> Type' Resolved -> Check ()
 bind i t = do
@@ -1172,6 +1199,7 @@ instance HasSrcRange CheckErrorContext where
   rangeOf (WhileCheckingDecide n _)     = rangeOfNode n
   rangeOf (WhileCheckingExpression e _) = rangeOfNode e
   rangeOf (WhileCheckingPattern p _)    = rangeOfNode p
+  rangeOf (WhileCheckingType t _)       = rangeOfNode t
 
 instance HasSrcRange CheckError where
   rangeOf (OutOfScopeError n _)             = rangeOfNode n
@@ -1189,6 +1217,7 @@ prettyCheckErrorContext (WhileCheckingDeclare n ctx)     = "while checking DECLA
 prettyCheckErrorContext (WhileCheckingDecide n ctx)      = "while checking DECIDE/MEANS of " <> simpleprint n <> ":" : prettyCheckErrorContext ctx
 prettyCheckErrorContext (WhileCheckingExpression _e ctx) = prettyCheckErrorContext ctx
 prettyCheckErrorContext (WhileCheckingPattern _p ctx)    = prettyCheckErrorContext ctx
+prettyCheckErrorContext (WhileCheckingType _t ctx)       = prettyCheckErrorContext ctx
 
 prettyCheckError :: CheckError -> Text
 prettyCheckError (OutOfScopeError n t)                   = "out of scope: " <> simpleprint n <> ", of type: " <> simpleprint t
@@ -1219,6 +1248,7 @@ instance SimplePrint a => SimplePrint (Type' a) where
   simpleprint (Fun _ onts t)  = "(FUNCTION FROM " <> Text.intercalate " AND " (map simpleprint onts) <> " TO " <> simpleprint t <> ")"
   simpleprint (Forall _ ns t) = "(FORALL " <> Text.intercalate ", " (map simpleprint ns) <> " " <> simpleprint t <> ")"
   simpleprint (InfVar _ n i)  = "_" <> simpleprint n <> Text.pack (show i)
+  simpleprint (ParenType _ t) = "(" <> simpleprint t <> ")"
 
 instance SimplePrint a => SimplePrint (OptionallyNamedType a) where
   simpleprint (MkOptionallyNamedType _ _ t) = simpleprint t

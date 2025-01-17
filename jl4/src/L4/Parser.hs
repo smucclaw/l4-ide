@@ -341,11 +341,30 @@ expr =
 
 type' :: Parser (Type' Name)
 type' =
-      (attachAnno $
-         Type emptyAnno <$ annoLexeme (spacedToken_ TKType))
+      typeKind
   <|> tyApp
   <|> fun
   <|> forall'
+  <|> parenType
+
+typeKind :: Parser (Type' Name)
+typeKind =
+  attachAnno $
+  Type emptyAnno <$ annoLexeme (spacedToken_ TKType)
+
+atomicType :: Parser (Type' Name)
+atomicType =
+      typeKind
+  <|> nameAsApp TyApp
+  <|> parenType
+
+parenType :: Parser (Type' Name)
+parenType =
+  attachAnno $
+    ParenType emptyAnno
+    <$  annoLexeme (spacedToken_ TPOpen)
+    <*> annoHole type'
+    <*  annoLexeme (spacedToken_ TPClose)
 
 -- We don't actually currently allow parsing an optional name
 optionallyNamedType :: Parser (OptionallyNamedType Name)
@@ -361,8 +380,8 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole (tokenAsName TKList <|> name)
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedToken_ TKAnd))
-        <|> annoHole (lmany (indented type' current))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedToken_ TComma))
+        <|> annoHole (lmany (indented atomicType current))
         )
 
 fun :: Parser (Type' Name)
@@ -418,17 +437,6 @@ lsepBy pp sep =
 lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
   fmap concat $ someLines $ do
-    (ps, seps) <- P.sepBy1 pp sep
-    pure $ zipWithLeftovers ps seps
-  where
-    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
-    zipWithLeftovers ps [] = ps
-    zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
-
-lsepBy1Pos :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Pos -> Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
-lsepBy1Pos current pp sep =
-  fmap concat $ someLinesPos current $ do
     (ps, seps) <- P.sepBy1 pp sep
     pure $ zipWithLeftovers ps seps
   where
@@ -557,14 +565,21 @@ type Prio = Int
 -- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (3, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
-  <|> (\ op -> (4, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
-  <|> (\ op -> (5, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
-  <|> (\ op -> (5, infix2' Cons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+      (\ op -> (2, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (3, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (4, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (4, infix2' Leq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKMost) <|> opToken TLessEquals)
+  <|> (\ op -> (4, infix2' Geq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKLeast) <|> opToken TLessEquals)
+  <|> (\ op -> (5, infix2' Cons      op)) <$> ((<>) <$> opToken TKFollowed <*> opToken TKBy)
   <|> (\ op -> (6, infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
   <|> (\ op -> (6, infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
   <|> (\ op -> (7, infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
-  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKDivided <*> spacedToken_ TKBy) <|> (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ TDividedBy)
+  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((<>) <$> opToken TKDivided <*> opToken TKBy) <|> opToken TDividedBy)
+  <|> (\ op -> (7, infix2  Modulo    op)) <$> spacedToken_ TKModulo
+
+opToken :: TokenType -> Parser Anno
+opToken t =
+  (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ t
 
 infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
@@ -589,13 +604,13 @@ baseExpr =
 atomicExpr :: Parser (Expr Name)
 atomicExpr =
       lit
-  <|> nameAsApp
+  <|> nameAsApp App
   <|> parenExpr
 
-nameAsApp :: Parser (Expr Name)
-nameAsApp =
+nameAsApp :: HasAnno b => (Anno -> Name -> [a] -> b) -> Parser b
+nameAsApp f =
   attachAnno $
-    App emptyAnno
+    f emptyAnno
     <$> annoHole name
     <*> annoHole (pure [])
 

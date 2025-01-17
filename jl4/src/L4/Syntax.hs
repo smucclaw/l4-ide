@@ -26,6 +26,7 @@ data Type' n =
   | Fun    Anno [OptionallyNamedType n] (Type' n) -- ^ a function type, with possibly named arguments
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
+  | ParenType Anno (Type' n) -- temporary
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)
 
@@ -106,7 +107,10 @@ data Expr n =
   | Minus      Anno (Expr n) (Expr n)
   | Times      Anno (Expr n) (Expr n)
   | DividedBy  Anno (Expr n) (Expr n)
+  | Modulo     Anno (Expr n) (Expr n)
   | Cons       Anno (Expr n) (Expr n)
+  | Leq        Anno (Expr n) (Expr n)
+  | Geq        Anno (Expr n) (Expr n)
   | Proj       Anno (Expr n) n -- record projection, we could consider making this yet another function application syntax
   | Var        Anno n -- currently not really needed because subsumed by empty App
   | Lam        Anno (GivenSig n) (Expr n)

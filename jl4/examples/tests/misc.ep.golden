@@ -28,8 +28,8 @@ DECLARE Pair OF a, b
 
 GIVEN a IS A TYPE
       b IS A TYPE
-      p IS A Pair OF a AND b
-GIVETH A Pair OF b AND a
+      p IS A Pair OF a, b
+GIVETH A Pair OF b, a
 swap p MEANS
   Pair WITH snd IS p's fst, fst IS p's snd
 
