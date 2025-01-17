@@ -1,0 +1,103 @@
+{-# LANGUAGE DefaultSignatures #-}
+
+module LSP.SemanticTokens where
+
+import Control.Applicative (Alternative (..))
+import Control.Lens hiding (Iso)
+import qualified Control.Monad.Extra as Extra
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Reader
+import qualified Data.Maybe as Maybe
+import GHC.Stack
+import Generics.SOP as SOP
+import qualified Language.LSP.Protocol.Lens as J
+import Language.LSP.Protocol.Types hiding (Pattern)
+
+import L4.Annotation
+import L4.ExactPrint (EPError (..), genericToNodes)
+import qualified Control.Monad.Trans.Except as Except
+import qualified Control.Monad.Trans.Reader as ReaderT
+
+-- ----------------------------------------------------------------------------
+-- Semantic Tokens Interface
+-- ----------------------------------------------------------------------------
+
+type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except EPError)
+
+type HoleFit_ t = SemanticTokensM t [SemanticToken]
+
+runSemanticTokensM :: ToSemTokens t a => SemanticTokenCtx t -> a -> Either EPError [SemanticToken]
+runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemTokens a) semTokenCtx
+
+-- I would prefer to avoid the duplication between this class and
+-- the ToTokens class.
+--
+-- We might want to override some functionality here. We should perhaps
+-- try to find another way to do this.
+class ToSemTokens t a where
+  toSemTokens :: a -> HoleFit_ t
+  default toSemTokens ::
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+    a ->
+    HoleFit_ t
+  toSemTokens =
+    genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
+
+traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
+traverseCsnWithHoles (Anno _ csns) = go csns
+  where
+    go [] _ = pure []
+    go (AnnoHole : cs) holeFits =
+      case holeFits of
+        [] -> lift $ throwE $ InsufficientHoleFit callStack
+        (x : xs) -> (<>) <$> x <*> go cs xs
+    go (AnnoCsn m : cs) holeFits = do
+      ctx <- ask
+      let
+        transformSyntaxNode token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
+        thisSyntaxNode = Maybe.mapMaybe transformSyntaxNode (csnTokens m)
+      restOfTokens <- go cs holeFits
+      pure $ thisSyntaxNode <> restOfTokens
+
+class ToSemToken t where
+  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken
+
+instance (ToSemTokens t a) => ToSemTokens t [a] where
+  toSemTokens =
+    Extra.concatMapM toSemTokens
+
+instance (ToSemTokens t a) => ToSemTokens t (Maybe a) where
+  toSemTokens =
+    maybe (pure []) toSemTokens
+
+data SemanticTokenCtx p = SemanticTokenCtx
+  { semanticTokenType :: p -> Maybe SemanticTokenTypes
+  , semanticTokenModifier :: p -> Maybe [SemanticTokenModifiers]
+  }
+
+withModifier :: (t -> Maybe [SemanticTokenModifiers]) -> SemanticTokensM t a -> SemanticTokensM t a
+withModifier f act = do
+  local (\i -> i{semanticTokenModifier = \t -> f t <|> i.semanticTokenModifier t}) act
+
+withTokenType :: (t -> Maybe SemanticTokenTypes) -> SemanticTokensM t a -> SemanticTokensM t a
+withTokenType f act = do
+  local (\i -> i{semanticTokenType = \t -> f t <|> i.semanticTokenType t}) act
+
+data SemanticToken = SemanticToken
+  { start :: Position
+  , length :: UInt
+  , category :: SemanticTokenTypes
+  , modifiers :: [SemanticTokenModifiers]
+  }
+  deriving stock (Show, Eq, Ord)
+
+toSemanticTokenAbsolute :: SemanticToken -> SemanticTokenAbsolute
+toSemanticTokenAbsolute s =
+  SemanticTokenAbsolute
+    { _line = s.start ^. J.line
+    , _startChar = s.start ^. J.character
+    , _length = s.length
+    , _tokenType = s.category
+    , _tokenModifiers = s.modifiers
+    }

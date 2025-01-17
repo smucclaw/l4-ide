@@ -143,6 +143,13 @@ executable jl4-lsp
     LSP.Core.Types.Options
     LSP.Core.Types.Shake
 
+    LSP.SemanticTokens
+    LSP.L4.Config
+    LSP.L4.Handlers
+    LSP.L4.Ladder
+    LSP.L4.LanguageServer
+    LSP.L4.Rules
+    LSP.L4.SemanticTokens
 
 test-suite jl4-test
   import: defaults
