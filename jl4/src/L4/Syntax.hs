@@ -120,6 +120,7 @@ data Expr n =
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
+  | List       Anno [Expr n] -- list literal
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)
 

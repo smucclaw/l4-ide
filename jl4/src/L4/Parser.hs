@@ -612,6 +612,7 @@ baseExpr =
   <|> try namedApp -- This is not nice
   <|> app
   <|> lit
+  <|> list
   <|> parenExpr
 
 atomicExpr :: Parser (Expr Name)
@@ -630,6 +631,14 @@ nameAsApp f =
 lit :: Parser (Expr Name)
 lit = attachAnno $
   Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+
+list :: Parser (Expr Name)
+list = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    List emptyAnno
+      <$  annoLexeme (spacedToken_ TKList)
+      <*> annoHole (lsepBy (indentedExpr current) (spacedToken_ TComma))
 
 numericLit :: Parser Lit
 numericLit =

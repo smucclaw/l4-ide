@@ -1033,6 +1033,10 @@ inferExpr g = scope $ do
     Lit ann l -> do
       t <- inferLit l
       pure (Lit ann l, t)
+    List ann es -> do
+      v <- fresh (NormalName "list")
+      res <- traverse (flip checkExpr v) es
+      pure (List ann res, list v)
 
 inferAppNamed :: Type' Resolved -> [NamedExpr Name] -> Check ([NamedExpr Resolved], Type' Resolved)
 inferAppNamed (Fun _ onts t) nes = do
