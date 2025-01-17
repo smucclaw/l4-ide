@@ -12,6 +12,8 @@ import qualified L4.Lexer as Lexer
 import L4.Syntax
 
 import LSP.SemanticTokens
+import Control.Monad.Reader (ask)
+import qualified Data.Maybe as Maybe
 
 import Language.LSP.Protocol.Types hiding (Pattern)
 
@@ -129,3 +131,8 @@ instance ToSemTokens PosToken Lit where
     traverseCsnWithHoles ann []
   toSemTokens (StringLit ann _) =
     traverseCsnWithHoles ann []
+
+instance ToSemTokens PosToken PosToken where
+  toSemTokens t = do
+    ctx <- ask
+    pure $ Maybe.maybeToList $ fromSemanticTokenContext ctx t

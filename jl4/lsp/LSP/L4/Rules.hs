@@ -10,7 +10,7 @@ import Data.Text (Text)
 import qualified Data.Text.Mixed.Rope as Rope
 import Data.Typeable
 import Development.IDE.Graph
-import GHC.Generics
+import GHC.Generics (Generic)
 import L4.Lexer (PosToken, SrcPos(..))
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -21,12 +21,14 @@ import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
-import Language.LSP.Protocol.Types (fromNormalizedFilePath)
+import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import L4.TypeCheck (CheckErrorWithContext(..), Substitution )
 import qualified L4.TypeCheck as TypeCheck
 import L4.Lexer (SrcRange)
 import L4.ExactPrint (HasSrcRange(..))
+import LSP.SemanticTokens
+import LSP.L4.SemanticTokens
 
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
@@ -50,6 +52,16 @@ data TypeCheckResult = TypeCheckResult
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
+
+type instance RuleResult LexerSemanticTokens = [UInt]
+data LexerSemanticTokens = LexerSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
+
+type instance RuleResult ParserSemanticTokens = [UInt]
+data ParserSemanticTokens = ParserSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
 
 data Log
   = ShakeLog Shake.Log
@@ -98,6 +110,34 @@ jl4Rules recorder = do
         , substitution = subst
         }
       )
+
+  define (cmapWithPrio ShakeLog recorder) $ \LexerSemanticTokens f -> do
+    (tokens, _) <- use_ GetLexTokens f
+    case runSemanticTokensM defaultSemanticTokenCtx tokens of
+      Left _err ->
+        pure ([{- TODO: Log error -}], Nothing)
+      Right tokenized -> do
+        let
+          semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokenized
+        case encodeTokens defaultSemanticTokensLegend semanticTokens of
+          Left _err ->
+            pure ([{- TODO: Log error -}], Nothing)
+          Right relSemTokens ->
+            pure ([], Just relSemTokens)
+
+  define (cmapWithPrio ShakeLog recorder) $ \ParserSemanticTokens f -> do
+    prog <- use_ GetParsedAst f
+    case runSemanticTokensM defaultSemanticTokenCtx prog of
+      Left _err ->
+        pure ([{- TODO: Log error -}], Nothing)
+      Right tokenized -> do
+        let
+          semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokenized
+        case encodeTokens defaultSemanticTokensLegend semanticTokens of
+          Left _err ->
+            pure ([{- TODO: Log error -}], Nothing)
+          Right relSemTokens ->
+            pure ([], Just relSemTokens)
 
   where
     mkSimpleFileDiagnostic nfp diag =

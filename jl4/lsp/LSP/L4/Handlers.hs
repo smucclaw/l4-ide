@@ -5,16 +5,28 @@ module LSP.L4.Handlers where
 import Control.Concurrent.STM
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
-import Control.Lens ( (^.) )
+import Control.Lens ((^.))
+import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import qualified Control.Monad.Trans.Reader as ReaderT
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Text as Aeson
 import qualified Data.Text as Text
-import LSP.Logger
-import LSP.Core.RuleTypes
+import qualified Data.Text.Lazy as LazyText
+import L4.TypeCheck
+import LSP.Core.FileStore hiding (Log (..))
+import qualified LSP.Core.FileStore as FileStore
+import LSP.Core.OfInterest hiding (Log (..))
+import LSP.Core.Service hiding (Log (..))
 import LSP.Core.Shake (VFSModified (..), use)
+import qualified LSP.Core.Shake as Shake
+import LSP.Core.Types.Location
 import LSP.L4.Config
+import qualified LSP.L4.Ladder as Ladder
+import LSP.L4.Rules hiding (Log (..))
+import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Pattern)
@@ -23,23 +35,6 @@ import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import UnliftIO (MonadUnliftIO)
-import Control.Monad.Extra (whenJust)
-import LSP.Core.FileStore hiding (Log(..))
-import qualified LSP.Core.FileStore as FileStore
-import qualified LSP.Core.Shake as Shake
-import LSP.Core.OfInterest hiding (Log(..))
-import LSP.Core.Service hiding (Log(..))
-import LSP.L4.Rules hiding (Log(..))
-import qualified LSP.SemanticTokens as SemanticTokens
-import LSP.SemanticTokens (runSemanticTokensM)
-import qualified LSP.L4.SemanticTokens as SemanticTokens
-import L4.ExactPrint (prettyEPError)
-import LSP.Core.Types.Location
-import qualified Data.Aeson as Aeson
-import qualified LSP.L4.Ladder as Ladder
-import qualified Data.Aeson.Text as Aeson
-import qualified Data.Text.Lazy as LazyText
-import L4.TypeCheck
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -226,49 +221,26 @@ handlers recorder =
           uri = doc ^. J.uri
           nfp = fromUri $ toNormalizedUri uri
 
-        mProgram <- liftIO $ runAction "semanticTokens.program" ide $ do
-          use GetParsedAst nfp
-
-        case mProgram of
+        tokens <- liftIO $ runAction "semanticTokens" ide $
+          use ParserSemanticTokens nfp
+        case tokens of
           Nothing ->
             pure $
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
+                  , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\""
                   , _xdata = Nothing
                   }
-          Just prog -> do
-            case runSemanticTokensM SemanticTokens.defaultSemanticTokenCtx prog  of
-              Left err -> do
-                -- TODO: log error
-                pure $
-                  Left $
-                    TResponseError
-                      { _code = InL LSPErrorCodes_RequestFailed
-                      , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> prettyEPError err
-                      , _xdata = Nothing
-                      }
-              Right semanticTokenstoks -> do
-                let
-                  semanticTokens = relativizeTokens $ fmap SemanticTokens.toSemanticTokenAbsolute semanticTokenstoks
-                case encodeTokens defaultSemanticTokensLegend semanticTokens of
-                  Left err -> do
-                    pure $
-                      Left $
-                        TResponseError
-                          { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Internal error, failed to encode semantic tokens for \"" <> Text.pack (show uri) <> "\", reason:" <> err
-                          , _xdata = Nothing
-                          }
-                  Right semanticTokensData -> do
-                    pure $
-                      Right $
-                        InL $
-                          SemanticTokens
-                            { _resultId = Nothing
-                            , _data_ = semanticTokensData
-                            }
+
+          Just semanticTokensData -> do
+            pure $
+              Right $
+                InL $
+                  SemanticTokens
+                    { _resultId = Nothing
+                    , _data_ = semanticTokensData
+                    }
     ]
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()

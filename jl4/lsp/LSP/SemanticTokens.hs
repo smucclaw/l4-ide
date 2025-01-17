@@ -44,21 +44,25 @@ class ToSemTokens t a where
   toSemTokens =
     genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
+
 traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno _ csns) = go csns
-  where
-    go [] _ = pure []
-    go (AnnoHole : cs) holeFits =
-      case holeFits of
-        [] -> lift $ throwE $ InsufficientHoleFit callStack
-        (x : xs) -> (<>) <$> x <*> go cs xs
-    go (AnnoCsn m : cs) holeFits = do
-      ctx <- ask
-      let
-        transformSyntaxNode token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
-        thisSyntaxNode = Maybe.mapMaybe transformSyntaxNode (csnTokens m)
-      restOfTokens <- go cs holeFits
-      pure $ thisSyntaxNode <> restOfTokens
+traverseCsnWithHoles (Anno _ []) _ = pure []
+traverseCsnWithHoles (Anno e (AnnoHole : cs)) holeFits = case holeFits of
+  [] -> lift $ throwE $ InsufficientHoleFit callStack
+  (x : xs) -> do
+    toks <- x
+    restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+    pure $ toks <> restOfTokens
+traverseCsnWithHoles (Anno e (AnnoCsn m : cs)) xs = do
+  ctx <- ask
+  let
+    thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (csnTokens m)
+
+  restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+  pure $ thisSyntaxNode <> restOfTokens
+
+fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe SemanticToken
+fromSemanticTokenContext ctx token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
 
 class ToSemToken t where
   toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken
