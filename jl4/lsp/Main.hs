@@ -7,10 +7,11 @@
 
 module Main where
 
-import L4.ExactPrint (prettyEPError)
-import L4.Lexer (SrcPos (..))
+import L4.ExactPrint (prettyEPError, HasSrcRange(..))
+import L4.Lexer (SrcPos (..), SrcRange)
 import qualified L4.Parser as Parser
 import L4.Syntax
+import L4.TypeCheck
 
 import qualified Ladder
 import qualified SemanticTokens
@@ -46,6 +47,7 @@ import Prettyprinter
 import qualified Prettyprinter.Render.Text as Pretty
 import System.Exit
 import System.IO
+import L4.Lexer (SrcRange(..))
 
 -- ----------------------------------------------------------------------------
 
@@ -192,7 +194,7 @@ handle _logger =
                       contents = Rope.toText rope
 
                     case parseJL4WithWithDiagnostics uri contents of
-                      Left _diags ->
+                      (_, Nothing) ->
                         responder $
                           Left $
                             TResponseError
@@ -200,7 +202,7 @@ handle _logger =
                               , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
                               , _xdata = Nothing
                               }
-                      Right prog ->
+                      (_, Just prog) ->
                         responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
           _ ->
             responder $ Left $ undefined
@@ -224,7 +226,7 @@ handle _logger =
               contents = Rope.toText rope
 
             case parseJL4WithWithDiagnostics uri contents of
-              Left _diags ->
+              (_, Nothing) ->
                 responder $
                   Left $
                     TResponseError
@@ -232,8 +234,8 @@ handle _logger =
                       , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
                       , _xdata = Nothing
                       }
-              Right ds -> do
-                case runExcept $ runReaderT (SemanticTokens.toSemTokens ds) SemanticTokens.defaultSemanticTokenCtx of
+              (_, Just prog) -> do
+                case runExcept $ runReaderT (SemanticTokens.toSemTokens prog) SemanticTokens.defaultSemanticTokenCtx of
                   Left err -> do
                     -- TODO: log error
                     responder $
@@ -300,36 +302,64 @@ sendDiagnostics fileUri = do
         contents = Rope.toText rope
 
       diags <- case parseJL4WithWithDiagnostics (fromNormalizedUri fileUri) contents of
-        Left diags -> pure diags
-        Right _ds -> pure []
+        (diags, _) -> pure diags
       publishDiagnostics 100 fileUri (Just version) (partitionBySource diags)
 
 -- ----------------------------------------------------------------------------
 -- JL4 Parser
 -- ----------------------------------------------------------------------------
 
-parseJL4WithWithDiagnostics :: Uri -> Text -> Either [Diagnostic] (Program Name)
+parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name))
 parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program fp content of
   Left err ->
-    Left $ fmap doDiagnostic $ Foldable.toList err
-  Right ds ->
-    pure ds
+    (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing)
+  Right prog ->
+    case doCheckProgram prog of
+      (errs, _p) -> (fmap checkErrorToDiagnostic errs, Just prog)
  where
-  doDiagnostic pError =
-    Diagnostic
-      (LSP.Range start (nextLine start))
-      (Just LSP.DiagnosticSeverity_Error) -- severity
-      Nothing -- code
-      Nothing
-      (Just pError.origin) -- source
-      pError.message
-      Nothing -- tags
-      (Just [])
-      Nothing
-   where
-    start = sourcePosToPosition pError.start
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
+
+checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
+checkErrorToDiagnostic checkError =
+  Diagnostic
+    (srcRangeToLSPRange r)
+    (Just LSP.DiagnosticSeverity_Error) -- severity
+    Nothing -- code
+    Nothing
+    (Just "check") -- source (i.e., a string describing the source component of this diagnostic)
+    (prettyCheckErrorWithContext checkError)
+    Nothing -- tags
+    (Just [])
+    Nothing
+  where
+    r = rangeOf checkError
+
+    srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
+    srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
+    srcRangeToLSPRange (Just range) = LSP.Range (srcPosToLSPPosition range.start) (srcPosToLSPPosition range.end)
+
+    srcPosToLSPPosition :: SrcPos -> LSP.Position
+    srcPosToLSPPosition s =
+      LSP.Position
+        { _character = fromIntegral $ s.column - 1
+        , _line = fromIntegral $ s.line - 1
+        }
+
+parseErrorToDiagnostic :: Parser.PError -> Diagnostic
+parseErrorToDiagnostic pError =
+  Diagnostic
+    (LSP.Range start (nextLine start))
+    (Just LSP.DiagnosticSeverity_Error) -- severity
+    Nothing -- code
+    Nothing
+    (Just pError.origin) -- source
+    pError.message
+    Nothing -- tags
+    (Just [])
+    Nothing
+ where
+  start = sourcePosToPosition pError.start
 
   sourcePosToPosition s =
     LSP.Position
@@ -342,3 +372,4 @@ parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program 
       { _character = 0
       , _line = p ^. J.line + 1
       }
+

@@ -1,7 +1,7 @@
 § xor
 
-GIVEN x IS A Bool, y IS A Bool
-GIVETH A Bool
+GIVEN x IS A BOOLEAN, y IS A BOOLEAN
+GIVETH A BOOLEAN
 DECIDE xor x y IS
      x AND NOT y
   OR NOT x AND y

@@ -3,6 +3,7 @@ module Main where
 import Base
 import qualified L4.Parser as Parser
 import qualified L4.ExactPrint as JL4
+import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
 import System.FilePath
@@ -20,7 +21,7 @@ main = do
   hspec $ do
     forM_ exampleSimalaFiles $ \ inputFile -> do
       describe (takeFileName inputFile) $ do
-        it "parses" $
+        it "parses and checks" $
           l4Golden (dataDir </> "examples") inputFile
         it "exactprints" $
           jl4ExactPrintGolden (dataDir </> "examples") inputFile
@@ -49,7 +50,7 @@ l4Golden dir inputFile = do
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   input <- Text.readFile inputFile
-  let output_ = JL4.exactprintFile inputFile input
+  let output_ = JL4.exactprintFile (takeFileName inputFile) input
   pure
     Golden
       { output = output_
@@ -67,9 +68,14 @@ jl4ExactPrintGolden dir inputFile = do
 
 parseFile :: String -> Text -> IO ()
 parseFile file input =
-  case Parser.execParser Parser.program file input of
+  case Parser.execParser Parser.program (takeFileName file) input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right _ -> Text.putStrLn "Parsed successfully"
+    Right prog -> do
+      Text.putStrLn "Parsing successful"
+      case JL4.doCheckProgram prog of
+        ([], _) -> Text.putStrLn "Typechecking successful"
+        (errs, _p) ->
+          Text.putStr (Text.unlines (map (\ err -> JL4.prettySrcRange (JL4.rangeOf err) <> ":\n" <> JL4.prettyCheckErrorWithContext err) errs))
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =

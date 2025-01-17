@@ -1,0 +1,12 @@
+§ Example
+
+ASSUME Person IS A TYPE
+ASSUME walks  IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME eats   IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME drinks IS A FUNCTION FROM Person TO BOOLEAN
+
+GIVEN p IS A Person
+DECIDE `must sing`
+    IF        walks p
+       AND    eats p
+           OR drinks p

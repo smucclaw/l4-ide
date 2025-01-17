@@ -1,0 +1,7 @@
+§ `Type-checking examples`
+
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+DECIDE f OF x, y
+IS f OF f OF x, y
+        f OF x, y

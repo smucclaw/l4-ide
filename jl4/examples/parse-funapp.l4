@@ -1,0 +1,43 @@
+§ `Nested function applications with OF and AND`
+
+ASSUME f IS A FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+
+test1 MEANS
+  f OF 1, 2
+
+test2 MEANS
+  f OF  1
+        2
+
+test3 MEANS
+  1 + f OF 1, 2
+
+test4 MEANS
+    f OF 1, 2
+  + 1
+
+test5 MEANS
+    f OF 1, 2
+  + f OF 3, 4
+
+test6 MEANS
+  f OF f OF 1, 2
+       3 + 4
+
+test7 MEANS
+  f OF 1 + 2
+       f OF 3, 4
+
+test8 MEANS
+  f OF 1
+       2
+
+test9 MEANS
+  f OF f OF 1, 2
+       f OF 3, 4
+
+test10 MEANS
+  f OF (f OF 1, 2), (f OF 3, 4)
+
+test11 MEANS
+  f OF (f OF 1, 2), f OF 3, 4

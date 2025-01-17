@@ -1,0 +1,14 @@
+§ `Type-directed name resolution`
+
+ASSUME foo IS A NUMBER
+ASSUME foo IS A BOOLEAN
+ASSUME foo IS A STRING
+
+DECIDE bar
+  IS foo + 2
+
+DECIDE baz
+  IS NOT foo
+
+DECIDE all
+  IS IF foo THEN foo ELSE "foo"

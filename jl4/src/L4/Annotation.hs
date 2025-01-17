@@ -5,15 +5,14 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module L4.Annotation where
 
-import qualified Data.Foldable as Foldable
+import L4.Lexer ( SrcRange (..) )
+
 import Data.Kind
 import qualified Data.List as List
 import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
-import Optics
-
-import L4.Lexer
 import Generics.SOP.Constraint
+import Optics
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -24,17 +23,17 @@ data NodeVisibility
   deriving stock (Show, Ord, Eq, Enum, Bounded, GHC.Generic)
   deriving anyclass ToExpr
 
-data ConcreteSyntaxNode t = ConcreteSyntaxNode
+data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   { tokens :: [t]
-  -- , range :: Maybe SrcRange
+  , range :: Maybe SrcRange
   , visibility :: NodeVisibility
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass ToExpr
 
 data CsnCluster_ t = CsnCluster
-  { payload :: ConcreteSyntaxNode t
-  , trailing :: ConcreteSyntaxNode t
+  { payload :: ConcreteSyntaxNode_ t
+  , trailing :: ConcreteSyntaxNode_ t
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass ToExpr
@@ -64,7 +63,7 @@ csnTokens :: CsnCluster_ t -> [t]
 csnTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
 mkAnno :: [AnnoElement_ t] -> Anno_ t
-mkAnno = Anno
+mkAnno es = Anno es
 
 emptyAnno :: Anno_ t
 emptyAnno = mkAnno []
@@ -72,27 +71,8 @@ emptyAnno = mkAnno []
 isEmptyAnno :: Anno_ t -> Bool
 isEmptyAnno m = List.null m.payload
 
-mkConcreteSyntaxNode :: [t] -> ConcreteSyntaxNode t
-mkConcreteSyntaxNode posTokens =
-  ConcreteSyntaxNode
-    { tokens = posTokens
-    -- , range = Nothing -- TODO fendor: fix this
-    , visibility =
-        if Foldable.null posTokens
-          then Hidden
-          else Visible
-    }
-
-mkHiddenCsnCluster :: CsnCluster_ t
-mkHiddenCsnCluster =
-  CsnCluster
-    { payload = mkConcreteSyntaxNode []
-    , trailing = mkConcreteSyntaxNode []
-    }
-
 class HasAnno t where
   type AnnoToken t :: Type
-  type AnnoToken t = PosToken
   getAnno :: t -> Anno_ (AnnoToken t)
   setAnno :: Anno_ (AnnoToken t) -> t -> t
 
@@ -101,6 +81,11 @@ class HasAnno t where
 
   default getAnno :: (GPosition 1 t t (Anno_ (AnnoToken t)) (Anno_ (AnnoToken t))) => t -> Anno_ (AnnoToken t)
   getAnno e = e ^. gposition @1
+
+instance HasAnno (Anno_ t) where
+  type AnnoToken (Anno_ t) = t
+  getAnno = id
+  setAnno = const
 
 -- This constraint enforces that Anno is the first field (of each constructor).
 --
@@ -117,4 +102,3 @@ instance Semigroup (Anno_ t) where
 
 instance Monoid (Anno_ t) where
   mempty = emptyAnno
-

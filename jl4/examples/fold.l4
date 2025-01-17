@@ -1,0 +1,23 @@
+§ `Folds`
+
+GIVEN a IS A TYPE
+      r IS A TYPE
+      cons IS A FUNCTION FROM a AND r TO r
+      nil IS AN r
+      list IS A LIST OF a
+GIVETH AN r
+foldr cons nil list MEANS
+  CONSIDER list
+  WHEN Nil THEN nil
+  WHEN x FOLLOWED BY xs THEN cons OF x, foldr cons nil list
+
+GIVEN a IS A TYPE
+      r IS A TYPE
+      op IS A FUNCTION FROM r AND a TO r
+      e IS AN r
+      list IS A LIST OF a
+GIVETH AN r
+foldl op e list MEANS
+  CONSIDER list
+  WHEN Nil THEN e
+  WHEN x FOLLOWED BY xs THEN foldl OF op, op e x, xs

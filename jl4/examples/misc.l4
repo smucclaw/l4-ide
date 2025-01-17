@@ -1,0 +1,69 @@
+§ `Various experiments`
+
+DECLARE Nat
+  IS ONE OF
+    Zero
+    Suc HAS pred IS Nat
+
+GIVEN m IS A Nat
+      n IS A Nat
+GIVETH A Nat
+add m n MEANS
+  CONSIDER m
+  WHEN Zero  THEN n
+  WHEN Suc p THEN Suc WITH pred IS add p n
+
+GIVEN m IS A Nat
+      n IS A Nat
+GIVETH A Nat
+mul m n MEANS
+  CONSIDER m
+  WHEN Zero  THEN Zero
+  WHEN Suc p THEN add OF n, mul WITH n IS n, m IS p
+
+DECLARE Pair OF a, b
+  HAS
+    fst IS AN a
+    snd IS A  b
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      p IS A Pair OF a AND b
+GIVETH A Pair OF b AND a
+swap p MEANS
+  Pair WITH snd IS p's fst, fst IS p's snd
+
+example MEANS
+  add (Suc Zero) (Suc (Suc Zero))
+
+GIVEN a IS A TYPE
+      list1 IS A LIST OF a
+      list2 IS A LIST OF a
+GIVETH A LIST OF a
+append list1 list2 MEANS
+  CONSIDER list1
+  WHEN EMPTY            THEN list2
+  WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
+
+GIVEN a IS A TYPE
+      x IS AN a
+GIVETH A LIST OF a
+singleton x MEANS
+  x FOLLOWED BY EMPTY
+
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A LIST OF a
+reverse list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN append xs (singleton x)
+
+ASSUME coerce IS A FUNCTION FROM NUMBER TO BOOLEAN
+ASSUME coerce IS A FUNCTION FROM BOOLEAN TO NUMBER
+ASSUME coerce IS A FUNCTION FROM NUMBER TO STRING
+ASSUME coerce IS A FUNCTION FROM STRING TO NUMBER
+ASSUME cat IS A FUNCTION FROM STRING AND STRING TO STRING
+
+example MEANS
+  coerce (cat (coerce 3) "foo") + 7

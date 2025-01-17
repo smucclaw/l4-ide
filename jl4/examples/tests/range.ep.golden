@@ -1,0 +1,8 @@
+§ `Compute a range of numbers`
+
+GIVEN n IS A NUMBER
+GIVETH A LIST OF NUMBER
+downFrom n MEANS
+  IF n EQUALS 0
+  THEN EMPTY
+  ELSE n FOLLOWED BY downFrom (n - 1)

@@ -1,0 +1,86 @@
+§ `Examples of polymorphism`
+
+ASSUME choice IS A BOOLEAN
+
+GIVEN a IS A TYPE
+      x IS AN a
+GIVETH AN a
+identity x MEANS x
+
+GIVETH A NUMBER
+n MEANS identity 3
+
+GIVETH A STRING
+n MEANS identity "hello"
+
+GIVETH A BOOLEAN
+n MEANS identity TRUE
+
+GIVEN a IS A TYPE
+      x IS AN a
+      y IS AN a
+GIVETH AN a
+choose x y MEANS IF choice THEN x ELSE y
+
+GIVETH A NUMBER
+c MEANS choose 3 4
+
+GIVETH A STRING
+c MEANS choose "foo" "bar"
+
+GIVETH A BOOLEAN
+c MEANS choose TRUE FALSE
+
+GIVEN a IS A TYPE
+      x IS AN a
+GIVETH A LIST OF a
+pure x MEANS x FOLLOWED BY EMPTY
+
+GIVETH A LIST OF NUMBER
+l MEANS pure 3
+
+GIVETH A LIST OF STRING
+l MEANS pure "foo"
+
+GIVETH A LIST OF BOOLEAN
+l MEANS pure TRUE
+
+GIVEN a IS A TYPE
+      x IS AN a
+GIVETH A LIST OF LIST OF a
+pure2 x MEANS
+              x FOLLOWED BY EMPTY
+  FOLLOWED BY EMPTY
+
+GIVETH A LIST OF LIST OF NUMBER
+ll MEANS pure2 3
+
+GIVETH A LIST OF LIST OF STRING
+ll MEANS pure2 "foo"
+
+GIVETH A LIST OF LIST OF BOOLEAN
+ll MEANS pure2 TRUE
+
+GIVEN a   IS A TYPE
+      def IS AN a
+      xs  IS A LIST OF a
+GIVETH AN a
+safeHead def xs MEANS
+  CONSIDER xs
+  WHEN EMPTY              THEN def
+  WHEN x FOLLOWED BY tail THEN x
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a TO b
+      x IS AN a
+GIVETH A b
+apply f x MEANS f x
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      c IS A TYPE
+      f IS A FUNCTION FROM b TO c
+      g IS A FUNCTION FROM a TO b
+GIVETH A FUNCTION FROM a TO c
+compose f g MEANS GIVEN x IS AN a YIELD f (g x)

@@ -1,0 +1,6 @@
+Parsing successful
+tdnr-ambiguous.l4:7:6-9:
+while checking DECIDE/MEANS of bar:
+ambiguous: foo, options:
+BOOLEAN
+NUMBER

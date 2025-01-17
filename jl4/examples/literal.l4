@@ -5,11 +5,13 @@ DECIDE primes IS
     3 FOLLOWED BY
     5 FOLLOWED BY
     7 FOLLOWED BY
-    11
+    11 FOLLOWED BY
+    EMPTY
 
 DECIDE countries IS
     "Germany" FOLLOWED BY
     "Österreich" FOLLOWED BY
     "新加坡共和国" FOLLOWED BY -- Unicode test
-    "Some \"country\"" -- escapes
+    "Some \"country\"" FOLLOWED BY -- escapes
+    EMPTY
 

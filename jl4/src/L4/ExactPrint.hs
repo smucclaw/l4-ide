@@ -2,7 +2,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module L4.ExactPrint where
 
@@ -18,6 +19,7 @@ import Generics.SOP as SOP
 import Generics.SOP.NP
 import Generics.SOP.NS
 import GHC.Stack
+import qualified Data.List.NonEmpty as NonEmpty
 
 -- ----------------------------------------------------------------------------
 -- ExactPrinting Interface
@@ -32,21 +34,25 @@ data EPError
 prettyEPError :: EPError -> Text
 prettyEPError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
 
-type AnyHoleFit_ m t = m t
+type HoleFit_ t = ExactPrintM [t]
 
-type HoleFit_ t = AnyHoleFit_ ExactPrintM [t]
+concreteNodesToTokens :: ToConcreteNodes t a => a -> ExceptT EPError Identity [t]
+concreteNodesToTokens a = fmap (concatMap csnTokens) $ toNodes a
 
 class ToTokens t a where
   toTokens :: a -> HoleFit_ t
 
-  default toTokens ::
-       (SOP.Generic a, All (AnnoFirst t (ToTokens t)) (Code a))
-    => a -> HoleFit_ t
-  toTokens =
-    genericToTokens (Proxy @(ToTokens t)) toTokens applyTokensWithHoles
+class ToConcreteNodes t a | a -> t where
+  toNodes :: a -> Except EPError [CsnCluster_ t]
 
-genericToTokens :: forall c a t r. (SOP.Generic a, All (AnnoFirst t c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno_ t -> [r] -> r) -> a -> r
-genericToTokens _ rec f x =
+  default toNodes ::
+       (SOP.Generic a, All (AnnoFirst t (ToConcreteNodes t)) (Code a))
+    => a -> Except EPError [CsnCluster_ t]
+  toNodes =
+    genericToNodes (Proxy @(ToConcreteNodes t)) toNodes flattenConcreteNodes
+
+genericToNodes :: forall c a t r. (SOP.Generic a, All (AnnoFirst t c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno_ t -> [r] -> r) -> a -> r
+genericToNodes _ rec f x =
     collapse_NS
   $ cmap_NS
       (Proxy @(AnnoFirst t c))
@@ -63,28 +69,34 @@ instance ToTokens t a => ToTokens t (Maybe a) where
   toTokens =
     maybe (pure []) toTokens
 
-applyTokensWithHoles :: (HasCallStack, MonadError EPError m) => Anno_ t -> [AnyHoleFit_ m [t]] -> m [t]
-applyTokensWithHoles (Anno []) _ = pure []
-applyTokensWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
+instance ToConcreteNodes t a => ToConcreteNodes t [a] where
+  toNodes =
+    Extra.concatMapM toNodes
+
+instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
+  toNodes =
+    maybe (pure []) toNodes
+
+flattenConcreteNodes :: (HasCallStack, MonadError EPError m) => Anno_ t -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
+flattenConcreteNodes (Anno []) _ = pure []
+flattenConcreteNodes (Anno (AnnoHole : cs)) holeFits = case holeFits of
   [] -> do
     throwError $ InsufficientHoleFit callStack
   (x : xs) -> do
     r <- x
-    rs <- applyTokensWithHoles (Anno cs) xs
+    rs <- flattenConcreteNodes (Anno cs) xs
     pure (r <> rs)
-applyTokensWithHoles (Anno (AnnoCsn m : cs)) xs = do
-  let
-    r = csnTokens m
-  rs <- applyTokensWithHoles (Anno cs) xs
-  pure (r <> rs)
+flattenConcreteNodes (Anno (AnnoCsn m : cs)) xs = do
+  rs <- flattenConcreteNodes (Anno cs) xs
+  pure (m : rs)
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation
 -- ----------------------------------------------------------------------------
 
-exactprint :: Program Name -> Either EPError Text
+exactprint :: ToConcreteNodes PosToken p => p -> Either EPError Text
 exactprint =
-  runExcept . fmap (Text.concat . fmap displayPosToken) . toTokens
+  runExcept . fmap (Text.concat . fmap displayPosToken) . concreteNodesToTokens
 
 -- | Parse a source file and exact-print the result.
 exactprintFile :: String -> Text -> Text
@@ -96,40 +108,80 @@ exactprintFile file input =
         Left epError -> prettyEPError epError
         Right ep -> ep
 
-deriving anyclass instance ToTokens PosToken (Program Name)
+deriving anyclass instance ToConcreteNodes PosToken (Program Name)
 
 -- Generic instance does not apply because we exclude the level.
-instance ToTokens PosToken (Section Name) where
-  toTokens (MkSection ann _lvl name decls) =
-    applyTokensWithHoles ann [toTokens name, toTokens decls]
+instance ToConcreteNodes PosToken (Section Name) where
+  toNodes (MkSection ann _lvl name decls) =
+    flattenConcreteNodes ann [toNodes name, toNodes decls]
 
-deriving anyclass instance ToTokens PosToken (TopDecl Name)
-deriving anyclass instance ToTokens PosToken (Assume Name)
-deriving anyclass instance ToTokens PosToken (Declare Name)
-deriving anyclass instance ToTokens PosToken (TypeDecl Name)
-deriving anyclass instance ToTokens PosToken (ConDecl Name)
-deriving anyclass instance ToTokens PosToken (Type' Name)
-deriving anyclass instance ToTokens PosToken (TypedName Name)
-deriving anyclass instance ToTokens PosToken (OptionallyTypedName Name)
-deriving anyclass instance ToTokens PosToken (Decide Name)
-deriving anyclass instance ToTokens PosToken (AppForm Name)
-deriving anyclass instance ToTokens PosToken (Expr Name)
-deriving anyclass instance ToTokens PosToken (NamedValue Name)
-deriving anyclass instance ToTokens PosToken (Branch Name)
-deriving anyclass instance ToTokens PosToken (Pattern Name)
-deriving anyclass instance ToTokens PosToken (TypeSig Name)
-deriving anyclass instance ToTokens PosToken (GivethSig Name)
-deriving anyclass instance ToTokens PosToken (GivenSig Name)
-deriving anyclass instance ToTokens PosToken (Directive Name)
+deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (Assume Name)
+deriving anyclass instance ToConcreteNodes PosToken (Declare Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (ConDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (Type' Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypedName Name)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Name)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Name)
+deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
+deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
+deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
+deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
+deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
+deriving anyclass instance ToConcreteNodes PosToken (Pattern Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 
-instance ToTokens PosToken Name where
-  toTokens (Name ann _) =
-    applyTokensWithHoles ann []
-  toTokens (PreDef ann _) =
-    applyTokensWithHoles ann []
+instance ToConcreteNodes PosToken Int where
+  toNodes _txt = pure []
+  -- TODO: This is lossy and should be improved (but we should not need to
+  -- exact-print inference variables).
 
-instance ToTokens PosToken Lit where
-  toTokens (NumericLit ann _) =
-    applyTokensWithHoles ann []
-  toTokens (StringLit ann _) =
-    applyTokensWithHoles ann []
+instance ToConcreteNodes PosToken Name where
+  toNodes (MkName ann _) =
+    flattenConcreteNodes ann []
+
+instance ToConcreteNodes PosToken RawName where
+  toNodes _rn = pure []
+  -- TODO: This is lossy and should be improved (but we should not need to
+  -- exact-print inference variables).
+
+instance ToConcreteNodes PosToken Lit where
+  toNodes (NumericLit ann _) =
+    flattenConcreteNodes ann []
+  toNodes (StringLit ann _) =
+    flattenConcreteNodes ann []
+
+-- -- ----------------------------------------------------------------------------
+-- -- Source Range manipulation
+-- -- ----------------------------------------------------------------------------
+
+class HasSrcRange a where
+  rangeOf :: a -> Maybe SrcRange
+
+instance HasSrcRange a => HasSrcRange [a] where
+  rangeOf as = do
+    ne <- NonEmpty.nonEmpty as
+    l <- rangeOf $ NonEmpty.head ne
+    h <- rangeOf $ NonEmpty.last ne
+    lens <- traverse rangeOf ne
+    pure MkSrcRange
+      { start = l.start
+      , end = h.end
+      , length = sum $ fmap (.length) lens
+      }
+
+instance HasSrcRange (CsnCluster_ a) where
+  rangeOf cluster = rangeOf cluster.payload
+
+instance HasSrcRange (ConcreteSyntaxNode_ a) where
+  rangeOf csn = csn.range
+
+rangeOfNode :: ToConcreteNodes t a => a -> Maybe SrcRange
+rangeOfNode a = case runExcept $ toNodes a of
+  Left _ -> Nothing
+  Right e -> rangeOf e
+

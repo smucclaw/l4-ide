@@ -4,7 +4,7 @@ GIVEN x IS A NUMBER
       y IS A NUMBER
 adder x y MEANS y + x
 
-#EVAL adder OF 4 AND 6
+#EVAL adder OF 4, 6
 #EVAL adder
         4
         6
@@ -12,10 +12,14 @@ adder x y MEANS y + x
 DECLARE Person
   HAS name IS A STRING
 
+ASSUME walks  IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME eats   IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME drinks IS A FUNCTION FROM Person TO BOOLEAN
+
 GIVEN p IS A Person
 DECIDE `must sing` OF p
-    IF        walks
-       AND    eats
-           OR drinks
+    IF        walks p
+       AND    eats p
+           OR drinks p
 
 #CHECK `must sing` OF Person WITH name IS "Taylor Swift"

@@ -1,0 +1,22 @@
+§ `Example of CONSIDER construct`
+
+DECLARE PairOrTriple a
+  IS ONE OF
+    MkPair HAS
+      x IS AN a
+      y IS AN a
+    MkTriple HAS
+      x IS AN a
+      y IS AN a
+      z IS AN a
+
+GIVETH A PairOrTriple NUMBER
+aNumberTriple MEANS
+  MkTriple OF 3, 4, 5
+
+GIVEN p IS A PairOrTriple NUMBER
+GIVETH A NUMBER
+sumPairOrTriple p MEANS
+  CONSIDER p
+  WHEN MkPair OF px, py       THEN px + py
+  WHEN MkTriple OF px, py, pz THEN px + py + pz

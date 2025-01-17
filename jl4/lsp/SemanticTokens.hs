@@ -8,7 +8,7 @@
 module SemanticTokens where
 
 import L4.Annotation
-import L4.ExactPrint (AnyHoleFit_, EPError (..), genericToTokens)
+import L4.ExactPrint (EPError (..), genericToNodes)
 import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
 import qualified L4.Lexer as Lexer
 import L4.Syntax
@@ -31,7 +31,7 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 
 type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except EPError)
 
-type HoleFit_ t = AnyHoleFit_ (SemanticTokensM t) [SemanticToken]
+type HoleFit_ t = SemanticTokensM t [SemanticToken]
 
 -- I would prefer to avoid the duplication between this class and
 -- the ToTokens class.
@@ -45,7 +45,7 @@ class ToSemTokens t a where
     a ->
     HoleFit_ t
   toSemTokens =
-    genericToTokens (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
+    genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
 traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
 traverseCsnWithHoles (Anno []) _ = pure []
@@ -193,10 +193,11 @@ deriving anyclass instance ToSemTokens PosToken (ConDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Type' Name)
 deriving anyclass instance ToSemTokens PosToken (TypedName Name)
 deriving anyclass instance ToSemTokens PosToken (OptionallyTypedName Name)
+deriving anyclass instance ToSemTokens PosToken (OptionallyNamedType Name)
 deriving anyclass instance ToSemTokens PosToken (Decide Name)
 deriving anyclass instance ToSemTokens PosToken (AppForm Name)
 deriving anyclass instance ToSemTokens PosToken (Expr Name)
-deriving anyclass instance ToSemTokens PosToken (NamedValue Name)
+deriving anyclass instance ToSemTokens PosToken (NamedExpr Name)
 deriving anyclass instance ToSemTokens PosToken (Branch Name)
 deriving anyclass instance ToSemTokens PosToken (Pattern Name)
 deriving anyclass instance ToSemTokens PosToken (TypeSig Name)
@@ -204,11 +205,15 @@ deriving anyclass instance ToSemTokens PosToken (GivethSig Name)
 deriving anyclass instance ToSemTokens PosToken (GivenSig Name)
 deriving anyclass instance ToSemTokens PosToken (Directive Name)
 
+instance ToSemTokens PosToken Int where
+  toSemTokens _ = pure []
+
 instance ToSemTokens PosToken Name where
-  toSemTokens (Name ann _) =
+  toSemTokens (MkName ann _) =
     traverseCsnWithHoles ann []
-  toSemTokens (PreDef ann _) =
-    traverseCsnWithHoles ann []
+
+instance ToSemTokens PosToken RawName where
+  toSemTokens _ = pure []
 
 instance ToSemTokens PosToken Lit where
   toSemTokens (NumericLit ann _) =

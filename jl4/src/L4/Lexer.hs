@@ -110,8 +110,8 @@ data TokenType =
   | TKThen
   | TKElse
   | TKOtherwise
-  | TKFalse
-  | TKTrue
+  -- | TKFalse
+  -- | TKTrue
   | TKAnd
   | TKOr
   | TKNot
@@ -292,8 +292,8 @@ keywords =
     , ("THEN"       , TKThen       )
     , ("ELSE"       , TKElse       )
     , ("OTHERWISE"  , TKOtherwise  )
-    , ("FALSE"      , TKFalse      )
-    , ("TRUE"       , TKTrue       )
+    -- , ("FALSE"      , TKFalse      )
+    -- , ("TRUE"       , TKTrue       )
     , ("AND"        , TKAnd        )
     , ("OR"         , TKOr         )
     , ("NOT"        , TKNot        )
@@ -609,8 +609,8 @@ displayPosToken (MkPosToken _r tt) =
     TKThen           -> "THEN"
     TKElse           -> "ELSE"
     TKOtherwise      -> "OTHERWISE"
-    TKFalse          -> "FALSE"
-    TKTrue           -> "TRUE"
+    -- TKFalse          -> "FALSE"
+    -- TKTrue           -> "TRUE"
     TKAnd            -> "AND"
     TKOr             -> "OR"
     TKNot            -> "NOT"
@@ -714,8 +714,8 @@ posTokenCategory =
     TKThen -> CKeyword
     TKElse -> CKeyword
     TKOtherwise -> CIdentifier
-    TKFalse -> CKeyword
-    TKTrue -> CKeyword
+    -- TKFalse -> CKeyword
+    -- TKTrue -> CKeyword
     TKAnd -> CKeyword
     TKOr -> CKeyword
     TKNot -> CKeyword

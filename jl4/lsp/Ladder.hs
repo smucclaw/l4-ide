@@ -11,7 +11,6 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Optics
@@ -19,6 +18,7 @@ import Optics
 ------- Imports for testing -------------
 import Text.Pretty.Simple
 import L4.Parser 
+import L4.TypeCheck (rawNameToText)
 -----------------------------------------
 
 data AndOrTag = All | Any | Leaf
@@ -99,17 +99,16 @@ decideToRuleNode (MkDecide _ sig appform body) =
 -- These limitations are arbitrary, mostly to make sure we have something to show rather
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 exprToRuleNode :: Name -> TypeSig Name -> Expr Name -> Maybe RuleNode
-exprToRuleNode (Name _ name) (MkTypeSig _ givenSig _) body =
+exprToRuleNode (MkName _ name) (MkTypeSig _ givenSig _) body =
   case givenSig of
-    MkGivenSig _ [MkOptionallyTypedName _ (Name _ subject) _] -> do
-        rNode <- traverseExpr subject body
+    MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] -> do
+        rNode <- traverseExpr (rawNameToText subject) body
         pure
           rNode
-            { prePost = Map.fromList [("Pre", "Does the " <> subject <> " " <> name <> "?")]
+            { prePost = Map.fromList [("Pre", "Does the " <> rawNameToText subject <> " " <> rawNameToText name <> "?")]
             }
-    MkGivenSig _ [] -> traverseExpr name body
+    MkGivenSig _ [] -> traverseExpr (rawNameToText name) body
     MkGivenSig _ _xs -> Nothing -- "DECIDEs with more than one GIVEN not currently supported"
-exprToRuleNode _ _ _ = Nothing
 
 traverseExpr :: Text -> Expr Name -> Maybe RuleNode
 traverseExpr subject e = case e of
@@ -122,13 +121,13 @@ traverseExpr subject e = case e of
     Just $
       ruleNode orPrePost $
         node Any [rNode | n <- scanOr e, Just rNode <- [traverseExpr subject n]]
-  Var _ (Name _ verb) ->
-    Just $ ruleNode emptyPrePost $ leaf subject verb
+  Var _ (MkName _ verb) ->
+    Just $ ruleNode emptyPrePost $ leaf subject (rawNameToText verb)
   Equals{} -> Nothing -- Can't handle 'Is' yet
   Not{}    -> Nothing -- Can't handle 'Not' yet
   Proj{}   -> Nothing -- Can't handle 'Proj' yet
-  App _ (Name _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject leafName
-  x        -> Nothing
+  App _ (MkName _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject (rawNameToText leafName)
+  _        -> Nothing
     -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
 scanAnd :: Expr Name -> [Expr Name]

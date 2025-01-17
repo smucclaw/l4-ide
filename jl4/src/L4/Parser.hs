@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DataKinds #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -26,6 +27,9 @@ import L4.Annotation
 import L4.Lexer as L
 import qualified L4.ParserCombinators as P
 import L4.Syntax
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Foldable as Foldable
+import GHC.Records
 
 type Parser = Parsec Void TokenStream
 
@@ -104,18 +108,27 @@ fab <<$>> fga = (fmap . fmap) fab fga
 -- | A quoted identifier between backticks.
 quotedName :: Parser (Epa Name)
 quotedName =
-  Name mempty <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
+  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
 
 simpleName :: Parser (Epa Name)
 simpleName =
-  Name mempty <<$>> spacedToken (preview #_TIdentifier) "identifier"
+  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
 name :: Parser Name
 name = attachEpa (quotedName <|> simpleName) <?> "identifier"
 
-indentedName :: Pos -> Parser Name
-indentedName p =
-  withIndent GT p $ \_ -> name
+tokenAsName :: TokenType -> Parser Name
+tokenAsName tt =
+  attachEpa (lexToEpa' . fmap convert <$> spacedToken_ tt)
+  where
+    convert :: PosToken -> (PosToken, Name)
+    convert p@(MkPosToken range _) = (MkPosToken range (TIdentifier t), MkName mempty (NormalName t))
+      where
+        t = displayPosToken p
+
+indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
+indented parser pos =
+  withIndent GT pos $ \ _ -> parser
 
 program :: Parser (Program Name)
 program = do
@@ -132,11 +145,19 @@ program = do
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
   current <- Lexer.indentLevel
+  manyLinesPos current p
+
+manyLinesPos :: Pos -> Parser a -> Parser [a]
+manyLinesPos current p = do
   many (withIndent EQ current (const p))
 
 someLines :: Parser a -> Parser [a]
 someLines p = do
   current <- Lexer.indentLevel
+  someLinesPos current p
+
+someLinesPos :: Pos -> Parser a -> Parser [a]
+someLinesPos current p = do
   some (withIndent EQ current (const p))
 
 -- | Run the parser only when the indentation is correct and fail otherwise.
@@ -220,7 +241,7 @@ assume = do
       <*> annoHole appForm
       <*  annoLexeme (spacedToken_ TKIs)
       <*  optional article
-      <*> annoHole (indentedType current)
+      <*> annoHole (indented type' current)
 
 declare :: Parser (Declare Name)
 declare =
@@ -286,8 +307,8 @@ appForm = do
   attachAnno $
     MkAppForm emptyAnno
       <$> annoHole name
-      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TKAnd))
-          <|> annoHole (lmany (indentedName current))
+      <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TComma))
+          <|> annoHole (lmany (indented name current))
           )
 
 typeSig :: Parser (TypeSig Name)
@@ -311,16 +332,12 @@ giveth = do
     MkGivethSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiveth)
       <*  optional article
-      <*> annoHole (indentedType current)
+      <*> annoHole (indented type' current)
 
 -- primarily for testing
 expr :: Parser (Expr Name)
 expr =
   indentedExpr (mkPos 1)
-
-indentedType :: Pos -> Parser (Type' Name)
-indentedType p =
-  withIndent GT p $ \_ -> type'
 
 type' :: Parser (Type' Name)
 type' =
@@ -330,14 +347,22 @@ type' =
   <|> fun
   <|> forall'
 
+-- We don't actually currently allow parsing an optional name
+optionallyNamedType :: Parser (OptionallyNamedType Name)
+optionallyNamedType = do
+  attachAnno $
+    MkOptionallyNamedType emptyAnno
+    <$> annoHole (pure Nothing)
+    <*> annoHole type'
+
 tyApp :: Parser (Type' Name)
 tyApp = do
   current <- Lexer.indentLevel
   attachAnno $
     TyApp emptyAnno
-    <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
-        <|> annoHole (lmany (indentedType current))
+    <$> annoHole (tokenAsName TKList <|> name)
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedToken_ TKAnd))
+        <|> annoHole (lmany (indented type' current))
         )
 
 fun :: Parser (Type' Name)
@@ -347,9 +372,9 @@ fun = do
     Fun emptyAnno
     <$  annoLexeme (spacedToken_ TKFunction)
     <*  annoLexeme (spacedToken_ TKFrom)
-    <*> annoHole (lsepBy1 (indentedType current) (spacedToken_ TKAnd))
+    <*> annoHole (lsepBy1 (indented optionallyNamedType current) (spacedToken_ TKAnd))
     <*  annoLexeme (spacedToken_ TKTo)
-    <*> annoHole (indentedType current)
+    <*> annoHole (indented type' current)
 
 forall' :: Parser (Type' Name)
 forall' = do
@@ -360,7 +385,7 @@ forall' = do
     <*  annoLexeme (spacedToken_ TKAll)
     <*> annoHole (lsepBy1 name (spacedToken_ TKAnd))
     <*  optional article
-    <*> annoHole (indentedType current)
+    <*> annoHole (indented type' current)
 
 article :: Compose Parser (WithAnno_ PosToken) PosToken
 article =
@@ -379,7 +404,7 @@ lmany :: Parser a -> Parser [a]
 lmany pp =
   fmap concat $ manyLines $ some pp
 
-lsepBy :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy pp sep =
   fmap concat $ manyLines $ do
     (ps, seps) <- P.sepBy1 pp sep
@@ -390,9 +415,20 @@ lsepBy pp sep =
     zipWithLeftovers [] _  = []
     zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
-lsepBy1 :: forall a. HasAnno a => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
   fmap concat $ someLines $ do
+    (ps, seps) <- P.sepBy1 pp sep
+    pure $ zipWithLeftovers ps seps
+  where
+    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
+    zipWithLeftovers ps [] = ps
+    zipWithLeftovers [] _  = []
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+
+lsepBy1Pos :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Pos -> Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy1Pos current pp sep =
+  fmap concat $ someLinesPos current $ do
     (ps, seps) <- P.sepBy1 pp sep
     pure $ zipWithLeftovers ps seps
   where
@@ -430,7 +466,7 @@ param =
 -- the right of the given column threshold.
 --
 indentedExpr :: Pos -> Parser (Expr Name)
-indentedExpr p = do
+indentedExpr p =
   withIndent GT p $ \_ -> do
     e <- baseExpr
     efs <- many (expressionCont p)
@@ -550,6 +586,19 @@ baseExpr =
   <|> lit
   <|> parenExpr
 
+atomicExpr :: Parser (Expr Name)
+atomicExpr =
+      lit
+  <|> nameAsApp
+  <|> parenExpr
+
+nameAsApp :: Parser (Expr Name)
+nameAsApp =
+  attachAnno $
+    App emptyAnno
+    <$> annoHole name
+    <*> annoHole (pure [])
+
 lit :: Parser (Expr Name)
 lit = attachAnno $
   Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
@@ -574,14 +623,16 @@ parenExpr =
     <*> annoHole expr
     <*  annoLexeme (spacedToken_ TPClose)
 
+-- | Parser for function application.
+--
 app :: Parser (Expr Name)
 app = do
   current <- Lexer.indentLevel
   attachAnno $
     App emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedToken_ TKAnd))
-        <|> annoHole (lmany (indentedExpr current))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedToken_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
+        <|> annoHole (lmany (indented atomicExpr current))
         )
 
 namedApp :: Parser (Expr Name)
@@ -590,13 +641,13 @@ namedApp = do
   attachAnno $
     AppNamed emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedValue current) (spacedToken_ TComma))
+    <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedExpr current) (spacedToken_ TComma))
         )
 
-namedValue :: Pos -> Parser (NamedValue Name)
-namedValue current  =
+namedExpr :: Pos -> Parser (NamedExpr Name)
+namedExpr current  =
   attachAnno $
-    MkNamedValue emptyAnno
+    MkNamedExpr emptyAnno
       <$> annoHole   name
       <*  annoLexeme (spacedToken_ TKIs)
       <*  optional article
@@ -670,6 +721,18 @@ basePattern :: Parser (Pattern Name)
 basePattern =
   patApp
 
+atomicPattern :: Parser (Pattern Name)
+atomicPattern =
+  --    lit
+  nameAsPatApp
+
+nameAsPatApp :: Parser (Pattern Name)
+nameAsPatApp =
+  attachAnno $
+    PatApp emptyAnno
+    <$> annoHole name
+    <*> annoHole (pure [])
+
 patternCont :: Pos -> Parser (Cont Pattern)
 patternCont = cont patOperator basePattern
 
@@ -683,8 +746,8 @@ patApp = do
   attachAnno $
     PatApp emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indentedPattern current) (spacedToken_ TKAnd))
-        <|> annoHole (lmany (indentedPattern current))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
+        <|> annoHole (lmany (indented atomicPattern current))
         )
 
 -- Some manual left-factoring here to prevent left-recursion
@@ -914,6 +977,33 @@ type Epa = Epa_ PosToken
 
 type Lexeme = Lexeme_ PosToken
 
+mkConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
+mkConcreteSyntaxNode posTokens =
+  ConcreteSyntaxNode
+    { tokens = posTokens
+    , range = do
+        ne <- NonEmpty.nonEmpty posTokens
+        let l = NonEmpty.last ne
+            h = NonEmpty.last ne
+
+        pure MkSrcRange
+          { start = l.range.start
+          , end = h.range.end
+          , length = sum $ fmap (.range.length) ne
+          }
+    , visibility =
+        if Foldable.null posTokens
+          then Hidden
+          else Visible
+    }
+
+mkHiddenCsnCluster :: (HasField "range" a SrcRange) => CsnCluster_ a
+mkHiddenCsnCluster =
+  CsnCluster
+    { payload = mkConcreteSyntaxNode []
+    , trailing = mkConcreteSyntaxNode []
+    }
+
 -- ----------------------------------------------------------------------------
 -- Annotation Combinators
 -- ----------------------------------------------------------------------------
@@ -929,15 +1019,15 @@ toAnno :: WithAnno_ t a -> Anno_ t
 toAnno (WithAnno ann _) = ann
 
 annoHole :: Parser e -> Compose Parser (WithAnno_ t) e
-annoHole p = Compose $ fmap (WithAnno (mkAnno [mkHole])) p
+annoHole p = Compose $ fmap (WithAnno mkHoleAnno) p
 
-annoEpa :: Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
+annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
 annoEpa p = Compose $ fmap epaToAnno p
 
-annoLexeme :: Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
+annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
 annoLexeme = annoEpa . fmap lexToEpa
 
-annoLexemes :: Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
+annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
 annoLexemes = annoEpa . fmap lexesToEpa
 
 instance Applicative (WithAnno_ t) where
@@ -947,7 +1037,7 @@ instance Applicative (WithAnno_ t) where
 attachAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
 attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
 
-attachEpa :: (HasAnno e, AnnoToken e ~ t) => Parser (Epa_ t e) -> Parser e
+attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
 attachEpa =
   attachAnno . annoEpa
 
@@ -955,11 +1045,11 @@ mkHoleAnno :: Anno_ t
 mkHoleAnno =
   mkAnno [mkHole]
 
-mkSimpleEpaAnno :: Epa_ t a -> Anno_ t
+mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t
 mkSimpleEpaAnno =
   toAnno . epaToAnno
 
-epaToAnno :: Epa_ t a -> WithAnno_ t a
+epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t a
 epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
  where
   cluster =

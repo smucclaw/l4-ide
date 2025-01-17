@@ -5,11 +5,13 @@ DECIDE primes IS
     3 FOLLOWED BY
     5 FOLLOWED BY
     7 FOLLOWED BY
-    11
+    11 FOLLOWED BY
+    EMPTY
 
 DECIDE countries IS
     "Germany" FOLLOWED BY
     "\214sterreich" FOLLOWED BY
     "\26032\21152\22369\20849\21644\22269" FOLLOWED BY -- Unicode test
-    "Some \"country\"" -- escapes
+    "Some \"country\"" FOLLOWED BY -- escapes
+    EMPTY
 
