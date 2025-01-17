@@ -36,6 +36,7 @@ import Control.Monad.Logic
 import Data.Bifunctor
 import Data.Containers.ListUtils (nubOrd)
 import Data.Either (partitionEithers)
+import Optics.Core (gplate, traverseOf)
 
 import qualified L4.Parser as Parser
 import L4.ExactPrint
@@ -139,10 +140,25 @@ initialCheckState env =
 
 doCheckProgram :: Program Name -> ([CheckErrorWithContext], Program Resolved)
 doCheckProgram program =
-  case runCheck (inferProgram program) (initialCheckState initialEnvironment) of
-    []       -> error "internal error: type checking without result"
-    [(w, _)] -> runWith w
-    _        -> error "internal error: type checking with multiple results"
+  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment) of
+    (w, s) ->
+      let
+        (errs, rprog) = runWith w
+      in
+        -- might be nicer to be able to do this within the inferProgram call / at the end of it
+        case runCheckUnique (traverse applySubst errs) s of
+          (w', _s') ->
+            let
+              (moreErrs, substErrs) = runWith w'
+            in
+              (substErrs ++ moreErrs, rprog)
+
+runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique c s =
+  case runCheck c s of
+    [] -> error "internal error: expected unique result, got none"
+    [(w, s)] -> (w, s)
+    _ -> error "internal error: expected unique result, got several"
 
 preDef :: Text -> Name
 preDef t = MkName (mkAnno [mkCsn (CsnCluster (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos "" 0 0) (MkSrcPos "" 0 0) 0) (TIdentifier t)] Nothing Visible) (ConcreteSyntaxNode [] Nothing Hidden))]) (PreDef t)
@@ -247,7 +263,7 @@ data CheckErrorWithContext =
     { kind    :: !CheckError
     , context :: !CheckErrorContext
     }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Generic, Show)
 
 data CheckError =
     OutOfScopeError Name (Type' Resolved)
@@ -265,7 +281,7 @@ data CheckError =
   | InternalAmbiguityError
   | IllegalAppNamed (Type' Resolved)
   | IncompleteAppNamed [OptionallyNamedType Resolved]
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Generic, Show)
 
 data CheckErrorContext =
     WhileCheckingDeclare Name CheckErrorContext
@@ -274,7 +290,7 @@ data CheckErrorContext =
   | WhileCheckingPattern (Pattern Name) CheckErrorContext
   | WhileCheckingType (Type' Name) CheckErrorContext
   | None
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Generic, Show)
 
 data CheckState =
   MkCheckState
@@ -1224,22 +1240,21 @@ prettyCheckErrorContext (WhileCheckingPattern _p ctx)    = prettyCheckErrorConte
 prettyCheckErrorContext (WhileCheckingType _t ctx)       = prettyCheckErrorContext ctx
 
 prettyCheckError :: CheckError -> Text
-prettyCheckError (OutOfScopeError n t)                   = "out of scope: " <> simpleprint n <> ", of type: " <> simpleprint t
-prettyCheckError (KindError k ts)                        = "kind error: expected " <> Text.pack (show k) <> ", received " <> Text.pack (show (length ts))
--- prettyCheckError (InternalUnificationErrorDef n1 n2)     = "cannot unify [internal, called on def]: " <> simpleprint n1 <> ", " <> simpleprint n2
-prettyCheckError (UnificationErrorRef n1 n2)             = "cannot unify: " <> simpleprint n1 <> ", " <> simpleprint n2
-prettyCheckError (UnificationError t1 t2)                = "cannot unify: " <> simpleprint t1 <> ", " <> simpleprint t2
-prettyCheckError (OccursCheck t1 t2)                     = "occurs check: " <> simpleprint t1 <> ", " <> simpleprint t2
-prettyCheckError (InconsistentNameInSignature n Nothing) = "inconsistent name (listed in signature, but not in the definition): " <> simpleprint n
+prettyCheckError (OutOfScopeError n t)                     = "out of scope: " <> simpleprint n <> ", of type: " <> simpleprint t
+prettyCheckError (KindError k ts)                          = "kind error: expected " <> Text.pack (show k) <> ", received " <> Text.pack (show (length ts))
+prettyCheckError (UnificationErrorRef n1 n2)               = "cannot unify: " <> simpleprint n1 <> ", " <> simpleprint n2
+prettyCheckError (UnificationError t1 t2)                  = "cannot unify: " <> simpleprint t1 <> ", " <> simpleprint t2
+prettyCheckError (OccursCheck t1 t2)                       = "occurs check: " <> simpleprint t1 <> ", " <> simpleprint t2
+prettyCheckError (InconsistentNameInSignature n Nothing)   = "inconsistent name (listed in signature, but not in the definition): " <> simpleprint n
 prettyCheckError (InconsistentNameInSignature n (Just n')) = "inconsistent name: " <> simpleprint n <> ", definition has: " <> simpleprint n'
-prettyCheckError (InconsistentNameInAppForm n Nothing)   = "inconsistent name (listed in definition, but not in the signature): " <> simpleprint n
-prettyCheckError (InconsistentNameInAppForm n (Just n')) = "inconsistent name: " <> simpleprint n <> ", signature has: " <> simpleprint n'
-prettyCheckError (AmbiguousTermError n rs)               = "ambiguous: " <> simpleprint n <> ", options:\n" <> Text.intercalate "\n" (simpleprint . snd <$> rs)
-prettyCheckError (AmbiguousTypeError n _rs)              = "ambiguous: " <> simpleprint n
-prettyCheckError InternalAmbiguityError                  = "ambiguous [internal]"
-prettyCheckError (NonDistinctError _)                    = "non-distinct names"
-prettyCheckError (IllegalAppNamed t)                     = "named application to a non-function: " <> simpleprint t
-prettyCheckError (IncompleteAppNamed _onts)              = "missing arguments in named application"
+prettyCheckError (InconsistentNameInAppForm n Nothing)     = "inconsistent name (listed in definition, but not in the signature): " <> simpleprint n
+prettyCheckError (InconsistentNameInAppForm n (Just n'))   = "inconsistent name: " <> simpleprint n <> ", signature has: " <> simpleprint n'
+prettyCheckError (AmbiguousTermError n rs)                 = "ambiguous: " <> simpleprint n <> ", options:\n" <> Text.intercalate "\n" (simpleprint . snd <$> rs)
+prettyCheckError (AmbiguousTypeError n _rs)                = "ambiguous: " <> simpleprint n
+prettyCheckError InternalAmbiguityError                    = "ambiguous [internal]"
+prettyCheckError (NonDistinctError _)                      = "non-distinct names"
+prettyCheckError (IllegalAppNamed t)                       = "named application to a non-function: " <> simpleprint t
+prettyCheckError (IncompleteAppNamed _onts)                = "missing arguments in named application"
 
 class SimplePrint a where
   simpleprint :: a -> Text
@@ -1278,3 +1293,38 @@ exactprint' x =
     Left _  -> "<exactprint-error>"
     Right t -> t
 
+-- | A class for applying the subsitution on inference variables exhaustively.
+--
+-- Note that we currently are applying the substitution late, which means we have
+-- to recursively apply it.
+--
+class ApplySubst a where
+  applySubst :: a -> Check a
+
+instance ApplySubst (Type' Resolved) where
+  applySubst (Type  ann)       = pure (Type ann)
+  applySubst (TyApp ann n ts)  = TyApp ann n <$> traverse applySubst ts
+  applySubst (Fun ann onts t)  = Fun ann <$> traverse applySubst onts <*> applySubst t
+  applySubst (Forall ann ns t) = Forall ann ns <$> applySubst t
+  applySubst (InfVar ann rn i) = do
+    s <- use #substitution
+    case Map.lookup i s of
+      Nothing -> pure (InfVar ann rn i)
+      Just t  -> do
+        -- we actually modify the substitution so that we don't do the same work many times if the same variable occurs often
+        -- we are still traversing every time though; we could do better
+        t' <- applySubst t
+        modifying #substitution (Map.insert i t')
+        pure t'
+
+instance ApplySubst (OptionallyNamedType Resolved) where
+  applySubst (MkOptionallyNamedType ann mn t) = MkOptionallyNamedType ann mn <$> applySubst t
+
+instance ApplySubst CheckError where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckError) applySubst
+
+instance ApplySubst CheckErrorContext where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorContext) applySubst
+
+instance ApplySubst CheckErrorWithContext where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
