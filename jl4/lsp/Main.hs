@@ -153,7 +153,7 @@ lspHandlers logger rin = mapHandlers goReq goNot (handle logger)
     liftIO $ atomically $ writeTChan rin $ ReactorAction (runLspT env $ f msg)
 
 handle :: (m ~ LspM Config) => LogAction m (WithSeverity Text) -> Handlers m
-handle _logger =
+handle logger =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized mempty
@@ -178,6 +178,28 @@ handle _logger =
         pure ()
     , -- Subscribe to notification changes
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
+    , requestHandler SMethod_TextDocumentDefinition $ \req responder -> do
+        let
+          doc :: Uri
+          doc = req ^. J.params ^. J.textDocument . J.uri
+          pos :: Position
+          pos = req ^. J.params ^. J.position
+        mloc <- gotoDefinition (LSP.toNormalizedUri doc) pos
+        case mloc of
+          Nothing  -> responder $ Right $ InR $ InR $ Null
+          Just loc -> responder $ Right $ InL $ Definition (InL loc)
+    , requestHandler SMethod_TextDocumentHover $ \ req responder -> do
+        let
+          doc :: Uri
+          doc = req ^. J.params ^. J.textDocument . J.uri
+          pos :: Position
+          pos = req ^. J.params ^. J.position
+        logger <& "Called hover" `WithSeverity` Info
+        mh <- findHover (LSP.toNormalizedUri doc) pos
+        logger <& ("Returned from hover with: " <> Text.pack (show mh)) `WithSeverity` Info
+        case mh of
+          Nothing  -> responder $ Right $ InR $ Null
+          Just h -> responder $ Right $ InL $ h
     , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
         let
           (TRequestMessage _ _ _ (ExecuteCommandParams _ _cid xdata)) = req
@@ -202,7 +224,7 @@ handle _logger =
                               , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
                               , _xdata = Nothing
                               }
-                      (_, Just prog) ->
+                      (_, Just (prog, _, _)) ->
                         responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
           _ ->
             responder $ Left $ undefined
@@ -234,7 +256,7 @@ handle _logger =
                       , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
                       , _xdata = Nothing
                       }
-              (_, Just prog) -> do
+              (_, Just (prog, _, _)) -> do
                 case runExcept $ runReaderT (SemanticTokens.toSemTokens prog) SemanticTokens.defaultSemanticTokenCtx of
                   Left err -> do
                     -- TODO: log error
@@ -306,16 +328,58 @@ sendDiagnostics fileUri = do
       publishDiagnostics 100 fileUri (Just version) (partitionBySource diags)
 
 -- ----------------------------------------------------------------------------
+-- LSP Go to Definition
+-- ----------------------------------------------------------------------------
+
+gotoDefinition :: NormalizedUri -> Position -> LspM Config (Maybe Location)
+gotoDefinition fileUri pos = do
+  mfile <- getVirtualFile fileUri
+  case mfile of
+    Nothing -> pure Nothing
+    Just (VirtualFile _version _ rope) -> do
+      let
+        contents = Rope.toText rope
+        (_diags, mr) = parseJL4WithWithDiagnostics uri contents
+
+      pure $ do
+        (_, rprog, _) <- mr
+        range <- findDefinition (lspPositionToSrcPos pos) rprog
+        pure (Location uri (srcRangeToLSPRange (Just range)))
+  where
+    uri = LSP.fromNormalizedUri fileUri
+
+-- ----------------------------------------------------------------------------
+-- LSP Hover
+-- ----------------------------------------------------------------------------
+
+findHover :: NormalizedUri -> Position -> LspT Config IO (Maybe Hover)
+findHover fileUri pos = do
+  mfile <- getVirtualFile fileUri
+  case mfile of
+    Nothing -> pure Nothing
+    Just (VirtualFile _version _ rope) -> do
+      let
+        contents = Rope.toText rope
+        (_diags, mr) = parseJL4WithWithDiagnostics uri contents
+
+      pure $ do
+        (_, rprog, subst) <- mr
+        (range, t) <- findType (lspPositionToSrcPos pos) rprog
+        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution subst t)))) (Just (srcRangeToLSPRange (Just range))))
+  where
+    uri = LSP.fromNormalizedUri fileUri
+
+-- ----------------------------------------------------------------------------
 -- JL4 Parser
 -- ----------------------------------------------------------------------------
 
-parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name))
+parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name, Program Resolved, Substitution))
 parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program fp content of
   Left err ->
     (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing)
   Right prog ->
     case doCheckProgram prog of
-      (errs, _p) -> (fmap checkErrorToDiagnostic errs, Just prog)
+      (errs, rprog, subst) -> (fmap checkErrorToDiagnostic errs, Just (prog, rprog, subst))
  where
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
@@ -324,7 +388,7 @@ checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
 checkErrorToDiagnostic checkError =
   Diagnostic
     (srcRangeToLSPRange r)
-    (Just LSP.DiagnosticSeverity_Error) -- severity
+    (Just (translateSeverity (severity checkError))) -- LSP.DiagnosticSeverity_Error) -- severity
     Nothing -- code
     Nothing
     (Just "check") -- source (i.e., a string describing the source component of this diagnostic)
@@ -335,16 +399,24 @@ checkErrorToDiagnostic checkError =
   where
     r = rangeOf checkError
 
-    srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
-    srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
-    srcRangeToLSPRange (Just range) = LSP.Range (srcPosToLSPPosition range.start) (srcPosToLSPPosition range.end)
+    translateSeverity SInfo  = LSP.DiagnosticSeverity_Information
+    translateSeverity SWarn  = LSP.DiagnosticSeverity_Warning
+    translateSeverity SError = LSP.DiagnosticSeverity_Error
 
-    srcPosToLSPPosition :: SrcPos -> LSP.Position
-    srcPosToLSPPosition s =
-      LSP.Position
-        { _character = fromIntegral $ s.column - 1
-        , _line = fromIntegral $ s.line - 1
-        }
+srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
+srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
+srcRangeToLSPRange (Just range) = LSP.Range (srcPosToLSPPosition range.start) (srcPosToLSPPosition range.end)
+
+srcPosToLSPPosition :: SrcPos -> LSP.Position
+srcPosToLSPPosition s =
+  LSP.Position
+    { _character = fromIntegral $ s.column - 1
+    , _line = fromIntegral $ s.line - 1
+    }
+
+lspPositionToSrcPos :: LSP.Position -> SrcPos
+lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
+  MkSrcPos "" (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 parseErrorToDiagnostic :: Parser.PError -> Diagnostic
 parseErrorToDiagnostic pError =

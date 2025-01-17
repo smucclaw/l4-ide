@@ -23,6 +23,10 @@ DECLARE OPTIONAL a
     Missing
     Just HAS payload IS AN a
 
+DECLARE PAIR OF a, b
+  HAS fst IS AN a
+      snd IS A  b
+
 GIVEN  a      IS A TYPE
        b      IS A TYPE
        f      IS A FUNCTION FROM a TO b
@@ -57,7 +61,7 @@ GIVEN  a      IS A TYPE
        c      IS A TYPE
        left   IS A FUNCTION FROM a TO c
        right  IS A FUNCTION FROM b TO c
-       choice IS A Choice OF a AND b
+       choice IS A Choice OF a, b
 GIVETH A c
 choose left right choice MEANS
   CONSIDER choice
@@ -71,4 +75,26 @@ GIVETH AN a
 fromOptional default o MEANS
   CONSIDER o
     WHEN Missing THEN default
-    WHEN Just a  THEN a
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      c IS A TYPE
+      op IS A FUNCTION FROM a AND b TO c
+      list1 IS A LIST OF a
+      list2 IS A LIST OF b
+GIVETH A LIST OF c
+zipWith op list1 list2 MEANS
+  CONSIDER list1
+    WHEN EMPTY THEN EMPTY
+    WHEN x FOLLOWED BY xs THEN
+      CONSIDER list2
+      WHEN EMPTY THEN EMPTY
+      WHEN y FOLLOWED BY ys THEN op x y FOLLOWED BY zipWith op xs ys
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      list1 IS A LIST OF a
+      list2 IS A LIST OF b
+GIVETH A LIST OF PAIR a b
+zip list1 list2 MEANS
+  zipWith PAIR list1 list2

@@ -41,28 +41,27 @@ type HoleFit_ t = SemanticTokensM t [SemanticToken]
 class ToSemTokens t a where
   toSemTokens :: a -> HoleFit_ t
   default toSemTokens ::
-    (SOP.Generic a, All (AnnoFirst t (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t) =>
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
     HoleFit_ t
   toSemTokens =
     genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno []) _ = pure []
-traverseCsnWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
-  [] -> lift $ throwE $ InsufficientHoleFit callStack
-  (x : xs) -> do
-    toks <- x
-    restOfTokens <- traverseCsnWithHoles (Anno cs) xs
-    pure $ toks <> restOfTokens
-traverseCsnWithHoles (Anno (AnnoCsn m : cs)) xs = do
-  ctx <- ask
-  let
-    transformSyntaxNode token = toSemToken token <$> ctx.toSemanticToken token <*> ctx.getModifiers token
-    thisSyntaxNode = Maybe.mapMaybe transformSyntaxNode (csnTokens m)
-
-  restOfTokens <- traverseCsnWithHoles (Anno cs) xs
-  pure $ thisSyntaxNode <> restOfTokens
+traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
+traverseCsnWithHoles (Anno _ csns) = go csns
+  where
+    go [] _ = pure []
+    go (AnnoHole : cs) holeFits =
+      case holeFits of
+        [] -> lift $ throwE $ InsufficientHoleFit callStack
+        (x : xs) -> (<>) <$> x <*> go cs xs
+    go (AnnoCsn m : cs) holeFits = do
+      ctx <- ask
+      let
+        transformSyntaxNode token = toSemToken token <$> ctx.toSemanticToken token <*> ctx.getModifiers token
+        thisSyntaxNode = Maybe.mapMaybe transformSyntaxNode (csnTokens m)
+      restOfTokens <- go cs holeFits
+      pure $ thisSyntaxNode <> restOfTokens
 
 class ToSemToken t where
   toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken

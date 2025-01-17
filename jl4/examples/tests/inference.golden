@@ -1,0 +1,13 @@
+Parsing successful
+inference.l4:24:8-11:
+(FUNCTION FROM NUMBER TO NUMBER)
+inference.l4:25:8-17:
+(LIST OF NUMBER)
+inference.l4:26:8-12:
+NUMBER
+inference.l4:27:8-11:
+NUMBER
+inference.l4:28:8-11:
+(FUNCTION FROM (LIST OF NUMBER) TO NUMBER)
+inference.l4:29:8-11:
+(FUNCTION FROM (LIST OF BOOLEAN) TO BOOLEAN)
