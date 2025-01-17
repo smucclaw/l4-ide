@@ -240,7 +240,7 @@ assume = do
       <$  annoLexeme (spacedToken_ TKAssume)
       <*> annoHole appForm
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  optional article
+--      <*  optional article
       <*> annoHole (indented type' current)
 
 declare :: Parser (Declare Name)
@@ -331,7 +331,7 @@ giveth = do
   attachAnno $
     MkGivethSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiveth)
-      <*  optional article
+--      <*  optional article
       <*> annoHole (indented type' current)
 
 -- primarily for testing
@@ -341,9 +341,11 @@ expr =
 
 type' :: Parser (Type' Name)
 type' =
-      typeKind
-  <|> tyApp
-  <|> fun
+      withOptionalArticle
+      (   typeKind
+      <|> tyApp
+      <|> fun
+      )
   <|> forall'
   <|> parenType
 
@@ -354,8 +356,10 @@ typeKind =
 
 atomicType :: Parser (Type' Name)
 atomicType =
-      typeKind
-  <|> nameAsApp TyApp
+      withOptionalArticle
+      (   typeKind
+      <|> nameAsApp TyApp
+      )
   <|> parenType
 
 parenType :: Parser (Type' Name)
@@ -397,18 +401,25 @@ fun = do
 
 forall' :: Parser (Type' Name)
 forall' = do
-  current <- Lexer.indentLevel
+  -- current <- Lexer.indentLevel
   attachAnno $
     Forall emptyAnno
     <$  annoLexeme (spacedToken_ TKFor)
     <*  annoLexeme (spacedToken_ TKAll)
     <*> annoHole (lsepBy1 name (spacedToken_ TKAnd))
-    <*  optional article
-    <*> annoHole (indented type' current)
+--    <*  optional article
+    <*> annoHole type' -- (indented type' current)
 
 article :: Compose Parser (WithAnno_ PosToken) PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
+
+withOptionalArticle :: (HasAnno a, AnnoToken a ~ PosToken) => Parser a -> Parser a
+withOptionalArticle p =
+  mergeAnno $
+    id
+    <$  optional article
+    <*> annoHole p
 
 {-
 enumType :: Compose Parser WithAnno (Type' Name)
@@ -451,7 +462,7 @@ reqParam =
     MkTypedName emptyAnno
       <$> annoHole name
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  optional article
+--      <*  optional article
       <*> annoHole type'
 
 param :: Parser (OptionallyTypedName Name)
@@ -459,7 +470,7 @@ param =
   attachAnno $
     MkOptionallyTypedName emptyAnno
       <$> annoHole name
-      <*> optional (annoLexeme (spacedToken_ TKIs) *> optional article *> annoHole type')
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole type')
 
 -- |
 -- An expression is a base expression followed by
