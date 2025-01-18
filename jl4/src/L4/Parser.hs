@@ -412,7 +412,7 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno_ PosToken) PosToken
+article :: Compose Parser (WithAnno_ PosToken e) PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
@@ -1045,36 +1045,36 @@ mkHiddenCsnCluster =
 -- Annotation Combinators
 -- ----------------------------------------------------------------------------
 
-data WithAnno_ t a = WithAnno (Anno_ t) a
+data WithAnno_ t e a = WithAnno (Anno_ t e) a
   deriving stock Show
   deriving (Functor)
 
-unAnno :: WithAnno_ t a -> a
+unAnno :: WithAnno_ t e a -> a
 unAnno (WithAnno _ a) = a
 
-toAnno :: WithAnno_ t a -> Anno_ t
+toAnno :: WithAnno_ t e a -> Anno_ t e
 toAnno (WithAnno ann _) = ann
 
-annoHole :: Parser e -> Compose Parser (WithAnno_ t) e
+annoHole :: Parser a -> Compose Parser (WithAnno_ t e) a
 annoHole p = Compose $ fmap (WithAnno mkHoleAnno) p
 
-annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
+annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
 annoEpa p = Compose $ fmap epaToAnno p
 
-annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
+annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
 
-annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
+annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
 annoLexemes = annoEpa . fmap lexesToEpa
 
-instance Applicative (WithAnno_ t) where
+instance Applicative (WithAnno_ t e) where
   pure a = WithAnno emptyAnno a
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
-attachAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
+attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
 attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
 
-mergeAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
+mergeAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
 mergeAnno p = (\ (WithAnno ann e) -> setAnno (mkAnno (mergeInto ann.payload (getAnno e).payload)) e) <$> getCompose p
   where
     mergeInto []               _   = []
@@ -1085,15 +1085,15 @@ attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser
 attachEpa =
   attachAnno . annoEpa
 
-mkHoleAnno :: Anno_ t
+mkHoleAnno :: Anno_ t e
 mkHoleAnno =
   mkAnno [mkHole]
 
-mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t
+mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
   toAnno . epaToAnno
 
-epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t a
+epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
 epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
  where
   cluster =

@@ -41,13 +41,13 @@ type HoleFit_ t = SemanticTokensM t [SemanticToken]
 class ToSemTokens t a where
   toSemTokens :: a -> HoleFit_ t
   default toSemTokens ::
-    (SOP.Generic a, All (AnnoFirst t (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t) =>
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
     HoleFit_ t
   toSemTokens =
     genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
+traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
 traverseCsnWithHoles (Anno []) _ = pure []
 traverseCsnWithHoles (Anno (AnnoHole : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
@@ -63,6 +63,8 @@ traverseCsnWithHoles (Anno (AnnoCsn m : cs)) xs = do
 
   restOfTokens <- traverseCsnWithHoles (Anno cs) xs
   pure $ thisSyntaxNode <> restOfTokens
+traverseCsnWithHoles (Anno (AnnoExtra _ : cs)) holeFits =
+  traverseCsnWithHoles (Anno cs) holeFits
 
 class ToSemToken t where
   toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken

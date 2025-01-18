@@ -387,17 +387,6 @@ addError e = do
   ctx <- use #errorContext
   with (MkCheckErrorWithContext e ctx)
 
-data Resolved =
-    Def Name        -- ^ defining occurrence of name
-  | Ref Name Name   -- ^ referring occurrence of name, original occurrence of name
-  | OutOfScope Name -- ^ used to make progress for names where name resolution failed
-  deriving stock (Eq, Show)
-
-getOriginal :: Resolved -> Name
-getOriginal (Def n)        = n
-getOriginal (Ref _ o)      = o
-getOriginal (OutOfScope n) = n
-
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
   env <- use #environment
@@ -921,8 +910,10 @@ setErrorContext f =
 
 ensureDistinct :: [Name] -> Check ()
 ensureDistinct ns
-  | nubOrd ns == ns = pure ()
-  | otherwise       = addError (NonDistinctError ns)
+  | nubOrd raws == raws = pure ()
+  | otherwise           = addError (NonDistinctError ns)
+  where
+    raws = rawName <$> ns
 
 -- | Makes the given named item known in the current scope,
 -- with the given specification.
@@ -972,6 +963,12 @@ checkConsider ann e branches t = do
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = scope $ do
   setErrorContext (WhileCheckingExpression g)
+  (re, te) <- inferExpr' g
+  let re' = setAnno (mkAnno [AnnoExtra te] <> getAnno re) re
+  pure (re', te)
+
+inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
+inferExpr' g =
   case g of
     And ann e1 e2 ->
       checkBinOp boolean boolean boolean And ann e1 e2
@@ -1350,7 +1347,7 @@ instance ApplySubst CheckErrorWithContext where
 -- list.
 class ToResolved a where
   toResolved :: a -> [Resolved]
-  default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst PosToken ToResolved) (SOP.Code a)) => a -> [Resolved]
+  default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
   toResolved = genericToResolved
 
 deriving anyclass instance ToResolved (Program Resolved)
@@ -1393,12 +1390,12 @@ instance ToResolved a => ToResolved (Maybe a) where
 instance ToResolved a => ToResolved [a] where
   toResolved = concatMap toResolved
 
-genericToResolved :: (SOP.Generic a, SOP.All (AnnoFirst PosToken ToResolved) (SOP.Code a)) => a -> [Resolved]
+genericToResolved :: forall a. (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
 genericToResolved =
   genericToNodes
     (Proxy @ToResolved)
     toResolved
-    (const concat :: Anno -> [[Resolved]] -> [Resolved])
+    (const concat :: Anno' a -> [[Resolved]] -> [Resolved])
 
 findDefinition :: ToResolved a => SrcPos -> a -> Maybe SrcRange
 findDefinition pos a = do

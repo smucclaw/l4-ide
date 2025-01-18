@@ -38,23 +38,24 @@ data CsnCluster_ t = CsnCluster
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass ToExpr
 
-data AnnoElement_ t
+data AnnoElement_ t e
   = AnnoHole
   | AnnoCsn (CsnCluster_ t)
+  | AnnoExtra e
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass ToExpr
 
-mkHoleWithType :: a -> AnnoElement_ t
+mkHoleWithType :: a -> AnnoElement_ t e
 mkHoleWithType _ = AnnoHole
 
-mkHole :: AnnoElement_ t
+mkHole :: AnnoElement_ t e
 mkHole = AnnoHole
 
-mkCsn :: CsnCluster_ t -> AnnoElement_ t
+mkCsn :: CsnCluster_ t -> AnnoElement_ t e
 mkCsn = AnnoCsn
 
-data Anno_ t = Anno
-  { payload :: [AnnoElement_ t]
+data Anno_ t e = Anno
+  { payload :: [AnnoElement_ t e]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass ToExpr
@@ -62,43 +63,53 @@ data Anno_ t = Anno
 csnTokens :: CsnCluster_ t -> [t]
 csnTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
-mkAnno :: [AnnoElement_ t] -> Anno_ t
+mkAnno :: [AnnoElement_ t e] -> Anno_ t e
 mkAnno es = Anno es
 
-emptyAnno :: Anno_ t
+emptyAnno :: Anno_ t e
 emptyAnno = mkAnno []
 
-isEmptyAnno :: Anno_ t -> Bool
+isEmptyAnno :: Anno_ t e -> Bool
 isEmptyAnno m = List.null m.payload
+
+type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 
 class HasAnno t where
   type AnnoToken t :: Type
-  getAnno :: t -> Anno_ (AnnoToken t)
-  setAnno :: Anno_ (AnnoToken t) -> t -> t
+  type AnnoExtra t :: Type
+  getAnno :: t -> Anno' t
+  setAnno :: Anno' t -> t -> t
 
-  default setAnno :: (GPosition 1 t t a (Anno_ (AnnoToken t))) => Anno_ (AnnoToken t) -> t -> t
-  setAnno ann e = set (gposition @1) ann e
+  default setAnno :: (GPosition 1 t t (Anno' t) (Anno' t)) => Anno' t -> t -> t
+  setAnno = genericSetAnno
 
-  default getAnno :: (GPosition 1 t t (Anno_ (AnnoToken t)) (Anno_ (AnnoToken t))) => t -> Anno_ (AnnoToken t)
-  getAnno e = e ^. gposition @1
+  default getAnno :: (GPosition 1 t t (Anno' t) (Anno' t)) => t -> Anno' t
+  getAnno = genericGetAnno
 
-instance HasAnno (Anno_ t) where
-  type AnnoToken (Anno_ t) = t
+genericSetAnno :: GPosition 1 s t a b => b -> s -> t
+genericSetAnno ann e = set (gposition @1) ann e
+
+genericGetAnno :: GPosition 1 s s a a => s -> a
+genericGetAnno e = e ^. gposition @1
+
+instance HasAnno (Anno_ t e) where
+  type AnnoToken (Anno_ t e) = t
+  type AnnoExtra (Anno_ t e) = e
   getAnno = id
   setAnno = const
 
 -- This constraint enforces that Anno is the first field (of each constructor).
 --
 -- It would be better to unify this with HasAnno somehow.
-class (Head xs ~ Anno_ t, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst t c (xs :: [Type])
-instance (Head xs ~ Anno_ t, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst t c (xs :: [Type])
+class (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst a c (xs :: [Type])
+instance (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst a c (xs :: [Type])
 
 -- ----------------------------------------------------------------------------
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
-instance Semigroup (Anno_ t) where
+instance Semigroup (Anno_ t e) where
   (Anno m1) <> (Anno m2) = Anno (m1 <> m2)
 
-instance Monoid (Anno_ t) where
+instance Monoid (Anno_ t e) where
   mempty = emptyAnno
