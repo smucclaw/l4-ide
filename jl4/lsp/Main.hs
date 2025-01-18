@@ -178,6 +178,16 @@ handle _logger =
         pure ()
     , -- Subscribe to notification changes
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
+    , requestHandler SMethod_TextDocumentDefinition $ \req responder -> do
+        let
+          doc :: Uri
+          doc = req ^. J.params ^. J.textDocument . J.uri
+          pos :: Position
+          pos = req ^. J.params ^. J.position
+        mloc <- gotoDefinition (LSP.toNormalizedUri doc) pos
+        case mloc of
+          Nothing  -> responder $ Right $ InR $ InR $ Null
+          Just loc -> responder $ Right $ InL $ Definition (InL loc)
     , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
         let
           (TRequestMessage _ _ _ (ExecuteCommandParams _ _cid xdata)) = req
@@ -194,7 +204,7 @@ handle _logger =
                       contents = Rope.toText rope
 
                     case parseJL4WithWithDiagnostics uri contents of
-                      (_, Nothing) ->
+                      (_, Nothing, _) ->
                         responder $
                           Left $
                             TResponseError
@@ -202,7 +212,7 @@ handle _logger =
                               , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
                               , _xdata = Nothing
                               }
-                      (_, Just prog) ->
+                      (_, Just prog, _) ->
                         responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
           _ ->
             responder $ Left $ undefined
@@ -226,7 +236,7 @@ handle _logger =
               contents = Rope.toText rope
 
             case parseJL4WithWithDiagnostics uri contents of
-              (_, Nothing) ->
+              (_, Nothing, _) ->
                 responder $
                   Left $
                     TResponseError
@@ -234,7 +244,7 @@ handle _logger =
                       , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
                       , _xdata = Nothing
                       }
-              (_, Just prog) -> do
+              (_, Just prog, _) -> do
                 case runExcept $ runReaderT (SemanticTokens.toSemTokens prog) SemanticTokens.defaultSemanticTokenCtx of
                   Left err -> do
                     -- TODO: log error
@@ -302,20 +312,41 @@ sendDiagnostics fileUri = do
         contents = Rope.toText rope
 
       diags <- case parseJL4WithWithDiagnostics (fromNormalizedUri fileUri) contents of
-        (diags, _) -> pure diags
+        (diags, _, _) -> pure diags
       publishDiagnostics 100 fileUri (Just version) (partitionBySource diags)
+
+-- ----------------------------------------------------------------------------
+-- LSP Go to Definition
+-- ----------------------------------------------------------------------------
+
+gotoDefinition :: NormalizedUri -> Position -> LspM Config (Maybe Location)
+gotoDefinition fileUri pos = do
+  mfile <- getVirtualFile fileUri
+  case mfile of
+    Nothing -> pure Nothing
+    Just (VirtualFile _version _ rope) -> do
+      let
+        contents = Rope.toText rope
+        (_diags, _mprog, mrprog) = parseJL4WithWithDiagnostics uri contents
+
+      pure $ do
+        rprog <- mrprog
+        range <- findDefinition (lspPositionToSrcPos pos) rprog
+        pure (Location uri (srcRangeToLSPRange (Just range)))
+  where
+    uri = LSP.fromNormalizedUri fileUri
 
 -- ----------------------------------------------------------------------------
 -- JL4 Parser
 -- ----------------------------------------------------------------------------
 
-parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name))
+parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name), Maybe (Program Resolved))
 parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program fp content of
   Left err ->
-    (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing)
+    (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing, Nothing)
   Right prog ->
     case doCheckProgram prog of
-      (errs, _p) -> (fmap checkErrorToDiagnostic errs, Just prog)
+      (errs, rprog) -> (fmap checkErrorToDiagnostic errs, Just prog, Just rprog)
  where
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
@@ -339,16 +370,20 @@ checkErrorToDiagnostic checkError =
     translateSeverity SWarn  = LSP.DiagnosticSeverity_Warning
     translateSeverity SError = LSP.DiagnosticSeverity_Error
 
-    srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
-    srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
-    srcRangeToLSPRange (Just range) = LSP.Range (srcPosToLSPPosition range.start) (srcPosToLSPPosition range.end)
+srcRangeToLSPRange :: Maybe SrcRange -> LSP.Range
+srcRangeToLSPRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
+srcRangeToLSPRange (Just range) = LSP.Range (srcPosToLSPPosition range.start) (srcPosToLSPPosition range.end)
 
-    srcPosToLSPPosition :: SrcPos -> LSP.Position
-    srcPosToLSPPosition s =
-      LSP.Position
-        { _character = fromIntegral $ s.column - 1
-        , _line = fromIntegral $ s.line - 1
-        }
+srcPosToLSPPosition :: SrcPos -> LSP.Position
+srcPosToLSPPosition s =
+  LSP.Position
+    { _character = fromIntegral $ s.column - 1
+    , _line = fromIntegral $ s.line - 1
+    }
+
+lspPositionToSrcPos :: LSP.Position -> SrcPos
+lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
+  MkSrcPos "" (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 parseErrorToDiagnostic :: Parser.PError -> Diagnostic
 parseErrorToDiagnostic pError =

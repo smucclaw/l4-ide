@@ -61,6 +61,9 @@ genericToNodes _ rec f x =
   $ unSOP
   $ from x
 
+data Tree =
+  Fork SrcRange [Tree] | Leaf Name
+
 instance ToTokens t a => ToTokens t [a] where
   toTokens =
     Extra.concatMapM toTokens

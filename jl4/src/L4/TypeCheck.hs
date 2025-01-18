@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 module L4.TypeCheck where
@@ -36,6 +37,8 @@ import Control.Monad.Logic
 import Data.Bifunctor
 import Data.Containers.ListUtils (nubOrd)
 import Data.Either (partitionEithers)
+import Data.Proxy
+import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf)
 
 import qualified L4.Parser as Parser
@@ -1340,3 +1343,76 @@ instance ApplySubst CheckErrorContext where
 
 instance ApplySubst CheckErrorWithContext where
   applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
+
+-- | It would be better to have a tree structure so that we can exclude
+-- large parts of the tree easily. However, right now we don't have range
+-- information cheaply in the tree, so I thought I could as well build a
+-- list.
+class ToResolved a where
+  toResolved :: a -> [Resolved]
+  default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst PosToken ToResolved) (SOP.Code a)) => a -> [Resolved]
+  toResolved = genericToResolved
+
+deriving anyclass instance ToResolved (Program Resolved)
+deriving anyclass instance ToResolved (Section Resolved)
+deriving anyclass instance ToResolved (TopDecl Resolved)
+deriving anyclass instance ToResolved (Assume Resolved)
+deriving anyclass instance ToResolved (Declare Resolved)
+deriving anyclass instance ToResolved (TypeDecl Resolved)
+deriving anyclass instance ToResolved (ConDecl Resolved)
+deriving anyclass instance ToResolved (Type' Resolved)
+deriving anyclass instance ToResolved (TypedName Resolved)
+deriving anyclass instance ToResolved (OptionallyTypedName Resolved)
+deriving anyclass instance ToResolved (OptionallyNamedType Resolved)
+deriving anyclass instance ToResolved (Decide Resolved)
+deriving anyclass instance ToResolved (AppForm Resolved)
+deriving anyclass instance ToResolved (Expr Resolved)
+deriving anyclass instance ToResolved (NamedExpr Resolved)
+deriving anyclass instance ToResolved (Branch Resolved)
+deriving anyclass instance ToResolved (Pattern Resolved)
+deriving anyclass instance ToResolved (TypeSig Resolved)
+deriving anyclass instance ToResolved (GivethSig Resolved)
+deriving anyclass instance ToResolved (GivenSig Resolved)
+deriving anyclass instance ToResolved (Directive Resolved)
+
+instance ToResolved Lit where
+  toResolved = const []
+
+instance ToResolved Int where
+  toResolved = const []
+
+instance ToResolved RawName where
+  toResolved = const []
+
+instance ToResolved Resolved where
+  toResolved = pure
+
+instance ToResolved a => ToResolved (Maybe a) where
+  toResolved = concatMap toResolved
+
+instance ToResolved a => ToResolved [a] where
+  toResolved = concatMap toResolved
+
+genericToResolved :: (SOP.Generic a, SOP.All (AnnoFirst PosToken ToResolved) (SOP.Code a)) => a -> [Resolved]
+genericToResolved =
+  genericToNodes
+    (Proxy @ToResolved)
+    toResolved
+    (const concat :: Anno -> [[Resolved]] -> [Resolved])
+
+findDefinition :: ToResolved a => SrcPos -> a -> Maybe SrcRange
+findDefinition pos a = do
+  r <- find matches (toResolved a)
+  rangeOfNode (getOriginal r)
+  where
+    matches :: Resolved -> Bool
+    matches r =
+      case rangeOfNode (getName r) of
+        Just range -> inRange pos range
+        Nothing -> False
+
+-- | We ignore the file name, because we assume this has already been checked.
+inRange :: SrcPos -> SrcRange -> Bool
+inRange (MkSrcPos _ l c) (MkSrcRange (MkSrcPos _ l1 c1) (MkSrcPos _ l2 c2) _) =
+     (l, c) >= (l1, c1)
+  && (l, c) <= (l2, c2)
