@@ -1,5 +1,13 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
-import { Either } from "effect"
+import { Either } from 'effect'
+import type { LirSource, LirNodeInfo } from '../layout-ir/core'
+import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.ts'
+import {
+  AtomicPropositionLirNode,
+  NotLirNode,
+  BinExprLirNode,
+} from '../layout-ir/lir-decision-logic.svelte.ts'
+import { match, P } from 'ts-pattern'
 
 /**********************
          IR
@@ -162,9 +170,38 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
   html: Schema.String,
 })
 
-/*************************
-    Examples of usage
-**************************/
+/***********************************
+        Lir Data Sources
+************************************/
+
+export const ExprSource: LirSource<IRExpr, ExprLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
+    return match(expr)
+      .with(
+        { $type: 'AtomicProposition' },
+        (ap) => new AtomicPropositionLirNode(nodeInfo, ap)
+      )
+      .with(
+        { $type: 'Not' },
+        (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
+      )
+      .with(
+        { $type: 'BinExpr' },
+        (binE) =>
+          new BinExprLirNode(
+            nodeInfo,
+            binE.op,
+            ExprSource.toLir(nodeInfo, binE.left),
+            ExprSource.toLir(nodeInfo, binE.right)
+          )
+      )
+      .exhaustive()
+  },
+}
+
+/***********************************
+        Examples of usage
+************************************/
 
 // Example of how to use Effect to decode an unknown input
 
@@ -222,7 +259,7 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
     JSON Schema version
 **************************/
 
-/* 
+/*
 As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
 
 {
