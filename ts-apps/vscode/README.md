@@ -98,3 +98,25 @@ To visualize your rule as a ladder diagram:
 
 - Alternatively, use the "Update Diagram" button in the bottom-right status bar of VSCode (near the notification bell or Prettier controls). Clicking this button generates the diagram in a new panel.
   ![alt text](screenshots/update-viz.png)
+
+## More build / config notes
+
+Jan 20 2025, tsconfig.json: `"DOM"` had to be added to the value for `lib` to avoid issues like the following
+
+```bash
+┌ jl4-lsp-client#build > cache miss, executing a18c902b9c9c2a55
+│
+│
+│ > jl4-lsp-client@0.0.1 build
+│ > tsc -b tsconfig.json && npm run esbuild-base
+│
+│ ../../node_modules/@types/d3-drag/index.d.ts:14:38 - error TS2304: Cannot find name 'Element'.
+│
+│ 14 export type DraggedElementBaseType = Element;
+│                                         ~~~~~~~
+│
+│ ../../node_modules/@types/d3-drag/index.d.ts:19:36 - error TS2304: Cannot find name 'HTMLElement'.
+│
+│ 19 export type DragContainerElement = HTMLElement | SVGSVGElement | SVGGElement; // HTMLElement inclu
+│ des HTMLCanvasElement
+```
