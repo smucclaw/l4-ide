@@ -175,7 +175,6 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
   return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
 }
 
-
 /* 
 As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
 
