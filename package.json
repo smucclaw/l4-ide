@@ -20,5 +20,8 @@
   "packageManager": "npm@11.0.0",
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "vite": "6.0.7"
   }
 }
