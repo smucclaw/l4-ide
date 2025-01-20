@@ -127,9 +127,9 @@ export class LirContext {
 }
 
 /*********************************************
-       LirDataSource
+       Lir Data Source
 ***********************************************/
 
-export interface LirDataSource<A, B> {
-  toLir(data: A): B
+export interface LirSource<A, B> {
+  toLir(nodeInfo: LirNodeInfo, data: A): B
 }
