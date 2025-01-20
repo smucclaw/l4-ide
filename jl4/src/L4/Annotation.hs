@@ -54,8 +54,7 @@ mkCsn :: CsnCluster_ t -> AnnoElement_ t
 mkCsn = AnnoCsn
 
 data Anno_ t e = Anno
-  { extra   :: e
-  , range   :: Maybe SrcRange
+  { extra   :: Maybe e
   , payload :: [AnnoElement_ t]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
@@ -64,10 +63,10 @@ data Anno_ t e = Anno
 csnTokens :: CsnCluster_ t -> [t]
 csnTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
-mkAnno :: Monoid e => [AnnoElement_ t] -> Anno_ t e
-mkAnno es = Anno mempty Nothing es
+mkAnno :: [AnnoElement_ t] -> Anno_ t e
+mkAnno es = Anno Nothing es
 
-emptyAnno :: Monoid e => Anno_ t e
+emptyAnno :: Anno_ t e
 emptyAnno = mkAnno []
 
 isEmptyAnno :: Anno_ t e -> Bool
@@ -109,8 +108,8 @@ instance (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoF
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
-instance Semigroup e => Semigroup (Anno_ t e) where
-  (Anno e1 r1 m1) <> (Anno e2 r2 m2) = Anno (e1 <> e2) (r1 <> r2) (m1 <> m2)
+instance Semigroup (Anno_ t e) where
+  (Anno _e1 m1) <> (Anno _e2 m2) = Anno Nothing (m1 <> m2)
 
-instance Monoid e => Monoid (Anno_ t e) where
+instance Monoid (Anno_ t e) where
   mempty = emptyAnno

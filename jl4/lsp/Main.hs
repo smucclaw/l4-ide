@@ -153,7 +153,7 @@ lspHandlers logger rin = mapHandlers goReq goNot (handle logger)
     liftIO $ atomically $ writeTChan rin $ ReactorAction (runLspT env $ f msg)
 
 handle :: (m ~ LspM Config) => LogAction m (WithSeverity Text) -> Handlers m
-handle _logger =
+handle logger =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized mempty
@@ -188,6 +188,18 @@ handle _logger =
         case mloc of
           Nothing  -> responder $ Right $ InR $ InR $ Null
           Just loc -> responder $ Right $ InL $ Definition (InL loc)
+    , requestHandler SMethod_TextDocumentHover $ \ req responder -> do
+        let
+          doc :: Uri
+          doc = req ^. J.params ^. J.textDocument . J.uri
+          pos :: Position
+          pos = req ^. J.params ^. J.position
+        logger <& "Called hover" `WithSeverity` Info
+        mh <- findHover (LSP.toNormalizedUri doc) pos
+        logger <& ("Returned from hover with: " <> Text.pack (show mh)) `WithSeverity` Info
+        case mh of
+          Nothing  -> responder $ Right $ InR $ Null
+          Just h -> responder $ Right $ InL $ h
     , requestHandler SMethod_WorkspaceExecuteCommand $ \req responder -> do
         let
           (TRequestMessage _ _ _ (ExecuteCommandParams _ _cid xdata)) = req
@@ -204,7 +216,7 @@ handle _logger =
                       contents = Rope.toText rope
 
                     case parseJL4WithWithDiagnostics uri contents of
-                      (_, Nothing, _) ->
+                      (_, Nothing) ->
                         responder $
                           Left $
                             TResponseError
@@ -212,7 +224,7 @@ handle _logger =
                               , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
                               , _xdata = Nothing
                               }
-                      (_, Just prog, _) ->
+                      (_, Just (prog, _, _)) ->
                         responder $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
           _ ->
             responder $ Left $ undefined
@@ -236,7 +248,7 @@ handle _logger =
               contents = Rope.toText rope
 
             case parseJL4WithWithDiagnostics uri contents of
-              (_, Nothing, _) ->
+              (_, Nothing) ->
                 responder $
                   Left $
                     TResponseError
@@ -244,7 +256,7 @@ handle _logger =
                       , _message = "Failed to parse \"" <> Text.pack (show uri) <> "\""
                       , _xdata = Nothing
                       }
-              (_, Just prog, _) -> do
+              (_, Just (prog, _, _)) -> do
                 case runExcept $ runReaderT (SemanticTokens.toSemTokens prog) SemanticTokens.defaultSemanticTokenCtx of
                   Left err -> do
                     -- TODO: log error
@@ -312,7 +324,7 @@ sendDiagnostics fileUri = do
         contents = Rope.toText rope
 
       diags <- case parseJL4WithWithDiagnostics (fromNormalizedUri fileUri) contents of
-        (diags, _, _) -> pure diags
+        (diags, _) -> pure diags
       publishDiagnostics 100 fileUri (Just version) (partitionBySource diags)
 
 -- ----------------------------------------------------------------------------
@@ -327,12 +339,33 @@ gotoDefinition fileUri pos = do
     Just (VirtualFile _version _ rope) -> do
       let
         contents = Rope.toText rope
-        (_diags, _mprog, mrprog) = parseJL4WithWithDiagnostics uri contents
+        (_diags, mr) = parseJL4WithWithDiagnostics uri contents
 
       pure $ do
-        rprog <- mrprog
+        (_, rprog, _) <- mr
         range <- findDefinition (lspPositionToSrcPos pos) rprog
         pure (Location uri (srcRangeToLSPRange (Just range)))
+  where
+    uri = LSP.fromNormalizedUri fileUri
+
+-- ----------------------------------------------------------------------------
+-- LSP Hover
+-- ----------------------------------------------------------------------------
+
+findHover :: NormalizedUri -> Position -> LspT Config IO (Maybe Hover)
+findHover fileUri pos = do
+  mfile <- getVirtualFile fileUri
+  case mfile of
+    Nothing -> pure Nothing
+    Just (VirtualFile _version _ rope) -> do
+      let
+        contents = Rope.toText rope
+        (_diags, mr) = parseJL4WithWithDiagnostics uri contents
+
+      pure $ do
+        (_, rprog, subst) <- mr
+        (range, t) <- findType (lspPositionToSrcPos pos) rprog
+        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution subst t)))) (Just (srcRangeToLSPRange (Just range))))
   where
     uri = LSP.fromNormalizedUri fileUri
 
@@ -340,13 +373,13 @@ gotoDefinition fileUri pos = do
 -- JL4 Parser
 -- ----------------------------------------------------------------------------
 
-parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name), Maybe (Program Resolved))
+parseJL4WithWithDiagnostics :: Uri -> Text -> ([Diagnostic], Maybe (Program Name, Program Resolved, Substitution))
 parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program fp content of
   Left err ->
-    (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing, Nothing)
+    (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing)
   Right prog ->
     case doCheckProgram prog of
-      (errs, rprog) -> (fmap checkErrorToDiagnostic errs, Just prog, Just rprog)
+      (errs, rprog, subst) -> (fmap checkErrorToDiagnostic errs, Just (prog, rprog, subst))
  where
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri

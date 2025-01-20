@@ -141,7 +141,7 @@ initialCheckState env =
     , supply       = 0
     }
 
-doCheckProgram :: Program Name -> ([CheckErrorWithContext], Program Resolved)
+doCheckProgram :: Program Name -> ([CheckErrorWithContext], Program Resolved, Substitution)
 doCheckProgram program =
   case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment) of
     (w, s) ->
@@ -150,11 +150,23 @@ doCheckProgram program =
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
         case runCheckUnique (traverse applySubst errs) s of
-          (w', _s') ->
+          (w', s') ->
             let
               (moreErrs, substErrs) = runWith w'
             in
-              (substErrs ++ moreErrs, rprog)
+              (substErrs ++ moreErrs, rprog, s'.substitution)
+
+applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
+applyFinalSubstitution subst t =
+  let
+    cs = (initialCheckState Map.empty) { substitution = subst }
+  in
+    case runCheckUnique (applySubst t) cs of
+      (w, _cs') ->
+        let
+          (_errs, r) = runWith w
+        in
+          r
 
 runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckState)
 runCheckUnique c s =
@@ -300,10 +312,12 @@ data CheckState =
   MkCheckState
     { environment  :: !(Map RawName [(Name, CheckEntity)])
     , errorContext :: !CheckErrorContext
-    , substitution :: !(Map Int (Type' Resolved))
+    , substitution :: !Substitution
     , supply       :: !Int
     }
   deriving stock (Eq, Generic, Show)
+
+type Substitution = Map Int (Type' Resolved)
 
 type Kind = Int -- arity of the type
 
@@ -393,16 +407,16 @@ resolveTerm' p n = do
   case mapMaybe proc (Map.findWithDefault [] (rawName n) env) of
     [] -> do
       v <- fresh (rawName n)
-      rn <- outOfScope n v
+      rn <- outOfScope (setAnno (set #extra (Just v) (getAnno n)) n) v
       pure (rn, v)
     [x] -> pure x
     xs -> anyOf xs <|> do
       v <- fresh (rawName n)
-      rn <- ambiguousTerm n xs
+      rn <- ambiguousTerm (setAnno (set #extra (Just v) (getAnno n)) n) xs
       pure (rn, v)
   where
     proc :: (Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (o, KnownTerm t tk) | p tk = Just (Ref n o, t)
+    proc (o, KnownTerm t tk) | p tk = Just (Ref (setAnno (set #extra (Just t) (getAnno n)) n) o, t)
     proc _                          = Nothing
 
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
@@ -934,10 +948,14 @@ makeKnown a ce =
     proc (Just xs) = Just (new : xs)
 
 checkExpr :: Expr Name -> Type' Resolved -> Check (Expr Resolved)
-checkExpr (IfThenElse ann e1 e2 e3) t =
-  checkIfThenElse ann e1 e2 e3 t
-checkExpr (Consider ann e branches) t =
-  checkConsider ann e branches t
+checkExpr (IfThenElse ann e1 e2 e3) t = do
+  re <- checkIfThenElse ann e1 e2 e3 t
+  let re' = setAnno (set #extra (Just t) (getAnno re)) re
+  pure re'
+checkExpr (Consider ann e branches) t = do
+  re <- checkConsider ann e branches t
+  let re' = setAnno (set #extra (Just t) (getAnno re)) re
+  pure re'
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
@@ -964,7 +982,7 @@ inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = scope $ do
   setErrorContext (WhileCheckingExpression g)
   (re, te) <- inferExpr' g
-  let re' = setAnno (mkAnno [AnnoExtra te] <> getAnno re) re
+  let re' = setAnno (set #extra (Just te) (getAnno re)) re
   pure (re', te)
 
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
@@ -1191,12 +1209,12 @@ checkAndExactPrintFile file input =
       "Parsing successful\n\n"
       <>
       case doCheckProgram prog of
-        ([], _) ->
+        ([], _p, _s) ->
           "Typechecking successful\n\n"
           <> case exactprint prog of
                Left epError -> prettyEPError epError
                Right ep -> ep
-        (errs, _p) ->
+        (errs, _p, _s) ->
           Text.unlines (map (\ err -> prettySrcRange (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errs)
 
 prettySrcRange :: Maybe SrcRange -> Text
@@ -1341,10 +1359,18 @@ instance ApplySubst CheckErrorContext where
 instance ApplySubst CheckErrorWithContext where
   applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
 
+-------------------------------------
+-- Computing info for goto definition
+-------------------------------------
+
 -- | It would be better to have a tree structure so that we can exclude
 -- large parts of the tree easily. However, right now we don't have range
 -- information cheaply in the tree, so I thought I could as well build a
 -- list.
+--
+-- Note that we are building a tree for type information, and possibly we
+-- could do something similar here. It's just probably not worth it.
+--
 class ToResolved a where
   toResolved :: a -> [Resolved]
   default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
@@ -1413,3 +1439,105 @@ inRange :: SrcPos -> SrcRange -> Bool
 inRange (MkSrcPos _ l c) (MkSrcRange (MkSrcPos _ l1 c1) (MkSrcPos _ l2 c2) _) =
      (l, c) >= (l1, c1)
   && (l, c) <= (l2, c2)
+
+--------------------------------------------------
+-- Computing info for hover (types of expressions)
+--------------------------------------------------
+
+data TypesTree =
+  TypesNode
+    { range    :: Maybe SrcRange
+    , type'    :: Maybe (Type' Resolved)
+    , children :: [TypesTree]
+    }
+
+class ToTypesTree a where
+  toTypesTree :: a -> [TypesTree]
+  default toTypesTree :: (SOP.Generic a, AnnoExtra a ~ Type' Resolved, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
+  toTypesTree = genericToTypesTree
+
+instance HasSrcRange TypesTree where
+  rangeOf = (.range)
+
+genericToTypesTree :: forall a. (SOP.Generic a, AnnoExtra a ~ Type' Resolved, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
+genericToTypesTree =
+  genericToNodes
+    (Proxy @ToTypesTree)
+    toTypesTree
+    (mergeTypesTrees (Proxy @a))
+
+mergeTypesTrees :: AnnoExtra a ~ Type' Resolved => Proxy a -> Anno' a -> [[TypesTree]] -> [TypesTree]
+mergeTypesTrees _ anno children =
+  [TypesNode (rangeOf (concat children)) anno.extra (concat children)]
+
+findType :: ToTypesTree a => SrcPos -> a -> Maybe (SrcRange, Type' Resolved)
+findType pos a =
+  asum (go <$> toTypesTree a)
+  where
+    go :: TypesTree -> Maybe (SrcRange, Type' Resolved)
+    go (TypesNode Nothing _t children)     =
+        asum (go <$> children) -- <|> if t == Nothing then Just (range, Type mempty) else (range,) <$> t
+    go (TypesNode (Just range) t children)
+      | pos `inRange` range                =
+        asum (go <$> children) <|> {- if t == Nothing then Just (range, Type mempty) else -} (range,) <$> t
+      | otherwise                          = Nothing
+
+deriving anyclass instance ToTypesTree (Program Resolved)
+deriving anyclass instance ToTypesTree (Section Resolved)
+deriving anyclass instance ToTypesTree (TopDecl Resolved)
+deriving anyclass instance ToTypesTree (Assume Resolved)
+deriving anyclass instance ToTypesTree (Declare Resolved)
+deriving anyclass instance ToTypesTree (TypeDecl Resolved)
+deriving anyclass instance ToTypesTree (ConDecl Resolved)
+deriving anyclass instance ToTypesTree (Type' Resolved)
+deriving anyclass instance ToTypesTree (TypedName Resolved)
+deriving anyclass instance ToTypesTree (OptionallyTypedName Resolved)
+deriving anyclass instance ToTypesTree (OptionallyNamedType Resolved)
+deriving anyclass instance ToTypesTree (Decide Resolved)
+deriving anyclass instance ToTypesTree (AppForm Resolved)
+deriving anyclass instance ToTypesTree (Expr Resolved)
+deriving anyclass instance ToTypesTree (NamedExpr Resolved)
+deriving anyclass instance ToTypesTree (Branch Resolved)
+deriving anyclass instance ToTypesTree (Pattern Resolved)
+deriving anyclass instance ToTypesTree (TypeSig Resolved)
+deriving anyclass instance ToTypesTree (GivethSig Resolved)
+deriving anyclass instance ToTypesTree (GivenSig Resolved)
+deriving anyclass instance ToTypesTree (Directive Resolved)
+
+instance ToTypesTree Lit where
+  toTypesTree l =
+    [TypesNode (rangeFromAnno (getAnno l)) (getAnno l).extra []]
+
+-- | Try to extract the range from an anno which we assume to be
+-- without holes.
+rangeFromAnno :: Anno -> Maybe SrcRange
+rangeFromAnno (Anno _ csns) = rangeOf (go csns)
+  where
+    go []              = []
+    go (AnnoHole  : cs) = go cs -- should not happen
+    go (AnnoCsn m : cs) = m : go cs
+
+instance ToTypesTree Int where
+  toTypesTree _ =
+    [TypesNode Nothing Nothing []]
+
+instance ToTypesTree Name where
+  toTypesTree n =
+    [TypesNode (rangeFromAnno (getAnno n)) (getAnno n).extra []]
+
+instance ToTypesTree RawName where
+  toTypesTree _ =
+    [TypesNode Nothing Nothing []]
+
+instance ToTypesTree Resolved where
+  toTypesTree n =
+    toTypesTree (getName n)
+
+instance ToTypesTree a => ToTypesTree (Maybe a) where
+  toTypesTree =
+    concatMap toTypesTree
+
+instance ToTypesTree a => ToTypesTree [a] where
+  toTypesTree =
+    concatMap toTypesTree
+

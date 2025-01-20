@@ -191,6 +191,9 @@ type CsnCluster = CsnCluster_ PosToken
 
 newtype L4Syntax a = MkL4Syntax a
 
+instance {-# OVERLAPPING #-} Semigroup (Maybe (Type' Resolved)) where
+  _ <> _ = Nothing
+
 instance (GHC.Generic a, GPosition 1 a a Anno Anno) => HasAnno (L4Syntax a) where
   type AnnoToken (L4Syntax a) = PosToken
   type AnnoExtra (L4Syntax a) = Type' Resolved

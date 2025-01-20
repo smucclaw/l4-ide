@@ -621,7 +621,7 @@ atomicExpr =
   <|> nameAsApp App
   <|> parenExpr
 
-nameAsApp :: HasAnno b => (Anno -> Name -> [a] -> b) -> Parser b
+nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b) => (Anno -> Name -> [a] -> b) -> Parser b
 nameAsApp f =
   attachAnno $
     f emptyAnno
@@ -1055,8 +1055,8 @@ unAnno (WithAnno _ a) = a
 toAnno :: WithAnno_ t e a -> Anno_ t e
 toAnno (WithAnno ann _) = ann
 
-annoHole :: Parser a -> Compose Parser (WithAnno_ t e) a
-annoHole p = Compose $ fmap (WithAnno mkHoleAnno) p
+annoHole :: (HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
+annoHole p = Compose $ fmap (\ t -> WithAnno mkHoleAnno t) p
 
 annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
 annoEpa p = Compose $ fmap epaToAnno p

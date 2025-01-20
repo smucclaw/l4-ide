@@ -81,19 +81,15 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
     maybe (pure []) toNodes
 
 flattenConcreteNodes :: (HasCallStack, MonadError EPError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
-flattenConcreteNodes (Anno []) _ = pure []
-flattenConcreteNodes (Anno (AnnoHole : cs)) holeFits = case holeFits of
-  [] -> do
-    throwError $ InsufficientHoleFit callStack
-  (x : xs) -> do
-    r <- x
-    rs <- flattenConcreteNodes (Anno cs) xs
-    pure (r <> rs)
-flattenConcreteNodes (Anno (AnnoCsn m : cs)) xs = do
-  rs <- flattenConcreteNodes (Anno cs) xs
-  pure (m : rs)
-flattenConcreteNodes (Anno (AnnoExtra _ : cs)) xs =
-  flattenConcreteNodes (Anno cs) xs
+flattenConcreteNodes (Anno _ csns) = go csns
+  where
+    go []               _        = pure []
+    go (AnnoHole : cs)  holeFits =
+      case holeFits of
+        [] -> throwError $ InsufficientHoleFit callStack
+        (x : xs) -> (<>) <$> x <*> go cs xs
+    go (AnnoCsn m : cs) holeFits =
+      (m :) <$> go cs holeFits
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation
