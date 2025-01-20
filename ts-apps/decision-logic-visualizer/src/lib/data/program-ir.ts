@@ -1,4 +1,5 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
+import { Either } from "effect"
 
 /**********************
          IR
@@ -162,6 +163,48 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
 })
 
 /*************************
+    Examples of usage
+**************************/
+
+// Example of how to use Effect to decode an unknown input
+
+const decode = Schema.decodeUnknownEither(IRExpr)
+
+/** Example of an unknown input */
+const egAtomicPropWalks = {
+  $type: 'AtomicProposition',
+  value: 'True',
+  id: { id: 1 },
+  label: 'walks',
+}
+
+const result = decode(egAtomicPropWalks)
+console.log(result)
+/*
+{
+  right: {
+    '$type': 'AtomicProposition',
+    value: 'True',
+    id: { id: 1 },
+    label: 'walks'
+  },
+  _tag: 'Right',
+  _op: 'Right'
+}
+*/
+if (Either.isRight(result)) {
+  console.log(result.right)
+  /*
+  {
+  '$type': 'AtomicProposition',
+  value: 'True',
+  id: { id: 1 },
+  label: 'walks'
+  }
+  */
+}
+
+/*************************
     Utils
 **************************/
 
@@ -174,6 +217,10 @@ export function getDecisionLogicIRPrettyPrinter() {
 export function exportDecisionLogicIRInfoToJSONSchema() {
   return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
 }
+
+/*************************
+    JSON Schema version
+**************************/
 
 /* 
 As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
