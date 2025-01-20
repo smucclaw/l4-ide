@@ -3,32 +3,33 @@
 module LSP.L4.Rules where
 
 import Control.DeepSeq
-import Control.Lens
+import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
+import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Data.Text.Mixed.Rope as Rope
 import Data.Typeable
 import Development.IDE.Graph
 import GHC.Generics (Generic)
-import L4.Lexer (PosToken, SrcPos(..))
+import L4.ExactPrint (HasSrcRange (..))
+import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import L4.Syntax
+import L4.TypeCheck (CheckErrorWithContext (..), Substitution)
+import qualified L4.TypeCheck as TypeCheck
+import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
+import LSP.L4.SemanticTokens
 import LSP.Logger
+import LSP.SemanticTokens
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import L4.TypeCheck (CheckErrorWithContext(..), Substitution )
-import qualified L4.TypeCheck as TypeCheck
-import L4.Lexer (SrcRange)
-import L4.ExactPrint (HasSrcRange(..))
-import LSP.SemanticTokens
-import LSP.L4.SemanticTokens
 
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
@@ -53,13 +54,23 @@ data TypeCheckResult = TypeCheckResult
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
 
-type instance RuleResult LexerSemanticTokens = [UInt]
+type instance RuleResult LexerSemanticTokens = [SemanticToken]
 data LexerSemanticTokens = LexerSemanticTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Typeable, Hashable)
 
-type instance RuleResult ParserSemanticTokens = [UInt]
+type instance RuleResult ParserSemanticTokens = [SemanticToken]
 data ParserSemanticTokens = ParserSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
+
+type instance RuleResult GetSemanticTokens = [SemanticToken]
+data GetSemanticTokens = GetSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
+
+type instance RuleResult GetRelSemanticTokens = [UInt]
+data GetRelSemanticTokens = GetRelSemanticTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Typeable, Hashable)
 
@@ -117,13 +128,7 @@ jl4Rules recorder = do
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
-        let
-          semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokenized
-        case encodeTokens defaultSemanticTokensLegend semanticTokens of
-          Left _err ->
-            pure ([{- TODO: Log error -}], Nothing)
-          Right relSemTokens ->
-            pure ([], Just relSemTokens)
+        pure ([], Just tokenized)
 
   define (cmapWithPrio ShakeLog recorder) $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
@@ -131,14 +136,59 @@ jl4Rules recorder = do
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
-        let
-          semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokenized
-        case encodeTokens defaultSemanticTokensLegend semanticTokens of
-          Left _err ->
-            pure ([{- TODO: Log error -}], Nothing)
-          Right relSemTokens ->
-            pure ([], Just relSemTokens)
+          pure ([], Just tokenized)
 
+  define (cmapWithPrio ShakeLog recorder) $ \GetSemanticTokens f -> do
+    mSemTokens <- useWithStale ParserSemanticTokens f
+    case mSemTokens of
+      Nothing -> do
+        -- If we don't even have any old result, just try to use lexer results
+        lexToks <- use LexerSemanticTokens f
+        pure ([], lexToks)
+      Just (progTokens, positionMapping) -> do
+
+        -- Throwing is ok, since if `ParserSemanticTokens` produces a result
+        -- so does `LexerSemanticTokens`.
+        (lexTokens, lexPositionMapping) <- useWithStale_ LexerSemanticTokens f
+        let
+          -- We assume that semantic tokens do *not* change its length, no matter whether they
+          -- have been lexed, parsed or typechecked.
+          -- A rather bold assumption, tbh. It will almost definitely not hold
+          -- up in practice, but let's do one step at a time.
+          mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
+          mergeSameLengthTokens [] bs = bs
+          mergeSameLengthTokens as [] = as
+          mergeSameLengthTokens (a:as) (b:bs) = case compare a.start b.start of
+            -- a.start == b.start
+            -- Same token, only print one
+            EQ -> a : mergeSameLengthTokens as bs
+            -- a.start < b.start
+            LT -> a : mergeSameLengthTokens as (b:bs)
+            -- a.start > b.start
+            GT -> b : mergeSameLengthTokens (a:as) bs
+
+          newPosAstTokens = Maybe.mapMaybe (\t ->
+            case toCurrentPosition positionMapping t.start of
+              Nothing -> Nothing
+              Just newPos -> Just (t { start = newPos })
+            ) progTokens
+
+          newPosLexTokens = Maybe.mapMaybe (\t ->
+            case toCurrentPosition lexPositionMapping t.start of
+              Nothing -> Nothing
+              Just newPos -> Just (t { start = newPos })
+            ) lexTokens
+
+        pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
+
+  define (cmapWithPrio ShakeLog recorder) $ \GetRelSemanticTokens f -> do
+    tokens <- use_ GetSemanticTokens f
+    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
+    case encodeTokens defaultSemanticTokensLegend semanticTokens of
+      Left _err ->
+        pure ([{- TODO: Log error -}], Nothing)
+      Right relSemTokens ->
+          pure ([], Just relSemTokens)
   where
     mkSimpleFileDiagnostic nfp diag =
       FileDiagnostic

@@ -2,22 +2,24 @@
 
 module LSP.SemanticTokens where
 
+import L4.Annotation
+import L4.ExactPrint (EPError (..), genericToNodes)
+
 import Control.Applicative (Alternative (..))
+import Control.DeepSeq (NFData)
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
+import qualified Control.Monad.Trans.Except as Except
 import Control.Monad.Trans.Reader
+import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Maybe as Maybe
+import qualified GHC.Generics as Generics
 import GHC.Stack
 import Generics.SOP as SOP
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types hiding (Pattern)
-
-import L4.Annotation
-import L4.ExactPrint (EPError (..), genericToNodes)
-import qualified Control.Monad.Trans.Except as Except
-import qualified Control.Monad.Trans.Reader as ReaderT
 
 -- ----------------------------------------------------------------------------
 -- Semantic Tokens Interface
@@ -94,7 +96,8 @@ data SemanticToken = SemanticToken
   , category :: SemanticTokenTypes
   , modifiers :: [SemanticTokenModifiers]
   }
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord, Generics.Generic)
+  deriving anyclass (NFData)
 
 toSemanticTokenAbsolute :: SemanticToken -> SemanticTokenAbsolute
 toSemanticTokenAbsolute s =

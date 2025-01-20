@@ -203,7 +203,7 @@ handlers recorder =
                       Left $
                         TResponseError
                           { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Internal error, failed to find the uri \"" <> Text.pack (show uri) <> "\" in the Virtual File System."
+                          , _message = "Failed to typecheck \"" <> Text.pack (show uri) <> "\"."
                           , _xdata = Nothing
                           }
                   Just prog ->
@@ -222,9 +222,9 @@ handlers recorder =
           nfp = fromUri $ toNormalizedUri uri
 
         tokens <- liftIO $ runAction "semanticTokens" ide $
-          use ParserSemanticTokens nfp
+          use GetRelSemanticTokens nfp
         case tokens of
-          Nothing ->
+          Nothing -> do
             pure $
               Left $
                 TResponseError
