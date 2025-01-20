@@ -179,6 +179,8 @@ defaultMain recorder args = do
         clientCaps <- LSP.runLspT env LSP.getClientCapabilities
 
         let ideOpts = defaultIdeOptions
+              { optKeywords = jl4Keywords
+              }
 
         -- disable runSubset if the client doesn't support watched files
         let runSubset = optRunSubset ideOpts && isWatchSupported clientCaps
@@ -251,3 +253,56 @@ lspSinkFromContext lspEnv = LspSink
   , takeVfsSnapshot = LSP.runLspT lspEnv LSP.getVirtualFiles
   , currentClientCapabilities = LSP.runLspT lspEnv getClientCapabilities
   }
+
+jl4Keywords :: [Text]
+jl4Keywords =
+  [ "GIVEN"
+  , "GIVETH"
+  , "DECIDE"
+  , "MEANS"
+  , "DECLARE"
+  , "IF"
+  , "THEN"
+  , "ELSE"
+  , "OTHERWISE"
+  , "AND"
+  , "OR"
+  , "NOT"
+  , "IS"
+  , "HAS"
+  , "ONE"
+  , "OF"
+  , "WITH"
+  , "A"
+  , "AN"
+  , "THE"
+  , "YIELD"
+  , "CONSIDER"
+  , "WHERE"
+  , "LIST"
+  , "ASSUME"
+  , "WHEN"
+  , "TYPE"
+  , "FUNCTION"
+  , "FROM"
+  , "TO"
+  , "EQUALS"
+  , "IMPLIES"
+  , "PLUS"
+  , "MINUS"
+  , "TIMES"
+  , "DIVIDED"
+  , "MODULO"
+  , "BY"
+  , "GREATER"
+  , "LESS"
+  , "THAN"
+  , "ABOVE"
+  , "BELOW"
+  , "AT"
+  , "LEAST"
+  , "MOST"
+  , "FOLLOWED"
+  , "FOR"
+  , "ALL"
+  ]

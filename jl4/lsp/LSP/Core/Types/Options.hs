@@ -37,6 +37,7 @@ import Language.LSP.Protocol.Types (ClientCapabilities)
 import qualified Language.LSP.Protocol.Types as LSP
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS
+import LSP.Core.RuleTypes
 
 data IdeOptions = IdeOptions
   {
@@ -109,48 +110,27 @@ defaultIdeOptions = IdeOptions
     ,optProgressStyle = Explicit
     ,optLanguageSyntax = "haskell"
     ,optNewColonConvention = False
-    ,optKeywords = haskellKeywords
+    ,optKeywords = []
     ,optTesting = IdeTesting False
     ,optCheckProject = pure True
     ,optCheckParents = pure CheckOnSave
-    ,optSkipProgress = const False
+    ,optSkipProgress = defaultSkipProgress
     ,optMaxDirtyAge = 100
     ,optRunSubset = True
     ,optPreservedKeys = \_ -> PreservedKeys HashSet.empty
     }
 
--- defaultSkipProgress :: Typeable a => a -> Bool
--- defaultSkipProgress key = case () of
---     -- don't do progress for GetFileContents as it's cheap
---     _ | Just GetFileContents <- cast key        -> True
---     -- don't do progress for GetFileExists, as there are lots of redundant nodes
---     -- (normally there is one node per file, but this is not the case for GetFileExists)
---     _ | Just GetFileExists <- cast key          -> True
---     -- don't do progress for GetModificationTime as there are lot of redundant nodes
---     -- (for the interface files)
---     _ | Just GetModificationTime_{} <- cast key -> True
---     _                                           -> False
-
--- | From https://wiki.haskell.org/Keywords
-haskellKeywords :: [T.Text]
-haskellKeywords =
-  [ "as"
-  , "case", "of"
-  , "class", "instance", "type"
-  , "data", "family", "newtype"
-  , "default"
-  , "deriving"
-  , "do", "mdo", "proc", "rec"
-  , "forall"
-  , "foreign"
-  , "hiding"
-  , "if", "then", "else"
-  , "import", "qualified", "hiding"
-  , "infix", "infixl", "infixr"
-  , "let", "in", "where"
-  , "module"
-  ]
-
+defaultSkipProgress :: Typeable a => a -> Bool
+defaultSkipProgress key = case () of
+    -- don't do progress for GetFileContents as it's cheap
+    _ | Just GetFileContents <- cast key        -> True
+    -- don't do progress for GetFileExists, as there are lots of redundant nodes
+    -- (normally there is one node per file, but this is not the case for GetFileExists)
+    _ | Just GetFileExists <- cast key          -> True
+    -- don't do progress for GetModificationTime as there are lot of redundant nodes
+    -- (for the interface files)
+    _ | Just GetModificationTime_{} <- cast key -> True
+    _                                           -> False
 data LspSink = LspSink
     { sendNotificationToClient :: forall (m :: Method 'ServerToClient 'Notification) . SServerMethod m -> MessageParams m -> IO ()
     , sendRequestToClient :: forall (m :: Method 'ServerToClient 'Request) . SServerMethod m -> MessageParams m -> ((Either (TResponseError m) (MessageResult m) -> IO ())) -> IO (LspId m)
