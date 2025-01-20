@@ -30,7 +30,6 @@ export class LirId {
   }
 }
 
-
 /*********************************************
       NodeInfo
 ***********************************************/
@@ -43,21 +42,21 @@ export interface LirNodeInfo {
 }
 
 export abstract class NodeInfoManager {
-  protected readonly lirInfo: LirNodeInfoWithoutContext;
+  protected readonly lirInfo: LirNodeInfoWithoutContext
 
   /** Note: Make sure not to actually store the LirContext in the class. */
   constructor(defaultNodeInfo: LirNodeInfo) {
-    const { context, ...lirInfoWithoutContext } = defaultNodeInfo;
-    this.lirInfo = lirInfoWithoutContext;
+    const { context, ...lirInfoWithoutContext } = defaultNodeInfo
+    this.lirInfo = lirInfoWithoutContext
   }
 
   protected makeNodeInfo(context: LirContext): LirNodeInfo {
-    return {context, ...this.lirInfo}
+    return { context, ...this.lirInfo }
   }
 
   /** This reference to the LirRegistry can be used to publish updates */
   protected getLirRegistry() {
-    return this.lirInfo.registry;
+    return this.lirInfo.registry
   }
 }
 
@@ -73,7 +72,10 @@ export interface LirNode {
   toString(): string
 }
 
-export abstract class DefaultLirNode extends NodeInfoManager implements LirNode {
+export abstract class DefaultLirNode
+  extends NodeInfoManager
+  implements LirNode
+{
   #id: LirId
 
   constructor(protected readonly nodeInfo: LirNodeInfo) {
