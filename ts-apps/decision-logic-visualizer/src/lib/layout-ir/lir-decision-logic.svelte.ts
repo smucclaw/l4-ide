@@ -1,10 +1,13 @@
 import type { AtomicProposition, BinOp } from '$lib/data/program-ir'
 import type { LirId, LirNode, LirNodeInfo } from './core'
 import { LirContext, DefaultLirNode } from './core'
+import { match } from 'ts-pattern'
 
 /*************************************************
  **************** Expr Lir Nodes *****************
  *************************************************/
+
+type AtomicPropositionValue = true | false | undefined
 
 export type ExprLirNode = BinExprLirNode | NotLirNode | AtomicPropositionLirNode
 
@@ -13,12 +16,16 @@ export class AtomicPropositionLirNode
   implements LirNode
 {
   readonly #originalExpr: AtomicProposition
-  #value: AtomicProposition['value'] = $state()!
+  #value: AtomicPropositionValue = $state()!
 
   constructor(nodeInfo: LirNodeInfo, originalExpr: AtomicProposition) {
     super(nodeInfo)
     this.#originalExpr = originalExpr
-    this.#value = originalExpr.value
+    this.#value = match(originalExpr.value)
+      .with('True', () => true)
+      .with('False', () => false)
+      .with('Unknown', () => undefined)
+      .exhaustive()
   }
 
   getLabel() {
