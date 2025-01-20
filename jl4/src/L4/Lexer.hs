@@ -7,6 +7,7 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 
+import Control.DeepSeq (NFData)
 import Data.Char hiding (Space)
 import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import Data.Proxy
@@ -31,7 +32,7 @@ data RawToken =
     , end     :: !Offset
     }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 -- | A pos token is a token with position information attached.
 data PosToken =
@@ -40,7 +41,7 @@ data PosToken =
     , payload :: !TokenType
     }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 -- | A range of source positions. We store the length of a range as well.
 data SrcRange =
@@ -50,7 +51,7 @@ data SrcRange =
     , length  :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 -- | A single source position. Line and column numbers are 1-based.
 data SrcPos =
@@ -60,7 +61,7 @@ data SrcPos =
     , column   :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 -- | The type of token, plus information needed to reconstruct its contents.
 data TokenType =
@@ -161,7 +162,7 @@ data TokenType =
   | TBlockComment !Text
   | EOF
   deriving stock (Eq, Generic, Ord, Show)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 nlgAnnotation :: Lexer Text
 nlgAnnotation =

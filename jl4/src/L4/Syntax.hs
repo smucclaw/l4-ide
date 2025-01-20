@@ -4,30 +4,31 @@
 module L4.Syntax where
 
 import L4.Annotation
+import L4.Lexer (PosToken)
 
+import Control.DeepSeq (NFData)
 import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
-import L4.Lexer (PosToken)
 import Optics.Generic
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data RawName =
     NormalName Text
   | PreDef Text
   deriving stock (GHC.Generic, Eq, Ord, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Resolved =
     Def Name        -- ^ defining occurrence of name
   | Ref Name Name   -- ^ referring occurrence of name, original occurrence of name
   | OutOfScope Name -- ^ used to make progress for names where name resolution failed
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 getOriginal :: Resolved -> Name
 getOriginal (Def n)        = n
@@ -42,74 +43,74 @@ data Type' n =
   | InfVar Anno RawName Int -- ^ only used during type inference
   -- | ParenType Anno (Type' n) -- temporary
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyTypedName n =
   MkOptionallyTypedName Anno n (Maybe (Type' n))
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyNamedType n =
   MkOptionallyNamedType Anno (Maybe n) (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeSig n =
   MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivenSig n =
   MkGivenSig Anno [OptionallyTypedName n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivethSig n =
   MkGivethSig Anno (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Decide n =
   MkDecide Anno (TypeSig n) (AppForm n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AppForm n =
   MkAppForm Anno n [n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
   MkDeclare Anno (AppForm n) (TypeDecl n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
   MkAssume Anno (AppForm n) (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
     Eval Anno (Expr n)
   | Check Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeDecl n =
     RecordDecl Anno [TypedName n]
   | EnumDecl Anno [ConDecl n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data ConDecl n =
   MkConDecl Anno n [TypedName n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Expr n =
     And        Anno (Expr n) (Expr n)
@@ -136,40 +137,40 @@ data Expr n =
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data NamedExpr n =
   MkNamedExpr Anno n (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Lit =
     NumericLit Anno Int
   | StringLit  Anno Text
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Branch n =
     When Anno (Pattern n) (Expr n)
   | Otherwise Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Pattern n =
     PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Program n =
   MkProgram Anno [Section n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Section n =
   MkSection Anno SectionLevel (Maybe n) [TopDecl n]
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 type SectionLevel = Int
 
@@ -179,7 +180,7 @@ data TopDecl n =
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
   deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations

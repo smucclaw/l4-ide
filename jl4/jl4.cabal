@@ -6,7 +6,7 @@ tested-with: GHC==9.6.6
 
 common defaults
   default-language: GHC2021
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunused-packages
   default-extensions:
     DeriveAnyClass
     DerivingStrategies
@@ -16,6 +16,7 @@ common defaults
     OverloadedRecordDot
     OverloadedStrings
     OverloadedLabels
+    LambdaCase
     -- This is annoying with fourmolu
     NoImportQualifiedPost
   build-depends:
@@ -27,6 +28,7 @@ library
   build-depends:
     aeson,
     containers,
+    deepseq,
     extra,
     generics-sop,
     megaparsec,
@@ -63,31 +65,91 @@ executable jl4-cli
 
 executable jl4-lsp
   import: defaults
+  ghc-options:
+    -threaded
+    -rtsopts
+    -- disable idle GC
+    -- increase nursery size
+    -- Enable collection of heap statistics
+    "-with-rtsopts=-I0 -A128M -T"
   hs-source-dirs: lsp
   build-depends:
+    prettyprinter-ansi-terminal ^>=1.1.3,
+    lens-aeson ^>=1.2.3,
+    focus ^>=1.0.3.2,
+    time,
+    sorted-list ^>=0.2.2.0,
+    unordered-containers ^>=0.2.20,
+    stm-containers ^>=1.2.1,
+    data-default ^>=0.8.0.0,
+    enummapset ^>=0.7.3.0,
+    hashable ^>=1.5.0.0,
+    async ^>=2.2.5,
+    hls-graph ^>=2.9.0.0,
+    bytestring ^>=0.11.5.3,
+    list-t,
     jl4,
     aeson,
-    -- putting aeson here again in order to :l lsp/Ladder.hs when REPL dev-ing
     pretty-simple,
+    binary,
     containers,
     co-log-core,
+    deepseq,
+    Diff,
     directory,
     extra,
     filepath,
     generics-sop,
+    Glob,
     lens,
     lsp-types ^>=2.3.0.0,
     lsp ^>=2.7.0.0,
+    mtl,
     optics,
     prettyprinter,
+    safe-exceptions,
     stm,
     text,
     text-rope,
     transformers,
-  main-is: Main.hs
+    unliftio,
+    vector,
+
+  if os(windows)
+    build-depends: Win32
+  else
+    build-depends: unix
+
+  main-is: Server.hs
   other-modules:
-    Ladder
-    SemanticTokens
+    Control.Concurrent.Strict
+    LSP.Logger
+    LSP.Core.Action
+    LSP.Core.Debouncer
+    LSP.Core.FileExists
+    LSP.Core.FileStore
+    LSP.Core.FileUtils
+    LSP.Core.PositionMapping
+    LSP.Core.IdeConfiguration
+    LSP.Core.OfInterest
+    LSP.Core.ProgressReporting
+    LSP.Core.RuleTypes
+    LSP.Core.Shake
+    LSP.Core.Service
+    LSP.Core.WorkerThread
+    LSP.Core.Types.Diagnostics
+    LSP.Core.Types.Location
+    LSP.Core.Types.Monitoring
+    LSP.Core.Types.Options
+    LSP.Core.Types.Shake
+
+    LSP.SemanticTokens
+    LSP.L4.Config
+    LSP.L4.Handlers
+    LSP.L4.Ladder
+    LSP.L4.LanguageServer
+    LSP.L4.Rules
+    LSP.L4.SemanticTokens
 
 test-suite jl4-test
   import: defaults

@@ -47,8 +47,6 @@ import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
 import L4.Syntax
 import L4.Annotation
 
--- import Debug.Trace
-
 type KEnv = Set Name
 type TEnv = Map Name (Type' Resolved)
 

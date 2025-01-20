@@ -1,86 +1,21 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module SemanticTokens where
+module LSP.L4.SemanticTokens where
 
-import L4.Annotation
-import L4.ExactPrint (EPError (..), genericToNodes)
 import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
 import qualified L4.Lexer as Lexer
 import L4.Syntax
 
-import Control.Applicative (Alternative (..))
-import Control.Lens hiding (Iso)
-import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Reader
+import LSP.SemanticTokens
+import Control.Monad.Reader (ask)
 import qualified Data.Maybe as Maybe
-import GHC.Stack
-import Generics.SOP as SOP
-import qualified Language.LSP.Protocol.Lens as J
+
 import Language.LSP.Protocol.Types hiding (Pattern)
-
--- ----------------------------------------------------------------------------
--- Semantic Tokens Interface
--- ----------------------------------------------------------------------------
-
-type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except EPError)
-
-type HoleFit_ t = SemanticTokensM t [SemanticToken]
-
--- I would prefer to avoid the duplication between this class and
--- the ToTokens class.
---
--- We might want to override some functionality here. We should perhaps
--- try to find another way to do this.
-class ToSemTokens t a where
-  toSemTokens :: a -> HoleFit_ t
-  default toSemTokens ::
-    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
-    a ->
-    HoleFit_ t
-  toSemTokens =
-    genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
-
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno _ csns) = go csns
-  where
-    go [] _ = pure []
-    go (AnnoHole : cs) holeFits =
-      case holeFits of
-        [] -> lift $ throwE $ InsufficientHoleFit callStack
-        (x : xs) -> (<>) <$> x <*> go cs xs
-    go (AnnoCsn m : cs) holeFits = do
-      ctx <- ask
-      let
-        transformSyntaxNode token = toSemToken token <$> ctx.toSemanticToken token <*> ctx.getModifiers token
-        thisSyntaxNode = Maybe.mapMaybe transformSyntaxNode (csnTokens m)
-      restOfTokens <- go cs holeFits
-      pure $ thisSyntaxNode <> restOfTokens
-
-class ToSemToken t where
-  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken
-
-instance (ToSemTokens t a) => ToSemTokens t [a] where
-  toSemTokens =
-    Extra.concatMapM toSemTokens
-
-instance (ToSemTokens t a) => ToSemTokens t (Maybe a) where
-  toSemTokens =
-    maybe (pure []) toSemTokens
-
-withModifier :: (t -> Maybe [SemanticTokenModifiers]) -> SemanticTokensM t a -> SemanticTokensM t a
-withModifier f act = do
-  local (\i -> i{getModifiers = \t -> f t <|> i.getModifiers t}) act
-
-withTokenType :: (t -> Maybe SemanticTokenTypes) -> SemanticTokensM t a -> SemanticTokensM t a
-withTokenType f act = do
-  local (\i -> i{toSemanticToken = \t -> f t <|> i.toSemanticToken t}) act
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation
@@ -88,22 +23,11 @@ withTokenType f act = do
 
 type HoleFit = HoleFit_ PosToken
 
-data SemanticToken = SemanticToken
-  { start :: Position
-  , length :: UInt
-  , category :: SemanticTokenTypes
-  , modifiers :: [SemanticTokenModifiers]
-  }
-  deriving stock (Show, Eq, Ord)
-
-toSemanticTokenAbsolute :: SemanticToken -> SemanticTokenAbsolute
-toSemanticTokenAbsolute s =
-  SemanticTokenAbsolute
-    { _line = s.start ^. J.line
-    , _startChar = s.start ^. J.character
-    , _length = s.length
-    , _tokenType = s.category
-    , _tokenModifiers = s.modifiers
+defaultSemanticTokenCtx :: SemanticTokenCtx PosToken
+defaultSemanticTokenCtx =
+  SemanticTokenCtx
+    { semanticTokenType = simpleTokenType
+    , semanticTokenModifier = \_ -> pure []
     }
 
 standardTokenType :: TokenCategory -> Maybe SemanticTokenTypes
@@ -122,18 +46,6 @@ standardTokenType = \case
 
 simpleTokenType :: PosToken -> Maybe SemanticTokenTypes
 simpleTokenType t = standardTokenType (Lexer.posTokenCategory t.payload)
-
-data SemanticTokenCtx p = SemanticTokenCtx
-  { toSemanticToken :: p -> Maybe SemanticTokenTypes
-  , getModifiers :: p -> Maybe [SemanticTokenModifiers]
-  }
-
-defaultSemanticTokenCtx :: SemanticTokenCtx PosToken
-defaultSemanticTokenCtx =
-  SemanticTokenCtx
-    { toSemanticToken = simpleTokenType
-    , getModifiers = \_ -> pure []
-    }
 
 parameterType :: PosToken -> Maybe SemanticTokenTypes
 parameterType t = case Lexer.posTokenCategory t.payload of
@@ -219,3 +131,8 @@ instance ToSemTokens PosToken Lit where
     traverseCsnWithHoles ann []
   toSemTokens (StringLit ann _) =
     traverseCsnWithHoles ann []
+
+instance ToSemTokens PosToken PosToken where
+  toSemTokens t = do
+    ctx <- ask
+    pure $ Maybe.maybeToList $ fromSemanticTokenContext ctx t
