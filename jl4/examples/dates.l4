@@ -1,0 +1,73 @@
+§ `A datatype for dates`
+
+DECLARE Month
+  IS ONE OF
+    January
+    February
+    March
+    April
+    May
+    June
+    July
+    August
+    September
+    October
+    November
+    December
+
+DECLARE Date
+  HAS day   IS A NUMBER
+      month IS A Month
+      year  IS A NUMBER
+
+toNumber month MEANS
+  CONSIDER month
+  WHEN January   THEN 1
+  WHEN February  THEN 2
+  WHEN March     THEN 3
+  WHEN April     THEN 4
+  WHEN May       THEN 5
+  WHEN June      THEN 6
+  WHEN July      THEN 7
+  WHEN August    THEN 8
+  WHEN September THEN 9
+  WHEN October   THEN 10
+  WHEN November  THEN 11
+  WHEN December  THEN 12
+
+`is divisible by` d n MEANS
+         n MODULO d
+  EQUALS 0
+
+`is leap year` year MEANS
+             `is divisible by` 4   year
+  AND    NOT `is divisible by` 100 year
+      OR     `is divisible by` 400 year
+
+`days in month` month year MEANS
+  CONSIDER month
+  WHEN January   THEN 31
+  WHEN February  THEN IF `is leap year` year THEN 29 ELSE 28
+  WHEN March     THEN 31
+  WHEN April     THEN 30
+  WHEN May       THEN 31
+  WHEN June      THEN 30
+  WHEN July      THEN 31
+  WHEN August    THEN 31
+  WHEN September THEN 30
+  WHEN October   THEN 31
+  WHEN November  THEN 30
+  WHEN December  THEN 31
+
+GIVEN low  IS A NUMBER
+      high IS A NUMBER
+      n    IS A NUMBER
+`is between` low high n MEANS
+      n AT LEAST low
+  AND n AT MOST  high
+
+`date is valid` date MEANS
+  `is between` OF
+     0
+     `days in month` OF date's month, date's year
+     date's day

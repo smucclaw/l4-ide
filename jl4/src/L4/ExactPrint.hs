@@ -46,20 +46,23 @@ class ToConcreteNodes t a | a -> t where
   toNodes :: a -> Except EPError [CsnCluster_ t]
 
   default toNodes ::
-       (SOP.Generic a, All (AnnoFirst t (ToConcreteNodes t)) (Code a))
+       (SOP.Generic a, All (AnnoFirst a (ToConcreteNodes t)) (Code a), AnnoToken a ~ t)
     => a -> Except EPError [CsnCluster_ t]
   toNodes =
     genericToNodes (Proxy @(ToConcreteNodes t)) toNodes flattenConcreteNodes
 
-genericToNodes :: forall c a t r. (SOP.Generic a, All (AnnoFirst t c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno_ t -> [r] -> r) -> a -> r
+genericToNodes :: forall c a r. (SOP.Generic a, All (AnnoFirst a c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno' a -> [r] -> r) -> a -> r
 genericToNodes _ rec f x =
     collapse_NS
   $ cmap_NS
-      (Proxy @(AnnoFirst t c))
+      (Proxy @(AnnoFirst a c))
       (\ (I anno :* xs) ->
         K (f anno (collapse_NP (cmap_NP (Proxy @c) (mapIK rec) xs))))
   $ unSOP
   $ from x
+
+data Tree =
+  Fork SrcRange [Tree] | Leaf Name
 
 instance ToTokens t a => ToTokens t [a] where
   toTokens =
@@ -77,18 +80,16 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
   toNodes =
     maybe (pure []) toNodes
 
-flattenConcreteNodes :: (HasCallStack, MonadError EPError m) => Anno_ t -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
-flattenConcreteNodes (Anno []) _ = pure []
-flattenConcreteNodes (Anno (AnnoHole : cs)) holeFits = case holeFits of
-  [] -> do
-    throwError $ InsufficientHoleFit callStack
-  (x : xs) -> do
-    r <- x
-    rs <- flattenConcreteNodes (Anno cs) xs
-    pure (r <> rs)
-flattenConcreteNodes (Anno (AnnoCsn m : cs)) xs = do
-  rs <- flattenConcreteNodes (Anno cs) xs
-  pure (m : rs)
+flattenConcreteNodes :: (HasCallStack, MonadError EPError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
+flattenConcreteNodes (Anno _ csns) = go csns
+  where
+    go []               _        = pure []
+    go (AnnoHole : cs)  holeFits =
+      case holeFits of
+        [] -> throwError $ InsufficientHoleFit callStack
+        (x : xs) -> (<>) <$> x <*> go cs xs
+    go (AnnoCsn m : cs) holeFits =
+      (m :) <$> go cs holeFits
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation

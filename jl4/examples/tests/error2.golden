@@ -1,5 +1,6 @@
   |
 9 | ASSUME one IS A
-  | ^
-incorrect indentation (got 1, should be greater than 1)
+  | ^^^^^^
+unexpected ASSUME
+expecting <, FUNCTION, LIST, TYPE, [, identifier, or space token
 

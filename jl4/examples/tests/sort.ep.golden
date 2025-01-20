@@ -1,0 +1,41 @@
+§ `Sorting lists`
+
+GIVEN a IS A TYPE
+      leq IS A FUNCTION FROM a AND a TO BOOLEAN
+      x IS AN a
+      list IS A LIST OF a [an already ordered list]
+GIVETH A LIST OF a
+insert MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x FOLLOWED BY EMPTY
+  WHEN y FOLLOWED BY ys THEN
+    IF leq x y
+    THEN x FOLLOWED BY y FOLLOWED BY ys
+    ELSE y FOLLOWED BY insert OF leq, x, ys
+
+-- insertion sort
+GIVEN a IS A TYPE
+      leq IS A FUNCTION FROM a AND a TO BOOLEAN
+      list IS A LIST OF a
+GIVETH A LIST OF a
+sort MEANS
+  CONSIDER list
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    insert OF
+      leq
+      x
+      sort OF leq, xs
+
+-- check if a list is sorted
+GIVEN a IS A TYPE
+      leq IS A FUNCTION FROM a AND a TO BOOLEAN
+      list IS A LIST OF a
+GIVETH A BOOLEAN
+sorted MEANS
+  CONSIDER list
+  WHEN EMPTY THEN TRUE
+  WHEN x FOLLOWED BY EMPTY THEN TRUE
+  WHEN x FOLLOWED BY y FOLLOWED BY ys THEN
+        leq OF x, y
+    AND sorted OF leq, y FOLLOWED BY ys

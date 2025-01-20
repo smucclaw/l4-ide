@@ -174,8 +174,10 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno 0 Nothing
-      <$> annoHole (manyLines topdeclWithRecovery)
+    MkSection emptyAnno
+      <$> pure 0
+      <*> annoHole (pure Nothing)
+      <*> annoHole (manyLines topdeclWithRecovery)
 
 section :: Parser (Section Name)
 section =
@@ -240,7 +242,7 @@ assume = do
       <$  annoLexeme (spacedToken_ TKAssume)
       <*> annoHole appForm
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  optional article
+--      <*  optional article
       <*> annoHole (indented type' current)
 
 declare :: Parser (Declare Name)
@@ -331,7 +333,7 @@ giveth = do
   attachAnno $
     MkGivethSig emptyAnno
       <$  annoLexeme (spacedToken_ TKGiveth)
-      <*  optional article
+--      <*  optional article
       <*> annoHole (indented type' current)
 
 -- primarily for testing
@@ -341,11 +343,34 @@ expr =
 
 type' :: Parser (Type' Name)
 type' =
-      (attachAnno $
-         Type emptyAnno <$ annoLexeme (spacedToken_ TKType))
-  <|> tyApp
-  <|> fun
+      withOptionalArticle
+      (   typeKind
+      <|> tyApp
+      <|> fun
+      )
   <|> forall'
+  <|> parenType
+
+typeKind :: Parser (Type' Name)
+typeKind =
+  attachAnno $
+  Type emptyAnno <$ annoLexeme (spacedToken_ TKType)
+
+atomicType :: Parser (Type' Name)
+atomicType =
+      withOptionalArticle
+      (   typeKind
+      <|> nameAsApp TyApp
+      )
+  <|> parenType
+
+parenType :: Parser (Type' Name)
+parenType =
+  mergeAnno $
+    id
+    <$  annoLexeme (spacedToken_ TPOpen)
+    <*> annoHole type'
+    <*  annoLexeme (spacedToken_ TPClose)
 
 -- We don't actually currently allow parsing an optional name
 optionallyNamedType :: Parser (OptionallyNamedType Name)
@@ -361,8 +386,8 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole (tokenAsName TKList <|> name)
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedToken_ TKAnd))
-        <|> annoHole (lmany (indented type' current))
+    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedToken_ TComma))
+        <|> annoHole (lmany (indented atomicType current))
         )
 
 fun :: Parser (Type' Name)
@@ -378,18 +403,25 @@ fun = do
 
 forall' :: Parser (Type' Name)
 forall' = do
-  current <- Lexer.indentLevel
+  -- current <- Lexer.indentLevel
   attachAnno $
     Forall emptyAnno
     <$  annoLexeme (spacedToken_ TKFor)
     <*  annoLexeme (spacedToken_ TKAll)
     <*> annoHole (lsepBy1 name (spacedToken_ TKAnd))
-    <*  optional article
-    <*> annoHole (indented type' current)
+--    <*  optional article
+    <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno_ PosToken) PosToken
+article :: Compose Parser (WithAnno_ PosToken e) PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
+
+withOptionalArticle :: (HasAnno a, AnnoToken a ~ PosToken) => Parser a -> Parser a
+withOptionalArticle p =
+  mergeAnno $
+    id
+    <$  optional article
+    <*> annoHole p
 
 {-
 enumType :: Compose Parser WithAnno (Type' Name)
@@ -426,24 +458,13 @@ lsepBy1 pp sep =
     zipWithLeftovers [] _  = []
     zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
-lsepBy1Pos :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Pos -> Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
-lsepBy1Pos current pp sep =
-  fmap concat $ someLinesPos current $ do
-    (ps, seps) <- P.sepBy1 pp sep
-    pure $ zipWithLeftovers ps seps
-  where
-    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
-    zipWithLeftovers ps [] = ps
-    zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
-
 reqParam :: Parser (TypedName Name)
 reqParam =
   attachAnno $
     MkTypedName emptyAnno
       <$> annoHole name
       <*  annoLexeme (spacedToken_ TKIs)
-      <*  optional article
+--      <*  optional article
       <*> annoHole type'
 
 param :: Parser (OptionallyTypedName Name)
@@ -451,7 +472,7 @@ param =
   attachAnno $
     MkOptionallyTypedName emptyAnno
       <$> annoHole name
-      <*> optional (annoLexeme (spacedToken_ TKIs) *> optional article *> annoHole type')
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole type')
 
 -- |
 -- An expression is a base expression followed by
@@ -557,14 +578,21 @@ type Prio = Int
 -- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (3, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
-  <|> (\ op -> (4, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
-  <|> (\ op -> (5, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
-  <|> (\ op -> (5, infix2' Cons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+      (\ op -> (2, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (3, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (4, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (4, infix2' Leq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKMost) <|> opToken TLessEquals)
+  <|> (\ op -> (4, infix2' Geq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKLeast) <|> opToken TLessEquals)
+  <|> (\ op -> (5, infix2' Cons      op)) <$> ((<>) <$> opToken TKFollowed <*> opToken TKBy)
   <|> (\ op -> (6, infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
   <|> (\ op -> (6, infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
   <|> (\ op -> (7, infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
-  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKDivided <*> spacedToken_ TKBy) <|> (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ TDividedBy)
+  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((<>) <$> opToken TKDivided <*> opToken TKBy) <|> opToken TDividedBy)
+  <|> (\ op -> (7, infix2  Modulo    op)) <$> spacedToken_ TKModulo
+
+opToken :: TokenType -> Parser Anno
+opToken t =
+  (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ t
 
 infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
@@ -584,24 +612,33 @@ baseExpr =
   <|> try namedApp -- This is not nice
   <|> app
   <|> lit
+  <|> list
   <|> parenExpr
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr =
       lit
-  <|> nameAsApp
+  <|> nameAsApp App
   <|> parenExpr
 
-nameAsApp :: Parser (Expr Name)
-nameAsApp =
+nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b) => (Anno -> Name -> [a] -> b) -> Parser b
+nameAsApp f =
   attachAnno $
-    App emptyAnno
+    f emptyAnno
     <$> annoHole name
     <*> annoHole (pure [])
 
 lit :: Parser (Expr Name)
 lit = attachAnno $
   Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+
+list :: Parser (Expr Name)
+list = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    List emptyAnno
+      <$  annoLexeme (spacedToken_ TKList)
+      <*> annoHole (lsepBy (indentedExpr current) (spacedToken_ TComma))
 
 numericLit :: Parser Lit
 numericLit =
@@ -617,8 +654,8 @@ stringLit =
 
 parenExpr :: Parser (Expr Name)
 parenExpr =
-  attachAnno $
-    ParenExpr emptyAnno
+  mergeAnno $
+    id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole expr
     <*  annoLexeme (spacedToken_ TPClose)
@@ -1008,48 +1045,55 @@ mkHiddenCsnCluster =
 -- Annotation Combinators
 -- ----------------------------------------------------------------------------
 
-data WithAnno_ t a = WithAnno (Anno_ t) a
+data WithAnno_ t e a = WithAnno (Anno_ t e) a
   deriving stock Show
   deriving (Functor)
 
-unAnno :: WithAnno_ t a -> a
+unAnno :: WithAnno_ t e a -> a
 unAnno (WithAnno _ a) = a
 
-toAnno :: WithAnno_ t a -> Anno_ t
+toAnno :: WithAnno_ t e a -> Anno_ t e
 toAnno (WithAnno ann _) = ann
 
-annoHole :: Parser e -> Compose Parser (WithAnno_ t) e
-annoHole p = Compose $ fmap (WithAnno mkHoleAnno) p
+annoHole :: (HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
+annoHole p = Compose $ fmap (\ t -> WithAnno mkHoleAnno t) p
 
-annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t e) -> Compose Parser (WithAnno_ t) e
+annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
 annoEpa p = Compose $ fmap epaToAnno p
 
-annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t) t
+annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
 
-annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t) [t]
+annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
 annoLexemes = annoEpa . fmap lexesToEpa
 
-instance Applicative (WithAnno_ t) where
+instance Applicative (WithAnno_ t e) where
   pure a = WithAnno emptyAnno a
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
-attachAnno :: (HasAnno e, AnnoToken e ~ t) => Compose Parser (WithAnno_ t) e -> Parser e
+attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
 attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
+
+mergeAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
+mergeAnno p = (\ (WithAnno ann e) -> setAnno (mkAnno (mergeInto ann.payload (getAnno e).payload)) e) <$> getCompose p
+  where
+    mergeInto []               _   = []
+    mergeInto (AnnoHole : as1) as2 = as2 ++ as1
+    mergeInto (a : as1)        as2 = a : mergeInto as1 as2
 
 attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
 attachEpa =
   attachAnno . annoEpa
 
-mkHoleAnno :: Anno_ t
+mkHoleAnno :: Anno_ t e
 mkHoleAnno =
   mkAnno [mkHole]
 
-mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t
+mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
   toAnno . epaToAnno
 
-epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t a
+epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
 epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
  where
   cluster =

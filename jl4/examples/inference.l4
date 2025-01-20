@@ -1,0 +1,29 @@
+§ `Type inference example(s)`
+
+inc n MEANS n + 1
+
+singleton MEANS 5 FOLLOWED BY EMPTY
+
+five MEANS
+  CONSIDER singleton
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN x
+
+six MEANS inc five
+
+sum list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN x + sum xs
+
+and list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN TRUE
+  WHEN x FOLLOWED BY xs THEN x AND and xs
+
+#CHECK inc
+#CHECK singleton
+#CHECK five
+#CHECK six
+#CHECK sum
+#CHECK and

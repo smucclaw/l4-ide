@@ -139,6 +139,7 @@ data TokenType =
   | TKMinus
   | TKTimes
   | TKDivided
+  | TKModulo
   | TKBy
   | TKGreater
   | TKLess
@@ -321,6 +322,7 @@ keywords =
     , ("MINUS"      , TKMinus      )
     , ("TIMES"      , TKTimes      )
     , ("DIVIDED"    , TKDivided    )
+    , ("MODULO"     , TKModulo     )
     , ("BY"         , TKBy         )
     , ("GREATER"    , TKGreater    )
     , ("LESS"       , TKLess       )
@@ -638,6 +640,7 @@ displayPosToken (MkPosToken _r tt) =
     TKMinus          -> "MINUS"
     TKTimes          -> "TIMES"
     TKDivided        -> "DIVIDED"
+    TKModulo         -> "MODULO"
     TKBy             -> "BY"
     TKGreater        -> "GREATER"
     TKLess           -> "LESS"
@@ -743,6 +746,7 @@ posTokenCategory =
     TKMinus -> CKeyword
     TKTimes -> CKeyword
     TKDivided -> CKeyword
+    TKModulo -> CKeyword
     TKBy -> CKeyword
     TKGreater -> CKeyword
     TKLess -> CKeyword

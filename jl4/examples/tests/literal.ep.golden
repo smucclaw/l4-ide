@@ -8,6 +8,11 @@ DECIDE primes IS
     11 FOLLOWED BY
     EMPTY
 
+DECIDE `another definition of primes` IS
+    LIST
+      2, 3, 5
+      7, 11
+
 DECIDE countries IS
     "Germany" FOLLOWED BY
     "\214sterreich" FOLLOWED BY
