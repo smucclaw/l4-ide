@@ -97,7 +97,7 @@ export interface BinExpr extends IRNode {
 
 export interface Not extends IRNode {
   readonly $type: 'Not'
-  readonly value: IRExpr
+  readonly negand: IRExpr
 }
 
 export interface AtomicProposition extends IRNode {
@@ -134,7 +134,7 @@ export const BinExpr = Schema.Struct({
 
 export const Not = Schema.Struct({
   $type: Schema.tag('Not'),
-  value: IRExpr,
+  negand: IRExpr,
   id: IRId,
 }).annotations({ identifier: 'Not' })
 
@@ -174,6 +174,7 @@ export function getDecisionLogicIRPrettyPrinter() {
 export function exportDecisionLogicIRInfoToJSONSchema() {
   return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
 }
+
 
 /* 
 As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
@@ -254,7 +255,7 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
       "type": "object",
       "required": [
         "$type",
-        "value",
+        "negand",
         "id"
       ],
       "properties": {
@@ -264,7 +265,7 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
             "Not"
           ]
         },
-        "value": {
+        "negand": {
           "$ref": "#/$defs/IRExpr"
         },
         "id": {
