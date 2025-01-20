@@ -136,6 +136,26 @@ deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 
+deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Assume Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Declare Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (ConDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Type' Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypedName Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Pattern Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
+
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
   -- TODO: This is lossy and should be improved (but we should not need to
@@ -144,6 +164,10 @@ instance ToConcreteNodes PosToken Int where
 instance ToConcreteNodes PosToken Name where
   toNodes (MkName ann _) =
     flattenConcreteNodes ann []
+
+instance ToConcreteNodes PosToken Resolved where
+  toNodes r =
+    toNodes (getActual r)
 
 instance ToConcreteNodes PosToken RawName where
   toNodes _rn = pure []

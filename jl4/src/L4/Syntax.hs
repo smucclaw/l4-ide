@@ -22,17 +22,31 @@ data RawName =
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr)
 
+newtype Unique = MkUnique Int
+  deriving stock (GHC.Generic, Eq, Ord, Show)
+  deriving anyclass ToExpr
+
 data Resolved =
-    Def Name        -- ^ defining occurrence of name
-  | Ref Name Name   -- ^ referring occurrence of name, original occurrence of name
-  | OutOfScope Name -- ^ used to make progress for names where name resolution failed
+    Def Unique Name        -- ^ defining occurrence of name
+  | Ref Name Unique Name   -- ^ referring occurrence of name, original occurrence of name
+  | OutOfScope Unique Name -- ^ used to make progress for names where name resolution failed
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)
 
 getOriginal :: Resolved -> Name
-getOriginal (Def n)        = n
-getOriginal (Ref _ o)      = o
-getOriginal (OutOfScope n) = n
+getOriginal (Def _ n)        = n
+getOriginal (Ref _ _ o)      = o
+getOriginal (OutOfScope _ n) = n
+
+getUnique :: Resolved -> Unique
+getUnique (Def u _)        = u
+getUnique (Ref _ u _)      = u
+getUnique (OutOfScope u _) = u
+
+getActual :: Resolved -> Name
+getActual (Def _ n)        = n
+getActual (Ref n _ _)      = n
+getActual (OutOfScope _ n) = n
 
 data Type' n =
     Type   Anno -- ^ the type of types
@@ -156,7 +170,8 @@ data Branch n =
   deriving anyclass (SOP.Generic, ToExpr)
 
 data Pattern n =
-    PatApp Anno n [Pattern n]
+    PatVar Anno n -- not used during parsing, but after scope-checking
+  | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr)

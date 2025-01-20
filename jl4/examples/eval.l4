@@ -1,0 +1,6 @@
+x MEANS 2 + 2
+y MEANS FALSE
+
+#CHECK x * 8
+#EVAL x * 8
+#EVAL IF y THEN 3 ELSE 5

@@ -7,8 +7,9 @@
 
 module Main where
 
+import L4.Evaluate
 import L4.ExactPrint (prettyEPError, HasSrcRange(..))
-import L4.Lexer (SrcPos (..), SrcRange)
+import L4.Lexer (SrcPos (..), SrcRange(..))
 import qualified L4.Parser as Parser
 import L4.Syntax
 import L4.TypeCheck
@@ -47,7 +48,6 @@ import Prettyprinter
 import qualified Prettyprinter.Render.Text as Pretty
 import System.Exit
 import System.IO
-import L4.Lexer (SrcRange(..))
 
 -- ----------------------------------------------------------------------------
 
@@ -378,11 +378,33 @@ parseJL4WithWithDiagnostics uri content = case Parser.execParser Parser.program 
   Left err ->
     (fmap parseErrorToDiagnostic $ Foldable.toList err, Nothing)
   Right prog ->
+    -- parsing successful
     case doCheckProgram prog of
-      (errs, rprog, subst) -> (fmap checkErrorToDiagnostic errs, Just (prog, rprog, subst))
+      (errs, rprog, subst) ->
+        let
+          results
+            | all ((== SInfo) . severity) errs =
+              -- typechecking successful
+              doEvalProgram rprog
+            | otherwise = []
+        in
+          (fmap checkErrorToDiagnostic errs <> fmap evalResultToDiagnostic results, Just (prog, rprog, subst))
  where
 
   fp = Maybe.fromMaybe "in-memory" $ uriToFilePath uri
+
+evalResultToDiagnostic :: (SrcRange, Either EvalException Value) -> Diagnostic
+evalResultToDiagnostic (range, res) =
+  Diagnostic
+    (srcRangeToLSPRange (Just range))
+    (Just LSP.DiagnosticSeverity_Information)
+    Nothing
+    Nothing
+    (Just "eval")
+    (either (Text.pack . show) renderValue res)
+    Nothing
+    (Just [])
+    Nothing
 
 checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
 checkErrorToDiagnostic checkError =
