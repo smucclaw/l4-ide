@@ -20,7 +20,7 @@ import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
 import LSP.Core.Service hiding (Log (..))
-import LSP.Core.Shake (VFSModified (..), use)
+import LSP.Core.Shake hiding (Log(..))
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Location
 import LSP.L4.Config
@@ -29,7 +29,7 @@ import LSP.L4.Rules hiding (Log (..))
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
-import Language.LSP.Protocol.Types hiding (Pattern)
+import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
@@ -121,7 +121,7 @@ handlers recorder =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
-        liftIO $ Shake.shakeSessionInit (cmapWithPrio LogShake recorder) ide
+        liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
     , -- Handling of the virtual file system
       notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
         let
