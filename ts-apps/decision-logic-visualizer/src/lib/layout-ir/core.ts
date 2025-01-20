@@ -1,3 +1,5 @@
+// Start by looking at the docs for LirNode
+
 /*********************************************
        Registry
 ***********************************************/
@@ -6,6 +8,7 @@ export type LirRootType = string
 /** Lir := 'Layout IR' */
 export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
+  // Will add subscribers here in the future
 
   getRoot(rootType: LirRootType): LirNode | undefined {
     return this.#roots.get(rootType)
@@ -64,6 +67,12 @@ export abstract class NodeInfoManager {
        LirNode
 ***********************************************/
 
+/**
+ * Think of LirNodes as being an intermediate representation that's neither the underlying data nor the concrete UI 'displayers'.
+ * It's an IR that's focused on content as opposed to presentation --- it can be rendered in different ways, via different concrete GUIs.
+ * It can also be used for data synchronization.
+ * And it's intended to be extensible in the set of LirNode types/variants.
+ */
 export interface LirNode {
   getId(): LirId
 
@@ -96,6 +105,13 @@ export abstract class DefaultLirNode
        LirContext
 ***********************************************/
 
+/**
+ * There will be one LirContext for the entire application;
+ * the LirContext represents relevant global data.
+ *
+ * Operations on LirNodes should have the LirContext as an opaque context parameter.
+ * This makes it easier to add, e.g., various kinds of synchronization in the future.
+ */
 export class LirContext {
   #nodes: Map<LirId, LirNode> = new Map()
 
