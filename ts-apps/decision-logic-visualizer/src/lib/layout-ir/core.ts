@@ -117,11 +117,11 @@ export class LirContext {
 
   constructor() {}
 
-  getNode(id: LirId) {
+  get(id: LirId) {
     return this.#nodes.get(id)
   }
 
-  setNode(node: LirNode) {
+  set(node: LirNode) {
     this.#nodes.set(node.getId(), node)
   }
 }
