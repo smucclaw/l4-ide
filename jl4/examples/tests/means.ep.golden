@@ -6,7 +6,7 @@ ASSUME drinks IS A BOOLEAN
 ASSUME eats   IS A BOOLEAN
 
 GIVEN x IS A Person
-x MEANS walks
+y MEANS walks
 
 GIVEN p IS A Person
 `must sing` MEANS
