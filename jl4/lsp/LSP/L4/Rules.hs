@@ -7,11 +7,12 @@ import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
 import qualified Data.Maybe as Maybe
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import qualified Data.Text.Mixed.Rope as Rope
 import Data.Typeable
 import Development.IDE.Graph
 import GHC.Generics (Generic)
+import L4.Evaluate
 import L4.ExactPrint (HasSrcRange (..))
 import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
@@ -47,12 +48,23 @@ data TypeCheck = TypeCheck
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Typeable, Hashable)
 
+type instance RuleResult SuccessfulTypeCheck = TypeCheckResult
+data SuccessfulTypeCheck = SuccessfulTypeCheck
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
+
 data TypeCheckResult = TypeCheckResult
   { program :: Program Resolved
   , substitution :: Substitution
+  , success :: Bool
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
+
+type instance RuleResult Evaluate = ()
+data Evaluate = Evaluate
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Typeable, Hashable)
 
 type instance RuleResult LexerSemanticTokens = [SemanticToken]
 data LexerSemanticTokens = LexerSemanticTokens
@@ -119,8 +131,20 @@ jl4Rules recorder = do
       , Just TypeCheckResult
         { program = resolvedProg
         , substitution = subst
+        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) errs
         }
       )
+
+  define (cmapWithPrio ShakeLog recorder) $ \SuccessfulTypeCheck f -> do
+    typeCheckResult <- use_ TypeCheck f
+    if typeCheckResult.success
+      then pure ([], Just typeCheckResult)
+      else pure ([], Nothing)
+
+  define (cmapWithPrio ShakeLog recorder) $ \Evaluate f -> do
+    r <- use_ SuccessfulTypeCheck f
+    let results = doEvalProgram r.program
+    pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
 
   define (cmapWithPrio ShakeLog recorder) $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
@@ -212,11 +236,25 @@ jl4Rules recorder = do
      where
       start = srcPosToLspPosition parseError.start
 
+    evalResultToDiagnostic :: EvalResult -> Diagnostic
+    evalResultToDiagnostic (range, res) =
+      Diagnostic
+        { _range = srcRangeToLspRange (Just range)
+        , _severity = Just LSP.DiagnosticSeverity_Information
+        , _code = Nothing
+        , _codeDescription = Nothing
+        , _source = Just "eval"
+        , _message = either (pack . show) renderValue res
+        , _tags = Nothing
+        , _relatedInformation = Nothing
+        , _data_ = Nothing
+        }
+
     checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
     checkErrorToDiagnostic checkError =
       Diagnostic
         { _range = srcRangeToLspRange (rangeOf checkError)
-        , _severity = Just LSP.DiagnosticSeverity_Error
+        , _severity = Just (translateSeverity (TypeCheck.severity checkError))
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "check"
@@ -232,6 +270,10 @@ jl4Rules recorder = do
         , _line = p ^. J.line + 1
         }
 
+translateSeverity :: TypeCheck.Severity -> DiagnosticSeverity
+translateSeverity TypeCheck.SInfo  = LSP.DiagnosticSeverity_Information
+translateSeverity TypeCheck.SWarn  = LSP.DiagnosticSeverity_Warning
+translateSeverity TypeCheck.SError = LSP.DiagnosticSeverity_Error
 
 srcRangeToLspRange :: Maybe SrcRange -> LSP.Range
 srcRangeToLspRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)

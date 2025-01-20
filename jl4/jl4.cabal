@@ -26,19 +26,15 @@ library
   import: defaults
   hs-source-dirs: src
   build-depends:
-    aeson,
     containers,
     deepseq,
     extra,
     generics-sop,
     megaparsec,
-    mtl,
     logict,
     optics,
     optics-core,
-    optics-extra,
     optparse-applicative,
-    parser-combinators,
     pretty-simple,
     simala,
     text,
@@ -47,10 +43,10 @@ library
   exposed-modules:
     L4.Annotation
     L4.CodeGen
+    L4.Evaluate
     L4.ExactPrint
     L4.Main
     L4.TypeCheck
-    L4.Scope
     L4.Syntax
     L4.Lexer
     L4.Parser

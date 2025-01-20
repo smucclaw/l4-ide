@@ -9,3 +9,5 @@ DECIDE factorial OF n
     ELSE       n
          TIMES factorial OF       n
                             MINUS 1
+
+#EVAL factorial 10

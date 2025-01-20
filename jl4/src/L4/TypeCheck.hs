@@ -13,43 +13,25 @@ module L4.TypeCheck where
 -- as being a multi-definition with several different valid
 -- instantiations.]
 --
--- Within scope and type checking, we perform several passes of
--- the program / module:
+-- As of now, scope and type-checking is essentially still a
+-- one-pass process. We traverse the AST and resolve all information
+-- as we go. This means that currently, forward references are not
+-- possible. We are planning to change this by making two passes
+-- and some dependency analysis. (TODO)
 --
--- 1a. collect all user-defined types
+-- The result of scope- and type checking is a new program with
+-- resolved names everywhere. So after this phase, the unique
+-- numbers used in resolved names should be used for determining
+-- what points where.
 --
---     Types cannot depend on terms, only on other types.
---     Our kind system is simple: we have a kind TYPE of
---     inhabited, fully instantiated types, and we allow
---     abstraction only over TYPE. In other words, the kinds
---     of types are uniquely determined by their arity.
+-- The resulting program also contains type annotations for
+-- the inferred types of expressions (to be e.g. used in LSP hovering),
+-- but note that these types can still contain inference variables.
 --
---     We allow forward references (and thus in principle
---     mutually recursive types).
+-- Currently, one therefore also has to extract the final substitution
+-- after type checking and apply this in order to get a properly
+-- expanded type.
 --
--- 1b. scope and kind-check the bodies of user-defined types
-
-import Base
-import qualified Base.Map as Map
-import qualified Base.Text as Text
-import Control.Applicative
-import Control.Monad.Logic
-import Data.Bifunctor
-import Data.Containers.ListUtils (nubOrd)
-import Data.Either (partitionEithers)
-import Data.Proxy
-import qualified Generics.SOP as SOP
-import Optics.Core (gplate, traverseOf)
-
-import qualified L4.Parser as Parser
-import L4.ExactPrint
-import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
-import L4.Syntax
-import L4.Annotation
-
-type KEnv = Set Name
-type TEnv = Map Name (Type' Resolved)
-
 -- Notes on Type-Directed Name Resolution (TDNR):
 --
 -- The basic idea is that we perform name resolution based on types.
@@ -83,34 +65,29 @@ type TEnv = Map Name (Type' Resolved)
 --    about this more, but it seems clear to me that we will have to
 --    compromise somewhere.
 
-{-
-newtype Check a =
-  MkCheck (LogicT (StateT CheckState (With CheckError)) a)
-  deriving newtype
-    ( Functor, Applicative, Monad
-    , Alternative
-    , MonadState CheckState
-    , MonadWith CheckError
-    , MonadLogic
-    )
 
--- what I want is, I think, this:
---
--- CheckState -> ([With CheckError a], CheckState)
---
--- with currently global state.
---
--- I currently can't figure out if I can build this using LogicT,
--- StateT, and With(T).
---
--- I'm also not yet fully convinced whether we really want global
--- state only, but it seems compelling.
--}
+import Base
+import qualified Base.Map as Map
+import qualified Base.Text as Text
+import Control.Applicative
+import Control.Monad.Logic
+import Data.Bifunctor
+import Data.Containers.ListUtils (nubOrd)
+import Data.Either (partitionEithers)
+import Data.Proxy
+import qualified Generics.SOP as SOP
+import Optics.Core (gplate, traverseOf)
+
+import qualified L4.Parser as Parser
+import L4.ExactPrint
+import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
+import L4.Syntax
+import L4.Annotation
 
 newtype Check a =
   MkCheck (CheckState -> [(With CheckErrorWithContext a, CheckState)])
 
--- Some notes on the Check monad:
+-- NOTES on the Check monad:
 --
 -- Contrary to my first belief, we cannot
 -- afford making the complete CheckState global, because the subsitution
@@ -127,10 +104,24 @@ newtype Check a =
 -- the different branches have been unambiguously resolved, so it should
 -- probably be fine.
 
+data CheckState =
+  MkCheckState
+    { environment  :: !Environment
+    , errorContext :: !CheckErrorContext
+    , substitution :: !Substitution
+    , supply       :: !Int
+    }
+  deriving stock (Eq, Generic, Show)
+
+type Environment = Map RawName [(Unique, Name, CheckEntity)]
+type Substitution = Map Int (Type' Resolved)
+
+type Kind = Int -- arity of the type
+
 runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
 runCheck (MkCheck f) = f
 
-initialCheckState :: Map RawName [(Name, CheckEntity)] -> CheckState
+initialCheckState :: Environment -> CheckState
 initialCheckState env =
   MkCheckState
     { environment  = env
@@ -139,6 +130,16 @@ initialCheckState env =
     , supply       = 0
     }
 
+-- | Main entry point for scope- and type-checking.
+--
+-- Takes the program as input.
+--
+-- Produces:
+--
+-- - a list of errors or informational messages (for @#CHECK@ directives)
+-- - a resolved and type-annotated version of the program
+-- - the final substitution (for resolving type annotations in the program)
+--
 doCheckProgram :: Program Name -> ([CheckErrorWithContext], Program Resolved, Substitution)
 doCheckProgram program =
   case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment) of
@@ -154,6 +155,9 @@ doCheckProgram program =
             in
               (substErrs ++ moreErrs, rprog, s'.substitution)
 
+-- | Can be used to apply the final substitution after type-checking, expanding
+-- inference variables whenever possible.
+--
 applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
 applyFinalSubstitution subst t =
   let
@@ -166,6 +170,7 @@ applyFinalSubstitution subst t =
         in
           r
 
+-- | Helper function to run the check monad an expect a unique result.
 runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckState)
 runCheckUnique c s =
   case runCheck c s of
@@ -173,31 +178,149 @@ runCheckUnique c s =
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
 
+-- --------------------------------
+-- Building the initial environment
+-- --------------------------------
+
+-- | Helper function to create a predefined name.
 preDef :: Text -> Name
-preDef t = MkName (mkAnno [mkCsn (CsnCluster (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos "" 0 0) (MkSrcPos "" 0 0) 0) (TIdentifier t)] Nothing Visible) (ConcreteSyntaxNode [] Nothing Hidden))]) (PreDef t)
+preDef t =
+  MkName
+    (mkAnno
+      [mkCsn
+        (CsnCluster
+          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos "" 0 0) (MkSrcPos "" 0 0) 0) (TIdentifier t)] Nothing Visible)
+          (ConcreteSyntaxNode [] Nothing Hidden)
+        )
+      ]
+    )
+    (PreDef t)
+
+-- uniques of built-in / predefs are currently negative:
+--
+-- -10  BOOLEAN
+-- -11  NUMBER
+-- -12  STRING
+-- -13  LIST
+-- -30  FALSE
+-- -31  TRUE
+-- -32  EMPTY
+-- -40  A (type variable in EMPTY)
+
+-- BOOLEAN
+
+booleanUnique :: Unique
+booleanUnique = MkUnique (-10)
+
+booleanName :: Name
+booleanName = preDef "BOOLEAN"
+
+booleanRef :: Resolved
+booleanRef = Ref booleanName booleanUnique booleanName
 
 boolean :: Type' Resolved
-boolean = TyApp mempty (Ref (preDef "BOOLEAN") (preDef "BOOLEAN")) []
+boolean = TyApp mempty booleanRef []
+
+falseUnique :: Unique
+falseUnique = MkUnique (-30)
+
+falseName :: Name
+falseName = preDef "FALSE"
+
+falseDef :: Resolved
+falseDef = Def falseUnique falseName
+
+falseRef :: Resolved
+falseRef = Ref falseName falseUnique falseName
+
+trueUnique :: Unique
+trueUnique = MkUnique (-31)
+
+trueName :: Name
+trueName = preDef "TRUE"
+
+trueDef :: Resolved
+trueDef = Def trueUnique trueName
+
+trueRef :: Resolved
+trueRef = Ref trueName trueUnique trueName
+
+-- NUMBER
+
+numberUnique :: Unique
+numberUnique = MkUnique (-11)
+
+numberName :: Name
+numberName = preDef "NUMBER"
+
+numberRef :: Resolved
+numberRef = Ref numberName numberUnique numberName
 
 number :: Type' Resolved
-number = TyApp mempty (Ref (preDef "NUMBER") (preDef "NUMBER")) []
+number = TyApp mempty numberRef []
+
+-- STRING
+
+stringUnique :: Unique
+stringUnique = MkUnique (-12)
+
+stringName :: Name
+stringName = preDef "STRING"
+
+stringRef :: Resolved
+stringRef = Ref stringName stringUnique stringName
 
 string :: Type' Resolved
-string = TyApp mempty (Ref (preDef "STRING") (preDef "STRING")) []
+string = TyApp mempty stringRef []
+
+-- LIST
+
+listUnique :: Unique
+listUnique = MkUnique (-13)
+
+listName :: Name
+listName = preDef "LIST"
+
+listRef :: Resolved
+listRef = Ref listName listUnique listName
 
 list :: Type' Resolved -> Type' Resolved
-list a = TyApp mempty (Ref (preDef "LIST") (preDef "LIST")) [a]
+list a = TyApp mempty listRef [a]
 
-initialEnvironment :: Map RawName [(Name, CheckEntity)]
+emptyUnique :: Unique
+emptyUnique = MkUnique (-32)
+
+emptyName :: Name
+emptyName = preDef "EMPTY"
+
+emptyDef :: Resolved
+emptyDef = Def emptyUnique emptyName
+
+emptyRef :: Resolved
+emptyRef = Ref emptyName emptyUnique emptyName
+
+aUnique :: Unique
+aUnique = MkUnique (-40)
+
+aName :: Name
+aName = MkName mempty (NormalName "A")
+
+aDef :: Resolved
+aDef = Def aUnique aName
+
+aRef :: Resolved
+aRef = Ref aName aUnique aName
+
+initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN", [ (preDef "BOOLEAN", KnownType 0 (EnumDecl mempty [MkConDecl mempty (Def (preDef "FALSE")) [], MkConDecl mempty (Def (preDef "TRUE")) []])) ])
-    , (NormalName "FALSE",   [ (preDef "FALSE",   KnownTerm boolean Constructor) ])
-    , (NormalName "TRUE",    [ (preDef "TRUE",    KnownTerm boolean Constructor) ])
-    , (NormalName "NUMBER",  [ (preDef "NUMBER",  KnownType 0 (EnumDecl mempty [])) ])
-    , (NormalName "STRING",  [ (preDef "STRING",  KnownType 0 (EnumDecl mempty [])) ])
-    , (NormalName "LIST",    [ (preDef "LIST",    KnownType 1 (EnumDecl mempty [MkConDecl mempty (Def (preDef "EMPTY")) []])) ])
-    , (NormalName "EMPTY",   [ (preDef "EMPTY",   KnownTerm (Forall mempty [Def (MkName mempty (NormalName "A"))] (list (TyApp mempty (Ref (MkName mempty (NormalName "A")) (MkName mempty (NormalName "A"))) []))) Constructor) ])
+    [ (NormalName "BOOLEAN", [ (booleanUnique, preDef "BOOLEAN", KnownType 0 (EnumDecl mempty [MkConDecl mempty falseDef [], MkConDecl mempty trueDef []])) ])
+    , (NormalName "FALSE",   [ (falseUnique,   preDef "FALSE",   KnownTerm boolean Constructor) ])
+    , (NormalName "TRUE",    [ (trueUnique,    preDef "TRUE",    KnownTerm boolean Constructor) ])
+    , (NormalName "NUMBER",  [ (numberUnique,  preDef "NUMBER",  KnownType 0 (EnumDecl mempty [])) ])
+    , (NormalName "STRING",  [ (stringUnique,  preDef "STRING",  KnownType 0 (EnumDecl mempty [])) ])
+    , (NormalName "LIST",    [ (listUnique,    preDef "LIST",    KnownType 1 (EnumDecl mempty [MkConDecl mempty emptyDef []])) ])
+    , (NormalName "EMPTY",   [ (emptyUnique,   preDef "EMPTY",   KnownTerm (Forall mempty [aDef] (list (TyApp mempty aRef []))) Constructor) ])
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
     ]
 
@@ -281,7 +404,7 @@ data CheckErrorWithContext =
 data CheckError =
     OutOfScopeError Name (Type' Resolved)
   | KindError Kind [Type' Name]
-  | UnificationErrorRef Name Name
+  | UnificationErrorRef (Unique, Name) (Unique, Name)
   -- | InternalUnificationErrorDef Resolved Resolved -- ^ if called on defining occurrences of names
   | UnificationError (Type' Resolved) (Type' Resolved)
   | OccursCheck (Type' Resolved) (Type' Resolved)
@@ -305,19 +428,6 @@ data CheckErrorContext =
   | WhileCheckingType (Type' Name) CheckErrorContext
   | None
   deriving stock (Eq, Generic, Show)
-
-data CheckState =
-  MkCheckState
-    { environment  :: !(Map RawName [(Name, CheckEntity)])
-    , errorContext :: !CheckErrorContext
-    , substitution :: !Substitution
-    , supply       :: !Int
-    }
-  deriving stock (Eq, Generic, Show)
-
-type Substitution = Map Int (Type' Resolved)
-
-type Kind = Int -- arity of the type
 
 data CheckEntity =
     KnownType Kind (TypeDecl Resolved)
@@ -356,14 +466,15 @@ orElse m1 m2 = do
 
 -- | Allow the subcomputation to have at most one result.
 --
-prune :: Check a -> Check a
+prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- use #errorContext
   MkCheck $ \ s ->
     let
+      candidates :: [(With CheckErrorWithContext a, CheckState)]
       candidates = runCheck m s
 
-      proc []                    = []
+      proc []                    = [] -- should never occur
       proc [a]                   = [a]
       proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
       proc ((With e x, s') : cs) = procWith (With e x, s') cs
@@ -389,6 +500,11 @@ step = do
   assign #supply next
   pure current
 
+newUnique :: Check Unique
+newUnique = do
+  i <- step
+  pure (MkUnique i)
+
 fresh :: RawName -> Check (Type' Resolved)
 fresh prefix = do
   i <- step
@@ -413,9 +529,9 @@ resolveTerm' p n = do
       rn <- ambiguousTerm (setAnno (set #extra (Just v) (getAnno n)) n) xs
       pure (rn, v)
   where
-    proc :: (Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (o, KnownTerm t tk) | p tk = Just (Ref (setAnno (set #extra (Just t) (getAnno n)) n) o, t)
-    proc _                          = Nothing
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
+    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnno (set #extra (Just t) (getAnno n)) n) u o, t)
+    proc _                             = Nothing
 
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
 resolveTerm = resolveTerm' (const True)
@@ -437,14 +553,14 @@ checkSelector recordt n = do
 
 instantiate :: Type' Resolved -> Check (Type' Resolved)
 instantiate (Forall _ann ns t) = do
-  substitution <- Map.fromList <$> traverse (\ n -> let r = rawName (getName n) in fresh r >>= \ v -> pure (r, v)) ns
+  substitution <- Map.fromList <$> traverse (\ n -> let (u, o) = getUniqueName n; r = rawName o in fresh r >>= \ v -> pure (u, v)) ns
   pure (substituteType substitution t)
 instantiate t             = pure t
 
-substituteType :: Map RawName (Type' Resolved) -> Type' Resolved -> Type' Resolved
+substituteType :: Map Unique (Type' Resolved) -> Type' Resolved -> Type' Resolved
 substituteType _ (Type ann)               = Type ann
-substituteType s t@(TyApp _ (Ref _ o) []) =
-  case Map.lookup (rawName o) s of
+substituteType s t@(TyApp _ r []) =
+  case Map.lookup (getUnique r) s of
     Nothing -> t
     Just t' -> t'
 substituteType s (TyApp ann n ts)         =
@@ -456,7 +572,7 @@ substituteType _ (Forall ann ns t)        =
 substituteType _ (InfVar ann prefix i)    = InfVar ann prefix i
 -- substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
 
-substituteOptionallyNamedType :: Map RawName (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
+substituteOptionallyNamedType :: Map Unique (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
 substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
   MkOptionallyNamedType ann mn (substituteType s t)
 
@@ -483,8 +599,8 @@ app = TyApp mempty
 -- which has defining occurrences of the type variables.
 --
 tyvar :: Resolved -> Type' Resolved
-tyvar (Def n) = TyApp mempty (Ref n n) []
-tyvar r       = TyApp mempty r         []
+tyvar (Def u n) = TyApp mempty (Ref n u n) []
+tyvar r         = TyApp mempty r           []
 
 checkBinOp ::
      Type' Resolved
@@ -501,25 +617,34 @@ checkBinOp t1 t2 tr op ann e1 e2 = do
   pure (op ann e1' e2', tr)
 
 def :: Name -> Check Resolved
-def n = pure (Def n)
+def n = do
+  u <- newUnique
+  pure (Def u n)
 
-ref :: HasName a => Name -> a -> Check Resolved
-ref n o = pure (Ref n (getName o))
+ref :: Name -> Resolved -> Check Resolved
+ref n a =
+  let
+    (u, o) = getUniqueName a
+  in
+    pure (Ref n u o)
 
 outOfScope :: Name -> Type' Resolved -> Check Resolved
 outOfScope n t = do
   addError (OutOfScopeError n t)
-  pure (OutOfScope n)
+  u <- newUnique
+  pure (OutOfScope u n)
 
 ambiguousTerm :: Name -> [(Resolved, Type' Resolved)] -> Check Resolved
 ambiguousTerm n xs = do
   addError (AmbiguousTermError n xs)
-  pure (OutOfScope n)
+  u <- newUnique
+  pure (OutOfScope u n)
 
 ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
 ambiguousType n xs = do
   addError (AmbiguousTypeError n xs)
-  pure (OutOfScope n)
+  u <- newUnique
+  pure (OutOfScope u n)
 
 inferDeclare :: Declare Name -> Check (Declare Resolved)
 inferDeclare (MkDeclare ann appForm t) = do
@@ -713,8 +838,21 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   pure (EnumDecl ann rconDecls, sequence_ extends)
 inferTypeDecl rappForm (RecordDecl ann tns) = do
   -- a record declaration is just a special case of an enum declaration
-  (MkConDecl rann _ rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getName rappForm) tns)
+  (MkConDecl rann _ rtns, extend) <- inferConDeclResolved rappForm (appFormHead rappForm) (MkConDecl ann (getName rappForm) tns)
   pure (RecordDecl rann rtns, extend)
+
+-- TODO: merge with inferConDecl
+inferConDeclResolved :: AppForm Resolved -> Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
+inferConDeclResolved rappForm n (MkConDecl ann _ tns) = do
+  ensureDistinct (getName <$> tns)
+  (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
+  let
+    conType = forall' (appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
+    conInfo = KnownTerm conType Constructor
+  -- instantiated <- instantiate conType
+  -- trace (Text.unpack $ simpleprint conType) (pure ())
+  -- trace (Text.unpack $ simpleprint instantiated) (pure ())
+  pure (MkConDecl ann n rtns, makeKnown n conInfo >> sequence_ extends)
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
 inferConDecl rappForm (MkConDecl ann n tns) = do
@@ -792,13 +930,16 @@ resolveType n = do
       rn <- ambiguousType n xs
       pure (rn, 0)
   where
-    proc :: (Name, CheckEntity) -> Maybe (Resolved, Kind)
-    proc (o, KnownTypeVariable) = Just (Ref n o, 0)
-    proc (o, KnownType kind _)  = Just (Ref n o, kind)
-    proc _                      = Nothing
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Kind)
+    proc (u, o, KnownTypeVariable) = Just (Ref n u o, 0)
+    proc (u, o, KnownType kind _)  = Just (Ref n u o, kind)
+    proc _                         = Nothing
 
 rawName :: Name -> RawName
 rawName (MkName _ raw) = raw
+
+getUniqueName :: Resolved -> (Unique, Name)
+getUniqueName r = (getUnique r, getOriginal r)
 
 class HasName a where
   getName :: a -> Name
@@ -807,9 +948,7 @@ instance HasName Name where
   getName n = n
 
 instance HasName Resolved where
-  getName (Def n)        = n
-  getName (Ref n _)      = n
-  getName (OutOfScope n) = n
+  getName = getActual
 
 instance HasName a => HasName (AppForm a) where
   getName (MkAppForm _ n _) = getName n
@@ -884,10 +1023,6 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
   rt <- maybeGivethType mgiveth
   pure (forall' tyvars (fun ronts rt), rt, traverse_ proc ronts)
   where
-    isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
-    isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
-    isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
-
     mkOptionallyNamedType :: (Resolved, Maybe (Type' Resolved)) -> Check (OptionallyNamedType Resolved)
     mkOptionallyNamedType (n, Nothing) = do
       v <- fresh (rawName (getName n))
@@ -899,6 +1034,10 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
     proc (MkOptionallyNamedType _ Nothing  _) = pure () -- should not happen
     proc (MkOptionallyNamedType _ (Just n) t) =
       makeKnown n (KnownTerm t Local)
+
+isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
+isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
+isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
 
 maybeGivethType :: Maybe (GivethSig Resolved) -> Check (Type' Resolved)
 maybeGivethType Nothing                  = fresh (NormalName "r") -- we have no obvious prefix?
@@ -930,18 +1069,19 @@ ensureDistinct ns
 -- | Makes the given named item known in the current scope,
 -- with the given specification.
 --
-makeKnown :: HasName a => a -> CheckEntity -> Check ()
+makeKnown :: Resolved -> CheckEntity -> Check ()
 makeKnown a ce =
   modifying #environment
     (Map.alter proc (rawName n))
   where
+    u :: Unique
     n :: Name
-    n = getName a
+    (u, n) = getUniqueName a
 
-    new :: (Name, CheckEntity)
-    new = (getName n, ce)
+    new :: (Unique, Name, CheckEntity)
+    new = (u, n, ce)
 
-    proc :: Maybe [(Name, CheckEntity)] -> Maybe [(Name, CheckEntity)]
+    proc :: Maybe [(Unique, Name, CheckEntity)] -> Maybe [(Unique, Name, CheckEntity)]
     proc Nothing   = Just [new]
     proc (Just xs) = Just (new : xs)
 
@@ -1122,13 +1262,16 @@ checkPattern p t = do
   unify t rt
   pure (rp, extend)
 
+-- Note: PatVar doesn't really get produced by the parser. We replace
+-- PatApps that are not in scope with PatVar applications here in the
+-- scope and type checker.
 inferPattern :: Pattern Name -> Check (Pattern Resolved, Type' Resolved, Check ())
+inferPattern g@(PatVar ann n)      = scope $ do
+  setErrorContext (WhileCheckingPattern g)
+  inferPatternVar ann n
 inferPattern g@(PatApp ann n [])   = scope $ do
   setErrorContext (WhileCheckingPattern g)
-  inferPatternApp ann n [] `orElse` do
-    rn <- def n
-    rt <- fresh (NormalName "p")
-    pure (PatApp ann rn [], rt, makeKnown rn (KnownTerm rt Local))
+  inferPatternApp ann n [] `orElse` inferPatternVar ann n
 inferPattern g@(PatApp ann n ps)   = scope $ do
   setErrorContext (WhileCheckingPattern g)
   inferPatternApp ann n ps
@@ -1138,6 +1281,12 @@ inferPattern g@(PatCons ann p1 p2) = scope $ do
   let listType = list rt1
   (rp2, extend2) <- checkPattern p2 listType
   pure (PatCons ann rp1 rp2, listType, extend1 >> extend2)
+
+inferPatternVar :: Anno -> Name -> Check (Pattern Resolved, Type' Resolved, Check ())
+inferPatternVar ann n = do
+  rn <- def n
+  rt <- fresh (NormalName "p")
+  pure (PatVar ann rn, rt, makeKnown rn (KnownTerm rt Local))
 
 inferPatternApp :: Anno -> Name -> [Pattern Name] -> Check (Pattern Resolved, Type' Resolved, Check ())
 inferPatternApp ann n ps = do
@@ -1158,8 +1307,8 @@ inferLit (StringLit _ _) =
 
 ensureSameRef :: Resolved -> Resolved -> Check ()
 ensureSameRef r1 r2
-  | getOriginal r1 == getOriginal r2 = pure ()
-  | otherwise = addError (UnificationErrorRef (getOriginal r1) (getOriginal r2))
+  | getUnique r1 == getUnique r2 = pure ()
+  | otherwise = addError (UnificationErrorRef (getUniqueName r1) (getUniqueName r2))
 
 -- We leave it somewhat vague how unify treats forall-types and TYPE.
 -- In general, types should be instantiated prior to unification, and
@@ -1247,6 +1396,7 @@ instance HasSrcRange CheckError where
   rangeOf _                                 = Nothing
 
 data Severity = SWarn | SError | SInfo
+  deriving stock (Eq, Show)
 
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
@@ -1303,14 +1453,17 @@ instance SimplePrint a => SimplePrint (OptionallyNamedType a) where
 instance SimplePrint RawName where
   simpleprint rn = rawNameToText rn
 
+instance SimplePrint (Unique, Name) where
+  simpleprint (_u, n) = simpleprint n
+
 rawNameToText :: RawName -> Text
 rawNameToText (NormalName n) = n
 rawNameToText (PreDef n)     = n
 
 instance SimplePrint Resolved where
-  simpleprint (Def n)        = simpleprint n
-  simpleprint (Ref n _)      = simpleprint n
-  simpleprint (OutOfScope n) = simpleprint n
+  simpleprint (Def _ n)        = simpleprint n
+  simpleprint (Ref n _ _)      = simpleprint n
+  simpleprint (OutOfScope _ n) = simpleprint n
 
 instance SimplePrint Name where
   simpleprint (MkName _ n) = simpleprint n
