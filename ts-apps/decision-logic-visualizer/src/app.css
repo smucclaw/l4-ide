@@ -1,0 +1,70 @@
+/* TODO: May want to put app.css in static/ instead, but not sure. Need to look more into this. */
+
+/* ==== FURTHER CSS = TODO ======================== */
+
+/* ===== Basic 'CSS reset' ======================= 
+
+Resources
+  * Josh Comeau
+  * https://piccalil.li/blog/a-more-modern-css-reset/
+*/
+
+/* Box sizing rules */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+#html {
+  isolation: isolate; /* create a new stacking context */
+
+  /* Prevent font size inflation */
+  -moz-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%; /* For older browsers */
+  text-size-adjust: 100%;
+}
+
+/* Core body defaults */
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* Set shorter line heights on headings and interactive elements */
+h1,
+h2,
+h3,
+h4,
+button,
+input,
+label {
+  line-height: 1.1;
+}
+
+/* Inherit fonts for inputs and buttons */
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Make sure textareas without a rows attribute are not tiny */
+textarea:not([rows]) {
+  min-height: 10em;
+}
+
+/* Anything that has been anchored to should have extra scroll margin */
+:target {
+  scroll-margin-block: 5ex;
+}

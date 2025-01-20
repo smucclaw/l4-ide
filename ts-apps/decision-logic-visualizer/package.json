@@ -1,24 +1,20 @@
 {
   "name": "decision-logic-visualizer",
   "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-kit sync && vite build && npm run package",
+    "build": "svelte-kit sync && vite build",
     "preview": "vite preview",
+    "prepare": "svelte-kit sync",
     "package": "svelte-kit sync && svelte-package && publint",
     "prepublishOnly": "npm run package",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write .",
     "lint": "eslint .",
-    "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "test": "vitest"
   },
-  "files": [
-    "dist",
-    "!dist/**/*.test.*",
-    "!dist/**/*.spec.*"
-  ],
   "sideEffects": [
     "**/*.css"
   ],
@@ -38,27 +34,33 @@
   "devDependencies": {
     "@repo/eslint-config": "*",
     "@repo/prettier-config": "*",
-    "@sveltejs/adapter-auto": "^3.3.1",
-    "@sveltejs/kit": "^2.9.0",
+    "@sveltejs/adapter-auto": "^3.0.0",
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.16.0",
     "@sveltejs/package": "^2.3.7",
-    "@sveltejs/vite-plugin-svelte": "^4.0.2",
-    "@testing-library/svelte": "^5.2.6",
-    "@vitest/coverage-v8": "^2.1.6",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.13.0",
-    "jsdom": "^25.0.1",
     "prettier": "^3.4.1",
-    "prettier-plugin-svelte": "^3.3.2",
+    "prettier-plugin-svelte": "^3.3.3",
     "publint": "^0.3.2",
-    "svelte": "^5.3.1",
-    "svelte-check": "^4.1.0",
+    "svelte": "^5.19.0",
+    "svelte-check": "^4.1.4",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.16.0",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.6"
+    "vite": "^6.0.7",
+    "vitest": "^3.0.2"
   },
   "dependencies": {
-    "effect": "^3.11.0"
+    "@xyflow/svelte": "^0.1.28",
+    "effect": "^3.11.0",
+    "elkjs": "^0.9.3",
+    "esbuild": "^0.24.2"
+  },
+  "overrides": {
+    "@xyflow/svelte": {
+      "svelte": "^5.0.0"
+    }
   }
 }

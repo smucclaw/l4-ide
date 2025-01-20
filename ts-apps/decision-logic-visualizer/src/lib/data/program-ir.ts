@@ -54,11 +54,6 @@ in order to implement recursive and mutually recursive schemas.
 See https://effect.website/docs/schema/advanced-usage/#recursive-schemas
 */
 
-/** A separate record type for annotations makes it easy to add more annotation types in the future */
-export const IRNodeAnnotation = Schema.Struct({
-  label: Schema.optional(Schema.String),
-})
-
 /** Stable IDs useful for things like bidirectional synchronization down the road */
 export const IRId = Schema.Struct({
   id: Schema.Number,
@@ -67,11 +62,6 @@ export const IRId = Schema.Struct({
 /** Stable IDs useful for things like bidirectional synchronization down the road */
 interface IRId {
   readonly id: number
-}
-
-export interface IRNodeAnnotation {
-  /** The label is what gets displayed in or around the box. */
-  readonly label?: string
 }
 
 /*****************
@@ -83,13 +73,11 @@ export interface IRNode {
   readonly $type: string
   /** (Stable) ID for this IRNode */
   readonly id: IRId
-  readonly annotation: IRNodeAnnotation
 }
 
 export const IRNode = Schema.Struct({
   $type: Schema.String,
   id: IRId,
-  annotation: IRNodeAnnotation,
 })
 
 /*******************************
@@ -115,14 +103,12 @@ export interface Not extends IRNode {
 export interface AtomicProposition extends IRNode {
   readonly $type: 'AtomicProposition'
   readonly value: 'False' | 'True' | 'Unknown'
-  readonly annotation: AtomicPropositionAnnotation
-}
-
-/**
-I can't think of a scenario where we'd plausibly want atomic propositions in something like a ladder diagram to not have a label;
-and conversely it is easy to think of scenarios where one forgets to add the label for atomic propositions.
-*/
-export interface AtomicPropositionAnnotation extends IRNodeAnnotation {
+  /** The label is what gets displayed in or around the box.
+   *
+   * I can't think of a scenario where we'd plausibly want
+   * atomic propositions in something like a ladder diagram to not have a label.
+   * And conversely it is easy to think of scenarios where one forgets to add the label for atomic propositions.
+   */
   readonly label: string
 }
 
@@ -144,19 +130,13 @@ export const BinExpr = Schema.Struct({
   left: IRExpr,
   right: IRExpr,
   id: IRId,
-  annotation: IRNodeAnnotation,
 }).annotations({ identifier: 'BinExpr' })
 
 export const Not = Schema.Struct({
   $type: Schema.tag('Not'),
   value: IRExpr,
   id: IRId,
-  annotation: IRNodeAnnotation,
 }).annotations({ identifier: 'Not' })
-
-export const AtomicPropositionAnnotation = Schema.Struct({
-  label: Schema.String,
-})
 
 export const AtomicProposition = Schema.Struct({
   $type: Schema.tag('AtomicProposition'),
@@ -166,7 +146,7 @@ export const AtomicProposition = Schema.Struct({
     Schema.Literal('Unknown')
   ),
   id: IRId,
-  annotation: AtomicPropositionAnnotation,
+  label: Schema.String,
 }).annotations({ identifier: 'AtomicProposition' })
 
 /***********************************
@@ -196,11 +176,10 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
 }
 
 /* 
-As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
+As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
 
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/$defs/VisualizeDecisionLogicIRInfo",
   "$defs": {
     "VisualizeDecisionLogicIRInfo": {
       "type": "object",
@@ -234,16 +213,17 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
         "op",
         "left",
         "right",
-        "id",
-        "annotation"
+        "id"
       ],
       "properties": {
         "$type": {
+          "type": "string",
           "enum": [
             "BinExpr"
           ]
         },
         "op": {
+          "type": "string",
           "enum": [
             "And",
             "Or"
@@ -266,16 +246,6 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
             }
           },
           "additionalProperties": false
-        },
-        "annotation": {
-          "type": "object",
-          "required": [],
-          "properties": {
-            "label": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -285,11 +255,11 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
       "required": [
         "$type",
         "value",
-        "id",
-        "annotation"
+        "id"
       ],
       "properties": {
         "$type": {
+          "type": "string",
           "enum": [
             "Not"
           ]
@@ -308,16 +278,6 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
             }
           },
           "additionalProperties": false
-        },
-        "annotation": {
-          "type": "object",
-          "required": [],
-          "properties": {
-            "label": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -328,15 +288,17 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
         "$type",
         "value",
         "id",
-        "annotation"
+        "label"
       ],
       "properties": {
         "$type": {
+          "type": "string",
           "enum": [
             "AtomicProposition"
           ]
         },
         "value": {
+          "type": "string",
           "enum": [
             "False",
             "True",
@@ -355,21 +317,13 @@ As of Dec 9 2024 7.50pm SGT (we should run this in the CI or something), exportD
           },
           "additionalProperties": false
         },
-        "annotation": {
-          "type": "object",
-          "required": [
-            "label"
-          ],
-          "properties": {
-            "label": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
+        "label": {
+          "type": "string"
         }
       },
       "additionalProperties": false
     }
-  }
+  },
+  "$ref": "#/$defs/VisualizeDecisionLogicIRInfo"
 }
 */

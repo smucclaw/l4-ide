@@ -1,3 +1,5 @@
+// Start by looking at the docs for LirNode
+
 /*********************************************
        Registry
 ***********************************************/
@@ -6,6 +8,7 @@ export type LirRootType = string
 /** Lir := 'Layout IR' */
 export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
+  // Will add subscribers here in the future
 
   getRoot(rootType: LirRootType): LirNode | undefined {
     return this.#roots.get(rootType)
@@ -31,9 +34,45 @@ export class LirId {
 }
 
 /*********************************************
+      NodeInfo
+***********************************************/
+
+type LirNodeInfoWithoutContext = Omit<LirNodeInfo, 'context'>
+
+export interface LirNodeInfo {
+  context: LirContext
+  registry: LirRegistry
+}
+
+export abstract class NodeInfoManager {
+  protected readonly lirInfo: LirNodeInfoWithoutContext
+
+  /** Note: Make sure not to actually store the LirContext in the class. */
+  constructor(defaultNodeInfo: LirNodeInfo) {
+    const { context, ...lirInfoWithoutContext } = defaultNodeInfo
+    this.lirInfo = lirInfoWithoutContext
+  }
+
+  protected makeNodeInfo(context: LirContext): LirNodeInfo {
+    return { context, ...this.lirInfo }
+  }
+
+  /** This reference to the LirRegistry can be used to publish updates */
+  protected getLirRegistry() {
+    return this.lirInfo.registry
+  }
+}
+
+/*********************************************
        LirNode
 ***********************************************/
 
+/**
+ * Think of LirNodes as being an intermediate representation that's neither the underlying data nor the concrete UI 'displayers'.
+ * It's an IR that's focused on content as opposed to presentation --- it can be rendered in different ways, via different concrete GUIs.
+ * It can also be used for data synchronization.
+ * And it's intended to be extensible in the set of LirNode types/variants.
+ */
 export interface LirNode {
   getId(): LirId
 
@@ -42,22 +81,15 @@ export interface LirNode {
   toString(): string
 }
 
-export interface LirNodeInfo {
-  context: LirContext
-  registry: LirRegistry
-}
-
-export abstract class DefaultLirNode implements LirNode {
+export abstract class DefaultLirNode
+  extends NodeInfoManager
+  implements LirNode
+{
   #id: LirId
-  #nodeInfo: Omit<LirNodeInfo, 'context'>
 
   constructor(protected readonly nodeInfo: LirNodeInfo) {
+    super(nodeInfo)
     this.#id = new LirId()
-    this.#nodeInfo = { registry: nodeInfo.registry }
-  }
-
-  protected getLirRegistry() {
-    return this.#nodeInfo.registry
   }
 
   getId(): LirId {
@@ -73,6 +105,13 @@ export abstract class DefaultLirNode implements LirNode {
        LirContext
 ***********************************************/
 
+/**
+ * There will be one LirContext for the entire application;
+ * the LirContext represents relevant global data.
+ *
+ * Operations on LirNodes should have the LirContext as an opaque context parameter.
+ * This makes it easier to add, e.g., various kinds of synchronization in the future.
+ */
 export class LirContext {
   #nodes: Map<LirId, LirNode> = new Map()
 
