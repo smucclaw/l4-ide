@@ -1,4 +1,4 @@
-import type { AtomicProposition, BinOp } from '$lib/data/program-ir'
+import type { BoolVar, BinOp } from '$lib/data/program-ir'
 import type { LirId, LirNode, LirNodeInfo } from './core'
 import { LirContext, DefaultLirNode } from './core'
 import { match } from 'ts-pattern'
@@ -7,18 +7,17 @@ import { match } from 'ts-pattern'
  **************** Expr Lir Nodes *****************
  *************************************************/
 
-type AtomicPropositionValue = true | false | undefined
+type BoolValue = true | false | undefined
 
-export type ExprLirNode = BinExprLirNode | NotLirNode | AtomicPropositionLirNode
+export type ExprLirNode = BinExprLirNode | NotLirNode | VarLirNode
 
-export class AtomicPropositionLirNode
-  extends DefaultLirNode
-  implements LirNode
-{
-  readonly #originalExpr: AtomicProposition
-  #value: AtomicPropositionValue = $state()!
+export type VarLirNode = BoolVarLirNode
 
-  constructor(nodeInfo: LirNodeInfo, originalExpr: AtomicProposition) {
+export class BoolVarLirNode extends DefaultLirNode implements LirNode {
+  readonly #originalExpr: BoolVar
+  #value: BoolValue = $state()!
+
+  constructor(nodeInfo: LirNodeInfo, originalExpr: BoolVar) {
     super(nodeInfo)
     this.#originalExpr = originalExpr
     this.#value = match(originalExpr.value)
@@ -28,8 +27,8 @@ export class AtomicPropositionLirNode
       .exhaustive()
   }
 
-  getLabel() {
-    return this.#originalExpr.label
+  getName() {
+    return this.#originalExpr.name
   }
 
   getValue() {
@@ -41,7 +40,7 @@ export class AtomicPropositionLirNode
   }
 
   toString(): string {
-    return 'ATOMIC_PROPOSITION_LIR_NODE'
+    return 'BOOL_VAR_LIR_NODE'
   }
 }
 

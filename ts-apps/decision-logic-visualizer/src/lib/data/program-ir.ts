@@ -3,7 +3,7 @@ import { Either } from 'effect'
 import type { LirSource, LirNodeInfo } from '../layout-ir/core'
 import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.ts'
 import {
-  AtomicPropositionLirNode,
+  BoolVarLirNode,
   NotLirNode,
   BinExprLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.ts'
@@ -112,16 +112,17 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
-export interface AtomicProposition extends IRNode {
-  readonly $type: 'AtomicProposition'
+export interface BoolVar extends IRNode {
+  readonly $type: 'BoolVar'
   readonly value: 'False' | 'True' | 'Unknown'
-  /** The label is what gets displayed in or around the box.
+  /** The name will be treated as a label by the visualizer;
+   * i.e., it is what gets displayed in or around the box.
    *
    * I can't think of a scenario where we'd plausibly want
    * atomic propositions in something like a ladder diagram to not have a label.
    * And conversely it is easy to think of scenarios where one forgets to add the label for atomic propositions.
    */
-  readonly label: string
+  readonly name: string
 }
 
 /***********************************
@@ -131,7 +132,7 @@ export interface AtomicProposition extends IRNode {
 export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
   Schema.suspend((): Schema.Schema<Not> => Not),
-  Schema.suspend((): Schema.Schema<AtomicProposition> => AtomicProposition)
+  Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
 export const BinOp = Schema.Union(Schema.Literal('And'), Schema.Literal('Or'))
@@ -150,16 +151,16 @@ export const Not = Schema.Struct({
   id: IRId,
 }).annotations({ identifier: 'Not' })
 
-export const AtomicProposition = Schema.Struct({
-  $type: Schema.tag('AtomicProposition'),
+export const BoolVar = Schema.Struct({
+  $type: Schema.tag('BoolVar'),
   value: Schema.Union(
     Schema.Literal('False'),
     Schema.Literal('True'),
     Schema.Literal('Unknown')
   ),
   id: IRId,
-  label: Schema.String,
-}).annotations({ identifier: 'AtomicProposition' })
+  name: Schema.String,
+}).annotations({ identifier: 'BoolVar' })
 
 /***********************************
   Wrapper / Protocol interfaces
@@ -180,10 +181,7 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
 export const ExprSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
     return match(expr)
-      .with(
-        { $type: 'AtomicProposition' },
-        (ap) => new AtomicPropositionLirNode(nodeInfo, ap)
-      )
+      .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
       .with(
         { $type: 'Not' },
         (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
@@ -212,10 +210,10 @@ const decode = Schema.decodeUnknownEither(IRExpr)
 
 /** Example of an unknown input */
 const egAtomicPropWalks = {
-  $type: 'AtomicProposition',
+  $type: 'BoolVar',
   value: 'True',
   id: { id: 1 },
-  label: 'walks',
+  name: 'walks',
 }
 
 const result = decode(egAtomicPropWalks)
@@ -223,10 +221,10 @@ console.log(result)
 /*
 {
   right: {
-    '$type': 'AtomicProposition',
+    '$type': 'BoolVar',
     value: 'True',
     id: { id: 1 },
-    label: 'walks'
+    name: 'walks'
   },
   _tag: 'Right',
   _op: 'Right'
@@ -236,10 +234,10 @@ if (Either.isRight(result)) {
   console.log(result.right)
   /*
   {
-  '$type': 'AtomicProposition',
+  '$type': 'BoolVar',
   value: 'True',
   id: { id: 1 },
-  label: 'walks'
+  name: 'walks'
   }
   */
 }
@@ -289,7 +287,7 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
           "$ref": "#/$defs/Not"
         },
         {
-          "$ref": "#/$defs/AtomicProposition"
+          "$ref": "#/$defs/BoolVar"
         }
       ]
     },
@@ -369,19 +367,19 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
       },
       "additionalProperties": false
     },
-    "AtomicProposition": {
+    "BoolVar": {
       "type": "object",
       "required": [
         "$type",
         "value",
         "id",
-        "label"
+        "name"
       ],
       "properties": {
         "$type": {
           "type": "string",
           "enum": [
-            "AtomicProposition"
+            "BoolVar"
           ]
         },
         "value": {
@@ -404,7 +402,7 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
           },
           "additionalProperties": false
         },
-        "label": {
+        "name": {
           "type": "string"
         }
       },
