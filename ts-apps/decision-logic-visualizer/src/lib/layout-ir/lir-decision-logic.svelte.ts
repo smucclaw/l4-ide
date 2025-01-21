@@ -15,7 +15,7 @@ export type VarLirNode = BoolVarLirNode
 
 export class BoolVarLirNode extends DefaultLirNode implements LirNode {
   readonly #originalExpr: BoolVar
-  #value: BoolValue = $state()!
+  #value = $state<BoolValue>()
 
   constructor(nodeInfo: LirNodeInfo, originalExpr: BoolVar) {
     super(nodeInfo)
@@ -33,6 +33,10 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
 
   getValue() {
     return this.#value
+  }
+
+  setValue(value: BoolValue) {
+    this.#value = value
   }
 
   getChildren(_context: LirContext) {
