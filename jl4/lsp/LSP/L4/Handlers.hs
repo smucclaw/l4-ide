@@ -19,8 +19,9 @@ import L4.TypeCheck
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
+import LSP.Core.PositionMapping
 import LSP.Core.Service hiding (Log (..))
-import LSP.Core.Shake hiding (Log(..))
+import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Location
 import LSP.L4.Config
@@ -253,13 +254,16 @@ whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
 gotoDefinition :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Location)
 gotoDefinition ide fileUri pos = do
   mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
-    use TypeCheck nfp
+    useWithStale TypeCheck nfp
   case mTypeCheckedModule of
     Nothing -> pure Nothing
-    Just m -> do
+    Just (m, positionMapping) -> do
       pure $ do
-        range <- findDefinition (lspPositionToSrcPos pos) m.program
-        pure (Location uri (srcRangeToLspRange (Just range)))
+        oldPos <- fromCurrentPosition positionMapping pos
+        range <- findDefinition (lspPositionToSrcPos oldPos) m.program
+        let lspRange = srcRangeToLspRange (Just range)
+        newRange <- toCurrentRange positionMapping lspRange
+        pure (Location uri newRange)
   where
     nfp = fromUri fileUri
     uri = LSP.fromNormalizedUri fileUri
@@ -271,12 +275,15 @@ gotoDefinition ide fileUri pos = do
 findHover :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Hover)
 findHover ide fileUri pos = do
   mTypeCheckedModule <- liftIO $ runAction "findHover" ide $
-    use TypeCheck nfp
+    useWithStale TypeCheck nfp
   case mTypeCheckedModule of
     Nothing -> pure Nothing
-    Just m -> do
+    Just (m, positionMapping) -> do
       pure $ do
-        (range, t) <- findType (lspPositionToSrcPos pos) m.program
-        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just (srcRangeToLspRange (Just range))))
+        oldPos <- fromCurrentPosition positionMapping pos
+        (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
+        let lspRange = srcRangeToLspRange (Just range)
+        newLspRange <- toCurrentRange positionMapping lspRange
+        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
   where
     nfp = fromUri fileUri
