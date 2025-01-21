@@ -7,6 +7,7 @@ module L4.Annotation where
 
 import L4.Lexer ( SrcRange (..) )
 
+import Control.DeepSeq (NFData)
 import Data.Kind
 import qualified Data.List as List
 import Data.TreeDiff.Class (ToExpr)
@@ -21,7 +22,7 @@ data NodeVisibility
   | -- | A token written by the user.
     Visible
   deriving stock (Show, Ord, Eq, Enum, Bounded, GHC.Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   { tokens :: [t]
@@ -29,20 +30,20 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   , visibility :: NodeVisibility
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 data CsnCluster_ t = CsnCluster
   { payload :: ConcreteSyntaxNode_ t
   , trailing :: ConcreteSyntaxNode_ t
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 data AnnoElement_ t
   = AnnoHole
   | AnnoCsn (CsnCluster_ t)
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 mkHoleWithType :: a -> AnnoElement_ t
 mkHoleWithType _ = AnnoHole
@@ -58,7 +59,7 @@ data Anno_ t e = Anno
   , payload :: [AnnoElement_ t]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass ToExpr
+  deriving anyclass (ToExpr, NFData)
 
 csnTokens :: CsnCluster_ t -> [t]
 csnTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens

@@ -5,8 +5,10 @@ module L4.Parser (
   -- * Public API
   parseFile,
   execParser,
+  execParserForTokens,
   program,
   PError(..),
+  mkPError,
   -- * Testing API
   parseTest,
 ) where
@@ -969,6 +971,12 @@ execParser p file input =
       case parse (p <* eof) file (MkTokenStream (Text.unpack input) ts) of
         Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
         Right x  -> Right x
+
+execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) a
+execParserForTokens p file input ts =
+    case parse (p <* eof) file (MkTokenStream (Text.unpack input) ts) of
+      Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
+      Right x  -> Right x
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
 parseFile :: Show a => Parser a -> String -> Text -> IO ()

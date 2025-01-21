@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE LambdaCase #-}
 
-module Ladder where
+module LSP.L4.Ladder where
 
 import L4.Syntax as S
 
