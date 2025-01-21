@@ -117,19 +117,19 @@ export class LirContext {
 
   constructor() {}
 
-  getNode(id: LirId) {
+  get(id: LirId) {
     return this.#nodes.get(id)
   }
 
-  setNode(node: LirNode) {
+  set(node: LirNode) {
     this.#nodes.set(node.getId(), node)
   }
 }
 
 /*********************************************
-       LirDataSource
+       Lir Data Source
 ***********************************************/
 
-export interface LirDataSource<A, B> {
-  toLir(data: A): B
+export interface LirSource<A, B> {
+  toLir(nodeInfo: LirNodeInfo, data: A): B
 }
