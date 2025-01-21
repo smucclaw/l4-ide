@@ -93,7 +93,10 @@ export const IRNode = Schema.Struct({
   Decision Logic (ish) IR node
 ********************************/
 
-export type IRExpr = BinExpr | Not | AtomicProposition
+/** Think of this as the Expr for the decision logic.
+ * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
+ */
+export type IRExpr = BinExpr | Not | BoolVar
 
 export type BinOp = 'And' | 'Or'
 
