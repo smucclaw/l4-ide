@@ -136,7 +136,7 @@ program :: Parser (Program Name)
 program = do
   attachAnno $
     MkProgram emptyAnno
-      <$  annoLexemes ((\ts -> Lexeme ts ts) <$> spacesOrAnnotations)
+      <$  annoLexemes ((\ts -> Lexeme ts []) <$> spacesOrAnnotations)
       <*> annoHole
           ((\s ss -> s:ss)
             <$> anonymousSection
