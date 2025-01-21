@@ -1,6 +1,28 @@
 x MEANS 2 + 2
 y MEANS FALSE
 
-#CHECK x * 8
-#EVAL x * 8
+DECLARE Pair
+  IS ONE OF
+    MkPair HAS p1 IS A NUMBER, p2 IS A NUMBER
+
+DECIDE addPair p
+  IS
+    CONSIDER p
+    WHEN MkPair p1 p2 THEN p1 + p2
+
+DECIDE l
+  IS LIST 1,2,3
+
+DECIDE sumList list
+  IS
+    CONSIDER list
+    WHEN EMPTY THEN 0
+    WHEN z FOLLOWED BY zs THEN z + sumList zs
+
+#CHECK x * x
+#EVAL x * x
 #EVAL IF y THEN 3 ELSE 5
+#EVAL MkPair 1 2
+#EVAL addPair (MkPair 1 2)
+#EVAL l
+#EVAL sumList (LIST 1,2,3)

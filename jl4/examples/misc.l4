@@ -16,6 +16,14 @@ add m n MEANS
 GIVEN m IS A Nat
       n IS A Nat
 GIVETH A Nat
+add2 m n MEANS
+  CONSIDER m
+  WHEN Zero  THEN n
+  WHEN Suc p THEN Suc OF add2 p n
+
+GIVEN m IS A Nat
+      n IS A Nat
+GIVETH A Nat
 mul m n MEANS
   CONSIDER m
   WHEN Zero  THEN Zero
@@ -35,6 +43,9 @@ swap p MEANS
 
 example MEANS
   add (Suc Zero) (Suc (Suc Zero))
+
+example2 MEANS
+  add2 (Suc Zero) (Suc (Suc Zero))
 
 GIVEN a IS A TYPE
       list1 IS A LIST OF a

@@ -823,8 +823,21 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   pure (EnumDecl ann rconDecls, sequence_ extends)
 inferTypeDecl rappForm (RecordDecl ann tns) = do
   -- a record declaration is just a special case of an enum declaration
-  (MkConDecl rann _ rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getName rappForm) tns)
+  (MkConDecl rann _ rtns, extend) <- inferConDeclResolved rappForm (appFormHead rappForm) (MkConDecl ann (getName rappForm) tns)
   pure (RecordDecl rann rtns, extend)
+
+-- TODO: merge with inferConDecl
+inferConDeclResolved :: AppForm Resolved -> Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
+inferConDeclResolved rappForm n (MkConDecl ann _ tns) = do
+  ensureDistinct (getName <$> tns)
+  (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
+  let
+    conType = forall' (appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
+    conInfo = KnownTerm conType Constructor
+  -- instantiated <- instantiate conType
+  -- trace (Text.unpack $ simpleprint conType) (pure ())
+  -- trace (Text.unpack $ simpleprint instantiated) (pure ())
+  pure (MkConDecl ann n rtns, makeKnown n conInfo >> sequence_ extends)
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
 inferConDecl rappForm (MkConDecl ann n tns) = do
