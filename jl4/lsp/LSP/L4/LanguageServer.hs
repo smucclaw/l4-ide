@@ -309,10 +309,15 @@ exitHandler ::IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
-modifyOptions x = x{ LSP.optTextDocumentSync   = Just $ tweakTDS origTDS
-                   }
+modifyOptions x =
+  x { LSP.optTextDocumentSync   = Just $ tweakTDS origTDS
+    }
     where
-        tweakTDS tds = tds{_openClose=Just True, _change=Just TextDocumentSyncKind_Incremental, _save=Just $ InR $ SaveOptions Nothing}
+        tweakTDS tds = tds
+          { _openClose = Just True
+          , _change = Just TextDocumentSyncKind_Incremental
+          , _save = Just $ InR $ SaveOptions Nothing
+          }
         origTDS = fromMaybe tdsDefault $ LSP.optTextDocumentSync x
         tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing
 
