@@ -92,7 +92,7 @@ fromCurrentPosition :: PositionMapping -> Position -> Maybe Position
 fromCurrentPosition (PositionMapping pm) = positionResultToMaybe . pm.fromDelta
 
 toCurrentPosition :: PositionMapping -> Position -> Maybe Position
-toCurrentPosition (PositionMapping pm) = positionResultToMaybe . pm.fromDelta
+toCurrentPosition (PositionMapping pm) = positionResultToMaybe . pm.toDelta
 
 -- A position mapping is the difference from the current version to
 -- a specific version
