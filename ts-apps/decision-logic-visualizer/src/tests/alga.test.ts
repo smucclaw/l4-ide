@@ -65,3 +65,20 @@ describe('Algebraic Graphs - Overlay Associativity', () => {
     )
   })
 })
+
+describe('Algebraic Graphs - Distributive Laws', () => {
+  test('Connect distributes over Overlay', () => {
+    const va = vertex(new NumberWrapper(1))
+    const vb = vertex(new NumberWrapper(2))
+    const vc = vertex(new NumberWrapper(3))
+
+    const a_times_b_plus_c = connect(va, overlay(vb, vc))
+    const a_times_b_plus_a_times_c = overlay(connect(va, vb), connect(va, vc))
+
+    expect(a_times_b_plus_c.toString()).toStrictEqual(
+      'edges [(NWrapper 1, NWrapper 2), (NWrapper 1, NWrapper 3)]'
+    )
+
+    expect(a_times_b_plus_c.isEqualTo(a_times_b_plus_a_times_c)).toBeTruthy()
+  })
+})
