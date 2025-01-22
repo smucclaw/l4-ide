@@ -36,24 +36,7 @@ describe('Algebraic Graphs - Overlay Commutativity', () => {
     const aPlusB = overlay(va, vb)
     const bPlusA = overlay(vb, va)
 
-    expect(
-      aPlusB
-        .getVertices()
-        .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    ).toStrictEqual(
-      bPlusA
-        .getVertices()
-        .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    )
-    expect(
-      bPlusA
-        .getVertices()
-        .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    ).toStrictEqual(
-      aPlusB
-        .getVertices()
-        .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    )
+    expect(aPlusB.isEqualTo(bPlusA)).toBeTruthy()
   })
 })
 
@@ -65,6 +48,8 @@ describe('Algebraic Graphs - Overlay Associativity', () => {
 
     const aPlusBC = overlay(va, overlay(vb, vc))
     const abPlusC = overlay(overlay(va, vb), vc)
+
+    expect(aPlusBC.isEqualTo(abPlusC)).toBeTruthy()
 
     expect(aPlusBC.toString()).toStrictEqual(
       'vertices [NWrapper 1, NWrapper 2, NWrapper 3]'
