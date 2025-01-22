@@ -1,4 +1,6 @@
-import type { Eq } from './alga.ts'
+import type { Eq, Ord } from './alga.ts'
+import { isLessThanOrEquals } from './alga.ts'
+import _ from 'lodash'
 
 /**********************************************************
   Internal Adjacency Map implementation / representation
@@ -25,15 +27,41 @@ I was optimizing for correctness and readability, not performance.
 */
 
 /** Adjacency Map implementation of undirected Alga Graph */
-export type AMGraph<A extends Eq> =
+export type AMUndirectedGraph<A extends Ord> =
   | Empty<A>
   | Vertex<A>
   | Overlay<A>
   | Connect<A>
 
+export class UndirectedEdge<A extends Ord> implements Eq {
+  readonly u: A
+  readonly v: A
+  constructor(u: A, v: A) {
+    if (isLessThanOrEquals(u, v)) {
+      this.u = u
+      this.v = v
+    } else {
+      this.v = u
+      this.u = v
+    }
+  }
+
+  isEqualTo(that: unknown): boolean {
+    if (!(that instanceof UndirectedEdge)) return false
+    return (
+      (this.u.isEqualTo(that.u) && this.v.isEqualTo(that.v)) ||
+      (this.u.isEqualTo(that.v) && this.v.isEqualTo(that.u))
+    )
+  }
+
+  toString(): string {
+    return `(${this.u}, ${this.v})`
+  }
+}
+
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors. */
-export class BaseAMGraph<A extends Eq> {
+export class BaseAMGraph<A extends Ord> {
   protected adjacencyMap: Map<A, Set<A>>
 
   constructor(adjacencyMap?: Map<A, Set<A>>) {
@@ -41,11 +69,11 @@ export class BaseAMGraph<A extends Eq> {
   }
 
   // Alga ops
-  overlay(other: AMGraph<A>): AMGraph<A> {
+  overlay(other: AMUndirectedGraph<A>): AMUndirectedGraph<A> {
     return new Overlay(this, other)
   }
 
-  connect(other: AMGraph<A>): AMGraph<A> {
+  connect(other: AMUndirectedGraph<A>): AMUndirectedGraph<A> {
     return new Connect(this, other)
   }
 
@@ -69,20 +97,20 @@ export class BaseAMGraph<A extends Eq> {
     return Array.from(this.adjacencyMap.keys())
   }
 
-  getEdges(): Array<[A, A]> {
+  getEdges(): UndirectedEdge<A>[] {
     const vertices = this.getVertices()
-    const edges = new Set<[A, A]>()
+    const edges = []
 
     for (const vertex of vertices) {
-      const neighbors = this.adjacencyMap.get(vertex)
-      if (neighbors) {
-        for (const neighbor of neighbors) {
-          edges.add([vertex, neighbor])
-        }
+      const neighbors = Array.from(
+        this.adjacencyMap.get(vertex) ?? (new Set() as Set<A>)
+      )
+      for (const neighbor of neighbors) {
+        edges.push(new UndirectedEdge(vertex, neighbor))
       }
     }
 
-    return Array.from(edges)
+    return _.uniqWith(edges, (a, b) => a.isEqualTo(b))
   }
 
   // Getters and setters for the underlying adjacency map
@@ -115,7 +143,7 @@ export class BaseAMGraph<A extends Eq> {
 **********************/
 
 /** Empty graph */
-export class Empty<A extends Eq> extends BaseAMGraph<A> {
+export class Empty<A extends Ord> extends BaseAMGraph<A> {
   readonly tag = 'Empty'
 
   constructor() {
@@ -124,7 +152,7 @@ export class Empty<A extends Eq> extends BaseAMGraph<A> {
 }
 
 /** The graph consisting of a single isolated vertex. */
-export class Vertex<A extends Eq> extends BaseAMGraph<A> {
+export class Vertex<A extends Ord> extends BaseAMGraph<A> {
   readonly tag = 'Vertex'
 
   constructor(readonly value: A) {
@@ -137,17 +165,17 @@ export class Vertex<A extends Eq> extends BaseAMGraph<A> {
 }
 
 /** Convenience wrapper over Overlay ctor.
- * 
+ *
  * overlay is analogous to +
  */
-export function overlay<A extends Eq>(
-  x: AMGraph<A>,
-  y: AMGraph<A>
-): AMGraph<A> {
+export function overlay<A extends Ord>(
+  x: AMUndirectedGraph<A>,
+  y: AMUndirectedGraph<A>
+): AMUndirectedGraph<A> {
   return new Overlay(x, y)
 }
 
-export class Overlay<A extends Eq> extends BaseAMGraph<A> {
+export class Overlay<A extends Ord> extends BaseAMGraph<A> {
   readonly tag = 'Overlay'
 
   constructor(
@@ -170,17 +198,17 @@ export class Overlay<A extends Eq> extends BaseAMGraph<A> {
 }
 
 /** Convenience wrapper over Connect ctor.
- * 
+ *
  * connect is analogous to *
  */
-export function connect<A extends Eq>(
-  x: AMGraph<A>,
-  y: AMGraph<A>
-): AMGraph<A> {
+export function connect<A extends Ord>(
+  x: AMUndirectedGraph<A>,
+  y: AMUndirectedGraph<A>
+): AMUndirectedGraph<A> {
   return new Connect(x, y)
 }
 
-export class Connect<A extends Eq> extends BaseAMGraph<A> {
+export class Connect<A extends Ord> extends BaseAMGraph<A> {
   readonly tag = 'Connect'
 
   constructor(
@@ -191,10 +219,7 @@ export class Connect<A extends Eq> extends BaseAMGraph<A> {
     const toAdjMap = to.getAdjMap()
 
     // Union domains and relations
-    const combinedMap = graphUnion(
-      from.getAdjMap(),
-      to.getAdjMap()
-    )
+    const combinedMap = graphUnion(from.getAdjMap(), to.getAdjMap())
 
     // Then union with cartesian product of from's vertices and to's vertices
     const fromVertices = Array.from(fromAdjMap.keys())
@@ -218,7 +243,7 @@ export class Connect<A extends Eq> extends BaseAMGraph<A> {
  *
  * edge x y == 'connect' ('vertex' x) ('vertex' y)
  */
-export function edge<A extends Eq>(x: A, y: A): AMGraph<A> {
+export function edge<A extends Ord>(x: A, y: A): AMUndirectedGraph<A> {
   // Adapted from
   // https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph/AdjacencyMap.hs#L251
   if (x.isEqualTo(y)) {
@@ -232,15 +257,15 @@ export function edge<A extends Eq>(x: A, y: A): AMGraph<A> {
 /**
  * Construct the graph comprising a given list of isolated vertices.
  */
-export function vertices<A extends Eq>(vertices: A[]): AMGraph<A> {
+export function vertices<A extends Ord>(vertices: A[]): AMUndirectedGraph<A> {
   return vertices
     .map((v) => new Vertex(v))
-    .reduce(overlay, new Empty() as AMGraph<A>)
+    .reduce(overlay, new Empty() as AMUndirectedGraph<A>)
 }
 
 // TODO: Test this
 /** Make path graph from an array of vertices */
-export function path<A extends Eq>(vertices: A[]): AMGraph<A> {
+export function path<A extends Ord>(vertices: A[]): AMUndirectedGraph<A> {
   if (vertices.length === 0) {
     return new Empty()
   }
@@ -256,10 +281,7 @@ export function path<A extends Eq>(vertices: A[]): AMGraph<A> {
 ***************************************/
 
 /** Union the domains and relations of two adj-map graphs */
-function graphUnion<A extends Eq>(
-  x: Map<A, Set<A>>,
-  y: Map<A, Set<A>>
-) {
+function graphUnion<A extends Ord>(x: Map<A, Set<A>>, y: Map<A, Set<A>>) {
   const combinedMap = new Map(x)
 
   for (const [yVertex, yNeighbors] of y.entries()) {
@@ -269,6 +291,6 @@ function graphUnion<A extends Eq>(
   return combinedMap
 }
 
-const setUnion = <A extends Eq>(set1: Set<A>, set2: Set<A>): Set<A> => {
+const setUnion = <A extends Ord>(set1: Set<A>, set2: Set<A>): Set<A> => {
   return new Set([...set1, ...set2])
 }
