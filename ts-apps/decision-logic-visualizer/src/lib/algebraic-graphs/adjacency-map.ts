@@ -24,39 +24,20 @@ The implementations here can almost definitely be made more performant:
 I was optimizing for correctness and readability, not performance.
 */
 
-/** Adjacency Map implementation of Alga Graph */
+/** Adjacency Map implementation of undirected Alga Graph */
 export type AMGraph<A extends Eq> =
   | Empty<A>
   | Vertex<A>
   | Overlay<A>
   | Connect<A>
 
-// interface AMGraphOps<A extends Eq> {
-//   // Key primitive ops
-//   overlay(other: AMGraph<A>): AMGraph<A>
-//   connect(other: AMGraph<A>): AMGraph<A>
-
-//   // Helpers
-//   /** Returns a unique array */
-//   getVertices(): A[]
-//   /** Returns a array of the unique edges as tuples */
-//   getEdges(): Array<[A, A]>
-// }
-
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors. */
 export class BaseAMGraph<A extends Eq> {
   protected adjacencyMap: Map<A, Set<A>>
 
-  // /** Assumes that the input vertices and edges arrays have been uniquified */
-  // static makeFromVerticesAndEdges(vertices: A[], edges: Array<[A, A]) {
-  //   const gVertices = vertices.map(av => new Vertex(av))
-  //   const gEdges = edges.map(([x, y]) => edge(x, y))
-  //   // TODO
-  // }
-
   constructor(adjacencyMap?: Map<A, Set<A>>) {
-    this.adjacencyMap = adjacencyMap || new Map()
+    this.adjacencyMap = adjacencyMap ?? new Map()
   }
 
   // Alga ops
@@ -155,7 +136,10 @@ export class Vertex<A extends Eq> extends BaseAMGraph<A> {
   }
 }
 
-/** Convenience wrapper over Overlay ctor */
+/** Convenience wrapper over Overlay ctor.
+ * 
+ * overlay is analogous to +
+ */
 export function overlay<A extends Eq>(
   x: AMGraph<A>,
   y: AMGraph<A>
@@ -181,11 +165,14 @@ export class Overlay<A extends Eq> extends BaseAMGraph<A> {
       overlay :: Ord a => AdjacencyMap a -> AdjacencyMap a -> AdjacencyMap a
       overlay (AM x) (AM y) = AM $ Map.unionWith Set.union x y
     */
-    super(unionDomainsAndRelations(left.getAdjMap(), right.getAdjMap()))
+    super(graphUnion(left.getAdjMap(), right.getAdjMap()))
   }
 }
 
-/** Convenience wrapper over Connect ctor */
+/** Convenience wrapper over Connect ctor.
+ * 
+ * connect is analogous to *
+ */
 export function connect<A extends Eq>(
   x: AMGraph<A>,
   y: AMGraph<A>
@@ -204,7 +191,7 @@ export class Connect<A extends Eq> extends BaseAMGraph<A> {
     const toAdjMap = to.getAdjMap()
 
     // Union domains and relations
-    const combinedMap = unionDomainsAndRelations(
+    const combinedMap = graphUnion(
       from.getAdjMap(),
       to.getAdjMap()
     )
@@ -215,7 +202,7 @@ export class Connect<A extends Eq> extends BaseAMGraph<A> {
 
     fromVertices.forEach((fromVertex) => {
       const currNeigbors = combinedMap.get(fromVertex) || new Set<A>()
-      const newNeighbors = unionVertexSets(currNeigbors, new Set(toVertices))
+      const newNeighbors = setUnion(currNeigbors, new Set(toVertices))
       combinedMap.set(fromVertex, newNeighbors)
     })
 
@@ -269,23 +256,19 @@ export function path<A extends Eq>(vertices: A[]): AMGraph<A> {
 ***************************************/
 
 /** Union the domains and relations of two adj-map graphs */
-function unionDomainsAndRelations<A extends Eq>(
+function graphUnion<A extends Eq>(
   x: Map<A, Set<A>>,
   y: Map<A, Set<A>>
 ) {
   const combinedMap = new Map(x)
 
   for (const [yVertex, yNeighbors] of y.entries()) {
-    if (!combinedMap.has(yVertex)) {
-      combinedMap.set(yVertex, new Set(yNeighbors))
-    } else {
-      const xNeighbors = combinedMap.get(yVertex) || new Set()
-      combinedMap.set(yVertex, unionVertexSets(xNeighbors, yNeighbors))
-    }
+    const xNeighbors = combinedMap.get(yVertex) ?? new Set()
+    combinedMap.set(yVertex, setUnion(xNeighbors, yNeighbors))
   }
   return combinedMap
 }
 
-const unionVertexSets = <A extends Eq>(set1: Set<A>, set2: Set<A>): Set<A> => {
+const setUnion = <A extends Eq>(set1: Set<A>, set2: Set<A>): Set<A> => {
   return new Set([...set1, ...set2])
 }
