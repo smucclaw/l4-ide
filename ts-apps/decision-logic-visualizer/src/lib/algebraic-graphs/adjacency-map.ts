@@ -67,10 +67,14 @@ export class BaseAMGraph<A extends Ord> {
     return false
   }
 
+  /** Get a (sorted) array of vertices */
   getVertices(): A[] {
-    return Array.from(this.adjacencyMap.keys())
+    return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
   }
 
+  /** Get the unique 'undirected' edges.
+   *
+   * (I.e., if (a, b) appears, (b, a) won't be present.) */
   getEdges(): UndirectedEdge<A>[] {
     const vertices = this.getVertices()
     const edges = []
