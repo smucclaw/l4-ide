@@ -1,14 +1,13 @@
 import { describe, test, expect } from 'vitest'
 import {
   vertex,
-  edge,
+  // edge,
   overlay,
   connect,
-  empty,
+  // empty,
   ComparisonResult,
 } from '../lib/algebraic-graphs/alga'
 import type { Ord } from '../lib/algebraic-graphs/alga'
-import _ from 'lodash'
 
 class NumberWrapper implements Ord {
   constructor(private value: number) {}
