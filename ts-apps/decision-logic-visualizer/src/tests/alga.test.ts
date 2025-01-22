@@ -22,6 +22,10 @@ class NumberWrapper implements Ord {
     if (this.value > other.value) return ComparisonResult.GreaterThan
     return ComparisonResult.Equal
   }
+
+  toString(): string {
+    return `NWrapper ${this.value.toString()}`
+  }
 }
 
 describe('Algebraic Graphs - Overlay Commutativity', () => {
@@ -36,7 +40,7 @@ describe('Algebraic Graphs - Overlay Commutativity', () => {
       aPlusB
         .getVertices()
         .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    ).toEqual(
+    ).toStrictEqual(
       bPlusA
         .getVertices()
         .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
@@ -45,10 +49,34 @@ describe('Algebraic Graphs - Overlay Commutativity', () => {
       bPlusA
         .getVertices()
         .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
-    ).toEqual(
+    ).toStrictEqual(
       aPlusB
         .getVertices()
         .sort((a: NumberWrapper, b: NumberWrapper) => a.compare(b))
+    )
+  })
+})
+
+describe('Algebraic Graphs - Overlay Associativity', () => {
+  test('Overlay is associative', () => {
+    const va = vertex(new NumberWrapper(1))
+    const vb = vertex(new NumberWrapper(2))
+    const vc = vertex(new NumberWrapper(3))
+
+    const aPlusBC = overlay(va, overlay(vb, vc))
+    const abPlusC = overlay(overlay(va, vb), vc)
+
+    expect(aPlusBC.toString()).toStrictEqual(
+      'vertices [NWrapper 1, NWrapper 2, NWrapper 3]'
+    )
+    expect(aPlusBC.toString()).toStrictEqual(abPlusC.toString())
+
+    expect(aPlusBC.getVertices().sort((a, b) => a.compare(b))).toStrictEqual(
+      abPlusC.getVertices().sort((a, b) => a.compare(b))
+    )
+
+    expect(aPlusBC.getEdges().sort((a, b) => a.compare(b))).toStrictEqual(
+      abPlusC.getEdges().sort((a, b) => a.compare(b))
     )
   })
 })
