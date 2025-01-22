@@ -110,12 +110,6 @@ export class BaseAMGraph<A extends Ord> implements Eq {
     const vertices = this.getVertices()
     const edges = this.getEdges().map((edge) => edge.toString())
 
-    this.adjacencyMap.forEach((set, vertex) => {
-      set.forEach((neighbor) => {
-        edges.push(`(${vertex}, ${neighbor})`)
-      })
-    })
-
     if (vertices.length === 0) return 'empty'
     if (edges.length === 0) return `vertices [${vertices.join(', ')}]`
     return `edges [${edges.join(', ')}]`
