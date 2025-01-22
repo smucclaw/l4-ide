@@ -1,4 +1,4 @@
-import type { Ord } from './alga.ts'
+import type { Eq, Ord } from './alga.ts'
 import { UndirectedEdge } from './alga.ts'
 import _ from 'lodash'
 
@@ -35,7 +35,7 @@ export type UndirectedGraph<A extends Ord> =
 
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors. */
-export class BaseAMGraph<A extends Ord> {
+export class BaseAMGraph<A extends Ord> implements Eq {
   protected adjacencyMap: Map<A, Set<A>>
 
   constructor(adjacencyMap?: Map<A, Set<A>>) {
@@ -91,6 +91,12 @@ export class BaseAMGraph<A extends Ord> {
     return _.uniqWith(edges, (a, b) => a.isEqualTo(b))
   }
 
+  isEqualTo(other: unknown) {
+    if (!(other instanceof BaseAMGraph)) return false
+    // TODO: Improve this!!
+    return this.toString() === other.toString()
+  }
+
   // Getters and setters for the underlying adjacency map
   getAdjMap() {
     return this.adjacencyMap
@@ -101,8 +107,8 @@ export class BaseAMGraph<A extends Ord> {
   }
 
   toString(): string {
-    const vertices = Array.from(this.adjacencyMap.keys())
-    const edges: string[] = []
+    const vertices = this.getVertices()
+    const edges = this.getEdges().map((edge) => edge.toString())
 
     this.adjacencyMap.forEach((set, vertex) => {
       set.forEach((neighbor) => {
