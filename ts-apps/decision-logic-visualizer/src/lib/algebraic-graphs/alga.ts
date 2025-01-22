@@ -122,7 +122,7 @@ export enum ComparisonResult {
 }
 
 export interface Ord extends Eq {
-  compare(other: unknown): ComparisonResult
+  compare(other: this): ComparisonResult
 }
 
 export function isLessThanOrEquals<A extends Ord>(a: A, b: A): boolean {
