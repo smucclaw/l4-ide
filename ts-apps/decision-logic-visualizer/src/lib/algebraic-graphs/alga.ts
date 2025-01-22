@@ -7,7 +7,7 @@ import * as AM from './adjacency-map'
 /** Algebraic graph */
 export type UndirectedGraph<A extends Ord> = AM.UndirectedGraph<A>
 
-export class UndirectedEdge<A extends Ord> implements Eq {
+export class UndirectedEdge<A extends Ord> implements Ord {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
@@ -20,12 +20,27 @@ export class UndirectedEdge<A extends Ord> implements Eq {
     }
   }
 
+  getU(): A {
+    return this.u
+  }
+
+  getV(): A {
+    return this.v
+  }
+
   isEqualTo(that: unknown): boolean {
     if (!(that instanceof UndirectedEdge)) return false
     return (
       (this.u.isEqualTo(that.u) && this.v.isEqualTo(that.v)) ||
       (this.u.isEqualTo(that.v) && this.v.isEqualTo(that.u))
     )
+  }
+
+  compare(that: UndirectedEdge<A>): ComparisonResult {
+    if (this.u.isEqualTo(that.u)) {
+      return this.v.compare(that.v)
+    }
+    return this.u.compare(that.u)
   }
 
   toString(): string {
