@@ -39,6 +39,7 @@
     "@sveltejs/kit": "^2.16.0",
     "@sveltejs/package": "^2.3.7",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/lodash": "^4.17.14",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.13.0",
@@ -58,6 +59,7 @@
     "effect": "^3.11.0",
     "elkjs": "^0.9.3",
     "esbuild": "^0.24.2",
+    "lodash": "^4.17.21",
     "ts-pattern": "^5.6.1"
   },
   "overrides": {
