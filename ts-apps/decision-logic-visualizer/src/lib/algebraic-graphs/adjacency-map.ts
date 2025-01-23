@@ -136,9 +136,10 @@ export class BaseAMGraph<A extends Ord> implements Eq {
     this.adjacencyMap = map
   }
 
+  /** Stringifies the internal representation. Currently for internal use. */
   toString(): string {
     const vertices = this.getVertices()
-    const edges = this.getEdges().map((edge) => edge.toString())
+    const edges = this.getAllEdges().map((edge) => edge.toString())
 
     if (vertices.length === 0) return 'empty'
     if (edges.length === 0) return `vertices [${vertices.join(', ')}]`
