@@ -6,4 +6,7 @@ export default defineConfig({
   ssr: {
     noExternal: ['@xyflow/svelte'],
   },
+  test: {
+    include: ['src/**/*.test.ts'],
+  },
 })

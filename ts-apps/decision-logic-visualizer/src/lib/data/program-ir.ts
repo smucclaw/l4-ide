@@ -4,7 +4,7 @@ import type { LirSource, LirNodeInfo } from '../layout-ir/core'
 import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.ts'
 import {
   BoolVarLirNode,
-  NotLirNode,
+  // NotLirNode,
   BinExprLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.ts'
 import { match, P } from 'ts-pattern'
@@ -96,7 +96,8 @@ export const IRNode = Schema.Struct({
 /** Think of this as the Expr for the decision logic.
  * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
  */
-export type IRExpr = BinExpr | Not | BoolVar
+export type IRExpr = BinExpr | BoolVar
+// | Not
 
 export type BinOp = 'And' | 'Or'
 
@@ -107,10 +108,10 @@ export interface BinExpr extends IRNode {
   readonly right: IRExpr
 }
 
-export interface Not extends IRNode {
-  readonly $type: 'Not'
-  readonly negand: IRExpr
-}
+// export interface Not extends IRNode {
+//   readonly $type: 'Not'
+//   readonly negand: IRExpr
+// }
 
 export interface BoolVar extends IRNode {
   readonly $type: 'BoolVar'
@@ -131,7 +132,7 @@ export interface BoolVar extends IRNode {
 
 export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
-  Schema.suspend((): Schema.Schema<Not> => Not),
+  // Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
@@ -145,11 +146,11 @@ export const BinExpr = Schema.Struct({
   id: IRId,
 }).annotations({ identifier: 'BinExpr' })
 
-export const Not = Schema.Struct({
-  $type: Schema.tag('Not'),
-  negand: IRExpr,
-  id: IRId,
-}).annotations({ identifier: 'Not' })
+// export const Not = Schema.Struct({
+//   $type: Schema.tag('Not'),
+//   negand: IRExpr,
+//   id: IRId,
+// }).annotations({ identifier: 'Not' })
 
 export const BoolVar = Schema.Struct({
   $type: Schema.tag('BoolVar'),
@@ -180,23 +181,25 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
 
 export const ExprSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
-    return match(expr)
-      .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
-      .with(
-        { $type: 'Not' },
-        (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
-      )
-      .with(
-        { $type: 'BinExpr' },
-        (binE) =>
-          new BinExprLirNode(
-            nodeInfo,
-            binE.op,
-            ExprSource.toLir(nodeInfo, binE.left),
-            ExprSource.toLir(nodeInfo, binE.right)
-          )
-      )
-      .exhaustive()
+    return (
+      match(expr)
+        .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
+        // .with(
+        //   { $type: 'Not' },
+        //   (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
+        // )
+        .with(
+          { $type: 'BinExpr' },
+          (binE) =>
+            new BinExprLirNode(
+              nodeInfo,
+              binE.op,
+              ExprSource.toLir(nodeInfo, binE.left),
+              ExprSource.toLir(nodeInfo, binE.right)
+            )
+        )
+        .exhaustive()
+    )
   },
 }
 

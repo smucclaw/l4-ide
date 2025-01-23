@@ -9,13 +9,14 @@ import { match } from 'ts-pattern'
 
 type BoolValue = true | false | undefined
 
-export type ExprLirNode = BinExprLirNode | NotLirNode | VarLirNode
+export type ExprLirNode = BinExprLirNode | VarLirNode
+// | NotLirNode
 
 export type VarLirNode = BoolVarLirNode
 
 export class BoolVarLirNode extends DefaultLirNode implements LirNode {
   readonly #originalExpr: BoolVar
-  #value: BoolValue = $state()!
+  #value = $state<BoolValue>()
 
   constructor(nodeInfo: LirNodeInfo, originalExpr: BoolVar) {
     super(nodeInfo)
@@ -35,6 +36,10 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
     return this.#value
   }
 
+  setValue(value: BoolValue) {
+    this.#value = value
+  }
+
   getChildren(_context: LirContext) {
     return []
   }
@@ -44,26 +49,26 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-export class NotLirNode extends DefaultLirNode implements LirNode {
-  #negand: LirId
+// export class NotLirNode extends DefaultLirNode implements LirNode {
+//   #negand: LirId
 
-  constructor(nodeInfo: LirNodeInfo, negand: ExprLirNode) {
-    super(nodeInfo)
-    this.#negand = negand.getId()
-  }
+//   constructor(nodeInfo: LirNodeInfo, negand: ExprLirNode) {
+//     super(nodeInfo)
+//     this.#negand = negand.getId()
+//   }
 
-  getNegand(context: LirContext) {
-    return context.get(this.#negand) as ExprLirNode
-  }
+//   getNegand(context: LirContext) {
+//     return context.get(this.#negand) as ExprLirNode
+//   }
 
-  getChildren(context: LirContext) {
-    return [this.getNegand(context)]
-  }
+//   getChildren(context: LirContext) {
+//     return [this.getNegand(context)]
+//   }
 
-  toString(): string {
-    return 'NOT_LIR_NODE'
-  }
-}
+//   toString(): string {
+//     return 'NOT_LIR_NODE'
+//   }
+// }
 
 export class BinExprLirNode extends DefaultLirNode implements LirNode {
   #op: BinOp
