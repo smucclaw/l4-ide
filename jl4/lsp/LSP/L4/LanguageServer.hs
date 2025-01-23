@@ -340,6 +340,7 @@ kick = do
     void $ uses GetLexTokens files
         <* uses GetParsedAst files
         <* uses TypeCheck files
+        <* uses Evaluate files
     liftIO $ progressUpdate progress ProgressCompleted
 
     GarbageCollectVar var <- getIdeGlobalAction

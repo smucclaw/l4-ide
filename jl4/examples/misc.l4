@@ -16,6 +16,14 @@ add m n MEANS
 GIVEN m IS A Nat
       n IS A Nat
 GIVETH A Nat
+add2 m n MEANS
+  CONSIDER m
+  WHEN Zero  THEN n
+  WHEN Suc p THEN Suc OF add2 p n
+
+GIVEN m IS A Nat
+      n IS A Nat
+GIVETH A Nat
 mul m n MEANS
   CONSIDER m
   WHEN Zero  THEN Zero
@@ -36,6 +44,11 @@ swap p MEANS
 example MEANS
   add (Suc Zero) (Suc (Suc Zero))
 
+example2 MEANS
+  add2 (Suc Zero) (Suc (Suc Zero))
+
+#EVAL example2
+
 GIVEN a IS A TYPE
       list1 IS A LIST OF a
       list2 IS A LIST OF a
@@ -44,6 +57,8 @@ append list1 list2 MEANS
   CONSIDER list1
   WHEN EMPTY            THEN list2
   WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
+
+#EVAL append (LIST 1, 2, 3) (LIST 4, 5, 6)
 
 GIVEN a IS A TYPE
       x IS AN a

@@ -424,7 +424,7 @@ mappingForVersion _ _ _ = pure zeroMapping
 type IdeRule k v =
   ( Graph.RuleResult k ~ v
   , Graph.ShakeValue k
-  , Show v
+  -- , Show v
   , Typeable v
   , NFData v
   )
