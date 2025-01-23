@@ -1,5 +1,5 @@
 import type { Eq, Ord } from './alga.ts'
-import { UndirectedEdge } from './alga.ts'
+import { Edge, UndirectedEdge, ComparisonResult } from './alga.ts'
 import _ from 'lodash'
 
 /**********************************************************
@@ -147,6 +147,18 @@ export class BaseAMGraph<A extends Ord> implements Eq {
   }
 }
 
+export class UndirectedAMGraph<A extends Ord> extends BaseAMGraph<A> {
+  /** Get a sorted array of the unique 'undirected' edges.
+   *
+   * (I.e., if (a, b) appears, (b, a) won't be present.) */
+  getEdges(): UndirectedEdge<A>[] {
+    const edges = this.getAllEdges().map(([u, v]) => new UndirectedEdge(u, v))
+
+    return _.uniqWith(edges, (a, b) => a.isEqualTo(b)).toSorted((a, b) =>
+      a.compare(b)
+    )
+  }
+}
 /*********************
      Primitives
 **********************/
