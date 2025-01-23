@@ -4,20 +4,19 @@ import * as AM from './adjacency-map'
   Alga abstract interface
 *****************************/
 
-/** Algebraic graph */
+/** Algebraic undirected graph */
 export type UndirectedGraph<A extends Ord> = AM.UndirectedGraph<A>
 
-export class UndirectedEdge<A extends Ord> implements Ord {
+/********************************
+      Edge types
+*********************************/
+
+export abstract class Edge<A extends Ord> implements Ord {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
-    if (isLessThanOrEquals(u, v)) {
-      this.u = u
-      this.v = v
-    } else {
-      this.v = u
-      this.u = v
-    }
+    this.u = u
+    this.v = v
   }
 
   getU(): A {
@@ -28,19 +27,39 @@ export class UndirectedEdge<A extends Ord> implements Ord {
     return this.v
   }
 
-  isEqualTo(that: unknown): boolean {
-    if (!(that instanceof UndirectedEdge)) return false
-    return (
-      (this.u.isEqualTo(that.u) && this.v.isEqualTo(that.v)) ||
-      (this.u.isEqualTo(that.v) && this.v.isEqualTo(that.u))
-    )
+  abstract isEqualTo(that: unknown): boolean
+
+  compare(that: this) {
+    // lexicographical comparison
+    const uComparison = this.getU().compare(that.getU())
+    if (uComparison !== ComparisonResult.Equal) return uComparison
+
+    return this.getV().compare(that.getV())
+  }
+}
+
+export class UndirectedEdge<A extends Ord> extends Edge<A> {
+  readonly u: A
+  readonly v: A
+  constructor(u: A, v: A) {
+    super(u, v)
+    // Sort input vertices so that this.u <= this.v
+    // The same `compare` implementation can then be used for both directed and undirected edges
+    if (isLessThanOrEquals(u, v)) {
+      this.u = u
+      this.v = v
+    } else {
+      this.v = u
+      this.u = v
+    }
   }
 
-  compare(that: UndirectedEdge<A>): ComparisonResult {
-    if (this.u.isEqualTo(that.u)) {
-      return this.v.compare(that.v)
-    }
-    return this.u.compare(that.u)
+  isEqualTo(that: unknown): boolean {
+    return (
+      that instanceof UndirectedEdge &&
+      ((this.u.isEqualTo(that.getU()) && this.v.isEqualTo(that.getV())) ||
+        (this.u.isEqualTo(that.getV()) && this.v.isEqualTo(that.getU())))
+    )
   }
 
   toString(): string {
@@ -48,9 +67,9 @@ export class UndirectedEdge<A extends Ord> implements Ord {
   }
 }
 
-/******************************
+/********************************
     Abstract (ish) primitives
-*******************************/
+*********************************/
 
 export function vertex<A extends Ord>(a: A): UndirectedGraph<A> {
   return new AM.Vertex(a)

@@ -33,8 +33,29 @@ export type UndirectedGraph<A extends Ord> =
   | Overlay<A>
   | Connect<A>
 
+/** Note that the string representation of a DirectedEdge differs from that of an UndirectedEdge. */
+export class DirectedEdge<A extends Ord> extends Edge<A> {
+  constructor(u: A, v: A) {
+    super(u, v)
+  }
+
+  isEqualTo(that: unknown): boolean {
+    return (
+      that instanceof DirectedEdge &&
+      this.getU().isEqualTo(that.getU()) &&
+      this.getV().isEqualTo(that.getV())
+    )
+  }
+
+  toString(): string {
+    return `<${this.getU()}, ${this.getV()}>`
+  }
+}
+
 /** The adjacency map of a graph:
- * each vertex is associated with a set of its direct neighbors. */
+ * each vertex is associated with a set of its direct neighbors.
+
+ * The base class is a *directed* graph. */
 export class BaseAMGraph<A extends Ord> implements Eq {
   protected adjacencyMap: Map<A, Set<A>>
 
@@ -67,28 +88,37 @@ export class BaseAMGraph<A extends Ord> implements Eq {
     return false
   }
 
-  /** Get a (sorted) array of vertices */
+  /** Get a sorted array of vertices */
   getVertices(): A[] {
     return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
   }
 
-  /** Get the unique 'undirected' edges.
-   *
-   * (I.e., if (a, b) appears, (b, a) won't be present.) */
-  getEdges(): UndirectedEdge<A>[] {
+  /** Internal helper */
+  protected getAllEdges(): Array<[A, A]> {
     const vertices = this.getVertices()
-    const edges = []
 
-    for (const vertex of vertices) {
-      const neighbors = Array.from(
-        this.adjacencyMap.get(vertex) ?? (new Set() as Set<A>)
+    // Get [ <v, n> for each vertex v, for each neighbor n of v]
+    const allEdges = vertices.flatMap((vertex) => {
+      const neighbors = this.adjacencyMap.get(vertex) ?? new Set<A>()
+      return Array.from(neighbors).map(
+        (neighbor) => [vertex, neighbor] as [A, A]
       )
-      for (const neighbor of neighbors) {
-        edges.push(new UndirectedEdge(vertex, neighbor))
-      }
-    }
+    })
 
-    return _.uniqWith(edges, (a, b) => a.isEqualTo(b))
+    return allEdges.toSorted(([u1, v1], [u2, v2]) => {
+      const firstComparison = u1.compare(u2)
+      return firstComparison !== ComparisonResult.Equal
+        ? firstComparison
+        : v1.compare(v2)
+    })
+  }
+
+  /** Get a sorted array of the unique directed edges */
+  getEdges(): DirectedEdge<A>[] {
+    const directedEdges = this.getAllEdges().map(
+      ([u, v]) => new DirectedEdge(u, v)
+    )
+    return directedEdges.toSorted((a, b) => a.compare(b))
   }
 
   isEqualTo(other: unknown) {
