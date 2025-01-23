@@ -75,6 +75,9 @@ describe('Algebraic Graphs - Distributive Laws', () => {
     const a_times_b_plus_a_times_c = overlay(connect(va, vb), connect(va, vc))
 
     expect(a_times_b_plus_c.toString()).toStrictEqual(
+      'edges [<NWrapper 1,NWrapper 2>, <NWrapper 1,NWrapper 3>, <NWrapper 2,NWrapper 1>, <NWrapper 3,NWrapper 1>]'
+    )
+    expect(a_times_b_plus_c.pPrint()).toStrictEqual(
       'edges [(NWrapper 1, NWrapper 2), (NWrapper 1, NWrapper 3)]'
     )
 

@@ -1,17 +1,19 @@
-import * as AM from './adjacency-map'
+import * as AM from './adjacency-map-undirected'
+import type { Ord } from '$lib/utils'
+import { ComparisonResult, isLessThanOrEquals } from '$lib/utils'
 
 /****************************
   Alga abstract interface
 *****************************/
 
 /** Algebraic undirected graph */
-export type UndirectedGraph<A extends Ord> = AM.UndirectedGraph<A>
+export type UndirectedGraph<A extends Ord<A>> = AM.UndirectedGraph<A>
 
 /********************************
       Edge types
 *********************************/
 
-export abstract class Edge<A extends Ord> implements Ord {
+export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
@@ -27,7 +29,7 @@ export abstract class Edge<A extends Ord> implements Ord {
     return this.v
   }
 
-  abstract isEqualTo(that: unknown): boolean
+  abstract isEqualTo(that: this): boolean
 
   compare(that: this) {
     // lexicographical comparison
@@ -38,7 +40,7 @@ export abstract class Edge<A extends Ord> implements Ord {
   }
 }
 
-export class UndirectedEdge<A extends Ord> extends Edge<A> {
+export class UndirectedEdge<A extends Ord<A>> extends Edge<A> {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
@@ -54,7 +56,7 @@ export class UndirectedEdge<A extends Ord> extends Edge<A> {
     }
   }
 
-  isEqualTo(that: unknown): boolean {
+  isEqualTo(that: this): boolean {
     return (
       that instanceof UndirectedEdge &&
       ((this.u.isEqualTo(that.getU()) && this.v.isEqualTo(that.getV())) ||
@@ -67,17 +69,32 @@ export class UndirectedEdge<A extends Ord> extends Edge<A> {
   }
 }
 
+/** Note that the string representation of a DirectedEdge differs from that of an UndirectedEdge. */
+export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
+  constructor(u: A, v: A) {
+    super(u, v)
+  }
+
+  isEqualTo(that: this): boolean {
+    return (
+      that instanceof DirectedEdge &&
+      this.getU().isEqualTo(that.getU()) &&
+      this.getV().isEqualTo(that.getV())
+    )
+  }
+
+  toString(): string {
+    return `<${this.getU()}, ${this.getV()}>`
+  }
+}
+
 /********************************
     Abstract (ish) primitives
 *********************************/
 
-export function vertex<A extends Ord>(a: A): UndirectedGraph<A> {
-  return new AM.Vertex(a)
-}
+export const empty = AM.empty
 
-export function empty<A extends Ord>(): UndirectedGraph<A> {
-  return new AM.Empty()
-}
+export const vertex = AM.vertex
 
 /** Convenience wrapper over Connect ctor.
  *
@@ -87,19 +104,13 @@ export function empty<A extends Ord>(): UndirectedGraph<A> {
  * 'empty'.
  * It distributes over 'overlay' and obeys the decomposition axiom.
  */
-export const connect = AM.connect as <A extends Ord>(
-  x: UndirectedGraph<A>,
-  y: UndirectedGraph<A>
-) => UndirectedGraph<A>
+export const connect = AM.connect
 
 /** Convenience wrapper over Overlay ctor.
  *
  * overlay is analogous to +
  */
-export const overlay = AM.overlay as <A extends Ord>(
-  x: UndirectedGraph<A>,
-  y: UndirectedGraph<A>
-) => UndirectedGraph<A>
+export const overlay = AM.overlay
 
 /**************************************
   Other graph construction functions
@@ -109,7 +120,7 @@ export const overlay = AM.overlay as <A extends Ord>(
  *
  * edge x y == 'connect' ('vertex' x) ('vertex' y)
  */
-export function edge<A extends Ord>(x: A, y: A): UndirectedGraph<A> {
+export function edge<A extends Ord<A>>(x: A, y: A): UndirectedGraph<A> {
   // Adapted from
   // https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph/AdjacencyMap.hs#L251
   if (x.isEqualTo(y)) {
@@ -123,7 +134,7 @@ export function edge<A extends Ord>(x: A, y: A): UndirectedGraph<A> {
 /**
  * Construct the graph comprising a given list of isolated vertices.
  */
-export function vertices<A extends Ord>(vertices: A[]): UndirectedGraph<A> {
+export function vertices<A extends Ord<A>>(vertices: A[]): UndirectedGraph<A> {
   return vertices
     .map((v) => vertex(v))
     .reduce(overlay, empty() as UndirectedGraph<A>)
@@ -131,7 +142,7 @@ export function vertices<A extends Ord>(vertices: A[]): UndirectedGraph<A> {
 
 // TODO: Test this
 /** Make path graph from an array of vertices */
-export function path<A extends Ord>(vertices: A[]): UndirectedGraph<A> {
+export function path<A extends Ord<A>>(vertices: A[]): UndirectedGraph<A> {
   // TODO: Refactor this to use ts-pattern
   if (vertices.length === 0) {
     return empty()
@@ -141,30 +152,4 @@ export function path<A extends Ord>(vertices: A[]): UndirectedGraph<A> {
   }
   const edges = vertices.slice(1).map((v, i) => edge(vertices[i], v))
   return edges.reduce((acc, curr) => overlay(acc, curr))
-}
-
-/****************************
-    Pseudo Eq, Ord
-*****************************/
-// TODO: This is useful outside of alga too, so move it out later
-
-/** For the underlying vertices */
-export interface Eq {
-  isEqualTo(other: unknown): boolean
-}
-
-export enum ComparisonResult {
-  LessThan = -1,
-  Equal = 0,
-  GreaterThan = 1,
-}
-
-export interface Ord extends Eq {
-  compare(other: this): ComparisonResult
-}
-
-export function isLessThanOrEquals<A extends Ord>(a: A, b: A): boolean {
-  return [ComparisonResult.Equal, ComparisonResult.LessThan].includes(
-    a.compare(b)
-  )
 }
