@@ -203,11 +203,9 @@ export class Connect<A extends Ord> extends BaseAMGraph<A> {
     const fromVertices = Array.from(fromAdjMap.keys())
     const toVertices = Array.from(toAdjMap.keys())
 
-    fromVertices.forEach((fromVertex) => {
-      const currNeigbors = combinedMap.get(fromVertex) || new Set<A>()
-      const newNeighbors = setUnion(currNeigbors, new Set(toVertices))
-      combinedMap.set(fromVertex, newNeighbors)
-    })
+    appendVerticesToSourceNeighbors(combinedMap, fromVertices, toVertices)
+    // Reciprocal connections for undirected graph
+    appendVerticesToSourceNeighbors(combinedMap, toVertices, fromVertices)
 
     super(combinedMap)
   }
@@ -216,6 +214,19 @@ export class Connect<A extends Ord> extends BaseAMGraph<A> {
 /*************************************
   Internal helper functions
 ***************************************/
+
+/** Mutating */
+function appendVerticesToSourceNeighbors<A extends Ord>(
+  combinedMap: Map<A, Set<A>>,
+  sourceVertices: A[],
+  targetVertices: A[]
+) {
+  sourceVertices.forEach((vertex) => {
+    const currNeighbors = combinedMap.get(vertex) || new Set<A>()
+    const newNeighbors = setUnion(currNeighbors, new Set(targetVertices))
+    combinedMap.set(vertex, newNeighbors)
+  })
+}
 
 /** Union the domains and relations of two adj-map graphs */
 function graphUnion<A extends Ord>(x: Map<A, Set<A>>, y: Map<A, Set<A>>) {
