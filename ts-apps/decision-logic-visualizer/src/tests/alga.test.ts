@@ -1,18 +1,12 @@
 import { describe, test, expect } from 'vitest'
-import {
-  vertex,
-  // edge,
-  overlay,
-  connect,
-  // empty,
-  ComparisonResult,
-} from '../lib/algebraic-graphs/alga'
-import type { Ord } from '../lib/algebraic-graphs/alga'
+import { vertex, overlay, connect } from '../lib/algebraic-graphs/alga'
+import { ComparisonResult } from '../lib/utils'
+import type { Ord } from '../lib/utils'
 
-class NumberWrapper implements Ord {
+class NumberWrapper implements Ord<NumberWrapper> {
   constructor(private value: number) {}
 
-  isEqualTo(other: unknown): boolean {
+  isEqualTo(other: NumberWrapper): boolean {
     return other instanceof NumberWrapper && this.value === other.value
   }
 
