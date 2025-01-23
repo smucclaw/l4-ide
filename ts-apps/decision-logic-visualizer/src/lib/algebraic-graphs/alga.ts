@@ -82,6 +82,10 @@ export function empty<A extends Ord>(): UndirectedGraph<A> {
 /** Convenience wrapper over Connect ctor.
  *
  * connect is analogous to *
+ *
+ * This is an associative operation with the identity
+ * 'empty'.
+ * It distributes over 'overlay' and obeys the decomposition axiom.
  */
 export const connect = AM.connect as <A extends Ord>(
   x: UndirectedGraph<A>,
