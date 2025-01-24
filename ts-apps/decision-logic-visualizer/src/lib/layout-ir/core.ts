@@ -10,11 +10,11 @@ export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
   // Will add subscribers here in the future
 
-  getRoot(rootType: LirRootType): LirNode | undefined {
+  getRoot(context: LirContext, rootType: LirRootType): LirNode | undefined {
     return this.#roots.get(rootType)
   }
 
-  setRoot(rootType: LirRootType, node: LirNode) {
+  setRoot(context: LirContext, rootType: LirRootType, node: LirNode) {
     this.#roots.set(rootType, node)
   }
 }
@@ -90,6 +90,8 @@ export abstract class DefaultLirNode
   constructor(protected readonly nodeInfo: LirNodeInfo) {
     super(nodeInfo)
     this.#id = new LirId()
+
+    nodeInfo.context.set(this)
   }
 
   getId(): LirId {
