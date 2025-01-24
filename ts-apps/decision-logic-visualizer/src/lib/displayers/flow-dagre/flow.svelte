@@ -8,6 +8,7 @@
     type Node,
     type Edge,
   } from '@xyflow/svelte'
+  import { onMount } from 'svelte'
 
   import '@xyflow/svelte/dist/style.css'
 
@@ -16,17 +17,23 @@
   const dagreGraph = new dagre.graphlib.Graph()
   dagreGraph.setDefaultEdgeLabel(() => ({}))
 
+  let NODES = $state.raw<Node[]>([])
+  let EDGES = $state.raw<Edge[]>([])
+
   // CONFIG / CONSTS
   const graphDirection = 'LR' // horizontal
   // qn: how did they decide on these numbers?
-  const nodeWidth = 172
-  const nodeHeight = 36
+  const defaultNodeWidth = 172
+  const defaultNodeHeight = 36
 
   function getLayoutedElements(nodes: Node[], edges: Edge[]) {
     dagreGraph.setGraph({ rankdir: graphDirection })
 
     nodes.forEach((node) => {
-      dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight })
+      dagreGraph.setNode(node.id, {
+        width: node.measured?.width ?? defaultNodeWidth,
+        height: node.measured?.height ?? defaultNodeHeight,
+      })
     })
 
     edges.forEach((edge) => {
@@ -46,8 +53,8 @@
         // We are shifting the dagre node position (anchor=center center) to the top left
         // so it matches the React Flow node anchor point (top left).
         position: {
-          x: nodeWithPosition.x - nodeWidth / 2,
-          y: nodeWithPosition.y - nodeHeight / 2,
+          x: nodeWithPosition.x - defaultNodeWidth / 2,
+          y: nodeWithPosition.y - defaultNodeHeight / 2,
         },
       }
     })
@@ -55,20 +62,12 @@
     return { nodes: layoutedNodes, edges }
   }
 
-  const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-    initialNodes,
-    initialEdges
-  )
-
-  let NODES = $state.raw<Node[]>(layoutedNodes)
-  let EDGES = $state.raw<Edge[]>(layoutedEdges)
-
-  // function onLayout() {
-  //   const layoutedElements = getLayoutedElements(NODES, EDGES)
-
-  //   NODES = layoutedElements.nodes
-  //   EDGES = layoutedElements.edges
-  // }
+  onMount(() => {
+    const layoutedElements = getLayoutedElements(initialNodes, initialEdges)
+    NODES = layoutedElements.nodes
+    EDGES = layoutedElements.edges
+    console.log("onMounted!")
+  })
 </script>
 
 <div style="height:100vh;">
