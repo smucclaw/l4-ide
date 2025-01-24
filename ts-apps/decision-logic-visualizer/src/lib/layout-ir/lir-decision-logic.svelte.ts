@@ -1,4 +1,5 @@
 import type { BoolVar, BinOp } from '$lib/data/program-ir'
+export type { BinOp }
 import type { LirId, LirNode, LirNodeInfo } from './core'
 import { LirContext, DefaultLirNode } from './core'
 import { match } from 'ts-pattern'
