@@ -1,8 +1,8 @@
 <!-- Copied and pasted from the stackblitz linked from https://next.svelteflow.dev/examples/layout/elkjs
  just to have a reference working (ish?) example to start with -->
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import ELK from 'elkjs/lib/elk.bundled.js';
+  import { onMount } from 'svelte'
+  import ELK from 'elkjs/lib/elk.bundled.js'
   import {
     SvelteFlow,
     Background,
@@ -12,17 +12,17 @@
     useSvelteFlow,
     type Node,
     type Edge,
-  } from '@xyflow/svelte';
+  } from '@xyflow/svelte'
 
-  import '@xyflow/svelte/dist/style.css';
+  import '@xyflow/svelte/dist/style.css'
 
-  import { initialNodes, initialEdges } from './nodes-and-edges';
-  let nodes = $state.raw<Node[]>([]);
-  let edges = $state.raw<Edge[]>([]);
+  import { initialNodes, initialEdges } from './nodes-and-edges'
+  let nodes = $state.raw<Node[]>([])
+  let edges = $state.raw<Edge[]>([])
 
-  const { fitView } = $derived(useSvelteFlow());
+  const { fitView } = $derived(useSvelteFlow())
 
-  const elk = new ELK();
+  const elk = new ELK()
 
   // Elk has a *huge* amount of options to configure. To see everything you can
   // tweak check out:
@@ -33,10 +33,10 @@
     'elk.algorithm': 'layered',
     'elk.layered.spacing.nodeNodeBetweenLayers': '100',
     'elk.spacing.nodeNode': '80',
-  };
+  }
 
   function getLayoutedElements(nodes: Node[], edges: Edge[], options = {}) {
-    const isHorizontal = options?.['elk.direction'] === 'RIGHT';
+    const isHorizontal = options?.['elk.direction'] === 'RIGHT'
     const graph = {
       id: 'root',
       layoutOptions: options,
@@ -52,7 +52,7 @@
         height: 50,
       })),
       edges: edges,
-    };
+    }
 
     return elk
       .layout(graph)
@@ -66,29 +66,29 @@
 
         edges: layoutedGraph.edges,
       }))
-      .catch(console.error);
+      .catch(console.error)
   }
 
   function onLayout(direction: string, useInitialNodes = false) {
-    const opts = { 'elk.direction': direction, ...elkOptions };
-    const ns = useInitialNodes ? initialNodes : nodes;
-    const es = useInitialNodes ? initialEdges : edges;
+    const opts = { 'elk.direction': direction, ...elkOptions }
+    const ns = useInitialNodes ? initialNodes : nodes
+    const es = useInitialNodes ? initialEdges : edges
 
     getLayoutedElements(ns, es, opts).then(
       ({ nodes: layoutedNodes, edges: layoutedEdges }) => {
-        nodes = layoutedNodes;
-        edges = layoutedEdges;
+        nodes = layoutedNodes
+        edges = layoutedEdges
 
-        fitView();
+        fitView()
 
-        window.requestAnimationFrame(() => fitView());
-      },
-    );
+        window.requestAnimationFrame(() => fitView())
+      }
+    )
   }
 
   onMount(() => {
-    onLayout('DOWN', true);
-  });
+    onLayout('DOWN', true)
+  })
 </script>
 
 <div style="height:100vh;">
