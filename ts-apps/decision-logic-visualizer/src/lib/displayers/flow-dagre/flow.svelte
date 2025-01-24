@@ -66,7 +66,7 @@
     const layoutedElements = getLayoutedElements(initialNodes, initialEdges)
     NODES = layoutedElements.nodes
     EDGES = layoutedElements.edges
-    console.log("onMounted!")
+    console.log('onMounted!')
   })
 </script>
 
