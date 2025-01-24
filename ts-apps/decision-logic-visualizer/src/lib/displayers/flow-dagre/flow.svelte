@@ -1,5 +1,5 @@
 <script lang="ts">
-  import dagre from '@dagrejs/dagre';
+  import dagre from '@dagrejs/dagre'
   import {
     SvelteFlow,
     Background,
@@ -8,36 +8,36 @@
     Panel,
     type Node,
     type Edge,
-  } from '@xyflow/svelte';
+  } from '@xyflow/svelte'
 
-  import '@xyflow/svelte/dist/style.css';
+  import '@xyflow/svelte/dist/style.css'
 
-  import { initialNodes, initialEdges } from './nodes-and-edges';
+  import { initialNodes, initialEdges } from './nodes-and-edges'
 
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  const dagreGraph = new dagre.graphlib.Graph()
+  dagreGraph.setDefaultEdgeLabel(() => ({}))
 
-  const nodeWidth = 172;
-  const nodeHeight = 36;
+  const nodeWidth = 172
+  const nodeHeight = 36
 
   function getLayoutedElements(nodes: Node[], edges: Edge[], direction = 'TB') {
-    const isHorizontal = direction === 'LR';
-    dagreGraph.setGraph({ rankdir: direction });
+    const isHorizontal = direction === 'LR'
+    dagreGraph.setGraph({ rankdir: direction })
 
     nodes.forEach((node) => {
-      dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-    });
+      dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight })
+    })
 
     edges.forEach((edge) => {
-      dagreGraph.setEdge(edge.source, edge.target);
-    });
+      dagreGraph.setEdge(edge.source, edge.target)
+    })
 
-    dagre.layout(dagreGraph);
+    dagre.layout(dagreGraph)
 
     const layoutedNodes = nodes.map((node) => {
-      const nodeWithPosition = dagreGraph.node(node.id);
-      node.targetPosition = isHorizontal ? Position.Left : Position.Top;
-      node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
+      const nodeWithPosition = dagreGraph.node(node.id)
+      node.targetPosition = isHorizontal ? Position.Left : Position.Top
+      node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom
 
       // We are shifting the dagre node position (anchor=center center) to the top left
       // so it matches the React Flow node anchor point (top left).
@@ -47,25 +47,25 @@
           x: nodeWithPosition.x - nodeWidth / 2,
           y: nodeWithPosition.y - nodeHeight / 2,
         },
-      };
-    });
+      }
+    })
 
-    return { nodes: layoutedNodes, edges };
+    return { nodes: layoutedNodes, edges }
   }
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
     initialNodes,
-    initialEdges,
-  );
+    initialEdges
+  )
 
-  let nodes = $state.raw<Node[]>(layoutedNodes);
-  let edges = $state.raw<Edge[]>(layoutedEdges);
+  let nodes = $state.raw<Node[]>(layoutedNodes)
+  let edges = $state.raw<Edge[]>(layoutedEdges)
 
   function onLayout(direction: string) {
-    const layoutedElements = getLayoutedElements(nodes, edges, direction);
+    const layoutedElements = getLayoutedElements(nodes, edges, direction)
 
-    nodes = layoutedElements.nodes;
-    edges = layoutedElements.edges;
+    nodes = layoutedElements.nodes
+    edges = layoutedElements.edges
   }
 </script>
 
