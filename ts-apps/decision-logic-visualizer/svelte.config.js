@@ -18,6 +18,9 @@ const config = {
       precompress: false,
       strict: true,
     }),
+    serviceWorker: {
+      register: false,
+    },
   },
 }
 
