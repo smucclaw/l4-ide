@@ -20,7 +20,7 @@ const config = {
     }),
     serviceWorker: {
       register: false,
-    }
+    },
   },
 }
 

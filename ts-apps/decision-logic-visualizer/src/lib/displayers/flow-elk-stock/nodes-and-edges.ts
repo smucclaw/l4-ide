@@ -1,63 +1,63 @@
-import type { Node, Edge } from '@xyflow/svelte';
+import type { Node, Edge } from '@xyflow/svelte'
 
-const position = { x: 0, y: 0 };
-const edgeType = 'smoothstep';
+const position = { x: 0, y: 0 }
+const edgeType = 'smoothstep'
 
 export const initialNodes: Node[] = [
   {
     id: '1',
     type: 'input',
     data: { label: 'input' },
-    position
+    position,
   },
   {
     id: '2',
     data: { label: 'node 2' },
-    position
+    position,
   },
   {
     id: '2a',
     data: { label: 'node 2a' },
-    position
+    position,
   },
   {
     id: '2b',
     data: { label: 'node 2b' },
-    position
+    position,
   },
   {
     id: '2c',
     data: { label: 'node 2c' },
-    position
+    position,
   },
   {
     id: '2d',
     data: { label: 'node 2d' },
-    position
+    position,
   },
   {
     id: '3',
     data: { label: 'node 3' },
-    position
+    position,
   },
   {
     id: '4',
     data: { label: 'node 4' },
-    position
+    position,
   },
   {
     id: '5',
     data: { label: 'node 5' },
-    position
+    position,
   },
   {
     id: '6',
     type: 'output',
     data: { label: 'output' },
-    position
+    position,
   },
-  { id: '7', type: 'output', data: { label: 'output' }, position }
-];
+  { id: '7', type: 'output', data: { label: 'output' }, position },
+]
 
 export const initialEdges: Edge[] = [
   { id: 'e12', source: '1', target: '2', type: edgeType, animated: false },
@@ -68,5 +68,5 @@ export const initialEdges: Edge[] = [
   { id: 'e2c2d', source: '2c', target: '2d', type: edgeType, animated: false },
   { id: 'e45', source: '4', target: '5', type: edgeType, animated: false },
   { id: 'e56', source: '5', target: '6', type: edgeType, animated: false },
-  { id: 'e57', source: '5', target: '7', type: edgeType, animated: false }
-];
+  { id: 'e57', source: '5', target: '7', type: edgeType, animated: false },
+]
