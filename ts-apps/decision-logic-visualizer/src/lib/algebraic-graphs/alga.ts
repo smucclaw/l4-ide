@@ -29,7 +29,7 @@ export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
     return this.v
   }
 
-  abstract isEqualTo(that: this): boolean
+  abstract isEqualTo<B extends Edge<A>>(that: B): boolean
 
   compare(that: this) {
     // lexicographical comparison
@@ -56,7 +56,7 @@ export class UndirectedEdge<A extends Ord<A>> extends Edge<A> {
     }
   }
 
-  isEqualTo(that: this): boolean {
+  override isEqualTo<B extends UndirectedEdge<A>>(that: B): boolean {
     return (
       that instanceof UndirectedEdge &&
       ((this.u.isEqualTo(that.getU()) && this.v.isEqualTo(that.getV())) ||
@@ -75,7 +75,7 @@ export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
     super(u, v)
   }
 
-  isEqualTo(that: this): boolean {
+  override isEqualTo<B extends DirectedEdge<A>>(that: B): boolean {
     return (
       that instanceof DirectedEdge &&
       this.getU().isEqualTo(that.getU()) &&

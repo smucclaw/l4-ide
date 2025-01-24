@@ -1,11 +1,11 @@
 import type { Eq, Ord } from '$lib/utils.ts'
-import { ComparisonResult } from '$lib/utils.ts'
 import { DirectedEdge } from './alga.ts'
 import _ from 'lodash'
+import { BaseAMGraph } from './base-adjacency-map.ts'
 
-/**********************************************************
+/****************************************************************************
   Internal Adjacency Map implementation / representation for Directed Graphs
-***********************************************************/
+*****************************************************************************/
 
 export type DirectedGraph<A extends Ord<A>> =
   | InstanceType<typeof Empty<A>>
@@ -24,14 +24,12 @@ export type DirectedGraph<A extends Ord<A>> =
  * (There's also a minor difference with `getEdges`, but that's more of a convenience feature)
  */
 export class DirectedAMGraph<A extends Ord<A>>
+  extends BaseAMGraph<A>
   implements Eq<DirectedAMGraph<A>>
 {
-  protected adjacencyMap: Map<A, Set<A>>
-
   constructor(adjacencyMap?: Map<A, Set<A>>) {
-    this.adjacencyMap = adjacencyMap ?? new Map()
+    super(adjacencyMap)
   }
-
   // Alga ops
   overlay(other: DirectedAMGraph<A>): DirectedAMGraph<A> {
     return new Overlay(this, other)
@@ -41,55 +39,7 @@ export class DirectedAMGraph<A extends Ord<A>>
     return new DirectedAMGraph(makeDirectedConnectAdjacencyMap(this, other))
   }
 
-  // Getters and setters for the underlying adjacency map
-  getAdjMap() {
-    return this.adjacencyMap
-  }
-
-  protected setAdjMap(map: typeof this.adjacencyMap) {
-    this.adjacencyMap = map
-  }
-
   // Misc useful
-
-  /** Check if a graph contains a given vertex. */
-  hasVertex(vertex: A): boolean {
-    return this.adjacencyMap.has(vertex)
-  }
-
-  /** Check if a graph contains a given edge. */
-  hasEdge(u: A, v: A): boolean {
-    const neighbors = this.adjacencyMap.get(u)
-    if (neighbors) {
-      return neighbors.has(v)
-    }
-    return false
-  }
-
-  /** Get a sorted array of vertices */
-  getVertices(): A[] {
-    return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
-  }
-
-  /** Internal helper: Get a sorted array of *all* the [A, A] edges */
-  protected getAllEdges(): Array<[A, A]> {
-    const vertices = this.getVertices()
-
-    // Get [ <v, n> for each vertex v, for each neighbor n of v]
-    const allEdges = vertices.flatMap((vertex) => {
-      const neighbors = this.adjacencyMap.get(vertex) ?? new Set<A>()
-      return Array.from(neighbors).map(
-        (neighbor) => [vertex, neighbor] as [A, A]
-      )
-    })
-
-    return allEdges.toSorted(([u1, v1], [u2, v2]) => {
-      const firstComparison = u1.compare(u2)
-      return firstComparison !== ComparisonResult.Equal
-        ? firstComparison
-        : v1.compare(v2)
-    })
-  }
 
   /** Get a sorted array of the unique directed edges */
   getEdges(): DirectedEdge<A>[] {
@@ -99,38 +49,9 @@ export class DirectedAMGraph<A extends Ord<A>>
     return directedEdges.toSorted((a, b) => a.compare(b))
   }
 
-  isEqualTo(other: this): boolean {
-    const isEqToPredicate = (
-      x: DirectedAMGraph<A>,
-      y: DirectedAMGraph<A>
-    ): boolean => {
-      return x.isEqualTo(y)
-    }
-    return (
-      other instanceof DirectedAMGraph &&
-      _.isEqualWith(this.getVertices(), other.getVertices(), isEqToPredicate) &&
-      _.isEqualWith(this.getAllEdges(), other.getAllEdges(), isEqToPredicate)
-    )
-  }
-
-  /** Pretty prints the *un*directed edges for undirected graphs (and directed for directed graphs)  */
-  pPrint(): string {
-    const vertices = this.getVertices()
-    const edges = this.getEdges().map((edge) => edge.toString())
-
-    if (vertices.length === 0) return 'empty'
-    if (edges.length === 0) return `vertices [${vertices.join(', ')}]`
-    return `edges [${edges.join(', ')}]`
-  }
-
-  /** Stringifies the internal representation. Currently for internal use. */
-  toString(): string {
-    const vertices = this.getVertices()
-    const edges = this.getAllEdges().map((edge) => `<${edge.toString()}>`)
-
-    if (vertices.length === 0) return 'empty'
-    if (edges.length === 0) return `vertices [${vertices.join(', ')}]`
-    return `edges [${edges.join(', ')}]`
+  isEqualTo<T extends DirectedAMGraph<A>>(other: T): boolean {
+    // TODO: Improve this!
+    return this.toString() === other.toString()
   }
 }
 
@@ -204,10 +125,10 @@ export const Connect = class<A extends Ord<A>> extends DirectedAMGraph<A> {
   }
 }
 
-export function makeDirectedConnectAdjacencyMap<A extends Ord<A>>(
-  from: DirectedAMGraph<A>,
-  to: DirectedAMGraph<A>
-) {
+export function makeDirectedConnectAdjacencyMap<
+  A extends Ord<A>,
+  T extends BaseAMGraph<A>,
+>(from: T, to: T): Map<A, Set<A>> {
   // Union domains and relations
   const combinedMap = graphUnion(from.getAdjMap(), to.getAdjMap())
 

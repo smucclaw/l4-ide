@@ -8,8 +8,8 @@ import type { Properties as CSSProperties } from 'csstype'
      Pseudo Eq, Ord
  *****************************/
 
-export interface Eq<T> {
-  isEqualTo(other: T): boolean
+export interface Eq<A> {
+  isEqualTo<B extends A>(other: B): boolean
 }
 
 export enum ComparisonResult {
