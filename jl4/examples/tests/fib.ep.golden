@@ -1,0 +1,31 @@
+§ `Fibonacci function`
+
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+DECIDE fibNaive n IS
+  IF n EQUALS 0
+    THEN 0
+    ELSE IF n EQUALS 1
+      THEN 1
+      ELSE      fibNaive OF
+                        n
+                  MINUS 1
+           PLUS fibNaive OF
+                        n
+                  MINUS 2
+
+#EVAL fibNaive 20
+
+DECIDE fibHelper m n o IS
+  IF o EQUALS 0
+    THEN m
+    ELSE fibHelper OF
+           n
+           m PLUS n
+           o MINUS 1 
+
+DECIDE fib n IS
+  fibHelper 0 1 n
+
+#EVAL fib 20
+#EVAL fib 50
