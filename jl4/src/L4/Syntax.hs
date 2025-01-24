@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveFunctor #-}
 module L4.Syntax where
 
 import L4.Annotation
@@ -56,7 +57,7 @@ data Type' n =
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
   -- | ParenType Anno (Type' n) -- temporary
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypedName n =
@@ -71,7 +72,7 @@ data OptionallyTypedName n =
 
 data OptionallyNamedType n =
   MkOptionallyNamedType Anno (Maybe n) (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeSig n =
@@ -347,29 +348,30 @@ instance ToConcreteNodes PosToken Lit where
   toNodes (StringLit ann _) =
     flattenConcreteNodes ann []
 
-deriving anyclass instance HasSrcRange a => HasSrcRange (Program a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Section a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (TopDecl a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Assume a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Declare a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (TypeDecl a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (ConDecl a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Type' a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (TypedName a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (OptionallyTypedName a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (OptionallyNamedType a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Decide a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (AppForm a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Expr a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (LocalDecl a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (NamedExpr a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Branch a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Pattern a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (TypeSig a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (GivethSig a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (GivenSig a)
-deriving anyclass instance HasSrcRange a => HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange (Program a)
+deriving anyclass instance HasSrcRange (Section a)
+deriving anyclass instance HasSrcRange (TopDecl a)
+deriving anyclass instance HasSrcRange (Assume a)
+deriving anyclass instance HasSrcRange (Declare a)
+deriving anyclass instance HasSrcRange (TypeDecl a)
+deriving anyclass instance HasSrcRange (ConDecl a)
+deriving anyclass instance HasSrcRange (Type' a)
+deriving anyclass instance HasSrcRange (TypedName a)
+deriving anyclass instance HasSrcRange (OptionallyTypedName a)
+deriving anyclass instance HasSrcRange (OptionallyNamedType a)
+deriving anyclass instance HasSrcRange (Decide a)
+deriving anyclass instance HasSrcRange (AppForm a)
+deriving anyclass instance HasSrcRange (Expr a)
+deriving anyclass instance HasSrcRange (LocalDecl a)
+deriving anyclass instance HasSrcRange (NamedExpr a)
+deriving anyclass instance HasSrcRange (Branch a)
+deriving anyclass instance HasSrcRange (Pattern a)
+deriving anyclass instance HasSrcRange (TypeSig a)
+deriving anyclass instance HasSrcRange (GivethSig a)
+deriving anyclass instance HasSrcRange (GivenSig a)
+deriving anyclass instance HasSrcRange (Directive a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 
-
+instance HasSrcRange Resolved where
+  rangeOf = rangeOf . getActual

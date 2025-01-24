@@ -13,7 +13,7 @@ import Data.Typeable
 import Development.IDE.Graph
 import GHC.Generics (Generic)
 import L4.Evaluate
-import L4.Annotation (HasSrcRange (..))
+import L4.Annotation
 import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -96,7 +96,7 @@ instance Pretty Log where
 
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
-  define (cmapWithPrio ShakeLog recorder) $ \GetLexTokens f -> do
+  define shakeRecorder $ \GetLexTokens f -> do
     (_, mRope) <- use_ GetFileContents f
     case mRope of
       Nothing -> pure ([{- TODO: report internal errors -}], Nothing)
@@ -111,7 +111,7 @@ jl4Rules recorder = do
           Right ts ->
             pure ([], Just (ts, contents))
 
-  define (cmapWithPrio ShakeLog recorder) $ \GetParsedAst f -> do
+  define shakeRecorder $ \GetParsedAst f -> do
     (tokens, contents) <- use_ GetLexTokens f
     case Parser.execParserForTokens Parser.program (fromNormalizedFilePath f) contents tokens of
       Left errs -> do
@@ -121,13 +121,13 @@ jl4Rules recorder = do
       Right prog -> do
         pure ([], Just prog)
 
-  define (cmapWithPrio ShakeLog recorder) $ \TypeCheck f -> do
+  define shakeRecorder $ \TypeCheck f -> do
     program <- use_ GetParsedAst f
     let
       (errs, resolvedProg, subst) = TypeCheck.doCheckProgram program
 
     pure
-      ( fmap (mkSimpleFileDiagnostic f . checkErrorToDiagnostic) errs
+      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) errs
       , Just TypeCheckResult
         { program = resolvedProg
         , substitution = subst
@@ -135,18 +135,18 @@ jl4Rules recorder = do
         }
       )
 
-  define (cmapWithPrio ShakeLog recorder) $ \SuccessfulTypeCheck f -> do
+  define shakeRecorder $ \SuccessfulTypeCheck f -> do
     typeCheckResult <- use_ TypeCheck f
     if typeCheckResult.success
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
-  define (cmapWithPrio ShakeLog recorder) $ \Evaluate f -> do
+  define shakeRecorder $ \Evaluate f -> do
     r <- use_ SuccessfulTypeCheck f
     let results = doEvalProgram r.program
     pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
 
-  define (cmapWithPrio ShakeLog recorder) $ \LexerSemanticTokens f -> do
+  define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
     case runSemanticTokensM defaultSemanticTokenCtx tokens of
       Left _err ->
@@ -154,7 +154,7 @@ jl4Rules recorder = do
       Right tokenized -> do
         pure ([], Just tokenized)
 
-  define (cmapWithPrio ShakeLog recorder) $ \ParserSemanticTokens f -> do
+  define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
     case runSemanticTokensM defaultSemanticTokenCtx prog of
       Left _err ->
@@ -162,7 +162,7 @@ jl4Rules recorder = do
       Right tokenized -> do
           pure ([], Just tokenized)
 
-  define (cmapWithPrio ShakeLog recorder) $ \GetSemanticTokens f -> do
+  define shakeRecorder $ \GetSemanticTokens f -> do
     mSemTokens <- useWithStale ParserSemanticTokens f
     case mSemTokens of
       Nothing -> do
@@ -205,7 +205,7 @@ jl4Rules recorder = do
 
         pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
 
-  define (cmapWithPrio ShakeLog recorder) $ \GetRelSemanticTokens f -> do
+  define shakeRecorder $ \GetRelSemanticTokens f -> do
     tokens <- use_ GetSemanticTokens f
     let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
     case encodeTokens defaultSemanticTokensLegend semanticTokens of
@@ -214,11 +214,21 @@ jl4Rules recorder = do
       Right relSemTokens ->
           pure ([], Just relSemTokens)
   where
+    shakeRecorder = cmapWithPrio ShakeLog recorder
     mkSimpleFileDiagnostic nfp diag =
       FileDiagnostic
         { fdFilePath = nfp
         , fdShouldShowDiagnostic = ShowDiag
         , fdLspDiagnostic = diag
+        , fdOriginalSource = NoMessage
+        }
+
+    mkFileDiagnosticWithSource nfp diag orig =
+      FileDiagnostic
+        { fdFilePath = nfp
+        , fdShouldShowDiagnostic = ShowDiag
+        , fdLspDiagnostic = diag
+        , fdOriginalSource = MkSomeMessage orig
         }
 
     mkSimpleDiagnostic parseError =

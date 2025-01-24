@@ -140,6 +140,7 @@ executable jl4-lsp
     LSP.Core.Types.Shake
 
     LSP.SemanticTokens
+    LSP.L4.Base
     LSP.L4.Config
     LSP.L4.Handlers
     LSP.L4.Ladder
