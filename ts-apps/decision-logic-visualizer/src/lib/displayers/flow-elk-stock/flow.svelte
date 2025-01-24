@@ -1,6 +1,9 @@
 <!-- Copied and pasted from the stackblitz linked from https://next.svelteflow.dev/examples/layout/elkjs
- just to have a reference working (ish?) example to start with -->
+ just to have a reference working (ish?) example to start with 
+ And yes, the sample code does not type check out of the box.
+ -->
 <script lang="ts">
+  // @ts-nocheck
   import { onMount } from 'svelte'
   import ELK from 'elkjs/lib/elk.bundled.js'
   import {
