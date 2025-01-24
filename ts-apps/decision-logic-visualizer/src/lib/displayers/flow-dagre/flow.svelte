@@ -5,7 +5,6 @@
     Background,
     Position,
     ConnectionLineType,
-    Panel,
     type Node,
     type Edge,
   } from '@xyflow/svelte'
@@ -17,12 +16,14 @@
   const dagreGraph = new dagre.graphlib.Graph()
   dagreGraph.setDefaultEdgeLabel(() => ({}))
 
+  // CONFIG / CONSTS
+  const graphDirection = 'LR' // horizontal
+  // qn: how did they decide on these numbers?
   const nodeWidth = 172
   const nodeHeight = 36
 
-  function getLayoutedElements(nodes: Node[], edges: Edge[], direction = 'TB') {
-    const isHorizontal = direction === 'LR'
-    dagreGraph.setGraph({ rankdir: direction })
+  function getLayoutedElements(nodes: Node[], edges: Edge[]) {
+    dagreGraph.setGraph({ rankdir: graphDirection })
 
     nodes.forEach((node) => {
       dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight })
@@ -36,13 +37,14 @@
 
     const layoutedNodes = nodes.map((node) => {
       const nodeWithPosition = dagreGraph.node(node.id)
-      node.targetPosition = isHorizontal ? Position.Left : Position.Top
-      node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom
+      // these positions are what get recommended for a horizontal direction
+      node.targetPosition = Position.Left
+      node.sourcePosition = Position.Right
 
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
       return {
         ...node,
+        // We are shifting the dagre node position (anchor=center center) to the top left
+        // so it matches the React Flow node anchor point (top left).
         position: {
           x: nodeWithPosition.x - nodeWidth / 2,
           y: nodeWithPosition.y - nodeHeight / 2,
@@ -58,29 +60,25 @@
     initialEdges
   )
 
-  let nodes = $state.raw<Node[]>(layoutedNodes)
-  let edges = $state.raw<Edge[]>(layoutedEdges)
+  let NODES = $state.raw<Node[]>(layoutedNodes)
+  let EDGES = $state.raw<Edge[]>(layoutedEdges)
 
-  function onLayout(direction: string) {
-    const layoutedElements = getLayoutedElements(nodes, edges, direction)
+  // function onLayout() {
+  //   const layoutedElements = getLayoutedElements(NODES, EDGES)
 
-    nodes = layoutedElements.nodes
-    edges = layoutedElements.edges
-  }
+  //   NODES = layoutedElements.nodes
+  //   EDGES = layoutedElements.edges
+  // }
 </script>
 
 <div style="height:100vh;">
   <SvelteFlow
-    bind:nodes
-    bind:edges
+    bind:nodes={NODES}
+    bind:edges={EDGES}
     fitView
     connectionLineType={ConnectionLineType.SmoothStep}
     defaultEdgeOptions={{ type: 'smoothstep', animated: false }}
   >
-    <Panel position="top-right">
-      <button onclick={() => onLayout('TB')}>vertical layout</button>
-      <button onclick={() => onLayout('LR')}>horizontal layout</button>
-    </Panel>
     <Background />
   </SvelteFlow>
 </div>
