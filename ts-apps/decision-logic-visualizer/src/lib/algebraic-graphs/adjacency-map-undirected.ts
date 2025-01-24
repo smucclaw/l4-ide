@@ -6,7 +6,7 @@ import {
   appendVerticesToSourceNeighbors,
   makeDirectedConnectAdjacencyMap,
 } from './adjacency-map-directed-graph.ts'
-import { DirectedAMGraph } from './adjacency-map-directed-graph.ts'
+import { BaseAMGraph } from './base-adjacency-map.ts'
 
 /**********************************************************
   Internal Adjacency Map implementation / representation
@@ -31,6 +31,11 @@ I did it this way to follow the original implementation more closely.
 
 The implementations here can almost definitely be made more performant:
 I was optimizing for correctness and readability, not performance.
+
+---------
+
+The main difference between directed and undirected graphs
+has to do with Connect.
 */
 
 /** Adjacency Map implementation of undirected Alga Graph */
@@ -40,15 +45,34 @@ export type UndirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
+export const isUndirectedGraph = <A extends Ord<A>>(
+  x: unknown
+): x is UndirectedGraph<A> => {
+  return (
+    x instanceof Empty ||
+    x instanceof Vertex ||
+    x instanceof Overlay ||
+    x instanceof Connect
+  )
+}
+
 export class UndirectedAMGraph<A extends Ord<A>>
-  extends DirectedAMGraph<A>
+  extends BaseAMGraph<A>
   implements Eq<UndirectedAMGraph<A>>
 {
-  override connect(other: UndirectedAMGraph<A>): UndirectedAMGraph<A> {
+  constructor(adjacencyMap?: Map<A, Set<A>>) {
+    super(adjacencyMap)
+  }
+
+  overlay(other: UndirectedGraph<A>): UndirectedGraph<A> {
+    return new Overlay(this, other)
+  }
+
+  connect(other: UndirectedGraph<A>): UndirectedGraph<A> {
     return new Connect(this, other)
   }
 
-  override isEqualTo(other: this): boolean {
+  isEqualTo<T extends UndirectedAMGraph<A>>(other: T): boolean {
     // TODO: Improve this!
     return this.toString() === other.toString()
     // const isEqToPredicate = <T extends Eq<T>>(x: T, y: T): boolean => {
@@ -101,6 +125,7 @@ export function vertex<A extends Ord<A>>(a: A) {
 
 /** A single isolated vertex. Same kind of implementation as DG.empty */
 export class Vertex<A extends Ord<A>> extends UndirectedAMGraph<A> {
+  $type = 'Vertex'
   constructor(readonly value: A) {
     super(new Map([[value, new Set()]]))
   }
@@ -116,7 +141,7 @@ export class Vertex<A extends Ord<A>> extends UndirectedAMGraph<A> {
 export function overlay<A extends Ord<A>>(
   x: UndirectedAMGraph<A>,
   y: UndirectedAMGraph<A>
-): UndirectedAMGraph<A> {
+): UndirectedGraph<A> {
   return new Overlay(x, y)
 }
 
@@ -137,7 +162,7 @@ export class Overlay<A extends Ord<A>> extends UndirectedAMGraph<A> {
 export function connect<A extends Ord<A>>(
   x: UndirectedAMGraph<A>,
   y: UndirectedAMGraph<A>
-): UndirectedAMGraph<A> {
+): UndirectedGraph<A> {
   return new Connect(x, y)
 }
 
@@ -147,7 +172,10 @@ export class Connect<A extends Ord<A>> extends UndirectedAMGraph<A> {
     readonly to: UndirectedAMGraph<A>
   ) {
     // Create the adjacency map as you would for a directed connection
-    const adjMap = makeDirectedConnectAdjacencyMap(from, to)
+    const adjMap: Map<A, Set<A>> = makeDirectedConnectAdjacencyMap(
+      from as BaseAMGraph<A>,
+      to as BaseAMGraph<A>
+    )
 
     // Add reciprocal connections necessary for the undirected graph
     // This is the main difference between directed and undirected graphs
