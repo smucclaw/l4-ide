@@ -26,9 +26,9 @@
   )
 
   const initialNodes = flowGraph.nodes
-    .toSorted((v1, v2) => -1 * v1.compare(v2))
-    .map((n) => n.toSFNodePojo())
-  const initialEdges = flowGraph.edges.map((e) => e.toSFEdgePojo())
+    .toSorted((v1, v2) => v2.compare(v1))
+    .map((n) => n.toSFPojo())
+  const initialEdges = flowGraph.edges.map((e) => e.toSFPojo())
 
   /***********************************
       SvelteFlow nodes and edges

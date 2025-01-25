@@ -69,7 +69,7 @@ export class FlowNode implements Ord<FlowNode> {
     return this.origLirIds
   }
 
-  toSFNodePojo(): SF.Node {
+  toSFPojo(): SF.Node {
     return {
       id: this.id,
       position: this.position,
@@ -131,7 +131,7 @@ export class FlowEdge implements Ord<FlowEdge> {
     return ComparisonResult.Equal
   }
 
-  toSFEdgePojo(): SF.Edge {
+  toSFPojo(): SF.Edge {
     return {
       id: this.id,
       source: this.source,
