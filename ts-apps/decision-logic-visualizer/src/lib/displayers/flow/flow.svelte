@@ -9,9 +9,6 @@
     type Edge,
   } from '@xyflow/svelte'
   import {
-    FlowNode,
-    FlowEdge,
-    type FlowGraph,
     type ExprFlowDisplayerProps,
     exprLirNodeToAlgaUndirectedGraph,
     algaUndirectedGraphToFlowGraph,
@@ -73,7 +70,7 @@
   })
 </script>
 
-<div style="height:100vh;">
+<div style="height:50vh;">
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
