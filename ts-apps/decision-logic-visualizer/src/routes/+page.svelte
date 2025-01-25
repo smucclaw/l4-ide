@@ -67,39 +67,13 @@
   Examples of decision logic visualizations, starting from a 'json' of the
   IRExpr that eventually gets transformed into a SvelteFlow graph
 </h2>
-<section>
-  <h3>Example 1</h3>
-  <p>Visualizing</p>
-  <pre><code>
-  {`const example1: IRExpr = {
-    $type: 'BinExpr' as const,
-    op: 'And',
-    left: {
-      $type: 'BinExpr' as const,
-      op: 'Or',
-      left: {
-        $type: 'BoolVar',
-        value: 'Unknown',
-        id: { id: 1 },
-        name: 'eats'
-      },
-      right: {
-        $type: 'BoolVar',
-        value: 'Unknown',
-        id: { id: 2 },
-        name: 'walks'
-      },
-      id: { id: 3 }
-    },
-    right: {
-      $type: 'BoolVar',
-      value: 'True',
-      id: { id: 4 },
-      name: 'swims'
-    },
-    id: { id: 5 }`}
-</code></pre>
-</section>
+<h3>Example 1</h3>
 <SvelteFlowProvider>
   <ExprFlow {context} node={exprLirNode} />
 </SvelteFlowProvider>
+<section>
+  <p>The above is a visualization of</p>
+  <pre><code>
+  {JSON.stringify(example1, null, 2)}
+</code></pre>
+</section>
