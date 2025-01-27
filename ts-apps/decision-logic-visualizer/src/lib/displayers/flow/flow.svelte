@@ -63,9 +63,8 @@
     NODES = layoutedElements.nodes
     EDGES = layoutedElements.edges
 
-    console.log(EDGES.length)
-    console.log('edges', EDGES)
-    console.log('onMounted!')
+    // console.log('edges', EDGES)
+    // console.log('onMounted!')
   })
 </script>
 
