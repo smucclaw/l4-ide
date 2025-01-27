@@ -5,7 +5,7 @@
 /* ===== Basic 'CSS reset' ======================= 
 
 Resources
-  * Josh Comeau
+  * https://www.joshwcomeau.com/css/custom-css-reset/
   * https://piccalil.li/blog/a-more-modern-css-reset/
 */
 
@@ -16,13 +16,18 @@ Resources
   box-sizing: border-box;
 }
 
+/* Make images easier to work with */
 img,
 picture,
-video,
-canvas,
-svg {
+video {
   max-width: 100%;
+  display: block;
 }
+/******************************************
+ IMPT: If you make svg max-width 100%,
+  edges won't render properly in SvelteFlow
+  (at least not with the default options)
+********************************************/
 
 #html {
   isolation: isolate; /* create a new stacking context */
