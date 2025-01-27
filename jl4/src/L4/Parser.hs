@@ -32,6 +32,7 @@ import L4.Syntax
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Foldable as Foldable
 import GHC.Records
+import qualified Data.Maybe as Maybe
 
 type Parser = Parsec Void TokenStream
 
@@ -110,11 +111,11 @@ fab <<$>> fga = (fmap . fmap) fab fga
 -- | A quoted identifier between backticks.
 quotedName :: Parser (Epa Name)
 quotedName =
-  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
+  (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
 
 simpleName :: Parser (Epa Name)
 simpleName =
-  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
+  (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
 name :: Parser Name
 name = attachEpa (quotedName <|> simpleName) <?> "identifier"
@@ -124,7 +125,7 @@ tokenAsName tt =
   attachEpa (lexToEpa' . fmap convert <$> spacedToken_ tt)
   where
     convert :: PosToken -> (PosToken, Name)
-    convert p@(MkPosToken range _) = (MkPosToken range (TIdentifier t), MkName mempty (NormalName t))
+    convert p@(MkPosToken range _) = (MkPosToken range (TIdentifier t), MkName emptyAnno (NormalName t))
       where
         t = displayPosToken p
 
@@ -219,11 +220,11 @@ topdeclWithRecovery = do
     topdecl
 
 topdecl :: Parser (TopDecl Name)
-topdecl =
-      Declare   mkHoleAnno <$> declare
-  <|> Decide    mkHoleAnno <$> decide
-  <|> Assume    mkHoleAnno <$> assume
-  <|> Directive mkHoleAnno <$> directive
+topdecl = attachAnno $
+      Declare   emptyAnno <$> annoHole declare
+  <|> Decide    emptyAnno <$> annoHole decide
+  <|> Assume    emptyAnno <$> annoHole assume
+  <|> Directive emptyAnno <$> annoHole directive
 
 directive :: Parser (Directive Name)
 directive = do
@@ -368,7 +369,7 @@ atomicType =
 
 parenType :: Parser (Type' Name)
 parenType =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole type'
@@ -414,13 +415,13 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno_ PosToken e) PosToken
+article :: Compose Parser WithAnno PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
-withOptionalArticle :: (HasAnno a, AnnoToken a ~ PosToken) => Parser a -> Parser a
+withOptionalArticle :: (HasSrcRange a, HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Type' Resolved) => Parser a -> Parser a
 withOptionalArticle p =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  optional article
     <*> annoHole p
@@ -447,7 +448,7 @@ lsepBy pp sep =
     zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
     zipWithLeftovers ps [] = ps
     zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
 lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
@@ -458,7 +459,7 @@ lsepBy1 pp sep =
     zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
     zipWithLeftovers ps [] = ps
     zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
 reqParam :: Parser (TypedName Name)
 reqParam =
@@ -596,13 +597,13 @@ opToken :: TokenType -> Parser Anno
 opToken t =
   (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ t
 
-infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
+infix2 :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
-  f (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnno) l r
+  f (fixAnnoSrcRange $ mkHoleAnnoFor l <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnnoFor r) l r
 
-infix2' :: (Anno -> a n-> a n -> a n) -> Anno -> a n -> a n -> a n
+infix2' :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Anno -> a n -> a n -> a n
 infix2' f op l r =
-  f (mkHoleAnno <> op <> mkHoleAnno) l r
+  f (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) l r
 
 baseExpr :: Parser (Expr Name)
 baseExpr =
@@ -623,7 +624,7 @@ atomicExpr =
   <|> nameAsApp App
   <|> parenExpr
 
-nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b) => (Anno -> Name -> [a] -> b) -> Parser b
+nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b, HasSrcRange a) => (Anno -> Name -> [a] -> b) -> Parser b
 nameAsApp f =
   attachAnno $
     f emptyAnno
@@ -656,7 +657,7 @@ stringLit =
 
 parenExpr :: Parser (Expr Name)
 parenExpr =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole expr
@@ -785,7 +786,8 @@ patApp = do
   attachAnno $
     PatApp emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
+    <*> (      annoLexeme (spacedToken_ TKOf)
+            *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
         <|> annoHole (lmany (indented atomicPattern current))
         )
 
@@ -797,7 +799,16 @@ projection =
       -- May affect the source span of the name.
       -- E.g. Goto definition of `name's` would be affected, as clicking on `'s` would not be part
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
-      (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
+      (\ n ns ->
+        foldl'
+          (\e (gen, n') ->
+            Proj (fixAnnoSrcRange $ mkHoleAnnoFor e <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnnoFor n')
+              e
+              n'
+          )
+          (Var (fixAnnoSrcRange $ mkHoleAnnoFor n) n)
+          ns
+      )
   <$> name
   <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
@@ -1016,7 +1027,7 @@ mkPError orig (m, s) =
 -- jl4 specific annotation helpers
 -- ----------------------------------------------------------------------------
 
-type WithAnno = WithAnno_ PosToken
+type WithAnno = WithAnno_ PosToken (Type' Resolved)
 
 type Epa = Epa_ PosToken
 
@@ -1057,17 +1068,29 @@ data WithAnno_ t e a = WithAnno (Anno_ t e) a
   deriving stock Show
   deriving (Functor)
 
-unAnno :: WithAnno_ t e a -> a
-unAnno (WithAnno _ a) = a
+withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
+withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
+
+withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
+withEpaAnno (Epa this trailing e) = WithAnno (mkAnno [mkCluster cluster]) e
+ where
+  cluster =
+    CsnCluster
+      { payload = mkConcreteSyntaxNode this
+      , trailing = mkConcreteSyntaxNode trailing
+      }
+
+unWithAnno :: WithAnno_ t e a -> a
+unWithAnno (WithAnno _ a) = a
 
 toAnno :: WithAnno_ t e a -> Anno_ t e
 toAnno (WithAnno ann _) = ann
 
-annoHole :: (HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
-annoHole p = Compose $ fmap (\ t -> WithAnno mkHoleAnno t) p
+annoHole :: (HasSrcRange a, HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
+annoHole p = Compose $ fmap withHoleAnno p
 
 annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
-annoEpa p = Compose $ fmap epaToAnno p
+annoEpa p = Compose $ fmap withEpaAnno p
 
 annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
@@ -1080,35 +1103,31 @@ instance Applicative (WithAnno_ t e) where
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
 attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
-
-mergeAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-mergeAnno p = (\ (WithAnno ann e) -> setAnno (mkAnno (mergeInto ann.payload (getAnno e).payload)) e) <$> getCompose p
-  where
-    mergeInto []               _   = []
-    mergeInto (AnnoHole : as1) as2 = as2 ++ as1
-    mergeInto (a : as1)        as2 = a : mergeInto as1 as2
+attachAnno p = fmap (\(WithAnno ann e) -> setAnno (fixAnnoSrcRange ann) e) $ getCompose p
 
 attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
 attachEpa =
   attachAnno . annoEpa
 
-mkHoleAnno :: Anno_ t e
-mkHoleAnno =
-  mkAnno [mkHole]
+-- | Replace the first occurrence of 'AnnoHole' with the exactprint annotations.
+-- Removes an indirection in the Annotation tree.
+inlineAnnoHole :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
+inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole ann.payload (getAnno e).payload)) e) <$> getCompose p
+  where
+    inlineFirstAnnoHole []                 _   = []
+    inlineFirstAnnoHole (AnnoHole _ : as1) as2 = as2 ++ as1
+    inlineFirstAnnoHole (a : as1)          as2 = a : inlineFirstAnnoHole as1 as2
+
+-- | Create an annotation hole with a source range hint.
+-- This source range hint is used to compute the final source range
+-- of the produced 'Anno_'.
+mkHoleAnnoFor :: HasSrcRange a => a -> Anno_ t e
+mkHoleAnnoFor a =
+  mkAnno [mkHoleWithSrcRange a]
 
 mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
-  toAnno . epaToAnno
-
-epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
-epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
- where
-  cluster =
-    CsnCluster
-      { payload = mkConcreteSyntaxNode this
-      , trailing = mkConcreteSyntaxNode trailing
-      }
+  toAnno . withEpaAnno
 
 data Lexeme_ t a = Lexeme [t] a
   deriving stock Show
