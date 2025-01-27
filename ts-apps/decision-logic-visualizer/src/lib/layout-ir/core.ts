@@ -1,4 +1,10 @@
-// Start by looking at the docs for LirNode
+/* 
+If you're unfamiliar with Lir stuff, 
+start by looking at the docs for LirNode.
+
+Acknowledgments: I adapted the Lir stuff from a similar framework
+that I learned from Jimmy Koppel (https://www.jameskoppel.com/).
+*/
 
 /*********************************************
        Registry
@@ -10,11 +16,13 @@ export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
   // Will add subscribers here in the future
 
-  getRoot(rootType: LirRootType): LirNode | undefined {
+  // @typescript-eslint/no-unused-vars
+  getRoot(_context: LirContext, rootType: LirRootType): LirNode | undefined {
     return this.#roots.get(rootType)
   }
 
-  setRoot(rootType: LirRootType, node: LirNode) {
+  // @typescript-eslint/no-unused-vars
+  setRoot(_context: LirContext, rootType: LirRootType, node: LirNode) {
     this.#roots.set(rootType, node)
   }
 }
@@ -49,6 +57,7 @@ export abstract class NodeInfoManager {
 
   /** Note: Make sure not to actually store the LirContext in the class. */
   constructor(defaultNodeInfo: LirNodeInfo) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { context, ...lirInfoWithoutContext } = defaultNodeInfo
     this.lirInfo = lirInfoWithoutContext
   }
@@ -90,6 +99,8 @@ export abstract class DefaultLirNode
   constructor(protected readonly nodeInfo: LirNodeInfo) {
     super(nodeInfo)
     this.#id = new LirId()
+
+    nodeInfo.context.set(this)
   }
 
   getId(): LirId {

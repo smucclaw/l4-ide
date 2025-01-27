@@ -7,7 +7,7 @@ import {
   // NotLirNode,
   BinExprLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.ts'
-import { match, P } from 'ts-pattern'
+import { match } from 'ts-pattern'
 
 /**********************
          IR
@@ -179,7 +179,7 @@ export const VisualizeDecisionLogicResult = Schema.Struct({
         Lir Data Sources
 ************************************/
 
-export const ExprSource: LirSource<IRExpr, ExprLirNode> = {
+export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
     return (
       match(expr)
@@ -194,8 +194,8 @@ export const ExprSource: LirSource<IRExpr, ExprLirNode> = {
             new BinExprLirNode(
               nodeInfo,
               binE.op,
-              ExprSource.toLir(nodeInfo, binE.left),
-              ExprSource.toLir(nodeInfo, binE.right)
+              ExprLirSource.toLir(nodeInfo, binE.left),
+              ExprLirSource.toLir(nodeInfo, binE.right)
             )
         )
         .exhaustive()
@@ -220,7 +220,7 @@ const egAtomicPropWalks = {
 }
 
 const result = decode(egAtomicPropWalks)
-console.log(result)
+// console.log(result)
 /*
 {
   right: {
@@ -234,7 +234,7 @@ console.log(result)
 }
 */
 if (Either.isRight(result)) {
-  console.log(result.right)
+  // console.log(result.right)
   /*
   {
   '$type': 'BoolVar',

@@ -1,7 +1,6 @@
 import type { Ord } from '$lib/utils.ts'
 import { ComparisonResult } from '$lib/utils.ts'
 import { Edge } from './alga.ts'
-import _ from 'lodash'
 
 /**************************************************************
   Base internal Adjacency Map implementation / representation

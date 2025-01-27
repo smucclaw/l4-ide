@@ -1,4 +1,5 @@
 import type { BoolVar, BinOp } from '$lib/data/program-ir'
+export type { BinOp }
 import type { LirId, LirNode, LirNodeInfo } from './core'
 import { LirContext, DefaultLirNode } from './core'
 import { match } from 'ts-pattern'
@@ -28,18 +29,22 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
       .exhaustive()
   }
 
-  getName() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getName(_context: LirContext) {
     return this.#originalExpr.name
   }
 
-  getValue() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getValue(_context: LirContext) {
     return this.#value
   }
 
-  setValue(value: BoolValue) {
+  // eslint-disable-next-line
+  setValue(_context: LirContext, value: BoolValue) {
     this.#value = value
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getChildren(_context: LirContext) {
     return []
   }

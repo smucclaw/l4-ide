@@ -1,6 +1,5 @@
 import type { Eq, Ord } from '$lib/utils.ts'
 import { DirectedEdge } from './alga.ts'
-import _ from 'lodash'
 import { BaseAMGraph } from './base-adjacency-map.ts'
 
 /****************************************************************************
