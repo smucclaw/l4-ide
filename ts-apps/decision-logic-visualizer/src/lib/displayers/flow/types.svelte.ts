@@ -144,8 +144,17 @@ export function exprLirNodeToAlgaUndirectedGraph(
   context: LirContext,
   expr: ExprLirNode
 ): UndirectedGraph<FlowNode> {
-  // The following exploits the analogy between And with connect
-  // and Or with overlay
+  /*
+  The following exploits the analogy between And with connect
+  and Or with overlay.
+
+  That is, the essence of the ladder diagram has to do with 
+  how the And distributes over Or. That is how 
+  we get a path for each of the ways that someone can make the goal true.
+
+  But this sort of distributivity is also what we get 
+  with connect and overlay from the algebraic graphs formalism.
+  */
   return match(expr)
     .with(P.instanceOf(BoolVarLirNode), (node) => {
       const flowNode = new FlowNode(node.getName(), [node.getId()])
