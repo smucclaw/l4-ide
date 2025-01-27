@@ -3,7 +3,7 @@ module L4.Evaluate where
 import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
-import L4.ExactPrint (rangeOfNode, ToConcreteNodes)
+import L4.Annotation
 import L4.Lexer (SrcRange, PosToken)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
@@ -89,7 +89,7 @@ makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
 addEvalResult :: ToConcreteNodes PosToken a => a -> Either EvalException Value -> Eval ()
-addEvalResult a val = 
+addEvalResult a val =
   let
     res = (, val) <$> rangeOfNode a
   in
@@ -152,13 +152,13 @@ data Stack =
   | Empty
 
 falseExpr :: Expr Resolved
-falseExpr = App mempty TypeCheck.falseRef []
+falseExpr = App emptyAnno TypeCheck.falseRef []
 
 falseVal :: Value
 falseVal = ValConstructor TypeCheck.falseRef []
 
 trueExpr :: Expr Resolved
-trueExpr = App mempty TypeCheck.trueRef []
+trueExpr = App emptyAnno TypeCheck.trueRef []
 
 trueVal :: Value
 trueVal = ValConstructor TypeCheck.trueRef []
@@ -203,7 +203,7 @@ evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
 evalTypeDecl _ (EnumDecl _ann conDecls) =
   traverse_ evalConDecl conDecls
 evalTypeDecl c (RecordDecl _ann tns) =
-  evalConDecl (MkConDecl mempty c tns)
+  evalConDecl (MkConDecl emptyAnno c tns)
 
 evalConDecl :: ConDecl Resolved -> Eval ()
 evalConDecl (MkConDecl _ann n []) =
@@ -221,10 +221,10 @@ evalConDecl (MkConDecl _ann n tns) = do
     let
       sel =
         ValClosure
-          (MkGivenSig mempty [MkOptionallyTypedName mempty arg Nothing])   -- \ x ->
-          (Consider mempty (App mempty argRef [])                          -- case x of
-            [ When mempty (PatApp mempty conRef (PatVar mempty <$> args))  --   Con y_1 ... y_n ->
-                (App mempty body [])                                       --     y_i
+          (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno arg Nothing])      -- \ x ->
+          (Consider emptyAnno (App emptyAnno argRef [])                             -- case x of
+            [ When emptyAnno (PatApp emptyAnno conRef (PatVar emptyAnno <$> args))  --   Con y_1 ... y_n ->
+                (App emptyAnno body [])                                             --     y_i
             ]
           )
           emptyEnvironment
@@ -242,7 +242,7 @@ evalDecide (MkDecide _ann _tysig (MkAppForm _ n []) expr) = do
 evalDecide (MkDecide _ann _tysig (MkAppForm _ n args) expr) =
   withEnvironment $ \ env -> do
     let
-      v = ValClosure (MkGivenSig mempty ((\ r -> MkOptionallyTypedName mempty r Nothing) <$> args)) expr env'
+      v = ValClosure (MkGivenSig emptyAnno ((\ r -> MkOptionallyTypedName emptyAnno r Nothing) <$> args)) expr env'
       env' = Map.insert (getUnique n) v env
     makeKnown n v
 
@@ -270,15 +270,15 @@ forwardExpr _env ss stack _e
   | ss > maximumStackSize =
     exception StackOverflow stack
 forwardExpr env !ss stack (And _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse mempty e1 e2 falseExpr)
+  forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 falseExpr)
 forwardExpr env !ss stack (Or _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse mempty e1 trueExpr e2)
+  forwardExpr env ss stack (IfThenElse emptyAnno e1 trueExpr e2)
 forwardExpr env !ss stack (Implies _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse mempty e1 e2 trueExpr)
+  forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 trueExpr)
 forwardExpr env !ss stack (Equals _ann e1 e2) =
   forwardExpr env (ss + 1) (BinOp1 BinOpEquals e2 env stack) e1
 forwardExpr env !ss stack (Not _ann e) =
-  forwardExpr env ss stack (IfThenElse mempty e falseExpr trueExpr)
+  forwardExpr env ss stack (IfThenElse emptyAnno e falseExpr trueExpr)
 forwardExpr env !ss stack (Plus _ann e1 e2) =
   forwardExpr env (ss + 1) (BinOp1 BinOpPlus e2 env stack) e1
 forwardExpr env !ss stack (Minus _ann e1 e2) =
@@ -296,7 +296,7 @@ forwardExpr env !ss stack (Leq _ann e1 e2) =
 forwardExpr env !ss stack (Geq _ann e1 e2) =
   forwardExpr env (ss + 1) (BinOp1 BinOpGeq e2 env stack) e1
 forwardExpr env !ss stack (Proj _ann e l) =
-  forwardExpr env ss stack (App mempty l [e]) -- we desugar projection to plain function application
+  forwardExpr env ss stack (App emptyAnno l [e]) -- we desugar projection to plain function application
 forwardExpr env !ss stack (Var _ann n) =
   case lookupTerm env n of
     Nothing -> exception (RuntimeScopeError n) stack

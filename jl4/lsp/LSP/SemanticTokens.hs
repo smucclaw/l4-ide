@@ -3,7 +3,6 @@
 module LSP.SemanticTokens where
 
 import L4.Annotation
-import L4.ExactPrint (EPError (..), genericToNodes)
 
 import Control.Applicative (Alternative (..))
 import Control.DeepSeq (NFData)
@@ -25,11 +24,11 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 -- Semantic Tokens Interface
 -- ----------------------------------------------------------------------------
 
-type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except EPError)
+type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except TraverseAnnoError)
 
 type HoleFit_ t = SemanticTokensM t [SemanticToken]
 
-runSemanticTokensM :: ToSemTokens t a => SemanticTokenCtx t -> a -> Either EPError [SemanticToken]
+runSemanticTokensM :: ToSemTokens t a => SemanticTokenCtx t -> a -> Either TraverseAnnoError [SemanticToken]
 runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemTokens a) semTokenCtx
 
 -- I would prefer to avoid the duplication between this class and
@@ -53,19 +52,19 @@ genericToSemTokens =
   genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
 traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno _ []) _ = pure []
-traverseCsnWithHoles (Anno e (AnnoHole : cs)) holeFits = case holeFits of
+traverseCsnWithHoles (Anno _ _ []) _ = pure []
+traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
   (x : xs) -> do
     toks <- x
-    restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+    restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
     pure $ toks <> restOfTokens
-traverseCsnWithHoles (Anno e (AnnoCsn m : cs)) xs = do
+traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
   ctx <- ask
   let
-    thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (csnTokens m)
+    thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (allClusterTokens m)
 
-  restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+  restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
   pure $ thisSyntaxNode <> restOfTokens
 
 fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe SemanticToken

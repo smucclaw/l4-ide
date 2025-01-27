@@ -5,6 +5,7 @@ import qualified L4.Parser as Parser
 import qualified L4.Evaluate as JL4
 import qualified L4.ExactPrint as JL4
 import qualified L4.TypeCheck as JL4
+import qualified L4.Annotation as JL4
 import Paths_jl4
 
 import System.FilePath
