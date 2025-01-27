@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// Temporarily disable eslint unused vars
+// while I think more about how to handle LirContext params
 import type { BoolVar, BinOp } from '$lib/data/program-ir'
 export type { BinOp }
 import type { LirId, LirNode, LirNodeInfo } from './core'
@@ -29,22 +32,18 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
       .exhaustive()
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getName(_context: LirContext) {
     return this.#originalExpr.name
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getValue(_context: LirContext) {
     return this.#value
   }
 
-  // eslint-disable-next-line
   setValue(_context: LirContext, value: BoolValue) {
     this.#value = value
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getChildren(_context: LirContext) {
     return []
   }
