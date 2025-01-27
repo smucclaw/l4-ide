@@ -1,4 +1,10 @@
-// Start by looking at the docs for LirNode
+/* 
+If you're unfamiliar with Lir stuff, 
+start by looking at the docs for LirNode.
+
+Acknowledgments: I adapted the Lir stuff from a similar framework
+that I learned from Jimmy Koppel (https://www.jameskoppel.com/).
+*/
 
 /*********************************************
        Registry
