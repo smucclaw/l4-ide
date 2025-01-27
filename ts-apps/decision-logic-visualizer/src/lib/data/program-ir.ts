@@ -7,7 +7,7 @@ import {
   // NotLirNode,
   BinExprLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.ts'
-import { match, P } from 'ts-pattern'
+import { match } from 'ts-pattern'
 
 /**********************
          IR
