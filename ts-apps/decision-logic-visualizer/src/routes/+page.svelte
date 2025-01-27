@@ -59,7 +59,7 @@
 
   const exprLirNode = ExprLirSource.toLir(nodeInfo, expr)
   // console.log(exprLirNode)
-  registry.setRoot(context, 'EXAMPLE_1', exprLirNode)
+  registry.setRoot(context, 'EXAMPLE_1' as LirRootType, exprLirNode)
 </script>
 
 <h1>Decision Logic Visualizer draft</h1>

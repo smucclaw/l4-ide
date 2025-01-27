@@ -157,7 +157,7 @@ export function exprLirNodeToAlgaUndirectedGraph(
   */
   return match(expr)
     .with(P.instanceOf(BoolVarLirNode), (node) => {
-      const flowNode = new FlowNode(node.getName(), [node.getId()])
+      const flowNode = new FlowNode(node.getName(context), [node.getId()])
       return vertex(flowNode)
     })
     .with(P.instanceOf(BinExprLirNode), (node) => {
