@@ -3,7 +3,6 @@
 module LSP.SemanticTokens where
 
 import L4.Annotation
-import L4.ExactPrint (EPError (..), genericToNodes)
 
 import Control.Applicative (Alternative (..))
 import Control.DeepSeq (NFData)
@@ -48,19 +47,19 @@ class ToSemTokens t a where
 
 
 traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno _ []) _ = pure []
-traverseCsnWithHoles (Anno e (AnnoHole : cs)) holeFits = case holeFits of
+traverseCsnWithHoles (Anno _ _ []) _ = pure []
+traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
   (x : xs) -> do
     toks <- x
-    restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+    restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
     pure $ toks <> restOfTokens
-traverseCsnWithHoles (Anno e (AnnoCsn m : cs)) xs = do
+traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
   ctx <- ask
   let
     thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (csnTokens m)
 
-  restOfTokens <- traverseCsnWithHoles (Anno e cs) xs
+  restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
   pure $ thisSyntaxNode <> restOfTokens
 
 fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe SemanticToken
