@@ -70,11 +70,13 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 import Control.Applicative
+import Control.DeepSeq (NFData)
 import Control.Monad.Logic
 import Data.Bifunctor
 import Data.Containers.ListUtils (nubOrd)
 import Data.Either (partitionEithers)
 import Data.Proxy
+import Data.Typeable (Typeable)
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf)
 
@@ -187,7 +189,7 @@ preDef :: Text -> Name
 preDef t =
   MkName
     (mkAnno
-      [mkCsn
+      [mkCluster
         (CsnCluster
           (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos "" 0 0) (MkSrcPos "" 0 0) 0) (TIdentifier t)] Nothing Visible)
           (ConcreteSyntaxNode [] Nothing Hidden)
@@ -219,7 +221,7 @@ booleanRef :: Resolved
 booleanRef = Ref booleanName booleanUnique booleanName
 
 boolean :: Type' Resolved
-boolean = TyApp mempty booleanRef []
+boolean = TyApp emptyAnno booleanRef []
 
 falseUnique :: Unique
 falseUnique = MkUnique (-30)
@@ -257,7 +259,7 @@ numberRef :: Resolved
 numberRef = Ref numberName numberUnique numberName
 
 number :: Type' Resolved
-number = TyApp mempty numberRef []
+number = TyApp emptyAnno numberRef []
 
 -- STRING
 
@@ -271,7 +273,7 @@ stringRef :: Resolved
 stringRef = Ref stringName stringUnique stringName
 
 string :: Type' Resolved
-string = TyApp mempty stringRef []
+string = TyApp emptyAnno stringRef []
 
 -- LIST
 
@@ -285,7 +287,7 @@ listRef :: Resolved
 listRef = Ref listName listUnique listName
 
 list :: Type' Resolved -> Type' Resolved
-list a = TyApp mempty listRef [a]
+list a = TyApp emptyAnno listRef [a]
 
 emptyUnique :: Unique
 emptyUnique = MkUnique (-32)
@@ -303,7 +305,7 @@ aUnique :: Unique
 aUnique = MkUnique (-40)
 
 aName :: Name
-aName = MkName mempty (NormalName "A")
+aName = MkName emptyAnno (NormalName "A")
 
 aDef :: Resolved
 aDef = Def aUnique aName
@@ -314,13 +316,13 @@ aRef = Ref aName aUnique aName
 initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN", [ (booleanUnique, preDef "BOOLEAN", KnownType 0 (EnumDecl mempty [MkConDecl mempty falseDef [], MkConDecl mempty trueDef []])) ])
+    [ (NormalName "BOOLEAN", [ (booleanUnique, preDef "BOOLEAN", KnownType 0 (EnumDecl emptyAnno [MkConDecl emptyAnno falseDef [], MkConDecl emptyAnno trueDef []])) ])
     , (NormalName "FALSE",   [ (falseUnique,   preDef "FALSE",   KnownTerm boolean Constructor) ])
     , (NormalName "TRUE",    [ (trueUnique,    preDef "TRUE",    KnownTerm boolean Constructor) ])
-    , (NormalName "NUMBER",  [ (numberUnique,  preDef "NUMBER",  KnownType 0 (EnumDecl mempty [])) ])
-    , (NormalName "STRING",  [ (stringUnique,  preDef "STRING",  KnownType 0 (EnumDecl mempty [])) ])
-    , (NormalName "LIST",    [ (listUnique,    preDef "LIST",    KnownType 1 (EnumDecl mempty [MkConDecl mempty emptyDef []])) ])
-    , (NormalName "EMPTY",   [ (emptyUnique,   preDef "EMPTY",   KnownTerm (Forall mempty [aDef] (list (TyApp mempty aRef []))) Constructor) ])
+    , (NormalName "NUMBER",  [ (numberUnique,  preDef "NUMBER",  KnownType 0 (EnumDecl emptyAnno [])) ])
+    , (NormalName "STRING",  [ (stringUnique,  preDef "STRING",  KnownType 0 (EnumDecl emptyAnno [])) ])
+    , (NormalName "LIST",    [ (listUnique,    preDef "LIST",    KnownType 1 (EnumDecl emptyAnno [MkConDecl emptyAnno emptyDef []])) ])
+    , (NormalName "EMPTY",   [ (emptyUnique,   preDef "EMPTY",   KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor) ])
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
     ]
 
@@ -399,7 +401,8 @@ data CheckErrorWithContext =
     { kind    :: !CheckError
     , context :: !CheckErrorContext
     }
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Eq, Generic, Typeable, Show)
+  deriving anyclass (NFData)
 
 data CheckError =
     OutOfScopeError Name (Type' Resolved)
@@ -418,7 +421,8 @@ data CheckError =
   | IllegalAppNamed (Type' Resolved)
   | IncompleteAppNamed [OptionallyNamedType Resolved]
   | CheckInfo (Type' Resolved)
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Eq, Generic, Typeable, Show)
+  deriving anyclass (NFData)
 
 data CheckErrorContext =
     WhileCheckingDeclare Name CheckErrorContext
@@ -427,7 +431,8 @@ data CheckErrorContext =
   | WhileCheckingPattern (Pattern Name) CheckErrorContext
   | WhileCheckingType (Type' Name) CheckErrorContext
   | None
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Eq, Generic, Typeable, Show)
+  deriving anyclass (NFData)
 
 data CheckEntity =
     KnownType Kind (TypeDecl Resolved)
@@ -508,7 +513,7 @@ newUnique = do
 fresh :: RawName -> Check (Type' Resolved)
 fresh prefix = do
   i <- step
-  pure (InfVar mempty prefix i)
+  pure (InfVar emptyAnno prefix i)
 
 addError :: CheckError -> Check ()
 addError e = do
@@ -578,18 +583,18 @@ substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
 
 forall' :: [Resolved] -> Type' Resolved -> Type' Resolved
 forall' [] t = t
-forall' ns t = Forall mempty ns t
+forall' ns t = Forall emptyAnno ns t
 
 fun_ :: [Type' Resolved] -> Type' Resolved -> Type' Resolved
 fun_ [] t = t
-fun_ ts t = fun (MkOptionallyNamedType mempty Nothing <$> ts) t
+fun_ ts t = fun (MkOptionallyNamedType emptyAnno Nothing <$> ts) t
 
 fun :: [OptionallyNamedType Resolved] -> Type' Resolved -> Type' Resolved
 fun [] t = t
-fun ts t = Fun mempty ts t
+fun ts t = Fun emptyAnno ts t
 
 app :: n -> [Type' n] -> Type' n
-app = TyApp mempty
+app = TyApp emptyAnno
 
 -- | Make a type application from a type variable. Also change defining
 -- occurrences into references.
@@ -599,8 +604,8 @@ app = TyApp mempty
 -- which has defining occurrences of the type variables.
 --
 tyvar :: Resolved -> Type' Resolved
-tyvar (Def u n) = TyApp mempty (Ref n u n) []
-tyvar r         = TyApp mempty r           []
+tyvar (Def u n) = TyApp emptyAnno (Ref n u n) []
+tyvar r         = TyApp emptyAnno r           []
 
 checkBinOp ::
      Type' Resolved
@@ -665,12 +670,12 @@ inferAssume :: Assume Name -> Check (Assume Resolved)
 inferAssume (MkAssume ann appForm (Type tann)) = do
   (rd, extend) <- prune $ scope $ do
     (rappForm, ce) <- inferTypeAppForm appForm
-    pure (MkAssume ann rappForm (Type tann), makeKnown (appFormHead rappForm) (ce (EnumDecl mempty [])))
+    pure (MkAssume ann rappForm (Type tann), makeKnown (appFormHead rappForm) (ce (EnumDecl emptyAnno [])))
   extend
   pure rd
 inferAssume (MkAssume ann appForm t) = do
   (rd, extend) <- prune $ scope $ do
-    (rappForm, rtysig) <- checkAppFormTypeSigConsistency appForm (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
+    (rappForm, rtysig) <- checkAppFormTypeSigConsistency appForm (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) (Just (MkGivethSig emptyAnno t)))
     (ce, result) <- inferTermAppForm rappForm rtysig
     pure (MkAssume ann rappForm result, makeKnown (appFormHead rappForm) ce)
   extend
@@ -760,7 +765,7 @@ checkAppFormTypeSigConsistency :: AppForm Name -> TypeSig Name -> Check (AppForm
 checkAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns) (MkTypeSig tann (MkGivenSig gann []) mgiveth) =
   checkAppFormTypeSigConsistency'
     appForm
-    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName mempty n Nothing) <$> ns)) mgiveth)
+    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing) <$> ns)) mgiveth)
 checkAppFormTypeSigConsistency (MkAppForm aann n []) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkAppFormTypeSigConsistency'
     (MkAppForm aann n (getName <$> filter isTerm otns))
@@ -868,7 +873,7 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
   pure (MkConDecl ann dn rtns, makeKnown dn conInfo >> sequence_ extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
-typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType mempty (Just n) t
+typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
 
 optionallyNamedTypeType :: OptionallyNamedType n -> Type' n
 optionallyNamedTypeType (MkOptionallyNamedType _ _ t) = t
@@ -923,7 +928,7 @@ resolveType n = do
   env <- use #environment
   case mapMaybe proc (Map.findWithDefault [] (rawName n) env) of
     [] -> do
-      rn <- outOfScope n (Type mempty)
+      rn <- outOfScope n (Type emptyAnno)
       pure (rn, 0)
     [x] -> pure x
     xs -> anyOf xs <|> do
@@ -972,7 +977,7 @@ inferTypeAppForm appForm@(MkAppForm ann n args) = do
   ensureDistinct (n : args)
   dn <- def n
   let kind = kindOfAppForm appForm
-  makeKnown dn (KnownType kind (EnumDecl mempty [])) -- preliminary, for recursive types
+  makeKnown dn (KnownType kind (EnumDecl emptyAnno [])) -- preliminary, for recursive types
   dargs <- traverse def args
   traverse_ (flip makeKnown KnownTypeVariable) dargs
   pure (MkAppForm ann dn dargs, KnownType kind)
@@ -1026,9 +1031,9 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
     mkOptionallyNamedType :: (Resolved, Maybe (Type' Resolved)) -> Check (OptionallyNamedType Resolved)
     mkOptionallyNamedType (n, Nothing) = do
       v <- fresh (rawName (getName n))
-      pure (MkOptionallyNamedType mempty (Just n) v)
+      pure (MkOptionallyNamedType emptyAnno (Just n) v)
     mkOptionallyNamedType (n, Just t)  = do
-      pure (MkOptionallyNamedType mempty (Just n) t)
+      pure (MkOptionallyNamedType emptyAnno (Just n) t)
 
     proc :: OptionallyNamedType Resolved -> Check ()
     proc (MkOptionallyNamedType _ Nothing  _) = pure () -- should not happen
@@ -1359,7 +1364,7 @@ checkAndExactPrintFile file input =
         ([], _p, _s) ->
           "Typechecking successful\n\n"
           <> case exactprint prog of
-               Left epError -> prettyEPError epError
+               Left epError -> prettyTraverseAnnoError epError
                Right ep -> ep
         (errs, _p, _s) ->
           Text.unlines (map (\ err -> prettySrcRange (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errs)
@@ -1662,11 +1667,11 @@ instance ToTypesTree Lit where
 -- | Try to extract the range from an anno which we assume to be
 -- without holes.
 rangeFromAnno :: Anno -> Maybe SrcRange
-rangeFromAnno (Anno _ csns) = rangeOf (go csns)
+rangeFromAnno (Anno _ _ csns) = rangeOf (go csns)
   where
     go []              = []
-    go (AnnoHole  : cs) = go cs -- should not happen
-    go (AnnoCsn m : cs) = m : go cs
+    go (AnnoHole _  : cs) = go cs -- should not happen
+    go (AnnoCsn _ m : cs) = m : go cs
 
 instance ToTypesTree Int where
   toTypesTree _ =

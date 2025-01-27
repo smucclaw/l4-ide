@@ -3,16 +3,25 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 module L4.Annotation where
 
+import Base
 import L4.Lexer ( SrcRange (..) )
 
 import Control.DeepSeq (NFData)
-import Data.Kind
+import qualified Control.Monad.Extra as Extra
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Maybe as Maybe
+import qualified Data.Text as Text
 import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
+import GHC.Stack
+import Generics.SOP as SOP
 import Generics.SOP.Constraint
+import Generics.SOP.NP
+import Generics.SOP.NS
 import Optics
 
 data NodeVisibility
@@ -24,6 +33,11 @@ data NodeVisibility
   deriving stock (Show, Ord, Eq, Enum, Bounded, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
+-- | A 'ConcreteSyntaxNode_' is a collection of tokens that semantically
+-- belong together to form a single node in the concrete syntax of your language.
+-- It contains meta-information such as 'NodeVisibility' and a 'SrcRange'.
+-- The 'SrcRange' may be 'Nothing', if the 'tokens' are empty ('[]').
+-- This can be sometimes convenient to express.
 data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   { tokens :: [t]
   , range :: Maybe SrcRange
@@ -32,6 +46,9 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
+-- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode' for tokens
+-- in the language paired with any trailing information that is not part of
+-- the language grammar itself.
 data CsnCluster_ t = CsnCluster
   { payload :: ConcreteSyntaxNode_ t
   , trailing :: ConcreteSyntaxNode_ t
@@ -40,38 +57,61 @@ data CsnCluster_ t = CsnCluster
   deriving anyclass (ToExpr, NFData)
 
 data AnnoElement_ t
-  = AnnoHole
-  | AnnoCsn (CsnCluster_ t)
+  = AnnoHole (Maybe SrcRange)
+  | AnnoCsn  (Maybe SrcRange) (CsnCluster_ t)
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
-mkHoleWithType :: a -> AnnoElement_ t
-mkHoleWithType _ = AnnoHole
+rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
+rangeOfAnnoElement = \case
+  AnnoHole srcRange -> srcRange
+  AnnoCsn srcRange _ -> srcRange
 
-mkHole :: AnnoElement_ t
-mkHole = AnnoHole
+mkHoleWithSrcRangeHint :: Maybe SrcRange -> AnnoElement_ t
+mkHoleWithSrcRangeHint = AnnoHole
 
-mkCsn :: CsnCluster_ t -> AnnoElement_ t
-mkCsn = AnnoCsn
+mkHoleWithSrcRange :: HasSrcRange a => a -> AnnoElement_ t
+mkHoleWithSrcRange a = mkHoleWithSrcRangeHint (rangeOf a)
+
+mkCluster :: CsnCluster_ t -> AnnoElement_ t
+mkCluster csn = AnnoCsn (rangeOf csn) csn
 
 data Anno_ t e = Anno
   { extra   :: Maybe e
+  , range   :: Maybe SrcRange
   , payload :: [AnnoElement_ t]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
-csnTokens :: CsnCluster_ t -> [t]
-csnTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
+allClusterTokens :: CsnCluster_ t -> [t]
+allClusterTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
 mkAnno :: [AnnoElement_ t] -> Anno_ t e
-mkAnno es = Anno Nothing es
+mkAnno es = fixAnnoSrcRange $ Anno Nothing Nothing es
 
 emptyAnno :: Anno_ t e
 emptyAnno = mkAnno []
 
 isEmptyAnno :: Anno_ t e -> Bool
 isEmptyAnno m = List.null m.payload
+
+-- | Calculate the actual 'Maybe SrcRange' of this source annotation.
+--
+-- We assume that the child 'AnnoElement_'s contain hints for their respective
+-- 'SrcRange's. Usually, that should be the case, if the 'AnnoElement_'s have
+-- been constructed with the smart constructors 'mkHoleWithSrcRangeHint',
+-- 'mkHoleWithSrcRange' and 'mkCluster'.
+--
+-- The result may be 'Nothing', if the 'Anno_' is empty (i.e. 'emptyAnno'),
+-- or none of the child elements 'AnnoElement_' contain any cached 'SrcRange's.
+--
+computeAnnoSrcRange :: Anno_ t e -> Maybe SrcRange
+computeAnnoSrcRange ann = rangeOf ann.payload
+
+-- | Calls 'computeAnnoSrcRange' and sets the @Maybe 'SrcRange'@ for this 'Anno_'
+fixAnnoSrcRange :: Anno_ t e -> Anno_ t e
+fixAnnoSrcRange ann = set #range (computeAnnoSrcRange ann) ann
 
 type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 
@@ -106,11 +146,103 @@ class (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirs
 instance (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoFirst a c (xs :: [Type])
 
 -- ----------------------------------------------------------------------------
+-- Source Range manipulation
+-- ----------------------------------------------------------------------------
+
+data TraverseAnnoError
+  = InsufficientHoleFit CallStack
+  deriving (Show)
+
+prettyTraverseAnnoError :: TraverseAnnoError -> Text
+prettyTraverseAnnoError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
+
+class ToConcreteNodes t a | a -> t where
+  toNodes :: a -> Except TraverseAnnoError [CsnCluster_ t]
+
+  default toNodes ::
+       (SOP.Generic a, All (AnnoFirst a (ToConcreteNodes t)) (Code a), AnnoToken a ~ t)
+    => a -> Except TraverseAnnoError [CsnCluster_ t]
+  toNodes =
+    genericToNodes (Proxy @(ToConcreteNodes t)) toNodes flattenConcreteNodes
+
+genericToNodes :: forall c a r. (SOP.Generic a, All (AnnoFirst a c) (Code a)) => Proxy c -> (forall x. c x => x -> r) -> (Anno' a -> [r] -> r) -> a -> r
+genericToNodes _ rec f x =
+    collapse_NS
+  $ cmap_NS
+      (Proxy @(AnnoFirst a c))
+      (\ (I anno :* xs) ->
+        K (f anno (collapse_NP (cmap_NP (Proxy @c) (mapIK rec) xs))))
+  $ unSOP
+  $ from x
+
+instance ToConcreteNodes t a => ToConcreteNodes t [a] where
+  toNodes =
+    Extra.concatMapM toNodes
+
+instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
+  toNodes =
+    maybe (pure []) toNodes
+
+flattenConcreteNodes :: (HasCallStack, MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
+flattenConcreteNodes (Anno _ _ csns) = go csns
+  where
+    go []                 _        = pure []
+    go (AnnoHole _ : cs)  holeFits =
+      case holeFits of
+        [] -> throwError $ InsufficientHoleFit callStack
+        (x : xs) -> (<>) <$> x <*> go cs xs
+    go (AnnoCsn _ m : cs) holeFits =
+      (m :) <$> go cs holeFits
+
+-- ----------------------------------------------------------------------------
+-- Source Range manipulation
+-- ----------------------------------------------------------------------------
+
+class HasSrcRange a where
+  rangeOf :: a -> Maybe SrcRange
+
+  default rangeOf :: HasAnno a => a -> Maybe SrcRange
+  rangeOf a = rangeOf $ getAnno a
+
+instance HasSrcRange a => HasSrcRange [a] where
+  rangeOf as = do
+    let
+      rs = Maybe.mapMaybe rangeOf as
+
+    rs' <- NonEmpty.nonEmpty rs
+    let
+      h = NonEmpty.head rs'
+      l = NonEmpty.last rs'
+
+    pure $ MkSrcRange
+      { start = h.start
+      , end = l.end
+      , length = sum $ fmap (.length) rs'
+      }
+
+instance HasSrcRange (CsnCluster_ a) where
+  rangeOf cluster = rangeOf [cluster.payload, cluster.trailing]
+
+instance HasSrcRange (ConcreteSyntaxNode_ a) where
+  rangeOf csn = csn.range
+
+instance HasSrcRange (AnnoElement_ a) where
+  rangeOf = rangeOfAnnoElement
+
+instance HasSrcRange a => HasSrcRange (Maybe a) where
+  rangeOf a = a >>= rangeOf
+
+instance HasSrcRange (Anno_ e t) where
+  rangeOf a = rangeOf a.payload
+
+rangeOfNode :: ToConcreteNodes t a => a -> Maybe SrcRange
+rangeOfNode a = case runExcept $ toNodes a of
+  Left _ -> Nothing
+  Right e -> rangeOf e
+
+-- ----------------------------------------------------------------------------
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
 instance Semigroup (Anno_ t e) where
-  (Anno _e1 m1) <> (Anno _e2 m2) = Anno Nothing (m1 <> m2)
-
-instance Monoid (Anno_ t e) where
-  mempty = emptyAnno
+  (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno Nothing Nothing (m1 <> m2)

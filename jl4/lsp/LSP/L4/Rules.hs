@@ -13,7 +13,7 @@ import Data.Typeable
 import Development.IDE.Graph
 import GHC.Generics (Generic)
 import L4.Evaluate
-import L4.ExactPrint (HasSrcRange (..))
+import L4.Annotation (HasSrcRange (..))
 import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
