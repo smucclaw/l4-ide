@@ -3,6 +3,8 @@ import type { Node, Edge } from '@xyflow/svelte'
 import { Position } from '@xyflow/svelte'
 
 export interface DagreConfig {
+  // TODO: Clean this up in the future!
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   dagreGraph: dagre.graphlib.Graph<{}>
   graph: {
     direction: 'TB' | 'LR'
