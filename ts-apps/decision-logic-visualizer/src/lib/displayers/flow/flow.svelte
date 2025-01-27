@@ -1,6 +1,6 @@
 <script lang="ts">
   import dagre from '@dagrejs/dagre'
-  import { getLayoutedElements, type DagreConfig } from './dagre'
+  import { getLayoutedElements, type DagreConfig } from './layout.ts'
   import {
     SvelteFlow,
     Background,
@@ -19,7 +19,6 @@
   import '@xyflow/svelte/dist/style.css'
 
   const { context, node: exprLirNode }: ExprFlowDisplayerProps = $props()
-  // import { initialNodes, initialEdges } from './nodes-and-edges'
 
   const flowGraph = algaUndirectedGraphToFlowGraph(
     exprLirNodeToAlgaUndirectedGraph(context, exprLirNode)
