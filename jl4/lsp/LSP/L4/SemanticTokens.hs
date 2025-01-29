@@ -67,6 +67,11 @@ defVar t = case Lexer.posTokenCategory t.payload of
   CIdentifier -> Just [SemanticTokenModifiers_Declaration, SemanticTokenModifiers_Definition]
   _ -> Nothing
 
+identIsType :: PosToken -> Maybe SemanticTokenTypes
+identIsType t = case Lexer.posTokenCategory t.payload of
+  CIdentifier -> Just SemanticTokenTypes_Type
+  _ -> Nothing
+
 srcPosToPosition :: SrcPos -> Position
 srcPosToPosition s =
   Position
@@ -98,10 +103,13 @@ instance ToSemTokens PosToken (Section Name) where
 
 deriving anyclass instance ToSemTokens PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Assume Name)
-deriving anyclass instance ToSemTokens PosToken (Declare Name)
+instance ToSemTokens PosToken (Declare Name) where
+  toSemTokens (MkDeclare ann appform decl) =
+    traverseCsnWithHoles ann [withTokenType identIsType $ toSemTokens appform, toSemTokens decl]
 deriving anyclass instance ToSemTokens PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens PosToken (ConDecl Name)
-deriving anyclass instance ToSemTokens PosToken (Type' Name)
+instance ToSemTokens PosToken (Type' Name) where
+  toSemTokens ty = withTokenType identIsType $ genericToSemTokens ty
 deriving anyclass instance ToSemTokens PosToken (TypedName Name)
 deriving anyclass instance ToSemTokens PosToken (OptionallyTypedName Name)
 deriving anyclass instance ToSemTokens PosToken (OptionallyNamedType Name)

@@ -42,9 +42,14 @@ class ToSemTokens t a where
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
     HoleFit_ t
-  toSemTokens =
-    genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
+  toSemTokens = genericToSemTokens
 
+genericToSemTokens :: forall a t .
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+    a ->
+    HoleFit_ t
+genericToSemTokens =
+  genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
 
 traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
 traverseCsnWithHoles (Anno _ _ []) _ = pure []
