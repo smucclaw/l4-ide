@@ -15,6 +15,11 @@ module L4.Parser (
 
 import Base
 
+import L4.Annotation
+import L4.Lexer as L
+import qualified L4.ParserCombinators as P
+import L4.Syntax
+
 import Data.Functor.Compose
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
@@ -24,15 +29,7 @@ import Optics
 import Text.Megaparsec hiding (parseTest)
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import Text.Pretty.Simple
-
-import L4.Annotation
-import L4.Lexer as L
-import qualified L4.ParserCombinators as P
-import L4.Syntax
-import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Foldable as Foldable
 import GHC.Records
-import qualified Data.Maybe as Maybe
 
 type Parser = Parsec Void TokenStream
 
@@ -80,16 +77,6 @@ plainToken tt =
   token
     (\ t -> if t.payload == tt then Just t else Nothing)
     (Set.singleton (Tokens (trivialToken tt :| [])))
-
-trivialToken :: TokenType -> PosToken
-trivialToken tt =
-  MkPosToken trivialRange tt
-  where
-    trivialRange :: SrcRange
-    trivialRange = MkSrcRange trivialPos trivialPos 0
-
-    trivialPos :: SrcPos
-    trivialPos = MkSrcPos "" 0 0
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -320,8 +307,15 @@ typeSig :: Parser (TypeSig Name)
 typeSig =
   attachAnno $
     MkTypeSig emptyAnno
-      <$> annoHole (option (MkGivenSig emptyAnno []) givens)
+      <$> annoHole (option emptyGiven givens)
       <*> annoHole (optional giveth)
+
+emptyGiven :: GivenSig Name
+emptyGiven =
+  runIdentity $
+    attachAnno $
+      MkGivenSig emptyAnno
+        <$> annoHole (pure [])
 
 givens :: Parser (GivenSig Name)
 givens =
@@ -1033,124 +1027,3 @@ type Epa = Epa_ PosToken
 
 type Lexeme = Lexeme_ PosToken
 
-mkConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
-mkConcreteSyntaxNode posTokens =
-  ConcreteSyntaxNode
-    { tokens = posTokens
-    , range = do
-        ne <- NonEmpty.nonEmpty posTokens
-        let l = NonEmpty.last ne
-            h = NonEmpty.last ne
-
-        pure MkSrcRange
-          { start = l.range.start
-          , end = h.range.end
-          , length = sum $ fmap (.range.length) ne
-          }
-    , visibility =
-        if Foldable.null posTokens
-          then Hidden
-          else Visible
-    }
-
-mkHiddenCsnCluster :: (HasField "range" a SrcRange) => CsnCluster_ a
-mkHiddenCsnCluster =
-  CsnCluster
-    { payload = mkConcreteSyntaxNode []
-    , trailing = mkConcreteSyntaxNode []
-    }
-
--- ----------------------------------------------------------------------------
--- Annotation Combinators
--- ----------------------------------------------------------------------------
-
-data WithAnno_ t e a = WithAnno (Anno_ t e) a
-  deriving stock Show
-  deriving (Functor)
-
-withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
-withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
-
-withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
-withEpaAnno (Epa this trailing e) = WithAnno (mkAnno [mkCluster cluster]) e
- where
-  cluster =
-    CsnCluster
-      { payload = mkConcreteSyntaxNode this
-      , trailing = mkConcreteSyntaxNode trailing
-      }
-
-unWithAnno :: WithAnno_ t e a -> a
-unWithAnno (WithAnno _ a) = a
-
-toAnno :: WithAnno_ t e a -> Anno_ t e
-toAnno (WithAnno ann _) = ann
-
-annoHole :: (HasSrcRange a, HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
-annoHole p = Compose $ fmap withHoleAnno p
-
-annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
-annoEpa p = Compose $ fmap withEpaAnno p
-
-annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
-annoLexeme = annoEpa . fmap lexToEpa
-
-annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
-annoLexemes = annoEpa . fmap lexesToEpa
-
-instance Applicative (WithAnno_ t e) where
-  pure a = WithAnno emptyAnno a
-  WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
-
-attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-attachAnno p = fmap (\(WithAnno ann e) -> setAnno (fixAnnoSrcRange ann) e) $ getCompose p
-
-attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
-attachEpa =
-  attachAnno . annoEpa
-
--- | Replace the first occurrence of 'AnnoHole' with the exactprint annotations.
--- Removes an indirection in the Annotation tree.
-inlineAnnoHole :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole ann.payload (getAnno e).payload)) e) <$> getCompose p
-  where
-    inlineFirstAnnoHole []                 _   = []
-    inlineFirstAnnoHole (AnnoHole _ : as1) as2 = as2 ++ as1
-    inlineFirstAnnoHole (a : as1)          as2 = a : inlineFirstAnnoHole as1 as2
-
--- | Create an annotation hole with a source range hint.
--- This source range hint is used to compute the final source range
--- of the produced 'Anno_'.
-mkHoleAnnoFor :: HasSrcRange a => a -> Anno_ t e
-mkHoleAnnoFor a =
-  mkAnno [mkHoleWithSrcRange a]
-
-mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
-mkSimpleEpaAnno =
-  toAnno . withEpaAnno
-
-data Lexeme_ t a = Lexeme [t] a
-  deriving stock Show
-  deriving (Functor)
-
-unLexeme :: Lexeme_ t a -> a
-unLexeme (Lexeme _ a) = a
-
-data Epa_ t a = Epa [t] [t] a
-  deriving stock Show
-  deriving (Functor)
-
-unEpa :: Epa_ t a -> a
-unEpa (Epa _ _ a) = a
-
-lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
-lexesToEpa (Lexeme trailing this) = Epa this trailing this
-
-lexesToEpa' :: Lexeme_ t ([t], a) -> Epa_ t a
-lexesToEpa' (Lexeme trailing (this, a)) = Epa this trailing a
-
-lexToEpa :: Lexeme_ t t -> Epa_ t t
-lexToEpa (Lexeme trailing this) = Epa [this] trailing this
-
-lexToEpa' :: Lexeme_ t (t, a) -> Epa_ t a
-lexToEpa' (Lexeme trailing (this, a)) = Epa [this] trailing a

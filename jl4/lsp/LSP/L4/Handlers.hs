@@ -1,11 +1,25 @@
 {-# LANGUAGE DataKinds #-}
 
-module LSP.L4.Handlers where
+module LSP.L4.Handlers (
+  Log(..),
+  ServerM(..),
+  ServerState(..),
+  ReactorMessage(..),
+  handlers,
+  requestHandler,
+  notificationHandler,
+) where
+
+import LSP.L4.Base
+import LSP.L4.Config
+import qualified LSP.L4.Ladder as Ladder
+import LSP.L4.Rules hiding (Log (..))
+import LSP.Logger
 
 import Control.Concurrent.STM
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
-import Control.Lens ((^.))
+import Control.Lens ((^.), Identity (runIdentity))
 import Control.Monad.Extra (guard, whenJust)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
@@ -19,6 +33,7 @@ import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.List.Extra as Extra
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -28,11 +43,6 @@ import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
-import LSP.L4.Base
-import LSP.L4.Config
-import qualified LSP.L4.Ladder as Ladder
-import LSP.L4.Rules hiding (Log (..))
-import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -229,7 +239,7 @@ handlers recorder =
           rng = params ^. J.range
         diags <- liftIO $ atomically $ do
           activeFileDiagnosticsInRange (shakeExtras ide) uri rng
-        cas <- Extra.mapMaybeM (outOfScopeAssumeQuickFix ide) diags
+        cas <- Extra.concatMapM (outOfScopeQuickFix ide) diags
         pure $ Right $ InL $ fmap InR cas
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \ide req -> do
         let
@@ -317,65 +327,151 @@ findHover ide fileUri pos = do
 -- LSP Code Actions
 -- ----------------------------------------------------------------------------
 
-outOfScopeAssumeQuickFix :: IdeState -> FileDiagnostic -> ServerM Config (Maybe CodeAction)
-outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext of
-  Nothing -> pure Nothing
+outOfScopeQuickFix :: IdeState -> FileDiagnostic -> ServerM Config  [CodeAction]
+outOfScopeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext of
+  Nothing -> pure []
   Just ctx -> case ctx.kind of
     OutOfScopeError name ty -> do
       mTypeCheck <- liftIO $ runAction "codeAction.outOfScope" ide $ do
         use TypeCheck nfp
-      case mTypeCheck of
-        Nothing -> pure Nothing
-        Just typeCheck -> do
-          let
-            -- assumeExpr =
-            --   Assume emptyAnno
-            --     (MkAssume emptyAnno (MkAppForm emptyAnno name []) (fmap getActual ty))
+      mParseMod <- liftIO $ runAction "codeAction.outOfScope" ide $ do
+        use GetParsedAst nfp
+      case liftA2 (,) mTypeCheck mParseMod of
+        Nothing -> pure []
+        Just (typeCheck, parsedMod) -> do
+          pure $ concat
+            [ assumeVariableCodeAction fd typeCheck name ty
+            , addAsParameterCodeAction fd parsedMod name ty
+            ]
 
-            topDecls =
-              Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
+    _ -> pure []
+  where
+    nfp = fd ^. fdFilePathL
 
-            enclosingTopDecl = do
-              target <- rangeOf name
-              List.find
-                (\decl -> Maybe.isJust $ do
-                  r <- rangeOf decl
-                  guard (target.start `inRange` r)
-                )
-                topDecls
+pointRange :: Position -> Range
+pointRange pos = Range pos pos
 
-          pure $ do
-            decl <- enclosingTopDecl
-            srcRange <- rangeOf decl
+assumeVariableCodeAction :: FileDiagnostic -> TypeCheckResult -> Name -> Type' Resolved -> [CodeAction]
+assumeVariableCodeAction fd typeCheck name ty = do
+  let
+    -- assumeExpr =
+    --   Assume emptyAnno
+    --     (MkAssume emptyAnno (MkAppForm emptyAnno name []) (fmap getActual ty))
 
-            let
-              edit =
-                TextEdit
-                  { _range = pointRange $ srcPosToLspPosition srcRange.start
-                  , _newText =
-                      -- simpleprint assumeExpr
-                      "ASSUME " <> simpleprint name <> " IS A " <> simpleprint ty <> "\n\n"
-                  }
+    topDecls =
+      Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
 
-            Just $ CodeAction
-              { _title = "Assume `" <> simpleprint name <> "` is defined"
-              , _kind = Just CodeActionKind_QuickFix
-              , _diagnostics = Just [fd ^. fdLspDiagnosticL]
-              , _isPreferred = Nothing
-              , _disabled = Nothing
-              , _edit = Just WorkspaceEdit
-                { _changeAnnotations = Nothing
-                , _documentChanges = Nothing
-                , _changes = Just $ Map.singleton uri [edit]
-                }
-              , _command = Nothing
-              , _data_ = Nothing
-              }
-    _ -> pure Nothing
+    enclosingTopDecl = do
+      target <- rangeOf name
+      List.find
+        (\decl -> Maybe.isJust $ do
+          r <- rangeOf decl
+          guard (target.start `inRange` r)
+        )
+        topDecls
+
+  Maybe.maybeToList $ do
+    decl <- enclosingTopDecl
+    srcRange <- rangeOf decl
+
+    let
+      edit =
+        TextEdit
+          { _range = pointRange $ srcPosToLspPosition srcRange.start
+          , _newText =
+              -- simpleprint assumeExpr
+              "ASSUME " <> simpleprint name <> " IS A " <> simpleprint ty <> "\n\n"
+          }
+
+    Just CodeAction
+      { _title = "Assume `" <> simpleprint name <> "` is defined"
+      , _kind = Just CodeActionKind_QuickFix
+      , _diagnostics = Just [fd ^. fdLspDiagnosticL]
+      , _isPreferred = Nothing
+      , _disabled = Nothing
+      , _edit = Just WorkspaceEdit
+        { _changeAnnotations = Nothing
+        , _documentChanges = Nothing
+        , _changes = Just $ Map.singleton uri [edit]
+        }
+      , _command = Nothing
+      , _data_ = Nothing
+      }
   where
     nfp = fd ^. fdFilePathL
 
     uri :: Uri
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
 
-    pointRange pos = Range pos pos
+addAsParameterCodeAction :: FileDiagnostic -> Program Name -> Name -> Type' Resolved -> [CodeAction]
+addAsParameterCodeAction fd program name ty = do
+  let
+    topDecls =
+      Optics.toListOf (Optics.gplate @(TopDecl Name)) program
+
+    enclosingDecide :: Maybe (Decide Name)
+    enclosingDecide = do
+      target <- rangeOf name
+      Extra.firstJust
+        (\decl -> do
+          r <- rangeOf decl
+          guard (target.start `inRange` r)
+          snd <$> Optics.preview #_Decide decl
+        )
+        topDecls
+
+  Maybe.maybeToList $ do
+    decide <- enclosingDecide
+    _newDecide <- addNameToDeclareAsParameter decide name ty
+
+    Just CodeAction
+      { _title = "Add `" <> simpleprint name <> "` as a parameter"
+      , _kind = Just CodeActionKind_QuickFix
+      , _diagnostics = Just [fd ^. fdLspDiagnosticL]
+      , _isPreferred = Nothing
+      , _disabled = Nothing
+      , _edit = Just WorkspaceEdit
+        { _changeAnnotations = Nothing
+        , _documentChanges = Nothing
+        , _changes = Just $ Map.singleton uri []
+        }
+      , _command = Nothing
+      , _data_ = Nothing
+      }
+  where
+    nfp = fd ^. fdFilePathL
+
+    uri :: Uri
+    uri = fromNormalizedUri $ normalizedFilePathToUri nfp
+
+addNameToDeclareAsParameter :: Decide Name -> Name -> Type' Resolved -> Maybe (Decide Name)
+addNameToDeclareAsParameter (MkDecide dAnn typeSig appForm expr) name ty = do
+  let
+    cleanName = name
+
+    MkAppForm aAnn fName fArgs = appForm
+
+    MkTypeSig tAnn givenSig givethSig = typeSig
+
+    MkGivenSig gAnn opts = givenSig
+
+    newParam = mkOptionallyTypedName cleanName ty
+
+    newGivenSig = MkGivenSig gAnn (opts <> [newParam])
+
+    newTypeSig = MkTypeSig tAnn newGivenSig givethSig
+
+    newAppForm = MkAppForm aAnn fName (fArgs <> [cleanName])
+
+  Just (MkDecide dAnn newTypeSig newAppForm expr)
+
+mkOptionallyTypedName :: Name -> Type' Resolved -> OptionallyTypedName Name
+mkOptionallyTypedName name ty = runIdentity $ attachAnno $
+  MkOptionallyTypedName emptyAnno
+    <$> annoHole (pure name)
+    -- TODO: this is not great
+    <*  annoLexemes (pure $ fromTokenType [TKIs, TSpace " ", TKA, TSpace " "])
+    <*> annoHole (pure $ Just $ fmap getActual ty)
+
+fromTokenType :: [TokenType] -> Lexeme_ PosToken [PosToken]
+fromTokenType ps = mkLexeme $ fmap trivialToken ps

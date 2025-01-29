@@ -338,6 +338,16 @@ keywords =
     , ("ALL"        , TKAll        )
     ]
 
+trivialToken :: TokenType -> PosToken
+trivialToken tt =
+  MkPosToken trivialRange tt
+  where
+    trivialRange :: SrcRange
+    trivialRange = MkSrcRange trivialPos trivialPos 0
+
+    trivialPos :: SrcPos
+    trivialPos = MkSrcPos "" 0 0
+
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 

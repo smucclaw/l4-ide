@@ -11,6 +11,7 @@ import L4.Lexer ( SrcRange (..) )
 
 import Control.DeepSeq (NFData)
 import qualified Control.Monad.Extra as Extra
+import qualified Data.Functor.Compose as Compose
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Maybe as Maybe
@@ -23,6 +24,7 @@ import Generics.SOP.Constraint
 import Generics.SOP.NP
 import Generics.SOP.NS
 import Optics
+import GHC.Records (HasField)
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -160,7 +162,7 @@ class ToConcreteNodes t a | a -> t where
   toNodes :: a -> Except TraverseAnnoError [CsnCluster_ t]
 
   default toNodes ::
-       (SOP.Generic a, All (AnnoFirst a (ToConcreteNodes t)) (Code a), AnnoToken a ~ t)
+       (SOP.Generic a, All (AnnoFirst a (ToConcreteNodes t)) (Code a), AnnoToken a ~ t, AnnoExtra a ~ e)
     => a -> Except TraverseAnnoError [CsnCluster_ t]
   toNodes =
     genericToNodes (Proxy @(ToConcreteNodes t)) toNodes flattenConcreteNodes
@@ -184,7 +186,7 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
     maybe (pure []) toNodes
 
 flattenConcreteNodes :: (HasCallStack, MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
-flattenConcreteNodes (Anno _ _ csns) = go csns
+flattenConcreteNodes (Anno _ _ csns) =go csns
   where
     go []                 _        = pure []
     go (AnnoHole _ : cs)  holeFits =
@@ -246,3 +248,134 @@ rangeOfNode a = case runExcept $ toNodes a of
 
 instance Semigroup (Anno_ t e) where
   (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno Nothing Nothing (m1 <> m2)
+
+-- ----------------------------------------------------------------------------
+-- Annotation Combinators
+-- ----------------------------------------------------------------------------
+
+data WithAnno_ t e a = WithAnno (Anno_ t e) a
+  deriving stock Show
+  deriving (Functor)
+
+withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
+withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
+
+withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
+withEpaAnno (Epa this trailing e) = WithAnno (mkAnno [mkCluster cluster]) e
+ where
+  cluster =
+    CsnCluster
+      { payload = mkConcreteSyntaxNode this
+      , trailing = mkConcreteSyntaxNode trailing
+      }
+
+unWithAnno :: WithAnno_ t e a -> a
+unWithAnno (WithAnno _ a) = a
+
+toAnno :: WithAnno_ t e a -> Anno_ t e
+toAnno (WithAnno ann _) = ann
+
+annoHole :: (Functor f, HasSrcRange a) => f a -> Compose.Compose f (WithAnno_ t e) a
+annoHole p = Compose.Compose $ fmap withHoleAnno p
+
+annoEpa :: (Functor f, HasField "range" t SrcRange) => f (Epa_ t a) -> Compose.Compose f (WithAnno_ t e) a
+annoEpa p = Compose.Compose $ fmap withEpaAnno p
+
+annoLexeme :: (Functor f, HasField "range" t SrcRange) => f (Lexeme_ t t) -> Compose.Compose f (WithAnno_ t e) t
+annoLexeme = annoEpa . fmap lexToEpa
+
+annoLexemes :: (Functor f, HasField "range" t SrcRange) => f (Lexeme_ t [t]) -> Compose.Compose f (WithAnno_ t e) [t]
+annoLexemes = annoEpa . fmap lexesToEpa
+
+instance Applicative (WithAnno_ t e) where
+  pure a = WithAnno emptyAnno a
+  WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
+
+attachAnno :: (Functor f, HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose.Compose f (WithAnno_ t e) a -> f a
+attachAnno p = fmap (\(WithAnno ann e) -> setAnno (fixAnnoSrcRange ann) e) $ Compose.getCompose p
+
+attachEpa :: (Functor f, HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) =>
+  f (Epa_ t e) ->
+  f e
+attachEpa =
+  attachAnno . annoEpa
+
+-- | Replace the first occurrence of 'AnnoHole' with the exactprint annotations.
+-- Removes an indirection in the Annotation tree.
+inlineAnnoHole :: (Functor f, HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose.Compose f (WithAnno_ t e) a -> f a
+inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole ann.payload (getAnno e).payload)) e) <$> Compose.getCompose p
+  where
+    inlineFirstAnnoHole []                 _   = []
+    inlineFirstAnnoHole (AnnoHole _ : as1) as2 = as2 ++ as1
+    inlineFirstAnnoHole (a : as1)          as2 = a : inlineFirstAnnoHole as1 as2
+
+-- | Create an annotation hole with a source range hint.
+-- This source range hint is used to compute the final source range
+-- of the produced 'Anno_'.
+mkHoleAnnoFor :: HasSrcRange a => a -> Anno_ t e
+mkHoleAnnoFor a =
+  mkAnno [mkHoleWithSrcRange a]
+
+mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
+mkSimpleEpaAnno =
+  toAnno . withEpaAnno
+
+data Lexeme_ t a = Lexeme [t] a
+  deriving stock Show
+  deriving (Functor)
+
+unLexeme :: Lexeme_ t a -> a
+unLexeme (Lexeme _ a) = a
+
+mkLexeme :: [t] -> Lexeme_ t [t]
+mkLexeme ts = Lexeme ts ts
+
+data Epa_ t a = Epa [t] [t] a
+  deriving stock Show
+  deriving (Functor)
+
+unEpa :: Epa_ t a -> a
+unEpa (Epa _ _ a) = a
+
+lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
+lexesToEpa (Lexeme trailing this) = Epa this trailing this
+
+lexesToEpa' :: Lexeme_ t ([t], a) -> Epa_ t a
+lexesToEpa' (Lexeme trailing (this, a)) = Epa this trailing a
+
+lexToEpa :: Lexeme_ t t -> Epa_ t t
+lexToEpa (Lexeme trailing this) = Epa [this] trailing this
+
+lexToEpa' :: Lexeme_ t (t, a) -> Epa_ t a
+lexToEpa' (Lexeme trailing (this, a)) = Epa [this] trailing a
+
+-- ----------------------------------------------------------------------------
+-- Concrete Syntax Node helpers
+-- ----------------------------------------------------------------------------
+
+mkConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
+mkConcreteSyntaxNode posTokens =
+  ConcreteSyntaxNode
+    { tokens = posTokens
+    , range = do
+        ne <- NonEmpty.nonEmpty posTokens
+        let l = NonEmpty.last ne
+            h = NonEmpty.last ne
+
+        pure MkSrcRange
+          { start = l.range.start
+          , end = h.range.end
+          , length = sum $ fmap (.range.length) ne
+          }
+    , visibility =
+        if null posTokens
+          then Hidden
+          else Visible
+    }
+
+mkHiddenCsnCluster :: (HasField "range" a SrcRange) => CsnCluster_ a
+mkHiddenCsnCluster =
+  CsnCluster
+    { payload = mkConcreteSyntaxNode []
+    , trailing = mkConcreteSyntaxNode []
+    }

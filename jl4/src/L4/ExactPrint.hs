@@ -15,8 +15,7 @@ import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
 import qualified Data.Text as Text
-import Text.Pretty.Simple
-import Data.Text.Lazy (toStrict)
+import GHC.Stack (HasCallStack)
 
 -- ----------------------------------------------------------------------------
 -- ExactPrinting Interface
@@ -50,6 +49,12 @@ instance ToTokens t a => ToTokens t (Maybe a) where
 exactprint :: ToConcreteNodes PosToken p => p -> Either TraverseAnnoError Text
 exactprint =
   runExcept . fmap (Text.concat . fmap displayPosToken) . concreteNodesToTokens
+
+exactprint' :: (HasCallStack, ToConcreteNodes PosToken p) => p -> Text
+exactprint' p =
+  case exactprint p of
+    Left err -> error $ Text.unpack $ prettyTraverseAnnoError err
+    Right t -> t
 
 -- | Parse a source file and exact-print the result.
 exactprintFile :: String -> Text -> Text

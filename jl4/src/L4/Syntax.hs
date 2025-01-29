@@ -62,12 +62,12 @@ data Type' n =
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyTypedName n =
   MkOptionallyTypedName Anno n (Maybe (Type' n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyNamedType n =
@@ -77,54 +77,54 @@ data OptionallyNamedType n =
 
 data TypeSig n =
   MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivenSig n =
   MkGivenSig Anno [OptionallyTypedName n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivethSig n =
   MkGivethSig Anno (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Decide n =
   MkDecide Anno (TypeSig n) (AppForm n) (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AppForm n =
   MkAppForm Anno n [n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
   MkDeclare Anno (AppForm n) (TypeDecl n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
   MkAssume Anno (AppForm n) (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
     Eval Anno (Expr n)
   | Check Anno (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeDecl n =
     RecordDecl Anno [TypedName n]
   | EnumDecl Anno [ConDecl n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data ConDecl n =
   MkConDecl Anno n [TypedName n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Expr n =
@@ -151,12 +151,12 @@ data Expr n =
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data NamedExpr n =
   MkNamedExpr Anno n (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Lit =
@@ -168,24 +168,24 @@ data Lit =
 data Branch n =
     When Anno (Pattern n) (Expr n)
   | Otherwise Anno (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Pattern n =
     PatVar Anno n -- not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Program n =
   MkProgram Anno [Section n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Section n =
   MkSection Anno SectionLevel (Maybe n) [TopDecl n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 type SectionLevel = Int
@@ -195,7 +195,7 @@ data TopDecl n =
   | Decide    Anno (Decide n)
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- ----------------------------------------------------------------------------
@@ -266,52 +266,32 @@ deriving via L4Syntax (TopDecl n)
   instance HasAnno (TopDecl n)
 
 
-deriving anyclass instance ToConcreteNodes PosToken (Program Name)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Program n)
 
 -- Generic instance does not apply because we exclude the level.
-instance ToConcreteNodes PosToken (Section Name) where
+instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Section n) where
   toNodes (MkSection ann _lvl name decls) =
     flattenConcreteNodes ann [toNodes name, toNodes decls]
 
-deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
-deriving anyclass instance ToConcreteNodes PosToken (Assume Name)
-deriving anyclass instance ToConcreteNodes PosToken (Declare Name)
-deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Name)
-deriving anyclass instance ToConcreteNodes PosToken (ConDecl Name)
-deriving anyclass instance ToConcreteNodes PosToken (Type' Name)
-deriving anyclass instance ToConcreteNodes PosToken (TypedName Name)
-deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Name)
-deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Name)
-deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
-deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
-deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
-deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
-deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
-deriving anyclass instance ToConcreteNodes PosToken (Pattern Name)
-deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
-deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
-deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
-deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
-
-deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Assume Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Declare Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (ConDecl Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Type' Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (TypedName Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Pattern Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (TopDecl n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Assume n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Declare n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (TypeDecl n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (ConDecl n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Type' n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (TypedName n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (OptionallyTypedName n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (OptionallyNamedType n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Decide n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (AppForm n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Expr n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (NamedExpr n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Branch n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Pattern n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (TypeSig n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (GivethSig n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (GivenSig n)
+deriving anyclass instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (Directive n)
 
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []

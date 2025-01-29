@@ -1473,12 +1473,6 @@ instance SimplePrint Resolved where
 instance SimplePrint Name where
   simpleprint (MkName _ n) = simpleprint n
 
-exactprint' :: ToConcreteNodes PosToken a => a -> Text
-exactprint' x =
-  case exactprint x of
-    Left _  -> "<exactprint-error>"
-    Right t -> t
-
 -- | A class for applying the subsitution on inference variables exhaustively.
 --
 -- Note that we currently are applying the substitution late, which means we have

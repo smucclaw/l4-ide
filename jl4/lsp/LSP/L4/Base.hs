@@ -4,4 +4,5 @@ import L4.Syntax as L4
 import L4.TypeCheck as L4
 import L4.Lexer as L4
 import L4.Annotation as L4
+import L4.ExactPrint as L4
 
