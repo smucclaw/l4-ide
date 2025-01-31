@@ -13,7 +13,7 @@ import           Data.Tuple.Optics
 import           GHC.Generics        (Generic)
 import           Optics
 
-newtype VisualizeDecisionLogicIRInfo = VisualizeDecisionLogicIRInfo
+newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
   { program :: IRExpr
   }
   deriving newtype (Eq)
@@ -100,7 +100,7 @@ instance HasCodec VisualizeDecisionLogicIRInfo where
   codec =
     named "VisualizeDecisionLogicIRInfo" $
       object "VisualizeDecisionLogicIRInfo" $
-        VisualizeDecisionLogicIRInfo
+        MkVisualizeDecisionLogicIRInfo
           <$> requiredField' "program" .= view #program
 
 -------------------------------------------------------------
