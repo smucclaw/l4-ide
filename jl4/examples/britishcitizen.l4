@@ -1,0 +1,45 @@
+ASSUME Person IS A TYPE
+ASSUME `mother of` IS A FUNCTION FROM Person TO Person
+ASSUME `father of` IS A FUNCTION FROM Person TO Person
+
+ASSUME `is born in the United Kingdom after commencement` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is born in a qualifying territory after the appointed day` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is settled in the United Kingdom` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is settled in the qualifying territory in which the person is born` IS A FUNCTION FROM Person TO BOOLEAN
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `is a British citizen` IS
+         `is born in the United Kingdom after commencement` p
+      OR `is born in a qualifying territory after the appointed day` p
+  AND -- when the person is born ...
+            `is a British citizen` OF `father of` p
+         OR `is a British citizen` OF `mother of` p
+      OR    `is settled in the United Kingdom` OF `father of` p
+         OR `is settled in the United Kingdom` OF `mother of` p
+      OR    `is settled in the qualifying territory in which the person is born` OF `father of` p
+         OR `is settled in the qualifying territory in which the person is born` OF `mother of` p
+
+{-
+           `for father or mother` `is a British citizen`
+        OR `for father or mother` `is settled in the United Kingdom`
+        OR `for father or mother` `is settled in the qualifying territory in which the person is born`
+      WHERE
+        `for father or mother` property MEANS
+             property OF `father of` p
+          OR property OF `mother of` p
+-}
+
+`for father or mother of` person property MEANS
+      property OF `father of` person
+   OR property OF `mother of` person
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `is a British citizen (variant)` IS
+         `is born in the United Kingdom after commencement` p
+      OR `is born in a qualifying territory after the appointed day` p
+  AND -- when the person is born ...
+         `for father or mother of` p `is a British citizen (variant)`
+      OR `for father or mother of` p `is settled in the United Kingdom`
+      OR `for father or mother of` p `is settled in the qualifying territory in which the person is born`
