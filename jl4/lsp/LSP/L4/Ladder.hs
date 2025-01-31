@@ -2,194 +2,118 @@
 
 module LSP.L4.Ladder where
 
-import L4.Syntax as S
-
-import Data.Aeson
-import Data.List.NonEmpty (toList)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Maybe as Maybe
-import qualified Data.Text as Text
-import Data.Text (Text)
-import GHC.Generics (Generic)
-import Optics
+import           Data.Aeson
+import           Data.List.NonEmpty (toList)
+import           Data.Map.Strict    (Map)
+import qualified Data.Map.Strict    as Map
+import qualified Data.Maybe         as Maybe
+import           Data.Text          (Text)
+import qualified Data.Text          as Text
+import           GHC.Generics       (Generic)
+import           L4.Annotation
 
 ------- Imports for testing -------------
-import Text.Pretty.Simple
-import L4.Parser 
-import L4.TypeCheck (rawNameToText)
+import           L4.Parser
+import           L4.Syntax          as S
+import           L4.TypeCheck       (rawNameToText)
+import           LSP.L4.LadderTypes (ID (..), IRExpr,
+                                     VisualizeDecisionLogicIRInfo (..))
+import qualified LSP.L4.LadderTypes as L
+import           Optics
+import           Text.Pretty.Simple
 -----------------------------------------
 
-data AndOrTag = All | Any | Leaf
-  deriving stock (Show, Ord, Eq, Generic)
-  deriving anyclass (ToJSON)
-
-data ShouldView = Ask | View
-  deriving stock (Show, Ord, Eq, Generic)
-  deriving anyclass (ToJSON)
-
-data AndOrNode = AndOrNode
-  { tag :: AndOrTag
-  , children :: Maybe [RuleNode]
-  , contents :: Maybe Text
-  }
-  deriving stock (Show, Ord, Eq, Generic)
-  deriving anyclass (ToJSON)
-
-data RuleNode = RuleNode
-  { andOr :: AndOrNode
-  , prePost :: Map Text Text
-  , mark :: Mark
-  , shouldView :: ShouldView
-  }
-  deriving (Show, Ord, Eq, Generic)
-  deriving anyclass (ToJSON)
-
-data Mark = Mark
-  { value :: Text
-  , source :: Text
-  }
-  deriving (Show, Ord, Eq, Generic)
-  deriving anyclass (ToJSON)
-
-undefinedUserMark :: Mark
-undefinedUserMark =
-  Mark
-    { value = "undefined"
-    , source = "user"
-    }
-
-----------------------------
+------------------------------------------------------
   -- Entrypoint: Visualise
-----------------------------
+------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the 'Program'.
 --
--- Generates one diagram for each 'Decide' statement.
-visualise :: Program Name -> [RuleNode]
+-- Simple version where we visualize the first Decide, if it exists.
+-- TODO: Might be nicer to have the ret type be an Either-like type
+-- so we can tell the user no Decides if that's the case / give better error messages
+visualise :: Program Name -> Maybe VisualizeDecisionLogicIRInfo
 visualise prog =
-  concatMap decideToRuleNode decides
- where
-  decides =
-    toListOf (gplate @(Decide Name)) prog
+  let decides = toListOf (gplate @(Decide Name)) prog
+   in case decides of
+        [x] -> MkVisualizeDecisionLogicIRInfo <$> translateDecide x
+        []  -> Nothing
+        _xs -> Nothing
 
--- Currently using the simplest possible implementation
-decideToRuleNode :: Decide Name -> [RuleNode]
-decideToRuleNode (MkDecide _ sig appform body) =
-  case appform of
-    MkAppForm _ name _ ->
-      Maybe.maybeToList $ exprToRuleNode name sig body
-
-------------------------
-  -- Traversals
-------------------------
+------------------------------------------------------
+  -- translateDecide, translateExpr
+------------------------------------------------------
 
 -- | Turn a single clause into a boolean circuit.
 -- We support only a tiny subset of possible representations, in particular
 -- only statements of the form:
 --
 -- @
---   GIVEN <variable>
---   DECIDE <variable> (IS|IF) <boolean expression>
+--  GIVEN <variable>
+--  DECIDE <variable> IF <boolean expression>
 -- @
 --
 -- Moreover, only 'AND', 'OR' and variables are allowed in the '<boolean expression>'.
 --
 -- These limitations are arbitrary, mostly to make sure we have something to show rather
 -- than being complete. So, feel free to lift these limitations at your convenience :)
-exprToRuleNode :: Name -> TypeSig Name -> Expr Name -> Maybe RuleNode
-exprToRuleNode (MkName _ name) (MkTypeSig _ givenSig _) body =
+--
+-- Simple implementation: Translate Decide iff <= 1 Given
+translateDecide :: Decide Name -> Maybe L.IRExpr
+translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (MkName _ fnName) _args) body) =
   case givenSig of
-    MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] -> do
-        rNode <- traverseExpr (rawNameToText subject) body
-        pure
-          rNode
-            { prePost = Map.fromList [("Pre", "Does the " <> rawNameToText subject <> " " <> rawNameToText name <> "?")]
-            }
-    MkGivenSig _ [] -> traverseExpr (rawNameToText name) body
+    MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] ->
+      translateExpr (rawNameToText subject) body
+    MkGivenSig _ [] ->
+      translateExpr (rawNameToText fnName) body
     MkGivenSig _ _xs -> Nothing -- "DECIDEs with more than one GIVEN not currently supported"
 
-traverseExpr :: Text -> Expr Name -> Maybe RuleNode
-traverseExpr subject e = case e of
-  And{} ->
-    Just $
-      ruleNode andPrePost $
-        node All [rNode | n <- scanAnd e, 
-                          Just rNode <- [traverseExpr subject n]]
-  Or{} ->
-    Just $
-      ruleNode orPrePost $
-        node Any [rNode | n <- scanOr e, Just rNode <- [traverseExpr subject n]]
+-- TODO: Temporary placeholder, to be replaced by getUnique or something
+tempId :: ID
+tempId = MkID 1
+
+translateExpr :: Text -> Expr Name -> Maybe IRExpr
+translateExpr subject e = case e of
+  And _ left right ->
+    binE L.And left right
+  Or _ left right ->
+    binE L.Or left right
+
+  Equals {} -> Nothing -- Can't handle 'Is' yet
+  Not {} -> Nothing -- Can't handle 'Not' yet
+  Proj {} -> Nothing -- Can't handle 'Proj' yet
+
+  -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
-    Just $ ruleNode emptyPrePost $ leaf subject (rawNameToText verb)
-  Equals{} -> Nothing -- Can't handle 'Is' yet
-  Not{}    -> Nothing -- Can't handle 'Not' yet
-  Proj{}   -> Nothing -- Can't handle 'Proj' yet
-  App _ (MkName _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject (rawNameToText leafName)
-  _        -> Nothing
-    -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
+    Just $ leaf subject (rawNameToText verb)
+  App _ (MkName _ leafName) [] -> Just $ leaf subject (rawNameToText leafName)
+  --------------------------------------------------------------------------------
+  -- TODO: Make leaf when the App has args
 
-scanAnd :: Expr Name -> [Expr Name]
-scanAnd (And _ e1 e2) =
-  scanAnd e1 <> scanAnd e2
-scanAnd e = [e]
+  _ -> Nothing
+  where
+    binE op left right = L.BinExpr tempId op <$> translateExpr subject left <*> translateExpr subject right
+-- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
-scanOr :: Expr Name -> [Expr Name]
-scanOr (Or _ e1 e2) =
-  scanOr e1 <> scanOr e2
-scanOr e = [e]
+------------------------------------------------------
+  -- Leaf makers
+------------------------------------------------------
 
+defaultBoolVarValue :: L.BoolValue
+defaultBoolVarValue = L.UnknownV
 
-------------------------
-  -- RuleNode makers
-------------------------
+leaf :: Text -> Text -> IRExpr
+leaf subject complement = L.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
 
-andPrePost :: Map Text Text
-andPrePost = Map.fromList [("Pre", "all of:")]
-
-orPrePost :: Map Text Text
-orPrePost = Map.fromList [("Pre", "any of:")]
-
-emptyPrePost :: Map Text Text
-emptyPrePost = mempty
-
-leaf :: Text -> Text -> AndOrNode
-leaf subject complement =
-  AndOrNode
-    { tag = Leaf
-    , children = Nothing
-    , contents = Just complement
-    }
-    where
-      makeMessage subject = ""
-      -- "does the " <> subject <> " " <> t <> "?"
-
-node :: AndOrTag -> [RuleNode] -> AndOrNode
-node tag chs =
-  AndOrNode
-    { tag = tag
-    , children = Just chs
-    , contents = Nothing
-    }
-
-ruleNode :: Map Text Text -> AndOrNode -> RuleNode
-ruleNode prePost n =
-  RuleNode
-    { andOr = n
-    , prePost = prePost
-    , mark = undefinedUserMark
-    , shouldView = View
-    }
-
-------------------------
+------------------------------------------------------
   -- Dev utils
-------------------------
+------------------------------------------------------
 
-programToRuleNodes :: Text -> [RuleNode]
-programToRuleNodes prog =
+parseAndVisualiseProgram :: Text -> Maybe VisualizeDecisionLogicIRInfo
+parseAndVisualiseProgram prog =
   case execParser program "" prog of
     Left errs -> error $ unlines $ fmap (Text.unpack . (.message)) (toList errs)
-    Right x -> visualise x
+    Right x   -> visualise x
 
 vizTest :: Text -> IO ()
-vizTest = pPrint . programToRuleNodes
+vizTest = pPrint . parseAndVisualiseProgram
