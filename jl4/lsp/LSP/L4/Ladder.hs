@@ -86,12 +86,14 @@ translateExpr subject e = case e of
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
     Just $ leaf subject (rawNameToText verb)
-  App _ (MkName _ leafName) [] -> Just $ leaf subject (rawNameToText leafName)
+  App _ (MkName _ leafName) [] ->
+    Just $ leaf subject (rawNameToText leafName)
   --------------------------------------------------------------------------------
-  -- TODO: Make leaf when the App has args
-
+  App _ (MkName _ fnName) args ->
+    Just $ leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
   _ -> Nothing
   where
+    getNames args = args ^.. (gplate @Name) % to nameToText
     binE op left right = L.BinExpr tempId op <$> translateExpr subject left <*> translateExpr subject right
 -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
@@ -104,6 +106,13 @@ defaultBoolVarValue = L.UnknownV
 
 leaf :: Text -> Text -> IRExpr
 leaf subject complement = L.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
+
+------------------------------------------------------
+  -- Name helpers
+------------------------------------------------------
+
+nameToText :: Name -> Text
+nameToText (MkName _ rawName) = rawNameToText rawName
 
 ------------------------------------------------------
   -- Dev utils
