@@ -63,8 +63,6 @@ instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
     where
       -- Encoder: maps Haskell constructors to (tag, codec)
-      -- mapToEncoder :: forall b context any a.
-      --                 b -> Codec context b any -> Codec context a ()
       enc = \case
         BinExpr uid op left right -> ("BinExpr", mapToEncoder (uid, op, left, right) binExprCodec)
         BoolVar uid name value -> ("BoolVar", mapToEncoder (uid, name, value) boolVarCodec)
@@ -75,13 +73,6 @@ instance HasCodec IRExpr where
           [ ("BinExpr", ("BinExpr", mapToDecoder (uncurry4 BinExpr) binExprCodec)),
             ("BoolVar", ("BoolVar", mapToDecoder (uncurry3 BoolVar) boolVarCodec))
           ]
-
-      -- Helper functions to uncurry constructors
-      uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
-      uncurry3 f (a, b, c) = f a b c
-
-      uncurry4 :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
-      uncurry4 f (a, b, c, d) = f a b c d
 
       -- Individual codecs without the "$type" discriminator
       -- TODO: There must be a nicer way to do this with record syntax instead of tuples?!
@@ -98,6 +89,12 @@ instance HasCodec IRExpr where
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
 
+      -- Helper functions
+      uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+      uncurry3 f (a, b, c) = f a b c
+
+      uncurry4 :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
+      uncurry4 f (a, b, c, d) = f a b c d
 
 instance HasCodec VisualizeDecisionLogicIRInfo where
   codec =
