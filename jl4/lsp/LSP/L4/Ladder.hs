@@ -3,6 +3,9 @@
 module LSP.L4.Ladder where
 
 import L4.Syntax as S
+import qualified L4.ExactPrint as L4
+import qualified L4.Annotation as L4
+import qualified L4.Lexer as L4
 
 import Data.Aeson
 import Data.List.NonEmpty (toList)
@@ -16,8 +19,9 @@ import Optics
 
 ------- Imports for testing -------------
 import Text.Pretty.Simple
-import L4.Parser 
+import L4.Parser
 import L4.TypeCheck (rawNameToText)
+import qualified Data.Either.Extra as Either
 -----------------------------------------
 
 data AndOrTag = All | Any | Leaf
@@ -103,8 +107,15 @@ exprToRuleNode (MkName _ name) (MkTypeSig _ givenSig _) body =
     MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] -> do
         rNode <- traverseExpr (rawNameToText subject) body
         pure
-          rNode
-            { prePost = Map.fromList [("Pre", "Does the " <> rawNameToText subject <> " " <> rawNameToText name <> "?")]
+          RuleNode
+            { andOr = AndOrNode
+              { children = Just [rNode]
+              , contents = Nothing
+              , tag = All
+              }
+            , prePost = Map.fromList [("Pre", "Does the " <> rawNameToText subject <> " " <> rawNameToText name <> "?")]
+            , mark = undefinedUserMark
+            , shouldView = Ask
             }
     MkGivenSig _ [] -> traverseExpr (rawNameToText name) body
     MkGivenSig _ _xs -> Nothing -- "DECIDEs with more than one GIVEN not currently supported"
@@ -114,7 +125,7 @@ traverseExpr subject e = case e of
   And{} ->
     Just $
       ruleNode andPrePost $
-        node All [rNode | n <- scanAnd e, 
+        node All [rNode | n <- scanAnd e,
                           Just rNode <- [traverseExpr subject n]]
   Or{} ->
     Just $
@@ -125,9 +136,15 @@ traverseExpr subject e = case e of
   Equals{} -> Nothing -- Can't handle 'Is' yet
   Not{}    -> Nothing -- Can't handle 'Not' yet
   Proj{}   -> Nothing -- Can't handle 'Proj' yet
-  App _ (MkName _ leafName) [] -> Just $  ruleNode emptyPrePost $ leaf subject (rawNameToText leafName)
+  App _ fnName argExprs -> do
+    args <- traverse realSimplePrint argExprs
+    name <- realSimplePrint fnName
+    Just $ ruleNode emptyPrePost $ leaf subject (Text.unwords $ name :  args)
   _        -> Nothing
     -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
+  where
+    realSimplePrint :: (L4.ToConcreteNodes L4.PosToken a, L4.HasAnno a, L4.AnnoToken a ~ L4.PosToken) => a -> Maybe Text
+    realSimplePrint = fmap (Text.strip . Text.unwords . Text.words) . Either.eitherToMaybe . L4.exactprint
 
 scanAnd :: Expr Name -> [Expr Name]
 scanAnd (And _ e1 e2) =
