@@ -1,24 +1,24 @@
 {-# LANGUAGE DataKinds #-}
 
-module LSP.L4.Ladder where
+module LSP.L4.Viz.Ladder where
 
-import           Data.Aeson
+-- import           Data.Aeson
 import           Data.List.NonEmpty (toList)
-import           Data.Map.Strict    (Map)
-import qualified Data.Map.Strict    as Map
-import qualified Data.Maybe         as Maybe
+-- import           Data.Map.Strict    (Map)
+-- import qualified Data.Map.Strict    as Map
+-- import qualified Data.Maybe         as Maybe
 import           Data.Text          (Text)
 import qualified Data.Text          as Text
-import           GHC.Generics       (Generic)
-import           L4.Annotation
+import           GHC.Generics       ()
+-- import           L4.Annotation      ()
 
 ------- Imports for testing -------------
 import           L4.Parser
 import           L4.Syntax          as S
 import           L4.TypeCheck       (rawNameToText)
-import           LSP.L4.LadderTypes (ID (..), IRExpr,
+import           LSP.L4.Viz.VizExpr (ID (..), IRExpr,
                                      VisualizeDecisionLogicIRInfo (..))
-import qualified LSP.L4.LadderTypes as L
+import qualified LSP.L4.Viz.VizExpr as V
 import           Optics
 import           Text.Pretty.Simple
 -----------------------------------------
@@ -59,7 +59,7 @@ visualise prog =
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Decide Name -> Maybe L.IRExpr
+translateDecide :: Decide Name -> Maybe V.IRExpr
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (MkName _ fnName) _args) body) =
   case givenSig of
     MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] ->
@@ -75,9 +75,9 @@ tempId = MkID 1
 translateExpr :: Text -> Expr Name -> Maybe IRExpr
 translateExpr subject e = case e of
   And _ left right ->
-    binE L.And left right
+    binE V.And left right
   Or _ left right ->
-    binE L.Or left right
+    binE V.Or left right
 
   Equals {} -> Nothing -- Can't handle 'Is' yet
   Not {} -> Nothing -- Can't handle 'Not' yet
@@ -94,18 +94,18 @@ translateExpr subject e = case e of
   _ -> Nothing
   where
     getNames args = args ^.. (gplate @Name) % to nameToText
-    binE op left right = L.BinExpr tempId op <$> translateExpr subject left <*> translateExpr subject right
+    binE op left right = V.BinExpr tempId op <$> translateExpr subject left <*> translateExpr subject right
 -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
 ------------------------------------------------------
   -- Leaf makers
 ------------------------------------------------------
 
-defaultBoolVarValue :: L.BoolValue
-defaultBoolVarValue = L.UnknownV
+defaultBoolVarValue :: V.BoolValue
+defaultBoolVarValue = V.UnknownV
 
 leaf :: Text -> Text -> IRExpr
-leaf subject complement = L.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
+leaf subject complement = V.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
   -- Name helpers

@@ -25,7 +25,7 @@ import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Location
 import LSP.L4.Config
-import qualified LSP.L4.Ladder as Ladder
+import qualified LSP.L4.Viz.Ladder as Ladder
 import LSP.L4.Rules hiding (Log (..))
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J

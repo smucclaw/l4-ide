@@ -143,8 +143,8 @@ executable jl4-lsp
     LSP.SemanticTokens
     LSP.L4.Config
     LSP.L4.Handlers
-    LSP.L4.LadderTypes
-    LSP.L4.Ladder
+    LSP.L4.Viz.VizExpr
+    LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
     LSP.L4.Rules
     LSP.L4.SemanticTokens

@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module LSP.L4.LadderTypes where
+module LSP.L4.Viz.VizExpr where
 
 import           Autodocodec
 import           Autodocodec.Aeson   ()
