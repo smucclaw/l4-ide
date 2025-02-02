@@ -21,7 +21,7 @@ data EvalState =
   MkEvalState
     { environment :: !Environment
     , results     :: [EvalResult]
-    -- , supply      :: !Int
+    , supply      :: !Int
     }
   deriving Generic
 
@@ -35,6 +35,36 @@ data EvalException =
   deriving anyclass NFData
 
 type Environment = Map Unique Value
+
+emptyEnvironment :: Environment
+emptyEnvironment = Map.empty
+
+-- We reproduce some of the name handling functions from the type checker here, only
+-- that we produce separate uniques.
+
+step :: Eval Int
+step = do
+  current <- use #supply
+  let next = current + 1
+  assign #supply next
+  pure current
+
+newUnique :: Eval Unique
+newUnique = do
+  i <- step
+  pure (MkUnique 'e' i)
+
+def :: Name -> Eval Resolved
+def n = do
+  u <- newUnique
+  pure (Def u n)
+
+ref :: Name -> Resolved -> Eval Resolved
+ref n a =
+  let
+    (u, o) = TypeCheck.getUniqueName a
+  in
+    pure (Ref n u o)
 
 scope :: Eval a -> Eval a
 scope m = do
@@ -92,7 +122,7 @@ instance NFData Value where
 renderValue :: Value -> Text
 renderValue (ValNumber i) = Text.pack (show i)
 renderValue (ValString txt) = Text.pack (show txt)
-renderValue (ValList vs) = Text.intercalate ", " (renderValue <$> vs)
+renderValue (ValList vs) = "(LIST " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValClosure _ _ _) = "<function>"
 renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"
 renderValue (ValConstructor r []) = TypeCheck.simpleprint r
@@ -178,9 +208,28 @@ evalTypeDecl c (RecordDecl _ann tns) =
 evalConDecl :: ConDecl Resolved -> Eval ()
 evalConDecl (MkConDecl _ann n []) =
   makeKnown n (ValConstructor n [])
-evalConDecl (MkConDecl _ann n _tns) =
+evalConDecl (MkConDecl _ann n tns) = do
+  -- constructor
   makeKnown n (ValUnappliedConstructor n)
-  -- TODO: selector functions
+  conRef <- ref (TypeCheck.getName n) n
+  -- selectors (we need to create fresh names for the lambda abstractions so that every binder is unique)
+  traverse_ (\ (i, MkTypedName _ sn _t) -> do
+    arg    <- def (TypeCheck.getName n)
+    argRef <- ref (TypeCheck.getName n) arg
+    args <- traverse def (TypeCheck.getName <$> tns)
+    body <- ref (TypeCheck.getName sn) (args !! i)
+    let
+      sel =
+        ValClosure
+          (MkGivenSig mempty [MkOptionallyTypedName mempty arg Nothing])   -- \ x ->
+          (Consider mempty (App mempty argRef [])                          -- case x of
+            [ When mempty (PatApp mempty conRef (PatVar mempty <$> args))  --   Con y_1 ... y_n ->
+                (App mempty body [])                                       --     y_i
+            ]
+          )
+          emptyEnvironment
+    makeKnown sn sel
+    ) (zip [0 ..] tns)
 
 -- NOTE: We currently disallow recursive declarations that look like values.
 -- We could allow these by being more sophisticated.
@@ -392,5 +441,5 @@ doEvalProgram :: Program Resolved -> [EvalResult]
 doEvalProgram prog =
   case evalProgram prog of
     MkEval m ->
-      case m (MkEvalState initialEnvironment [] {- 0 -}) of
+      case m (MkEvalState initialEnvironment [] 0) of
         (_, s) -> s.results
