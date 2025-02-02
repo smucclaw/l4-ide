@@ -23,7 +23,7 @@ data RawName =
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-newtype Unique = MkUnique Int
+data Unique = MkUnique !Char !Int
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -100,12 +100,12 @@ data AppForm n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
-  MkDeclare Anno (AppForm n) (TypeDecl n)
+  MkDeclare Anno (TypeSig n) (AppForm n) (TypeDecl n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
-  MkAssume Anno (AppForm n) (Type' n)
+  MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

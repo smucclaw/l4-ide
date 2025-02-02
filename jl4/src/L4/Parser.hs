@@ -220,10 +220,16 @@ topdeclWithRecovery = do
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
-      Declare   mkHoleAnno <$> declare
-  <|> Decide    mkHoleAnno <$> decide
-  <|> Assume    mkHoleAnno <$> assume
-  <|> Directive mkHoleAnno <$> directive
+  withTypeSig (\ sig -> attachAnno $
+        Declare   emptyAnno <$> annoHole (declare sig)
+    <|> Decide    emptyAnno <$> annoHole (decide sig)
+    <|> Assume    emptyAnno <$> annoHole (assume sig)
+  ) <|> Directive mkHoleAnno <$> directive
+
+withTypeSig :: (TypeSig Name -> Parser (TopDecl Name)) -> Parser (TopDecl Name)
+withTypeSig p = do
+  sig <- typeSig
+  p sig
 
 directive :: Parser (Directive Name)
 directive = do
@@ -236,22 +242,22 @@ directive = do
       ]
       <*> annoHole expr
 
-assume :: Parser (Assume Name)
-assume = do
+assume :: TypeSig Name -> Parser (Assume Name)
+assume sig = do
   current <- Lexer.indentLevel
   attachAnno $
     MkAssume emptyAnno
-      <$  annoLexeme (spacedToken_ TKAssume)
+      <$> annoHole (pure sig)
+      <*  annoLexeme (spacedToken_ TKAssume)
       <*> annoHole appForm
-      <*  annoLexeme (spacedToken_ TKIs)
---      <*  optional article
-      <*> annoHole (indented type' current)
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole (indented type' current))
 
-declare :: Parser (Declare Name)
-declare =
+declare :: TypeSig Name -> Parser (Declare Name)
+declare sig =
   attachAnno $
     MkDeclare emptyAnno
-      <$  annoLexeme (spacedToken_ TKDeclare)
+      <$> annoHole (pure sig)
+      <*  annoLexeme (spacedToken_ TKDeclare)
       <*> annoHole appForm
       <*> annoHole typeDecl
 
@@ -282,13 +288,12 @@ conDecl =
       <$> annoHole name
       <*> option [] (annoLexeme (spacedToken_ TKHas) *> annoHole (lsepBy reqParam (spacedToken_ TComma)))
 
-decide :: Parser (Decide Name)
-decide = do
-  sig <- typeSig
+decide :: TypeSig Name -> Parser (Decide Name)
+decide sig = do
   current <- Lexer.indentLevel
-  decideKW sig current <|> meansKW sig current
+  decideKW current <|> meansKW current
   where
-    decideKW sig current =
+    decideKW current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
@@ -297,7 +302,7 @@ decide = do
           <*  annoLexeme (spacedToken_ TKIs <|> spacedToken_ TKIf)
           <*> annoHole (indentedExpr current)
 
-    meansKW sig current =
+    meansKW current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
@@ -414,7 +419,7 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno_ PosToken e) PosToken
+article :: Compose Parser (WithAnno e) PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 

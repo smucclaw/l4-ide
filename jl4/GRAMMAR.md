@@ -24,10 +24,10 @@ givens ::=
   "GIVEN" param{,}*
 
 param ::=
-  name ("IS" article? type)?
+  name ("IS" type)?
 
 reqparam ::=
-  name "IS" article? type
+  name "IS" type
 
 article ::=
   "A" | "AN" | "THE"
@@ -86,7 +86,7 @@ assumption ::=
   givens? assumption'
 
 assumption' ::=
-  "ASSUME" appform "IS" article? type
+  "ASSUME" appform ("IS" type)?
 
 -- ignoring operator priority
 expr ::=
