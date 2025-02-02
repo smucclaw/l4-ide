@@ -309,8 +309,16 @@ forwardExpr env !ss stack (App _ann n []) =
     Just val -> backwardExpr ss stack val
 forwardExpr env !ss stack (App _ann n (e : es)) =
   forwardExpr env (ss + 1) (App1 n [] es env stack) e
-forwardExpr _env _ss stack (AppNamed _ann _n _nes) =
-  exception Unimplemented stack
+forwardExpr env !ss stack (AppNamed ann n [] _) =
+  forwardExpr env ss stack (App ann n [])
+forwardExpr _env !_ss stack (AppNamed _ann _n _nes Nothing) =
+  exception RuntimeTypeError stack
+forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
+  let
+    -- move expressions into order, drop names
+    es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
+  in
+    forwardExpr env ss stack (App ann n es)
 forwardExpr env !ss stack (IfThenElse _ann e1 e2 e3) =
   forwardExpr env (ss + 1) (IfThenElse1 e2 e3 env stack) e1
 forwardExpr env !ss stack (Consider _ann e branches) =

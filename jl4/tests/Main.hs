@@ -2,6 +2,7 @@ module Main where
 
 import Base
 import qualified L4.Parser as Parser
+import qualified L4.Evaluate as JL4
 import qualified L4.ExactPrint as JL4
 import qualified L4.TypeCheck as JL4
 import Paths_jl4
@@ -66,6 +67,7 @@ jl4ExactPrintGolden dir inputFile = do
 -- Test helpers
 -- ----------------------------------------------------------------------------
 
+-- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
 parseFile :: String -> Text -> IO ()
 parseFile file input =
   case Parser.execParser Parser.program (takeFileName file) input of
@@ -73,9 +75,19 @@ parseFile file input =
     Right prog -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
-        ([], _p, _s) -> Text.putStrLn "Typechecking successful"
-        (errs, _p, _s) ->
-          Text.putStr (Text.unlines (map (\ err -> JL4.prettySrcRange (JL4.rangeOf err) <> ":\n" <> JL4.prettyCheckErrorWithContext err) errs))
+        (errs, p, _s)
+          | all ((== JL4.SInfo) . JL4.severity) errs -> do
+            Text.putStrLn "Typechecking successful"
+            let results = JL4.doEvalProgram p
+            let msgs = (typeErrorToMessage <$> errs) ++ (evalResultToMessage <$> results)
+            Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
+          | otherwise -> do
+            let msgs = typeErrorToMessage <$> errs
+            Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
+  where
+    typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
+    evalResultToMessage (r, res) = (Just r, either (Text.pack . show) JL4.renderValue res)
+    renderMessage (r, txt) = JL4.prettySrcRange r <> ":\n" <> txt
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =

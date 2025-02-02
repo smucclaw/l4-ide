@@ -1,0 +1,34 @@
+
+DECLARE Record
+  HAS
+    field1 IS A BOOLEAN
+    field2 IS A NUMBER
+    field3 IS A LIST OF NUMBER
+
+exampleRecord
+  MEANS
+    Record OF
+      TRUE
+      3
+      LIST 1, 2, 3
+
+anotherExampleRecord
+  MEANS
+    Record WITH
+      field2 IS 7
+      field1 IS FALSE
+      field3 IS EMPTY
+
+#CHECK field1
+#CHECK field2
+#CHECK field3
+
+#EVAL exampleRecord
+
+#EVAL exampleRecord's field1
+#EVAL exampleRecord's field2
+#EVAL exampleRecord's field3
+
+#EVAL field1 OF exampleRecord
+
+#EVAL anotherExampleRecord

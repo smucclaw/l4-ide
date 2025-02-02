@@ -1354,11 +1354,12 @@ inferExpr' g =
       let tf = fun_ ts rt
       unify t tf
       pure (App ann rn res, rt)
-    AppNamed ann n nes -> do
+    AppNamed ann n nes _morder -> do
       (rn, pt) <- resolveTerm n
       t <- instantiate pt
-      (rnes, rt) <- inferAppNamed t nes
-      pure (AppNamed ann rn rnes, rt)
+      (ornes, rt) <- inferAppNamed t nes
+      let (order, rnes) = unzip ornes
+      pure (AppNamed ann rn rnes (Just order), rt)
     IfThenElse ann e1 e2 e3 -> do
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ann e1 e2 e3 v
@@ -1382,38 +1383,38 @@ inferExpr' g =
       (re, t) <- inferExpr e
       pure (Where ann re rds, t)
 
-inferAppNamed :: Type' Resolved -> [NamedExpr Name] -> Check ([NamedExpr Resolved], Type' Resolved)
+inferAppNamed :: Type' Resolved -> [NamedExpr Name] -> Check ([(Int, NamedExpr Resolved)], Type' Resolved)
 inferAppNamed (Fun _ onts t) nes = do
-  rnes <- supplyAppNamed onts nes
-  pure (rnes, t)
+  ornes <- supplyAppNamed (zip [0 ..] onts) nes
+  pure (ornes, t)
 inferAppNamed t _nes = do
   addError (IllegalAppNamed t)
   v <- fresh (NormalName "v")
   pure ([], v) -- TODO: This is unnecessarily lossy. We could still check the expressions and treat all names as out of scope.
 
-supplyAppNamed :: [OptionallyNamedType Resolved] -> [NamedExpr Name] -> Check [NamedExpr Resolved]
+supplyAppNamed :: [(Int, OptionallyNamedType Resolved)] -> [NamedExpr Name] -> Check [(Int, NamedExpr Resolved)]
 supplyAppNamed []   [] = pure []
 supplyAppNamed onts [] = do
-  addError (IncompleteAppNamed onts)
+  addError (IncompleteAppNamed (snd <$> onts))
   pure []
 supplyAppNamed onts (MkNamedExpr ann n e : nes) = do
-  (rn, t, onts') <- findOptionallyNamedType n onts
+  (i, rn, t, onts') <- findOptionallyNamedType n onts
   re <- checkExpr e t
   rnes <- supplyAppNamed onts' nes
-  pure (MkNamedExpr ann rn re : rnes)
+  pure ((i, MkNamedExpr ann rn re) : rnes)
 
-findOptionallyNamedType :: Name -> [OptionallyNamedType Resolved] -> Check (Resolved, Type' Resolved, [OptionallyNamedType Resolved])
+findOptionallyNamedType :: Name -> [(Int, OptionallyNamedType Resolved)] -> Check (Int, Resolved, Type' Resolved, [(Int, OptionallyNamedType Resolved)])
 findOptionallyNamedType n [] = do
   v <- fresh (NormalName "v")
   rn <- outOfScope n v
-  pure (rn, v, [])
-findOptionallyNamedType n (MkOptionallyNamedType _ (Just n') t : onts)
+  pure (0, rn, v, [])
+findOptionallyNamedType n ((i, MkOptionallyNamedType _ (Just n') t) : onts)
   | rawName n == rawName (getOriginal n') = do
     rn <- ref n n'
-    pure (rn, t, onts)
+    pure (i, rn, t, onts)
 findOptionallyNamedType n (ont : onts) = do
-    (rn, t, onts') <- findOptionallyNamedType n onts
-    pure (rn, t, ont : onts')
+    (i, rn, t, onts') <- findOptionallyNamedType n onts
+    pure (i, rn, t, ont : onts')
 
 checkBranch :: Type' Resolved -> Type' Resolved -> Branch Name -> Check (Branch Resolved)
 checkBranch tscrutinee tresult (When ann pat e)  = scope $ do

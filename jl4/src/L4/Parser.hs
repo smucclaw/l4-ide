@@ -702,6 +702,7 @@ namedApp = do
     <$> annoHole name
     <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedExpr current) (spacedToken_ TComma))
         )
+    <*> pure Nothing
 
 namedExpr :: Pos -> Parser (NamedExpr Name)
 namedExpr current  =
