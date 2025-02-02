@@ -499,7 +499,30 @@ prune m = do
 -- but don't force it.
 --
 softprune :: forall a. Check a -> Check a
-softprune = id
+softprune m = do
+  MkCheck $ \ s ->
+    let
+      candidates :: [(With CheckErrorWithContext a, CheckState)]
+      candidates = runCheck m s
+
+      proc []                    = [] -- should never occur
+      proc [a]                   = [a]
+      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
+      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+
+      -- We have a success, we don't want a second one
+      procPlain a []                    = [a]
+      procPlain _ ((Plain _, _)  : [])  = candidates
+      procPlain _ ((Plain _, _)  : _cs) = candidates
+      procPlain a ((With _ _, _) :  cs) = procPlain a cs
+
+      -- We have a failure, we're still looking for a success, and prefer the last failure
+      procWith a []                     = [a]
+      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
+      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+
+    in
+      proc candidates
 
 step :: Check Int
 step = do
@@ -656,7 +679,7 @@ ambiguousType n xs = do
 
 inferDeclare :: Declare Name -> Check (Declare Resolved)
 inferDeclare (MkDeclare ann tysig appForm t) = do
-  (rd, extend) <- prune $ scope $ do
+  (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDeclare (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
     ce <- inferTypeAppForm' rappForm rtysig
@@ -683,7 +706,7 @@ inferDeclare (MkDeclare ann tysig appForm t) = do
 inferAssume :: Assume Name -> Check (Assume Resolved)
 inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
   -- declaration of a type
-  (rd, extend) <- prune $ scope $ do
+  (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
     ce <- inferTypeAppForm' rappForm rtysig
@@ -693,7 +716,7 @@ inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
   pure rd
 inferAssume (MkAssume ann tysig appForm mt) = do
   -- declaration of a term
-  (rd, extend) <- prune $ scope $ do
+  (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig -- (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
     (ce, result) <- inferTermAppForm rappForm rtysig
@@ -726,21 +749,21 @@ inferSection (MkSection ann lvl mn topdecls) = do
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved)
 inferLocalDecl (LocalDecide ann decide) = do
-  rdecide <- inferDecide decide
+  rdecide <- softprune $ inferDecide decide
   pure (LocalDecide ann rdecide)
 inferLocalDecl (LocalAssume ann assume) = do
-  rassume <- inferAssume assume
+  rassume <- softprune $ inferAssume assume
   pure (LocalAssume ann rassume)
 
 inferTopDecl :: TopDecl Name -> Check (TopDecl Resolved)
 inferTopDecl (Declare ann declare) = do
-  rdeclare <- inferDeclare declare
+  rdeclare <- prune $ inferDeclare declare
   pure (Declare ann rdeclare)
 inferTopDecl (Decide ann decide) = do
-  rdecide <- inferDecide decide
+  rdecide <- prune $ inferDecide decide
   pure (Decide ann rdecide)
 inferTopDecl (Assume ann assume) = do
-  rassume <- inferAssume assume
+  rassume <- prune $ inferAssume assume
   pure (Assume ann rassume)
 inferTopDecl (Directive ann directive) = do
   rdirective <- inferDirective directive
@@ -766,7 +789,7 @@ inferProgram (MkProgram ann sections) = do
 --
 inferDecide :: Decide Name -> Check (Decide Resolved)
 inferDecide (MkDecide ann tysig appForm expr) = do
-  (rd, extend) <- prune $ scope $ do
+  (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDecide (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, result) <- inferTermAppForm rappForm rtysig
@@ -1225,22 +1248,22 @@ makeKnown a ce =
     proc (Just xs) = Just (new : xs)
 
 checkExpr :: Expr Name -> Type' Resolved -> Check (Expr Resolved)
-checkExpr (IfThenElse ann e1 e2 e3) t = do
+checkExpr (IfThenElse ann e1 e2 e3) t = softprune $ scope $ do
   re <- checkIfThenElse ann e1 e2 e3 t
   let re' = setAnno (set #extra (Just t) (getAnno re)) re
   pure re'
-checkExpr (Consider ann e branches) t = do
+checkExpr (Consider ann e branches) t = softprune $ scope $ do
   re <- checkConsider ann e branches t
   let re' = setAnno (set #extra (Just t) (getAnno re)) re
   pure re'
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
-checkExpr (Where ann e ds) t = scope $ do
+checkExpr (Where ann e ds) t = softprune $ scope $ do
   rds <- traverse inferLocalDecl ds
   re <- checkExpr e t
   pure (Where ann re rds)
-checkExpr e t = scope $ do
+checkExpr e t = softprune $ scope $ do
   setErrorContext (WhileCheckingExpression e)
   (re, rt) <- inferExpr e
   unify t rt
@@ -1260,7 +1283,7 @@ checkConsider ann e branches t = do
   pure (Consider ann re rbranches)
 
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
-inferExpr g = scope $ do
+inferExpr g = softprune $ scope $ do
   setErrorContext (WhileCheckingExpression g)
   (re, te) <- inferExpr' g
   let re' = setAnno (set #extra (Just te) (getAnno re)) re
@@ -1330,7 +1353,6 @@ inferExpr' g =
       rt <- fresh (NormalName "v")
       let tf = fun_ ts rt
       unify t tf
-      -- TODO: apply substitution
       pure (App ann rn res, rt)
     AppNamed ann n nes -> do
       (rn, pt) <- resolveTerm n

@@ -12,3 +12,10 @@ DECIDE baz
 
 DECIDE all
   IS IF foo THEN foo ELSE "foo"
+
+-- This should be fine even if it's in a local declaration.
+-- This possibly conflicts with local polymorphism.
+DECIDE indirect
+  IS local OR TRUE
+  WHERE
+    local MEANS foo
