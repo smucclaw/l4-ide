@@ -36,10 +36,23 @@ data EvalException =
 
 type Environment = Map Unique Value
 
+scope :: Eval a -> Eval a
+scope m = do
+  savedEnv <- use #environment
+  a <- m
+  assign #environment savedEnv
+  pure a
+
 withEnvironment :: (Environment -> Eval a) -> Eval a
 withEnvironment f = do
   env <- use #environment
   f env
+
+usingEnvironment :: Environment -> Eval () -> Eval Environment
+usingEnvironment env m = scope $ do
+  assign #environment env
+  m
+  use #environment
 
 makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
@@ -60,6 +73,7 @@ data Value =
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [Value]
   | ValAssumed Resolved
+  -- | ValEnvironment Environment
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
@@ -73,6 +87,7 @@ instance NFData Value where
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
+  -- rnf (ValEnvironment env)        = env `seq` ()
 
 renderValue :: Value -> Text
 renderValue (ValNumber i) = Text.pack (show i)
@@ -83,6 +98,7 @@ renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"
 renderValue (ValConstructor r []) = TypeCheck.simpleprint r
 renderValue (ValConstructor r vs) = "(" <> TypeCheck.simpleprint r <> " OF " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValAssumed _) = "<assumed>"
+-- renderValue (ValEnvironment _) = "<environment>"
 
 data BinOp =
     BinOpPlus
@@ -143,6 +159,12 @@ evalTopDecl (Assume _ann assume) =
 evalTopDecl (Directive _ann directive) =
   evalDirective directive
 
+evalLocalDecl :: LocalDecl Resolved -> Eval ()
+evalLocalDecl (LocalDecide _ann decide) =
+  evalDecide decide
+evalLocalDecl (LocalAssume _ann assume) =
+  evalAssume assume
+
 evalDeclare :: Declare Resolved -> Eval ()
 evalDeclare (MkDeclare _ann _tysig appForm t) =
   evalTypeDecl (TypeCheck.appFormHead appForm) t
@@ -191,9 +213,12 @@ evalDirective (Eval _ann expr) = do
   addEvalResult expr v
 evalDirective (Check _ _) = pure ()
 
+maximumStackSize :: Int
+maximumStackSize = 50
+
 forwardExpr :: Environment -> Int -> Stack -> Expr Resolved -> Eval Value
 forwardExpr _env ss stack _e
-  | ss >= 50 =
+  | ss > maximumStackSize =
     exception StackOverflow stack
 forwardExpr env !ss stack (And _ann e1 e2) =
   forwardExpr env ss stack (IfThenElse mempty e1 e2 falseExpr)
@@ -248,6 +273,12 @@ forwardExpr _env !ss stack (List _ann []) =
   backwardExpr ss stack (ValList [])
 forwardExpr env !ss stack (List _ann (e : es)) =
   forwardExpr env (ss + 1) (List1 [] es env stack) e
+forwardExpr env !ss stack (Where _ann e ds) = do
+  -- TODO: I don't like the weird mix between abstract machine style
+  -- and direct style. We should extend the abstract machine style to
+  -- cover declarations.
+  env' <- usingEnvironment env (traverse_ evalLocalDecl ds)
+  forwardExpr env' ss stack e
 
 backwardExpr :: Int -> Stack -> Value -> Eval Value
 backwardExpr !ss (BinOp1 binOp e2 env stack) val1 =

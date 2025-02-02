@@ -724,6 +724,14 @@ inferSection (MkSection ann lvl mn topdecls) = do
   rtopdecls <- traverse inferTopDecl topdecls
   pure (MkSection ann lvl rmn rtopdecls)
 
+inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved)
+inferLocalDecl (LocalDecide ann decide) = do
+  rdecide <- inferDecide decide
+  pure (LocalDecide ann rdecide)
+inferLocalDecl (LocalAssume ann assume) = do
+  rassume <- inferAssume assume
+  pure (LocalAssume ann rassume)
+
 inferTopDecl :: TopDecl Name -> Check (TopDecl Resolved)
 inferTopDecl (Declare ann declare) = do
   rdeclare <- inferDeclare declare
@@ -1228,6 +1236,10 @@ checkExpr (Consider ann e branches) t = do
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
+checkExpr (Where ann e ds) t = scope $ do
+  rds <- traverse inferLocalDecl ds
+  re <- checkExpr e t
+  pure (Where ann re rds)
 checkExpr e t = scope $ do
   setErrorContext (WhileCheckingExpression e)
   (re, rt) <- inferExpr e
@@ -1343,6 +1355,10 @@ inferExpr' g =
       v <- fresh (NormalName "list")
       res <- traverse (flip checkExpr v) es
       pure (List ann res, list v)
+    Where ann e ds -> scope $ do
+      rds <- traverse inferLocalDecl ds
+      (re, t) <- inferExpr e
+      pure (Where ann re rds, t)
 
 inferAppNamed :: Type' Resolved -> [NamedExpr Name] -> Check ([NamedExpr Resolved], Type' Resolved)
 inferAppNamed (Fun _ onts t) nes = do
@@ -1664,6 +1680,7 @@ class ToResolved a where
 deriving anyclass instance ToResolved (Program Resolved)
 deriving anyclass instance ToResolved (Section Resolved)
 deriving anyclass instance ToResolved (TopDecl Resolved)
+deriving anyclass instance ToResolved (LocalDecl Resolved)
 deriving anyclass instance ToResolved (Assume Resolved)
 deriving anyclass instance ToResolved (Declare Resolved)
 deriving anyclass instance ToResolved (TypeDecl Resolved)
@@ -1770,6 +1787,7 @@ findType pos a =
 deriving anyclass instance ToTypesTree (Program Resolved)
 deriving anyclass instance ToTypesTree (Section Resolved)
 deriving anyclass instance ToTypesTree (TopDecl Resolved)
+deriving anyclass instance ToTypesTree (LocalDecl Resolved)
 deriving anyclass instance ToTypesTree (Assume Resolved)
 deriving anyclass instance ToTypesTree (Declare Resolved)
 deriving anyclass instance ToTypesTree (TypeDecl Resolved)

@@ -226,7 +226,14 @@ topdecl =
     <|> Assume    emptyAnno <$> annoHole (assume sig)
   ) <|> Directive mkHoleAnno <$> directive
 
-withTypeSig :: (TypeSig Name -> Parser (TopDecl Name)) -> Parser (TopDecl Name)
+localdecl :: Parser (LocalDecl Name)
+localdecl =
+  withTypeSig (\ sig -> attachAnno $
+        LocalDecide    emptyAnno <$> annoHole (decide sig)
+    <|> LocalAssume    emptyAnno <$> annoHole (assume sig)
+  )
+
+withTypeSig :: (TypeSig Name -> Parser (d Name)) -> Parser (d Name)
 withTypeSig p = do
   sig <- typeSig
   p sig
@@ -495,10 +502,18 @@ param =
 --
 indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
-  withIndent GT p $ \_ -> do
+  withIndent GT p $ \ _ -> do
     e <- baseExpr
     efs <- many (expressionCont p)
-    pure (combine End e efs)
+    mw <- optional (whereExpr p)
+    pure ((maybe id id mw) (combine End e efs))
+
+whereExpr :: Pos -> Parser (Expr Name -> Expr Name)
+whereExpr p =
+  withIndent GT p $ \ _ -> do
+    ann <- opToken TKWhere
+    ds <- many (indented localdecl p)
+    pure (\ e -> Where (mkHoleAnno <> ann <> mkHoleAnno) e ds)
 
 data Stack a =
     Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos

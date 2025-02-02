@@ -97,6 +97,7 @@ instance ToSemTokens PosToken (Section Name) where
     traverseCsnWithHoles ann [withTokenType nameIsDirective $ toSemTokens name, toSemTokens decls]
 
 deriving anyclass instance ToSemTokens PosToken (TopDecl Name)
+deriving anyclass instance ToSemTokens PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Assume Name)
 deriving anyclass instance ToSemTokens PosToken (Declare Name)
 deriving anyclass instance ToSemTokens PosToken (TypeDecl Name)
