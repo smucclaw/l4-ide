@@ -47,6 +47,13 @@ data VizError
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
+-- TODO: Incorporate context like the specific erroring rule and the src range too
+prettyPrintVizError :: VizError -> Text
+prettyPrintVizError = \case
+  InvalidProgramNoDecidesFound -> "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
+  InvalidProgramDecidesMustNotHaveMoreThanOneGiven -> "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
+  Unimplemented -> "Unimplemented"
+
 ------------------------------------------------------
 -- Entrypoint: Visualise
 ------------------------------------------------------
