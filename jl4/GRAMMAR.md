@@ -12,13 +12,25 @@ see further below.
 
 ```
 program ::=
+  anonymoussection section*
+
+anonymoussection ::=
   topdecl{;}*
 
+section ::=
+  sectionsymbols name? topdecl{;}*
+
+sectionsymbols ::=
+  '§'+
+
 topdecl ::=
-  declare | binding | assumption | directive
+  declare | decide | assume | directive
+
+localdecl ::=
+  decide | assume
 
 declare ::=
-  givens? declare'
+  typesig declare'
 
 givens ::=
   "GIVEN" param{,}*
@@ -33,7 +45,10 @@ article ::=
   "A" | "AN" | "THE"
 
 declare' ::=
-  "DECLARE" appform (recorddecl | enumdecl)
+  "DECLARE" appform typedecl
+
+typedecl ::=
+  recorddecl | enumdecl
 
 recorddecl ::=
   "HAS" reqparam{,}*
@@ -55,8 +70,8 @@ atype ::=
     "TYPE"
   | name+                                 -- type application
   | name "OF" tyargs                      -- also type application
-  | name "WITH" namedtyargs               -- also type application
-  | "FUNCTION" "FROM" tyargs "TO" type    -- function type
+  | name "WITH" namedtyargs               -- also type application [currently unsupported]
+  | "FUNCTION" "FROM" funtyargs "TO" type -- function type
 
 namedtyargs ::=
   namedtyarg{,}*
@@ -67,14 +82,20 @@ namedtyarg ::=
 tyargs ::=
   type{,}+
 
-binding ::=
-  givens? giveth? binding'
+funtyargs ::=
+  type{AND}+
+
+decide ::=
+  typesig decide'
+
+typesig ::=
+  givens? giveth?
 
 giveth ::=
   "GIVETH" type
 
-binding' ::=
-    "DECIDE" appform ("IS" | "IF") expr  -- both forms are equivalent
+decide' ::=
+    "DECIDE" appform ("IS" | "IF") expr  -- all forms are equivalent
   | appform "MEANS" expr
 
 appform ::=
@@ -82,33 +103,28 @@ appform ::=
   | name "OF" nameargs
   -- possibly allow "WITH" here as well?
 
-assumption ::=
-  givens? assumption'
+assume ::=
+  typesig assume'
 
-assumption' ::=
+assume' ::=
   "ASSUME" appform ("IS" type)?
 
 -- ignoring operator priority
 expr ::=
     expr infixop expr
-  | name+                 -- constructor / function application
-  | name "OF" args        -- also constructor / function application
-  | name "WITH" namedargs -- also constructor / function application
-  | givens "YIELD" expr   -- anonymous function / lambda
-  | expr "'s" name        -- record projection
-  | "THE" name "OF" expr  -- also record projection (under discussion / should perhaps become generally possible as application syntax)
+  | name+                              -- constructor / function application
+  | name "OF" args                     -- also constructor / function application
+  | name "WITH" namedargs              -- also constructor / function application
+  | givens "YIELD" expr                -- anonymous function / lambda
+  | expr "'s" name                     -- record projection
+  | "THE" name "OF" expr               -- also record projection (under discussion / should perhaps become generally possible as application syntax)
   | "IF" expr "THEN" expr "ELSE" expr  -- elimination for Booleans
-  | "CONSIDER" expr branches -- elimination for general datatypes
-  | expr "WHERE" decls    -- local declarations
-  | article? "LIST" ("OF"?) expr{,}*   -- literal lists
-  | ...                   -- numeric literals (at least integers)
-  | ...                   -- string literals (in double quotes)
-    -- probably not needed because can be predefined instead of built-in:
-  | "EMPTY"               -- empty list
-  | "MISSING"             -- like Nothing in Haskell
-  | "JUST"                -- like Just in Haskell
-  | "TRUE"
-  | "FALSE"
+  | "CONSIDER" expr branches           -- elimination for general datatypes
+  | expr "WHERE" localdecls            -- local declarations
+  | "LIST" expr{,}*                    -- literal lists
+  | "NOT" expr                         -- negation [should probably be predefined, not built-in]
+  | ...                                -- numeric literals (at least integers)
+  | ...                                -- string literals (in double quotes)
 
 -- All operators have a textual form, but some may also have
 -- a symbolic form. These have to be built-in for now (not *necessarily*
@@ -125,7 +141,7 @@ infixop ::=
   | "GREATER" "THAN" | "ABOVE" | ">"
   | "LESS" "THAN" | "BELOW" | "<"
   | "AT" "LEAST" | ">="
-  | "AT "MOST" | "<="
+  | "AT" "MOST" | "<="
   | "FOLLOWED" "BY"     -- "cons" on lists
   | ...                 -- we will probably add more operators
 
@@ -149,10 +165,10 @@ namedarg ::=
   name "IS" article? expr
 
 args ::=
-  expr{AND}+
+  expr{,}+
 
 nameargs ::=
-  name{AND}+
+  name{,}+
 
 namedpatargs ::=
   namedpatarg{,}*
@@ -161,10 +177,10 @@ namedpatarg ::=
   name "IS" article? pattern
 
 patargs ::=
-  pattern{AND}+
+  pattern{,}+
 
-decls ::=
-  binding{;}*
+localdecls ::=
+  localdecl{;}*
 
 directive ::=
     "#EVAL" expr

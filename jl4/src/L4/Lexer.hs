@@ -80,6 +80,7 @@ data TokenType =
   | TAOpen
   | TAClose
     -- punctuation
+  | TParagraph
   | TComma
   | TSemicolon
   | TDot
@@ -232,6 +233,7 @@ tokenPayload =
   <|> TCClose         <$ char '}'
   <|> TSOpen          <$ char '['
   <|> TSClose         <$ char ']'
+  <|> TParagraph      <$ char '§'
   <|> TComma          <$ char ','
   <|> TSemicolon      <$ char ';'
   <|> TDot            <$ char '.'
@@ -584,6 +586,7 @@ displayPosToken (MkPosToken _r tt) =
     TSClose          -> "]"
     TAOpen           -> "<"
     TAClose          -> ">"
+    TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
     TDot             -> "."
@@ -690,6 +693,7 @@ posTokenCategory =
     TSClose -> CSymbol
     TAOpen -> CSymbol
     TAClose -> CSymbol
+    TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
     TDot -> CSymbol

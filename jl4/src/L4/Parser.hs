@@ -15,6 +15,7 @@ module L4.Parser (
 
 import Base
 
+import qualified Control.Applicative as Applicative
 import Data.Functor.Compose
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
@@ -179,26 +180,19 @@ anonymousSection =
     MkSection emptyAnno
       <$> pure 0
       <*> annoHole (pure Nothing)
-      <*> annoHole (manyLines topdeclWithRecovery)
+      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
 section :: Parser (Section Name)
 section =
   attachAnno $
     MkSection emptyAnno
-      <$> annoEpa sectionSymbols
+      <$> sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdeclWithRecovery)
+      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
-sectionSymbols :: Parser (Epa Int)
-sectionSymbols = do
-  paragraphSymbols <- lexeme $
-    token
-      (\ t -> do
-        symbol <- preview #_TOtherSymbolic t.payload
-        guard (Text.all (== '§') symbol)
-        pure t)
-      (Set.singleton (Tokens (trivialToken (TOtherSymbolic "§") :| [])))
-  pure $ (.range.length) <$> lexToEpa paragraphSymbols
+sectionSymbols :: Compose Parser (WithAnno e) Int
+sectionSymbols =
+  length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
 topdeclWithRecovery :: Parser (TopDecl Name)
 topdeclWithRecovery = do
@@ -275,9 +269,12 @@ typeDecl =
 recordDecl :: Parser (TypeDecl Name)
 recordDecl =
   attachAnno $
-    RecordDecl emptyAnno
-      <$  annoLexeme (spacedToken_ TKHas)
-      <*> annoHole (lsepBy reqParam (spacedToken_ TComma))
+    RecordDecl emptyAnno <$> recordDecl'
+
+recordDecl' :: Compose Parser (WithAnno e) [TypedName Name]
+recordDecl' =
+     annoLexeme (spacedToken_ TKHas)
+  *> annoHole (lsepBy reqParam (spacedToken_ TComma))
 
 enumDecl :: Parser (TypeDecl Name)
 enumDecl =
@@ -293,7 +290,7 @@ conDecl =
   attachAnno $
     MkConDecl emptyAnno
       <$> annoHole name
-      <*> option [] (annoLexeme (spacedToken_ TKHas) *> annoHole (lsepBy reqParam (spacedToken_ TComma)))
+      <*> option [] recordDecl'
 
 decide :: TypeSig Name -> Parser (Decide Name)
 decide sig = do
