@@ -144,7 +144,7 @@ data Expr n =
   | Var        Anno n -- currently not really needed because subsumed by empty App
   | Lam        Anno (GivenSig n) (Expr n)
   | App        Anno n [Expr n]
-  | AppNamed   Anno n [NamedExpr n]
+  | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary

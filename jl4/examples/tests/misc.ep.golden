@@ -47,7 +47,12 @@ example MEANS
 example2 MEANS
   add2 (Suc Zero) (Suc (Suc Zero))
 
+example3 MEANS
+  mul (Suc (Suc Zero)) example
+
+#EVAL example
 #EVAL example2
+#EVAL example3
 
 GIVEN a IS A TYPE
       list1 IS A LIST OF a
