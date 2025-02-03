@@ -9,7 +9,7 @@
     "files": [
       "!**/.DS_Store",
       "!**/.vscode/**",
-      "media",
+      "static",
       "out",
       "src"
     ]
@@ -74,6 +74,7 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
+    "@repo/webview": "*",
     "minimatch": "^10.0.1",
     "ladder-diagram": "^2.0.3",
     "vscode-languageclient": "^9.0.1"

@@ -1,6 +1,9 @@
 import path from 'path'
 import * as vscode from 'vscode'
 import { RuleNode } from './rule-to-json'
+// import webviewHtml from '@repo/webview'
+
+const STATIC_ASSETS_DIR = 'static'
 
 export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
   let panel: vscode.WebviewPanel | undefined
@@ -17,7 +20,11 @@ export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
     )
 
     const ladderDiagramScriptPath = vscode.Uri.file(
-      path.join(context.extensionPath, 'media', 'ladder-diagram.min.js')
+      path.join(
+        context.extensionPath,
+        STATIC_ASSETS_DIR,
+        'ladder-diagram.min.js'
+      )
     )
     const ladderDiagramScriptUri = panel.webview.asWebviewUri(
       ladderDiagramScriptPath
@@ -42,10 +49,10 @@ function getWebviewContent(
   scriptUri: vscode.Uri,
   ruleJson: RuleNode
 ): string {
-  // TODO: Temporarily putting the CSS in `media` of the extension
+  // TODO: Temporarily putting the CSS in STATIC_ASSETS_DIR of the extension
   // Will clean this up and put it all under the decision-logic-visualizer later
   const webviewCssUri = panel.webview.asWebviewUri(
-    vscode.Uri.joinPath(context.extensionUri, 'media', 'ladder.css')
+    vscode.Uri.joinPath(context.extensionUri, STATIC_ASSETS_DIR, 'ladder.css')
   )
 
   return `
