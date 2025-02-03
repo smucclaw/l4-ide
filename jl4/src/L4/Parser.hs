@@ -54,21 +54,6 @@ blockRefAnnotation :: Parser [PosToken]
 blockRefAnnotation =
   (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
 
-isSpaceToken :: PosToken -> Bool
-isSpaceToken t =
-  case t.payload of
-    TSpace _        -> True
-    TLineComment _  -> True
-    TBlockComment _ -> True
-    _               -> False
-
-isAnnotationToken :: PosToken -> Bool
-isAnnotationToken t =
-  case t.payload of
-    TNlg _ -> True
-    TRef _ -> True
-    _      -> False
-
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
@@ -78,7 +63,7 @@ lexeme p = do
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
   token
-    (\ t -> if t.payload == tt then Just t else Nothing)
+    (\ t -> if computedPayload t == tt then Just t else Nothing)
     (Set.singleton (Tokens (trivialToken tt :| [])))
 
 trivialToken :: TokenType -> PosToken
@@ -100,7 +85,7 @@ spacedToken cond lbl =
   lexToEpa' <$>
     lexeme
       (token
-        (\ t -> (t,) <$> cond t.payload)
+        (\ t -> (t,) <$> cond (computedPayload t))
         Set.empty
       )
     <?> lbl
