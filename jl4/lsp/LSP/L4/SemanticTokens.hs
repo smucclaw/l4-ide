@@ -105,8 +105,8 @@ deriving anyclass instance ToSemTokens PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Assume Name)
 instance ToSemTokens PosToken (Declare Name) where
-  toSemTokens (MkDeclare ann appform decl) =
-    traverseCsnWithHoles ann [withTokenType identIsType $ toSemTokens appform, toSemTokens decl]
+  toSemTokens (MkDeclare ann typesig appform decl) =
+    traverseCsnWithHoles ann [withTokenType identIsType $ toSemTokens typesig, toSemTokens appform, toSemTokens decl]
 deriving anyclass instance ToSemTokens PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens PosToken (ConDecl Name)
 instance ToSemTokens PosToken (Type' Name) where
