@@ -4,3 +4,13 @@ while checking DECIDE/MEANS of bar:
 ambiguous: foo, options:
 BOOLEAN
 NUMBER
+tdnr-ambiguous.l4:14:18-21:
+while checking DECIDE/MEANS of another:
+ambiguous: foo, options:
+BOOLEAN
+NUMBER
+tdnr-ambiguous.l4:14:27-30:
+while checking DECIDE/MEANS of another:
+ambiguous: foo, options:
+BOOLEAN
+NUMBER
