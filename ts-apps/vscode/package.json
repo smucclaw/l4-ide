@@ -107,7 +107,7 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",
-    "format": "prettier --write .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
     "lint-fix": "eslint ./src --fix"
