@@ -56,8 +56,7 @@ data SrcRange =
 -- | A single source position. Line and column numbers are 1-based.
 data SrcPos =
   MkSrcPos
-    { filename :: !FilePath
-    , line     :: !Int
+    { line     :: !Int
     , column   :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
@@ -338,6 +337,16 @@ keywords =
     , ("ALL"        , TKAll        )
     ]
 
+trivialToken :: TokenType -> PosToken
+trivialToken tt =
+  MkPosToken trivialRange tt
+  where
+    trivialRange :: SrcRange
+    trivialRange = MkSrcRange trivialPos trivialPos 0
+
+    trivialPos :: SrcPos
+    trivialPos = MkSrcPos 0 0
+
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
@@ -373,11 +382,11 @@ mkPosTokens filepath txt rtoks =
 
 -- | Convert from a Megaparsec source position to one of ours.
 convertPos :: SourcePos -> SrcPos
-convertPos (SourcePos fn l c) =
-  MkSrcPos fn (unPos l) (unPos c)
+convertPos (SourcePos _fn l c) =
+  MkSrcPos (unPos l) (unPos c)
 
-unconvertPos :: SrcPos -> SourcePos
-unconvertPos (MkSrcPos fn l c) =
+unconvertPos :: FilePath -> SrcPos -> SourcePos
+unconvertPos fn (MkSrcPos l c) =
   SourcePos fn (mkPos l) (mkPos c)
 
 data TokenStream =
@@ -457,6 +466,8 @@ instance TraversableStream TokenStream where
         }
     )
     where
+      fn = pst.pstateSourcePos.sourceName
+
       prefix
         | sameLine  = pst.pstateLinePrefix ++ preLine
         | otherwise = preLine
@@ -469,8 +480,8 @@ instance TraversableStream TokenStream where
         case post of
           [] -> case pst.pstateInput.tokens of
             [] -> pst.pstateSourcePos
-            xs -> unconvertPos (last xs).range.end
-          (x : _) -> unconvertPos x.range.start
+            xs -> unconvertPos fn (last xs).range.end
+          (x : _) -> unconvertPos fn x.range.start
 
       pre, post :: [PosToken]
       (pre, post) = splitAt (o - pst.pstateOffset) pst.pstateInput.tokens

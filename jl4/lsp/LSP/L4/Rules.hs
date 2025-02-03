@@ -288,4 +288,4 @@ srcPosToLspPosition s =
 
 lspPositionToSrcPos :: LSP.Position -> SrcPos
 lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
-  MkSrcPos "" (fromIntegral $ l + 1) (fromIntegral $ c + 1)
+  MkSrcPos (fromIntegral $ l + 1) (fromIntegral $ c + 1)

@@ -204,6 +204,12 @@ class HasSrcRange a where
   default rangeOf :: HasAnno a => a -> Maybe SrcRange
   rangeOf a = rangeOf $ getAnno a
 
+class HasTrailingSrcRange a where
+  rangeOfTrailing :: a -> Maybe SrcRange
+
+  -- default rangeOfTrailing :: HasAnno a => a -> Maybe SrcRange
+  -- rangeOfTrailing a = rangeOfTrailing $ getAnno a
+
 instance HasSrcRange a => HasSrcRange [a] where
   rangeOf as = do
     let
@@ -220,8 +226,25 @@ instance HasSrcRange a => HasSrcRange [a] where
       , length = sum $ fmap (.length) rs'
       }
 
+instance HasTrailingSrcRange a => HasTrailingSrcRange [a] where
+  rangeOfTrailing as = do
+    let
+      rs = Maybe.mapMaybe rangeOfTrailing as
+
+    rs' <- NonEmpty.nonEmpty rs
+    let
+      l = NonEmpty.last rs'
+
+    pure l
+
+instance HasTrailingSrcRange a => HasTrailingSrcRange (Maybe a) where
+  rangeOfTrailing = (>>= rangeOfTrailing)
+
 instance HasSrcRange (CsnCluster_ a) where
-  rangeOf cluster = rangeOf [cluster.payload, cluster.trailing]
+  rangeOf cluster = rangeOf cluster.payload
+
+instance HasTrailingSrcRange (CsnCluster_ a) where
+  rangeOfTrailing cluster = rangeOf cluster.trailing
 
 instance HasSrcRange (ConcreteSyntaxNode_ a) where
   rangeOf csn = csn.range

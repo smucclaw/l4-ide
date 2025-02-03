@@ -81,16 +81,6 @@ plainToken tt =
     (\ t -> if t.payload == tt then Just t else Nothing)
     (Set.singleton (Tokens (trivialToken tt :| [])))
 
-trivialToken :: TokenType -> PosToken
-trivialToken tt =
-  MkPosToken trivialRange tt
-  where
-    trivialRange :: SrcRange
-    trivialRange = MkSrcRange trivialPos trivialPos 0
-
-    trivialPos :: SrcPos
-    trivialPos = MkSrcPos "" 0 0
-
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
   lexeme (plainToken tt)
@@ -1016,8 +1006,7 @@ mkPError orig (m, s) =
   PError
     { message = m
     , start = MkSrcPos
-        { filename = sourceName s
-        , line = unPos $ sourceLine s
+        { line = unPos $ sourceLine s
         , column = unPos $ sourceColumn s
         }
     , origin = orig
