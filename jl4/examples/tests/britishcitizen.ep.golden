@@ -32,11 +32,11 @@ DECIDE `is a British citizen (local)` IS
          `is born in the United Kingdom after commencement` p
       OR `is born in a qualifying territory after the appointed day` p
   AND -- when the person is born ...
-         `for father or mother` `is a British citizen`
-      OR `for father or mother` `is settled in the United Kingdom`
-      OR `for father or mother` `is settled in the qualifying territory in which the person is born`
+         `father or mother` `is a British citizen`
+      OR `father or mother` `is settled in the United Kingdom`
+      OR `father or mother` `is settled in the qualifying territory in which the person is born`
       WHERE
-        `for father or mother` property MEANS
+        `father or mother` property MEANS
              property OF `father of` p
           OR property OF `mother of` p
 
