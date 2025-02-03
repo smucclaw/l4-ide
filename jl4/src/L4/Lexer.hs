@@ -57,7 +57,9 @@ data SrcRange =
 -- | A single source position. Line and column numbers are 1-based.
 data SrcPos =
   MkSrcPos
-    { line     :: !Int
+    {
+    -- filename :: !FilePath
+      line     :: !Int
     , column   :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
