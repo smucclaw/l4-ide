@@ -104,7 +104,8 @@
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
-    "build": "tsc -b tsconfig.json && npm run esbuild-base",
+    "build": "npm run prepare:webview && tsc -b tsconfig.json && npm run esbuild-base",
+    "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",
