@@ -33,7 +33,6 @@ import L4.Syntax
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Foldable as Foldable
 import GHC.Records
-import qualified Data.Maybe as Maybe
 
 type Parser = Parsec Void TokenStream
 
@@ -65,17 +64,7 @@ plainToken :: TokenType -> Parser PosToken
 plainToken tt =
   token
     (\ t -> if computedPayload t == tt then Just t else Nothing)
-    (Set.singleton (Tokens (trivialToken tt :| [])))
-
-trivialToken :: TokenType -> PosToken
-trivialToken tt =
-  MkPosToken trivialRange tt
-  where
-    trivialRange :: SrcRange
-    trivialRange = MkSrcRange trivialPos trivialPos 0
-
-    trivialPos :: SrcPos
-    trivialPos = MkSrcPos "" 0 0
+    (Set.singleton (Tokens (L.trivialToken tt :| [])))
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -563,7 +552,7 @@ combine End _l e [] = e
 combine (Frame s e1 op _ l1 _) _l2 e2 [] =
   combine s l1 (e1 `op` e2) []
 
--- If there is nothing on the stack, we always push. 
+-- If there is nothing on the stack, we always push.
 combine End l1 e1 (MkCont op1 prio1 l2 p2 e2 : efs) =
   combine (Frame End e1 op1 prio1 l1 p2) l2 e2 efs
 
@@ -1095,8 +1084,7 @@ mkPError orig (m, s) =
   PError
     { message = m
     , start = MkSrcPos
-        { filename = sourceName s
-        , line = unPos $ sourceLine s
+        { line = unPos $ sourceLine s
         , column = unPos $ sourceColumn s
         }
     , origin = orig

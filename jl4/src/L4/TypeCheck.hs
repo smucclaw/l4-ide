@@ -191,7 +191,7 @@ preDef t =
     (mkAnno
       [mkCluster
         (CsnCluster
-          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos "" 0 0) (MkSrcPos "" 0 0) 0) (TIdentifier t)] Nothing Visible)
+          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos 0 0) (MkSrcPos 0 0) 0) (TIdentifier t)] Nothing Visible)
           (ConcreteSyntaxNode [] Nothing Hidden)
         )
       ]
@@ -1537,21 +1537,20 @@ checkAndExactPrintFile file input =
                Left epError -> prettyTraverseAnnoError epError
                Right ep -> ep
         (errs, _p, _s) ->
-          Text.unlines (map (\ err -> prettySrcRange (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errs)
+          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errs)
 
-prettySrcRange :: Maybe SrcRange -> Text
-prettySrcRange Nothing = "<unknown location>:"
-prettySrcRange (Just (MkSrcRange p1 p2 _)) = prettySrcPos p1 <> prettyPartialSrcPos p1 p2
+prettySrcRange :: FilePath -> Maybe SrcRange -> Text
+prettySrcRange fp Nothing = Text.pack fp <> ":<unknown range>"
+prettySrcRange fp (Just (MkSrcRange p1 p2 _)) = Text.pack fp <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 
 prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos f l c) = Text.pack f <> ":" <> Text.pack (show l) <> ":" <> Text.pack (show c)
+prettySrcPos (MkSrcPos l c) = Text.pack (show l) <> ":" <> Text.pack (show c)
 
 prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
-prettyPartialSrcPos (MkSrcPos rf rl rc) p@(MkSrcPos f l c)
-  | rf == f && rl == l && rc == c = ""
-  | rf == f && rl == l            = "-" <> Text.pack (show c)
-  | rf == f                       = "-" <> Text.pack (show l) <> ":" <> Text.pack (show c)
-  | otherwise                     = "-" <> prettySrcPos p
+prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
+  | rl == l && rc == c = ""
+  | rl == l            = "-" <> Text.pack (show c)
+  | otherwise          = "-" <> prettySrcPos p
 
 instance HasSrcRange CheckErrorWithContext where
   rangeOf (MkCheckErrorWithContext e ctx) = rangeOf e <|> rangeOf ctx
@@ -1766,7 +1765,7 @@ findDefinition pos a = do
 
 -- | We ignore the file name, because we assume this has already been checked.
 inRange :: SrcPos -> SrcRange -> Bool
-inRange (MkSrcPos _ l c) (MkSrcRange (MkSrcPos _ l1 c1) (MkSrcPos _ l2 c2) _) =
+inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _) =
      (l, c) >= (l1, c1)
   && (l, c) <= (l2, c2)
 
