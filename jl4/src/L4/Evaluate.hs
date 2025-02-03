@@ -21,7 +21,7 @@ data EvalState =
   MkEvalState
     { environment :: !Environment
     , results     :: [EvalResult]
-    , supply      :: !Int -- TODO: uniques generated during evaluation should be distinct from uniques generated using scope-checking
+    -- , supply      :: !Int
     }
   deriving Generic
 
@@ -144,7 +144,7 @@ evalTopDecl (Directive _ann directive) =
   evalDirective directive
 
 evalDeclare :: Declare Resolved -> Eval ()
-evalDeclare (MkDeclare _ann appForm t) =
+evalDeclare (MkDeclare _ann _tysig appForm t) =
   evalTypeDecl (TypeCheck.appFormHead appForm) t
 
 evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
@@ -176,9 +176,9 @@ evalDecide (MkDecide _ann _tysig (MkAppForm _ n args) expr) =
     makeKnown n v
 
 evalAssume :: Assume Resolved -> Eval ()
-evalAssume (MkAssume _ann (MkAppForm _ n []) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n []) _) =
   makeKnown n (ValAssumed n)
-evalAssume (MkAssume _ann (MkAppForm _ n _args) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n _args) _) =
   makeKnown n (ValAssumed n) -- TODO: we should create a given here yielding an assumed, but we currently cannot do that easily
 
 evalExpr :: Expr Resolved -> Eval (Either EvalException Value)
@@ -361,5 +361,5 @@ doEvalProgram :: Program Resolved -> [EvalResult]
 doEvalProgram prog =
   case evalProgram prog of
     MkEval m ->
-      case m (MkEvalState initialEnvironment [] 1000) of
+      case m (MkEvalState initialEnvironment [] {- 0 -}) of
         (_, s) -> s.results
