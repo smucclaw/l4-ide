@@ -36,6 +36,7 @@ library
     optics-core,
     optparse-applicative,
     pretty-simple,
+    prettyprinter,
     simala,
     text,
     transformers,
@@ -47,6 +48,7 @@ library
     L4.ExactPrint
     L4.Main
     L4.TypeCheck
+    L4.Print
     L4.Syntax
     L4.Lexer
     L4.Parser

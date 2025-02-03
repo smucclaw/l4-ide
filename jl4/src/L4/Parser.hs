@@ -772,7 +772,10 @@ lam :: Parser (Expr Name)
 lam = do
   current <- Lexer.indentLevel
   attachAnno $
-    Lam emptyAnno <$> annoHole givens <* annoLexeme (spacedToken_ TKYield) <*> annoHole (indentedExpr current)
+    Lam emptyAnno
+      <$> annoHole givens
+      <* annoLexeme (spacedToken_ TKYield)
+      <*> annoHole (indentedExpr current)
 
 ifthenelse :: Parser (Expr Name)
 ifthenelse = do
