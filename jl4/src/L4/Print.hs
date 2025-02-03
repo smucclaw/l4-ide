@@ -17,7 +17,10 @@ readAndPrint fp = do
   case Parser.execParser Parser.program fp input of
     Left errs -> Text.putStrLn $ Text.unlines $ fmap (.message) $ toList errs
     Right prog ->
-      Text.putStrLn $ renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout prog
+      Text.putStrLn $ prettyLayout prog
+
+prettyLayout :: LayoutPrinter a => a -> Text
+prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
 
 class LayoutPrinter a where
   printWithLayout :: a -> Doc ann

@@ -328,9 +328,13 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
         Nothing -> pure Nothing
         Just typeCheck -> do
           let
-            -- assumeExpr =
-            --   Assume emptyAnno
-            --     (MkAssume emptyAnno (MkAppForm emptyAnno name []) (fmap getActual ty))
+            assumeExpr =
+              Assume emptyAnno
+                (MkAssume emptyAnno
+                  (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
+                  (MkAppForm emptyAnno name [])
+                  (Just $ fmap getActual ty)
+                )
 
             topDecls =
               Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
@@ -345,6 +349,12 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                 topDecls
 
           pure $ do
+            -- If the type has any inference variable, we don't want to print it
+            -- yet. Maybe it in the future, once LSP has snippet support
+            -- for code actions.
+            -- This LSP feature is promised in 3.18.
+            -- At the time of writing, we are designing this code action against 3.17.
+            guard (not $ hasTypeInferenceVars ty)
             decl <- enclosingTopDecl
             srcRange <- rangeOf decl
 
@@ -353,8 +363,13 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                 TextEdit
                   { _range = pointRange $ srcPosToLspPosition srcRange.start
                   , _newText =
-                      -- simpleprint assumeExpr
-                      "ASSUME " <> simpleprint name <> " IS A " <> simpleprint ty <> "\n\n"
+                      -- Add 2 newlines for better results.
+                      -- Ideally, we "graft" this top level onto our
+                      -- AST, at the correct location, and then calculate a diff
+                      -- based on the old AST and the new one.
+                      -- However, currently we are missing a lot of infrastructure
+                      -- to make this possible.
+                      Text.strip (prettyLayout assumeExpr) <> "\n\n"
                   }
 
             Just $ CodeAction
@@ -379,3 +394,15 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
 
     pointRange pos = Range pos pos
+
+hasTypeInferenceVars :: Type' Resolved -> Bool
+hasTypeInferenceVars = \case
+  Type   _ -> False
+  TyApp  _ _n ns -> any hasTypeInferenceVars ns
+  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
+  Forall _ _ ty -> hasTypeInferenceVars ty
+  InfVar _ _ _ -> True
+
+hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
+hasNamedTypeInferenceVars = \case
+  MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
