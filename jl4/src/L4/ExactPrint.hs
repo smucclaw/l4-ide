@@ -117,6 +117,7 @@ instance ToConcreteNodes PosToken (Section Name) where
     flattenConcreteNodes ann [toNodes name, toNodes decls]
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (Assume Name)
 deriving anyclass instance ToConcreteNodes PosToken (Declare Name)
 deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Name)
@@ -137,6 +138,7 @@ deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Assume Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Declare Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Resolved)

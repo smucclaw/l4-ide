@@ -1,0 +1,18 @@
+x MEANS
+  y + z
+  WHERE
+    y MEANS 2
+    z MEANS 3
+
+#CHECK x
+#EVAL x
+
+outer MEANS
+  middle
+  WHERE
+    middle MEANS
+      inner
+      WHERE
+        inner MEANS 42
+
+#EVAL outer

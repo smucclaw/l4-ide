@@ -150,6 +150,7 @@ data Expr n =
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
+  | Where      Anno (Expr n) [LocalDecl n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -194,6 +195,12 @@ data TopDecl n =
   | Decide    Anno (Decide n)
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data LocalDecl n =
+    LocalDecide Anno (Decide n)
+  | LocalAssume Anno (Assume n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -263,3 +270,5 @@ deriving via L4Syntax (Section n)
   instance HasAnno (Section n)
 deriving via L4Syntax (TopDecl n)
   instance HasAnno (TopDecl n)
+deriving via L4Syntax (LocalDecl n)
+  instance HasAnno (LocalDecl n)
