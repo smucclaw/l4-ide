@@ -1010,8 +1010,7 @@ mkPError orig (m, s) =
   PError
     { message = m
     , start = MkSrcPos
-        { filename = sourceName s
-        , line = unPos $ sourceLine s
+        { line = unPos $ sourceLine s
         , column = unPos $ sourceColumn s
         }
     , origin = orig

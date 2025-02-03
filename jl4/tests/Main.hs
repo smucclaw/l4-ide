@@ -69,14 +69,16 @@ jl4ExactPrintGolden dir inputFile = do
 
 parseFile :: String -> Text -> IO ()
 parseFile file input =
-  case Parser.execParser Parser.program (takeFileName file) input of
+  case Parser.execParser Parser.program fp input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right prog -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
         ([], _p, _s) -> Text.putStrLn "Typechecking successful"
         (errs, _p, _s) ->
-          Text.putStr (Text.unlines (map (\ err -> JL4.prettySrcRange (JL4.rangeOf err) <> ":\n" <> JL4.prettyCheckErrorWithContext err) errs))
+          Text.putStr (Text.unlines (map (\ err -> JL4.prettySrcRange fp (JL4.rangeOf err) <> ":\n" <> JL4.prettyCheckErrorWithContext err) errs))
+  where
+    fp = takeFileName file
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =
