@@ -1,16 +1,16 @@
-import type { Eq, Ord } from '$lib/utils.ts'
-import { DirectedEdge } from './alga.ts'
-import { BaseAMGraph } from './base-adjacency-map.ts'
+import type { Eq, Ord } from '$lib/utils.js'
+import { DirectedEdge } from './alga.js'
+import { BaseAMGraph } from './base-adjacency-map.js'
 
 /****************************************************************************
   Internal Adjacency Map implementation / representation for Directed Graphs
 *****************************************************************************/
 
 export type DirectedGraph<A extends Ord<A>> =
-  | InstanceType<typeof Empty<A>>
-  | InstanceType<typeof Vertex<A>>
-  | InstanceType<typeof Overlay<A>>
-  | InstanceType<typeof Connect<A>>
+  | Empty<A>
+  | Vertex<A>
+  | Overlay<A>
+  | Connect<A>
 
 // Ignore the InstanceType<typeof ... syntax
 // It's morally equivalent to Empty | Vertex | ...
@@ -63,7 +63,7 @@ export function empty<A extends Ord<A>>() {
 }
 
 /** Empty graph */
-export const Empty = class<A extends Ord<A>> extends DirectedAMGraph<A> {
+export class Empty<A extends Ord<A>> extends DirectedAMGraph<A> {
   constructor() {
     super()
   }
@@ -74,7 +74,7 @@ export function vertex<A extends Ord<A>>(a: A) {
 }
 
 /** The graph consisting of a single isolated vertex. */
-export const Vertex = class<A extends Ord<A>> extends DirectedAMGraph<A> {
+export class Vertex<A extends Ord<A>> extends DirectedAMGraph<A> {
   constructor(readonly value: A) {
     super(new Map([[value, new Set()]]))
   }
@@ -95,7 +95,7 @@ export function overlay<A extends Ord<A>>(
   return new Overlay(x, y)
 }
 
-export const Overlay = class<A extends Ord<A>> extends DirectedAMGraph<A> {
+export class Overlay<A extends Ord<A>> extends DirectedAMGraph<A> {
   constructor(
     readonly left: DirectedAMGraph<A>,
     readonly right: DirectedAMGraph<A>
@@ -115,7 +115,7 @@ export const Overlay = class<A extends Ord<A>> extends DirectedAMGraph<A> {
   }
 }
 
-export const Connect = class<A extends Ord<A>> extends DirectedAMGraph<A> {
+export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
   constructor(
     readonly from: DirectedAMGraph<A>,
     readonly to: DirectedAMGraph<A>

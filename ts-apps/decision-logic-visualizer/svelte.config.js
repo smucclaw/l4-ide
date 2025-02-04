@@ -1,5 +1,6 @@
 import adapter from '@sveltejs/adapter-static'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+// import tsconfigPaths from 'vite-tsconfig-paths'
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -7,6 +8,7 @@ const config = {
   // for more information about preprocessors
   extensions: ['.svelte'],
   preprocess: [vitePreprocess()],
+  // plugins: [tsconfigPaths()],
 
   kit: {
     adapter: adapter({

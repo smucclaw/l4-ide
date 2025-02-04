@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-kit sync && vite build",
+    "build": "npm run package",
     "preview": "vite preview",
     "prepare": "svelte-kit sync",
     "package": "svelte-kit sync && svelte-package && publint",
@@ -27,6 +27,14 @@
       "svelte": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "src/lib",
+    "!src/lib/**/*.test.*",
+    "!src/lib/**/*.spec.*"
+  ],
   "prettier": "@repo/prettier-config",
   "peerDependencies": {
     "svelte": "^5.0.0"

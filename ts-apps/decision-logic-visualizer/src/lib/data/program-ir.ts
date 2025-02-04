@@ -1,12 +1,12 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
 import { Either } from 'effect'
-import type { LirSource, LirNodeInfo } from '../layout-ir/core'
-import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.ts'
+import type { LirSource, LirNodeInfo } from '../layout-ir/core.js'
+import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
 import {
   BoolVarLirNode,
   // NotLirNode,
   BinExprLirNode,
-} from '../layout-ir/lir-decision-logic.svelte.ts'
+} from '../layout-ir/lir-decision-logic.svelte.js'
 import { match } from 'ts-pattern'
 
 /**********************

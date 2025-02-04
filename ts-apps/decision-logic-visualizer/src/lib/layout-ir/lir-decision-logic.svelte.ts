@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Temporarily disable eslint unused vars
 // while I think more about how to handle LirContext params
-import type { BoolVar, BinOp } from '$lib/data/program-ir'
-export type { BinOp }
-import type { LirId, LirNode, LirNodeInfo } from './core'
-import { LirContext, DefaultLirNode } from './core'
+import type { BoolVar, BinOp } from '$lib/data/program-ir.js'
+// export type { BinOp }
+import type { LirId, LirNode, LirNodeInfo } from './core.js'
+import { LirContext, DefaultLirNode } from './core.js'
 import { match } from 'ts-pattern'
 
 /*************************************************

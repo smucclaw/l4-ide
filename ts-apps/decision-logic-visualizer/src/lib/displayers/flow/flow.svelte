@@ -1,6 +1,6 @@
 <script lang="ts">
   import dagre from '@dagrejs/dagre'
-  import { getLayoutedElements, type DagreConfig } from './layout.ts'
+  import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
     SvelteFlow,
     Background,
@@ -12,7 +12,7 @@
     type ExprFlowDisplayerProps,
     exprLirNodeToAlgaUndirectedGraph,
     algaUndirectedGraphToFlowGraph,
-  } from './types.svelte.ts'
+  } from './types.svelte.js'
 
   import { onMount } from 'svelte'
 

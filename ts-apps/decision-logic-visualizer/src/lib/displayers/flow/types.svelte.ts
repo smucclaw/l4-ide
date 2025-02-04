@@ -1,21 +1,21 @@
 import * as SF from '@xyflow/svelte'
-import type {
-  LirId,
-  LirContext,
-  ExprLirNode,
-  BinOp,
-} from '$lib/layout-ir/index.ts'
-import { BoolVarLirNode, BinExprLirNode } from '$lib/layout-ir/index.ts'
+import { BinOp } from '../../data/program-ir.js'
+import type { LirId, LirContext } from '../../layout-ir/core.js'
+import type { ExprLirNode } from '../../layout-ir/lir-decision-logic.svelte.js'
+import {
+  BoolVarLirNode,
+  BinExprLirNode,
+} from '../../layout-ir/lir-decision-logic.svelte.js'
 import { match, P } from 'ts-pattern'
-import type { UndirectedGraph } from '$lib/algebraic-graphs/alga.ts'
-import type { Ord } from '$lib/utils'
-import { ComparisonResult } from '$lib/utils'
+import type { UndirectedGraph } from '$lib/algebraic-graphs/alga.js'
+import type { Ord } from '../../utils.js'
+import { ComparisonResult } from '../../utils.js'
 import {
   connect,
   // empty,
   vertex,
   overlay,
-} from '$lib/algebraic-graphs/alga.ts'
+} from '../../algebraic-graphs/alga.js'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
@@ -148,11 +148,11 @@ export function exprLirNodeToAlgaUndirectedGraph(
   The following exploits the analogy between And with connect
   and Or with overlay.
 
-  That is, the essence of the ladder diagram has to do with 
-  how the And distributes over Or. That is how 
+  That is, the essence of the ladder diagram has to do with
+  how the And distributes over Or. That is how
   we get a path for each of the ways that someone can make the goal true.
 
-  But this sort of distributivity is also what we get 
+  But this sort of distributivity is also what we get
   with connect and overlay from the algebraic graphs formalism.
   */
   return match(expr)

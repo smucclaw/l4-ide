@@ -1,8 +1,12 @@
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import { Either, Schema } from 'effect'
-  import { IRExpr, ExprLirSource } from '$lib/data/program-ir'
-  import { LirContext, LirRegistry, type LirRootType } from '$lib/layout-ir'
+  import { IRExpr, ExprLirSource } from '$lib/data/program-ir.js'
+  import {
+    LirContext,
+    LirRegistry,
+    type LirRootType,
+  } from '$lib/layout-ir/core.js'
 
   import ExprFlow from '$lib/displayers/flow/flow.svelte'
 

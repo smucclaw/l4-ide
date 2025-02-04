@@ -1,6 +1,6 @@
-import * as AM from './adjacency-map-undirected'
-import type { Ord } from '$lib/utils'
-import { ComparisonResult, isLessThanOrEquals } from '$lib/utils'
+import * as AM from './adjacency-map-undirected.js'
+import type { Ord } from '$lib/utils.js'
+import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /****************************
   Alga abstract interface

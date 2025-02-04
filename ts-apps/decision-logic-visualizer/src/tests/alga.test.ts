@@ -1,7 +1,12 @@
 import { describe, test, expect } from 'vitest'
-import { empty, vertex, overlay, connect } from '../lib/algebraic-graphs/alga'
-import { ComparisonResult } from '../lib/utils'
-import type { Ord } from '../lib/utils'
+import {
+  empty,
+  vertex,
+  overlay,
+  connect,
+} from '../lib/algebraic-graphs/alga.js'
+import { ComparisonResult } from '../lib/utils.js'
+import type { Ord } from '../lib/utils.js'
 
 class NumberWrapper implements Ord<NumberWrapper> {
   constructor(private value: number) {}

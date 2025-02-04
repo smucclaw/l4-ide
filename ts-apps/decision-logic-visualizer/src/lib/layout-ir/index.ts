@@ -1,2 +1,2 @@
-export * from './core.ts'
-export * from './lir-decision-logic.svelte.ts'
+export * from './core.js'
+export * from './lir-decision-logic.svelte.js'
