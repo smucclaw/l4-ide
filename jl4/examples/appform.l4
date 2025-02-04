@@ -1,0 +1,19 @@
+
+foo x y MEANS
+  x + y
+
+DECLARE Pair
+  HAS px IS A NUMBER
+      py IS A NUMBER
+
+DECLARE Colour
+  IS ONE OF
+    red
+    green
+    blue
+
+isNiceColour c MEANS
+  CONSIDER c
+  WHEN red THEN TRUE
+  WHEN green THEN FALSE
+  WHEN blue THEN TRUE
