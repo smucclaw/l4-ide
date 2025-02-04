@@ -2,5 +2,5 @@
 9 | ASSUME one IS A
   | ^^^^^^
 unexpected ASSUME
-expecting <, FUNCTION, LIST, TYPE, [, identifier, or space token
+expecting <, FUNCTION, LIST, NLG Annotation, TYPE, [, identifier, or space token
 

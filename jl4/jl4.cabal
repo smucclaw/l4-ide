@@ -52,13 +52,16 @@ library
     L4.Evaluate
     L4.ExactPrint
     L4.Main
-    L4.TypeCheck
-    L4.Print
-    L4.Syntax
+    L4.Nlg
     L4.Lexer
     L4.Parser
+    L4.Parser.ResolveAnnotation
+    L4.Parser.SrcSpan
     L4.ParserCombinators
+    L4.Print
+    L4.Syntax
     L4.Transform
+    L4.TypeCheck
 
 executable jl4-cli
   import: defaults
@@ -172,6 +175,7 @@ test-suite jl4-test
     Glob,
     hspec,
     hspec-golden,
+    optics,
     silently,
     text,
     jl4

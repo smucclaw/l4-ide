@@ -1,0 +1,5 @@
+DECIDE foo [Test]
+            a [A Comment]
+            b [B Comment]
+            c
+    IS c [C comment]

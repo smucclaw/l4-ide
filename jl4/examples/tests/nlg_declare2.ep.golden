@@ -1,0 +1,3 @@
+DECLARE PAIR [The Pair Of] OF a, b
+  HAS fst [the first] IS AN a
+      snd [the second] IS A  b

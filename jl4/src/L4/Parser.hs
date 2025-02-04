@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 module L4.Parser (
   -- * Public API
@@ -7,57 +5,190 @@ module L4.Parser (
   execParser,
   execParserForTokens,
   program,
-  PError(..),
+  PError (..),
   mkPError,
+  PState (..),
+
+  -- * High-level JL4 parser
+  execProgramParser,
+  execProgramParserForTokens,
+
   -- * Testing API
   parseTest,
+
+  -- * Utils
+  isWhiteSpaceToken,
+
+  -- * Annotation helpers
+  WithAnno_ (..),
+  withHoleAnno,
+  withEpaAnno,
+  mkHoleAnnoFor,
+  annoHole,
+  annoEpa,
+  annoLexeme,
+  annoLexemes,
+  attachAnno,
+  inlineAnnoHole,
+  Epa_ (..),
+  epaToCluster,
+  epaToHiddenCluster,
+  attachEpa,
+  mkSimpleEpaAnno,
+  Lexeme_ (..),
+  mkLexeme,
+  lexesToEpa,
+  lexesToEpa',
+  lexToEpa,
+  lexToEpa',
 ) where
 
 import Base
 
 import qualified Control.Applicative as Applicative
+import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import qualified Data.List.NonEmpty as NonEmpty
+import GHC.Records
 import Optics
 import Text.Megaparsec hiding (parseTest)
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import Text.Pretty.Simple
+import qualified Control.Monad.Trans.State.Lazy as State
 
 import L4.Annotation
 import L4.Lexer as L
 import qualified L4.ParserCombinators as P
 import L4.Syntax
-import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Foldable as Foldable
-import GHC.Records
+import qualified L4.Parser.ResolveAnnotation as Resolve
 
-type Parser = Parsec Void TokenStream
+type Parser = StateT PState (Parsec Void TokenStream)
 
-spacesOrAnnotations :: Parser [PosToken]
-spacesOrAnnotations =  concat <$> many (spaces1 <|> blockNlgAnnotation <|> blockRefAnnotation)
+data PState = PState
+  { comments :: [Comment]
+  , nlgs :: [Nlg]
+  , refs :: [Ref]
+  }
+  deriving stock (Show, Eq, Generic)
 
-spaces1 :: Parser [PosToken]
-spaces1 =
-  takeWhile1P (Just "space token") isWhiteSpaceToken
+instance Semigroup PState where
+  s1 <> s2 = PState
+    { comments = s1.comments <> s2.comments
+    , nlgs = s1.nlgs <> s2.nlgs
+    , refs = s1.refs <> s2.refs
+    }
+
+emptyPState :: PState
+emptyPState = PState
+  { comments = []
+  , nlgs = []
+  , refs = []
+  }
+
+addNlg :: Nlg -> PState -> PState
+addNlg n s = over #nlgs (n:) s
+
+addRef :: Ref -> PState -> PState
+addRef ref s = over #refs (ref:) s
+
+spaces :: Parser [PosToken]
+spaces =
+  takeWhileP (Just "space token") isWhiteSpaceToken
 
 isWhiteSpaceToken :: PosToken -> Bool
-isWhiteSpaceToken t = isSpaceToken t || isAnnotationToken t
+isWhiteSpaceToken t = isSpaceToken t
 
-blockNlgAnnotation :: Parser [PosToken]
-blockNlgAnnotation =
-  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TSOpen <*> manyTill_ (anySingle <?> "NLG Block Annotation") (plainToken TSClose)
+spaceOrAnnotations :: Parser (Lexeme ())
+spaceOrAnnotations = do
+  ws <- spaces
+  nlgs <- many (fmap Left nlgP <|> fmap Right refP)
+  traverse_ addNlgOrRef nlgs
+  let
+    epaNlgs = fmap (either epaToHiddenCluster epaToHiddenCluster) nlgs
+  pure $ Lexeme
+    { trailingTokens = ws
+    , payload = ()
+    , hiddenClusters = epaNlgs
+    }
 
-blockRefAnnotation :: Parser [PosToken]
+nlgP :: Parser (Epa Nlg)
+nlgP = do
+  nlgExpr <- nlgAnnotationP <|> blockNlgAnnotationP
+  pure $ fmap (MkNlg (mkSimpleEpaAnno nlgExpr)) nlgExpr
+
+refP :: Parser (Epa Ref)
+refP = do
+  refExpr <- blockRefAnnotation
+  pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
+
+nlgAnnotationP :: Parser (Epa [Text])
+nlgAnnotationP = onlySpacedToken (\case
+  TNlg t -> Just [t]
+  _ -> Nothing)
+  "NLG Annotation"
+
+blockNlgAnnotationP :: Parser (Epa [Text])
+blockNlgAnnotationP =
+  let
+    nlgParser = spacedP $
+      (\open (mid, close) -> [open] <> mid <> [close])
+        <$> plainToken TSOpen
+        <*> manyTill_
+              (anySingle <?> "NLG Block Annotation")
+              (plainToken TSClose)
+
+    epaNlg = lexesToEpa <$> nlgParser
+    epaTextNlg = fmap (fmap displayPosToken) <$> epaNlg
+  in
+    epaTextNlg
+
+blockRefAnnotation :: Parser (Epa [Text])
 blockRefAnnotation =
-  (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
+  let
+    refParser = spacedP $
+      (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
+    epaRef = lexesToEpa <$> refParser
+    epaTextRef = fmap (fmap displayPosToken) <$> epaRef
+  in
+    epaTextRef
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
-  trailingTokens <- spacesOrAnnotations
-  pure $ Lexeme trailingTokens a
+  wsOrAnnotation <- spaceOrAnnotations
+  pure $ Lexeme
+    { trailingTokens = wsOrAnnotation.trailingTokens
+    , payload = a
+    , hiddenClusters = wsOrAnnotation.hiddenClusters
+    }
+
+addNlgOrRef :: Either (Epa Nlg) (Epa Ref) -> Parser ()
+addNlgOrRef = \case
+  Left nlg -> State.modify' (addNlg nlg.payload)
+  Right ref -> State.modify' (addRef ref.payload)
+
+spacedP :: Parser a -> Parser (Lexeme a)
+spacedP p = do
+  a <- p
+  trailingTokens <- spaces
+  pure $ Lexeme
+    { trailingTokens = trailingTokens
+    , payload = a
+    , hiddenClusters = []
+    }
+
+onlySpacedToken :: (TokenType -> Maybe a) -> String -> Parser (Epa a)
+onlySpacedToken cond lbl =
+  lexToEpa' <$>
+    spacedP
+      (token
+        (\ t -> (t,) <$> cond t.payload)
+        Set.empty
+      )
+    <?> lbl
 
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
@@ -111,13 +242,12 @@ program :: Parser (Program Name)
 program = do
   attachAnno $
     MkProgram emptyAnno
-      <$  annoLexemes ((\ts -> Lexeme ts []) <$> spacesOrAnnotations)
+      <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
           ((\s ss -> s:ss)
             <$> anonymousSection
             <*> many section
           )
-
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -402,7 +532,7 @@ article :: Compose Parser WithAnno PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
-withOptionalArticle :: (HasSrcRange a, HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Type' Resolved) => Parser a -> Parser a
+withOptionalArticle :: (HasSrcRange a, HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => Parser a -> Parser a
 withOptionalArticle p =
   inlineAnnoHole $
     id
@@ -1061,27 +1191,58 @@ _example11e =
     , "     AND baz"
     ]
 
-execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) a
+-- ----------------------------------------------------------------------------
+-- JL4 parsers
+-- ----------------------------------------------------------------------------
+
+execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) (a, PState)
 execParser p file input =
+  case runLexer file input of
+    Left errs -> Left errs
+    Right ts -> execParserForTokens p file input ts
+
+execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, PState)
+execParserForTokens p file input ts =
+  case parse (runStateT (p <* eof) emptyPState) file (MkTokenStream (Text.unpack input) ts) of
+    Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
+    Right x  -> Right x
+
+runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
+runLexer file input =
   case execLexer file input of
     Left errs -> Left $ fmap (mkPError "lexer") errs
-    Right ts ->
-      case parse (p <* eof) file (MkTokenStream (Text.unpack input) ts) of
-        Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
-        Right x  -> Right x
+    Right ts -> pure ts
 
-execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) a
-execParserForTokens p file input ts =
-    case parse (p <* eof) file (MkTokenStream (Text.unpack input) ts) of
-      Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
-      Right x  -> Right x
+-- ----------------------------------------------------------------------------
+-- JL4 Program parser
+-- ----------------------------------------------------------------------------
+
+execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParser file input =
+  case runLexer file input of
+    Left err -> Left err
+    Right ts -> execProgramParserForTokens file input ts
+
+execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParserForTokens file input ts =
+  case execParserForTokens program file input ts of
+    Left err -> Left err
+    Right (prog, pstate) ->
+      let
+        (progWithNlgAnnotations, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs prog
+      in
+        Right (progWithNlgAnnotations, nlgS.warnings)
+
+-- ----------------------------------------------------------------------------
+-- Debug helpers
+-- ----------------------------------------------------------------------------
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
 parseFile :: Show a => Parser a -> String -> Text -> IO ()
 parseFile p file input =
   case execParser p file input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right x -> pPrint x
+    Right (x, _pState) -> pPrint x
 
 parseTest :: Show a => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
@@ -1113,7 +1274,7 @@ mkPError orig (m, s) =
 -- jl4 specific annotation helpers
 -- ----------------------------------------------------------------------------
 
-type WithAnno = WithAnno_ PosToken (Type' Resolved)
+type WithAnno = WithAnno_ PosToken Extension
 
 type Epa = Epa_ PosToken
 
@@ -1125,7 +1286,7 @@ mkConcreteSyntaxNode posTokens =
     { tokens = posTokens
     , range = do
         ne <- NonEmpty.nonEmpty posTokens
-        let l = NonEmpty.last ne
+        let l = NonEmpty.head ne
             h = NonEmpty.last ne
 
         pure MkSrcRange
@@ -1139,18 +1300,18 @@ mkConcreteSyntaxNode posTokens =
           else Visible
     }
 
-mkHiddenCsnCluster :: (HasField "range" a SrcRange) => CsnCluster_ a
-mkHiddenCsnCluster =
-  CsnCluster
-    { payload = mkConcreteSyntaxNode []
-    , trailing = mkConcreteSyntaxNode []
-    }
+mkHiddenConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
+mkHiddenConcreteSyntaxNode ps = mkConcreteSyntaxNode ps
+  & #visibility .~ Hidden
 
 -- ----------------------------------------------------------------------------
 -- Annotation Combinators
 -- ----------------------------------------------------------------------------
 
-data WithAnno_ t e a = WithAnno (Anno_ t e) a
+data WithAnno_ t e a = WithAnno
+  { anno :: Anno_ t e
+  , payload :: a
+  }
   deriving stock Show
   deriving (Functor)
 
@@ -1158,19 +1319,19 @@ withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
 withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
 
 withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
-withEpaAnno (Epa this trailing e) = WithAnno (mkAnno [mkCluster cluster]) e
- where
-  cluster =
-    CsnCluster
-      { payload = mkConcreteSyntaxNode this
-      , trailing = mkConcreteSyntaxNode trailing
-      }
+withEpaAnno p = WithAnno (mkAnno $ fmap mkCluster $ epaToCluster p : p.hiddenClusters) p.payload
 
-unWithAnno :: WithAnno_ t e a -> a
-unWithAnno (WithAnno _ a) = a
+epaToCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
+epaToCluster p = CsnCluster
+  { payload = mkConcreteSyntaxNode p.original
+  , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
+  }
 
-toAnno :: WithAnno_ t e a -> Anno_ t e
-toAnno (WithAnno ann _) = ann
+epaToHiddenCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
+epaToHiddenCluster p = CsnCluster
+  { payload = mkHiddenConcreteSyntaxNode p.original
+  , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
+  }
 
 annoHole :: (HasSrcRange a) => Parser a -> Compose Parser (WithAnno_ t e) a
 annoHole p = Compose $ fmap withHoleAnno p
@@ -1180,6 +1341,9 @@ annoEpa p = Compose $ fmap withEpaAnno p
 
 annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
+
+annoLexeme_ :: (HasField "range" t SrcRange) => Parser (Lexeme_ t a) -> Compose Parser (WithAnno_ t e) ()
+annoLexeme_ = void . annoLexemes . fmap (fmap (const []))
 
 annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
 annoLexemes = annoEpa . fmap lexesToEpa
@@ -1213,30 +1377,70 @@ mkHoleAnnoFor a =
 
 mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
-  toAnno . withEpaAnno
+  (.anno) . withEpaAnno
 
-data Lexeme_ t a = Lexeme [t] a
+data Lexeme_ t a = Lexeme
+  { trailingTokens :: [t]
+  , payload :: a
+  , hiddenClusters :: [CsnCluster_ t]
+  -- ^ A hidden cluster is something that is structured but not part
+  -- of the abstract syntax tree. Think comments, which often need to be processed later
+  -- or highlighted in a specific way.
+  -- Having comment tokens unstructured as part of 'trailingTokens' can be quite
+  -- tricky later to manage.
+  }
   deriving stock Show
   deriving (Functor)
 
-unLexeme :: Lexeme_ t a -> a
-unLexeme (Lexeme _ a) = a
+mkLexeme :: [t] -> a -> Lexeme_ t a
+mkLexeme trail a = Lexeme
+  { trailingTokens = trail
+  , payload = a
+  , hiddenClusters = []
+  }
 
-data Epa_ t a = Epa [t] [t] a
+data Epa_ t a = Epa
+  { original :: [t]
+  , trailingTokens :: [t]
+  , payload :: a
+  , hiddenClusters :: [CsnCluster_ t]
+  -- ^ A hidden cluster is something that is structured but not part
+  -- of the abstract syntax tree. Think comments, which often need to be processed later
+  -- or highlighted in a specific way.
+  -- Having comment tokens unstructured as part of 'trailingTokens' can be quite
+  -- tricky later to manage.
+  }
   deriving stock Show
   deriving (Functor)
-
-unEpa :: Epa_ t a -> a
-unEpa (Epa _ _ a) = a
 
 lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
-lexesToEpa (Lexeme trailing this) = Epa this trailing this
+lexesToEpa l = Epa
+  { original = l.payload
+  , trailingTokens = l.trailingTokens
+  , payload = l.payload
+  , hiddenClusters = l.hiddenClusters
+  }
 
 lexesToEpa' :: Lexeme_ t ([t], a) -> Epa_ t a
-lexesToEpa' (Lexeme trailing (this, a)) = Epa this trailing a
+lexesToEpa' l = Epa
+  { original = fst l.payload
+  , trailingTokens = l.trailingTokens
+  , payload = snd l.payload
+  , hiddenClusters = l.hiddenClusters
+  }
 
 lexToEpa :: Lexeme_ t t -> Epa_ t t
-lexToEpa (Lexeme trailing this) = Epa [this] trailing this
+lexToEpa l = Epa
+  { original = [l.payload]
+  , trailingTokens = l.trailingTokens
+  , payload = l.payload
+  , hiddenClusters = l.hiddenClusters
+  }
 
 lexToEpa' :: Lexeme_ t (t, a) -> Epa_ t a
-lexToEpa' (Lexeme trailing (this, a)) = Epa [this] trailing a
+lexToEpa' l = Epa
+  { original = [fst l.payload]
+  , trailingTokens = l.trailingTokens
+  , payload = snd l.payload
+  , hiddenClusters = l.hiddenClusters
+  }

@@ -78,9 +78,8 @@ import Data.Either (partitionEithers)
 import Data.Proxy
 import Data.Typeable (Typeable)
 import qualified Generics.SOP as SOP
-import Optics.Core (gplate, traverseOf)
+import Optics.Core hiding (anyOf, re) --  (gplate, traverseOf, Optic', A_Lens, NoIx, (^.), (%))
 
-import qualified L4.Parser as Parser
 import L4.ExactPrint
 import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
 import L4.Syntax
@@ -92,7 +91,7 @@ newtype Check a =
 -- NOTES on the Check monad:
 --
 -- Contrary to my first belief, we cannot
--- afford making the complete CheckState global, because the subsitution
+-- afford making the complete CheckState global, because the substitution
 -- must be branch-dependent. Unification can create bindings for a
 -- previously introduced unification variable (prior to branches) that
 -- become invalid if the branch is not selected. So we have to backtrack
@@ -565,22 +564,41 @@ addError e = do
   ctx <- use #errorContext
   with (MkCheckErrorWithContext e ctx)
 
+annResolveType :: Lens' Anno (Maybe (Type' Resolved))
+annResolveType = lens
+  (\ann -> case ann.extra of
+    Nothing -> Nothing
+    Just exts -> exts.resolvedType)
+  (\ann ty -> case ann.extra of
+    Just exts -> ann
+      { extra = Just exts
+        { resolvedType = ty
+        }
+      }
+    Nothing -> ann
+      { extra = Just Extension
+        { resolvedType = ty
+        , nlg = Nothing
+        }
+      }
+  )
+
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
   env <- use #environment
   case mapMaybe proc (Map.findWithDefault [] (rawName n) env) of
     [] -> do
       v <- fresh (rawName n)
-      rn <- outOfScope (setAnno (set #extra (Just v) (getAnno n)) n) v
+      rn <- outOfScope (setAnno (set annResolveType (Just v) (getAnno n)) n) v
       pure (rn, v)
     [x] -> pure x
     xs -> anyOf xs <|> do
       v <- fresh (rawName n)
-      rn <- ambiguousTerm (setAnno (set #extra (Just v) (getAnno n)) n) xs
+      rn <- ambiguousTerm (setAnno (set annResolveType (Just v) (getAnno n)) n) xs
       pure (rn, v)
   where
     proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnno (set #extra (Just t) (getAnno n)) n) u o, t)
+    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnno (set annResolveType (Just t) (getAnno n)) n) u o, t)
     proc _                             = Nothing
 
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
@@ -1270,11 +1288,11 @@ makeKnown a ce =
 checkExpr :: Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr (IfThenElse ann e1 e2 e3) t = softprune $ scope $ do
   re <- checkIfThenElse ann e1 e2 e3 t
-  let re' = setAnno (set #extra (Just t) (getAnno re)) re
+  let re' = setAnno (set annResolveType (Just t) (getAnno re)) re
   pure re'
 checkExpr (Consider ann e branches) t = softprune $ scope $ do
   re <- checkConsider ann e branches t
-  let re' = setAnno (set #extra (Just t) (getAnno re)) re
+  let re' = setAnno (set annResolveType (Just t) (getAnno re)) re
   pure re'
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
@@ -1306,7 +1324,7 @@ inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = softprune $ scope $ do
   setErrorContext (WhileCheckingExpression g)
   (re, te) <- inferExpr' g
-  let re' = setAnno (set #extra (Just te) (getAnno re)) re
+  let re' = setAnno (set annResolveType (Just te) (getAnno re)) re
   pure (re', te)
 
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
@@ -1548,23 +1566,6 @@ bind i t = do
   case Map.lookup i subst of
     Nothing -> assign #substitution (Map.insert i t subst)
     Just t' -> unify t' t -- addError (InternalUnificationErrorBind i t t')
-
--- | Parse, typecheck and exact-print a program.
-checkAndExactPrintFile :: String -> Text -> Text
-checkAndExactPrintFile file input =
-  case Parser.execParser Parser.program file input of
-    Left errs -> Text.unlines $ (.message) <$> toList errs
-    Right prog ->
-      "Parsing successful\n\n"
-      <>
-      case doCheckProgram prog of
-        CheckResult {errors = []} ->
-          "Typechecking successful\n\n"
-          <> case exactprint prog of
-               Left epError -> prettyTraverseAnnoError epError
-               Right ep -> ep
-        CheckResult {errors} ->
-          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
 
 prettySrcRange :: FilePath -> Maybe SrcRange -> Text
 prettySrcRange fp Nothing = Text.pack fp <> ":<unknown range>"
@@ -1809,22 +1810,22 @@ data TypesTree =
 
 class ToTypesTree a where
   toTypesTree :: a -> [TypesTree]
-  default toTypesTree :: (SOP.Generic a, AnnoExtra a ~ Type' Resolved, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
+  default toTypesTree :: (SOP.Generic a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
   toTypesTree = genericToTypesTree
 
 instance HasSrcRange TypesTree where
   rangeOf = (.range)
 
-genericToTypesTree :: forall a. (SOP.Generic a, AnnoExtra a ~ Type' Resolved, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
+genericToTypesTree :: forall a. (SOP.Generic a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension, SOP.All (AnnoFirst a ToTypesTree) (SOP.Code a)) => a -> [TypesTree]
 genericToTypesTree =
   genericToNodes
     (Proxy @ToTypesTree)
     toTypesTree
     (mergeTypesTrees (Proxy @a))
 
-mergeTypesTrees :: AnnoExtra a ~ Type' Resolved => Proxy a -> Anno' a -> [[TypesTree]] -> [TypesTree]
+mergeTypesTrees :: (AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => Proxy a -> Anno' a -> [[TypesTree]] -> [TypesTree]
 mergeTypesTrees _ anno children =
-  [TypesNode (rangeOf (concat children)) anno.extra (concat children)]
+  [TypesNode (rangeOf (concat children)) (anno ^. annResolveType) (concat children)]
 
 findType :: ToTypesTree a => SrcPos -> a -> Maybe (SrcRange, Type' Resolved)
 findType pos a =
@@ -1863,7 +1864,7 @@ deriving anyclass instance ToTypesTree (Directive Resolved)
 
 instance ToTypesTree Lit where
   toTypesTree l =
-    [TypesNode (rangeFromAnno (getAnno l)) (getAnno l).extra []]
+    [TypesNode (rangeFromAnno (getAnno l)) ((getAnno l) ^. annResolveType) []]
 
 -- | Try to extract the range from an anno which we assume to be
 -- without holes.
@@ -1880,7 +1881,7 @@ instance ToTypesTree Int where
 
 instance ToTypesTree Name where
   toTypesTree n =
-    [TypesNode (rangeFromAnno (getAnno n)) (getAnno n).extra []]
+    [TypesNode (rangeFromAnno (getAnno n)) ((getAnno n) ^. annResolveType) []]
 
 instance ToTypesTree RawName where
   toTypesTree _ =

@@ -1,0 +1,17 @@
+DECLARE Choice OF a, b
+  IS ONE OF
+    Left  HAS payload IS AN a
+    Right HAS payload IS A  b
+
+GIVEN  a      IS A TYPE
+       b      IS A TYPE
+       c      IS A TYPE
+       left   IS A FUNCTION FROM a TO c
+       right  IS A FUNCTION FROM b TO c
+       choice IS A Choice OF a, b
+GIVETH A c
+choose left right choice MEANS
+  CONSIDER choice
+    WHEN Left  a
+    [This is attached to %a%] THEN left a [This is also attached to %a%]
+    WHEN Right b THEN (right b) [Might be attached to %right b% in the future]

@@ -224,13 +224,13 @@ handlers recorder =
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
               let nfp = fromUri $ toNormalizedUri uri
 
-              TypeCheckResult {program} <- do
+              typeChecked <- do
                 mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
                 case mTcResult of
                   Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
                   Just tcRes -> pure tcRes
 
-              let decides = foldTopLevelDecides (: []) program
+              let decides = foldTopLevelDecides (: []) typeChecked.program
 
               (decide :: Decide Resolved, simplify :: Bool) <- case args of
                 -- the command was issued by the button in vscode

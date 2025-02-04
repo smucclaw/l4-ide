@@ -1,0 +1,7 @@
+DECIDE foo @nlg Test
+            a @nlg A Comment
+            b @nlg B Comment
+            c @nlg %b%'s favorite coffee flavour
+    IS
+        (a PLUS c)
+        @nlg Expression
