@@ -3,73 +3,9 @@
 /* ==== FURTHER CSS = TODO ======================== */
 
 /* ===== Basic 'CSS reset' ======================= 
+  tailwind resets it with preflight */
 
-Resources
-  * https://www.joshwcomeau.com/css/custom-css-reset/
-  * https://piccalil.li/blog/a-more-modern-css-reset/
-*/
 
-/* Box sizing rules */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@import '@xyflow/svelte/dist/style.css';
+@import "tailwindcss";
 
-/* Make images easier to work with */
-img,
-picture,
-video {
-  max-width: 100%;
-  display: block;
-}
-/******************************************
- IMPT: If you make svg max-width 100%,
-  edges won't render properly in SvelteFlow
-  (at least not with the default options)
-********************************************/
-
-#html {
-  isolation: isolate; /* create a new stacking context */
-
-  /* Prevent font size inflation */
-  -moz-text-size-adjust: 100%;
-  -webkit-text-size-adjust: 100%; /* For older browsers */
-  text-size-adjust: 100%;
-}
-
-/* Core body defaults */
-body {
-  min-height: 100vh;
-  line-height: 1.5;
-}
-
-/* Set shorter line heights on headings and interactive elements */
-h1,
-h2,
-h3,
-h4,
-button,
-input,
-label {
-  line-height: 1.1;
-}
-
-/* Inherit fonts for inputs and buttons */
-input,
-button,
-textarea,
-select {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-/* Make sure textareas without a rows attribute are not tiny */
-textarea:not([rows]) {
-  min-height: 10em;
-}
-
-/* Anything that has been anchored to should have extra scroll margin */
-:target {
-  scroll-margin-block: 5ex;
-}
