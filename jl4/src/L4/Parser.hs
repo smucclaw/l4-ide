@@ -500,10 +500,11 @@ param =
 indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
   withIndent GT p $ \ _ -> do
+    l <- currentLine
     e <- baseExpr
     efs <- many (expressionCont p)
     mw <- optional (whereExpr p)
-    pure ((maybe id id mw) (combine End e efs))
+    pure ((maybe id id mw) (combine End l e efs))
 
 whereExpr :: Pos -> Parser (Expr Name -> Expr Name)
 whereExpr p =
@@ -513,20 +514,87 @@ whereExpr p =
     pure (\ e -> Where (mkHoleAnno <> ann <> mkHoleAnno) e ds)
 
 data Stack a =
-    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos
+    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Pos !Pos
   | End
 
-combine :: Stack a -> a Name -> [Cont a] -> a Name
-combine End e [] = e
-combine (Frame s e1 op _ _) e2 [] =
-  combine s (e1 `op` e2) []
-combine End e1 (MkCont op1 prio1 p1 e2 : efs) =
-  combine (Frame End e1 op1 prio1 p1) e2 efs
-combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
-  | p2 > p1 || p2 == p1 && prio2 >= prio1 = -- (>=) is for *right*-associative operators
-  combine (Frame s1 e2 op2 prio2 p2) e3 efs -- push
+-- | This function decides how stack frames and continuations are combined
+-- into a single expression.
+--
+-- For this, we take line and column information of various entities into
+-- account. The general rule of thumb is: If items occur on a single line,
+-- then normal precedence prevails. Similarly, if items occur on different
+-- lines, but all start on the same column, then normal precedence should
+-- prevail.
+--
+-- In other scenarios, we use the indentation for grouping.
+--
+-- Initially, the stack is empty, the given entity is the starting point,
+-- and we have a number of continuation frames. We need the line of the
+-- starting point.
+--
+-- The general process of moving through an expression is best demonstrated
+-- by example:
+--
+-- a + b * c + d = e * f
+--
+-- We mark the focused position by [_], we write the stack to the left,
+-- elements separated by commas, and the continuations to the right,
+-- elements separated by commas.
+--
+-- Note that the stack and the continuations have exactly the same
+-- structure.
+--
+-- [a] + b, * c,   + d,  = e, * f   -- empty stack, always push
+-- a +  [b] * c,   + d,  = e, * f   -- * is stronger than + => push
+-- a +, b *  [c]   + d,  = e, * f   -- + is weaker than * => pop
+-- a +, [(b * c)]  + d,  = e, * f   -- + is like +, depends on associativity, left-associative => pop
+-- [(a + (b * c))] + d,  = e, * f   -- empty stack, always push
+-- (a + (b * c)) +  [d]  = e, * f   -- = is weaker than + => pop
+-- [((a + (b * c)) + d)] = e, * f   -- empty stack, always push
+-- ((a + (b * c)) + d) =  [e] * f   -- * is stronger than => push
+-- ((a + (b * c)) + d) =, e *  [f]  -- empty continuation, always pop
+-- ((a + (b * c)) + d) =, [(e * f)] -- empty continuation, always pop
+-- [((a + (b * c)) + d) = (e * f)]  -- final result
+--
+-- The only difference between the process depicted above and the
+-- real process is that the rules for which operator is stronger factor
+-- in layout information. So in general, operators that are indented
+-- more are seen to be stronger.
+--
+-- The exceptions are if either the whole expression is on the same line,
+-- or if all operators are on the same column.
+--
+combine :: Stack a -> Pos -> a Name -> [Cont a] -> a Name
+
+-- If we have a single expression and nothing on the stack, then we
+-- can just return it.
+combine End _l e [] = e
+
+-- If there is no continuation, we always pop. The line passed to
+-- combine is always the starting point of the currently focused
+-- expression, so we take the line stored on the stack.
+combine (Frame s e1 op _ l1 _) _l2 e2 [] =
+  combine s l1 (e1 `op` e2) []
+
+-- If there is nothing on the stack, we always push. 
+combine End l1 e1 (MkCont op1 prio1 l2 p2 e2 : efs) =
+  combine (Frame End e1 op1 prio1 l1 p2) l2 e2 efs
+
+-- This is the standard case. We have something on the stack and a
+-- continuation. We have to compare the two operators. If the operator
+-- on the continuation side is stronger, we push. Otherwise, we pop.
+--
+-- TODO: we currently do not track associativity.
+--
+combine s1@(Frame s e1 op1 prio1 l1 p1) _l e2 (MkCont op2 prio2 l2 p2 e3 : efs)
+  | (l2, p2, prio2) `stronger` (l1, p1, prio1) =
+  combine (Frame s1 e2 op2 prio2 l2 p2) l2 e3 efs -- push
   | otherwise =
-  combine s (e1 `op1` e2) (MkCont op2 prio2 p2 e3 : efs) -- pop
+  combine s l1 (e1 `op1` e2) (MkCont op2 prio2 l2 p2 e3 : efs) -- pop
+  where
+    stronger (ly, py, prioy) (lx, px, priox)
+      | lx == ly  = prioy >= priox
+      | otherwise = py > px || py == px && prioy >= priox
 
 -- The real problem is:
 --
@@ -576,18 +644,24 @@ combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
 data Cont a =
   MkCont
     { _op   :: a Name -> a Name -> a Name
-    , _prio :: Prio
-    , _pos  :: Pos
+    , _prio :: !Prio
+    , _line :: !Pos
+    , _pos  :: !Pos
     , _arg  :: a Name
     }
 
 cont :: Parser (Prio, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
   withIndent GT p $ \ pos -> do
+    l <- currentLine
     (prio, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
     arg <- pbase
-    pure (MkCont op prio pos arg)
+    pure (MkCont op prio l pos arg)
+
+-- TODO: We should think whether we can obtain this more cheaply.
+currentLine :: Parser Pos
+currentLine = sourceLine <$> getSourcePos
 
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
@@ -770,9 +844,10 @@ otherwise' = do
 indentedPattern :: Pos -> Parser (Pattern Name)
 indentedPattern p =
   withIndent GT p $ \ _ -> do
+    l <- currentLine
     pat <- basePattern
     pfs <- many (patternCont p)
-    pure (combine End pat pfs)
+    pure (combine End l pat pfs)
 
 basePattern :: Parser (Pattern Name)
 basePattern =

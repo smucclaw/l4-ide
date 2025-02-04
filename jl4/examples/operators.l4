@@ -1,0 +1,88 @@
+§ `Testing operator priorities`
+
+examplel1 MEANS   2
+                + 3 * 4
+
+examplel2 MEANS   2 + 3
+                * 4
+
+examplel3 MEANS   3 * 4
+                + 2
+
+examplel4 MEANS   3
+                * 4 + 2
+
+examplel5 MEANS   2
+                + 3
+                * 4
+
+examplel6 MEANS   3
+                * 4
+                + 2
+
+examplel7 MEANS 2 * 3 *   1
+                        + 1
+
+examplei1 MEANS 2 + 3 * 4
+examplei2 MEANS (2 + 3) * 4
+examplei3 MEANS 3 * 4 + 2
+examplei4 MEANS 3 * (4 + 2)
+
+examplec1 MEANS   2 + 3 * 4
+                * 2 + 3 * 4
+examplec2 MEANS   2 + 3 * 4
+                + 2 + 3 * 4
+examplec3 MEANS   3 * 4 + 2
+                * 3 * 4 + 2
+examplec4 MEANS   3 * 4 + 2
+                + 3 * 4 + 2
+
+examplem1 MEANS        9
+                     - 8
+                   -   7
+                 -     6
+
+examplem2 MEANS        9
+                 -     8
+                   -   7
+                     - 6
+
+examplem3 MEANS      9
+                   - 8
+                 -   7
+                   - 6
+
+-- I think currently all operators are right-associative
+examplem4 MEANS  9 - 8 - 7 - 6
+
+-- weird things happen here:
+--
+-- I think this is parsed as 3 * ((4 + 2 + 3) * 3 + 2),
+-- because the + is indented more and on a different line
+-- from the * ...
+examplew1 MEANS   3 * (4 + 2
+                + 3) * 4 + 2
+
+#EVAL examplel1 = 14
+#EVAL examplel2 = 20
+#EVAL examplel3 = 14
+#EVAL examplel4 = 18
+#EVAL examplel5 = 14
+#EVAL examplel6 = 14
+#EVAL examplel7 = 12
+
+#EVAL examplei1 = 14
+#EVAL examplei2 = 20
+#EVAL examplei3 = 14
+#EVAL examplei4 = 18
+
+#EVAL examplec1 = 196
+#EVAL examplec2 = 28
+#EVAL examplec3 = 196
+#EVAL examplec4 = 28
+
+#EVAL examplem1 = -12
+#EVAL examplem2 = 2
+#EVAL examplem3 = 0
+
+#EVAL examplew1 = 114  -- would rather have 110, I think
