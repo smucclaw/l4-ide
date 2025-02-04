@@ -5,29 +5,23 @@ import webviewHtml from '../static/webview/index.html'
 const STATIC_ASSETS_DIR = 'static'
 const WEBVIEW_DIR = 'webview'
 
-export function showViz(
+const PANEL_TITLE = 'Decision Logic Visualizer'
+
+export function makeVizPanel(
   context: vscode.ExtensionContext
   // , ruleJson?: RuleNode
 ) {
-  let panel: vscode.WebviewPanel | undefined
-
-  if (!panel) {
-    panel = vscode.window.createWebviewPanel(
-      'viz',
-      'Visualisation',
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      }
-    )
-
-    panel.webview.html = getWebviewContent(context, panel)
-
-    panel.onDidDispose(() => {
-      panel = undefined
-    })
-  }
+  const panel = vscode.window.createWebviewPanel(
+    'viz',
+    PANEL_TITLE,
+    vscode.ViewColumn.Beside,
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    }
+  )
+  panel.webview.html = getWebviewContent(context, panel)
+  return panel
 }
 
 function getWebviewContent(

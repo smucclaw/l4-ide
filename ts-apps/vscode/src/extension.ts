@@ -13,9 +13,43 @@ import {
 } from 'vscode-languageclient/node'
 import * as command from './commands'
 // import { RuleNode } from './rule-to-json'
-import { showViz } from './viz'
+import { makeVizPanel } from './viz'
 
 let client: LanguageClient
+
+interface PanelConfig {
+  position: vscode.ViewColumn
+}
+
+class PanelManager {
+  /** Allow only one webview to exist at any given moment. */
+  #panel: vscode.WebviewPanel | undefined = undefined
+
+  constructor(private readonly config: PanelConfig) {}
+
+  getPanel() {
+    return this.#panel
+  }
+
+  /**
+   * If the panel has already been created, reveal it;
+   * make it if not.
+   */
+  makeOrShowPanel(context: vscode.ExtensionContext) {
+    if (this.#panel) {
+      this.#panel.reveal(this.config.position)
+    } else {
+      this.#panel = makeVizPanel(context)
+
+      // Reset when the current panel is closed
+      this.#panel.onDidDispose(() => {
+        this.#panel = undefined
+      })
+    }
+  }
+}
+
+const PANEL_CONFIG = { position: vscode.ViewColumn.Beside }
 
 export async function activate(context: ExtensionContext) {
   const langId = 'l4'
@@ -36,6 +70,8 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
+  const panelManager = new PanelManager(PANEL_CONFIG)
+
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -53,7 +89,8 @@ export async function activate(context: ExtensionContext) {
           args = args.slice(0)
           args.push(editor.document.uri.toString())
 
-          showViz(context)
+          panelManager.makeOrShowPanel(context)
+
           // const result: unknown = await next(command, args)
           // outputChannel.appendLine(
           //   `Received command response ${JSON.stringify(result)}`
