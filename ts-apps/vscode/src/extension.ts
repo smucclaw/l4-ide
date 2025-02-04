@@ -2,7 +2,7 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
-
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { ExtensionContext, workspace, window } from 'vscode'
 import * as vscode from 'vscode'
 import {
@@ -12,7 +12,7 @@ import {
   ServerOptions,
 } from 'vscode-languageclient/node'
 import * as command from './commands'
-import { RuleNode } from './rule-to-json'
+// import { RuleNode } from './rule-to-json'
 import { showViz } from './viz'
 
 let client: LanguageClient
@@ -52,19 +52,21 @@ export async function activate(context: ExtensionContext) {
           // Maybe to avoid accidental mutation?
           args = args.slice(0)
           args.push(editor.document.uri.toString())
-          const result: unknown = await next(command, args)
-          outputChannel.appendLine(
-            `Received command response ${JSON.stringify(result)}`
-          )
-          const nodeVisualisation: RuleNode[] = result as RuleNode[]
-          if (nodeVisualisation.length >= 1) {
-            showViz(context, nodeVisualisation[0])
-          } else {
-            outputChannel.appendLine(
-              `Can't visualise ${editor.document.uri.toString()}, none available`
-            )
-          }
-          return result
+
+          showViz(context)
+          // const result: unknown = await next(command, args)
+          // outputChannel.appendLine(
+          //   `Received command response ${JSON.stringify(result)}`
+          // )
+          // const nodeVisualisation: RuleNode[] = result as RuleNode[]
+          // if (nodeVisualisation.length >= 1) {
+          //   showViz(context, nodeVisualisation[0])
+          // } else {
+          //   outputChannel.appendLine(
+          //     `Can't visualise ${editor.document.uri.toString()}, none available`
+          //   )
+          // }
+          // return result
         }
         // TODO: else show pop up to client
       },

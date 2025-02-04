@@ -1,11 +1,14 @@
-import path from 'path'
 import * as vscode from 'vscode'
-import { RuleNode } from './rule-to-json'
-// import webviewHtml from '@repo/webview'
+// import { RuleNode } from './rule-to-json'
+import webviewHtml from '../static/webview/index.html'
 
 const STATIC_ASSETS_DIR = 'static'
+const WEBVIEW_DIR = 'webview'
 
-export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
+export function showViz(
+  context: vscode.ExtensionContext
+  // , ruleJson?: RuleNode
+) {
   let panel: vscode.WebviewPanel | undefined
 
   if (!panel) {
@@ -19,23 +22,7 @@ export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
       }
     )
 
-    const ladderDiagramScriptPath = vscode.Uri.file(
-      path.join(
-        context.extensionPath,
-        STATIC_ASSETS_DIR,
-        'ladder-diagram.min.js'
-      )
-    )
-    const ladderDiagramScriptUri = panel.webview.asWebviewUri(
-      ladderDiagramScriptPath
-    )
-
-    panel.webview.html = getWebviewContent(
-      context,
-      panel,
-      ladderDiagramScriptUri,
-      ruleJson || DefaultRule()
-    )
+    panel.webview.html = getWebviewContent(context, panel)
 
     panel.onDidDispose(() => {
       panel = undefined
@@ -45,92 +32,26 @@ export function showViz(context: vscode.ExtensionContext, ruleJson?: RuleNode) {
 
 function getWebviewContent(
   context: vscode.ExtensionContext,
-  panel: vscode.WebviewPanel,
-  scriptUri: vscode.Uri,
-  ruleJson: RuleNode
+  panel: vscode.WebviewPanel
 ): string {
-  // TODO: Temporarily putting the CSS in STATIC_ASSETS_DIR of the extension
-  // Will clean this up and put it all under the decision-logic-visualizer later
-  const webviewCssUri = panel.webview.asWebviewUri(
-    vscode.Uri.joinPath(context.extensionUri, STATIC_ASSETS_DIR, 'ladder.css')
+  const basePath = vscode.Uri.joinPath(
+    context.extensionUri,
+    STATIC_ASSETS_DIR,
+    WEBVIEW_DIR
+  )
+  const compatibleBasePath = panel.webview.asWebviewUri(basePath)
+
+  /* Add the <base> tag so that relative paths work
+  (TODO: Test that this actually works...)
+
+  References:
+    * https://github.com/bscotch/stitch/blob/76f65a626a6ebd825af5b172b5338a8dee6e947d/packages/vscode/src/webview.igor.mts#L64
+    * https://medium.com/@ashleyluu87/data-flow-from-vs-code-extension-webview-panel-react-components-2f94b881467e
+  */
+  const postprocessedWebviewHtml = webviewHtml.replace(
+    '<head>',
+    `<head><base href="${compatibleBasePath}/">`
   )
 
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Rule Ladder Diagram</title>
-      <link rel="stylesheet" href="${webviewCssUri.toString()}">
-      <style>
-        body {
-          margin: 0;
-          padding: 20px;
-          font-family: Arial, sans-serif;
-        }
-        #ladder-container {
-          width: 100%;
-          height: 100vh;
-        }
-      </style>
-      <script src="${scriptUri.toString()}"></script>
-    </head>
-    <body>
-      <div id="ladder-container" style="width: 100%; height: 100%;"></div>
-      <hr />
-      <!-- <div id="json">${JSON.stringify(ruleJson, null, 2)}</pre></div> -->
-      <script>
-        // const LadderDiagram = LadderDiagram.LadderDiagram;
-        console.log("ladder:", LadderDiagram.LadderDiagram);
-        const BoolVar = LadderDiagram.BoolVar;
-        const AllQuantifier = LadderDiagram.AllQuantifier;
-        const AnyQuantifier = LadderDiagram.AnyQuantifier;
-
-        // JavaScript functions for the ladder diagram
-        function q2circuit(q) {
-          if (q.andOr.tag === 'Leaf') {
-            const utf =
-              q.mark.value === 'undefined' ? 'U' :
-              q.mark.value === 'true' ? 'T' :
-              q.mark.value === 'false' ? 'F' : null;
-
-            return new BoolVar(
-              q.andOr.contents,
-              false,
-              q.mark.source === 'default' ? utf : null,
-              q.mark.source === 'user' ? utf : null
-            );
-          }
-
-          const Construct = q.andOr.tag === 'All' ?
-            AllQuantifier :
-            AnyQuantifier;
-
-          return new Construct(
-            q.andOr.children.map(c => q2circuit(c))
-          );
-        }
-
-        function renderDiagram() {
-          const ruleJson = ${JSON.stringify(ruleJson)};
-          const circuit = q2circuit(ruleJson);
-          const ld = new LadderDiagram.LadderDiagram(circuit);
-          ld.attach(document.getElementById('ladder-container'));
-        }
-
-        renderDiagram();
-      </script>
-    </body>
-  </html>
-  `
-}
-
-function DefaultRule(): RuleNode {
-  return {
-    andOr: { tag: 'All', children: [] },
-    mark: { value: 'undefined', source: 'user' },
-    prePost: {},
-    shouldView: 'Ask',
-  }
+  return postprocessedWebviewHtml
 }
