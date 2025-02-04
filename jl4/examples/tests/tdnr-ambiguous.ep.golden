@@ -5,3 +5,10 @@ ASSUME foo IS A BOOLEAN
 
 DECIDE bar
   IS foo
+
+ASSUME baz IS A NUMBER
+ASSUME baz IS A BOOLEAN
+
+-- In the following, foo is ambiguous, yet baz should not be.
+DECIDE another
+  IS IF baz THEN foo ELSE foo

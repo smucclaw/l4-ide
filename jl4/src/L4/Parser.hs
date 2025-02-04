@@ -15,6 +15,7 @@ module L4.Parser (
 
 import Base
 
+import qualified Control.Applicative as Applicative
 import Data.Functor.Compose
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
@@ -179,26 +180,19 @@ anonymousSection =
     MkSection emptyAnno
       <$> pure 0
       <*> annoHole (pure Nothing)
-      <*> annoHole (manyLines topdeclWithRecovery)
+      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
 section :: Parser (Section Name)
 section =
   attachAnno $
     MkSection emptyAnno
-      <$> annoEpa sectionSymbols
+      <$> sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdeclWithRecovery)
+      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
-sectionSymbols :: Parser (Epa Int)
-sectionSymbols = do
-  paragraphSymbols <- lexeme $
-    token
-      (\ t -> do
-        symbol <- preview #_TOtherSymbolic t.payload
-        guard (Text.all (== '§') symbol)
-        pure t)
-      (Set.singleton (Tokens (trivialToken (TOtherSymbolic "§") :| [])))
-  pure $ (.range.length) <$> lexToEpa paragraphSymbols
+sectionSymbols :: Compose Parser (WithAnno e) Int
+sectionSymbols =
+  length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
 topdeclWithRecovery :: Parser (TopDecl Name)
 topdeclWithRecovery = do
@@ -220,10 +214,23 @@ topdeclWithRecovery = do
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
-      Declare   mkHoleAnno <$> declare
-  <|> Decide    mkHoleAnno <$> decide
-  <|> Assume    mkHoleAnno <$> assume
-  <|> Directive mkHoleAnno <$> directive
+  withTypeSig (\ sig -> attachAnno $
+        Declare   emptyAnno <$> annoHole (declare sig)
+    <|> Decide    emptyAnno <$> annoHole (decide sig)
+    <|> Assume    emptyAnno <$> annoHole (assume sig)
+  ) <|> Directive mkHoleAnno <$> directive
+
+localdecl :: Parser (LocalDecl Name)
+localdecl =
+  withTypeSig (\ sig -> attachAnno $
+        LocalDecide    emptyAnno <$> annoHole (decide sig)
+    <|> LocalAssume    emptyAnno <$> annoHole (assume sig)
+  )
+
+withTypeSig :: (TypeSig Name -> Parser (d Name)) -> Parser (d Name)
+withTypeSig p = do
+  sig <- typeSig
+  p sig
 
 directive :: Parser (Directive Name)
 directive = do
@@ -236,22 +243,22 @@ directive = do
       ]
       <*> annoHole expr
 
-assume :: Parser (Assume Name)
-assume = do
+assume :: TypeSig Name -> Parser (Assume Name)
+assume sig = do
   current <- Lexer.indentLevel
   attachAnno $
     MkAssume emptyAnno
-      <$  annoLexeme (spacedToken_ TKAssume)
+      <$> annoHole (pure sig)
+      <*  annoLexeme (spacedToken_ TKAssume)
       <*> annoHole appForm
-      <*  annoLexeme (spacedToken_ TKIs)
---      <*  optional article
-      <*> annoHole (indented type' current)
+      <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole (indented type' current))
 
-declare :: Parser (Declare Name)
-declare =
+declare :: TypeSig Name -> Parser (Declare Name)
+declare sig =
   attachAnno $
     MkDeclare emptyAnno
-      <$  annoLexeme (spacedToken_ TKDeclare)
+      <$> annoHole (pure sig)
+      <*  annoLexeme (spacedToken_ TKDeclare)
       <*> annoHole appForm
       <*> annoHole typeDecl
 
@@ -262,9 +269,12 @@ typeDecl =
 recordDecl :: Parser (TypeDecl Name)
 recordDecl =
   attachAnno $
-    RecordDecl emptyAnno
-      <$  annoLexeme (spacedToken_ TKHas)
-      <*> annoHole (lsepBy reqParam (spacedToken_ TComma))
+    RecordDecl emptyAnno <$> recordDecl'
+
+recordDecl' :: Compose Parser (WithAnno e) [TypedName Name]
+recordDecl' =
+     annoLexeme (spacedToken_ TKHas)
+  *> annoHole (lsepBy reqParam (spacedToken_ TComma))
 
 enumDecl :: Parser (TypeDecl Name)
 enumDecl =
@@ -280,15 +290,14 @@ conDecl =
   attachAnno $
     MkConDecl emptyAnno
       <$> annoHole name
-      <*> option [] (annoLexeme (spacedToken_ TKHas) *> annoHole (lsepBy reqParam (spacedToken_ TComma)))
+      <*> option [] recordDecl'
 
-decide :: Parser (Decide Name)
-decide = do
-  sig <- typeSig
+decide :: TypeSig Name -> Parser (Decide Name)
+decide sig = do
   current <- Lexer.indentLevel
-  decideKW sig current <|> meansKW sig current
+  decideKW current <|> meansKW current
   where
-    decideKW sig current =
+    decideKW current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
@@ -297,7 +306,7 @@ decide = do
           <*  annoLexeme (spacedToken_ TKIs <|> spacedToken_ TKIf)
           <*> annoHole (indentedExpr current)
 
-    meansKW sig current =
+    meansKW current =
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
@@ -414,7 +423,7 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno_ PosToken e) PosToken
+article :: Compose Parser (WithAnno e) PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
@@ -490,10 +499,18 @@ param =
 --
 indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
-  withIndent GT p $ \_ -> do
+  withIndent GT p $ \ _ -> do
     e <- baseExpr
     efs <- many (expressionCont p)
-    pure (combine End e efs)
+    mw <- optional (whereExpr p)
+    pure ((maybe id id mw) (combine End e efs))
+
+whereExpr :: Pos -> Parser (Expr Name -> Expr Name)
+whereExpr p =
+  withIndent GT p $ \ _ -> do
+    ann <- opToken TKWhere
+    ds <- many (indented localdecl p)
+    pure (\ e -> Where (mkHoleAnno <> ann <> mkHoleAnno) e ds)
 
 data Stack a =
     Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos
@@ -682,6 +699,7 @@ namedApp = do
     <$> annoHole name
     <*> (   annoLexeme (spacedToken_ TKWith) *> annoHole (lsepBy1 (namedExpr current) (spacedToken_ TComma))
         )
+    <*> pure Nothing
 
 namedExpr :: Pos -> Parser (NamedExpr Name)
 namedExpr current  =

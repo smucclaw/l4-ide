@@ -21,7 +21,7 @@ data EvalState =
   MkEvalState
     { environment :: !Environment
     , results     :: [EvalResult]
-    , supply      :: !Int -- TODO: uniques generated during evaluation should be distinct from uniques generated using scope-checking
+    , supply      :: !Int
     }
   deriving Generic
 
@@ -36,10 +36,53 @@ data EvalException =
 
 type Environment = Map Unique Value
 
+emptyEnvironment :: Environment
+emptyEnvironment = Map.empty
+
+-- We reproduce some of the name handling functions from the type checker here, only
+-- that we produce separate uniques.
+
+step :: Eval Int
+step = do
+  current <- use #supply
+  let next = current + 1
+  assign #supply next
+  pure current
+
+newUnique :: Eval Unique
+newUnique = do
+  i <- step
+  pure (MkUnique 'e' i)
+
+def :: Name -> Eval Resolved
+def n = do
+  u <- newUnique
+  pure (Def u n)
+
+ref :: Name -> Resolved -> Eval Resolved
+ref n a =
+  let
+    (u, o) = TypeCheck.getUniqueName a
+  in
+    pure (Ref n u o)
+
+scope :: Eval a -> Eval a
+scope m = do
+  savedEnv <- use #environment
+  a <- m
+  assign #environment savedEnv
+  pure a
+
 withEnvironment :: (Environment -> Eval a) -> Eval a
 withEnvironment f = do
   env <- use #environment
   f env
+
+usingEnvironment :: Environment -> Eval () -> Eval Environment
+usingEnvironment env m = scope $ do
+  assign #environment env
+  m
+  use #environment
 
 makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
@@ -60,6 +103,7 @@ data Value =
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [Value]
   | ValAssumed Resolved
+  -- | ValEnvironment Environment
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
@@ -73,16 +117,18 @@ instance NFData Value where
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
+  -- rnf (ValEnvironment env)        = env `seq` ()
 
 renderValue :: Value -> Text
 renderValue (ValNumber i) = Text.pack (show i)
 renderValue (ValString txt) = Text.pack (show txt)
-renderValue (ValList vs) = Text.intercalate ", " (renderValue <$> vs)
+renderValue (ValList vs) = "(LIST " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValClosure _ _ _) = "<function>"
 renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"
 renderValue (ValConstructor r []) = TypeCheck.simpleprint r
 renderValue (ValConstructor r vs) = "(" <> TypeCheck.simpleprint r <> " OF " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValAssumed _) = "<assumed>"
+-- renderValue (ValEnvironment _) = "<environment>"
 
 data BinOp =
     BinOpPlus
@@ -143,8 +189,14 @@ evalTopDecl (Assume _ann assume) =
 evalTopDecl (Directive _ann directive) =
   evalDirective directive
 
+evalLocalDecl :: LocalDecl Resolved -> Eval ()
+evalLocalDecl (LocalDecide _ann decide) =
+  evalDecide decide
+evalLocalDecl (LocalAssume _ann assume) =
+  evalAssume assume
+
 evalDeclare :: Declare Resolved -> Eval ()
-evalDeclare (MkDeclare _ann appForm t) =
+evalDeclare (MkDeclare _ann _tysig appForm t) =
   evalTypeDecl (TypeCheck.appFormHead appForm) t
 
 evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
@@ -156,9 +208,28 @@ evalTypeDecl c (RecordDecl _ann tns) =
 evalConDecl :: ConDecl Resolved -> Eval ()
 evalConDecl (MkConDecl _ann n []) =
   makeKnown n (ValConstructor n [])
-evalConDecl (MkConDecl _ann n _tns) =
+evalConDecl (MkConDecl _ann n tns) = do
+  -- constructor
   makeKnown n (ValUnappliedConstructor n)
-  -- TODO: selector functions
+  conRef <- ref (TypeCheck.getName n) n
+  -- selectors (we need to create fresh names for the lambda abstractions so that every binder is unique)
+  traverse_ (\ (i, MkTypedName _ sn _t) -> do
+    arg    <- def (TypeCheck.getName n)
+    argRef <- ref (TypeCheck.getName n) arg
+    args <- traverse def (TypeCheck.getName <$> tns)
+    body <- ref (TypeCheck.getName sn) (args !! i)
+    let
+      sel =
+        ValClosure
+          (MkGivenSig mempty [MkOptionallyTypedName mempty arg Nothing])   -- \ x ->
+          (Consider mempty (App mempty argRef [])                          -- case x of
+            [ When mempty (PatApp mempty conRef (PatVar mempty <$> args))  --   Con y_1 ... y_n ->
+                (App mempty body [])                                       --     y_i
+            ]
+          )
+          emptyEnvironment
+    makeKnown sn sel
+    ) (zip [0 ..] tns)
 
 -- NOTE: We currently disallow recursive declarations that look like values.
 -- We could allow these by being more sophisticated.
@@ -176,9 +247,9 @@ evalDecide (MkDecide _ann _tysig (MkAppForm _ n args) expr) =
     makeKnown n v
 
 evalAssume :: Assume Resolved -> Eval ()
-evalAssume (MkAssume _ann (MkAppForm _ n []) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n []) _) =
   makeKnown n (ValAssumed n)
-evalAssume (MkAssume _ann (MkAppForm _ n _args) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n _args) _) =
   makeKnown n (ValAssumed n) -- TODO: we should create a given here yielding an assumed, but we currently cannot do that easily
 
 evalExpr :: Expr Resolved -> Eval (Either EvalException Value)
@@ -191,9 +262,12 @@ evalDirective (Eval _ann expr) = do
   addEvalResult expr v
 evalDirective (Check _ _) = pure ()
 
+maximumStackSize :: Int
+maximumStackSize = 50
+
 forwardExpr :: Environment -> Int -> Stack -> Expr Resolved -> Eval Value
 forwardExpr _env ss stack _e
-  | ss >= 50 =
+  | ss > maximumStackSize =
     exception StackOverflow stack
 forwardExpr env !ss stack (And _ann e1 e2) =
   forwardExpr env ss stack (IfThenElse mempty e1 e2 falseExpr)
@@ -235,8 +309,16 @@ forwardExpr env !ss stack (App _ann n []) =
     Just val -> backwardExpr ss stack val
 forwardExpr env !ss stack (App _ann n (e : es)) =
   forwardExpr env (ss + 1) (App1 n [] es env stack) e
-forwardExpr _env _ss stack (AppNamed _ann _n _nes) =
-  exception Unimplemented stack
+forwardExpr env !ss stack (AppNamed ann n [] _) =
+  forwardExpr env ss stack (App ann n [])
+forwardExpr _env !_ss stack (AppNamed _ann _n _nes Nothing) =
+  exception RuntimeTypeError stack
+forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
+  let
+    -- move expressions into order, drop names
+    es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
+  in
+    forwardExpr env ss stack (App ann n es)
 forwardExpr env !ss stack (IfThenElse _ann e1 e2 e3) =
   forwardExpr env (ss + 1) (IfThenElse1 e2 e3 env stack) e1
 forwardExpr env !ss stack (Consider _ann e branches) =
@@ -248,6 +330,12 @@ forwardExpr _env !ss stack (List _ann []) =
   backwardExpr ss stack (ValList [])
 forwardExpr env !ss stack (List _ann (e : es)) =
   forwardExpr env (ss + 1) (List1 [] es env stack) e
+forwardExpr env !ss stack (Where _ann e ds) = do
+  -- TODO: I don't like the weird mix between abstract machine style
+  -- and direct style. We should extend the abstract machine style to
+  -- cover declarations.
+  env' <- usingEnvironment env (traverse_ evalLocalDecl ds)
+  forwardExpr env' ss stack e
 
 backwardExpr :: Int -> Stack -> Value -> Eval Value
 backwardExpr !ss (BinOp1 binOp e2 env stack) val1 =
@@ -361,5 +449,5 @@ doEvalProgram :: Program Resolved -> [EvalResult]
 doEvalProgram prog =
   case evalProgram prog of
     MkEval m ->
-      case m (MkEvalState initialEnvironment [] 1000) of
+      case m (MkEvalState initialEnvironment [] 0) of
         (_, s) -> s.results

@@ -23,7 +23,7 @@ data RawName =
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-newtype Unique = MkUnique Int
+data Unique = MkUnique !Char !Int
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -100,12 +100,12 @@ data AppForm n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
-  MkDeclare Anno (AppForm n) (TypeDecl n)
+  MkDeclare Anno (TypeSig n) (AppForm n) (TypeDecl n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
-  MkAssume Anno (AppForm n) (Type' n)
+  MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -144,12 +144,13 @@ data Expr n =
   | Var        Anno n -- currently not really needed because subsumed by empty App
   | Lam        Anno (GivenSig n) (Expr n)
   | App        Anno n [Expr n]
-  | AppNamed   Anno n [NamedExpr n]
+  | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
+  | Where      Anno (Expr n) [LocalDecl n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -194,6 +195,12 @@ data TopDecl n =
   | Decide    Anno (Decide n)
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data LocalDecl n =
+    LocalDecide Anno (Decide n)
+  | LocalAssume Anno (Assume n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -263,3 +270,5 @@ deriving via L4Syntax (Section n)
   instance HasAnno (Section n)
 deriving via L4Syntax (TopDecl n)
   instance HasAnno (TopDecl n)
+deriving via L4Syntax (LocalDecl n)
+  instance HasAnno (LocalDecl n)

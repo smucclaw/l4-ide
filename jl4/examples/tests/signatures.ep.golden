@@ -1,0 +1,23 @@
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+GIVETH A TYPE
+DECLARE Pair
+  HAS `first component`  IS AN a
+      `second component` IS A b
+
+GIVEN x IS A BOOLEAN
+ASSUME f x IS A BOOLEAN
+
+GIVEN x IS A TYPE
+ASSUME T x IS A TYPE
+
+ASSUME g IS A T OF NUMBER
+
+GIVEN x IS A BOOLEAN
+GIVETH A NUMBER
+ASSUME h
+
+#CHECK f
+#CHECK g
+#CHECK h
