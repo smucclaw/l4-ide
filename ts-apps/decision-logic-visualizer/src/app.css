@@ -1,11 +1,32 @@
-/* TODO: May want to put app.css in static/ instead, but not sure. Need to look more into this. */
+/* can't put it in static because vite won't serve it */
 
 /* ==== FURTHER CSS = TODO ======================== */
 
 /* ===== Basic 'CSS reset' ======================= 
   tailwind resets it with preflight */
 
-
 @import '@xyflow/svelte/dist/style.css';
 @import "tailwindcss";
+@import "../static/themes/default.css";
 
+body {
+  color: var(--color-primary);
+  background-color: white;
+}
+
+.button {
+  background-color: var(--color-secondary);
+  color: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+}
+
+.edge-positive {
+  stroke: var(--color-positive);
+  stroke-width: 2px;
+}
+
+.edge-negative {
+  stroke: var(--color-negative);
+  stroke-width: 2px;
+}
