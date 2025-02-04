@@ -51,7 +51,7 @@ that means you aren't in the right directory.)
 The extension expects to find `jl4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
 
 ```sh
-$ cabal install exe:lj4-lsp --overwrite-policy=always
+$ cabal install exe:jl4-lsp --overwrite-policy=always
 ```
 
 and make sure `cabal`'s `/bin` directory is part of your `$PATH`.
