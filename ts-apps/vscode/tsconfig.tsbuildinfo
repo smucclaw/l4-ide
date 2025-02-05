@@ -1,1 +1,1 @@
-{"root":["./src/commands.ts","./src/extension.ts","./src/html.d.ts","./src/rule-to-json.ts","./src/viz.ts"],"version":"5.7.3"}
+{"root":["./src/commands.ts","./src/extension.mts","./src/html.d.ts","./src/rule-to-json.ts","./src/viz.ts"],"version":"5.7.3"}

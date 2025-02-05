@@ -2,14 +2,15 @@ import esbuild from 'esbuild'
 
 /*
 The previous esbuild package.json script that
-this is meant to extend:
+this is meant to extend
+(setting aside the ts vs mts difference):
 
     "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
 */
 
 esbuild
   .build({
-    entryPoints: ['./src/extension.ts'],
+    entryPoints: ['./src/extension.mts'],
     bundle: true,
     minify: true,
     sourcemap: true,

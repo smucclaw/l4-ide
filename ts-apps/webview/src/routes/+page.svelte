@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SvelteFlowProvider } from '@xyflow/svelte'
+  // import { SvelteFlowProvider } from '@xyflow/svelte'
   import { Either, Schema } from 'effect'
   import {
     IRExpr,
@@ -71,11 +71,9 @@
   IRExpr that eventually gets transformed into a SvelteFlow graph
 </h2>
 <h3>Example 1</h3>
-<!-- TODO: May want to encapsulate SvelteFlowProvider within DLV instead of requiring that consumers like the webview also invoke it.
+<!-- TODO: Probably ecapsulate SvelteFlowProvider within DLV instead of requiring that consumers like the webview also invoke it.
 Will think more about this after getting more experience with the library -->
-<SvelteFlowProvider>
-  <ExprFlow {context} node={exprLirNode} />
-</SvelteFlowProvider>
+<ExprFlow {context} node={exprLirNode} />
 <section>
   <p>The above is a visualization of</p>
   <pre><code>

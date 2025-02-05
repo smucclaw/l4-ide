@@ -10,11 +10,14 @@ import {
   LanguageClientOptions,
   RevealOutputChannelOn,
   ServerOptions,
-} from 'vscode-languageclient/node'
-import * as command from './commands'
+} from 'vscode-languageclient/node.js'
+import { isMessengerDiagnostic, Messenger } from 'vscode-messenger'
+import { VisualizeDecisionLogicNotification } from '@repo/webview'
+
+import * as command from './commands.js'
 // import { RuleNode } from './rule-to-json'
-import { PanelManager } from './viz'
-import type { PanelConfig } from './viz'
+import { PanelManager } from './viz.js'
+import type { PanelConfig } from './viz.js'
 
 let client: LanguageClient
 
@@ -44,6 +47,7 @@ export async function activate(context: ExtensionContext) {
   }
 
   const panelManager = new PanelManager(PANEL_CONFIG)
+  const webviewMessenger = new Messenger({ debugLog: true })
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
@@ -63,6 +67,7 @@ export async function activate(context: ExtensionContext) {
           args.push(editor.document.uri.toString())
 
           panelManager.render(context)
+          // webviewMessenger.sendNotification(type, receiver)
 
           // const result: unknown = await next(command, args)
           // outputChannel.appendLine(
