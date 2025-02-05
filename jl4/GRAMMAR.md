@@ -18,7 +18,7 @@ anonymoussection ::=
   topdecl{;}*
 
 section ::=
-  sectionsymbols name? topdecl{;}*
+  sectionsymbols name? aka? topdecl{;}*
 
 sectionsymbols ::=
   '§'+
@@ -45,7 +45,7 @@ article ::=
   "A" | "AN" | "THE"
 
 declare' ::=
-  "DECLARE" appform typedecl
+  "DECLARE" defappform typedecl
 
 typedecl ::=
   recorddecl | enumdecl
@@ -95,19 +95,25 @@ giveth ::=
   "GIVETH" type
 
 decide' ::=
-    "DECIDE" appform ("IS" | "IF") expr  -- all forms are equivalent
-  | appform "MEANS" expr
+    "DECIDE" defappform ("IS" | "IF") expr  -- all forms are equivalent
+  | defappform "MEANS" expr
+
+defappform ::=
+    appform aka?
 
 appform ::=
     name+
   | name "OF" nameargs
   -- possibly allow "WITH" here as well?
 
+aka ::=
+  "AKA" name{,}*
+
 assume ::=
   typesig assume'
 
 assume' ::=
-  "ASSUME" appform ("IS" type)?
+  "ASSUME" defappform ("IS" type)?
 
 -- ignoring operator priority
 expr ::=

@@ -747,10 +747,11 @@ inferDirective (Check ann e) = scope $ do
   pure (Check ann re)
 
 inferSection :: Section Name -> Check (Section Resolved)
-inferSection (MkSection ann lvl mn topdecls) = do
+inferSection (MkSection ann lvl mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
+  rmaka <- traverse (traverse def) maka
   rtopdecls <- traverse inferTopDecl topdecls
-  pure (MkSection ann lvl rmn rtopdecls)
+  pure (MkSection ann lvl rmn rmaka rtopdecls)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved)
 inferLocalDecl (LocalDecide ann decide) = do
