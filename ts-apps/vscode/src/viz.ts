@@ -5,7 +5,7 @@ import webviewHtml from '../static/webview/index.html'
 const STATIC_ASSETS_DIR = 'static'
 const WEBVIEW_DIR = 'webview'
 
-const PANEL_TITLE = 'Decision Logic Visualizer'
+const PANEL_TITLE = 'Visualize L4'
 
 export function makeVizPanel(
   context: vscode.ExtensionContext
