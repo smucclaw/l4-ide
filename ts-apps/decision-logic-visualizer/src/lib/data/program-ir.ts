@@ -1,5 +1,8 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
 import { Either } from 'effect'
+/*
+Do not use $lib for the layout-ir imports
+*/
 import type { LirSource, LirNodeInfo } from '../layout-ir/core.js'
 import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
 import {

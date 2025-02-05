@@ -1,15 +1,17 @@
 import * as SF from '@xyflow/svelte'
-import { BinOp } from '../../data/program-ir.js'
-import type { LirId, LirContext } from '../../layout-ir/core.js'
-import type { ExprLirNode } from '../../layout-ir/lir-decision-logic.svelte.js'
+import { BinOp } from '$lib/data/program-ir.js'
+import type { LirId, LirContext } from '$lib/layout-ir/core.js'
+import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import {
   BoolVarLirNode,
   BinExprLirNode,
-} from '../../layout-ir/lir-decision-logic.svelte.js'
+} from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import { match, P } from 'ts-pattern'
 import type { UndirectedGraph } from '$lib/algebraic-graphs/alga.js'
-import type { Ord } from '../../utils.js'
-import { ComparisonResult } from '../../utils.js'
+import type { Ord } from '$lib/utils.js'
+import { ComparisonResult } from '$lib/utils.js'
+/* IMPT: Cannot currently use $lib for the following import,
+because of how the functions were defined */
 import {
   connect,
   // empty,
