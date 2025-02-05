@@ -19,6 +19,9 @@ import GHC.Stack
 import Generics.SOP as SOP
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types hiding (Pattern)
+import qualified Data.Text as Text
+import Data.Text (Text)
+import qualified Data.List as List
 
 -- ----------------------------------------------------------------------------
 -- Semantic Tokens Interface
@@ -65,13 +68,15 @@ traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
     thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (allClusterTokens m)
 
   restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
-  pure $ thisSyntaxNode <> restOfTokens
+  pure $ concat thisSyntaxNode <> restOfTokens
 
-fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe SemanticToken
+fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe [SemanticToken]
 fromSemanticTokenContext ctx token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
 
 class ToSemToken t where
-  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken
+  -- | 'toSemToken' possibly returns multiple tokens, to accommodate for clients
+  -- that do not support tokens that span multiple lines
+  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> [SemanticToken]
 
 instance (ToSemTokens t a) => ToSemTokens t [a] where
   toSemTokens =
@@ -112,3 +117,28 @@ toSemanticTokenAbsolute s =
     , _tokenType = s.category
     , _tokenModifiers = s.modifiers
     }
+
+-- | Split a 'SemanticToken' into multiple 'SemanticToken' based on
+-- newlines.
+-- Not all LSP clients support 'SemanticToken's spanning over multiple
+-- lines. Since we want to display them correctly nevertheless, we split them
+-- here into multiple 'SemanticToken's.
+splitTokens :: SemanticToken -> Text -> [SemanticToken]
+splitTokens s t =
+  snd $ List.mapAccumL go s.start (Text.lines t)
+  where
+    nextLine p =
+      p
+        { _character = 0
+        , _line = p ^. J.line + 1
+        }
+
+    mkSemanticTokenForLine startPos line = SemanticToken
+        { start = startPos
+        , length = fromIntegral $ Text.length line
+        , category = s.category
+        , modifiers = s.modifiers
+        }
+
+    go pos line =
+      (nextLine pos, mkSemanticTokenForLine pos line)
