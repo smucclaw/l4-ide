@@ -1,5 +1,5 @@
 import * as SF from '@xyflow/svelte'
-import { BinOp } from '$lib/data/program-ir.js'
+import { BinOp } from '@repo/viz-expr'
 import type { LirId, LirContext } from '$lib/layout-ir/core.js'
 import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import {

@@ -1,8 +1,9 @@
 <script lang="ts">
   // import { SvelteFlowProvider } from '@xyflow/svelte'
+  import { onMount } from 'svelte'
   import { Either, Schema } from 'effect'
+  import { IRExpr } from '@repo/viz-expr'
   import {
-    IRExpr,
     ExprLirSource,
     LirContext,
     LirRegistry,
@@ -10,6 +11,19 @@
     // ExprLirNode,
     ExprFlow,
   } from '@repo/decision-logic-visualizer'
+  import type { WebviewApi } from 'vscode-webview'
+  import { Messenger } from 'vscode-messenger-webview'
+
+  /**************************
+        VSCode
+  ****************************/
+  let vsCodeApi: WebviewApi<null>
+  let messenger: Messenger
+  onMount(() => {
+    // eslint-disable-next-line no-undef
+    vsCodeApi = acquireVsCodeApi()
+    messenger = new Messenger(vsCodeApi, { debugLog: true })
+  })
 
   // Parse JSON object into IRExpr (the example logic remains the same)
   const example1 = {

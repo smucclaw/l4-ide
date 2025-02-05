@@ -1,7 +1,8 @@
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import { Either, Schema } from 'effect'
-  import { IRExpr, ExprLirSource } from '$lib/data/program-ir.js'
+  import { IRExpr } from '@repo/viz-expr'
+  import { ExprLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
     LirContext,
     LirRegistry,

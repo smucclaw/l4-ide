@@ -12,7 +12,7 @@ import {
   ServerOptions,
 } from 'vscode-languageclient/node.js'
 import { isMessengerDiagnostic, Messenger } from 'vscode-messenger'
-import { VisualizeDecisionLogicNotification } from '@repo/webview'
+import type { VisualizeDecisionLogicNotification } from '@repo/viz-expr'
 
 import * as command from './commands.js'
 // import { RuleNode } from './rule-to-json'

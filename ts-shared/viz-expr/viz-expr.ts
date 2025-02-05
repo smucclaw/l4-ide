@@ -1,19 +1,9 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
 import { Either } from 'effect'
-/*
-Do not use $lib for the layout-ir imports
-*/
-import type { LirSource, LirNodeInfo } from '../layout-ir/core.js'
-import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
-import {
-  BoolVarLirNode,
-  // NotLirNode,
-  BinExprLirNode,
-} from '../layout-ir/lir-decision-logic.svelte.js'
 import { match } from 'ts-pattern'
 
 /**********************
-         IR
+      VizExpr IR
 ************************
 
 The following is pretty much adapted / copied from the interfaces sketched at
@@ -170,41 +160,18 @@ export const BoolVar = Schema.Struct({
   Wrapper / Protocol interfaces
 ************************************/
 
+/** The payload for VisualizeDecisionLogicNotification */
+export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
+  typeof VisualizeDecisionLogicIRInfo
+>
+
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRExpr,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
 
-export const VisualizeDecisionLogicResult = Schema.Struct({
-  html: Schema.String,
-})
-
-/***********************************
-        Lir Data Sources
-************************************/
-
-export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
-    return (
-      match(expr)
-        .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
-        // .with(
-        //   { $type: 'Not' },
-        //   (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
-        // )
-        .with(
-          { $type: 'BinExpr' },
-          (binE) =>
-            new BinExprLirNode(
-              nodeInfo,
-              binE.op,
-              ExprLirSource.toLir(nodeInfo, binE.left),
-              ExprLirSource.toLir(nodeInfo, binE.right)
-            )
-        )
-        .exhaustive()
-    )
-  },
-}
+// export const VisualizeDecisionLogicResult = Schema.Struct({
+//   html: Schema.String,
+// })
 
 /***********************************
         Examples of usage
