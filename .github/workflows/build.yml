@@ -99,4 +99,4 @@ jobs:
       - run: npm run format:check
       - run: npm run check
       - run: xvfb-run -a npm run test
-        working-directory: ts-apps/vscode
+        # working-directory: ts-apps/vscode
