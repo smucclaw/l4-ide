@@ -74,6 +74,7 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
+    "@repo/webview": "*",
     "ladder-diagram": "^2.0.3",
     "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1",
@@ -84,7 +85,6 @@
     "@eslint/js": "^9.17.0",
     "@repo/eslint-config": "*",
     "@repo/prettier-config": "*",
-    "@repo/webview": "*",
     "@types/fs-extra": "^11.0.4",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.11",
