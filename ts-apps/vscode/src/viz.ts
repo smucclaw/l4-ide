@@ -32,6 +32,7 @@ export class PanelManager {
     } else {
       this.#panel = vscode.window.createWebviewPanel(
         this.config.viewType,
+        // TODO: The title can be `<title prefix> <filename>`
         this.config.title,
         this.config.position,
         {
