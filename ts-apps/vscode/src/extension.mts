@@ -11,21 +11,49 @@ import {
   RevealOutputChannelOn,
   ServerOptions,
 } from 'vscode-languageclient/node.js'
+import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { isMessengerDiagnostic, Messenger } from 'vscode-messenger'
-import type { VisualizeDecisionLogicNotification } from '@repo/viz-expr'
-
+import {
+  IRExpr,
+  VisualizeDecisionLogicIRInfo,
+  VisualizeDecisionLogicNotification,
+} from '@repo/viz-expr'
+import { Schema } from 'effect'
 import * as command from './commands.js'
-// import { RuleNode } from './rule-to-json'
 import { PanelManager } from './viz.js'
 import type { PanelConfig } from './viz.js'
 
+/***********************************************
+     decode for VisualizeDecisionLogicIRInfo
+     (aka the payload from lang server)
+***********************************************/
+
+const decode = Schema.decodeUnknownSync(VisualizeDecisionLogicIRInfo)
+
+/***************************************
+      Language Client
+****************************************/
+
 let client: LanguageClient
+
+/***************************************
+       Webview Panel
+****************************************/
 
 const PANEL_CONFIG: PanelConfig = {
   viewType: 'l4Viz',
   title: 'Visualize L4',
   position: vscode.ViewColumn.Beside,
 }
+
+const vizWebviewPanel: WebviewTypeMessageParticipant = {
+  type: 'webview',
+  webviewType: PANEL_CONFIG.viewType,
+}
+
+/***************************************
+      Activate
+****************************************/
 
 export async function activate(context: ExtensionContext) {
   const langId = 'l4'
@@ -66,13 +94,26 @@ export async function activate(context: ExtensionContext) {
           args = args.slice(0)
           args.push(editor.document.uri.toString())
 
-          panelManager.render(context)
-          // webviewMessenger.sendNotification(type, receiver)
+          const responseFromLangServer: unknown = await next(command, args)
+          outputChannel.appendLine(
+            `Received command response ${JSON.stringify(responseFromLangServer)}`
+          )
 
-          // const result: unknown = await next(command, args)
-          // outputChannel.appendLine(
-          //   `Received command response ${JSON.stringify(result)}`
-          // )
+          const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(
+            responseFromLangServer
+          )
+
+          outputChannel.appendLine(JSON.stringify(vizProgramInfo))
+
+          panelManager.render(context)
+          webviewMessenger.registerWebviewPanel(panelManager.getPanel())
+
+          webviewMessenger.sendNotification(
+            VisualizeDecisionLogicNotification,
+            vizWebviewPanel,
+            vizProgramInfo
+          )
+
           // const nodeVisualisation: RuleNode[] = result as RuleNode[]
           // if (nodeVisualisation.length >= 1) {
           //   showViz(context, nodeVisualisation[0])

@@ -1,7 +1,6 @@
 <script lang="ts">
   // import { SvelteFlowProvider } from '@xyflow/svelte'
   import { onMount } from 'svelte'
-  import { Schema } from 'effect'
   import {
     IRExpr,
     VisualizeDecisionLogicIRInfo,
@@ -49,12 +48,19 @@
     vsCodeApi = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
 
+    console.log('Webview: vsCodeApi:', vsCodeApi)
+    console.log('Webview: onMount!')
+
     messenger.onNotification(
       VisualizeDecisionLogicNotification,
       (payload: VisualizeDecisionLogicIRInfo) => {
+        console.log('Webview: received notification!')
         vizExpr = payload.program
+        console.log('vizExpr:', vizExpr)
       }
     )
+
+    messenger.start()
   }
   // Parse JSON object into IRExpr (the example logic remains the same)
   // const example1 = {
@@ -101,30 +107,25 @@
   // }
 </script>
 
-<h1>Decision Logic Visualizer</h1>
-<h2>
-  Examples of decision logic visualizations, starting from a 'json' of the
-  IRExpr that eventually gets transformed into a SvelteFlow graph
-</h2>
-<h3>Example 1</h3>
+<h1>Visualize L4</h1>
 <!-- TODO: Probably ecapsulate SvelteFlowProvider within DLV instead of requiring that consumers like the webview also invoke it.
 Will think more about this after getting more experience with the library -->
 
 {#if vizExpr && exprLirNode}
   {#key exprLirNode}
-    <div class="flash-on-update">
-      <ExprFlow {context} node={exprLirNode} />
-      <section>
-        <p>The above is a visualization of</p>
-        <pre><code>
+    <!-- <div class="flash-on-update"> -->
+    <ExprFlow {context} node={exprLirNode} />
+    <section>
+      <p>The above is a visualization of</p>
+      <pre><code>
         {JSON.stringify(vizExpr, null, 2)}
       </code></pre>
-      </section>
-    </div>
+    </section>
+    <!-- </div> -->
   {/key}
 {/if}
 
-<style>
+<!-- <style>
   @keyframes flash {
     0%,
     90% {
@@ -138,4 +139,4 @@ Will think more about this after getting more experience with the library -->
   .flash-on-update {
     animation: flash 0.6s;
   }
-</style>
+</style> -->
