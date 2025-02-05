@@ -2,27 +2,59 @@ import * as vscode from 'vscode'
 // import { RuleNode } from './rule-to-json'
 import webviewHtml from '../static/webview/index.html'
 
+/******************************************
+                Panel
+*******************************************/
+
+export interface PanelConfig {
+  viewType: string
+  title: string
+  position: vscode.ViewColumn
+}
+
+export class PanelManager {
+  /** Allow only one webview to exist at any given moment. */
+  #panel: vscode.WebviewPanel | undefined = undefined
+
+  constructor(private readonly config: PanelConfig) {}
+
+  getPanel() {
+    return this.#panel
+  }
+
+  /**
+   * If the panel has already been created, reveal it;
+   * make it if not.
+   */
+  render(context: vscode.ExtensionContext) {
+    if (this.#panel) {
+      this.#panel.reveal(this.config.position)
+    } else {
+      this.#panel = vscode.window.createWebviewPanel(
+        this.config.viewType,
+        this.config.title,
+        this.config.position,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+        }
+      )
+      this.#panel.webview.html = getWebviewContent(context, this.#panel)
+
+      // Reset when the current panel is closed
+      this.#panel.onDidDispose(() => {
+        this.#panel = undefined
+      })
+    }
+  }
+}
+
+/******************************************
+            getWebviewContent
+*******************************************/
+
 const STATIC_ASSETS_DIR = 'static'
 const WEBVIEW_DIR = 'webview'
-
-const PANEL_TITLE = 'Visualize L4'
-
-export function makeVizPanel(
-  context: vscode.ExtensionContext
-  // , ruleJson?: RuleNode
-) {
-  const panel = vscode.window.createWebviewPanel(
-    'viz',
-    PANEL_TITLE,
-    vscode.ViewColumn.Beside,
-    {
-      enableScripts: true,
-      retainContextWhenHidden: true,
-    }
-  )
-  panel.webview.html = getWebviewContent(context, panel)
-  return panel
-}
 
 function getWebviewContent(
   context: vscode.ExtensionContext,
