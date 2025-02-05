@@ -98,5 +98,5 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check
-      - run: npm run test
+      - run: xvfb-run -a npm run test
       #   working-directory: vscode/
