@@ -48,7 +48,7 @@ declare' ::=
   "DECLARE" defappform typedecl
 
 typedecl ::=
-  recorddecl | enumdecl
+  recorddecl | enumdecl | synonymdecl
 
 recorddecl ::=
   "HAS" reqparam{,}*
@@ -56,6 +56,9 @@ recorddecl ::=
 enumdecl ::=
   "IS" "ONE" "OF"
     condecl{,}*
+
+synonymdecl ::=
+  "IS" type
 
 condecl ::=
   name recorddecl?

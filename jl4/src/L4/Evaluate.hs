@@ -176,7 +176,7 @@ evalProgram (MkProgram _ann sections) =
   traverse_ evalSection sections
 
 evalSection :: Section Resolved -> Eval ()
-evalSection (MkSection _ann _lvl _mn topdecls) =
+evalSection (MkSection _ann _lvl _mn _maka topdecls) =
   traverse_ evalTopDecl topdecls
 
 evalTopDecl :: TopDecl Resolved -> Eval ()
@@ -196,8 +196,8 @@ evalLocalDecl (LocalAssume _ann assume) =
   evalAssume assume
 
 evalDeclare :: Declare Resolved -> Eval ()
-evalDeclare (MkDeclare _ann _tysig appForm t) =
-  evalTypeDecl (TypeCheck.appFormHead appForm) t
+evalDeclare (MkDeclare _ann _tysig defAppForm t) =
+  evalTypeDecl (TypeCheck.defAppFormHead defAppForm) t
 
 evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
 evalTypeDecl _ (EnumDecl _ann conDecls) =

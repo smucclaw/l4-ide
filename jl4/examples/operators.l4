@@ -86,3 +86,6 @@ examplew1 MEANS   3 * (4 + 2
 #EVAL examplem3 = 0
 
 #EVAL examplew1 = 114  -- would rather have 110, I think
+
+
+
