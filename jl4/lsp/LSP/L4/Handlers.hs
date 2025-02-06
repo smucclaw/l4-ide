@@ -208,13 +208,12 @@ handlers recorder =
                           , _xdata = Nothing
                           }
                   Just prog ->
-                    let prettyprintVizErrorTODO = undefined
-                    in pure $ case Ladder.doVisualize prog of
+                    pure $ case Ladder.doVisualize prog of
                       Right vizProgramInfo -> Right $ InL $ Aeson.toJSON vizProgramInfo
                       Left vizError -> Left $ 
                         TResponseError
                           { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Could not visualize\n" <> Text.pack (show uri) <> "\n" <> prettyprintVizErrorTODO vizError
+                          , _message = "Could not visualize\n" <> Text.pack (show uri) <> "\n" <> Ladder.prettyPrintVizError vizError
                           , _xdata = Nothing }
           _ ->
             pure $ Left $
