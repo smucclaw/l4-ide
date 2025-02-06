@@ -14,10 +14,6 @@ body {
   background-color: white;
 }
 
-main {
-  height: 100vh;
-}
-
 .button {
   background-color: var(--color-secondary);
   color: transparent;
