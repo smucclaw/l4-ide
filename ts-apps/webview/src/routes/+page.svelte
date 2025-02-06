@@ -15,6 +15,7 @@
     ExprFlow,
   } from '@repo/decision-logic-visualizer'
   import type { WebviewApi } from 'vscode-webview'
+  // import type { acquireVsCodeApi } from '$lib/index.js'
   import { Messenger } from 'vscode-messenger-webview'
 
   /**************************
@@ -42,8 +43,8 @@
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
 
-  onMount(doOnMount)
-  function doOnMount() {
+  // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
+  onMount(() => {
     // eslint-disable-next-line no-undef
     vsCodeApi = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
@@ -61,7 +62,7 @@
     )
 
     messenger.start()
-  }
+  })
   // Parse JSON object into IRExpr (the example logic remains the same)
   // const example1 = {
   //   $type: 'BinExpr' as const,
@@ -113,19 +114,19 @@ Will think more about this after getting more experience with the library -->
 
 {#if vizExpr && exprLirNode}
   {#key exprLirNode}
-    <!-- <div class="flash-on-update"> -->
-    <ExprFlow {context} node={exprLirNode} />
-    <section>
-      <p>The above is a visualization of</p>
-      <pre><code>
+    <div class="flash-on-update">
+      <ExprFlow {context} node={exprLirNode} />
+      <section>
+        <p>The above is a visualization of</p>
+        <pre><code>
         {JSON.stringify(vizExpr, null, 2)}
       </code></pre>
-    </section>
-    <!-- </div> -->
+      </section>
+    </div>
   {/key}
 {/if}
 
-<!-- <style>
+<style>
   @keyframes flash {
     0%,
     90% {
@@ -139,4 +140,4 @@ Will think more about this after getting more experience with the library -->
   .flash-on-update {
     animation: flash 0.6s;
   }
-</style> -->
+</style>
