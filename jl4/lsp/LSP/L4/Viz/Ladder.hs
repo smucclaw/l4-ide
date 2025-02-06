@@ -120,10 +120,12 @@ translateExpr subject e = case e of
 
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
-    pure $ leaf subject (rawNameToText verb)
+    pure $ leaf "" (rawNameToText verb)
   App _ (MkName _ leafName) [] ->
-    pure $ leaf subject (rawNameToText leafName)
+    pure $ leaf "" (rawNameToText leafName)
   --------------------------------------------------------------------------------
+
+  -- TODO: Will be replacing this temporary, hacky version with variants for Lam App on the frontend
   App _ (MkName _ fnName) args ->
     pure $ leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
   _ -> throwError Unimplemented
