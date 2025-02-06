@@ -14,7 +14,8 @@
       "dependsOn": ["^check"]
     },
     "test": {
-      "dependsOn": ["^check"]
+      "dependsOn": ["^check"],
+      "passThroughEnv": ["XAUTHORITY", "DISPLAY"]
     },
     "dev": {
       "cache": false,
