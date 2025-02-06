@@ -1,9 +1,12 @@
 import { describe, test, expect } from 'vitest'
 import {
   empty,
+  edge,
   vertex,
   overlay,
   connect,
+  pathFromValues,
+  graphFromEdges,
 } from '../lib/algebraic-graphs/alga.js'
 import { ComparisonResult } from '../lib/utils.js'
 import type { Ord } from '../lib/utils.js'
@@ -121,5 +124,101 @@ describe('Algebraic graphs -- more isEqualTo', () => {
     const overlay2 = overlay(va, vb2) // 1 + 3
 
     expect(overlay1.isEqualTo(overlay2)).toBeFalsy()
+  })
+})
+
+describe('Algebraic graphs -- pathFromValues helper for making undirected path graph', () => {
+  test('Empty path should return an empty graph', () => {
+    const g = pathFromValues<NumberWrapper>([])
+    expect(g.isEqualTo(empty<NumberWrapper>())).toBeTruthy()
+    expect(g.getVertices()).toStrictEqual([])
+    expect(g.getEdges()).toStrictEqual([])
+  })
+
+  test('Path with one vertex should return a graph with that vertex', () => {
+    const nw1 = new NumberWrapper(1)
+    const g = pathFromValues([nw1])
+    expect(g.isEqualTo(vertex(nw1))).toBeTruthy()
+    expect(g.getVertices()).toStrictEqual([nw1])
+    expect(g.getEdges()).toStrictEqual([])
+  })
+
+  test('Path with two vertices should return a graph with an edge between them', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const g = pathFromValues([nw1, nw2])
+    const expectedGraph = edge(nw1, nw2)
+    expect(g.isEqualTo(expectedGraph)).toBeTruthy()
+  })
+
+  test('Path with multiple vertices should return a graph forming a path', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const nw3 = new NumberWrapper(3)
+    const nw4 = new NumberWrapper(4)
+    const g = pathFromValues([nw1, nw2, nw3, nw4])
+    // Expected edges are (1,2), (2,3), (3,4)
+    const expectedGraph = [
+      edge(nw1, nw2),
+      edge(nw2, nw3),
+      edge(nw3, nw4),
+    ].reduce(overlay)
+    expect(g.isEqualTo(expectedGraph)).toBeTruthy()
+    expect(g.toString()).toStrictEqual(
+      'edges [<NWrapper 1,NWrapper 2>, <NWrapper 2,NWrapper 1>, <NWrapper 2,NWrapper 3>, <NWrapper 3,NWrapper 2>, <NWrapper 3,NWrapper 4>, <NWrapper 4,NWrapper 3>]'
+    )
+  })
+
+  test('Simple path graph with duplicate vertices 1 -> 2 -> 1', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const g = pathFromValues([nw1, nw2, nw1])
+    const expectedGraph = overlay(edge(nw1, nw2), edge(nw2, nw1))
+    expect(g.isEqualTo(expectedGraph)).toBeTruthy()
+  })
+})
+
+describe('Algebraic graphs -- graphFromEdges function', () => {
+  test('graphFromEdges with empty list should return an empty graph', () => {
+    const g = graphFromEdges<NumberWrapper>([])
+    expect(g.isEqualTo(empty<NumberWrapper>())).toBeTruthy()
+  })
+
+  test('graphFromEdges with single edge should return that edge', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const g = graphFromEdges([[nw1, nw2]])
+    const expectedGraph = edge(nw1, nw2)
+    expect(g.isEqualTo(expectedGraph)).toBeTruthy()
+  })
+
+  test('graphFromEdges with multiple edges should be equivalent to overlaying those edges', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const nw3 = new NumberWrapper(3)
+    const edges = [
+      [nw1, nw2],
+      [nw2, nw3],
+    ] as [NumberWrapper, NumberWrapper][]
+
+    const g = graphFromEdges(edges)
+    const expectedGraph = overlay(edge(nw1, nw2), edge(nw2, nw3))
+    expect(g.isEqualTo(expectedGraph)).toBeTruthy()
+  })
+
+  test('edgeCount of graphFromEdges equals length of unique edges', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const nw3 = new NumberWrapper(3)
+    const edges = [
+      [nw1, nw2],
+      [nw2, nw3],
+      [nw1, nw2],
+    ] as [NumberWrapper, NumberWrapper][]
+
+    const g = graphFromEdges(edges)
+    const uniqueEdges = [edge(nw1, nw2), edge(nw2, nw3)]
+
+    expect(g.getEdges().length).toBe(uniqueEdges.length)
   })
 })

@@ -9,6 +9,8 @@ import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 /** Algebraic undirected graph */
 export type UndirectedGraph<A extends Ord<A>> = AM.UndirectedGraph<A>
 
+export type Vertex<A extends Ord<A>> = AM.Vertex<A>
+
 /********************************
       Edge types
 *********************************/
@@ -140,16 +142,34 @@ export function vertices<A extends Ord<A>>(vertices: A[]): UndirectedGraph<A> {
     .reduce(overlay, empty() as UndirectedGraph<A>)
 }
 
-// TODO: Test this
+/** Construct the graph from a list of edges. */
+export function graphFromEdges<A extends Ord<A>>(
+  edges: Array<[A, A]>
+): UndirectedGraph<A> {
+  return edges.map(([x, y]) => edge(x, y)).reduce(overlay, empty())
+}
+
 /** Make path graph from an array of vertices */
-export function path<A extends Ord<A>>(vertices: A[]): UndirectedGraph<A> {
-  // TODO: Refactor this to use ts-pattern
+export function pathFromValues<A extends Ord<A>>(
+  vertices: A[]
+): UndirectedGraph<A> {
+  return pathFromVertices(vertices.map(vertex))
+}
+
+/**
+ * Make a 'path graph' from an array of vertices.
+ */
+export function pathFromVertices<A extends Ord<A>>(
+  vertices: Vertex<A>[]
+): UndirectedGraph<A> {
   if (vertices.length === 0) {
     return empty()
   }
   if (vertices.length === 1) {
-    return vertex(vertices[0])
+    return vertices[0]
   }
-  const edges = vertices.slice(1).map((v, i) => edge(vertices[i], v))
-  return edges.reduce((acc, curr) => overlay(acc, curr))
+  const edges = vertices
+    .slice(1)
+    .map((neighborVertex, i) => connect(vertices[i], neighborVertex))
+  return edges.reduce(overlay)
 }
