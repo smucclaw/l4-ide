@@ -66,10 +66,12 @@
 </script>
 
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
-<h2 class="text-2xl italic text-center text-gray-700">
-  Examples of decision logic visualizations, starting from a 'json' of the
-  IRExpr that eventually gets transformed into a SvelteFlow graph
-</h2>
+<section class="flex items-center justify-center my-8">
+  <h2 class="text-2xl italic text-center text-gray-700 w-3/4">
+    Examples of decision logic visualizations, starting from a 'json' of the
+    IRExpr that eventually gets transformed into a SvelteFlow graph
+  </h2>
+</section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <h3 class="text-2xl font-semibold">Example 1</h3>
   <SvelteFlowProvider>
