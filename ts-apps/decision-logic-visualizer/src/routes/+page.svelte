@@ -78,10 +78,9 @@
     <ExprFlow {context} node={exprLirNode} />
   </SvelteFlowProvider>
   <section class="json-visualisation space-y-2">
-    <input type="checkbox" id="json-toggle" class="peer hidden" />
-
+    <input type="checkbox" data-toggle="example-1-json" class="peer hidden" />
     <label 
-      for="json-toggle"
+      for="example-1-json"
       class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
       on:mouseover={() => isHovered = true}
       on:mouseout={() => isHovered = false}
@@ -91,7 +90,6 @@
       >
       <h4>Expand to view source JSON of the IRExpr</h4>
     </label>
-
     <pre class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md"><code>
       {JSON.stringify(example1, null, 2)}
     </code></pre>
