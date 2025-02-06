@@ -69,7 +69,7 @@
   })
 </script>
 
-<div style="height:100vh;">
+<div class="w-full min-h-[300px] flex">
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}

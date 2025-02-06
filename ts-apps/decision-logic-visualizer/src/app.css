@@ -14,6 +14,10 @@ body {
   background-color: white;
 }
 
+main {
+  height: 100vh;
+}
+
 .button {
   background-color: var(--color-secondary);
   color: transparent;
@@ -21,12 +25,31 @@ body {
   border-radius: 0.25rem;
 }
 
-.edge-positive {
+/* for use later when we have positive and negative paths
+.path-positive {
   stroke: var(--color-positive);
   stroke-width: 2px;
 }
 
-.edge-negative {
+.path-negative {
   stroke: var(--color-negative);
   stroke-width: 2px;
 }
+*/
+
+:root, .svelte-flow {
+  .svelte-flow__edge.smoothstep, .svelte-flow__edge-path {
+    stroke: var(--color-path) !important;
+  }
+
+  .svelte-flow__edge:hover .svelte-flow__edge-path {
+    stroke: var(--color-secondary) !important;
+  }
+  /* for if we're adding animation */
+  .svelte-flow__edge.animated .svelte-flow__edge-path {
+    stroke-dasharray: 5;
+    animation: flowAnimation 1s linear infinite;
+  }
+}
+
+
