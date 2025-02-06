@@ -2,18 +2,22 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build JL4 VSCode extension",
+      "label": "Build JL4 VSCode extension, webview, and decision logic visualizer",
       "type": "npm",
       "script": "build",
-      "group": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
       "presentation": {
         "panel": "dedicated",
         "reveal": "never"
       },
       "problemMatcher": ["$tsc"],
       "options": {
-        "cwd": "${workspaceFolder}/ts-apps/vscode"
-      }
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "turbo build"
     },
     {
       "label": "Package (and prepublish) JL4 VSCode extension",
@@ -34,10 +38,7 @@
       "type": "npm",
       "script": "dev",
       "isBackground": true,
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
+      "group": "build",
       "presentation": {
         "panel": "dedicated",
         "reveal": "never"
@@ -45,7 +46,8 @@
       "problemMatcher": ["$tsc-watch"],
       "options": {
         "cwd": "${workspaceFolder}/ts-apps/vscode"
-      }
+      },
+      "detail": "turbo dev"
     },
     {
       "label": "Format TS Monorepo",
