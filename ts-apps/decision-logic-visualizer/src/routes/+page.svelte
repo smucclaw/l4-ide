@@ -23,7 +23,7 @@
         $type: 'BoolVar' as const,
         value: 'Unknown' as const,
         id: { id: 2 },
-        name: 'walks',
+        name: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
       },
       id: { id: 3 },
     },
@@ -78,7 +78,7 @@
     <ExprFlow {context} node={exprLirNode} />
   </SvelteFlowProvider>
   <section class="json-visualisation space-y-2">
-    <input type="checkbox" data-toggle="example-1-json" class="peer hidden" />
+    <input type="checkbox" id="example-1-json" class="peer hidden" />
     <label 
       for="example-1-json"
       class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
