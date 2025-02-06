@@ -16,12 +16,15 @@ import { isMessengerDiagnostic, Messenger } from 'vscode-messenger'
 import {
   IRExpr,
   VisualizeDecisionLogicIRInfo,
-  VisualizeDecisionLogicNotification,
+  WebviewFrontendIsReadyNotification,
+  VisualizeDecisionLogicRequest,
+  VisualizeDecisionLogicResponse,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
+// import { match } from 'ts-pattern'
 import * as command from './commands.js'
-import { PanelManager } from './viz.js'
 import type { PanelConfig } from './viz.js'
+import { PanelManager } from './viz.js'
 
 /***********************************************
      decode for VisualizeDecisionLogicIRInfo
@@ -46,9 +49,9 @@ const PANEL_CONFIG: PanelConfig = {
   position: vscode.ViewColumn.Beside,
 }
 
-const vizWebviewPanel: WebviewTypeMessageParticipant = {
+const vizWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
-  webviewType: PANEL_CONFIG.viewType,
+  webviewType: 'l4Viz',
 }
 
 /***************************************
@@ -75,9 +78,9 @@ export async function activate(context: ExtensionContext) {
   }
 
   const panelManager = new PanelManager(PANEL_CONFIG)
+
   const webviewMessenger = new Messenger({ debugLog: true })
 
-  // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
     diagnosticCollectionName: langName,
@@ -107,12 +110,28 @@ export async function activate(context: ExtensionContext) {
 
           panelManager.render(context)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
+          webviewMessenger.onNotification(
+            WebviewFrontendIsReadyNotification,
+            () => {
+              panelManager.markFrontendAsReady()
+              outputChannel.appendLine(
+                `Ext: got frontend is ready notification!`
+              )
+            }
+          )
 
-          webviewMessenger.sendNotification(
-            VisualizeDecisionLogicNotification,
-            vizWebviewPanel,
+          await panelManager.getWebviewFrontendIsReadyPromise()
+
+          const response = await webviewMessenger.sendRequest(
+            VisualizeDecisionLogicRequest,
+            vizWebviewFrontend,
             vizProgramInfo
           )
+          if (response.$type === 'error') {
+            outputChannel.appendLine(`Error in visualisation request`)
+          } else if (response.$type === 'ok') {
+            outputChannel.appendLine(`Visualisation request success`)
+          }
 
           // const nodeVisualisation: RuleNode[] = result as RuleNode[]
           // if (nodeVisualisation.length >= 1) {

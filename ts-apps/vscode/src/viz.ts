@@ -16,20 +16,36 @@ export class PanelManager {
   /** Allow only one webview to exist at any given moment. */
   #panel: vscode.WebviewPanel | undefined = undefined
 
-  constructor(private readonly config: PanelConfig) {}
+  private frontendIsReadyPromise: Promise<void>
+  private frontendIsReadyResolver!: () => void
+
+  constructor(private readonly config: PanelConfig) {
+    this.resetWebviewFrontendIsReady()
+  }
 
   getPanel() {
     return this.#panel
   }
 
-  /**
-   * If the panel has already been created, reveal it;
-   * make it if not.
-   */
-  render(context: vscode.ExtensionContext) {
-    if (this.#panel) {
-      this.#panel.reveal(this.config.position)
-    } else {
+  private resetWebviewFrontendIsReady() {
+    this.frontendIsReadyPromise = new Promise<void>((resolve) => {
+      this.frontendIsReadyResolver = resolve
+    })
+  }
+
+  markFrontendAsReady() {
+    if (this.frontendIsReadyResolver) {
+      this.frontendIsReadyResolver()
+      // Since the webview can be recreated, allow the Promise to be resolved each time the webview frontend sends the "ready" notification.
+    }
+  }
+
+  getWebviewFrontendIsReadyPromise(): Promise<void> {
+    return this.frontendIsReadyPromise
+  }
+
+  initialize(context: vscode.ExtensionContext) {
+    if (!this.#panel) {
       this.#panel = vscode.window.createWebviewPanel(
         this.config.viewType,
         // TODO: The title can be `<title prefix> <filename>`
@@ -45,7 +61,21 @@ export class PanelManager {
       // Reset when the current panel is closed
       this.#panel.onDidDispose(() => {
         this.#panel = undefined
+        this.resetWebviewFrontendIsReady()
       })
+    }
+  }
+
+  /**
+   * If the panel has already been created, reveal it;
+   * make it if not.
+   */
+  render(context: vscode.ExtensionContext) {
+    if (this.#panel) {
+      this.#panel.reveal(this.config.position)
+    } else {
+      this.initialize(context)
+      // this.#panel.reveal(this.config.position)
     }
   }
 }

@@ -4,7 +4,11 @@
   import {
     IRExpr,
     VisualizeDecisionLogicIRInfo,
-    VisualizeDecisionLogicNotification,
+    VisualizeDecisionLogicRequest,
+    makeSuccessVisualizeResponse,
+    // makeFailureVisualizeResponse,
+    WebviewFrontendIsReadyNotification,
+    type WebviewFrontendIsReadyMessage,
   } from '@repo/viz-expr'
   import {
     ExprLirSource,
@@ -17,6 +21,7 @@
   import type { WebviewApi } from 'vscode-webview'
   // import type { acquireVsCodeApi } from '$lib/index.js'
   import { Messenger } from 'vscode-messenger-webview'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
 
   /**************************
       Set up Lir
@@ -49,15 +54,22 @@
     vsCodeApi = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
 
+    messenger.sendNotification(
+      WebviewFrontendIsReadyNotification,
+      HOST_EXTENSION,
+      { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
+    )
+
     console.log('Webview: vsCodeApi:', vsCodeApi)
     console.log('Webview: onMount!')
 
-    messenger.onNotification(
-      VisualizeDecisionLogicNotification,
+    messenger.onRequest(
+      VisualizeDecisionLogicRequest,
       (payload: VisualizeDecisionLogicIRInfo) => {
-        console.log('Webview: received notification!')
         vizExpr = payload.program
         console.log('vizExpr:', vizExpr)
+
+        return makeSuccessVisualizeResponse()
       }
     )
 

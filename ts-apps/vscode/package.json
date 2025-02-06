@@ -79,7 +79,8 @@
     "ladder-diagram": "^2.0.3",
     "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1",
-    "vscode-messenger": "^0.5.1"
+    "vscode-messenger": "^0.5.1",
+    "vscode-messenger-common": "^0.5.1"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.26.0",
