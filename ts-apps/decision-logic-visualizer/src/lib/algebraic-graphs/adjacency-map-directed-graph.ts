@@ -37,7 +37,7 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   // Misc useful
 
-  /** Get a sorted array of the unique directed edges */
+  /** Get a (lexicographically) sorted array of the unique directed edges */
   getEdges(): DirectedEdge<A>[] {
     const directedEdges = this.getAllEdges().map(
       ([u, v]) => new DirectedEdge(u, v)
@@ -121,18 +121,37 @@ export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
   }
 }
 
+/**
+ * Creates a new adjacency map by
+ * unioning the graphs represented by the two argument adjacency maps and
+ * connecting every vertex in the "from" adjacency map to every vertex in the "to" adjacency map.
+ *
+ * @param fromAdjMap The adjacency map representing the "from" graph.
+ * @param toAdjMap The adjacency map representing the "to" graph.
+ * @returns A new adjacency map representing the connected graphs.
+ */
+export function makeDirectedConnectAdjacencyMapFromAdjMaps<A extends Ord<A>>(
+  from: Map<A, Set<A>>,
+  to: Map<A, Set<A>>
+): Map<A, Set<A>> {
+  // Union domains and relations
+  const combinedMap = graphUnion(from, to)
+
+  // Then union with cartesian product of from's vertices and to's vertices
+  const fromVertices = Array.from(from.keys())
+  const toVertices = Array.from(to.keys())
+  appendVerticesToSourceNeighbors(combinedMap, fromVertices, toVertices)
+  return combinedMap
+}
+
 export function makeDirectedConnectAdjacencyMap<
   A extends Ord<A>,
   T extends BaseAMGraph<A>,
 >(from: T, to: T): Map<A, Set<A>> {
-  // Union domains and relations
-  const combinedMap = graphUnion(from.getAdjMap(), to.getAdjMap())
-
-  // Then union with cartesian product of from's vertices and to's vertices
-  const fromVertices = Array.from(from.getAdjMap().keys())
-  const toVertices = Array.from(to.getAdjMap().keys())
-  appendVerticesToSourceNeighbors(combinedMap, fromVertices, toVertices)
-  return combinedMap
+  return makeDirectedConnectAdjacencyMapFromAdjMaps(
+    from.getAdjMap(),
+    to.getAdjMap()
+  )
 }
 
 /*************************************

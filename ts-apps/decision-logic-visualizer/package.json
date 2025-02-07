@@ -62,13 +62,15 @@
     "vitest": "^3.0.2"
   },
   "dependencies": {
-    "@repo/viz-expr": "*",
     "@dagrejs/dagre": "^1.1.4",
+    "@repo/viz-expr": "*",
     "@xyflow/svelte": "^1.0.0-next.3",
     "csstype": "^3.1.3",
     "effect": "^3.11.0",
     "elkjs": "^0.9.3",
     "esbuild": "^0.24.2",
+    "graphology": "^0.26.0",
+    "graphology-dag": "^0.4.1",
     "lodash": "^4.17.21",
     "ts-pattern": "^5.6.1"
   }

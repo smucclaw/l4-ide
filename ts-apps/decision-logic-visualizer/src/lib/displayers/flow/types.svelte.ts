@@ -84,6 +84,7 @@ export class FlowNode implements Ord<FlowNode> {
     return this.id === other.id
   }
 
+  /** Lexicographical comparison */
   compare(that: this) {
     const intId = parseInt(this.getId())
     const thatId = parseInt(that.getId())
