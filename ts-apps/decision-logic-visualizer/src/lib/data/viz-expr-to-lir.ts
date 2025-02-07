@@ -6,8 +6,9 @@ import type { LirSource, LirNodeInfo } from '../layout-ir/core.js'
 import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
 import {
   BoolVarLirNode,
+  AndLirNode,
+  OrLirNode,
   // NotLirNode,
-  BinExprLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.js'
 import { match } from 'ts-pattern'
 
@@ -25,13 +26,19 @@ export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
         //   (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
         // )
         .with(
-          { $type: 'BinExpr' },
-          (binE) =>
-            new BinExprLirNode(
+          { $type: 'And' },
+          (andExpr) =>
+            new AndLirNode(
               nodeInfo,
-              binE.op,
-              ExprLirSource.toLir(nodeInfo, binE.left),
-              ExprLirSource.toLir(nodeInfo, binE.right)
+              andExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
+            )
+        )
+        .with(
+          { $type: 'Or' },
+          (orExpr) =>
+            new OrLirNode(
+              nodeInfo,
+              orExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
             )
         )
         .exhaustive()

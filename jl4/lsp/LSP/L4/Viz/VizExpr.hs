@@ -1,17 +1,17 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module LSP.L4.Viz.VizExpr where
 
-import           Autodocodec
-import           Autodocodec.Aeson   ()
-import           Data.Aeson          (FromJSON, ToJSON)
+import Autodocodec
+import Autodocodec.Aeson ()
+import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
-import           Data.Text           (Text)
-import           Data.Tuple.Optics
-import           GHC.Generics        (Generic)
-import           Optics
+import Data.Text (Text)
+import Data.Tuple.Optics
+import GHC.Generics (Generic)
+import Optics
 
 newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
   { program :: IRExpr
@@ -20,8 +20,9 @@ newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
   deriving stock (Show, Generic)
 
 data IRExpr
-  = BinExpr ID BinOp IRExpr IRExpr
-  | BoolVar ID Text BoolValue
+  = And ID [IRExpr]
+  | Or ID [IRExpr]
+  | BoolVar ID BoolValue Text
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID
@@ -29,9 +30,6 @@ newtype ID = MkID
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
-
-data BinOp = And | Or
-  deriving (Show, Eq, Enum, Generic)
 
 data BoolValue = FalseV | TrueV | UnknownV
   deriving (Show, Eq, Generic)
@@ -46,11 +44,6 @@ instance HasCodec ID where
       MkID
         <$> requiredField "id" "Unique, stable identifier" .= view #id
 
--- | Corresponds to the Typescript `type BinOp = 'And' | 'Or'`
-instance HasCodec BinOp where
-  codec =
-    stringConstCodec [(And, "And"), (Or, "Or")]
-
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
 instance HasCodec BoolValue where
   codec = stringConstCodec [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
@@ -64,24 +57,31 @@ instance HasCodec IRExpr where
     where
       -- Encoder: maps Haskell constructors to (tag, codec)
       enc = \case
-        BinExpr uid op left right -> ("BinExpr", mapToEncoder (uid, op, left, right) binExprCodec)
+        And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
+        Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         BoolVar uid name value -> ("BoolVar", mapToEncoder (uid, name, value) boolVarCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
-          [ ("BinExpr", ("BinExpr", mapToDecoder (uncurry4 BinExpr) binExprCodec)),
-            ("BoolVar", ("BoolVar", mapToDecoder (uncurry3 BoolVar) boolVarCodec))
+          [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
+            ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
+            ("BoolVar", ("BoolVar", mapToDecoder (\(uid, value, name) -> BoolVar uid value name) boolVarCodec))
           ]
 
-      -- Individual codecs without the "$type" discriminator
-      -- TODO: There must be a nicer way to do this with record syntax instead of tuples?!
-      binExprCodec =
-        (,,,)
-          <$> requiredField' "id" .=  view _1
-          <*> requiredField' "op" .= view _2
-          <*> requiredField' "left" .= view _3
-          <*> requiredField' "right" .=  view _4
+      -- Codec for 'And' and 'Or' expressions.
+      naryExprCodec =
+        (,)
+          <$> requiredField' "id" .= fst
+          <*> requiredField' "args" .= snd
+
+      -- -- Individual codecs without the "$type" discriminator
+      -- -- TODO: There must be a nicer way to do this with record syntax instead of tuples?!
+      -- binExprCodec =
+      --   (,,)
+      --     <$> requiredField' "id" .= view _1
+      --     <*> requiredField' "op" .= view _2
+      --     <*> requiredField' "args" .= view _3
 
       boolVarCodec =
         (,,)
@@ -89,12 +89,9 @@ instance HasCodec IRExpr where
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
 
-      -- Helper functions
-      uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
-      uncurry3 f (a, b, c) = f a b c
-
-      uncurry4 :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
-      uncurry4 f (a, b, c, d) = f a b c d
+-- -- Helper functions
+-- uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+-- uncurry3 f (a, b, c) = f a b c
 
 instance HasCodec VisualizeDecisionLogicIRInfo where
   codec =
@@ -108,16 +105,17 @@ instance HasCodec VisualizeDecisionLogicIRInfo where
 -------------------------------------------------------------
 
 deriving via (Autodocodec ID) instance ToJSON ID
+
 deriving via (Autodocodec ID) instance FromJSON ID
 
-deriving via (Autodocodec BinOp) instance ToJSON BinOp
-deriving via (Autodocodec BinOp) instance FromJSON BinOp
-
 deriving via (Autodocodec BoolValue) instance ToJSON BoolValue
+
 deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
 
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
+
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
+
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo

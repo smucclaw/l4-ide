@@ -1,10 +1,10 @@
 import * as SF from '@xyflow/svelte'
-import { BinOp } from '@repo/viz-expr'
 import type { LirId, LirContext } from '$lib/layout-ir/core.js'
 import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import {
   BoolVarLirNode,
-  BinExprLirNode,
+  AndLirNode,
+  OrLirNode,
 } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import { match, P } from 'ts-pattern'
 import type { UndirectedGraph } from '$lib/algebraic-graphs/alga.js'
@@ -13,11 +13,12 @@ import { ComparisonResult } from '$lib/utils.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
-  connect,
+  // connect,
   // empty,
   vertex,
-  overlay,
+  // overlay,
 } from '../../algebraic-graphs/alga.js'
+// import { over } from 'lodash'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
@@ -162,19 +163,14 @@ export function exprLirNodeToAlgaUndirectedGraph(
       const flowNode = new FlowNode(node.getName(context), [node.getId()])
       return vertex(flowNode)
     })
-    .with(P.instanceOf(BinExprLirNode), (node) => {
-      const leftGraph = exprLirNodeToAlgaUndirectedGraph(
-        context,
-        node.getLeft(context)
-      )
-      const rightGraph = exprLirNodeToAlgaUndirectedGraph(
-        context,
-        node.getRight(context)
-      )
-      return match<BinOp>(node.getOp())
-        .with('And', () => connect(leftGraph, rightGraph))
-        .with('Or', () => overlay(leftGraph, rightGraph))
-        .exhaustive()
+    .with(P.instanceOf(AndLirNode), () => {
+      // const argsGraphs = node
+      //   .getArgs(context)
+      //   .map((n) => exprLirNodeToAlgaUndirectedGraph(context, n))
+      throw new Error('Unimplemented TODO')
+    })
+    .with(P.instanceOf(OrLirNode), () => {
+      throw new Error('Unimplemented TODO')
     })
     .exhaustive()
 }

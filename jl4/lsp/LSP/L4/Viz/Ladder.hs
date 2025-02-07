@@ -3,28 +3,33 @@
 module LSP.L4.Viz.Ladder where
 
 -- import           Data.Aeson
-import           Control.Monad        ()
-import           Control.Monad.Except
-import           Data.List.NonEmpty   (toList)
+
 -- import           Data.Map.Strict    (Map)
 -- import qualified Data.Map.Strict    as Map
 -- import qualified Data.Maybe         as Maybe
-import           Data.Text            (Text)
-import qualified Data.Text            as Text
-import           GHC.Generics         (Generic)
+
 -- import           L4.Annotation      ()
-import           Control.DeepSeq
+import Control.DeepSeq
+import Control.Monad ()
+import Control.Monad.Except
+import Data.List.NonEmpty (toList)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import GHC.Generics (Generic)
 -- import           L4.Lexer             (PosToken, SrcRange)
 
 ------- Imports for testing -------------
-import           L4.Parser
-import           L4.Syntax            as S
-import           L4.TypeCheck         (rawNameToText)
-import           LSP.L4.Viz.VizExpr   (ID (..), IRExpr,
-                                       VisualizeDecisionLogicIRInfo (..))
-import qualified LSP.L4.Viz.VizExpr   as V
-import           Optics
-import           Text.Pretty.Simple
+import L4.Parser
+import L4.Syntax as S
+import L4.TypeCheck (rawNameToText)
+import LSP.L4.Viz.VizExpr
+  ( ID (..),
+    IRExpr,
+    VisualizeDecisionLogicIRInfo (..),
+  )
+import qualified LSP.L4.Viz.VizExpr as V
+import Optics
+import Text.Pretty.Simple
 
 -----------------------------------------
 
@@ -61,19 +66,16 @@ prettyPrintVizError = \case
 -- | Entrypoint: Generate boolean circuits of the 'Program'.
 --
 -- Simple version where we visualize the first Decide, if it exists.
--- TODO: Might be nicer to have the ret type be an Either-like type
--- so we can tell the user no Decides if that's the case / give better error messages
 doVisualize :: Program Name -> Either VizError VisualizeDecisionLogicIRInfo
 doVisualize prog = (vizProgram prog).runViz
 
 vizProgram :: Program Name -> Viz VisualizeDecisionLogicIRInfo
 vizProgram prog =
   let decides = toListOf (gplate @(Decide Name)) prog
-  in case decides of
-      [x] -> MkVisualizeDecisionLogicIRInfo <$> translateDecide x
-      []  -> throwError InvalidProgramNoDecidesFound
-      _xs -> throwError Unimplemented --TODO: Want to eventually translate every eligible Decide
-
+   in case decides of
+        [x] -> MkVisualizeDecisionLogicIRInfo <$> translateDecide x
+        [] -> throwError InvalidProgramNoDecidesFound
+        _xs -> throwError Unimplemented -- TODO: Want to eventually translate every eligible Decide
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -110,13 +112,12 @@ tempId = MkID 1
 
 translateExpr :: Text -> Expr Name -> Viz IRExpr
 translateExpr subject e = case e of
-  And _ left right ->
-    binE V.And left right
-  Or _ left right ->
-    binE V.Or left right
-
+  And {} ->
+    V.And tempId <$> traverse (translateExpr subject) (scanAnd e)
+  Or {} ->
+    V.Or tempId <$> traverse (translateExpr subject) (scanAnd e)
   Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
-  Not {}    -> throwError Unimplemented -- Can't handle 'Not' yet
+  Not {} -> throwError Unimplemented -- Can't handle 'Not' yet
 
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
@@ -131,8 +132,18 @@ translateExpr subject e = case e of
   _ -> throwError Unimplemented
   where
     getNames args = args ^.. (gplate @Name) % to nameToText
-    binE op left right = V.BinExpr tempId op <$> translateExpr subject left <*> translateExpr subject right
+
 -- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
+
+scanAnd :: Expr Name -> [Expr Name]
+scanAnd (And _ e1 e2) =
+  scanAnd e1 <> scanAnd e2
+scanAnd e = [e]
+
+scanOr :: Expr Name -> [Expr Name]
+scanOr (Or _ e1 e2) =
+  scanOr e1 <> scanOr e2
+scanOr e = [e]
 
 ------------------------------------------------------
 -- Leaf makers
@@ -142,7 +153,7 @@ defaultBoolVarValue :: V.BoolValue
 defaultBoolVarValue = V.UnknownV
 
 leaf :: Text -> Text -> IRExpr
-leaf subject complement = V.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
+leaf subject complement = V.BoolVar tempId defaultBoolVarValue (subject <> " " <> complement)
 
 ------------------------------------------------------
 -- Name helpers
@@ -159,7 +170,7 @@ parseAndVisualiseProgram :: Text -> Either VizError VisualizeDecisionLogicIRInfo
 parseAndVisualiseProgram prog =
   case execParser program "" prog of
     Left errs -> error $ unlines $ fmap (Text.unpack . (.message)) (toList errs)
-    Right x   -> doVisualize x
+    Right x -> doVisualize x
 
 vizTest :: Text -> IO ()
 vizTest = pPrint . parseAndVisualiseProgram

@@ -1,6 +1,5 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
 import { Either } from 'effect'
-import { match } from 'ts-pattern'
 
 /**********************
       VizExpr IR
@@ -89,16 +88,17 @@ export const IRNode = Schema.Struct({
 /** Think of this as the Expr for the decision logic.
  * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
  */
-export type IRExpr = BinExpr | BoolVar
+export type IRExpr = And | Or | BoolVar
 // | Not
 
-export type BinOp = 'And' | 'Or'
+export interface And extends IRNode {
+  readonly $type: 'And'
+  readonly args: readonly IRExpr[]
+}
 
-export interface BinExpr extends IRNode {
-  readonly $type: 'BinExpr'
-  readonly op: BinOp
-  readonly left: IRExpr
-  readonly right: IRExpr
+export interface Or extends IRNode {
+  readonly $type: 'Or'
+  readonly args: readonly IRExpr[]
 }
 
 // export interface Not extends IRNode {
@@ -124,20 +124,23 @@ export interface BoolVar extends IRNode {
 ************************************/
 
 export const IRExpr = Schema.Union(
-  Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
+  Schema.suspend((): Schema.Schema<And> => And),
+  Schema.suspend((): Schema.Schema<Or> => Or),
   // Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
-export const BinOp = Schema.Union(Schema.Literal('And'), Schema.Literal('Or'))
-
-export const BinExpr = Schema.Struct({
-  $type: Schema.tag('BinExpr'),
-  op: BinOp,
-  left: IRExpr,
-  right: IRExpr,
+export const And = Schema.Struct({
+  $type: Schema.tag('And'),
   id: IRId,
-}).annotations({ identifier: 'BinExpr' })
+  args: Schema.Array(IRExpr),
+}).annotations({ identifier: 'And' })
+
+export const Or = Schema.Struct({
+  $type: Schema.tag('Or'),
+  id: IRId,
+  args: Schema.Array(IRExpr),
+}).annotations({ identifier: 'Or' })
 
 // export const Not = Schema.Struct({
 //   $type: Schema.tag('Not'),
@@ -168,10 +171,6 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRExpr,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
-
-// export const VisualizeDecisionLogicResult = Schema.Struct({
-//   html: Schema.String,
-// })
 
 /***********************************
         Examples of usage
@@ -234,8 +233,7 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
 **************************/
 
 /*
-As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
-
+As of feb 7 2025:
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$defs": {
@@ -254,44 +252,29 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
     "IRExpr": {
       "anyOf": [
         {
-          "$ref": "#/$defs/BinExpr"
+          "$ref": "#/$defs/And"
         },
         {
-          "$ref": "#/$defs/Not"
+          "$ref": "#/$defs/Or"
         },
         {
           "$ref": "#/$defs/BoolVar"
         }
       ]
     },
-    "BinExpr": {
+    "And": {
       "type": "object",
       "required": [
         "$type",
-        "op",
-        "left",
-        "right",
-        "id"
+        "id",
+        "args"
       ],
       "properties": {
         "$type": {
           "type": "string",
           "enum": [
-            "BinExpr"
+            "And"
           ]
-        },
-        "op": {
-          "type": "string",
-          "enum": [
-            "And",
-            "Or"
-          ]
-        },
-        "left": {
-          "$ref": "#/$defs/IRExpr"
-        },
-        "right": {
-          "$ref": "#/$defs/IRExpr"
         },
         "id": {
           "type": "object",
@@ -304,26 +287,29 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
             }
           },
           "additionalProperties": false
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IRExpr"
+          }
         }
       },
       "additionalProperties": false
     },
-    "Not": {
+    "Or": {
       "type": "object",
       "required": [
         "$type",
-        "negand",
-        "id"
+        "id",
+        "args"
       ],
       "properties": {
         "$type": {
           "type": "string",
           "enum": [
-            "Not"
+            "Or"
           ]
-        },
-        "negand": {
-          "$ref": "#/$defs/IRExpr"
         },
         "id": {
           "type": "object",
@@ -336,6 +322,12 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
             }
           },
           "additionalProperties": false
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IRExpr"
+          }
         }
       },
       "additionalProperties": false
