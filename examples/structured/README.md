@@ -35,12 +35,6 @@ We can only say
 is_king(edward_viii, 1936).
 ```
 
-giving
-
-``` prolog
-:- is_king(edward_viii, 1936).
-```
-
 This is enough for us to start thinking with temporals:
 
 1. A person (`Person`) is a British citizen (`AS OF Time_Of_Birth`) if:
@@ -61,11 +55,15 @@ Regarding 1.b.i, we are willing to accept _prima facie_ evidence, without having
 
 What is an appointed day? Farther down in the legislation it says: _The relevant day for the purposes of subsection (1A) or (3A) is the day appointed for the commencement of section 42 of the Borders, Citizenship and Immigration Act 2009 (which inserted those subsections)._
 
-So we'll log that as `T_ad42`.
+So we'll log that as `T_bcia`.
 
-That method of indexing temporals into predicates is a good start.
+The BNA material deserves a tutorial in its own right, but we won't get into that here. Here we want to focus on the temporals, affording a concise vocabulary for saying that something was true at a certain time in the past; due to a particular version of the legislation that was in effect at a certain time; or due to imperfect knowledge about events as they reported in; or due to encoding errors.
 
-But a properly bitemporal database would allow us to go further:
+In the above treatment, our method of indexing temporals into predicates is a good start. There are other methods, which employ more sophisticed logics like the event calculus; see also [TempLog](https://core.ac.uk/outputs/202985978/). In this case we will restrict our model of time and events to say that if a thing was true at time T it continues to be true at subsequent times; and if we need to override that thing we just introduce an overriding predicate. So we would say that someone is a British citizen by birth forever, but they are no longer a British citizen since the date of renunciation of citizenship, which also goes on forever. So you can think of it as layering on new events, and at any point in time we can take a core sample of the layers and use the top one.
+
+A properly bitemporal, or multitemporal, database would allow us to go further. We have to deal with the temporality of events as they are reported into the system: the classic example deals with events that change someone's state, and with the practical problems with the fact that those events are imperfectly recorded to the database, with some delays. Due to these practical issues, decisions made with imperfect information may be inaccurate; but for audit purposes we need to record those decisions as having been made at a certain time in a certain way, so that we do not later question our own sanity; instead we can account discrepancies to simply not knowing all the facts at the time. So we achieve a bitemporal model and [tritemporal history](https://en.wikipedia.org/wiki/Temporal_database#Using_three_axes:_valid_time,_decision_time,_and_transaction_time).
+
+How do we apply this thinking to law? Legislation and regulations are subject to *versioning*: changing rulesets are indexed by commencement date, much as changing repositories are indexed by commit. So we need to be multitemporal with respect to events in the world, and we need to be multitemporal with respect to the rules which govern those events, and we need to allow the rules to also be sensitive to the history of previous applications of rules. In recent news the Australian Robodebt matter, and in the UK the Windrush scandal, have been the settings for logics which say, "if a mistake was made through incorrect application of the rules that were in effect at that time, that mistake is now to be corrected by offering remedy to the concerned parties."
 
 Let's pretend that the very first version of the BNA did not allow qualified territories.
 
@@ -75,23 +73,50 @@ The people didn't change; only their institutional constitution did.
 
 So we want to be able to say, in 2001, prior to the commencement of the British Overseas Territories Act, someone born in Gibraltar to parents settled there, would not have qualified.
 
-Was Eva a British citizen in 1960, as at 2001? No.
+Was Eva a British citizen in 1960, according to rules in effect in 2001? No.
 
-Was Eva a British citizen in 1960, as at 2005? Yes.
+Was Eva a British citizen in 1960, according to rules in effect in 2005? Yes.
 
-Now we need to distinguish valid time from system time from transaction time.
+What if we were late to encode the legislation? Maybe only got around to encoding the 2005 legislation in 2024. So the decision history shows inaccuracy due to system latency.
 
-What if we were late to encode the legislation? We only got around to encoding the 2005 legislation in 2025.
+Was Eva a British citizen in 1960, according to rules in effect in 2005, under the encoding in use by the system in 2023? No.
 
-Was Eva a British citizen in 1960, as at 2005, with system 2023? No.
+Was Eva a British citizen in 1960, according to rules in effect in  2005, under the encoding in use by the system in 2025? No.
 
-Was Eva a British citizen in 1960, as at 2005, with system 2026? Yes.
+Meng proposes the following system of operators to handle the above complexity.
 
-So the "as at LT" indexes the legislative rules in effect at time LT.
+Valid time refers to our record of an event in the real world.
 
-The "in VT" indexes the valid time VT.
+Transaction time allows us to update those records, while reflecting past misunderstandings: see [the example from Wikipedia.](https://en.wikipedia.org/wiki/Temporal_database#Using_two_axes:_valid_time_and_transaction_time)
 
-The "with system DT" refers to the decision time DT.
+However, there are two categories of events in the real world: the physical events, and the constitutive interpretations of those events which are given by rulesets which are themselves subject to change.
+
+So we now need to have a similar notion of valid and transaction time *but applying to legislation*.
+
+I propose to use:
+- *version time* to represent valid time for rules
+- *encoding time* to represent transaction time for rules. If an encoding was in error, we need to fix it, without necessarily implying that the underlying version changed; only our encoding of it did.
+
+So we can ask questions like
+
+- In 1984, what did the system know about Alice's date and place of birth?
+  - Query: transaction time = 1984, person = alice, event = birth
+  - Response: valid time = 1970, place = UK
+
+- In 2025, what did the system know about the nationality act in effect in 1988? (version time = 1988, encoding time = 2025)
+  
+  - Query: transaction time = 2025, act = BNA, valid = 1988
+  - Response: BNA_1988
+
+- The 2025 encoding of the 1988 version of the nationality act, would then take as an input the valid-time data about Alice, and return an answer about her citizenship in 1988, due to events of 1984.
+
+- A subsequent act, say the 2020 Windrush Compensation Scheme (Expenditure) Act, might take as a further input the history of whether the rules (of a certain version-time) were applied in a certain way due to incorrect valid-time records; and if they were, then other rules kick in.
+
+Composing these ideas, 
+
+"AS AT T" means "taking the version of legislation in effect at time T, with the information known to the system at time T"
+
+the absence of "AS AT" is shorthand for "taking the current version of legislation, using the latest information known to the system"
 
 These operators `in`, `as at`, and `with system` can themselves nest, as understandings of the past, and of retroactive evaluations, are increasingly refined.
 
