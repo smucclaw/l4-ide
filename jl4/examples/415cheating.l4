@@ -1,0 +1,65 @@
+-- https://sso.agc.gov.sg/Act/PC1871?ProvIds=pr415-.
+-- 415.
+--  Whoever,
+--      by deceiving any person,
+--         whether or not such deception was the sole or main inducement,
+--   AND
+--         fraudulently or dishonestly
+--          induces the person so deceived to
+--            deliver or cause the delivery of any property to any person,
+--              or to consent that any person shall retain any property,
+--     OR  intentionally
+--          induces the person so deceived to
+--            do or omit to do
+--              anything which he would not do or omit to do if he were not so deceived,
+--          and which act or omission
+--                  causes
+--            or    is likely to cause
+--                damage
+--            or  harm to any person in
+--                   body,
+--                   mind,
+--                   reputation
+--                or property,
+-- is said to “cheat”.
+
+-- we might use some idea of a p2 /= p3, or p2 could be == p3, much as we want to avoid the canard of you being your own sibling.
+GIVEN p1 IS A Person
+      p2 IS A Person
+      p3 IS A Person
+      d  IS A Deception -- mark as DEFAULT OBJECT then we don't need to have "d" sprinkled below. Or we can have Env be the default.
+GIVETH A BOOLEAN -- are they said to cheat?
+DECIDE `is said to cheat` IS
+  `by deceiving any person` p1
+  AND         soleOrMainInducement d
+       OR NOT ^                    ^ -- PROPOSAL: triple ditto syntax ^^^ continues until the end of the line
+  AND     `fraudulently or dishonestly induces the person so deceived` d
+          "to"
+               `deliver`       d
+            OR `causeDelivery` d
+          "of"
+               `any Property`  d
+          "to" `any Person`    d
+       OR `to consent that any person shall retain any property`
+    OR `intentionally induces the person so deceived` d
+          "to"
+               `do` d
+            OR `omit to do` d
+          "anything which he would not do or omit to do if he were not so deceived"
+       AND `which act or omission`
+               `causes` d
+            OR `is likely to cause` d
+                `damage` d
+            OR `harm` d
+          "to"
+               `any person` d
+          "in"
+               `body` d
+            OR `mind` d
+            OR `reputation` d
+            OR `property` d
+       OR `is said to cheat` d
+
+WHERE soleOrMainInducement d
+ MEANS    `sole inducement` d
+       OR `main inducement` d
