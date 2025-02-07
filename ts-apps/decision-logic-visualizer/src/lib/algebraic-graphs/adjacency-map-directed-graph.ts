@@ -12,9 +12,6 @@ export type DirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
-// Ignore the InstanceType<typeof ... syntax
-// It's morally equivalent to Empty | Vertex | ...
-
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors.
 

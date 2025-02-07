@@ -38,7 +38,7 @@ export abstract class BaseAMGraph<A extends Ord<A>> {
     return false
   }
 
-  /** Get a sorted array of vertices */
+  /** Get a sorted (via `compare`) array of vertices */
   getVertices(): A[] {
     return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
   }
