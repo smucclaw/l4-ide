@@ -57,6 +57,8 @@ export abstract class Dag<A extends Ord<A> & HasId>
     return this.topologicalOrdering as A[]
   }
 
+  /** Returns the unique source, if there is only one source.
+   * No guarantees if there is more than one source. */
   getSource(): Vertex<A> | Empty<A> {
     const topSort = this.getTopSort()
     return match(topSort)
@@ -64,6 +66,8 @@ export abstract class Dag<A extends Ord<A> & HasId>
       .otherwise(() => vertex(topSort[0]))
   }
 
+  /** Returns the unique source, if there is only one source.
+   * No guarantees if there is more than one sink. */
   getSink(): Vertex<A> | Empty<A> {
     const topSort = this.getTopSort()
     return match(topSort)
