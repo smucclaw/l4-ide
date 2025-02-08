@@ -22,7 +22,7 @@ newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
 data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
-  | BoolVar ID BoolValue Text
+  | BoolVar ID Text BoolValue
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID

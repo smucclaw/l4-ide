@@ -10,7 +10,7 @@
   } from '@xyflow/svelte'
   import {
     type ExprFlowDisplayerProps,
-    exprLirNodeToAlgaUndirectedGraph,
+    exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
   } from './types.svelte.js'
 
@@ -21,7 +21,7 @@
   const { context, node: exprLirNode }: ExprFlowDisplayerProps = $props()
 
   const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaUndirectedGraph(context, exprLirNode)
+    exprLirNodeToAlgaDag(context, exprLirNode)
   )
 
   const initialNodes = flowGraph.nodes
@@ -63,19 +63,30 @@
     NODES = layoutedElements.nodes
     EDGES = layoutedElements.edges
 
-    // console.log('edges', EDGES)
-    // console.log('onMounted!')
+    console.log('nodes', NODES)
+    console.log('edges', EDGES)
   })
 </script>
 
-<div style="height:50vh;">
+<div style="height:80vh;">
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
     fitView
-    connectionLineType={ConnectionLineType.SmoothStep}
-    defaultEdgeOptions={{ type: 'smoothstep', animated: false }}
+    connectionLineType={ConnectionLineType.Bezier}
+    defaultEdgeOptions={{ type: 'bezier', animated: false }}
   >
     <Background />
   </SvelteFlow>
 </div>
+<section>
+  <p>For debugging</p>
+  <p>Nodes</p>
+  <pre><code>
+    {JSON.stringify(NODES, null, 2)}
+  </code></pre>
+  <p>edges</p>
+  <pre><code>
+    {JSON.stringify(EDGES, null, 2)}
+  </code></pre>
+</section>

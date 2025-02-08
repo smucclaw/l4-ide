@@ -153,7 +153,7 @@ defaultBoolVarValue :: V.BoolValue
 defaultBoolVarValue = V.UnknownV
 
 leaf :: Text -> Text -> IRExpr
-leaf subject complement = V.BoolVar tempId defaultBoolVarValue (subject <> " " <> complement)
+leaf subject complement = V.BoolVar tempId (subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers

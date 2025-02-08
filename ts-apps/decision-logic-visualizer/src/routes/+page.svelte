@@ -13,31 +13,33 @@
 
   // Parse JSON object into IRExpr
   const example1 = {
-    $type: 'BinExpr' as const,
-    op: 'And' as const,
-    left: {
-      $type: 'BinExpr' as const,
-      op: 'Or' as const,
-      left: {
+    $type: 'And' as const,
+    args: [
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'True' as const,
+            id: { id: 1 },
+            name: 'eats',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'Unknown' as const,
+            id: { id: 2 },
+            name: 'walks',
+          },
+        ],
+        id: { id: 3 },
+      },
+      {
         $type: 'BoolVar' as const,
         value: 'True' as const,
-        id: { id: 1 },
-        name: 'eats',
+        id: { id: 4 },
+        name: 'swims',
       },
-      right: {
-        $type: 'BoolVar' as const,
-        value: 'Unknown' as const,
-        id: { id: 2 },
-        name: 'walks',
-      },
-      id: { id: 3 },
-    },
-    right: {
-      $type: 'BoolVar' as const,
-      value: 'True' as const,
-      id: { id: 4 },
-      name: 'swims',
-    },
+    ],
     id: { id: 5 },
   }
 

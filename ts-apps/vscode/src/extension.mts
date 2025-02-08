@@ -97,6 +97,8 @@ export async function activate(context: ExtensionContext) {
           args = args.slice(0)
           args.push(editor.document.uri.toString())
 
+          outputChannel.appendLine('in executeCommand...')
+
           const responseFromLangServer: unknown = await next(command, args)
           outputChannel.appendLine(
             `Received command response ${JSON.stringify(responseFromLangServer)}`
