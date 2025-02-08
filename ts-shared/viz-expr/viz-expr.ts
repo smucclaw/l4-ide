@@ -91,11 +91,27 @@ export const IRNode = Schema.Struct({
 export type IRExpr = And | Or | BoolVar
 // | Not
 
+/* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
+It's one of those things that seems obvious in retrospect; to quote
+Brent Yorgey: "The set of booleans forms a monoid under conjunction (with identity True), disjunction (with identity False)" */
+
+/**
+* Preconditions / assumptions
+* - The visualizer assumes that any nested ANDs/ORs have already been 'flattened'.
+    E.g., nested exprs like (AND [a (AND [b])]) should have already been rewritten to (AND [a b]).
+    This should be done in order to reduce visual clutter in the generated graph; but the visualizer will not do this sort of flattening.
+*/
 export interface And extends IRNode {
   readonly $type: 'And'
   readonly args: readonly IRExpr[]
 }
 
+/**
+* Preconditions / assumptions
+* - The visualizer assumes that any nested ANDs/ORs have already been 'flattened'.
+    E.g., nested exprs like (AND [a (AND [b])]) should have already been rewritten to (AND [a b]).
+    This should be done in order to reduce visual clutter in the generated graph; but the visualizer will not do this sort of flattening.
+*/
 export interface Or extends IRNode {
   readonly $type: 'Or'
   readonly args: readonly IRExpr[]
