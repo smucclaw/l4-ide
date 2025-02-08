@@ -2,12 +2,6 @@
 
 module LSP.L4.Viz.Ladder where
 
--- import           Data.Aeson
-
--- import           Data.Map.Strict    (Map)
--- import qualified Data.Map.Strict    as Map
--- import qualified Data.Maybe         as Maybe
-
 -- import           L4.Annotation      ()
 import Control.DeepSeq
 import Control.Monad ()
@@ -115,9 +109,9 @@ translateExpr subject e = case e of
   And {} ->
     V.And tempId <$> traverse (translateExpr subject) (scanAnd e)
   Or {} ->
-    V.Or tempId <$> traverse (translateExpr subject) (scanAnd e)
+    V.Or tempId <$> traverse (translateExpr subject) (scanOr e)
   Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
-  Not {} -> throwError Unimplemented -- Can't handle 'Not' yet
+  Not {} -> throwError Unimplemented -- This will be done in the next or next next PR, at the same time that we add a visualization for this on the frontend
 
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
