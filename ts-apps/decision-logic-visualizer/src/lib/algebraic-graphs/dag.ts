@@ -1,5 +1,4 @@
 import type { Eq, Ord, HasId } from '$lib/utils.js'
-// import { DirectedEdge } from './alga.js'
 import {
   DirectedAMGraph,
   graphUnion,
@@ -7,6 +6,7 @@ import {
 } from './adjacency-map-directed-graph.js'
 import * as GY from 'graphology'
 import { topologicalSort } from 'graphology-dag'
+import { match } from 'ts-pattern'
 
 /*
 TODO: There is currently a fair bit of code duplication between the various kinds of alga graphs in this mini-lib.
@@ -20,7 +20,8 @@ export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
   | Connect<A>
 
 /** Directed Acyclic Graph
-TODO: This currently isn't the safest,
+*
+* TODO: This currently isn't the safest,
 in that we only check if it's a DAG when topSort / getSource / getSink are called
 */
 export abstract class Dag<A extends Ord<A> & HasId>
@@ -56,19 +57,28 @@ export abstract class Dag<A extends Ord<A> & HasId>
     return this.topologicalOrdering as A[]
   }
 
-  getSource(): A {
-    return this.getTopSort()[0]
+  getSource(): Vertex<A> | Empty<A> {
+    const topSort = this.getTopSort()
+    return match(topSort)
+      .with([], () => empty<A>())
+      .otherwise(() => vertex(topSort[0]))
   }
 
-  getSink(): A {
+  getSink(): Vertex<A> | Empty<A> {
     const topSort = this.getTopSort()
-    return topSort[topSort.length - 1]
+    return match(topSort)
+      .with([], () => empty<A>())
+      .otherwise(() => vertex(topSort[topSort.length - 1]))
   }
 }
 
 /*********************
      Primitives
 **********************/
+
+export function isEmpty<A extends Ord<A> & HasId>(g: DirectedAcyclicGraph<A>) {
+  return g instanceof Empty
+}
 
 export function empty<A extends Ord<A> & HasId>() {
   return new Empty<A>()
@@ -79,6 +89,10 @@ export class Empty<A extends Ord<A> & HasId> extends Dag<A> {
   constructor() {
     super()
   }
+}
+
+export function isVertex<A extends Ord<A> & HasId>(g: DirectedAcyclicGraph<A>) {
+  return g instanceof Vertex
 }
 
 export function vertex<A extends Ord<A> & HasId>(a: A) {
@@ -153,17 +167,20 @@ export class Connect<A extends Ord<A> & HasId> extends Dag<A> {
 ***********************************************/
 
 export function connectNodeToSource<A extends Ord<A> & HasId>(
-  dag: Dag<A>,
+  dag: DirectedAcyclicGraph<A>,
   node: A
-): Dag<A> {
-  return dag.overlay(connect(vertex(node), vertex(dag.getSource())))
+): DirectedAcyclicGraph<A> {
+  const nodeV = vertex(node)
+  /* (G, ->, empty) is a monoid */
+  return dag.overlay(nodeV.connect(dag.getSource()))
 }
 
 export function connectSinkToNode<A extends Ord<A> & HasId>(
-  dag: Dag<A>,
+  dag: DirectedAcyclicGraph<A>,
   node: A
-): Dag<A> {
-  return dag.overlay(connect(vertex(dag.getSink()), vertex(node)))
+): DirectedAcyclicGraph<A> {
+  const nodeV = vertex(node)
+  return dag.overlay(dag.getSink().connect(nodeV))
 }
 
 /**********************************************

@@ -7,7 +7,7 @@ import {
   connectNodeToSource,
   connectSinkToNode,
 } from '../lib/algebraic-graphs/dag.js' // Adjust the import path accordingly
-import type { Eq, Ord, HasId } from '$lib/utils.js'
+import type { Ord, HasId } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 
 class NumberWrapper implements Ord<NumberWrapper>, HasId {
@@ -83,6 +83,42 @@ describe('Alga: DAG - Basic Operations', () => {
   })
 })
 
+describe('Alga: DAG - Monoid Laws', () => {
+  test('x -> empty = x for dags)', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+
+    // Empty DAG
+    const emptyDag = empty<NumberWrapper>()
+
+    // x -> empty
+    const resultDag = connect(x, emptyDag)
+
+    // resultDag should be equal to x
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
+
+  test('empty -> x = x for dags', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+
+    // Empty DAG
+    const emptyDag = empty<NumberWrapper>()
+
+    // empty -> x
+    const resultDag = connect(emptyDag, x)
+
+    // resultDag should be equal to x
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
+})
+
+/******************************************
+      DAG specific tests
+*******************************************/
+
 describe('DAG - Topological Sort', () => {
   test('Simple DAG topological sort', () => {
     const nw1 = new NumberWrapper(1)
@@ -97,7 +133,7 @@ describe('DAG - Topological Sort', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const dag = vertex(nw1).connect(vertex(nw2))
-    expect(dag.getSource()).toEqual(nw1)
+    expect(dag.getSource()).toEqual(vertex(nw1))
   })
 
   test('getSink should return the last vertex in topological order', () => {
@@ -105,7 +141,7 @@ describe('DAG - Topological Sort', () => {
     const nw2 = new NumberWrapper(2)
     const nw3 = new NumberWrapper(3)
     const dag = connect(vertex(nw1), connect(vertex(nw2), vertex(nw3)))
-    expect(dag.getSink()).toEqual(nw3)
+    expect(dag.getSink()).toEqual(vertex(nw3))
   })
 
   test('Connecting sink to new node makes the new node the sink', () => {
@@ -115,9 +151,9 @@ describe('DAG - Topological Sort', () => {
 
     // 1 -> 2
     const dag = connect(vertex(nw1), vertex(nw2))
-    expect(dag.getSink()).toEqual(nw2)
+    expect(dag.getSink()).toEqual(vertex(nw2))
     const updatedDag = connectSinkToNode(dag, nw3)
-    expect(updatedDag.getSink()).toEqual(nw3)
+    expect(updatedDag.getSink()).toEqual(vertex(nw3))
   })
 
   test('Connecting new node to source makes the new node the source', () => {
@@ -127,9 +163,9 @@ describe('DAG - Topological Sort', () => {
 
     // 1 -> 2
     const dag = vertex(nw1).connect(vertex(nw2))
-    expect(dag.getSource()).toEqual(nw1)
+    expect(dag.getSource()).toEqual(vertex(nw1))
     const updatedDag = connectNodeToSource(dag, nw0)
-    expect(updatedDag.getSource()).toEqual(nw0)
+    expect(updatedDag.getSource()).toEqual(vertex(nw0))
   })
 
   test('Topological sort throws error on cyclic graph', () => {
