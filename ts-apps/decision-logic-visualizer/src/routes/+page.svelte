@@ -1,6 +1,7 @@
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import { Either, Schema } from 'effect'
+  import { match } from 'ts-pattern'
   import { IRExpr } from '@repo/viz-expr'
   import { ExprLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
@@ -10,6 +11,10 @@
   } from '$lib/layout-ir/core.js'
 
   import ExprFlow from '$lib/displayers/flow/flow.svelte'
+
+  /***************************
+      Example 1
+  ****************************/
 
   // Parse JSON object into IRExpr
   const example1 = {
@@ -67,6 +72,117 @@
   const exprLirNode = ExprLirSource.toLir(nodeInfo, expr)
   // console.log(exprLirNode)
   registry.setRoot(context, 'EXAMPLE_1' as LirRootType, exprLirNode)
+
+  /***************************
+      Example 2
+  ****************************/
+
+  const example2 = {
+    $type: 'And' as const,
+    args: [
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'False' as const,
+            id: { id: 1 },
+            name: 'flies',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'True' as const,
+            id: { id: 2 },
+            name: 'runs',
+          },
+          {
+            $type: 'And' as const,
+            args: [
+              {
+                $type: 'BoolVar' as const,
+                value: 'Unknown' as const,
+                id: { id: 3 },
+                name: 'swims',
+              },
+              {
+                $type: 'BoolVar' as const,
+                value: 'True' as const,
+                id: { id: 4 },
+                name: 'dives',
+              },
+            ],
+            id: { id: 5 },
+          },
+        ],
+        id: { id: 6 },
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 7 },
+        name: 'jumps',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'False' as const,
+        id: { id: 8 },
+        name: 'jogs',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'False' as const,
+        id: { id: 9 },
+        name: 'reads',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 10 },
+        name: 'writes',
+      },
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'Unknown' as const,
+            id: { id: 11 },
+            name: 'sketches',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'False' as const,
+            id: { id: 12 },
+            name: 'paints',
+          },
+        ],
+        id: { id: 13 },
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 14 },
+        name: 'codes',
+      },
+    ],
+    id: { id: 15 },
+  }
+
+  const eitherExpr2 = decode(example2)
+  let expr2: IRExpr = match(eitherExpr2)
+    .with({ _tag: 'Right' }, ({ right }) => right)
+    .otherwise(({ left }) => {
+      console.error('Decoding failed for Example 2:', left)
+      return {
+        $type: 'BoolVar',
+        value: 'True',
+        id: { id: 15 },
+        name: 'decoding somehow failed!!',
+      }
+    })
+
+  const exprLirNode2 = ExprLirSource.toLir(nodeInfo, expr2)
+  registry.setRoot(context, 'EXAMPLE_2' as LirRootType, exprLirNode2)
 </script>
 
 <h1>Decision Logic Visualizer draft</h1>
@@ -74,13 +190,36 @@
   Examples of decision logic visualizations, starting from a 'json' of the
   IRExpr that eventually gets transformed into a SvelteFlow graph
 </h2>
-<h3>Example 1</h3>
-<SvelteFlowProvider>
-  <ExprFlow {context} node={exprLirNode} />
-</SvelteFlowProvider>
 <section>
+  <h3>Example 1</h3>
+  <div class="visualization-container">
+    <SvelteFlowProvider>
+      <ExprFlow {context} node={exprLirNode} />
+    </SvelteFlowProvider>
+  </div>
   <p>The above is a visualization of</p>
   <pre><code>
   {JSON.stringify(example1, null, 2)}
 </code></pre>
 </section>
+<!-- Example 2 -->
+<section>
+  <h3>Example 2</h3>
+  <div class="visualization-container">
+    <SvelteFlowProvider>
+      <ExprFlow {context} node={exprLirNode2} />
+    </SvelteFlowProvider>
+  </div>
+  <p>The above is a visualization of</p>
+  <pre><code>
+  {JSON.stringify(example2, null, 2)}
+</code></pre>
+</section>
+
+<style>
+  .visualization-container {
+    min-height: 400px;
+    max-width: 80%;
+    margin: 0 auto;
+  }
+</style>
