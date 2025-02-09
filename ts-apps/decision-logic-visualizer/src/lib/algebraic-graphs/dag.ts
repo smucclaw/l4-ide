@@ -22,7 +22,7 @@ export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
 /** Directed Acyclic Graph
 *
 * TODO: This currently isn't the safest,
-in that we only check if it's a DAG when topSort / getSource / getSink are called
+in that we only check if it's a DAG when topSort is called
 */
 export abstract class Dag<A extends Ord<A> & HasId>
   extends DirectedAMGraph<A>
@@ -57,22 +57,56 @@ export abstract class Dag<A extends Ord<A> & HasId>
     return this.topologicalOrdering as A[]
   }
 
-  /** Returns the unique source, if there is only one source.
-   * No guarantees if there is more than one source. */
+  /**
+   * Returns the unique source, if there is only one source.
+   * No guarantees if there is more than one source.
+   *
+   * Time complexity: O(|V| + |E|) because naively implemented
+   */
   getSource(): Vertex<A> | Empty<A> {
-    const topSort = this.getTopSort()
-    return match(topSort)
+    const sources = Array.from(this.getSources())
+
+    return match(sources)
       .with([], () => empty<A>())
-      .otherwise(() => vertex(topSort[0]))
+      .otherwise(() => vertex(sources[0]))
   }
 
-  /** Returns the unique source, if there is only one source.
-   * No guarantees if there is more than one sink. */
+  /**
+   * Returns the unique sink, if there is only one sink.
+   * No guarantees if there is more than one sink.
+   *
+   * Time complexity: O(|V| + |E|) because naively implemented
+   */
   getSink(): Vertex<A> | Empty<A> {
-    const topSort = this.getTopSort()
-    return match(topSort)
+    const sinks = Array.from(this.getSinks())
+
+    return match(sinks)
       .with([], () => empty<A>())
-      .otherwise(() => vertex(topSort[topSort.length - 1]))
+      .otherwise(() => vertex(sinks[0]))
+  }
+
+  /** Returns all source vertices (vertices with no incoming edges).
+   *
+   * Time complexity: O(|V| + |E|) because naively implemented*/
+  getSources(): Set<A> {
+    const allVertices = this.getVertices()
+
+    const nonSources = new Set<A>(this.getAllEdges().map((edge) => edge[1]))
+
+    const sources = allVertices.filter((vertex) => !nonSources.has(vertex))
+    return new Set(sources)
+  }
+
+  /** Returns all sink vertices (vertices with no outgoing edges)
+
+  * Time complexity: O(|V| + |E|) because naively implemented*/
+  getSinks(): Set<A> {
+    const allVertices = this.getVertices()
+
+    const nonSinks = new Set<A>(this.getAllEdges().map((edge) => edge[0]))
+
+    const sinks = allVertices.filter((vertex) => !nonSinks.has(vertex))
+    return new Set(sinks)
   }
 }
 
