@@ -6,16 +6,19 @@ import Control.Concurrent.STM
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Extra (guard, whenJust)
+import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
+import qualified Data.List as List
+import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
-import L4.TypeCheck
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -23,7 +26,9 @@ import LSP.Core.PositionMapping
 import LSP.Core.Service hiding (Log (..))
 import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
+import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
+import LSP.L4.Base
 import LSP.L4.Config
 import qualified LSP.L4.Viz.Ladder as Ladder
 import LSP.L4.Rules hiding (Log (..))
@@ -35,6 +40,8 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
+import qualified Optics
+import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO)
 
 data ReactorMessage
@@ -186,9 +193,9 @@ handlers recorder =
         case mh of
           Nothing  -> pure $ Right $ InR $ Null
           Just h -> pure $ Right $ InL $ h
-    , requestHandler SMethod_WorkspaceExecuteCommand $ \ide req -> do
+    , requestHandler SMethod_WorkspaceExecuteCommand $ \ide params -> do
         let
-          ExecuteCommandParams _ _cid xdata = req
+          ExecuteCommandParams _ _cid xdata = params
         case xdata of
           Just [uriJson]
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
@@ -222,6 +229,14 @@ handlers recorder =
                 , _message = "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
                 , _xdata = Nothing
                 }
+    , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
+        let
+          uri = toNormalizedUri $ params ^. J.textDocument . J.uri
+          rng = params ^. J.range
+        diags <- liftIO $ atomically $ do
+          activeFileDiagnosticsInRange (shakeExtras ide) uri rng
+        cas <- Extra.mapMaybeM (outOfScopeAssumeQuickFix ide) diags
+        pure $ Right $ InL $ fmap InR cas
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \ide req -> do
         let
           SemanticTokensParams _ _ doc = req
@@ -252,6 +267,16 @@ handlers recorder =
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
+
+activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
+activeFileDiagnosticsInRange extras nfu rng = do
+  mDiags <- STM.lookup nfu (publishedDiagnostics extras)
+  pure
+    [ diag
+    | Just diags <- [mDiags]
+    , diag <- diags
+    , rangesOverlap rng (diag ^. fdLspDiagnosticL . J.range)
+    ]
 
 -- ----------------------------------------------------------------------------
 -- LSP Go to Definition
@@ -293,3 +318,97 @@ findHover ide fileUri pos = do
         pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
   where
     nfp = fromUri fileUri
+
+-- ----------------------------------------------------------------------------
+-- LSP Code Actions
+-- ----------------------------------------------------------------------------
+
+outOfScopeAssumeQuickFix :: IdeState -> FileDiagnostic -> ServerM Config (Maybe CodeAction)
+outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext of
+  Nothing -> pure Nothing
+  Just ctx -> case ctx.kind of
+    OutOfScopeError name ty -> do
+      mTypeCheck <- liftIO $ runAction "codeAction.outOfScope" ide $ do
+        use TypeCheck nfp
+      case mTypeCheck of
+        Nothing -> pure Nothing
+        Just typeCheck -> do
+          let
+            assumeExpr =
+              Assume emptyAnno
+                (MkAssume emptyAnno
+                  (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
+                  (MkAppForm emptyAnno name [])
+                  (Just $ fmap getActual ty)
+                )
+
+            topDecls =
+              Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
+
+            enclosingTopDecl = do
+              target <- rangeOf name
+              List.find
+                (\decl -> Maybe.isJust $ do
+                  r <- rangeOf decl
+                  guard (target.start `inRange` r)
+                )
+                topDecls
+
+          pure $ do
+            -- If the type has any inference variable, we don't want to print it
+            -- yet. Maybe it in the future, once LSP has snippet support
+            -- for code actions.
+            -- This LSP feature is promised in 3.18.
+            -- At the time of writing, we are designing this code action against 3.17.
+            guard (not $ hasTypeInferenceVars ty)
+            decl <- enclosingTopDecl
+            srcRange <- rangeOf decl
+
+            let
+              edit =
+                TextEdit
+                  { _range = pointRange $ srcPosToLspPosition srcRange.start
+                  , _newText =
+                      -- Add 2 newlines for better results.
+                      -- Ideally, we "graft" this top level onto our
+                      -- AST, at the correct location, and then calculate a diff
+                      -- based on the old AST and the new one.
+                      -- However, currently we are missing a lot of infrastructure
+                      -- to make this possible.
+                      Text.strip (prettyLayout assumeExpr) <> "\n\n"
+                  }
+
+            Just $ CodeAction
+              { _title = "Assume `" <> simpleprint name <> "` is defined"
+              , _kind = Just CodeActionKind_QuickFix
+              , _diagnostics = Just [fd ^. fdLspDiagnosticL]
+              , _isPreferred = Nothing
+              , _disabled = Nothing
+              , _edit = Just WorkspaceEdit
+                { _changeAnnotations = Nothing
+                , _documentChanges = Nothing
+                , _changes = Just $ Map.singleton uri [edit]
+                }
+              , _command = Nothing
+              , _data_ = Nothing
+              }
+    _ -> pure Nothing
+  where
+    nfp = fd ^. fdFilePathL
+
+    uri :: Uri
+    uri = fromNormalizedUri $ normalizedFilePathToUri nfp
+
+    pointRange pos = Range pos pos
+
+hasTypeInferenceVars :: Type' Resolved -> Bool
+hasTypeInferenceVars = \case
+  Type   _ -> False
+  TyApp  _ _n ns -> any hasTypeInferenceVars ns
+  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
+  Forall _ _ ty -> hasTypeInferenceVars ty
+  InfVar _ _ _ -> True
+
+hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
+hasNamedTypeInferenceVars = \case
+  MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
