@@ -8,7 +8,7 @@
     type Node,
     type Edge,
   } from '@xyflow/svelte'
-  import { type ExprFlowDisplayerProps } from './types.svelte.js'
+  import { type ExprFlowDisplayerProps, sfNodeTypes } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
@@ -53,18 +53,16 @@
     },
   }
 
-  onMount(() => {
-    // TODO: Will want to expose getLayoutedElements (maybe rename it to onLayout) that can be called whenever, e.g., window/pane resizes
-    const layoutedElements = getLayoutedElements(
-      dagreConfig,
-      initialNodes,
-      initialEdges
-    )
+  // TODO: Will want to expose this so that it can be called whenever, e.g., window/pane resizes
+  function doLayout() {
+    const layoutedElements = getLayoutedElements(dagreConfig, NODES, EDGES)
     NODES = layoutedElements.nodes
     EDGES = layoutedElements.edges
-
     console.log('nodes', NODES)
     console.log('edges', EDGES)
+  }
+  onMount(() => {
+    doLayout()
   })
 </script>
 
@@ -72,6 +70,7 @@
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
+    nodeTypes={sfNodeTypes}
     fitView
     connectionLineType={ConnectionLineType.Bezier}
     defaultEdgeOptions={{ type: 'bezier', animated: false }}

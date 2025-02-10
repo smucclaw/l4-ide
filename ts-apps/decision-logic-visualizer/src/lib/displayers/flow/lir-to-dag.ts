@@ -17,11 +17,6 @@ import type { DirectedAcyclicGraph } from '../../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import { vertex, overlay } from '../../algebraic-graphs/dag.js'
-// import { over } from 'lodash'
-
-// TODO1: Make a new kind of FlowNode for source/sink nodes
-// TODO2: Attach a group id to the label for the flownode to make it easier to debug
-// TODO3: Return the number of groups as metadata in the FlowGraph
 
 /**
 * Preconditions / assumptions:
@@ -30,6 +25,28 @@ import { vertex, overlay } from '../../algebraic-graphs/dag.js'
     nested exprs like (AND [a (AND [b])]) should have already been flattened to (AND [a b]).
 */
 export function exprLirNodeToAlgaDag(
+  context: LirContext,
+  expr: ExprLirNode
+): DirectedAcyclicGraph<FlowNode> {
+  const overallSource = vertex(
+    new SourceFlowNode([expr.getId()])
+  ) as DirectedAcyclicGraph<FlowNode>
+  const overallSink = vertex(
+    new SinkFlowNode([expr.getId()])
+  ) as DirectedAcyclicGraph<FlowNode>
+
+  const middle = transform(context, expr)
+  return overallSource
+    .connect(middle.getSource())
+    .overlay(middle)
+    .overlay(middle.getSink().connect(overallSink))
+}
+
+// TODO2: Attach a group id to the label for the flownode to make it easier to debug
+// TODO3: Return the number of groups as metadata in the FlowGraph
+
+/** Internal helper */
+function transform(
   context: LirContext,
   expr: ExprLirNode
 ): DirectedAcyclicGraph<FlowNode> {
@@ -42,9 +59,6 @@ export function exprLirNodeToAlgaDag(
 
   For AND:
   * For each of the child subgraphs, connect the sink of the previous child to the source of the next child.
-  * Sandwich the children between a source and sink vertex:
-    Connect the source vertex to the source of first child
-    and the sink of the last child to the final overall sink vertex.
 
   For OR:
   * Sandwich the children between a source and sink vertex.
@@ -58,29 +72,25 @@ export function exprLirNodeToAlgaDag(
       return vertex(flowNode)
     })
     .with(P.instanceOf(AndLirNode), (node) => {
-      const overallSource = vertex(
-        new SourceFlowNode([node.getId()])
-      ) as DirectedAcyclicGraph<FlowNode>
-      const overallSink = vertex(
-        new SinkFlowNode([node.getId()])
-      ) as DirectedAcyclicGraph<FlowNode>
+      // const overallSource = vertex(
+      //   new SourceFlowNode([node.getId()])
+      // ) as DirectedAcyclicGraph<FlowNode>
+      // const overallSink = vertex(
+      //   new SinkFlowNode([node.getId()])
+      // ) as DirectedAcyclicGraph<FlowNode>
 
       const childGraphs = node
         .getArgs(context)
-        .map((n) => exprLirNodeToAlgaDag(context, n))
+        .map((n) => transform(context, n))
 
-      return [overallSource, ...childGraphs, overallSink].reduceRight(
-        (acc, left) => {
-          const accSource = acc.getSource()
-          const leftSink = left.getSink()
-          return leftSink.connect(accSource).overlay(left).overlay(acc)
-        }
-      )
+      return childGraphs.reduceRight((acc, left) => {
+        const accSource = acc.getSource()
+        const leftSink = left.getSink()
+        return leftSink.connect(accSource).overlay(left).overlay(acc)
+      })
     })
     .with(P.instanceOf(OrLirNode), (node) => {
-      const children = node
-        .getArgs(context)
-        .map((n) => exprLirNodeToAlgaDag(context, n))
+      const children = node.getArgs(context).map((n) => transform(context, n))
 
       const overallSource = vertex(
         new SourceFlowNode([node.getId()])

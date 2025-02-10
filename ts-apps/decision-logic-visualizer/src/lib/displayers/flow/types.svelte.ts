@@ -3,7 +3,9 @@ import type { LirId, LirContext } from '$lib/layout-ir/core.js'
 import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-// import { over } from 'lodash'
+import BoolVarSFNode from './sf-custom-nodes/BoolVarSFNode.svelte'
+import SourceSFNode from './sf-custom-nodes/SourceSFNode.svelte'
+import SinkSFNode from './sf-custom-nodes/SinkSFNode.svelte'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
@@ -11,6 +13,10 @@ export interface ExprFlowDisplayerProps {
   context: LirContext
   node: ExprLirNode
 }
+
+/************************************************
+            Flow Graph
+*************************************************/
 
 export interface FlowGraph {
   nodes: FlowNode[]
@@ -121,8 +127,9 @@ export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
+      type: 'sourceNode',
       position: this.position,
-      data: { label: 'GroupSource' },
+      data: {},
     }
   }
 }
@@ -141,25 +148,11 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
+      type: 'sinkNode',
       position: this.position,
-      data: { label: 'GroupSink' },
+      data: {},
     }
   }
-}
-
-/************************************************
-          SvelteFlow Custom Nodes
-*************************************************/
-
-export interface SFHandlesInfo {
-  sourcePosition: SF.Position
-  targetPosition: SF.Position
-}
-
-export interface BoolVarDisplayerProps extends SF.NodeProps {
-  data: { label: string }
-  // TODO: Will add Value in the next version
-  handlesInfo?: SFHandlesInfo
 }
 
 /************************************************
@@ -212,3 +205,36 @@ export class FlowEdge implements Ord<FlowEdge> {
     }
   }
 }
+
+/************************************************
+          SvelteFlow Custom Nodes
+*************************************************/
+
+/** This is where we declare all the custom nodes for Svelte Flow */
+export const sfNodeTypes: SF.NodeTypes = {
+  boolVarNode: BoolVarSFNode,
+  sourceNode: SourceSFNode,
+  sinkNode: SinkSFNode,
+}
+
+export interface SFHandlesInfo {
+  sourcePosition: SF.Position
+  targetPosition: SF.Position
+}
+
+export const defaultSFHandlesInfo: SFHandlesInfo = {
+  sourcePosition: SF.Position.Right,
+  targetPosition: SF.Position.Left,
+}
+
+// See Meng's layman for this 1px thing
+export const groupingNodehandleStyle = 'opacity:0 width:1px height:1px'
+
+export interface BoolVarDisplayerProps extends SF.NodeProps {
+  data: { label: string }
+  // TODO: Will add Value in the next version
+}
+
+// export interface GroupingNodeDisplayerProps extends SF.NodeProps {
+//   handlesInfo: SFHandlesInfo
+// }
