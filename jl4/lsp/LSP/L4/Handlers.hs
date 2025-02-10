@@ -12,9 +12,6 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Monoid (Ap (..))
-import Generics.SOP
-import Generics.SOP.GGP
-import Generics.SOP.NP (trans_NP)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
@@ -43,6 +40,7 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
+import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..)) 
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
@@ -65,6 +63,7 @@ data ServerState =
 
 newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
   deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
+  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
   deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
   deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
 
@@ -88,7 +87,7 @@ instance Pretty Log where
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
-    LogRequestedCompletionsFor t-> "requesting completions for:" <+> pretty t
+    LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -260,33 +259,33 @@ handlers recorder =
                     { _resultId = Nothing
                     , _data_ = semanticTokensData
                     }
-        , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
-            let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
-                Position ln col = params ^. J.position
-            liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
-              Nothing -> pure (Right (InL []))
-              Just rope -> do
-                  let completionPrefix =
-                        Text.takeWhileEnd isAlphaNum
-                        $ Rope.toText
-                        $ fst -- we don't care for the rest of the line
-                        $ Rope.charSplitAt (fromIntegral col) 
-                        $ Rope.getLine (fromIntegral ln) rope -- TODO: can we use this or do we need to use the Data.Text.Utf16.Rope.Mixed which does not have this function
+    , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
+        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+            Position ln col = params ^. J.position
+        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+          Nothing -> pure (Right (InL []))
+          Just rope -> do
+            let completionPrefix =
+                  Text.takeWhileEnd isAlphaNum
+                  $ Rope.toText
+                  $ fst -- we don't care for the rest of the line
+                  $ Rope.charSplitAt (fromIntegral col) 
+                  $ Rope.getLine (fromIntegral ln) rope
 
-                  let mkKeyWordCompletionItem :: Text.Text -> CompletionItem
-                      mkKeyWordCompletionItem kw = gto $ SOP $ Z $ I kw :* trans_NP (Proxy @IsMaybe) I (hpure Nothing)
-                      keyWordMatches = Fuzzy.simpleFilter completionPrefix $ Map.keys keywords
+            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw) { CompletionItem._kind =  Just CompletionItemKind_Keyword }
+                keyWordMatches = Fuzzy.simpleFilter completionPrefix $ Map.keys keywords
 
-                  let allMatches = keyWordMatches
-                      items = map mkKeyWordCompletionItem allMatches
+            let items = map mkKeyWordCompletionItem keyWordMatches
 
-                  logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
+            logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
 
-                  pure (Right (InL items))
-        ]
+            pure (Right (InL items))
+    ]
 
-class (Maybe a ~ b) => IsMaybe a b
-instance (Maybe a ~ b) => IsMaybe a b
+defaultCompletionItem :: Text.Text -> CompletionItem
+defaultCompletionItem label = CompletionItem label 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
