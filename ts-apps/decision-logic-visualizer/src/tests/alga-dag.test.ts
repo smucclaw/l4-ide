@@ -32,7 +32,73 @@ class NumberWrapper implements Ord<NumberWrapper>, HasId {
   }
 }
 
-describe('Alga: DAG - Basic Operations', () => {
+/*******************
+      Overlay
+********************/
+
+describe('Algebraic graphs -- Overlay Commutativity', () => {
+  test('Commutativity of overlay for simple vertices', () => {
+    const va = vertex(new NumberWrapper(1))
+    const vb = vertex(new NumberWrapper(2))
+
+    const aPlusB = overlay(va, vb)
+    const bPlusA = overlay(vb, va)
+
+    expect(aPlusB.isEqualTo(bPlusA)).toBeTruthy()
+  })
+})
+
+describe('Algebraic graphs - Overlay Associativity', () => {
+  test('Overlay is associative', () => {
+    const va = vertex(new NumberWrapper(1))
+    const vb = vertex(new NumberWrapper(2))
+    const vc = vertex(new NumberWrapper(3))
+
+    const aPlusBC = overlay(va, overlay(vb, vc))
+    const abPlusC = overlay(overlay(va, vb), vc)
+
+    expect(aPlusBC.isEqualTo(abPlusC)).toBeTruthy()
+
+    expect(aPlusBC.toString()).toStrictEqual(
+      'vertices [NWrapper 1, NWrapper 2, NWrapper 3]'
+    )
+    expect(aPlusBC.toString()).toStrictEqual(abPlusC.toString())
+
+    expect(aPlusBC.getVertices().sort((a, b) => a.compare(b))).toStrictEqual(
+      abPlusC.getVertices().sort((a, b) => a.compare(b))
+    )
+
+    expect(aPlusBC.getEdges().sort((a, b) => a.compare(b))).toStrictEqual(
+      abPlusC.getEdges().sort((a, b) => a.compare(b))
+    )
+  })
+})
+
+/*******************
+    Connect
+********************/
+
+describe('Alga: Connect', () => {
+  test('Connect two vertices should create an edge from first to second', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const dag = vertex(nw1).connect(vertex(nw2))
+    expect(dag.getVertices()).toEqual(expect.arrayContaining([nw1, nw2]))
+    expect(dag.getEdges().map((e) => [e.getU(), e.getV()])).toEqual([
+      [nw1, nw2],
+    ])
+  })
+
+  test('Connect is not commutative for directed graphs', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const dag1 = connect(vertex(nw1), vertex(nw2))
+    const dag2 = connect(vertex(nw2), vertex(nw1))
+    expect(dag1.isEqualTo(dag2)).toBeFalsy()
+  })
+})
+
+describe('Alga: DAG - Other Basic Operations', () => {
   test('Empty DAG should have no vertices or edges', () => {
     const dag = empty<NumberWrapper>()
     expect(dag.getVertices()).toEqual([])
@@ -55,33 +121,28 @@ describe('Alga: DAG - Basic Operations', () => {
     expect(dag.getVertices()).toEqual(expect.arrayContaining([nw1, nw2]))
     expect(dag.getEdges()).toEqual([])
   })
+})
 
-  test('Connect two vertices should create an edge from first to second', () => {
-    const nw1 = new NumberWrapper(1)
-    const nw2 = new NumberWrapper(2)
-    const dag = vertex(nw1).connect(vertex(nw2))
-    expect(dag.getVertices()).toEqual(expect.arrayContaining([nw1, nw2]))
-    expect(dag.getEdges().map((e) => [e.getU(), e.getV()])).toEqual([
-      [nw1, nw2],
-    ])
-  })
+/*******************
+  Distributivity
+********************/
 
-  test('Overlay is commutative', () => {
-    const nw1 = new NumberWrapper(1)
-    const nw2 = new NumberWrapper(2)
-    const dag1 = overlay(vertex(nw1), vertex(nw2))
-    const dag2 = overlay(vertex(nw2), vertex(nw1))
-    expect(dag1.isEqualTo(dag2)).toBeTruthy()
-  })
+describe('Algebraic graphs - Distributive Laws', () => {
+  test('Connect distributes over Overlay', () => {
+    const va = vertex(new NumberWrapper(1))
+    const vb = vertex(new NumberWrapper(2))
+    const vc = vertex(new NumberWrapper(3))
 
-  test('Connect is not commutative for directed graphs', () => {
-    const nw1 = new NumberWrapper(1)
-    const nw2 = new NumberWrapper(2)
-    const dag1 = connect(vertex(nw1), vertex(nw2))
-    const dag2 = connect(vertex(nw2), vertex(nw1))
-    expect(dag1.isEqualTo(dag2)).toBeFalsy()
+    const a_times_b_plus_c = connect(va, overlay(vb, vc))
+    const a_times_b_plus_a_times_c = overlay(connect(va, vb), connect(va, vc))
+
+    expect(a_times_b_plus_c.isEqualTo(a_times_b_plus_a_times_c)).toBeTruthy()
   })
 })
+
+/*******************
+      Monoid
+********************/
 
 describe('Alga: DAG - Monoid Laws', () => {
   test('x -> empty = x for dags)', () => {

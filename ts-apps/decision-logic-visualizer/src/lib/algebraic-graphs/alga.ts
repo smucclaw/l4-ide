@@ -1,5 +1,5 @@
-import * as AM from './adjacency-map-undirected.js'
-import type { Ord } from '$lib/utils.js'
+import * as DAG from './dag.js'
+import type { Ord, HasId } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /****************************
@@ -7,9 +7,10 @@ import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 *****************************/
 
 /** Algebraic undirected graph */
-export type UndirectedGraph<A extends Ord<A>> = AM.UndirectedGraph<A>
+export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
+  DAG.DirectedAcyclicGraph<A>
 
-export type Vertex<A extends Ord<A>> = AM.Vertex<A>
+export type Vertex<A extends Ord<A> & HasId> = DAG.Vertex<A>
 
 /********************************
       Edge types
@@ -94,9 +95,9 @@ export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
     Abstract (ish) primitives
 *********************************/
 
-export const empty = AM.empty
+export const empty = DAG.empty
 
-export const vertex = AM.vertex
+export const vertex = DAG.vertex
 
 /** Convenience wrapper over Connect ctor.
  *
@@ -106,13 +107,13 @@ export const vertex = AM.vertex
  * 'empty'.
  * It distributes over 'overlay' and obeys the decomposition axiom.
  */
-export const connect = AM.connect
+export const connect = DAG.connect
 
 /** Convenience wrapper over Overlay ctor.
  *
  * overlay is analogous to +
  */
-export const overlay = AM.overlay
+export const overlay = DAG.overlay
 
 /**************************************
   Other graph construction functions
@@ -122,7 +123,10 @@ export const overlay = AM.overlay
  *
  * edge x y == 'connect' ('vertex' x) ('vertex' y)
  */
-export function edge<A extends Ord<A>>(x: A, y: A): UndirectedGraph<A> {
+export function edge<A extends Ord<A> & HasId>(
+  x: A,
+  y: A
+): DirectedAcyclicGraph<A> {
   // Adapted from
   // https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph/AdjacencyMap.hs#L251
   if (x.isEqualTo(y)) {
@@ -136,40 +140,10 @@ export function edge<A extends Ord<A>>(x: A, y: A): UndirectedGraph<A> {
 /**
  * Construct the graph comprising a given list of isolated vertices.
  */
-export function vertices<A extends Ord<A>>(vertices: A[]): UndirectedGraph<A> {
+export function vertices<A extends Ord<A> & HasId>(
+  vertices: A[]
+): DirectedAcyclicGraph<A> {
   return vertices
     .map((v) => vertex(v))
-    .reduce(overlay, empty() as UndirectedGraph<A>)
-}
-
-/** Construct the graph from a list of edges. */
-export function graphFromEdges<A extends Ord<A>>(
-  edges: Array<[A, A]>
-): UndirectedGraph<A> {
-  return edges.map(([x, y]) => edge(x, y)).reduce(overlay, empty())
-}
-
-/** Make path graph from an array of vertices */
-export function pathFromValues<A extends Ord<A>>(
-  vertices: A[]
-): UndirectedGraph<A> {
-  return pathFromVertices(vertices.map(vertex))
-}
-
-/**
- * Make a 'path graph' from an array of vertices.
- */
-export function pathFromVertices<A extends Ord<A>>(
-  vertices: Vertex<A>[]
-): UndirectedGraph<A> {
-  if (vertices.length === 0) {
-    return empty()
-  }
-  if (vertices.length === 1) {
-    return vertices[0]
-  }
-  const edges = vertices
-    .slice(1)
-    .map((neighborVertex, i) => connect(vertices[i], neighborVertex))
-  return edges.reduce(overlay)
+    .reduce(overlay, empty() as DirectedAcyclicGraph<A>)
 }
