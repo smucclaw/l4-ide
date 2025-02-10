@@ -12,13 +12,12 @@ import {
   ServerOptions,
 } from 'vscode-languageclient/node.js'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
-import { isMessengerDiagnostic, Messenger } from 'vscode-messenger'
+import { Messenger } from 'vscode-messenger'
 import {
   IRExpr,
   VisualizeDecisionLogicIRInfo,
   WebviewFrontendIsReadyNotification,
   VisualizeDecisionLogicRequest,
-  VisualizeDecisionLogicResponse,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
 // import { match } from 'ts-pattern'
