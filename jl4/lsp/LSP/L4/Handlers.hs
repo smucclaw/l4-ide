@@ -11,14 +11,20 @@ import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Monoid (Ap (..))
+import Generics.SOP
+import Generics.SOP.GGP
+import Generics.SOP.NP (trans_NP)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
+import qualified Text.Fuzzy as Fuzzy
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -43,6 +49,7 @@ import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO)
+import Data.Char (isAlphaNum)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -57,15 +64,9 @@ data ServerState =
     }
 
 newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
+  deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
   deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
   deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
-
--- TODO: can these instances be derived via?
-instance (Semigroup a) => Semigroup (ServerM c a) where
-  a <> b = liftA2 (<>) a b
---
-instance (Monoid a) => Monoid (ServerM c a) where
-  mempty = ServerM $ pure mempty
 
 runServerM :: ServerState -> ServerM c a -> LspM c a
 runServerM st m = ReaderT.runReaderT m.runServerT st
@@ -76,6 +77,7 @@ data Log
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
+  | LogRequestedCompletionsFor !Text.Text
   | LogFileStore FileStore.Log
   | LogShake Shake.Log
   deriving (Show)
@@ -86,6 +88,7 @@ instance Pretty Log where
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
+    LogRequestedCompletionsFor t-> "requesting completions for:" <+> pretty t
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -257,7 +260,33 @@ handlers recorder =
                     { _resultId = Nothing
                     , _data_ = semanticTokensData
                     }
-    ]
+        , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
+            let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+                Position ln col = params ^. J.position
+            liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+              Nothing -> pure (Right (InL []))
+              Just rope -> do
+                  let completionPrefix =
+                        Text.takeWhileEnd isAlphaNum
+                        $ Rope.toText
+                        $ fst -- we don't care for the rest of the line
+                        $ Rope.charSplitAt (fromIntegral col) 
+                        $ Rope.getLine (fromIntegral ln) rope -- TODO: can we use this or do we need to use the Data.Text.Utf16.Rope.Mixed which does not have this function
+
+                  let mkKeyWordCompletionItem :: Text.Text -> CompletionItem
+                      mkKeyWordCompletionItem kw = gto $ SOP $ Z $ I kw :* trans_NP (Proxy @IsMaybe) I (hpure Nothing)
+                      keyWordMatches = Fuzzy.simpleFilter completionPrefix $ Map.keys keywords
+
+                  let allMatches = keyWordMatches
+                      items = map mkKeyWordCompletionItem allMatches
+
+                  logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
+
+                  pure (Right (InL items))
+        ]
+
+class (Maybe a ~ b) => IsMaybe a b
+instance (Maybe a ~ b) => IsMaybe a b
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
