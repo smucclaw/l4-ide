@@ -54,6 +54,7 @@
   }
 
   onMount(() => {
+    // TODO: Will want to expose getLayoutedElements (maybe rename it to onLayout) that can be called whenever, e.g., window/pane resizes
     const layoutedElements = getLayoutedElements(
       dagreConfig,
       initialNodes,
