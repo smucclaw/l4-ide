@@ -146,6 +146,22 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
     }
   }
 }
+
+/************************************************
+          SvelteFlow Custom Nodes
+*************************************************/
+
+export interface SFHandlesInfo {
+  sourcePosition: SF.Position
+  targetPosition: SF.Position
+}
+
+export interface BoolVarDisplayerProps extends SF.NodeProps {
+  data: { label: string }
+  // TODO: Will add Value in the next version
+  handlesInfo?: SFHandlesInfo
+}
+
 /************************************************
             Flow Edges
 *************************************************/
