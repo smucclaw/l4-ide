@@ -60,6 +60,9 @@ export abstract class Dag<A extends Ord<A> & HasId>
   /** Returns the unique source, if there is only one source.
    * No guarantees if there is more than one source. */
   getSource(): Vertex<A> | Empty<A> {
+    /* This can be made more performant in the future,
+    especially if we specialize it to DAGs with exactly one source and exactly one sink.
+     */
     const topSort = this.getTopSort()
     return match(topSort)
       .with([], () => empty<A>())

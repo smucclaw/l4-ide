@@ -16,7 +16,7 @@
       "problemMatcher": ["$tsc"],
       "options": {
         "cwd": "${workspaceFolder}"
-      },
+      }
     },
     {
       "label": "Package (and prepublish) JL4 VSCode extension",
