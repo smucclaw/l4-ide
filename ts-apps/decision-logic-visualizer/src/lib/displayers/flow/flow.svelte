@@ -8,12 +8,11 @@
     type Node,
     type Edge,
   } from '@xyflow/svelte'
+  import { type ExprFlowDisplayerProps } from './types.svelte.js'
   import {
-    type ExprFlowDisplayerProps,
     exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
-  } from './types.svelte.js'
-
+  } from './lir-to-dag.js'
   import { onMount } from 'svelte'
 
   import '@xyflow/svelte/dist/style.css'
