@@ -17,7 +17,6 @@ Minimal Requirements:
 To build the `mattwaddington` project, all you have to do is this:
 
 ```sh
-git submodule update --init
 cabal update
 cabal build all
 npm install && npm run build
