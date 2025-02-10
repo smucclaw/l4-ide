@@ -63,6 +63,13 @@ function transform(
   For OR:
   * Sandwich the children between a source and sink vertex.
   * For each of the child subgraphs, connect the source of the child to the source of the overall graph; and likewise with the sinks.
+  *
+  * In "Scalable Drawing of Nested Directed Acyclic Graphs With Gates and Ports",
+  * Thomas Leu calls this kind of sandwiching 'bundling'. Leu's layouter and visualizer
+  * can do this kind of bundling automatically; it's a pity
+  * we need to do it more manually.
+  *
+  * TODO: I haven't looked at how Leu does the bundling yet --- there might be useful info there too.
   */
   return match(expr)
     .with(P.instanceOf(BoolVarLirNode), (node) => {
@@ -72,13 +79,6 @@ function transform(
       return vertex(flowNode)
     })
     .with(P.instanceOf(AndLirNode), (node) => {
-      // const overallSource = vertex(
-      //   new SourceFlowNode([node.getId()])
-      // ) as DirectedAcyclicGraph<FlowNode>
-      // const overallSink = vertex(
-      //   new SinkFlowNode([node.getId()])
-      // ) as DirectedAcyclicGraph<FlowNode>
-
       const childGraphs = node
         .getArgs(context)
         .map((n) => transform(context, n))
