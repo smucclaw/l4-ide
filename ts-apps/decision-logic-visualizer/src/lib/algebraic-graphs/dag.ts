@@ -201,14 +201,14 @@ export function gyGraphFromAdjacencyMap<A extends Ord<A> & HasId>(
   adjacencyMap: Map<A, Set<A>>
 ): { idToVertex: Map<IdType, A>; graph: GY.DirectedGraph } {
   const idToVertex = new Map<IdType, A>()
-  adjacencyMap.keys().forEach((vertex) => {
+  for (const vertex of adjacencyMap.keys()) {
     idToVertex.set(vertex.getId(), vertex)
-  })
+  }
 
   const graph = new GY.DirectedGraph()
-  adjacencyMap.keys().forEach((vertex) => {
+  for (const vertex of adjacencyMap.keys()) {
     graph.addNode(vertex.getId())
-  })
+  }
   for (const [vertex, neighbors] of adjacencyMap) {
     for (const neighbor of neighbors) {
       graph.addEdge(vertex.getId(), neighbor.getId())
