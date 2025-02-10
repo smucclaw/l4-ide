@@ -117,7 +117,6 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
-    "lint-fix": "eslint ./src --fix",
-    "test": "vscode-test"
+    "lint-fix": "eslint ./src --fix"
   }
 }
