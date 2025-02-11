@@ -30,7 +30,7 @@ import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import LSP.L4.Base
 import LSP.L4.Config
-import qualified LSP.L4.Ladder as Ladder
+import qualified LSP.L4.Viz.Ladder as Ladder
 import LSP.L4.Rules hiding (Log (..))
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
@@ -215,7 +215,13 @@ handlers recorder =
                           , _xdata = Nothing
                           }
                   Just prog ->
-                    pure $ Right $ InL $ Aeson.toJSON $ Ladder.visualise prog
+                    pure $ case Ladder.doVisualize prog of
+                      Right vizProgramInfo -> Right $ InL $ Aeson.toJSON vizProgramInfo
+                      Left vizError -> Left $ 
+                        TResponseError
+                          { _code = InL LSPErrorCodes_RequestFailed
+                          , _message = "Could not visualize\n" <> Text.pack (show uri) <> "\n" <> Ladder.prettyPrintVizError vizError
+                          , _xdata = Nothing }
           _ ->
             pure $ Left $
               TResponseError

@@ -1,12 +1,12 @@
-import type { Eq, Ord } from '$lib/utils.ts'
-import { UndirectedEdge } from './alga.ts'
+import type { Eq, Ord } from '$lib/utils.js'
+import { UndirectedEdge } from './alga.js'
 import _ from 'lodash'
 import {
   graphUnion,
   appendVerticesToSourceNeighbors,
   makeDirectedConnectAdjacencyMap,
-} from './adjacency-map-directed-graph.ts'
-import { BaseAMGraph } from './base-adjacency-map.ts'
+} from './adjacency-map-directed-graph.js'
+import { BaseAMGraph } from './base-adjacency-map.js'
 
 /**********************************************************
   Internal Adjacency Map implementation / representation

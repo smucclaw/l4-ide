@@ -85,10 +85,10 @@ The extension uses a VSCode webview to render L4 rules as ladder diagrams, displ
 The ladder diagrams are powered by an npm library developed by Jules and Zeming, available [here](https://github.com/JuliaPoo/ladder-diagram). For use in this extension, the library is bundled using esbuild to generate a standalone JavaScript file. To update the bundled file in the future, you can run:
 
 ```bash
-npx esbuild node_modules/ladder-diagram/js/ladder.js --bundle --format=iife --global-name=LadderDiagram --outfile=media/ladder-diagram.min.js
+npx esbuild node_modules/ladder-diagram/js/ladder.js --bundle --format=iife --global-name=LadderDiagram --outfile=static/ladder-diagram.min.js
 ```
 
-This produces a file named `ladder-diagram.min.js`, located in the `media` folder, which is referenced by the extension.
+This produces a file named `ladder-diagram.min.js`, located in the `static` folder, which is referenced by the extension.
 
 ### Displaying the Diagram
 
@@ -100,6 +100,8 @@ To visualize your rule as a ladder diagram:
   ![alt text](screenshots/update-viz.png)
 
 ## More build / config notes
+
+### lib, DOM
 
 Jan 20 2025, tsconfig.json: `"DOM"` had to be added to the value for `lib` to avoid issues like the following
 

@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Temporarily disable eslint unused vars
 // while I think more about how to handle LirContext params
-import type { BoolVar, BinOp } from '$lib/data/program-ir'
-export type { BinOp }
-import type { LirId, LirNode, LirNodeInfo } from './core'
-import { LirContext, DefaultLirNode } from './core'
+import type { BoolVar } from '@repo/viz-expr'
+import type { LirId, LirNode, LirNodeInfo } from './core.js'
+import { LirContext, DefaultLirNode } from './core.js'
 import { match } from 'ts-pattern'
 
 /*************************************************
@@ -13,7 +12,7 @@ import { match } from 'ts-pattern'
 
 type BoolValue = true | false | undefined
 
-export type ExprLirNode = BinExprLirNode | VarLirNode
+export type ExprLirNode = VarLirNode | AndLirNode | OrLirNode
 // | NotLirNode
 
 export type VarLirNode = BoolVarLirNode
@@ -74,40 +73,44 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
 //   }
 // }
 
-export class BinExprLirNode extends DefaultLirNode implements LirNode {
-  #op: BinOp
-  #left: LirId
-  #right: LirId
+export class AndLirNode extends DefaultLirNode implements LirNode {
+  #args: LirId[]
 
-  constructor(
-    nodeInfo: LirNodeInfo,
-    op: BinOp,
-    left: ExprLirNode,
-    right: ExprLirNode
-  ) {
+  constructor(nodeInfo: LirNodeInfo, args: ExprLirNode[]) {
     super(nodeInfo)
-    this.#op = op
-    this.#left = left.getId()
-    this.#right = right.getId()
+    this.#args = args.map((n) => n.getId())
   }
 
-  getOp() {
-    return this.#op
-  }
-
-  getLeft(context: LirContext) {
-    return context.get(this.#left) as ExprLirNode
-  }
-
-  getRight(context: LirContext) {
-    return context.get(this.#right) as ExprLirNode
+  getArgs(context: LirContext) {
+    return this.#args.map((id) => context.get(id) as ExprLirNode)
   }
 
   getChildren(context: LirContext) {
-    return [this.getLeft(context), this.getRight(context)]
+    return this.getArgs(context)
   }
 
   toString(): string {
-    return 'BIN_EXPR_LIR_NODE'
+    return 'AND_LIR_NODE'
+  }
+}
+
+export class OrLirNode extends DefaultLirNode implements LirNode {
+  #args: LirId[]
+
+  constructor(nodeInfo: LirNodeInfo, args: ExprLirNode[]) {
+    super(nodeInfo)
+    this.#args = args.map((n) => n.getId())
+  }
+
+  getArgs(context: LirContext) {
+    return this.#args.map((id) => context.get(id) as ExprLirNode)
+  }
+
+  getChildren(context: LirContext) {
+    return this.getArgs(context)
+  }
+
+  toString(): string {
+    return 'OR_LIR_NODE'
   }
 }

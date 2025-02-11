@@ -1,38 +1,50 @@
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import { Either, Schema } from 'effect'
-  import { IRExpr, ExprLirSource } from '$lib/data/program-ir'
-  import { LirContext, LirRegistry, type LirRootType } from '$lib/layout-ir'
+  import { match } from 'ts-pattern'
+  import { IRExpr } from '@repo/viz-expr'
+  import { ExprLirSource } from '$lib/data/viz-expr-to-lir.js'
+  import {
+    LirContext,
+    LirRegistry,
+    type LirRootType,
+  } from '$lib/layout-ir/core.js'
 
   import ExprFlow from '$lib/displayers/flow/flow.svelte'
 
+  /***************************
+      Example 1
+  ****************************/
+
   // Parse JSON object into IRExpr
   const example1 = {
-    $type: 'BinExpr' as const,
-    op: 'And' as const,
-    left: {
-      $type: 'BinExpr' as const,
-      op: 'Or' as const,
-      left: {
+    $type: 'And' as const,
+    args: [
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'True' as const,
+            id: { id: 1 },
+            name: 'eats',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'Unknown' as const,
+            id: { id: 2 },
+            name: 'walks',
+          },
+        ],
+        id: { id: 3 },
+      },
+      {
         $type: 'BoolVar' as const,
         value: 'True' as const,
-        id: { id: 1 },
-        name: 'eats',
+        id: { id: 4 },
+        name: 'swims',
       },
-      right: {
-        $type: 'BoolVar' as const,
-        value: 'Unknown' as const,
-        id: { id: 2 },
-        name: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
-      },
-      id: { id: 3 },
-    },
-    right: {
-      $type: 'BoolVar' as const,
-      value: 'True' as const,
-      id: { id: 4 },
-      name: 'swims',
-    },
+    ],
     id: { id: 5 },
   }
 
@@ -61,8 +73,116 @@
   // console.log(exprLirNode)
   registry.setRoot(context, 'EXAMPLE_1' as LirRootType, exprLirNode)
 
-  // style
-  let isHovered = false
+  /***************************
+      Example 2
+  ****************************/
+
+  const example2 = {
+    $type: 'And' as const,
+    args: [
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'False' as const,
+            id: { id: 1 },
+            name: 'flies',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'True' as const,
+            id: { id: 2 },
+            name: 'runs',
+          },
+          {
+            $type: 'And' as const,
+            args: [
+              {
+                $type: 'BoolVar' as const,
+                value: 'Unknown' as const,
+                id: { id: 3 },
+                name: 'swims',
+              },
+              {
+                $type: 'BoolVar' as const,
+                value: 'True' as const,
+                id: { id: 4 },
+                name: 'dives',
+              },
+            ],
+            id: { id: 5 },
+          },
+        ],
+        id: { id: 6 },
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 7 },
+        name: 'jumps',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'False' as const,
+        id: { id: 8 },
+        name: 'jogs',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'False' as const,
+        id: { id: 9 },
+        name: 'reads',
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 10 },
+        name: 'writes',
+      },
+      {
+        $type: 'Or' as const,
+        args: [
+          {
+            $type: 'BoolVar' as const,
+            value: 'Unknown' as const,
+            id: { id: 11 },
+            name: 'sketches',
+          },
+          {
+            $type: 'BoolVar' as const,
+            value: 'False' as const,
+            id: { id: 12 },
+            name: 'paints',
+          },
+        ],
+        id: { id: 13 },
+      },
+      {
+        $type: 'BoolVar' as const,
+        value: 'True' as const,
+        id: { id: 14 },
+        name: 'codes',
+      },
+    ],
+    id: { id: 15 },
+  }
+
+  const eitherExpr2 = decode(example2)
+  let expr2: IRExpr = match(eitherExpr2)
+    .with({ _tag: 'Right' }, ({ right }) => right)
+    .otherwise(({ left }) => {
+      console.error('Decoding failed for Example 2:', left)
+      return {
+        $type: 'BoolVar',
+        value: 'True',
+        id: { id: 15 },
+        name: 'decoding somehow failed!!',
+      }
+    })
+
+  const exprLirNode2 = ExprLirSource.toLir(nodeInfo, expr2)
+  registry.setRoot(context, 'EXAMPLE_2' as LirRootType, exprLirNode2)
 </script>
 
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
@@ -95,3 +215,24 @@
     </code></pre>
   </section>
 </section>
+<!-- Example 2 -->
+<section>
+  <h3>Example 2</h3>
+  <div class="visualization-container">
+    <SvelteFlowProvider>
+      <ExprFlow {context} node={exprLirNode2} />
+    </SvelteFlowProvider>
+  </div>
+  <p>The above is a visualization of</p>
+  <pre><code>
+  {JSON.stringify(example2, null, 2)}
+</code></pre>
+</section>
+
+<style>
+  .visualization-container {
+    min-height: 400px;
+    max-width: 80%;
+    margin: 0 auto;
+  }
+</style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import dagre from '@dagrejs/dagre'
-  import { getLayoutedElements, type DagreConfig } from './layout.ts'
+  import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
     SvelteFlow,
     Background,
@@ -8,12 +8,11 @@
     type Node,
     type Edge,
   } from '@xyflow/svelte'
+  import { type ExprFlowDisplayerProps, sfNodeTypes } from './types.svelte.js'
   import {
-    type ExprFlowDisplayerProps,
-    exprLirNodeToAlgaUndirectedGraph,
+    exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
-  } from './types.svelte.ts'
-
+  } from './lir-to-dag.js'
   import { onMount } from 'svelte'
 
   import '@xyflow/svelte/dist/style.css'
@@ -21,7 +20,7 @@
   const { context, node: exprLirNode }: ExprFlowDisplayerProps = $props()
 
   const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaUndirectedGraph(context, exprLirNode)
+    exprLirNodeToAlgaDag(context, exprLirNode)
   )
 
   const initialNodes = flowGraph.nodes
@@ -54,28 +53,39 @@
     },
   }
 
-  onMount(() => {
-    const layoutedElements = getLayoutedElements(
-      dagreConfig,
-      initialNodes,
-      initialEdges
-    )
+  // TODO: Will want to expose this so that it can be called whenever, e.g., window/pane resizes
+  function doLayout() {
+    const layoutedElements = getLayoutedElements(dagreConfig, NODES, EDGES)
     NODES = layoutedElements.nodes
     EDGES = layoutedElements.edges
-
-    // console.log('edges', EDGES)
-    // console.log('onMounted!')
+    console.log('nodes', NODES)
+    console.log('edges', EDGES)
+  }
+  onMount(() => {
+    doLayout()
   })
 </script>
 
-<div style="height:50vh;">
+<div style="height:80vh;">
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
+    nodeTypes={sfNodeTypes}
     fitView
-    connectionLineType={ConnectionLineType.SmoothStep}
-    defaultEdgeOptions={{ type: 'smoothstep', animated: false }}
+    connectionLineType={ConnectionLineType.Bezier}
+    defaultEdgeOptions={{ type: 'bezier', animated: false }}
   >
     <Background />
   </SvelteFlow>
 </div>
+<section>
+  <p>For debugging</p>
+  <p>Nodes</p>
+  <pre><code>
+    {JSON.stringify(NODES, null, 2)}
+  </code></pre>
+  <p>edges</p>
+  <pre><code>
+    {JSON.stringify(EDGES, null, 2)}
+  </code></pre>
+</section>

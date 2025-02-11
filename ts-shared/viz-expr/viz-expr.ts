@@ -1,16 +1,8 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
 import { Either } from 'effect'
-import type { LirSource, LirNodeInfo } from '../layout-ir/core'
-import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.ts'
-import {
-  BoolVarLirNode,
-  // NotLirNode,
-  BinExprLirNode,
-} from '../layout-ir/lir-decision-logic.svelte.ts'
-import { match } from 'ts-pattern'
 
 /**********************
-         IR
+      VizExpr IR
 ************************
 
 The following is pretty much adapted / copied from the interfaces sketched at
@@ -96,16 +88,33 @@ export const IRNode = Schema.Struct({
 /** Think of this as the Expr for the decision logic.
  * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
  */
-export type IRExpr = BinExpr | BoolVar
+export type IRExpr = And | Or | BoolVar
 // | Not
 
-export type BinOp = 'And' | 'Or'
+/* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
+It's one of those things that seems obvious in retrospect; to quote
+Brent Yorgey: "The set of booleans forms a monoid under conjunction (with identity True), disjunction (with identity False)" */
 
-export interface BinExpr extends IRNode {
-  readonly $type: 'BinExpr'
-  readonly op: BinOp
-  readonly left: IRExpr
-  readonly right: IRExpr
+/**
+* Preconditions / assumptions
+* - The visualizer assumes that any nested ANDs/ORs have already been 'flattened'.
+    E.g., nested exprs like (AND [a (AND [b])]) should have already been rewritten to (AND [a b]).
+    This should be done in order to reduce visual clutter in the generated graph; but the visualizer will not do this sort of flattening.
+*/
+export interface And extends IRNode {
+  readonly $type: 'And'
+  readonly args: readonly IRExpr[]
+}
+
+/**
+* Preconditions / assumptions
+* - The visualizer assumes that any nested ANDs/ORs have already been 'flattened'.
+    E.g., nested exprs like (AND [a (AND [b])]) should have already been rewritten to (AND [a b]).
+    This should be done in order to reduce visual clutter in the generated graph; but the visualizer will not do this sort of flattening.
+*/
+export interface Or extends IRNode {
+  readonly $type: 'Or'
+  readonly args: readonly IRExpr[]
 }
 
 // export interface Not extends IRNode {
@@ -131,20 +140,23 @@ export interface BoolVar extends IRNode {
 ************************************/
 
 export const IRExpr = Schema.Union(
-  Schema.suspend((): Schema.Schema<BinExpr> => BinExpr),
+  Schema.suspend((): Schema.Schema<And> => And),
+  Schema.suspend((): Schema.Schema<Or> => Or),
   // Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
-export const BinOp = Schema.Union(Schema.Literal('And'), Schema.Literal('Or'))
-
-export const BinExpr = Schema.Struct({
-  $type: Schema.tag('BinExpr'),
-  op: BinOp,
-  left: IRExpr,
-  right: IRExpr,
+export const And = Schema.Struct({
+  $type: Schema.tag('And'),
   id: IRId,
-}).annotations({ identifier: 'BinExpr' })
+  args: Schema.Array(IRExpr),
+}).annotations({ identifier: 'And' })
+
+export const Or = Schema.Struct({
+  $type: Schema.tag('Or'),
+  id: IRId,
+  args: Schema.Array(IRExpr),
+}).annotations({ identifier: 'Or' })
 
 // export const Not = Schema.Struct({
 //   $type: Schema.tag('Not'),
@@ -167,41 +179,14 @@ export const BoolVar = Schema.Struct({
   Wrapper / Protocol interfaces
 ************************************/
 
+/** The payload for VisualizeDecisionLogicNotification */
+export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
+  typeof VisualizeDecisionLogicIRInfo
+>
+
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRExpr,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
-
-export const VisualizeDecisionLogicResult = Schema.Struct({
-  html: Schema.String,
-})
-
-/***********************************
-        Lir Data Sources
-************************************/
-
-export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
-    return (
-      match(expr)
-        .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
-        // .with(
-        //   { $type: 'Not' },
-        //   (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
-        // )
-        .with(
-          { $type: 'BinExpr' },
-          (binE) =>
-            new BinExprLirNode(
-              nodeInfo,
-              binE.op,
-              ExprLirSource.toLir(nodeInfo, binE.left),
-              ExprLirSource.toLir(nodeInfo, binE.right)
-            )
-        )
-        .exhaustive()
-    )
-  },
-}
 
 /***********************************
         Examples of usage
@@ -264,8 +249,7 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
 **************************/
 
 /*
-As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLogicIRInfoToJSONSchema() outputs:
-
+As of feb 7 2025:
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$defs": {
@@ -284,44 +268,29 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
     "IRExpr": {
       "anyOf": [
         {
-          "$ref": "#/$defs/BinExpr"
+          "$ref": "#/$defs/And"
         },
         {
-          "$ref": "#/$defs/Not"
+          "$ref": "#/$defs/Or"
         },
         {
           "$ref": "#/$defs/BoolVar"
         }
       ]
     },
-    "BinExpr": {
+    "And": {
       "type": "object",
       "required": [
         "$type",
-        "op",
-        "left",
-        "right",
-        "id"
+        "id",
+        "args"
       ],
       "properties": {
         "$type": {
           "type": "string",
           "enum": [
-            "BinExpr"
+            "And"
           ]
-        },
-        "op": {
-          "type": "string",
-          "enum": [
-            "And",
-            "Or"
-          ]
-        },
-        "left": {
-          "$ref": "#/$defs/IRExpr"
-        },
-        "right": {
-          "$ref": "#/$defs/IRExpr"
         },
         "id": {
           "type": "object",
@@ -334,26 +303,29 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
             }
           },
           "additionalProperties": false
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IRExpr"
+          }
         }
       },
       "additionalProperties": false
     },
-    "Not": {
+    "Or": {
       "type": "object",
       "required": [
         "$type",
-        "negand",
-        "id"
+        "id",
+        "args"
       ],
       "properties": {
         "$type": {
           "type": "string",
           "enum": [
-            "Not"
+            "Or"
           ]
-        },
-        "negand": {
-          "$ref": "#/$defs/IRExpr"
         },
         "id": {
           "type": "object",
@@ -366,6 +338,12 @@ As of Jan 20 2025 (we should run this in the CI or something), exportDecisionLog
             }
           },
           "additionalProperties": false
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IRExpr"
+          }
         }
       },
       "additionalProperties": false

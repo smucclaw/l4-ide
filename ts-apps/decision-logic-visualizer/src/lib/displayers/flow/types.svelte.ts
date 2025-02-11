@@ -1,21 +1,11 @@
 import * as SF from '@xyflow/svelte'
-import type {
-  LirId,
-  LirContext,
-  ExprLirNode,
-  BinOp,
-} from '$lib/layout-ir/index.ts'
-import { BoolVarLirNode, BinExprLirNode } from '$lib/layout-ir/index.ts'
-import { match, P } from 'ts-pattern'
-import type { UndirectedGraph } from '$lib/algebraic-graphs/alga.ts'
-import type { Ord } from '$lib/utils'
-import { ComparisonResult } from '$lib/utils'
-import {
-  connect,
-  // empty,
-  vertex,
-  overlay,
-} from '$lib/algebraic-graphs/alga.ts'
+import type { LirId, LirContext } from '$lib/layout-ir/core.js'
+import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import type { Ord } from '$lib/utils.js'
+import { ComparisonResult } from '$lib/utils.js'
+import BoolVarSFNode from './sf-custom-nodes/BoolVarSFNode.svelte'
+import SourceSFNode from './sf-custom-nodes/SourceSFNode.svelte'
+import SinkSFNode from './sf-custom-nodes/SinkSFNode.svelte'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
@@ -24,36 +14,40 @@ export interface ExprFlowDisplayerProps {
   node: ExprLirNode
 }
 
+/************************************************
+            Flow Graph
+*************************************************/
+
 export interface FlowGraph {
   nodes: FlowNode[]
   edges: FlowEdge[]
 }
 
+/************************************************
+            Flow Nodes
+*************************************************/
+
 /** A simplified version of the SvelteFlow Node interface,
- * for the v0 prototype.
- * We can distinguish between different kinds of FlowNodes in the future. */
-export class FlowNode implements Ord<FlowNode> {
+ * for the v0 prototype. */
+export interface FlowNode extends Ord<FlowNode> {
+  getId(): string
+  getOrigLirIds(): LirId[]
+  toSFPojo(): SF.Node
+}
+
+export abstract class BaseFlowNode implements Ord<FlowNode> {
   private static counter = 0
   protected id: string
-  // Let's only add more variants of data, e.g. a value, in the next prototype
-  private data: {
-    label: string
-  }
 
   constructor(
-    protected readonly label: string,
+    /** The LirIds of the LirNodes that correspond in some sense to this FlowNode */
     protected readonly origLirIds: LirId[],
     protected readonly position: {
       x: number
       y: number
     } = DEFAULT_INITIAL_POSITION
   ) {
-    this.data = { label }
-    this.id = (FlowNode.counter++).toString()
-  }
-
-  getData() {
-    return this.data
+    this.id = (BaseFlowNode.counter++).toString()
   }
 
   getId() {
@@ -69,18 +63,14 @@ export class FlowNode implements Ord<FlowNode> {
     return this.origLirIds
   }
 
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      position: this.position,
-      data: this.data,
-    }
-  }
+  abstract toSFPojo(): SF.Node
 
   isEqualTo<T extends FlowNode>(other: T) {
-    return this.id === other.id
+    return this.getId() === other.getId()
   }
 
+  /** Lexicographical comparison based on IDs.
+   * This gets used by DirectedEdge. */
   compare(that: this) {
     const intId = parseInt(this.getId())
     const thatId = parseInt(that.getId())
@@ -93,6 +83,82 @@ export class FlowNode implements Ord<FlowNode> {
     }
   }
 }
+
+export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  // TODO: Let's only add more info to data, e.g. a value, in the next prototype
+  constructor(
+    protected readonly data: { label: string },
+    origLirIds: LirId[],
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super(origLirIds, position)
+  }
+
+  getData() {
+    return this.data
+  }
+
+  toSFPojo(): SF.Node {
+    return {
+      id: this.id,
+      type: 'boolVarNode',
+      position: this.position,
+      data: this.data,
+    }
+  }
+}
+
+/** A FlowNode that's used solely to visually group or 'bundle' other nodes. */
+export type GroupingFlowNode = SinkFlowNode | SourceFlowNode
+
+export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  constructor(
+    origLirIds: LirId[],
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super(origLirIds, position)
+  }
+
+  toSFPojo(): SF.Node {
+    return {
+      id: this.id,
+      type: 'sourceNode',
+      position: this.position,
+      data: {},
+    }
+  }
+}
+
+export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  constructor(
+    origLirIds: LirId[],
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super(origLirIds, position)
+  }
+
+  toSFPojo(): SF.Node {
+    return {
+      id: this.id,
+      type: 'sinkNode',
+      position: this.position,
+      data: {},
+    }
+  }
+}
+
+/************************************************
+            Flow Edges
+*************************************************/
 
 export class FlowEdge implements Ord<FlowEdge> {
   id: string
@@ -115,6 +181,7 @@ export class FlowEdge implements Ord<FlowEdge> {
     return this.id === other.id
   }
 
+  /** Lexicographical comparison of IDs of nodes */
   compare(that: FlowEdge): ComparisonResult {
     if (this.getU() < that.getU()) {
       return ComparisonResult.LessThan
@@ -140,52 +207,35 @@ export class FlowEdge implements Ord<FlowEdge> {
   }
 }
 
-export function exprLirNodeToAlgaUndirectedGraph(
-  context: LirContext,
-  expr: ExprLirNode
-): UndirectedGraph<FlowNode> {
-  /*
-  The following exploits the analogy between And with connect
-  and Or with overlay.
+/************************************************
+          SvelteFlow Custom Nodes
+*************************************************/
 
-  That is, the essence of the ladder diagram has to do with 
-  how the And distributes over Or. That is how 
-  we get a path for each of the ways that someone can make the goal true.
-
-  But this sort of distributivity is also what we get 
-  with connect and overlay from the algebraic graphs formalism.
-  */
-  return match(expr)
-    .with(P.instanceOf(BoolVarLirNode), (node) => {
-      const flowNode = new FlowNode(node.getName(context), [node.getId()])
-      return vertex(flowNode)
-    })
-    .with(P.instanceOf(BinExprLirNode), (node) => {
-      const leftGraph = exprLirNodeToAlgaUndirectedGraph(
-        context,
-        node.getLeft(context)
-      )
-      const rightGraph = exprLirNodeToAlgaUndirectedGraph(
-        context,
-        node.getRight(context)
-      )
-      return match<BinOp>(node.getOp())
-        .with('And', () => connect(leftGraph, rightGraph))
-        .with('Or', () => overlay(leftGraph, rightGraph))
-        .exhaustive()
-    })
-    .exhaustive()
+/** This is where we declare all the custom nodes for Svelte Flow */
+export const sfNodeTypes: SF.NodeTypes = {
+  boolVarNode: BoolVarSFNode,
+  sourceNode: SourceSFNode,
+  sinkNode: SinkSFNode,
 }
 
-export function algaUndirectedGraphToFlowGraph(
-  graph: UndirectedGraph<FlowNode>
-): FlowGraph {
-  const nodes: FlowNode[] = graph.getVertices()
-  const edges: FlowEdge[] = graph
-    .getEdges()
-    .map((edge) => new FlowEdge(edge.getU().getId(), edge.getV().getId()))
-  return {
-    nodes,
-    edges,
-  }
+export interface SFHandlesInfo {
+  sourcePosition: SF.Position
+  targetPosition: SF.Position
 }
+
+export const defaultSFHandlesInfo: SFHandlesInfo = {
+  sourcePosition: SF.Position.Right,
+  targetPosition: SF.Position.Left,
+}
+
+// See Meng's layman for this 1px thing
+export const groupingNodehandleStyle = 'opacity:0 width:1px height:1px'
+
+export interface BoolVarDisplayerProps extends SF.NodeProps {
+  data: { label: string }
+  // TODO: Will add Value in the next version
+}
+
+// export interface GroupingNodeDisplayerProps extends SF.NodeProps {
+//   handlesInfo: SFHandlesInfo
+// }

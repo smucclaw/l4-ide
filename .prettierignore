@@ -20,3 +20,5 @@ simala/
 jl4/
 examples/
 hie.yaml
+
+.vscode-test/

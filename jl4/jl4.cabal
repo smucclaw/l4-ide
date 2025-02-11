@@ -31,17 +31,22 @@ library
     extra,
     generics-sop,
     megaparsec,
+    mtl,
     logict,
     optics,
     optics-core,
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    simala,
     text,
     transformers,
     tree-diff
   exposed-modules:
+    Base
+    Base.Map
+    Base.Set
+    Base.Pretty
+    Base.Text
     L4.Annotation
     L4.CodeGen
     L4.Evaluate
@@ -87,6 +92,7 @@ executable jl4-lsp
     bytestring ^>=0.11.5.3,
     list-t,
     jl4,
+    autodocodec,
     aeson,
     pretty-simple,
     binary,
@@ -145,7 +151,8 @@ executable jl4-lsp
     LSP.L4.Base
     LSP.L4.Config
     LSP.L4.Handlers
-    LSP.L4.Ladder
+    LSP.L4.Viz.VizExpr
+    LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
     LSP.L4.Rules
     LSP.L4.SemanticTokens
@@ -160,12 +167,10 @@ test-suite jl4-test
   autogen-modules:
     Paths_jl4
   build-depends:
-    directory,
     filepath,
     Glob,
     hspec,
     hspec-golden,
     silently,
-    simala,
     text,
     jl4

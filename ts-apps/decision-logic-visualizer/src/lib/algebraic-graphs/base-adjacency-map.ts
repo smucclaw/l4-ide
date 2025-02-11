@@ -1,6 +1,6 @@
-import type { Ord } from '$lib/utils.ts'
-import { ComparisonResult } from '$lib/utils.ts'
-import { Edge } from './alga.ts'
+import type { Ord } from '$lib/utils.js'
+import { ComparisonResult } from '$lib/utils.js'
+import { Edge } from './alga.js'
 
 /**************************************************************
   Base internal Adjacency Map implementation / representation
@@ -38,7 +38,7 @@ export abstract class BaseAMGraph<A extends Ord<A>> {
     return false
   }
 
-  /** Get a sorted array of vertices */
+  /** Get a sorted (via `compare`) array of vertices */
   getVertices(): A[] {
     return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
   }
