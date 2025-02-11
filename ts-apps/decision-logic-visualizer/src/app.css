@@ -1,75 +1,39 @@
-/* TODO: May want to put app.css in static/ instead, but not sure. Need to look more into this. */
+/* can't put it in static because vite won't serve it */
 
 /* ==== FURTHER CSS = TODO ======================== */
 
 /* ===== Basic 'CSS reset' ======================= 
+  tailwind resets it with preflight */
 
-Resources
-  * https://www.joshwcomeau.com/css/custom-css-reset/
-  * https://piccalil.li/blog/a-more-modern-css-reset/
-*/
+@import '@xyflow/svelte/dist/style.css';
+@import 'tailwindcss';
+@import '../static/themes/default.css';
 
-/* Box sizing rules */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-/* Make images easier to work with */
-img,
-picture,
-video {
-  max-width: 100%;
-  display: block;
-}
-/******************************************
- IMPT: If you make svg max-width 100%,
-  edges won't render properly in SvelteFlow
-  (at least not with the default options)
-********************************************/
-
-#html {
-  isolation: isolate; /* create a new stacking context */
-
-  /* Prevent font size inflation */
-  -moz-text-size-adjust: 100%;
-  -webkit-text-size-adjust: 100%; /* For older browsers */
-  text-size-adjust: 100%;
-}
-
-/* Core body defaults */
 body {
-  min-height: 100vh;
-  line-height: 1.5;
+  color: var(--color-primary);
+  background-color: white;
 }
 
-/* Set shorter line heights on headings and interactive elements */
-h1,
-h2,
-h3,
-h4,
-button,
-input,
-label {
-  line-height: 1.1;
+.button {
+  background-color: var(--color-secondary);
+  color: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
 }
 
-/* Inherit fonts for inputs and buttons */
-input,
-button,
-textarea,
-select {
-  font-family: inherit;
-  font-size: inherit;
-}
+:root,
+.svelte-flow {
+  .svelte-flow__edge.smoothstep,
+  .svelte-flow__edge-path {
+    stroke: var(--color-path) !important;
+  }
 
-/* Make sure textareas without a rows attribute are not tiny */
-textarea:not([rows]) {
-  min-height: 10em;
-}
-
-/* Anything that has been anchored to should have extra scroll margin */
-:target {
-  scroll-margin-block: 5ex;
+  .svelte-flow__edge:hover .svelte-flow__edge-path {
+    stroke: var(--color-secondary) !important;
+  }
+  /* for if we're adding animation */
+  .svelte-flow__edge.animated .svelte-flow__edge-path {
+    stroke-dasharray: 5;
+    animation: flowAnimation 1s linear infinite;
+  }
 }
