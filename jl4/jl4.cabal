@@ -31,17 +31,22 @@ library
     extra,
     generics-sop,
     megaparsec,
+    mtl,
     logict,
     optics,
     optics-core,
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    simala,
     text,
     transformers,
     tree-diff
   exposed-modules:
+    Base
+    Base.Map
+    Base.Set
+    Base.Pretty
+    Base.Text
     L4.Annotation
     L4.CodeGen
     L4.Evaluate
@@ -160,12 +165,10 @@ test-suite jl4-test
   autogen-modules:
     Paths_jl4
   build-depends:
-    directory,
     filepath,
     Glob,
     hspec,
     hspec-golden,
     silently,
-    simala,
     text,
     jl4
