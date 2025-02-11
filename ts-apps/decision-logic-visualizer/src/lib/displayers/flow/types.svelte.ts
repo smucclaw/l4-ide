@@ -104,6 +104,7 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
+      type: 'boolVarNode',
       position: this.position,
       data: this.data,
     }
