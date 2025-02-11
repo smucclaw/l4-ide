@@ -1,10 +1,6 @@
-{-# LANGUAGE DataKinds #-}
-
 module LSP.L4.Viz.Ladder where
 
--- import           L4.Annotation      ()
 import Control.DeepSeq
-import Control.Monad ()
 import Control.Monad.Except
 import Control.Monad.Identity (Identity (Identity))
 import Control.Monad.State (MonadState, StateT (StateT))
@@ -12,23 +8,27 @@ import Data.List.NonEmpty (toList)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (Generic)
--- import           L4.Lexer             (PosToken, SrcRange)
-
-------- Imports for testing -------------
-import L4.Parser
+import Optics
+import Optics.State.Operators ((<%=))
+import Text.Pretty.Simple
 import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), OptionallyTypedName (..), Program, TypeSig (..))
 import qualified L4.Syntax as S ()
-import L4.TypeCheck (rawNameToText)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
-import Optics
-import Optics.State.Operators ((<%=))
-import Text.Pretty.Simple
 
------------------------------------------
+-- For dev utils
+import L4.Parser (
+  execParser,
+  program,
+  PError(..))
+import L4.TypeCheck (rawNameToText)
+
+------------------------------------------------------
+-- Monad
+------------------------------------------------------
 
 -- TODO: Would be better not to stop at the first error
 newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
@@ -47,13 +47,9 @@ getFresh = do
 initialVizState :: VizState
 initialVizState = MkVizState { maxId = MkID 0 }
 
--- TODO in next version
--- data VizErrorWithContext =
---   MkVizErrorWithContext
---     { error   :: !VizError
---     , context :: !SrcRange
---     }
---   deriving stock (Eq, Generic, Show)
+------------------------------------------------------
+-- VizError
+------------------------------------------------------
 
 data VizError
   = InvalidProgramNoDecidesFound
@@ -77,7 +73,6 @@ prettyPrintVizError = \case
 --
 -- Simple version where we visualize the first Decide, if it exists.
 doVisualize :: Program Name -> Either VizError VisualizeDecisionLogicIRInfo
--- doVisualize prog = (vizProgram prog).getVizE
 doVisualize prog = 
   case  (vizProgram prog).getVizE initialVizState of
     (result, _) -> result
@@ -144,7 +139,6 @@ translateExpr subject e = case e of
   _ -> throwError Unimplemented
   where
     getNames args = args ^.. (gplate @Name) % to nameToText
--- error $ "[fallthru]\n" <> show x (Keeping comment around because useful for printf-style debugging)
 
 scanAnd :: Expr Name -> [Expr Name]
 scanAnd (And _ e1 e2) =

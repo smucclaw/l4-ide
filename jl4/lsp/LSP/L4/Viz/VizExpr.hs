@@ -1,7 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module LSP.L4.Viz.VizExpr where
 
 import Autodocodec
@@ -12,6 +8,7 @@ import Data.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
+import qualified Data.List.NonEmpty as NE
 
 newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
   { program :: IRExpr
@@ -46,7 +43,7 @@ instance HasCodec ID where
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
 instance HasCodec BoolValue where
-  codec = stringConstCodec [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
+  codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
 
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
@@ -75,23 +72,11 @@ instance HasCodec IRExpr where
           <$> requiredField' "id" .= fst
           <*> requiredField' "args" .= snd
 
-      -- -- Individual codecs without the "$type" discriminator
-      -- -- TODO: There must be a nicer way to do this with record syntax instead of tuples?!
-      -- binExprCodec =
-      --   (,,)
-      --     <$> requiredField' "id" .= view _1
-      --     <*> requiredField' "op" .= view _2
-      --     <*> requiredField' "args" .= view _3
-
       boolVarCodec =
         (,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
-
--- -- Helper functions
--- uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
--- uncurry3 f (a, b, c) = f a b c
 
 instance HasCodec VisualizeDecisionLogicIRInfo where
   codec =
@@ -119,3 +104,14 @@ deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
 
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
+
+{-
+Am trying out autodocodec because I wanted to see if 
+being able to create a json schema might help with automatedly checking that 
+the Ladder backend VizExpr types are in sync with the corresponding types on the frontend 
+(since the lib I use for the types on the frontend can also automatically generate a json schema). 
+  
+I haven't actually tried setting up such a automated test though.
+
+If that doesn't end up panning out, I will switch back to aeson.
+-}
