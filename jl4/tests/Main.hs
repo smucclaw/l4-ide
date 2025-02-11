@@ -15,6 +15,7 @@ import Test.Hspec
 import Test.Hspec.Golden
 import qualified Data.Text.IO as Text
 import qualified Data.Text as Text
+import L4.TypeCheck (CheckResult(CheckResult))
 
 main :: IO ()
 main = do
@@ -76,14 +77,14 @@ parseFile file input =
     Right prog -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
-        (errs, p, _s)
-          | all ((== JL4.SInfo) . JL4.severity) errs -> do
+        CheckResult {errors, resolvedProgram}
+          | all ((== JL4.SInfo) . JL4.severity) errors -> do
             Text.putStrLn "Typechecking successful"
-            let results = JL4.doEvalProgram p
-            let msgs = (typeErrorToMessage <$> errs) ++ (evalResultToMessage <$> results)
+            let results = JL4.doEvalProgram resolvedProgram
+            let msgs = (typeErrorToMessage <$> errors) ++ (evalResultToMessage <$> results)
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
           | otherwise -> do
-            let msgs = typeErrorToMessage <$> errs
+            let msgs = typeErrorToMessage <$> errors
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
   where
     fp = takeFileName file

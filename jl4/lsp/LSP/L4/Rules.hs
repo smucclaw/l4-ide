@@ -18,7 +18,7 @@ import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import L4.Syntax
-import L4.TypeCheck (CheckErrorWithContext (..), Substitution)
+import L4.TypeCheck (CheckErrorWithContext (..), Substitution, CheckResult (..))
 import qualified L4.TypeCheck as TypeCheck
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
@@ -57,6 +57,7 @@ data TypeCheckResult = TypeCheckResult
   { program :: Program Resolved
   , substitution :: Substitution
   , success :: Bool
+  , finalEnvironment :: TypeCheck.Environment
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
@@ -124,14 +125,20 @@ jl4Rules recorder = do
   define shakeRecorder $ \TypeCheck f -> do
     program <- use_ GetParsedAst f
     let
-      (errs, resolvedProg, subst) = TypeCheck.doCheckProgram program
+      CheckResult 
+        { resolvedProgram
+        , errors
+        , finalSubstitutions
+        , finalEnvironment
+        } = TypeCheck.doCheckProgram program
 
     pure
-      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) errs
+      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) errors
       , Just TypeCheckResult
-        { program = resolvedProg
-        , substitution = subst
-        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) errs
+        { program = resolvedProgram
+        , substitution = finalSubstitutions
+        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) errors
+        , finalEnvironment
         }
       )
 
