@@ -11,14 +11,17 @@ import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Monoid (Ap (..))
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
+import qualified Text.Fuzzy as Fuzzy
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -37,12 +40,14 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
+import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..)) 
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO)
+import Data.Char (isAlphaNum)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -57,15 +62,10 @@ data ServerState =
     }
 
 newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
+  deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
+  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
   deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
   deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
-
--- TODO: can these instances be derived via?
-instance (Semigroup a) => Semigroup (ServerM c a) where
-  a <> b = liftA2 (<>) a b
---
-instance (Monoid a) => Monoid (ServerM c a) where
-  mempty = ServerM $ pure mempty
 
 runServerM :: ServerState -> ServerM c a -> LspM c a
 runServerM st m = ReaderT.runReaderT m.runServerT st
@@ -76,6 +76,7 @@ data Log
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
+  | LogRequestedCompletionsFor !Text.Text
   | LogFileStore FileStore.Log
   | LogShake Shake.Log
   deriving (Show)
@@ -86,6 +87,7 @@ instance Pretty Log where
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
+    LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -257,7 +259,33 @@ handlers recorder =
                     { _resultId = Nothing
                     , _data_ = semanticTokensData
                     }
+    , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
+        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+            Position ln col = params ^. J.position
+        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+          Nothing -> pure (Right (InL []))
+          Just rope -> do
+            let completionPrefix =
+                  Text.takeWhileEnd isAlphaNum
+                  $ Rope.toText
+                  $ fst -- we don't care for the rest of the line
+                  $ Rope.charSplitAt (fromIntegral col) 
+                  $ Rope.getLine (fromIntegral ln) rope
+
+            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw) { CompletionItem._kind =  Just CompletionItemKind_Keyword }
+                keyWordMatches = Fuzzy.simpleFilter completionPrefix $ Map.keys keywords
+
+            let items = map mkKeyWordCompletionItem keyWordMatches
+
+            logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
+
+            pure (Right (InL items))
     ]
+
+defaultCompletionItem :: Text.Text -> CompletionItem
+defaultCompletionItem label = CompletionItem label 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath

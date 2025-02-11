@@ -21,6 +21,7 @@ import LSP.Core.Types.Shake
 import LSP.L4.Config
 import LSP.L4.Handlers hiding (Log (..))
 import qualified LSP.L4.Handlers as Handlers
+import qualified L4.Lexer as Lexer
 import LSP.L4.LanguageServer (runLanguageServer)
 import qualified LSP.L4.LanguageServer as LanguageServer
 import qualified LSP.L4.Rules as Rules
@@ -31,6 +32,7 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
+import qualified Data.Map as Map
 import Data.Text ( Text )
 import qualified Data.Text as Text
 import Development.IDE.Graph (Rules, action)
@@ -255,54 +257,4 @@ lspSinkFromContext lspEnv = LspSink
   }
 
 jl4Keywords :: [Text]
-jl4Keywords =
-  [ "GIVEN"
-  , "GIVETH"
-  , "DECIDE"
-  , "MEANS"
-  , "DECLARE"
-  , "IF"
-  , "THEN"
-  , "ELSE"
-  , "OTHERWISE"
-  , "AND"
-  , "OR"
-  , "NOT"
-  , "IS"
-  , "HAS"
-  , "ONE"
-  , "OF"
-  , "WITH"
-  , "A"
-  , "AN"
-  , "THE"
-  , "YIELD"
-  , "CONSIDER"
-  , "WHERE"
-  , "LIST"
-  , "ASSUME"
-  , "WHEN"
-  , "TYPE"
-  , "FUNCTION"
-  , "FROM"
-  , "TO"
-  , "EQUALS"
-  , "IMPLIES"
-  , "PLUS"
-  , "MINUS"
-  , "TIMES"
-  , "DIVIDED"
-  , "MODULO"
-  , "BY"
-  , "GREATER"
-  , "LESS"
-  , "THAN"
-  , "ABOVE"
-  , "BELOW"
-  , "AT"
-  , "LEAST"
-  , "MOST"
-  , "FOLLOWED"
-  , "FOR"
-  , "ALL"
-  ]
+jl4Keywords = Map.keys Lexer.keywords
