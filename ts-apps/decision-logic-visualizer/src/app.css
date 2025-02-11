@@ -21,18 +21,6 @@ body {
   border-radius: 0.25rem;
 }
 
-/* for use later when we have positive and negative paths
-.path-positive {
-  stroke: var(--color-positive);
-  stroke-width: 2px;
-}
-
-.path-negative {
-  stroke: var(--color-negative);
-  stroke-width: 2px;
-}
-*/
-
 :root,
 .svelte-flow {
   .svelte-flow__edge.smoothstep,
