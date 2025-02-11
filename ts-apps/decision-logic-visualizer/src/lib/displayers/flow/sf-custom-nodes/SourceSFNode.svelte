@@ -5,11 +5,10 @@
     groupingNodehandleStyle,
     defaultSFHandlesInfo,
   } from '../types.svelte.js'
-  // They require a data prop, but we don't need it
-  let { data }: NodeProps<Node> = $props() // eslint-disable-line
+  // eslint-disable-next-line no-empty-pattern
+  let {}: NodeProps<Node> = $props()
 </script>
 
-<!-- See Meng's layman for this 1px thing -->
 <div style="opacity:0.4">
   <Handle
     type="source"

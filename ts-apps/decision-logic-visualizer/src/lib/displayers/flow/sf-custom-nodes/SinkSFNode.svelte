@@ -1,5 +1,5 @@
 <!--
-TODO: reduce code duplication between this and SourceSFNode
+TODO: maybe reduce code duplication between this and SourceSFNode
 -->
 <script lang="ts">
   import { Handle } from '@xyflow/svelte'
@@ -8,8 +8,8 @@ TODO: reduce code duplication between this and SourceSFNode
     groupingNodehandleStyle,
     defaultSFHandlesInfo,
   } from '../types.svelte.js'
-  // They require a data prop, but we don't need it
-  let { data }: NodeProps<Node> = $props() // eslint-disable-line
+  // eslint-disable-next-line no-empty-pattern
+  let {}: NodeProps<Node> = $props()
 </script>
 
 <div style="opacity:0.4">
