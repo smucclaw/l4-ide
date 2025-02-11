@@ -4,8 +4,8 @@ export const theme = {
   colors: {
     transparent: 'transparent',
     primary: 'var(--color-primary)',
-    secondary: 'var(--color-secondary)'
-  }
+    secondary: 'var(--color-secondary)',
+  },
 }
 export const variants = {
   extend: {},

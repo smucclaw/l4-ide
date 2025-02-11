@@ -79,18 +79,21 @@
   </SvelteFlowProvider>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-1-json" class="peer hidden" />
-    <label 
+    <label
       for="example-1-json"
       class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
-      on:mouseover={() => isHovered = true}
-      on:mouseout={() => isHovered = false}
-      on:focus={() => isHovered = true}
-      on:blur={() => isHovered = false}
-      style="background-color: {isHovered ? 'var(--color-button-hover)' : 'var(--color-button)'}"
-      >
+      on:mouseover={() => (isHovered = true)}
+      on:mouseout={() => (isHovered = false)}
+      on:focus={() => (isHovered = true)}
+      on:blur={() => (isHovered = false)}
+      style="background-color: {isHovered
+        ? 'var(--color-button-hover)'
+        : 'var(--color-button)'}"
+    >
       <h4>Expand to view source JSON of the IRExpr</h4>
     </label>
-    <pre class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md"><code>
+    <pre
+      class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md"><code>
       {JSON.stringify(example1, null, 2)}
     </code></pre>
   </section>

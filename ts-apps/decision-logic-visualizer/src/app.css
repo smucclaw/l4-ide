@@ -6,8 +6,8 @@
   tailwind resets it with preflight */
 
 @import '@xyflow/svelte/dist/style.css';
-@import "tailwindcss";
-@import "../static/themes/default.css";
+@import 'tailwindcss';
+@import '../static/themes/default.css';
 
 body {
   color: var(--color-primary);
@@ -33,8 +33,10 @@ body {
 }
 */
 
-:root, .svelte-flow {
-  .svelte-flow__edge.smoothstep, .svelte-flow__edge-path {
+:root,
+.svelte-flow {
+  .svelte-flow__edge.smoothstep,
+  .svelte-flow__edge-path {
     stroke: var(--color-path) !important;
   }
 
@@ -47,5 +49,3 @@ body {
     animation: flowAnimation 1s linear infinite;
   }
 }
-
-
