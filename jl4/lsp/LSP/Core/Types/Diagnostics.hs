@@ -6,6 +6,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FieldSelectors #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module LSP.Core.Types.Diagnostics (
   LSP.Diagnostic(..),
@@ -14,6 +17,10 @@ module LSP.Core.Types.Diagnostics (
   fdFilePathL,
   fdLspDiagnosticL,
   fdShouldShowDiagnosticL,
+  fdOriginalSourceL,
+  messageOfL,
+  SomeMessage(..),
+  pattern MkSomeMessage,
   IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -23,7 +30,8 @@ module LSP.Core.Types.Diagnostics (
   showDiagnostics,
   showDiagnosticsColored,
   IdeResultNoDiagnosticsEarlyCutoff,
-  attachedReason) where
+  attachedReason,
+  ) where
 
 import           Control.DeepSeq
 import           Control.Lens
@@ -41,6 +49,7 @@ import           Prettyprinter
 import           Prettyprinter.Render.Terminal  (Color (..), color)
 import qualified Prettyprinter.Render.Terminal  as Terminal
 import           Prettyprinter.Render.Text
+import Type.Reflection
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -81,6 +90,7 @@ ideErrorFromLspDiag lspDiag fdFilePath =
   let fdShouldShowDiagnostic = ShowDiag
       fdLspDiagnostic =
         lspDiag
+      fdOriginalSource = NoMessage
   in
   FileDiagnostic {..}
 
@@ -137,10 +147,71 @@ data FileDiagnostic = FileDiagnostic
   { fdFilePath             :: NormalizedFilePath
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
+  , fdOriginalSource       :: SomeMessage
   }
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData FileDiagnostic
+
+data SomeMessage
+  = NoMessage
+  | SomeMessage NfDynamic
+  deriving stock (Eq, Ord, Show, Generic)
+
+pattern MkSomeMessage :: (Typeable a, NFData a) => a -> SomeMessage
+pattern MkSomeMessage a <- SomeMessage (fromNfDynamic -> Just a) where
+  MkSomeMessage a = SomeMessage (toNfDyn a)
+
+instance NFData SomeMessage
+
+data NfDynamic where
+  MkNfDynamic :: forall a. (NFData a) => TypeRep a -> a -> NfDynamic
+
+instance NFData NfDynamic where
+  rnf (MkNfDynamic t a) = rnf t `seq` rnf a
+
+instance Show NfDynamic where
+  show (MkNfDynamic t _) = "MkNfDyn <<<" <> show t <> ">>>"
+
+instance Eq NfDynamic where
+  (MkNfDynamic x _) == (MkNfDynamic y _) = SomeTypeRep x == SomeTypeRep y
+
+instance Ord NfDynamic where
+  compare (MkNfDynamic x _a) (MkNfDynamic y _b) = compare (SomeTypeRep x) (SomeTypeRep y)
+
+messageOfL :: forall a. (NFData a, Typeable a) => Lens' FileDiagnostic (Maybe a)
+messageOfL = lens (\fd -> case fdOriginalSource fd of
+      NoMessage -> Nothing
+      SomeMessage nfDyn -> fromNfDynamic @a nfDyn
+    )
+    (\fd b -> fd { fdOriginalSource = case b of
+        Nothing -> NoMessage
+        Just msg -> SomeMessage $ toNfDyn msg })
+
+-- | Converts an arbitrary value into an object of type 'NfDynamic'.
+--
+-- The type of the object must be an instance of 'Typeable' and 'NFData', which
+-- ensures that only monomorphically-typed objects may be converted to
+-- 'NfDynamic'.  To convert a polymorphic object into 'NfDynamic', give it
+-- a monomorphic type signature.  For example:
+--
+-- >    toDyn (id :: Int -> Int)
+--
+toNfDyn :: (NFData a, Typeable a) => a -> NfDynamic
+toNfDyn v = MkNfDynamic typeRep v
+
+-- | Converts a 'NfDynamic' object back into an ordinary Haskell value of
+-- the correct type.
+fromNfDynamic
+        :: forall a. Typeable a
+        => NfDynamic    -- ^ the dynamically-typed object
+        -> Maybe a      -- ^ returns: @'Just' a@, if the dynamically-typed
+                        -- object has the correct type (and @a@ is its value),
+                        -- or 'Nothing' otherwise.
+fromNfDynamic (MkNfDynamic t v)
+  | Just HRefl <- t `eqTypeRep` rep = Just v
+  | otherwise                       = Nothing
+  where rep = typeRep :: TypeRep a
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end

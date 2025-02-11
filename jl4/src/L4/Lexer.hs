@@ -11,6 +11,7 @@ import Control.DeepSeq (NFData)
 import Data.Char hiding (Space)
 import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import Data.Proxy
+import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
@@ -56,8 +57,9 @@ data SrcRange =
 -- | A single source position. Line and column numbers are 1-based.
 data SrcPos =
   MkSrcPos
-    { filename :: !FilePath
-    , line     :: !Int
+    {
+    -- filename :: !FilePath
+      line     :: !Int
     , column   :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
@@ -70,6 +72,8 @@ data TokenType =
   | TIntLit       !Text !Int
   | TStringLit    !Text
   | TDirective    !Text
+    -- copy token / ditto mark, currently '^'
+  | TCopy         (Maybe TokenType)
     -- parentheses
   | TPOpen
   | TPClose
@@ -219,7 +223,7 @@ tokenPayload :: Lexer TokenType
 tokenPayload =
       uncurry TIntLit <$> try integerLiteral
   <|> TStringLit      <$> stringLiteral
-  <|> TGenitive       <$ string "'s"
+  <|> TGenitive       <$  string "'s"
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directiveLiteral
   <|> TNlg            <$> nlgAnnotation
@@ -227,16 +231,17 @@ tokenPayload =
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
-  <|> TPOpen          <$ char '('
-  <|> TPClose         <$ char ')'
-  <|> TCOpen          <$ char '{'
-  <|> TCClose         <$ char '}'
-  <|> TSOpen          <$ char '['
-  <|> TSClose         <$ char ']'
-  <|> TParagraph      <$ char '§'
-  <|> TComma          <$ char ','
-  <|> TSemicolon      <$ char ';'
-  <|> TDot            <$ char '.'
+  <|> TPOpen          <$  char '('
+  <|> TPClose         <$  char ')'
+  <|> TCOpen          <$  char '{'
+  <|> TCClose         <$  char '}'
+  <|> TSOpen          <$  char '['
+  <|> TSClose         <$  char ']'
+  <|> TParagraph      <$  char '§'
+  <|> TComma          <$  char ','
+  <|> TSemicolon      <$  char ';'
+  <|> TDot            <$  char '.'
+  <|> TCopy Nothing   <$  char '^'
   <|> symbolic
   <|> identifierOrKeyword
 
@@ -340,6 +345,16 @@ keywords =
     , ("ALL"        , TKAll        )
     ]
 
+trivialToken :: TokenType -> PosToken
+trivialToken tt =
+  MkPosToken trivialRange tt
+  where
+    trivialRange :: SrcRange
+    trivialRange = MkSrcRange trivialPos trivialPos 0
+
+    trivialPos :: SrcPos
+    trivialPos = MkSrcPos 0 0
+
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
@@ -352,34 +367,99 @@ execLexer file input =
       Right rtoks -> Right (mkPosTokens file input rtoks)
       Left errs   -> Left (errorBundleToErrorMessages errs)
 
+data TokenState =
+  MkTokenState
+    { posState        :: !(PosState Text)
+    , currentLine     :: Int
+    , currentLineToks :: [PosToken]
+    , prevLineToks    :: [PosToken] -- immediately preceding non-whitespace line
+    }
+  deriving Generic
+
+initialTokenState :: FilePath -> Text -> TokenState
+initialTokenState filepath txt =
+  MkTokenState
+    (initialPosState filepath txt)
+    0
+    []
+    []
+
+-- | This traversal postprocesses raw tokens and turns them into pos tokens
+-- by converting their positions.
+--
+-- At the same time, we interpret copy tokens.
+--
 mkPosTokens :: FilePath -> Text -> [RawToken] -> [PosToken]
 mkPosTokens filepath txt rtoks =
-    evalState (traverse go rtoks) (initialPosState filepath txt)
+    evalState (traverse go rtoks) (initialTokenState filepath txt)
   where
-    go :: RawToken -> StateT (PosState Text) Identity PosToken
+    go :: RawToken -> StateT TokenState Identity PosToken
     go rtok = do
-      pst <- get
+      ts <- get
       let
+        pst      = ts.posState
         pstStart = reachOffsetNoLine rtok.start pst
         pstEnd   = reachOffsetNoLine rtok.end pstStart
-      put pstEnd
-      pure
-        (MkPosToken
-          (MkSrcRange
-            (convertPos (pstateSourcePos pstStart))
-            (convertPos (pstateSourcePos pstEnd  ))
-            (rtok.end - rtok.start)
-          )
-          rtok.payload
-        )
+        posStart = convertPos (pstateSourcePos pstStart)
+        posEnd   = convertPos (pstateSourcePos pstEnd  )
+      when (posStart.line /= ts.currentLine) $ do
+        assign #currentLine posStart.line
+        assign #currentLineToks []
+        -- We ignore purely "whitespace" lines, and count comments as whitespace, but currently not annotations.
+        unless (all isSpaceToken ts.currentLineToks) (assign #prevLineToks ts.currentLineToks)
+      assign #posState pstEnd
+      prevLineToks' <- use #prevLineToks
+      let
+        payload  =
+          case rtok.payload of
+            TCopy Nothing -> TCopy (findMatchingToken posStart.column prevLineToks')
+            other         -> other
+        pt       =
+          MkPosToken
+            (MkSrcRange
+              posStart
+              posEnd
+              (rtok.end - rtok.start)
+            )
+            payload
+      modifying #currentLineToks (pt :)
+      pure pt
+
+findMatchingToken :: Int -> [PosToken] -> Maybe TokenType
+findMatchingToken c pts = do
+  -- trace ("trying to find match: " <> show pts) (pure ())
+  pt <- find (\ pt -> pt.range.start.column == c) pts
+  -- trace ("found match: " <> show (computedPayload pt)) $
+  pure (computedPayload pt)
+
+computedPayload :: PosToken -> TokenType
+computedPayload pt =
+  case pt.payload of
+    TCopy (Just original) -> original
+    other                 -> other
+
+isSpaceToken :: PosToken -> Bool
+isSpaceToken t =
+  case computedPayload t of
+    TSpace _        -> True
+    TLineComment _  -> True
+    TBlockComment _ -> True
+    _               -> False
+
+isAnnotationToken :: PosToken -> Bool
+isAnnotationToken t =
+  case computedPayload t of
+    TNlg _ -> True
+    TRef _ -> True
+    _      -> False
 
 -- | Convert from a Megaparsec source position to one of ours.
 convertPos :: SourcePos -> SrcPos
-convertPos (SourcePos fn l c) =
-  MkSrcPos fn (unPos l) (unPos c)
+convertPos (SourcePos _fn l c) =
+  MkSrcPos (unPos l) (unPos c)
 
-unconvertPos :: SrcPos -> SourcePos
-unconvertPos (MkSrcPos fn l c) =
+unconvertPos :: FilePath -> SrcPos -> SourcePos
+unconvertPos fn (MkSrcPos l c) =
   SourcePos fn (mkPos l) (mkPos c)
 
 data TokenStream =
@@ -459,6 +539,8 @@ instance TraversableStream TokenStream where
         }
     )
     where
+      fn = pst.pstateSourcePos.sourceName
+
       prefix
         | sameLine  = pst.pstateLinePrefix ++ preLine
         | otherwise = preLine
@@ -471,8 +553,8 @@ instance TraversableStream TokenStream where
         case post of
           [] -> case pst.pstateInput.tokens of
             [] -> pst.pstateSourcePos
-            xs -> unconvertPos (last xs).range.end
-          (x : _) -> unconvertPos x.range.start
+            xs -> unconvertPos fn (last xs).range.end
+          (x : _) -> unconvertPos fn x.range.start
 
       pre, post :: [PosToken]
       (pre, post) = splitAt (o - pst.pstateOffset) pst.pstateInput.tokens
@@ -570,14 +652,22 @@ errorFancyLength = \case
   ErrorCustom a -> errorComponentLen a
   _ -> 1
 
+-- | This isn't truly precise, but it should be mostly fine, because we use
+-- the Haskell escape sequences both in the parser and in printing.
+--
+showStringLit :: Text -> Text
+showStringLit t =
+  Text.pack ((showChar '"' . showLitString (Text.unpack t) . showChar '"') "")
+
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
   case tt of
     TIdentifier t    -> t
     TQuoted t        -> "`" <> t <> "`"
     TIntLit t _i     -> t
-    TStringLit s     -> Text.pack (show s) -- ideally, this should be fine, because we use the Haskell escape sequences
+    TStringLit s     -> showStringLit s
     TDirective t     -> "#" <> t
+    TCopy _          -> "^"
     TPOpen           -> "("
     TPClose          -> ")"
     TCOpen           -> "{"
@@ -676,6 +766,7 @@ data TokenCategory
   | CDirective
   | CAnnotation
   | CEOF
+  deriving stock Eq
 
 posTokenCategory :: TokenType -> TokenCategory
 posTokenCategory =
@@ -685,6 +776,8 @@ posTokenCategory =
     TIntLit _ _ -> CNumberLit
     TStringLit _ -> CStringLit
     TDirective _ -> CDirective
+    TCopy Nothing -> CSymbol
+    TCopy (Just t) -> posTokenCategory t
     TPOpen -> CSymbol
     TPClose -> CSymbol
     TCOpen -> CSymbol

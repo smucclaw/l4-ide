@@ -5,6 +5,7 @@ import qualified L4.Parser as Parser
 import qualified L4.Evaluate as JL4
 import qualified L4.ExactPrint as JL4
 import qualified L4.TypeCheck as JL4
+import qualified L4.Annotation as JL4
 import Paths_jl4
 
 import System.FilePath
@@ -70,7 +71,7 @@ jl4ExactPrintGolden dir inputFile = do
 -- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
 parseFile :: String -> Text -> IO ()
 parseFile file input =
-  case Parser.execParser Parser.program (takeFileName file) input of
+  case Parser.execParser Parser.program fp input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right prog -> do
       Text.putStrLn "Parsing successful"
@@ -85,9 +86,10 @@ parseFile file input =
             let msgs = typeErrorToMessage <$> errs
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
   where
+    fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
     evalResultToMessage (r, res) = (Just r, either (Text.pack . show) JL4.renderValue res)
-    renderMessage (r, txt) = JL4.prettySrcRange r <> ":\n" <> txt
+    renderMessage (r, txt) = JL4.prettySrcRange fp r <> ":\n" <> txt
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =

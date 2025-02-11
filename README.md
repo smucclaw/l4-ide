@@ -39,6 +39,12 @@ Running the Haskell tests:
 cabal test test:jl4-test
 ```
 
+## Prerequisite: Visual Studio Code
+
+If running `code` from the command line does nothing, see
+
+https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+
 ## Quick links
 
 - Drafts of the Dec report for CRLP, started on Tues Dec 17 2024

@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveFunctor #-}
 module L4.Syntax where
 
 import L4.Annotation
@@ -56,7 +57,7 @@ data Type' n =
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
   -- | ParenType Anno (Type' n) -- temporary
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypedName n =
@@ -71,7 +72,7 @@ data OptionallyTypedName n =
 
 data OptionallyNamedType n =
   MkOptionallyNamedType Anno (Maybe n) (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeSig n =
@@ -272,3 +273,105 @@ deriving via L4Syntax (TopDecl n)
   instance HasAnno (TopDecl n)
 deriving via L4Syntax (LocalDecl n)
   instance HasAnno (LocalDecl n)
+
+
+deriving anyclass instance ToConcreteNodes PosToken (Program Name)
+
+-- Generic instance does not apply because we exclude the level.
+instance ToConcreteNodes PosToken (Section Name) where
+  toNodes (MkSection ann _lvl name decls) =
+    flattenConcreteNodes ann [toNodes name, toNodes decls]
+
+deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (Assume Name)
+deriving anyclass instance ToConcreteNodes PosToken (Declare Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (ConDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (Type' Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypedName Name)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Name)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Name)
+deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
+deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
+deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
+deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
+deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
+deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
+deriving anyclass instance ToConcreteNodes PosToken (Pattern Name)
+deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
+deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
+
+deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Assume Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Declare Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypeDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (ConDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Type' Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypedName Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Pattern Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
+
+instance ToConcreteNodes PosToken Int where
+  toNodes _txt = pure []
+  -- TODO: This is lossy and should be improved (but we should not need to
+  -- exact-print inference variables).
+
+instance ToConcreteNodes PosToken Name where
+  toNodes (MkName ann _) =
+    flattenConcreteNodes ann []
+
+instance ToConcreteNodes PosToken Resolved where
+  toNodes r =
+    toNodes (getActual r)
+
+instance ToConcreteNodes PosToken RawName where
+  toNodes _rn = pure []
+  -- TODO: This is lossy and should be improved (but we should not need to
+  -- exact-print inference variables).
+
+instance ToConcreteNodes PosToken Lit where
+  toNodes (NumericLit ann _) =
+    flattenConcreteNodes ann []
+  toNodes (StringLit ann _) =
+    flattenConcreteNodes ann []
+
+deriving anyclass instance HasSrcRange (Program a)
+deriving anyclass instance HasSrcRange (Section a)
+deriving anyclass instance HasSrcRange (TopDecl a)
+deriving anyclass instance HasSrcRange (Assume a)
+deriving anyclass instance HasSrcRange (Declare a)
+deriving anyclass instance HasSrcRange (TypeDecl a)
+deriving anyclass instance HasSrcRange (ConDecl a)
+deriving anyclass instance HasSrcRange (Type' a)
+deriving anyclass instance HasSrcRange (TypedName a)
+deriving anyclass instance HasSrcRange (OptionallyTypedName a)
+deriving anyclass instance HasSrcRange (OptionallyNamedType a)
+deriving anyclass instance HasSrcRange (Decide a)
+deriving anyclass instance HasSrcRange (AppForm a)
+deriving anyclass instance HasSrcRange (Expr a)
+deriving anyclass instance HasSrcRange (LocalDecl a)
+deriving anyclass instance HasSrcRange (NamedExpr a)
+deriving anyclass instance HasSrcRange (Branch a)
+deriving anyclass instance HasSrcRange (Pattern a)
+deriving anyclass instance HasSrcRange (TypeSig a)
+deriving anyclass instance HasSrcRange (GivethSig a)
+deriving anyclass instance HasSrcRange (GivenSig a)
+deriving anyclass instance HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange Lit
+deriving anyclass instance HasSrcRange Name
+
+instance HasSrcRange Resolved where
+  rangeOf = rangeOf . getActual

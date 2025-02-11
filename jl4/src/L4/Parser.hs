@@ -54,21 +54,6 @@ blockRefAnnotation :: Parser [PosToken]
 blockRefAnnotation =
   (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
 
-isSpaceToken :: PosToken -> Bool
-isSpaceToken t =
-  case t.payload of
-    TSpace _        -> True
-    TLineComment _  -> True
-    TBlockComment _ -> True
-    _               -> False
-
-isAnnotationToken :: PosToken -> Bool
-isAnnotationToken t =
-  case t.payload of
-    TNlg _ -> True
-    TRef _ -> True
-    _      -> False
-
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
   a <- p
@@ -78,18 +63,8 @@ lexeme p = do
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
   token
-    (\ t -> if t.payload == tt then Just t else Nothing)
-    (Set.singleton (Tokens (trivialToken tt :| [])))
-
-trivialToken :: TokenType -> PosToken
-trivialToken tt =
-  MkPosToken trivialRange tt
-  where
-    trivialRange :: SrcRange
-    trivialRange = MkSrcRange trivialPos trivialPos 0
-
-    trivialPos :: SrcPos
-    trivialPos = MkSrcPos "" 0 0
+    (\ t -> if computedPayload t == tt then Just t else Nothing)
+    (Set.singleton (Tokens (L.trivialToken tt :| [])))
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -100,7 +75,7 @@ spacedToken cond lbl =
   lexToEpa' <$>
     lexeme
       (token
-        (\ t -> (t,) <$> cond t.payload)
+        (\ t -> (t,) <$> cond (computedPayload t))
         Set.empty
       )
     <?> lbl
@@ -111,11 +86,11 @@ fab <<$>> fga = (fmap . fmap) fab fga
 -- | A quoted identifier between backticks.
 quotedName :: Parser (Epa Name)
 quotedName =
-  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
+  (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TQuoted) "quoted identifier"
 
 simpleName :: Parser (Epa Name)
 simpleName =
-  (MkName mempty . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
+  (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
 name :: Parser Name
 name = attachEpa (quotedName <|> simpleName) <?> "identifier"
@@ -125,7 +100,7 @@ tokenAsName tt =
   attachEpa (lexToEpa' . fmap convert <$> spacedToken_ tt)
   where
     convert :: PosToken -> (PosToken, Name)
-    convert p@(MkPosToken range _) = (MkPosToken range (TIdentifier t), MkName mempty (NormalName t))
+    convert p@(MkPosToken range _) = (MkPosToken range (TIdentifier t), MkName emptyAnno (NormalName t))
       where
         t = displayPosToken p
 
@@ -190,7 +165,7 @@ section =
       <*> annoHole (optional name)
       <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
-sectionSymbols :: Compose Parser (WithAnno e) Int
+sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
   length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
@@ -218,7 +193,8 @@ topdecl =
         Declare   emptyAnno <$> annoHole (declare sig)
     <|> Decide    emptyAnno <$> annoHole (decide sig)
     <|> Assume    emptyAnno <$> annoHole (assume sig)
-  ) <|> Directive mkHoleAnno <$> directive
+  ) <|> attachAnno
+        (Directive emptyAnno <$> annoHole directive)
 
 localdecl :: Parser (LocalDecl Name)
 localdecl =
@@ -271,7 +247,7 @@ recordDecl =
   attachAnno $
     RecordDecl emptyAnno <$> recordDecl'
 
-recordDecl' :: Compose Parser (WithAnno e) [TypedName Name]
+recordDecl' :: Compose Parser WithAnno [TypedName Name]
 recordDecl' =
      annoLexeme (spacedToken_ TKHas)
   *> annoHole (lsepBy reqParam (spacedToken_ TComma))
@@ -377,7 +353,7 @@ atomicType =
 
 parenType :: Parser (Type' Name)
 parenType =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole type'
@@ -423,13 +399,13 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser (WithAnno e) PosToken
+article :: Compose Parser WithAnno PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
-withOptionalArticle :: (HasAnno a, AnnoToken a ~ PosToken) => Parser a -> Parser a
+withOptionalArticle :: (HasSrcRange a, HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Type' Resolved) => Parser a -> Parser a
 withOptionalArticle p =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  optional article
     <*> annoHole p
@@ -456,7 +432,7 @@ lsepBy pp sep =
     zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
     zipWithLeftovers ps [] = ps
     zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
 lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
@@ -467,7 +443,7 @@ lsepBy1 pp sep =
     zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
     zipWithLeftovers ps [] = ps
     zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
 
 reqParam :: Parser (TypedName Name)
 reqParam =
@@ -500,33 +476,101 @@ param =
 indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
   withIndent GT p $ \ _ -> do
+    l <- currentLine
     e <- baseExpr
     efs <- many (expressionCont p)
     mw <- optional (whereExpr p)
-    pure ((maybe id id mw) (combine End e efs))
+    pure ((maybe id id mw) (combine End l e efs))
 
 whereExpr :: Pos -> Parser (Expr Name -> Expr Name)
 whereExpr p =
   withIndent GT p $ \ _ -> do
     ann <- opToken TKWhere
     ds <- many (indented localdecl p)
-    pure (\ e -> Where (mkHoleAnno <> ann <> mkHoleAnno) e ds)
+    pure (\ e -> Where (mkHoleAnnoFor e <> ann <> mkHoleAnnoFor ds) e ds)
 
 data Stack a =
-    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) Prio Pos
+    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Pos !Pos
   | End
 
-combine :: Stack a -> a Name -> [Cont a] -> a Name
-combine End e [] = e
-combine (Frame s e1 op _ _) e2 [] =
-  combine s (e1 `op` e2) []
-combine End e1 (MkCont op1 prio1 p1 e2 : efs) =
-  combine (Frame End e1 op1 prio1 p1) e2 efs
-combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
-  | p2 > p1 || p2 == p1 && prio2 >= prio1 = -- (>=) is for *right*-associative operators
-  combine (Frame s1 e2 op2 prio2 p2) e3 efs -- push
+-- | This function decides how stack frames and continuations are combined
+-- into a single expression.
+--
+-- For this, we take line and column information of various entities into
+-- account. The general rule of thumb is: If items occur on a single line,
+-- then normal precedence prevails. Similarly, if items occur on different
+-- lines, but all start on the same column, then normal precedence should
+-- prevail.
+--
+-- In other scenarios, we use the indentation for grouping.
+--
+-- Initially, the stack is empty, the given entity is the starting point,
+-- and we have a number of continuation frames. We need the line of the
+-- starting point.
+--
+-- The general process of moving through an expression is best demonstrated
+-- by example:
+--
+-- a + b * c + d = e * f
+--
+-- We mark the focused position by [_], we write the stack to the left,
+-- elements separated by commas, and the continuations to the right,
+-- elements separated by commas.
+--
+-- Note that the stack and the continuations have exactly the same
+-- structure.
+--
+-- [a] + b, * c,   + d,  = e, * f   -- empty stack, always push
+-- a +  [b] * c,   + d,  = e, * f   -- * is stronger than + => push
+-- a +, b *  [c]   + d,  = e, * f   -- + is weaker than * => pop
+-- a +, [(b * c)]  + d,  = e, * f   -- + is like +, depends on associativity, left-associative => pop
+-- [(a + (b * c))] + d,  = e, * f   -- empty stack, always push
+-- (a + (b * c)) +  [d]  = e, * f   -- = is weaker than + => pop
+-- [((a + (b * c)) + d)] = e, * f   -- empty stack, always push
+-- ((a + (b * c)) + d) =  [e] * f   -- * is stronger than => push
+-- ((a + (b * c)) + d) =, e *  [f]  -- empty continuation, always pop
+-- ((a + (b * c)) + d) =, [(e * f)] -- empty continuation, always pop
+-- [((a + (b * c)) + d) = (e * f)]  -- final result
+--
+-- The only difference between the process depicted above and the
+-- real process is that the rules for which operator is stronger factor
+-- in layout information. So in general, operators that are indented
+-- more are seen to be stronger.
+--
+-- The exceptions are if either the whole expression is on the same line,
+-- or if all operators are on the same column.
+--
+combine :: Stack a -> Pos -> a Name -> [Cont a] -> a Name
+
+-- If we have a single expression and nothing on the stack, then we
+-- can just return it.
+combine End _l e [] = e
+
+-- If there is no continuation, we always pop. The line passed to
+-- combine is always the starting point of the currently focused
+-- expression, so we take the line stored on the stack.
+combine (Frame s e1 op _ l1 _) _l2 e2 [] =
+  combine s l1 (e1 `op` e2) []
+
+-- If there is nothing on the stack, we always push.
+combine End l1 e1 (MkCont op1 prio1 l2 p2 e2 : efs) =
+  combine (Frame End e1 op1 prio1 l1 p2) l2 e2 efs
+
+-- This is the standard case. We have something on the stack and a
+-- continuation. We have to compare the two operators. If the operator
+-- on the continuation side is stronger, we push. Otherwise, we pop.
+--
+-- TODO: we currently do not track associativity.
+--
+combine s1@(Frame s e1 op1 prio1 l1 p1) _l e2 (MkCont op2 prio2 l2 p2 e3 : efs)
+  | (l2, p2, prio2) `stronger` (l1, p1, prio1) =
+  combine (Frame s1 e2 op2 prio2 l2 p2) l2 e3 efs -- push
   | otherwise =
-  combine s (e1 `op1` e2) (MkCont op2 prio2 p2 e3 : efs) -- pop
+  combine s l1 (e1 `op1` e2) (MkCont op2 prio2 l2 p2 e3 : efs) -- pop
+  where
+    stronger (ly, py, prioy) (lx, px, priox)
+      | lx == ly  = prioy >= priox
+      | otherwise = py > px || py == px && prioy >= priox
 
 -- The real problem is:
 --
@@ -576,18 +620,24 @@ combine s1@(Frame s e1 op1 prio1 p1) e2 (MkCont op2 prio2 p2 e3 : efs)
 data Cont a =
   MkCont
     { _op   :: a Name -> a Name -> a Name
-    , _prio :: Prio
-    , _pos  :: Pos
+    , _prio :: !Prio
+    , _line :: !Pos
+    , _pos  :: !Pos
     , _arg  :: a Name
     }
 
 cont :: Parser (Prio, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
   withIndent GT p $ \ pos -> do
+    l <- currentLine
     (prio, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
     arg <- pbase
-    pure (MkCont op prio pos arg)
+    pure (MkCont op prio l pos arg)
+
+-- TODO: We should think whether we can obtain this more cheaply.
+currentLine :: Parser Pos
+currentLine = sourceLine <$> getSourcePos
 
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
@@ -613,13 +663,13 @@ opToken :: TokenType -> Parser Anno
 opToken t =
   (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ t
 
-infix2 :: (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
+infix2 :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Lexeme PosToken -> a n -> a n -> a n
 infix2 f op l r =
-  f (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnno) l r
+  f (fixAnnoSrcRange $ mkHoleAnnoFor l <> mkSimpleEpaAnno (lexToEpa op) <> mkHoleAnnoFor r) l r
 
-infix2' :: (Anno -> a n-> a n -> a n) -> Anno -> a n -> a n -> a n
+infix2' :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Anno -> a n -> a n -> a n
 infix2' f op l r =
-  f (mkHoleAnno <> op <> mkHoleAnno) l r
+  f (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) l r
 
 baseExpr :: Parser (Expr Name)
 baseExpr =
@@ -640,7 +690,7 @@ atomicExpr =
   <|> nameAsApp App
   <|> parenExpr
 
-nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b) => (Anno -> Name -> [a] -> b) -> Parser b
+nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b, HasSrcRange a) => (Anno -> Name -> [a] -> b) -> Parser b
 nameAsApp f =
   attachAnno $
     f emptyAnno
@@ -673,7 +723,7 @@ stringLit =
 
 parenExpr :: Parser (Expr Name)
 parenExpr =
-  mergeAnno $
+  inlineAnnoHole $
     id
     <$  annoLexeme (spacedToken_ TPOpen)
     <*> annoHole expr
@@ -722,7 +772,10 @@ lam :: Parser (Expr Name)
 lam = do
   current <- Lexer.indentLevel
   attachAnno $
-    Lam emptyAnno <$> annoHole givens <* annoLexeme (spacedToken_ TKYield) <*> annoHole (indentedExpr current)
+    Lam emptyAnno
+      <$> annoHole givens
+      <* annoLexeme (spacedToken_ TKYield)
+      <*> annoHole (indentedExpr current)
 
 ifthenelse :: Parser (Expr Name)
 ifthenelse = do
@@ -770,9 +823,10 @@ otherwise' = do
 indentedPattern :: Pos -> Parser (Pattern Name)
 indentedPattern p =
   withIndent GT p $ \ _ -> do
+    l <- currentLine
     pat <- basePattern
     pfs <- many (patternCont p)
-    pure (combine End pat pfs)
+    pure (combine End l pat pfs)
 
 basePattern :: Parser (Pattern Name)
 basePattern =
@@ -803,7 +857,8 @@ patApp = do
   attachAnno $
     PatApp emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
+    <*> (      annoLexeme (spacedToken_ TKOf)
+            *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
         <|> annoHole (lmany (indented atomicPattern current))
         )
 
@@ -815,7 +870,16 @@ projection =
       -- May affect the source span of the name.
       -- E.g. Goto definition of `name's` would be affected, as clicking on `'s` would not be part
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
-      (\ n ns -> foldl' (\e (gen, n') -> Proj (mkHoleAnno <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnno) e n') (Var mkHoleAnno n) ns)
+      (\ n ns ->
+        foldl'
+          (\e (gen, n') ->
+            Proj (fixAnnoSrcRange $ mkHoleAnnoFor e <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnnoFor n')
+              e
+              n'
+          )
+          (Var (fixAnnoSrcRange $ mkHoleAnnoFor n) n)
+          ns
+      )
   <$> name
   <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
@@ -1023,8 +1087,7 @@ mkPError orig (m, s) =
   PError
     { message = m
     , start = MkSrcPos
-        { filename = sourceName s
-        , line = unPos $ sourceLine s
+        { line = unPos $ sourceLine s
         , column = unPos $ sourceColumn s
         }
     , origin = orig
@@ -1034,7 +1097,7 @@ mkPError orig (m, s) =
 -- jl4 specific annotation helpers
 -- ----------------------------------------------------------------------------
 
-type WithAnno = WithAnno_ PosToken
+type WithAnno = WithAnno_ PosToken (Type' Resolved)
 
 type Epa = Epa_ PosToken
 
@@ -1075,17 +1138,29 @@ data WithAnno_ t e a = WithAnno (Anno_ t e) a
   deriving stock Show
   deriving (Functor)
 
-unAnno :: WithAnno_ t e a -> a
-unAnno (WithAnno _ a) = a
+withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
+withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
+
+withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
+withEpaAnno (Epa this trailing e) = WithAnno (mkAnno [mkCluster cluster]) e
+ where
+  cluster =
+    CsnCluster
+      { payload = mkConcreteSyntaxNode this
+      , trailing = mkConcreteSyntaxNode trailing
+      }
+
+unWithAnno :: WithAnno_ t e a -> a
+unWithAnno (WithAnno _ a) = a
 
 toAnno :: WithAnno_ t e a -> Anno_ t e
 toAnno (WithAnno ann _) = ann
 
-annoHole :: (HasField "range" t SrcRange) => Parser a -> Compose Parser (WithAnno_ t e) a
-annoHole p = Compose $ fmap (\ t -> WithAnno mkHoleAnno t) p
+annoHole :: (HasSrcRange a) => Parser a -> Compose Parser (WithAnno_ t e) a
+annoHole p = Compose $ fmap withHoleAnno p
 
 annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
-annoEpa p = Compose $ fmap epaToAnno p
+annoEpa p = Compose $ fmap withEpaAnno p
 
 annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
@@ -1098,35 +1173,31 @@ instance Applicative (WithAnno_ t e) where
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
 attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-attachAnno p = fmap (\(WithAnno ann e) -> setAnno ann e) $ getCompose p
-
-mergeAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-mergeAnno p = (\ (WithAnno ann e) -> setAnno (mkAnno (mergeInto ann.payload (getAnno e).payload)) e) <$> getCompose p
-  where
-    mergeInto []               _   = []
-    mergeInto (AnnoHole : as1) as2 = as2 ++ as1
-    mergeInto (a : as1)        as2 = a : mergeInto as1 as2
+attachAnno p = fmap (\(WithAnno ann e) -> setAnno (fixAnnoSrcRange ann) e) $ getCompose p
 
 attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
 attachEpa =
   attachAnno . annoEpa
 
-mkHoleAnno :: Anno_ t e
-mkHoleAnno =
-  mkAnno [mkHole]
+-- | Replace the first occurrence of 'AnnoHole' with the exactprint annotations.
+-- Removes an indirection in the Annotation tree.
+inlineAnnoHole :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
+inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole ann.payload (getAnno e).payload)) e) <$> getCompose p
+  where
+    inlineFirstAnnoHole []                 _   = []
+    inlineFirstAnnoHole (AnnoHole _ : as1) as2 = as2 ++ as1
+    inlineFirstAnnoHole (a : as1)          as2 = a : inlineFirstAnnoHole as1 as2
+
+-- | Create an annotation hole with a source range hint.
+-- This source range hint is used to compute the final source range
+-- of the produced 'Anno_'.
+mkHoleAnnoFor :: HasSrcRange a => a -> Anno_ t e
+mkHoleAnnoFor a =
+  mkAnno [mkHoleWithSrcRange a]
 
 mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
-  toAnno . epaToAnno
-
-epaToAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
-epaToAnno (Epa this trailing e) = WithAnno (mkAnno [mkCsn cluster]) e
- where
-  cluster =
-    CsnCluster
-      { payload = mkConcreteSyntaxNode this
-      , trailing = mkConcreteSyntaxNode trailing
-      }
+  toAnno . withEpaAnno
 
 data Lexeme_ t a = Lexeme [t] a
   deriving stock Show
