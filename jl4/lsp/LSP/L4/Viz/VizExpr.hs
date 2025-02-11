@@ -28,7 +28,7 @@ data IRExpr
 newtype ID = MkID
   { id :: Int
   }
-  deriving newtype (Eq)
+  deriving newtype (Eq, Ord)
   deriving stock (Show, Generic)
 
 data BoolValue = FalseV | TrueV | UnknownV
