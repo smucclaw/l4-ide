@@ -62,7 +62,7 @@
   registry.setRoot(context, 'EXAMPLE_1' as LirRootType, exprLirNode)
 
   // style
-  let isHovered = false
+  let isHovered = $state(false)
 </script>
 
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
@@ -82,10 +82,10 @@
     <label
       for="example-1-json"
       class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
-      on:mouseover={() => (isHovered = true)}
-      on:mouseout={() => (isHovered = false)}
-      on:focus={() => (isHovered = true)}
-      on:blur={() => (isHovered = false)}
+      onmouseover={() => (isHovered = true)}
+      onmouseout={() => (isHovered = false)}
+      onfocus={() => (isHovered = true)}
+      onblur={() => (isHovered = false)}
       style="background-color: {isHovered
         ? 'var(--color-button-hover)'
         : 'var(--color-button)'}"
