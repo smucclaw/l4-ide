@@ -48,8 +48,8 @@
     ],
     "commands": [
       {
-        "command": "viz.showViz",
-        "title": "Show Visualisation"
+        "command": "l4.visualize",
+        "title": "Visualize L4 expression"
       }
     ]
   },

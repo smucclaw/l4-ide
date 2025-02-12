@@ -81,7 +81,7 @@ lspOptions =
     { optTextDocumentSync = Just syncOptions
     , optExecuteCommandCommands =
         Just
-          [ "viz.showViz"
+          [ "l4.visualize"
           ]
     }
 
