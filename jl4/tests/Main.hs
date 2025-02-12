@@ -77,10 +77,10 @@ parseFile file input =
     Right prog -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
-        CheckResult {errors, resolvedProgram}
+        CheckResult {errors, program}
           | all ((== JL4.SInfo) . JL4.severity) errors -> do
             Text.putStrLn "Typechecking successful"
-            let results = JL4.doEvalProgram resolvedProgram
+            let results = JL4.doEvalProgram program
             let msgs = (typeErrorToMessage <$> errors) ++ (evalResultToMessage <$> results)
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
           | otherwise -> do

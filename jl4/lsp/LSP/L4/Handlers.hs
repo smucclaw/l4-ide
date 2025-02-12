@@ -52,7 +52,6 @@ import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO)
-import Debug.Trace
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -286,7 +285,9 @@ handlers recorder =
                     f
                     False
 
-            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw) { CompletionItem._kind =  Just CompletionItemKind_Keyword }
+            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
+                  { CompletionItem._kind =  Just CompletionItemKind_Keyword
+                  }
                 keyWordMatches = filterMatchesOn id $ Map.keys keywords 
                 -- FUTUREWORK(mangoiv): we could 
                 -- 1 pass through the token here 
@@ -294,7 +295,8 @@ handlers recorder =
                 -- 3 set the CompletionItemKind to CompletionItemKind_Operator
                 keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
-            (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $ useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
+            (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
+              useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
 
             let topDeclItems 
                   = filterMatchesOn CompletionItem._label 
@@ -308,14 +310,12 @@ handlers recorder =
                             checkEntity
                         )
                       ) 
-                      typeCheck.finalEnvironment
+                      typeCheck.environment
 
             -- TODO: maybe we should sort these as follows
             -- 1 keywords 
             -- 2 toplevel values 
             -- 3 toplevel types 
-            
-            traceShowM topDeclItems
 
             let items = keywordItems <> topDeclItems
 

@@ -57,7 +57,7 @@ data TypeCheckResult = TypeCheckResult
   { program :: Program Resolved
   , substitution :: Substitution
   , success :: Bool
-  , finalEnvironment :: TypeCheck.Environment
+  , environment :: TypeCheck.Environment
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
@@ -123,22 +123,15 @@ jl4Rules recorder = do
         pure ([], Just prog)
 
   define shakeRecorder $ \TypeCheck f -> do
-    program <- use_ GetParsedAst f
-    let
-      CheckResult 
-        { resolvedProgram
-        , errors
-        , finalSubstitutions
-        , finalEnvironment
-        } = TypeCheck.doCheckProgram program
-
+    parsed <- use_ GetParsedAst f
+    let result = TypeCheck.doCheckProgram parsed
     pure
-      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) errors
+      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) result.errors
       , Just TypeCheckResult
-        { program = resolvedProgram
-        , substitution = finalSubstitutions
-        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) errors
-        , finalEnvironment
+        { program = result.program
+        , substitution = result.substitution
+        , environment = result.environment
+        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
         }
       )
 

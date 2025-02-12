@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, DuplicateRecordFields #-}
 module L4.TypeCheck where
 
 -- We perform scope checking and type checking in one go.
@@ -123,12 +123,12 @@ type Kind = Int -- arity of the type
 runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
 runCheck (MkCheck f) = f
 
-initialCheckState :: Environment -> CheckState
-initialCheckState env =
+initialCheckState :: Environment -> Substitution -> CheckState
+initialCheckState environment substitution =
   MkCheckState
-    { environment  = env
+    { environment
+    , substitution
     , errorContext = None
-    , substitution = Map.empty
     , supply       = 0
     }
 
@@ -144,7 +144,7 @@ initialCheckState env =
 --
 doCheckProgram :: Program Name -> CheckResult
 doCheckProgram program =
-  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment) of
+  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment Map.empty) of
     (w, s) ->
       let
         (errs, rprog) = runWith w
@@ -154,18 +154,18 @@ doCheckProgram program =
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
             in CheckResult 
-              { resolvedProgram = rprog
+              { program = rprog
               , errors = substErrs ++ moreErrs
-              , finalSubstitutions = s'.substitution
-              , finalEnvironment = s'.environment
+              , substitution = s'.substitution
+              , environment = s'.environment
               }
 
 data CheckResult 
   = CheckResult 
-  { resolvedProgram :: Program Resolved 
+  { program :: Program Resolved 
   , errors :: [CheckErrorWithContext]
-  , finalSubstitutions :: Substitution 
-  , finalEnvironment :: Environment 
+  , substitution :: Substitution 
+  , environment :: Environment 
   }
   deriving stock (Eq, Show)
 
@@ -175,7 +175,7 @@ data CheckResult
 applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
 applyFinalSubstitution subst t =
   let
-    cs = (initialCheckState Map.empty) { substitution = subst }
+    cs = initialCheckState Map.empty subst
   in
     case runCheckUnique (applySubst t) cs of
       (w, _cs') ->
