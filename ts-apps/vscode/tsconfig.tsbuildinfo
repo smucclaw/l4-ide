@@ -1,1 +1,1 @@
-{"root":["./src/commands.ts","./src/extension.mts","./src/html.d.ts","./src/viz.ts","./src/test/suite/extension.test.ts"],"errors":true,"version":"5.7.3"}
+{"root":["./src/commands.ts","./src/extension.mts","./src/html.d.ts","./src/viz.ts","./src/test/suite/extension.test.ts"],"version":"5.7.3"}
