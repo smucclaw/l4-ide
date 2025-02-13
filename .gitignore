@@ -34,6 +34,7 @@ coverage
 .vercel
 
 # Build Outputs
+tsconfig.tsbuildinfo
 .next/
 out/
 build
