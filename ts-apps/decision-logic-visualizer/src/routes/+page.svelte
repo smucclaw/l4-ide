@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { Either, Schema } from 'effect'
-  import { match } from 'ts-pattern'
+  import { Schema } from 'effect'
   import { IRExpr } from '@repo/viz-expr'
   import { ExprLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
