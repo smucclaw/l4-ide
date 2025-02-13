@@ -52,8 +52,13 @@ examplem3 MEANS      9
                  -   7
                    - 6
 
--- I think currently all operators are right-associative
+-- Minus is now left-associative
 examplem4 MEANS  9 - 8 - 7 - 6
+
+-- Cons is still right-associative
+-- (this is clear because the left-associative interpretation would not be
+-- type-correct)
+examplecons MEANS 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
 
 -- weird things happen here:
 --
@@ -84,5 +89,6 @@ examplew1 MEANS   3 * (4 + 2
 #EVAL examplem1 = -12
 #EVAL examplem2 = 2
 #EVAL examplem3 = 0
+#EVAL examplem4 = -12
 
 #EVAL examplew1 = 114  -- would rather have 110, I think
