@@ -118,6 +118,7 @@ executable jl4-lsp
     transformers,
     unliftio,
     vector,
+    fuzzy,
 
   if os(windows)
     build-depends: Win32

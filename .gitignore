@@ -54,3 +54,9 @@ yarn-error.log*
 *.pem
 *~
 *.personalnotes
+
+# Nix
+.direnv
+.envrc
+flake.nix
+flake.lock
