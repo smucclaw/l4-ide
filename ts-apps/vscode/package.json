@@ -76,7 +76,6 @@
   "dependencies": {
     "@repo/viz-expr": "*",
     "@repo/webview": "*",
-    "ladder-diagram": "^2.0.3",
     "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-messenger": "^0.5.1",
