@@ -80,11 +80,12 @@ srcPosToPosition s =
 -- ----------------------------------------------------------------------------
 
 instance ToSemToken PosToken where
-  toSemToken :: PosToken -> SemanticTokenTypes -> [SemanticTokenModifiers] -> [SemanticToken]
+  toSemToken :: PosToken -> SemanticTokenTypes -> [SemanticTokenModifiers] -> NonEmpty SemanticToken
   toSemToken token category modifiers
     | token.range.start.line /= token.range.end.line =
         splitTokens (mkSingleSemToken token) (displayPosToken token)
-    | otherwise = [mkSingleSemToken token]
+    | otherwise =
+        pure (mkSingleSemToken token)
    where
     mkSingleSemToken :: PosToken -> SemanticToken
     mkSingleSemToken t = SemanticToken
@@ -145,4 +146,4 @@ instance ToSemTokens PosToken Lit where
 instance ToSemTokens PosToken PosToken where
   toSemTokens t = do
     ctx <- ask
-    pure $ fromMaybe [] (fromSemanticTokenContext ctx t)
+    pure $ maybe [] toList (fromSemanticTokenContext ctx t)

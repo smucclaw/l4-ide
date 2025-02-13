@@ -3,25 +3,23 @@
 module LSP.SemanticTokens where
 
 import L4.Annotation
+import Base
 
 import Control.Applicative (Alternative (..))
 import Control.DeepSeq (NFData)
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.Except as Except
-import Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.Reader as ReaderT
+import qualified Data.List as List
 import qualified Data.Maybe as Maybe
+import qualified Data.Text as Text
 import qualified GHC.Generics as Generics
 import GHC.Stack
 import Generics.SOP as SOP
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types hiding (Pattern)
-import qualified Data.Text as Text
-import Data.Text (Text)
-import qualified Data.List as List
 
 -- ----------------------------------------------------------------------------
 -- Semantic Tokens Interface
@@ -68,15 +66,15 @@ traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
     thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (allClusterTokens m)
 
   restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
-  pure $ concat thisSyntaxNode <> restOfTokens
+  pure $ concatMap toList thisSyntaxNode <> restOfTokens
 
-fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe [SemanticToken]
+fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe (NonEmpty SemanticToken)
 fromSemanticTokenContext ctx token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
 
 class ToSemToken t where
   -- | 'toSemToken' possibly returns multiple tokens, to accommodate for clients
   -- that do not support tokens that span multiple lines
-  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> [SemanticToken]
+  toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> NonEmpty SemanticToken
 
 instance (ToSemTokens t a) => ToSemTokens t [a] where
   toSemTokens =
@@ -123,9 +121,11 @@ toSemanticTokenAbsolute s =
 -- Not all LSP clients support 'SemanticToken's spanning over multiple
 -- lines. Since we want to display them correctly nevertheless, we split them
 -- here into multiple 'SemanticToken's.
-splitTokens :: SemanticToken -> Text -> [SemanticToken]
+splitTokens :: SemanticToken -> Text -> NonEmpty SemanticToken
 splitTokens s t =
-  snd $ List.mapAccumL go s.start (Text.lines t)
+  case Text.lines t of
+    [] -> pure s
+    (x:xs) -> snd $ List.mapAccumL go s.start (x :| xs)
   where
     nextLine p =
       p
