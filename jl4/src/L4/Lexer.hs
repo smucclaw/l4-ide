@@ -9,7 +9,6 @@ import qualified Base.Text as Text
 
 import Control.DeepSeq (NFData)
 import Data.Char hiding (Space)
-import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty)
 import Data.Proxy
 import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec

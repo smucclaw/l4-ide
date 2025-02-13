@@ -15,8 +15,6 @@ import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
 import qualified Data.Text as Text
-import Text.Pretty.Simple
-import Data.Text.Lazy (toStrict)
 
 -- ----------------------------------------------------------------------------
 -- ExactPrinting Interface

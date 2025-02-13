@@ -17,7 +17,6 @@ import Base
 
 import qualified Control.Applicative as Applicative
 import Data.Functor.Compose
-import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text

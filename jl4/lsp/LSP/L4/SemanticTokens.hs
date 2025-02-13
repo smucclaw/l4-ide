@@ -7,14 +7,10 @@
 
 module LSP.L4.SemanticTokens where
 
-import L4.Lexer (PosToken (..), SrcPos (..), TokenCategory (..))
-import qualified L4.Lexer as Lexer
-import L4.Syntax
+import Base
+import LSP.L4.Base
 
 import LSP.SemanticTokens
-import Control.Monad.Reader (ask)
-import qualified Data.Maybe as Maybe
-
 import Language.LSP.Protocol.Types hiding (Pattern)
 
 -- ----------------------------------------------------------------------------
@@ -45,30 +41,30 @@ standardTokenType = \case
   CEOF -> Nothing
 
 simpleTokenType :: PosToken -> Maybe SemanticTokenTypes
-simpleTokenType t = standardTokenType (Lexer.posTokenCategory t.payload)
+simpleTokenType t = standardTokenType (posTokenCategory t.payload)
 
 parameterType :: PosToken -> Maybe SemanticTokenTypes
-parameterType t = case Lexer.posTokenCategory t.payload of
+parameterType t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Parameter
   _ -> Nothing
 
 nameIsDirective :: PosToken -> Maybe SemanticTokenTypes
-nameIsDirective t = case Lexer.posTokenCategory t.payload of
+nameIsDirective t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Interface
   _ -> Nothing
 
 enumType :: PosToken -> Maybe SemanticTokenTypes
-enumType t = case Lexer.posTokenCategory t.payload of
+enumType t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Enum
   _ -> Nothing
 
 defVar :: PosToken -> Maybe [SemanticTokenModifiers]
-defVar t = case Lexer.posTokenCategory t.payload of
+defVar t = case posTokenCategory t.payload of
   CIdentifier -> Just [SemanticTokenModifiers_Declaration, SemanticTokenModifiers_Definition]
   _ -> Nothing
 
 identIsType :: PosToken -> Maybe SemanticTokenTypes
-identIsType t = case Lexer.posTokenCategory t.payload of
+identIsType t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Type
   _ -> Nothing
 
@@ -84,11 +80,17 @@ srcPosToPosition s =
 -- ----------------------------------------------------------------------------
 
 instance ToSemToken PosToken where
-  toSemToken :: PosToken -> SemanticTokenTypes -> [SemanticTokenModifiers] -> SemanticToken
-  toSemToken token category modifiers =
-    SemanticToken
-      { start = srcPosToPosition token.range.start
-      , length = fromIntegral token.range.length
+  toSemToken :: PosToken -> SemanticTokenTypes -> [SemanticTokenModifiers] -> NonEmpty SemanticToken
+  toSemToken token category modifiers
+    | token.range.start.line /= token.range.end.line =
+        splitTokens (mkSingleSemToken token) (displayPosToken token)
+    | otherwise =
+        pure (mkSingleSemToken token)
+   where
+    mkSingleSemToken :: PosToken -> SemanticToken
+    mkSingleSemToken t = SemanticToken
+      { start = srcPosToPosition t.range.start
+      , length = fromIntegral t.range.length
       , category = category
       , modifiers = modifiers
       }
@@ -144,4 +146,4 @@ instance ToSemTokens PosToken Lit where
 instance ToSemTokens PosToken PosToken where
   toSemTokens t = do
     ctx <- ask
-    pure $ Maybe.maybeToList $ fromSemanticTokenContext ctx t
+    pure $ maybe [] toList (fromSemanticTokenContext ctx t)

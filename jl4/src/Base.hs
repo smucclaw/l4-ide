@@ -14,6 +14,7 @@ import Data.Kind as X
 import Data.List as X
 import Data.Map.Strict as X (Map, (!))
 import Data.Maybe as X
+import Data.List.NonEmpty as X (NonEmpty(..), nonEmpty)
 import Data.Set as X (Set)
 import Data.String as X
 import Data.Text as X (Text)
