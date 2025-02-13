@@ -226,7 +226,7 @@ handlers recorder =
               let nfp = fromUri $ toNormalizedUri uri
 
               TypeCheckResult {program} <-
-                maybe (throwError $ defaultResponseError $ "Failed to typecheck " <> Text.show (Text.show uri.getUri) <> ".") pure
+                maybe (throwError $ defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> ".") pure
                 =<< liftIO (runAction "l4.visualize" ide $ use TypeCheck nfp)
 
               let decides = Optics.toListOf (Optics.gplate @(Decide Resolved)) program
