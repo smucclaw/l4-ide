@@ -53,11 +53,10 @@
   const { fitView } = $derived(useSvelteFlow())
   onMount(() => {
     watch(
-      () => sfNodes$Initialized,
+      () => sfNodes$Initialized.current,
       () => {
-        if (sfNodes$Initialized) {
+        if (sfNodes$Initialized.current) {
           doLayout()
-          console.log('nodes initialized')
         }
       }
     )
