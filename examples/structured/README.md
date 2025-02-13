@@ -35,9 +35,9 @@ We add a date to the end. Now we can say
 is_king(edward_viii, 1936).
 ```
 
-You can verbalize this as "In 1936, Edward the Eighth is king".
+You can verbalize this as "In 1936, Edward the Eighth is king". Maybe in future we will flip this convention around so the date appears at the front.
 
-Later we'll have a predicate `is_British(Person, Time_Of_Birth)` which you can verbalize as "at their time of birth, a person is a British citizen if ..."
+Further down in this document you will see a predicate `is_British(Person, Time_Of_Birth)` which you can verbalize as "at their time of birth, a person is a British citizen if ..."
 
 It really should be `is_British_citizen` but we leave out the `_citizen` part for concision.
 
@@ -77,19 +77,25 @@ The predicate logic of the BNA material deserves a tutorial in its own right, bu
 
 Let's develop a concise vocabulary that allows us to deal with different aspects of time:
 
-- something event occurred in the real world at a certain time;
-- a particular version of legislation was passed at a certain time;
-- a particular version of legislation commenced at a certain time;
-- a particular provision within legislation is aware of time and makes decisions differently based on when events occurred;
+- some event occurred in the real world at a certain time;
 - our system possessed imperfect knowledge about events as they reported in;
+- a particular version of legislation was passed at a certain time, turning from a Bill into an Act;
+- a particular version of legislation/regulation commenced at a certain time, taking effect on a certain date;
+- a particular provision is aware of time and makes decisions differently based on when events occurred; this is the notion of commencement, just at a finer granularity within an Act;
 - a certain piece of legislation was encoded in a certain way at a certain time, and a different way at a different time;
+- a judge decided that even though a certain decision should have been, or was made a certain way, they overrode the decision and applied that override retroactively.
 
 Composing these notions, we want to be able to say:
 - a piece of legislation that was in effect at time T1
 - specifies a certain decision that refers to how some other piece of legislation that was in effect at time T2 would have made a decision about
-- some event that occurred, or some state of affairs that held true, at some time T3.
+- some event that occurred, or some state of affairs that held true, at some time T3
 
-We also want to handle these notions:
+In the future we might add a decision axis:
+- the above logics led to a decision at time T4
+- which might later be overridden at time T5
+- with an instruction to take effect retroactively dating back to time T6
+
+We also want to handle support for audit:
 - a decision was made at a certain time in accordance with various grounds that were relevant at that time (or, perhaps, in violation of those grounds, which is why we need to record these decisions -- for audit purposes -- in the first place).
 - And if we want to reconstruct that decision we need to be able to "rewind the clock" to that time and revisit those grounds as they stood at that time.
 
@@ -106,52 +112,71 @@ There's subtle logic here. Subsection 6 says:
 
 So we need to distinguish **at** a particular time, *vs* **after** a particular time.
 
-The above example also deals with counterfactuals -- which we will not deal with at the moment, other than to say that the semantics of the Reader Monad and the `local` function are sufficient to represent simple counterfactuals. [Section 4L](https://www.legislation.gov.uk/ukpga/1981/61/section/4L) provides a recent politically charged example of a counterfactual which requires more sophisticated metaprogramming.
+The above example also deals with counterfactuals -- which we will not deal with at the moment, other than to say that the semantics of the Reader Monad and the `local` function are sufficient to represent simple counterfactuals.
+
+[Section 4L](https://www.legislation.gov.uk/ukpga/1981/61/section/4L) provides a recent politically charged example of a counterfactual which requires more sophisticated metaprogramming, and leads to the idea of homoiconicity.
 
 ##### Temporal Databases
 
-Fortunately, to accommodate the above temporal challenges, we don't need to develop theory from scratch. The existing theory of *multi-temporal databases* provides a vocabulary for us to talk about *valid time*, *system (or transactional) time*, and *decision time*. See the examples from https://en.wikipedia.org/wiki/Temporal_database, then come back.
+To handle the above temporal challenges, we fortunately don't need to develop theory from scratch. The existing theory of *multi-temporal databases* provides a language for us to talk about *valid time*, *system (or transactional) time*, and *decision time*. See the examples from https://en.wikipedia.org/wiki/Temporal_database, then come back.
 
-How do we apply this thinking to law? By analogy to software, legislation and regulations are subject to *versioning*: Acts are indexed by the date they pass (typically recorded in the title), much as changing Git repositories are indexed by commit date. From the perspective of a legal drafter, that date of passage is a *transaction time* (also called *system time*). We can use the same notion to record amendments to Acts.
+How do we apply this thinking to law? By analogy to software, legislation and regulations are subject to *versioning*: Acts are indexed by the date they pass (typically recorded in the title), much as changing Git repositories are indexed by authoring and commit date. From the perspective of a legal drafter, that date of passage is a *transaction time* (also called *system time*). We can use the same notion to record amendments to Acts.
 
-Acts also contain *commencement* dates: when they take effect in the real world. Borrowing terminology from temporal databases, let's call that a *valid time*. Here, the code itself contains date logic: `if (current_date() > commencement_date + 6 months) { penalties increase }`
+Acts also contain *commencement* dates: when they take effect in the real world. Borrowing terminology from temporal databases, let's call that a *rule valid time*. Here, the code itself contains date logic: `if (current_date() > commencement_date + 6 months) { penalties increase }`
 
 Meng proposes the following vocabulary and system of operators to handle the above complexity.
 
-**Valid time** refers to an understanding of an event in the real world. The corresponding operators are `ON` / `AT`: Alice was born `ON` January 3, 2022 `AT` 12:10am. Sometimes only a date is available, so we leave out the `AT` part.
+**Event Valid Time** refers to an understanding of an event in the real world. The corresponding operators are `ON` / `AT`: Alice was born `ON` January 3, 1950 `AT` 12:10am. Sometimes only a date is available, so we leave out the `AT` part.
 
-**System time** describes the creation, update, and deletion of records regarding those understandings. The corresponding operators are `AS AT` / `AS OF` to represent that the end time is undefined, so the record is current.
+**Event System Time** describes the creation, update, and deletion of records regarding those understandings. The corresponding operators are `KNOWN ON` / `KNOWN AT`. System time allows us to update event records, while reflecting past misunderstandings: see [the example from Wikipedia.](https://en.wikipedia.org/wiki/Temporal_database#Using_two_axes:_valid_time_and_transaction_time)
 
-`AS AT` January 5, Alice was recorded to have been born `ON` January 2, 2022. But on January 8 a clerk realized that the birth happened after midnight, and corrected the date of birth to January 3. So, `AS AT January 6, Alice was 
+Suppose Alice was recorded on January 5 to have been born on January 2, 2022. That's "Born `ON` January 2 `KNOWN ON` January 5".
 
-Transaction time allows us to update those records, while reflecting past misunderstandings: see [the example from Wikipedia.](https://en.wikipedia.org/wiki/Temporal_database#Using_two_axes:_valid_time_and_transaction_time)
+But on January 8 a clerk realized that the birth happened after midnight, and corrected the date of birth to January 3.
 
-However, there are two categories of events in the real world: the physical events, and the constitutive interpretations of those events which are given by rulesets which are themselves subject to change.
+So, we update: "Born `ON` January 3 `KNOWN ON` January 8".
 
-So we now need to have a similar notion of valid and transaction time *but applying to legislation*.
+Subsequently, we can say `AS KNOWN ON` and `AS KNOWN AT` to refer to system knowledge at that time: this is a decision-time axis.
+
+Searle would point out that there are actually two categories of events in the real world: the physical events, and the constitutive interpretations of those events -- what Searle calls "institutional facts" -- which are given by rulesets which are themselves subject to change.
+
+So we now need to have a similar notion of valid and transaction time *but deriving from legislation*.
 
 I propose to use:
-- *rule valid time* to refer to a rule being in effect with respect to a particular matter; at the level of an act, that's commencement; but certain provisions may apply with their own set of validity dates. Contracts likewise have an *effective date*, which can be backdated to before the date of execution.
-- *rule version time* to represent transaction time for rules. This encompasses drafts of bills, final versions passed by a legislature, subsequent [amendments](https://www.legislation.gov.uk/ukpga/2022/36/section/8) and [errata](https://www.legislation.gov.uk/ukpga/2022/36/pdfs/ukpgacs_20220036_en_001.pdf), and versions identified as "in force". Contracts have draft versions of their own, and *dates of execution*.
-- *rule encoding time* to represent the L4 encoding of the rules. If an encoding was in error, we need to fix it, without necessarily implying that the underlying version changed; only our encoding of it did.
+- **Rule Effective Time** to refer to a rule being in effect with respect to a particular matter; at the level of an act, that's commencement; but certain provisions may apply with their own set of validity dates. Contracts likewise have an *effective date*, which can be backdated to before the date of execution.
+- **Rule Source Version** to represent system, or transaction, time for rules. This encompasses drafts of bills, final versions passed by a legislature, subsequent [amendments](https://www.legislation.gov.uk/ukpga/2022/36/section/8) and [errata](https://www.legislation.gov.uk/ukpga/2022/36/pdfs/ukpgacs_20220036_en_001.pdf), and versions identified as "in force" or not. Contracts have draft versions of their own, and *dates of execution* which are not necessarily the same as the effective date, thanks to Conditions Precedent or explicit start dates in the contract.
+- **Rule Encoding Version** to represent the L4 encoding of the rules. If an encoding was in error, we need to fix it, without necessarily implying that the underlying version changed; only our encoding of it did.
 
-Legal rules, indexed by the above times, can now be articulated with precision: an Act passed in 2023, amended in 2025, encoded into L4 in 2025, and set to commence in 2026, can be unambiguously retrieved and referenced. If the L4 encoding was corrected in 2027, we know that the encoding time changed, but the version and valid times did not.
+Legal rules, indexed by the above times, can now be articulated with precision: an Act passed in 2023, errataed in 2024, amended in 2025, encoded into L4 in 2026, and set to commence in 2027, can be unambiguously retrieved and referenced, variant by variant. If the L4 encoding was corrected in 2028, we know that the encoding time changed, but the version and valid times did not.
 
-Based on this information, we can model the evolution of a person's citizenship:
+These things interact: every Act that is in effect is associated with a particular Rule Source Version and a Rule Encoding Version.
 
+The operator `AT` can refer not just to an event in the real world, but also to an institutional fact derived from a combination of real-world events, and rules that are in effect `AS AT` that time:
 
+`Alice Is Not A British Citizen` `AT` `June 1 2010` `AS AT` `July 1 2017` means
 
-- The 2025 encoding of the 1988 version of the nationality act, would then take as an input the valid-time data about Alice, and return an answer about her citizenship in 1988, due to events of 1984.
+- Alice's birth record `AS KNOWN ON` July 1 2017 == `{ Born ON January 3, 1950; Born in Caribbean }`
+- We retrieve the ruleset that was in effect July 1 2017; this comprises one or more Acts, each of which has its own Source Version Time and Encoding Version Time.
+- We run those rules, querying about Alice's citizenship status on the date June 1 2010.
+- Those rules return the decision that Alice is not a British citizen on July 1 2017.
 
-- A subsequent act, say the 2020 Windrush Compensation Scheme (Expenditure) Act, might take as a further input the history of whether the rules (of a certain version-time) were applied in a certain way due to incorrect valid-time records; and if they were, then other rules kick in.
+Subsequently, however, a new set of legislation might revise the institutional fact of Alice's citizenship.
+
+Suppose in 2020 an Act was passed that decided Alice should have been a citizen at that time after all.
+
+`Alice Is A British Citizen` `AT` `June 1 2010` `AS AT` `October 1 2022`.
 
 Composing these ideas, 
 
 "AS AT T" means "taking the version of legislation in effect at time T, with the information known to the system at time T"
 
-the absence of "AS AT" is shorthand for "taking the current version of legislation, using the latest information known to the system"
+The absence of "AS AT" is shorthand for "taking the current version of legislation, using the latest information known to the system". But a decision record will always extensionalize those dates by filling them in.
 
-These operators `in`, `as at`, and `with system` can themselves nest, as understandings of the past, and of retroactive evaluations, are increasingly refined.
+For extra confusion, we may add the notion that these operators `ON/AT` and `AS AT` can themselves nest, as understandings of the past, and of retroactive evaluations, are increasingly refined. This is a controversial idea and possibly not a good one: let's proceed with this carefully, and only if people arrive intuitively at the same semantics for something like
+
+Institutional_Fact `AT` Event Valid Time `AS AT` (Event System Time := Rule Effective Time) `AS AT` Rule Source Version Time `AS AT` Rule Encoding Version Time
+
+I bring this up mostly to have an obvious target for agreeing to let's not do this.
 
 * The other examples from `examples_for_parsing`
 
