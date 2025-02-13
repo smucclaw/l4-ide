@@ -1,11 +1,6 @@
 commencement(bna,  1983).
 commencement(bcia, 2009).
 
-parentOf(alice, bob).
-parentOf(carol, bob).
-parentOf(dave, carol).
-parentOf(eva,  carol).
-
 born_at(alice, 1970).
 born_at(bob,   1995).
 born_at(carol, 1975).
@@ -23,6 +18,10 @@ is_settled_in(dave , uk, Y)        :- Y >  1960.
 is_settled_in(carol, uk, Y)        :- Y >  1990.
 is_settled_in(eva,   gibraltar, Y) :- Y >= 1955.
 
+parentOf(alice, bob).
+parentOf(carol, bob).
+parentOf(dave, carol).
+parentOf(eva,  carol).
 
 qualifying_territory(cayman, T) :- T >= 1955.
 qualifying_territory(gibraltar, T) :- T >= 1955.

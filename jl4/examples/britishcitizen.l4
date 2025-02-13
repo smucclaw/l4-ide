@@ -1,45 +1,18 @@
 § `Assumptions`
 
 ASSUME Person IS A TYPE
-  HAS ATTRIBUTE `mother` IS A Person
-      ^         `father` ^  ^ ^
-      ^         `is born in the United Kingdom after commencement`          IS A BOOLEAN
-      ^         `is born in a qualifying territory after the appointed day` IS A BOOLEAN
-      ^         `is settled in`                                             IS A FUNCTION FROM Time TO Place
+ASSUME `mother of` IS A FUNCTION FROM Person TO Person
+ASSUME `father of` IS A FUNCTION FROM Person TO Person
 
-DECLARE Person IS A TYPE
-  HAS `mother` IS A Person
-      `father` ^  ^ ^
-      `is born in the United Kingdom after commencement`          IS A BOOLEAN
-      `is born in a qualifying territory after the appointed day` IS A BOOLEAN
-      `is settled in`                                             IS A FUNCTION FROM Time TO Place
-
-class Person {
-   mother() : Person;
-   father() : Person;
-   isBornInTheUK: Boolean;
-   isBornInQualifyingTerritory: Boolean;
-   isSettledIn: Time -> Place;
-}
-
-qualifyingTerritories = [ "Gibraltar", "Cayman Islands", ... ]
-
-function isBritish (p : Person) : Boolean {
-  for (parent in [person.mother(), person.father()]) {
-    if parent.isSettledQualifies() { return True }
-  }
-}
-
-function isSettledQualifies (pp : Person, t : Time) {
-  var place = pp.isSettledIn(t)
-  if (place == "UK") { return True }
-  if (qualifyingTerritories.contains(place)) { return True }
-}
+ASSUME `is born in the United Kingdom after commencement` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is born in a qualifying territory after the appointed day` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is settled in the United Kingdom` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is settled in the qualifying territory in which the person is born` IS A FUNCTION FROM Person TO BOOLEAN
 
 § `Expanded version`
 
 GIVEN p IS A Person
-GIVES A BOOLEAN
+GIVETH A BOOLEAN
 DECIDE `is a British citizen` IS
          `is born in the United Kingdom after commencement` p
       OR `is born in a qualifying territory after the appointed day` p
