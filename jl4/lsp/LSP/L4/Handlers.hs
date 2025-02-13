@@ -244,7 +244,10 @@ handlers recorder =
                 ((Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) : xs) -> do
                   unless (null xs) $ do
                     logWith recorder Warning (LogSuppliedTooManyArguments xs)
-                  case filter (\decide -> Optics.headOf (Optics.to getAnno % #range % Optics.folded % #start) decide == Just srcPos) decides of
+
+                  let decideAtSrcPos decide
+                        = Optics.headOf (Optics.to getAnno % #range % Optics.folded % #start) decide == Just srcPos
+                  case filter decideAtSrcPos decides of
                     [decide] -> pure decide
                     _ -> throwError $ defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
@@ -356,8 +359,8 @@ handlers recorder =
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
         let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
 
-        (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
-          useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
+        typeCheck <- liftIO $ runAction "typecheck" ide $
+          use_ TypeCheck (fromUri (toNormalizedUri uri))
 
         let
           mkCodeLens srcPos = CodeLens
@@ -366,9 +369,7 @@ handlers recorder =
               , _command = "l4.visualize"
               , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos)]
               }
-            , _range
-              = let pos = srcPosToPosition srcPos
-                 in Range {_start = pos , _end = pos}
+            , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
             }
 
@@ -573,8 +574,6 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
 
     uri :: Uri
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
-
-    pointRange pos = Range pos pos
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
 hasTypeInferenceVars = \case
