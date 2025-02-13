@@ -88,8 +88,7 @@ export const IRNode = Schema.Struct({
 /** Think of this as the Expr for the decision logic.
  * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
  */
-export type IRExpr = And | Or | BoolVar
-// | Not
+export type IRExpr = And | Or | BoolVar | Not
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -117,10 +116,10 @@ export interface Or extends IRNode {
   readonly args: readonly IRExpr[]
 }
 
-// export interface Not extends IRNode {
-//   readonly $type: 'Not'
-//   readonly negand: IRExpr
-// }
+export interface Not extends IRNode {
+  readonly $type: 'Not'
+  readonly negand: IRExpr
+}
 
 export interface BoolVar extends IRNode {
   readonly $type: 'BoolVar'
@@ -142,7 +141,7 @@ export interface BoolVar extends IRNode {
 export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<And> => And),
   Schema.suspend((): Schema.Schema<Or> => Or),
-  // Schema.suspend((): Schema.Schema<Not> => Not),
+  Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
@@ -158,11 +157,11 @@ export const Or = Schema.Struct({
   args: Schema.Array(IRExpr),
 }).annotations({ identifier: 'Or' })
 
-// export const Not = Schema.Struct({
-//   $type: Schema.tag('Not'),
-//   negand: IRExpr,
-//   id: IRId,
-// }).annotations({ identifier: 'Not' })
+export const Not = Schema.Struct({
+  $type: Schema.tag('Not'),
+  negand: IRExpr,
+  id: IRId,
+}).annotations({ identifier: 'Not' })
 
 export const BoolVar = Schema.Struct({
   $type: Schema.tag('BoolVar'),
@@ -249,147 +248,5 @@ export function exportDecisionLogicIRInfoToJSONSchema() {
 **************************/
 
 /*
-As of feb 7 2025:
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$defs": {
-    "VisualizeDecisionLogicIRInfo": {
-      "type": "object",
-      "required": [
-        "program"
-      ],
-      "properties": {
-        "program": {
-          "$ref": "#/$defs/IRExpr"
-        }
-      },
-      "additionalProperties": false
-    },
-    "IRExpr": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/And"
-        },
-        {
-          "$ref": "#/$defs/Or"
-        },
-        {
-          "$ref": "#/$defs/BoolVar"
-        }
-      ]
-    },
-    "And": {
-      "type": "object",
-      "required": [
-        "$type",
-        "id",
-        "args"
-      ],
-      "properties": {
-        "$type": {
-          "type": "string",
-          "enum": [
-            "And"
-          ]
-        },
-        "id": {
-          "type": "object",
-          "required": [
-            "id"
-          ],
-          "properties": {
-            "id": {
-              "type": "number"
-            }
-          },
-          "additionalProperties": false
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/IRExpr"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "Or": {
-      "type": "object",
-      "required": [
-        "$type",
-        "id",
-        "args"
-      ],
-      "properties": {
-        "$type": {
-          "type": "string",
-          "enum": [
-            "Or"
-          ]
-        },
-        "id": {
-          "type": "object",
-          "required": [
-            "id"
-          ],
-          "properties": {
-            "id": {
-              "type": "number"
-            }
-          },
-          "additionalProperties": false
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/IRExpr"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "BoolVar": {
-      "type": "object",
-      "required": [
-        "$type",
-        "value",
-        "id",
-        "name"
-      ],
-      "properties": {
-        "$type": {
-          "type": "string",
-          "enum": [
-            "BoolVar"
-          ]
-        },
-        "value": {
-          "type": "string",
-          "enum": [
-            "False",
-            "True",
-            "Unknown"
-          ]
-        },
-        "id": {
-          "type": "object",
-          "required": [
-            "id"
-          ],
-          "properties": {
-            "id": {
-              "type": "number"
-            }
-          },
-          "additionalProperties": false
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  "$ref": "#/$defs/VisualizeDecisionLogicIRInfo"
-}
+TODO: Update this
 */

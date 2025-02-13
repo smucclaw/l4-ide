@@ -19,6 +19,7 @@ newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
 data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
+  | Not ID IRExpr
   | BoolVar ID Text BoolValue
   deriving (Show, Eq, Generic)
 
@@ -56,6 +57,7 @@ instance HasCodec IRExpr where
       enc = \case
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
+        Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         BoolVar uid name value -> ("BoolVar", mapToEncoder (uid, name, value) boolVarCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
@@ -63,6 +65,7 @@ instance HasCodec IRExpr where
         HashMap.fromList
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
+            ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
             ("BoolVar", ("BoolVar", mapToDecoder (\(uid, value, name) -> BoolVar uid value name) boolVarCodec))
           ]
 
@@ -71,6 +74,11 @@ instance HasCodec IRExpr where
         (,)
           <$> requiredField' "id" .= fst
           <*> requiredField' "args" .= snd
+
+      notExprCodec =
+        (,)
+          <$> requiredField' "id" .= fst
+          <*> requiredField' "negand" .= snd
 
       boolVarCodec =
         (,,)
@@ -102,11 +110,11 @@ deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON Visualiz
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
 
 {-
-Am trying out autodocodec because I wanted to see if 
-being able to create a json schema might help with automatedly checking that 
-the Ladder backend VizExpr types are in sync with the corresponding types on the frontend 
-(since the lib I use for the types on the frontend can also automatically generate a json schema). 
-  
+Am trying out autodocodec because I wanted to see if
+being able to create a json schema might help with automatedly checking that
+the Ladder backend VizExpr types are in sync with the corresponding types on the frontend
+(since the lib I use for the types on the frontend can also automatically generate a json schema).
+
 I haven't actually tried setting up such a automated test though.
 
 If that doesn't end up panning out, I will switch back to aeson.

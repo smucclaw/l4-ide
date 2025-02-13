@@ -8,7 +8,7 @@ import {
   BoolVarLirNode,
   AndLirNode,
   OrLirNode,
-  // NotLirNode,
+  NotLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.js'
 import { match } from 'ts-pattern'
 
@@ -18,30 +18,28 @@ import { match } from 'ts-pattern'
 
 export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
-    return (
-      match(expr)
-        .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
-        // .with(
-        //   { $type: 'Not' },
-        //   (n) => new NotLirNode(nodeInfo, ExprSource.toLir(nodeInfo, n.negand))
-        // )
-        .with(
-          { $type: 'And' },
-          (andExpr) =>
-            new AndLirNode(
-              nodeInfo,
-              andExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
-            )
-        )
-        .with(
-          { $type: 'Or' },
-          (orExpr) =>
-            new OrLirNode(
-              nodeInfo,
-              orExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
-            )
-        )
-        .exhaustive()
-    )
+    return match(expr)
+      .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
+      .with(
+        { $type: 'Not' },
+        (n) => new NotLirNode(nodeInfo, ExprLirSource.toLir(nodeInfo, n.negand))
+      )
+      .with(
+        { $type: 'And' },
+        (andExpr) =>
+          new AndLirNode(
+            nodeInfo,
+            andExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
+          )
+      )
+      .with(
+        { $type: 'Or' },
+        (orExpr) =>
+          new OrLirNode(
+            nodeInfo,
+            orExpr.args.map((arg) => ExprLirSource.toLir(nodeInfo, arg))
+          )
+      )
+      .exhaustive()
   },
 }

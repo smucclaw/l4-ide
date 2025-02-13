@@ -9,6 +9,7 @@ import type { LirContext } from '$lib/layout-ir/core.js'
 import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import {
   BoolVarLirNode,
+  NotLirNode,
   AndLirNode,
   OrLirNode,
 } from '$lib/layout-ir/lir-decision-logic.svelte.js'
@@ -77,6 +78,10 @@ function transform(
         node.getId(),
       ])
       return vertex(flowNode)
+    })
+    .with(P.instanceOf(NotLirNode), () => {
+      // TODO
+      throw new Error('NotLirNode -> DAG<FlowNode> not yet implemented')
     })
     .with(P.instanceOf(AndLirNode), (node) => {
       const childGraphs = node

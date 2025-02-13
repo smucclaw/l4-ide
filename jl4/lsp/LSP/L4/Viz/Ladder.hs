@@ -73,7 +73,7 @@ prettyPrintVizError = \case
 --
 -- Simple version where we visualize the first Decide, if it exists.
 doVisualize :: Program Name -> Either VizError VisualizeDecisionLogicIRInfo
-doVisualize prog = 
+doVisualize prog =
   case  (vizProgram prog).getVizE initialVizState of
     (result, _) -> result
 
@@ -116,6 +116,11 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (MkName 
 
 translateExpr :: Text -> Expr Name -> Viz IRExpr
 translateExpr subject e = case e of
+{- TODO: Need to look more into whether we really want to be passing `subject` down.
+-}
+  Not _ negand -> do
+    uid <- getFresh
+    V.Not uid <$> translateExpr subject negand
   And {} -> do
     uid <- getFresh
     V.And uid <$> traverse (translateExpr subject) (scanAnd e)
@@ -124,7 +129,6 @@ translateExpr subject e = case e of
     V.Or uid <$> traverse (translateExpr subject) (scanOr e)
   ---- unimplemented --------------------------------
   Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
-  Not {} -> throwError Unimplemented -- This will be done in the next or next next PR, at the same time that we add a visualization for this on the frontend
 
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
   Var _ (MkName _ verb) ->
@@ -133,7 +137,7 @@ translateExpr subject e = case e of
     leaf "" (rawNameToText leafName)
   --------------------------------------------------------------------------------
 
-  -- TODO: Will be replacing this temporary, hacky version with variants for Lam App on the frontend
+  -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
   App _ (MkName _ fnName) args ->
     leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
   _ -> throwError Unimplemented
