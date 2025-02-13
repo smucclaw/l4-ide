@@ -5,13 +5,23 @@
 /* ===== Basic 'CSS reset' ======================= 
   tailwind resets it with preflight */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import '@xyflow/svelte/dist/style.css';
-@import 'tailwindcss';
-@import '../static/themes/default.css';
+@import '../static/style/themes/default.css';
+@import '../static/style/tailwind.css';
 
 body {
   color: var(--color-primary);
   background-color: white;
+}
+
+.visualization-container {
+  min-height: 400px;
+  max-width: 80vw;
+  margin: 0 auto;
 }
 
 .button {
@@ -21,19 +31,33 @@ body {
   border-radius: 0.25rem;
 }
 
+/* svelte-flow specific */
+
 :root,
 .svelte-flow {
-  .svelte-flow__edge.smoothstep,
-  .svelte-flow__edge-path {
-    stroke: var(--color-path) !important;
+  --xy-node-border-radius: var(--theme-border-radius);
+  --xy-node-color: var(--color-node-text);
+  --xy-node-border: 2px solid var(--color-primary);
+  --xy-handle-background-color: var(--color-primary);
+  --xy-edge-stroke: var(--color-primary);
+
+  .svelte-flow__node {
+    padding: 0.5rem;
+    font-family: 'Source Sans 3', serif;
+    font-optical-sizing: auto;
+    font-style: normal;
   }
 
   .svelte-flow__edge:hover .svelte-flow__edge-path {
     stroke: var(--color-secondary) !important;
   }
-  /* for if we're adding animation */
-  .svelte-flow__edge.animated .svelte-flow__edge-path {
-    stroke-dasharray: 5;
-    animation: flowAnimation 1s linear infinite;
+
+  .svelte-flow__handle {
+    min-width: 0;
+    min-height: 0;
+    width: 0;
+    height: 0;
+    border: 0;
+    background-color: transparent;
   }
 }

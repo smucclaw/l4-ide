@@ -1,4 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
 :root {
+  --color-node-text: #00004d;
   --color-primary: #1e40af;
   --color-secondary: #2563eb;
   --color-positive: #047857; /* green for positive path */
@@ -6,4 +9,6 @@
   --color-path: #4b5563; /* dark grey for default path */
   --color-button: #c7d2fe;
   --color-button-hover: #a5b4fc;
+
+  --theme-border-radius: 5px;
 }

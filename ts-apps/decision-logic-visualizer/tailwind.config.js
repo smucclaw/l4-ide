@@ -1,13 +1,13 @@
-export const purge = []
-export const darkMode = false
-export const theme = {
-  colors: {
-    transparent: 'transparent',
-    primary: 'var(--color-primary)',
-    secondary: 'var(--color-secondary)',
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./src/**/*.{html,js,svelte,ts,css}'],
+  theme: {
+    colors: {
+      transparent: 'transparent',
+      primary: 'var(--color-primary)',
+      secondary: 'var(--color-secondary)',
+    },
+    extend: {},
   },
+  plugins: [],
 }
-export const variants = {
-  extend: {},
-}
-export const plugins = []
