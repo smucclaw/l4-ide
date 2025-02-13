@@ -82,22 +82,11 @@ Running `cabal build exe:jl4-lsp` and restarting the `Extension Development Host
 
 The extension uses a VSCode webview to render L4 rules as ladder diagrams, displaying them in a panel next to the editor. This setup enables the extension to update the visualisation dynamically, reflecting any changes made to the rules in real time.
 
-The ladder diagrams are powered by an npm library developed by Jules and Zeming, available [here](https://github.com/JuliaPoo/ladder-diagram). For use in this extension, the library is bundled using esbuild to generate a standalone JavaScript file. To update the bundled file in the future, you can run:
-
-```bash
-npx esbuild node_modules/ladder-diagram/js/ladder.js --bundle --format=iife --global-name=LadderDiagram --outfile=static/ladder-diagram.min.js
-```
-
-This produces a file named `ladder-diagram.min.js`, located in the `static` folder, which is referenced by the extension.
-
 ### Displaying the Diagram
 
 To visualize your rule as a ladder diagram:
 
-- Save the file containing your rule.
-
-- Alternatively, use the "Update Diagram" button in the bottom-right status bar of VSCode (near the notification bell or Prettier controls). Clicking this button generates the diagram in a new panel.
-  ![alt text](screenshots/update-viz.png)
+- For now, either run the "Visualize L4 expression" command from the command palette or use the "Update Diagram" button in the bottom-right status bar of VSCode (near the notification bell or Prettier controls). Clicking this button generates the diagram in a new panel.
 
 ## More build / config notes
 

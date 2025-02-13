@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, DuplicateRecordFields #-}
 module L4.TypeCheck where
 
 -- We perform scope checking and type checking in one go.
@@ -123,12 +123,12 @@ type Kind = Int -- arity of the type
 runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
 runCheck (MkCheck f) = f
 
-initialCheckState :: Environment -> CheckState
-initialCheckState env =
+initialCheckState :: Environment -> Substitution -> CheckState
+initialCheckState environment substitution =
   MkCheckState
-    { environment  = env
+    { environment
+    , substitution
     , errorContext = None
-    , substitution = Map.empty
     , supply       = 0
     }
 
@@ -142,9 +142,9 @@ initialCheckState env =
 -- - a resolved and type-annotated version of the program
 -- - the final substitution (for resolving type annotations in the program)
 --
-doCheckProgram :: Program Name -> ([CheckErrorWithContext], Program Resolved, Substitution)
+doCheckProgram :: Program Name -> CheckResult
 doCheckProgram program =
-  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment) of
+  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment Map.empty) of
     (w, s) ->
       let
         (errs, rprog) = runWith w
@@ -152,10 +152,22 @@ doCheckProgram program =
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
         case runCheckUnique (traverse applySubst errs) s of
           (w', s') ->
-            let
-              (moreErrs, substErrs) = runWith w'
-            in
-              (substErrs ++ moreErrs, rprog, s'.substitution)
+            let (moreErrs, substErrs) = runWith w'
+            in CheckResult 
+              { program = rprog
+              , errors = substErrs ++ moreErrs
+              , substitution = s'.substitution
+              , environment = s'.environment
+              }
+
+data CheckResult 
+  = CheckResult 
+  { program :: Program Resolved 
+  , errors :: [CheckErrorWithContext]
+  , substitution :: Substitution 
+  , environment :: Environment 
+  }
+  deriving stock (Eq, Show)
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
@@ -163,7 +175,7 @@ doCheckProgram program =
 applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
 applyFinalSubstitution subst t =
   let
-    cs = (initialCheckState Map.empty) { substitution = subst }
+    cs = initialCheckState Map.empty subst
   in
     case runCheckUnique (applySubst t) cs of
       (w, _cs') ->
@@ -433,14 +445,15 @@ data CheckErrorContext =
   | WhileCheckingPattern (Pattern Name) CheckErrorContext
   | WhileCheckingType (Type' Name) CheckErrorContext
   | None
-  deriving stock (Eq, Generic, Typeable, Show)
+  deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
 data CheckEntity =
     KnownType Kind (TypeDecl Resolved)
   | KnownTerm (Type' Resolved) TermKind
   | KnownTypeVariable
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
 
 data TermKind =
     Computable -- ^ a variable with known definition (let or global)
@@ -448,7 +461,8 @@ data TermKind =
   | Local -- ^ a local variable (introduced by a lambda or pattern)
   | Constructor
   | Selector
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
 
 choose :: [Check a] -> Check a
 choose = asum
@@ -1526,18 +1540,18 @@ bind i t = do
 checkAndExactPrintFile :: String -> Text -> Text
 checkAndExactPrintFile file input =
   case Parser.execParser Parser.program file input of
-    Left errs -> Text.unlines $ fmap (.message) $ toList errs
+    Left errs -> Text.unlines $ (.message) <$> toList errs
     Right prog ->
       "Parsing successful\n\n"
       <>
       case doCheckProgram prog of
-        ([], _p, _s) ->
+        CheckResult {errors = []} ->
           "Typechecking successful\n\n"
           <> case exactprint prog of
                Left epError -> prettyTraverseAnnoError epError
                Right ep -> ep
-        (errs, _p, _s) ->
-          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errs)
+        CheckResult {errors} ->
+          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
 
 prettySrcRange :: FilePath -> Maybe SrcRange -> Text
 prettySrcRange fp Nothing = Text.pack fp <> ":<unknown range>"

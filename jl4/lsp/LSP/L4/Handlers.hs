@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 
 module LSP.L4.Handlers where
 
@@ -11,14 +13,20 @@ import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Char (isAlphaNum)
+import Data.Maybe (mapMaybe)
+import Data.Monoid (Ap (..))
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
+import qualified Text.Fuzzy as Fuzzy
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Mixed.Rope as Rope
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -37,6 +45,7 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
+import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..)) 
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
@@ -57,15 +66,10 @@ data ServerState =
     }
 
 newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
+  deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
+  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
   deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
   deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
-
--- TODO: can these instances be derived via?
-instance (Semigroup a) => Semigroup (ServerM c a) where
-  a <> b = liftA2 (<>) a b
---
-instance (Monoid a) => Monoid (ServerM c a) where
-  mempty = ServerM $ pure mempty
 
 runServerM :: ServerState -> ServerM c a -> LspM c a
 runServerM st m = ReaderT.runReaderT m.runServerT st
@@ -76,6 +80,7 @@ data Log
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
+  | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogShake Shake.Log
   deriving (Show)
@@ -86,6 +91,7 @@ instance Pretty Log where
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
+    LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -220,7 +226,7 @@ handlers recorder =
                       Left vizError -> Left $ 
                         TResponseError
                           { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Could not visualize\n" <> Text.pack (show uri) <> "\n" <> Ladder.prettyPrintVizError vizError
+                          , _message = "Could not visualize\n" <> getUri uri <> "\n" <> Ladder.prettyPrintVizError vizError
                           , _xdata = Nothing }
           _ ->
             pure $ Left $
@@ -263,7 +269,114 @@ handlers recorder =
                     { _resultId = Nothing
                     , _data_ = semanticTokensData
                     }
+    , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
+        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+            Position ln col = params ^. J.position
+        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+          Nothing -> pure (Right (InL []))
+          Just rope -> do
+            let completionPrefix =
+                  Text.takeWhileEnd isAlphaNum
+                  $ Rope.toText
+                  $ fst -- we don't care for the rest of the line
+                  $ Rope.charSplitAt (fromIntegral col) 
+                  $ Rope.getLine (fromIntegral ln) rope
+
+            let filterMatchesOn f is = 
+                  map Fuzzy.original $ Fuzzy.filter
+                    completionPrefix
+                    is
+                    mempty
+                    mempty
+                    f
+                    False
+
+            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
+                  { CompletionItem._kind =  Just CompletionItemKind_Keyword
+                  }
+                keyWordMatches = filterMatchesOn id $ Map.keys keywords 
+                -- FUTUREWORK(mangoiv): we could 
+                -- 1 pass through the token here 
+                -- 2 check the token category and if the category is COperator 
+                -- 3 set the CompletionItemKind to CompletionItemKind_Operator
+                keywordItems = map mkKeyWordCompletionItem keyWordMatches
+
+            (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
+              useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
+
+            let topDeclItems 
+                  = filterMatchesOn CompletionItem._label 
+                  $ foldMap 
+                      (mapMaybe 
+                        (\(_, name, checkEntity) -> 
+                          topDeclToCompletionItem name 
+                          $ Optics.over' 
+                            (Optics.gplate @(Type' Resolved)) 
+                            (applyFinalSubstitution @(Type' Resolved) typeCheck.substitution) 
+                            checkEntity
+                        )
+                      ) 
+                      typeCheck.environment
+
+            -- TODO: maybe we should sort these as follows
+            -- 1 keywords 
+            -- 2 toplevel values 
+            -- 3 toplevel types 
+
+            let items = keywordItems <> topDeclItems
+
+            logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
+
+            pure (Right (InL items))
     ]
+
+topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
+topDeclToCompletionItem name = \case 
+  KnownTerm ty term -> 
+    Just (defaultTopDeclCompletionItem ty)
+      { CompletionItem._kind = Just $ case (term, ty) of
+         (Constructor, _) -> CompletionItemKind_Constructor
+         (Selector, _) -> CompletionItemKind_Field
+         (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
+         _ -> CompletionItemKind_Constant
+      }
+  KnownType kind tydec -> 
+    Just (defaultTopDeclCompletionItem (typeFunction kind))
+      { CompletionItem._kind = Just $ case tydec of 
+          RecordDecl {} -> CompletionItemKind_Struct
+          EnumDecl {} -> CompletionItemKind_Enum
+      }
+  KnownTypeVariable {} -> Nothing
+  where 
+    -- a function (but also a constant, in theory) can be polymorphic, so we have to strip 
+    -- all the foralls to get to the "actual" type.
+    unrollForall :: Type' Resolved -> Type' Resolved
+    unrollForall (Forall _ _ ty) = unrollForall ty
+    unrollForall ty = ty
+
+    -- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
+    typeFunction :: Kind -> Type' Resolved
+    typeFunction 0 = Type emptyAnno
+    typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
+    typeFunction _ = error "Internal error: negative arity of type constructor"
+
+    defaultTopDeclCompletionItem :: Type' Resolved -> CompletionItem
+    defaultTopDeclCompletionItem ty = (defaultCompletionItem $ quoteIfNeeded prepared)
+      { CompletionItem._filterText = Just prepared
+      , CompletionItem._labelDetails 
+        = Just CompletionItemLabelDetails
+          { _description = Nothing
+          , _detail = Just $ " IS A " <> simpleprint ty
+          }
+      }
+      where 
+        prepared :: Text
+        prepared = case name of MkName _ raw -> rawNameToText raw
+
+defaultCompletionItem :: Text -> CompletionItem
+defaultCompletionItem label = CompletionItem label 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath

@@ -12,6 +12,9 @@
 
   import ExprFlow from '$lib/displayers/flow/flow.svelte'
 
+  // TODO: This stuff should just be replaced with the tailwind on hovered classes
+  let isHovered = $state(false)
+
   /***************************
       Example 1
   ****************************/
@@ -33,7 +36,7 @@
             $type: 'BoolVar' as const,
             value: 'Unknown' as const,
             id: { id: 2 },
-            name: 'walks',
+            name: 'walkswalks',
           },
         ],
         id: { id: 3 },
@@ -197,25 +200,55 @@
   <SvelteFlowProvider>
     <ExprFlow {context} node={exprLirNode} />
   </SvelteFlowProvider>
+  <section class="json-visualisation space-y-2">
+    <input type="checkbox" id="example-1-json" class="peer hidden" />
+    <label
+      for="example-1-json"
+      class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
+      onmouseover={() => (isHovered = true)}
+      onmouseout={() => (isHovered = false)}
+      onfocus={() => (isHovered = true)}
+      onblur={() => (isHovered = false)}
+      style="background-color: {isHovered
+        ? 'var(--color-button-hover)'
+        : 'var(--color-button)'}"
+    >
+      <h4>Expand to view source JSON of the IRExpr</h4>
+    </label>
+    <pre
+      class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md">
+      <code>
+        {JSON.stringify(example1, null, 2)}
+      </code>
+    </pre>
+  </section>
 </section>
-<!-- Example 2 -->
-<section>
-  <h3>Example 2</h3>
-  <div class="visualization-container">
-    <SvelteFlowProvider>
-      <ExprFlow {context} node={exprLirNode2} />
-    </SvelteFlowProvider>
-  </div>
-  <p>The above is a visualization of</p>
-  <pre><code>
-  {JSON.stringify(example2, null, 2)}
-</code></pre>
+<!-- TODO: Use a svelte snippet to reduce code duplication -->
+<section id="example 2" class="example w-3/4 mx-auto space-y-4">
+  <h3 class="text-2xl font-semibold">Example 2</h3>
+  <SvelteFlowProvider>
+    <ExprFlow {context} node={exprLirNode2} />
+  </SvelteFlowProvider>
+  <section class="json-visualisation space-y-2">
+    <input type="checkbox" id="example-2-json" class="peer hidden" />
+    <label
+      for="example-2-json"
+      class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
+      onmouseover={() => (isHovered = true)}
+      onmouseout={() => (isHovered = false)}
+      onfocus={() => (isHovered = true)}
+      onblur={() => (isHovered = false)}
+      style="background-color: {isHovered
+        ? 'var(--color-button-hover)'
+        : 'var(--color-button)'}"
+    >
+      <h4>Expand to view source JSON of the IRExpr</h4>
+    </label>
+    <pre
+      class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md">
+      <code>
+        {JSON.stringify(example2, null, 2)}
+      </code>
+    </pre>
+  </section>
 </section>
-
-<style>
-  .visualization-container {
-    min-height: 400px;
-    max-width: 80%;
-    margin: 0 auto;
-  }
-</style>
