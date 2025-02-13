@@ -1,0 +1,11 @@
+Parsing successful
+error-directive-ambiguity.l4:9:7-15:
+ambiguous: foo, options:
+(FUNCTION FROM BOOLEAN TO BOOLEAN)
+(FUNCTION FROM BOOLEAN TO BOOLEAN)
+error-directive-ambiguity.l4:10:8-16:
+ambiguous: foo, options:
+(FUNCTION FROM BOOLEAN TO BOOLEAN)
+(FUNCTION FROM BOOLEAN TO BOOLEAN)
+error-directive-ambiguity.l4:10:8-16:
+_v13
