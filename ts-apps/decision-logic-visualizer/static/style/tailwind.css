@@ -4,6 +4,8 @@
     var(--xy-node-border-radius-default)
   );
   font-size: 1.2rem;
+  /* TODO: YM: Should we really be using a fixed width? 
+  Especially if we are going to have the grouping nodes inherit from this? */
   width: 150px;
   padding: 10px;
   color: var(--xy-node-color, var(--xy-node-color-default));
