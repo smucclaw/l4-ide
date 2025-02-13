@@ -5,9 +5,13 @@
 /* ===== Basic 'CSS reset' ======================= 
   tailwind resets it with preflight */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import '@xyflow/svelte/dist/style.css';
-@import "tailwindcss";
-@import "../static/themes/default.css";
+@import "../static/style/tailwind.css";
+@import "../static/style/themes/default.css";
 
 body {
   color: var(--color-primary);

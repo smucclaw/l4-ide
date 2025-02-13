@@ -1,0 +1,16 @@
+@utility svelte-flow__node-basic {
+  padding: 10px;
+  border-radius: var(--xy-node-border-radius, var(--xy-node-border-radius-default));
+  width: 150px;
+  font-size: 12px;
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  text-align: center;
+  border: var(--xy-node-border, var(--xy-node-border-default));
+  background-color: var(--xy-node-background-color, var(--xy-node-background-color-default));
+}
+
+.svelte-flow__node-boolVarNode,
+.svelte-flow__node-sinkSFNode,
+.svelte-flow__node-sourceSFNode {
+  @apply svelte-flow__node-basic;
+}
