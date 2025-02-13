@@ -86,10 +86,13 @@ export async function activate(context: ExtensionContext) {
           // why do we copy the args via .slice(0)?
           // No clue, the sample does it.
           // Maybe to avoid accidental mutation?
-          args = args.slice(0)
-          args.push(editor.document.uri.toString())
+          if (args.length === 0) {
+            args = args.slice(0);
+            args.push(editor.document.uri.toString());
+          }
 
           outputChannel.appendLine('in executeCommand...')
+          outputChannel.appendLine(`args are ${ args.toString() }`)
 
           const responseFromLangServer: unknown = await next(command, args)
           outputChannel.appendLine(
