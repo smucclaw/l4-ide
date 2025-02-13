@@ -126,7 +126,6 @@ export async function activate(context: ExtensionContext) {
           } else if (response.$type === 'ok') {
             outputChannel.appendLine(`Visualisation request success`)
           }
-
         }
         // TODO: else show pop up to client
       },
