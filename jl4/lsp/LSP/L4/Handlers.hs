@@ -226,7 +226,7 @@ handlers recorder =
                       Left vizError -> Left $ 
                         TResponseError
                           { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Could not visualize\n" <> Text.pack (show uri) <> "\n" <> Ladder.prettyPrintVizError vizError
+                          , _message = "Could not visualize\n" <> getUri uri <> "\n" <> Ladder.prettyPrintVizError vizError
                           , _xdata = Nothing }
           _ ->
             pure $ Left $

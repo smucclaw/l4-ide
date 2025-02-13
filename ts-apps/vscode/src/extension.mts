@@ -1,8 +1,3 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { ExtensionContext, workspace, window } from 'vscode'
 import * as vscode from 'vscode'
 import {
@@ -14,13 +9,11 @@ import {
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
 import {
-  IRExpr,
   VisualizeDecisionLogicIRInfo,
   WebviewFrontendIsReadyNotification,
   VisualizeDecisionLogicRequest,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
-// import { match } from 'ts-pattern'
 import * as command from './commands.js'
 import type { PanelConfig } from './viz.js'
 import { PanelManager } from './viz.js'
@@ -134,15 +127,6 @@ export async function activate(context: ExtensionContext) {
             outputChannel.appendLine(`Visualisation request success`)
           }
 
-          // const nodeVisualisation: RuleNode[] = result as RuleNode[]
-          // if (nodeVisualisation.length >= 1) {
-          //   showViz(context, nodeVisualisation[0])
-          // } else {
-          //   outputChannel.appendLine(
-          //     `Can't visualise ${editor.document.uri.toString()}, none available`
-          //   )
-          // }
-          // return result
         }
         // TODO: else show pop up to client
       },
