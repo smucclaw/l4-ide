@@ -78,14 +78,3 @@
     <Background />
   </SvelteFlow>
 </div>
-<section>
-  <p>For debugging</p>
-  <p>Nodes</p>
-  <pre><code>
-    {JSON.stringify(NODES, null, 2)}
-  </code></pre>
-  <p>edges</p>
-  <pre><code>
-    {JSON.stringify(EDGES, null, 2)}
-  </code></pre>
-</section>
