@@ -5,9 +5,9 @@ export default {
     colors: {
       transparent: 'transparent',
       primary: 'var(--color-primary)',
-      secondary: 'var(--color-secondary)'
+      secondary: 'var(--color-secondary)',
     },
     extend: {},
   },
-  plugins: []
+  plugins: [],
 }
