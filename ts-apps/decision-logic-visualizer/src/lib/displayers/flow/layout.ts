@@ -13,6 +13,8 @@ export interface DagreConfig {
   }
 }
 
+// TODO: May want the layout function to work with the intermediate DAG representation,
+// as opposed to working with the SF nodes/edges directly
 /** Adapted from sample code */
 export function getLayoutedElements(
   config: DagreConfig,

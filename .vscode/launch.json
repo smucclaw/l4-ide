@@ -10,7 +10,7 @@
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/ts-apps/vscode"],
       "outFiles": ["${workspaceFolder}/ts-apps/vscode/out/**/*.js"],
       "autoAttachChildProcesses": true,
-      "preLaunchTask": "npm: build - ts-apps/vscode"
+      "preLaunchTask": "${defaultBuildTask}"
     }
   ]
 }

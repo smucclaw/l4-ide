@@ -92,6 +92,7 @@ executable jl4-lsp
     bytestring ^>=0.11.5.3,
     list-t,
     jl4,
+    autodocodec,
     aeson,
     pretty-simple,
     binary,
@@ -151,7 +152,8 @@ executable jl4-lsp
     LSP.L4.Base
     LSP.L4.Config
     LSP.L4.Handlers
-    LSP.L4.Ladder
+    LSP.L4.Viz.VizExpr
+    LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
     LSP.L4.Rules
     LSP.L4.SemanticTokens

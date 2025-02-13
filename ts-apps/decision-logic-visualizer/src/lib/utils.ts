@@ -28,7 +28,19 @@ export function isLessThanOrEquals<A extends Ord<A>>(a: A, b: A): boolean {
   )
 }
 
-export type ValueOf<Obj> = Obj[keyof Obj]
+/****************************
+          HasId
+*****************************/
+
+export interface HasId {
+  getId(): string
+}
+
+// /****************************
+//       ValueOf
+//  *****************************/
+
+// export type ValueOf<Obj> = Obj[keyof Obj]
 
 /* ====== CSS ============ */
 

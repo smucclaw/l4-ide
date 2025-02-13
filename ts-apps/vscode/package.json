@@ -9,7 +9,7 @@
     "files": [
       "!**/.DS_Store",
       "!**/.vscode/**",
-      "media",
+      "static",
       "out",
       "src"
     ]
@@ -74,9 +74,12 @@
   },
   "prettier": "@repo/prettier-config",
   "dependencies": {
-    "ladder-diagram": "^2.0.3",
+    "@repo/viz-expr": "*",
+    "@repo/webview": "*",
     "minimatch": "^10.0.1",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "vscode-messenger": "^0.5.1",
+    "vscode-messenger-common": "^0.5.1"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.26.0",
@@ -104,15 +107,15 @@
   },
   "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run lint && npm run esbuild-base -- --minify",
-    "build": "tsc -b tsconfig.json && npm run esbuild-base",
-    "esbuild-base": "esbuild ./src/extension.ts --bundle --minify --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
+    "build": "npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
+    "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
+    "bundle-esbuild": "node scripts/build.mjs",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",
-    "format": "prettier --write .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
-    "lint-fix": "eslint ./src --fix",
-    "test": "vscode-test"
+    "lint-fix": "eslint ./src --fix"
   }
 }

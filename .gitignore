@@ -38,6 +38,7 @@ coverage
 out/
 build
 dist
+*/vscode/static/webview/
 
 ## Built Visual Studio Code Extensions
 *.vsix
