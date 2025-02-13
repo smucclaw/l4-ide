@@ -90,19 +90,15 @@ instance HasCodec VisualizeDecisionLogicIRInfo where
 -------------------------------------------------------------
 
 deriving via (Autodocodec ID) instance ToJSON ID
-
 deriving via (Autodocodec ID) instance FromJSON ID
 
 deriving via (Autodocodec BoolValue) instance ToJSON BoolValue
-
 deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
 
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
-
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
-
 deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
 
 {-

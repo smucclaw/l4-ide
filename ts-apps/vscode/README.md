@@ -82,7 +82,6 @@ Running `cabal build exe:jl4-lsp` and restarting the `Extension Development Host
 
 The extension uses a VSCode webview to render L4 rules as ladder diagrams, displaying them in a panel next to the editor. This setup enables the extension to update the visualisation dynamically, reflecting any changes made to the rules in real time.
 
-
 ### Displaying the Diagram
 
 To visualize your rule as a ladder diagram:
