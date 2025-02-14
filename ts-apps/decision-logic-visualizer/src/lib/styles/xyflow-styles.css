@@ -1,0 +1,53 @@
+/**************************************************************
+  Stuff from the more 'batteries-included' xyflow styles.css
+***************************************************************/
+
+.svelte-flow__nodes {
+  z-index: 0;
+}
+
+.svelte-flow__edgelabel-renderer {
+  z-index: 0;
+}
+
+.svelte-flow__node-group {
+  background-color: var(
+    --xy-node-group-background-color,
+    var(--xy-node-group-background-color-default)
+  );
+}
+
+.svelte-flow__selection {
+  background: var(
+    --xy-selection-background-color,
+    var(--xy-selection-background-color-default)
+  );
+  border: var(--xy-selection-border, var(--xy-selection-border-default));
+}
+.svelte-flow__nodesselection-rect:focus,
+.svelte-flow__nodesselection-rect:focus-visible,
+.svelte-flow__selection:focus,
+.svelte-flow__selection:focus-visible {
+  outline: none;
+}
+
+.svelte-flow__viewport {
+  transform-origin: 0 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.svelte-flow__viewport-portal {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+svg {
+  max-width: 100%;
+}

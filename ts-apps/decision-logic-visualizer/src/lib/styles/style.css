@@ -1,0 +1,128 @@
+/* can't put style.css in static because vite won't serve it */
+
+/**********************************************
+      Basic 'CSS reset' + basic SF styles
+***********************************************/
+
+/* CSS reset */
+@import 'the-new-css-reset/css/reset.css';
+
+/* Start with the more minimal styles, since we have a bunch of unusual kinds of nodes */
+@import '@xyflow/svelte/dist/base.css';
+/* Along with a partial subset of the styles from xyflow's styles.css */
+@import "./xyflow-styles.css";
+
+/**********************************************
+        Themes, Fonts
+***********************************************/
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
+:root {
+  --color-node-text: #00004d;
+  --color-primary: #1e40af;
+  --color-secondary: #2563eb;
+
+  --color-button: #c7d2fe;
+  --color-button-hover: #a5b4fc;
+
+  --theme-border-radius: 5px;
+}
+
+/**
+Stuff that had been discussed in relation to Meng's Layman, but that is not currently :user-valid
+--color-positive: #047857;  green for positive path
+--color-negative: #dc2626; red for negative path
+--color-path: #4b5563; dark grey for default path
+*/
+
+/**********************************************
+      Other non-SF-related CSS classes
+***********************************************/
+
+body {
+  color: var(--color-primary);
+  background-color: white;
+}
+
+.visualization-container {
+  min-height: 400px;
+  max-width: 80vw;
+  margin: 0 auto;
+}
+
+.button {
+  background-color: var(--color-secondary);
+  color: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+}
+
+/**********************************************
+          svelte-flow specific
+***********************************************/
+
+:root {
+  --xy-node-border-radius: var(--theme-border-radius);
+  --xy-node-color: var(--color-node-text);
+  --xy-node-border: 2px solid var(--color-primary);
+  --xy-handle-background-color: var(--color-primary);
+  --xy-edge-stroke: var(--color-primary);
+}
+
+/**********************
+      Nodes
+***********************/
+
+/* For all flow nodes */
+.svelte-flow__node {
+  font-family: 'Source Sans 3', serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+
+.content-bearing-node {
+  border: var(--xy-node-border, var(--xy-node-border-default));
+  border-radius: var(
+    --xy-node-border-radius,
+    var(--xy-node-border-radius-default)
+  );
+
+  font-size: 1.2rem;
+
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  text-align: center;
+
+  background-color: var(
+    --xy-node-background-color,
+    var(--xy-node-background-color-default)
+  );
+}
+
+.grouping-node {
+  width: 1px;
+  /* border: 0px; */
+}
+
+/**********************
+        Edges
+***********************/
+
+.svelte-flow__edge:hover .svelte-flow__edge-path {
+  stroke: var(--color-secondary) !important;
+}
+
+/**********************
+        Handles
+***********************/
+
+/* Flow handles */
+.svelte-flow__handle {
+  /* TODO: Why is there both min-width as well as width? */
+  min-width: 0;
+  min-height: 0;
+  width: 0;
+  height: 0;
+  border: 0;
+  background-color: transparent;
+}
