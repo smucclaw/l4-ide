@@ -2,7 +2,43 @@
 @import '../static/style/themes/default.css';
 
 @import 'tailwindcss';
-@import '../static/style/tailwind.css';
+
+/*************************************
+  Utility SF styles
+*************************************/
+
+@utility svelte-flow__node-basic {
+  font-size: 1rem;
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  text-align: center;
+  background-color: var(
+    --xy-node-background-color,
+    var(--xy-node-background-color-default)
+  );
+}
+
+@utility bool-var-node {
+  @apply svelte-flow__node-basic;
+
+  border: var(--xy-node-border, var(--xy-node-border-default));
+  border-radius: var(
+    --xy-node-border-radius,
+    var(--xy-node-border-radius-default)
+  );
+
+  min-width: 8rem;
+  padding: 4px;
+}
+
+@utility grouping-node {
+  @apply svelte-flow__node-basic;
+  padding: 0;
+  width: 1px;
+}
+
+/*************************************
+  Other styles
+*************************************/
 
 body {
   color: var(--color-primary);
