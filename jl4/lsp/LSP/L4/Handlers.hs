@@ -4,7 +4,6 @@
 
 module LSP.L4.Handlers where
 
-import Control.Concurrent.STM
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -17,7 +16,9 @@ import Data.Char (isAlphaNum)
 import Data.Maybe (mapMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
-import Control.Monad.Except (throwError, runExceptT)
+import Control.Applicative
+import Control.Monad.Except (throwError, runExceptT, ExceptT)
+import Control.Monad.Trans.Maybe
 import Control.Monad (unless)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
@@ -56,7 +57,7 @@ import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
-import UnliftIO (MonadUnliftIO)
+import UnliftIO (MonadUnliftIO, atomically, STM)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -90,6 +91,7 @@ data Log
   | LogMultipleDecideClauses !Uri
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
+  | LogDecideMissingInformation
   | LogShake Shake.Log
   deriving (Show)
 
@@ -103,6 +105,7 @@ instance Pretty Log where
     LogMultipleDecideClauses uri -> "Document contains multiple decide clauses:" <+> pretty (getUri uri)
     LogSuppliedTooManyArguments args -> "Visualization command was passed too many arguments, this is a bug:" <+> pretty (Aeson.encodeToLazyText args)
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
+    LogDecideMissingInformation -> "Decide that we are visualising is missing type or source location information"
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -211,62 +214,15 @@ handlers recorder =
           Nothing  -> InR Null
           Just h ->   InL h
     , requestHandler SMethod_WorkspaceExecuteCommand $ \ide params -> do
-        let
-          ExecuteCommandParams _ cid xdata = params
-          defaultResponseError _message = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
+        let ExecuteCommandParams _ cid xdata = params
 
         -- TODO: we should check that the command sent is indeed the one that we expect, but this can be postponed until the point
         -- where we actually have multiple
         logWith recorder Debug $ LogExecutingCommand cid
 
-        runExceptT $ case xdata of
-          Just (uriJson : args)
-            | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
-              let nfp = fromUri $ toNormalizedUri uri
-
-              TypeCheckResult {program} <- do
-                mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
-                case mTcResult of
-                  Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
-                  Just tcRes -> pure tcRes
-
-              let decides = foldTopLevelDecides (: []) program
-
-              (decide :: Decide Resolved, simplify :: Bool) <- case args of
-                -- the command was issued by the button in vscode
-                [] -> case decides of
-                   [] -> defaultResponseError "No DECIDE/MEANS declarations available"
-                   (x : xs) -> do
-                     unless (null xs) $ do
-                       logWith recorder Warning $ LogMultipleDecideClauses uri
-                     pure (x, False)
-
-                -- the command was issued by a code action or codelens
-                ((Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) : (Aeson.fromJSON -> Aeson.Success (simplify :: Bool)) : xs) -> do
-                  unless (null xs) $ do
-                    logWith recorder Warning (LogSuppliedTooManyArguments xs)
-
-                  let decideAtSrcPos decide
-                        = Just srcPos == do
-                            node <- rangeOfNode decide
-                            pure node.start
-                  case filter decideAtSrcPos decides of
-                    [decide] -> pure (decide, simplify)
-                    _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
-                    -- TODO: if this becomes a problem, we should use
-                    -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
-                (_ : _ : _)  -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
-                _ -> defaultResponseError "Incorrect number of arguments to visualizer. This is a bug."
-
-              case Ladder.doVisualize simplify decide of
-                Right vizProgramInfo -> pure $ InL $ Aeson.toJSON vizProgramInfo
-                Left vizError ->
-                  defaultResponseError $ Text.unlines
-                    [ "Could not visualize:"
-                    , getUri uri
-                    , Ladder.prettyPrintVizError vizError
-                    ]
-
+        runExceptT case xdata of
+          Just ((Aeson.fromJSON -> Aeson.Success (uri :: Uri)) : (Aeson.fromJSON -> Aeson.Success simplify) : args) ->
+            visualise recorder ide uri (Maybe.listToMaybe args) simplify
           _ -> defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
@@ -397,6 +353,124 @@ handlers recorder =
         pure (Right (InL visualizeDecides))
     ]
 
+whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
+
+activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
+activeFileDiagnosticsInRange extras nfu rng = do
+  mDiags <- STM.lookup nfu (publishedDiagnostics extras)
+  pure
+    [ diag
+    | Just diags <- [mDiags]
+    , diag <- diags
+    , rangesOverlap rng (diag ^. fdLspDiagnosticL . J.range)
+    ]
+
+-- ----------------------------------------------------------------------------
+-- Ladder visualisation
+-- ----------------------------------------------------------------------------
+
+visualise
+  :: MonadIO m
+  => Recorder (WithPriority Log)
+  -> IdeState
+  -> Uri
+  -- ^ The document uri whose decides should be visualised
+  -> Maybe Aeson.Value
+  -- ^ The location of the `Decide` to visualize
+  -> Bool
+  -- ^ whether or not to simplify
+  -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
+visualise recorder ide uri marg simplify = do
+  let nfp = fromUri $ toNormalizedUri uri
+
+  TypeCheckResult {program, substitution} <- do
+    mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+    case mTcResult of
+      Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
+      Just tcRes -> pure tcRes
+
+  let decides = foldTopLevelDecides (: []) program
+
+  mdecide :: Maybe (Decide Resolved) <- case marg of
+    -- the command was issued by the button in vscode or autorefresh
+    Nothing -> case decides of
+       -- TODO: since it is possible that we get this command from redrawing the current document,
+       -- we should not throw an error here
+       [] -> defaultResponseError "No DECIDE/MEANS declarations available"
+       xs@(_y : _ys) -> atomically (getMostRecentVisualisation ide) >>= \case
+         Just decide -> maybe (defaultResponseError "No DECIDE/MEANS that matches previously saved one") (pure . Just) (matchOnAvailableDecides decide xs)
+         Nothing -> do
+           -- TODO: we should not just return the first decide here because if this was triggered
+           -- by auto update, we might draw a diagram even though the user didn't request it
+           -- Fix: either remove the button or indicate on whether a first request had been made already
+           unless (null _ys) do
+             logWith recorder Warning $ LogMultipleDecideClauses uri
+           pure Nothing
+
+    -- the command was issued by a code action or codelens
+    Just (Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) -> do
+      let decideAtSrcPos decide
+            = Just srcPos == do
+                node <- rangeOfNode decide
+                pure node.start
+
+      case filter decideAtSrcPos decides of
+        [decide] -> pure $ Just decide
+        _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
+        -- TODO: if this becomes a problem, we should use
+        -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
+    _ -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr)
+        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty}
+      recentlyVisualisedDecide _ = Nothing
+
+  case mdecide of
+    Nothing -> pure (InR Null)
+    Just decide -> case Ladder.doVisualize simplify decide of
+      Right vizProgramInfo -> do
+        maybe
+          (logWith recorder Warning LogDecideMissingInformation)
+          (atomically . setMostRecentVisualisation ide)
+          (recentlyVisualisedDecide decide)
+        pure $ InL $ Aeson.toJSON vizProgramInfo
+      Left vizError ->
+        defaultResponseError $ Text.unlines
+          [ "Could not visualize:"
+          , getUri uri
+          , Ladder.prettyPrintVizError vizError
+          ]
+
+  where
+
+    -- TODO: in the future we want to be a bit more clever wrt. which
+    -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
+    -- (by requiring extra = Just ty) or the name of the 'Decide' by the means
+    -- of checking its 'Resolved'
+    --
+    -- TODO: refactor (use RecentlyVisualised)
+    matchOnAvailableDecides :: RecentlyVisualised -> [Decide Resolved] -> Maybe (Decide Resolved)
+    matchOnAvailableDecides v = runMaybeT do
+      let atSrcPos = MaybeT $ List.find \d -> Just v.pos == do
+            node <- rangeOfNode d
+            pure node.start
+          -- NOTE: this heuristic is wrong if there are ambiguous names in scope. that's why it will
+          -- only succed if there's exactly one match
+          withName = MaybeT $ singletonToMaybe . List.filter \(MkDecide _ _ appform _) -> rawName (getName appform) == v.name
+      atSrcPos <|> withName
+
+    singletonToMaybe :: [a] -> Maybe a
+    singletonToMaybe = \case [x] -> Just x; _ -> Nothing
+
+defaultResponseError :: Monad m => Text -> ExceptT (TResponseError method) m a
+defaultResponseError _message
+  = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
+
+-- ----------------------------------------------------------------------------
+-- LSP Autocompletions
+-- ----------------------------------------------------------------------------
+
 topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
 topDeclToCompletionItem name = \case
   KnownTerm ty term ->
@@ -444,19 +518,6 @@ defaultCompletionItem :: Text -> CompletionItem
 defaultCompletionItem label = CompletionItem label
   Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
   Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
-
-activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
-activeFileDiagnosticsInRange extras nfu rng = do
-  mDiags <- STM.lookup nfu (publishedDiagnostics extras)
-  pure
-    [ diag
-    | Just diags <- [mDiags]
-    , diag <- diags
-    , rangesOverlap rng (diag ^. fdLspDiagnosticL . J.range)
-    ]
 
 -- ----------------------------------------------------------------------------
 -- LSP Go to Definition
@@ -579,13 +640,4 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
-hasTypeInferenceVars = \case
-  Type   _ -> False
-  TyApp  _ _n ns -> any hasTypeInferenceVars ns
-  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
-  Forall _ _ ty -> hasTypeInferenceVars ty
-  InfVar _ _ _ -> True
-
-hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
-hasNamedTypeInferenceVars = \case
-  MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
+hasTypeInferenceVars = Optics.anyOf (Optics.gplate @(Type' Resolved)) \case {InfVar {} -> True; _ -> False}

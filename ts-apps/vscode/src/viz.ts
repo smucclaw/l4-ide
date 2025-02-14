@@ -50,7 +50,7 @@ export class PanelManager {
         this.config.viewType,
         // TODO: The title can be `<title prefix> <filename>`
         this.config.title,
-        this.config.position,
+        { viewColumn: this.config.position, preserveFocus: true },
         {
           enableScripts: true,
           retainContextWhenHidden: true,
@@ -72,7 +72,7 @@ export class PanelManager {
    */
   render(context: vscode.ExtensionContext) {
     if (this.#panel) {
-      this.#panel.reveal(this.config.position)
+      this.#panel.reveal(this.config.position, /* preserveFocus */ true)
     } else {
       this.initialize(context)
       // this.#panel.reveal(this.config.position)
