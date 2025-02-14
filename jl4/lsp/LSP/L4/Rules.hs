@@ -289,6 +289,9 @@ srcRangeToLspRange :: Maybe SrcRange -> LSP.Range
 srcRangeToLspRange Nothing = LSP.Range (LSP.Position 0 0) (LSP.Position 0 0)
 srcRangeToLspRange (Just range) = LSP.Range (srcPosToLspPosition range.start) (srcPosToLspPosition range.end)
 
+pointRange :: Position -> Range
+pointRange pos = Range pos pos
+
 srcPosToLspPosition :: SrcPos -> LSP.Position
 srcPosToLspPosition s =
   LSP.Position

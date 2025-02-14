@@ -15,7 +15,10 @@ import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Char (isAlphaNum)
 import Data.Maybe (mapMaybe)
+import Data.Either (isRight)
 import Data.Monoid (Ap (..))
+import Control.Monad.Except (throwError, runExceptT)
+import Control.Monad (unless)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
@@ -27,6 +30,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Mixed.Rope as Rope
+import GHC.Generics
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -41,11 +45,12 @@ import LSP.L4.Config
 import qualified LSP.L4.Viz.Ladder as Ladder
 import LSP.L4.Rules hiding (Log (..))
 import LSP.Logger
+import LSP.L4.SemanticTokens (srcPosToPosition)
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..)) 
+import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
@@ -82,6 +87,9 @@ data Log
   | LogClosedTextDocument !Uri
   | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
+  | LogMultipleDecideClauses !Uri
+  | LogSuppliedTooManyArguments [Aeson.Value]
+  | LogExecutingCommand !Text
   | LogShake Shake.Log
   deriving (Show)
 
@@ -92,6 +100,9 @@ instance Pretty Log where
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
     LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
+    LogMultipleDecideClauses uri -> "Document contains multiple decide clauses:" <+> pretty (getUri uri)
+    LogSuppliedTooManyArguments args -> "Visualization command was passed too many arguments, this is a bug:" <+> pretty (Aeson.encodeToLazyText args)
+    LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -187,7 +198,7 @@ handlers recorder =
           pos = params ^. J.position
         mloc <- gotoDefinition ide (LSP.toNormalizedUri doc) pos
         case mloc of
-          Nothing  -> pure $ Right $ InR $ InR $ Null
+          Nothing  -> pure $ Right $ InR $ InR Null
           Just loc -> pure $ Right $ InL $ Definition (InL loc)
     , requestHandler SMethod_TextDocumentHover $ \ ide params -> do
         let
@@ -196,45 +207,66 @@ handlers recorder =
           pos :: Position
           pos = params ^. J.position
         mh <- findHover ide (LSP.toNormalizedUri doc) pos
-        case mh of
-          Nothing  -> pure $ Right $ InR $ Null
-          Just h -> pure $ Right $ InL $ h
+        pure $ Right $ case mh of
+          Nothing  -> InR Null
+          Just h ->   InL h
     , requestHandler SMethod_WorkspaceExecuteCommand $ \ide params -> do
         let
-          ExecuteCommandParams _ _cid xdata = params
-        case xdata of
-          Just [uriJson]
+          ExecuteCommandParams _ cid xdata = params
+          defaultResponseError _message = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
+
+        -- TODO: we should check that the command sent is indeed the one that we expect, but this can be postponed until the point
+        -- where we actually have multiple
+        logWith recorder Debug $ LogExecutingCommand cid
+
+        runExceptT $ case xdata of
+          Just (uriJson : args)
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
-                let
-                  nfp = fromUri $ toNormalizedUri uri
+              let nfp = fromUri $ toNormalizedUri uri
 
-                mProgram <- liftIO $ runAction "semanticTokens.program" ide $ do
-                  use GetParsedAst nfp
+              TypeCheckResult {program} <- do
+                mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+                case mTcResult of
+                  Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
+                  Just tcRes -> pure tcRes
 
-                case mProgram of
-                  Nothing ->
-                    pure $
-                      Left $
-                        TResponseError
-                          { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Failed to typecheck \"" <> Text.pack (show uri) <> "\"."
-                          , _xdata = Nothing
-                          }
-                  Just prog ->
-                    pure $ case Ladder.doVisualize prog of
-                      Right vizProgramInfo -> Right $ InL $ Aeson.toJSON vizProgramInfo
-                      Left vizError -> Left $ 
-                        TResponseError
-                          { _code = InL LSPErrorCodes_RequestFailed
-                          , _message = "Could not visualize\n" <> getUri uri <> "\n" <> Ladder.prettyPrintVizError vizError
-                          , _xdata = Nothing }
-          _ ->
-            pure $ Left $
-              TResponseError
-                { _code = InL LSPErrorCodes_RequestFailed
-                , _message = "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
-                , _xdata = Nothing
-                }
+              let decides = foldTopLevelDecides (: []) program
+
+              decide :: Decide Resolved <- case args of
+                -- the command was issued by the button in vscode
+                [] -> case decides of
+                   [] -> defaultResponseError "No DECIDE/MEANS declarations available"
+                   (x : xs) -> do
+                     unless (null xs) $ do
+                       logWith recorder Warning $ LogMultipleDecideClauses uri
+                     pure x
+
+                -- the command was issued by a code action or codelens
+                ((Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) : xs) -> do
+                  unless (null xs) $ do
+                    logWith recorder Warning (LogSuppliedTooManyArguments xs)
+
+                  let decideAtSrcPos decide
+                        = Just srcPos == do
+                            node <- rangeOfNode decide
+                            pure node.start
+                  case filter decideAtSrcPos decides of
+                    [decide] -> pure decide
+                    _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
+                    -- TODO: if this becomes a problem, we should use
+                    -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
+                _ -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+
+              case Ladder.doVisualize decide of
+                Right vizProgramInfo -> pure $ InL $ Aeson.toJSON vizProgramInfo
+                Left vizError ->
+                  defaultResponseError $ Text.unlines
+                    [ "Could not visualize:"
+                    , getUri uri
+                    , Ladder.prettyPrintVizError vizError
+                    ]
+
+          _ -> defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
@@ -257,7 +289,7 @@ handlers recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\""
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.pack (show (show uri.getUri))
                   , _xdata = Nothing
                   }
 
@@ -279,10 +311,10 @@ handlers recorder =
                   Text.takeWhileEnd isAlphaNum
                   $ Rope.toText
                   $ fst -- we don't care for the rest of the line
-                  $ Rope.charSplitAt (fromIntegral col) 
+                  $ Rope.charSplitAt (fromIntegral col)
                   $ Rope.getLine (fromIntegral ln) rope
 
-            let filterMatchesOn f is = 
+            let filterMatchesOn f is =
                   map Fuzzy.original $ Fuzzy.filter
                     completionPrefix
                     is
@@ -294,45 +326,76 @@ handlers recorder =
             let mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
                   { CompletionItem._kind =  Just CompletionItemKind_Keyword
                   }
-                keyWordMatches = filterMatchesOn id $ Map.keys keywords 
-                -- FUTUREWORK(mangoiv): we could 
-                -- 1 pass through the token here 
-                -- 2 check the token category and if the category is COperator 
+                keyWordMatches = filterMatchesOn id $ Map.keys keywords
+                -- FUTUREWORK(mangoiv): we could
+                -- 1 pass through the token here
+                -- 2 check the token category and if the category is COperator
                 -- 3 set the CompletionItemKind to CompletionItemKind_Operator
                 keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
               useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
 
-            let topDeclItems 
-                  = filterMatchesOn CompletionItem._label 
-                  $ foldMap 
-                      (mapMaybe 
-                        (\(_, name, checkEntity) -> 
-                          topDeclToCompletionItem name 
-                          $ Optics.over' 
-                            (Optics.gplate @(Type' Resolved)) 
-                            (applyFinalSubstitution @(Type' Resolved) typeCheck.substitution) 
+            let topDeclItems
+                  = filterMatchesOn CompletionItem._label
+                  $ foldMap
+                      (mapMaybe
+                        (\(_, name, checkEntity) ->
+                          topDeclToCompletionItem name
+                          $ Optics.over'
+                            (Optics.gplate @(Type' Resolved))
+                            (applyFinalSubstitution typeCheck.substitution)
                             checkEntity
                         )
-                      ) 
+                      )
                       typeCheck.environment
 
             -- TODO: maybe we should sort these as follows
-            -- 1 keywords 
-            -- 2 toplevel values 
-            -- 3 toplevel types 
+            -- 1 keywords
+            -- 2 toplevel values
+            -- 3 toplevel types
 
             let items = keywordItems <> topDeclItems
 
             logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
 
             pure (Right (InL items))
+    , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
+        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+
+        typeCheck <- liftIO $ runAction "typecheck" ide $
+          use_ TypeCheck (fromUri (toNormalizedUri uri))
+
+        let
+          mkCodeLens srcPos = CodeLens
+            { _command = Just Command
+              { _title = "Visualize as Ladder Diagram"
+              , _command = "l4.visualize"
+              , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos)]
+              }
+            , _range = pointRange $ srcPosToPosition srcPos
+            , _data_ = Nothing
+            }
+
+          decideToCodeLens decide
+            -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
+            -- We try to not offer any code lenses for the visualizer if that's the case.
+            -- If in future this is too slow, we should think about caching these results or, even better,
+            -- make the visualizer work on as many examples as possible.
+            | isRight (Ladder.doVisualize decide)
+            , Just node <- rangeOfNode decide
+            = [mkCodeLens node.start]
+            | otherwise = []
+
+          -- adds codelenses to visualize DECIDE or MEANS clauses
+          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program
+
+        pure (Right (InL visualizeDecides))
     ]
 
 topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
-topDeclToCompletionItem name = \case 
-  KnownTerm ty term -> 
+topDeclToCompletionItem name = \case
+  KnownTerm ty term ->
     Just (defaultTopDeclCompletionItem ty)
       { CompletionItem._kind = Just $ case (term, ty) of
          (Constructor, _) -> CompletionItemKind_Constructor
@@ -340,15 +403,15 @@ topDeclToCompletionItem name = \case
          (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
          _ -> CompletionItemKind_Constant
       }
-  KnownType kind tydec -> 
+  KnownType kind tydec ->
     Just (defaultTopDeclCompletionItem (typeFunction kind))
-      { CompletionItem._kind = Just $ case tydec of 
+      { CompletionItem._kind = Just $ case tydec of
           RecordDecl {} -> CompletionItemKind_Struct
           EnumDecl {} -> CompletionItemKind_Enum
       }
   KnownTypeVariable {} -> Nothing
-  where 
-    -- a function (but also a constant, in theory) can be polymorphic, so we have to strip 
+  where
+    -- a function (but also a constant, in theory) can be polymorphic, so we have to strip
     -- all the foralls to get to the "actual" type.
     unrollForall :: Type' Resolved -> Type' Resolved
     unrollForall (Forall _ _ ty) = unrollForall ty
@@ -363,20 +426,20 @@ topDeclToCompletionItem name = \case
     defaultTopDeclCompletionItem :: Type' Resolved -> CompletionItem
     defaultTopDeclCompletionItem ty = (defaultCompletionItem $ quoteIfNeeded prepared)
       { CompletionItem._filterText = Just prepared
-      , CompletionItem._labelDetails 
+      , CompletionItem._labelDetails
         = Just CompletionItemLabelDetails
           { _description = Nothing
           , _detail = Just $ " IS A " <> simpleprint ty
           }
       }
-      where 
+      where
         prepared :: Text
         prepared = case name of MkName _ raw -> rawNameToText raw
 
 defaultCompletionItem :: Text -> CompletionItem
-defaultCompletionItem label = CompletionItem label 
-  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
-  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+defaultCompletionItem label = CompletionItem label
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
@@ -455,8 +518,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   (Just $ fmap getActual ty)
                 )
 
-            topDecls =
-              Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
+            topDecls = foldTopDecls (: []) typeCheck.program
 
             enclosingTopDecl = do
               target <- rangeOf name
@@ -511,8 +573,6 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
 
     uri :: Uri
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
-
-    pointRange pos = Range pos pos
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
 hasTypeInferenceVars = \case
