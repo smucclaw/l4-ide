@@ -11,6 +11,8 @@ TODO: Will add UI for things like Value in the next iteration
   let { data }: BoolVarDisplayerProps = $props()
 </script>
 
-<Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-{data.label}
-<Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
+<div class="bool-var-node">
+  <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
+  {data.label}
+  <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
+</div>
