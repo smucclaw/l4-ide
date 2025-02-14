@@ -19,7 +19,7 @@
     algaUndirectedGraphToFlowGraph,
   } from './lir-to-dag.js'
   import { onMount } from 'svelte'
-  import { watch } from 'runed'
+  import { Debounced, useDebounce, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
@@ -49,16 +49,28 @@
       SvelteFlow hooks
   ************************************/
 
+  const layoutDebounceMs = 400
+
+  // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
   const { fitView } = $derived(useSvelteFlow())
+  
+  const debouncedSfNodes$Initialized = new Debounced(() => sfNodes$Initialized.current, layoutDebounceMs)
+  const flowOpacity = $derived(debouncedSfNodes$Initialized.current ? 100 : 0)
+  $inspect('flowOpacity: ' + `${flowOpacity}`)
+   
   onMount(() => {
+    const debouncedLayout = useDebounce(
+        () => {
+          if (debouncedSfNodes$Initialized.current) {
+            doLayout()
+          }
+        },
+        () => layoutDebounceMs
+      )
     watch(
-      () => sfNodes$Initialized.current,
-      () => {
-        if (sfNodes$Initialized.current) {
-          doLayout()
-        }
-      }
+      () => debouncedSfNodes$Initialized.current,
+      () => debouncedLayout
     )
   })
 
@@ -94,7 +106,7 @@
   }
 </script>
 
-<div style="height:100vh;">
+<div style={`height:100vh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
@@ -107,4 +119,4 @@
   </SvelteFlow>
 </div>
 <!-- Do layout button for debugging doLayout:  -->
-<!-- <button onclick={doLayout}>Do layout</button> -->
+<button onclick={doLayout}>Do layout</button>
