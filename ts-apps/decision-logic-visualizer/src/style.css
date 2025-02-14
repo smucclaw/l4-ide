@@ -1,4 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
 @import '@xyflow/svelte/dist/style.css';
+
 @import '../static/style/themes/default.css';
 
 @import 'tailwindcss';
@@ -27,7 +30,7 @@
   );
 
   min-width: 8rem;
-  padding: 4px;
+  padding: 12px;
 }
 
 @utility grouping-node {
@@ -49,7 +52,7 @@ body {
 
 .visualization-container {
   min-height: 400px;
-  max-width: 80vw;
+  max-width: 96vw;
   margin: 0 auto;
 }
 

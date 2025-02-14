@@ -19,7 +19,7 @@
     algaUndirectedGraphToFlowGraph,
   } from './lir-to-dag.js'
   import { onMount } from 'svelte'
-  import { watch } from 'runed'
+  import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
@@ -49,13 +49,28 @@
       SvelteFlow hooks
   ************************************/
 
+  const layoutDebounceMs = 115
+
+  // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
+  const debouncedSfNodes$Initialized = new Debounced(
+    () => sfNodes$Initialized.current,
+    layoutDebounceMs
+  )
   const { fitView } = $derived(useSvelteFlow())
+
+  // Keep track of whether nodes have been layouted, so that won't display them before then
+  let nodes$AreLayouted = $state(false)
+  $inspect('nodes layouted', nodes$AreLayouted)
+  const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
+  // $inspect('flowOpacity: ' + `${flowOpacity}`)
+
   onMount(() => {
+    // Layout only after the nodes have been measured (have a width and height)
     watch(
-      () => sfNodes$Initialized.current,
+      () => debouncedSfNodes$Initialized.current,
       () => {
-        if (sfNodes$Initialized.current) {
+        if (debouncedSfNodes$Initialized.current) {
           doLayout()
         }
       }
@@ -89,12 +104,14 @@
 
     window.requestAnimationFrame(() => {
       console.log('fitting view!')
-      fitView({ padding: 0, duration: 25 })
+      fitView({ padding: 0, duration: 15 })
+
+      nodes$AreLayouted = true
     })
   }
 </script>
 
-<div style="height:100vh;">
+<div style={`height:100vh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}

@@ -229,7 +229,7 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 }
 
 // See Meng's layman for this 1px thing
-export const groupingNodehandleStyle = 'opacity:0 width:1px height:1px'
+export const groupingNodehandleStyle = 'width:1px; height:1px'
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { label: string }

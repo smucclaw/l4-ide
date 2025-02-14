@@ -24,6 +24,11 @@ export function getLayoutedElements(
   config.dagreGraph.setGraph({ rankdir: config.graph.direction })
 
   nodes.forEach((node) => {
+    console.log(
+      'node width, height',
+      node.measured?.width,
+      node.measured?.height
+    )
     config.dagreGraph.setNode(node.id, {
       width: node.measured?.width ?? config.graph.defaultNodeWidth,
       height: node.measured?.height ?? config.graph.defaultNodeHeight,
