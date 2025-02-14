@@ -1,17 +1,34 @@
-/* can't put it in static because vite won't serve it */
+/* can't put app.css in static because vite won't serve it */
 
-/* ==== FURTHER CSS = TODO ======================== */
+/**********************************************
+      Basic 'CSS reset'
+***********************************************/
 
-/* ===== Basic 'CSS reset' ======================= 
-  tailwind resets it with preflight */
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import 'the-new-css-reset/css/reset.css';
 @import '@xyflow/svelte/dist/style.css';
-@import '../static/style/themes/default.css';
-@import '../static/style/tailwind.css';
+
+/**********************************************
+        Themes, Fonts
+***********************************************/
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
+:root {
+  --color-node-text: #00004d;
+  --color-primary: #1e40af;
+  --color-secondary: #2563eb;
+  --color-positive: #047857; /* green for positive path */
+  --color-negative: #dc2626; /* red for negative path */
+  --color-path: #4b5563; /* dark grey for default path */
+  --color-button: #c7d2fe;
+  --color-button-hover: #a5b4fc;
+
+  --theme-border-radius: 5px;
+}
+
+/**********************************************
+      Other non-SF-related CSS classes
+***********************************************/
 
 body {
   color: var(--color-primary);
@@ -31,7 +48,9 @@ body {
   border-radius: 0.25rem;
 }
 
-/* svelte-flow specific */
+/**********************************************
+          svelte-flow specific
+***********************************************/
 
 :root,
 .svelte-flow {
