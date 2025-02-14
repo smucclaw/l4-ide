@@ -10,5 +10,5 @@ export default {
     },
     extend: {},
   },
-  plugins: ["@tailwindcss/postcss"],
+  plugins: ['@tailwindcss/postcss'],
 }
