@@ -13,6 +13,7 @@ import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics.Generic
+import qualified Optics
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -205,6 +206,24 @@ data LocalDecl n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- | Given a @'Program' n@, runs a 'foldMap' over all of
+-- nodes of the specified type
+_foldNodeType
+  :: forall nodeType n m
+   . (Monoid m, Optics.GPlate (nodeType n) (Program n))
+  => (nodeType n -> m) -> Program n -> m
+_foldNodeType = Optics.foldMapOf Optics.gplate
+
+-- | Given a @'Program' n@, runs a 'foldMap' over 'Decide's at the toplevel
+foldTopLevelDecides
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Program n -> m
+foldTopLevelDecides = _foldNodeType
+
+-- | Given a @'Program' n@, runs a 'foldMap' over 'TopDecl's at the toplevel
+foldTopDecls
+  :: forall n m. (Monoid m) => (TopDecl n -> m) -> Program n -> m
+foldTopDecls = _foldNodeType
+
 -- ----------------------------------------------------------------------------
 -- Source Annotations
 -- ----------------------------------------------------------------------------
@@ -214,9 +233,6 @@ type AnnoElement = AnnoElement_ PosToken
 type CsnCluster = CsnCluster_ PosToken
 
 newtype L4Syntax a = MkL4Syntax a
-
-instance {-# OVERLAPPING #-} Semigroup (Maybe (Type' Resolved)) where
-  _ <> _ = Nothing
 
 instance (GHC.Generic a, GPosition 1 a a Anno Anno) => HasAnno (L4Syntax a) where
   type AnnoToken (L4Syntax a) = PosToken

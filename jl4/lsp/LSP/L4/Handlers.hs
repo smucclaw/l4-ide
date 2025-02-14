@@ -54,7 +54,6 @@ import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
-import Optics ((%))
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO)
@@ -214,9 +213,9 @@ handlers recorder =
     , requestHandler SMethod_WorkspaceExecuteCommand $ \ide params -> do
         let
           ExecuteCommandParams _ cid xdata = params
-          defaultResponseError _message = TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
+          defaultResponseError _message = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
 
-        -- TODO: we should check that the command send is indeed the on that we expect but that can be postponed until the point
+        -- TODO: we should check that the command sent is indeed the one that we expect, but this can be postponed until the point
         -- where we actually have multiple
         logWith recorder Debug $ LogExecutingCommand cid
 
@@ -225,16 +224,18 @@ handlers recorder =
             | Aeson.Success (uri :: Uri) <- Aeson.fromJSON uriJson -> do
               let nfp = fromUri $ toNormalizedUri uri
 
-              TypeCheckResult {program} <-
-                maybe (throwError $ defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> ".") pure
-                =<< liftIO (runAction "l4.visualize" ide $ use TypeCheck nfp)
+              TypeCheckResult {program} <- do
+                mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+                case mTcResult of
+                  Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
+                  Just tcRes -> pure tcRes
 
-              let decides = Optics.toListOf (Optics.gplate @(Decide Resolved)) program
+              let decides = foldTopLevelDecides (: []) program
 
               decide :: Decide Resolved <- case args of
                 -- the command was issued by the button in vscode
                 [] -> case decides of
-                   [] -> throwError $ defaultResponseError "No DECIDE/MEANS closes available"
+                   [] -> defaultResponseError "No DECIDE/MEANS declarations available"
                    (x : xs) -> do
                      unless (null xs) $ do
                        logWith recorder Warning $ LogMultipleDecideClauses uri
@@ -246,23 +247,26 @@ handlers recorder =
                     logWith recorder Warning (LogSuppliedTooManyArguments xs)
 
                   let decideAtSrcPos decide
-                        = Optics.headOf (Optics.to getAnno % #range % Optics.folded % #start) decide == Just srcPos
+                        = Just srcPos == do
+                            node <- rangeOfNode decide
+                            pure node.start
                   case filter decideAtSrcPos decides of
                     [decide] -> pure decide
-                    _ -> throwError $ defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
-
-                _ -> throwError $ defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+                    _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
+                    -- TODO: if this becomes a problem, we should use
+                    -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
+                _ -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
 
               case Ladder.doVisualize decide of
                 Right vizProgramInfo -> pure $ InL $ Aeson.toJSON vizProgramInfo
                 Left vizError ->
-                  throwError $ defaultResponseError $ Text.unlines
+                  defaultResponseError $ Text.unlines
                     [ "Could not visualize:"
                     , getUri uri
                     , Ladder.prettyPrintVizError vizError
                     ]
 
-          _ -> throwError $ defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
+          _ -> defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
@@ -285,7 +289,7 @@ handlers recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for \"" <> Text.pack (show uri) <> "\""
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.pack (show (show uri.getUri))
                   , _xdata = Nothing
                   }
 
@@ -340,7 +344,7 @@ handlers recorder =
                           topDeclToCompletionItem name
                           $ Optics.over'
                             (Optics.gplate @(Type' Resolved))
-                            (applyFinalSubstitution @(Type' Resolved) typeCheck.substitution)
+                            (applyFinalSubstitution typeCheck.substitution)
                             checkEntity
                         )
                       )
@@ -373,22 +377,18 @@ handlers recorder =
             , _data_ = Nothing
             }
 
+          decideToCodeLens decide
+            -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
+            -- We try to not offer any code lenses for the visualizer if that's the case.
+            -- If in future this is too slow, we should think about caching these results or, even better,
+            -- make the visualizer work on as many examples as possible.
+            | isRight (Ladder.doVisualize decide)
+            , Just node <- rangeOfNode decide
+            = [mkCodeLens node.start]
+            | otherwise = []
+
           -- adds codelenses to visualize DECIDE or MEANS clauses
-          visualizeDecides :: [CodeLens] =
-            Optics.toListOf
-              ( Optics.gplate @(Decide Resolved)
-                -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
-                -- We try to not offer any code lenses for the visualizer if that's the case.
-                -- If in future this is too slow, we should think about caching these results or, even better,
-                -- make the visualizer work on as many examples as possible.
-                % Optics.filtered (isRight . Ladder.doVisualize)
-                % Optics.to getAnno
-                % #range
-                % Optics.folded
-                % #start
-                % Optics.to mkCodeLens
-              )
-              typeCheck.program
+          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program
 
         pure (Right (InL visualizeDecides))
     ]
@@ -518,8 +518,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   (Just $ fmap getActual ty)
                 )
 
-            topDecls =
-              Optics.toListOf (Optics.gplate @(TopDecl Resolved)) typeCheck.program
+            topDecls = foldTopDecls (: []) typeCheck.program
 
             enclosingTopDecl = do
               target <- rangeOf name
