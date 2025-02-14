@@ -7,7 +7,9 @@ export default defineConfig({
   plugins: [sveltekit(), tailwindcss()],
   resolve: {
     alias: {
-      '@repo/decision-logic-visualizer': path.resolve('../decision-logic-visualizer'),
+      '@repo/decision-logic-visualizer': path.resolve(
+        '../decision-logic-visualizer'
+      ),
     },
   },
   build: {

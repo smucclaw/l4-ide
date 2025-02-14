@@ -3,7 +3,7 @@
 <script lang="ts">
   // it was using the app.css from the webview repo and not the decisionlogicvisualizer
   // for now we're referencing it from decision-logic-visualizer
-  import '@repo/decision-logic-visualizer/src/app.css';
+  import '@repo/decision-logic-visualizer/src/app.css'
   let { children } = $props()
 </script>
 
