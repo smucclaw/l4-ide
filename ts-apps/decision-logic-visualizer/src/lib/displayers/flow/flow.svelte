@@ -1,80 +1,21 @@
-<script lang="ts">
-  import dagre from '@dagrejs/dagre'
-  import { getLayoutedElements, type DagreConfig } from './layout.js'
-  import {
-    SvelteFlow,
-    Background,
-    ConnectionLineType,
-    type Node,
-    type Edge,
-  } from '@xyflow/svelte'
-  import { type ExprFlowDisplayerProps, sfNodeTypes } from './types.svelte.js'
-  import {
-    exprLirNodeToAlgaDag,
-    algaUndirectedGraphToFlowGraph,
-  } from './lir-to-dag.js'
-  import { onMount } from 'svelte'
+<!-- 
+This is the component that consumers of the DLV lib will import,
+when trying to make ladder diagrams.
 
-  import '@xyflow/svelte/dist/style.css'
+This component only exists so that we can put SvelteFlowProvider
+ above FlowBase (which uses SF hooks) in the component hierarchy -->
+<script lang="ts">
+  import { SvelteFlowProvider } from '@xyflow/svelte'
+  import { type ExprFlowDisplayerProps } from './types.svelte.js'
+  import FlowBase from './flow-base.svelte'
 
   const { context, node: exprLirNode }: ExprFlowDisplayerProps = $props()
 
-  const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaDag(context, exprLirNode)
-  )
+  let baseFlowComponent: ReturnType<typeof FlowBase>
 
-  const initialNodes = flowGraph.nodes
-    .toSorted((v1, v2) => v2.compare(v1))
-    .map((n) => n.toSFPojo())
-  const initialEdges = flowGraph.edges.map((e) => e.toSFPojo())
-
-  /***********************************
-      SvelteFlow nodes and edges
-  ************************************/
-
-  let NODES = $state.raw<Node[]>(initialNodes)
-  let EDGES = $state.raw<Edge[]>(initialEdges)
-
-  /***********************************
-      Dagre Graph and Config
-  ************************************/
-
-  const dagreGraph = new dagre.graphlib.Graph()
-  dagreGraph.setDefaultEdgeLabel(() => ({}))
-
-  const dagreConfig: DagreConfig = {
-    dagreGraph: dagreGraph,
-    graph: {
-      direction: 'LR', // horizontal
-      // qn: how did they decide on these numbers?
-      // Doesn't matter though, since we'll use the measured width and height if available
-      defaultNodeWidth: 172,
-      defaultNodeHeight: 36,
-    },
-  }
-
-  // TODO: Will want to expose this so that it can be called whenever, e.g., window/pane resizes
-  function doLayout() {
-    const layoutedElements = getLayoutedElements(dagreConfig, NODES, EDGES)
-    NODES = layoutedElements.nodes
-    EDGES = layoutedElements.edges
-    console.log('nodes', NODES)
-    console.log('edges', EDGES)
-  }
-  onMount(() => {
-    doLayout()
-  })
+  // TODO: Expose a wrapped version of SF's fitView, etc
 </script>
 
-<div style="height:80vh;">
-  <SvelteFlow
-    bind:nodes={NODES}
-    bind:edges={EDGES}
-    nodeTypes={sfNodeTypes}
-    fitView
-    connectionLineType={ConnectionLineType.Bezier}
-    defaultEdgeOptions={{ type: 'bezier', animated: false }}
-  >
-    <Background />
-  </SvelteFlow>
-</div>
+<SvelteFlowProvider>
+  <FlowBase {context} node={exprLirNode} bind:this={baseFlowComponent} />
+</SvelteFlowProvider>

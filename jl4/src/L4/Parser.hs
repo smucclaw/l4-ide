@@ -17,7 +17,6 @@ import Base
 
 import qualified Control.Applicative as Applicative
 import Data.Functor.Compose
-import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -490,7 +489,7 @@ whereExpr p =
     pure (\ e -> Where (mkHoleAnnoFor e <> ann <> mkHoleAnnoFor ds) e ds)
 
 data Stack a =
-    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Pos !Pos
+    Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Assoc !Pos !Pos
   | End
 
 -- | This function decides how stack frames and continuations are combined
@@ -549,12 +548,12 @@ combine End _l e [] = e
 -- If there is no continuation, we always pop. The line passed to
 -- combine is always the starting point of the currently focused
 -- expression, so we take the line stored on the stack.
-combine (Frame s e1 op _ l1 _) _l2 e2 [] =
+combine (Frame s e1 op _ _ l1 _) _l2 e2 [] =
   combine s l1 (e1 `op` e2) []
 
 -- If there is nothing on the stack, we always push.
-combine End l1 e1 (MkCont op1 prio1 l2 p2 e2 : efs) =
-  combine (Frame End e1 op1 prio1 l1 p2) l2 e2 efs
+combine End l1 e1 (MkCont op1 prio1 assoc1 l2 p2 e2 : efs) =
+  combine (Frame End e1 op1 prio1 assoc1 l1 p2) l2 e2 efs
 
 -- This is the standard case. We have something on the stack and a
 -- continuation. We have to compare the two operators. If the operator
@@ -562,16 +561,29 @@ combine End l1 e1 (MkCont op1 prio1 l2 p2 e2 : efs) =
 --
 -- TODO: we currently do not track associativity.
 --
-combine s1@(Frame s e1 op1 prio1 l1 p1) _l e2 (MkCont op2 prio2 l2 p2 e3 : efs)
-  | (l2, p2, prio2) `stronger` (l1, p1, prio1) =
-  combine (Frame s1 e2 op2 prio2 l2 p2) l2 e3 efs -- push
+combine s1@(Frame s e1 op1 prio1 assoc1 l1 p1) _l e2 (MkCont op2 prio2 assoc2 l2 p2 e3 : efs)
+  | (l2, p2, prio2, assoc2) `stronger` (l1, p1, prio1, assoc1) =
+  combine (Frame s1 e2 op2 prio2 assoc2 l2 p2) l2 e3 efs -- push
   | otherwise =
-  combine s l1 (e1 `op1` e2) (MkCont op2 prio2 l2 p2 e3 : efs) -- pop
+  combine s l1 (e1 `op1` e2) (MkCont op2 prio2 assoc2 l2 p2 e3 : efs) -- pop
   where
-    stronger (ly, py, prioy) (lx, px, priox)
-      | lx == ly  = prioy >= priox
-      | otherwise = py > px || py == px && prioy >= priox
+    stronger (ly, py, prioy, assocy) (lx, px, priox, assocx)
+      | lx == ly  = priostronger
+      | otherwise = py > px || py == px && priostronger
+      where
+        priostronger =
+          case compare prioy priox of
+            GT -> True
+            EQ -> assocstronger
+            LT -> False
+        assocstronger =
+          case (assocx, assocy) of
+            (AssocRight, AssocRight) -> True
+            (AssocLeft , AssocLeft ) -> False
+            _                        -> True -- this should be a parse error, but we tolerate it and treat it as right-associative
 
+-- Older thoughts on the operator layout parsing problem:
+--
 -- The real problem is:
 --
 --          e1
@@ -619,21 +631,22 @@ combine s1@(Frame s e1 op1 prio1 l1 p1) _l e2 (MkCont op2 prio2 l2 p2 e3 : efs)
 
 data Cont a =
   MkCont
-    { _op   :: a Name -> a Name -> a Name
-    , _prio :: !Prio
-    , _line :: !Pos
-    , _pos  :: !Pos
-    , _arg  :: a Name
+    { _op    :: a Name -> a Name -> a Name
+    , _prio  :: !Prio
+    , _assoc :: !Assoc
+    , _line  :: !Pos
+    , _pos   :: !Pos
+    , _arg   :: a Name
     }
 
-cont :: Parser (Prio, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
+cont :: Parser (Prio, Assoc, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
   withIndent GT p $ \ pos -> do
     l <- currentLine
-    (prio, op) <- pop
+    (prio, assoc, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
     arg <- pbase
-    pure (MkCont op prio l pos arg)
+    pure (MkCont op prio assoc l pos arg)
 
 -- TODO: We should think whether we can obtain this more cheaply.
 currentLine :: Parser Pos
@@ -643,21 +656,22 @@ expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
 
 type Prio = Int
+data Assoc = AssocLeft | AssocRight
 
 -- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
-operator :: Parser (Prio, Expr Name -> Expr Name -> Expr Name)
+operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (2, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
-  <|> (\ op -> (3, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
-  <|> (\ op -> (4, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
-  <|> (\ op -> (4, infix2' Leq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKMost) <|> opToken TLessEquals)
-  <|> (\ op -> (4, infix2' Geq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKLeast) <|> opToken TLessEquals)
-  <|> (\ op -> (5, infix2' Cons      op)) <$> ((<>) <$> opToken TKFollowed <*> opToken TKBy)
-  <|> (\ op -> (6, infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
-  <|> (\ op -> (6, infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
-  <|> (\ op -> (7, infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
-  <|> (\ op -> (7, infix2' DividedBy op)) <$> (((<>) <$> opToken TKDivided <*> opToken TKBy) <|> opToken TDividedBy)
-  <|> (\ op -> (7, infix2  Modulo    op)) <$> spacedToken_ TKModulo
+      (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
+  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
+  <|> (\ op -> (4, AssocRight, infix2' Leq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKMost) <|> opToken TLessEquals)
+  <|> (\ op -> (4, AssocRight, infix2' Geq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKLeast) <|> opToken TLessEquals)
+  <|> (\ op -> (5, AssocRight, infix2' Cons      op)) <$> ((<>) <$> opToken TKFollowed <*> opToken TKBy)
+  <|> (\ op -> (6, AssocLeft,  infix2  Plus      op)) <$> (spacedToken_ TKPlus   <|> spacedToken_ TPlus  )
+  <|> (\ op -> (6, AssocLeft,  infix2  Minus     op)) <$> (spacedToken_ TKMinus  <|> spacedToken_ TMinus )
+  <|> (\ op -> (7, AssocLeft,  infix2  Times     op)) <$> (spacedToken_ TKTimes  <|> spacedToken_ TTimes )
+  <|> (\ op -> (7, AssocLeft,  infix2' DividedBy op)) <$> (((<>) <$> opToken TKDivided <*> opToken TKBy) <|> opToken TDividedBy)
+  <|> (\ op -> (7, AssocLeft,  infix2  Modulo    op)) <$> spacedToken_ TKModulo
 
 opToken :: TokenType -> Parser Anno
 opToken t =
@@ -847,9 +861,9 @@ nameAsPatApp =
 patternCont :: Pos -> Parser (Cont Pattern)
 patternCont = cont patOperator basePattern
 
-patOperator :: Parser (Prio, Pattern Name -> Pattern Name -> Pattern Name)
+patOperator :: Parser (Prio, Assoc, Pattern Name -> Pattern Name -> Pattern Name)
 patOperator =
-  (\ op -> (5, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
+  (\ op -> (5, AssocRight, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
 
 patApp :: Parser (Pattern Name)
 patApp = do

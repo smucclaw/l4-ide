@@ -34,11 +34,13 @@ coverage
 .vercel
 
 # Build Outputs
+tsconfig.tsbuildinfo
 .next/
 out/
 build
 dist
 */vscode/static/webview/
+*/webview/.svelte-kit/
 
 ## Built Visual Studio Code Extensions
 *.vsix

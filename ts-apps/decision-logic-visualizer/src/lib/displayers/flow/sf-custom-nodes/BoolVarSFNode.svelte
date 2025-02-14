@@ -8,11 +8,7 @@ TODO: Will add UI for things like Value in the next iteration
   import { defaultSFHandlesInfo } from '../types.svelte.js'
   import { Handle } from '@xyflow/svelte'
 
-  let {
-    data,
-    // targetPosition = Position.Top,
-    // sourcePosition = Position.Bottom,
-  }: BoolVarDisplayerProps = $props()
+  let { data }: BoolVarDisplayerProps = $props()
 </script>
 
 <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />

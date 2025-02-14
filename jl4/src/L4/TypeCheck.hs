@@ -153,19 +153,19 @@ doCheckProgram program =
         case runCheckUnique (traverse applySubst errs) s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
-            in CheckResult 
+            in CheckResult
               { program = rprog
               , errors = substErrs ++ moreErrs
               , substitution = s'.substitution
               , environment = s'.environment
               }
 
-data CheckResult 
-  = CheckResult 
-  { program :: Program Resolved 
+data CheckResult
+  = CheckResult
+  { program :: Program Resolved
   , errors :: [CheckErrorWithContext]
-  , substitution :: Substitution 
-  , environment :: Environment 
+  , substitution :: Substitution
+  , environment :: Environment
   }
   deriving stock (Eq, Show)
 
@@ -752,11 +752,12 @@ inferAssume (MkAssume ann tysig appForm mt) = do
 
 inferDirective :: Directive Name -> Check (Directive Resolved)
 inferDirective (Eval ann e) = do
-  (re, _) <- inferExpr e
+  setErrorContext (WhileCheckingExpression e)
+  (re, _) <- prune $ inferExpr e
   pure (Eval ann re)
 inferDirective (Check ann e) = scope $ do
   setErrorContext (WhileCheckingExpression e)
-  (re, te) <- inferExpr e
+  (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
   pure (Check ann re)
 

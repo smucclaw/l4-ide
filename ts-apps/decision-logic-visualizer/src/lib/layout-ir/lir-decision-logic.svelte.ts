@@ -12,8 +12,7 @@ import { match } from 'ts-pattern'
 
 type BoolValue = true | false | undefined
 
-export type ExprLirNode = VarLirNode | AndLirNode | OrLirNode
-// | NotLirNode
+export type ExprLirNode = VarLirNode | NotLirNode | AndLirNode | OrLirNode
 
 export type VarLirNode = BoolVarLirNode
 
@@ -52,26 +51,26 @@ export class BoolVarLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-// export class NotLirNode extends DefaultLirNode implements LirNode {
-//   #negand: LirId
+export class NotLirNode extends DefaultLirNode implements LirNode {
+  #negand: LirId
 
-//   constructor(nodeInfo: LirNodeInfo, negand: ExprLirNode) {
-//     super(nodeInfo)
-//     this.#negand = negand.getId()
-//   }
+  constructor(nodeInfo: LirNodeInfo, negand: ExprLirNode) {
+    super(nodeInfo)
+    this.#negand = negand.getId()
+  }
 
-//   getNegand(context: LirContext) {
-//     return context.get(this.#negand) as ExprLirNode
-//   }
+  getNegand(context: LirContext) {
+    return context.get(this.#negand) as ExprLirNode
+  }
 
-//   getChildren(context: LirContext) {
-//     return [this.getNegand(context)]
-//   }
+  getChildren(context: LirContext) {
+    return [this.getNegand(context)]
+  }
 
-//   toString(): string {
-//     return 'NOT_LIR_NODE'
-//   }
-// }
+  toString(): string {
+    return 'NOT_LIR_NODE'
+  }
+}
 
 export class AndLirNode extends DefaultLirNode implements LirNode {
   #args: LirId[]

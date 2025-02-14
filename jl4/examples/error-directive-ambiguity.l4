@@ -1,0 +1,10 @@
+-- This is a test case for issue #89.
+
+ASSUME foo IS A FUNCTION FROM BOOLEAN TO BOOLEAN
+
+GIVEN p IS A BOOLEAN
+DECIDE foo OF p
+  IF p
+
+#EVAL foo TRUE
+#CHECK foo TRUE

@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { SvelteFlowProvider } from '@xyflow/svelte'
-  import { Either, Schema } from 'effect'
-  import { match } from 'ts-pattern'
+  import { Schema } from 'effect'
   import { IRExpr } from '@repo/viz-expr'
   import { ExprLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
@@ -36,7 +34,7 @@
             $type: 'BoolVar' as const,
             value: 'Unknown' as const,
             id: { id: 2 },
-            name: 'walkswalks',
+            name: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
           },
         ],
         id: { id: 3 },
@@ -51,22 +49,8 @@
     id: { id: 5 },
   }
 
-  const decode = Schema.decodeUnknownEither(IRExpr)
-  const eitherExpr = decode(example1)
-  let expr: IRExpr
-  if (Either.isRight(eitherExpr)) {
-    expr = eitherExpr.right
-  } else {
-    // not sure how to just unsafely coerce, so whatever
-    console.error('Decoding failed:', eitherExpr.left)
-    expr = {
-      $type: 'BoolVar',
-      value: 'True',
-      id: { id: 1 },
-      name: 'decoding somehow failed??!?!?!?!',
-    }
-  }
-
+  const decode = Schema.decodeSync(IRExpr)
+  const expr = decode(example1)
   // Set up Lir
   const registry = new LirRegistry()
   const context = new LirContext()
@@ -171,19 +155,7 @@
     id: { id: 15 },
   }
 
-  const eitherExpr2 = decode(example2)
-  let expr2: IRExpr = match(eitherExpr2)
-    .with({ _tag: 'Right' }, ({ right }) => right)
-    .otherwise(({ left }) => {
-      console.error('Decoding failed for Example 2:', left)
-      return {
-        $type: 'BoolVar',
-        value: 'True',
-        id: { id: 15 },
-        name: 'decoding somehow failed!!',
-      }
-    })
-
+  const expr2 = decode(example2)
   const exprLirNode2 = ExprLirSource.toLir(nodeInfo, expr2)
   registry.setRoot(context, 'EXAMPLE_2' as LirRootType, exprLirNode2)
 </script>
@@ -197,9 +169,7 @@
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <h3 class="text-2xl font-semibold">Example 1</h3>
-  <SvelteFlowProvider>
-    <ExprFlow {context} node={exprLirNode} />
-  </SvelteFlowProvider>
+  <ExprFlow {context} node={exprLirNode} />
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-1-json" class="peer hidden" />
     <label
@@ -226,9 +196,7 @@
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto space-y-4">
   <h3 class="text-2xl font-semibold">Example 2</h3>
-  <SvelteFlowProvider>
-    <ExprFlow {context} node={exprLirNode2} />
-  </SvelteFlowProvider>
+  <ExprFlow {context} node={exprLirNode2} />
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />
     <label
