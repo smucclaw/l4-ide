@@ -61,7 +61,7 @@
 
   // Keep track of whether nodes have been layouted, so that won't display them before then
   let nodes$AreLayouted = $state(false)
-  // $inspect('nodes layouted', nodes$AreLayouted)
+  $inspect('nodes layouted', nodes$AreLayouted)
   const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
   // $inspect('flowOpacity: ' + `${flowOpacity}`)
 
