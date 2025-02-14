@@ -32,8 +32,9 @@
 
 @utility grouping-node {
   @apply svelte-flow__node-basic;
-  padding: 0;
-  width: 1px;
+  /* Will lose the grouping node if make width 0 px */
+  width: 1px; 
+  opacity: 0.3;
 }
 
 /*************************************
@@ -69,7 +70,6 @@ body {
   --xy-edge-stroke: var(--color-primary);
 
   .svelte-flow__node {
-    padding: 0.5rem;
     font-family: 'Source Sans 3', serif;
     font-optical-sizing: auto;
     font-style: normal;

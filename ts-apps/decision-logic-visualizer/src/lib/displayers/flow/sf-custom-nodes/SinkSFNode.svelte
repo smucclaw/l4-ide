@@ -12,7 +12,7 @@ TODO: maybe reduce code duplication between this and SourceSFNode
   let {}: NodeProps<Node> = $props()
 </script>
 
-<div style="opacity:0.4">
+<div class="grouping-node">
   <Handle
     type="source"
     position={defaultSFHandlesInfo.sourcePosition}
