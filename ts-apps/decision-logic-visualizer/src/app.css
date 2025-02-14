@@ -1,6 +1,7 @@
-@import 'tailwindcss';
 @import '@xyflow/svelte/dist/style.css';
 @import '../static/style/themes/default.css';
+
+@import 'tailwindcss';
 @import '../static/style/tailwind.css';
 
 body {
