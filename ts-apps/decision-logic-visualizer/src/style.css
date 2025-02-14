@@ -33,7 +33,7 @@
 @utility grouping-node {
   @apply svelte-flow__node-basic;
   /* Will lose the grouping node if make width 0 px */
-  width: 1px; 
+  width: 1px;
   opacity: 0.3;
 }
 
