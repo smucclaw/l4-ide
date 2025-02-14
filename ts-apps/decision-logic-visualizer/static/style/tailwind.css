@@ -15,6 +15,7 @@
     --xy-node-background-color,
     var(--xy-node-background-color-default)
   );
+  overflow: auto;
 }
 
 .svelte-flow__node-boolVarNode,
