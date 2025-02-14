@@ -2,11 +2,16 @@
   --color-node-text: #00004d;
   --color-primary: #1e40af;
   --color-secondary: #2563eb;
-  --color-positive: #047857; /* green for positive path */
-  --color-negative: #dc2626; /* red for negative path */
-  --color-path: #4b5563; /* dark grey for default path */
   --color-button: #c7d2fe;
   --color-button-hover: #a5b4fc;
 
   --theme-border-radius: 5px;
 }
+
+/**
+From discussion of Meng's layman visualizer
+
+  --color-positive: #047857; green for positive path 
+  --color-negative: #dc2626; red for negative path 
+  --color-path: #4b5563; dark grey for default path 
+*/

@@ -1,11 +1,50 @@
-@import 'tailwindcss';
 @import '@xyflow/svelte/dist/style.css';
 @import '../static/style/themes/default.css';
-@import '../static/style/tailwind.css';
+
+@import 'tailwindcss';
+
+/*************************************
+  Utility SF styles
+*************************************/
+
+@utility svelte-flow__node-basic {
+  font-size: 1rem;
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  text-align: center;
+  background-color: var(
+    --xy-node-background-color,
+    var(--xy-node-background-color-default)
+  );
+}
+
+@utility bool-var-node {
+  @apply svelte-flow__node-basic;
+
+  border: var(--xy-node-border, var(--xy-node-border-default));
+  border-radius: var(
+    --xy-node-border-radius,
+    var(--xy-node-border-radius-default)
+  );
+
+  min-width: 8rem;
+  padding: 4px;
+}
+
+@utility grouping-node {
+  @apply svelte-flow__node-basic;
+  /* Will lose the grouping node if make width 0 px */
+  width: 1px;
+  opacity: 0.3;
+}
+
+/*************************************
+  Other styles
+*************************************/
 
 body {
   color: var(--color-primary);
   background-color: white;
+  margin: 0;
 }
 
 .visualization-container {
@@ -32,7 +71,6 @@ body {
   --xy-edge-stroke: var(--color-primary);
 
   .svelte-flow__node {
-    padding: 0.5rem;
     font-family: 'Source Sans 3', serif;
     font-optical-sizing: auto;
     font-style: normal;

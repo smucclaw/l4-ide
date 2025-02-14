@@ -1,30 +1,24 @@
+{-# LANGUAGE ViewPatterns #-}
 module LSP.L4.Viz.Ladder where
 
 import Control.DeepSeq
 import Control.Monad.Except
 import Control.Monad.Identity (Identity (Identity))
 import Control.Monad.State (MonadState, StateT (StateT))
-import Data.List.NonEmpty (toList)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (Generic)
-import Optics
+import qualified Optics
+import Optics ((%), (^..))
 import Optics.State.Operators ((<%=))
-import Text.Pretty.Simple
-import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), OptionallyTypedName (..), Program, TypeSig (..))
-import qualified L4.Syntax as S ()
+
+import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), OptionallyTypedName (..), TypeSig (..), Resolved, getOriginal)
+import L4.TypeCheck (rawNameToText)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
-
--- For dev utils
-import L4.Parser (
-  execParser,
-  program,
-  PError(..))
-import L4.TypeCheck (rawNameToText)
 
 ------------------------------------------------------
 -- Monad
@@ -69,21 +63,14 @@ prettyPrintVizError = \case
 -- Entrypoint: Visualise
 ------------------------------------------------------
 
--- | Entrypoint: Generate boolean circuits of the 'Program'.
---
--- Simple version where we visualize the first Decide, if it exists.
-doVisualize :: Program Name -> Either VizError VisualizeDecisionLogicIRInfo
-doVisualize prog =
-  case  (vizProgram prog).getVizE initialVizState of
+-- | Entrypoint: Generate boolean circuits of the given 'Decide'.
+doVisualize :: Decide Resolved -> Either VizError VisualizeDecisionLogicIRInfo
+doVisualize decide =
+  case  (vizProgram decide).getVizE initialVizState of
     (result, _) -> result
 
-vizProgram :: Program Name -> Viz VisualizeDecisionLogicIRInfo
-vizProgram prog =
-  let decides = toListOf (gplate @(Decide Name)) prog
-   in case decides of
-        [x] -> MkVisualizeDecisionLogicIRInfo <$> translateDecide x
-        [] -> throwError InvalidProgramNoDecidesFound
-        _xs -> throwError Unimplemented -- TODO: Want to eventually translate every eligible Decide
+vizProgram :: Decide Resolved -> Viz VisualizeDecisionLogicIRInfo
+vizProgram = fmap MkVisualizeDecisionLogicIRInfo . translateDecide
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -104,17 +91,17 @@ vizProgram prog =
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Decide Name -> Viz V.IRExpr
-translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (MkName _ fnName) _args) body) =
+translateDecide :: Decide Resolved -> Viz V.IRExpr
+translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (getOriginal -> MkName _ fnName) _args) body) =
   case givenSig of
-    MkGivenSig _ [MkOptionallyTypedName _ (MkName _ subject) _] ->
+    MkGivenSig _ [MkOptionallyTypedName _ (getOriginal -> MkName _ subject) _] ->
       translateExpr (rawNameToText subject) body
     MkGivenSig _ [] ->
       translateExpr (rawNameToText fnName) body
     -- DECIDEs with more than one GIVEN not currently supported
     MkGivenSig _ _xs -> throwError InvalidProgramDecidesMustNotHaveMoreThanOneGiven
 
-translateExpr :: Text -> Expr Name -> Viz IRExpr
+translateExpr :: Text -> Expr Resolved -> Viz IRExpr
 translateExpr subject e = case e of
 {- TODO: Need to look more into whether we really want to be passing `subject` down.
 -}
@@ -131,25 +118,25 @@ translateExpr subject e = case e of
   Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
 
   -- A 'Var' can apparently be parsed as an App with no arguments ----------------
-  Var _ (MkName _ verb) ->
+  Var _ (getOriginal -> MkName _ verb) ->
     leaf "" (rawNameToText verb)
-  App _ (MkName _ leafName) [] ->
+  App _ (getOriginal -> MkName _ leafName) [] ->
     leaf "" (rawNameToText leafName)
   --------------------------------------------------------------------------------
 
   -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
-  App _ (MkName _ fnName) args ->
+  App _ (getOriginal -> MkName _ fnName) args ->
     leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
   _ -> throwError Unimplemented
   where
-    getNames args = args ^.. (gplate @Name) % to nameToText
+    getNames args = args ^.. (Optics.gplate @Name) % Optics.to nameToText
 
-scanAnd :: Expr Name -> [Expr Name]
+scanAnd :: Expr Resolved -> [Expr Resolved]
 scanAnd (And _ e1 e2) =
   scanAnd e1 <> scanAnd e2
 scanAnd e = [e]
 
-scanOr :: Expr Name -> [Expr Name]
+scanOr :: Expr Resolved -> [Expr Resolved]
 scanOr (Or _ e1 e2) =
   scanOr e1 <> scanOr e2
 scanOr e = [e]
@@ -172,16 +159,3 @@ leaf subject complement = do
 
 nameToText :: Name -> Text
 nameToText (MkName _ rawName) = rawNameToText rawName
-
-------------------------------------------------------
--- Dev utils
-------------------------------------------------------
-
-parseAndVisualiseProgram :: Text -> Either VizError VisualizeDecisionLogicIRInfo
-parseAndVisualiseProgram prog =
-  case execParser program "" prog of
-    Left errs -> error $ unlines $ fmap (Text.unpack . (.message)) (toList errs)
-    Right x -> doVisualize x
-
-vizTest :: Text -> IO ()
-vizTest = pPrint . parseAndVisualiseProgram
