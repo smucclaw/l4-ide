@@ -1,14 +1,4 @@
-/* can't put it in static because vite won't serve it */
-
-/* ==== FURTHER CSS = TODO ======================== */
-
-/* ===== Basic 'CSS reset' ======================= 
-  tailwind resets it with preflight */
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import "tailwindcss";
 @import '@xyflow/svelte/dist/style.css';
 @import '../static/style/themes/default.css';
 @import '../static/style/tailwind.css';
