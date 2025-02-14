@@ -111,6 +111,38 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   }
 }
 
+export class NotFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  constructor(
+    protected readonly negand: FlowNode,
+    /** of the NotLirNode */
+    origLirId: LirId,
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super([origLirId], position)
+  }
+
+  getNegand() {
+    return this.negand
+  }
+
+  getChildren() {
+    return [this.negand]
+  }
+
+  toSFPojo(): SF.Node {
+    // TODO: Need to think more aobut hwether this should be a subflow
+    // return {
+    //   id: this.id,
+    //   type: 'notNode',
+    //   position: this.position,
+    //   data: {},
+    // }
+  }
+}
+
 /** A FlowNode that's used solely to visually group or 'bundle' other nodes. */
 export type GroupingFlowNode = SinkFlowNode | SourceFlowNode
 
