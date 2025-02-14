@@ -41,13 +41,4 @@ body {
   .svelte-flow__edge:hover .svelte-flow__edge-path {
     stroke: var(--color-secondary) !important;
   }
-
-  .svelte-flow__handle {
-    min-width: 0;
-    min-height: 0;
-    width: 0;
-    height: 0;
-    border: 0;
-    background-color: transparent;
-  }
 }

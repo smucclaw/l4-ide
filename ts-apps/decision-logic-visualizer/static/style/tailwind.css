@@ -4,8 +4,7 @@
     var(--xy-node-border-radius-default)
   );
   font-size: 1.2rem;
-  width: 150px;
-  padding: 10px;
+  min-width: 9rem;
   color: var(--xy-node-color, var(--xy-node-color-default));
   text-align: center;
   border: var(--xy-node-border, var(--xy-node-border-default));
@@ -15,8 +14,12 @@
   );
 }
 
-.svelte-flow__node-boolVarNode,
+.svelte-flow__node-boolVarNode {
+  @apply svelte-flow__node-basic;
+  padding: 10px;
+}
 .svelte-flow__node-sinkSFNode,
 .svelte-flow__node-sourceSFNode {
   @apply svelte-flow__node-basic;
+  padding: 0;
 }
