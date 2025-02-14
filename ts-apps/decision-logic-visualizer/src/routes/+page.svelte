@@ -34,7 +34,7 @@
             $type: 'BoolVar' as const,
             value: 'Unknown' as const,
             id: { id: 2 },
-            name: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
+            name: 'walks walkswalks walkswalkswalks walkswalkswalkswalks',
           },
         ],
         id: { id: 3 },
