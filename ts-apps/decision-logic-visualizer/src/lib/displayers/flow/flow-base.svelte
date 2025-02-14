@@ -19,7 +19,7 @@
     algaUndirectedGraphToFlowGraph,
   } from './lir-to-dag.js'
   import { onMount } from 'svelte'
-  import { Debounced, useDebounce, watch } from 'runed'
+  import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
@@ -49,28 +49,31 @@
       SvelteFlow hooks
   ************************************/
 
-  const layoutDebounceMs = 400
+  const layoutDebounceMs = 115
 
   // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
+  const debouncedSfNodes$Initialized = new Debounced(
+    () => sfNodes$Initialized.current,
+    layoutDebounceMs
+  )
   const { fitView } = $derived(useSvelteFlow())
-  
-  const debouncedSfNodes$Initialized = new Debounced(() => sfNodes$Initialized.current, layoutDebounceMs)
-  const flowOpacity = $derived(debouncedSfNodes$Initialized.current ? 100 : 0)
-  $inspect('flowOpacity: ' + `${flowOpacity}`)
-   
+
+  // Keep track of whether nodes have been layouted, so that won't display them before then
+  let nodes$AreLayouted = $state(false)
+  // $inspect('nodes layouted', nodes$AreLayouted)
+  const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
+  // $inspect('flowOpacity: ' + `${flowOpacity}`)
+
   onMount(() => {
-    const debouncedLayout = useDebounce(
-        () => {
-          if (debouncedSfNodes$Initialized.current) {
-            doLayout()
-          }
-        },
-        () => layoutDebounceMs
-      )
+    // Layout only after the nodes have been measured (have a width and height)
     watch(
       () => debouncedSfNodes$Initialized.current,
-      () => debouncedLayout
+      () => {
+        if (debouncedSfNodes$Initialized.current) {
+          doLayout()
+        }
+      }
     )
   })
 
@@ -101,7 +104,9 @@
 
     window.requestAnimationFrame(() => {
       console.log('fitting view!')
-      fitView({ padding: 0, duration: 25 })
+      fitView({ padding: 0, duration: 15 })
+
+      nodes$AreLayouted = true
     })
   }
 </script>
@@ -119,4 +124,4 @@
   </SvelteFlow>
 </div>
 <!-- Do layout button for debugging doLayout:  -->
-<button onclick={doLayout}>Do layout</button>
+<!-- <button onclick={doLayout}>Do layout</button> -->
