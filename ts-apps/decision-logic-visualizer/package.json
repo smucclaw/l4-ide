@@ -25,9 +25,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js"
-    },
-    "./app.css": {
-      "default": "./assets/app.css"
     }
   },
   "files": [
