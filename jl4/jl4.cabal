@@ -94,7 +94,6 @@ executable jl4-lsp
     jl4,
     autodocodec,
     aeson,
-    pretty-simple,
     binary,
     containers,
     co-log-core,
