@@ -13,6 +13,8 @@ TODO: Will add UI for things like Value in the next iteration
 
 <div class="bool-var-node">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  {data.label}
+  <div class="px-2.5 min-w-[10ch] leading-normal">
+    {data.label}
+  </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>

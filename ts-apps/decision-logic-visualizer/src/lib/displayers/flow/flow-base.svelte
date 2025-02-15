@@ -13,7 +13,11 @@
     type Edge,
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
-  import { type ExprFlowDisplayerProps, sfNodeTypes } from './types.svelte.js'
+  import {
+    type ExprFlowDisplayerProps,
+    sfNodeTypes,
+    type NodeWithMeasuredDimensions,
+  } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
@@ -49,7 +53,7 @@
       SvelteFlow hooks
   ************************************/
 
-  const layoutDebounceMs = 115
+  const layoutDebounceMs = 100
 
   // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
@@ -71,7 +75,7 @@
       () => debouncedSfNodes$Initialized.current,
       () => {
         if (debouncedSfNodes$Initialized.current) {
-          doLayout()
+          doLayoutAndFitView()
         }
       }
     )
@@ -96,22 +100,36 @@
   }
 
   function doLayout() {
-    const layoutedElements = getLayoutedElements(dagreConfig, NODES, EDGES)
-    NODES = layoutedElements.nodes
-    EDGES = layoutedElements.edges
-    console.log('nodes', NODES)
-    console.log('edges', EDGES)
-
+    if (
+      debouncedSfNodes$Initialized.current &&
+      NODES[0] &&
+      NODES[0].measured?.width
+    ) {
+      const layoutedElements = getLayoutedElements(
+        dagreConfig,
+        NODES as NodeWithMeasuredDimensions[],
+        EDGES
+      )
+      NODES = layoutedElements.nodes
+      EDGES = layoutedElements.edges
+      console.log('nodes', NODES)
+      console.log('edges', EDGES)
+    }
+  }
+  function doFitView() {
     window.requestAnimationFrame(() => {
       console.log('fitting view!')
-      fitView({ padding: 0, duration: 15 })
-
-      nodes$AreLayouted = true
+      fitView({ padding: 1, duration: 15 })
     })
+  }
+  function doLayoutAndFitView() {
+    doLayout()
+    nodes$AreLayouted = true
+    doFitView()
   }
 </script>
 
-<div style={`height:100vh; opacity: ${flowOpacity}`}>
+<div style={`height:100svh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
@@ -124,4 +142,5 @@
   </SvelteFlow>
 </div>
 <!-- Do layout button for debugging doLayout:  -->
-<!-- <button onclick={doLayout}>Do layout</button> -->
+<button onclick={doLayout}>Do layout</button>
+<button onclick={doLayoutAndFitView}>Do layout and fit view</button>

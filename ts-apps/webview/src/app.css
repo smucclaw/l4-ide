@@ -18,11 +18,13 @@ Resources
   -moz-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%; /* For older browsers */
   text-size-adjust: 100%;
+
+  height: 100%;
 }
 
 /* Core body defaults */
 body {
-  min-height: 100vh;
+  height: 100%;
   line-height: 1.1;
 }
 
