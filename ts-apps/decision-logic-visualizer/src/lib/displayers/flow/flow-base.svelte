@@ -17,7 +17,6 @@
     type ExprFlowDisplayerProps,
     sfNodeTypes,
     type NodeWithMeasuredDimensions,
-    type NodeDimensions,
   } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,

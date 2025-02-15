@@ -1,11 +1,10 @@
 import dagre from '@dagrejs/dagre'
-import type { Edge, Node } from '@xyflow/svelte'
+import type { Edge } from '@xyflow/svelte'
 import { Position } from '@xyflow/svelte'
 import {
   isSFGroupingNode,
   type NodeWithMeasuredDimensions,
   type NodeDimensions,
-  type SFHandlesInfo,
 } from './types.svelte.js'
 import partition from 'lodash/partition'
 
@@ -84,8 +83,7 @@ export function getLayoutedElements(
     at least in the demo +page.svelte in DLV.
 
   * Currently experimenting with nodeSep and rankSep, but it doesn't seem to make much of a difference
-  * Setting grouping node dims to {width: 40, height: 40} still isn't enough to get the edges working properly
-  * Next big thing to try: compound graphs (which also requires modifying the traversal)
+  * Was going to look also in to compound graphs (which also requires modifying the traversal), but I don't think that's necessary now.
   */
   dagre.layout(config.dagreGraph, { nodesep: 30, marginx: 8 })
 
@@ -98,6 +96,7 @@ export function getLayoutedElements(
     return {
       ...node,
       // TODO: Refactor the stuff below to use a helper function
+
       // Shift the dagre node position (anchor=center center) for NON-grouping nodes to the top left
       // so it matches the React Flow node anchor point (top left).
       position: isSFGroupingNode(node)
