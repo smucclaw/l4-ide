@@ -12,14 +12,16 @@
 
 @utility svelte-flow__node-basic {
   font-size: 1rem;
-  color: var(--xy-node-color, var(--xy-node-color-default));
   text-align: center;
+
+  color: var(--xy-node-color, var(--xy-node-color-default));
   background-color: var(
     --xy-node-background-color,
     var(--xy-node-background-color-default)
   );
 }
 
+/** TODO: Move this into the component... */
 @utility bool-var-node {
   @apply svelte-flow__node-basic;
 
@@ -28,9 +30,16 @@
     --xy-node-border-radius,
     var(--xy-node-border-radius-default)
   );
+  /* To deal with long text / avoid overflow issues:
 
-  min-width: 8rem;
-  padding: 12px;
+    break-words: so that long unbreakable words won't overflow the container
+
+    whitespace-pre-wrap vs whitespace-breaks-spaces:  
+      https://stackoverflow.com/questions/64699828/css-property-white-space-example-for-break-spaces
+  */
+  @apply break-words whitespace-break-spaces;
+
+  max-width: 16rem;
 }
 
 @utility grouping-node {
@@ -38,6 +47,7 @@
   /* Will lose the grouping node if make width 0 px */
   width: 1px;
   height: 1px;
+
   opacity: 0.3;
 }
 
@@ -53,7 +63,7 @@ body {
 
 .visualization-container {
   min-height: 400px;
-  max-width: 96vw;
+  max-width: 96svw;
   margin: 0 auto;
 }
 
