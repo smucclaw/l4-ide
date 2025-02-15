@@ -160,6 +160,18 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
           SF Nodes
 *************************************************/
 
+export type NodeDimensions = {
+  width: number
+  height: number
+}
+
+export type NodeWithMeasuredDimensions = SF.Node & {
+  measured: {
+    width: number
+    height: number
+  }
+}
+
 const boolVarNodeType = 'boolVarNode' as const
 const sfSourceNodeType = 'sourceNode' as const
 const sfSinkNodeType = 'sinkNode' as const
