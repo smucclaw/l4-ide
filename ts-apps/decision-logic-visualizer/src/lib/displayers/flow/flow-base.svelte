@@ -62,7 +62,7 @@
       SvelteFlow hooks
   ************************************/
 
-  const layoutDebounceMs = 100
+  const layoutDebounceMs = 20
 
   // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
@@ -74,7 +74,7 @@
 
   // Keep track of whether nodes have been layouted, so that won't display them before then
   let nodes$AreLayouted = $state(false)
-  $inspect('nodes layouted', nodes$AreLayouted)
+  // $inspect('nodes layouted', nodes$AreLayouted)
   const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
   // $inspect('flowOpacity: ' + `${flowOpacity}`)
 
@@ -127,8 +127,6 @@
   }
   function doFitView() {
     window.requestAnimationFrame(() => {
-      console.log('fitting view!')
-
       fitView({
         padding: 0.1,
         minZoom: sfVisualOptions.smallestThatCanZoomOutTo,
@@ -160,7 +158,7 @@
   }
 </script>
 
-<div style={`height:100svh; opacity: ${flowOpacity}`}>
+<div style={`height:96svh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
@@ -175,6 +173,6 @@
     <Background />
   </SvelteFlow>
 </div>
-<!-- Do layout button for debugging doLayout:  -->
-<button onclick={doLayout}>Do layout</button>
-<button onclick={doLayoutAndFitView}>Do layout and fit view</button>
+<!-- For debugging -->
+<!-- <button onclick={doLayout}>Do layout</button>
+<button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
