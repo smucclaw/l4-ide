@@ -58,6 +58,7 @@ library
     L4.Lexer
     L4.Parser
     L4.ParserCombinators
+    L4.Transform
 
 executable jl4-cli
   import: defaults

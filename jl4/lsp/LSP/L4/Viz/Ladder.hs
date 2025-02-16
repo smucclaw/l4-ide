@@ -8,17 +8,17 @@ import Control.Monad.State (MonadState, StateT (StateT))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics (Generic)
-import qualified Optics
-import Optics ((%), (^..))
 import Optics.State.Operators ((<%=))
 
-import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), OptionallyTypedName (..), TypeSig (..), Resolved, getOriginal)
+import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal)
 import L4.TypeCheck (rawNameToText)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
+import L4.Print (prettyLayout)
+import qualified L4.Transform as Transform (simplify)
 
 ------------------------------------------------------
 -- Monad
@@ -64,13 +64,13 @@ prettyPrintVizError = \case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> Either VizError VisualizeDecisionLogicIRInfo
-doVisualize decide =
-  case  (vizProgram decide).getVizE initialVizState of
+doVisualize :: Bool -> Decide Resolved -> Either VizError VisualizeDecisionLogicIRInfo
+doVisualize simplify decide =
+  case  (vizProgram simplify decide).getVizE initialVizState of
     (result, _) -> result
 
-vizProgram :: Decide Resolved -> Viz VisualizeDecisionLogicIRInfo
-vizProgram = fmap MkVisualizeDecisionLogicIRInfo . translateDecide
+vizProgram :: Bool -> Decide Resolved -> Viz VisualizeDecisionLogicIRInfo
+vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simplify
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -91,45 +91,54 @@ vizProgram = fmap MkVisualizeDecisionLogicIRInfo . translateDecide
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Decide Resolved -> Viz V.IRExpr
-translateDecide (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (getOriginal -> MkName _ fnName) _args) body) =
+translateDecide :: Bool -> Decide Resolved -> Viz V.IRExpr
+translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (getOriginal -> MkName _ _fnName) _args) body) =
   case givenSig of
-    MkGivenSig _ [MkOptionallyTypedName _ (getOriginal -> MkName _ subject) _] ->
-      translateExpr (rawNameToText subject) body
-    MkGivenSig _ [] ->
-      translateExpr (rawNameToText fnName) body
-    -- DECIDEs with more than one GIVEN not currently supported
-    MkGivenSig _ _xs -> throwError InvalidProgramDecidesMustNotHaveMoreThanOneGiven
+    -- MkGivenSig _ [MkOptionallyTypedName _ (getOriginal -> MkName _ subject) _] ->
+    --   translateExpr simplify (rawNameToText subject) body
+    -- MkGivenSig _ [] ->
+    --   translateExpr simplify (rawNameToText fnName) body
+    MkGivenSig _ _xs ->
+      translateExpr simplify body
 
-translateExpr :: Text -> Expr Resolved -> Viz IRExpr
-translateExpr subject e = case e of
-{- TODO: Need to look more into whether we really want to be passing `subject` down.
--}
-  Not _ negand -> do
-    uid <- getFresh
-    V.Not uid <$> translateExpr subject negand
-  And {} -> do
-    uid <- getFresh
-    V.And uid <$> traverse (translateExpr subject) (scanAnd e)
-  Or {} -> do
-    uid <- getFresh
-    V.Or uid <$> traverse (translateExpr subject) (scanOr e)
-  ---- unimplemented --------------------------------
-  Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
-
-  -- A 'Var' can apparently be parsed as an App with no arguments ----------------
-  Var _ (getOriginal -> MkName _ verb) ->
-    leaf "" (rawNameToText verb)
-  App _ (getOriginal -> MkName _ leafName) [] ->
-    leaf "" (rawNameToText leafName)
-  --------------------------------------------------------------------------------
-
-  -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
-  App _ (getOriginal -> MkName _ fnName) args ->
-    leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
-  _ -> throwError Unimplemented
+translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
+translateExpr True  =
+  translateExpr False . Transform.simplify
+translateExpr False = go
   where
-    getNames args = args ^.. (Optics.gplate @Name) % Optics.to nameToText
+    go e =
+      case e of
+        Not _ negand -> do
+          uid <- getFresh
+          V.Not uid <$> go negand
+        And {} -> do
+          uid <- getFresh
+          V.And uid <$> traverse go (scanAnd e)
+        Or {} -> do
+          uid <- getFresh
+          V.Or uid <$> traverse go (scanOr e)
+        -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
+        App _ (getOriginal -> MkName _ fnName) args ->
+          leaf "" $ Text.unwords (rawNameToText fnName : (prettyLayout <$> args))
+        Where _ e' _ds -> go e' -- TODO: lossy
+        _ -> do
+          leaf "" (prettyLayout e)
+        ---- unimplemented --------------------------------
+        -- Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
+
+        -- -- A 'Var' can apparently be parsed as an App with no arguments ----------------
+        -- Var _ (getOriginal -> MkName _ verb) ->
+        --   leaf "" (rawNameToText verb)
+        -- App _ (getOriginal -> MkName _ leafName) [] ->
+        --   leaf "" (rawNameToText leafName)
+        -- --------------------------------------------------------------------------------
+
+        -- -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
+        -- App _ (getOriginal -> MkName _ fnName) args ->
+        --   leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
+        -- _ -> throwError Unimplemented
+        -- where
+        --   getNames args = args ^.. (Optics.gplate @Name) % Optics.to nameToText
 
 scanAnd :: Expr Resolved -> [Expr Resolved]
 scanAnd (And _ e1 e2) =

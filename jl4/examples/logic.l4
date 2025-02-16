@@ -1,0 +1,60 @@
+
+formula1 a b c d MEANS
+      a
+  AND b
+  AND c
+  AND d
+
+formula2 a b c d MEANS
+     a
+  OR b
+  OR c
+  OR d
+
+formula3 a b c d MEANS
+         a
+      OR b
+  AND    c
+      OR d
+
+formula4 a b c d MEANS
+         a
+     AND b
+  OR     c
+     AND d
+
+formula5 a b c d e f g MEANS
+              a
+          AND b
+          AND c
+      OR      d
+          AND e
+          AND f
+  AND         g
+
+formula6 a b c d e f MEANS
+         a
+     AND b
+  OR     c
+     AND d
+  OR     e
+     AND f
+
+§ `Formulas with negation`
+
+formula7 a MEANS
+  NOT a
+
+formula8 a MEANS
+  NOT NOT a
+
+formula9 a b MEANS
+  NOT     NOT a
+      OR  NOT b
+
+formula10 a b c d MEANS
+  NOT
+             a
+         AND b
+      OR     c
+         AND d

@@ -232,17 +232,17 @@ handlers recorder =
 
               let decides = foldTopLevelDecides (: []) program
 
-              decide :: Decide Resolved <- case args of
+              (decide :: Decide Resolved, simplify :: Bool) <- case args of
                 -- the command was issued by the button in vscode
                 [] -> case decides of
                    [] -> defaultResponseError "No DECIDE/MEANS declarations available"
                    (x : xs) -> do
                      unless (null xs) $ do
                        logWith recorder Warning $ LogMultipleDecideClauses uri
-                     pure x
+                     pure (x, False)
 
                 -- the command was issued by a code action or codelens
-                ((Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) : xs) -> do
+                ((Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) : (Aeson.fromJSON -> Aeson.Success (simplify :: Bool)) : xs) -> do
                   unless (null xs) $ do
                     logWith recorder Warning (LogSuppliedTooManyArguments xs)
 
@@ -251,13 +251,14 @@ handlers recorder =
                             node <- rangeOfNode decide
                             pure node.start
                   case filter decideAtSrcPos decides of
-                    [decide] -> pure decide
+                    [decide] -> pure (decide, simplify)
                     _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
                     -- TODO: if this becomes a problem, we should use
                     -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
-                _ -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+                (_ : _ : _)  -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+                _ -> defaultResponseError "Incorrect number of arguments to visualizer. This is a bug."
 
-              case Ladder.doVisualize decide of
+              case Ladder.doVisualize simplify decide of
                 Right vizProgramInfo -> pure $ InL $ Aeson.toJSON vizProgramInfo
                 Left vizError ->
                   defaultResponseError $ Text.unlines
@@ -367,25 +368,28 @@ handlers recorder =
           use_ TypeCheck (fromUri (toNormalizedUri uri))
 
         let
-          mkCodeLens srcPos = CodeLens
+          mkCodeLens srcPos simplify = CodeLens
             { _command = Just Command
-              { _title = "Visualize as Ladder Diagram"
+              { _title = t simplify
               , _command = "l4.visualize"
-              , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos)]
+              , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
               }
             , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
             }
+            where
+              t False = "Visualize"
+              t True  = "Simplify and visualize"
 
-          decideToCodeLens decide
+          decideToCodeLens decide =
             -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
             -- We try to not offer any code lenses for the visualizer if that's the case.
             -- If in future this is too slow, we should think about caching these results or, even better,
             -- make the visualizer work on as many examples as possible.
-            | isRight (Ladder.doVisualize decide)
-            , Just node <- rangeOfNode decide
-            = [mkCodeLens node.start]
-            | otherwise = []
+            case rangeOfNode decide of
+              Just node ->
+                map (mkCodeLens node.start) (filter (isRight . (\ s -> Ladder.doVisualize s decide)) [False, True])
+              Nothing -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
           visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program

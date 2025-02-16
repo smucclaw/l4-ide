@@ -36,16 +36,19 @@ data Resolved =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- | Extract the original name, i.e., for referring occurrences, the defining occurrence of the name.
 getOriginal :: Resolved -> Name
 getOriginal (Def _ n)        = n
 getOriginal (Ref _ _ o)      = o
 getOriginal (OutOfScope _ n) = n
 
+-- | Extract the unique of a name, should be used for determining name equality.
 getUnique :: Resolved -> Unique
 getUnique (Def u _)        = u
 getUnique (Ref _ u _)      = u
 getUnique (OutOfScope u _) = u
 
+-- | Extract the actual name, i.e., for referring occurrences, the actual referring occurrence.
 getActual :: Resolved -> Name
 getActual (Def _ n)        = n
 getActual (Ref n _ _)      = n

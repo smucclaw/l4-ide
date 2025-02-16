@@ -28,6 +28,9 @@ class LayoutPrinter a where
 instance LayoutPrinter Name where
   printWithLayout (MkName _ rawName) = printWithLayout rawName
 
+instance LayoutPrinter Resolved where
+  printWithLayout r = printWithLayout (getActual r)
+
 instance LayoutPrinter a => LayoutPrinter (Maybe a) where
   printWithLayout = \case
     Nothing -> mempty
