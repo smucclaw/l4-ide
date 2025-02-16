@@ -116,18 +116,20 @@ export const sfNodeTypes: SF.NodeTypes = {
 }
 
 /************************************************
-          Stuff for SF Node data
+        SF Node data, displayer props
 *************************************************/
 
-export interface SFHandlesInfo {
-  sourcePosition: SF.Position
-  targetPosition: SF.Position
+// Displayer props
+
+export interface BoolVarDisplayerProps {
+  data: BoolVarDisplayerData
 }
 
-export const defaultSFHandlesInfo: SFHandlesInfo = {
-  sourcePosition: SF.Position.Right,
-  targetPosition: SF.Position.Left,
+export interface BundlingNodeDisplayerProps {
+  data: BundlingNodeDisplayerData
 }
+
+// Node data
 
 // TODO: Not sure we need this after all
 export interface LadderSFNodeData {
@@ -140,8 +142,24 @@ export interface BoolVarDisplayerData extends LadderSFNodeData {
   value: BoolVal
 }
 
-export interface BoolVarDisplayerProps {
-  data: BoolVarDisplayerData
+export interface BundlingNodeDisplayerData extends LadderSFNodeData {
+  /** Currently used for the explanatory labels */
+  annotation: string
+}
+
+/************************************************
+        SF Node handles
+*************************************************/
+
+export interface SFHandlesInfo {
+  sourcePosition: SF.Position
+  targetPosition: SF.Position
+}
+
+// TODO: Improve how this is used -- took a shortcut here
+export const defaultSFHandlesInfo: SFHandlesInfo = {
+  sourcePosition: SF.Position.Right,
+  targetPosition: SF.Position.Left,
 }
 
 /************************************************
