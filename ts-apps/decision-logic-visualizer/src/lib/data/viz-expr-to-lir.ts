@@ -19,7 +19,10 @@ import { match } from 'ts-pattern'
 export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {
     return match(expr)
-      .with({ $type: 'BoolVar' }, (ap) => new BoolVarLirNode(nodeInfo, ap))
+      .with(
+        { $type: 'BoolVar' },
+        (originalVar) => new BoolVarLirNode(nodeInfo, originalVar)
+      )
       .with(
         { $type: 'Not' },
         (n) => new NotLirNode(nodeInfo, ExprLirSource.toLir(nodeInfo, n.negand))

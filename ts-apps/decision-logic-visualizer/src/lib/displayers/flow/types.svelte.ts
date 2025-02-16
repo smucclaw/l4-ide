@@ -4,6 +4,8 @@ import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import BoolVarSFNode from './sf-custom-nodes/BoolVarSFNode.svelte'
+import NotStartSFNode from './sf-custom-nodes/NotStartSFNode.svelte'
+import NotEndSFNode from './sf-custom-nodes/NotEndSFNode.svelte'
 import SourceSFNode from './sf-custom-nodes/SourceSFNode.svelte'
 import SinkSFNode from './sf-custom-nodes/SinkSFNode.svelte'
 
@@ -88,13 +90,13 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   // TODO: Let's only add more info to data, e.g. a value, in the next prototype
   constructor(
     protected readonly data: { label: string },
-    origLirIds: LirId[],
+    origLirId: LirId,
     position: {
       x: number
       y: number
     } = DEFAULT_INITIAL_POSITION
   ) {
-    super(origLirIds, position)
+    super([origLirId], position)
   }
 
   getData() {
@@ -107,6 +109,50 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       type: boolVarNodeType,
       position: this.position,
       data: this.data,
+    }
+  }
+}
+
+export class NotStartFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  constructor(
+    /** of the NotLirNode */
+    origLirId: LirId,
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super([origLirId], position)
+  }
+
+  toSFPojo(): SF.Node {
+    return {
+      id: this.id,
+      type: notStartNodeType,
+      position: this.position,
+      data: {},
+    }
+  }
+}
+
+export class NotEndFlowNode extends BaseFlowNode implements Ord<FlowNode> {
+  constructor(
+    /** of the NotLirNode */
+    origLirId: LirId,
+    position: {
+      x: number
+      y: number
+    } = DEFAULT_INITIAL_POSITION
+  ) {
+    super([origLirId], position)
+  }
+
+  toSFPojo(): SF.Node {
+    return {
+      id: this.id,
+      type: notEndNodeType,
+      position: this.position,
+      data: {},
     }
   }
 }
@@ -165,7 +211,7 @@ export type NodeDimensions = {
   height: number
 }
 
-export type NodeWithMeasuredDimensions = SF.Node & {
+export type SFNodeWithMeasuredDimensions = SF.Node & {
   measured: {
     width: number
     height: number
@@ -173,6 +219,8 @@ export type NodeWithMeasuredDimensions = SF.Node & {
 }
 
 const boolVarNodeType = 'boolVarNode' as const
+const notStartNodeType = 'notStartNode' as const
+const notEndNodeType = 'notEndNode' as const
 const sfSourceNodeType = 'sourceNode' as const
 const sfSinkNodeType = 'sinkNode' as const
 
@@ -251,6 +299,8 @@ export class FlowEdge implements Ord<FlowEdge> {
 /** This is where we declare all the custom nodes for Svelte Flow */
 export const sfNodeTypes: SF.NodeTypes = {
   boolVarNode: BoolVarSFNode,
+  notStartNode: NotStartSFNode,
+  notEndNode: NotEndSFNode,
   sourceNode: SourceSFNode,
   sinkNode: SinkSFNode,
 }
@@ -264,9 +314,6 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
   sourcePosition: SF.Position.Right,
   targetPosition: SF.Position.Left,
 }
-
-// See Meng's layman for this 1px thing
-export const groupingNodehandleStyle = 'width:1px; height:1px'
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { label: string }

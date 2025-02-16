@@ -3,6 +3,8 @@ import {
   BoolVarFlowNode,
   SourceFlowNode,
   SinkFlowNode,
+  NotStartFlowNode,
+  NotEndFlowNode,
   FlowEdge,
 } from './types.svelte.js'
 import type { LirContext } from '$lib/layout-ir/core.js'
@@ -74,14 +76,24 @@ function transform(
   */
   return match(expr)
     .with(P.instanceOf(BoolVarLirNode), (node) => {
-      const flowNode = new BoolVarFlowNode({ label: node.getName(context) }, [
-        node.getId(),
-      ])
+      const flowNode = new BoolVarFlowNode(
+        { label: node.getName(context) },
+        node.getId()
+      )
       return vertex(flowNode)
     })
-    .with(P.instanceOf(NotLirNode), () => {
-      // TODO
-      throw new Error('NotLirNode -> DAG<FlowNode> not yet implemented')
+    .with(P.instanceOf(NotLirNode), (node) => {
+      const negand = transform(context, node.getNegand(context))
+      const notStart = vertex(
+        new NotStartFlowNode(node.getId())
+      ) as DirectedAcyclicGraph<FlowNode>
+      const notEnd = vertex(
+        new NotEndFlowNode(node.getId())
+      ) as DirectedAcyclicGraph<FlowNode>
+      return notStart
+        .connect(negand.getSource())
+        .overlay(negand)
+        .overlay(negand.getSink().connect(notEnd))
     })
     .with(P.instanceOf(AndLirNode), (node) => {
       const childGraphs = node
