@@ -13,13 +13,17 @@
     type Edge,
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
-  import { type ExprFlowDisplayerProps, sfNodeTypes } from './types.svelte.js'
+  import {
+    type ExprFlowDisplayerProps,
+    sfNodeTypes,
+    type NodeWithMeasuredDimensions,
+  } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,
     algaUndirectedGraphToFlowGraph,
   } from './lir-to-dag.js'
   import { onMount } from 'svelte'
-  import { watch } from 'runed'
+  import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
@@ -49,14 +53,29 @@
       SvelteFlow hooks
   ************************************/
 
+  const layoutDebounceMs = 100
+
+  // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
+  const debouncedSfNodes$Initialized = new Debounced(
+    () => sfNodes$Initialized.current,
+    layoutDebounceMs
+  )
   const { fitView } = $derived(useSvelteFlow())
+
+  // Keep track of whether nodes have been layouted, so that won't display them before then
+  let nodes$AreLayouted = $state(false)
+  $inspect('nodes layouted', nodes$AreLayouted)
+  const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
+  // $inspect('flowOpacity: ' + `${flowOpacity}`)
+
   onMount(() => {
+    // Layout only after the nodes have been measured (have a width and height)
     watch(
-      () => sfNodes$Initialized.current,
+      () => debouncedSfNodes$Initialized.current,
       () => {
-        if (sfNodes$Initialized.current) {
-          doLayout()
+        if (debouncedSfNodes$Initialized.current) {
+          doLayoutAndFitView()
         }
       }
     )
@@ -81,20 +100,48 @@
   }
 
   function doLayout() {
-    const layoutedElements = getLayoutedElements(dagreConfig, NODES, EDGES)
-    NODES = layoutedElements.nodes
-    EDGES = layoutedElements.edges
-    console.log('nodes', NODES)
-    console.log('edges', EDGES)
-
+    if (
+      debouncedSfNodes$Initialized.current &&
+      NODES[0] &&
+      NODES[0].measured?.width
+    ) {
+      const layoutedElements = getLayoutedElements(
+        dagreConfig,
+        NODES as NodeWithMeasuredDimensions[],
+        EDGES
+      )
+      NODES = layoutedElements.nodes
+      EDGES = layoutedElements.edges
+      console.log('nodes', NODES)
+      console.log('edges', EDGES)
+    }
+  }
+  function doFitView() {
     window.requestAnimationFrame(() => {
       console.log('fitting view!')
-      fitView({ padding: 0, duration: 25 })
+
+      fitView({ padding: 0.1, duration: 15 })
+      /***************************
+       * Notes on fitView padding
+       ***************************
+       *
+       * 0.1 is the default
+       *
+       * The padding gets used in `getViewportForBounds` in @xyflow/system:
+       *
+       * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
+       *
+       */
     })
+  }
+  function doLayoutAndFitView() {
+    doLayout()
+    nodes$AreLayouted = true
+    doFitView()
   }
 </script>
 
-<div style="height:100vh;">
+<div style={`height:100svh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
@@ -107,4 +154,5 @@
   </SvelteFlow>
 </div>
 <!-- Do layout button for debugging doLayout:  -->
-<!-- <button onclick={doLayout}>Do layout</button> -->
+<button onclick={doLayout}>Do layout</button>
+<button onclick={doLayoutAndFitView}>Do layout and fit view</button>

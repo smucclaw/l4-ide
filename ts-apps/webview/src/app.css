@@ -1,6 +1,8 @@
-/* TODO: Right now there's an app.css for both the DLV and the webview packages. It'd be good to share the common CSS instead of having duplicates. */
-
-/* ==== FURTHER CSS = TODO ======================== */
+/**************************************************************************
+  The DLV lib exports a style.css for the Ladder diagram
+  This stylesheet is required for the Ladder diagram to render correctly 
+****************************************************************************/
+@import '@repo/decision-logic-visualizer/dist/style.css';
 
 /* ===== Basic 'CSS reset' ======================= 
 
@@ -9,26 +11,6 @@ Resources
   * https://piccalil.li/blog/a-more-modern-css-reset/
 */
 
-/* Box sizing rules */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-/* Make images easier to work with */
-img,
-picture,
-video {
-  max-width: 100%;
-  display: block;
-}
-/******************************************
- IMPT: If you make svg max-width 100%,
-  edges won't render properly in SvelteFlow
-  (at least not with the default options)
-********************************************/
-
 #html {
   isolation: isolate; /* create a new stacking context */
 
@@ -36,12 +18,14 @@ video {
   -moz-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%; /* For older browsers */
   text-size-adjust: 100%;
+
+  height: 100%;
 }
 
 /* Core body defaults */
 body {
-  min-height: 100vh;
-  line-height: 1.5;
+  height: 100%;
+  line-height: 1.1;
 }
 
 /* Set shorter line heights on headings and interactive elements */

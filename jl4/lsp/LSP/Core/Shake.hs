@@ -200,7 +200,7 @@ instance Pretty Log where
     LogShakeGarbageCollection label number ds ->
         pretty label <+> "of" <+> pretty number <+> "keys (took " <+> pretty (showDuration ds) <> ")"
     LogSetFilesOfInterest ofInterest ->
-        "Set files of interst to" <> Pretty.line
+        "Set files of interest to" <> Pretty.line
             <> indent 4 (pretty $ fmap (first fromNormalizedFilePath) ofInterest)
 
 

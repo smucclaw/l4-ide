@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
+@import '@xyflow/svelte/dist/style.css';
+
+@import '../static/style/themes/default.css';
+
+@import 'tailwindcss';
+
+/*************************************
+  Utility SF styles
+*************************************/
+
+@utility svelte-flow__node-basic {
+  font-size: 1rem;
+  text-align: center;
+
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  background-color: var(
+    --xy-node-background-color,
+    var(--xy-node-background-color-default)
+  );
+}
+
+/** Controls min/max widths of the labels,
+* as well as text wrapping behavior.
+*
+* To be used in the div that wraps the label. */
+@utility label-wrapper-for-content-bearing-sf-node {
+  /* horizontal padding */
+  @apply px-2.5;
+  /* vertical padding */
+  @apply py-2;
+
+  /* To deal with long text / avoid overflow issues:
+
+    break-words: so that long unbreakable words won't overflow the container
+
+    whitespace-pre-wrap vs whitespace-breaks-spaces:  
+      https://stackoverflow.com/questions/64699828/css-property-white-space-example-for-break-spaces
+  */
+  @apply break-words whitespace-break-spaces;
+
+  /*
+  * Max width so that the node doesn't get too wide.
+  * But also need min width to minimize edge crossings when 
+  * stacking nodes with labels of different lengths
+  * on top of each other.
+  *
+  * TODO: To experiment with in the future: probably better to dynamically 
+  * adjust the min/max width based on the size of the the relevant neighbor nodes?
+  * Hard to find a one-size-fits-all set of min/max widths.
+  */
+  @apply min-w-[12ch] leading-normal;
+  max-width: 34ch;
+}
+
+@utility grouping-node {
+  @apply svelte-flow__node-basic;
+  /* Will lose the grouping node if make width 0 px */
+  width: 1px;
+  height: 1px;
+
+  opacity: 0.3;
+}
+
+/*************************************
+  Other styles
+*************************************/
+
+body {
+  color: var(--color-primary);
+  background-color: white;
+  margin: 0;
+}
+
+.visualization-container {
+  min-height: 400px;
+  max-width: 96svw;
+  margin: 0 auto;
+}
+
+.button {
+  background-color: var(--color-secondary);
+  color: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+}
+
+/* svelte-flow specific */
+
+:root,
+.svelte-flow {
+  --xy-node-border-radius: var(--theme-border-radius);
+  --xy-node-color: var(--color-node-text);
+  --xy-node-border: 2px solid var(--color-primary);
+  --xy-handle-background-color: var(--color-primary);
+  --xy-edge-stroke: var(--color-primary);
+
+  .svelte-flow__node {
+    font-family: 'Source Sans 3', serif;
+    font-optical-sizing: auto;
+    font-style: normal;
+  }
+
+  .svelte-flow__edge:hover .svelte-flow__edge-path {
+    stroke: var(--color-secondary) !important;
+  }
+}

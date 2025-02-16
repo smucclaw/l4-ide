@@ -80,7 +80,7 @@ Will think more about this after getting more experience with the library -->
 
 {#if vizExpr && exprLirNode}
   {#key exprLirNode}
-    <div class="flash-on-update">
+    <div class="flash-on-update visualization-container">
       <ExprFlow {context} node={exprLirNode} />
       <section>
         <p>The above is a visualization of</p>
@@ -105,5 +105,14 @@ Will think more about this after getting more experience with the library -->
 
   .flash-on-update {
     animation: flash 0.6s;
+  }
+
+  h1 {
+    margin-top: 10px;
+    padding-bottom: 2px;
+    font-size: 1.5rem;
+    line-height: 1.1rem;
+    font-weight: 700;
+    text-align: center;
   }
 </style>

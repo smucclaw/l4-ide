@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
+
 export default {
-  content: ['./src/**/*.{html,js,svelte,ts,css}'],
+  // Needs to be important to override the default styles
+  important: true,
+  content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     colors: {
       transparent: 'transparent',
@@ -9,5 +12,5 @@ export default {
     },
     extend: {},
   },
-  plugins: [],
+  plugins: ['@tailwindcss/postcss'],
 }

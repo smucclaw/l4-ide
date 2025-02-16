@@ -104,7 +104,7 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
-      type: 'boolVarNode',
+      type: boolVarNodeType,
       position: this.position,
       data: this.data,
     }
@@ -160,7 +160,7 @@ export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
-      type: 'sourceNode',
+      type: sfSourceNodeType,
       position: this.position,
       data: {},
     }
@@ -181,12 +181,49 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   toSFPojo(): SF.Node {
     return {
       id: this.id,
-      type: 'sinkNode',
+      type: sfSinkNodeType,
       position: this.position,
       data: {},
     }
   }
 }
+
+/************************************************
+          SF Nodes
+*************************************************/
+
+export type NodeDimensions = {
+  width: number
+  height: number
+}
+
+export type NodeWithMeasuredDimensions = SF.Node & {
+  measured: {
+    width: number
+    height: number
+  }
+}
+
+const boolVarNodeType = 'boolVarNode' as const
+const sfSourceNodeType = 'sourceNode' as const
+const sfSinkNodeType = 'sinkNode' as const
+
+export type SFNode<T extends string> = SF.Node & { type: T }
+function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
+  return node.type === type
+}
+
+export type SFSourceNode = SFNode<typeof sfSourceNodeType>
+export type SFSinkNode = SFNode<typeof sfSinkNodeType>
+
+export const isSFSourceNode = (node: SF.Node): node is SFSourceNode =>
+  isSFNode(node, sfSourceNodeType)
+export const isSFSinkNode = (node: SF.Node): node is SFSinkNode =>
+  isSFNode(node, sfSinkNodeType)
+export const isSFGroupingNode = (
+  node: SF.Node
+): node is SFSourceNode | SFSinkNode =>
+  isSFSourceNode(node) || isSFSinkNode(node)
 
 /************************************************
             Flow Edges
@@ -261,7 +298,7 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 }
 
 // See Meng's layman for this 1px thing
-export const groupingNodehandleStyle = 'opacity:0 width:1px height:1px'
+export const groupingNodehandleStyle = 'width:1px; height:1px'
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { label: string }
