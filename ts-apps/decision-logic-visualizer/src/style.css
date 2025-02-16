@@ -51,7 +51,7 @@
   * Hard to find a one-size-fits-all set of min/max widths.
   */
   @apply min-w-[12ch] leading-normal;
-  max-width: 34ch;
+  max-width: 40ch;
 }
 
 @utility grouping-node {
