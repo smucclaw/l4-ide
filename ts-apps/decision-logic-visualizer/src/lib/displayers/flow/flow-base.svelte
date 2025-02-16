@@ -8,6 +8,7 @@
   import {
     SvelteFlow,
     Background,
+    Controls,
     ConnectionLineType,
     type Node,
     type Edge,
@@ -169,6 +170,8 @@
     connectionLineType={ConnectionLineType.Bezier}
     defaultEdgeOptions={{ type: 'bezier', animated: false }}
   >
+    <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
+    <Controls position="bottom-right" showLock={false} />
     <Background />
   </SvelteFlow>
 </div>
