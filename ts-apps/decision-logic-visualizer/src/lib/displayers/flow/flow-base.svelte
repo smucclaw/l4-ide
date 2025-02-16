@@ -16,7 +16,7 @@
   import {
     type ExprFlowDisplayerProps,
     sfNodeTypes,
-    type NodeWithMeasuredDimensions,
+    type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,
@@ -115,7 +115,7 @@
     ) {
       const layoutedElements = getLayoutedElements(
         dagreConfig,
-        NODES as NodeWithMeasuredDimensions[],
+        NODES as SFNodeWithMeasuredDimensions[],
         EDGES
       )
       NODES = layoutedElements.nodes
