@@ -52,6 +52,9 @@ export function getLayoutedElements(
     config.dagreGraph.setEdge(edge.source, edge.target)
   })
 
+  /**
+   * Nodesep: Minimum horizontal separation between node boxes.
+   */
   dagre.layout(config.dagreGraph, { nodesep: 30 })
 
   const layoutedNodes = nodes.map((node) => {
@@ -83,6 +86,25 @@ export function getLayoutedElements(
 
 /* https://github.com/dagrejs/dagre/wiki#configuring-the-layout
 
+  ==================================================================================
+  Knobs we can play with if we need more control wrt source/sink nodes in the future
+  ==================================================================================
+    
+  Tweak the ranker / augment the network simplex algo:
+
+      > The user can further constrain the layout in a way that is useful for drawing graphs that have time-lines
+      > or for highlighting source and sink nodes. The initial pass of the algorithm described in the next section
+      > assigns nodes to discrete ranks 0...Max_rank. Nodes in the same rank receive the same Y coordinate value. 
+      > The user may provide sets S ,S ,S ,S , . . . , S !subset V. These are (possibly empty)
+      > max min 0 1 k
+      > sets of nodes that must be placed together on the maximum, minimum, or same rank, respectively.
+      > ("A Technique for Drawing Directed Graphs")
+
+    though the lib doesn't seem to make it easy to do this:
+      - https://github.com/dagrejs/dagre/pull/271
+      - https://github.com/dagrejs/dagre/issues/196
+
+  ===========================
   Experiment log re layouting
   ===========================
   * The biggest difference / issue so far: the anchor positions for the grouping nodes were indeed not being set correctly!
