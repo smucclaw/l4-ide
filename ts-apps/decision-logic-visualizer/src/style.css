@@ -59,8 +59,17 @@
   /* Will lose the grouping node if make width 0 px */
   width: 1px;
   height: 1px;
+}
 
-  opacity: 0.3;
+@utility annotation {
+  position: absolute;
+  top: -20px; /* Adjust this value to control the vertical position */
+  left: 50%;
+  transform: translateX(-50%); /* Centers the text horizontally */
+
+  opacity: 0.8;
+  @apply text-xl leading-none;
+  @apply text-(--color-node-text);
 }
 
 /*************************************

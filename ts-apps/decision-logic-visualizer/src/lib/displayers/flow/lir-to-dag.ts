@@ -32,10 +32,10 @@ export function exprLirNodeToAlgaDag(
   expr: ExprLirNode
 ): DirectedAcyclicGraph<FlowNode> {
   const overallSource = vertex(
-    new SourceFlowNode([expr.getId()])
+    new SourceFlowNode(emptyAnnotation, [expr.getId()])
   ) as DirectedAcyclicGraph<FlowNode>
   const overallSink = vertex(
-    new SinkFlowNode([expr.getId()])
+    new SinkFlowNode(emptyAnnotation, [expr.getId()])
   ) as DirectedAcyclicGraph<FlowNode>
 
   const middle = transform(context, expr)
@@ -47,6 +47,8 @@ export function exprLirNodeToAlgaDag(
 
 // TODO2: Attach a group id to the label for the flownode to make it easier to debug
 // TODO3: Return the number of groups as metadata in the FlowGraph
+
+const emptyAnnotation = { annotation: '' }
 
 /** Internal helper */
 function transform(
@@ -110,10 +112,10 @@ function transform(
       const children = node.getArgs(context).map((n) => transform(context, n))
 
       const overallSource = vertex(
-        new SourceFlowNode([node.getId()])
+        new SourceFlowNode({ annotation: 'ANY OF' }, [node.getId()])
       ) as DirectedAcyclicGraph<FlowNode>
       const overallSink = vertex(
-        new SinkFlowNode([node.getId()])
+        new SinkFlowNode(emptyAnnotation, [node.getId()])
       ) as DirectedAcyclicGraph<FlowNode>
 
       const leftEdges = children.map((child) =>
