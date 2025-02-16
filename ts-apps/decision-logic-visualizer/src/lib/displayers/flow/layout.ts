@@ -35,11 +35,11 @@ export function getLayoutedElements(
   // Node dimensions
 
   nodes.forEach((node) => {
-    console.log(
-      'node width, height',
-      node.measured?.width,
-      node.measured?.height
-    )
+    // console.log(
+    //   'node width, height',
+    //   node.measured?.width,
+    //   node.measured?.height
+    // )
     config.dagreGraph.setNode(node.id, {
       // including the fallback options because I don't fully trust TS' type system
       width: node.measured?.width ?? config.graph.defaultNodeWidth,
