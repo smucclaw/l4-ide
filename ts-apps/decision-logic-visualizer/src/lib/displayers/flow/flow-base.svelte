@@ -62,7 +62,7 @@
       SvelteFlow hooks
   ************************************/
 
-  const layoutDebounceMs = 100
+  const layoutDebounceMs = 20
 
   // Set up the initial SvelteFlow hooks
   const sfNodes$Initialized = useNodesInitialized()
