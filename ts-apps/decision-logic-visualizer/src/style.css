@@ -35,18 +35,18 @@
 
     break-words: so that long unbreakable words won't overflow the container
 
-    whitespace-pre-wrap vs whitespace-breaks-spaces:  
+    whitespace-pre-wrap vs whitespace-breaks-spaces:
       https://stackoverflow.com/questions/64699828/css-property-white-space-example-for-break-spaces
   */
   @apply break-words whitespace-break-spaces;
 
   /*
   * Max width so that the node doesn't get too wide.
-  * But also need min width to minimize edge crossings when 
+  * But also need min width to minimize edge crossings when
   * stacking nodes with labels of different lengths
   * on top of each other.
   *
-  * TODO: To experiment with in the future: probably better to dynamically 
+  * TODO: To experiment with in the future: probably better to dynamically
   * adjust the min/max width based on the size of the the relevant neighbor nodes?
   * Hard to find a one-size-fits-all set of min/max widths.
   */
