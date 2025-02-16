@@ -17,7 +17,7 @@
   />
   <!-- <div>{'<NOT|'}</div> -->
   <svg
-    width="90%"
+    width="92%"
     height={graphicSize * 0.5}
     viewBox="0 0 105 100"
     xmlns="http://www.w3.org/2000/svg"
@@ -34,9 +34,9 @@
 
     <!-- "NOT" Text -->
     <text
-      x="65"
+      x="67"
       y="50"
-      font-size="40"
+      font-size="42"
       dominant-baseline="middle"
       text-anchor="middle"
     >
