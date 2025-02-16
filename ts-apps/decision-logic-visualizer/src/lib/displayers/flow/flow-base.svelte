@@ -173,6 +173,6 @@
     <Background />
   </SvelteFlow>
 </div>
-<!-- Do layout button for debugging doLayout:  -->
-<button onclick={doLayout}>Do layout</button>
-<button onclick={doLayoutAndFitView}>Do layout and fit view</button>
+<!-- For debugging -->
+<!-- <button onclick={doLayout}>Do layout</button>
+<button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->

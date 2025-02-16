@@ -82,12 +82,6 @@ Will think more about this after getting more experience with the library -->
   {#key exprLirNode}
     <div class="flash-on-update visualization-container">
       <ExprFlow {context} node={exprLirNode} />
-      <section>
-        <p>The above is a visualization of</p>
-        <pre><code>
-        {JSON.stringify(vizExpr, null, 2)}
-      </code></pre>
-      </section>
     </div>
   {/key}
 {/if}
