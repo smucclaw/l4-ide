@@ -11,10 +11,20 @@ TODO: Will add UI for things like Value in the next iteration
   let { data }: BoolVarDisplayerProps = $props()
 </script>
 
-<div class="bool-var-node">
+<div class="svelte-flow__node-basic bool-var-node-border">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="px-2.5 min-w-[10ch] leading-normal">
+  <div class="label-wrapper-for-content-bearing-sf-node">
     {data.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>
+
+<style>
+  .bool-var-node-border {
+    border: var(--xy-node-border, var(--xy-node-border-default));
+    border-radius: var(
+      --xy-node-border-radius,
+      var(--xy-node-border-radius-default)
+    );
+  }
+</style>

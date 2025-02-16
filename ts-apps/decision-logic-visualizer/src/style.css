@@ -21,15 +21,16 @@
   );
 }
 
-/** TODO: Move this into the component... */
-@utility bool-var-node {
-  @apply svelte-flow__node-basic;
+/** Controls min/max widths of the labels,
+* as well as text wrapping behavior.
+*
+* To be used in the div that wraps the label. */
+@utility label-wrapper-for-content-bearing-sf-node {
+  /* horizontal padding */
+  @apply px-2.5;
+  /* vertical padding */
+  @apply py-2;
 
-  border: var(--xy-node-border, var(--xy-node-border-default));
-  border-radius: var(
-    --xy-node-border-radius,
-    var(--xy-node-border-radius-default)
-  );
   /* To deal with long text / avoid overflow issues:
 
     break-words: so that long unbreakable words won't overflow the container
@@ -39,7 +40,18 @@
   */
   @apply break-words whitespace-break-spaces;
 
-  max-width: 16rem;
+  /*
+  * Max width so that the node doesn't get too wide.
+  * But also need min width to minimize edge crossings when 
+  * stacking nodes with labels of different lengths
+  * on top of each other.
+  *
+  * TODO: To experiment with in the future: probably better to dynamically 
+  * adjust the min/max width based on the size of the the relevant neighbor nodes?
+  * Hard to find a one-size-fits-all set of min/max widths.
+  */
+  @apply min-w-[12ch] leading-normal;
+  max-width: 34ch;
 }
 
 @utility grouping-node {
