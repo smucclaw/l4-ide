@@ -119,7 +119,19 @@
   function doFitView() {
     window.requestAnimationFrame(() => {
       console.log('fitting view!')
-      fitView({ padding: 1, duration: 15 })
+
+      fitView({ padding: 0.1, duration: 15 })
+      /***************************
+       * Notes on fitView padding
+       ***************************
+       *
+       * 0.1 is the default
+       *
+       * The padding gets used in `getViewportForBounds` in @xyflow/system:
+       *
+       * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
+       *
+       */
     })
   }
   function doLayoutAndFitView() {
