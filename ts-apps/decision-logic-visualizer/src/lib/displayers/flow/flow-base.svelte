@@ -158,7 +158,7 @@
   }
 </script>
 
-<div style={`height:100svh; opacity: ${flowOpacity}`}>
+<div style={`height:96svh; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
