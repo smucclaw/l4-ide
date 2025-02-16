@@ -115,18 +115,18 @@ export function ladderLirNodeToSfNode(
         data: defaultData,
       }
     })
-    .with(P.instanceOf(SourceLirNode), () => {
+    .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
       return {
         ...defaults,
         type: sourceNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(SinkLirNode), () => {
+    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .exhaustive()

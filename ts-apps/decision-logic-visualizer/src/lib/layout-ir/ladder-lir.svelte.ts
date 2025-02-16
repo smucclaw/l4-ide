@@ -22,7 +22,10 @@ import {
   type EdgeAttributes,
   DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
-import type { Dimensions } from '$lib/displayers/flow/svelteflow-types.js'
+import type {
+  Dimensions,
+  BundlingNodeDisplayerData,
+} from '$lib/displayers/flow/svelteflow-types.js'
 import { match } from 'ts-pattern'
 
 /*
@@ -548,6 +551,13 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
     Bundling Flow Lir Node
 *******************************/
 
+export type BundlingNodeAnno = Pick<BundlingNodeDisplayerData, 'annotation'>
+
+export const emptyBundlingNodeAnno: BundlingNodeAnno = { annotation: '' }
+export const anyOfBundlingNodeAnno: BundlingNodeAnno = {
+  annotation: 'any of',
+}
+
 export function isBundlingFlowLirNode(
   node: FlowLirNode
 ): node is BundlingFlowLirNode {
@@ -560,12 +570,30 @@ export function isBundlingFlowLirNode(
  */
 export type BundlingFlowLirNode = SourceLirNode | SinkLirNode
 
-export class SourceLirNode extends BaseFlowLirNode implements FlowLirNode {
+abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
-    position: Position = DEFAULT_INITIAL_POSITION
+    protected readonly annotation: BundlingNodeDisplayerData['annotation'],
+    position: Position
   ) {
     super(nodeInfo, position)
+  }
+
+  getData(_context: LirContext) {
+    return { annotation: this.annotation }
+  }
+}
+
+export class SourceLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
+  constructor(
+    nodeInfo: LirNodeInfo,
+    annotation: BundlingNodeDisplayerData['annotation'] = emptyBundlingNodeAnno.annotation,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, annotation, position)
   }
 
   toPretty() {
@@ -577,12 +605,16 @@ export class SourceLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
-export class SinkLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class SinkLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
+    annotation: BundlingNodeDisplayerData['annotation'] = emptyBundlingNodeAnno.annotation,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
-    super(nodeInfo, position)
+    super(nodeInfo, annotation, position)
   }
 
   toPretty() {

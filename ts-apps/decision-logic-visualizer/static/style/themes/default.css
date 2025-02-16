@@ -4,6 +4,7 @@
   ****************************************/
 
   --color-node-text: #00004d;
+  --color-node-annotation: var(--color-zinc-400);
   --color-primary: #001188;
   --color-secondary: #2563eb;
   --color-button: #c7d2fe;
