@@ -52,7 +52,7 @@ export function getLayoutedElements(
     config.dagreGraph.setEdge(edge.source, edge.target)
   })
 
-  dagre.layout(config.dagreGraph, { nodesep: 30, marginx: 8 })
+  dagre.layout(config.dagreGraph, { nodesep: 30 })
 
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPosition = config.dagreGraph.node(node.id)
