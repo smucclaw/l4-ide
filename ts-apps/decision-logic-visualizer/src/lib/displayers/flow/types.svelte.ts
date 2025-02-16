@@ -297,9 +297,6 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
   targetPosition: SF.Position.Left,
 }
 
-// See Meng's layman for this 1px thing
-export const groupingNodehandleStyle = 'width:1px; height:1px'
-
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { label: string }
   // TODO: Will add Value in the next version
