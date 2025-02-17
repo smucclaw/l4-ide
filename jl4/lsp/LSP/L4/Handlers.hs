@@ -248,7 +248,7 @@ handlers recorder =
 
                   let decideAtSrcPos decide
                         = Just srcPos == do
-                            node <- rangeOfNode decide
+                            node <- rangeOf decide
                             pure node.start
                   case filter decideAtSrcPos decides of
                     [decide] -> pure (decide, simplify)

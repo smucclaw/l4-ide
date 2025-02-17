@@ -287,6 +287,10 @@ debugShow = \case
 debugShowL :: [AnnoElement_ t] -> String
 debugShowL = intercalate "\n" . fmap debugShow
 
+-- | Calculate the 'SrcRange' of the AST node including hidden concrete syntax nodes.
+--
+-- This is notably different to @'rangeOf' (ann :: 'Anno_' t)@, which
+-- filters out any hidden concrete syntax nodes.
 rangeOfNode :: ToConcreteNodes t a => a -> Maybe SrcRange
 rangeOfNode a = case runExcept $ toNodes a of
   Left _ -> Nothing

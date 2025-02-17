@@ -1585,17 +1585,17 @@ instance HasSrcRange CheckErrorWithContext where
 
 instance HasSrcRange CheckErrorContext where
   rangeOf None = Nothing
-  rangeOf (WhileCheckingDeclare n _)    = rangeOfNode n
-  rangeOf (WhileCheckingDecide n _)     = rangeOfNode n
-  rangeOf (WhileCheckingAssume n _)     = rangeOfNode n
-  rangeOf (WhileCheckingExpression e _) = rangeOfNode e
-  rangeOf (WhileCheckingPattern p _)    = rangeOfNode p
-  rangeOf (WhileCheckingType t _)       = rangeOfNode t
+  rangeOf (WhileCheckingDeclare n _)    = rangeOf n
+  rangeOf (WhileCheckingDecide n _)     = rangeOf n
+  rangeOf (WhileCheckingAssume n _)     = rangeOf n
+  rangeOf (WhileCheckingExpression e _) = rangeOf e
+  rangeOf (WhileCheckingPattern p _)    = rangeOf p
+  rangeOf (WhileCheckingType t _)       = rangeOf t
 
 instance HasSrcRange CheckError where
-  rangeOf (OutOfScopeError n _)             = rangeOfNode n
-  rangeOf (InconsistentNameInSignature n _) = rangeOfNode n
-  rangeOf (InconsistentNameInAppForm n _)   = rangeOfNode n
+  rangeOf (OutOfScopeError n _)             = rangeOf n
+  rangeOf (InconsistentNameInSignature n _) = rangeOf n
+  rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
 data Severity = SWarn | SError | SInfo
@@ -1783,11 +1783,11 @@ genericToResolved =
 findDefinition :: ToResolved a => SrcPos -> a -> Maybe SrcRange
 findDefinition pos a = do
   r <- find matches (toResolved a)
-  rangeOfNode (getOriginal r)
+  rangeOf (getOriginal r)
   where
     matches :: Resolved -> Bool
     matches r =
-      case rangeOfNode (getName r) of
+      case rangeOf (getName r) of
         Just range -> inRange pos range
         Nothing -> False
 
