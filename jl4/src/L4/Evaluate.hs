@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module L4.Evaluate where
 
 import Base
@@ -140,6 +141,8 @@ data BinOp =
   | BinOpEquals
   | BinOpLeq
   | BinOpGeq
+  | BinOpLt
+  | BinOpGt
 
 data Stack =
     BinOp1 BinOp {- -} (Expr Resolved) Environment Stack
@@ -295,6 +298,10 @@ forwardExpr env !ss stack (Leq _ann e1 e2) =
   forwardExpr env (ss + 1) (BinOp1 BinOpLeq e2 env stack) e1
 forwardExpr env !ss stack (Geq _ann e1 e2) =
   forwardExpr env (ss + 1) (BinOp1 BinOpGeq e2 env stack) e1
+forwardExpr env !ss stack (Lt _ann e1 e2) =
+  forwardExpr env (ss + 1) (BinOp1 BinOpLt e2 env stack) e1
+forwardExpr env !ss stack (Gt _ann e1 e2) =
+  forwardExpr env (ss + 1) (BinOp1 BinOpGt e2 env stack) e1
 forwardExpr env !ss stack (Proj _ann e l) =
   forwardExpr env ss stack (App emptyAnno l [e]) -- we desugar projection to plain function application
 forwardExpr env !ss stack (Var _ann n) =
@@ -358,11 +365,10 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
 backwardExpr !ss (App1 n vals (e : es) env stack) val =
   forwardExpr env ss (App1 n (val : vals) es env stack) e
 backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 =
-  case val1 of
-    ValConstructor n []
-      | sameResolved n TypeCheck.trueRef  -> forwardExpr env (ss - 1) stack e2
-      | sameResolved n TypeCheck.falseRef -> forwardExpr env (ss - 1) stack e3
-    _                                     -> exception RuntimeTypeError stack0
+  case boolView val1 of
+    Just True  -> forwardExpr env (ss - 1) stack e2
+    Just False -> forwardExpr env (ss - 1) stack e3
+    Nothing    -> exception RuntimeTypeError stack0
 backwardExpr !ss stack0@(Consider1 branches env stack) val =
     matchBranches val branches env stack0 ss stack
 backwardExpr !ss (List1 vals [] _env stack) val =
@@ -371,6 +377,15 @@ backwardExpr !ss (List1 vals (e : es) env stack) val =
   forwardExpr env ss (List1 (val : vals) es env stack) e
 backwardExpr _ss Empty val =
   pure val
+
+-- | Checks if a value is a Boolean constructor.
+boolView :: Value -> Maybe Bool
+boolView val =
+  case val of
+    ValConstructor n []
+      | sameResolved n TypeCheck.trueRef  -> Just True
+      | sameResolved n TypeCheck.falseRef -> Just False
+    _ -> Nothing
 
 matchGivens :: GivenSig Resolved -> [Value] -> Stack -> Eval Environment
 matchGivens (MkGivenSig _ann otns) vals stack0 = do
@@ -429,8 +444,20 @@ runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2) _stack = pure $ ValNum
 runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `mod` num2)
 runBinOp BinOpCons   val1             (ValList val2)   _stack = pure $ ValList (val1 : val2)
 runBinOp BinOpEquals (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 == num2)
+runBinOp BinOpEquals (ValString str1) (ValString str2) _stack = pure $ valBool (str1 == str2)
+runBinOp BinOpEquals (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 == b2)
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 <= num2)
+runBinOp BinOpLeq    (ValString str1) (ValString str2) _stack = pure $ valBool (str1 <= str2)
+runBinOp BinOpLeq    (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 <= b2)
 runBinOp BinOpGeq    (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 >= num2)
+runBinOp BinOpGeq    (ValString str1) (ValString str2) _stack = pure $ valBool (str1 >= str2)
+runBinOp BinOpGeq    (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 >= b2)
+runBinOp BinOpLt     (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 < num2)
+runBinOp BinOpLt     (ValString str1) (ValString str2) _stack = pure $ valBool (str1 < str2)
+runBinOp BinOpLt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 < b2)
+runBinOp BinOpGt     (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 > num2)
+runBinOp BinOpGt     (ValString str1) (ValString str2) _stack = pure $ valBool (str1 > str2)
+runBinOp BinOpGt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 > b2)
 runBinOp _           _                _                 stack = exception RuntimeTypeError stack
 
 valBool :: Bool -> Value
