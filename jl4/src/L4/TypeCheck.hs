@@ -1336,6 +1336,18 @@ inferExpr' g =
         , checkBinOp number  number  boolean Geq ann e1 e2
         , checkBinOp string  string  boolean Geq ann e1 e2
         ]
+    Lt ann e1 e2 ->
+      choose
+        [ checkBinOp boolean boolean boolean Lt ann e1 e2
+        , checkBinOp number  number  boolean Lt ann e1 e2
+        , checkBinOp string  string  boolean Lt ann e1 e2
+        ]
+    Gt ann e1 e2 ->
+      choose
+        [ checkBinOp boolean boolean boolean Gt ann e1 e2
+        , checkBinOp number  number  boolean Gt ann e1 e2
+        , checkBinOp string  string  boolean Gt ann e1 e2
+        ]
     Not ann e -> do
       e' <- checkExpr e boolean
       pure (Not ann e', boolean)

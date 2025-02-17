@@ -142,6 +142,8 @@ data Expr n =
   | Cons       Anno (Expr n) (Expr n)
   | Leq        Anno (Expr n) (Expr n)
   | Geq        Anno (Expr n) (Expr n)
+  | Lt         Anno (Expr n) (Expr n)
+  | Gt         Anno (Expr n) (Expr n)
   | Proj       Anno (Expr n) n -- record projection, we could consider making this yet another function application syntax
   | Var        Anno n -- currently not really needed because subsumed by empty App
   | Lam        Anno (GivenSig n) (Expr n)

@@ -1,0 +1,55 @@
+
+#EVAL 3 < 5
+#EVAL 3 < 4
+#EVAL 3 < 3
+#EVAL 3 < 2
+
+#EVAL 3 LESS THAN 2
+#EVAL 3 BELOW 2
+
+#EVAL 3 <= 5
+#EVAL 3 <= 4
+#EVAL 3 <= 3
+#EVAL 3 <= 2
+
+#EVAL 3 AT MOST 2
+
+#EVAL 5 > 3
+#EVAL 4 > 3
+#EVAL 3 > 3
+#EVAL 2 > 3
+
+#EVAL 3 GREATER THAN 2
+#EVAL 3 ABOVE 2
+
+#EVAL 5 >= 3
+#EVAL 4 >= 3
+#EVAL 3 >= 3
+#EVAL 2 >= 3
+
+#EVAL 2 AT LEAST 3
+
+#EVAL 2 = 3
+#EVAL 3 = 3
+
+#EVAL 3 EQUALS 3
+
+#EVAL "bar" < "car"
+#EVAL "bar" < "bar"
+#EVAL "bar" < "bas"
+
+#EVAL "bar" <= "car"
+#EVAL "bar" <= "bar"
+#EVAL "bar" <= "bas"
+
+#EVAL "bar" = "bar"
+#EVAL "bar" = "car"
+#EVAL "bar" = "Bar"
+
+#EVAL TRUE < FALSE
+#EVAL TRUE <= FALSE
+#EVAL FALSE <= FALSE
+#EVAL FALSE <= TRUE
+
+#EVAL TRUE = TRUE
+#EVAL TRUE = FALSE
