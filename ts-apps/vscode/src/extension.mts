@@ -73,38 +73,6 @@ export async function activate(context: ExtensionContext) {
 
   const webviewMessenger = new Messenger({ debugLog: true })
 
-  const rerenderVisualization = async (responseFromLangServer) => {
-    outputChannel.appendLine(
-      `Received command response ${JSON.stringify(responseFromLangServer)}`
-    )
-
-    const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(
-      responseFromLangServer
-    )
-
-    outputChannel.appendLine(JSON.stringify(vizProgramInfo))
-
-    panelManager.render(context)
-    webviewMessenger.registerWebviewPanel(panelManager.getPanel())
-    webviewMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
-      panelManager.markFrontendAsReady()
-      outputChannel.appendLine(`Ext: got frontend is ready notification!`)
-    })
-
-    await panelManager.getWebviewFrontendIsReadyPromise()
-
-    const response = await webviewMessenger.sendRequest(
-      VisualizeDecisionLogicRequest,
-      vizWebviewFrontend,
-      vizProgramInfo
-    )
-    if (response.$type === 'error') {
-      outputChannel.appendLine(`Error in visualisation request`)
-    } else if (response.$type === 'ok') {
-      outputChannel.appendLine(`Visualisation request success`)
-    }
-  }
-
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
     diagnosticCollectionName: langName,
@@ -124,11 +92,43 @@ export async function activate(context: ExtensionContext) {
           }
 
           outputChannel.appendLine('in executeCommand...')
+          outputChannel.appendLine(`args are ${args.toString()}`)
 
-          if (command === 'l4.visualize') {
-            const response = await next(command, args)
-            await rerenderVisualization(response)
-          } else outputChannel.appendLine(`unknown command ${command}`)
+          const responseFromLangServer: unknown = await next(command, args)
+          outputChannel.appendLine(
+            `Received command response ${JSON.stringify(responseFromLangServer)}`
+          )
+
+          const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(
+            responseFromLangServer
+          )
+
+          outputChannel.appendLine(JSON.stringify(vizProgramInfo))
+
+          panelManager.render(context)
+          webviewMessenger.registerWebviewPanel(panelManager.getPanel())
+          webviewMessenger.onNotification(
+            WebviewFrontendIsReadyNotification,
+            () => {
+              panelManager.markFrontendAsReady()
+              outputChannel.appendLine(
+                `Ext: got frontend is ready notification!`
+              )
+            }
+          )
+
+          await panelManager.getWebviewFrontendIsReadyPromise()
+
+          const response = await webviewMessenger.sendRequest(
+            VisualizeDecisionLogicRequest,
+            vizWebviewFrontend,
+            vizProgramInfo
+          )
+          if (response.$type === 'error') {
+            outputChannel.appendLine(`Error in visualisation request`)
+          } else if (response.$type === 'ok') {
+            outputChannel.appendLine(`Visualisation request success`)
+          }
         }
         // TODO: else show pop up to client
       },
