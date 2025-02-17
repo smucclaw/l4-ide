@@ -95,6 +95,14 @@ export async function activate(context: ExtensionContext) {
           outputChannel.appendLine(`args are ${args.toString()}`)
 
           const responseFromLangServer: unknown = await next(command, args)
+
+          if (responseFromLangServer === null) {
+            outputChannel.appendLine(
+              'language server returned null, doing nothing'
+            )
+            return
+          }
+
           outputChannel.appendLine(
             `Received command response ${JSON.stringify(responseFromLangServer)}`
           )
@@ -116,6 +124,15 @@ export async function activate(context: ExtensionContext) {
               )
             }
           )
+          panelManager.getPanel().onDidDispose(async () => {
+            // if the panel dies, we want to reset the visualisation
+            // such that the extension doesn't keep bringing up the visualisation
+            // after it has been closed
+            await vscode.commands.executeCommand(
+              'l4.resetvisualization',
+              editor.document.uri.toString()
+            )
+          })
 
           await panelManager.getWebviewFrontendIsReadyPromise()
 
@@ -133,6 +150,9 @@ export async function activate(context: ExtensionContext) {
         // TODO: else show pop up to client
       },
       didChange: async (event, next) => {
+        // we sent a visualisation command whenever we change any code
+        // we do this after invoking the callback to avoid blocking the editor
+        // on the command invokation
         await next(event)
         await vscode.commands.executeCommand(
           'l4.visualize',

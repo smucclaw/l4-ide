@@ -63,7 +63,7 @@ module LSP.Core.Shake(
     DelayedAction, mkDelayedAction,
     IdeAction(..), runIdeAction,
 
-    RecentlyVisualised (..), getMostRecentVisualisation, setMostRecentVisualisation,
+    RecentlyVisualised (..), getMostRecentVisualisation, setMostRecentVisualisation, clearMostRecentVisualisation,
 
     -- Exposed for testing.
     Q(..),
@@ -1301,6 +1301,9 @@ getMostRecentVisualisation ideState = tryReadTMVar ideState.shakeExtras.mostRece
 
 setMostRecentVisualisation :: IdeState -> RecentlyVisualised -> STM ()
 setMostRecentVisualisation ideState = writeTMVar ideState.shakeExtras.mostRecentlyVisualized
+
+clearMostRecentVisualisation :: IdeState -> STM ()
+clearMostRecentVisualisation ideState = void $ tryTakeTMVar ideState.shakeExtras.mostRecentlyVisualized
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =

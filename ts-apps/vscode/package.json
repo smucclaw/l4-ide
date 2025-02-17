@@ -50,6 +50,10 @@
       {
         "command": "l4.visualize",
         "title": "Visualize L4 expression"
+      },
+      {
+        "command": "l4.resetvisualization",
+        "title": "Reset L4 Expression Visualizer"
       }
     ]
   },

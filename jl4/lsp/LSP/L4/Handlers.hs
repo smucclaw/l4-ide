@@ -17,8 +17,10 @@ import Data.Char (isAlphaNum)
 import Data.Maybe (mapMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
+import Data.Tuple (swap)
 import Control.Applicative
 import Control.Monad.Except (throwError, runExceptT, ExceptT)
+import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
@@ -57,7 +59,6 @@ import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO, atomically, STM)
-import Debug.Trace
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -216,20 +217,26 @@ handlers recorder =
     , requestHandler SMethod_WorkspaceExecuteCommand $ \ide params -> do
         let ExecuteCommandParams _ cid xdata = params
 
-        -- TODO: we should check that the command sent is indeed the one that we expect, but this can be postponed until the point
-        -- where we actually have multiple
         logWith recorder Debug $ LogExecutingCommand cid
+        runExceptT case lookup cid (map swap l4CmdNames) of
+          Just CmdVisualize -> do
+            let decodeXdata
+                  | Just ((Aeson.fromJSON -> Aeson.Success uri) :  args) <- xdata
+                  , msrcPos <- case args of
+                     [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
+                     _ -> Nothing
+                  = visualise recorder ide uri msrcPos
 
-        let decodeXdata
-              | Just ((Aeson.fromJSON -> Aeson.Success uri) :  args) <- xdata
-              , msrcPos <- case args of
-                 [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
-                 _ -> Nothing
-              = visualise recorder ide uri msrcPos
+                  | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
+            decodeXdata
 
-              | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
+          -- NOTE: certain actions reset the state of the visualisation, like clicking it away, in these
+          -- cases we don't want to continue rerendering
+          Just CmdResetVisualization -> do
+            atomically $ clearMostRecentVisualisation ide
+            pure (InR Null)
+          Nothing -> defaultResponseError ("Unknown command: " <> cid)
 
-        runExceptT decodeXdata
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
@@ -388,50 +395,42 @@ visualise
 visualise recorder ide uri msrcPos = do
   let nfp = fromUri $ toNormalizedUri uri
 
-  TypeCheckResult {program, substitution} <- do
-    mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
-    case mTcResult of
-      Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show (show uri.getUri)) <> "."
-      Just tcRes -> pure tcRes
-
-  let decides = foldTopLevelDecides (: []) program
-
-  mdecide :: Maybe (Decide Resolved, Bool) <- case msrcPos of
+  mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
-    Nothing -> case decides of
-       -- TODO: since it is possible that we get this command from redrawing the current document,
-       -- we should not throw an error here
-       [] -> defaultResponseError "No DECIDE/MEANS declarations available"
-       xs@(_y : _ys) -> do
-         atomically (getMostRecentVisualisation ide) >>= \case
-           Just recentlyVisualised ->
-             maybe
-               (defaultResponseError "No DECIDE/MEANS that matches previously saved one")
-               (pure . Just . (,recentlyVisualised.simplify))
-               (matchOnAvailableDecides recentlyVisualised xs)
-           Nothing -> pure Nothing
+    -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
+    -- exits by returning Nothing instead of throwing an error
+    Nothing -> runMaybeT do
+      TypeCheckResult {substitution, program} <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+      recentlyVisualised <- MaybeT $ atomically $ getMostRecentVisualisation ide
+      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) program
+      pure (decide, recentlyVisualised.simplify, substitution)
 
     -- the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
-      case filter (decideNodeStartsAtPos srcPos) decides of
-        [decide] -> pure $ Just (decide, simp)
+      TypeCheckResult {program, substitution} <- do
+        mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+        case mTcResult of
+          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
+          Just tcRes -> pure tcRes
+      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) program of
+        [decide] -> pure $ Just (decide, simp, substitution)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide simplify (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr)
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
-      recentlyVisualisedDecide _ _ = Nothing
+      recentlyVisualisedDecide _ _ _ = Nothing
 
   case mdecide of
     -- FIXME: the client (vscode plugin) needs to be able to handle 'Null'
     Nothing -> pure (InR Null)
-    Just (decide, simp) -> case Ladder.doVisualize decide simp of
+    Just (decide, simp, substitution) -> case Ladder.doVisualize decide simp of
       Right vizProgramInfo -> do
         maybe
           (logWith recorder Warning LogDecideMissingInformation)
           (atomically . setMostRecentVisualisation ide)
-          (recentlyVisualisedDecide simp decide)
+          (recentlyVisualisedDecide decide simp substitution)
         pure $ InL $ Aeson.toJSON vizProgramInfo
       Left vizError ->
         defaultResponseError $ Text.unlines
@@ -439,24 +438,33 @@ visualise recorder ide uri msrcPos = do
           , getUri uri
           , Ladder.prettyPrintVizError vizError
           ]
-
   where
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
     -- (by requiring extra = Just ty) or the name of the 'Decide' by the means
     -- of checking its 'Resolved'
-    matchOnAvailableDecides :: RecentlyVisualised -> [Decide Resolved] -> Maybe (Decide Resolved)
-    matchOnAvailableDecides v decides = do
-      let atSrcPos = List.find (decideNodeStartsAtPos v.pos) decides
-          -- NOTE: this heuristic is wrong if there are ambiguous names in scope. that's why it will
-          -- only succeed if there's exactly one match
-          withName = singletonToMaybe $ List.filter (\(MkDecide _ _ appform _) -> rawName (getName appform) == v.name) decides
+    matchOnAvailableDecides :: RecentlyVisualised -> Decide Resolved -> One (Decide Resolved)
+    matchOnAvailableDecides v decide = One do
+      guard (decideNodeStartsAtPos v.pos decide)
+        <|> guard case decide of
+               (MkDecide _ _ appform _) -> rawName (getName appform) == v.name
+        -- NOTE: this heuristic is wrong if there are ambiguous names in scope. that's why it will
+        -- only succeed if there's exactly one match
 
-      atSrcPos <|> withName
+      pure decide
 
-    singletonToMaybe :: [a] -> Maybe a
-    singletonToMaybe = \case [x] -> Just x; _ -> Nothing
+-- | the 'Monoid' 'Maybe' that returns the only occurrence of 'Just'
+newtype One a = One {getOne :: Maybe a}
+  deriving stock (Eq, Ord, Show)
+
+instance Semigroup (One a) where
+  One (Just a) <> One Nothing = One (Just a)
+  One Nothing <> One (Just a) = One (Just a)
+  _ <> _ = One Nothing
+
+instance Monoid (One a) where
+  mempty = One Nothing
 
 defaultResponseError :: Monad m => Text -> ExceptT (TResponseError method) m a
 defaultResponseError _message
@@ -640,7 +648,27 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
     uri = fromNormalizedUri $ normalizedFilePathToUri nfp
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
-hasTypeInferenceVars = Optics.anyOf (Optics.gplate @(Type' Resolved)) \case {InfVar {} -> True; _ -> False}
+hasTypeInferenceVars = \case
+  Type   _ -> False
+  TyApp  _ _n ns -> any hasTypeInferenceVars ns
+  Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
+  Forall _ _ ty -> hasTypeInferenceVars ty
+  InfVar {} -> True
+
+hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
+hasNamedTypeInferenceVars = \case
+  MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
+
+data L4Cmd
+  = CmdVisualize
+  | CmdResetVisualization
+  deriving stock (Eq, Show, Enum, Bounded)
+
+l4CmdNames :: [(L4Cmd, Text)]
+l4CmdNames =
+  [ (CmdVisualize, "l4.visualize")
+  , (CmdResetVisualization, "l4.resetvisualization")
+  ]
 
 -- | Given an 'Aeson.Value', matches successfully, if decoding via @a@'s 'Generic' instance is successful
 pattern GFromJSON :: forall a. (Generic a, Aeson.GFromJSON Aeson.Zero (Rep a)) => forall. a -> Aeson.Value
