@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-haskell:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
