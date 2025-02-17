@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Handlers where
 
@@ -18,8 +19,6 @@ import Data.Either (isRight)
 import Data.Monoid (Ap (..))
 import Control.Applicative
 import Control.Monad.Except (throwError, runExceptT, ExceptT)
-import Control.Monad.Trans.Maybe
-import Control.Monad (unless)
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
@@ -220,15 +219,21 @@ handlers recorder =
         -- where we actually have multiple
         logWith recorder Debug $ LogExecutingCommand cid
 
-        runExceptT case xdata of
-          Just ((Aeson.fromJSON -> Aeson.Success (uri :: Uri)) : (Aeson.fromJSON -> Aeson.Success simplify) : args) ->
-            visualise recorder ide uri (Maybe.listToMaybe args) simplify
-          _ -> defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
+        let decodeXdata
+              | Just ((Aeson.fromJSON -> Aeson.Success uri) : (Aeson.fromJSON -> Aeson.Success simplify) : args) <- xdata
+              , msrcPos <- case args of
+                 [GFromJSON srcPos] -> Just srcPos
+                 _ -> Nothing
+              = visualise recorder ide uri msrcPos simplify
+
+              | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
+
+        runExceptT decodeXdata
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
           rng = params ^. J.range
-        diags <- liftIO $ atomically $ do
+        diags <- atomically $ do
           activeFileDiagnosticsInRange (shakeExtras ide) uri rng
         cas <- Extra.mapMaybeM (outOfScopeAssumeQuickFix ide) diags
         pure $ Right $ InL $ fmap InR cas
@@ -344,7 +349,7 @@ handlers recorder =
             -- make the visualizer work on as many examples as possible.
             case rangeOfNode decide of
               Just node ->
-                map (mkCodeLens node.start) (filter (isRight . (\ s -> Ladder.doVisualize s decide)) [False, True])
+                map (mkCodeLens node.start) (filter (isRight . Ladder.doVisualize decide) [False, True])
               Nothing -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
@@ -376,12 +381,12 @@ visualise
   -> IdeState
   -> Uri
   -- ^ The document uri whose decides should be visualised
-  -> Maybe Aeson.Value
+  -> Maybe SrcPos
   -- ^ The location of the `Decide` to visualize
   -> Bool
-  -- ^ whether or not to simplify
+  -- ^ whether or not to simplify the 'Decide'
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
-visualise recorder ide uri marg simplify = do
+visualise recorder ide uri msrcPos simplify = do
   let nfp = fromUri $ toNormalizedUri uri
 
   TypeCheckResult {program, substitution} <- do
@@ -392,43 +397,36 @@ visualise recorder ide uri marg simplify = do
 
   let decides = foldTopLevelDecides (: []) program
 
-  mdecide :: Maybe (Decide Resolved) <- case marg of
+  mdecide :: Maybe (Decide Resolved) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
     Nothing -> case decides of
        -- TODO: since it is possible that we get this command from redrawing the current document,
        -- we should not throw an error here
        [] -> defaultResponseError "No DECIDE/MEANS declarations available"
        xs@(_y : _ys) -> atomically (getMostRecentVisualisation ide) >>= \case
-         Just decide -> maybe (defaultResponseError "No DECIDE/MEANS that matches previously saved one") (pure . Just) (matchOnAvailableDecides decide xs)
-         Nothing -> do
-           -- TODO: we should not just return the first decide here because if this was triggered
-           -- by auto update, we might draw a diagram even though the user didn't request it
-           -- Fix: either remove the button or indicate on whether a first request had been made already
-           unless (null _ys) do
-             logWith recorder Warning $ LogMultipleDecideClauses uri
-           pure Nothing
+         Just decide ->
+           maybe
+             (defaultResponseError "No DECIDE/MEANS that matches previously saved one")
+             (pure . Just)
+             (matchOnAvailableDecides decide xs)
+         Nothing -> pure Nothing
 
     -- the command was issued by a code action or codelens
-    Just (Aeson.fromJSON -> Aeson.Success (Generically (srcPos :: SrcPos))) -> do
-      let decideAtSrcPos decide
-            = Just srcPos == do
-                node <- rangeOfNode decide
-                pure node.start
-
-      case filter decideAtSrcPos decides of
+    Just srcPos -> do
+      case filter (decideNodeStartsAtPos srcPos) decides of
         [decide] -> pure $ Just decide
-        _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
-        -- TODO: if this becomes a problem, we should use
+        -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
-    _ -> defaultResponseError "Could not decode arguments to visualizer. This is a bug."
+        _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
   let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr)
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty}
       recentlyVisualisedDecide _ = Nothing
 
   case mdecide of
+    -- FIXME: the client (vscode plugin) needs to be able to handle 'Null'
     Nothing -> pure (InR Null)
-    Just decide -> case Ladder.doVisualize simplify decide of
+    Just decide -> case Ladder.doVisualize decide simplify of
       Right vizProgramInfo -> do
         maybe
           (logWith recorder Warning LogDecideMissingInformation)
@@ -448,16 +446,13 @@ visualise recorder ide uri marg simplify = do
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
     -- (by requiring extra = Just ty) or the name of the 'Decide' by the means
     -- of checking its 'Resolved'
-    --
-    -- TODO: refactor (use RecentlyVisualised)
     matchOnAvailableDecides :: RecentlyVisualised -> [Decide Resolved] -> Maybe (Decide Resolved)
-    matchOnAvailableDecides v = runMaybeT do
-      let atSrcPos = MaybeT $ List.find \d -> Just v.pos == do
-            node <- rangeOfNode d
-            pure node.start
+    matchOnAvailableDecides v decides = do
+      let atSrcPos = List.find (decideNodeStartsAtPos v.pos) decides
           -- NOTE: this heuristic is wrong if there are ambiguous names in scope. that's why it will
-          -- only succed if there's exactly one match
-          withName = MaybeT $ singletonToMaybe . List.filter \(MkDecide _ _ appform _) -> rawName (getName appform) == v.name
+          -- only succeed if there's exactly one match
+          withName = singletonToMaybe $ List.filter (\(MkDecide _ _ appform _) -> rawName (getName appform) == v.name) decides
+
       atSrcPos <|> withName
 
     singletonToMaybe :: [a] -> Maybe a
@@ -466,6 +461,11 @@ visualise recorder ide uri marg simplify = do
 defaultResponseError :: Monad m => Text -> ExceptT (TResponseError method) m a
 defaultResponseError _message
   = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
+
+decideNodeStartsAtPos :: SrcPos -> Decide Resolved -> Bool
+decideNodeStartsAtPos pos d = Just pos == do
+  node <- rangeOfNode d
+  pure node.start
 
 -- ----------------------------------------------------------------------------
 -- LSP Autocompletions
@@ -641,3 +641,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
 hasTypeInferenceVars = Optics.anyOf (Optics.gplate @(Type' Resolved)) \case {InfVar {} -> True; _ -> False}
+
+-- | Given an 'Aeson.Value', matches successfully, if decoding via @a@'s 'Generic' instance is successful
+pattern GFromJSON :: forall a. (Generic a, Aeson.GFromJSON Aeson.Zero (Rep a)) => forall. a -> Aeson.Value
+pattern GFromJSON a <- (Aeson.fromJSON -> Aeson.Success (Generically a))
