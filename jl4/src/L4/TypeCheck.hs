@@ -78,7 +78,7 @@ import Data.Either (partitionEithers)
 import Data.Proxy
 import Data.Typeable (Typeable)
 import qualified Generics.SOP as SOP
-import Optics.Core hiding (anyOf, re) --  (gplate, traverseOf, Optic', A_Lens, NoIx, (^.), (%))
+import Optics.Core hiding (anyOf, re)
 
 import L4.ExactPrint
 import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))

@@ -513,7 +513,8 @@ newtype NlgM a = MkNlgM {runNlgM :: LocRange -> (State NlgS) a}
 
 data NlgS = NlgS
   { nlgs :: ![NlgWithSpan]
-    -- ^ Nlg annotations that haven't been
+    -- ^ Nlg annotations that haven't been assigned to a specific 'Name' or
+    -- other abstract syntax node.
   , warnings :: [Warning]
     -- ^ Warnings uncovered while trying to attach 'Nlg' annotations
     -- to the ast.

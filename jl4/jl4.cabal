@@ -52,7 +52,6 @@ library
     L4.Evaluate
     L4.ExactPrint
     L4.Main
-    L4.Nlg
     L4.Lexer
     L4.Parser
     L4.Parser.ResolveAnnotation

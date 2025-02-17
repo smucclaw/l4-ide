@@ -1,6 +1,6 @@
-[:8:7-17] p
+[:8:7-8] p
   [:8:9-17] [person]
-[:10:15-43] walks
+[:10:15-20] walks
   [:10:21-43] [the person must walk]
-[:11:15-41] eats
+[:11:15-19] eats
   [:11:20-41] [the person must eat]

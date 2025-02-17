@@ -16,9 +16,6 @@ module L4.Parser (
   -- * Testing API
   parseTest,
 
-  -- * Utils
-  isWhiteSpaceToken,
-
   -- * Annotation helpers
   WithAnno_ (..),
   withHoleAnno,
@@ -48,22 +45,22 @@ import Base
 import qualified Control.Applicative as Applicative
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Data.List.NonEmpty as NonEmpty
+import GHC.Generics
 import GHC.Records
 import Optics
 import Text.Megaparsec hiding (parseTest)
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import Text.Pretty.Simple
-import qualified Control.Monad.Trans.State.Lazy as State
 
 import L4.Annotation
 import L4.Lexer as L
+import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
-import qualified L4.Parser.ResolveAnnotation as Resolve
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -73,20 +70,7 @@ data PState = PState
   , refs :: [Ref]
   }
   deriving stock (Show, Eq, Generic)
-
-instance Semigroup PState where
-  s1 <> s2 = PState
-    { comments = s1.comments <> s2.comments
-    , nlgs = s1.nlgs <> s2.nlgs
-    , refs = s1.refs <> s2.refs
-    }
-
-emptyPState :: PState
-emptyPState = PState
-  { comments = []
-  , nlgs = []
-  , refs = []
-  }
+  deriving (Semigroup, Monoid) via Generically PState
 
 addNlg :: Nlg -> PState -> PState
 addNlg n s = over #nlgs (n:) s
@@ -96,10 +80,7 @@ addRef ref s = over #refs (ref:) s
 
 spaces :: Parser [PosToken]
 spaces =
-  takeWhileP (Just "space token") isWhiteSpaceToken
-
-isWhiteSpaceToken :: PosToken -> Bool
-isWhiteSpaceToken t = isSpaceToken t
+  takeWhileP (Just "space token") isSpaceToken
 
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
@@ -128,7 +109,7 @@ nlgAnnotationP :: Parser (Epa [Text])
 nlgAnnotationP = onlySpacedToken (\case
   TNlg t -> Just [t]
   _ -> Nothing)
-  "NLG Annotation"
+  "Natural Language Annotation"
 
 blockNlgAnnotationP :: Parser (Epa [Text])
 blockNlgAnnotationP =
@@ -137,7 +118,7 @@ blockNlgAnnotationP =
       (\open (mid, close) -> [open] <> mid <> [close])
         <$> plainToken TSOpen
         <*> manyTill_
-              (anySingle <?> "NLG Block Annotation")
+              (anySingle <?> "Natural Language Annotation Block")
               (plainToken TSClose)
 
     epaNlg = lexesToEpa <$> nlgParser
@@ -149,7 +130,7 @@ blockRefAnnotation :: Parser (Epa [Text])
 blockRefAnnotation =
   let
     refParser = spacedP $
-      (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Ref Block Annotation") (plainToken TAClose)
+      (\open (mid, close) -> [open] <> mid <> [close]) <$> plainToken TAOpen <*> manyTill_ (anySingle <?> "Reference Annotation Block") (plainToken TAClose)
     epaRef = lexesToEpa <$> refParser
     epaTextRef = fmap (fmap displayPosToken) <$> epaRef
   in
@@ -167,8 +148,8 @@ lexeme p = do
 
 addNlgOrRef :: Either (Epa Nlg) (Epa Ref) -> Parser ()
 addNlgOrRef = \case
-  Left nlg -> State.modify' (addNlg nlg.payload)
-  Right ref -> State.modify' (addRef ref.payload)
+  Left nlg -> modify' (addNlg nlg.payload)
+  Right ref -> modify' (addRef ref.payload)
 
 spacedP :: Parser a -> Parser (Lexeme a)
 spacedP p = do
@@ -304,7 +285,7 @@ topdeclWithRecovery = do
   withRecovery
     (\e -> do
       -- Ignoring tokens here is fine, as we will fail parsing any way.
-      _ <- takeWhileP Nothing (\t -> not (isWhiteSpaceToken t) && t.range.start.column > 1)
+      _ <- takeWhileP Nothing (\t -> not (isSpaceToken t) && t.range.start.column > 1)
       current <- lookAhead anySingle
       registerParseError e
       -- If we didn't make any progress whatsoever,
@@ -1203,7 +1184,7 @@ execParser p file input =
 
 execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, PState)
 execParserForTokens p file input ts =
-  case parse (runStateT (p <* eof) emptyPState) file (MkTokenStream (Text.unpack input) ts) of
+  case parse (runStateT (p <* eof) mempty) file (MkTokenStream (Text.unpack input) ts) of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right x  -> Right x
 

@@ -2,11 +2,11 @@
 5 | ASSUME one IS A NUMBER
   | ^^^^^^
 unexpected ASSUME
-expecting <, FUNCTION, LIST, NLG Annotation, TYPE, [, identifier, or space token
+expecting <, FUNCTION, LIST, Natural Language Annotation, TYPE, [, identifier, or space token
 
   |
 7 | 
   | ^
 unexpected end of input
-expecting <, FUNCTION, LIST, NLG Annotation, TYPE, [, identifier, or space token
+expecting <, FUNCTION, LIST, Natural Language Annotation, TYPE, [, identifier, or space token
 
