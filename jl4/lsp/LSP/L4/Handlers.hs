@@ -57,6 +57,7 @@ import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
 import UnliftIO (MonadUnliftIO, atomically, STM)
+import Debug.Trace
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -220,11 +221,11 @@ handlers recorder =
         logWith recorder Debug $ LogExecutingCommand cid
 
         let decodeXdata
-              | Just ((Aeson.fromJSON -> Aeson.Success uri) : (Aeson.fromJSON -> Aeson.Success simplify) : args) <- xdata
+              | Just ((Aeson.fromJSON -> Aeson.Success uri) :  args) <- xdata
               , msrcPos <- case args of
-                 [GFromJSON srcPos] -> Just srcPos
+                 [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
                  _ -> Nothing
-              = visualise recorder ide uri msrcPos simplify
+              = visualise recorder ide uri msrcPos
 
               | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
 
@@ -381,12 +382,10 @@ visualise
   -> IdeState
   -> Uri
   -- ^ The document uri whose decides should be visualised
-  -> Maybe SrcPos
-  -- ^ The location of the `Decide` to visualize
-  -> Bool
-  -- ^ whether or not to simplify the 'Decide'
+  -> Maybe (SrcPos, Bool)
+  -- ^ The location of the `Decide` to visualize and whether or not to simplify it
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
-visualise recorder ide uri msrcPos simplify = do
+visualise recorder ide uri msrcPos = do
   let nfp = fromUri $ toNormalizedUri uri
 
   TypeCheckResult {program, substitution} <- do
@@ -397,41 +396,42 @@ visualise recorder ide uri msrcPos simplify = do
 
   let decides = foldTopLevelDecides (: []) program
 
-  mdecide :: Maybe (Decide Resolved) <- case msrcPos of
+  mdecide :: Maybe (Decide Resolved, Bool) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
     Nothing -> case decides of
        -- TODO: since it is possible that we get this command from redrawing the current document,
        -- we should not throw an error here
        [] -> defaultResponseError "No DECIDE/MEANS declarations available"
-       xs@(_y : _ys) -> atomically (getMostRecentVisualisation ide) >>= \case
-         Just decide ->
-           maybe
-             (defaultResponseError "No DECIDE/MEANS that matches previously saved one")
-             (pure . Just)
-             (matchOnAvailableDecides decide xs)
-         Nothing -> pure Nothing
+       xs@(_y : _ys) -> do
+         atomically (getMostRecentVisualisation ide) >>= \case
+           Just recentlyVisualised ->
+             maybe
+               (defaultResponseError "No DECIDE/MEANS that matches previously saved one")
+               (pure . Just . (,recentlyVisualised.simplify))
+               (matchOnAvailableDecides recentlyVisualised xs)
+           Nothing -> pure Nothing
 
     -- the command was issued by a code action or codelens
-    Just srcPos -> do
+    Just (srcPos, simp) -> do
       case filter (decideNodeStartsAtPos srcPos) decides of
-        [decide] -> pure $ Just decide
+        [decide] -> pure $ Just (decide, simp)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr)
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty}
-      recentlyVisualisedDecide _ = Nothing
+  let recentlyVisualisedDecide simplify (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr)
+        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
+      recentlyVisualisedDecide _ _ = Nothing
 
   case mdecide of
     -- FIXME: the client (vscode plugin) needs to be able to handle 'Null'
     Nothing -> pure (InR Null)
-    Just decide -> case Ladder.doVisualize decide simplify of
+    Just (decide, simp) -> case Ladder.doVisualize decide simp of
       Right vizProgramInfo -> do
         maybe
           (logWith recorder Warning LogDecideMissingInformation)
           (atomically . setMostRecentVisualisation ide)
-          (recentlyVisualisedDecide decide)
+          (recentlyVisualisedDecide simp decide)
         pure $ InL $ Aeson.toJSON vizProgramInfo
       Left vizError ->
         defaultResponseError $ Text.unlines

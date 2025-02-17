@@ -286,7 +286,7 @@ data ShakeExtras = ShakeExtras
     }
 
 data RecentlyVisualised
-  = RecentlyVisualised {pos :: !SrcPos, name :: !RawName, type' :: !(Type' Resolved)}
+  = RecentlyVisualised {pos :: !SrcPos, name :: !RawName, type' :: !(Type' Resolved), simplify :: !Bool}
   deriving stock (Show, Eq)
 
 type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
