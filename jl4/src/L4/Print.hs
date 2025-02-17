@@ -213,6 +213,10 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
       parensIfNeeded e1 <+> "AT MOST" <+> parensIfNeeded e2
     Geq        _ e1 e2 ->
       parensIfNeeded e1 <+> "AT LEAST" <+> parensIfNeeded e2
+    Lt         _ e1 e2 ->
+      parensIfNeeded e1 <+> "LESS THAN" <+> parensIfNeeded e2
+    Gt         _ e1 e2 ->
+      parensIfNeeded e1 <+> "GREATER THAN" <+> parensIfNeeded e2
     Proj       _ e1 n ->
       parensIfNeeded e1 <> "'s" <+> printWithLayout n
     Var        _ n ->
