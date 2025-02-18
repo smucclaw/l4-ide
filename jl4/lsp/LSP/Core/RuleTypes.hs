@@ -8,7 +8,6 @@ import           Control.DeepSeq
 import           Data.Aeson.Types                             (Value)
 import           Data.Hashable
 import           Data.Time.Clock.POSIX
-import           Data.Typeable
 
 import           Development.IDE.Graph
 import           GHC.Generics                                 (Generic)
@@ -72,7 +71,7 @@ instance Hashable GetFileContents
 instance NFData   GetFileContents
 
 data GetFileExists = GetFileExists
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 
 instance NFData   GetFileExists
 instance Hashable GetFileExists
@@ -81,7 +80,7 @@ data FileOfInterestStatus
   = OnDisk
   | Modified { firstOpen :: !Bool -- ^ was this file just opened
              }
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
 
@@ -89,27 +88,27 @@ instance Pretty FileOfInterestStatus where
     pretty = viaShow
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Generic)
 instance Hashable IsFileOfInterestResult
 instance NFData   IsFileOfInterestResult
 
 type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
 
 data IsFileOfInterest = IsFileOfInterest
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable IsFileOfInterest
 instance NFData   IsFileOfInterest
 
 -- See Note [Client configuration in Rules]
 -- | Get the client config stored in the ide state
 data GetClientSettings = GetClientSettings
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 instance Hashable GetClientSettings
 instance NFData   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
 
-data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
+data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Generic)
 instance Hashable AddWatchedFile
 instance NFData   AddWatchedFile
 

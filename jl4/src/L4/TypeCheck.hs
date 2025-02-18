@@ -76,7 +76,6 @@ import Data.Bifunctor
 import Data.Containers.ListUtils (nubOrd)
 import Data.Either (partitionEithers)
 import Data.Proxy
-import Data.Typeable (Typeable)
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf)
 
@@ -413,7 +412,7 @@ data CheckErrorWithContext =
     { kind    :: !CheckError
     , context :: !CheckErrorContext
     }
-  deriving stock (Eq, Generic, Typeable, Show)
+  deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
 data CheckError =
@@ -434,7 +433,7 @@ data CheckError =
   | IncompleteAppNamed [OptionallyNamedType Resolved]
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
-  deriving stock (Eq, Generic, Typeable, Show)
+  deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
 data CheckErrorContext =
