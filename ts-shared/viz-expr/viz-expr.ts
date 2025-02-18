@@ -1,5 +1,5 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
-import { Either } from 'effect'
+// import { Either } from 'effect'
 
 /**********************
       VizExpr IR
@@ -55,6 +55,31 @@ in order to implement recursive and mutually recursive schemas.
 See https://effect.website/docs/schema/advanced-usage/#recursive-schemas
 */
 
+/***********************************************************
+        Name
+  (a label / 'RawName' and a Unique for equality of exprs)
+*************************************************************/
+
+export const Name = Schema.Struct({
+  /** Uniques for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+   *
+   * BoolVar IRNodes that refer to the same proposition can nevertheless differ
+   * in virtue of eg having different nlg annotations.  */
+  unique: Schema.Number,
+  label: Schema.String,
+})
+
+export interface Name {
+  /** For equality of exprs */
+  readonly unique: number
+  /** The label is what gets displayed in or around the box. */
+  readonly label: string
+}
+
+/*******************************
+    IRId (not currently used)
+********************************/
+
 /** Stable IDs useful for things like bidirectional synchronization down the road */
 export const IRId = Schema.Struct({
   id: Schema.Number,
@@ -84,6 +109,15 @@ export const IRNode = Schema.Struct({
 /*******************************
   Decision Logic (ish) IR node
 ********************************/
+
+export type IRDecl = FunDecl
+
+export interface FunDecl extends IRNode {
+  readonly $type: 'FunDecl'
+  readonly name: Name
+  readonly params: readonly Name[] // TODO: Will worry about adding type info later
+  readonly body: IRExpr
+}
 
 /** Think of this as the Expr for the decision logic.
  * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
@@ -121,17 +155,12 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
+export type BoolValue = 'False' | 'True' | 'Unknown'
+
 export interface BoolVar extends IRNode {
   readonly $type: 'BoolVar'
-  readonly value: 'False' | 'True' | 'Unknown'
-  /** The name will be treated as a label by the visualizer;
-   * i.e., it is what gets displayed in or around the box.
-   *
-   * I can't think of a scenario where we'd plausibly want
-   * atomic propositions in something like a ladder diagram to not have a label.
-   * And conversely it is easy to think of scenarios where one forgets to add the label for atomic propositions.
-   */
-  readonly name: string
+  readonly name: Name
+  readonly value: BoolValue
 }
 
 /***********************************
@@ -144,6 +173,16 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
 ).annotations({ identifier: 'IRExpr' })
+
+export const FunDecl = Schema.Struct({
+  $type: Schema.tag('FunDecl'),
+  id: IRId,
+  name: Name,
+  params: Schema.Array(Name),
+  body: IRExpr,
+}).annotations({ identifier: 'FunDecl' })
+
+export const IRDecl = FunDecl
 
 export const And = Schema.Struct({
   $type: Schema.tag('And'),
@@ -163,15 +202,17 @@ export const Not = Schema.Struct({
   id: IRId,
 }).annotations({ identifier: 'Not' })
 
+export const BoolValue = Schema.Union(
+  Schema.Literal('False'),
+  Schema.Literal('True'),
+  Schema.Literal('Unknown')
+)
+
 export const BoolVar = Schema.Struct({
   $type: Schema.tag('BoolVar'),
-  value: Schema.Union(
-    Schema.Literal('False'),
-    Schema.Literal('True'),
-    Schema.Literal('Unknown')
-  ),
+  value: BoolValue,
   id: IRId,
-  name: Schema.String,
+  name: Name,
 }).annotations({ identifier: 'BoolVar' })
 
 /***********************************
@@ -184,7 +225,7 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 >
 
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
-  program: IRExpr,
+  program: IRDecl,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
 
 /***********************************
@@ -193,41 +234,18 @@ export const VisualizeDecisionLogicIRInfo = Schema.Struct({
 
 // Example of how to use Effect to decode an unknown input
 
-const decode = Schema.decodeUnknownEither(IRExpr)
+// const decode = Schema.decodeUnknownEither(IRExpr)
 
 /** Example of an unknown input */
-const egAtomicPropWalks = {
-  $type: 'BoolVar',
-  value: 'True',
-  id: { id: 1 },
-  name: 'walks',
-}
+// const egAtomicPropWalks = {
+//   $type: 'BoolVar',
+//   value: 'True',
+//   id: { id: 1 },
+//   name: { label: 'walks', unique: 2 }
+// }
 
-const result = decode(egAtomicPropWalks)
+// const result = decode(egAtomicPropWalks)
 // console.log(result)
-/*
-{
-  right: {
-    '$type': 'BoolVar',
-    value: 'True',
-    id: { id: 1 },
-    name: 'walks'
-  },
-  _tag: 'Right',
-  _op: 'Right'
-}
-*/
-if (Either.isRight(result)) {
-  // console.log(result.right)
-  /*
-  {
-  '$type': 'BoolVar',
-  value: 'True',
-  id: { id: 1 },
-  name: 'walks'
-  }
-  */
-}
 
 /*************************
     Utils
@@ -242,11 +260,12 @@ export function getDecisionLogicIRPrettyPrinter() {
 export function exportDecisionLogicIRInfoToJSONSchema() {
   return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
 }
+// console.log(exportDecisionLogicIRInfoToJSONSchema())
 
 /*************************
     JSON Schema version
 **************************/
 
 /*
-TODO: Update this
+
 */

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
-    IRExpr,
+    IRDecl,
     VisualizeDecisionLogicIRInfo,
     VisualizeDecisionLogicRequest,
     makeSuccessVisualizeResponse,
@@ -9,12 +9,12 @@
     type WebviewFrontendIsReadyMessage,
   } from '@repo/viz-expr'
   import {
-    ExprLirSource,
     LirContext,
     LirRegistry,
     type LirRootType,
-    type ExprLirNode,
-    ExprFlow,
+    LadderFlow,
+    type DeclLirNode,
+    VizDeclLirSource,
   } from '@repo/decision-logic-visualizer'
   import type { WebviewApi } from 'vscode-webview'
   import { Messenger } from 'vscode-messenger-webview'
@@ -28,13 +28,13 @@
   const context = new LirContext()
   const nodeInfo = { registry, context }
 
-  let vizExpr: IRExpr | undefined = $state(undefined)
-  let exprLirNode: ExprLirNode | undefined = $derived(
-    vizExpr && ExprLirSource.toLir(nodeInfo, vizExpr)
+  let vizDecl: IRDecl | undefined = $state(undefined)
+  let declLirNode: DeclLirNode | undefined = $derived(
+    vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   )
   $effect(() => {
-    if (exprLirNode) {
-      registry.setRoot(context, 'VizExpr' as LirRootType, exprLirNode)
+    if (declLirNode) {
+      registry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
     }
   })
 
@@ -63,8 +63,8 @@
     messenger.onRequest(
       VisualizeDecisionLogicRequest,
       (payload: VisualizeDecisionLogicIRInfo) => {
-        vizExpr = payload.program
-        console.log('vizExpr:', vizExpr)
+        vizDecl = payload.program
+        console.log('vizDecl:', vizDecl)
 
         return makeSuccessVisualizeResponse()
       }
@@ -75,13 +75,11 @@
 </script>
 
 <h1>Visualize L4</h1>
-<!-- TODO: Probably ecapsulate SvelteFlowProvider within DLV instead of requiring that consumers like the webview also invoke it.
-Will think more about this after getting more experience with the library -->
 
-{#if vizExpr && exprLirNode}
-  {#key exprLirNode}
+{#if vizDecl && declLirNode}
+  {#key declLirNode}
     <div class="flash-on-update visualization-container">
-      <ExprFlow {context} node={exprLirNode} />
+      <LadderFlow {context} node={declLirNode} />
     </div>
   {/key}
 {/if}
