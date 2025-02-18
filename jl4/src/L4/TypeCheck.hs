@@ -76,7 +76,6 @@ import Data.Bifunctor
 import Data.Containers.ListUtils (nubOrd)
 import Data.Either (partitionEithers)
 import Data.Proxy
-import Data.Typeable (Typeable)
 import qualified Generics.SOP as SOP
 import Optics.Core hiding (anyOf, re)
 
@@ -412,7 +411,7 @@ data CheckErrorWithContext =
     { kind    :: !CheckError
     , context :: !CheckErrorContext
     }
-  deriving stock (Eq, Generic, Typeable, Show)
+  deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
 data CheckError =
@@ -433,7 +432,7 @@ data CheckError =
   | IncompleteAppNamed [OptionallyNamedType Resolved]
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
-  deriving stock (Eq, Generic, Typeable, Show)
+  deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
 data CheckErrorContext =
@@ -737,7 +736,7 @@ inferAssume (MkAssume ann tysig appForm mt) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig -- (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
-    (ce, result) <- inferTermAppForm rappForm rtysig
+    (ce, _rt, result) <- inferTermAppForm rappForm rtysig
     -- check that the given result type matches the result type in the type signature
     rmt <- case mt of
       Nothing -> pure Nothing
@@ -811,10 +810,10 @@ inferDecide (MkDecide ann tysig appForm expr) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDecide (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
-    (ce, result) <- inferTermAppForm rappForm rtysig
+    (ce, rt, result) <- inferTermAppForm rappForm rtysig
     rexpr <- checkExpr expr result
-    -- TODO: somewhere here, we should think about generalisation or escaping inference variables
-    pure (MkDecide ann rtysig rappForm rexpr, makeKnown (appFormHead rappForm) ce)
+    let ann' = set annResolveType (Just rt) ann
+    pure (MkDecide ann' rtysig rappForm rexpr, makeKnown (appFormHead rappForm) ce)
   extend
   pure rd
 
@@ -1161,14 +1160,14 @@ inferTypeAppForm' appForm@(MkAppForm _ n args) _tysig = do
 -- | This happens after consistency checking which is in turn already doing part of
 -- name resolution, so this takes a resolved appform. We do the environment handling
 -- here.
-inferTermAppForm :: AppForm Resolved -> TypeSig Resolved -> Check (CheckEntity, Type' Resolved)
+inferTermAppForm :: AppForm Resolved -> TypeSig Resolved -> Check (CheckEntity, Type' Resolved, Type' Resolved)
 inferTermAppForm (MkAppForm _ n args) tysig = do
   ensureDistinct (getName <$> (n : args)) -- should we do this earlier?
   (rt, result, extend) <- typeSigType tysig
   let termInfo = KnownTerm rt Computable
   makeKnown n termInfo -- this makes the name known for recursive uses
   extend
-  pure (termInfo, result)
+  pure (termInfo, rt, result)
 
 inferLamGivens :: GivenSig Name -> Check (GivenSig Resolved, [Type' Resolved])
 inferLamGivens (MkGivenSig ann otns) = do

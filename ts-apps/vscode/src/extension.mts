@@ -14,7 +14,7 @@ import {
   VisualizeDecisionLogicRequest,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
-import * as command from './commands.js'
+// import { cmdViz } from './commands.js'
 import type { PanelConfig } from './viz.js'
 import { PanelManager } from './viz.js'
 
@@ -95,6 +95,14 @@ export async function activate(context: ExtensionContext) {
           outputChannel.appendLine(`args are ${args.toString()}`)
 
           const responseFromLangServer: unknown = await next(command, args)
+
+          if (responseFromLangServer === null) {
+            outputChannel.appendLine(
+              'language server returned null, doing nothing'
+            )
+            return
+          }
+
           outputChannel.appendLine(
             `Received command response ${JSON.stringify(responseFromLangServer)}`
           )
@@ -105,7 +113,7 @@ export async function activate(context: ExtensionContext) {
 
           outputChannel.appendLine(JSON.stringify(vizProgramInfo))
 
-          panelManager.render(context)
+          panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
           webviewMessenger.onNotification(
             WebviewFrontendIsReadyNotification,
@@ -116,7 +124,6 @@ export async function activate(context: ExtensionContext) {
               )
             }
           )
-
           await panelManager.getWebviewFrontendIsReadyPromise()
 
           const response = await webviewMessenger.sendRequest(
@@ -132,22 +139,22 @@ export async function activate(context: ExtensionContext) {
         }
         // TODO: else show pop up to client
       },
+      didChange: async (event, next) => {
+        // we sent a visualisation command whenever we change any code
+        // we do this after invoking the callback to avoid blocking the editor
+        // on the command invokation
+        await next(event)
+        await vscode.commands.executeCommand(
+          'l4.visualize',
+          event.document.uri.toString()
+        )
+      },
     },
   }
 
   outputChannel.appendLine(
     `[client] Starting server from the client: ${serverCmd}`
   )
-
-  // on Button. the button is at the bottom right of the status bar.
-  const button = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  )
-  button.command = command.showVisualisation
-  button.text = 'Update Diagram'
-  button.tooltip = 'Show visualisation'
-  button.show()
 
   // Create the language client and start the client.
   client = new LanguageClient(langId, langName, serverOptions, clientOptions)

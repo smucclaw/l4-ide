@@ -6,8 +6,9 @@ tested-with: GHC==9.6.6
 
 common defaults
   default-language: GHC2021
-  ghc-options: -Wall -Wunused-packages
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages
   default-extensions:
+    BlockArguments
     DeriveAnyClass
     DerivingStrategies
     DerivingVia

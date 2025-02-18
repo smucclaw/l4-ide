@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
-// import { RuleNode } from './rule-to-json'
 import webviewHtml from '../static/webview/index.html'
+import { Uri } from 'vscode'
 
 /******************************************
                 Panel
@@ -44,13 +44,13 @@ export class PanelManager {
     return this.frontendIsReadyPromise
   }
 
-  initialize(context: vscode.ExtensionContext) {
+  initialize(context: vscode.ExtensionContext, ownUri: Uri) {
     if (!this.#panel) {
       this.#panel = vscode.window.createWebviewPanel(
         this.config.viewType,
         // TODO: The title can be `<title prefix> <filename>`
         this.config.title,
-        this.config.position,
+        { viewColumn: this.config.position, preserveFocus: true },
         {
           enableScripts: true,
           retainContextWhenHidden: true,
@@ -59,7 +59,14 @@ export class PanelManager {
       this.#panel.webview.html = getWebviewContent(context, this.#panel)
 
       // Reset when the current panel is closed
-      this.#panel.onDidDispose(() => {
+      this.#panel.onDidDispose(async () => {
+        // if the panel dies, we want to reset the visualisation
+        // such that the extension doesn't keep bringing up the visualisation
+        // after it has been closed
+        await vscode.commands.executeCommand(
+          'l4.resetvisualization',
+          ownUri.toString()
+        )
         this.#panel = undefined
         this.resetWebviewFrontendIsReady()
       })
@@ -70,11 +77,11 @@ export class PanelManager {
    * If the panel has already been created, reveal it;
    * make it if not.
    */
-  render(context: vscode.ExtensionContext) {
+  render(context: vscode.ExtensionContext, ownUri: Uri) {
     if (this.#panel) {
-      this.#panel.reveal(this.config.position)
+      this.#panel.reveal(this.config.position, /* preserveFocus */ true)
     } else {
-      this.initialize(context)
+      this.initialize(context, ownUri)
       // this.#panel.reveal(this.config.position)
     }
   }

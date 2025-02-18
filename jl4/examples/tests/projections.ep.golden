@@ -1,0 +1,34 @@
+DECLARE SubRecord
+  HAS z IS A NUMBER
+
+DECLARE MyRecord
+  HAS x IS A BOOLEAN
+      y IS A SubRecord
+
+r MEANS
+  MyRecord
+    WITH x IS TRUE
+         y IS
+           SubRecord
+             WITH z IS 5
+
+-- this works
+test1 MEANS
+  r's y's z
+
+-- these also works, but possibly should not
+test2 MEANS
+  r  's  y   's z
+
+test3 MEANS
+  r's y
+   's z
+
+-- this now also works
+test4 MEANS
+  ((r)'s y)'s z
+
+#EVAL test1
+#EVAL test2
+#EVAL test3
+#EVAL test4
