@@ -564,25 +564,6 @@ addError e = do
   ctx <- use #errorContext
   with (MkCheckErrorWithContext e ctx)
 
-annResolveType :: Lens' Anno (Maybe (Type' Resolved))
-annResolveType = lens
-  (\ann -> case ann.extra of
-    Nothing -> Nothing
-    Just exts -> exts.resolvedType)
-  (\ann ty -> case ann.extra of
-    Just exts -> ann
-      { extra = Just exts
-        { resolvedType = ty
-        }
-      }
-    Nothing -> ann
-      { extra = Just Extension
-        { resolvedType = ty
-        , nlg = Nothing
-        }
-      }
-  )
-
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
   env <- use #environment

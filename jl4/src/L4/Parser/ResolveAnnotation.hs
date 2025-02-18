@@ -34,7 +34,6 @@ import L4.Annotation
 import L4.Lexer
 import L4.Syntax
 import L4.Parser.SrcSpan
-import Optics
 
 -- | Warnings for attaching Nlg comments to the ast.
 data Warning
@@ -85,17 +84,6 @@ leftoversToWarnings = do
   liftNlgA $ do
     ns <- use #nlgs
     traverse_ addWarning $ fmap NotAttached ns
-
-setNlg :: (HasAnno a, AnnoExtra a ~ Extension) => Nlg -> a -> a
-setNlg n a =
-  a & annoOf % #extra %~ \case
-    Nothing ->
-      Just
-        Extension
-          { nlg = Just n
-          , resolvedType = Nothing
-          }
-    Just exts -> Just $ exts & #nlg ?~ n
 
 addWarning :: Warning -> NlgM ()
 addWarning warn = do

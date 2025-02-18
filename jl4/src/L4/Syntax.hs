@@ -12,8 +12,7 @@ import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
-import Optics.Generic
-import qualified Optics
+import Optics
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -241,6 +240,48 @@ data Extension = Extension
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+
+annResolveType :: Lens' Anno (Maybe (Type' Resolved))
+annResolveType = lens
+  (\ann -> case ann.extra of
+    Nothing -> Nothing
+    Just exts -> exts.resolvedType)
+  (\ann ty -> case ann.extra of
+    Just exts -> ann
+      { extra = Just exts
+        { resolvedType = ty
+        }
+      }
+    Nothing -> ann
+      { extra = Just Extension
+        { resolvedType = ty
+        , nlg = Nothing
+        }
+      }
+  )
+
+annNlg :: Lens' Anno (Maybe Nlg)
+annNlg = lens
+  (\ann -> case ann.extra of
+    Nothing -> Nothing
+    Just exts -> exts.nlg)
+  (\ann n -> case ann.extra of
+    Just exts -> ann
+      { extra = Just exts
+        { nlg = n
+        }
+      }
+    Nothing -> ann
+      { extra = Just Extension
+        { resolvedType = Nothing
+        , nlg = n
+        }
+      }
+  )
+
+setNlg :: Nlg -> Anno -> Anno
+setNlg n a = a & annNlg ?~ n
 
 type Anno = Anno_ PosToken Extension
 type AnnoElement = AnnoElement_ PosToken
