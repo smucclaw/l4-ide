@@ -3,11 +3,11 @@ import type { LirId, LirContext } from '$lib/layout-ir/core.js'
 import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import BoolVarSFNode from './sf-custom-nodes/BoolVarSFNode.svelte'
-import NotStartSFNode from './sf-custom-nodes/NotStartSFNode.svelte'
-import NotEndSFNode from './sf-custom-nodes/NotEndSFNode.svelte'
-import SourceSFNode from './sf-custom-nodes/SourceSFNode.svelte'
-import SinkSFNode from './sf-custom-nodes/SinkSFNode.svelte'
+import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
+import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
+import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
+import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
+import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
@@ -157,8 +157,11 @@ export class NotEndFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   }
 }
 
-/** A FlowNode that's used solely to visually group or 'bundle' other nodes. */
-export type GroupingFlowNode = SinkFlowNode | SourceFlowNode
+/** A FlowNode that's used solely to visually group or 'bundle' other nodes.
+ *
+ * Using `bundling` because `group` has a specific meaning in the React/SvelteFlow context.
+ */
+export type BundlingFlowNode = SinkFlowNode | SourceFlowNode
 
 export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   constructor(
@@ -319,7 +322,3 @@ export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { label: string }
   // TODO: Will add Value in the next version
 }
-
-// export interface GroupingNodeDisplayerProps extends SF.NodeProps {
-//   handlesInfo: SFHandlesInfo
-// }
