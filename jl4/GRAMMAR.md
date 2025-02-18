@@ -242,7 +242,7 @@ For NLG hints, we allow to write them as a comment
 starting with `@nlg` or within square brackets.
 
 For references, we allow to write them as a comment
-starting with `@ref` or within angle brackets.
+starting with `@ref` or within double angle brackets.
 
 Annotations for specific entities refer to whatever
 precedes them.

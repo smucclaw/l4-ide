@@ -14,7 +14,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Char (isAlphaNum)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
 import Data.Tuple (swap)
@@ -31,6 +31,7 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
 import LSP.Core.FileStore hiding (Log (..))
@@ -551,20 +552,36 @@ gotoDefinition ide fileUri pos = do
 -- ----------------------------------------------------------------------------
 
 findHover :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Hover)
-findHover ide fileUri pos = do
-  mTypeCheckedModule <- liftIO $ runAction "findHover" ide $
-    useWithStale TypeCheck nfp
-  case mTypeCheckedModule of
-    Nothing -> pure Nothing
-    Just (m, positionMapping) -> do
-      pure $ do
-        oldPos <- fromCurrentPosition positionMapping pos
-        (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
-        let lspRange = srcRangeToLspRange (Just range)
-        newLspRange <- toCurrentRange positionMapping lspRange
-        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
+findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
   where
-    nfp = fromUri fileUri
+  refHover = do
+    refs <- MaybeT $ liftIO $ runAction "refHover" ide $
+      use ResolveReferences nfp
+    hoistMaybe do
+      -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
+      let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
+      (range, reference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
+      let lspRange = srcRangeToLspRange (Just range)
+      pure $ Hover
+        (InL
+          (MarkupContent
+            { _value = reference
+            , _kind = MarkupKind_Markdown}
+          )
+        )
+        (Just lspRange)
+
+  typeHover = do
+    (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
+      useWithStale TypeCheck nfp
+    hoistMaybe do
+      oldPos <- fromCurrentPosition positionMapping pos
+      (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
+      let lspRange = srcRangeToLspRange (Just range)
+      newLspRange <- toCurrentRange positionMapping lspRange
+      pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
+
+  nfp = fromUri fileUri
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions
