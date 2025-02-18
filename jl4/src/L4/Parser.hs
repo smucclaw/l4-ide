@@ -886,17 +886,17 @@ projection =
       -- May affect the source span of the name.
       -- E.g. Goto definition of `name's` would be affected, as clicking on `'s` would not be part
       -- of the overall name source span. It is possible to implement this, but slightly annoying.
-      (\ n ns ->
+      (\ ae ns ->
         foldl'
           (\e (gen, n') ->
             Proj (fixAnnoSrcRange $ mkHoleAnnoFor e <> mkSimpleEpaAnno (lexToEpa gen) <> mkHoleAnnoFor n')
               e
               n'
           )
-          (Var (fixAnnoSrcRange $ mkHoleAnnoFor n) n)
+          ae -- (Var (fixAnnoSrcRange $ mkHoleAnnoFor n) n)
           ns
       )
-  <$> name
+  <$> atomicExpr
   <*> some ((,) <$> spacedToken_ TGenitive <*> name)
 
 _example1 :: Text
