@@ -423,7 +423,6 @@ visualise recorder ide uri msrcPos = do
       recentlyVisualisedDecide _ _ _ = Nothing
 
   case mdecide of
-    -- FIXME: the client (vscode plugin) needs to be able to handle 'Null'
     Nothing -> pure (InR Null)
     Just (decide, simp, substitution) -> case Ladder.doVisualize decide simp of
       Right vizProgramInfo -> do

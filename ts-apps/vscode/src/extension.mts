@@ -113,7 +113,7 @@ export async function activate(context: ExtensionContext) {
 
           outputChannel.appendLine(JSON.stringify(vizProgramInfo))
 
-          panelManager.render(context)
+          panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
           webviewMessenger.onNotification(
             WebviewFrontendIsReadyNotification,
@@ -124,16 +124,6 @@ export async function activate(context: ExtensionContext) {
               )
             }
           )
-          panelManager.getPanel().onDidDispose(async () => {
-            // if the panel dies, we want to reset the visualisation
-            // such that the extension doesn't keep bringing up the visualisation
-            // after it has been closed
-            await vscode.commands.executeCommand(
-              'l4.resetvisualization',
-              editor.document.uri.toString()
-            )
-          })
-
           await panelManager.getWebviewFrontendIsReadyPromise()
 
           const response = await webviewMessenger.sendRequest(
