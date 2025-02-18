@@ -104,7 +104,13 @@ preprocessNlgs nlgs =
 -- HasNlg Class and Instances
 -- ----------------------------------------------------------------------------
 
+-- | Add 'Nlg' annotations that are in "scope" for the abstract syntax node 'a'.
+-- Any type that implements this type class declares that it can either
+-- have 'Nlg' annotations, or that one of its children can be annotated with
+-- an 'Nlg' comment.
 class HasNlg a where
+  -- | Add 'Nlg' annotations that are applicable to the current AST node 'a'
+  -- based on the 'SrcSpan' of 'a' and its neighbours.
   addNlg :: a -> NlgA a
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Program n) where
