@@ -62,6 +62,9 @@ module LSP.Core.Shake(
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
     IdeAction(..), runIdeAction,
+
+    RecentlyVisualised (..), getMostRecentVisualisation, setMostRecentVisualisation, clearMostRecentVisualisation,
+
     -- Exposed for testing.
     Q(..),
     IndexQueue,
@@ -142,6 +145,8 @@ import System.FilePath hiding (makeRelative)
 import System.Time.Extra
 import UnliftIO (MonadUnliftIO (withRunInIO))
 import qualified "list-t" ListT
+import L4.Lexer
+import L4.Syntax
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -277,7 +282,12 @@ data ShakeExtras = ShakeExtras
       -- ^ Queue of restart actions to be run.
     , loaderQueue :: TQueue (IO ())
       -- ^ Queue of loader actions to be run.
+    , mostRecentlyVisualized :: TMVar RecentlyVisualised
     }
+
+data RecentlyVisualised
+  = RecentlyVisualised {pos :: !SrcPos, name :: !RawName, type' :: !(Type' Resolved), simplify :: !Bool}
+  deriving stock (Show, Eq)
 
 type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
@@ -587,6 +597,7 @@ shakeOpen recorder lspSink mClientCapabilities debouncer
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspSink
+        mostRecentlyVisualized <- newEmptyTMVarIO
         pure ShakeExtras{shakeRecorder = recorder, ..}
     shakeDb  <-
         shakeNewDatabase
@@ -1284,6 +1295,15 @@ getAllDiagnostics ::
     STM [FileDiagnostic]
 getAllDiagnostics =
     fmap (concatMap (\(_,v) -> getDiagnosticsFromStore v)) . ListT.toList . STM.listT
+
+getMostRecentVisualisation :: IdeState -> STM (Maybe RecentlyVisualised)
+getMostRecentVisualisation ideState = tryReadTMVar ideState.shakeExtras.mostRecentlyVisualized
+
+setMostRecentVisualisation :: IdeState -> RecentlyVisualised -> STM ()
+setMostRecentVisualisation ideState = writeTMVar ideState.shakeExtras.mostRecentlyVisualized
+
+clearMostRecentVisualisation :: IdeState -> STM ()
+clearMostRecentVisualisation ideState = void $ tryTakeTMVar ideState.shakeExtras.mostRecentlyVisualized
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =
