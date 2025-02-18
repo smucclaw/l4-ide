@@ -80,9 +80,7 @@ lspOptions =
   defaultOptions
     { optTextDocumentSync = Just syncOptions
     , optExecuteCommandCommands =
-        Just
-          [ "l4.visualize"
-          ]
+        Just $ map snd l4CmdNames
     }
 
 -- ----------------------------------------------------------------------------

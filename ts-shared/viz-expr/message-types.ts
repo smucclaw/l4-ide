@@ -2,9 +2,8 @@ import type { NotificationType, RequestType } from 'vscode-messenger-common'
 
 import { VisualizeDecisionLogicIRInfo } from './viz-expr.js'
 
-// TODO: A request might be better,
-// so that extension will know whether webview received it
 /**
+ * Using a request so that the extension can know whether the webview received it.
  * See also Wrapper / Protocol interfaces in viz-expr.ts
  */
 export const VisualizeDecisionLogicRequest: RequestType<

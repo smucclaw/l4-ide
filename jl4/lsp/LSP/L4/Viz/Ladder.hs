@@ -65,8 +65,8 @@ prettyPrintVizError = \case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Bool -> Decide Resolved -> Either VizError VisualizeDecisionLogicIRInfo
-doVisualize simplify decide =
+doVisualize :: Decide Resolved -> Bool -> Either VizError VisualizeDecisionLogicIRInfo
+doVisualize decide simplify =
   case  (vizProgram simplify decide).getVizE initialVizState of
     (result, _) -> result
 
