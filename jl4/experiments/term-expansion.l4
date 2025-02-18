@@ -3,19 +3,20 @@
 
 -- before:
 --   f x = x && y
---     where y = z && z
+--     where y = z || z
 
 -- after:
---   f x = x && z && z
+--   f x = x && (z || z)
 
 GIVETH A BOOLEAN
 z MEANS TRUE
 
 GIVETH A BOOLEAN
-y MEANS z AND z
+y MEANS z OR z
 
 GIVEN x IS A BOOLEAN
 GIVETH A BOOLEAN
-DECIDE `myOr` IS x AND y
+DECIDE `myOr` IS x AND     z
+                        OR z
 
 #EVAL `myOr` TRUE
