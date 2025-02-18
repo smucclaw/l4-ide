@@ -16,7 +16,10 @@ y MEANS z OR z
 
 GIVEN x IS A BOOLEAN
 GIVETH A BOOLEAN
-DECIDE `myOr` IS x AND     z
-                        OR z
+DECIDE `after` IS x AND     z
+                         OR z
 
-#EVAL `myOr` TRUE
+GIVEN x IS A BOOLEAN
+DECIDE `before` IS x AND y
+
+#EVAL `after` TRUE
