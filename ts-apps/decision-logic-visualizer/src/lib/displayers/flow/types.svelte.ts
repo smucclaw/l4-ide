@@ -162,6 +162,7 @@ export type GroupingFlowNode = SinkFlowNode | SourceFlowNode
 
 export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   constructor(
+    protected readonly data: { annotation: string },
     origLirIds: LirId[],
     position: {
       x: number
@@ -176,13 +177,14 @@ export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       id: this.id,
       type: sfSourceNodeType,
       position: this.position,
-      data: {},
+      data: this.data,
     }
   }
 }
 
 export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
   constructor(
+    protected readonly data: { annotation: string },
     origLirIds: LirId[],
     position: {
       x: number
@@ -197,7 +199,7 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       id: this.id,
       type: sfSinkNodeType,
       position: this.position,
-      data: {},
+      data: this.data,
     }
   }
 }
@@ -320,6 +322,6 @@ export interface BoolVarDisplayerProps extends SF.NodeProps {
   // TODO: Will add Value in the next version
 }
 
-// export interface GroupingNodeDisplayerProps extends SF.NodeProps {
-//   handlesInfo: SFHandlesInfo
-// }
+export interface GroupingNodeDisplayerProps extends SF.NodeProps {
+  data: { annotation: string }
+}
