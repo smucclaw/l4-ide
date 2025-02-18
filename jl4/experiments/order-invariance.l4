@@ -1,0 +1,7 @@
+
+-- Haskell functions are order-invariant.
+-- It would be nice if L4 definitions were too.
+
+y MEANS z OR z
+
+z MEANS TRUE
