@@ -1,5 +1,4 @@
 import * as vscode from 'vscode'
-// import { RuleNode } from './rule-to-json'
 import webviewHtml from '../static/webview/index.html'
 import { Uri } from 'vscode'
 

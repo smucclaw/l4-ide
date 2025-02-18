@@ -14,7 +14,7 @@ import {
   VisualizeDecisionLogicRequest,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
-import * as command from './commands.js'
+// import { cmdViz } from './commands.js'
 import type { PanelConfig } from './viz.js'
 import { PanelManager } from './viz.js'
 
@@ -155,16 +155,6 @@ export async function activate(context: ExtensionContext) {
   outputChannel.appendLine(
     `[client] Starting server from the client: ${serverCmd}`
   )
-
-  // on Button. the button is at the bottom right of the status bar.
-  const button = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  )
-  button.command = command.showVisualisation
-  button.text = 'Update Diagram'
-  button.tooltip = 'Show visualisation'
-  button.show()
 
   // Create the language client and start the client.
   client = new LanguageClient(langId, langName, serverOptions, clientOptions)
