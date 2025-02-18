@@ -139,16 +139,6 @@ export async function activate(context: ExtensionContext) {
     `[client] Starting server from the client: ${serverCmd}`
   )
 
-  // on Button. the button is at the bottom right of the status bar.
-  const button = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  )
-  button.command = command.showVisualisation
-  button.text = 'Update Diagram'
-  button.tooltip = 'Show visualisation'
-  button.show()
-
   // Create the language client and start the client.
   client = new LanguageClient(langId, langName, serverOptions, clientOptions)
   // Start the client. This will also launch the server
