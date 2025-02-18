@@ -6,7 +6,7 @@ import {
 } from './adjacency-map-directed-graph.js'
 import * as GY from 'graphology'
 import { topologicalSort } from 'graphology-dag'
-import { match } from 'ts-pattern'
+import { match, P } from 'ts-pattern'
 
 /*
 TODO: There is currently a fair bit of code duplication between the various kinds of alga graphs in this mini-lib.
@@ -76,6 +76,26 @@ export abstract class Dag<A extends Ord<A> & HasId>
     return match(topSort)
       .with([], () => empty<A>())
       .otherwise(() => vertex(topSort[topSort.length - 1]))
+  }
+
+  /** Internal helper */
+  protected getAllPathsFromVertex(vertex: A): Array<Array<A>> {
+    const neighbors = this.getAdjMap().get(vertex) ?? new Set()
+    if (neighbors.size === 0) return [[vertex]]
+
+    const pathsFromNeighbors = Array.from(neighbors).flatMap((neighbor) =>
+      this.getAllPathsFromVertex(neighbor)
+    )
+    return pathsFromNeighbors.map((path) => [vertex, ...path])
+  }
+
+  getAllPaths(): Array<Array<A>> {
+    const source = this.getSource()
+    return match(source)
+      .with(P.instanceOf(Empty), () => [])
+      .otherwise((source) =>
+        this.getAllPathsFromVertex((source as Vertex<A>).getValue())
+      )
   }
 }
 
