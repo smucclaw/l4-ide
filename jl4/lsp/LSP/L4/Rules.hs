@@ -64,27 +64,27 @@ data TypeCheckResult = TypeCheckResult
 type instance RuleResult Evaluate = ()
 data Evaluate = Evaluate
   deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Typeable, Hashable)
+  deriving anyclass (NFData, Hashable)
 
 type instance RuleResult LexerSemanticTokens = [SemanticToken]
 data LexerSemanticTokens = LexerSemanticTokens
   deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Typeable, Hashable)
+  deriving anyclass (NFData, Hashable)
 
 type instance RuleResult ParserSemanticTokens = [SemanticToken]
 data ParserSemanticTokens = ParserSemanticTokens
   deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Typeable, Hashable)
+  deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetSemanticTokens = [SemanticToken]
 data GetSemanticTokens = GetSemanticTokens
   deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Typeable, Hashable)
+  deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetRelSemanticTokens = [UInt]
 data GetRelSemanticTokens = GetRelSemanticTokens
   deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Typeable, Hashable)
+  deriving anyclass (NFData, Hashable)
 
 data Log
   = ShakeLog Shake.Log
