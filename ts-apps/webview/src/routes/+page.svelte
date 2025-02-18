@@ -32,7 +32,9 @@
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   )
-  let declLabel = $derived(declLirNode && (declLirNode as DeclLirNode).getLabel(context))
+  let declLabel = $derived(
+    declLirNode && (declLirNode as DeclLirNode).getLabel(context)
+  )
   $effect(() => {
     if (declLirNode) {
       registry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
