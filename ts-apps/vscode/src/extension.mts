@@ -14,7 +14,7 @@ import {
   VisualizeDecisionLogicRequest,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
-import * as command from './commands.js'
+// import { cmdViz } from './commands.js'
 import type { PanelConfig } from './viz.js'
 import { PanelManager } from './viz.js'
 

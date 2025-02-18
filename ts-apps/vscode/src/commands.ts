@@ -1,1 +1,1 @@
-export const showVisualisation = 'l4.visualize'
+export const cmdViz = 'l4.visualize'
