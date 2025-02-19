@@ -10,6 +10,10 @@ module L4.Parser (
   mkPError,
   PState (..),
 
+  -- * Debug combinators
+  expr,
+  spaceOrAnnotations,
+
   -- * High-level JL4 parser
   execProgramParser,
   execProgramParserForTokens,
@@ -1194,17 +1198,21 @@ _example11e =
 -- JL4 parsers
 -- ----------------------------------------------------------------------------
 
-execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) (a, PState)
+execParser :: Resolve.HasNlg a => Parser a -> String -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
 execParser p file input =
   case runLexer file input of
     Left errs -> Left errs
     Right ts -> execParserForTokens p file input ts
 
-execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, PState)
+execParserForTokens :: Resolve.HasNlg a => Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
 execParserForTokens p file input ts =
   case parse (runStateT (p <* eof) mempty) file (MkTokenStream (Text.unpack input) ts) of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
-    Right x  -> Right x
+    Right (a, pstate)  ->
+      let
+        (annotatedA, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs a
+      in
+        Right (annotatedA, nlgS.warnings, pstate)
 
 runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 runLexer file input =
@@ -1216,32 +1224,28 @@ runLexer file input =
 
 execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
 execProgramParser file input =
-  case runLexer file input of
-    Left err -> Left err
-    Right ts -> execProgramParserForTokens file input ts
+  forgetPState $ execParser program file input
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
 
 execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
 execProgramParserForTokens file input ts =
-  case execParserForTokens program file input ts of
-    Left err -> Left err
-    Right (prog, pstate) ->
-      let
-        (progWithNlgAnnotations, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs prog
-      in
-        Right (progWithNlgAnnotations, nlgS.warnings)
+  forgetPState $  execParserForTokens program file input ts
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
 
 -- ----------------------------------------------------------------------------
 -- Debug helpers
 -- ----------------------------------------------------------------------------
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
-parseFile :: Show a => Parser a -> String -> Text -> IO ()
+parseFile :: (Show a, Resolve.HasNlg a) => Parser a -> String -> Text -> IO ()
 parseFile p file input =
   case execParser p file input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right (x, _pState) -> pPrint x
+    Right (x, _, _pState) -> pPrint x
 
-parseTest :: Show a => Parser a -> Text -> IO ()
+parseTest :: (Show a, Resolve.HasNlg a) => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
 
 -- ----------------------------------------------------------------------------
