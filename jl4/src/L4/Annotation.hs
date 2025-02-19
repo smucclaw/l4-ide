@@ -46,7 +46,7 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
--- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode' for tokens
+-- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode_' for tokens
 -- in the language paired with any trailing information that is not part of
 -- the language grammar itself.
 data CsnCluster_ t = CsnCluster
@@ -126,6 +126,11 @@ class HasAnno t where
 
   default getAnno :: (GPosition 1 t t (Anno' t) (Anno' t)) => t -> Anno' t
   getAnno = genericGetAnno
+
+annoOf :: HasAnno a => Lens' a (Anno' a)
+annoOf = lens
+  getAnno
+  (flip setAnno)
 
 genericSetAnno :: GPosition 1 s t a b => b -> s -> t
 genericSetAnno ann e = set (gposition @1) ann e
@@ -255,9 +260,37 @@ instance HasSrcRange (AnnoElement_ a) where
 instance HasSrcRange a => HasSrcRange (Maybe a) where
   rangeOf a = a >>= rangeOf
 
-instance HasSrcRange (Anno_ e t) where
-  rangeOf a = rangeOf a.payload
+instance HasSrcRange (Anno_ t e) where
+  rangeOf a =
+    let
+      -- Only take the 'SrcRange' of elements into account that are visibile
+      applicable =
+        filter
+          (\e ->
+              maybe
+                True
+                (isCsnClusterVisible . snd)
+                (preview #_AnnoCsn e)
+          )
+          a.payload
+    in
+      rangeOf applicable
 
+isCsnClusterVisible :: CsnCluster_ t -> Bool
+isCsnClusterVisible csn = csn.payload.visibility == Visible
+
+debugShow :: AnnoElement_ t -> String
+debugShow = \case
+  AnnoHole r -> "AnnoHole [" <> show r <> "]"
+  AnnoCsn r p  -> "AnnoCsn [" <> show r <> "]: " <> show (p.payload.visibility, p.trailing.visibility, p.payload.range)
+
+debugShowL :: [AnnoElement_ t] -> String
+debugShowL = intercalate "\n" . fmap debugShow
+
+-- | Calculate the 'SrcRange' of the AST node including hidden concrete syntax nodes.
+--
+-- This is notably different to @'rangeOf' (ann :: 'Anno_' t)@, which
+-- filters out any hidden concrete syntax nodes.
 rangeOfNode :: ToConcreteNodes t a => a -> Maybe SrcRange
 rangeOfNode a = case runExcept $ toNodes a of
   Left _ -> Nothing

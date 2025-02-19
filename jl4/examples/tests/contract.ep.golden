@@ -1,0 +1,74 @@
+DECLARE Person
+    HAS
+        name IS A STRING
+
+ASSUME `owns car` IS A FUNCTION FROM A Person TO A BOOLEAN
+ASSUME `wallet content` IS A FUNCTION FROM A Person TO A NUMBER
+
+GIVEN `the buyer` IS A Person @nlg
+      `the seller` IS A Person @nlg
+      `the amount` IS A NUMBER @nlg
+GIVETH A BOOLEAN
+DECIDE `can purchase car` IF
+      `owns car` OF `the seller`
+  AND (`wallet content` OF `the buyer`) > `the amount`
+
+#CHECK `can purchase car` WITH
+    `the buyer` IS Person "Hannes",
+    `the seller` IS Person "Magnus",
+    `the amount` IS 1000
+{-
+*Only for `GIVETH A BOOLEAN`*
+Decide whether or not `can purchase car` where
+`the buyer` is `A Person` with the `name` Hannes,
+`the seller` is `A Person` with the `name` Magnus,
+and `the amount` is 1000.
+-}
+
+{-
+The Person Hannes, named `the buyer`, and the Person Magnus, named `the seller`, and 1000 named `the amount`, `can purchase car`.
+
+No expansion of terms.
+~~`can purchase car` if `the seller` `owns car` and `the buyer` `wallet content` is larger than `the amount`[1].~~
+~~[1] `the amount` is `1000`.~~
+-}
+
+ASSUME `wants to buy car` IS FUNCTION FROM Person TO BOOLEAN
+
+GIVEN
+  `the seller` IS A Person
+  `the buyer` IS A Person
+  `the amount` IS A NUMBER
+GIVETH A BOOLEAN
+DECIDE `can transfer car ownership`
+@nlg %the seller% %can transfer car ownership% to %the buyer%
+        `the seller` @nlg [Subject]
+        `the buyer`  @nlg [...]
+        `the amount`
+    IF
+     `owns car` OF `the seller`
+ AND `wants to buy car` OF `the buyer`
+
+{-
+`The seller` `can transfer car ownership` to `the buyer` if `the seller` `owns car` and `the buyer` `wants to buy car`
+-}
+
+ASSUME `has enough money` IS FUNCTION FROM Person TO BOOLEAN
+
+GIVEN `the buyer` IS A Person
+GIVETH A BOOLEAN
+DECIDE `can purchase car from Magnus` IF
+    `has enough money` OF `the buyer`
+{-
+`A Person`, known as the `the buyer`, `can purchase car from Magnus` if `the buyer` `has enough money`
+-}
+
+ASSUME `owns the car` IS FUNCTION FROM Person TO BOOLEAN
+
+GIVEN `the seller` IS A Person
+DECIDE `is allowed to sell the car` `the seller` IF
+    `owns the car` OF `the seller`
+
+{-
+`A Person`, known as the `the seller`, `is allowed to sell the car` if `the seller` `owns the car`
+-}

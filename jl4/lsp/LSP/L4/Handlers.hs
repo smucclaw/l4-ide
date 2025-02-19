@@ -236,7 +236,6 @@ handlers recorder =
             atomically $ clearMostRecentVisualisation ide
             pure (InR Null)
           Nothing -> defaultResponseError ("Unknown command: " <> cid)
-
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
@@ -418,7 +417,7 @@ visualise recorder ide uri msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr) simplify substitution
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just Extension {resolvedType = Just ty}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 

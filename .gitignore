@@ -6,6 +6,9 @@ cabal.project.local~
 ## golden actual files
 *.actual
 
+## test setup
+jl4/examples/.vscode
+
 # Typescript-monorepo stuff
 
 ## Turbo

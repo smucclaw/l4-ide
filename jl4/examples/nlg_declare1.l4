@@ -1,0 +1,6 @@
+DECLARE List [The List] OF a [Elements]
+  IS ONE OF
+    Nil [Empty Case]
+    Cons [Followed By] HAS
+      head [Get First Element] IS AN a [Start Element]
+      tail [Get Tail Elements] IS A List OF a [Rest of elements]

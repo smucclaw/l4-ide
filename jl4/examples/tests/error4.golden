@@ -2,5 +2,5 @@
 8 | DECIDE factorial MEANS n
   |                  ^^^^^
 unexpected MEANS
-expecting <, IF, IS, OF, [, identifier, or space token
+expecting IF, IS, OF, identifier, or space token
 

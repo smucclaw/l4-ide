@@ -6,7 +6,7 @@ import Control.Monad as X
 import Control.Monad.Except as X
 import Control.Monad.Identity as X
 import Control.Monad.Reader as X
-import Control.Monad.State as X
+import Control.Monad.State.Strict as X
 import Data.Coerce as X
 import Data.IORef as X
 import Data.Foldable as X

@@ -7,6 +7,8 @@ import Options.Applicative as Options
 
 import L4.Parser
 import L4.TypeCheck
+import L4.ExactPrint
+import L4.Annotation
 
 data Options =
   MkOptions
@@ -46,3 +48,30 @@ exactprintFiles =
 parseFiles :: [FilePath] -> IO ()
 parseFiles =
   traverse_ (\ file -> parseFile program file =<< Text.readFile file)
+
+-- | Parse, typecheck and exact-print a program.
+checkAndExactPrintFile :: String -> Text -> Text
+checkAndExactPrintFile file input =
+  case execProgramParser file input of
+    Left errs -> Text.unlines $ fmap (.message) $ toList errs
+    Right (prog, _) ->
+      "Parsing successful\n\n"
+      <>
+      case doCheckProgram prog of
+        CheckResult {errors = []} ->
+          "Typechecking successful\n\n"
+          <> case exactprint prog of
+               Left epError -> prettyTraverseAnnoError epError
+               Right ep -> ep
+        CheckResult {errors} ->
+          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
+
+-- | Parse a source file and exact-print the result.
+exactprintProgram :: String -> Text -> Text
+exactprintProgram file input =
+  case execProgramParser file input of
+    Left errs -> Text.unlines $ fmap (.message) $ toList errs
+    Right (prog, _) ->
+      case exactprint prog of
+        Left epError -> prettyTraverseAnnoError epError
+        Right ep -> ep
