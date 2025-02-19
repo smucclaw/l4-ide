@@ -1,0 +1,12 @@
+DECLARE Choice OF a, b
+  IS ONE OF
+    Left  HAS payload IS AN a
+    Right HAS payload IS A  b
+
+GIVETH Choice OF NUMBER, NUMBER
+DECIDE choice IS Left 5
+
+#CHECK CONSIDER choice
+    WHEN Left  a
+    [This is attached to %a%] THEN Left a [This is also attached to %a%]
+    WHEN Right b THEN (Right b) [Might be attached to %right b% in the future]
