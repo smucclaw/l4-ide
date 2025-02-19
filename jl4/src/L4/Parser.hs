@@ -102,7 +102,7 @@ nlgP = do
 
 refP :: Parser (Epa Ref)
 refP = do
-  refExpr <- blockRefAnnotation
+  refExpr <- refAnnotationP <|> blockRefAnnotation
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
 nlgAnnotationP :: Parser (Epa [Text])
@@ -140,6 +140,12 @@ blockRefAnnotation =
     epaTextRef = fmap (fmap displayPosToken) <$> epaRef
   in
     epaTextRef
+
+refAnnotationP :: Parser (Epa [Text])
+refAnnotationP = hidden $ onlySpacedToken (\case
+  TRef t -> Just [t]
+  _ -> Nothing)
+  "Reference Annotation"
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
