@@ -156,10 +156,10 @@ data TokenType =
     -- annotations
   | TNlg          !Text
   | TRef          !Text
-  | TAOpen
-  | TAClose
-  | TSOpen
-  | TSClose
+  | TRefOpen
+  | TRefClose
+  | TNlgOpen
+  | TNlgClose
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -244,10 +244,10 @@ tokenPayload =
   <|> TPClose         <$  char ')'
   <|> TCOpen          <$  char '{'
   <|> TCClose         <$  char '}'
-  <|> TSOpen          <$  "<<"
-  <|> TSClose         <$  ">>"
-  <|> TAOpen          <$  char '['
-  <|> TAClose         <$  char ']'
+  <|> TNlgOpen          <$  "<<"
+  <|> TNlgClose         <$  ">>"
+  <|> TRefOpen          <$  char '['
+  <|> TRefClose         <$  char ']'
   <|> TParagraph      <$  char '§'
   <|> TComma          <$  char ','
   <|> TSemicolon      <$  char ';'
@@ -683,10 +683,10 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
-    TAOpen           -> "<<"
-    TAClose          -> ">>"
-    TSOpen           -> "["
-    TSClose          -> "]"
+    TRefOpen           -> "<<"
+    TRefClose          -> ">>"
+    TNlgOpen           -> "["
+    TNlgClose          -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -793,10 +793,10 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
-    TAOpen -> CSymbol
-    TAClose -> CSymbol
-    TSOpen -> CSymbol
-    TSClose -> CSymbol
+    TRefOpen -> CSymbol
+    TRefClose -> CSymbol
+    TNlgOpen -> CSymbol
+    TNlgClose -> CSymbol
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol

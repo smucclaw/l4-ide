@@ -215,7 +215,7 @@ We will go for the first option.
 Annotations are treated just as lexical comments.
 
 Line comments start with `--`.
-Block comments start with `/-` and end with `-/`.
+Block comments start with `{-` and end with `-}`.
 
 # Layout
 
