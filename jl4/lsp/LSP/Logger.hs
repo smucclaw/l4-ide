@@ -181,15 +181,12 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
     textColumns <- mapM loggingColumnToText columns
     pure $ Text.intercalate " | " textColumns
     where
-      showAsText :: Show a => a -> Text
-      showAsText = Text.pack . show
-
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
       priorityToText :: Priority -> Text
-      priorityToText = showAsText
+      priorityToText = Text.show
 
-      threadIdToText = showAsText
+      threadIdToText = Text.show
 
       callStackToSrcLoc :: CallStack -> Maybe SrcLoc
       callStackToSrcLoc theCallStack =
@@ -200,7 +197,7 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
       srcLocToText = \case
           Nothing -> "<unknown>"
           Just SrcLoc{ srcLocModule, srcLocStartLine, srcLocStartCol } ->
-            Text.pack srcLocModule <> "#" <> showAsText srcLocStartLine <> ":" <> showAsText srcLocStartCol
+            Text.pack srcLocModule <> "#" <> Text.show srcLocStartLine <> ":" <> Text.show srcLocStartCol
 
       loggingColumnToText :: LoggingColumn -> IO Text
       loggingColumnToText = \case
