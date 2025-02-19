@@ -121,8 +121,8 @@ instance NFData Value where
   -- rnf (ValEnvironment env)        = env `seq` ()
 
 renderValue :: Value -> Text
-renderValue (ValNumber i) = Text.pack (show i)
-renderValue (ValString txt) = Text.pack (show txt)
+renderValue (ValNumber i) = Text.show i
+renderValue (ValString txt) = Text.show txt
 renderValue (ValList vs) = "(LIST " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValClosure _ _ _) = "<function>"
 renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"

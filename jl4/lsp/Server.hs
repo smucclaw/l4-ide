@@ -225,7 +225,7 @@ defaultMain recorder args = do
           Nothing -> pure ()
           Just ide -> liftIO $ do
             let
-              msg = Text.pack $ show cfg
+              msg = Text.show cfg
             setSomethingModified Shake.VFSUnmodified ide "config change" $ do
               logWith recorder Debug $ LogConfigurationChange msg
               modifyClientSettings ide (const $ Just cfgObj)

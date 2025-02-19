@@ -1,4 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
@@ -18,9 +21,17 @@ import Control.DeepSeq
 import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
+import Data.Text (Text, pattern (:<), pattern (:>))
+import UnliftIO (liftIO)
+import qualified Data.Csv as Csv
+import qualified Data.Map.Lazy as Map
 import qualified Data.Maybe as Maybe
-import Data.Text (Text, pack)
+import qualified Data.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
+import qualified System.OsPath as Path
+import qualified System.File.OsPath as Path
+import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
+import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
 import GHC.Generics (Generic)
 import LSP.Core.PositionMapping
@@ -35,7 +46,6 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
-import qualified Data.Text as Text
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -90,6 +100,24 @@ type instance RuleResult GetRelSemanticTokens = [UInt]
 data GetRelSemanticTokens = GetRelSemanticTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
+
+-- TODO:
+-- in future we want to have SrcPos |-> Uri s.t. we can resolve
+-- relative locations based on the scope, i.e. if we have
+-- DECLARE foo <<british nationality act>>
+--   IF bar <<sec. 3>>
+-- then this should assemble the uri into one link based on
+-- an uri scheme described in the original file
+type instance RuleResult ResolveReferences = IntervalMap SrcPos (Int, Maybe Text)
+data ResolveReferences = ResolveReferences
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+srcRangeToInterval :: SrcRange -> IVMap.Interval SrcPos
+srcRangeToInterval range = IVMap.Interval range.start range.end
+
+intervalToSrcRange :: Int -> IVMap.Interval SrcPos -> SrcRange
+intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
 
 data Log
   = ShakeLog Shake.Log
@@ -219,6 +247,65 @@ jl4Rules recorder = do
         pure ([{- TODO: Log error -}], Nothing)
       Right relSemTokens ->
           pure ([], Just relSemTokens)
+
+  define shakeRecorder $ \ResolveReferences f -> do
+    ownPath <- normalizedFilePathToOsPath f
+    let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
+    -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
+    contents <- liftIO $ Path.readFile citationFilePath
+    -- TODO: in future we may want to use the parse of the tree to get the context of the references
+    (tokens, _) <- use_ GetLexTokens f
+
+
+    let stripReferenceHeralds r
+          | Text.isPrefixOf "@ref" r = Text.drop 4 r
+          | ('<' :< '<' :< r') :> '>' :> '>' <- r = r'
+          | otherwise = r
+
+        normalizeRef = Text.toLower . Text.strip
+
+        rangeOfPosToken = \case
+          -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
+          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
+          _ -> mempty
+
+        allReferencesInTree :: [(Text, SrcRange)]
+        allReferencesInTree = foldMap rangeOfPosToken tokens
+
+
+        records = do
+          decoded <- Csv.decode Csv.NoHeader contents
+
+          let mp = foldMap (uncurry Map.singleton) decoded
+              mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
+              getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
+
+          pure $ foldMap getReferences allReferencesInTree
+
+    pure case records of
+      Right recs -> ([], Just recs)
+      Left err ->
+        (
+          [ FileDiagnostic
+            { fdLspDiagnostic = Diagnostic
+              { _source = Just "jl4"
+              , _severity = Just DiagnosticSeverity_Warning
+              , _range = srcRangeToLspRange Nothing
+              , _message = Text.pack err
+              , _relatedInformation = Nothing
+              , _data_ = Nothing
+              , _codeDescription = Nothing
+              , _tags = Nothing
+              , _code = Nothing
+              }
+            , fdFilePath = f
+            , fdShouldShowDiagnostic = ShowDiag
+            , fdOriginalSource = NoMessage
+            }
+          ]
+        , Nothing
+        )
+
   where
     shakeRecorder = cmapWithPrio ShakeLog recorder
     mkSimpleFileDiagnostic nfp diag =
@@ -274,7 +361,7 @@ jl4Rules recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either (pack . show) renderValue res
+        , _message = either Text.show renderValue res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

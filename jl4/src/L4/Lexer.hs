@@ -78,10 +78,6 @@ data TokenType =
   | TPClose
   | TCOpen
   | TCClose
-  | TSOpen
-  | TSClose
-  | TAOpen
-  | TAClose
     -- punctuation
   | TParagraph
   | TComma
@@ -160,6 +156,10 @@ data TokenType =
     -- annotations
   | TNlg          !Text
   | TRef          !Text
+  | TRefOpen
+  | TRefClose
+  | TNlgOpen
+  | TNlgClose
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -171,10 +171,20 @@ data TokenType =
 nlgAnnotation :: Lexer Text
 nlgAnnotation =
   (<>) <$> string "@nlg" <*> takeWhileP (Just "character") (/= '\n')
+    <|> inlineAnno "[" "]"
+  <?> "Natural Language Generation Annotation"
 
 refAnnotation :: Lexer Text
 refAnnotation =
   (<>) <$> string "@ref" <*> takeWhileP (Just "character") (/= '\n')
+    <|> inlineAnno "<<" ">>"
+  <?> "Reference Annotation"
+
+inlineAnno :: Text -> Text -> Lexer Text
+inlineAnno open close = do
+  o <- string open
+  (anno, c) <- manyTill_ anySingle (string close)
+  pure $ o <> Text.pack anno <> c
 
 whitespace :: Lexer Text
 whitespace =
@@ -234,8 +244,10 @@ tokenPayload =
   <|> TPClose         <$  char ')'
   <|> TCOpen          <$  char '{'
   <|> TCClose         <$  char '}'
-  <|> TSOpen          <$  char '['
-  <|> TSClose         <$  char ']'
+  <|> TNlgOpen          <$  "<<"
+  <|> TNlgClose         <$  ">>"
+  <|> TRefOpen          <$  char '['
+  <|> TRefClose         <$  char ']'
   <|> TParagraph      <$  char '§'
   <|> TComma          <$  char ','
   <|> TSemicolon      <$  char ';'
@@ -671,10 +683,10 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
-    TSOpen           -> "["
-    TSClose          -> "]"
-    TAOpen           -> "<"
-    TAClose          -> ">"
+    TRefOpen           -> "<<"
+    TRefClose          -> ">>"
+    TNlgOpen           -> "["
+    TNlgClose          -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -781,10 +793,10 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
-    TSOpen -> CSymbol
-    TSClose -> CSymbol
-    TAOpen -> CSymbol
-    TAClose -> CSymbol
+    TRefOpen -> CSymbol
+    TRefClose -> CSymbol
+    TNlgOpen -> CSymbol
+    TNlgClose -> CSymbol
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol

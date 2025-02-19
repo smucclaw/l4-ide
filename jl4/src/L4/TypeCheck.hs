@@ -1552,12 +1552,12 @@ prettySrcRange fp Nothing = Text.pack fp <> ":<unknown range>"
 prettySrcRange fp (Just (MkSrcRange p1 p2 _)) = Text.pack fp <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 
 prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.pack (show l) <> ":" <> Text.pack (show c)
+prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
 
 prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
 prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
   | rl == l && rc == c = ""
-  | rl == l            = "-" <> Text.pack (show c)
+  | rl == l            = "-" <> Text.show c
   | otherwise          = "-" <> prettySrcPos p
 
 instance HasSrcRange CheckErrorWithContext where
@@ -1602,7 +1602,7 @@ prettyCheckErrorContext (WhileCheckingType _t ctx)       = prettyCheckErrorConte
 
 prettyCheckError :: CheckError -> Text
 prettyCheckError (OutOfScopeError n t)                     = "out of scope: " <> simpleprint n <> ", of type: " <> simpleprint t
-prettyCheckError (KindError k ts)                          = "kind error: expected " <> Text.pack (show k) <> ", received " <> Text.pack (show (length ts))
+prettyCheckError (KindError k ts)                          = "kind error: expected " <> Text.show k <> ", received " <> Text.show (length ts)
 prettyCheckError (UnificationErrorRef n1 n2)               = "cannot unify: " <> simpleprint n1 <> ", " <> simpleprint n2
 prettyCheckError (UnificationError t1 t2)                  = "cannot unify: " <> simpleprint t1 <> ", " <> simpleprint t2
 prettyCheckError (OccursCheck t1 t2)                       = "occurs check: " <> simpleprint t1 <> ", " <> simpleprint t2
@@ -1629,7 +1629,7 @@ instance SimplePrint a => SimplePrint (Type' a) where
   simpleprint (TyApp _ n ts)  = "(" <> simpleprint n <> " OF " <> Text.intercalate ", " (map simpleprint ts) <> ")"
   simpleprint (Fun _ onts t)  = "(FUNCTION FROM " <> Text.intercalate " AND " (map simpleprint onts) <> " TO " <> simpleprint t <> ")"
   simpleprint (Forall _ ns t) = "(FORALL " <> Text.intercalate ", " (map simpleprint ns) <> " " <> simpleprint t <> ")"
-  simpleprint (InfVar _ n i)  = "_" <> simpleprint n <> Text.pack (show i)
+  simpleprint (InfVar _ n i)  = "_" <> simpleprint n <> Text.show i
 --  simpleprint (ParenType _ t) = "(" <> simpleprint t <> ")"
 
 instance SimplePrint a => SimplePrint (OptionallyNamedType a) where

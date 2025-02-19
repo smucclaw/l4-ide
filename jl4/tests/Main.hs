@@ -114,7 +114,7 @@ parseFile file input =
   where
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-    evalResultToMessage (r, res) = (Just r, either (Text.pack . show) JL4.renderValue res)
+    evalResultToMessage (r, res) = (Just r, either Text.show JL4.renderValue res)
     renderMessage (r, txt) = JL4.prettySrcRange fp r <> ":\n" <> txt
 
 parseFiles :: [FilePath] -> IO ()

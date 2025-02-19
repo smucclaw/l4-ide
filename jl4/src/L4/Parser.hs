@@ -102,7 +102,7 @@ nlgP = do
 
 refP :: Parser (Epa Ref)
 refP = do
-  refExpr <- blockRefAnnotation
+  refExpr <- refAnnotationP <|> blockRefAnnotation
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
 nlgAnnotationP :: Parser (Epa [Text])
@@ -116,10 +116,10 @@ blockNlgAnnotationP =
   let
     nlgParser = spacedP $
       (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TSOpen)
+        <$> hidden (plainToken TNlgOpen)
         <*> manyTill_
               (anySingle <?> "Natural Language Annotation Block")
-              (plainToken TSClose)
+              (plainToken TNlgClose)
 
     epaNlg = lexesToEpa <$> nlgParser
     epaTextNlg = fmap (fmap displayPosToken) <$> epaNlg
@@ -131,15 +131,21 @@ blockRefAnnotation =
   let
     refParser = spacedP $
       (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TAOpen)
+        <$> hidden (plainToken TRefOpen)
         <*> manyTill_
               (anySingle <?> "Reference Annotation Block")
-              (plainToken TAClose)
+              (plainToken TRefClose)
 
     epaRef = lexesToEpa <$> refParser
     epaTextRef = fmap (fmap displayPosToken) <$> epaRef
   in
     epaTextRef
+
+refAnnotationP :: Parser (Epa [Text])
+refAnnotationP = hidden $ onlySpacedToken (\case
+  TRef t -> Just [t]
+  _ -> Nothing)
+  "Reference Annotation"
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
