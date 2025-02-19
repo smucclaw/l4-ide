@@ -94,6 +94,7 @@ addWarning warn = do
 -- We need to report such 'Nlg's as 'Warning's.
 preprocessNlgs :: [Nlg] -> ([NlgWithSpan], [Nlg])
 preprocessNlgs nlgs =
+  -- TODO: this is a known space leak, a lazy accumulator with `foldl'`.
   foldl' go ([], []) nlgs
  where
   go (nlg, unprocessable) n = case rangeOf n of
