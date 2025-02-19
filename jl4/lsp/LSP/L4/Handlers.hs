@@ -400,20 +400,20 @@ visualise recorder ide uri msrcPos = do
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
-      TypeCheckResult {substitution, program} <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+      tcRes <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
       recentlyVisualised <- MaybeT $ atomically $ getMostRecentVisualisation ide
-      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) program
-      pure (decide, recentlyVisualised.simplify, substitution)
+      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.program
+      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
 
     -- the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
-      TypeCheckResult {program, substitution} <- do
+      tcRes <- do
         mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
         case mTcResult of
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
-      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) program of
-        [decide] -> pure $ Just (decide, simp, substitution)
+      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.program of
+        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
@@ -560,12 +560,13 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
     hoistMaybe do
       -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
       let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
-      (range, reference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
+      (range, mreference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
       let lspRange = srcRangeToLspRange (Just range)
       pure $ Hover
         (InL
           (MarkupContent
-            { _value = reference
+            -- TODO: should be more descriptive
+            { _value = Maybe.fromMaybe "Reference not found" mreference
             , _kind = MarkupKind_Markdown}
           )
         )

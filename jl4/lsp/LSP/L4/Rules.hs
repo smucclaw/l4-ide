@@ -21,11 +21,9 @@ import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
 import Data.Text (Text, pack)
-import Data.Map.Lazy (Map)
 import UnliftIO (liftIO)
 import qualified Data.Csv as Csv
 import qualified Data.Map.Lazy as Map
-import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
@@ -47,7 +45,6 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
-import qualified Data.Text as Text
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -110,7 +107,7 @@ data GetRelSemanticTokens = GetRelSemanticTokens
 --   IF bar <<sec. 3>>
 -- then this should assemble the uri into one link based on
 -- an uri scheme described in the original file
-type instance RuleResult ResolveReferences = IntervalMap SrcPos (Int, Text)
+type instance RuleResult ResolveReferences = IntervalMap SrcPos (Int, Maybe Text)
 data ResolveReferences = ResolveReferences
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -270,17 +267,22 @@ jl4Rules recorder = do
 
         rangeOfPosToken = \case
           -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> MonoidalMap.fromList [(normalizeRef r, [range])]
+          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef r, range)]
           _ -> mempty
 
-        allReferencesInTree :: Map Text [SrcRange]
-        allReferencesInTree = MonoidalMap.getMonoidalMap $ foldMap rangeOfPosToken tokens
+        allReferencesInTree :: [(Text, SrcRange)]
+        allReferencesInTree = foldMap rangeOfPosToken tokens
 
-        lineToIV (reference, uri) = case Map.lookup (Text.strip reference) allReferencesInTree of
-          Just ranges -> foldMap (\range -> IVMap.singleton (srcRangeToInterval range) (range.length, uri)) ranges
-          Nothing -> IVMap.empty
 
-        records = foldMap lineToIV <$> Csv.decode Csv.NoHeader contents
+        records = do
+          decoded <- Csv.decode Csv.NoHeader contents
+
+          let mp = foldMap (uncurry Map.singleton) decoded
+              mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
+              getReferences (reference, range) = mkMap range $ Map.lookup reference mp
+
+          pure $ foldMap getReferences allReferencesInTree
+
     pure case records of
       Right recs -> ([], Just recs)
       Left err ->

@@ -113,7 +113,6 @@ executable jl4-lsp
     lsp-types ^>=2.3.0.0,
     lsp ^>=2.7.0.0,
     mtl,
-    monoidal-containers,
     optics,
     prettyprinter,
     safe-exceptions,
