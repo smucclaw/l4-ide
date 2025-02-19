@@ -1,5 +1,5 @@
 import type { Eq, Ord } from '$lib/utils.js'
-import { UndirectedEdge } from './alga.js'
+import { UndirectedEdge } from './edge.js'
 import _ from 'lodash'
 import {
   graphUnion,

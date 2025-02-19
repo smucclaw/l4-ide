@@ -1,16 +1,5 @@
-import * as DAG from './dag.js'
-import type { Ord, HasId } from '$lib/utils.js'
+import type { Ord } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
-
-/****************************
-  Alga abstract interface
-*****************************/
-
-/** Algebraic undirected graph */
-export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
-  DAG.DirectedAcyclicGraph<A>
-
-export type Vertex<A extends Ord<A> & HasId> = DAG.Vertex<A>
 
 /********************************
       Edge types
@@ -89,61 +78,4 @@ export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
   toString(): string {
     return `<${this.getU()}, ${this.getV()}>`
   }
-}
-
-/********************************
-    Abstract (ish) primitives
-*********************************/
-
-export const empty = DAG.empty
-
-export const vertex = DAG.vertex
-
-/** Convenience wrapper over Connect ctor.
- *
- * connect is analogous to *
- *
- * This is an associative operation with the identity
- * 'empty'.
- * It distributes over 'overlay' and obeys the decomposition axiom.
- */
-export const connect = DAG.connect
-
-/** Convenience wrapper over Overlay ctor.
- *
- * overlay is analogous to +
- */
-export const overlay = DAG.overlay
-
-/**************************************
-  Other graph construction functions
-***************************************/
-
-/** Construct the graph comprising /a single edge/.
- *
- * edge x y == 'connect' ('vertex' x) ('vertex' y)
- */
-export function edge<A extends Ord<A> & HasId>(
-  x: A,
-  y: A
-): DirectedAcyclicGraph<A> {
-  // Adapted from
-  // https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph/AdjacencyMap.hs#L251
-  if (x.isEqualTo(y)) {
-    const vtx = vertex(x)
-    return connect(vtx, vtx)
-  } else {
-    return connect(vertex(x), vertex(y))
-  }
-}
-
-/**
- * Construct the graph comprising a given list of isolated vertices.
- */
-export function vertices<A extends Ord<A> & HasId>(
-  vertices: A[]
-): DirectedAcyclicGraph<A> {
-  return vertices
-    .map((v) => vertex(v))
-    .reduce(overlay, empty() as DirectedAcyclicGraph<A>)
 }

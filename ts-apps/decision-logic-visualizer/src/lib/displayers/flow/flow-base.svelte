@@ -16,14 +16,10 @@
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
     type LadderFlowDisplayerProps,
-    isBundlingFlowNode,
     sfNodeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
-  import {
-    exprLirNodeToAlgaDag,
-    algaDirectedGraphToFlowGraph,
-  } from './lir-to-dag.js'
+  import { dagToSFGraph } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
@@ -43,21 +39,15 @@
     Make initial SF nodes and edges
   ************************************/
 
-  const algaDag = exprLirNodeToAlgaDag(context, declLirNode.getBody(context))
-  const flowGraph = algaDirectedGraphToFlowGraph(algaDag)
-
-
-  const initialNodes = flowGraph.nodes
-    .toSorted((v1, v2) => v2.compare(v1))
-    .map((n) => n.toSFPojo())
-  const initialEdges = flowGraph.edges.map((e) => e.toSFPojo())
+  const ladderDag = declLirNode.getBody(context)
+  const sfGraph = dagToSFGraph(context, ladderDag)
 
   /***********************************
       SvelteFlow nodes and edges
   ************************************/
 
-  let NODES = $state.raw<Node[]>(initialNodes)
-  let EDGES = $state.raw<Edge[]>(initialEdges)
+  let NODES = $state.raw<Node[]>(sfGraph.nodes)
+  let EDGES = $state.raw<Edge[]>(sfGraph.edges)
 
   /***********************************
       SvelteFlow hooks
@@ -174,13 +164,13 @@
     <Background />
   </SvelteFlow>
 </div>
-<section>
+<!-- <section>
   {#each algaDag.getAllPaths() as path }
     <article>
       {path.filter((n) => !isBundlingFlowNode(n)).reduce((acc, node) => acc + ' ' + node.toPretty(), '')}
     </article>
   {/each}
-</section>
+</section> -->
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->

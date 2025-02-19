@@ -13,7 +13,7 @@ TODO: There is currently a fair bit of code duplication between the various kind
 Would be good to improve that.
 */
 
-export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
+export type DirectedAcyclicGraph<A extends Ord<A>> =
   | Empty<A>
   | Vertex<A>
   | Overlay<A>
@@ -24,7 +24,7 @@ export type DirectedAcyclicGraph<A extends Ord<A> & HasId> =
 * TODO: This currently isn't the safest,
 in that we only check if it's a DAG when topSort / getSource / getSink are called
 */
-export abstract class Dag<A extends Ord<A> & HasId>
+export abstract class Dag<A extends Ord<A>>
   extends DirectedAMGraph<A>
   implements Eq<Dag<A>>
 {
@@ -89,13 +89,16 @@ export abstract class Dag<A extends Ord<A> & HasId>
     return pathsFromNeighbors.map((path) => [vertex, ...path])
   }
 
-  getAllPaths(): Array<Array<A>> {
+  // TODO: The ret type should be Dag[], so tt
+  // it's easier to preserve metadata associated with the edges
+  getAllPaths() {
     const source = this.getSource()
-    return match(source)
+    const barePaths: Array<Array<A>> = match(source)
       .with(P.instanceOf(Empty), () => [])
       .otherwise((source) =>
         this.getAllPathsFromVertex((source as Vertex<A>).getValue())
       )
+    return barePaths.map(pathFromValues)
   }
 }
 
@@ -103,31 +106,31 @@ export abstract class Dag<A extends Ord<A> & HasId>
      Primitives
 **********************/
 
-export function isEmpty<A extends Ord<A> & HasId>(g: DirectedAcyclicGraph<A>) {
+export function isEmpty<A extends Ord<A>>(g: DirectedAcyclicGraph<A>) {
   return g instanceof Empty
 }
 
-export function empty<A extends Ord<A> & HasId>() {
+export function empty<A extends Ord<A>>() {
   return new Empty<A>()
 }
 
 /** Empty graph */
-export class Empty<A extends Ord<A> & HasId> extends Dag<A> {
+export class Empty<A extends Ord<A>> extends Dag<A> {
   constructor() {
     super()
   }
 }
 
-export function isVertex<A extends Ord<A> & HasId>(g: DirectedAcyclicGraph<A>) {
+export function isVertex<A extends Ord<A>>(g: DirectedAcyclicGraph<A>) {
   return g instanceof Vertex
 }
 
-export function vertex<A extends Ord<A> & HasId>(a: A) {
+export function vertex<A extends Ord<A>>(a: A) {
   return new Vertex(a)
 }
 
 /** The graph consisting of a single isolated vertex. */
-export class Vertex<A extends Ord<A> & HasId> extends Dag<A> {
+export class Vertex<A extends Ord<A>> extends Dag<A> {
   constructor(readonly value: A) {
     super(new Map([[value, new Set()]]))
   }
@@ -141,14 +144,14 @@ export class Vertex<A extends Ord<A> & HasId> extends Dag<A> {
  *
  * overlay is analogous to +
  */
-export function overlay<A extends Ord<A> & HasId>(
+export function overlay<A extends Ord<A>>(
   x: DirectedAcyclicGraph<A>,
   y: DirectedAcyclicGraph<A>
 ): DirectedAcyclicGraph<A> {
   return new Overlay(x, y)
 }
 
-export class Overlay<A extends Ord<A> & HasId> extends Dag<A> {
+export class Overlay<A extends Ord<A>> extends Dag<A> {
   constructor(
     readonly left: DirectedAcyclicGraph<A>,
     readonly right: DirectedAcyclicGraph<A>
@@ -168,14 +171,14 @@ export class Overlay<A extends Ord<A> & HasId> extends Dag<A> {
   }
 }
 
-export function connect<A extends Ord<A> & HasId>(
+export function connect<A extends Ord<A>>(
   x: DirectedAcyclicGraph<A>,
   y: DirectedAcyclicGraph<A>
 ): DirectedAcyclicGraph<A> {
   return new Connect(x, y)
 }
 
-export class Connect<A extends Ord<A> & HasId> extends Dag<A> {
+export class Connect<A extends Ord<A>> extends Dag<A> {
   constructor(
     readonly from: DirectedAcyclicGraph<A>,
     readonly to: DirectedAcyclicGraph<A>
@@ -189,11 +192,62 @@ export class Connect<A extends Ord<A> & HasId> extends Dag<A> {
   }
 }
 
-/**********************************************
-      Useful Helper Functions
-***********************************************/
+/**************************************
+  Other graph construction functions
+***************************************/
 
-export function connectNodeToSource<A extends Ord<A> & HasId>(
+/** Construct the graph comprising /a single edge/.
+ *
+ * edge x y == 'connect' ('vertex' x) ('vertex' y)
+ */
+export function edge<A extends Ord<A>>(x: A, y: A): DirectedAcyclicGraph<A> {
+  // Adapted from
+  // https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph/AdjacencyMap.hs#L251
+  if (x.isEqualTo(y)) {
+    const vtx = vertex(x)
+    return connect(vtx, vtx)
+  } else {
+    return connect(vertex(x), vertex(y))
+  }
+}
+
+/**
+ * Construct the graph comprising a given list of isolated vertices.
+ */
+export function vertices<A extends Ord<A>>(
+  vertices: A[]
+): DirectedAcyclicGraph<A> {
+  return vertices
+    .map((v) => vertex(v))
+    .reduce(overlay, empty() as DirectedAcyclicGraph<A>)
+}
+
+/** Make path graph from an array of vertices */
+export function pathFromValues<A extends Ord<A>>(
+  vertices: A[]
+): DirectedAcyclicGraph<A> {
+  return pathFromVertices(vertices.map(vertex))
+}
+
+/**
+ * Make a 'path graph' from an array of vertices.
+ */
+export function pathFromVertices<A extends Ord<A>>(
+  vertices: Vertex<A>[]
+): DirectedAcyclicGraph<A> {
+  if (vertices.length === 0) {
+    return empty()
+  }
+  if (vertices.length === 1) {
+    return vertices[0]
+  }
+  const edges = vertices
+    .slice(1)
+    .map((neighborVertex, i) => connect(vertices[i], neighborVertex))
+  return edges.reduce(overlay)
+}
+
+export function connectNodeToSource<A extends Ord<A>>(
   dag: DirectedAcyclicGraph<A>,
   node: A
 ): DirectedAcyclicGraph<A> {
@@ -202,7 +256,7 @@ export function connectNodeToSource<A extends Ord<A> & HasId>(
   return dag.overlay(nodeV.connect(dag.getSource()))
 }
 
-export function connectSinkToNode<A extends Ord<A> & HasId>(
+export function connectSinkToNode<A extends Ord<A>>(
   dag: DirectedAcyclicGraph<A>,
   node: A
 ): DirectedAcyclicGraph<A> {
@@ -211,27 +265,27 @@ export function connectSinkToNode<A extends Ord<A> & HasId>(
 }
 
 /**********************************************
-      Graphology
+         INTERNAL: Graphology
   (used for the more typical dag operations)
 ***********************************************/
 
 type IdType = ReturnType<HasId['getId']>
 
-export function gyGraphFromAdjacencyMap<A extends Ord<A> & HasId>(
+export function gyGraphFromAdjacencyMap<A extends Ord<A>>(
   adjacencyMap: Map<A, Set<A>>
 ): { idToVertex: Map<IdType, A>; graph: GY.DirectedGraph } {
   const idToVertex = new Map<IdType, A>()
   for (const vertex of adjacencyMap.keys()) {
-    idToVertex.set(vertex.getId(), vertex)
+    idToVertex.set(vertex.toString(), vertex)
   }
 
   const graph = new GY.DirectedGraph()
   for (const vertex of adjacencyMap.keys()) {
-    graph.addNode(vertex.getId())
+    graph.addNode(vertex.toString())
   }
   for (const [vertex, neighbors] of adjacencyMap) {
     for (const neighbor of neighbors) {
-      graph.addEdge(vertex.getId(), neighbor.getId())
+      graph.addEdge(vertex.toString(), neighbor.toString())
     }
   }
   return { idToVertex, graph }

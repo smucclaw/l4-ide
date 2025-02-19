@@ -1,5 +1,5 @@
 import type { Eq, Ord } from '$lib/utils.js'
-import { DirectedEdge } from './alga.js'
+import { DirectedEdge } from './edge.js'
 import { BaseAMGraph } from './base-adjacency-map.js'
 
 /****************************************************************************

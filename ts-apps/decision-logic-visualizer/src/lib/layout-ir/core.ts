@@ -1,10 +1,16 @@
-/* 
-If you're unfamiliar with Lir stuff, 
+/*
+If you're unfamiliar with Lir stuff,
 start by looking at the docs for LirNode.
 
-Acknowledgments: I adapted the Lir stuff from a similar framework
-that I learned from Jimmy Koppel (https://www.jameskoppel.com/).
+I had originally adapted the Lir stuff from a similar framework
+that I learned from Jimmy Koppel (https://www.jameskoppel.com/),
+but this framework is now getting quite different from what it used to be.
 */
+
+import { ComparisonResult } from '../utils.js'
+import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import { Empty } from '../algebraic-graphs/dag.js'
+import type { LadderLirNode } from './lir-decision-logic.svelte.js'
 
 /*********************************************
        Registry
@@ -39,6 +45,15 @@ export class LirId {
   isEqualTo(other: LirId) {
     return this.id === other.id
   }
+
+  compare(other: LirId) {
+    const thisStr = this.toString()
+    const otherStr = other.toString()
+
+    if (thisStr < otherStr) return ComparisonResult.LessThan
+    if (thisStr > otherStr) return ComparisonResult.GreaterThan
+    return ComparisonResult.Equal
+  }
 }
 
 /*********************************************
@@ -67,7 +82,7 @@ export abstract class NodeInfoManager {
   }
 
   /** This reference to the LirRegistry can be used to publish updates */
-  protected getLirRegistry() {
+  protected getRegistry() {
     return this.lirInfo.registry
   }
 }
@@ -85,8 +100,9 @@ export abstract class NodeInfoManager {
 export interface LirNode {
   getId(): LirId
 
-  getChildren(context: LirContext): LirNode[]
+  // getChildren(context: LirContext): LirNode[]
 
+  /** NON-pretty */
   toString(): string
 }
 
@@ -107,7 +123,11 @@ export abstract class DefaultLirNode
     return this.#id
   }
 
-  abstract getChildren(context: LirContext): LirNode[]
+  compare(other: LirNode) {
+    return this.getId().compare(other.getId())
+  }
+
+  // Removed getChildren to simplify things
 
   abstract toString(): string
 }
@@ -122,11 +142,21 @@ export abstract class DefaultLirNode
  *
  * Operations on LirNodes should have the LirContext as an opaque context parameter.
  * This makes it easier to add, e.g., various kinds of synchronization in the future.
+ *
+ * This LirContext has been specialized to the LirFlow setting
  */
 export class LirContext {
+  /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
-  constructor() {}
+  // TODO: Not 100% sure if the DAG shld be here or in LirRegistry,
+  // but won't be too hard to move later if necessary
+  /** For the flow lir graph */
+  #dag: DirectedAcyclicGraph<LirId>
+
+  constructor() {
+    this.#dag = new Empty()
+  }
 
   get(id: LirId) {
     return this.#nodes.get(id)
@@ -134,6 +164,39 @@ export class LirContext {
 
   set(node: LirNode) {
     this.#nodes.set(node.getId(), node)
+  }
+
+  /** Specifically for LadderLirNode. I.e., the `id` should correspond to that of a LadderLirNode. */
+  getNeighbors(id: LirId): LadderLirNode[] {
+    const neighbors = this.#dag.getAdjMap().get(id) || new Set()
+
+    return Array.from(neighbors)
+      .map((neighborId) => this.get(neighborId) as LadderLirNode)
+      .filter((n) => !!n)
+  }
+
+  // TODO
+  // getEdge(u: LirId, v: LirId): LirEdge | undefined {
+  //   const uNode = this.#dag.getAdjMap().get(u)
+  //   const vNode = this.#dag.getAdjMap().get(v)
+  //   if (!uNode || !vNode) return undefined
+
+  //   // TODO
+  //   // Make a LirEdge that also has any data associated with the edge
+
+  // }
+
+  getAllPaths(): DirectedAcyclicGraph<LirId>[] {
+    return this.#dag.getAllPaths()
+  }
+
+  /** My first-pass, naive approach is to make the Dag separately from the LirContext, and only set the Dag in the LirContext after the LirNodes and Dag have been made.
+  This obviously is not ideal
+  (e.g., it opens up the possibility that the Dag that's set might be out of sync with the LirNodes) --- it'd
+  be much better to somehow construct them in tandem --- but
+  it's probably OK as a first version. */
+  setDag(dag: DirectedAcyclicGraph<LirId>) {
+    this.#dag = dag
   }
 }
 

@@ -1,6 +1,6 @@
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import { Edge } from './alga.js'
+import { Edge } from './edge.js'
 
 /**************************************************************
   Base internal Adjacency Map implementation / representation
