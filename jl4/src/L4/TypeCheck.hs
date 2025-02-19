@@ -1734,11 +1734,12 @@ deriving anyclass instance ToResolved (TypeSig Resolved)
 deriving anyclass instance ToResolved (GivethSig Resolved)
 deriving anyclass instance ToResolved (GivenSig Resolved)
 deriving anyclass instance ToResolved (Directive Resolved)
-
-instance ToResolved Lit where
-  toResolved = const []
+deriving anyclass instance ToResolved Lit
 
 instance ToResolved Int where
+  toResolved = const []
+
+instance ToResolved Text where
   toResolved = const []
 
 instance ToResolved RawName where

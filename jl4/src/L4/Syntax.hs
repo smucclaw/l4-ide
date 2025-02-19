@@ -15,7 +15,7 @@ import qualified Generics.SOP as SOP
 import Optics
 
 data Name = MkName Anno RawName
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data RawName =
@@ -32,7 +32,7 @@ data Resolved =
     Def Unique Name        -- ^ defining occurrence of name
   | Ref Name Unique Name   -- ^ referring occurrence of name, original occurrence of name
   | OutOfScope Unique Name -- ^ used to make progress for names where name resolution failed
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | Extract the original name, i.e., for referring occurrences, the defining occurrence of the name.
@@ -60,7 +60,7 @@ data Type' n =
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
   -- | ParenType Anno (Type' n) -- temporary
-  deriving stock (GHC.Generic, Eq, Show, Functor)
+  deriving stock (GHC.Generic, Eq, Ord, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypedName n =
@@ -70,12 +70,12 @@ data TypedName n =
 
 data OptionallyTypedName n =
   MkOptionallyTypedName Anno n (Maybe (Type' n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyNamedType n =
   MkOptionallyNamedType Anno (Maybe n) (Type' n)
-  deriving stock (GHC.Generic, Eq, Show, Functor)
+  deriving stock (GHC.Generic, Eq, Ord, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeSig n =
@@ -238,7 +238,7 @@ data Extension = Extension
   { resolvedType :: Maybe (Type' Resolved)
   , nlg :: Maybe Nlg
   }
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 
@@ -400,7 +400,7 @@ data Comment = MkComment Anno [Text]
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Nlg = MkNlg Anno [Text]
-  deriving stock (Show, Eq, GHC.Generic)
+  deriving stock (Show, Eq, Ord, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Ref = MkRef Anno [Text]
