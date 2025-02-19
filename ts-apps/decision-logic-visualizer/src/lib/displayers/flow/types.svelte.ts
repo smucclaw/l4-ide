@@ -1,16 +1,6 @@
 import type { Name, BoolValue } from '@repo/viz-expr'
-import type { LirId, LirContext } from '$lib/layout-ir/core.js'
-import type {
-  DeclLirNode,
-  LadderLirNode,
-} from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import {
-  BoolVarLirNode,
-  NotStartLirNode,
-  NotEndLirNode,
-  SourceLirNode,
-  SinkLirNode,
-} from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import type { LirContext } from '$lib/layout-ir/core.js'
+import type { DeclLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import * as SF from '@xyflow/svelte'
@@ -149,5 +139,4 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { name: Name; value: BoolValue }
-  // TODO: Will add Value in the next version
 }

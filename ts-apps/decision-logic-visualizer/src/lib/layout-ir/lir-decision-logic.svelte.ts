@@ -70,6 +70,30 @@ export function getDagVertices(
 }
 
 // TODO: Add getDagEdges...
+//
+
+// getEdge(u: LirId, v: LirId): LirEdge | undefined {
+//   const uNode = this.#dag.getAdjMap().get(u)
+//   const vNode = this.#dag.getAdjMap().get(v)
+//   if (!uNode || !vNode) return undefined
+
+//   // TODO
+//   // Make a LirEdge that also has any data associated with the edge
+
+// }
+
+/** The `id` should correspond to that of a LadderLirNode. */
+export function getNeighbors(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>,
+  id: LirId
+): LadderLirNode[] {
+  const neighbors = dag.getAdjMap().get(id) || new Set()
+
+  return Array.from(neighbors)
+    .map((neighborId) => context.get(neighborId) as LadderLirNode)
+    .filter((n) => !!n)
+}
 
 /******************************************************
  **************** Flow Lir Nodes **********************
@@ -83,7 +107,6 @@ type Position = { x: number; y: number }
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
 export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
-  getNeighbors(context: LirContext): FlowLirNode[]
   getPosition(context: LirContext): Position
   toPretty(context: LirContext): string
 }
@@ -105,10 +128,6 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 
   isEqualTo<T extends LirNode>(other: T) {
     return this.getId().isEqualTo(other.getId())
-  }
-
-  getNeighbors(context: LirContext) {
-    return context.getNeighbors(this.getId())
   }
 
   abstract toPretty(context: LirContext): string

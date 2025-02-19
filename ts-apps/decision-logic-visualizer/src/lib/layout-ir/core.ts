@@ -8,9 +8,6 @@ but this framework is now getting quite different from what it used to be.
 */
 
 import { ComparisonResult } from '../utils.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { Empty } from '../algebraic-graphs/dag.js'
-import type { LadderLirNode } from './lir-decision-logic.svelte.js'
 
 /*********************************************
        Registry
@@ -149,14 +146,7 @@ export class LirContext {
   /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
-  // TODO: Not 100% sure if the DAG shld be here or in LirRegistry,
-  // but won't be too hard to move later if necessary
-  /** For the flow lir graph */
-  #dag: DirectedAcyclicGraph<LirId>
-
-  constructor() {
-    this.#dag = new Empty()
-  }
+  constructor() {}
 
   get(id: LirId) {
     return this.#nodes.get(id)
@@ -164,39 +154,6 @@ export class LirContext {
 
   set(node: LirNode) {
     this.#nodes.set(node.getId(), node)
-  }
-
-  /** Specifically for LadderLirNode. I.e., the `id` should correspond to that of a LadderLirNode. */
-  getNeighbors(id: LirId): LadderLirNode[] {
-    const neighbors = this.#dag.getAdjMap().get(id) || new Set()
-
-    return Array.from(neighbors)
-      .map((neighborId) => this.get(neighborId) as LadderLirNode)
-      .filter((n) => !!n)
-  }
-
-  // TODO
-  // getEdge(u: LirId, v: LirId): LirEdge | undefined {
-  //   const uNode = this.#dag.getAdjMap().get(u)
-  //   const vNode = this.#dag.getAdjMap().get(v)
-  //   if (!uNode || !vNode) return undefined
-
-  //   // TODO
-  //   // Make a LirEdge that also has any data associated with the edge
-
-  // }
-
-  getAllPaths(): DirectedAcyclicGraph<LirId>[] {
-    return this.#dag.getAllPaths()
-  }
-
-  /** My first-pass, naive approach is to make the Dag separately from the LirContext, and only set the Dag in the LirContext after the LirNodes and Dag have been made.
-  This obviously is not ideal
-  (e.g., it opens up the possibility that the Dag that's set might be out of sync with the LirNodes) --- it'd
-  be much better to somehow construct them in tandem --- but
-  it's probably OK as a first version. */
-  setDag(dag: DirectedAcyclicGraph<LirId>) {
-    this.#dag = dag
   }
 }
 

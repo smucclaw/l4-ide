@@ -53,12 +53,10 @@ export const exprToLadderDag: LirSource<IRExpr, DirectedAcyclicGraph<LirId>> = {
 
     const middle = transform(nodeInfo, expr)
 
-    const finalDag = overallSource
+    return overallSource
       .connect(middle.getSource())
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
-    nodeInfo.context.setDag(finalDag)
-    return finalDag
   },
 }
 
