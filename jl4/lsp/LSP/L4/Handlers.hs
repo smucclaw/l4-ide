@@ -5,26 +5,19 @@
 
 module LSP.L4.Handlers where
 
-import Control.Concurrent.Strict (Chan, writeChan)
-import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
 import Control.Monad.Extra (guard, whenJust)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.IO.Class
-import Control.Monad.Reader (MonadReader (..))
-import Control.Monad.Trans.Reader (ReaderT)
 import Data.Char (isAlphaNum)
 import Data.Maybe (mapMaybe)
 import Data.Either (isRight)
-import Data.Monoid (Ap (..))
 import Data.Tuple (swap)
 import Control.Applicative
 import Control.Monad.Except (throwError, runExceptT, ExceptT)
 import Control.Monad.Trans.Maybe
-import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
-import qualified Text.Fuzzy as Fuzzy
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
@@ -44,43 +37,21 @@ import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import LSP.L4.Base
 import LSP.L4.Config
-import qualified LSP.L4.Viz.Ladder as Ladder
 import LSP.L4.Rules hiding (Log (..))
+import qualified LSP.L4.Viz.Ladder as Ladder
+import LSP.LanguageServer hiding (Log)
 import LSP.Logger
 import LSP.L4.SemanticTokens (srcPosToPosition)
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
+import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
-import qualified Language.LSP.Server as LSP
-import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
-import UnliftIO (MonadUnliftIO, atomically, STM)
-
-data ReactorMessage
-  = ReactorNotification (IO ())
-  | forall m . ReactorRequest (LspId m) (IO ()) (TResponseError m -> IO ())
-
-type ReactorChan = Chan ReactorMessage
-
-data ServerState =
-  ServerState
-    { reactor :: ReactorChan
-    , ideState :: IdeState
-    }
-
-newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
-  deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
-  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
-  deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
-  deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
-
-runServerM :: ServerState -> ServerM c a -> LspM c a
-runServerM st m = ReaderT.runReaderT m.runServerT st
-
+import qualified Text.Fuzzy as Fuzzy
+import UnliftIO (STM, atomically)
 
 data Log
   = LogOpenedTextDocument !Uri
@@ -109,37 +80,6 @@ instance Pretty Log where
     LogDecideMissingInformation -> "Decide that we are visualising is missing type or source location information"
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
-
--- ----------------------------------------------------------------------------
--- Reactor
--- ----------------------------------------------------------------------------
-
-requestHandler
-  :: forall (m :: Method ClientToServer Request) c .
-     SMethod m
-  -> (IdeState -> MessageParams m -> ServerM c (Either (TResponseError m) (MessageResult m)))
-  -> Handlers (ServerM c)
-requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params} resp -> do
-  st <- (ask :: ServerM c ServerState)
-  env <- LSP.getLspEnv
-  let resp' :: Either (TResponseError m) (MessageResult m) -> LspM c ()
-      resp' = flip (\s -> ReaderT.runReaderT s.runServerT) st . resp
-
-  liftIO $ writeChan st.reactor $ ReactorRequest _id (LSP.runLspT env $ resp' =<< runServerM st (k st.ideState _params)) (LSP.runLspT env . resp' . Left)
-
-notificationHandler
-  :: forall (m :: Method ClientToServer Notification) c .
-     SMethod m
-  -> (IdeState -> VFS -> MessageParams m -> ServerM c ())
-  -> Handlers (ServerM c)
-notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_params,_method} -> do
-  st <- ask
-  env <- LSP.getLspEnv
-  -- Take a snapshot of the VFS state on every notification
-  -- We only need to do this here because the VFS state is only updated
-  -- on notifications
-  vfs <- LSP.getVirtualFiles
-  liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
 
 -- ----------------------------------------------------------------------------
 -- Handlers

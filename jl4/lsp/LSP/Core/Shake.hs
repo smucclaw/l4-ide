@@ -35,6 +35,7 @@ module LSP.Core.Shake(
     shakeEnqueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
+    usesNoValue,
     FastResult(..),
     use_, useNoFile_, uses_,
     useWithStale, usesWithStale,
@@ -1027,6 +1028,11 @@ uses_ key files = do
 uses :: (Traversable f, IdeRule k v)
     => k -> f NormalizedFilePath -> Action (f (Maybe v))
 uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
+
+-- | Plural version of 'use'
+usesNoValue :: (Traversable f, IdeRule k v)
+    => k -> f NormalizedFilePath -> Action (f ())
+usesNoValue key files = fmap void $ fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
 
 -- | Return the last computed result which might be stale.
 usesWithStale :: (Traversable f, IdeRule k v)

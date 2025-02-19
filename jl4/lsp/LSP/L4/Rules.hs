@@ -300,6 +300,53 @@ jl4Rules recorder = do
         , _line = p ^. J.line + 1
         }
 
+twoLevelSemanticTokens ::
+  (NormalizedFilePath -> Action ([SemanticToken], PositionMapping)) ->
+  (NormalizedFilePath -> Action (Maybe ([SemanticToken], PositionMapping))) ->
+  (NormalizedFilePath -> Action [SemanticToken])
+twoLevelSemanticTokens level1 level2 = \f -> do
+  mSemTokens <- level2 f
+  case mSemTokens of
+    Nothing -> do
+      -- If we don't even have any old result, just try to use lexer results
+      (lexToks, _) <- level1 f
+      pure lexToks
+    Just (progTokens, positionMapping) -> do
+
+      -- Throwing is ok, since if `ParserSemanticTokens` produces a result
+      -- so does `LexerSemanticTokens`.
+      (lexTokens, lexPositionMapping) <- level1 f
+      let
+        -- We assume that semantic tokens do *not* change its length, no matter whether they
+        -- have been lexed, parsed or typechecked.
+        -- A rather bold assumption, tbh. It will almost definitely not hold
+        -- up in practice, but let's do one step at a time.
+        mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
+        mergeSameLengthTokens [] bs = bs
+        mergeSameLengthTokens as [] = as
+        mergeSameLengthTokens (a:as) (b:bs) = case compare a.start b.start of
+          -- a.start == b.start
+          -- Same token, only print one
+          EQ -> a : mergeSameLengthTokens as bs
+          -- a.start < b.start
+          LT -> a : mergeSameLengthTokens as (b:bs)
+          -- a.start > b.start
+          GT -> b : mergeSameLengthTokens (a:as) bs
+
+        newPosAstTokens = Maybe.mapMaybe (\t ->
+          case toCurrentPosition positionMapping t.start of
+            Nothing -> Nothing
+            Just newPos -> Just (t & #start .~ newPos)
+          ) progTokens
+
+        newPosLexTokens = Maybe.mapMaybe (\t ->
+          case toCurrentPosition lexPositionMapping t.start of
+            Nothing -> Nothing
+            Just newPos -> Just (t & #start .~ newPos)
+          ) lexTokens
+
+      pure $ mergeSameLengthTokens newPosAstTokens newPosLexTokens
+
 translateSeverity :: TypeCheck.Severity -> DiagnosticSeverity
 translateSeverity TypeCheck.SInfo  = LSP.DiagnosticSeverity_Information
 translateSeverity TypeCheck.SWarn  = LSP.DiagnosticSeverity_Warning

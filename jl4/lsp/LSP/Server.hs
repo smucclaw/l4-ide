@@ -4,41 +4,50 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main (main) where
+module LSP.Server (
+  serverMain,
+  ServerConfig (..),
+  Arguments (..),
+  lspOptions,
+  getDefaultArguments,
+  defOnConfigChange,
+  kickRules,
+  Log,
+) where
 
-import LSP.Logger
 import LSP.Core.Debouncer
 import LSP.Core.FileStore hiding (Log (..))
-import LSP.Core.IdeConfiguration
-import qualified LSP.Core.RuleTypes as Rules
 import LSP.Core.Service hiding (Log (..))
 import qualified LSP.Core.Service as Service hiding (LogShake)
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Monitoring
 import LSP.Core.Types.Options
-import LSP.Core.Types.Shake
-
-import LSP.L4.Config
-import LSP.L4.Handlers hiding (Log (..))
-import qualified LSP.L4.Handlers as Handlers
-import qualified L4.Lexer as Lexer
-import LSP.L4.LanguageServer (runLanguageServer)
-import qualified LSP.L4.LanguageServer as LanguageServer
-import qualified LSP.L4.Rules as Rules
+import LSP.Logger
 
 import Control.Concurrent.Strict
-    ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities )
 import Control.Monad (unless)
+import Control.Monad.Extra (when)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
-import qualified Data.Map as Map
-import Data.Text ( Text )
+import Data.Data
+import Data.Functor (void)
+import qualified Data.HashMap.Strict as HashMap
+import Data.Text (Text)
 import qualified Data.Text as Text
-import Development.IDE.Graph (Rules, action)
+import Development.IDE.Graph (Action, Rules, action)
 import GHC.Conc (getNumProcessors)
 import GHC.IO.Encoding
-import GHC.Natural (Natural)
+import GHC.TypeLits
+import LSP.Core.IdeConfiguration
+import LSP.Core.OfInterest hiding (Log (..))
+import LSP.Core.ProgressReporting
+import qualified LSP.Core.RuleTypes as Rules
+import LSP.Core.Shake hiding (Log (..))
+import LSP.Core.Types.Shake
+import LSP.LanguageServer (runLanguageServer)
+import qualified LSP.LanguageServer as LanguageServer
+import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types hiding (Pattern)
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
@@ -47,20 +56,6 @@ import System.Directory (getCurrentDirectory)
 import System.IO
 import System.Time.Extra
 import UnliftIO (withRunInIO)
-
--- ----------------------------------------------------------------------------
-
-main :: IO ()
-main = do
-  -- Setup the logger
-  recorder <- makeDefaultStderrRecorder Nothing
-  let prettyRecorder = cmapWithPrio pretty recorder
-
-  -- Get Arguments.
-  -- If we wanted to, here is where we would add argument parsing
-  args <- getDefaultArguments prettyRecorder
-  -- Run the Language Server in all its glory!
-  defaultMain prettyRecorder args
 
 -- ----------------------------------------------------------------------------
 
@@ -79,8 +74,6 @@ lspOptions :: Options
 lspOptions =
   defaultOptions
     { optTextDocumentSync = Just syncOptions
-    , optExecuteCommandCommands =
-        Just $ map snd l4CmdNames
     }
 
 -- ----------------------------------------------------------------------------
@@ -91,12 +84,10 @@ data Log
   = LogLspStart
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
-  | LogConfigurationChange Text.Text
   | LogService Service.Log
   | LogShake Shake.Log
   | LogLanguageServer LanguageServer.Log
-  | LogHandlers Handlers.Log
-  | LogRules Rules.Log
+  | LogConfigurationChange Text
   deriving (Show)
 
 instance Pretty Log where
@@ -109,18 +100,15 @@ instance Pretty Log where
       "Started LSP server in" <+> pretty (showDuration ds)
     LogShouldRunSubset shouldRunSubset ->
       "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogConfigurationChange msg -> "Configuration changed:" <+> pretty msg
     LogService msg -> pretty msg
     LogShake msg -> pretty msg
     LogLanguageServer msg -> pretty msg
-    LogHandlers msg -> pretty msg
-    LogRules msg -> pretty msg
+    LogConfigurationChange msg -> "Configuration changed:" <+> pretty msg
 
 data Arguments = Arguments
   { projectRoot :: FilePath
   , rules :: Rules ()
   , lspOptions :: LSP.Options
-  , defaultConfig :: Config
   , debouncer :: IO (Debouncer NormalizedUri)
   -- ^ Debouncer used for diagnostics
   , handleIn :: IO Handle
@@ -131,14 +119,13 @@ data Arguments = Arguments
   -- ^ flag to disable kick used for testing
   }
 
-getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
-getDefaultArguments recorder = do
+getDefaultArguments :: IO Arguments
+getDefaultArguments = do
   cwd <- getCurrentDirectory
   pure Arguments
     { projectRoot = cwd
-    , rules = Rules.jl4Rules (cmapWithPrio LogRules recorder)
+    , rules = pure ()
     , lspOptions = lspOptions
-    , defaultConfig = defConfig
     , debouncer = newAsyncDebouncer
     , handleIn = pure stdin
     , handleOut = pure stdout
@@ -147,16 +134,30 @@ getDefaultArguments recorder = do
     , disableKick = False
     }
 
-defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
-defaultMain recorder args = do
+data ServerConfig m config = ServerConfig
+  { config :: config
+  , parseServerConfig :: config -> Aeson.Value -> Either Text config
+  , onConfigChange :: MVar IdeState -> config -> m config ()
+  , handlers :: Handlers (m config)
+  , rules :: Rules ()
+  , kick :: Action ()
+  , setupLsp :: FilePath -> (LanguageContextEnv config -> FilePath -> Shake.ThreadQueue -> IO IdeState) -> LanguageServer.OnSetup m config
+  , keywords :: [Text]
+  , configSection :: Text
+  , lspOptions :: Options
+  }
+
+serverMain :: forall m config . Show config => Recorder (WithPriority Log) -> ServerConfig m config -> Arguments -> IO ()
+serverMain recorder serverConf args = do
   setLocaleEncoding utf8
   hSetBuffering stderr LineBuffering
 
   let
-    options = args.lspOptions
+    options = serverConf.lspOptions
     rules = do
       args.rules
-      unless args.disableKick $ action LanguageServer.kick
+      serverConf.rules
+      unless args.disableKick $ action serverConf.kick
 
   debouncer <- args.debouncer
   inH <- args.handleIn
@@ -172,14 +173,14 @@ defaultMain recorder args = do
 
     ideStateVar <- newEmptyMVar
     let
-      getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> Shake.ThreadQueue -> IO IdeState
+      getIdeState :: LSP.LanguageContextEnv config -> FilePath -> Shake.ThreadQueue -> IO IdeState
       getIdeState env rootPath threadQueue = do
         t <- ioT
         logWith recorder Info $ LogLspStartDuration t
         clientCaps <- LSP.runLspT env LSP.getClientCapabilities
 
         let ideOpts = defaultIdeOptions
-              { optKeywords = jl4Keywords
+              { optKeywords = serverConf.keywords
               }
 
         -- disable runSubset if the client doesn't support watched files
@@ -209,35 +210,22 @@ defaultMain recorder args = do
         pure ide
 
     let
-      setup = LanguageServer.setupLSP
-          (cmapWithPrio LogLanguageServer recorder)
+      setup :: LanguageServer.OnSetup m config
+      setup = serverConf.setupLsp
           args.projectRoot
-          (handlers (cmapWithPrio LogHandlers recorder))
           getIdeState
-      -- See Note [Client configuration in Rules]
-      onConfigChange :: Config -> ServerM Config ()
-      onConfigChange cfg = do
-        -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
-        let
-          cfgObj = J.toJSON cfg
-        mide <- liftIO $ tryReadMVar ideStateVar
-        case mide of
-          Nothing -> pure ()
-          Just ide -> liftIO $ do
-            let
-              msg = Text.pack $ show cfg
-            setSomethingModified Shake.VFSUnmodified ide "config change" $ do
-              logWith recorder Debug $ LogConfigurationChange msg
-              modifyClientSettings ide (const $ Just cfgObj)
-              return [toNoFileKey Rules.GetClientSettings]
 
-    runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH args.defaultConfig parseServerConfig onConfigChange setup
+    runLanguageServer
+      (cmapWithPrio LogLanguageServer recorder) -- Logger for LanguageServer lifecycles
+      options                                   -- LSP options
+      inH                                       -- Handler for reading LSP messages
+      outH                                      -- Handler for writing LSP messages
+      serverConf.config                         -- Language Server specific Configuration
+      serverConf.parseServerConfig              -- How to parse the LS specific Configuration
+      (serverConf.onConfigChange ideStateVar)   -- What to do on LS specific Config changes
+      serverConf.configSection                  -- Name of the Config section
+      setup                                     -- What to do on LSP initialization requests.
 
-parseServerConfig :: Config -> Aeson.Value -> Either Text Config
-parseServerConfig _ v = do
-  case J.fromJSON v of
-    J.Error e -> Left (Text.pack e)
-    J.Success cfg -> Right cfg
 
 lspSinkFromContext :: LSP.LanguageContextEnv config -> LspSink
 lspSinkFromContext lspEnv = LspSink
@@ -254,5 +242,47 @@ lspSinkFromContext lspEnv = LspSink
   , currentClientCapabilities = LSP.runLspT lspEnv getClientCapabilities
   }
 
-jl4Keywords :: [Text]
-jl4Keywords = Map.keys Lexer.keywords
+-- See Note [Client configuration in Rules]
+defOnConfigChange :: (Show config, J.ToJSON config, Monad m, MonadIO m) => Recorder (WithPriority Log) -> MVar IdeState -> config -> m ()
+defOnConfigChange recorder ideStateVar cfg = do
+  -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
+  let
+    cfgObj = J.toJSON cfg
+  mide <- liftIO $ tryReadMVar ideStateVar
+  case mide of
+    Nothing -> pure ()
+    Just ide -> liftIO $ do
+      let
+        msg = Text.pack $ show cfg
+      setSomethingModified Shake.VFSUnmodified ide "config change" $ do
+        logWith recorder Debug $ LogConfigurationChange msg
+        modifyClientSettings ide (const $ Just cfgObj)
+        return [toNoFileKey Rules.GetClientSettings]
+
+
+kickRules :: ([NormalizedFilePath] -> Action ()) -> Action ()
+kickRules runKickRules = do
+  files <- HashMap.keys <$> getFilesOfInterestUntracked
+  ShakeExtras{ideTesting = IdeTesting testing, lspSink, progress} <- getShakeExtras
+  let
+    signal :: (KnownSymbol s) => Proxy s -> Action ()
+    signal msg = when testing $
+      liftIO $
+        case lspSink of
+          Nothing -> pure ()
+          Just sink ->
+            sendNotificationToClient sink (SMethod_CustomMethod msg) $ J.toJSON $ map fromNormalizedFilePath files
+
+  signal (Proxy @"kick/start")
+  liftIO $ progressUpdate progress ProgressNewStarted
+  -- Run rules that produce diagnostics
+  runKickRules files
+  liftIO $ progressUpdate progress ProgressCompleted
+
+  GarbageCollectVar var <- getIdeGlobalAction
+  garbageCollectionScheduled <- liftIO $ readVar var
+  when garbageCollectionScheduled $ do
+    void garbageCollectDirtyKeys
+    liftIO $ writeVar var False
+
+  signal (Proxy @"kick/done")

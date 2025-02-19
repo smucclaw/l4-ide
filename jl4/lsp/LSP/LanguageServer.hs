@@ -2,57 +2,47 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-module LSP.L4.LanguageServer (
+module LSP.LanguageServer (
   Log (..),
   runLanguageServer,
   setupLSP,
+  OnSetup(..),
+  ServerM(..),
   requestHandler,
   notificationHandler,
-  kick,
 ) where
 
+import qualified Colog.Core as Colog
 import Control.Concurrent.STM
+import Control.Exception.Safe (MonadMask, MonadThrow, MonadCatch)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader
-import Data.Aeson (ToJSON (toJSON), Value)
+import Control.Monad.Trans.Cont (evalContT)
+import Data.Aeson (Value)
+import Data.Kind (Type)
 import Data.Maybe
+import Data.Monoid (Ap(..))
 import qualified Data.Set as Set
+import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text as Text
+import LSP.Core.IdeConfiguration
+import LSP.Core.Shake hiding (Log)
+import LSP.Core.WorkerThread (withWorkerQueue)
+import LSP.Logger
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
+import Language.LSP.Server hiding (requestHandler, notificationHandler)
 import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
 import System.IO
+import UnliftIO (MonadUnliftIO (..))
 import UnliftIO.Async
 import UnliftIO.Concurrent
 import UnliftIO.Directory
 import UnliftIO.Exception
-
-import qualified Colog.Core as Colog
-import Control.Concurrent.Strict (readVar, writeVar)
-import Control.Monad.Trans.Cont (evalContT)
-import qualified Data.HashMap.Strict as HashMap
-import Data.Kind (Type)
-import Data.Proxy
-import qualified Data.Text as Text
-import Development.IDE.Graph
-import GHC.TypeLits
-import LSP.Core.IdeConfiguration
-import LSP.Core.OfInterest hiding (Log (..))
-import LSP.Core.ProgressReporting
-import LSP.Core.Shake hiding (Log)
-import LSP.Core.Types.Options
-import LSP.Core.WorkerThread (withWorkerQueue)
-import LSP.L4.Handlers hiding (Log)
-import LSP.L4.Rules hiding (Log (..))
-import LSP.Logger
-import Language.LSP.Server (
-  LanguageContextEnv,
-  LspServerLog,
-  type (<~>),
- )
-import UnliftIO (MonadUnliftIO)
-
+import qualified Control.Monad.Trans.Reader as ReaderT
 
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
@@ -100,8 +90,18 @@ instance Pretty Log where
 -- Running the Language Server
 -- ----------------------------------------------------------------------------
 
+data OnSetup m config
+  = OnSetup
+      (MVar () ->
+        IO
+          ( LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, IdeState))
+          , LSP.Handlers (m config)
+          , (LanguageContextEnv config, IdeState) -> m config <~> IO
+          )
+      )
+
 runLanguageServer
-    :: forall config (m :: Type -> Type -> Type) a. (Show config)
+    :: forall config (m :: Type -> Type -> Type) . (Show config)
     => Recorder (WithPriority Log)
     -> LSP.Options
     -> Handle -- input
@@ -109,12 +109,10 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
-    -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
-               LSP.Handlers (m config),
-               (LanguageContextEnv config, a) -> m config <~> IO))
+    -> Text -- ^ Config section name
+    -> OnSetup m config
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
+runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange configSection (OnSetup setup) = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -125,8 +123,7 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             { LSP.parseConfig = parseConfig
             , LSP.onConfigChange = onConfigChange
             , LSP.defaultConfig = defaultConfig
-            -- TODO: magic string
-            , LSP.configSection = "jl4"
+            , LSP.configSection = configSection
             , LSP.doInitialize = doInitialize
             , LSP.staticHandlers = const staticHandlers
             , LSP.interpretHandler = interpretHandler
@@ -145,16 +142,17 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             serverDefinition
 
 setupLSP ::
-     forall config err.
+     forall config .
      Recorder (WithPriority Log)
   -> FilePath -- ^ root directory, see Note [Root Directory]
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> FilePath -> ThreadQueue -> IO IdeState)
-  -> MVar ()
-  -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
-         LSP.Handlers (ServerM config),
-         (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
-setupLSP recorder defaultRoot userHandlers getIdeState clientMsgVar = do
+  -> OnSetup ServerM config
+  -- MVar ()
+  -- -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, IdeState)),
+  --        LSP.Handlers (ServerM config),
+  --        (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
+setupLSP recorder defaultRoot userHandlers getIdeState = OnSetup $ \clientMsgVar -> do
   -- Send everything over a channel, since you need to wait until after initialise before
   -- LspFuncs is available
   clientMsgChan :: Chan ReactorMessage <- newChan
@@ -321,32 +319,58 @@ modifyOptions x =
         origTDS = fromMaybe tdsDefault $ LSP.optTextDocumentSync x
         tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing
 
+-- ----------------------------------------------------------------------------
+-- ServerM
+-- ----------------------------------------------------------------------------
 
--- | Typecheck all the files of interest.
-kick :: Action ()
-kick = do
-    files <- HashMap.keys <$> getFilesOfInterestUntracked
-    ShakeExtras{ideTesting = IdeTesting testing, lspSink, progress} <- getShakeExtras
-    let signal :: KnownSymbol s => Proxy s -> Action ()
-        signal msg = when testing $ liftIO $
-            case lspSink of
-              Nothing -> pure ()
-              Just sink ->
-                sendNotificationToClient sink (SMethod_CustomMethod msg) $ toJSON $ map fromNormalizedFilePath files
+data ReactorMessage
+  = ReactorNotification (IO ())
+  | forall m . ReactorRequest (LspId m) (IO ()) (TResponseError m -> IO ())
 
-    signal (Proxy @"kick/start")
-    liftIO $ progressUpdate progress ProgressNewStarted
-    -- Run rules that produce diagnostics
-    void $ uses GetLexTokens files
-        <* uses GetParsedAst files
-        <* uses TypeCheck files
-        <* uses Evaluate files
-    liftIO $ progressUpdate progress ProgressCompleted
+type ReactorChan = Chan ReactorMessage
 
-    GarbageCollectVar var <- getIdeGlobalAction
-    garbageCollectionScheduled <- liftIO $ readVar var
-    when garbageCollectionScheduled $ do
-        void garbageCollectDirtyKeys
-        liftIO $ writeVar var False
+data ServerState =
+  ServerState
+    { reactor :: ReactorChan
+    , ideState :: IdeState
+    }
 
-    signal (Proxy @"kick/done")
+newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
+  deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
+  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
+  deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
+  deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
+
+runServerM :: ServerState -> ServerM c a -> LspM c a
+runServerM st m = ReaderT.runReaderT m.runServerT st
+
+-- ----------------------------------------------------------------------------
+-- Reactor
+-- ----------------------------------------------------------------------------
+
+requestHandler
+  :: forall (m :: Method ClientToServer Request) c .
+     SMethod m
+  -> (IdeState -> MessageParams m -> ServerM c (Either (TResponseError m) (MessageResult m)))
+  -> Handlers (ServerM c)
+requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params} resp -> do
+  st <- (ask :: ServerM c ServerState)
+  env <- LSP.getLspEnv
+  let resp' :: Either (TResponseError m) (MessageResult m) -> LspM c ()
+      resp' = flip (\s -> ReaderT.runReaderT s.runServerT) st . resp
+
+  liftIO $ writeChan st.reactor $ ReactorRequest _id (LSP.runLspT env $ resp' =<< runServerM st (k st.ideState _params)) (LSP.runLspT env . resp' . Left)
+
+notificationHandler
+  :: forall (m :: Method ClientToServer Notification) c .
+     SMethod m
+  -> (IdeState -> VFS -> MessageParams m -> ServerM c ())
+  -> Handlers (ServerM c)
+notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_params,_method} -> do
+  st <- ask
+  env <- LSP.getLspEnv
+  -- Take a snapshot of the VFS state on every notification
+  -- We only need to do this here because the VFS state is only updated
+  -- on notifications
+  vfs <- LSP.getVirtualFiles
+  liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
