@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
@@ -20,7 +21,7 @@ import Control.DeepSeq
 import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Text (Text, pack)
+import Data.Text (Text, pattern (:<), pattern (:>))
 import UnliftIO (liftIO)
 import qualified Data.Csv as Csv
 import qualified Data.Map.Lazy as Map
@@ -252,24 +253,20 @@ jl4Rules recorder = do
     let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
     -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
     contents <- liftIO $ Path.readFile citationFilePath
-    -- FIXME: this should get the parse instead and annotate the nodes with annotations
-    -- parse <- use_ GetParsedAst f
+    -- TODO: in future we may want to use the parse of the tree to get the context of the references
     (tokens, _) <- use_ GetLexTokens f
 
 
-    let -- TODO: probably makes sense to normalize the reference here,
-        -- e.g. normalizing whitespace and ignoring capitalization
-        normalizeRef r
-          | Text.isPrefixOf "@ref" r = normalizeRef' $ Text.drop 4 r
-          | ('<' Text.:< '<' Text.:< r') Text.:> '>' Text.:> '>' <- r
-          = normalizeRef' r'
-          | otherwise = normalizeRef' r
+    let stripReferenceHeralds r
+          | Text.isPrefixOf "@ref" r = Text.drop 4 r
+          | ('<' :< '<' :< r') :> '>' :> '>' <- r = r'
+          | otherwise = r
 
-        normalizeRef' = Text.toLower . Text.strip
+        normalizeRef = Text.toLower . Text.strip
 
         rangeOfPosToken = \case
           -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef r, range)]
+          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
           _ -> mempty
 
         allReferencesInTree :: [(Text, SrcRange)]
@@ -281,7 +278,7 @@ jl4Rules recorder = do
 
           let mp = foldMap (uncurry Map.singleton) decoded
               mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-              getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef' reference) mp
+              getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
 
           pure $ foldMap getReferences allReferencesInTree
 
@@ -364,7 +361,7 @@ jl4Rules recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either (pack . show) renderValue res
+        , _message = either (Text.pack . show) renderValue res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
