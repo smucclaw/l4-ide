@@ -5,7 +5,7 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Annotation
-import L4.Lexer (SrcRange, PosToken)
+import L4.Lexer (SrcRange)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 
@@ -89,10 +89,10 @@ makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
-addEvalResult :: ToConcreteNodes PosToken a => a -> Either EvalException Value -> Eval ()
+addEvalResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
 addEvalResult a val =
   let
-    res = (, val) <$> rangeOfNode a
+    res = (, val) <$> rangeOf a
   in
     maybe (pure ()) (modifying #results . (:)) res
 
@@ -121,8 +121,8 @@ instance NFData Value where
   -- rnf (ValEnvironment env)        = env `seq` ()
 
 renderValue :: Value -> Text
-renderValue (ValNumber i) = Text.pack (show i)
-renderValue (ValString txt) = Text.pack (show txt)
+renderValue (ValNumber i) = Text.show i
+renderValue (ValString txt) = Text.show txt
 renderValue (ValList vs) = "(LIST " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
 renderValue (ValClosure _ _ _) = "<function>"
 renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"

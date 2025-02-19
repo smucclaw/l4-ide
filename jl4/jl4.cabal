@@ -39,7 +39,7 @@ library
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    text,
+    text >= 2.1,
     transformers,
     tree-diff
   exposed-modules:
@@ -53,13 +53,15 @@ library
     L4.Evaluate
     L4.ExactPrint
     L4.Main
-    L4.TypeCheck
-    L4.Print
-    L4.Syntax
     L4.Lexer
     L4.Parser
+    L4.Parser.ResolveAnnotation
+    L4.Parser.SrcSpan
     L4.ParserCombinators
+    L4.Print
+    L4.Syntax
     L4.Transform
+    L4.TypeCheck
 
 executable jl4-cli
   import: defaults
@@ -91,6 +93,7 @@ executable jl4-lsp
     hashable ^>=1.5.0.0,
     async ^>=2.2.5,
     hls-graph ^>=2.9.0.0,
+    hw-fingertree,
     bytestring ^>=0.11.5.3,
     list-t,
     jl4,
@@ -114,12 +117,14 @@ executable jl4-lsp
     prettyprinter,
     safe-exceptions,
     stm,
-    text,
+    text >= 2.1,
     text-rope,
     transformers,
     unliftio,
     vector,
     fuzzy,
+    file-io,
+    cassava,
 
   if os(windows)
     build-depends: Win32
@@ -173,6 +178,7 @@ test-suite jl4-test
     Glob,
     hspec,
     hspec-golden,
+    optics,
     silently,
-    text,
+    text >= 2.1,
     jl4

@@ -12,8 +12,7 @@ import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
-import Optics.Generic
-import qualified Optics
+import Optics
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -133,6 +132,8 @@ data ConDecl n =
 
 data Expr n =
     And        Anno (Expr n) (Expr n)
+    -- (var1 AND var3) AND {- Comment -}var2
+    -- [AnnoHole, CSN "AND", CSN " ", CSN "{- Comment -}", AnnoHole]
   | Or         Anno (Expr n) (Expr n)
   | Implies    Anno (Expr n) (Expr n)
   | Equals     Anno (Expr n) (Expr n)
@@ -233,7 +234,56 @@ foldTopDecls = _foldNodeType
 -- Source Annotations
 -- ----------------------------------------------------------------------------
 
-type Anno = Anno_ PosToken (Type' Resolved)
+data Extension = Extension
+  { resolvedType :: Maybe (Type' Resolved)
+  , nlg :: Maybe Nlg
+  }
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+
+annResolveType :: Lens' Anno (Maybe (Type' Resolved))
+annResolveType = lens
+  (\ann -> case ann.extra of
+    Nothing -> Nothing
+    Just exts -> exts.resolvedType)
+  (\ann ty -> case ann.extra of
+    Just exts -> ann
+      { extra = Just exts
+        { resolvedType = ty
+        }
+      }
+    Nothing -> ann
+      { extra = Just Extension
+        { resolvedType = ty
+        , nlg = Nothing
+        }
+      }
+  )
+
+annNlg :: Lens' Anno (Maybe Nlg)
+annNlg = lens
+  (\ann -> case ann.extra of
+    Nothing -> Nothing
+    Just exts -> exts.nlg)
+  (\ann n -> case ann.extra of
+    Just exts -> ann
+      { extra = Just exts
+        { nlg = n
+        }
+      }
+    Nothing -> ann
+      { extra = Just Extension
+        { resolvedType = Nothing
+        , nlg = n
+        }
+      }
+  )
+
+setNlg :: Nlg -> Anno -> Anno
+setNlg n a = a & annNlg ?~ n
+
+type Anno = Anno_ PosToken Extension
 type AnnoElement = AnnoElement_ PosToken
 type CsnCluster = CsnCluster_ PosToken
 
@@ -241,7 +291,7 @@ newtype L4Syntax a = MkL4Syntax a
 
 instance (GHC.Generic a, GPosition 1 a a Anno Anno) => HasAnno (L4Syntax a) where
   type AnnoToken (L4Syntax a) = PosToken
-  type AnnoExtra (L4Syntax a) = Type' Resolved
+  type AnnoExtra (L4Syntax a) = Extension
 
   setAnno ann (MkL4Syntax a) = MkL4Syntax (genericSetAnno ann a)
   getAnno (MkL4Syntax a) = genericGetAnno a
@@ -345,6 +395,31 @@ deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
 
+data Comment = MkComment Anno [Text]
+  deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data Nlg = MkNlg Anno [Text]
+  deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data Ref = MkRef Anno [Text]
+  deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+deriving via L4Syntax Nlg
+  instance HasAnno Nlg
+deriving via L4Syntax Comment
+  instance HasAnno Comment
+deriving via L4Syntax Ref
+  instance HasAnno Ref
+
+instance ToConcreteNodes PosToken Comment where
+  toNodes (MkComment ann _) = flattenConcreteNodes ann []
+
+instance ToConcreteNodes PosToken Nlg where
+  toNodes (MkNlg ann _) = flattenConcreteNodes ann []
+
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
   -- TODO: This is lossy and should be improved (but we should not need to
@@ -393,6 +468,9 @@ deriving anyclass instance HasSrcRange (GivenSig a)
 deriving anyclass instance HasSrcRange (Directive a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
+deriving anyclass instance HasSrcRange Nlg
+deriving anyclass instance HasSrcRange Comment
+deriving anyclass instance HasSrcRange Ref
 
 instance HasSrcRange Resolved where
   rangeOf = rangeOf . getActual

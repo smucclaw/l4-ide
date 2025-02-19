@@ -1,21 +1,27 @@
 module Main where
 
 import Base
-import qualified L4.Parser as Parser
-import qualified L4.Evaluate as JL4
-import qualified L4.ExactPrint as JL4
-import qualified L4.TypeCheck as JL4
 import qualified L4.Annotation as JL4
+import qualified L4.Evaluate as JL4
+import qualified L4.Lexer as JL4
+import qualified L4.Main as JL4
+import L4.Parser (execProgramParser)
+import qualified L4.Parser as Parser
+import qualified L4.Parser.ResolveAnnotation as Parser
+import qualified L4.Print as Print
+import L4.Syntax
+import L4.TypeCheck (CheckResult (CheckResult))
+import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import Optics
 import System.FilePath
 import System.FilePath.Glob
 import System.IO.Silently
 import Test.Hspec
 import Test.Hspec.Golden
-import qualified Data.Text.IO as Text
-import qualified Data.Text as Text
-import L4.TypeCheck (CheckResult(CheckResult))
 
 main :: IO ()
 main = do
@@ -28,6 +34,8 @@ main = do
           l4Golden (dataDir </> "examples") inputFile
         it "exactprints" $
           jl4ExactPrintGolden (dataDir </> "examples") inputFile
+        it "natural language annotations" $
+          jl4NlgAnnotationsGolden (dataDir </> "examples") inputFile
 
 l4Golden :: String -> String -> IO (Golden String)
 l4Golden dir inputFile = do
@@ -53,7 +61,7 @@ l4Golden dir inputFile = do
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   input <- Text.readFile inputFile
-  let output_ = JL4.exactprintFile (takeFileName inputFile) input
+  let output_ = JL4.exactprintProgram (takeFileName inputFile) input
   pure
     Golden
       { output = output_
@@ -65,6 +73,23 @@ jl4ExactPrintGolden dir inputFile = do
       , failFirstTime = False
       }
 
+jl4NlgAnnotationsGolden :: String -> String -> IO (Golden Text)
+jl4NlgAnnotationsGolden dir inputFile = do
+  input <- Text.readFile inputFile
+  let output_ = case execProgramParser (takeFileName inputFile) input of
+        Left _err -> "Failed to parse"
+        Right (prog, warns) -> prettyNlgOutput prog warns
+  pure
+    Golden
+      { output = output_
+      , encodePretty = Text.unpack
+      , writeToFile = Text.writeFile
+      , readFromFile = Text.readFile
+      , goldenFile = dir </> "tests" </> (takeFileName inputFile -<.> "nlg.golden")
+      , actualFile = Just (dir </> "tests" </> (takeFileName inputFile -<.> "nlg.actual"))
+      , failFirstTime = False
+      }
+
 -- ----------------------------------------------------------------------------
 -- Test helpers
 -- ----------------------------------------------------------------------------
@@ -72,9 +97,9 @@ jl4ExactPrintGolden dir inputFile = do
 -- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
 parseFile :: String -> Text -> IO ()
 parseFile file input =
-  case Parser.execParser Parser.program fp input of
+  case Parser.execProgramParser fp input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right prog -> do
+    Right (prog, _) -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
         CheckResult {errors, program}
@@ -89,9 +114,55 @@ parseFile file input =
   where
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-    evalResultToMessage (r, res) = (Just r, either (Text.pack . show) JL4.renderValue res)
+    evalResultToMessage (r, res) = (Just r, either Text.show JL4.renderValue res)
     renderMessage (r, txt) = JL4.prettySrcRange fp r <> ":\n" <> txt
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =
   traverse_ (\ file -> parseFile file =<< Text.readFile file)
+
+prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
+prettyNlgOutput p warns = Text.unlines $
+  [ prettyNlgName n nlg
+  | n <- toListOf gplate p
+  , Just nlg <- [n ^? JL4.annoOf % #extra % _Just % #nlg % _Just]
+  ]
+  <>
+  [prettyWarning warning | warning <- warns]
+  where
+    prettyNlgName :: Name -> Nlg -> Text
+    prettyNlgName name nlg = mconcat
+      [ prettyName name
+      , "\n  "
+      , prettyNlg nlg
+      ]
+
+    prettyName name = mconcat
+      [ prettyMaybeSrcRange (JL4.rangeOf name)
+      , " "
+      , Print.prettyLayout name
+      ]
+
+    prettyMaybeSrcRange :: Maybe JL4.SrcRange -> Text
+    prettyMaybeSrcRange srcRange = "[" <> JL4.prettySrcRange "" srcRange <> "]"
+
+    prettyNlg :: Nlg -> Text
+    prettyNlg n = mconcat
+      [ prettyMaybeSrcRange (JL4.rangeOf n)
+      , " "
+      , Print.prettyLayout n
+      ]
+
+    prettyWarning = \case
+      Parser.NotAttached nlg ->
+        "Not attached to any node:\n  " <> prettyNlg nlg.payload
+      Parser.UnknownLocation nlg ->
+        "Annotation without location:\n  " <> prettyNlg nlg
+      Parser.Ambiguous n nlgs -> Text.unlines
+        [ "Too many annotations:"
+        , Text.replicate 2 " " <> "Name: " <> prettyName n
+        , Text.unlines  $
+          [ Text.replicate 4 " " <> prettyNlg nlg.payload
+          | nlg <- nlgs
+          ]
+        ]

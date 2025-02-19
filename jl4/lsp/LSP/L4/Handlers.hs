@@ -14,7 +14,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Char (isAlphaNum)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
 import Data.Tuple (swap)
@@ -31,6 +31,7 @@ import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as LazyText
+import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
 import LSP.Core.FileStore hiding (Log (..))
@@ -236,7 +237,6 @@ handlers recorder =
             atomically $ clearMostRecentVisualisation ide
             pure (InR Null)
           Nothing -> defaultResponseError ("Unknown command: " <> cid)
-
     , requestHandler SMethod_TextDocumentCodeAction $ \ide params -> do
         let
           uri = toNormalizedUri $ params ^. J.textDocument . J.uri
@@ -259,7 +259,7 @@ handlers recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.pack (show (show uri.getUri))
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.show (Text.show uri.getUri)
                   , _xdata = Nothing
                   }
 
@@ -400,25 +400,25 @@ visualise recorder ide uri msrcPos = do
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
-      TypeCheckResult {substitution, program} <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+      tcRes <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
       recentlyVisualised <- MaybeT $ atomically $ getMostRecentVisualisation ide
-      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) program
-      pure (decide, recentlyVisualised.simplify, substitution)
+      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.program
+      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
 
     -- the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
-      TypeCheckResult {program, substitution} <- do
+      tcRes <- do
         mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
         case mTcResult of
-          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
+          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.show uri.getUri <> "."
           Just tcRes -> pure tcRes
-      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) program of
-        [decide] -> pure $ Just (decide, simp, substitution)
+      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.program of
+        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just ty} _tydec appform _expr) simplify substitution
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just Extension {resolvedType = Just ty}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 
@@ -552,20 +552,37 @@ gotoDefinition ide fileUri pos = do
 -- ----------------------------------------------------------------------------
 
 findHover :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Hover)
-findHover ide fileUri pos = do
-  mTypeCheckedModule <- liftIO $ runAction "findHover" ide $
-    useWithStale TypeCheck nfp
-  case mTypeCheckedModule of
-    Nothing -> pure Nothing
-    Just (m, positionMapping) -> do
-      pure $ do
-        oldPos <- fromCurrentPosition positionMapping pos
-        (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
-        let lspRange = srcRangeToLspRange (Just range)
-        newLspRange <- toCurrentRange positionMapping lspRange
-        pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
+findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
   where
-    nfp = fromUri fileUri
+  refHover = do
+    refs <- MaybeT $ liftIO $ runAction "refHover" ide $
+      use ResolveReferences nfp
+    hoistMaybe do
+      -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
+      let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
+      (range, mreference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
+      let lspRange = srcRangeToLspRange (Just range)
+      pure $ Hover
+        (InL
+          (MarkupContent
+            -- TODO: should be more descriptive
+            { _value = Maybe.fromMaybe "Reference not found" mreference
+            , _kind = MarkupKind_Markdown}
+          )
+        )
+        (Just lspRange)
+
+  typeHover = do
+    (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
+      useWithStale TypeCheck nfp
+    hoistMaybe do
+      oldPos <- fromCurrentPosition positionMapping pos
+      (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
+      let lspRange = srcRangeToLspRange (Just range)
+      newLspRange <- toCurrentRange positionMapping lspRange
+      pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
+
+  nfp = fromUri fileUri
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions
