@@ -97,16 +97,16 @@ translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funRe
   do
     uid <- getFresh
     vizBody <- translateExpr simplify body
-    pure $ V.MkFunDecl uid (simplePrintedVizNameFromResolved funResolved) (paramNamesFromGivens givenSig) vizBody
+    pure $ V.MkFunDecl
+      uid 
+      (simplePrintedVizNameFromResolved funResolved)
+      (paramNamesFromGivens givenSig) 
+      vizBody
                            -- didn't want a backtick'd name in the header
       where
         paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          getParamName <$> optionallyTypedNames
-
-        getParamName :: OptionallyTypedName Resolved -> V.Name
-        getParamName (MkOptionallyTypedName _ paramName _) =
-          simplePrintedVizNameFromResolved paramName
+          simplePrintedVizNameFromResolved . getName <$> optionallyTypedNames
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
