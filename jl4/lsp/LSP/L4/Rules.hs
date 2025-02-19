@@ -260,10 +260,12 @@ jl4Rules recorder = do
     let -- TODO: probably makes sense to normalize the reference here,
         -- e.g. normalizing whitespace and ignoring capitalization
         normalizeRef r
-          | Text.isPrefixOf "@ref" r = Text.strip $ Text.drop 4 r
+          | Text.isPrefixOf "@ref" r = normalizeRef' $ Text.drop 4 r
           | ('<' Text.:< '<' Text.:< r') Text.:> '>' Text.:> '>' <- r
-          = Text.strip r'
-          | otherwise = Text.strip r
+          = normalizeRef' r'
+          | otherwise = normalizeRef' r
+
+        normalizeRef' = Text.toLower . Text.strip
 
         rangeOfPosToken = \case
           -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
@@ -279,7 +281,7 @@ jl4Rules recorder = do
 
           let mp = foldMap (uncurry Map.singleton) decoded
               mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-              getReferences (reference, range) = mkMap range $ Map.lookup reference mp
+              getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef' reference) mp
 
           pure $ foldMap getReferences allReferencesInTree
 
