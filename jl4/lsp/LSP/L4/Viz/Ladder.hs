@@ -56,8 +56,10 @@ data VizError
 -- TODO: Incorporate context like the specific erroring rule and the src range too
 prettyPrintVizError :: VizError -> Text
 prettyPrintVizError = \case
-  InvalidProgramNoDecidesFound -> "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
-  InvalidProgramDecidesMustNotHaveMoreThanOneGiven -> "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
+  InvalidProgramNoDecidesFound ->
+    "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
+  InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
+    "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
   Unimplemented -> "Unimplemented"
 
 ------------------------------------------------------
@@ -98,15 +100,17 @@ translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funRe
     uid <- getFresh
     vizBody <- translateExpr simplify body
     pure $ V.MkFunDecl
-      uid 
-      (simplePrintedVizNameFromResolved funResolved)
-      (paramNamesFromGivens givenSig) 
+      uid
+      -- didn't want a backtick'd name in the header
+      (mkSimpleVizName funResolved)
+      (paramNamesFromGivens givenSig)
       vizBody
-                           -- didn't want a backtick'd name in the header
       where
         paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          simplePrintedVizNameFromResolved . getName <$> optionallyTypedNames
+          mkSimpleVizName . getName <$> optionallyTypedNames
+
+        getName (MkOptionallyTypedName _ paramName _) = paramName
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -128,7 +132,7 @@ translateExpr False = go
 
         -- 'var'
         App _ resolved [] ->
-          leafFromVizName (simplePrintedVizNameFromResolved resolved)
+          leafFromVizName (mkSimpleVizName resolved)
         -- TODO: Will be replacing this temporary version with a variant for App on the frontend
         App _ (getOriginal -> MkName _ fnName) args ->
           leaf "" $ Text.unwords (rawNameToText fnName : (prettyLayout <$> args))
@@ -161,18 +165,24 @@ leafFromVizName vname = do
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
   uid <- getFresh
-  let tempUniqueTODO = negate uid.id -- will return to this when we explicitly handle more cases in translateExpr
+  let tempUniqueTODO = negate uid.id
+  -- The negate is just my very-lazy-person's way of finding some kind of unique for this
+  -- that isn't likely to collide with other Uniques,
+  -- because I'd like to defer properly handling `leaf` and the kinds of cases it's used for, for now.
+  -- I'll return to this when we explicitly handle more cases in translateExpr
+  -- (I'm currently focusing on state x the simpler case of App with no args)
   pure $ V.BoolVar uid (V.MkName tempUniqueTODO $ subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers
 ------------------------------------------------------
 
-simplePrintedVizNameFromResolved :: Resolved -> V.Name
-simplePrintedVizNameFromResolved = vizNameFromResolvedWithPrinter simpleprint
+-- | Used for places where I don't want backticks appearing.
+mkSimpleVizName :: Resolved -> V.Name
+mkSimpleVizName = mkVizNameWith simpleprint
 
-vizNameFromResolvedWithPrinter :: (Resolved -> Text) -> Resolved -> V.Name
-vizNameFromResolvedWithPrinter printer resolved =
+mkVizNameWith :: (Resolved -> Text) -> Resolved -> V.Name
+mkVizNameWith printer resolved =
   case getUnique resolved of
     MkUnique _ uniq -> V.MkName uniq (printer resolved)
 
