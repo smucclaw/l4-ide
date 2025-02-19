@@ -1,8 +1,9 @@
-import * as SF from '@xyflow/svelte'
+import type { Name, BoolValue } from '@repo/viz-expr'
 import type { LirId, LirContext } from '$lib/layout-ir/core.js'
-import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import type { DeclLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
+import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
 import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
@@ -11,9 +12,9 @@ import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
-export interface ExprFlowDisplayerProps {
+export interface LadderFlowDisplayerProps {
   context: LirContext
-  node: ExprLirNode
+  node: DeclLirNode
 }
 
 /************************************************
@@ -87,9 +88,8 @@ export abstract class BaseFlowNode implements Ord<FlowNode> {
 }
 
 export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  // TODO: Let's only add more info to data, e.g. a value, in the next prototype
   constructor(
-    protected readonly data: { label: string },
+    protected readonly data: { name: Name; value: BoolValue },
     origLirId: LirId,
     position: {
       x: number
@@ -319,6 +319,6 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 }
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
-  data: { label: string }
+  data: { name: Name; value: BoolValue }
   // TODO: Will add Value in the next version
 }

@@ -1,3 +1,15 @@
+import type { LirContext } from '$lib/layout-ir/core.js'
+import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import {
+  BoolVarLirNode,
+  NotLirNode,
+  AndLirNode,
+  OrLirNode,
+} from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import type { DirectedAcyclicGraph } from '../../algebraic-graphs/dag.js'
+/* IMPT: Cannot currently use $lib for the following import,
+because of how the functions were defined */
+import { vertex, overlay } from '../../algebraic-graphs/dag.js'
 import type { FlowGraph, FlowNode } from './types.svelte.js'
 import {
   BoolVarFlowNode,
@@ -7,19 +19,7 @@ import {
   NotEndFlowNode,
   FlowEdge,
 } from './types.svelte.js'
-import type { LirContext } from '$lib/layout-ir/core.js'
-import type { ExprLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import {
-  BoolVarLirNode,
-  NotLirNode,
-  AndLirNode,
-  OrLirNode,
-} from '$lib/layout-ir/lir-decision-logic.svelte.js'
 import { match, P } from 'ts-pattern'
-import type { DirectedAcyclicGraph } from '../../algebraic-graphs/dag.js'
-/* IMPT: Cannot currently use $lib for the following import,
-because of how the functions were defined */
-import { vertex, overlay } from '../../algebraic-graphs/dag.js'
 
 /**
 * Preconditions / assumptions:
@@ -77,7 +77,7 @@ function transform(
   return match(expr)
     .with(P.instanceOf(BoolVarLirNode), (node) => {
       const flowNode = new BoolVarFlowNode(
-        { label: node.getName(context) },
+        { name: node.getName(context), value: node.getValue(context) },
         node.getId()
       )
       return vertex(flowNode)

@@ -1,10 +1,14 @@
-import type { IRExpr } from '@repo/viz-expr'
+import type { IRDecl, IRExpr } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
 import type { LirSource, LirNodeInfo } from '../layout-ir/core.js'
-import type { ExprLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
+import type {
+  DeclLirNode,
+  ExprLirNode,
+} from '../layout-ir/lir-decision-logic.svelte.js'
 import {
+  FunDeclLirNode,
   BoolVarLirNode,
   AndLirNode,
   OrLirNode,
@@ -15,6 +19,17 @@ import { match } from 'ts-pattern'
 /***********************************
         Lir Data Sources
 ************************************/
+
+export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, decl: IRDecl): DeclLirNode {
+    return new FunDeclLirNode(
+      nodeInfo,
+      decl.name,
+      decl.params,
+      ExprLirSource.toLir(nodeInfo, decl.body)
+    )
+  },
+}
 
 export const ExprLirSource: LirSource<IRExpr, ExprLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): ExprLirNode {

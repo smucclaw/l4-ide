@@ -7,6 +7,7 @@ TODO: Will add UI for things like Value in the next iteration
   import type { BoolVarDisplayerProps } from '../types.svelte.js'
   import { defaultSFHandlesInfo } from '../types.svelte.js'
   import { Handle } from '@xyflow/svelte'
+  // import { match } from 'ts-pattern'
 
   let { data }: BoolVarDisplayerProps = $props()
 </script>
@@ -14,10 +15,16 @@ TODO: Will add UI for things like Value in the next iteration
 <div class="svelte-flow__node-basic bool-var-node-border">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
   <div class="label-wrapper-for-content-bearing-sf-node">
-    {data.label}
+    {data.name.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>
+
+<!-- match(originalExpr.value)
+  .with('True', () => true)
+  .with('False', () => false)
+  .with('Unknown', () => undefined)
+  .exhaustive() -->
 
 <style>
   .bool-var-node-border {

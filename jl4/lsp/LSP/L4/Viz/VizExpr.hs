@@ -4,23 +4,37 @@ import Autodocodec
 import Autodocodec.Aeson ()
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
+import qualified Data.List.NonEmpty as NE
 import Data.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
-import qualified Data.List.NonEmpty as NE
 
 newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
-  { program :: IRExpr
+  { program :: IRDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
+
+type Unique = Int
+-- | Analogous to, but much simpler than, L4.Syntax's Name
+data Name = MkName
+  { unique :: Unique   -- ^ for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+  , label  :: Text     -- ^ Label to be displayed in the visualizer.
+  }
+  deriving (Show, Eq, Generic)
+
+type IRDecl = FunDecl
+
+-- TODO: Will worry about adding param type info later
+data FunDecl = MkFunDecl ID Name [Name] IRExpr
+  deriving (Show, Eq, Generic)
 
 data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | BoolVar ID Text BoolValue
+  | BoolVar ID Name BoolValue
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID
@@ -36,6 +50,12 @@ data BoolValue = FalseV | TrueV | UnknownV
 -- HasCodec instances
 --------------------------------------------------------------------------------
 
+instance HasCodec Name where
+  codec = object "Name" $
+    MkName
+      <$> requiredField "unique" "Unique identifier for the name (for equality of expressions)" .= view #unique
+      <*> requiredField "label" "Label to be displayed" .= view #label
+
 instance HasCodec ID where
   codec =
     object "ID" $
@@ -49,6 +69,20 @@ instance HasCodec BoolValue where
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L740
+
+instance HasCodec IRDecl where
+  codec = object "IRDecl" $ discriminatedUnionCodec "$type" enc dec
+    where
+      enc (MkFunDecl uid name params body) = ("FunDecl", mapToEncoder (uid, name, params, body) funDeclCodec)
+      dec = HashMap.fromList
+        [ ("FunDecl", ("FunDecl", mapToDecoder (\(uid, name, params, body) -> MkFunDecl uid name params body) funDeclCodec))
+        ]
+      funDeclCodec =
+        (,,,)
+          <$> requiredField' "id" .= view _1
+          <*> requiredField' "name" .= view _2
+          <*> requiredField' "params" .= view _3
+          <*> requiredField' "body" .= view _4
 
 instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
@@ -66,7 +100,7 @@ instance HasCodec IRExpr where
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
-            ("BoolVar", ("BoolVar", mapToDecoder (\(uid, value, name) -> BoolVar uid value name) boolVarCodec))
+            ("BoolVar", ("BoolVar", mapToDecoder (\(uid, name, value) -> BoolVar uid name value) boolVarCodec))
           ]
 
       -- Codec for 'And' and 'Or' expressions.
