@@ -130,7 +130,7 @@ function transform(
     .exhaustive()
 }
 
-export function algaUndirectedGraphToFlowGraph(
+export function algaDirectedGraphToFlowGraph(
   graph: DirectedAcyclicGraph<FlowNode>
 ): FlowGraph {
   const nodes: FlowNode[] = graph.getVertices()

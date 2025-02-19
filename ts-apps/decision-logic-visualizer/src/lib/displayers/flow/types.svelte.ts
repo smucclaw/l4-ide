@@ -36,6 +36,7 @@ export interface FlowNode extends Ord<FlowNode> {
   getId(): string
   getOrigLirIds(): LirId[]
   toSFPojo(): SF.Node
+  toPretty(): string
 }
 
 export abstract class BaseFlowNode implements Ord<FlowNode> {
@@ -85,6 +86,8 @@ export abstract class BaseFlowNode implements Ord<FlowNode> {
       return ComparisonResult.GreaterThan
     }
   }
+
+  abstract toPretty(): string
 }
 
 export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
@@ -101,6 +104,10 @@ export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
 
   getData() {
     return this.data
+  }
+
+  toPretty() {
+    return this.data.name.label
   }
 
   toSFPojo(): SF.Node {
@@ -133,6 +140,10 @@ export class NotStartFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       data: {},
     }
   }
+
+  toPretty() {
+    return 'NOT'
+  }
 }
 
 export class NotEndFlowNode extends BaseFlowNode implements Ord<FlowNode> {
@@ -155,6 +166,14 @@ export class NotEndFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       data: {},
     }
   }
+
+  toPretty() {
+    return ''
+  }
+}
+
+export function isBundlingFlowNode(node: FlowNode): node is BundlingFlowNode {
+  return node instanceof SourceFlowNode || node instanceof SinkFlowNode
 }
 
 /** A FlowNode that's used solely to visually group or 'bundle' other nodes.
@@ -182,6 +201,10 @@ export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       data: {},
     }
   }
+
+  toPretty() {
+    return ''
+  }
 }
 
 export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
@@ -202,6 +225,10 @@ export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
       position: this.position,
       data: {},
     }
+  }
+
+  toPretty() {
+    return ''
   }
 }
 

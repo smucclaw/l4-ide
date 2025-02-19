@@ -16,12 +16,13 @@
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
     type LadderFlowDisplayerProps,
+    isBundlingFlowNode,
     sfNodeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
   import {
     exprLirNodeToAlgaDag,
-    algaUndirectedGraphToFlowGraph,
+    algaDirectedGraphToFlowGraph,
   } from './lir-to-dag.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
@@ -42,9 +43,9 @@
     Make initial SF nodes and edges
   ************************************/
 
-  const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaDag(context, declLirNode.getBody(context))
-  )
+  const algaDag = exprLirNodeToAlgaDag(context, declLirNode.getBody(context))
+  const flowGraph = algaDirectedGraphToFlowGraph(algaDag)
+
 
   const initialNodes = flowGraph.nodes
     .toSorted((v1, v2) => v2.compare(v1))
@@ -173,6 +174,13 @@
     <Background />
   </SvelteFlow>
 </div>
+<section>
+  {#each algaDag.getAllPaths() as path }
+    <article>
+      {path.filter((n) => !isBundlingFlowNode(n)).reduce((acc, node) => acc + ' ' + node.toPretty(), '')}
+    </article>
+  {/each}
+</section>
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
