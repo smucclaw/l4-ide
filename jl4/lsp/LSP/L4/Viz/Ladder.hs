@@ -169,13 +169,11 @@ leafFromVizName vname = do
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
   uid <- getFresh
-  let tempUniqueTODO = negate uid.id
-  -- The negate is just my very-lazy-person's way of finding some kind of unique for this
-  -- that isn't likely to collide with other Uniques,
-  -- because I'd like to defer properly handling `leaf` and the kinds of cases it's used for.
-  -- I'll return to this when we explicitly handle more cases in translateExpr
+  tempUniqueTODO <- getFresh
+  -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
+  -- I'll return to this when we explicitly/properly handle more cases in translateExpr
   -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
-  pure $ V.BoolVar uid (V.MkName tempUniqueTODO $ subject <> " " <> complement) defaultBoolVarValue
+  pure $ V.BoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers
