@@ -1,0 +1,9 @@
+body {
+  background-color: #242424;
+}
+
+#editor {
+  margin: 10vh auto;
+  width: 720px;
+  height: 20vh;
+}
