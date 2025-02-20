@@ -1,11 +1,13 @@
-§ `Preamble -- notions of Place, Date, and Person belong in a supporting library, but are here for exposition`
+§ `Preamble`
 
--- we need a way to represent NULLs -- for example in the case of an orphan, we don't know the parents
+-- definitions of Place, Date, and Person belong in a supporting library, but are here for exposition
+
+-- this is how we represent NULLs -- for example in the case of an orphan, we don't know the parents
 DECLARE Maybe something
   IS ONE OF
     Unknown
     Known
-      HAS val IS A something
+      HAS value IS A something
 
 DECLARE Date
   HAS year    IS A NUMBER
@@ -13,18 +15,19 @@ DECLARE Date
       day     ^  ^ ^
 
 BNA_commencement    MEANS Date OF 1983, 1, 1  -- of the main British Nationality Act 1981
-@ref (British Nationality Act 1981 c.61 Section 15)
--- URL: https://www.legislation.gov.uk/ukpga/1981/61/section/15
+@ref source: section 1 of British Nationality Act 1981 c.61 @ 2021-07-01
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/section/1
 
 `appointed day` MEANS Date OF 2002, 2, 21 -- from various acts that subsequently updated the British Nationality Act 1981
-@ref (British Overseas Territories Act 2002 c.8 Section 1)
--- URL: https://www.legislation.gov.uk/ukpga/2002/8/section/1
+@ref source: section 1 of British Overseas Territories Act 2002 c.8 @ 2002-02-26
+@ref url: https://www.legislation.gov.uk/ukpga/2002/8/section/1
 
 DECLARE Place
   HAS `English name` IS A STRING
 
 GIVEN p IS A Place
 GIVETH A BOOLEAN
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/schedule/6
 `is British Overseas Territory` p MEANS
       p's `English name` = "Anguilla"
    OR ^^  ^              = "Bermuda"
@@ -46,15 +49,17 @@ GIVEN p IS A Place
 GIVETH A BOOLEAN
 DECIDE `is a qualifying territory` p IF
            `is British Overseas Territory` p
-   AND NOT p's `English name` = "Sovereign Base Areas of Akrotiri and Dhekelia"
-
+   AND NOT (`English name` OF p) = "Sovereign Base Areas of Akrotiri and Dhekelia"
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/section/50#term-qualifying-territory
 
 DECLARE NaturalPerson
-  HAS mother       IS A   NaturalPerson
+  HAS name         IS A   STRING
+      mother       IS A   NaturalPerson
       father       IS A   NaturalPerson
       birthPlace   ^  ^     Place
       birthDate    ^  ^     Date
       `settled in` IS A     Place
+      `known to be British` IS A BOOLEAN
 
 GIVEN d IS A Date -- date of birth
       c IS A Date -- commencement
@@ -86,31 +91,39 @@ DECIDE `is settled in the UK` parent IF `English name` OF parent's `settled in`
                                      EQUALS "UK"
 
 GIVEN p        IS A NaturalPerson
-DECIDE `born after commencement` p IF `after` (p's birthDate) BNA_commencement
+DECIDE `is born after commencement` p IF `after` (p's birthDate) BNA_commencement
+
+-- syntactic sugar for the visualization to read more naturally
+flip a b MEANS b a
+ascertain MEANS flip
+is        ^     ^
+person    ^     ^
 
 
 § `S1 BNA possible redraft form`
 GIVEN p IS A NaturalPerson
 GIVETH A BOOLEAN
-DECIDE `is British citizen 2` IF
-               `is born in the UK` p
-           AND `born after commencement` p
-           AND    `father or mother` `is British citizen 2`
-               OR `father or mother` `is settled in the UK`
+DECIDE `is British citizen` p
+  IF       person p `is born in the UK`
+      AND  person p `is born after commencement`
+      AND       `father or mother` `is British citizen`
+            OR  `father or mother` `is settled in the UK`
 
-  OR   `is born in a qualifying territory after the appointed day` p
-    AND       `father or mother` `is British citizen 2`
-           OR `father or mother` `is settled in the UK`
-           OR `father or mother` `is settled in the qualifying territory in which the person is born`
+    OR   person p `is born in a qualifying territory after the appointed day`
+      AND       `father or mother` `is British citizen`
+            OR  `father or mother` `is settled in the UK`
+            OR  `father or mother` `is settled in the qualifying territory in which the person is born`
+
+    -- Sometimes we are simply given a fact, that some parent is a British citizen.
+    OR   p's `known to be British`
+
   WHERE
-    `father or mother` property MEANS
-         property OF p's father
-      OR property OF p's mother
+    `father or mother` someProperty MEANS
+          someProperty OF p's father
+      OR  someProperty OF p's mother
 
     `is settled in the qualifying territory in which the person is born` parent MEANS
                  `is born in a qualifying territory after the appointed day` p
          AND     `English name` OF parent's `settled in`
          EQUALS  `English name` OF p's birthPlace
-
-
 
