@@ -7,22 +7,20 @@
 module L4.Annotation where
 
 import Base
+import qualified Base.Text as Text
 import L4.Lexer ( SrcRange (..) )
 
-import Control.DeepSeq (NFData)
 import qualified Control.Monad.Extra as Extra
-import qualified Data.List as List
+import Data.Default
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Maybe as Maybe
-import qualified Data.Text as Text
-import Data.TreeDiff.Class (ToExpr)
 import qualified GHC.Generics as GHC
 import GHC.Stack
 import Generics.SOP as SOP
 import Generics.SOP.Constraint
 import Generics.SOP.NP
 import Generics.SOP.NS
-import Optics
+import Optics.Generic
+import Optics.Operators
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -77,24 +75,30 @@ mkCluster :: CsnCluster_ t -> AnnoElement_ t
 mkCluster csn = AnnoCsn (rangeOf csn) csn
 
 data Anno_ t e = Anno
-  { extra   :: Maybe e
+  { extra   :: e
   , range   :: Maybe SrcRange
   , payload :: [AnnoElement_ t]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
   deriving anyclass (ToExpr, NFData)
 
+annoExtra :: Lens' (Anno_ t e) e
+annoExtra = #extra
+
 allClusterTokens :: CsnCluster_ t -> [t]
 allClusterTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
-mkAnno :: [AnnoElement_ t] -> Anno_ t e
-mkAnno es = fixAnnoSrcRange $ Anno Nothing Nothing es
+mkAnno :: Default e => [AnnoElement_ t] -> Anno_ t e
+mkAnno es = fixAnnoSrcRange $ Anno def Nothing es
 
-emptyAnno :: Anno_ t e
+emptyAnno :: Default e => Anno_ t e
 emptyAnno = mkAnno []
 
+instance Default e => Default (Anno_ t e) where
+  def = emptyAnno
+
 isEmptyAnno :: Anno_ t e -> Bool
-isEmptyAnno m = List.null m.payload
+isEmptyAnno m = null m.payload
 
 -- | Calculate the actual 'Maybe SrcRange' of this source annotation.
 --
@@ -115,7 +119,7 @@ fixAnnoSrcRange ann = set #range (computeAnnoSrcRange ann) ann
 
 type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 
-class HasAnno t where
+class (Default (AnnoExtra t)) => HasAnno t where
   type AnnoToken t :: Type
   type AnnoExtra t :: Type
   getAnno :: t -> Anno' t
@@ -138,7 +142,7 @@ genericSetAnno ann e = set (gposition @1) ann e
 genericGetAnno :: GPosition 1 s s a a => s -> a
 genericGetAnno e = e ^. gposition @1
 
-instance HasAnno (Anno_ t e) where
+instance Default e => HasAnno (Anno_ t e) where
   type AnnoToken (Anno_ t e) = t
   type AnnoExtra (Anno_ t e) = e
   getAnno = id
@@ -218,7 +222,7 @@ class HasTrailingSrcRange a where
 instance HasSrcRange a => HasSrcRange [a] where
   rangeOf as = do
     let
-      rs = Maybe.mapMaybe rangeOf as
+      rs = mapMaybe rangeOf as
 
     rs' <- NonEmpty.nonEmpty rs
     let
@@ -234,7 +238,7 @@ instance HasSrcRange a => HasSrcRange [a] where
 instance HasTrailingSrcRange a => HasTrailingSrcRange [a] where
   rangeOfTrailing as = do
     let
-      rs = Maybe.mapMaybe rangeOfTrailing as
+      rs = mapMaybe rangeOfTrailing as
 
     rs' <- NonEmpty.nonEmpty rs
     let
@@ -300,5 +304,5 @@ rangeOfNode a = case runExcept $ toNodes a of
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
-instance Semigroup (Anno_ t e) where
-  (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno Nothing Nothing (m1 <> m2)
+instance Default e => Semigroup (Anno_ t e) where
+  (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno def Nothing (m1 <> m2)

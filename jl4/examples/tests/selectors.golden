@@ -1,20 +1,29 @@
 Parsing successful
 Typechecking successful
 selectors.l4:22:8-14:
-(FUNCTION FROM Record TO BOOLEAN)
+  FUNCTION FROM Record TO BOOLEAN
+
 selectors.l4:23:8-14:
-(FUNCTION FROM Record TO NUMBER)
+  FUNCTION FROM Record TO NUMBER
+
 selectors.l4:24:8-14:
-(FUNCTION FROM Record TO (LIST OF NUMBER))
+  FUNCTION FROM Record TO LIST OF NUMBER
+
 selectors.l4:26:7-20:
-(Record OF TRUE, 3, (LIST 1, 2, 3))
+  Record OF TRUE, 3, (LIST 1, 2, 3)
+
 selectors.l4:28:7-29:
-TRUE
+  TRUE
+
 selectors.l4:29:7-29:
-3
+  3
+
 selectors.l4:30:7-29:
-(LIST 1, 2, 3)
+  LIST 1, 2, 3
+
 selectors.l4:32:7-30:
-TRUE
+  TRUE
+
 selectors.l4:34:7-27:
-(Record OF FALSE, 7, (LIST ))
+  Record OF FALSE, 7, (LIST )
+

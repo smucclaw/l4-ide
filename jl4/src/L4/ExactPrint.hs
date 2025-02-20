@@ -8,11 +8,11 @@
 module L4.ExactPrint where
 
 import Base
+import qualified Base.Text as Text
 import L4.Annotation
 import L4.Lexer
 
 import qualified Control.Monad.Extra as Extra
-import qualified Data.Text as Text
 
 -- ----------------------------------------------------------------------------
 -- ExactPrinting Interface

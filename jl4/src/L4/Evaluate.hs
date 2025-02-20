@@ -3,13 +3,12 @@ module L4.Evaluate where
 
 import Base
 import qualified Base.Map as Map
-import qualified Base.Text as Text
 import L4.Annotation
+import L4.Evaluate.Value
 import L4.Lexer (SrcRange)
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 
-import Control.DeepSeq
 import Data.Either
 
 newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
@@ -35,8 +34,6 @@ data EvalException =
   | Unimplemented
   deriving stock (Generic, Show)
   deriving anyclass NFData
-
-type Environment = Map Unique Value
 
 emptyEnvironment :: Environment
 emptyEnvironment = Map.empty
@@ -64,7 +61,7 @@ def n = do
 ref :: Name -> Resolved -> Eval Resolved
 ref n a =
   let
-    (u, o) = TypeCheck.getUniqueName a
+    (u, o) = getUniqueName a
   in
     pure (Ref n u o)
 
@@ -96,41 +93,6 @@ addEvalResult a val =
     res = (, val) <$> rangeOf a
   in
     maybe (pure ()) (modifying #results . (:)) res
-
-data Value =
-    ValNumber Int -- for now
-  | ValString Text
-  | ValList [Value]
-  | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
-  | ValUnappliedConstructor Resolved
-  | ValConstructor Resolved [Value]
-  | ValAssumed Resolved
-  -- | ValEnvironment Environment
-
--- | This is a non-standard instance because environments can be recursive, hence we must
--- not actually force the environments ...
---
-instance NFData Value where
-  rnf :: Value -> ()
-  rnf (ValNumber i)               = rnf i
-  rnf (ValString t)               = rnf t
-  rnf (ValList vs)                = rnf vs
-  rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
-  rnf (ValUnappliedConstructor r) = rnf r
-  rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
-  rnf (ValAssumed r)              = rnf r
-  -- rnf (ValEnvironment env)        = env `seq` ()
-
-renderValue :: Value -> Text
-renderValue (ValNumber i) = Text.show i
-renderValue (ValString txt) = Text.show txt
-renderValue (ValList vs) = "(LIST " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
-renderValue (ValClosure _ _ _) = "<function>"
-renderValue (ValUnappliedConstructor _) = "<unapplied constructor>"
-renderValue (ValConstructor r []) = TypeCheck.simpleprint r
-renderValue (ValConstructor r vs) = "(" <> TypeCheck.simpleprint r <> " OF " <> Text.intercalate ", " (renderValue <$> vs) <> ")"
-renderValue (ValAssumed _) = "<assumed>"
--- renderValue (ValEnvironment _) = "<environment>"
 
 data BinOp =
     BinOpPlus
@@ -201,7 +163,7 @@ evalLocalDecl (LocalAssume _ann assume) =
 
 evalDeclare :: Declare Resolved -> Eval ()
 evalDeclare (MkDeclare _ann _tysig appForm t) =
-  evalTypeDecl (TypeCheck.appFormHead appForm) t
+  evalTypeDecl (view TypeCheck.appFormHead appForm) t
 
 evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
 evalTypeDecl _ (EnumDecl _ann conDecls) =

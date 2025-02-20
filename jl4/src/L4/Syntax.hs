@@ -2,12 +2,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Syntax where
 
 import L4.Annotation
 import L4.Lexer (PosToken)
 
 import Control.DeepSeq (NFData)
+import Data.Default
 import Data.Text (Text)
 import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
@@ -47,11 +49,24 @@ getUnique (Def u _)        = u
 getUnique (Ref _ u _)      = u
 getUnique (OutOfScope u _) = u
 
+-- | Extract the raw name from a name.
+rawName :: Name -> RawName
+rawName (MkName _ raw) = raw
+
+-- | Return the unique and the original name for a resolved name.
+getUniqueName :: Resolved -> (Unique, Name)
+getUniqueName r = (getUnique r, getOriginal r)
+
 -- | Extract the actual name, i.e., for referring occurrences, the actual referring occurrence.
 getActual :: Resolved -> Name
 getActual (Def _ n)        = n
 getActual (Ref n _ _)      = n
 getActual (OutOfScope _ n) = n
+
+-- | Get the actual textual form of a raw name.
+rawNameToText :: RawName -> Text
+rawNameToText (NormalName n) = n
+rawNameToText (PreDef n)     = n
 
 data Type' n =
     Type   Anno -- ^ the type of types
@@ -62,6 +77,12 @@ data Type' n =
   -- | ParenType Anno (Type' n) -- temporary
   deriving stock (GHC.Generic, Eq, Show, Functor)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+-- | A kind of a type is its arity.
+--
+-- (Currently not used in the surface syntax.)
+--
+type Kind = Int
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
@@ -235,50 +256,27 @@ foldTopDecls = _foldNodeType
 -- ----------------------------------------------------------------------------
 
 data Extension = Extension
-  { resolvedType :: Maybe (Type' Resolved)
-  , nlg :: Maybe Nlg
+  { resolvedInfo :: Maybe Info
+  , nlg          :: Maybe Nlg
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+data Info =
+    TypeInfo (Type' Resolved)
+  | KindInfo Kind
+  | KeywordInfo
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-annResolveType :: Lens' Anno (Maybe (Type' Resolved))
-annResolveType = lens
-  (\ann -> case ann.extra of
-    Nothing -> Nothing
-    Just exts -> exts.resolvedType)
-  (\ann ty -> case ann.extra of
-    Just exts -> ann
-      { extra = Just exts
-        { resolvedType = ty
-        }
-      }
-    Nothing -> ann
-      { extra = Just Extension
-        { resolvedType = ty
-        , nlg = Nothing
-        }
-      }
-  )
+instance Default Extension where
+  def = Extension Nothing Nothing
+
+annInfo :: Lens' Anno (Maybe Info)
+annInfo = annoExtra % #resolvedInfo
 
 annNlg :: Lens' Anno (Maybe Nlg)
-annNlg = lens
-  (\ann -> case ann.extra of
-    Nothing -> Nothing
-    Just exts -> exts.nlg)
-  (\ann n -> case ann.extra of
-    Just exts -> ann
-      { extra = Just exts
-        { nlg = n
-        }
-      }
-    Nothing -> ann
-      { extra = Just Extension
-        { resolvedType = Nothing
-        , nlg = n
-        }
-      }
-  )
+annNlg = #extra % #nlg
 
 setNlg :: Nlg -> Anno -> Anno
 setNlg n a = a & annNlg ?~ n
@@ -420,10 +418,22 @@ instance ToConcreteNodes PosToken Comment where
 instance ToConcreteNodes PosToken Nlg where
   toNodes (MkNlg ann _) = flattenConcreteNodes ann []
 
+
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
-  -- TODO: This is lossy and should be improved (but we should not need to
-  -- exact-print inference variables).
+  -- TODO: This instance is lossy, i.e., it drops information.
+  --
+  -- Ints currently appear in two places of the syntax tree:
+  --
+  -- In types, as inference variables.
+  -- In names applications, to store the inferred order of applications.
+  --
+  -- In both cases, the Ints are only added after scope / type-checking,
+  -- and should not be relevant for exact-printing.
+  --
+  -- We could either be more precise about what occurs in which phase,
+  -- or we could also possibly be more precise about the types, and not
+  -- use plain Int, but some newtype-wrapped type.
 
 instance ToConcreteNodes PosToken Name where
   toNodes (MkName ann _) =

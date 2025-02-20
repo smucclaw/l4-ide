@@ -6,7 +6,6 @@ import L4.Annotation
 import Base
 
 import Control.Applicative (Alternative (..))
-import Control.DeepSeq (NFData)
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except

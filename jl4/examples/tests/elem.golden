@@ -1,26 +1,38 @@
 Parsing successful
 Typechecking successful
 elem.l4:16:7-33:
-TRUE
+  TRUE
+
 elem.l4:17:7-33:
-FALSE
+  FALSE
+
 elem.l4:19:7-30:18:
-TRUE
+  TRUE
+
 elem.l4:32:7-71:
-TRUE
+  TRUE
+
 elem.l4:34:7-43:
-FALSE
+  FALSE
+
 elem.l4:43:7-63:
-TRUE
+  TRUE
+
 elem.l4:53:7-28:
-FALSE
+  FALSE
+
 elem.l4:54:7-27:
-FALSE
+  FALSE
+
 elem.l4:55:7-27:
-TRUE
+  TRUE
+
 elem.l4:57:7-25:
-TRUE
+  TRUE
+
 elem.l4:62:7-23:
-EqualityOnUnsupportedType
+  EqualityOnUnsupportedType
+
 elem.l4:63:7-23:
-EqualityOnUnsupportedType
+  EqualityOnUnsupportedType
+

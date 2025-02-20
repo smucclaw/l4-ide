@@ -1,11 +1,26 @@
 Parsing successful
 error-directive-ambiguity.l4:9:7-15:
-ambiguous: foo, options:
-(FUNCTION FROM BOOLEAN TO BOOLEAN)
-(FUNCTION FROM BOOLEAN TO BOOLEAN)
+  There are multiple definitions for the identifier
+  
+    foo
+  
+  and I do not have sufficient information to make a choice between them.
+  The options are:
+  
+    foo (defined at 6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+    foo (defined at 3:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+
 error-directive-ambiguity.l4:10:8-16:
-ambiguous: foo, options:
-(FUNCTION FROM BOOLEAN TO BOOLEAN)
-(FUNCTION FROM BOOLEAN TO BOOLEAN)
+  There are multiple definitions for the identifier
+  
+    foo
+  
+  and I do not have sufficient information to make a choice between them.
+  The options are:
+  
+    foo (defined at 6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+    foo (defined at 3:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+
 error-directive-ambiguity.l4:10:8-16:
-_v13
+  res12
+
