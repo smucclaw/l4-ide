@@ -10,8 +10,6 @@ module L4.ExactPrint where
 import Base
 import L4.Annotation
 import L4.Lexer
-import qualified L4.Parser as Parser
-import L4.Syntax
 
 import qualified Control.Monad.Extra as Extra
 import qualified Data.Text as Text
@@ -30,9 +28,6 @@ concreteNodesToTokens a = fmap (concatMap allClusterTokens) $ toNodes a
 class ToTokens t a where
   toTokens :: a -> HoleFit_ t
 
-data Tree =
-  Fork SrcRange [Tree] | Leaf Name
-
 instance ToTokens t a => ToTokens t [a] where
   toTokens =
     Extra.concatMapM toTokens
@@ -48,13 +43,3 @@ instance ToTokens t a => ToTokens t (Maybe a) where
 exactprint :: ToConcreteNodes PosToken p => p -> Either TraverseAnnoError Text
 exactprint =
   runExcept . fmap (Text.concat . fmap displayPosToken) . concreteNodesToTokens
-
--- | Parse a source file and exact-print the result.
-exactprintFile :: String -> Text -> Text
-exactprintFile file input =
-  case Parser.execParser Parser.program file input of
-    Left errs -> Text.unlines $ fmap (.message) $ toList errs
-    Right prog ->
-      case exactprint prog of
-        Left epError -> prettyTraverseAnnoError epError
-        Right ep -> ep

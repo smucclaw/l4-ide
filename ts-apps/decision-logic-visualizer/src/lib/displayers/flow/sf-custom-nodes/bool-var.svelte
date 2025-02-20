@@ -20,12 +20,6 @@ TODO: Will add UI for things like Value in the next iteration
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>
 
-<!-- match(originalExpr.value)
-  .with('True', () => true)
-  .with('False', () => false)
-  .with('Unknown', () => undefined)
-  .exhaustive() -->
-
 <style>
   .bool-var-node-border {
     border: var(--xy-node-border, var(--xy-node-border-default));

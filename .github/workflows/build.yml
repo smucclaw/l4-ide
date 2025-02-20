@@ -56,7 +56,7 @@ jobs:
 
       - name: Remove cabal store
         # Sometimes the runner rotates in a dirty docker container
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit == ''
         run: |
           rm -rf ~/.cabal/{bin,logs,packages,script-builds,store}
           cabal clean -s

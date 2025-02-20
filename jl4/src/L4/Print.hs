@@ -2,22 +2,11 @@ module L4.Print where
 
 import L4.Syntax
 
-import Base (Foldable (..))
 import Data.Char
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
-import qualified L4.Parser as Parser
 import Prettyprinter
 import Prettyprinter.Render.Text
-
-readAndPrint :: FilePath -> IO ()
-readAndPrint fp = do
-  input <- Text.readFile fp
-  case Parser.execParser Parser.program fp input of
-    Left errs -> Text.putStrLn $ Text.unlines $ fmap (.message) $ toList errs
-    Right prog ->
-      Text.putStrLn $ prettyLayout prog
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -280,6 +269,10 @@ instance LayoutPrinter a => LayoutPrinter (Pattern a) where
       [] -> mempty
       pats'@(_:_) -> vsep (fmap printWithLayout pats')
     PatCons _ patHead patTail -> printWithLayout patHead <+> "FOLLOWED BY" <+> printWithLayout patTail
+
+instance LayoutPrinter Nlg where
+  printWithLayout = \case
+    (MkNlg _ contents) -> pretty $ Text.concat contents
 
 quoteIfNeeded :: Text.Text -> Text.Text
 quoteIfNeeded n = case Text.uncons n of

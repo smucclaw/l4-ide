@@ -27,7 +27,11 @@ data Name = MkName
 type IRDecl = FunDecl
 
 -- TODO: Will worry about adding param type info later
-data FunDecl = MkFunDecl ID Name [Name] IRExpr
+data FunDecl = MkFunDecl
+  { id     :: ID
+  , fnName :: Name
+  , params :: [Name]
+  , body   :: IRExpr }
   deriving (Show, Eq, Generic)
 
 data IRExpr
@@ -75,7 +79,7 @@ instance HasCodec IRDecl where
     where
       enc (MkFunDecl uid name params body) = ("FunDecl", mapToEncoder (uid, name, params, body) funDeclCodec)
       dec = HashMap.fromList
-        [ ("FunDecl", ("FunDecl", mapToDecoder (\(uid, name, params, body) -> MkFunDecl uid name params body) funDeclCodec))
+        [ ("FunDecl", ("FunDecl", mapToDecoder mkFunDecl funDeclCodec))
         ]
       funDeclCodec =
         (,,,)
@@ -83,6 +87,8 @@ instance HasCodec IRDecl where
           <*> requiredField' "name" .= view _2
           <*> requiredField' "params" .= view _3
           <*> requiredField' "body" .= view _4
+
+      mkFunDecl (uid, name, params, body) = MkFunDecl uid name params body
 
 instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
@@ -100,8 +106,9 @@ instance HasCodec IRExpr where
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
-            ("BoolVar", ("BoolVar", mapToDecoder (\(uid, name, value) -> BoolVar uid name value) boolVarCodec))
+            ("BoolVar", ("BoolVar", mapToDecoder mkBoolVar boolVarCodec))
           ]
+      mkBoolVar (uid, name, value) = BoolVar uid name value
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
