@@ -10,7 +10,6 @@ import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
 import Control.Monad.Extra (guard, whenJust)
 import qualified Control.Monad.Extra as Extra
-import Control.Monad.IO.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Char (isAlphaNum)
@@ -18,6 +17,7 @@ import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
 import Data.Tuple (swap)
+import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import Control.Applicative
 import Control.Monad.Except (throwError, runExceptT, ExceptT)
 import Control.Monad.Trans.Maybe
@@ -59,7 +59,6 @@ import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import qualified Optics
 import qualified StmContainers.Map as STM
-import UnliftIO (MonadUnliftIO, atomically, STM)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -364,6 +363,16 @@ handlers recorder =
           visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program
 
         pure (Right (InL visualizeDecides))
+    , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
+        let doc :: Uri = params ^. J.textDocument . J.uri
+            pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
+            nfp :: NormalizedFilePath = fromUri $ toNormalizedUri doc
+
+        refs <- liftIO $ runAction "getReferences" ide $
+          use_ GetReferences nfp
+
+        let locs = map (Location doc . srcRangeToLspRange . Just) $ lookupReference pos refs
+        pure (Right (InL locs))
     ]
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
@@ -556,7 +565,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
   where
   refHover = do
     refs <- MaybeT $ liftIO $ runAction "refHover" ide $
-      use ResolveReferences nfp
+      use ResolveReferenceAnnotations nfp
     hoistMaybe do
       -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
       let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)

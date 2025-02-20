@@ -125,6 +125,7 @@ executable jl4-lsp
     fuzzy,
     file-io,
     cassava,
+    monoidal-containers,
 
   if os(windows)
     build-depends: Win32
