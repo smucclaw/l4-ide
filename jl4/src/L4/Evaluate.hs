@@ -29,6 +29,7 @@ data EvalState =
 data EvalException =
     RuntimeScopeError Resolved -- internal
   | RuntimeTypeError -- internal
+  | EqualityOnUnsupportedType
   | NonExhaustivePatterns -- we could try to warn statically
   | StackOverflow
   | Unimplemented
@@ -443,9 +444,7 @@ runBinOp BinOpTimes  (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber
 runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `div` num2)
 runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `mod` num2)
 runBinOp BinOpCons   val1             (ValList val2)   _stack = pure $ ValList (val1 : val2)
-runBinOp BinOpEquals (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 == num2)
-runBinOp BinOpEquals (ValString str1) (ValString str2) _stack = pure $ valBool (str1 == str2)
-runBinOp BinOpEquals (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 == b2)
+runBinOp BinOpEquals val1             val2             stack  = runBinOpEquals val1 val2 stack
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2) _stack = pure $ valBool (str1 <= str2)
 runBinOp BinOpLeq    (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 <= b2)
@@ -459,6 +458,28 @@ runBinOp BinOpGt     (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (
 runBinOp BinOpGt     (ValString str1) (ValString str2) _stack = pure $ valBool (str1 > str2)
 runBinOp BinOpGt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 > b2)
 runBinOp _           _                _                 stack = exception RuntimeTypeError stack
+
+runBinOpEquals :: Value -> Value -> Stack -> Eval Value
+runBinOpEquals val1 val2 stack =
+  case computeEquals val1 val2 of
+    Just b  -> pure $ valBool b
+    Nothing -> exception EqualityOnUnsupportedType stack
+
+computeEquals :: Value -> Value -> Maybe Bool
+computeEquals (ValNumber num1) (ValNumber num2) = Just $ num1 == num2
+computeEquals (ValString str1) (ValString str2) = Just $ str1 == str2
+computeEquals (ValList vs1)    (ValList vs2)
+  | length vs1 == length vs2                    = do
+      bs <- zipWithM computeEquals vs1 vs2
+      pure (and bs)
+  | otherwise                                   = Just False
+computeEquals (ValConstructor r1 vs1) (ValConstructor r2 vs2)
+  | sameResolved r1 r2 && length vs1 == length vs2 = do
+      bs <- zipWithM computeEquals vs1 vs2
+      pure (and bs)
+  | otherwise                                   = Just False
+computeEquals _                _                = Nothing
+
 
 valBool :: Bool -> Value
 valBool False = falseVal

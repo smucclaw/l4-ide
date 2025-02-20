@@ -1316,13 +1316,11 @@ inferExpr' g =
       checkBinOp boolean boolean boolean Or ann e1 e2
     Implies ann e1 e2 ->
       checkBinOp boolean boolean boolean Implies ann e1 e2
-    Equals ann e1 e2 -> -- TODO: probably better to actually treat it as polymorphic
-      choose
-        [ checkBinOp boolean boolean boolean Equals ann e1 e2
-        , checkBinOp number  number  boolean Equals ann e1 e2
-        , checkBinOp string  string  boolean Equals ann e1 e2
-        ]
-    Leq ann e1 e2 ->
+    Equals ann e1 e2 -> do
+      (re1, rt1) <- inferExpr e1
+      re2 <- checkExpr e2 rt1
+      pure (Equals ann re1 re2, boolean)
+    Leq ann e1 e2 -> -- TODO: consider making all the comparison operators polymorphic as well
       choose
         [ checkBinOp boolean boolean boolean Leq ann e1 e2
         , checkBinOp number  number  boolean Leq ann e1 e2
@@ -1524,6 +1522,9 @@ unify (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
     traverse_ (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
     unify t1 t2
 unify (Type _ann1) (Type _ann2) = pure ()
+unify (InfVar _ann1 _pre1 i1) t2@(InfVar _ann2 _pre2 i2)
+  | i1 == i2             = pure ()
+  | otherwise            = bind i1 t2
 unify t1@(InfVar _ann1 _pre1 i1) t2
   | i1 `elem` infVars t2 = addError (OccursCheck t1 t2)
   | otherwise            = bind i1 t2
