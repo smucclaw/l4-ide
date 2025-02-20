@@ -132,7 +132,7 @@ translateExpr False = go
 
         -- 'var'
         App _ resolved [] ->
-          leafFromVizName (mkSimpleVizName resolved)
+          leafFromVizName (mkVizNameWith prettyLayout resolved)
         -- TODO: Will be replacing this temporary version with a variant for App on the frontend
         App _ (getOriginal -> MkName _ fnName) args ->
           leaf "" $ Text.unwords (rawNameToText fnName : (prettyLayout <$> args))
@@ -168,9 +168,9 @@ leaf subject complement = do
   let tempUniqueTODO = negate uid.id
   -- The negate is just my very-lazy-person's way of finding some kind of unique for this
   -- that isn't likely to collide with other Uniques,
-  -- because I'd like to defer properly handling `leaf` and the kinds of cases it's used for, for now.
+  -- because I'd like to defer properly handling `leaf` and the kinds of cases it's used for.
   -- I'll return to this when we explicitly handle more cases in translateExpr
-  -- (I'm currently focusing on state x the simpler case of App with no args)
+  -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
   pure $ V.BoolVar uid (V.MkName tempUniqueTODO $ subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
