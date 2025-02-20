@@ -25,6 +25,8 @@ import Data.Text (Text, pattern (:<), pattern (:>))
 import UnliftIO (liftIO)
 import qualified Data.Csv as Csv
 import qualified Data.Map.Lazy as Map
+import Data.Map.Monoidal (MonoidalMap)
+import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
@@ -33,7 +35,7 @@ import qualified System.File.OsPath as Path
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
-import GHC.Generics (Generic)
+import GHC.Generics (Generic, Generically (..))
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -108,8 +110,8 @@ data GetRelSemanticTokens = GetRelSemanticTokens
 --   IF bar <<sec. 3>>
 -- then this should assemble the uri into one link based on
 -- an uri scheme described in the original file
-type instance RuleResult ResolveReferences = IntervalMap SrcPos (Int, Maybe Text)
-data ResolveReferences = ResolveReferences
+type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (Int, Maybe Text)
+data ResolveReferenceAnnotations = ResolveReferenceAnnotations
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -118,6 +120,34 @@ srcRangeToInterval range = IVMap.Interval range.start range.end
 
 intervalToSrcRange :: Int -> IVMap.Interval SrcPos -> SrcRange
 intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
+
+type instance RuleResult GetReferences = ReferenceMapping
+data GetReferences = GetReferences
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+data ReferenceMapping =
+  ReferenceMapping
+  { actualToOriginal :: IntervalMap SrcPos Unique
+  -- ^ getting the original occurence of a name, based on its source range
+  , originalToActual :: MonoidalMap Unique [SrcRange]
+  -- ^ getting the source range of all references of an original definition
+  }
+  deriving stock Generic
+  deriving anyclass NFData
+  deriving (Semigroup, Monoid) via Generically ReferenceMapping
+
+singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
+singletonReferenceMapping originalName actualRange
+  = ReferenceMapping
+  { actualToOriginal = IVMap.singleton (srcRangeToInterval actualRange) originalName
+  , originalToActual = MonoidalMap.singleton originalName [actualRange]
+  }
+
+lookupReference :: SrcPos -> ReferenceMapping -> [SrcRange]
+lookupReference pos mapping = do
+  (_, n) <- IVMap.search pos mapping.actualToOriginal
+  Maybe.fromMaybe [] $ MonoidalMap.lookup n mapping.originalToActual
 
 data Log
   = ShakeLog Shake.Log
@@ -248,7 +278,7 @@ jl4Rules recorder = do
       Right relSemTokens ->
           pure ([], Just relSemTokens)
 
-  define shakeRecorder $ \ResolveReferences f -> do
+  define shakeRecorder $ \ResolveReferenceAnnotations f -> do
     ownPath <- normalizedFilePathToOsPath f
     let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
     -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
@@ -271,7 +301,6 @@ jl4Rules recorder = do
 
         allReferencesInTree :: [(Text, SrcRange)]
         allReferencesInTree = foldMap rangeOfPosToken tokens
-
 
         records = do
           decoded <- Csv.decode Csv.NoHeader contents
@@ -305,6 +334,20 @@ jl4Rules recorder = do
           ]
         , Nothing
         )
+
+  define shakeRecorder $ \GetReferences f -> do
+    tcRes <- use_ TypeCheck f
+
+    let spanOf resolved
+          = maybe
+              mempty
+              (singletonReferenceMapping $ getUnique resolved)
+              -- NOTE: the source range of the actual Name
+              (rangeOf resolved)
+
+        resolveds = foldMap spanOf $ TypeCheck.toResolved tcRes.program
+
+    pure ([], Just resolveds)
 
   where
     shakeRecorder = cmapWithPrio ShakeLog recorder
