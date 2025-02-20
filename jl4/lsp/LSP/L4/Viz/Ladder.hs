@@ -10,8 +10,9 @@ import qualified Data.Text as Text
 import GHC.Generics (Generic)
 import Optics.State.Operators ((<%=))
 
-import L4.Syntax (AppForm (..), Decide (..), Expr (..), GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal)
-import L4.TypeCheck (rawNameToText)
+import L4.Syntax (OptionallyTypedName (..), AppForm (..), Decide (..), Expr (..),
+  GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal, Unique (..))
+import L4.TypeCheck (rawNameToText, simpleprint, getUniqueName)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
@@ -55,8 +56,10 @@ data VizError
 -- TODO: Incorporate context like the specific erroring rule and the src range too
 prettyPrintVizError :: VizError -> Text
 prettyPrintVizError = \case
-  InvalidProgramNoDecidesFound -> "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
-  InvalidProgramDecidesMustNotHaveMoreThanOneGiven -> "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
+  InvalidProgramNoDecidesFound ->
+    "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
+  InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
+    "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
   Unimplemented -> "Unimplemented"
 
 ------------------------------------------------------
@@ -91,15 +94,28 @@ vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simp
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Bool -> Decide Resolved -> Viz V.IRExpr
-translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _retSig) (MkAppForm _ (getOriginal -> MkName _ _fnName) _args) body) =
-  case givenSig of
-    -- MkGivenSig _ [MkOptionallyTypedName _ (getOriginal -> MkName _ subject) _] ->
-    --   translateExpr simplify (rawNameToText subject) body
-    -- MkGivenSig _ [] ->
-    --   translateExpr simplify (rawNameToText fnName) body
-    MkGivenSig _ _xs ->
-      translateExpr simplify body
+translateDecide :: Bool -> Decide Resolved -> Viz V.IRDecl
+translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _) body) =
+  do
+    uid <- getFresh
+    vizBody <- translateExpr simplify body
+    pure $ V.MkFunDecl
+      uid
+      -- didn't want a backtick'd name in the header
+      (mkSimpleVizName funResolved)
+      (paramNamesFromGivens givenSig)
+      vizBody
+      where
+        paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
+        paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
+          mkSimpleVizName . getResolved <$> optionallyTypedNames
+
+        -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
+        -- this can be replaced with that when that happens.
+        getResolved :: OptionallyTypedName Resolved -> Resolved
+        getResolved (MkOptionallyTypedName _ paramName _) = paramName
+
+        mkSimpleVizName = mkVizNameWith simpleprint
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -117,28 +133,17 @@ translateExpr False = go
         Or {} -> do
           uid <- getFresh
           V.Or uid <$> traverse go (scanOr e)
-        -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
+        Where _ e' _ds -> go e' -- TODO: lossy
+
+        -- 'var'
+        App _ resolved [] ->
+          leafFromVizName (mkVizNameWith prettyLayout resolved)
+        -- TODO: Will be replacing this temporary version with a variant for App on the frontend
         App _ (getOriginal -> MkName _ fnName) args ->
           leaf "" $ Text.unwords (rawNameToText fnName : (prettyLayout <$> args))
-        Where _ e' _ds -> go e' -- TODO: lossy
+
         _ -> do
           leaf "" (prettyLayout e)
-        ---- unimplemented --------------------------------
-        -- Equals {} -> throwError Unimplemented -- Can't handle 'Is' yet
-
-        -- -- A 'Var' can apparently be parsed as an App with no arguments ----------------
-        -- Var _ (getOriginal -> MkName _ verb) ->
-        --   leaf "" (rawNameToText verb)
-        -- App _ (getOriginal -> MkName _ leafName) [] ->
-        --   leaf "" (rawNameToText leafName)
-        -- --------------------------------------------------------------------------------
-
-        -- -- TODO: Will be replacing this temporary, hacky version with variants for Lam and App on the frontend
-        -- App _ (getOriginal -> MkName _ fnName) args ->
-        --   leaf subject $ rawNameToText fnName <> Text.unwords (getNames args)
-        -- _ -> throwError Unimplemented
-        -- where
-        --   getNames args = args ^.. (Optics.gplate @Name) % Optics.to nameToText
 
 scanAnd :: Expr Resolved -> [Expr Resolved]
 scanAnd (And _ e1 e2) =
@@ -157,14 +162,31 @@ scanOr e = [e]
 defaultBoolVarValue :: V.BoolValue
 defaultBoolVarValue = V.UnknownV
 
+leafFromVizName :: V.Name -> Viz IRExpr
+leafFromVizName vname = do
+  uid <- getFresh
+  pure $ V.BoolVar uid vname defaultBoolVarValue
+
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
   uid <- getFresh
-  pure $ V.BoolVar uid (subject <> " " <> complement) defaultBoolVarValue
+  tempUniqueTODO <- getFresh
+  -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
+  -- I'll return to this when we explicitly/properly handle more cases in translateExpr
+  -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
+  pure $ V.BoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers
 ------------------------------------------------------
+
+-- It's not obvious to me that we want to be using
+-- getOriginal (as getUniqueName does), instead of getActual,
+-- but I'm going with this for now since it's what was used to translate the function name.
+mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
+mkVizNameWith printer (getUniqueName -> (uniq, name)) =
+  case uniq of
+    MkUnique _ u -> V.MkName u (printer name)
 
 nameToText :: Name -> Text
 nameToText (MkName _ rawName) = rawNameToText rawName

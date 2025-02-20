@@ -15,7 +15,7 @@
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
-    type ExprFlowDisplayerProps,
+    type LadderFlowDisplayerProps,
     sfNodeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
@@ -28,7 +28,7 @@
 
   import '@xyflow/svelte/dist/style.css'
 
-  const { context, node: exprLirNode }: ExprFlowDisplayerProps = $props()
+  const { context, node: declLirNode }: LadderFlowDisplayerProps = $props()
 
   /* TODO:
   - Come up with more-easily-understandable units for the minZoom
@@ -43,7 +43,7 @@
   ************************************/
 
   const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaDag(context, exprLirNode)
+    exprLirNodeToAlgaDag(context, declLirNode.getBody(context))
   )
 
   const initialNodes = flowGraph.nodes
