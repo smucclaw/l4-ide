@@ -53,6 +53,10 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
 
+      - name: Get some information
+        run: |
+          ls -l ~/.cabal
+
       - name: Install dependencies
         # If we had an exact cache hit, the dependencies will be up to date.
         if: steps.cache.outputs.cache-hit != 'true'
