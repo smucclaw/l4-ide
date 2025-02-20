@@ -128,16 +128,16 @@ data GetReferences = GetReferences
 
 data ReferenceMapping =
   ReferenceMapping
-  { actualToOriginal :: IntervalMap SrcPos Name
+  { actualToOriginal :: IntervalMap SrcPos Unique
   -- ^ getting the original occurence of a name, based on its source range
-  , originalToActual :: MonoidalMap Name [SrcRange]
+  , originalToActual :: MonoidalMap Unique [SrcRange]
   -- ^ getting the source range of all references of an original definition
   }
   deriving stock Generic
   deriving anyclass NFData
   deriving (Semigroup, Monoid) via Generically ReferenceMapping
 
-singletonReferenceMapping :: Name -> SrcRange -> ReferenceMapping
+singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
 singletonReferenceMapping originalName actualRange
   = ReferenceMapping
   { actualToOriginal = IVMap.singleton (srcRangeToInterval actualRange) originalName
@@ -341,7 +341,7 @@ jl4Rules recorder = do
     let spanOf resolved
           = maybe
               mempty
-              (singletonReferenceMapping $ getOriginal resolved)
+              (singletonReferenceMapping $ getUnique resolved)
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
