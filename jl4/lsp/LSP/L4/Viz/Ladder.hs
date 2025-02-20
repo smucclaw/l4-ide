@@ -110,7 +110,11 @@ translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funRe
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
           mkSimpleVizName . getName <$> optionallyTypedNames
 
+        getName :: OptionallyTypedName n -> n
         getName (MkOptionallyTypedName _ paramName _) = paramName
+
+        mkSimpleVizName :: Resolved -> V.Name
+        mkSimpleVizName = mkVizNameWith simpleprint
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -176,10 +180,6 @@ leaf subject complement = do
 ------------------------------------------------------
 -- Name helpers
 ------------------------------------------------------
-
--- | Used for places where I don't want backticks appearing.
-mkSimpleVizName :: Resolved -> V.Name
-mkSimpleVizName = mkVizNameWith simpleprint
 
 mkVizNameWith :: (Resolved -> Text) -> Resolved -> V.Name
 mkVizNameWith printer resolved =
