@@ -52,16 +52,6 @@ jobs:
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
-          restore-keys: ${{ env.key }}-
-
-      - name: Remove cabal store
-        # Sometimes the runner rotates in a dirty docker container
-        if: steps.cache.outputs.cache-hit == ''
-        run: |
-          rm -rf ~/.cabal/{bin,logs,packages,script-builds,store}
-          cabal clean -s
-          cabal update
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
 
       - name: Install dependencies
         # If we had an exact cache hit, the dependencies will be up to date.
