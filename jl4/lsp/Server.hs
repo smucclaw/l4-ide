@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main (main) where
 
@@ -22,13 +23,13 @@ import LSP.L4.Config
 import LSP.L4.Handlers hiding (Log (..))
 import qualified LSP.L4.Handlers as Handlers
 import qualified L4.Lexer as Lexer
-import LSP.L4.LanguageServer (runLanguageServer)
+import LSP.L4.LanguageServer (runLanguageServer, Communication (..))
 import qualified LSP.L4.LanguageServer as LanguageServer
 import qualified LSP.L4.Rules as Rules
 
 import Control.Concurrent.Strict
-    ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities )
-import Control.Monad (unless)
+    ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
+import Control.Monad (unless, forever, void)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
@@ -46,7 +47,16 @@ import qualified Language.LSP.Server as LSP
 import System.Directory (getCurrentDirectory)
 import System.IO
 import System.Time.Extra
-import UnliftIO (withRunInIO)
+import UnliftIO (withRunInIO, race_, async)
+import qualified Data.ByteString.Lazy as BSL
+import System.Environment
+import qualified Data.ByteString as BS
+import Data.ByteString.Builder.Extra (defaultChunkSize)
+import Text.Read (readMaybe)
+import qualified Network.WebSockets as WS
+import Debug.Trace
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy.Char8 as C8L
 
 -- ----------------------------------------------------------------------------
 
@@ -115,7 +125,6 @@ instance Pretty Log where
     LogLanguageServer msg -> pretty msg
     LogHandlers msg -> pretty msg
     LogRules msg -> pretty msg
-
 data Arguments = Arguments
   { projectRoot :: FilePath
   , rules :: Rules ()
@@ -123,8 +132,7 @@ data Arguments = Arguments
   , defaultConfig :: Config
   , debouncer :: IO (Debouncer NormalizedUri)
   -- ^ Debouncer used for diagnostics
-  , handleIn :: IO Handle
-  , handleOut :: IO Handle
+  , communication :: Communication
   , threads :: Maybe Natural
   , monitoring :: IO Monitoring
   , disableKick :: Bool
@@ -134,17 +142,62 @@ data Arguments = Arguments
 getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
 getDefaultArguments recorder = do
   cwd <- getCurrentDirectory
+  args <- getArgs
+  communication :: Communication <- case args of
+    -- FIXME: proper argument parsing
+    [address, readMaybe -> Just port] -> do
+        outChan <- newChan
+        inChan <- newChan
+        -- FIXME: exception handling
+        void $ async $ WS.runServer address port \pending -> do
+          -- NOTE: this is where to send back headers if any
+          conn <- WS.acceptRequest pending
+
+          traceM "==== Accepted request"
+          race_
+            (forever do
+               traceM "== sending via socket"
+               msg <- readChan outChan
+               let msg' = C8L.dropWhile (/= '{') msg
+               traceM ("== sent via socket\n" <> show msg')
+               WS.sendTextData conn msg'
+            )
+            (forever do
+               -- NOTE: web clients don't add Content-Length headers since
+               -- websockets do the chunking for us, since the haskell lsp library
+               -- doesn't support this behaviour, we add the header ourselves
+               traceM "== receiving via socket"
+               msg <- WS.receiveData conn
+               let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
+               traceM $ "== received via socket\n" <> show msg'
+               writeChan inChan msg'
+            )
+        pure Communication
+          { inwards = readChan inChan
+          , outwards = writeChan outChan
+          }
+    _ -> do
+      let hin = stdin
+          hout = stdout
+      hSetBuffering hin NoBuffering
+      hSetEncoding hin utf8
+      pure Communication
+        { inwards = BS.hGetSome hin defaultChunkSize
+        , outwards = \out -> do
+            BSL.hPut hout out
+            hFlush hout
+        }
+
   pure Arguments
     { projectRoot = cwd
     , rules = Rules.jl4Rules (cmapWithPrio LogRules recorder)
     , lspOptions = lspOptions
     , defaultConfig = defConfig
     , debouncer = newAsyncDebouncer
-    , handleIn = pure stdin
-    , handleOut = pure stdout
     , threads = Nothing
     , monitoring = mempty
     , disableKick = False
+    , communication
     }
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
@@ -159,8 +212,6 @@ defaultMain recorder args = do
       unless args.disableKick $ action LanguageServer.kick
 
   debouncer <- args.debouncer
-  inH <- args.handleIn
-  outH <- args.handleOut
 
   numProcessors <- getNumProcessors
   let
@@ -231,7 +282,7 @@ defaultMain recorder args = do
               modifyClientSettings ide (const $ Just cfgObj)
               return [toNoFileKey Rules.GetClientSettings]
 
-    runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH args.defaultConfig parseServerConfig onConfigChange setup
+    runLanguageServer (cmapWithPrio LogLanguageServer recorder) options args.communication args.defaultConfig parseServerConfig onConfigChange setup
 
 parseServerConfig :: Config -> Aeson.Value -> Either Text Config
 parseServerConfig _ v = do

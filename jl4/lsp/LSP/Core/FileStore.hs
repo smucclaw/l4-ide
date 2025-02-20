@@ -62,6 +62,7 @@ import           Language.LSP.VFS
 import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
+import Debug.Trace
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
@@ -108,6 +109,7 @@ getModificationTimeImpl
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl missingFileDiags file = do
     let file' = fromNormalizedFilePath file
+    traceM ("========= get modification time impl " <> file')
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
     mbVf <- getVirtualFile file
     case mbVf of
@@ -176,8 +178,10 @@ getFileContentsImpl
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
+    traceM "got modification time"
     res <- do
         mbVirtual <- getVirtualFile file
+        traceM "got virtual file"
         pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 

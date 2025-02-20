@@ -102,6 +102,7 @@ executable jl4-lsp
     binary,
     containers,
     co-log-core,
+    websockets,
     deepseq,
     Diff,
     directory,

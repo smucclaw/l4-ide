@@ -4,6 +4,7 @@
 
 module LSP.L4.LanguageServer (
   Log (..),
+  Communication (..),
   runLanguageServer,
   setupLSP,
   requestHandler,
@@ -22,7 +23,6 @@ import qualified Data.Text as T
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Server as LSP
-import System.IO
 import UnliftIO.Async
 import UnliftIO.Concurrent
 import UnliftIO.Directory
@@ -52,6 +52,8 @@ import Language.LSP.Server (
   type (<~>),
  )
 import UnliftIO (MonadUnliftIO)
+import Data.ByteString (StrictByteString)
+import Data.ByteString.Lazy (LazyByteString)
 
 
 data Log
@@ -100,12 +102,17 @@ instance Pretty Log where
 -- Running the Language Server
 -- ----------------------------------------------------------------------------
 
+data Communication
+  = Communication
+  { inwards :: IO StrictByteString
+  , outwards :: LazyByteString -> IO ()
+  }
+
 runLanguageServer
     :: forall config (m :: Type -> Type -> Type) a. (Show config)
     => Recorder (WithPriority Log)
     -> LSP.Options
-    -> Handle -- input
-    -> Handle -- output
+    -> Communication
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (config -> m config ())
@@ -114,7 +121,7 @@ runLanguageServer
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
+runLanguageServer recorder options comm defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -136,12 +143,13 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
+    -- TODO: use runServerWith instead of runServerWithHandles
     void $ untilMVar clientMsgVar $
-          void $ LSP.runServerWithHandles
+          void $ LSP.runServerWith
             lspCologAction
             lspCologAction
-            inH
-            outH
+            comm.inwards
+            comm.outwards
             serverDefinition
 
 setupLSP ::

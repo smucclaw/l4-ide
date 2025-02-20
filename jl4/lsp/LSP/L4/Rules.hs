@@ -48,6 +48,7 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
+import Debug.Trace
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -161,7 +162,10 @@ instance Pretty Log where
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
   define shakeRecorder $ \GetLexTokens f -> do
+    traceM "========== trying to get file contents"
+    traceM (show f)
     (_, mRope) <- use_ GetFileContents f
+    traceM "========== got file contents"
     case mRope of
       Nothing -> pure ([{- TODO: report internal errors -}], Nothing)
       Just rope -> do
@@ -177,6 +181,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \GetParsedAst f -> do
     (tokens, contents) <- use_ GetLexTokens f
+    traceM "========== successfully lexed"
     case Parser.execProgramParserForTokens (fromNormalizedFilePath f) contents tokens of
       Left errs -> do
         let
@@ -189,6 +194,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \TypeCheck f -> do
     parsed <- use_ GetParsedAst f
+    traceM "========== successfully parsed"
     let result = TypeCheck.doCheckProgram parsed
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) result.errors
