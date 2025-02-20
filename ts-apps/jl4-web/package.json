@@ -1,0 +1,27 @@
+{
+  "name": "jl4-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tsconfig/svelte": "^5.0.4",
+    "@types/vscode": "^1.97.0",
+    "svelte": "^5.19.6",
+    "svelte-check": "^4.1.4",
+    "typescript": "~5.7.2",
+    "vite": "^6.1.0"
+  },
+  "dependencies": {
+    "monaco-editor": "npm:@codingame/monaco-vscode-editor-api",
+    "monaco-editor-wrapper": "^6.4.0",
+    "monaco-languageclient": "^9.4.0",
+    "vscode-ws-jsonrpc": "^3.4.0"
+  }
+}

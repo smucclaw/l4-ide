@@ -7,7 +7,7 @@ cabal.project.local~
 *.actual
 
 ## test setup
-jl4/examples/.vscode
+.vscode
 
 # Typescript-monorepo stuff
 
