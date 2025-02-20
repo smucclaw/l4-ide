@@ -23,6 +23,12 @@ jobs:
         ghc-version: ["9.6"]
 
     steps:
+      # FIXME: this is a temporary fix, the docker container should never be dirty
+      # at the begin of a run
+      - name: Remove cabal store
+        run: |
+          rm -rf ~/.cabal
+
       - uses: actions/checkout@v4
 
       - name: Update git submodules
@@ -53,15 +59,6 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}-
-
-      - name: Remove cabal store
-        # Sometimes the runner rotates in a dirty docker container
-        if: steps.cache.outputs.cache-hit == ''
-        run: |
-          rm -rf ~/.cabal/{bin,logs,packages,script-builds,store}
-          cabal clean -s
-          cabal update
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
 
       - name: Install dependencies
         # If we had an exact cache hit, the dependencies will be up to date.
