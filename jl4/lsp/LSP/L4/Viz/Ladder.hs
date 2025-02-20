@@ -11,8 +11,8 @@ import GHC.Generics (Generic)
 import Optics.State.Operators ((<%=))
 
 import L4.Syntax (OptionallyTypedName (..), AppForm (..), Decide (..), Expr (..),
-  GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal, Unique (..), getUnique)
-import L4.TypeCheck (rawNameToText, simpleprint)
+  GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal, Unique (..))
+import L4.TypeCheck (rawNameToText, simpleprint, getUniqueName)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
@@ -108,12 +108,13 @@ translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funRe
       where
         paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          mkSimpleVizName . getName <$> optionallyTypedNames
+          mkSimpleVizName . getResolved <$> optionallyTypedNames
 
-        getName :: OptionallyTypedName n -> n
-        getName (MkOptionallyTypedName _ paramName _) = paramName
+        -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
+        -- this can be replaced with that when that happens.
+        getResolved :: OptionallyTypedName Resolved -> Resolved
+        getResolved (MkOptionallyTypedName _ paramName _) = paramName
 
-        mkSimpleVizName :: Resolved -> V.Name
         mkSimpleVizName = mkVizNameWith simpleprint
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
@@ -179,10 +180,13 @@ leaf subject complement = do
 -- Name helpers
 ------------------------------------------------------
 
-mkVizNameWith :: (Resolved -> Text) -> Resolved -> V.Name
-mkVizNameWith printer resolved =
-  case getUnique resolved of
-    MkUnique _ uniq -> V.MkName uniq (printer resolved)
+-- It's not obvious to me that we want to be using
+-- getOriginal (as getUniqueName does), instead of getActual,
+-- but I'm going with this for now since it's what was used to translate the function name.
+mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
+mkVizNameWith printer (getUniqueName -> (uniq, name)) =
+  case uniq of
+    MkUnique _ u -> V.MkName u (printer name)
 
 nameToText :: Name -> Text
 nameToText (MkName _ rawName) = rawNameToText rawName
