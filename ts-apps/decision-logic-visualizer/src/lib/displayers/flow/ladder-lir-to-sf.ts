@@ -1,11 +1,9 @@
-import type { LirId, LirContext } from '$lib/layout-ir/core.js'
+import type { LirContext } from '$lib/layout-ir/core.js'
 import type {
   LadderLirNode,
   LadderLirEdge,
 } from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import { DefaultLadderLirEdge } from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import { getDagVertices } from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import type { DirectedAcyclicGraph } from '../../algebraic-graphs/dag.js'
+import { LadderGraphLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
@@ -27,19 +25,15 @@ import { match, P } from 'ts-pattern'
 
 export function dagToSFGraph(
   context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>
+  ladderGraph: LadderGraphLirNode
 ) {
-  const nodes = getDagVertices(context, dag)
+  const nodes = (ladderGraph.getVertices(context) as LadderLirNode[])
     .toSorted((v1, v2) => v2.compare(v1))
     .map(ladderLirNodeToSfNode.bind(null, context))
 
   // TODO: May want to sort as well
-  const edges = dag
-    .getEdges()
-    .map(
-      (edge) =>
-        new DefaultLadderLirEdge(edge.getU().toString(), edge.getV().toString())
-    )
+  const edges = ladderGraph
+    .getEdges(context)
     .map(ladderLirEdgeToSfEdge.bind(null, context))
 
   return {
@@ -108,12 +102,12 @@ export function ladderLirNodeToSfNode(
  ******************************************************/
 
 export function ladderLirEdgeToSfEdge(
-  context: LirContext,
+  _context: LirContext,
   edge: LadderLirEdge
 ): SF.Edge {
   return {
     id: edge.getId(),
-    source: edge.getU(),
-    target: edge.getV(),
+    source: edge.getU().toString(),
+    target: edge.getV().toString(),
   }
 }

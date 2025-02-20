@@ -6,6 +6,7 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import { DirectedEdge } from '../algebraic-graphs/edge.js'
 
 /*************************************************
  **************** Decl Lir Node ******************
@@ -16,13 +17,13 @@ export type DeclLirNode = FunDeclLirNode
 export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   readonly #name: Name
   readonly #params: readonly Name[]
-  readonly #body: DirectedAcyclicGraph<LirId>
+  readonly #body: LadderGraphLirNode
 
   constructor(
     nodeInfo: LirNodeInfo,
     name: Name,
     params: readonly Name[],
-    body: DirectedAcyclicGraph<LirId>
+    body: LadderGraphLirNode
   ) {
     super(nodeInfo)
 
@@ -48,7 +49,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   }
 
   getChildren(context: LirContext) {
-    return getDagVertices(context, this.#body)
+    return [this.getBody(context)]
   }
 
   toString(): string {
@@ -138,6 +139,39 @@ export type LadderLirNode =
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
+
+export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
+  #dag: DirectedAcyclicGraph<LirId>
+
+  constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
+    super(nodeInfo)
+    this.#dag = dag
+  }
+
+  setDag(dag: DirectedAcyclicGraph<LirId>) {
+    this.#dag = dag
+  }
+
+  getVertices(context: LirContext): LadderLirNode[] {
+    return Array.from(this.#dag.getVertices()).map(
+      (id) => context.get(id) as LadderLirNode
+    )
+  }
+
+  // TODO
+  getEdges(_context: LirContext): LadderLirEdge[] {
+    return new Error('Not implemented yet') as any
+    // return Array.from(this.#dag.getEdges())
+  }
+
+  getChildren(context: LirContext) {
+    return this.getVertices(context)
+  }
+
+  toString(): string {
+    return 'LADDER_GRAPH_LIR_NODE'
+  }
+}
 
 export type VarLirNode = BoolVarLirNode
 
@@ -282,17 +316,16 @@ export class SinkLirNode extends BaseFlowLirNode implements FlowLirNode {
 
 export interface LadderLirEdge extends Ord<LadderLirEdge> {
   getId(): string
-  getU(): string
-  getV(): string
+  getU(): LirId
+  getV(): LirId
 }
 
 export class DefaultLadderLirEdge implements LadderLirEdge {
   id: string
-  constructor(
-    readonly source: string,
-    readonly target: string
-  ) {
+  #edge: DirectedEdge<LirId>
+  constructor(source: LirId, target: LirId) {
     this.id = `(${source}, ${target})`
+    this.#edge = new DirectedEdge(source, target)
   }
 
   getId(): string {
@@ -300,11 +333,11 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
   }
 
   getU() {
-    return this.source
+    return this.#edge.getU()
   }
 
   getV() {
-    return this.target
+    return this.#edge.getV()
   }
 
   isEqualTo<T extends LadderLirEdge>(other: T) {
@@ -313,18 +346,10 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
 
   /** Lexicographical comparison of IDs of nodes */
   compare(that: LadderLirEdge): ComparisonResult {
-    if (this.getU() < that.getU()) {
-      return ComparisonResult.LessThan
-    } else if (this.getU() > that.getU()) {
-      return ComparisonResult.GreaterThan
+    if (this.getU().compare(that.getU()) !== ComparisonResult.Equal) {
+      return this.getU().compare(that.getU())
     }
 
-    if (this.getV() < that.getV()) {
-      return ComparisonResult.LessThan
-    } else if (this.getV() > that.getV()) {
-      return ComparisonResult.GreaterThan
-    }
-
-    return ComparisonResult.Equal
+    return this.getV().compare(that.getV())
   }
 }

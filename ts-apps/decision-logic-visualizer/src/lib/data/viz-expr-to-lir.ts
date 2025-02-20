@@ -11,6 +11,7 @@ import {
   NotEndLirNode,
   SourceLirNode,
   SinkLirNode,
+  LadderGraphLirNode,
 } from '../layout-ir/lir-decision-logic.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -29,7 +30,7 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
       nodeInfo,
       decl.name,
       decl.params,
-      exprToLadderDag.toLir(nodeInfo, decl.body)
+      LadderGraphLirSource.toLir(nodeInfo, decl.body)
     )
   },
 }
@@ -42,8 +43,8 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
     nested exprs like (AND [a (AND [b])]) should have already been flattened to (AND [a b]).
 *
 */
-export const exprToLadderDag: LirSource<IRExpr, DirectedAcyclicGraph<LirId>> = {
-  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): DirectedAcyclicGraph<LirId> {
+export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
     const overallSource = vertex(
       new SourceLirNode(nodeInfo).getId()
     ) as DirectedAcyclicGraph<LirId>
@@ -53,10 +54,12 @@ export const exprToLadderDag: LirSource<IRExpr, DirectedAcyclicGraph<LirId>> = {
 
     const middle = transform(nodeInfo, expr)
 
-    return overallSource
+    const dag = overallSource
       .connect(middle.getSource())
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
+
+    return new LadderGraphLirNode(nodeInfo, dag)
   },
 }
 
