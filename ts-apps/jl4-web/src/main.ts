@@ -112,13 +112,17 @@ export const createLanguageClient = (
   });
 };
 
-function mkMiddleware(logger: ConsoleLogger) : Middleware {
-  return { executeCommand: async (command, args, next) => {
-    logger.debug(`== trying to execute command ${command}`)
-    // FIXME: he we can actually run everything that we also run in the vscode extension
-    const response = await next(command, args);
-    logger.debug(`== received response from language server ${JSON.stringify(response)}`)
-  } }
+function mkMiddleware(logger: ConsoleLogger): Middleware {
+  return {
+    executeCommand: async (command, args, next) => {
+      logger.debug(`== trying to execute command ${command}`);
+      // FIXME: he we can actually run everything that we also run in the vscode extension
+      const response = await next(command, args);
+      logger.debug(
+        `== received response from language server ${JSON.stringify(response)}`,
+      );
+    },
+  };
 }
 
 const britishCitizen = `
