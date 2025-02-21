@@ -1,6 +1,6 @@
 import type { Name, BoolValue } from '@repo/viz-expr'
 import type { LirContext } from '$lib/layout-ir/core.js'
-import type { DeclLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
+import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import * as SF from '@xyflow/svelte'

@@ -8,6 +8,14 @@ import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import { DirectedEdge } from '../algebraic-graphs/edge.js'
 
+/*
+Design principles:
+* The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
+since part of the point of having a Lir intermediate representation
+is to make it easy to experiment with different displayers/renderers.
+(That is why, e.g., there is no toSFPojo method on the following.)
+*/
+
 /*************************************************
  **************** Decl Lir Node ******************
  *************************************************/
@@ -55,45 +63,6 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   toString(): string {
     return 'FUN_DECL_LIR_NODE'
   }
-}
-
-/******************************************************
- ********* Useful dag-related functions ***************
- ******************************************************/
-
-export function getDagVertices(
-  context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>
-): LadderLirNode[] {
-  return Array.from(dag.getVertices()).map(
-    (id) => context.get(id) as LadderLirNode
-  )
-}
-
-// TODO: Add getDagEdges...
-//
-
-// getEdge(u: LirId, v: LirId): LirEdge | undefined {
-//   const uNode = this.#dag.getAdjMap().get(u)
-//   const vNode = this.#dag.getAdjMap().get(v)
-//   if (!uNode || !vNode) return undefined
-
-//   // TODO
-//   // Make a LirEdge that also has any data associated with the edge
-
-// }
-
-/** The `id` should correspond to that of a LadderLirNode. */
-export function getNeighbors(
-  context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>,
-  id: LirId
-): LadderLirNode[] {
-  const neighbors = dag.getAdjMap().get(id) || new Set()
-
-  return Array.from(neighbors)
-    .map((neighborId) => context.get(neighborId) as LadderLirNode)
-    .filter((n) => !!n)
 }
 
 /******************************************************
@@ -148,8 +117,17 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
   }
 
-  setDag(dag: DirectedAcyclicGraph<LirId>) {
+  setDag(context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
     this.#dag = dag
+  }
+
+  /** The `id` should correspond to that of a LadderLirNode. */
+  getNeighbors(context: LirContext, id: LirId): LadderLirNode[] {
+    const neighbors = this.#dag.getAdjMap().get(id) || new Set()
+
+    return Array.from(neighbors)
+      .map((neighborId) => context.get(neighborId) as LadderLirNode)
+      .filter((n) => !!n)
   }
 
   getVertices(context: LirContext): LadderLirNode[] {
@@ -205,16 +183,13 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.#data
   }
 
-  // TODO: if we use an 'interpreter pattern' where we have an aux env structure that keeps track of the Name => Set<Node> mappings,
-  // do we still need value getter/setters?
-  // Maybe for the displayer / sf custom node?
   getValue(_context: LirContext): BoolValue {
     return this.#value
   }
 
   setValue(_context: LirContext, value: BoolValue) {
     this.#value = value
-    // TODO: Will want to publish that value has been set!
+    // TODO: Will probably want to publish that value has been set!
   }
 
   toString(): string {
@@ -323,9 +298,9 @@ export interface LadderLirEdge extends Ord<LadderLirEdge> {
 export class DefaultLadderLirEdge implements LadderLirEdge {
   id: string
   #edge: DirectedEdge<LirId>
-  constructor(source: LirId, target: LirId) {
-    this.id = `(${source}, ${target})`
-    this.#edge = new DirectedEdge(source, target)
+  constructor(edge: DirectedEdge<LirId>) {
+    this.id = `(${edge.getU()}, ${edge.getV()})`
+    this.#edge = edge
   }
 
   getId(): string {

@@ -2,8 +2,8 @@ import type { LirContext } from '$lib/layout-ir/core.js'
 import type {
   LadderLirNode,
   LadderLirEdge,
-} from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import { LadderGraphLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
+} from '$lib/layout-ir/ladder-lir.svelte.js'
+import { LadderGraphLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
@@ -12,7 +12,7 @@ import {
   NotEndLirNode,
   SourceLirNode,
   SinkLirNode,
-} from '$lib/layout-ir/lir-decision-logic.svelte.js'
+} from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
   boolVarNodeType,
   notStartNodeType,

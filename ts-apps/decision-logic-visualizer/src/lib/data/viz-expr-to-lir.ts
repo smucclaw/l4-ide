@@ -3,7 +3,7 @@ import type { IRDecl, IRExpr } from '@repo/viz-expr'
 Do not use $lib for the layout-ir imports
 */
 import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
-import type { DeclLirNode } from '../layout-ir/lir-decision-logic.svelte.js'
+import type { DeclLirNode } from '../layout-ir/ladder-lir.svelte.js'
 import {
   FunDeclLirNode,
   BoolVarLirNode,
@@ -12,7 +12,7 @@ import {
   SourceLirNode,
   SinkLirNode,
   LadderGraphLirNode,
-} from '../layout-ir/lir-decision-logic.svelte.js'
+} from '../layout-ir/ladder-lir.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
