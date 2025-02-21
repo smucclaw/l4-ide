@@ -26,6 +26,8 @@ export const runClient = async () => {
         logger
     });
 
+    configureDefaultWorkerFactory(logger);
+
     // register the jl4 language with Monaco
     monaco.languages.register({
         id: 'jl4',
@@ -33,19 +35,36 @@ export const runClient = async () => {
         aliases: ['JL4', 'jl4'],
     });
 
-    configureDefaultWorkerFactory(logger);
+    // monaco.editor.defineTheme('myCustomTheme', {
+    //     base: 'vs',
+    //     inherit: true,
+    //     rules: [
+    //         { token: 'comment'      , foreground: 'aaaaaa', fontStyle: 'italic' },
+    //         { token: 'keyword'      , foreground: 'ce63eb' },
+    //         { token: 'property'     , foreground: '3e5bbf' },
+    //         { token: 'label'        , foreground: '615a60' },
+    //         { token: 'type.static'  , fontStyle: 'bold' },
+    //         { token: 'class.static' , foreground: 'ff0000', fontStyle: 'bold' }
+    //     ],
+    //     encodedTokensColors: [],
+    //     colors:  {}
+    // });
+
+    // monaco.editor.setTheme('myCustomTheme')
 
     monaco.editor.create(htmlContainer, {
         value: "DECIDE foo IF TRUE",
         language: 'jl4',
         automaticLayout: true,
-        wordBasedSuggestions: 'off'
+        wordBasedSuggestions: 'off',
+        theme: 'vs-dark',
+        'semanticHighlighting.enabled': true,
     });
-    initWebSocketAndStartClient('ws://localhost:5007');
+    initWebSocketAndStartClient('ws://localhost:5007', logger);
 };
 
 /** parameterized version , support all languageId */
-export const initWebSocketAndStartClient = (url: string): WebSocket => {
+export const initWebSocketAndStartClient = (url: string, logger: ConsoleLogger): WebSocket => {
     const webSocket = new WebSocket(url);
     webSocket.onopen = () => {
         const socket = toSocket(webSocket);
