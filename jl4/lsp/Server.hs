@@ -27,7 +27,7 @@ import qualified LSP.L4.Rules as Rules
 
 import Control.Concurrent.Strict
     ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
-import Control.Monad (unless, forever, void)
+import Control.Monad (unless, forever)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
@@ -45,7 +45,7 @@ import qualified Language.LSP.Server as LSP
 import System.Directory (getCurrentDirectory)
 import System.IO
 import System.Time.Extra
-import UnliftIO (withRunInIO, race_, async)
+import UnliftIO (withRunInIO, race_, withAsync, MVar)
 import qualified Data.ByteString.Lazy as BSL
 import System.Environment
 import qualified Data.ByteString as BS
@@ -104,7 +104,13 @@ data Log
   | LogLanguageServer LanguageServer.Log
   | LogHandlers Handlers.Log
   | LogRules Rules.Log
+  | LogWebsocket WebsocketLog
   deriving (Show)
+
+data WebsocketLog
+  = WebsocketShutDown
+  | WebsocketNewConnection
+  deriving stock Show
 
 instance Pretty Log where
   pretty = \case
@@ -122,6 +128,13 @@ instance Pretty Log where
     LogLanguageServer msg -> pretty msg
     LogHandlers msg -> pretty msg
     LogRules msg -> pretty msg
+    LogWebsocket wmsg -> "Websocket:" <+> pretty wmsg
+
+instance Pretty WebsocketLog where
+  pretty = \case
+    WebsocketShutDown -> "shut down server"
+    WebsocketNewConnection -> "new connection established"
+
 data Arguments = Arguments
   { projectRoot :: FilePath
   , rules :: Rules ()
@@ -129,56 +142,26 @@ data Arguments = Arguments
   , defaultConfig :: Config
   , debouncer :: IO (Debouncer NormalizedUri)
   -- ^ Debouncer used for diagnostics
-  , communication :: Communication
+  , communication :: CommunicationKind
   , threads :: Maybe Natural
   , monitoring :: IO Monitoring
   , disableKick :: Bool
   -- ^ flag to disable kick used for testing
   }
 
+data CommunicationKind
+  = StdIO
+  | Websocket {host :: String, port :: Int}
+  deriving stock (Eq, Show)
+
 getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
 getDefaultArguments recorder = do
   cwd <- getCurrentDirectory
   args <- getArgs
-  communication :: Communication <- case args of
-    -- FIXME: proper argument parsing
-    [address, readMaybe -> Just port] -> do
-        outChan <- newChan
-        inChan <- newChan
-        -- FIXME: exception handling
-        void $ async $ WS.runServer address port \pending -> do
-          -- NOTE: this is where to send back headers if any
-          conn <- WS.acceptRequest pending
-
-          race_
-            (forever do
-               msg <- readChan outChan
-               let msg' = C8L.dropWhile (/= '{') msg
-               WS.sendTextData conn msg'
-            )
-            (forever do
-               -- NOTE: web clients don't add Content-Length headers since
-               -- websockets do the chunking for us, since the haskell lsp library
-               -- doesn't support this behaviour, we add the header ourselves
-               msg <- WS.receiveData conn
-               let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
-               writeChan inChan msg'
-            )
-        pure Communication
-          { inwards = readChan inChan
-          , outwards = writeChan outChan
-          }
-    _ -> do
-      let hin = stdin
-          hout = stdout
-      hSetBuffering hin NoBuffering
-      hSetEncoding hin utf8
-      pure Communication
-        { inwards = BS.hGetSome hin defaultChunkSize
-        , outwards = \out -> do
-            BSL.hPut hout out
-            hFlush hout
-        }
+  let communication :: CommunicationKind = case args of
+        -- FIXME: proper argument parsing
+        [address, readMaybe -> Just port] -> Websocket address port
+        _ -> StdIO
 
   pure Arguments
     { projectRoot = cwd
@@ -213,10 +196,9 @@ defaultMain recorder args = do
     ioT <- offsetTime
     logWith recorder Info LogLspStart
 
-    ideStateVar <- newEmptyMVar
     let
-      getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> Shake.ThreadQueue -> IO IdeState
-      getIdeState env rootPath threadQueue = do
+      getIdeState :: MVar IdeState -> LSP.LanguageContextEnv Config -> FilePath -> Shake.ThreadQueue -> IO IdeState
+      getIdeState ideStateVar env rootPath threadQueue = do
         t <- ioT
         logWith recorder Info $ LogLspStartDuration t
         clientCaps <- LSP.runLspT env LSP.getClientCapabilities
@@ -256,10 +238,10 @@ defaultMain recorder args = do
           (cmapWithPrio LogLanguageServer recorder)
           args.projectRoot
           (handlers (cmapWithPrio LogHandlers recorder))
-          getIdeState
+
       -- See Note [Client configuration in Rules]
-      onConfigChange :: Config -> ServerM Config ()
-      onConfigChange cfg = do
+      onConfigChange :: MVar IdeState -> Config -> ServerM Config ()
+      onConfigChange ideStateVar cfg = do
         -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
         let
           cfgObj = J.toJSON cfg
@@ -274,7 +256,57 @@ defaultMain recorder args = do
               modifyClientSettings ide (const $ Just cfgObj)
               return [toNoFileKey Rules.GetClientSettings]
 
-    runLanguageServer (cmapWithPrio LogLanguageServer recorder) options args.communication args.defaultConfig parseServerConfig onConfigChange setup
+    let runServerWithCommunication comm
+          = do
+            ideStateVar <- newEmptyMVar
+            runLanguageServer
+              (cmapWithPrio LogLanguageServer recorder)
+              options
+              comm
+              args.defaultConfig
+              parseServerConfig
+              (onConfigChange ideStateVar)
+              (setup (getIdeState ideStateVar))
+    case args.communication of
+      StdIO -> runServerWithCommunication =<< do
+        let hin = stdin
+            hout = stdout
+        hSetBuffering hin NoBuffering
+        hSetEncoding hin utf8
+        pure Communication
+          { inwards = BS.hGetSome hin defaultChunkSize
+          , outwards = \out -> do
+              BSL.hPut hout out
+              hFlush hout
+          }
+
+      Websocket host port -> do
+        WS.runServer host port \pending -> do
+          -- NOTE: this is where to send back headers if any
+          conn <- WS.acceptRequest pending
+          logWith recorder Info $ LogWebsocket WebsocketNewConnection
+
+          outChan <- newChan
+          inChan <- newChan
+
+          let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
+
+          withAsync (runServerWithCommunication comm) \_lspAsync ->
+            race_
+              (forever do
+                msg <- readChan outChan
+                let msg' = C8L.dropWhile (/= '{') msg
+                WS.sendTextData conn msg'
+              )
+              (forever do
+                -- NOTE: web clients don't add Content-Length headers since
+                -- websockets do the chunking for us, since the haskell lsp library
+                -- doesn't support this behaviour, we add the header ourselves
+                msg <- WS.receiveData conn
+                let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
+                writeChan inChan msg'
+              )
+        logWith recorder Info $ LogWebsocket WebsocketShutDown
 
 parseServerConfig :: Config -> Aeson.Value -> Either Text Config
 parseServerConfig _ v = do
