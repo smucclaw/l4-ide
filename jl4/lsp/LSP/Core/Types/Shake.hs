@@ -69,16 +69,16 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Graph.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: Graph.ShakeValue k => k -> NormalizedUri -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedUri)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedUri)
 fromKeyType (Key k) = case typeOf k of
     App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
         -> case unsafeCoerce k of
@@ -86,13 +86,13 @@ fromKeyType (Key k) = case typeOf k of
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyNormalizedFilePath)
+toNoFileKey k = newKey $ Q (k, let s = "file://" in NormalizedUri (hash s) s)
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k = Q (k, NormalizedUri)
     deriving newtype (Eq, Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+    show (Q (k, file)) = show k ++ "; " ++ show file
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database

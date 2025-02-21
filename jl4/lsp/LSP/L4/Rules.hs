@@ -48,7 +48,6 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
-import Debug.Trace
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -162,16 +161,13 @@ instance Pretty Log where
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
   define shakeRecorder $ \GetLexTokens f -> do
-    traceM "========== trying to get file contents"
-    traceM (show f)
     (_, mRope) <- use_ GetFileContents f
-    traceM "========== got file contents"
     case mRope of
       Nothing -> pure ([{- TODO: report internal errors -}], Nothing)
       Just rope -> do
         let
           contents = Rope.toText rope
-        case Lexer.execLexer (fromNormalizedFilePath f) contents of
+        case Lexer.execLexer (show $ fromNormalizedUri f) contents of
           Left errs -> do
             let
               diags = toList $ fmap (mkSimpleDiagnostic . Parser.mkPError "lexer") errs
@@ -181,8 +177,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \GetParsedAst f -> do
     (tokens, contents) <- use_ GetLexTokens f
-    traceM "========== successfully lexed"
-    case Parser.execProgramParserForTokens (fromNormalizedFilePath f) contents tokens of
+    case Parser.execProgramParserForTokens (show $ fromNormalizedUri f) contents tokens of
       Left errs -> do
         let
           diags = toList $ fmap mkSimpleDiagnostic errs
@@ -194,7 +189,6 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \TypeCheck f -> do
     parsed <- use_ GetParsedAst f
-    traceM "========== successfully parsed"
     let result = TypeCheck.doCheckProgram parsed
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) result.errors
@@ -286,62 +280,66 @@ jl4Rules recorder = do
       Right relSemTokens ->
           pure ([], Just relSemTokens)
 
-  define shakeRecorder $ \ResolveReferenceAnnotations f -> do
-    ownPath <- normalizedFilePathToOsPath f
-    let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
-    -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
-    contents <- liftIO $ Path.readFile citationFilePath
-    -- TODO: in future we may want to use the parse of the tree to get the context of the references
-    (tokens, _) <- use_ GetLexTokens f
+  define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
+    -- TODO: this should load citations from a "central place" as long as we don't
+    -- support citations directly in the file
+    Nothing -> pure ([], Nothing)
+    Just f -> do
+      ownPath <- normalizedFilePathToOsPath f
+      let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
+      -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
+      contents <- liftIO $ Path.readFile citationFilePath
+      -- TODO: in future we may want to use the parse of the tree to get the context of the references
+      (tokens, _) <- use_ GetLexTokens uri
 
 
-    let stripReferenceHeralds r
-          | Text.isPrefixOf "@ref" r = Text.drop 4 r
-          | ('<' :< '<' :< r') :> '>' :> '>' <- r = r'
-          | otherwise = r
+      let stripReferenceHeralds r
+            | Text.isPrefixOf "@ref" r = Text.drop 4 r
+            | ('<' :< '<' :< r') :> '>' :> '>' <- r = r'
+            | otherwise = r
 
-        normalizeRef = Text.toLower . Text.strip
+          normalizeRef = Text.toLower . Text.strip
 
-        rangeOfPosToken = \case
-          -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-          Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
-          _ -> mempty
+          rangeOfPosToken = \case
+            -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
+            Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
+            _ -> mempty
 
-        allReferencesInTree :: [(Text, SrcRange)]
-        allReferencesInTree = foldMap rangeOfPosToken tokens
+          allReferencesInTree :: [(Text, SrcRange)]
+          allReferencesInTree = foldMap rangeOfPosToken tokens
 
-        records = do
-          decoded <- Csv.decode Csv.NoHeader contents
+          records = do
+            decoded <- Csv.decode Csv.NoHeader contents
 
-          let mp = foldMap (uncurry Map.singleton) decoded
-              mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-              getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
+            let mp = foldMap (uncurry Map.singleton) decoded
+                mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
+                getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
 
-          pure $ foldMap getReferences allReferencesInTree
+            pure $ foldMap getReferences allReferencesInTree
 
-    pure case records of
-      Right recs -> ([], Just recs)
-      Left err ->
-        (
-          [ FileDiagnostic
-            { fdLspDiagnostic = Diagnostic
-              { _source = Just "jl4"
-              , _severity = Just DiagnosticSeverity_Warning
-              , _range = srcRangeToLspRange Nothing
-              , _message = Text.pack err
-              , _relatedInformation = Nothing
-              , _data_ = Nothing
-              , _codeDescription = Nothing
-              , _tags = Nothing
-              , _code = Nothing
+      pure case records of
+        Right recs -> ([], Just recs)
+        Left err ->
+          (
+            [ FileDiagnostic
+              { fdLspDiagnostic = Diagnostic
+                { _source = Just "jl4"
+                , _severity = Just DiagnosticSeverity_Warning
+                , _range = srcRangeToLspRange Nothing
+                , _message = Text.pack err
+                , _relatedInformation = Nothing
+                , _data_ = Nothing
+                , _codeDescription = Nothing
+                , _tags = Nothing
+                , _code = Nothing
+                }
+              , fdFilePath = uri
+              , fdShouldShowDiagnostic = ShowDiag
+              , fdOriginalSource = NoMessage
               }
-            , fdFilePath = f
-            , fdShouldShowDiagnostic = ShowDiag
-            , fdOriginalSource = NoMessage
-            }
-          ]
-        , Nothing
-        )
+            ]
+          , Nothing
+          )
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f

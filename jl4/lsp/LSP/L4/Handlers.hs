@@ -5,6 +5,8 @@
 
 module LSP.L4.Handlers where
 
+import Debug.Trace
+
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -156,39 +158,39 @@ handlers recorder =
         let
           doc = msg ^. J.textDocument . J.uri
           version = msg ^. J.textDocument . J.version
+          uri = toNormalizedUri doc
         atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-        whenUriFile doc $ \file -> do
-            -- We don't know if the file actually exists, or if the contents match those on disk
-            -- For example, vscode restores previously unsaved contents on open
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file Modified{firstOpen=True}
+        -- We don't know if the file actually exists, or if the contents match those on disk
+        -- For example, vscode restores previously unsaved contents on open
+        setFileModified (VFSModified vfs) ide uri $
+          addFileOfInterest ide uri Modified{firstOpen=True}
         logWith recorder Debug $ LogOpenedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
+          uri = toNormalizedUri doc
           version = msg ^. J.textDocument . J.version
           changes = msg ^. J.contentChanges
         atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-        whenUriFile doc $ \file -> do
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file Modified{firstOpen=False}
+        setFileModified (VFSModified vfs) ide uri $
+          addFileOfInterest ide uri Modified{firstOpen=False}
         logWith recorder Debug $ LogModifiedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
-        whenUriFile doc $ \file -> do
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file OnDisk
+          uri = toNormalizedUri doc
+        setFileModified (VFSModified vfs) ide uri $
+          addFileOfInterest ide uri OnDisk
         logWith recorder Debug $ LogSavedTextDocument doc
     , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
         let
           doc = msg ^. J.textDocument . J.uri
-        whenUriFile doc $ \file -> do
-          let herald = "Closed text document: " <> getUri doc
-          setSomethingModified (VFSModified vfs) ide (Text.unpack herald) $ do
-            scheduleGarbageCollection ide
-            deleteFileOfInterest ide file
-          logWith recorder Debug $ LogClosedTextDocument doc
+          uri = toNormalizedUri doc
+        let herald = "Closed text document: " <> getUri doc
+        setSomethingModified (VFSModified vfs) ide (Text.unpack herald) $ do
+          scheduleGarbageCollection ide
+          deleteFileOfInterest ide uri
+        logWith recorder Debug $ LogClosedTextDocument doc
 
     , notificationHandler SMethod_SetTrace $ \_ _ _msg -> do
         pure ()
@@ -245,13 +247,13 @@ handlers recorder =
         cas <- Extra.mapMaybeM (outOfScopeAssumeQuickFix ide) diags
         pure $ Right $ InL $ fmap InR cas
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \ide req -> do
+        traceM "=================== semantic tokens requested"
         let
           SemanticTokensParams _ _ doc = req
           uri = doc ^. J.uri
-          nfp = fromUri $ toNormalizedUri uri
 
         tokens <- liftIO $ runAction "semanticTokens" ide $
-          use GetRelSemanticTokens nfp
+          use GetRelSemanticTokens (toNormalizedUri uri)
         case tokens of
           Nothing -> do
             pure $
@@ -303,7 +305,7 @@ handlers recorder =
                 keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
-              useWithStale_ TypeCheck (fromUri (toNormalizedUri uri))
+              useWithStale_ TypeCheck (toNormalizedUri uri)
 
             let topDeclItems
                   = filterMatchesOn CompletionItem._label
@@ -334,7 +336,7 @@ handlers recorder =
         let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
 
         typeCheck <- liftIO $ runAction "typecheck" ide $
-          use_ TypeCheck (fromUri (toNormalizedUri uri))
+          use_ TypeCheck (toNormalizedUri uri)
 
         let
           mkCodeLens srcPos simplify = CodeLens
@@ -367,7 +369,7 @@ handlers recorder =
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
         let doc :: Uri = params ^. J.textDocument . J.uri
             pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
-            nfp :: NormalizedFilePath = fromUri $ toNormalizedUri doc
+            nfp :: NormalizedUri = toNormalizedUri doc
 
         refs <- liftIO $ runAction "getReferences" ide $
           use_ GetReferences nfp
@@ -403,7 +405,7 @@ visualise
   -- ^ The location of the `Decide` to visualize and whether or not to simplify it
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
 visualise recorder ide uri msrcPos = do
-  let nfp = fromUri $ toNormalizedUri uri
+  let nfp = toNormalizedUri uri
 
   mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
@@ -544,7 +546,7 @@ defaultCompletionItem label = CompletionItem label
 gotoDefinition :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Location)
 gotoDefinition ide fileUri pos = do
   mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
-    useWithStale TypeCheck nfp
+    useWithStale TypeCheck fileUri
   case mTypeCheckedModule of
     Nothing -> pure Nothing
     Just (m, positionMapping) -> do
@@ -555,7 +557,6 @@ gotoDefinition ide fileUri pos = do
         newRange <- toCurrentRange positionMapping lspRange
         pure (Location uri newRange)
   where
-    nfp = fromUri fileUri
     uri = LSP.fromNormalizedUri fileUri
 
 -- ----------------------------------------------------------------------------
@@ -567,7 +568,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
   where
   refHover = do
     refs <- MaybeT $ liftIO $ runAction "refHover" ide $
-      use ResolveReferenceAnnotations nfp
+      use ResolveReferenceAnnotations fileUri
     hoistMaybe do
       -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
       let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
@@ -585,15 +586,13 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
 
   typeHover = do
     (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
-      useWithStale TypeCheck nfp
+      useWithStale TypeCheck fileUri
     hoistMaybe do
       oldPos <- fromCurrentPosition positionMapping pos
       (range, i) <- findInfo (lspPositionToSrcPos oldPos) m.program
       let lspRange = srcRangeToLspRange (Just range)
       newLspRange <- toCurrentRange positionMapping lspRange
       pure (infoToHover m.substitution newLspRange i)
-
-  nfp = fromUri fileUri
 
 infoToHover :: Substitution -> Range -> Info -> Hover
 infoToHover subst r i =
@@ -615,7 +614,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
   Just ctx -> case ctx.kind of
     OutOfScopeError name ty -> do
       mTypeCheck <- liftIO $ runAction "codeAction.outOfScope" ide $ do
-        use TypeCheck nfp
+        use TypeCheck nuri
       case mTypeCheck of
         Nothing -> pure Nothing
         Just typeCheck -> do
@@ -679,10 +678,10 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
               }
     _ -> pure Nothing
   where
-    nfp = fd ^. fdFilePathL
+    nuri = fd ^. fdFilePathL
 
     uri :: Uri
-    uri = fromNormalizedUri $ normalizedFilePathToUri nfp
+    uri = fromNormalizedUri nuri
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
 hasTypeInferenceVars = \case

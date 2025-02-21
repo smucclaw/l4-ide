@@ -209,7 +209,7 @@ setupLSP recorder defaultRoot userHandlers getIdeState clientMsgVar = do
 
   let interpretHandler (env,  st) =
         LSP.Iso
-          ((\(s :: ServerM config a) -> LSP.runLspT env $ runReaderT (s.runServerT) (ServerState clientMsgChan st)))
+          (\(s :: ServerM config a) -> LSP.runLspT env $ runReaderT s.runServerT (ServerState clientMsgChan st))
           liftIO
 
   pure (doInitialize, asyncHandlers, interpretHandler)
@@ -340,7 +340,7 @@ kick = do
             case lspSink of
               Nothing -> pure ()
               Just sink ->
-                sendNotificationToClient sink (SMethod_CustomMethod msg) $ toJSON $ map fromNormalizedFilePath files
+                sendNotificationToClient sink (SMethod_CustomMethod msg) $ toJSON $ map fromNormalizedUri files
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress ProgressNewStarted
