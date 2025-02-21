@@ -10,14 +10,20 @@ but this framework is now getting quite different from what it used to be.
 import { ComparisonResult } from '../utils.js'
 
 /*********************************************
-       Registry
+       Registry, Top-level Lir
 ***********************************************/
+
+export type Unsubscriber = { unsubscribe: () => void }
+
 export type LirRootType = string
 
 /** Lir := 'Layout IR' */
 export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
-  // Will add subscribers here in the future
+  #subscribers: Map<symbol, (context: LirContext, id: LirId) => void> =
+    new Map()
+
+  constructor() {}
 
   // @typescript-eslint/no-unused-vars
   getRoot(_context: LirContext, rootType: LirRootType): LirNode | undefined {
@@ -27,6 +33,14 @@ export class LirRegistry {
   // @typescript-eslint/no-unused-vars
   setRoot(_context: LirContext, rootType: LirRootType, node: LirNode) {
     this.#roots.set(rootType, node)
+  }
+
+  subscribe(callback: (_: LirContext, id: LirId) => void): Unsubscriber {
+    const callbackId = Symbol()
+    this.#subscribers.set(callbackId, callback)
+    return {
+      unsubscribe: () => this.#subscribers.delete(callbackId),
+    }
   }
 }
 
