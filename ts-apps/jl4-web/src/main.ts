@@ -10,6 +10,7 @@ import {
   CloseAction,
   ErrorAction,
   MessageTransports,
+  type Middleware,
 } from "vscode-languageclient/browser.js";
 import { MonacoLanguageClient } from "monaco-languageclient";
 import { ConsoleLogger } from "monaco-languageclient/tools";
@@ -73,14 +74,14 @@ export const runClient = async () => {
 /** parameterized version , support all languageId */
 export const initWebSocketAndStartClient = (
   url: string,
-  _logger: ConsoleLogger,
+  logger: ConsoleLogger,
 ): WebSocket => {
   const webSocket = new WebSocket(url);
   webSocket.onopen = () => {
     const socket = toSocket(webSocket);
     const reader = new WebSocketMessageReader(socket);
     const writer = new WebSocketMessageWriter(socket);
-    const languageClient = createLanguageClient({
+    const languageClient = createLanguageClient(logger, {
       reader,
       writer,
     });
@@ -91,6 +92,7 @@ export const initWebSocketAndStartClient = (
 };
 
 export const createLanguageClient = (
+  logger: ConsoleLogger,
   messageTransports: MessageTransports,
 ): MonacoLanguageClient => {
   return new MonacoLanguageClient({
@@ -103,11 +105,21 @@ export const createLanguageClient = (
         error: () => ({ action: ErrorAction.Continue }),
         closed: () => ({ action: CloseAction.DoNotRestart }),
       },
+      middleware: mkMiddleware(logger),
     },
     // create a language client connection from the JSON RPC connection on demand
     messageTransports,
   });
 };
+
+function mkMiddleware(logger: ConsoleLogger) : Middleware {
+  return { executeCommand: async (command, args, next) => {
+    logger.debug(`== trying to execute command ${command}`)
+    // FIXME: he we can actually run everything that we also run in the vscode extension
+    const response = await next(command, args);
+    logger.debug(`== received response from language server ${JSON.stringify(response)}`)
+  } }
+}
 
 const britishCitizen = `
 § \`Assumptions\`
