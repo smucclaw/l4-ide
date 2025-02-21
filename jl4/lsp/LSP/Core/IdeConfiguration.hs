@@ -77,17 +77,21 @@ modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
   void $ modifyVar' var f
 
-isWorkspaceFile :: NormalizedFilePath -> Action Bool
-isWorkspaceFile file =
-  if isRelative (fromNormalizedFilePath file)
-    then return True
-    else do
-      IdeConfiguration {..} <- getIdeConfiguration
-      let toText = getUri . fromNormalizedUri
-      return $
-        any
-          (\root -> toText root `isPrefixOf` toText (normalizedFilePathToUri file))
-          workspaceFolders
+isWorkspaceFile :: NormalizedUri -> Action Bool
+isWorkspaceFile uri =
+  case uriToNormalizedFilePath uri of
+    -- FIXME: if we don't have file://, we assume that the thing is a workspace file
+    Nothing -> pure True
+    Just file ->
+      if isRelative (fromNormalizedFilePath file)
+        then return True
+        else do
+          IdeConfiguration {..} <- getIdeConfiguration
+          let toText = getUri . fromNormalizedUri
+          return $
+            any
+              (\root -> toText root `isPrefixOf` toText (normalizedFilePathToUri file))
+              workspaceFolders
 
 getClientSettings :: Action (Maybe Value)
 getClientSettings = unhashed . clientSettings <$> getIdeConfiguration

@@ -54,9 +54,9 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Builder.Extra (defaultChunkSize)
 import Text.Read (readMaybe)
 import qualified Network.WebSockets as WS
-import Debug.Trace
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as C8L
+import Debug.Trace
 
 -- ----------------------------------------------------------------------------
 
@@ -153,23 +153,19 @@ getDefaultArguments recorder = do
           -- NOTE: this is where to send back headers if any
           conn <- WS.acceptRequest pending
 
-          traceM "==== Accepted request"
           race_
             (forever do
-               traceM "== sending via socket"
                msg <- readChan outChan
                let msg' = C8L.dropWhile (/= '{') msg
-               traceM ("== sent via socket\n" <> show msg')
+               traceM $ C8L.unpack msg'
                WS.sendTextData conn msg'
             )
             (forever do
                -- NOTE: web clients don't add Content-Length headers since
                -- websockets do the chunking for us, since the haskell lsp library
                -- doesn't support this behaviour, we add the header ourselves
-               traceM "== receiving via socket"
                msg <- WS.receiveData conn
                let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
-               traceM $ "== received via socket\n" <> show msg'
                writeChan inChan msg'
             )
         pure Communication

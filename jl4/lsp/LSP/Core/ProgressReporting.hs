@@ -52,7 +52,7 @@ data ProgressReporting = ProgressReporting
 
 data PerFileProgressReporting = PerFileProgressReporting
   {
-    inProgress             :: forall a. NormalizedFilePath -> IO a -> IO a,
+    inProgress             :: forall a. NormalizedUri -> IO a -> IO a,
     -- ^ see Note [ProgressReporting API and InProgressState]
     progressReportingInner :: ProgressReporting
   }
@@ -123,13 +123,13 @@ data InProgressState
         todoVar    :: TVar Int,
         -- | Number of files done
         doneVar    :: TVar Int,
-        currentVar :: STM.Map NormalizedFilePath Int
+        currentVar :: STM.Map NormalizedUri Int
       }
 
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
-recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
+recordProgress :: InProgressState -> NormalizedUri -> (Int -> Int) -> IO ()
 recordProgress InProgressState {..} file shift = do
   (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
   atomicallyNamed "recordProgress2" $ case (prev, new) of
@@ -180,7 +180,7 @@ progressReporting (Just notifier) title optProgressStyle = do
   progressReportingInner <- progressReportingNoTrace (readTVar $ todoVar inProgressState)
                                 (readTVar $ doneVar inProgressState) (Just notifier) title optProgressStyle
   let
-    inProgress :: NormalizedFilePath -> IO a -> IO a
+    inProgress :: NormalizedUri -> IO a -> IO a
     inProgress = updateStateForFile inProgressState
   return PerFileProgressReporting {..}
   where
