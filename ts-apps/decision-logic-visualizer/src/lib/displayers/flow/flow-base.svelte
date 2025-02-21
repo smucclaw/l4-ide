@@ -19,7 +19,7 @@
     sfNodeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
-  import { dagToSFGraph } from './ladder-lir-to-sf.js'
+  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
@@ -39,8 +39,7 @@
     Make initial SF nodes and edges
   ************************************/
 
-  const ladderDag = declLirNode.getBody(context)
-  const sfGraph = dagToSFGraph(context, ladderDag)
+  const sfGraph = ladderGraphToSFGraph(context, declLirNode.getBody(context))
 
   /***********************************
       SvelteFlow nodes and edges

@@ -23,7 +23,7 @@ import {
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
 
-export function dagToSFGraph(
+export function ladderGraphToSFGraph(
   context: LirContext,
   ladderGraph: LadderGraphLirNode
 ) {

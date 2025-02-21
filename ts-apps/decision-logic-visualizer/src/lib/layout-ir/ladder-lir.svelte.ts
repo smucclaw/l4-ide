@@ -17,7 +17,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
- **************** Decl Lir Node ******************
+                  Decl Lir Node 
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -40,7 +40,8 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     this.#body = body
   }
 
-  getLabel(_context: LirContext) {
+  /** This differs from the Unique in that this is a name that's meant for display. */
+  getFunName(_context: LirContext) {
     return this.#name.label
   }
 
@@ -66,11 +67,11 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /******************************************************
- **************** Flow Lir Nodes **********************
+                  Flow Lir Nodes
  ******************************************************/
 
 // There's a 1-1 correspondence between the Flow Lir Nodes and the SF Nodes that are fed to SvelteFlow
-// (and similarly with Flow Lir Edges
+// (and similarly with Flow Lir Edges)
 
 type Position = { x: number; y: number }
 
@@ -103,11 +104,9 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   abstract toPretty(context: LirContext): string
 }
 
-export type LadderLirNode =
-  | VarLirNode
-  | NotStartLirNode
-  | NotEndLirNode
-  | BundlingFlowLirNode
+/**********************************************
+          Ladder Graph Lir Node
+***********************************************/
 
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
@@ -117,7 +116,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
   }
 
-  setDag(context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
+  setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
     this.#dag = dag
   }
 
@@ -154,6 +153,16 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
+/**********************************************
+          Ladder Lir Node
+***********************************************/
+
+export type LadderLirNode =
+  | VarLirNode
+  | NotStartLirNode
+  | NotEndLirNode
+  | BundlingFlowLirNode
+
 export type VarLirNode = BoolVarLirNode
 
 export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
@@ -174,12 +183,12 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#data = { name: originalExpr.name, value: this.#value }
   }
 
-  getName(_context: LirContext) {
-    return this.#originalExpr.name
-  }
-
   getLabel(_context: LirContext) {
     return this.#data.name.label
+  }
+
+  getUnique(_context: LirContext) {
+    return this.#originalExpr.name.unique
   }
 
   getData(_context: LirContext) {
@@ -195,12 +204,12 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     // TODO: Will probably want to publish that value has been set!
   }
 
-  toString(): string {
-    return 'BOOL_VAR_LIR_NODE'
-  }
-
   toPretty(_context: LirContext) {
     return this.getLabel(_context)
+  }
+
+  toString(): string {
+    return 'BOOL_VAR_LIR_NODE'
   }
 }
 

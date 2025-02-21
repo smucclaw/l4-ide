@@ -97,7 +97,7 @@ export abstract class NodeInfoManager {
 export interface LirNode {
   getId(): LirId
 
-  // getChildren(context: LirContext): LirNode[]
+  // Removed getChildren for now to simplify things
 
   /** NON-pretty */
   toString(): string
@@ -123,8 +123,6 @@ export abstract class DefaultLirNode
   compare(other: LirNode) {
     return this.getId().compare(other.getId())
   }
-
-  // Removed getChildren to simplify things
 
   abstract toString(): string
 }

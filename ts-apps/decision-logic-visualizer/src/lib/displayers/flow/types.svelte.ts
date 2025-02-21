@@ -16,15 +16,6 @@ export interface LadderFlowDisplayerProps {
 }
 
 /************************************************
-            Flow Graph
-*************************************************/
-
-// export interface FlowGraph {
-//   nodes: FlowNode[]
-//   edges: FlowEdge[]
-// }
-
-/************************************************
           SF Nodes
 *************************************************/
 
