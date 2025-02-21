@@ -1,0 +1,63 @@
+§ `Membership in a list`
+
+-- This is a test for polymorphic equality.
+
+GIVEN a IS A TYPE
+      x IS AN a
+      list IS A LIST OF a
+GIVETH A BOOLEAN
+elem x list MEANS
+  CONSIDER list
+    WHEN EMPTY            THEN FALSE
+    WHEN y FOLLOWED BY ys THEN
+         x EQUALS y
+      OR elem x ys
+
+#EVAL elem OF 3, LIST 1, 2, 3, 4
+#EVAL elem OF 5, LIST 1, 2, 3, 4
+
+#EVAL elem OF
+        "Boromir"
+        LIST
+          "Frodo"
+          "Sam"
+          "Gandalf"
+          "Peregrin"
+          "Meriadoc"
+          "Aragorn"
+          "Boromir"
+          "Legolas"
+          "Gimli"
+
+#EVAL elem OF EMPTY, LIST EMPTY, (LIST 1), (LIST 1, 2), (LIST 1, 2, 3)
+
+#EVAL elem OF FALSE, LIST TRUE, TRUE, TRUE
+
+DECLARE Daytime
+  IS ONE OF
+    Morning
+    Afternoon
+    Evening
+    Night
+
+#EVAL elem OF Evening, LIST Morning, Afternoon, Evening, Night
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+GIVETH A TYPE
+DECLARE Either a b
+  IS ONE OF
+    Left  HAS payload IS AN a
+    Right HAS payload IS A  b
+
+#EVAL Left 3 EQUALS Right 3
+#EVAL Left 3 EQUALS Left 4
+#EVAL Left 3 EQUALS Left 3
+
+#EVAL EMPTY EQUALS EMPTY
+
+-- currently, equality on functions (including unapplied constructors) is unsupported,
+-- which leads to run-time errors
+
+#EVAL Left EQUALS Left
+#EVAL elem EQUALS elem

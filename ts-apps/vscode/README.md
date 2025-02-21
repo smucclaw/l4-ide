@@ -84,9 +84,7 @@ The extension uses a VSCode webview to render L4 rules as ladder diagrams, displ
 
 ### Displaying the Diagram
 
-To visualize your rule as a ladder diagram:
-
-- For now, either run the "Visualize L4 expression" command from the command palette or use the "Update Diagram" button in the bottom-right status bar of VSCode (near the notification bell or Prettier controls). Clicking this button generates the diagram in a new panel.
+After opening a .l4 file, to visualize an eligible rule as a ladder diagram, click on the "Visualize" or "Simplify and visualize" codelens above the L4 expression you want to visualize.
 
 ## More build / config notes
 
