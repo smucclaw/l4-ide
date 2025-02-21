@@ -5,8 +5,6 @@
 
 module LSP.L4.Handlers where
 
-import Debug.Trace
-
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
@@ -247,7 +245,6 @@ handlers recorder =
         cas <- Extra.mapMaybeM (outOfScopeAssumeQuickFix ide) diags
         pure $ Right $ InL $ fmap InR cas
     , requestHandler SMethod_TextDocumentSemanticTokensFull $ \ide req -> do
-        traceM "=================== semantic tokens requested"
         let
           SemanticTokensParams _ _ doc = req
           uri = doc ^. J.uri

@@ -1,9 +1,24 @@
 body {
+  height: 100vh;
+  width: 100vw;
+  overflow-y: hidden;
+  overflow-x: scroll;
   background-color: #242424;
 }
 
-#editor {
-  margin: 10vh auto;
-  width: 720px;
-  height: 20vh;
+#jl4-editor {
+  flex-grow: 2;
+  border: 1px solid grey;
+}
+
+#jl4-webview {
+  flex-grow: 1;
+}
+
+.jl4-container {
+  min-width: 1200;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  height: 90%;
 }

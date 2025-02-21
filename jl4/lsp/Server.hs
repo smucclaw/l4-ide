@@ -1,7 +1,5 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -56,7 +54,6 @@ import Text.Read (readMaybe)
 import qualified Network.WebSockets as WS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as C8L
-import Debug.Trace
 
 -- ----------------------------------------------------------------------------
 
@@ -157,7 +154,6 @@ getDefaultArguments recorder = do
             (forever do
                msg <- readChan outChan
                let msg' = C8L.dropWhile (/= '{') msg
-               traceM $ C8L.unpack msg'
                WS.sendTextData conn msg'
             )
             (forever do
@@ -215,7 +211,7 @@ defaultMain recorder args = do
 
   withNumCapabilities numCapabilities $ do
     ioT <- offsetTime
-    logWith recorder Info $ LogLspStart
+    logWith recorder Info LogLspStart
 
     ideStateVar <- newEmptyMVar
     let
