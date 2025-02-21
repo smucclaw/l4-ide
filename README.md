@@ -1,48 +1,51 @@
-# mattwaddington
+# L4 IDE
 
-Private repository for a mattwadd-specific dialect of L4.
+An implementation of the L4 language, with an emphasis on IDE extensions for Visual Studio Code.
 
-## How To Build
+This repository includes language examples, a compiler toolchain, a visualizer, and integrations with VS Code.
 
-Minimal Requirements:
+## Install and Build
 
-- Haskell
-  - [GHCup](https://www.haskell.org/ghcup/)
-  - ghc 9.6.6
-  - cabal 3.10 (or newer)
-- npm >= 10.9.2
-  - installed via `corepack` or `nvm` or your package manager
-  - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
+[Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
-To build the `mattwaddington` project, all you have to do is this:
+[Quickstart](Quickstart.md): for legal engineers to experiment with writing L4 code. Download the VS Code extension and get started.
 
-```sh
-cabal update
-cabal build all
-npm install && npm run build
-```
+## Language Tutorials
 
-Setting up a development run for the Language Server:
+- Tutorial 1: Hello, World
+  - Must Sing
+  - Vermin
 
-```sh
-cabal install exe:jl4-lsp --overwrite-policy=always
-# Make sure the installation directory is on the `$PATH`
-code .
-# Press F5 from within VSCode to launch the JL4 extension
-# Open folder ./jl4/examples to see the Language Server in action
-```
+- Tutorial 2: British Nationality Act
+  - References and Legal Citations
+  - Temporals
 
-Running the Haskell tests:
+- [Tutorial 3](doc/apps.md): Automatically Building User-Facing Apps
 
-```sh
-cabal test test:jl4-test
-```
+- Tutorial 4: Automatically Generating an AI Chatbot
 
-## Prerequisite: Visual Studio Code
+- Tutorial 5: Contracts involving Parties, Obligations, and Deadlines
+  - visualizing a contract
+  - abductive reasoning and planning problems
 
-If running `code` from the command line does nothing, see
+- Tutorial 6: Automatically Finding Loopholes
+  - underspecification, vagueness, and ambiguity
 
-https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+## Language Reference
+
+- Decision Logic
+
+- State Transitions
+
+- Functional and Logical Paradigms
+
+- Source Citations and Versioning
+
+- Multi-Temporal Logic
+
+- Operationalization to Web and Mobile Apps
+
+- Natural Language Generation: exporting to Word and PDF
 
 ## Quick links
 
