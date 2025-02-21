@@ -136,10 +136,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
-  // TODO
+  // When we associate data with edges, will want to add a getEdge method too
+
   getEdges(_context: LirContext): LadderLirEdge[] {
-    return new Error('Not implemented yet') as any
-    // return Array.from(this.#dag.getEdges())
+    // TODO: In the future, will want to add any data associated with the edges too
+    return this.#dag.getEdges().map((edge) => {
+      return new DefaultLadderLirEdge(edge)
+    })
   }
 
   getChildren(context: LirContext) {
