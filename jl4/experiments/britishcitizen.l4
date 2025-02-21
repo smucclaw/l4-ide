@@ -67,6 +67,19 @@ DECIDE `is a British citizen (local)` IS
              property OF `father of` p
           OR property OF `mother of` p
 
+
+§ 347.5 Support Orders
+GIVEN child IS A NaturalPerson
+      env   IS AN Environment
+GIVETH money IS A NUMBER
+`support order` MEANS
+  IF env's `alimony ordered`
+    THEN env's father's salary / 10
+    ELSE 0
+
+
+
+
 § `Version using a global auxiliary declaration`
 
 `for father or mother of` person property MEANS
@@ -82,3 +95,42 @@ DECIDE `is a British citizen (variant)` IS
          `for father or mother of` p `is a British citizen (variant)`
       OR `for father or mother of` p `is settled in the United Kingdom`
       OR `for father or mother of` p `is settled in the qualifying territory in which the person is born`
+
+  OR `support order` parents > 50000
+
+IMPORT ImmigrationAndNationalityAct (§242, §243) as INA2020
+
+INA2020.§242
+
+
+
+
+
+
+
+
+
+
+The following categories of aliens are PRUCOL:
+(a) aliens paroled into the United States pursuant to section 212(d)(5) of the Immigration and Nationality Act for less than one year;
+(b) aliens residing in the United States pursuant to an order of supervision;
+(c) deportable aliens residing in the United States pursuant to an indefinite stay of deportation;
+(d) aliens residing in the United States pursuant to an indefinite voluntary departure;
+(e) aliens on whose behalf an immediate relative petition has been approved, and members of their families covered by the petition, who are entitled to voluntary departure and whose departure the Federal Immigration Agency does not contemplate enforcing;
+(f) aliens who have filed an application for adjustment to lawful permanent resident status pursuant to section 245 of the Immigration and Nationality Act, whose application the Federal Immigration Agency has accepted as properly filed or has granted, and whose departure the Federal Immigration Agency does not contemplate enforcing;
+(g) aliens granted stays of deportation by 
+                                           court order
+                                       OR  statute
+                                       OR regulation
+                                       OR by individual determination of the Federal Immigration Agency pursuant to section 243 of the Immigration and Nationally Act, whose departure the Federal Immigration Agency does not contemplate enforcing;
+(h) aliens granted voluntary departure status pursuant to section 242(b) of the Immigration and Nationality Act whose departure the Federal Immigration Agency does not contemplate enforcing;
+(i) aliens granted deferred action status;
+(j) aliens who entered and have continuously resided in the United States since before January 1, 1972;
+(k) aliens granted suspension of deportation pursuant to section 244 of the Immigration and Nationality Act whose departure the Federal Immigration Agency does not contemplate enforcing; and
+(l) any other alien living in the United States with the knowledge and permission or acquiescence of the Federal Immigration Agency and whose departure such agency does not contemplate enforcing.
+
+
+
+
+
+
