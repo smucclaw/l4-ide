@@ -163,13 +163,6 @@
     <Background />
   </SvelteFlow>
 </div>
-<!-- <section>
-  {#each algaDag.getAllPaths() as path }
-    <article>
-      {path.filter((n) => !isBundlingFlowNode(n)).reduce((acc, node) => acc + ' ' + node.toPretty(), '')}
-    </article>
-  {/each}
-</section> -->
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
