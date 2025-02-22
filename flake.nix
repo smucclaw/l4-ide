@@ -20,8 +20,8 @@
           modules = [
             {
               jl4-demo = {
-                domain = "cclaw.mangoiv.com";
-                acme-email = "contact@mangoiv.com";
+                domain = "olive.well-typed.com";
+                acme-email = "magnus@well-typed.com";
                 root-ssh-keys = [
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkSSWT6/5jBteJYcwiwltGp+hPZM/rQcqbOENvMvIj3 mangoiv@p14-nixos"
                 ];
