@@ -21,7 +21,7 @@ import Control.DeepSeq
 import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Text (Text, pattern (:<), pattern (:>))
+import Data.Text (Text)
 import UnliftIO (liftIO)
 import qualified Data.Csv as Csv
 import qualified Data.Map.Lazy as Map
@@ -295,7 +295,7 @@ jl4Rules recorder = do
 
       let stripReferenceHeralds r
             | Text.isPrefixOf "@ref" r = Text.drop 4 r
-            | ('<' :< '<' :< r') :> '>' :> '>' <- r = r'
+            | ("<<", (r', ">>")) <- Text.span (== '>') <$> Text.span (== '<') r = r'
             | otherwise = r
 
           normalizeRef = Text.toLower . Text.strip

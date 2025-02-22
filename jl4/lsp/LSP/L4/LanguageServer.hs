@@ -262,7 +262,7 @@ handleInit recorder defaultRoot getIdeState lifetime exitClientMsg clearReqId wa
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
-                    k $ TResponseError (InR ErrorCodes_InternalError) (T.show e) Nothing
+                    k $ TResponseError (InR ErrorCodes_InternalError) (T.pack (show e)) Nothing
     _ <- flip forkFinally handleServerException $ do
         untilMVar lifetime $ runWithWorkerThreads $ \threadQueue -> do
             putMVar threadQueueMVar threadQueue
