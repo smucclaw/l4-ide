@@ -7,7 +7,7 @@
 {
   options.services.jl4-lsp = {
     path = lib.mkOption {
-      type = lib.types.string;
+      type = lib.types.str;
       default = "/lsp";
       description = "path relative to the domain the lsp will answer on";
     };
