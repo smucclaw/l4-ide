@@ -257,7 +257,7 @@ handlers recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.show (Text.show uri.getUri)
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.pack (show (show uri.getUri))
                   , _xdata = Nothing
                   }
 
@@ -419,7 +419,7 @@ visualise recorder ide uri msrcPos = do
       tcRes <- do
         mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
         case mTcResult of
-          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.show uri.getUri <> "."
+          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.program of
         [decide] -> pure $ Just (decide, simp, tcRes.substitution)

@@ -1880,12 +1880,12 @@ prettyFilePath Nothing   = ""
 prettyFilePath (Just fp) = Text.pack fp <> ":"
 
 prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
+prettySrcPos (MkSrcPos l c) = Text.pack (show l) <> ":" <> Text.pack (show c)
 
 prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
 prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
   | rl == l && rc == c = ""
-  | rl == l            = "-" <> Text.show c
+  | rl == l            = "-" <> Text.pack (show c)
   | otherwise          = "-" <> prettySrcPos p
 
 instance HasSrcRange CheckErrorWithContext where

@@ -40,7 +40,8 @@ library
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    text >= 2.1,
+    text < 2.1.2,
+    transformers,
     tree-diff
   exposed-modules:
     Base
@@ -118,8 +119,8 @@ executable jl4-lsp
     prettyprinter,
     safe-exceptions,
     stm,
-    text >= 2.1,
-    text-rope,
+    text < 2.1.2,
+    text-rope > 0.2,
     transformers,
     unliftio,
     vector,
@@ -182,5 +183,5 @@ test-suite jl4-test
     hspec-golden,
     optics,
     silently,
-    text >= 2.1,
+    text < 2.1.2,
     jl4

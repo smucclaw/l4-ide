@@ -216,5 +216,5 @@ progressCounter sink title optProgressStyle getTodo getDone =
         when (nextPct == prevPct) retry
         pure (todo, done, nextPct)
 
-      _ <- update (ProgressAmount (Just nextPct) (Just $ T.show done <> "/" <> T.show todo))
+      _ <- update (ProgressAmount (Just nextPct) (Just $ T.pack (show done) <> "/" <> T.pack (show todo)))
       loop update nextPct
