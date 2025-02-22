@@ -5,5 +5,9 @@
       url = "${config.networking.domain}${config.services.jl4-lsp.path}";
       secure = true;
     };
+    "/robots.txt".root = pkgs.writeTextDir "robots.txt" ''
+      User-agent: *
+      Disallow: /
+    '';
   };
 }
