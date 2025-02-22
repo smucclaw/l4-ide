@@ -21,6 +21,8 @@ import {
 } from "vscode-ws-jsonrpc";
 import { configureDefaultWorkerFactory } from "monaco-editor-wrapper/workers/workerLoaders";
 
+export const backendUrl = import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
+
 export const runClient = async () => {
   const logger = new ConsoleLogger(LogLevel.Debug);
   const htmlContainer = document.getElementById("jl4-editor")!;
@@ -68,7 +70,7 @@ export const runClient = async () => {
     "semanticHighlighting.enabled": true,
   });
 
-  initWebSocketAndStartClient("ws://localhost:5007", logger);
+  initWebSocketAndStartClient(backendUrl, logger);
 };
 
 /** parameterized version , support all languageId */
