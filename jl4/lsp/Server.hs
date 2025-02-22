@@ -286,26 +286,27 @@ defaultMain recorder args = do
           conn <- WS.acceptRequest pending
           logWith recorder Info $ LogWebsocket WebsocketNewConnection
 
-          outChan <- newChan
-          inChan <- newChan
+          WS.withPingThread conn 30 (pure ()) do
+            outChan <- newChan
+            inChan <- newChan
 
-          let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
+            let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
 
-          withAsync (runServerWithCommunication comm) \_lspAsync ->
-            race_
-              (forever do
-                msg <- readChan outChan
-                let msg' = C8L.dropWhile (/= '{') msg
-                WS.sendTextData conn msg'
-              )
-              (forever do
-                -- NOTE: web clients don't add Content-Length headers since
-                -- websockets do the chunking for us, since the haskell lsp library
-                -- doesn't support this behaviour, we add the header ourselves
-                msg <- WS.receiveData conn
-                let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
-                writeChan inChan msg'
-              )
+            withAsync (runServerWithCommunication comm) \_lspAsync ->
+              race_
+                (forever do
+                  msg <- readChan outChan
+                  let msg' = C8L.dropWhile (/= '{') msg
+                  WS.sendTextData conn msg'
+                )
+                (forever do
+                  -- NOTE: web clients don't add Content-Length headers since
+                  -- websockets do the chunking for us, since the haskell lsp library
+                  -- doesn't support this behaviour, we add the header ourselves
+                  msg <- WS.receiveData conn
+                  let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
+                  writeChan inChan msg'
+                )
         logWith recorder Info $ LogWebsocket WebsocketShutDown
 
 parseServerConfig :: Config -> Aeson.Value -> Either Text Config
