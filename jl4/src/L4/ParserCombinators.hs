@@ -21,21 +21,18 @@ between open close p =
 -- parsed by @sep@.
 --
 -- > commaSep p = p `sepBy` comma
-sepBy :: (Alternative m) => m a -> m sep -> m ([a], [sep])
-sepBy p sep = sepBy1 p sep <|> pure ([], [])
+sepBy :: (Alternative m) => m a -> m sep -> m (SepBy a sep)
+sepBy p sep = fmap (SepBy . Just) (sepBy1 p sep) <|> pure (SepBy Nothing)
 {-# INLINE sepBy #-}
 
 -- | @'sepBy1' p sep@ parses /one/ or more occurrences of @p@, separated by
 -- @sep@. Returns a list of values returned by @p@ and a list of separators
 -- parsed by @sep@.
-sepBy1 :: (Alternative m) => m a -> m sep -> m ([a], [sep])
+sepBy1 :: (Alternative m) => m a -> m sep -> m (SepBy1 a sep)
 sepBy1 p sep = go <$> p <*> many ((,) <$> sep <*> p)
  where
   go a sepsAndA =
-    let
-      (seps, as) = unzip sepsAndA
-    in
-      (a : as, seps)
+    SepBy1 a sepsAndA
 
 -- | @'sepEndBy' p sep@ parses /zero/ or more occurrences of @p@, separated
 -- and optionally ended by @sep@. Returns a list of values returned by @p@ and a
@@ -58,4 +55,48 @@ sepEndBy1 p sep = do
       <|> pure ([], [])
   pure (a : as, seps)
 {-# INLINEABLE sepEndBy1 #-}
+
+newtype SepBy a b = SepBy
+  { getSepBy :: Maybe (SepBy1 a b)
+  }
+  deriving (Show, Eq, Ord)
+
+toListSepBy :: (a -> c) -> (b -> c) -> SepBy a b -> [c]
+toListSepBy fac fbc s = maybe [] (toListSepBy1 fac fbc) s.getSepBy
+
+sepByElems :: SepBy a b -> [a]
+sepByElems s = maybe [] sepBy1Elems s.getSepBy
+
+sepBySeps :: SepBy a b -> [b]
+sepBySeps s = maybe [] sepBy1Seps s.getSepBy
+
+zipSepBy :: (a -> c) -> (a -> b -> c) -> SepBy a b -> [c]
+zipSepBy l fabc s = case s.getSepBy of
+  Nothing -> []
+  Just s' -> zipSepBy1 l fabc s'
+
+data SepBy1 a b = SepBy1
+  { sepBy1Head :: a
+  , sepBy1Tail :: [(b, a)]
+  }
+  deriving (Show, Eq, Ord)
+
+toListSepBy1 :: (a -> c) -> (b -> c) -> SepBy1 a b -> [c]
+toListSepBy1 fac fbc interleaved1 =
+  fac interleaved1.sepBy1Head :
+    concatMap
+      ((\(b, a) -> [fbc b, fac a]))
+      interleaved1.sepBy1Tail
+
+sepBy1Elems :: SepBy1 a b -> [a]
+sepBy1Elems s = s.sepBy1Head : fmap snd s.sepBy1Tail
+
+sepBy1Seps :: SepBy1 a b -> [b]
+sepBy1Seps s = fmap fst s.sepBy1Tail
+
+zipSepBy1 :: (a -> c) -> (a -> b -> c) -> SepBy1 a b -> [c]
+zipSepBy1 l fabc s = go s.sepBy1Head s.sepBy1Tail
+  where
+    go a [] = [l a]
+    go a ((b, aNext):r) = fabc a b : go aNext r
 

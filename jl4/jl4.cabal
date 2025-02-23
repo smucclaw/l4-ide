@@ -55,6 +55,7 @@ library
     L4.Main
     L4.Lexer
     L4.Parser
+    L4.Parser.Annotation
     L4.Parser.ResolveAnnotation
     L4.Parser.SrcSpan
     L4.ParserCombinators

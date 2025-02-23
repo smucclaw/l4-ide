@@ -16,36 +16,11 @@ module L4.Parser (
   -- * Testing API
   parseTest,
 
-  -- * Annotation helpers
-  WithAnno_ (..),
-  withHoleAnno,
-  withEpaAnno,
-  mkHoleAnnoFor,
-  annoHole,
-  annoEpa,
-  annoLexeme,
-  annoLexemes,
-  attachAnno,
-  inlineAnnoHole,
-  Epa_ (..),
-  epaToCluster,
-  epaToHiddenCluster,
-  attachEpa,
-  mkSimpleEpaAnno,
-  Lexeme_ (..),
-  mkLexeme,
-  lexesToEpa,
-  lexesToEpa',
-  lexToEpa,
-  lexToEpa',
 ) where
 
 import Base
 
 import qualified Control.Applicative as Applicative
-import qualified Data.Foldable as Foldable
-import Data.Functor.Compose
-import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -61,6 +36,7 @@ import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
+import L4.Parser.Annotation
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -280,7 +256,7 @@ section =
       <*> annoHole (optional name)
       <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
 
-sectionSymbols :: Compose Parser WithAnno Int
+sectionSymbols :: AnnoParser Int
 sectionSymbols =
   length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
@@ -362,7 +338,7 @@ recordDecl =
   attachAnno $
     RecordDecl emptyAnno <$> recordDecl'
 
-recordDecl' :: Compose Parser WithAnno [TypedName Name]
+recordDecl' :: AnnoParser [TypedName Name]
 recordDecl' =
      annoLexeme (spacedToken_ TKHas)
   *> annoHole (lsepBy reqParam (spacedToken_ TComma))
@@ -514,7 +490,7 @@ forall' = do
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
-article :: Compose Parser WithAnno PosToken
+article :: AnnoParser PosToken
 article =
   annoLexeme (spacedToken_ TKA <|> spacedToken_ TKAn <|> spacedToken_ TKThe)
 
@@ -541,24 +517,20 @@ lmany pp =
 lsepBy :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy pp sep =
   fmap concat $ manyLines $ do
-    (ps, seps) <- P.sepBy1 pp sep
-    pure $ zipWithLeftovers ps seps
+    s1 <- P.sepBy1 pp sep
+    pure $ P.zipSepBy1 id attachSep s1
   where
-    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
-    zipWithLeftovers ps [] = ps
-    zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    attachSep = \p s ->
+      setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p
 
 lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
   fmap concat $ someLines $ do
-    (ps, seps) <- P.sepBy1 pp sep
-    pure $ zipWithLeftovers ps seps
+    s1 <- P.sepBy1 pp sep
+    pure $ P.zipSepBy1 id attachSep s1
   where
-    zipWithLeftovers :: [a] -> [Lexeme_ (AnnoToken a) (AnnoToken a)] -> [a]
-    zipWithLeftovers ps [] = ps
-    zipWithLeftovers [] _  = []
-    zipWithLeftovers (p : ps) (s : ss) = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p : zipWithLeftovers ps ss
+    attachSep = \p s ->
+      setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p
 
 reqParam :: Parser (TypedName Name)
 reqParam =
@@ -1260,173 +1232,9 @@ mkPError orig (m, s) =
 -- jl4 specific annotation helpers
 -- ----------------------------------------------------------------------------
 
-type WithAnno = WithAnno_ PosToken Extension
+type AnnoParser = AnnoParser_ Parser PosToken
 
 type Epa = Epa_ PosToken
 
 type Lexeme = Lexeme_ PosToken
 
-mkConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
-mkConcreteSyntaxNode posTokens =
-  ConcreteSyntaxNode
-    { tokens = posTokens
-    , range = do
-        ne <- NonEmpty.nonEmpty posTokens
-        let l = NonEmpty.head ne
-            h = NonEmpty.last ne
-
-        pure MkSrcRange
-          { start = l.range.start
-          , end = h.range.end
-          , length = sum $ fmap (.range.length) ne
-          }
-    , visibility =
-        if Foldable.null posTokens
-          then Hidden
-          else Visible
-    }
-
-mkHiddenConcreteSyntaxNode :: (HasField "range" a SrcRange) => [a] -> ConcreteSyntaxNode_ a
-mkHiddenConcreteSyntaxNode ps = mkConcreteSyntaxNode ps
-  & #visibility .~ Hidden
-
--- ----------------------------------------------------------------------------
--- Annotation Combinators
--- ----------------------------------------------------------------------------
-
-data WithAnno_ t e a = WithAnno
-  { anno :: Anno_ t e
-  , payload :: a
-  }
-  deriving stock Show
-  deriving (Functor)
-
-withHoleAnno :: HasSrcRange a => a -> WithAnno_ t e a
-withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
-
-withEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
-withEpaAnno p = WithAnno (mkAnno $ fmap mkCluster $ epaToCluster p : p.hiddenClusters) p.payload
-
-epaToCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
-epaToCluster p = CsnCluster
-  { payload = mkConcreteSyntaxNode p.original
-  , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
-  }
-
-epaToHiddenCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
-epaToHiddenCluster p = CsnCluster
-  { payload = mkHiddenConcreteSyntaxNode p.original
-  , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
-  }
-
-annoHole :: (HasSrcRange a) => Parser a -> Compose Parser (WithAnno_ t e) a
-annoHole p = Compose $ fmap withHoleAnno p
-
-annoEpa :: (HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
-annoEpa p = Compose $ fmap withEpaAnno p
-
-annoLexeme :: (HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
-annoLexeme = annoEpa . fmap lexToEpa
-
-annoLexeme_ :: (HasField "range" t SrcRange) => Parser (Lexeme_ t a) -> Compose Parser (WithAnno_ t e) ()
-annoLexeme_ = void . annoLexemes . fmap (fmap (const []))
-
-annoLexemes :: (HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
-annoLexemes = annoEpa . fmap lexesToEpa
-
-instance Applicative (WithAnno_ t e) where
-  pure a = WithAnno emptyAnno a
-  WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
-
-attachAnno :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-attachAnno p = fmap (\(WithAnno ann e) -> setAnno (fixAnnoSrcRange ann) e) $ getCompose p
-
-attachEpa :: (HasAnno e, AnnoToken e ~ t, HasField "range" t SrcRange) => Parser (Epa_ t e) -> Parser e
-attachEpa =
-  attachAnno . annoEpa
-
--- | Replace the first occurrence of 'AnnoHole' with the exactprint annotations.
--- Removes an indirection in the Annotation tree.
-inlineAnnoHole :: (HasAnno a, AnnoToken a ~ t, AnnoExtra a ~ e) => Compose Parser (WithAnno_ t e) a -> Parser a
-inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole ann.payload (getAnno e).payload)) e) <$> getCompose p
-  where
-    inlineFirstAnnoHole []                 _   = []
-    inlineFirstAnnoHole (AnnoHole _ : as1) as2 = as2 ++ as1
-    inlineFirstAnnoHole (a : as1)          as2 = a : inlineFirstAnnoHole as1 as2
-
--- | Create an annotation hole with a source range hint.
--- This source range hint is used to compute the final source range
--- of the produced 'Anno_'.
-mkHoleAnnoFor :: HasSrcRange a => a -> Anno_ t e
-mkHoleAnnoFor a =
-  mkAnno [mkHoleWithSrcRange a]
-
-mkSimpleEpaAnno :: (HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
-mkSimpleEpaAnno =
-  (.anno) . withEpaAnno
-
-data Lexeme_ t a = Lexeme
-  { trailingTokens :: [t]
-  , payload :: a
-  , hiddenClusters :: [CsnCluster_ t]
-  -- ^ A hidden cluster is something that is structured but not part
-  -- of the abstract syntax tree. Think comments, which often need to be processed later
-  -- or highlighted in a specific way.
-  -- Having comment tokens unstructured as part of 'trailingTokens' can be quite
-  -- tricky later to manage.
-  }
-  deriving stock Show
-  deriving (Functor)
-
-mkLexeme :: [t] -> a -> Lexeme_ t a
-mkLexeme trail a = Lexeme
-  { trailingTokens = trail
-  , payload = a
-  , hiddenClusters = []
-  }
-
-data Epa_ t a = Epa
-  { original :: [t]
-  , trailingTokens :: [t]
-  , payload :: a
-  , hiddenClusters :: [CsnCluster_ t]
-  -- ^ A hidden cluster is something that is structured but not part
-  -- of the abstract syntax tree. Think comments, which often need to be processed later
-  -- or highlighted in a specific way.
-  -- Having comment tokens unstructured as part of 'trailingTokens' can be quite
-  -- tricky later to manage.
-  }
-  deriving stock Show
-  deriving (Functor)
-
-lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
-lexesToEpa l = Epa
-  { original = l.payload
-  , trailingTokens = l.trailingTokens
-  , payload = l.payload
-  , hiddenClusters = l.hiddenClusters
-  }
-
-lexesToEpa' :: Lexeme_ t ([t], a) -> Epa_ t a
-lexesToEpa' l = Epa
-  { original = fst l.payload
-  , trailingTokens = l.trailingTokens
-  , payload = snd l.payload
-  , hiddenClusters = l.hiddenClusters
-  }
-
-lexToEpa :: Lexeme_ t t -> Epa_ t t
-lexToEpa l = Epa
-  { original = [l.payload]
-  , trailingTokens = l.trailingTokens
-  , payload = l.payload
-  , hiddenClusters = l.hiddenClusters
-  }
-
-lexToEpa' :: Lexeme_ t (t, a) -> Epa_ t a
-lexToEpa' l = Epa
-  { original = [fst l.payload]
-  , trailingTokens = l.trailingTokens
-  , payload = snd l.payload
-  , hiddenClusters = l.hiddenClusters
-  }
