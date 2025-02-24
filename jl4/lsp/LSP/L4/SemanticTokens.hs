@@ -166,7 +166,7 @@ instance ToSemTokens Context PosToken (AppForm Name) where
           , withTokenType identIsType $ toSemTokens maka
           ]
       CType -> genericToSemTokens a
-      CValue -> functionApp ann n ns
+      CValue -> genericToSemTokens a
 
 deriving anyclass instance ToSemTokens Context PosToken (Expr Name)
 deriving anyclass instance ToSemTokens Context PosToken (Program Name)
@@ -207,17 +207,3 @@ instance ToSemTokens () PosToken PosToken where
   toSemTokens t = do
     ctx <- ask
     pure $ maybe [] toList (fromSemanticTokenContext ctx t)
-
--- ----------------------------------------------------------------------------
--- Helpers that are more complicated
--- ----------------------------------------------------------------------------
-
-functionApp :: (ToSemTokens c PosToken a, ToSemTokens c PosToken b) => Anno -> a -> [b] -> SemanticTokensM c PosToken [SemanticToken]
-functionApp ann n ns = do
-  let maybeFunctionType = case ns of
-        [] -> id
-        _  -> withTokenType identIsFunction
-  traverseCsnWithHoles ann
-    [ maybeFunctionType $ toSemTokens n
-    , toSemTokens ns
-    ]

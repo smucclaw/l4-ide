@@ -42,7 +42,7 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   , visibility :: NodeVisibility
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass (ToExpr, NFData)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode_' for tokens
 -- in the language paired with any trailing information that is not part of
@@ -52,13 +52,13 @@ data CsnCluster_ t = CsnCluster
   , trailing :: ConcreteSyntaxNode_ t
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass (ToExpr, NFData)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AnnoElement_ t
   = AnnoHole (Maybe SrcRange)
   | AnnoCsn  (Maybe SrcRange) (CsnCluster_ t)
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass (ToExpr, NFData)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
 rangeOfAnnoElement = \case
@@ -80,7 +80,7 @@ data Anno_ t e = Anno
   , payload :: [AnnoElement_ t]
   }
   deriving stock (Show, Ord, Eq, GHC.Generic)
-  deriving anyclass (ToExpr, NFData)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 annoExtra :: Lens' (Anno_ t e) e
 annoExtra = #extra
@@ -131,11 +131,6 @@ class (Default (AnnoExtra t)) => HasAnno t where
   default getAnno :: (GPosition 1 t t (Anno' t) (Anno' t)) => t -> Anno' t
   getAnno = genericGetAnno
 
-annoOf :: HasAnno a => Lens' a (Anno' a)
-annoOf = lens
-  getAnno
-  (flip setAnno)
-
 genericSetAnno :: GPosition 1 s t a b => b -> s -> t
 genericSetAnno ann e = set (gposition @1) ann e
 
@@ -164,6 +159,9 @@ data TraverseAnnoError
 
 prettyTraverseAnnoError :: TraverseAnnoError -> Text
 prettyTraverseAnnoError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
+
+toNodesEither :: ToConcreteNodes t a => a -> Either TraverseAnnoError [CsnCluster_ t]
+toNodesEither = runExcept . toNodes
 
 class ToConcreteNodes t a | a -> t where
   toNodes :: a -> Except TraverseAnnoError [CsnCluster_ t]
@@ -267,7 +265,7 @@ instance HasSrcRange a => HasSrcRange (Maybe a) where
 instance HasSrcRange (Anno_ t e) where
   rangeOf a =
     let
-      -- Only take the 'SrcRange' of elements into account that are visibile
+      -- Only take the 'SrcRange' of elements into account that are visible
       applicable =
         filter
           (\e ->

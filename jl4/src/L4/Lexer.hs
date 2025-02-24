@@ -10,6 +10,7 @@ import qualified Base.Text as Text
 
 import Data.Char hiding (Space)
 import GHC.Show (showLitString)
+import Optics ((&), (%~))
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
@@ -160,6 +161,14 @@ data TokenType =
   | TNlg          !Text !AnnoType
   | TRefSrc       !Text
   | TRef          !Text !AnnoType
+  | TRefOpen
+  | TRefClose
+  | TNlgOpen
+  | TNlgClose
+    -- tokens within annotations
+  | TNlgString    !Text
+  | TNlgPrefix    -- ^ "@nlg"
+  | TPercent
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -182,6 +191,14 @@ refAnnotation =
 
 refSrcAnnotation :: Lexer Text
 refSrcAnnotation = fst <$> lineAnno "@ref-src"
+
+nlgString :: Lexer Text
+nlgString =
+  takeWhile1P (Just "character") (`notElem` ['\n', ' ', ']', '%']) -- TODO: incomplete and destined to be outdated
+
+nlgExprDelimiter :: Lexer Char
+nlgExprDelimiter =
+  satisfy (== '%')
 
 inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
 inlineAnno openingHerald closingHerald = do
@@ -260,6 +277,17 @@ tokenPayload =
   <|> TCopy Nothing   <$  char '^'
   <|> symbolic
   <|> identifierOrKeyword
+
+nlgTokenPayload :: Lexer TokenType
+nlgTokenPayload =
+      TPercent    <$  nlgExprDelimiter
+  <|> TQuoted     <$> quoted
+  <|> TNlgOpen    <$  char '['
+  <|> TNlgClose   <$  char ']'
+  <|> TNlgPrefix  <$  "@nlg"
+  <|> TSpace      <$> whitespace
+  <|> TIdentifier <$> identifier
+  <|> TNlgString  <$> nlgString
 
 symbolic :: Lexer TokenType
 symbolic =
@@ -375,14 +403,27 @@ trivialToken tt =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
+rawNlgTokens :: Lexer [RawToken]
+rawNlgTokens = many (MkRawToken <$> getOffset <*> nlgTokenPayload <*> getOffset)
+
 execLexer :: FilePath -> Text -> Either (NonEmpty (Text, SourcePos)) [PosToken]
 execLexer file input =
   let
     r = parse (rawTokens <* eof) file input
   in
     case r of
-      Right rtoks -> Right (mkPosTokens file input rtoks)
+      Right rtoks -> Right (mkPosTokens Nothing file input rtoks)
       Left errs   -> Left (errorBundleToErrorMessages errs)
+
+execNlgLexer :: SourcePos -> Text -> Either (ParseErrorBundle Text Void) [PosToken]
+execNlgLexer offset input =
+  let
+    file = sourceName offset
+    r = parse (rawNlgTokens <* eof) file input
+  in
+    case r of
+      Right rtoks -> Right (mkPosTokens (Just offset) file input rtoks)
+      Left errs   -> Left errs
 
 data TokenState =
   MkTokenState
@@ -406,10 +447,14 @@ initialTokenState filepath txt =
 --
 -- At the same time, we interpret copy tokens.
 --
-mkPosTokens :: FilePath -> Text -> [RawToken] -> [PosToken]
-mkPosTokens filepath txt rtoks =
-    evalState (traverse go rtoks) (initialTokenState filepath txt)
+mkPosTokens :: Maybe SourcePos -> FilePath -> Text -> [RawToken] -> [PosToken]
+mkPosTokens sourcePosOffset filepath txt rtoks =
+    evalState (traverse go rtoks) tokenSt
   where
+    tokenSt = case sourcePosOffset of
+      Nothing -> initialTokenState filepath txt
+      Just offset -> initialTokenState filepath txt
+        & #posState %~ (\p -> p { pstateSourcePos = offset} )
     go :: RawToken -> StateT TokenState Identity PosToken
     go rtok = do
       ts <- get
@@ -699,6 +744,10 @@ toNlgAnno = toAnno "@nlg" "[" "]"
 
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
+  displayTokenType tt
+
+displayTokenType :: TokenType -> Text
+displayTokenType tt =
   case tt of
     TIdentifier t    -> t
     TQuoted t        -> "`" <> t <> "`"
@@ -710,6 +759,10 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
+    TRefOpen         -> "<<"
+    TRefClose        -> ">>"
+    TNlgOpen         -> "["
+    TNlgClose        -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -785,6 +838,9 @@ displayPosToken (MkPosToken _r tt) =
     TNlg t ty        -> toNlgAnno t ty
     TRef t ty        -> toRefAnno t ty
     TRefSrc t        -> "@ref-src" <> t
+    TNlgString t     -> t
+    TNlgPrefix       -> "@nlg"
+    TPercent         -> "%"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -818,6 +874,10 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
+    TRefOpen -> CSymbol
+    TRefClose -> CSymbol
+    TNlgOpen -> CAnnotation
+    TNlgClose -> CAnnotation
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
@@ -890,9 +950,12 @@ posTokenCategory =
     TKFor -> CKeyword
     TKAll -> CKeyword
     TKAka -> CKeyword
-    TNlg {} -> CAnnotation
+    TNlg {} -> CKeyword
     TRef {} -> CAnnotation
-    TRefSrc _ -> CAnnotation
+    TRefSrc{} -> CAnnotation
+    TNlgString _ -> CAnnotation
+    TNlgPrefix -> CAnnotation
+    TPercent -> CSymbol
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

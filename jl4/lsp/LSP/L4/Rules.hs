@@ -142,11 +142,13 @@ lookupReference pos mapping = do
 
 data Log
   = ShakeLog Shake.Log
+  | LogAstTraversalError !TraverseAnnoError
   deriving (Show)
 
 instance Pretty Log where
   pretty = \case
     ShakeLog msg -> pretty msg
+    LogAstTraversalError msg -> pretty $ prettyTraverseAnnoError msg
 
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
@@ -205,16 +207,18 @@ jl4Rules recorder = do
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
     case runSemanticTokensM (defaultSemanticTokenCtx ()) tokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogAstTraversalError err
+        pure ([], Nothing)
       Right tokenized -> do
         pure ([], Just tokenized)
 
   define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
     case runSemanticTokensM (defaultSemanticTokenCtx CValue) prog of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogAstTraversalError err
+        pure ([], Nothing)
       Right tokenized -> do
           pure ([], Just tokenized)
 
