@@ -1,0 +1,166 @@
+-- 33D.      Dog attacks etc.
+--     (1)    If a dog attacks or chases any person or animal and physical injury is caused to the person or animal that is attacked or chased, every person liable for the control of the dog commits an offence.
+--               Penalty:
+--                       (a)    for an offence relating to a dangerous dog, a fine of $20 000, but the minimum penalty is a fine of $1 000;
+--                      (b)    for an offence relating to a dog other than a dangerous dog, a fine of $10 000.
+
+§ `preamble, please ignore`
+
+id x MEANS x
+flip a b MEANS b a
+the MEANS flip
+does MEANS id
+some x MEANS TRUE
+any  x MEANS TRUE
+person p f d MEANS f p d
+
+DECLARE OPTIONAL a
+  IS ONE OF
+    Nothing
+    Just HAS value IS AN a
+
+§ `application-specific data model`
+
+DECLARE Animal
+    HAS name      IS A STRING
+        dangerous IS A BOOLEAN
+
+DECLARE Person
+    HAS name IS A STRING
+
+§ `many-to-many relation between Person and Animal`
+ASSUME `is liable for the control of the` IS A FUNCTION FROM Person AND Animal TO BOOLEAN
+ASSUME `owns` IS A FUNCTION FROM Person AND Animal TO BOOLEAN
+
+§ `two kinds of possible victims`
+DECLARE Victim IS ONE OF VictimP HAS p IS A  Person
+                         VictimA HAS a IS AN Animal
+
+#CHECK VictimP OF (Person WITH name IS "Bob")
+#CHECK VictimA OF (Animal WITH name IS "Spot", dangerous IS FALSE)
+
+§ `application-specific input environment`
+ASSUME attacks IS A BOOLEAN
+^      chases  IS A BOOLEAN
+^      `causes injury to`  IS A FUNCTION FROM Victim TO BOOLEAN
+
+@ref Dog Act 058 of 1976 (WA)
+@ref url https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a230.html
+@ref url pdf https://www.legislation.wa.gov.au/legislation/prod/filestore.nsf/FileURL/mrdoc_47983.pdf/$FILE/Dog%20Act%201976%20-%20%5B08-b0-00%5D.pdf?OpenElement
+
+§ `Dogs Act - 33D.1`
+@ref Dog Act 058 of 1976 (WA) s1
+
+GIVEN dp     IS A Person
+      dog    IS AN Animal
+      victim IS A Victim
+DECIDE `commits s1 offence`
+ IF   some dog
+ AND  attacks OR chases
+ AND  any  victim
+      AND  `causes injury to` victim
+ AND  person dp
+             `is liable for the control of the`
+             dog
+
+DECLARE Penalty IS ONE OF
+   Fine HAS maximum IS A          NUMBER
+            minimum ^  ^ OPTIONAL NUMBER
+   Jail HAS maximum ^  ^          ^
+            minimum ^  ^ OPTIONAL ^
+
+§ `s1 offence`
+GIVEN dp  IS A  Person
+      dog IS AN Animal
+GIVETH A Penalty
+`s1 penalty` MEANS
+   IF dog's dangerous THEN Fine WITH maximum IS 20000, minimum IS Just 1000
+                      ELSE Fine ^    ^       ^  10000, minimum IS Nothing
+
+§ `Dogs Act - 33D.2A`
+@ref Dog Act 058 of 1976 (WA) s2
+GIVEN dp     IS A Person
+      dog    IS AN Animal
+      victim IS A Victim
+DECIDE `commits s2 offence`
+ IF   some dog
+ AND  attacks OR chases
+ AND  any  victim
+      AND  NOT `causes injury to` victim
+ AND  person dp
+             `is liable for the control of the`
+             dog
+GIVEN dp  IS A  Person
+      dog IS AN Animal
+`s2 penalty` MEANS
+   IF dog's dangerous THEN Fine WITH maximum IS 10000, minimum IS Just 500
+                      ELSE Fine ^    ^       ^   3000, minimum IS Nothing
+
+GIVEN str IS A STRING
+      b   IS A BOOLEAN
+say str b MEANS b
+
+above x MEANS TRUE
+
+ASSUME `identified by` IS FUNCTION FROM Person AND Person TO BOOLEAN
+
+GIVEN dp     IS A Person
+      dog    IS AN Animal
+      victim IS A Victim
+      `defence of person`   [defence of person] IS A BOOLEAN
+      property [defence of property] IS A BOOLEAN
+      droving IS A BOOLEAN
+      removal IS A BOOLEAN
+      `of any animal found trespassing` IS A BOOLEAN
+      `ordinarily kept` IS A BOOLEAN
+      `ordinarily permitted to live` IS A BOOLEAN
+      `the occupier of premises` IS A FUNCTION FROM Person AND Animal AND BOOLEAN TO BOOLEAN
+      otherOwner IS A Person
+DECIDE `defence 33D.2B.a`
+IF    above dog
+ AND  ([was being used in good faith in the reasonable defence of any] (`defence of person`
+                                                                         OR property))
+  OR [for the] ((droving OR removal) [of any animal found trespassing])
+  OR `the occupier of premises` dp dog (`ordinarily kept` OR `ordinarily permitted to live`)
+     AND [at the material time] `owns` otherOwner dog [was owned by another person who had reached 18 years of age]
+     AND `identified by` otherOwner dp
+
+
+--   (2A)    If a dog attacks or chases any person or animal without causing physical injury to the person or animal that is attacked or chased, every person liable for the control of the dog commits an offence.
+--               Penalty:
+--                       (a)    for an offence relating to a dangerous dog, a fine of $10 000, but the minimum penalty is a fine of $500;
+--                      (b)    for an offence relating to a dog other than a dangerous dog, a fine of $3 000.
+--   (2B)    It is a defence to a charge of an offence under subsection (1) or (2A) if the person charged satisfies the court —
+--                  (a)    in the case of any person, that the dog was being used in good faith in the reasonable defence of any person or property or for the droving or removal of any animal found trespassing; or
+--                  (b)    in the case of the occupier of premises where the dog is ordinarily kept or ordinarily permitted to live, that at the material time the dog was owned by another person who had reached 18 years of age, and who is identified by the person charged; or
+--                  (c)    in the case of the owner, that at the material time the dog was in the possession or control of another person without the owner’s consent, express or implied.
+-- attack, in relation to the behaviour of a dog, does not include behaviour which was an immediate response to, and was induced by, provocation, but includes —
+--                  (a)    aggressively rushing at or harassing any person or animal; or
+--                  (b)    biting, or otherwise causing physical injury to, a person or an animal; or
+--                  (c)    tearing clothing on, or otherwise causing damage to the property of, the person attacked; or
+--                  (d)    attempting to attack, or behaving in such a manner toward a person as would cause a reasonable person to fear physical injury,
+--               unless the owner establishes that the behaviour was justified by a reasonable cause;
+-- provocation, in relation to the behaviour of a dog, includes —
+--                  (a)    on the part of a person, other than a person liable for the control of the dog —
+--                              (i)    any teasing, tormenting, or abuse of the dog; or
+--                             (ii)    any assault on, or act of cruelty towards, the dog; or
+--                            (iii)    entry without lawful excuse on any land or premises of which the owner of the dog is an occupier or where the dog is ordinarily kept; or
+--                            (iv)    any intrusion into or upon any vehicle in or on which the dog is present; or
+--                             (v)    any threat to, or attack upon, another person or animal towards whom the dog could reasonably be expected to be protective;
+--                           or
+--                  (b)    on the part of another animal —
+--                              (i)    an attack on the dog made by any other animal; or
+--                             (ii)    the entry of that other animal on any land or premises of which the owner of the dog is an occupier or where the dog is ordinarily kept; or
+--                            (iii)    any threat to, or attack upon, another person or animal towards whom the dog could reasonably be expected to be protective,
+--               but does not include an intentional provocation of the dog by a person liable for the control of the dog;
+-- dangerous dog means a dog that is —
+--                  (a)    a dangerous dog (declared); or
+--                  (b)    a dangerous dog (restricted breed); or
+--                  (c)    a commercial security dog;
+-- dangerous dog (declared) means an individual dog that under section 33E(1) is declared to be a dangerous dog (declared);
+-- dangerous dog (restricted breed) means a dog that —
+--                  (a)    is of a breed prescribed by the regulations to be a restricted breed; or
+--                  (b)    is a mix of 2 or more breeds, one being a breed prescribed by the regulations to be a restricted breed;
+-- 
+-- 
+-- 
