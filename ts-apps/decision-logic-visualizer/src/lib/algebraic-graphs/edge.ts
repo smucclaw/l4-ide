@@ -1,4 +1,4 @@
-import type { Ord } from '$lib/utils.js'
+import type { Ord, CSSClass } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /********************************
@@ -77,5 +77,103 @@ export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
 
   toString(): string {
     return `<${this.getU()}, ${this.getV()}>`
+  }
+}
+
+/********************************
+      Attributes
+*********************************/
+// This isn't in principle limited to edges; it's just that we will prob use LirNode methods for node data
+
+export interface EdgeAttributes<A extends Ord<A>> {
+  getStyles(): EdgeStyles
+  getLabel(): string
+  merge(other: EdgeAttributes<A>): EdgeAttributes<A>
+}
+
+export class DefaultEdgeAttributes<A extends Ord<A>>
+  implements EdgeAttributes<A>
+{
+  constructor(
+    protected styles: EdgeStyles = new EmptyEdgeStyles(),
+    protected label: string = ''
+  ) {}
+
+  getStyles(): EdgeStyles {
+    return this.styles
+  }
+
+  setStyles(styles: EdgeStyles) {
+    this.styles = styles
+  }
+
+  getLabel(): string {
+    return this.label
+  }
+
+  setLabel(label: string) {
+    this.label = label
+  }
+
+  merge(other: EdgeAttributes<A>): EdgeAttributes<A> {
+    return mergeEdgeAttributes(this, other)
+  }
+}
+
+/** <|> */
+export function mergeEdgeAttributes<A extends Ord<A>>(
+  a1: EdgeAttributes<A>,
+  a2: EdgeAttributes<A>
+): EdgeAttributes<A> {
+  function mergeEdgeLabels(l1: string, l2: string) {
+    if (l1 === emptyEdgeLabel) {
+      return l2
+    }
+    if (l2 === emptyEdgeLabel) {
+      return l1
+    }
+    return l2
+  }
+
+  function mergeEdgeStyles(s1: EdgeStyles, s2: EdgeStyles) {
+    if (s1.getRawStyles() === '') {
+      return s2
+    }
+    if (s2.getRawStyles() === '') {
+      return s1
+    }
+    return s2
+  }
+
+  return new DefaultEdgeAttributes(
+    mergeEdgeStyles(a1.getStyles(), a2.getStyles()),
+    mergeEdgeLabels(a1.getLabel(), a2.getLabel())
+  )
+}
+
+/***************************
+    Edge Label and Styles
+****************************/
+
+export const emptyEdgeLabel = ''
+
+export interface EdgeStyles {
+  getRawStyles(): CSSClass
+}
+
+/** 'mempty' for EdgeStyles */
+export class EmptyEdgeStyles implements EdgeStyles {
+  constructor() {}
+
+  getRawStyles() {
+    return ''
+  }
+}
+
+export class HighlightedEdgeStyles implements EdgeStyles {
+  constructor() {}
+
+  getRawStyles() {
+    return 'stroke: var(--color-highlighted-path)'
   }
 }

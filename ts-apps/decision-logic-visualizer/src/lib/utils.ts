@@ -38,6 +38,7 @@ export interface HasId {
 
 /* ====== CSS ============ */
 
+/** TODO: Make this more precise / more restrictive? */
 export type CSSClass = string
 
 export type Styles = {
