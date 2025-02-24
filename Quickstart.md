@@ -11,4 +11,3 @@ Instructions for downloading a VSIX bundle together with the visualizer and othe
 ### Linux -- TODO
 
 Instructions for downloading a VSIX bundle together with the visualizer and other components.
-

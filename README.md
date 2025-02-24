@@ -13,10 +13,12 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 ## Language Tutorials
 
 - Tutorial 1: Hello, World
+
   - Must Sing
   - Vermin
 
 - Tutorial 2: British Nationality Act
+
   - References and Legal Citations
   - Temporals
 
@@ -25,6 +27,7 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 - Tutorial 4: Automatically Generating an AI Chatbot
 
 - Tutorial 5: Contracts involving Parties, Obligations, and Deadlines
+
   - visualizing a contract
   - abductive reasoning and planning problems
 

@@ -51,4 +51,3 @@ Open folder [./jl4/examples](./jl4/examples) to see the Language Server in actio
 ## Visualizer
 
 Click on "visualize" to see a rendering of the decision logic.
-
