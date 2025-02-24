@@ -37,6 +37,15 @@ data LinTree = MkLinTree
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Semigroup, Monoid) via Generically LinTree
 
+data LinExpr
+  = AndChain [Expr Resolved]
+  | OrChain [Expr Resolved]
+  | IfChain
+      (Expr Resolved, [Expr Resolved])
+      -- ^ tuple of 'condition' and the "then" part of the 'if <condition> then <expr>'
+      (Expr Resolved)
+      -- ^ The 'else' part.
+
 debugAllChecksAndEvals :: FilePath -> IO ()
 debugAllChecksAndEvals file = do
   input <- Text.readFile file
