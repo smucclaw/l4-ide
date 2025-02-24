@@ -55,57 +55,6 @@ export const isSFGroupingNode = (
   isSFSourceNode(node) || isSFSinkNode(node)
 
 /************************************************
-            Flow Edges
-*************************************************/
-
-export class FlowEdge implements Ord<FlowEdge> {
-  id: string
-  constructor(
-    readonly source: string,
-    readonly target: string
-  ) {
-    this.id = `(${source}, ${target})`
-  }
-
-  getU() {
-    return this.source
-  }
-
-  getV() {
-    return this.target
-  }
-
-  isEqualTo<T extends FlowEdge>(other: T) {
-    return this.id === other.id
-  }
-
-  /** Lexicographical comparison of IDs of nodes */
-  compare(that: FlowEdge): ComparisonResult {
-    if (this.getU() < that.getU()) {
-      return ComparisonResult.LessThan
-    } else if (this.getU() > that.getU()) {
-      return ComparisonResult.GreaterThan
-    }
-
-    if (this.getV() < that.getV()) {
-      return ComparisonResult.LessThan
-    } else if (this.getV() > that.getV()) {
-      return ComparisonResult.GreaterThan
-    }
-
-    return ComparisonResult.Equal
-  }
-
-  toSFPojo(): SF.Edge {
-    return {
-      id: this.id,
-      source: this.source,
-      target: this.target,
-    }
-  }
-}
-
-/************************************************
           SvelteFlow Custom Nodes
 *************************************************/
 
