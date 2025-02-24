@@ -94,7 +94,7 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgP <|> fmap Z refP)
+  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgAnnotationP <|> fmap Z refP)
   traverse_ addNlgOrRef nlgs
   let
     epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
@@ -104,24 +104,106 @@ spaceOrAnnotations = do
     , hiddenClusters = epaNlgs
     }
 
-nlgP :: Parser (Epa Nlg)
-nlgP = do
-  nlgExpr <- nlgAnnotationP
-  pure $ fmap (MkNlg (mkSimpleEpaAnno nlgExpr)) nlgExpr
-
 refP :: Parser (Epa Ref)
 refP = do
   refExpr <- refAnnotationP
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
-nlgAnnotationP :: Parser (Epa Text)
-nlgAnnotationP = hidden $ onlySpacedToken (\case
-  TNlg t ty -> Just $ toNlgAnno t ty
-  _ -> Nothing)
-  "Natural Language Annotation"
+nlgAnnotationP :: Parser (Epa Nlg)
+nlgAnnotationP = do
+  currentPosition <- getSourcePos
+  rawText <- hidden $ spacedTokenWs (\case
+    TNlg t ty -> Just $ toNlgAnno t ty
+    _ -> Nothing)
+    "Natural Language Annotation"
+
+  let
+    inputFp = sourceName currentPosition
+
+    nlgParser :: Parser Nlg
+    nlgParser =
+      blockNlg <|> lineNlg
+
+    blockNlg :: Parser Nlg
+    blockNlg = do
+      (open, a, close) <- P.between (plainToken TNlgOpen) (plainToken TNlgClose) (nlgFragment True)
+      attachAnno $
+        MkParsedNlg emptyAnno
+          <$  annoEpa  (pure (tokenToEpa open))
+          <*> annoHole (pure a)
+          <*  annoEpa  (pure (tokenToEpa close))
+
+    lineNlg :: Parser Nlg
+    lineNlg = do
+      attachAnno $
+        MkParsedNlg emptyAnno
+          <$  annoLexeme (spacedTokenWs_ TNlgPrefix)
+          <*> annoHole   (nlgFragment False)
+
+    nlgFragment :: Bool -> Parser [NlgFragment Name]
+    nlgFragment isBlock = do
+      many $
+            try nameRefP
+        <|> textFragment isBlock
+
+    runNlgParserForInputAt initPos input = case execNlgLexer initPos input of
+      Left err -> do
+        -- traverse_ registerParseError (bundleErrors err)
+        fancyFailure $ Set.singleton $ ErrorFail $ errorBundlePretty err -- TODO: no idea how to lift this properly
+      Right toks ->
+        case execNlgParserForTokens (nlgParser <* eof) inputFp rawText.payload toks of
+          Left err -> do
+            -- TODO: register delayed parser error
+            traverse_ registerParseError (bundleErrors err)
+            attachAnno $
+              MkInvalidNlg emptyAnno
+                <$ annoEpa (pure $ TNlg <$> rawText)
+
+          Right nlg ->
+            pure nlg
+
+  nlg <- runNlgParserForInputAt currentPosition rawText.payload
+  case toNodesEither nlg of
+    Left err -> do
+      fancyFailure $ Set.singleton $
+        ErrorFail $ "Internal error while parsing NLG annotation: " <> Text.unpack (prettyTraverseAnnoError err)
+    Right csns -> do
+      pure $ Epa
+        { payload = nlg
+        , original = concatMap allClusterTokens csns
+        , trailingTokens = rawText.trailingTokens
+        , hiddenClusters = []
+        }
+
+nameRefP :: Parser (NlgFragment Name)
+nameRefP = do
+  (open, n, close) <- P.between (hidden $ spacedToken_ TPercent) (spacedToken_ TPercent) name
+  attachAnno $
+    MkNlgRef emptyAnno
+      <$  annoLexeme (pure open)
+      <*> annoHole   (pure n)
+      <*  annoLexeme (pure close)
+
+textFragment :: Bool -> Parser (NlgFragment Name)
+textFragment isBlock = do
+  when isBlock $ do
+    notFollowedBy (plainToken TNlgClose *> eof)
+  attachAnno $
+    MkNlgText emptyAnno
+      <$> annoEpa (wrapInEpa <$> anyToken)
+  where
+    -- We replace any 'PosToken' we are parsing with 'TNlgString' to make sure
+    -- it is highlighted correctly
+    wrapInEpa :: PosToken -> Epa Text
+    wrapInEpa posToken =
+      displayTokenType . (.payload) <$> tokenToEpa (posToken & #payload %~ replaceTokenType)
+
+    replaceTokenType :: TokenType -> TokenType
+    replaceTokenType tt@(TSpace _) = tt
+    replaceTokenType tt = TNlgString (displayTokenType tt)
 
 refAnnotationP :: Parser (Epa Text)
-refAnnotationP = hidden $ onlySpacedToken (\case
+refAnnotationP = hidden $ spacedTokenWs (\case
   TRef t ty -> Just $ toRefAnno t ty
   _ -> Nothing)
   "Reference Annotation"
@@ -130,7 +212,7 @@ refAnnotationP = hidden $ onlySpacedToken (\case
 -- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
 -- (2) should we add it to the AST at all? Currently we don't need it
 refAdditionalP :: Parser (Epa ())
-refAdditionalP = hidden $ onlySpacedToken (\case
+refAdditionalP = hidden $ spacedTokenWs (\case
   TRefSrc _t -> Just ()
   TRefMap _t -> Just ()
   _ -> Nothing
@@ -142,8 +224,8 @@ lexeme p = do
   a <- p
   wsOrAnnotation <- spaceOrAnnotations
   pure $ Lexeme
-    { trailingTokens = wsOrAnnotation.trailingTokens
-    , payload = a
+    { payload = a
+    , trailingTokens = wsOrAnnotation.trailingTokens
     , hiddenClusters = wsOrAnnotation.hiddenClusters
     }
 
@@ -153,8 +235,8 @@ addNlgOrRef = \case
   Z ref -> modify' (addRef ref.payload)
   _ -> pure ()
 
-spacedP :: Parser a -> Parser (Lexeme a)
-spacedP p = do
+lexemeWs :: Parser a -> Parser (Lexeme a)
+lexemeWs p = do
   a <- p
   trailingTokens <- spaces
   pure $ Lexeme
@@ -163,21 +245,28 @@ spacedP p = do
     , hiddenClusters = []
     }
 
-onlySpacedToken :: (TokenType -> Maybe a) -> String -> Parser (Epa a)
-onlySpacedToken cond lbl =
+spacedTokenWs :: (TokenType -> Maybe a) -> String -> Parser (Epa a)
+spacedTokenWs cond lbl =
   lexToEpa' <$>
-    spacedP
+    lexemeWs
       (token
         (\ t -> (t,) <$> cond t.payload)
         Set.empty
       )
     <?> lbl
 
+spacedTokenWs_ :: TokenType -> Parser (Lexeme PosToken)
+spacedTokenWs_ tt =
+  lexemeWs (plainToken tt)
+
 plainToken :: TokenType -> Parser PosToken
 plainToken tt =
   token
     (\ t -> if computedPayload t == tt then Just t else Nothing)
     (Set.singleton (Tokens (L.trivialToken tt :| [])))
+
+anyToken :: Parser PosToken
+anyToken = anySingle
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -1195,6 +1284,17 @@ _example11e =
     ]
 
 -- ----------------------------------------------------------------------------
+-- Nlg Annotation parsers.
+-- Parse NLG annotations such that we can process them later.
+-- ----------------------------------------------------------------------------
+
+execNlgParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (ParseErrorBundle TokenStream Void) a
+execNlgParserForTokens p file input ts =
+  case parse (runStateT (p <* eof) mempty) file (MkTokenStream (Text.unpack input) ts) of
+    Left err -> Left err
+    Right (a, _pstate) -> Right a
+
+-- ----------------------------------------------------------------------------
 -- JL4 parsers
 -- ----------------------------------------------------------------------------
 
@@ -1213,6 +1313,8 @@ execParserForTokens p file input ts =
         (annotatedA, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs a
       in
         Right (annotatedA, nlgS.warnings, pstate)
+
+
 
 runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 runLexer file input =
@@ -1305,9 +1407,9 @@ epaToCluster p = CsnCluster
   , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
   }
 
-epaToHiddenCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
+epaToHiddenCluster :: (HasField "range" t SrcRange, Show t) => Epa_ t a -> CsnCluster_ t
 epaToHiddenCluster p = CsnCluster
-  { payload = mkHiddenConcreteSyntaxNode p.original
+  { payload =  mkHiddenConcreteSyntaxNode p.original
   , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
   }
 
@@ -1391,6 +1493,14 @@ data Epa_ t a = Epa
   }
   deriving stock Show
   deriving (Functor)
+
+tokenToEpa :: t -> Epa_ t t
+tokenToEpa t = Epa
+  { original = [t]
+  , payload = t
+  , trailingTokens = []
+  , hiddenClusters = []
+  }
 
 lexesToEpa :: Lexeme_ t [t] -> Epa_ t [t]
 lexesToEpa l = Epa

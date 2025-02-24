@@ -1,17 +1,17 @@
 module L4.Nlg where
 
 import Base
+import qualified Base.Text as Text
 
 import L4.Syntax
 import L4.Annotation
 import Optics
 import L4.Print
-import L4.Lexer (PosToken)
-import GHC.Generics (Generically(..))
-import qualified Data.Text as Text
-import qualified L4.Parser as Parser
 import L4.TypeCheck
-import qualified Data.Text.IO as Text
+import L4.Lexer (PosToken)
+import L4.Parser.SrcSpan
+import GHC.Generics (Generically(..))
+import qualified L4.Parser as Parser
 
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
@@ -45,7 +45,11 @@ debugAllChecksAndEvals file = do
     Right (prog, _) ->
       case doCheckProgram prog of
         CheckResult {errors, program} -> do
-          Text.putStrLn $ Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
+          Text.putStrLn $ Text.unlines
+            ( map
+                (\ err -> prettySrcRange (Just file) (rangeOf err) <> ":\n" <> Text.unlines (prettyCheckErrorWithContext err))
+                errors
+            )
 
           let directives = toListOf (gplate @(Directive Resolved)) program
               checkExprs = mapMaybe (\case
@@ -299,8 +303,8 @@ instance Linearize Resolved where
   linearize = \case
     Def _ name -> lin name
     Ref actual _ original
-      | Just _ <- actual ^. annoNlg
-      , Nothing <- original ^. annoNlg
+      | Just _ <- actual ^. annoOf % annNlg
+      , Nothing <- original ^. annoOf % annNlg
        -> lin actual
       | otherwise -> lin original
     OutOfScope _ n -> lin n
