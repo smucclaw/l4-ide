@@ -3,8 +3,9 @@ import { describe, test, expect } from 'vitest'
 import { vertex } from '../lib/algebraic-graphs/adjacency-map-directed-graph.js'
 import {
   DefaultEdgeAttributes,
+  DirectedEdge,
   EmptyEdgeStyles,
-  HighlightedEdgeStyles,
+  SelectedEdgeStyles,
 } from '../lib/algebraic-graphs/edge.js'
 import { NumberWrapper } from './number-wrapper.js'
 
@@ -24,12 +25,12 @@ describe('Edge Attributes - Setting and Getting', () => {
 
     // Create some attributes
     const edgeAttrs = new DefaultEdgeAttributes(
-      new HighlightedEdgeStyles(),
+      new SelectedEdgeStyles(),
       'Test Edge'
     )
 
     // Set attributes on the edge from nw1 to nw2
-    const edge = { u: nw1, v: nw2 }
+    const edge = new DirectedEdge(nw1, nw2)
     g.setEdgeAttribute(edge, edgeAttrs)
 
     // Get the attributes
@@ -49,7 +50,7 @@ describe('Edge Attributes - Setting and Getting', () => {
 
     const edgeAttrs = new DefaultEdgeAttributes()
     edgeAttrs.setLabel('Non-existent Edge')
-    const edge = { u: nw1, v: nw3 }
+    const edge = new DirectedEdge(nw1, nw3)
 
     expect(() => g.setEdgeAttribute(edge, edgeAttrs)).toThrowError(
       `setEdgeAttribute: Edge (${edge.u}, ${edge.v}) does not exist`
@@ -60,7 +61,7 @@ describe('Edge Attributes - Setting and Getting', () => {
 describe('Edge Attributes - Merging', () => {
   test('Merging edge attributes', () => {
     const styles1 = new EmptyEdgeStyles()
-    const styles2 = new HighlightedEdgeStyles()
+    const styles2 = new SelectedEdgeStyles()
 
     const attrs1 = new DefaultEdgeAttributes(styles1, 'Label1')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -73,7 +74,7 @@ describe('Edge Attributes - Merging', () => {
 
   test('Merging edge attributes when one is empty', () => {
     const styles1 = new EmptyEdgeStyles()
-    const styles2 = new HighlightedEdgeStyles()
+    const styles2 = new SelectedEdgeStyles()
 
     const attrs1 = new DefaultEdgeAttributes(styles1, '')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -90,7 +91,7 @@ describe('Edge Attributes - Graph Operations', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
 
-    const edge = { u: nw1, v: nw2 }
+    const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes()
@@ -98,10 +99,7 @@ describe('Edge Attributes - Graph Operations', () => {
     g1.setEdgeAttribute(edge, attr1)
 
     const g2 = vertex(nw1).connect(vertex(nw2))
-    const attr2 = new DefaultEdgeAttributes(
-      new HighlightedEdgeStyles(),
-      'Label2'
-    )
+    const attr2 = new DefaultEdgeAttributes(new SelectedEdgeStyles(), 'Label2')
     g2.setEdgeAttribute(edge, attr2)
 
     const overlaid = g1.overlay(g2)
@@ -119,8 +117,8 @@ describe('Edge Attributes - Graph Operations', () => {
     const nw2 = new NumberWrapper(2)
     const nw3 = new NumberWrapper(3)
 
-    const edge1 = { u: nw1, v: nw2 }
-    const edge2 = { u: nw1, v: nw3 }
+    const edge1 = new DirectedEdge(nw1, nw2)
+    const edge2 = new DirectedEdge(nw1, nw3)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes()
@@ -147,7 +145,7 @@ describe('Edge Attributes - Graph Operations', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
 
-    const edge = { u: nw1, v: nw2 }
+    const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes(new EmptyEdgeStyles(), 'Label1')
@@ -155,7 +153,7 @@ describe('Edge Attributes - Graph Operations', () => {
 
     // Create g2 with edge nw1 -> nw2, set attribute attr2
     const g2 = vertex(nw1).connect(vertex(nw2))
-    const attr2 = new DefaultEdgeAttributes(new HighlightedEdgeStyles())
+    const attr2 = new DefaultEdgeAttributes(new SelectedEdgeStyles())
     g2.setEdgeAttribute(edge, attr2)
 
     const overlaid = g1.overlay(g2)

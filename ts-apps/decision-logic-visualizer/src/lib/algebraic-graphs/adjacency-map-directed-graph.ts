@@ -1,6 +1,7 @@
 import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
+  type HasEdge,
   type EdgeAttributes,
   DefaultEdgeAttributes,
 } from './edge.js'
@@ -67,23 +68,29 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   // Getting / setting edge attributes
 
-  getAttributesForEdge(edge: { u: A; v: A }): EdgeAttributes<A> {
-    return this.edgeAttributes.get(edge) ?? new DefaultEdgeAttributes()
+  getAttributesForEdge<T extends HasEdge<A>>(edge: T): EdgeAttributes<A> {
+    return (
+      this.edgeAttributes.get({ u: edge.getU(), v: edge.getV() }) ??
+      new DefaultEdgeAttributes()
+    )
   }
 
   /** Will error if the input edge does not exist.
    *
    * Merges the input attribute with any existing ones
    */
-  setEdgeAttribute(edge: { u: A; v: A }, newAttr: EdgeAttributes<A>) {
-    if (!this.hasEdge(edge.u, edge.v)) {
+  setEdgeAttribute<T extends HasEdge<A>>(edge: T, newAttr: EdgeAttributes<A>) {
+    if (!this.hasEdge(edge.getU(), edge.getV())) {
       throw new Error(
-        `setEdgeAttribute: Edge (${edge.u}, ${edge.v}) does not exist`
+        `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`
       )
     }
 
     const currAttributes = this.getAttributesForEdge(edge)
-    this.edgeAttributes.set(edge, currAttributes.merge(newAttr))
+    this.edgeAttributes.set(
+      { u: edge.getU(), v: edge.getV() },
+      currAttributes.merge(newAttr)
+    )
   }
 
   /** Internal */

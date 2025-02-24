@@ -6,7 +6,12 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { DirectedEdge, type EdgeStyles } from '../algebraic-graphs/edge.js'
+import {
+  type HasEdge,
+  DirectedEdge,
+  type EdgeStyles,
+  SelectedEdgeStyles,
+} from '../algebraic-graphs/edge.js'
 
 /*
 Design principles:
@@ -73,7 +78,20 @@ export class PathLirNode {
   ) {}
 
   /** Or 'highlight' */
-  select(context: LirContext) {}
+  select(context: LirContext) {
+    const edges = this.rawPath.getEdges()
+    edges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, new SelectedEdgeStyles())
+    })
+    // TODO: setbindings for the vars in the path too
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n)
+  }
 }
 
 /******************************************************
@@ -130,6 +148,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
   }
 
+  /*****************************
+      Basic graph ops
+  ******************************/
+
   /** The `id` should correspond to that of a LadderLirNode. */
   getNeighbors(context: LirContext, id: LirId): LadderLirNode[] {
     const neighbors = this.#dag.getAdjMap().get(id) || new Set()
@@ -153,39 +175,50 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   /** Get all simple paths through the Dag */
   getPaths(_context: LirContext) {
-    return this.#dag.getAllPaths().map((rawPath) => new PathLirNode(this, rawPath))
+    return this.#dag
+      .getAllPaths()
+      .map((rawPath) => new PathLirNode(this, rawPath))
   }
 
   /*****************************
         Edge attributes
   ******************************/
 
-  getEdgeStyles(_context: LirContext, edge: LadderLirEdge): EdgeStyles {
-    const rawEdge = { u: edge.getU(), v: edge.getV() }
-    return this.#dag.getAttributesForEdge(rawEdge).getStyles()
+  getEdgeStyles<T extends HasEdge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeStyles {
+    return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
-  setEdgeStyles(context: LirContext, edge: LadderLirEdge, styles: EdgeStyles) {
-    const rawEdge = { u: edge.getU(), v: edge.getV() }
-    this.#dag.getAttributesForEdge(rawEdge).setStyles(styles)
-
+  setEdgeStyles<T extends HasEdge<LirId>>(
+    context: LirContext,
+    edge: T,
+    styles: EdgeStyles
+  ) {
+    this.#dag.getAttributesForEdge(edge).setStyles(styles)
     this.getRegistry().publish(context, this.getId())
   }
 
-  getEdgeLabel(_context: LirContext, edge: LadderLirEdge): string {
-    const rawEdge = { u: edge.getU(), v: edge.getV() }
-    return this.#dag.getAttributesForEdge(rawEdge).getLabel()
+  getEdgeLabel<T extends HasEdge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): string {
+    return this.#dag.getAttributesForEdge(edge).getLabel()
   }
 
-  setEdgeLabel(context: LirContext, edge: LadderLirEdge, label: string) {
-    const rawEdge = { u: edge.getU(), v: edge.getV() }
-    this.#dag.getAttributesForEdge(rawEdge).setLabel(label)
-
+  setEdgeLabel<T extends HasEdge<LirId>>(
+    context: LirContext,
+    edge: T,
+    label: string
+  ) {
+    this.#dag.getAttributesForEdge(edge).setLabel(label)
     this.getRegistry().publish(context, this.getId())
   }
   /*****************************
             Misc
   ******************************/
+
   getChildren(context: LirContext) {
     return this.getVertices(context)
   }

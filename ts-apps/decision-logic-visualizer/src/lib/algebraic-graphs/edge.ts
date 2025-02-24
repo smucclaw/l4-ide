@@ -5,6 +5,12 @@ import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
       Edge types
 *********************************/
 
+/** The most minimal 'HasEdge' */
+export interface HasEdge<A extends Ord<A>> {
+  getU(): A
+  getV(): A
+}
+
 export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
   readonly u: A
   readonly v: A
@@ -174,7 +180,7 @@ export class EmptyEdgeStyles implements EdgeStyles {
   }
 }
 
-export class HighlightedEdgeStyles implements EdgeStyles {
+export class SelectedEdgeStyles implements EdgeStyles {
   constructor() {}
 
   getRawStyles() {
