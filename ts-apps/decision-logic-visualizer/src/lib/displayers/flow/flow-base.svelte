@@ -39,7 +39,8 @@
     Make initial SF nodes and edges
   ************************************/
 
-  const sfGraph = ladderGraphToSFGraph(context, declLirNode.getBody(context))
+  const ladderGraph = declLirNode.getBody(context)
+  const sfGraph = ladderGraphToSFGraph(context, ladderGraph)
 
   /***********************************
       SvelteFlow nodes and edges
@@ -163,6 +164,17 @@
     <Background />
   </SvelteFlow>
 </div>
+<section>
+  <section class="flex flex-col gap-2">
+    {#each ladderGraph.getPaths(context) as path }
+    <button class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100" 
+      onmouseenter={() => path.select(context)} 
+      onmouseleave={() => path.deselect(context)}>
+        {path.toPretty(context)}
+    </button>
+    {/each}
+  </section>
+</section>
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->

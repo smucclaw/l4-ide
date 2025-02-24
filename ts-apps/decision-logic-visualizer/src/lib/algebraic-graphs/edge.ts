@@ -1,4 +1,4 @@
-import type { Ord, CSSClass } from '$lib/utils.js'
+import type { Ord, StyleStr } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /********************************
@@ -168,7 +168,7 @@ export function mergeEdgeAttributes<A extends Ord<A>>(
 export const emptyEdgeLabel = ''
 
 export interface EdgeStyles {
-  getRawStyles(): CSSClass
+  getRawStyles(): StyleStr
 }
 
 /** 'mempty' for EdgeStyles */

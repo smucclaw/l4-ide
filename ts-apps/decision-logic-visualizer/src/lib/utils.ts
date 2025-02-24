@@ -39,7 +39,7 @@ export interface HasId {
 /* ====== CSS ============ */
 
 /** TODO: Make this more precise / more restrictive? */
-export type CSSClass = string
+export type StyleStr = string
 
 export type Styles = {
   [val: string]: CSSProperties | Styles
