@@ -6,7 +6,7 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { DirectedEdge, EmptyEdgeStyles, HighlightedEdgeStyles, type EdgeStyles } from '../algebraic-graphs/edge.js'
+import { DirectedEdge, type EdgeStyles } from '../algebraic-graphs/edge.js'
 
 /*
 Design principles:
@@ -53,7 +53,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return this.#params
   }
 
-  getBody(context: LirContext) {
+  getBody(_context: LirContext) {
     return this.#body
   }
 
