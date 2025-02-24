@@ -16,7 +16,10 @@ export type DirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
-type EdgeAttributeMap<A extends Ord<A>> = Map<{ u: A; v: A }, EdgeAttributes<A>>
+export type EdgeAttributeMap<A extends Ord<A>> = Map<
+  { u: A; v: A },
+  EdgeAttributes<A>
+>
 
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors.
@@ -215,7 +218,7 @@ export function appendVerticesToSourceNeighbors<A extends Ord<A>>(
   })
 }
 
-function mergeEdgeAttributeMaps<A extends Ord<A>>(
+export function mergeEdgeAttributeMaps<A extends Ord<A>>(
   left: EdgeAttributeMap<A>,
   right: EdgeAttributeMap<A>
 ): EdgeAttributeMap<A> {
