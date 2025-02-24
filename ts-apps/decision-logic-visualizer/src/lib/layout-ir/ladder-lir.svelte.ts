@@ -11,6 +11,7 @@ import {
   DirectedEdge,
   type EdgeStyles,
   SelectedEdgeStyles,
+  EmptyEdgeStyles,
 } from '../algebraic-graphs/edge.js'
 
 /*
@@ -77,20 +78,33 @@ export class PathLirNode {
     protected rawPath: DirectedAcyclicGraph<LirId>
   ) {}
 
-  /** Or 'highlight' */
-  select(context: LirContext) {
+  /** Helper */
+  protected setStylesOnPathEdges(context: LirContext, styles: EdgeStyles) {
     const edges = this.rawPath.getEdges()
     edges.forEach((edge) => {
-      this.ladderGraph.setEdgeStyles(context, edge, new SelectedEdgeStyles())
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
     })
+  }
+
+  /** Or 'highlight' */
+  select(context: LirContext) {
+    this.setStylesOnPathEdges(context, new SelectedEdgeStyles())
     // TODO: setbindings for the vars in the path too
+  }
+
+  deselect(context: LirContext) {
+    this.setStylesOnPathEdges(context, new EmptyEdgeStyles())
   }
 
   getVertices(context: LirContext) {
     return this.rawPath
       .getVertices()
       .map((id) => context.get(id))
-      .filter((n) => !!n)
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context).map((n) => n.toPretty(context)).join(' ')
   }
 }
 
