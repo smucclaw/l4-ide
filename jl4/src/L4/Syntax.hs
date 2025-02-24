@@ -141,8 +141,9 @@ data Directive n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeDecl n =
-    RecordDecl Anno [TypedName n]
+    RecordDecl Anno (Maybe n) [TypedName n]
   | EnumDecl Anno [ConDecl n]
+  | SynonymDecl Anno (Type' n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

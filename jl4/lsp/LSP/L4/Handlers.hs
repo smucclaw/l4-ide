@@ -307,17 +307,18 @@ handlers recorder =
 
             let topDeclItems
                   = filterMatchesOn CompletionItem._label
-                  $ foldMap
-                      (mapMaybe
-                        (\(_, name, checkEntity) ->
-                          topDeclToCompletionItem name
-                          $ Optics.over'
-                            (Optics.gplate @(Type' Resolved))
-                            (applyFinalSubstitution typeCheck.substitution)
-                            checkEntity
-                        )
+                  $ mapMaybe
+                      (\(name, checkEntity) ->
+                        topDeclToCompletionItem name
+                        $ Optics.over'
+                          (Optics.gplate @(Type' Resolved))
+                          (applyFinalSubstitution typeCheck.substitution)
+                          checkEntity
                       )
-                      typeCheck.environment
+                      (combineEnvironmentEntityInfo
+                        typeCheck.environment
+                        typeCheck.entityInfo
+                      )
 
             -- TODO: maybe we should sort these as follows
             -- 1 keywords
@@ -502,6 +503,7 @@ topDeclToCompletionItem name = \case
       { CompletionItem._kind = Just $ case tydec of
           RecordDecl {} -> CompletionItemKind_Struct
           EnumDecl {} -> CompletionItemKind_Enum
+          SynonymDecl {} -> CompletionItemKind_Reference
       }
   KnownTypeVariable {} -> Nothing
   where

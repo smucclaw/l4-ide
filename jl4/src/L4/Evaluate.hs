@@ -162,14 +162,16 @@ evalLocalDecl (LocalAssume _ann assume) =
   evalAssume assume
 
 evalDeclare :: Declare Resolved -> Eval ()
-evalDeclare (MkDeclare _ann _tysig appForm t) =
-  evalTypeDecl (view TypeCheck.appFormHead appForm) t
+evalDeclare (MkDeclare _ann _tysig _appForm t) =
+  evalTypeDecl t
 
-evalTypeDecl :: Resolved -> TypeDecl Resolved -> Eval ()
-evalTypeDecl _ (EnumDecl _ann conDecls) =
+evalTypeDecl :: TypeDecl Resolved -> Eval ()
+evalTypeDecl (EnumDecl _ann conDecls) =
   traverse_ evalConDecl conDecls
-evalTypeDecl c (RecordDecl _ann tns) =
-  evalConDecl (MkConDecl emptyAnno c tns)
+evalTypeDecl (RecordDecl _ann mcon tns) =
+  traverse_ (\ c -> evalConDecl (MkConDecl emptyAnno c tns)) mcon
+evalTypeDecl (SynonymDecl _ann _t) =
+  pure ()
 
 evalConDecl :: ConDecl Resolved -> Eval ()
 evalConDecl (MkConDecl _ann n []) =

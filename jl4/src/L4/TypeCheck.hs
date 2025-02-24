@@ -67,6 +67,7 @@ module L4.TypeCheck where
 
 import Base
 import qualified Base.Map as Map
+import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.ExactPrint
 import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
@@ -80,6 +81,8 @@ import Data.Bifunctor
 import Data.Either (partitionEithers)
 import qualified Generics.SOP as SOP
 import Optics.Core hiding (anyOf, re)
+
+import Debug.Trace
 
 newtype Check a =
   MkCheck (CheckState -> [(With CheckErrorWithContext a, CheckState)])
@@ -104,22 +107,25 @@ newtype Check a =
 data CheckState =
   MkCheckState
     { environment  :: !Environment
+    , entityInfo   :: !EntityInfo
     , errorContext :: !CheckErrorContext
     , substitution :: !Substitution
     , supply       :: !Int
     }
   deriving stock (Eq, Generic, Show)
 
-type Environment = Map RawName [(Unique, Name, CheckEntity)]
+type Environment  = Map RawName [Unique]
+type EntityInfo   = Map Unique (Name, CheckEntity)
 type Substitution = Map Int (Type' Resolved)
 
 runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
 runCheck (MkCheck f) = f
 
-initialCheckState :: Environment -> Substitution -> CheckState
-initialCheckState environment substitution =
+initialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
+initialCheckState environment entityInfo substitution =
   MkCheckState
     { environment
+    , entityInfo
     , substitution
     , errorContext = None
     , supply       = 0
@@ -137,7 +143,7 @@ initialCheckState environment substitution =
 --
 doCheckProgram :: Program Name -> CheckResult
 doCheckProgram program =
-  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment Map.empty) of
+  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment initialEntityInfo Map.empty) of
     (w, s) ->
       let
         (errs, rprog) = runWith w
@@ -151,6 +157,7 @@ doCheckProgram program =
               , errors = substErrs ++ moreErrs
               , substitution = s'.substitution
               , environment = s'.environment
+              , entityInfo = s'.entityInfo
               }
 
 data CheckResult
@@ -159,8 +166,21 @@ data CheckResult
   , errors :: [CheckErrorWithContext]
   , substitution :: Substitution
   , environment :: Environment
+  , entityInfo :: EntityInfo
   }
   deriving stock (Eq, Show)
+
+-- | Combines environment and entityInfo into one single list
+--
+-- This is currently used to generate top-level completions.
+--
+combineEnvironmentEntityInfo :: Environment -> EntityInfo -> [(Name, CheckEntity)]
+combineEnvironmentEntityInfo env ei =
+  let
+    uniques :: Set Unique
+    uniques = Set.fromList (concat (snd <$> Map.toList env))
+  in
+    snd <$> filter (flip Set.member uniques . fst) (Map.toList ei)
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
@@ -168,7 +188,7 @@ data CheckResult
 applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
 applyFinalSubstitution subst t =
   let
-    cs = initialCheckState Map.empty subst
+    cs = initialCheckState Map.empty Map.empty subst
   in
     case runCheckUnique (applySubst t) cs of
       (w, _cs') ->
@@ -318,17 +338,57 @@ aDef = Def aUnique aName
 aRef :: Resolved
 aRef = Ref aName aUnique aName
 
+booleanInfo :: CheckEntity
+booleanInfo =
+  KnownType 0 (EnumDecl emptyAnno [MkConDecl emptyAnno falseDef [], MkConDecl emptyAnno trueDef []])
+
+falseInfo :: CheckEntity
+falseInfo =
+  KnownTerm boolean Constructor
+
+trueInfo :: CheckEntity
+trueInfo =
+  KnownTerm boolean Constructor
+
+numberInfo :: CheckEntity
+numberInfo =
+  KnownType 0 (EnumDecl emptyAnno [])
+
+stringInfo :: CheckEntity
+stringInfo =
+  KnownType 0 (EnumDecl emptyAnno [])
+
+listInfo :: CheckEntity
+listInfo =
+  KnownType 1 (EnumDecl emptyAnno [MkConDecl emptyAnno emptyDef []])
+
+emptyInfo :: CheckEntity
+emptyInfo =
+  KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor
+
 initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN", [ (booleanUnique, preDef "BOOLEAN", KnownType 0 (EnumDecl emptyAnno [MkConDecl emptyAnno falseDef [], MkConDecl emptyAnno trueDef []])) ])
-    , (NormalName "FALSE",   [ (falseUnique,   preDef "FALSE",   KnownTerm boolean Constructor) ])
-    , (NormalName "TRUE",    [ (trueUnique,    preDef "TRUE",    KnownTerm boolean Constructor) ])
-    , (NormalName "NUMBER",  [ (numberUnique,  preDef "NUMBER",  KnownType 0 (EnumDecl emptyAnno [])) ])
-    , (NormalName "STRING",  [ (stringUnique,  preDef "STRING",  KnownType 0 (EnumDecl emptyAnno [])) ])
-    , (NormalName "LIST",    [ (listUnique,    preDef "LIST",    KnownType 1 (EnumDecl emptyAnno [MkConDecl emptyAnno emptyDef []])) ])
-    , (NormalName "EMPTY",   [ (emptyUnique,   preDef "EMPTY",   KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor) ])
+    [ (NormalName "BOOLEAN", [booleanUnique])
+    , (NormalName "FALSE",   [falseUnique  ])
+    , (NormalName "TRUE",    [trueUnique   ])
+    , (NormalName "NUMBER",  [numberUnique ])
+    , (NormalName "STRING",  [stringUnique ])
+    , (NormalName "LIST",    [listUnique   ])
+    , (NormalName "EMPTY",   [emptyUnique  ])
+    ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
+
+initialEntityInfo :: EntityInfo
+initialEntityInfo =
+  Map.fromList
+    [ (booleanUnique, (booleanName, booleanInfo))
+    , (falseUnique,   (falseName,   falseInfo  ))
+    , (trueUnique,    (trueName,    trueInfo   ))
+    , (numberUnique,  (numberName,  numberInfo ))
+    , (stringUnique,  (stringName,  stringInfo ))
+    , (listUnique,    (listName,    listInfo   ))
+    , (emptyUnique,   (emptyName,   emptyInfo  ))
     ]
 
 instance Functor Check where
@@ -582,10 +642,32 @@ addError e = do
   ctx <- use #errorContext
   with (MkCheckErrorWithContext e ctx)
 
+lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
+lookupRawNameInEnvironment n = do
+  env <- use #environment
+  ei  <- use #entityInfo
+  let
+    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
+    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
+
+    candidates :: [(Unique, Name, CheckEntity)]
+    candidates = mapMaybe proc (Map.findWithDefault [] n env)
+
+  traceM ("Trying to look up " <> Text.unpack (prettyLayout n))
+  traceM ("Returning with " <> show (length candidates) <> " candidates")
+  traverse_ (traceM . debugCandidate) candidates
+  pure candidates
+
+debugCandidate :: (Unique, Name, CheckEntity) -> String
+debugCandidate (u, _, KnownType kind _)   = show u <> " of kind " <> show kind
+debugCandidate (u, _, KnownTerm _ _)      = show u <> " is a term"
+debugCandidate (u, _, KnownTypeVariable)  = show u <> " is a type variable"
+
+
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
-  env <- use #environment
-  case mapMaybe proc (Map.findWithDefault [] (rawName n) env) of
+  options <- lookupRawNameInEnvironment (rawName n)
+  case mapMaybe proc options of
     [] -> do
       v <- fresh (rawName n)
       rn <- outOfScope (setAnnResolvedType v n) v
@@ -1031,23 +1113,15 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   ensureDistinct NonDistinctConstructors (getName <$> conDecls)
   (rconDecls, extends) <- unzip <$> traverse (inferConDecl rappForm) conDecls
   pure (EnumDecl ann rconDecls, sequence_ extends)
-inferTypeDecl rappForm (RecordDecl ann tns) = do
+inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
+  -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
-  (MkConDecl rann _ rtns, extend) <- inferConDeclResolved rappForm (view appFormHead rappForm) (MkConDecl ann (getName rappForm) tns)
-  pure (RecordDecl rann rtns, extend)
-
--- TODO: merge with inferConDecl
-inferConDeclResolved :: AppForm Resolved -> Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
-inferConDeclResolved rappForm n (MkConDecl ann _ tns) = do
-  ensureDistinct NonDistinctSelectors (getName <$> tns)
-  (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
-  let
-    conType = forall' (view appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
-    conInfo = KnownTerm conType Constructor
-  -- instantiated <- instantiate conType
-  -- trace (Text.unpack $ simpleprint conType) (pure ())
-  -- trace (Text.unpack $ simpleprint instantiated) (pure ())
-  pure (MkConDecl ann n rtns, makeKnown n conInfo >> sequence_ extends)
+  (MkConDecl rann mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
+  pure (RecordDecl rann (Just mrcon) rtns, extend)
+inferTypeDecl _rappForm (SynonymDecl ann t) = do
+  rt <- inferType t
+  -- TODO: we scope- and kind-check the rhs of a synonym, but do not actually introduce a synonym yet
+  pure (SynonymDecl ann rt, pure ())
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
 inferConDecl rappForm (MkConDecl ann n tns) = do
@@ -1115,8 +1189,8 @@ checkKind kind xs
 
 resolveType :: Name -> Check (Resolved, Kind)
 resolveType n = do
-  env <- use #environment
-  case mapMaybe proc (Map.findWithDefault [] (rawName n) env) of
+  options <- lookupRawNameInEnvironment (rawName n)
+  case mapMaybe proc options of
     [] -> do
       let kind = 0
       rn <- outOfScope (setAnnResolvedKind kind n) (Type emptyAnno)
@@ -1128,9 +1202,9 @@ resolveType n = do
       pure (rn, kind)
   where
     proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Kind)
-    proc (u, o, KnownTypeVariable) = let kind = 0 in Just (Ref (setAnnResolvedKind kind n) u o, kind)
-    proc (u, o, KnownType kind _)  = Just (Ref (setAnnResolvedKind kind n) u o, kind)
-    proc _                         = Nothing
+    proc (u, o, KnownTypeVariable)       = let kind = 0 in Just (Ref (setAnnResolvedKind kind n) u o, kind)
+    proc (u, o, KnownType kind _)        = Just (Ref (setAnnResolvedKind kind n) u o, kind)
+    proc _                               = Nothing
 
 class HasName a where
   getName :: a -> Name
@@ -1250,9 +1324,11 @@ scope :: Check a -> Check a
 scope m = do
   savedCtx <- use #errorContext
   savedEnv <- use #environment
+  savedEi  <- use #entityInfo -- possibly not necessary, but also not harmful
   a <- m
   assign #errorContext savedCtx
   assign #environment savedEnv
+  assign #entityInfo savedEi
   pure a
 
 setErrorContext :: (CheckErrorContext -> CheckErrorContext) -> Check ()
@@ -1270,20 +1346,18 @@ ensureDistinct ndc ns = do
 -- with the given specification.
 --
 makeKnown :: Resolved -> CheckEntity -> Check ()
-makeKnown a ce =
-  modifying #environment
-    (Map.alter proc (rawName n))
+makeKnown a ce = do
+  traceM $ "Trying to make known " <> Text.unpack (prettyLayout a) <> ": " <> debugCandidate (u, n, ce)
+  modifying' #environment (Map.alter proc (rawName n))
+  modifying' #entityInfo  (Map.insert u (n, ce))
   where
     u :: Unique
     n :: Name
     (u, n) = getUniqueName a
 
-    new :: (Unique, Name, CheckEntity)
-    new = (u, n, ce)
-
-    proc :: Maybe [(Unique, Name, CheckEntity)] -> Maybe [(Unique, Name, CheckEntity)]
-    proc Nothing   = Just [new]
-    proc (Just xs) = Just (new : xs)
+    proc :: Maybe [Unique] -> Maybe [Unique]
+    proc Nothing   = Just [u]
+    proc (Just xs) = Just (u : xs)
 
 checkExpr :: ExpectationContext -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr ec (IfThenElse ann e1 e2 e3) t = softprune $ scope $ do

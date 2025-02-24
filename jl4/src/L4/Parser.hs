@@ -362,26 +362,37 @@ declare sig =
 
 typeDecl :: Parser (TypeDecl Name)
 typeDecl =
-  recordDecl <|> enumDecl
+  recordDecl <|> enumOrSynonymDecl
 
 recordDecl :: Parser (TypeDecl Name)
 recordDecl =
   attachAnno $
-    RecordDecl emptyAnno <$> recordDecl'
+    RecordDecl emptyAnno
+      <$> annoHole (pure Nothing)
+      <*> recordDecl'
 
 recordDecl' :: Compose Parser WithAnno [TypedName Name]
 recordDecl' =
      annoLexeme (spacedToken_ TKHas)
   *> annoHole (lsepBy reqParam (spacedToken_ TComma))
 
-enumDecl :: Parser (TypeDecl Name)
-enumDecl =
+enumOrSynonymDecl :: Parser (TypeDecl Name)
+enumOrSynonymDecl =
   attachAnno $
-    EnumDecl emptyAnno
-      <$  annoLexeme (spacedToken_ TKIs)
-      <*  annoLexeme (spacedToken_ TKOne)
-      <*  annoLexeme (spacedToken_ TKOf)
-      <*> annoHole (lsepBy conDecl (spacedToken_ TComma))
+       annoLexeme (spacedToken_ TKIs)
+    *> (enumDecl <|> synonymDecl)
+
+enumDecl :: Compose Parser WithAnno (TypeDecl Name)
+enumDecl =
+  EnumDecl emptyAnno
+    <$  annoLexeme (spacedToken_ TKOne)
+    <*  annoLexeme (spacedToken_ TKOf)
+    <*> annoHole (lsepBy conDecl (spacedToken_ TComma))
+
+synonymDecl :: Compose Parser WithAnno (TypeDecl Name)
+synonymDecl =
+  SynonymDecl emptyAnno
+    <$> annoHole type'
 
 conDecl :: Parser (ConDecl Name)
 conDecl =
