@@ -43,6 +43,8 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 
 - Multi-Temporal Logic
 
+  - a remark on "shall" as an unfortunate consequence of negotiation-time vs run-time interpretation
+
 - Operationalization to Web and Mobile Apps
 
 - Natural Language Generation: exporting to Word and PDF
