@@ -159,8 +159,6 @@ data ConDecl n =
 
 data Expr n =
     And        Anno (Expr n) (Expr n)
-    -- (var1 AND var3) AND {- Comment -}var2
-    -- [AnnoHole, CSN "AND", CSN " ", CSN "{- Comment -}", AnnoHole]
   | Or         Anno (Expr n) (Expr n)
   | Implies    Anno (Expr n) (Expr n)
   | Equals     Anno (Expr n) (Expr n)
