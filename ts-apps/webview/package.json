@@ -42,7 +42,6 @@
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.4.1",
     "prettier-plugin-svelte": "^3.3.3",
-    "svelte": "^5.19.0",
     "svelte-check": "^4.1.4",
     "tailwindcss": "^4.0.6",
     "typescript": "^5.0.0",
@@ -50,6 +49,7 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "svelte": "^5.20.4",
     "@dagrejs/dagre": "^1.1.4",
     "@repo/decision-logic-visualizer": "*",
     "@repo/viz-expr": "*",

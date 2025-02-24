@@ -10,10 +10,13 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.97.0",
+    "@sveltejs/kit": "^2.16.0",
     "typescript": "~5.7.2",
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@repo/webview": "*",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "monaco-editor": "npm:@codingame/monaco-vscode-editor-api",
     "monaco-editor-wrapper": "^6.4.0",
     "monaco-languageclient": "^9.4.0",

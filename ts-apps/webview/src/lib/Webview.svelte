@@ -51,8 +51,9 @@
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
     // eslint-disable-next-line no-undef
-    vsCodeApi = acquireVsCodeApi()
-    messenger = new Messenger(vsCodeApi, { debugLog: true })
+    debugger;
+    // vsCodeApi = acquireVsCodeApi()
+    messenger = new Messenger(undefined, { debugLog: true })
 
     messenger.sendNotification(
       WebviewFrontendIsReadyNotification,
@@ -60,7 +61,7 @@
       { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
     )
 
-    console.log('Webview: vsCodeApi:', vsCodeApi)
+    // console.log('Webview: vsCodeApi:', vsCodeApi)
     console.log('Webview: onMount!')
 
     messenger.onRequest(

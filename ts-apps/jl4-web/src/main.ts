@@ -6,6 +6,7 @@
 import * as monaco from "@codingame/monaco-vscode-editor-api";
 import { initServices } from "monaco-languageclient/vscode/services";
 import { LogLevel } from "@codingame/monaco-vscode-api";
+import { mount } from 'svelte';
 import {
   CloseAction,
   ErrorAction,
@@ -20,6 +21,7 @@ import {
   toSocket,
 } from "vscode-ws-jsonrpc";
 import { configureDefaultWorkerFactory } from "monaco-editor-wrapper/workers/workerLoaders";
+import { Page } from '@repo/webview'
 
 export const backendUrl =
   import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
@@ -27,6 +29,7 @@ export const backendUrl =
 export const runClient = async () => {
   const logger = new ConsoleLogger(LogLevel.Debug);
   const htmlContainer = document.getElementById("jl4-editor")!;
+
   await initServices(
     {
       loadThemes: true,
@@ -36,6 +39,8 @@ export const runClient = async () => {
           "editor.experimental.asyncTokenization": true,
         }),
       },
+      serviceOverrides: {
+      }
     },
     {
       htmlContainer,
@@ -61,7 +66,6 @@ export const runClient = async () => {
     encodedTokensColors: [],
     colors: {},
   });
-
   monaco.editor.create(htmlContainer, {
     value: britishCitizen,
     language: "jl4",
@@ -70,6 +74,8 @@ export const runClient = async () => {
     theme: "jl4Theme",
     "semanticHighlighting.enabled": true,
   });
+
+  mount(Page, {target: document.getElementById('jl4-webview')});
 
   initWebSocketAndStartClient(backendUrl, logger);
 };
@@ -106,7 +112,7 @@ export const createLanguageClient = (
       // disable the default error handler
       errorHandler: {
         error: () => ({ action: ErrorAction.Continue }),
-        closed: () => ({ action: CloseAction.DoNotRestart }),
+        closed: () => ({ action: CloseAction.Restart }),
       },
       middleware: mkMiddleware(logger),
     },
