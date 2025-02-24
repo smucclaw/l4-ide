@@ -42,6 +42,13 @@ export class LirRegistry {
       unsubscribe: () => this.#subscribers.delete(callbackId),
     }
   }
+
+  publish(context: LirContext, id: LirId) {
+    // must NOT use forEach on pain of running into issues with Safari, at least for me
+    for (const callback of this.#subscribers.values()) {
+      callback(context, id)
+    }
+  }
 }
 
 export class LirId {
