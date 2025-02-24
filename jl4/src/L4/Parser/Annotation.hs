@@ -214,6 +214,14 @@ lexToEpa' l =
     , hiddenClusters = l.hiddenClusters
     }
 
+mkEpaFromLexeme :: a -> Lexeme_ t t -> Epa_ t a
+mkEpaFromLexeme a l = Epa
+  { trailingTokens = l.trailingTokens
+  , payload = a
+  , original = [l.payload]
+  , hiddenClusters = l.hiddenClusters
+  }
+
 --
 
 tryParser ::
