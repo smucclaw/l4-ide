@@ -20,7 +20,7 @@
           modules = [
             {
               jl4-demo = {
-                domain = "olive.well-typed.com";
+                domain = "jl4.well-typed.com";
                 acme-email = "magnus@well-typed.com";
                 root-ssh-keys = [
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkSSWT6/5jBteJYcwiwltGp+hPZM/rQcqbOENvMvIj3 mangoiv@p14-nixos"
