@@ -6,7 +6,7 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { DirectedEdge } from '../algebraic-graphs/edge.js'
+import { DirectedEdge, EmptyEdgeStyles, HighlightedEdgeStyles, type EdgeStyles } from '../algebraic-graphs/edge.js'
 
 /*
 Design principles:
@@ -144,6 +144,23 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
+  /*****************************
+        Edge attributes
+  ******************************/
+
+  getEdgeStyles(_context: LirContext, edge: LadderLirEdge): EdgeStyles {
+    const rawEdge = {u: edge.getU(), v: edge.getV()}
+    return this.#dag.getAttributesForEdge(rawEdge).getStyles()
+  }
+
+  setEdgeStyles(_context: LirContext, edge: LadderLirEdge, styles: EdgeStyles) {
+    const rawEdge = {u: edge.getU(), v: edge.getV()}
+    this.#dag.getAttributesForEdge(rawEdge).setStyles(styles)
+  }
+
+  /*****************************
+            Misc
+  ******************************/
   getChildren(context: LirContext) {
     return this.getVertices(context)
   }

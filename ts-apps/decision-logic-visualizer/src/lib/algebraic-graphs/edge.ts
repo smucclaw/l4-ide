@@ -87,7 +87,11 @@ export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
 
 export interface EdgeAttributes<A extends Ord<A>> {
   getStyles(): EdgeStyles
+  setStyles(styles: EdgeStyles): void
+  
   getLabel(): string
+  setLabel(label: string): void
+  
   merge(other: EdgeAttributes<A>): EdgeAttributes<A>
 }
 
