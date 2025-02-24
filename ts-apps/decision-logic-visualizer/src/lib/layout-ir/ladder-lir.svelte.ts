@@ -135,10 +135,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
-  // When we associate data with edges, will want to add a getEdge method too
-
   getEdges(_context: LirContext): LadderLirEdge[] {
-    // TODO: In the future, will want to add any data associated with the edges too
     return this.#dag.getEdges().map((edge) => {
       return new DefaultLadderLirEdge(edge)
     })
@@ -149,15 +146,28 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   ******************************/
 
   getEdgeStyles(_context: LirContext, edge: LadderLirEdge): EdgeStyles {
-    const rawEdge = {u: edge.getU(), v: edge.getV()}
+    const rawEdge = { u: edge.getU(), v: edge.getV() }
     return this.#dag.getAttributesForEdge(rawEdge).getStyles()
   }
 
-  setEdgeStyles(_context: LirContext, edge: LadderLirEdge, styles: EdgeStyles) {
-    const rawEdge = {u: edge.getU(), v: edge.getV()}
+  setEdgeStyles(context: LirContext, edge: LadderLirEdge, styles: EdgeStyles) {
+    const rawEdge = { u: edge.getU(), v: edge.getV() }
     this.#dag.getAttributesForEdge(rawEdge).setStyles(styles)
+
+    this.getRegistry().publish(context, this.getId())
   }
 
+  getEdgeLabel(_context: LirContext, edge: LadderLirEdge): string {
+    const rawEdge = { u: edge.getU(), v: edge.getV() }
+    return this.#dag.getAttributesForEdge(rawEdge).getLabel()
+  }
+
+  setEdgeLabel(context: LirContext, edge: LadderLirEdge, label: string) {
+    const rawEdge = { u: edge.getU(), v: edge.getV() }
+    this.#dag.getAttributesForEdge(rawEdge).setLabel(label)
+
+    this.getRegistry().publish(context, this.getId())
+  }
   /*****************************
             Misc
   ******************************/
