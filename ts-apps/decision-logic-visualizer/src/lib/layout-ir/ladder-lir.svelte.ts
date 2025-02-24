@@ -66,6 +66,16 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
+export class PathLirNode {
+  constructor(
+    protected ladderGraph: LadderGraphLirNode,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {}
+
+  /** Or 'highlight' */
+  select(context: LirContext) {}
+}
+
 /******************************************************
                   Flow Lir Nodes
  ******************************************************/
@@ -139,6 +149,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getEdges().map((edge) => {
       return new DefaultLadderLirEdge(edge)
     })
+  }
+
+  /** Get all simple paths through the Dag */
+  getPaths(_context: LirContext) {
+    return this.#dag.getAllPaths().map((rawPath) => new PathLirNode(this, rawPath))
   }
 
   /*****************************
