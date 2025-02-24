@@ -290,6 +290,11 @@ data Info =
 instance Default Extension where
   def = Extension Nothing Nothing
 
+annoOf :: HasAnno a => Lens' a (Anno' a)
+annoOf = lens
+  getAnno
+  (flip setAnno)
+
 annInfo :: Lens' Anno (Maybe Info)
 annInfo = annoExtra % #resolvedInfo
 
@@ -419,7 +424,16 @@ data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Nlg = MkNlg Anno [Text]
+data Nlg =
+    MkInvalidNlg Anno
+  | MkParsedNlg Anno [NlgFragment Name]
+  | MkResolvedNlg Anno [NlgFragment Resolved]
+  deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data NlgFragment n
+  = MkNlgText Anno Text
+  | MkNlgRef  Anno n
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -429,6 +443,8 @@ data Ref = MkRef Anno [Text]
 
 deriving via L4Syntax Nlg
   instance HasAnno Nlg
+deriving via L4Syntax (NlgFragment n)
+  instance HasAnno (NlgFragment n)
 deriving via L4Syntax Comment
   instance HasAnno Comment
 deriving via L4Syntax Ref
@@ -437,8 +453,12 @@ deriving via L4Syntax Ref
 instance ToConcreteNodes PosToken Comment where
   toNodes (MkComment ann _) = flattenConcreteNodes ann []
 
-instance ToConcreteNodes PosToken Nlg where
-  toNodes (MkNlg ann _) = flattenConcreteNodes ann []
+deriving anyclass instance ToConcreteNodes PosToken Nlg
+
+instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (NlgFragment n) where
+  toNodes = \case
+    MkNlgText ann _ -> flattenConcreteNodes ann []
+    MkNlgRef ann n -> flattenConcreteNodes ann [toNodes n]
 
 
 instance ToConcreteNodes PosToken Int where
@@ -502,6 +522,7 @@ deriving anyclass instance HasSrcRange (Directive a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 deriving anyclass instance HasSrcRange Nlg
+deriving anyclass instance HasSrcRange (NlgFragment n)
 deriving anyclass instance HasSrcRange Comment
 deriving anyclass instance HasSrcRange Ref
 

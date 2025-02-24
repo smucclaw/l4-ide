@@ -7,6 +7,6 @@ ASSUME eats   IS A BOOLEAN
 
 GIVEN p [person] IS A Person
 DECIDE `must sing`
-    IF        walks [the person must walk]
-       AND    eats [the person must eat]
+    IF        walks [%p% must walk]
+       AND    eats [%p% must eat]
            OR drinks

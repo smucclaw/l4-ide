@@ -37,14 +37,14 @@ data LinTree = MkLinTree
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Semigroup, Monoid) via Generically LinTree
 
-data LinExpr
-  = AndChain [Expr Resolved]
-  | OrChain [Expr Resolved]
-  | IfChain
-      (Expr Resolved, [Expr Resolved])
-      -- ^ tuple of 'condition' and the "then" part of the 'if <condition> then <expr>'
-      (Expr Resolved)
-      -- ^ The 'else' part.
+-- data LinExpr
+--   = AndChain [Expr Resolved]
+--   | OrChain [Expr Resolved]
+--   | IfChain
+--       (Expr Resolved, [Expr Resolved])
+--       -- ^ tuple of 'condition' and the "then" part of the 'if <condition> then <expr>'
+--       (Expr Resolved)
+--       -- ^ The 'else' part.
 
 debugAllChecksAndEvals :: FilePath -> IO ()
 debugAllChecksAndEvals file = do
@@ -54,7 +54,11 @@ debugAllChecksAndEvals file = do
     Right (prog, _) ->
       case doCheckProgram prog of
         CheckResult {errors, program} -> do
-          Text.putStrLn $ Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
+          Text.putStrLn $ Text.unlines
+            ( map
+                (\ err -> prettySrcRange (Just file) (rangeOf err) <> ":\n" <> Text.unlines (prettyCheckErrorWithContext err))
+                errors
+            )
 
           let directives = toListOf (gplate @(Directive Resolved)) program
               checkExprs = mapMaybe (\case
@@ -308,8 +312,8 @@ instance Linearize Resolved where
   linearize = \case
     Def _ name -> lin name
     Ref actual _ original
-      | Just _ <- actual ^. annoNlg
-      , Nothing <- original ^. annoNlg
+      | Just _ <- actual ^. annoOf % annNlg
+      , Nothing <- original ^. annoOf % annNlg
        -> lin actual
       | otherwise -> lin original
     OutOfScope _ n -> lin n
