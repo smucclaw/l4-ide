@@ -6,12 +6,13 @@
   --color-button-hover: #a5b4fc;
 
   --theme-border-radius: 5px;
+
+  /* TODO: Need to check the colors against some color palette generator */
+  --color-highlighted-path: #047857;
 }
 
 /**
 From discussion of Meng's layman visualizer
-
-  --color-positive: #047857; green for positive path 
   --color-negative: #dc2626; red for negative path 
   --color-path: #4b5563; dark grey for default path 
 */
