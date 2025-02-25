@@ -3,14 +3,12 @@
 ## Key commands
 
 ```bash
-npm run preview
+npm run dev --open
 ```
 
-There is no `dev` script in the package.json,
-because there is an issue with dev mode (probably with HMR)
-that I don't currently know how to fix.
-
 ## Notes on dependency-related things / errors / decisions
+
+### Make sure that SF nodes don't try to render and measure themselves in a non-browser environment (e.g. if SSR is enabled)
 
 ### esbuild x vite
 
