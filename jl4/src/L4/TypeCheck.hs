@@ -1839,8 +1839,9 @@ unifyBase (TyApp _ann1 n1 ts1) (TyApp _ann2 n2 ts2) = do
   pure (and (r : rs))
 unifyBase (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
   | length onts1 == length onts2 = do
-    traverse_ (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
-    unify t1 t2
+    rs <- traverse (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
+    r <- unify t1 t2
+    pure (and (r : rs))
 unifyBase (Type _ann1) (Type _ann2) = pure True
 unifyBase _t1 _t2 = pure False -- addError (UnificationError t1 t2)
 
