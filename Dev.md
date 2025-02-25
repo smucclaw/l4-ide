@@ -2,7 +2,7 @@
 
 These instructions are intended for L4 internal developers with experience in Typescript and/or Haskell.
 
-## Requirements:
+## Requirements
 
 - Haskell
   - [GHCup](https://www.haskell.org/ghcup/)
@@ -14,12 +14,11 @@ These instructions are intended for L4 internal developers with experience in Ty
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
 
-## Build:
+## Quick build and install
 
 ```sh
-cabal update
-cabal build all
 npm install && npm run build
+cabal update
 cabal install exe:jl4-lsp --overwrite-policy=always
 # Make sure the installation directory (usually `~/.cabal/bin/`) is on the `$PATH`
 ```
