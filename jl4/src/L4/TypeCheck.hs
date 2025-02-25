@@ -483,6 +483,7 @@ data CheckError =
   | IncompleteAppNamed Resolved [OptionallyNamedType Resolved]
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
+  | MissingEntityInfo Resolved
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -656,7 +657,11 @@ addError e = do
 getEntityInfo :: Resolved -> Check (Maybe CheckEntity)
 getEntityInfo r = do
   ei <- use #entityInfo
-  pure (snd <$> Map.lookup (getUnique r) ei)
+  case Map.lookup (getUnique r) ei of
+    Nothing       -> do
+      addError (MissingEntityInfo r)
+      pure Nothing
+    Just (_n, ce) -> pure (Just ce)
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment n = do
@@ -2042,6 +2047,14 @@ prettyCheckError (IllegalTypeInKindSignature t)            =
   , "but this one has type"
   , ""
   , "  " <> prettyLayout t
+  ]
+prettyCheckError (MissingEntityInfo r)                     =
+  [ "I've encountered a resolved name that has no additional information"
+  , "stored for it:"
+  , ""
+  , "  " <> prettyLayout r
+  , ""
+  , "This is an error in this system and should be reported as a bug."
   ]
 
 -- | Forms a plural when needed.
