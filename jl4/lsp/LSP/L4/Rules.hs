@@ -214,7 +214,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
-    case runSemanticTokensM defaultSemanticTokenCtx tokens of
+    case runSemanticTokensM (defaultSemanticTokenCtx ()) tokens of
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
@@ -222,7 +222,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
-    case runSemanticTokensM defaultSemanticTokenCtx prog of
+    case runSemanticTokensM (defaultSemanticTokenCtx CValue) prog of
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
