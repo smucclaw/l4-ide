@@ -91,15 +91,15 @@ srcPosToPosition s =
 
 withTypeContext :: SemanticTokensM Context t a -> SemanticTokensM Context t a
 withTypeContext =
-  local (\i -> i{semanticTokenContext = CType })
+  withContext CType
 
 withTypeSigContext :: SemanticTokensM Context t a -> SemanticTokensM Context t a
 withTypeSigContext =
-  local (\i -> i{semanticTokenContext = CTypeSig })
+  withContext CTypeSig
 
 withValueContext :: SemanticTokensM Context t a -> SemanticTokensM Context t a
 withValueContext =
-  local (\i -> i{semanticTokenContext = CValue })
+  withContext CValue
 
 data Context
   = CValue
@@ -166,7 +166,7 @@ instance ToSemTokens Context PosToken (AppForm Name) where
       CType -> genericToSemTokens a
       CValue -> functionApp ann n ns
 
-deriving anyclass  instance ToSemTokens Context PosToken (Expr Name)
+deriving anyclass instance ToSemTokens Context PosToken (Expr Name)
 deriving anyclass instance ToSemTokens Context PosToken (Program Name)
 deriving anyclass instance ToSemTokens Context PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (LocalDecl Name)
