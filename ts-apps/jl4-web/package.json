@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/vscode": "^1.97.0",
     "@sveltejs/kit": "^2.16.0",
+    "@types/vscode": "^1.97.0",
     "typescript": "~5.7.2",
     "vite": "^6.0.7"
   },

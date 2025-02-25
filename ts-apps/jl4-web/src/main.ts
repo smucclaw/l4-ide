@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------------------------------ */
 
 import * as monaco from "@codingame/monaco-vscode-editor-api";
+import * as vscode from "vscode";
 import { initServices } from "monaco-languageclient/vscode/services";
 import { LogLevel } from "@codingame/monaco-vscode-api";
 import { mount } from 'svelte';
@@ -74,8 +75,6 @@ export const runClient = async () => {
     theme: "jl4Theme",
     "semanticHighlighting.enabled": true,
   });
-
-  mount(Page, {target: document.getElementById('jl4-webview')});
 
   initWebSocketAndStartClient(backendUrl, logger);
 };
