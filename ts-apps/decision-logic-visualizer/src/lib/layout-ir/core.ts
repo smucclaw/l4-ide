@@ -57,7 +57,7 @@ export class LirId {
   constructor(private id: symbol = Symbol(LirId.counter++)) {}
 
   toString() {
-    return this.id.toString()
+    return this.id.description as string
   }
 
   isEqualTo(other: LirId) {
