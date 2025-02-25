@@ -8,8 +8,9 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 
 <figure>
 
-<figcaption>Syntax Highlighting for type declarations and Boolean-valued decision logic</figcaption>
 ![Syntax Highlighting Example](./doc/images/doc-screenshot-1.png)
+
+<figcaption>Syntax Highlighting for type declarations and Boolean-valued decision logic</figcaption>
 </figure>
 
 Decision Logic Visualization as a ladder diagram circuit
