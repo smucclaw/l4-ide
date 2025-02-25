@@ -3,8 +3,12 @@
 ## Key commands
 
 ```bash
-npm run dev -- --open
+npm run preview
 ```
+
+There is no `dev` script in the package.json,
+because there is an issue with dev mode (probably with HMR)
+that I don't currently know how to fix.
 
 ## Notes on dependency-related things / errors / decisions
 
