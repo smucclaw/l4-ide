@@ -28,8 +28,6 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 
 type SemanticTokensM c t = ReaderT (SemanticTokenCtx c t) (Except TraverseAnnoError)
 
-type HoleFit_ c t = SemanticTokensM c t [SemanticToken]
-
 runSemanticTokensM :: ToSemTokens c t a => SemanticTokenCtx c t -> a -> Either TraverseAnnoError [SemanticToken]
 runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemTokens a) semTokenCtx
 
@@ -39,21 +37,21 @@ runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemT
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
 class ToSemTokens c t a | a t -> c where
-  toSemTokens :: a -> HoleFit_ c t
+  toSemTokens :: a -> SemanticTokensM c t [SemanticToken]
   default toSemTokens ::
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ c t
+    SemanticTokensM c t [SemanticToken]
   toSemTokens = genericToSemTokens
 
 genericToSemTokens :: forall a t c .
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ c t
+    SemanticTokensM c t [SemanticToken]
 genericToSemTokens =
   genericToNodes (Proxy @(ToSemTokens c t)) toSemTokens traverseCsnWithHoles
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ c t] -> SemanticTokensM c t [SemanticToken]
+traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [SemanticTokensM c t [SemanticToken]] -> SemanticTokensM c t [SemanticToken]
 traverseCsnWithHoles (Anno _ _ []) _ = pure []
 traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
@@ -98,6 +96,10 @@ withModifier f act = do
 withTokenType :: (t -> Maybe SemanticTokenTypes) -> SemanticTokensM c t a -> SemanticTokensM c t a
 withTokenType f act = do
   local (\i -> i{semanticTokenType = \t -> f t <|> i.semanticTokenType t}) act
+
+withContext :: c -> SemanticTokensM c t a -> SemanticTokensM c t a
+withContext c =
+  local (\i -> i{semanticTokenContext = c })
 
 data SemanticToken = SemanticToken
   { start :: Position
