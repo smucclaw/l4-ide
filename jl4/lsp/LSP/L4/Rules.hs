@@ -74,6 +74,7 @@ data TypeCheckResult = TypeCheckResult
   , substitution :: Substitution
   , success :: Bool
   , environment :: TypeCheck.Environment
+  , entityInfo :: TypeCheck.EntityInfo
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
@@ -195,6 +196,7 @@ jl4Rules recorder = do
         { program = result.program
         , substitution = result.substitution
         , environment = result.environment
+        , entityInfo = result.entityInfo
         , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
         }
       )

@@ -110,7 +110,7 @@ instance LayoutPrinter a => LayoutPrinter (AppForm a) where
 
 instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
   printWithLayout = \case
-    RecordDecl _ fields  ->
+    RecordDecl _ _ fields  ->
       vcat
         [ "HAS"
         , indent 2 (vsep (fmap printWithLayout fields))
@@ -120,6 +120,12 @@ instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
         [ "IS ONE OF"
         , indent 2 (vsep (fmap printWithLayout enums))
         ]
+    SynonymDecl _ t ->
+      vcat
+        [ "IS"
+        , indent 2 (printWithLayout t)
+        ]
+
 instance LayoutPrinter a => LayoutPrinter (ConDecl a) where
   printWithLayout = \case
     MkConDecl _ n fields  ->
