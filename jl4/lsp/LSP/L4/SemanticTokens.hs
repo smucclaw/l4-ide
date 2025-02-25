@@ -77,6 +77,11 @@ identIsCon t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Class
   _ -> Nothing
 
+identIsFunction :: PosToken -> Maybe SemanticTokenTypes
+identIsFunction t = case posTokenCategory t.payload of
+  CIdentifier -> Just SemanticTokenTypes_Function
+  _ -> Nothing
+
 srcPosToPosition :: SrcPos -> Position
 srcPosToPosition s =
   Position
@@ -158,9 +163,10 @@ instance ToSemTokens Context PosToken (AppForm Name) where
           [ withTokenType identIsType $ toSemTokens n
           , withTokenType identIsTypeVar $ toSemTokens ns
           ]
-      _ ->
-        genericToSemTokens a
+      CType -> genericToSemTokens a
+      CValue -> functionApp ann n ns
 
+deriving anyclass  instance ToSemTokens Context PosToken (Expr Name)
 deriving anyclass instance ToSemTokens Context PosToken (Program Name)
 deriving anyclass instance ToSemTokens Context PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (LocalDecl Name)
@@ -170,7 +176,6 @@ deriving anyclass instance ToSemTokens Context PosToken (OptionallyTypedName Nam
 deriving anyclass instance ToSemTokens Context PosToken (OptionallyNamedType Name)
 deriving anyclass instance ToSemTokens Context PosToken (Decide Name)
 deriving anyclass instance ToSemTokens Context PosToken (TypeDecl Name)
-deriving anyclass instance ToSemTokens Context PosToken (Expr Name)
 deriving anyclass instance ToSemTokens Context PosToken (NamedExpr Name)
 deriving anyclass instance ToSemTokens Context PosToken (Branch Name)
 deriving anyclass instance ToSemTokens Context PosToken (Pattern Name)
@@ -199,3 +204,17 @@ instance ToSemTokens () PosToken PosToken where
   toSemTokens t = do
     ctx <- ask
     pure $ maybe [] toList (fromSemanticTokenContext ctx t)
+
+-- ----------------------------------------------------------------------------
+-- Helpers that are more complicated
+-- ----------------------------------------------------------------------------
+
+functionApp :: (ToSemTokens c PosToken a, ToSemTokens c PosToken b) => Anno -> a -> [b] -> SemanticTokensM c PosToken [SemanticToken]
+functionApp ann n ns = do
+  let maybeFunctionType = case ns of
+        [] -> id
+        _  -> withTokenType identIsFunction
+  traverseCsnWithHoles ann
+    [ maybeFunctionType $ toSemTokens n
+    , toSemTokens ns
+    ]
