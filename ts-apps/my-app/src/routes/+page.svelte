@@ -1,31 +1,25 @@
 <script lang="ts">
-  import { editor } from "@codingame/monaco-vscode-editor-api";
   import { onMount } from "svelte";
   let editorElement: HTMLDivElement;
   import { Page } from "@repo/webview";
-  import {
-    VisualizeDecisionLogicIRInfo,
-    WebviewFrontendIsReadyNotification,
-    VisualizeDecisionLogicRequest,
-  } from "@repo/viz-expr";
+  import { VisualizeDecisionLogicIRInfo, FunDecl } from "@repo/viz-expr";
+  import { MessageTransports } from "vscode-languageclient";
+  import { ConsoleLogger } from "monaco-languageclient/tools";
 
   import { Schema } from "effect";
 
-  let vizDecl = $state(undefined);
+  let vizDecl: undefined | FunDecl = $state(undefined);
 
   onMount(async () => {
     const monaco = await import("@codingame/monaco-vscode-editor-api");
-    const vscode = await import("vscode");
     const { initServices } = await import(
       "monaco-languageclient/vscode/services"
     );
     const { LogLevel } = await import("@codingame/monaco-vscode-api");
-    const { mount } = await import("svelte");
     const { CloseAction, ErrorAction, MessageTransports } = await import(
       "vscode-languageclient/browser.js"
     );
     const { MonacoLanguageClient } = await import("monaco-languageclient");
-    const { ConsoleLogger } = await import("monaco-languageclient/tools");
     const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } =
       await import("vscode-ws-jsonrpc");
     const { configureDefaultWorkerFactory } = await import(
@@ -50,7 +44,7 @@
           serviceOverrides: {},
         },
         {
-          editorElement,
+          htmlContainer: editorElement,
           logger,
         }
       );
@@ -73,7 +67,7 @@
         encodedTokensColors: [],
         colors: {},
       });
-      console.log("got to the container");
+
       monaco.editor.create(editorElement, {
         value: britishCitizen,
         language: "jl4",
@@ -83,13 +77,14 @@
         "semanticHighlighting.enabled": true,
       });
 
-      console.log("Should be mounted now");
-
       initWebSocketAndStartClient(backendUrl, logger);
     };
 
     /** parameterized version , support all languageId */
-    const initWebSocketAndStartClient = (url: string, logger): WebSocket => {
+    const initWebSocketAndStartClient = (
+      url: string,
+      logger: ConsoleLogger
+    ): WebSocket => {
       const webSocket = new WebSocket(url);
       webSocket.onopen = () => {
         const socket = toSocket(webSocket);
@@ -106,8 +101,8 @@
     };
 
     const createLanguageClient = (
-      logger: typeof ConsoleLogger,
-      messageTransports
+      logger: ConsoleLogger,
+      messageTransports: MessageTransports
     ) => {
       return new MonacoLanguageClient({
         name: "JL4 Language Client",
@@ -126,9 +121,9 @@
       });
     };
 
-    function mkMiddleware(logger) {
+    function mkMiddleware(logger: ConsoleLogger) {
       return {
-        executeCommand: async (command, args, next) => {
+        executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`== trying to execute command ${command}`);
           // FIXME: he we can actually run everything that we also run in the vscode extension
           const response = await next(command, args);
