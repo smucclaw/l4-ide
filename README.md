@@ -8,11 +8,11 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 
 Syntax Highlighting for Boolean-oriented decision logic
 
-![Syntax Highlighting Example](./doc/images/doc-screenshot-1.png)
+![Syntax Highlighting Example](./doc/images/bna-code.png)
 
 Decision Logic Visualization as a ladder diagram circuit
 
-Annotation mechanism to assist with natural language generation (the yellow bits in square brackets)
+![Syntax Highlighting Example](./doc/images/bna-viz.png)
 
 ## Status (25 Feb 2025)
 
