@@ -78,3 +78,11 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { name: Name; value: BoolValue }
 }
+
+/************************************************
+          SvelteFlow Custom Edges
+*************************************************/
+
+export interface HighlightableEdgeProps extends SF.EdgeProps {
+  data: {strokeColor: CSSStyleValue}
+}

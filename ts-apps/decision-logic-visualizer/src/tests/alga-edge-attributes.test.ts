@@ -37,7 +37,7 @@ describe('Edge Attributes - Setting and Getting', () => {
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
     expect(retrievedAttrs.getStyles().getRawStyles()).toBe(
-      'stroke: var(--color-highlighted-path)'
+      new SelectedEdgeStyles().getRawStyles()
     )
   })
 

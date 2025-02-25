@@ -1,6 +1,7 @@
 import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
+  stringifyEdge,
   type HasEdge,
   type EdgeAttributes,
   DefaultEdgeAttributes,
@@ -17,10 +18,7 @@ export type DirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
-export type EdgeAttributeMap<A extends Ord<A>> = Map<
-  { u: A; v: A },
-  EdgeAttributes<A>
->
+export type EdgeAttributeMap<A extends Ord<A>> = Map<string, EdgeAttributes<A>>
 
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors.
@@ -36,7 +34,7 @@ export class DirectedAMGraph<A extends Ord<A>>
   constructor(
     adjacencyMap?: Map<A, Set<A>>,
     protected edgeAttributes: EdgeAttributeMap<A> = new Map<
-      { u: A; v: A },
+      string,
       EdgeAttributes<A>
     >()
   ) {
@@ -70,7 +68,7 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   getAttributesForEdge<T extends HasEdge<A>>(edge: T): EdgeAttributes<A> {
     return (
-      this.edgeAttributes.get({ u: edge.getU(), v: edge.getV() }) ??
+      this.edgeAttributes.get(stringifyEdge(edge)) ??
       new DefaultEdgeAttributes()
     )
   }
@@ -87,10 +85,7 @@ export class DirectedAMGraph<A extends Ord<A>>
     }
 
     const currAttributes = this.getAttributesForEdge(edge)
-    this.edgeAttributes.set(
-      { u: edge.getU(), v: edge.getV() },
-      currAttributes.merge(newAttr)
-    )
+    this.edgeAttributes.set(stringifyEdge(edge), currAttributes.merge(newAttr))
   }
 
   /** Internal */

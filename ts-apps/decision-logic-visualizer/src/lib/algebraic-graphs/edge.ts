@@ -5,6 +5,12 @@ import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
       Edge types
 *********************************/
 
+export function stringifyEdge<A extends Ord<A>, T extends HasEdge<A>>(
+  edge: T
+): string {
+  return `<${edge.getU()}, ${edge.getV()}>`
+}
+
 /** The most minimal 'HasEdge' */
 export interface HasEdge<A extends Ord<A>> {
   getU(): A
