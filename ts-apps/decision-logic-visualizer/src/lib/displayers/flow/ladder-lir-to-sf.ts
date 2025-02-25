@@ -1,4 +1,4 @@
-import type { LirContext } from '$lib/layout-ir/core.js'
+import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import type {
   LadderLirNode,
   LadderLirEdge,
@@ -46,6 +46,10 @@ export function ladderGraphToSFGraph(
  ************* LadderLirNode to SF.Node ***************
  ******************************************************/
 
+export function lirIdToSFId(id: LirId): string {
+  return id.toString()
+}
+
 /**
  * Converts a LadderLirNode into an SF.Node object.
  */
@@ -56,7 +60,7 @@ export function ladderLirNodeToSfNode(
   return match(node)
     .with(P.instanceOf(BoolVarLirNode), (n) => {
       return {
-        id: n.getId().toString(),
+        id: lirIdToSFId(n.getId()),
         type: boolVarNodeType,
         position: n.getPosition(context),
         data: n.getData(context),
@@ -64,7 +68,7 @@ export function ladderLirNodeToSfNode(
     })
     .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
       return {
-        id: n.getId().toString(),
+        id: lirIdToSFId(n.getId()),
         type: notStartNodeType,
         position: n.getPosition(context),
         data: {},
@@ -72,7 +76,7 @@ export function ladderLirNodeToSfNode(
     })
     .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
       return {
-        id: n.getId().toString(),
+        id: lirIdToSFId(n.getId()),
         type: notEndNodeType,
         position: n.getPosition(context),
         data: {},
@@ -80,7 +84,7 @@ export function ladderLirNodeToSfNode(
     })
     .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
       return {
-        id: n.getId().toString(),
+        id: lirIdToSFId(n.getId()),
         type: sourceNodeType,
         position: n.getPosition(context),
         data: {},
@@ -88,7 +92,7 @@ export function ladderLirNodeToSfNode(
     })
     .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
-        id: n.getId().toString(),
+        id: lirIdToSFId(n.getId()),
         type: sinkNodeType,
         position: n.getPosition(context),
         data: {},
