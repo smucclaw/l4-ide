@@ -14,12 +14,7 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 
 Decision Logic Visualization as a ladder diagram circuit
 
-
-
 Annotation mechanism to assist with natural language generation
-
-
-
 
 ## Status (25 Feb 2025)
 
@@ -82,4 +77,3 @@ All this documentation is still under construction.
 - Operationalization to Web and Mobile Apps
 
 - Natural Language Generation: exporting to Word and PDF
-
