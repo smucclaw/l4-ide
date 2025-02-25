@@ -1,22 +1,22 @@
-# Other Background Material
+*# Other Background Material
 
 ## Quick links
 
 ## Other reading materials
 
-- Computer-readable legislation project, main page: <https://osf.io/yzf6x/>
-- Meng's thoughts on L4 syntax: <https://docs.google.com/spreadsheets/d/1RW5wLksZY7BBpjkbYzHDAjAgan994nnTdZiqhTFxoJw/edit?gid=1732775477#gid=1732775477>
+- [Computer-readable legislation project, main page](https://osf.io/yzf6x/)
+- [Meng's thoughts on L4 syntax](https://docs.google.com/spreadsheets/d/1RW5wLksZY7BBpjkbYzHDAjAgan994nnTdZiqhTFxoJw/edit?gid=1732775477#gid=1732775477)
 - CSL
   - Static Analyses of CSL contracts
     - [A Formally Verified Static Analysis Framework for Compositional Contracts](https://core.ac.uk/download/pdf/322819293.pdf)
 
 ## Links to specific examples
 
-- Short parsing exercises: <https://osf.io/rjduz>
+- [Short parsing exercises](https://osf.io/rjduz)
   - traffic, farming, alcohol, dogs (imaginary); charities, advertising in event (real)
-- British Nationality Act: <https://osf.io/mt78r>. Note that they have a redraft of s1 at the end in a more modern style.
-- (Fictional) alcohol sales example in the IDE mockup: <https://crlp-jerseyldo.github.io/ilde-mockup/>
-- (Fictional) farming act: <https://osf.io/bcnje>
+- [British Nationality Act](https://osf.io/mt78r). Note that they have a redraft of s1 at the end in a more modern style.
+- [Fictional alcohol sales example in the IDE mockup](https://crlp-jerseyldo.github.io/ilde-mockup/)
+- [Fictional farming act](https://osf.io/bcnje)
 - [Charities (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_41_2014) and its [Reg & Orders](https://www.jerseylaw.je/laws/current/search?q=charities&size=n_50_n)
 - [Financial Services Ombudsman (Jersey) Law 2014](https://www.jerseylaw.je/laws/current/l_14_2014)
 - [Domestic Abuse (Jersey) Law 2022](https://www.jerseylaw.je/laws/current/l_27_2022)
@@ -34,11 +34,11 @@ Related notes from meetings
 
 ## Slack thread
 
-Probably contains still some relevant links that aren't here yet. <https://smucclaw.slack.com/archives/C029JEMBKJB/p1726120969098429>
+Probably contains still some relevant links that aren't here yet. [Slack thread](https://smucclaw.slack.com/archives/C029JEMBKJB/p1726120969098429)
 
 ## Relevant examples from other legal DSLs
 
 [The NSW Community Gaming legislation](https://legislation.nsw.gov.au/view/whole/html/inforce/current/sl-2020-0304), formalized in Catala vs. YScript:
 
-- Catala: <https://github.com/CatalaLang/catala-examples/tree/master/NSW_community_gaming>
-- YScript: See page 187 of <https://austlii.community/foswiki/pub/DataLex/WebHome/ys-manual.pdf>
+- [Catala](https://github.com/CatalaLang/catala-examples/tree/master/NSW_community_gaming)
+- YScript: See page 187 of [YScript Manual](https://austlii.community/foswiki/pub/DataLex/WebHome/ys-manual.pdf)
