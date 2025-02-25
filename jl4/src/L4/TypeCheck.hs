@@ -1814,18 +1814,20 @@ unify t1 t2              = expandAndUnify t1 t2
 -- inference variables.
 --
 expandAndUnify :: Type' Resolved -> Type' Resolved -> Check Bool
-expandAndUnify t1 t2 = do
-  mt1' <- tryExpand t1
-  case mt1' of
-    Just t1' -> unify t1' t2
-    Nothing  -> do
-      mt2' <- tryExpand t2
-      case mt2' of
-        Just t2' -> unify t1 t2'
-        Nothing  -> unifyBase t1 t2
+expandAndUnify t1 t2 =
+  tryExpand t1 (\ t1' -> unify t1' t2) $
+  tryExpand t2 (\ t2' -> unify t1 t2') $
+  unifyBase t1 t2
   where
-    tryExpand (TyApp _ann n ts) = tryExpandTypeSynonym n ts
-    tryExpand _                 = pure Nothing
+    -- Tries to expand the given type synonym. If expansion succeeds,
+    -- applies the success continuation, otherwise the failure
+    -- continuation.
+    --
+    tryExpand :: Type' Resolved -> (Type' Resolved -> Check r) -> Check r -> Check r
+    tryExpand (TyApp _ann n ts)  kSuccess kFail = do
+      mt' <- tryExpandTypeSynonym n ts
+      maybe kFail kSuccess mt'
+    tryExpand _                 _kSuccess kFail = kFail
 
 -- | Handles the cases where we've established we have no top-level
 -- type synonym application and no inference variables.
