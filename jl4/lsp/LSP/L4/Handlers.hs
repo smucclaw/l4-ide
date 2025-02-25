@@ -498,7 +498,7 @@ topDeclToCompletionItem name = \case
          (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
          _ -> CompletionItemKind_Constant
       }
-  KnownType kind tydec ->
+  KnownType kind _args tydec ->
     Just (defaultTopDeclCompletionItem (typeFunction kind))
       { CompletionItem._kind = Just $ case tydec of
           RecordDecl {} -> CompletionItemKind_Struct
