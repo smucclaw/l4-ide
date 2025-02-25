@@ -5,19 +5,26 @@ import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
       Edge types
 *********************************/
 
-export function stringifyEdge<A extends Ord<A>, T extends HasEdge<A>>(
+export function stringifyEdge<A extends Ord<A>, T extends Edge<A>>(
   edge: T
 ): string {
   return `<${edge.getU()}, ${edge.getV()}>`
 }
 
-/** The most minimal 'HasEdge' */
-export interface HasEdge<A extends Ord<A>> {
+/** The most minimal 'Edge' */
+export interface Edge<A extends Ord<A>> {
   getU(): A
   getV(): A
 }
 
-export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
+export interface EdgeWithOrd<A extends Ord<A>> extends Edge<A> {
+  isEqualTo<B extends this>(that: B): boolean
+  compare(that: this): ComparisonResult
+}
+
+export abstract class AbsEdgeWithOrd<A extends Ord<A>>
+  implements EdgeWithOrd<A>
+{
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
@@ -33,7 +40,7 @@ export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
     return this.v
   }
 
-  abstract isEqualTo<B extends Edge<A>>(that: B): boolean
+  abstract isEqualTo<B extends this>(that: B): boolean
 
   compare(that: this) {
     // lexicographical comparison
@@ -44,7 +51,7 @@ export abstract class Edge<A extends Ord<A>> implements Ord<Edge<A>> {
   }
 }
 
-export class UndirectedEdge<A extends Ord<A>> extends Edge<A> {
+export class UndirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
   readonly u: A
   readonly v: A
   constructor(u: A, v: A) {
@@ -74,7 +81,7 @@ export class UndirectedEdge<A extends Ord<A>> extends Edge<A> {
 }
 
 /** Note that the string representation of a DirectedEdge differs from that of an UndirectedEdge. */
-export class DirectedEdge<A extends Ord<A>> extends Edge<A> {
+export class DirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
   constructor(u: A, v: A) {
     super(u, v)
   }

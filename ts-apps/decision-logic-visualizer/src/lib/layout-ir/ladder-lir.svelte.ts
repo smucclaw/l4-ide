@@ -7,7 +7,7 @@ import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import {
-  type HasEdge,
+  type Edge,
   DirectedEdge,
   type EdgeStyles,
   SelectedEdgeStyles,
@@ -200,14 +200,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         Edge attributes
   ******************************/
 
-  getEdgeStyles<T extends HasEdge<LirId>>(
+  getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
     edge: T
   ): EdgeStyles {
     return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
-  setEdgeStyles<T extends HasEdge<LirId>>(
+  setEdgeStyles<T extends Edge<LirId>>(
     context: LirContext,
     edge: T,
     styles: EdgeStyles
@@ -216,14 +216,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.getRegistry().publish(context, this.getId())
   }
 
-  getEdgeLabel<T extends HasEdge<LirId>>(
-    _context: LirContext,
-    edge: T
-  ): string {
+  getEdgeLabel<T extends Edge<LirId>>(_context: LirContext, edge: T): string {
     return this.#dag.getAttributesForEdge(edge).getLabel()
   }
 
-  setEdgeLabel<T extends HasEdge<LirId>>(
+  setEdgeLabel<T extends Edge<LirId>>(
     context: LirContext,
     edge: T,
     label: string

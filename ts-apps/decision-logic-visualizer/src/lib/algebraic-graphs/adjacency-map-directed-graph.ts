@@ -2,7 +2,7 @@ import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
   stringifyEdge,
-  type HasEdge,
+  type Edge,
   type EdgeAttributes,
   DefaultEdgeAttributes,
 } from './edge.js'
@@ -66,7 +66,7 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   // Getting / setting edge attributes
 
-  getAttributesForEdge<T extends HasEdge<A>>(edge: T): EdgeAttributes<A> {
+  getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes<A> {
     return (
       this.edgeAttributes.get(stringifyEdge(edge)) ??
       new DefaultEdgeAttributes()
@@ -77,7 +77,7 @@ export class DirectedAMGraph<A extends Ord<A>>
    *
    * Merges the input attribute with any existing ones
    */
-  setEdgeAttribute<T extends HasEdge<A>>(edge: T, newAttr: EdgeAttributes<A>) {
+  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes<A>) {
     if (!this.hasEdge(edge.getU(), edge.getV())) {
       throw new Error(
         `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`

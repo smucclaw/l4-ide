@@ -1,6 +1,6 @@
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import { Edge } from './edge.js'
+import { AbsEdgeWithOrd } from './edge.js'
 
 /**************************************************************
   Base internal Adjacency Map implementation / representation
@@ -43,7 +43,7 @@ export abstract class BaseAMGraph<A extends Ord<A>> {
     return Array.from(this.adjacencyMap.keys()).sort((a, b) => a.compare(b))
   }
 
-  abstract getEdges(): Edge<A>[]
+  abstract getEdges(): AbsEdgeWithOrd<A>[]
 
   /** Internal helper: Get a sorted array of *all* the [A, A] edges */
   protected getAllEdges(): Array<[A, A]> {
