@@ -1787,26 +1787,18 @@ tryExpandTypeSynonym r args = do
 -- In general, types should be instantiated prior to unification, and
 -- kind-checking should not involve unification.
 --
+-- One major complication are type synonyms which we have to expand
+-- during unification. When do we want to expand a type synonym?
+--
+-- Basically whenever we have ruled out the inference variable cases,
+-- because if we have one inference variable against a type synonym,
+-- we can just bind directly.
+--
+-- So we check the inference variable cases first, and then try to
+-- expand in 'expandAndUnify', and once we've established we cannot
+-- expand, we handle the remaining cases in 'unifyBase'.
+--
 unify :: Type' Resolved -> Type' Resolved -> Check Bool
-unify t1@(TyApp _ann1 n1 ts1) t2@(TyApp _ann2 n2 ts2) = do
-  mt1' <- tryExpandTypeSynonym n1 ts1
-  case mt1' of
-    Just t1' -> unify t1' t2
-    Nothing  -> do
-      mt2' <- tryExpandTypeSynonym n2 ts2
-      case mt2' of
-        Just t2' -> unify t1 t2'
-        Nothing  -> do
-          -- both are type constructors or type variables
-          r <- ensureSameRef n1 n2
-          -- We should not need to check the same length because we've done kind checking.
-          rs <- traverse (uncurry unify) (zip ts1 ts2)
-          pure (and (r : rs))
-unify (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
-  | length onts1 == length onts2 = do
-    traverse_ (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
-    unify t1 t2
-unify (Type _ann1) (Type _ann2) = pure True
 unify (InfVar _ann1 _pre1 i1) t2@(InfVar _ann2 _pre2 i2)
   | i1 == i2             = pure True
   | otherwise            = bind i1 t2
@@ -1816,7 +1808,41 @@ unify (InfVar _ann1 _pre1 i1) t2
 unify t1 (InfVar _ann2 _pre2 i2)
   | i2 `elem` infVars t1 = pure False -- addError (OccursCheck t1 t2)
   | otherwise            = bind i2 t1
-unify _t1 _t2 = pure False -- addError (UnificationError t1 t2)
+unify t1 t2              = expandAndUnify t1 t2
+
+-- | Handles the cases where we've established we have no top-level
+-- inference variables.
+--
+expandAndUnify :: Type' Resolved -> Type' Resolved -> Check Bool
+expandAndUnify t1 t2 = do
+  mt1' <- tryExpand t1
+  case mt1' of
+    Just t1' -> unify t1' t2
+    Nothing  -> do
+      mt2' <- tryExpand t2
+      case mt2' of
+        Just t2' -> unify t1 t2'
+        Nothing  -> unifyBase t1 t2
+  where
+    tryExpand (TyApp _ann n ts) = tryExpandTypeSynonym n ts
+    tryExpand _                 = pure Nothing
+
+-- | Handles the cases where we've established we have no top-level
+-- type synonym application and no inference variables.
+--
+unifyBase :: Type' Resolved -> Type' Resolved -> Check Bool
+unifyBase (TyApp _ann1 n1 ts1) (TyApp _ann2 n2 ts2) = do
+  -- both are type constructors or type variables
+  r <- ensureSameRef n1 n2
+  -- We should not need to check the same length because we've done kind checking.
+  rs <- traverse (uncurry unify) (zip ts1 ts2)
+  pure (and (r : rs))
+unifyBase (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
+  | length onts1 == length onts2 = do
+    traverse_ (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
+    unify t1 t2
+unifyBase (Type _ann1) (Type _ann2) = pure True
+unifyBase _t1 _t2 = pure False -- addError (UnificationError t1 t2)
 
 infVars :: Type' Resolved -> [Int]
 infVars (Type _)        = []
