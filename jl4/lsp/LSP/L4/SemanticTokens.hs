@@ -108,7 +108,16 @@ deriving anyclass instance ToSemTokens PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Assume Name)
 instance ToSemTokens PosToken (Declare Name) where
   toSemTokens (MkDeclare ann typesig appform decl) =
-    traverseCsnWithHoles ann [withTokenType identIsType $ toSemTokens typesig, toSemTokens appform, toSemTokens decl]
+    traverseCsnWithHoles ann
+      [ withTokenType identIsType $ toSemTokens typesig
+      , ifIsEnum identIsType decl $ toSemTokens appform
+      , toSemTokens decl
+      ]
+    where
+      ifIsEnum modifier = \case
+        EnumDecl{} -> withTokenType modifier
+        _ -> id
+
 deriving anyclass instance ToSemTokens PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens PosToken (ConDecl Name)
 instance ToSemTokens PosToken (Type' Name) where
