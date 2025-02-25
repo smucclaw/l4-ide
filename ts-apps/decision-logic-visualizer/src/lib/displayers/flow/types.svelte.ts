@@ -84,5 +84,5 @@ export interface BoolVarDisplayerProps extends SF.NodeProps {
 *************************************************/
 
 export interface HighlightableEdgeProps extends SF.EdgeProps {
-  data: {strokeColor: CSSStyleValue}
+  data: { strokeColor: CSSStyleValue }
 }

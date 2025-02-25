@@ -165,7 +165,7 @@
   </SvelteFlow>
 </div>
 <section>
-  <section class="flex flex-col gap-2">
+  <div class="flex flex-col gap-2">
     {#each ladderGraph.getPaths(context) as path}
       <button
         class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
@@ -175,7 +175,7 @@
         {path.toPretty(context)}
       </button>
     {/each}
-  </section>
+  </div>
 </section>
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
