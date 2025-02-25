@@ -1,4 +1,4 @@
-*# Other Background Material
+\*# Other Background Material
 
 ## Quick links
 
