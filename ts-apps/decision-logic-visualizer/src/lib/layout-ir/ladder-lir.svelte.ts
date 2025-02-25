@@ -104,7 +104,9 @@ export class PathLirNode {
   }
 
   toPretty(context: LirContext) {
-    return this.getVertices(context).map((n) => n.toPretty(context)).join(' ')
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
   }
 }
 

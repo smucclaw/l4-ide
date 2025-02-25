@@ -166,12 +166,14 @@
 </div>
 <section>
   <section class="flex flex-col gap-2">
-    {#each ladderGraph.getPaths(context) as path }
-    <button class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100" 
-      onmouseenter={() => path.select(context)} 
-      onmouseleave={() => path.deselect(context)}>
+    {#each ladderGraph.getPaths(context) as path}
+      <button
+        class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
+        onmouseenter={() => path.select(context)}
+        onmouseleave={() => path.deselect(context)}
+      >
         {path.toPretty(context)}
-    </button>
+      </button>
     {/each}
   </section>
 </section>
