@@ -1,7 +1,7 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module LSP.L4.Rules where
 
@@ -11,31 +11,28 @@ import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Resolve
+import L4.Parser.SrcSpan
 import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
-import L4.Parser.SrcSpan
 
+import qualified Base.Text as Text
 import Control.DeepSeq
 import Control.Lens ((^.))
+import qualified Data.Csv as Csv
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Text (Text)
-import UnliftIO (liftIO)
-import qualified Data.Csv as Csv
 import qualified Data.Map.Lazy as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
-import qualified Data.Text as Text
+import Data.Text (Text)
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified System.OsPath as Path
-import qualified System.File.OsPath as Path
-import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
 import GHC.Generics (Generic, Generically (..))
+import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
+import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -48,26 +45,29 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
+import qualified System.File.OsPath as Path
+import qualified System.OsPath as Path
+import UnliftIO (liftIO)
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetParsedAst = Program Name
 data GetParsedAst = GetParsedAst
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult TypeCheck = TypeCheckResult
 data TypeCheck = TypeCheck
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult SuccessfulTypeCheck = TypeCheckResult
 data SuccessfulTypeCheck = SuccessfulTypeCheck
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 data TypeCheckResult = TypeCheckResult
   { program :: Program Resolved
@@ -81,28 +81,28 @@ data TypeCheckResult = TypeCheckResult
 
 type instance RuleResult Evaluate = ()
 data Evaluate = Evaluate
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult LexerSemanticTokens = [SemanticToken]
 data LexerSemanticTokens = LexerSemanticTokens
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult ParserSemanticTokens = [SemanticToken]
 data ParserSemanticTokens = ParserSemanticTokens
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetSemanticTokens = [SemanticToken]
 data GetSemanticTokens = GetSemanticTokens
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetRelSemanticTokens = [UInt]
 data GetRelSemanticTokens = GetRelSemanticTokens
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 -- TODO:
 -- in future we want to have SrcPos |-> Uri s.t. we can resolve
@@ -113,8 +113,8 @@ data GetRelSemanticTokens = GetRelSemanticTokens
 -- an uri scheme described in the original file
 type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (Int, Maybe Text)
 data ResolveReferenceAnnotations = ResolveReferenceAnnotations
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
 srcRangeToInterval :: SrcRange -> IVMap.Interval SrcPos
 srcRangeToInterval range = IVMap.Interval range.start range.end
@@ -124,68 +124,68 @@ intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
 
 type instance RuleResult GetReferences = ReferenceMapping
 data GetReferences = GetReferences
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
+    deriving stock (Generic, Show, Eq)
+    deriving anyclass (NFData, Hashable)
 
-data ReferenceMapping =
-  ReferenceMapping
-  { actualToOriginal :: IntervalMap SrcPos Unique
-  -- ^ getting the original occurence of a name, based on its source range
-  , originalToActual :: MonoidalMap Unique [SrcRange]
-  -- ^ getting the source range of all references of an original definition
-  }
-  deriving stock Generic
-  deriving anyclass NFData
-  deriving (Semigroup, Monoid) via Generically ReferenceMapping
+data ReferenceMapping
+    = ReferenceMapping
+    { actualToOriginal :: IntervalMap SrcPos Unique
+    -- ^ getting the original occurence of a name, based on its source range
+    , originalToActual :: MonoidalMap Unique [SrcRange]
+    -- ^ getting the source range of all references of an original definition
+    }
+    deriving stock (Generic)
+    deriving anyclass (NFData)
+    deriving (Semigroup, Monoid) via Generically ReferenceMapping
 
 singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
-singletonReferenceMapping originalName actualRange
-  = ReferenceMapping
-  { actualToOriginal = IVMap.singleton (srcRangeToInterval actualRange) originalName
-  , originalToActual = MonoidalMap.singleton originalName [actualRange]
-  }
+singletonReferenceMapping originalName actualRange =
+    ReferenceMapping
+        { actualToOriginal = IVMap.singleton (srcRangeToInterval actualRange) originalName
+        , originalToActual = MonoidalMap.singleton originalName [actualRange]
+        }
 
 lookupReference :: SrcPos -> ReferenceMapping -> [SrcRange]
 lookupReference pos mapping = do
-  (_, n) <- IVMap.search pos mapping.actualToOriginal
-  Maybe.fromMaybe [] $ MonoidalMap.lookup n mapping.originalToActual
+    (_, n) <- IVMap.search pos mapping.actualToOriginal
+    Maybe.fromMaybe [] $ MonoidalMap.lookup n mapping.originalToActual
 
 data Log
-  = ShakeLog Shake.Log
-  deriving (Show)
+    = ShakeLog Shake.Log
+    deriving (Show)
 
 instance Pretty Log where
-  pretty = \case
-    ShakeLog msg -> pretty msg
+    pretty = \case
+        ShakeLog msg -> pretty msg
 
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
-  define shakeRecorder $ \GetLexTokens f -> do
-    (_, mRope) <- use_ GetFileContents f
-    case mRope of
-      Nothing -> pure ([{- TODO: report internal errors -}], Nothing)
-      Just rope -> do
-        let
-          contents = Rope.toText rope
-        case Lexer.execLexer (show $ fromNormalizedUri f) contents of
-          Left errs -> do
-            let
-              diags = toList $ fmap (mkSimpleDiagnostic . Parser.mkPError "lexer") errs
-            pure (fmap (mkSimpleFileDiagnostic f) diags, Nothing)
-          Right ts ->
-            pure ([], Just (ts, contents))
+    define shakeRecorder $ \GetLexTokens f -> do
+        (_, mRope) <- use_ GetFileContents f
+        case mRope of
+            Nothing -> pure ([], {- TODO: report internal errors -} Nothing)
+            Just rope -> do
+                let
+                    contents = Rope.toText rope
+                case Lexer.execLexer (show $ fromNormalizedUri f) contents of
+                    Left errs -> do
+                        let
+                            diags = toList $ fmap (mkSimpleDiagnostic . Parser.mkPError "lexer") errs
+                        pure (fmap (mkSimpleFileDiagnostic f) diags, Nothing)
+                    Right ts ->
+                        pure ([], Just (ts, contents))
 
-  define shakeRecorder $ \GetParsedAst f -> do
-    (tokens, contents) <- use_ GetLexTokens f
-    case Parser.execProgramParserForTokens (show $ fromNormalizedUri f) contents tokens of
-      Left errs -> do
-        let
-          diags = toList $ fmap mkSimpleDiagnostic errs
-        pure (fmap (mkSimpleFileDiagnostic f) diags , Nothing)
-      Right (prog, warns) -> do
-        let
-          diags = fmap mkNlgWarning warns
-        pure (fmap (mkSimpleFileDiagnostic f) diags, Just prog)
+    define shakeRecorder $ \GetParsedAst f -> do
+        (tokens, contents) <- use_ GetLexTokens f
+        case Parser.execProgramParserForTokens (show $ fromNormalizedUri f) contents tokens of
+            Left errs -> do
+                let
+                    diags = toList $ fmap mkSimpleDiagnostic errs
+                pure (fmap (mkSimpleFileDiagnostic f) diags, Nothing)
+            Right (prog, warns) -> do
+                let
+                    diags = fmap mkNlgWarning warns
+                pure (fmap (mkSimpleFileDiagnostic f) diags, Just prog)
 
   define shakeRecorder $ \TypeCheck f -> do
     parsed <- use_ GetParsedAst f
@@ -201,16 +201,16 @@ jl4Rules recorder = do
         }
       )
 
-  define shakeRecorder $ \SuccessfulTypeCheck f -> do
-    typeCheckResult <- use_ TypeCheck f
-    if typeCheckResult.success
-      then pure ([], Just typeCheckResult)
-      else pure ([], Nothing)
+    define shakeRecorder $ \SuccessfulTypeCheck f -> do
+        typeCheckResult <- use_ TypeCheck f
+        if typeCheckResult.success
+            then pure ([], Just typeCheckResult)
+            else pure ([], Nothing)
 
-  define shakeRecorder $ \Evaluate f -> do
-    r <- use_ SuccessfulTypeCheck f
-    let results = doEvalProgram r.program
-    pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
+    define shakeRecorder $ \Evaluate f -> do
+        r <- use_ SuccessfulTypeCheck f
+        let results = doEvalProgram r.program
+        pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
@@ -228,217 +228,221 @@ jl4Rules recorder = do
       Right tokenized -> do
           pure ([], Just tokenized)
 
-  define shakeRecorder $ \GetSemanticTokens f -> do
-    mSemTokens <- useWithStale ParserSemanticTokens f
-    case mSemTokens of
-      Nothing -> do
-        -- If we don't even have any old result, just try to use lexer results
-        lexToks <- use LexerSemanticTokens f
-        pure ([], lexToks)
-      Just (progTokens, positionMapping) -> do
+    define shakeRecorder $ \GetSemanticTokens f -> do
+        mSemTokens <- useWithStale ParserSemanticTokens f
+        case mSemTokens of
+            Nothing -> do
+                -- If we don't even have any old result, just try to use lexer results
+                lexToks <- use LexerSemanticTokens f
+                pure ([], lexToks)
+            Just (progTokens, positionMapping) -> do
+                -- Throwing is ok, since if `ParserSemanticTokens` produces a result
+                -- so does `LexerSemanticTokens`.
+                (lexTokens, lexPositionMapping) <- useWithStale_ LexerSemanticTokens f
+                let
+                    -- We assume that semantic tokens do *not* change its length, no matter whether they
+                    -- have been lexed, parsed or typechecked.
+                    -- A rather bold assumption, tbh. It will almost definitely not hold
+                    -- up in practice, but let's do one step at a time.
+                    mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
+                    mergeSameLengthTokens [] bs = bs
+                    mergeSameLengthTokens as [] = as
+                    mergeSameLengthTokens (a : as) (b : bs) = case compare a.start b.start of
+                        -- a.start == b.start
+                        -- Same token, only print one
+                        EQ -> a : mergeSameLengthTokens as bs
+                        -- a.start < b.start
+                        LT -> a : mergeSameLengthTokens as (b : bs)
+                        -- a.start > b.start
+                        GT -> b : mergeSameLengthTokens (a : as) bs
 
-        -- Throwing is ok, since if `ParserSemanticTokens` produces a result
-        -- so does `LexerSemanticTokens`.
-        (lexTokens, lexPositionMapping) <- useWithStale_ LexerSemanticTokens f
-        let
-          -- We assume that semantic tokens do *not* change its length, no matter whether they
-          -- have been lexed, parsed or typechecked.
-          -- A rather bold assumption, tbh. It will almost definitely not hold
-          -- up in practice, but let's do one step at a time.
-          mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
-          mergeSameLengthTokens [] bs = bs
-          mergeSameLengthTokens as [] = as
-          mergeSameLengthTokens (a:as) (b:bs) = case compare a.start b.start of
-            -- a.start == b.start
-            -- Same token, only print one
-            EQ -> a : mergeSameLengthTokens as bs
-            -- a.start < b.start
-            LT -> a : mergeSameLengthTokens as (b:bs)
-            -- a.start > b.start
-            GT -> b : mergeSameLengthTokens (a:as) bs
+                    newPosAstTokens =
+                        Maybe.mapMaybe
+                            ( \t ->
+                                case toCurrentPosition positionMapping t.start of
+                                    Nothing -> Nothing
+                                    Just newPos -> Just (t & #start .~ newPos)
+                            )
+                            progTokens
 
-          newPosAstTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition positionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) progTokens
+                    newPosLexTokens =
+                        Maybe.mapMaybe
+                            ( \t ->
+                                case toCurrentPosition lexPositionMapping t.start of
+                                    Nothing -> Nothing
+                                    Just newPos -> Just (t & #start .~ newPos)
+                            )
+                            lexTokens
 
-          newPosLexTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition lexPositionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) lexTokens
+                pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
 
-        pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
+    define shakeRecorder $ \GetRelSemanticTokens f -> do
+        tokens <- use_ GetSemanticTokens f
+        let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
+        case encodeTokens defaultSemanticTokensLegend semanticTokens of
+            Left _err ->
+                pure ([], {- TODO: Log error -} Nothing)
+            Right relSemTokens ->
+                pure ([], Just relSemTokens)
 
-  define shakeRecorder $ \GetRelSemanticTokens f -> do
-    tokens <- use_ GetSemanticTokens f
-    let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
-    case encodeTokens defaultSemanticTokensLegend semanticTokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
-      Right relSemTokens ->
-          pure ([], Just relSemTokens)
+    define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
+        -- TODO: this should load citations from a "central place" as long as we don't
+        -- support citations directly in the file
+        Nothing -> pure ([], Nothing)
+        Just f -> do
+            ownPath <- normalizedFilePathToOsPath f
+            let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
+            -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
+            contents <- liftIO $ Path.readFile citationFilePath
+            -- TODO: in future we may want to use the parse of the tree to get the context of the references
+            (tokens, _) <- use_ GetLexTokens uri
 
-  define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
-    -- TODO: this should load citations from a "central place" as long as we don't
-    -- support citations directly in the file
-    Nothing -> pure ([], Nothing)
-    Just f -> do
-      ownPath <- normalizedFilePathToOsPath f
-      let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
-      -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
-      contents <- liftIO $ Path.readFile citationFilePath
-      -- TODO: in future we may want to use the parse of the tree to get the context of the references
-      (tokens, _) <- use_ GetLexTokens uri
+            let stripReferenceHeralds r
+                    | Text.isPrefixOf "@ref" r = Text.drop 4 r
+                    | ("<<", (r', ">>")) <- Text.span (== '>') <$> Text.span (== '<') r = r'
+                    | otherwise = r
 
+                normalizeRef = Text.toLower . Text.strip
 
-      let stripReferenceHeralds r
-            | Text.isPrefixOf "@ref" r = Text.drop 4 r
-            | ("<<", (r', ">>")) <- Text.span (== '>') <$> Text.span (== '<') r = r'
-            | otherwise = r
+                rangeOfPosToken = \case
+                    -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
+                    Lexer.MkPosToken{payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
+                    _ -> mempty
 
-          normalizeRef = Text.toLower . Text.strip
+                allReferencesInTree :: [(Text, SrcRange)]
+                allReferencesInTree = foldMap rangeOfPosToken tokens
 
-          rangeOfPosToken = \case
-            -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-            Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
-            _ -> mempty
+                records = do
+                    decoded <- Csv.decode Csv.NoHeader contents
 
-          allReferencesInTree :: [(Text, SrcRange)]
-          allReferencesInTree = foldMap rangeOfPosToken tokens
+                    let mp = foldMap (uncurry Map.singleton) decoded
+                        mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
+                        getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
 
-          records = do
-            decoded <- Csv.decode Csv.NoHeader contents
+                    pure $ foldMap getReferences allReferencesInTree
 
-            let mp = foldMap (uncurry Map.singleton) decoded
-                mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-                getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
+            pure case records of
+                Right recs -> ([], Just recs)
+                Left err ->
+                    (
+                        [ FileDiagnostic
+                            { fdLspDiagnostic =
+                                Diagnostic
+                                    { _source = Just "jl4"
+                                    , _severity = Just DiagnosticSeverity_Warning
+                                    , _range = srcRangeToLspRange Nothing
+                                    , _message = Text.pack err
+                                    , _relatedInformation = Nothing
+                                    , _data_ = Nothing
+                                    , _codeDescription = Nothing
+                                    , _tags = Nothing
+                                    , _code = Nothing
+                                    }
+                            , fdFilePath = uri
+                            , fdShouldShowDiagnostic = ShowDiag
+                            , fdOriginalSource = NoMessage
+                            }
+                        ]
+                    , Nothing
+                    )
 
-            pure $ foldMap getReferences allReferencesInTree
+    define shakeRecorder $ \GetReferences f -> do
+        tcRes <- use_ TypeCheck f
 
-      pure case records of
-        Right recs -> ([], Just recs)
-        Left err ->
-          (
-            [ FileDiagnostic
-              { fdLspDiagnostic = Diagnostic
-                { _source = Just "jl4"
-                , _severity = Just DiagnosticSeverity_Warning
-                , _range = srcRangeToLspRange Nothing
-                , _message = Text.pack err
-                , _relatedInformation = Nothing
-                , _data_ = Nothing
-                , _codeDescription = Nothing
-                , _tags = Nothing
-                , _code = Nothing
-                }
-              , fdFilePath = uri
-              , fdShouldShowDiagnostic = ShowDiag
-              , fdOriginalSource = NoMessage
-              }
-            ]
-          , Nothing
-          )
+        let spanOf resolved =
+                maybe
+                    mempty
+                    (singletonReferenceMapping $ getUnique resolved)
+                    -- NOTE: the source range of the actual Name
+                    (rangeOf resolved)
 
-  define shakeRecorder $ \GetReferences f -> do
-    tcRes <- use_ TypeCheck f
+            resolveds = foldMap spanOf $ TypeCheck.toResolved tcRes.program
 
-    let spanOf resolved
-          = maybe
-              mempty
-              (singletonReferenceMapping $ getUnique resolved)
-              -- NOTE: the source range of the actual Name
-              (rangeOf resolved)
-
-        resolveds = foldMap spanOf $ TypeCheck.toResolved tcRes.program
-
-    pure ([], Just resolveds)
-
+        pure ([], Just resolveds)
   where
     shakeRecorder = cmapWithPrio ShakeLog recorder
     mkSimpleFileDiagnostic nfp diag =
-      FileDiagnostic
-        { fdFilePath = nfp
-        , fdShouldShowDiagnostic = ShowDiag
-        , fdLspDiagnostic = diag
-        , fdOriginalSource = NoMessage
-        }
+        FileDiagnostic
+            { fdFilePath = nfp
+            , fdShouldShowDiagnostic = ShowDiag
+            , fdLspDiagnostic = diag
+            , fdOriginalSource = NoMessage
+            }
 
     mkFileDiagnosticWithSource nfp diag orig =
-      FileDiagnostic
-        { fdFilePath = nfp
-        , fdShouldShowDiagnostic = ShowDiag
-        , fdLspDiagnostic = diag
-        , fdOriginalSource = MkSomeMessage orig
-        }
+        FileDiagnostic
+            { fdFilePath = nfp
+            , fdShouldShowDiagnostic = ShowDiag
+            , fdLspDiagnostic = diag
+            , fdOriginalSource = MkSomeMessage orig
+            }
 
     mkNlgWarning :: Resolve.Warning -> Diagnostic
     mkNlgWarning warn =
         Diagnostic
-          { _range = rangeOfResolveWarning warn
-          , _severity = Just LSP.DiagnosticSeverity_Warning
-          , _code = Nothing
-          , _codeDescription = Nothing
-          , _source = Just "parser"
-          , _message = prettyNlgResolveWarning warn
-          , _tags = Nothing
-          , _relatedInformation = Nothing
-          , _data_ = Nothing
-          }
+            { _range = rangeOfResolveWarning warn
+            , _severity = Just LSP.DiagnosticSeverity_Warning
+            , _code = Nothing
+            , _codeDescription = Nothing
+            , _source = Just "parser"
+            , _message = prettyNlgResolveWarning warn
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            , _data_ = Nothing
+            }
 
     mkSimpleDiagnostic parseError =
-      Diagnostic
-        { _range = LSP.Range start (extendToNextLine start)
-        , _severity = Just LSP.DiagnosticSeverity_Error
-        , _code = Nothing
-        , _codeDescription = Nothing
-        , _source = Just parseError.origin
-        , _message = parseError.message
-        , _tags = Nothing
-        , _relatedInformation = Nothing
-        , _data_ = Nothing
-        }
-     where
-      start = srcPosToLspPosition parseError.start
+        Diagnostic
+            { _range = LSP.Range start (extendToNextLine start)
+            , _severity = Just LSP.DiagnosticSeverity_Error
+            , _code = Nothing
+            , _codeDescription = Nothing
+            , _source = Just parseError.origin
+            , _message = parseError.message
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            , _data_ = Nothing
+            }
+      where
+        start = srcPosToLspPosition parseError.start
 
     evalResultToDiagnostic :: EvalResult -> Diagnostic
     evalResultToDiagnostic (range, res) =
-      Diagnostic
-        { _range = srcRangeToLspRange (Just range)
-        , _severity = Just LSP.DiagnosticSeverity_Information
-        , _code = Nothing
-        , _codeDescription = Nothing
-        , _source = Just "eval"
-        , _message = either Text.show Print.prettyLayout res
-        , _tags = Nothing
-        , _relatedInformation = Nothing
-        , _data_ = Nothing
-        }
+        Diagnostic
+            { _range = srcRangeToLspRange (Just range)
+            , _severity = Just LSP.DiagnosticSeverity_Information
+            , _code = Nothing
+            , _codeDescription = Nothing
+            , _source = Just "eval"
+            , _message = either Text.show Print.prettyLayout res
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            , _data_ = Nothing
+            }
 
     checkErrorToDiagnostic :: CheckErrorWithContext -> Diagnostic
     checkErrorToDiagnostic checkError =
-      Diagnostic
-        { _range = srcRangeToLspRange (rangeOf checkError)
-        , _severity = Just (translateSeverity (TypeCheck.severity checkError))
-        , _code = Nothing
-        , _codeDescription = Nothing
-        , _source = Just "check"
-        , _message = Text.unlines (TypeCheck.prettyCheckError checkError.kind)
-        , _tags = Nothing
-        , _relatedInformation = Nothing
-        , _data_ = Nothing
-        }
+        Diagnostic
+            { _range = srcRangeToLspRange (rangeOf checkError)
+            , _severity = Just (translateSeverity (TypeCheck.severity checkError))
+            , _code = Nothing
+            , _codeDescription = Nothing
+            , _source = Just "check"
+            , _message = Text.unlines (TypeCheck.prettyCheckError checkError.kind)
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            , _data_ = Nothing
+            }
 
     extendToNextLine p =
-      LSP.Position
-        { _character = 0
-        , _line = p ^. J.line + 1
-        }
+        LSP.Position
+            { _character = 0
+            , _line = p ^. J.line + 1
+            }
 
 translateSeverity :: TypeCheck.Severity -> DiagnosticSeverity
-translateSeverity TypeCheck.SInfo  = LSP.DiagnosticSeverity_Information
-translateSeverity TypeCheck.SWarn  = LSP.DiagnosticSeverity_Warning
+translateSeverity TypeCheck.SInfo = LSP.DiagnosticSeverity_Information
+translateSeverity TypeCheck.SWarn = LSP.DiagnosticSeverity_Warning
 translateSeverity TypeCheck.SError = LSP.DiagnosticSeverity_Error
 
 srcRangeToLspRange :: Maybe SrcRange -> LSP.Range
@@ -454,36 +458,39 @@ srcSpanToLspRange (Just range) = LSP.Range (srcPosToLspPosition range.start) (sr
 
 srcPosToLspPosition :: SrcPos -> LSP.Position
 srcPosToLspPosition s =
-  LSP.Position
-    { _character = fromIntegral $ s.column - 1
-    , _line = fromIntegral $ s.line - 1
-    }
+    LSP.Position
+        { _character = fromIntegral $ s.column - 1
+        , _line = fromIntegral $ s.line - 1
+        }
 
 lspPositionToSrcPos :: LSP.Position -> SrcPos
-lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
-  MkSrcPos (fromIntegral $ l + 1) (fromIntegral $ c + 1)
+lspPositionToSrcPos (LSP.Position{_character = c, _line = l}) =
+    MkSrcPos (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 prettyNlgResolveWarning :: Resolve.Warning -> Text
 prettyNlgResolveWarning = \case
-  Resolve.NotAttached _ ->
-    "Not attached to any valid syntax node."
-  Resolve.UnknownLocation nlg -> Text.unlines
-    [ "The following NLG Annotation has no source location. This might be an internal compiler error."
-    , "```"
-    , Print.prettyLayout nlg
-    , "```"
-    ]
-  Resolve.Ambiguous name nlgs -> Text.unlines $
-    [ "More than one NLG annotation attached to: " <> Print.prettyLayout name
-    , "The following annotations would be attached:"
-    , ""
-    ] <> [ "* `" <> Print.prettyLayout n.payload <> "`" | n <- nlgs]
+    Resolve.NotAttached _ ->
+        "Not attached to any valid syntax node."
+    Resolve.UnknownLocation nlg ->
+        Text.unlines
+            [ "The following NLG Annotation has no source location. This might be an internal compiler error."
+            , "```"
+            , Print.prettyLayout nlg
+            , "```"
+            ]
+    Resolve.Ambiguous name nlgs ->
+        Text.unlines $
+            [ "More than one NLG annotation attached to: " <> Print.prettyLayout name
+            , "The following annotations would be attached:"
+            , ""
+            ]
+                <> ["* `" <> Print.prettyLayout n.payload <> "`" | n <- nlgs]
 
 rangeOfResolveWarning :: Resolve.Warning -> LSP.Range
 rangeOfResolveWarning = \case
-  Resolve.NotAttached nlg ->
-    srcSpanToLspRange $ Just nlg.range
-  Resolve.UnknownLocation _ ->
-    srcSpanToLspRange Nothing
-  Resolve.Ambiguous name _ ->
-    srcRangeToLspRange $ rangeOf name
+    Resolve.NotAttached nlg ->
+        srcSpanToLspRange $ Just nlg.range
+    Resolve.UnknownLocation _ ->
+        srcSpanToLspRange Nothing
+    Resolve.Ambiguous name _ ->
+        srcRangeToLspRange $ rangeOf name
