@@ -41,7 +41,6 @@ library
     pretty-simple,
     prettyprinter,
     text < 2.1.2,
-    transformers,
     tree-diff
   exposed-modules:
     Base
@@ -183,5 +182,4 @@ test-suite jl4-test
     hspec-golden,
     optics,
     silently,
-    text < 2.1.2,
     jl4
