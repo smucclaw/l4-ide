@@ -46,7 +46,7 @@ Open folder [./jl4/examples](./jl4/examples) to see the Language Server in actio
 
 ## Syntax Highlighting
 
-![Syntax Highlighting Example](./doc/images/doc-screenshot-1-.png)
+![Syntax Highlighting Example](./doc/images/doc-screenshot-1.png)
 
 ## Visualizer
 

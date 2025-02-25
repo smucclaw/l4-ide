@@ -1,10 +1,39 @@
-# L4 IDE
+# L4 with IDE
 
-An implementation of the L4 language, with an emphasis on IDE extensions for Visual Studio Code.
+An implementation of the L4 language for law, with an emphasis on IDE extensions for Visual Studio Code.
 
 This repository includes language examples, a compiler toolchain, a visualizer, and integrations with VS Code.
 
-## Install and Build
+## Gallery
+
+<figure>
+
+<figcaption>Syntax Highlighting for type declarations and Boolean-valued decision logic</figcaption>
+![Syntax Highlighting Example](./doc/images/doc-screenshot-1.png)
+</figure>
+
+Decision Logic Visualization as a ladder diagram circuit
+
+
+
+Annotation mechanism to assist with natural language generation
+
+
+
+
+## Status (25 Feb 2025)
+
+- WORKING: Basic language features (functional core, layout parsing)
+- WORKING: Basic IDE features (highlighting, CHECK, EVAL)
+- WORKING: Decision logic visualizer (as ladder diagram)
+- ROADMAP: resource libraries for Date, Place, Entity, Currency
+- ROADMAP: Language support for state transition modals
+- ROADMAP: State transition logic visualizer
+- ROADMAP: Web App Auto-Generation for Decision Logic
+- ROADMAP: Web App Auto-Generation for State Transition Logic, abductive reasonign, planning problems
+- ROADMAP: Formal Verification Tooling, enhanced compiler error messages and warnings
+
+## Download, Install and Build
 
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
@@ -12,7 +41,7 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 
 ## Language Tutorials
 
-All this documentation is still under construction
+All this documentation is still under construction.
 
 - Tutorial: Hello, World
 
