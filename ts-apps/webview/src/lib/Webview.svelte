@@ -28,7 +28,7 @@
   const context = new LirContext()
   const nodeInfo = { registry, context }
 
-  let vizDecl: IRDecl | undefined = $state(undefined)
+  let { vizDecl } : { vizDecl: IRDecl | undefined } = $props();
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   )
@@ -41,41 +41,41 @@
     }
   })
 
-  /**************************
-        VSCode
-  ****************************/
+  // /**************************
+  //       VSCode
+  // ****************************/
 
-  let vsCodeApi: WebviewApi<null>
-  let messenger: Messenger
+  // let vsCodeApi: WebviewApi<null>
+  // let messenger: Messenger
 
-  // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
-  onMount(() => {
-    // eslint-disable-next-line no-undef
-    debugger;
-    // vsCodeApi = acquireVsCodeApi()
-    messenger = new Messenger(undefined, { debugLog: true })
+  // // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
+  // onMount(() => {
+  //   // eslint-disable-next-line no-undef
+  //   debugger;
+  //   // vsCodeApi = acquireVsCodeApi()
+  //   messenger = new Messenger(undefined, { debugLog: true })
 
-    messenger.sendNotification(
-      WebviewFrontendIsReadyNotification,
-      HOST_EXTENSION,
-      { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
-    )
+  //   messenger.sendNotification(
+  //     WebviewFrontendIsReadyNotification,
+  //     HOST_EXTENSION,
+  //     { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
+  //   )
 
-    // console.log('Webview: vsCodeApi:', vsCodeApi)
-    console.log('Webview: onMount!')
+  //   // console.log('Webview: vsCodeApi:', vsCodeApi)
+  //   console.log('Webview: onMount!')
 
-    messenger.onRequest(
-      VisualizeDecisionLogicRequest,
-      (payload: VisualizeDecisionLogicIRInfo) => {
-        vizDecl = payload.program
-        console.log('vizDecl:', vizDecl)
+  //   messenger.onRequest(
+  //     VisualizeDecisionLogicRequest,
+  //     (payload: VisualizeDecisionLogicIRInfo) => {
+  //       vizDecl = payload.program
+  //       console.log('vizDecl:', vizDecl)
 
-        return makeSuccessVisualizeResponse()
-      }
-    )
+  //       return makeSuccessVisualizeResponse()
+  //     }
+  //   )
 
-    messenger.start()
-  })
+  //   messenger.start()
+  // })
 </script>
 
 <h1>{funName}</h1>

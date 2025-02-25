@@ -1,0 +1,20 @@
+body {
+    margin: 0;
+    height: 100vh;
+    width: 100%;
+    overflow-y: hidden;
+    background-color: #242424;
+  }
+
+  #jl4-editor {
+    border: 1px solid grey;
+  }
+
+  #jl4-webview {
+  }
+
+  .jl4-container {
+    display: grid;
+    grid-template-columns: 60% 40%;
+    grid-template-rows: 100vh;
+  }
