@@ -16,15 +16,15 @@ Decision Logic Visualization as a ladder diagram circuit
 
 ## Status (25 Feb 2025)
 
-- WORKING: Basic language features (functional core, layout parsing)
-- WORKING: Basic IDE features (highlighting, CHECK, EVAL)
-- WORKING: Decision logic visualizer (as ladder diagram)
-- ROADMAP: resource libraries for Date, Place, Entity, Currency
-- ROADMAP: Language support for state transition modals
-- ROADMAP: State transition logic visualizer
-- ROADMAP: Web App Auto-Generation for Decision Logic
-- ROADMAP: Web App Auto-Generation for State Transition Logic, abductive reasonign, planning problems
-- ROADMAP: Formal Verification Tooling, enhanced compiler error messages and warnings
+- ✅ Basic language features (functional core, layout parsing)
+- ✅ Basic IDE features (highlighting, CHECK, EVAL)
+- ✅ Decision logic visualizer (as ladder diagram)
+- 🚧 resource libraries for Date, Place, Entity, Currency
+- 🚧 Language support for state transition modals
+- 🚧 State transition logic visualizer
+- 🚧 Web App Auto-Generation for Decision Logic
+- 🚧 Web App Auto-Generation for State Transition Logic, abductive reasonign, planning problems
+- 🚧 Formal Verification Tooling, enhanced compiler error messages and warnings
 
 ## The Web Editor
 
@@ -34,9 +34,11 @@ https://jl4.well-typed.com/
 
 ## VS Code Extension: Download, Install and Build
 
+[Web Demo](https://jl4.well-typed.com): for legal engineers to experiment with writing L4 code. Click the link and get started.
+
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
-[Quickstart](Quickstart.md): for legal engineers to experiment with writing L4 code. Download the VS Code extension and get started.
+[Quickstart for a local build](Quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.
 
 ## Language Tutorials
 
