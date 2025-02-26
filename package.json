@@ -6,7 +6,7 @@
     "ts-shared/*"
   ],
   "scripts": {
-    "build": "turbo build --concurrency=1",
+    "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "test": "turbo run test",
