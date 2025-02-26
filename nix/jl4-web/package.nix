@@ -3,24 +3,28 @@
   secure,
   buildNpmPackage,
   importNpmLock,
+  pkg-config,
+  libsecret,
   ...
 }:
 buildNpmPackage {
   pname = "jl4-web";
   version = "0-latest";
-  src = ../../ts-apps/jl4-web;
-  npmDeps = importNpmLock {
-    npmRoot = ../../.;
-    package = builtins.fromJSON (builtins.readFile ../../ts-apps/jl4-web/package.json);
-  };
+  src = ../../.;
+  npmDeps = importNpmLock { npmRoot = ../../.; };
+  npmWorkspace = ../../.;
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libsecret.dev ];
   buildPhase = ''
     runHook preBuild
     export VITE_BACKEND_URL=${if secure then "wss" else "ws"}://${url};
+    cd ./ts-apps/jl4-web
     npm run build
     runHook postBuild
   '';
   installPhase = ''
-    mv dist $out
+    mv build $out
   '';
+  npmFlags = [ ];
   npmConfigHook = importNpmLock.npmConfigHook;
 }
