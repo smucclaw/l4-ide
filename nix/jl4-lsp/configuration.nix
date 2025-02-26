@@ -30,8 +30,9 @@
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = ''
-        ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp \
-          localhost ${toString config.services.jl4-lsp.port}
+        ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp ws \
+          --host localhost \
+          --port ${toString config.services.jl4-lsp.port}
       '';
       Restart = "always";
 

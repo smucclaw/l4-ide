@@ -47,8 +47,7 @@ import           Data.Foldable                 (for_)
 import           Data.Functor.Contravariant    (Contravariant (contramap))
 import           Data.Maybe                    (fromMaybe)
 import           Data.Text                     (Text)
-import qualified Data.Text                     as Text
-import qualified Data.Text.IO                  as Text
+import qualified Base.Text                     as Text
 import           Data.Time                     (defaultTimeLocale, formatTime,
                                                 getCurrentTime)
 import           GHC.Stack                     (CallStack, HasCallStack,
@@ -184,9 +183,9 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
       priorityToText :: Priority -> Text
-      priorityToText = Text.pack . show
+      priorityToText = Text.show
 
-      threadIdToText = Text.pack . show
+      threadIdToText = Text.show
 
       callStackToSrcLoc :: CallStack -> Maybe SrcLoc
       callStackToSrcLoc theCallStack =
@@ -197,7 +196,7 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
       srcLocToText = \case
           Nothing -> "<unknown>"
           Just SrcLoc{ srcLocModule, srcLocStartLine, srcLocStartCol } ->
-            Text.pack srcLocModule <> "#" <> Text.pack (show srcLocStartLine) <> ":" <> Text.pack (show srcLocStartCol)
+            Text.pack srcLocModule <> "#" <> Text.show srcLocStartLine <> ":" <> Text.show srcLocStartCol
 
       loggingColumnToText :: LoggingColumn -> IO Text
       loggingColumnToText = \case
