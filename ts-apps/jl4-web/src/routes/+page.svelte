@@ -1,12 +1,45 @@
 <script lang="ts">
   import { onMount } from "svelte";
   let editorElement: HTMLDivElement;
-  import { Page } from "@repo/webview";
-  import { type VisualizeDecisionLogicIRInfo, type FunDecl } from "@repo/viz-expr";
+  import {
+  LadderFlow,
+    LirContext,
+    LirRegistry,
+    VizDeclLirSource,
+    type DeclLirNode,
+    type LirRootType,
+  } from "@repo/decision-logic-visualizer";
+  import {
+    type VisualizeDecisionLogicIRInfo,
+    type FunDecl,
+  } from "@repo/viz-expr";
   import { type MessageTransports } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
 
+  /**************************
+      Set up Lir
+  ****************************/
+
+  const registry = new LirRegistry();
+  const context = new LirContext();
+  const nodeInfo = { registry, context };
+
   let vizDecl: undefined | FunDecl = $state(undefined);
+  let declLirNode: DeclLirNode | undefined = $derived(
+    vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
+  );
+  let declLabel = $derived(
+    declLirNode && (declLirNode as DeclLirNode).getLabel(context)
+  );
+  $effect(() => {
+    if (declLirNode) {
+      registry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
+    }
+  });
+
+  // /**************************
+  //       Monadco
+  // ****************************/
 
   onMount(async () => {
     const monaco = await import("@codingame/monaco-vscode-editor-api");
@@ -25,7 +58,7 @@
     );
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
     const { Schema } = await import("effect");
-    const { VisualizeDecisionLogicIRInfo } = await import("@repo/viz-expr")
+    const { VisualizeDecisionLogicIRInfo } = await import("@repo/viz-expr");
 
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
@@ -205,5 +238,40 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <div class="jl4-container">
   <div id="jl4-editor" bind:this={editorElement}></div>
-  <div id="jl4-webview"><Page {vizDecl} /></div>
+  <div id="jl4-webview">
+    <h1>{declLabel}</h1>
+
+    {#if vizDecl && declLirNode}
+      {#key declLirNode}
+        <div class="flash-on-update visualization-container">
+          <LadderFlow {context} node={declLirNode} />
+        </div>
+      {/key}
+    {/if}
+
+    <style>
+      @keyframes flash {
+        0%,
+        90% {
+          background-color: hsl(var(--neutral));
+        }
+        50% {
+          background-color: hsl(var(--muted));
+        }
+      }
+
+      .flash-on-update {
+        animation: flash 0.6s;
+      }
+
+      h1 {
+        margin-top: 10px;
+        padding-bottom: 2px;
+        font-size: 1.5rem;
+        line-height: 1.1rem;
+        font-weight: 700;
+        text-align: center;
+      }
+    </style>
+  </div>
 </div>

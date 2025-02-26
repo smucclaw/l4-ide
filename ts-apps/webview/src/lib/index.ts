@@ -1,1 +1,1 @@
-export { default as Page } from './Webview.svelte'
+// place files you want to import through the `$lib` alias in this folder.
