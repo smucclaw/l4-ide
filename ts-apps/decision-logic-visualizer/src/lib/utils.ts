@@ -36,12 +36,6 @@ export interface HasId {
   getId(): string
 }
 
-// /****************************
-//       ValueOf
-//  *****************************/
-
-// export type ValueOf<Obj> = Obj[keyof Obj]
-
 /* ====== CSS ============ */
 
 export type CSSClass = string

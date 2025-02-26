@@ -1,8 +1,6 @@
 import type { Name, BoolValue } from '@repo/viz-expr'
-import type { LirId, LirContext } from '$lib/layout-ir/core.js'
-import type { DeclLirNode } from '$lib/layout-ir/lir-decision-logic.svelte.js'
-import type { Ord } from '$lib/utils.js'
-import { ComparisonResult } from '$lib/utils.js'
+import type { LirContext } from '$lib/layout-ir/core.js'
+import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
@@ -10,199 +8,9 @@ import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 
-const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
-
 export interface LadderFlowDisplayerProps {
   context: LirContext
   node: DeclLirNode
-}
-
-/************************************************
-            Flow Graph
-*************************************************/
-
-export interface FlowGraph {
-  nodes: FlowNode[]
-  edges: FlowEdge[]
-}
-
-/************************************************
-            Flow Nodes
-*************************************************/
-
-/** A simplified version of the SvelteFlow Node interface,
- * for the v0 prototype. */
-export interface FlowNode extends Ord<FlowNode> {
-  getId(): string
-  getOrigLirIds(): LirId[]
-  toSFPojo(): SF.Node
-}
-
-export abstract class BaseFlowNode implements Ord<FlowNode> {
-  private static counter = 0
-  protected id: string
-
-  constructor(
-    /** The LirIds of the LirNodes that correspond in some sense to this FlowNode */
-    protected readonly origLirIds: LirId[],
-    protected readonly position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    this.id = (BaseFlowNode.counter++).toString()
-  }
-
-  getId() {
-    return this.id
-  }
-
-  /** Required for SF nodes */
-  getPosition() {
-    return this.position
-  }
-
-  getOrigLirIds() {
-    return this.origLirIds
-  }
-
-  abstract toSFPojo(): SF.Node
-
-  isEqualTo<T extends FlowNode>(other: T) {
-    return this.getId() === other.getId()
-  }
-
-  /** Lexicographical comparison based on IDs.
-   * This gets used by DirectedEdge. */
-  compare(that: this) {
-    const intId = parseInt(this.getId())
-    const thatId = parseInt(that.getId())
-    if (intId === thatId) {
-      return ComparisonResult.Equal
-    } else if (intId < thatId) {
-      return ComparisonResult.LessThan
-    } else {
-      return ComparisonResult.GreaterThan
-    }
-  }
-}
-
-export class BoolVarFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  constructor(
-    protected readonly data: { name: Name; value: BoolValue },
-    origLirId: LirId,
-    position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    super([origLirId], position)
-  }
-
-  getData() {
-    return this.data
-  }
-
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      type: boolVarNodeType,
-      position: this.position,
-      data: this.data,
-    }
-  }
-}
-
-export class NotStartFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  constructor(
-    /** of the NotLirNode */
-    origLirId: LirId,
-    position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    super([origLirId], position)
-  }
-
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      type: notStartNodeType,
-      position: this.position,
-      data: {},
-    }
-  }
-}
-
-export class NotEndFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  constructor(
-    /** of the NotLirNode */
-    origLirId: LirId,
-    position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    super([origLirId], position)
-  }
-
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      type: notEndNodeType,
-      position: this.position,
-      data: {},
-    }
-  }
-}
-
-/** A FlowNode that's used solely to visually group or 'bundle' other nodes.
- *
- * Using `bundling` because `group` has a specific meaning in the React/SvelteFlow context.
- */
-export type BundlingFlowNode = SinkFlowNode | SourceFlowNode
-
-export class SourceFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  constructor(
-    origLirIds: LirId[],
-    position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    super(origLirIds, position)
-  }
-
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      type: sfSourceNodeType,
-      position: this.position,
-      data: {},
-    }
-  }
-}
-
-export class SinkFlowNode extends BaseFlowNode implements Ord<FlowNode> {
-  constructor(
-    origLirIds: LirId[],
-    position: {
-      x: number
-      y: number
-    } = DEFAULT_INITIAL_POSITION
-  ) {
-    super(origLirIds, position)
-  }
-
-  toSFPojo(): SF.Node {
-    return {
-      id: this.id,
-      type: sfSinkNodeType,
-      position: this.position,
-      data: {},
-    }
-  }
 }
 
 /************************************************
@@ -221,79 +29,28 @@ export type SFNodeWithMeasuredDimensions = SF.Node & {
   }
 }
 
-const boolVarNodeType = 'boolVarNode' as const
-const notStartNodeType = 'notStartNode' as const
-const notEndNodeType = 'notEndNode' as const
-const sfSourceNodeType = 'sourceNode' as const
-const sfSinkNodeType = 'sinkNode' as const
+export const boolVarNodeType = 'boolVarNode' as const
+export const notStartNodeType = 'notStartNode' as const
+export const notEndNodeType = 'notEndNode' as const
+export const sourceNodeType = 'sourceNode' as const
+export const sinkNodeType = 'sinkNode' as const
 
 export type SFNode<T extends string> = SF.Node & { type: T }
 function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
   return node.type === type
 }
 
-export type SFSourceNode = SFNode<typeof sfSourceNodeType>
-export type SFSinkNode = SFNode<typeof sfSinkNodeType>
+export type SFSourceNode = SFNode<typeof sourceNodeType>
+export type SFSinkNode = SFNode<typeof sinkNodeType>
 
 export const isSFSourceNode = (node: SF.Node): node is SFSourceNode =>
-  isSFNode(node, sfSourceNodeType)
+  isSFNode(node, sourceNodeType)
 export const isSFSinkNode = (node: SF.Node): node is SFSinkNode =>
-  isSFNode(node, sfSinkNodeType)
+  isSFNode(node, sinkNodeType)
 export const isSFGroupingNode = (
   node: SF.Node
 ): node is SFSourceNode | SFSinkNode =>
   isSFSourceNode(node) || isSFSinkNode(node)
-
-/************************************************
-            Flow Edges
-*************************************************/
-
-export class FlowEdge implements Ord<FlowEdge> {
-  id: string
-  constructor(
-    readonly source: string,
-    readonly target: string
-  ) {
-    this.id = `(${source}, ${target})`
-  }
-
-  getU() {
-    return this.source
-  }
-
-  getV() {
-    return this.target
-  }
-
-  isEqualTo<T extends FlowEdge>(other: T) {
-    return this.id === other.id
-  }
-
-  /** Lexicographical comparison of IDs of nodes */
-  compare(that: FlowEdge): ComparisonResult {
-    if (this.getU() < that.getU()) {
-      return ComparisonResult.LessThan
-    } else if (this.getU() > that.getU()) {
-      return ComparisonResult.GreaterThan
-    }
-
-    if (this.getV() < that.getV()) {
-      return ComparisonResult.LessThan
-    } else if (this.getV() > that.getV()) {
-      return ComparisonResult.GreaterThan
-    }
-
-    return ComparisonResult.Equal
-  }
-
-  toSFPojo(): SF.Edge {
-    return {
-      id: this.id,
-      source: this.source,
-      target: this.target,
-    }
-  }
-}
 
 /************************************************
           SvelteFlow Custom Nodes
@@ -320,5 +77,4 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
 
 export interface BoolVarDisplayerProps extends SF.NodeProps {
   data: { name: Name; value: BoolValue }
-  // TODO: Will add Value in the next version
 }

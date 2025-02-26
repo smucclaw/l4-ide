@@ -19,10 +19,7 @@
     sfNodeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
-  import {
-    exprLirNodeToAlgaDag,
-    algaUndirectedGraphToFlowGraph,
-  } from './lir-to-dag.js'
+  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
@@ -42,21 +39,14 @@
     Make initial SF nodes and edges
   ************************************/
 
-  const flowGraph = algaUndirectedGraphToFlowGraph(
-    exprLirNodeToAlgaDag(context, declLirNode.getBody(context))
-  )
-
-  const initialNodes = flowGraph.nodes
-    .toSorted((v1, v2) => v2.compare(v1))
-    .map((n) => n.toSFPojo())
-  const initialEdges = flowGraph.edges.map((e) => e.toSFPojo())
+  const sfGraph = ladderGraphToSFGraph(context, declLirNode.getBody(context))
 
   /***********************************
       SvelteFlow nodes and edges
   ************************************/
 
-  let NODES = $state.raw<Node[]>(initialNodes)
-  let EDGES = $state.raw<Edge[]>(initialEdges)
+  let NODES = $state.raw<Node[]>(sfGraph.nodes)
+  let EDGES = $state.raw<Edge[]>(sfGraph.edges)
 
   /***********************************
       SvelteFlow hooks

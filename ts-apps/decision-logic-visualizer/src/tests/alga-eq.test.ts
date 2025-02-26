@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { empty, vertex, overlay } from '../lib/algebraic-graphs/alga.js'
+import { empty, vertex, overlay } from '../lib/algebraic-graphs/dag.js'
 import { ComparisonResult } from '../lib/utils.js'
 import type { Ord, HasId } from '../lib/utils.js'
 

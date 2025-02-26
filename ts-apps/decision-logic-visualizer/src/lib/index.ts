@@ -4,7 +4,7 @@ export * from './data/viz-expr-to-lir.js'
 /** Lir nodes.
 This is an intermediate layer between the concrete UI and the abstract data (the Viz Expr types / schemas). */
 export * from './layout-ir/core.js'
-export * from './layout-ir/lir-decision-logic.svelte.js'
+export * from './layout-ir/ladder-lir.svelte.js'
 
 /** Displayers; in particular, Ladder Flow */
 export { default as LadderFlow } from './displayers/flow/flow.svelte'

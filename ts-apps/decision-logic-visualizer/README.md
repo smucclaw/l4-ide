@@ -3,10 +3,12 @@
 ## Key commands
 
 ```bash
-npm run dev -- --open
+npm run dev --open
 ```
 
 ## Notes on dependency-related things / errors / decisions
+
+### Make sure that SF nodes don't try to render and measure themselves in a non-browser environment (e.g. if SSR is enabled)
 
 ### esbuild x vite
 

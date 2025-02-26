@@ -1,10 +1,13 @@
-/* 
-If you're unfamiliar with Lir stuff, 
+/*
+If you're unfamiliar with Lir stuff,
 start by looking at the docs for LirNode.
 
-Acknowledgments: I adapted the Lir stuff from a similar framework
-that I learned from Jimmy Koppel (https://www.jameskoppel.com/).
+I had originally adapted the Lir stuff from a similar framework
+that I learned from Jimmy Koppel (https://www.jameskoppel.com/),
+but this framework is now getting quite different from what it used to be.
 */
+
+import { ComparisonResult } from '../utils.js'
 
 /*********************************************
        Registry
@@ -33,11 +36,20 @@ export class LirId {
   constructor(private id: symbol = Symbol(LirId.counter++)) {}
 
   toString() {
-    return this.id.toString()
+    return this.id.description as string
   }
 
   isEqualTo(other: LirId) {
     return this.id === other.id
+  }
+
+  compare(other: LirId) {
+    const thisStr = this.toString()
+    const otherStr = other.toString()
+
+    if (thisStr < otherStr) return ComparisonResult.LessThan
+    if (thisStr > otherStr) return ComparisonResult.GreaterThan
+    return ComparisonResult.Equal
   }
 }
 
@@ -67,7 +79,7 @@ export abstract class NodeInfoManager {
   }
 
   /** This reference to the LirRegistry can be used to publish updates */
-  protected getLirRegistry() {
+  protected getRegistry() {
     return this.lirInfo.registry
   }
 }
@@ -85,8 +97,9 @@ export abstract class NodeInfoManager {
 export interface LirNode {
   getId(): LirId
 
-  getChildren(context: LirContext): LirNode[]
+  // Removed getChildren for now to simplify things
 
+  /** NON-pretty */
   toString(): string
 }
 
@@ -107,7 +120,9 @@ export abstract class DefaultLirNode
     return this.#id
   }
 
-  abstract getChildren(context: LirContext): LirNode[]
+  compare(other: LirNode) {
+    return this.getId().compare(other.getId())
+  }
 
   abstract toString(): string
 }
@@ -122,8 +137,11 @@ export abstract class DefaultLirNode
  *
  * Operations on LirNodes should have the LirContext as an opaque context parameter.
  * This makes it easier to add, e.g., various kinds of synchronization in the future.
+ *
+ * This LirContext has been specialized to the LirFlow setting
  */
 export class LirContext {
+  /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
   constructor() {}

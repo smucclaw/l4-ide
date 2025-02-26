@@ -28,7 +28,7 @@ export function makeFailureVisualizeResponse(): VisualizeDecisionLogicResponse {
 /*************************************
   On webview frontend initialization
 **************************************/
-// TODO
+
 export interface WebviewFrontendIsReadyMessage {
   $type: 'webviewReady'
 }
