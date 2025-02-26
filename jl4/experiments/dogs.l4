@@ -4,11 +4,11 @@
 --                       (a)    for an offence relating to a dangerous dog, a fine of $20 000, but the minimum penalty is a fine of $1 000;
 --                      (b)    for an offence relating to a dog other than a dangerous dog, a fine of $10 000.
 
-§ `preamble, please ignore`
+§ `prelude, please ignore`
 
 id x MEANS x
-flip a b MEANS b a
-the MEANS flip
+revApp a b MEANS b a
+the MEANS revApp
 does MEANS id
 some x MEANS TRUE
 any  x MEANS TRUE
@@ -28,9 +28,9 @@ DECLARE Animal
 DECLARE Person
     HAS name IS A STRING
 
-§ `many-to-many relation between Person and Animal`
+§ `many-to-many relations between Person and Animal`
 ASSUME `is liable for the control of the` IS A FUNCTION FROM Person AND Animal TO BOOLEAN
-ASSUME `owns` IS A FUNCTION FROM Person AND Animal TO BOOLEAN
+ASSUME `owns`                             IS A FUNCTION FROM Person AND Animal TO BOOLEAN
 
 § `two kinds of possible victims`
 DECLARE Victim IS ONE OF VictimP HAS p IS A  Person
@@ -124,6 +124,75 @@ IF    above dog
   OR `the occupier of premises` dp dog (`ordinarily kept` OR `ordinarily permitted to live`)
      AND [at the material time] `owns` otherOwner dog [was owned by another person who had reached 18 years of age]
      AND `identified by` otherOwner dp
+
+-- attack, in relation to the behaviour of a dog, does not include behaviour which was an immediate response to, and was induced by, provocation, but includes —
+--                  (a)    aggressively rushing at or harassing any person or animal; or
+--                  (b)    biting, or otherwise causing physical injury to, a person or an animal; or
+--                  (c)    tearing clothing on, or otherwise causing damage to the property of, the person attacked; or
+--                  (d)    attempting to attack, or behaving in such a manner toward a person as would cause a reasonable person to fear physical injury,
+--               unless the owner establishes that the behaviour was justified by a reasonable cause;
+
+ASSUME `aggressively rushing at` IS BOOLEAN
+ASSUME harassing IS BOOLEAN
+ASSUME biting IS BOOLEAN
+ASSUME `otherwise causing physical injury to` IS BOOLEAN
+ASSUME `tearing clothing on` IS BOOLEAN
+ASSUME `otherwise causing damage to the property of` IS BOOLEAN
+ASSUME `attempting to attack` IS BOOLEAN
+ASSUME `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury` IS BOOLEAN
+
+attacks MEANS
+        NOT provocation
+    AND     (`aggressively rushing at` OR harassing) [any person or animal]
+        OR  (biting OR `otherwise causing physical injury to`) [a person or an animal]
+        OR  (`tearing clothing on` OR `otherwise causing damage to the property of`) [the person attacked]
+        OR  (`attempting to attack` OR `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury`)
+
+GIVEN dog IS AN Animal
+      dp  IS A Person   -- the dog-walker  person
+      pp  IS A Person   -- the agent provocateur
+      pa  IS AN Animal  -- animal provocateur
+GIVETH A BOOLEAN
+provocation MEANS
+            (ANY OF teasing
+                    tormenting
+                    abuse) [of] dog [by] pp
+        OR  (ANY OF assault
+                    act of cruelty)
+            [by] pp
+            [toward] dog
+        OR  entry [without lawful excuse]
+            [by] pp
+            [on] (land OR premises)
+                  (    [of which the] dog's owner [is] an occupier
+                   OR  [where the] dog [is] ordinarily kept)
+        OR       intrusion
+             []  (into OR upon)
+             []  vehicle
+                 [in] OR [on which]
+                 dog [is] present
+
+
+
+-- provocation, in relation to the behaviour of a dog, includes —
+--                  (a)    on the part of a person, other than a person liable for the control of the dog —
+--                              (i)    any teasing, tormenting, or abuse of the dog; or
+--                             (ii)    any assault on, or act of cruelty towards, the dog; or
+--                            (iii)    entry without lawful excuse on any land or premises of which the owner of the dog is an occupier or where the dog is ordinarily kept; or
+--                            (iv)    any intrusion into or upon any vehicle in or on which the dog is present; or
+--                             (v)    any threat to, or attack upon, another person or animal towards whom the dog could reasonably be expected to be protective;
+--                           or
+--                  (b)    on the part of another animal —
+--                              (i)    an attack on the dog made by any other animal; or
+--                             (ii)    the entry of that other animal on any land or premises of which the owner of the dog is an occupier or where the dog is ordinarily kept; or
+--                            (iii)    any threat to, or attack upon, another person or animal towards whom the dog could reasonably be expected to be protective,
+--               but does not include an intentional provocation of the dog by a person liable for the control of the dog;
+-- dangerous dog means a dog that is —
+--                  (a)    a dangerous dog (declared); or
+--                  (b)    a dangerous dog (restricted breed); or
+--                  (c)    a commercial security dog;
+
+
 
 
 --   (2A)    If a dog attacks or chases any person or animal without causing physical injury to the person or animal that is attacked or chased, every person liable for the control of the dog commits an offence.
