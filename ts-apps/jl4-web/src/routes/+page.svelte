@@ -2,11 +2,9 @@
   import { onMount } from "svelte";
   let editorElement: HTMLDivElement;
   import { Page } from "@repo/webview";
-  import { VisualizeDecisionLogicIRInfo, FunDecl } from "@repo/viz-expr";
-  import { MessageTransports } from "vscode-languageclient";
-  import { ConsoleLogger } from "monaco-languageclient/tools";
-
-  import { Schema } from "effect";
+  import { type VisualizeDecisionLogicIRInfo, type FunDecl } from "@repo/viz-expr";
+  import { type MessageTransports } from "vscode-languageclient";
+  import { type ConsoleLogger } from "monaco-languageclient/tools";
 
   let vizDecl: undefined | FunDecl = $state(undefined);
 
@@ -16,7 +14,7 @@
       "monaco-languageclient/vscode/services"
     );
     const { LogLevel } = await import("@codingame/monaco-vscode-api");
-    const { CloseAction, ErrorAction, MessageTransports } = await import(
+    const { CloseAction, ErrorAction } = await import(
       "vscode-languageclient/browser.js"
     );
     const { MonacoLanguageClient } = await import("monaco-languageclient");
@@ -25,6 +23,9 @@
     const { configureDefaultWorkerFactory } = await import(
       "monaco-editor-wrapper/workers/workerLoaders"
     );
+    const { ConsoleLogger } = await import("monaco-languageclient/tools");
+    const { Schema } = await import("effect");
+    const { VisualizeDecisionLogicIRInfo } = await import("@repo/viz-expr")
 
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
