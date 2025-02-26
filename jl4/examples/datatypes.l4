@@ -98,4 +98,3 @@ GIVEN a IS A TYPE
 GIVETH A LIST OF PAIR a b
 zip list1 list2 MEANS
   zipWith PAIR list1 list2
-
