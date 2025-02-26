@@ -8,7 +8,7 @@
   --theme-border-radius: 5px;
 
   /* TODO: Need to check the colors against some color palette generator */
-  --color-highlighted-path: #047857;
+  --color-highlighted-path-in-flow: #047857;
 }
 
 /**

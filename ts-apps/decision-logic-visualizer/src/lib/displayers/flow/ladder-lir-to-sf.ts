@@ -19,6 +19,7 @@ import {
   notEndNodeType,
   sourceNodeType,
   sinkNodeType,
+  ladderEdgeType,
 } from './types.svelte.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
@@ -34,7 +35,7 @@ export function ladderGraphToSFGraph(
   // TODO: May want to sort as well
   const edges = ladderGraph
     .getEdges(context)
-    .map(ladderLirEdgeToSfEdge.bind(null, context))
+    .map(ladderLirEdgeToSfEdge.bind(null, context, ladderGraph))
 
   return {
     nodes,
@@ -106,11 +107,20 @@ export function ladderLirNodeToSfNode(
  ******************************************************/
 
 export function ladderLirEdgeToSfEdge(
-  _context: LirContext,
+  context: LirContext,
+  graph: LadderGraphLirNode,
   edge: LadderLirEdge
 ): SF.Edge {
+  const label = graph.getEdgeLabel(context, edge)
+  const strokeColorCSSVar = graph.getEdgeStyles(context, edge).getStrokeColor()
+
   return {
     id: edge.getId(),
+    type: ladderEdgeType,
+    data: {
+      label,
+      strokeColorCSSVar,
+    },
     source: edge.getU().toString(),
     target: edge.getV().toString(),
   }

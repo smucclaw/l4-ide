@@ -10,7 +10,7 @@ import {
   type Edge,
   DirectedEdge,
   type EdgeStyles,
-  SelectedEdgeStyles,
+  HighlightedEdgeStyles,
   EmptyEdgeStyles,
 } from '../algebraic-graphs/edge.js'
 
@@ -86,13 +86,12 @@ export class PathLirNode {
     })
   }
 
-  /** Or 'highlight' */
-  select(context: LirContext) {
-    this.setStylesOnPathEdges(context, new SelectedEdgeStyles())
+  highlight(context: LirContext) {
+    this.setStylesOnPathEdges(context, new HighlightedEdgeStyles())
     // TODO: setbindings for the vars in the path too
   }
 
-  deselect(context: LirContext) {
+  unhighlight(context: LirContext) {
     this.setStylesOnPathEdges(context, new EmptyEdgeStyles())
   }
 
@@ -228,6 +227,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag.getAttributesForEdge(edge).setLabel(label)
     this.getRegistry().publish(context, this.getId())
   }
+
+  /*****************************
+        Bindings
+  ******************************/
+
+  // setBinding(context: LirContext, binding: { name: Name, value: Value })
+
   /*****************************
             Misc
   ******************************/
@@ -287,9 +293,9 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.#value
   }
 
-  setValue(_context: LirContext, value: BoolValue) {
+  _setValue(context: LirContext, value: BoolValue) {
     this.#value = value
-    // TODO: Will probably want to publish that value has been set!
+    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(_context: LirContext) {

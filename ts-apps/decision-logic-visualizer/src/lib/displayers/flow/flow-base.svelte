@@ -17,6 +17,7 @@
   import {
     type LadderFlowDisplayerProps,
     sfNodeTypes,
+    sfEdgeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
@@ -61,7 +62,7 @@
     () => sfNodes$Initialized.current,
     layoutDebounceMs
   )
-  const { fitView } = $derived(useSvelteFlow())
+  const { fitView, updateEdge } = $derived(useSvelteFlow())
 
   // Keep track of whether nodes have been layouted, so that won't display them before then
   let nodes$AreLayouted = $state(false)
@@ -80,6 +81,10 @@
       }
     )
   })
+
+  /*********************************************
+     Subscribe to changes in the LadderLirNodes
+  **********************************************/
 
   /***********************************
       doLayout, Dagre Graph, Config
@@ -154,6 +159,7 @@
     bind:nodes={NODES}
     bind:edges={EDGES}
     nodeTypes={sfNodeTypes}
+    edgeTypes={sfEdgeTypes}
     minZoom={sfVisualOptions.smallestThatCanZoomOutTo}
     fitView
     connectionLineType={ConnectionLineType.Bezier}
@@ -169,8 +175,8 @@
     {#each ladderGraph.getPaths(context) as path}
       <button
         class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
-        onmouseenter={() => path.select(context)}
-        onmouseleave={() => path.deselect(context)}
+        onmouseenter={() => path.highlight(context)}
+        onmouseleave={() => path.unhighlight(context)}
       >
         {path.toPretty(context)}
       </button>

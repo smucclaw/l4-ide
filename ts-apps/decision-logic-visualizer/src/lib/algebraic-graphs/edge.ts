@@ -1,4 +1,4 @@
-import type { Ord, StyleStr } from '$lib/utils.js'
+import type { Ord } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /********************************
@@ -102,7 +102,8 @@ export class DirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
 /********************************
       Attributes
 *********************************/
-// This isn't in principle limited to edges; it's just that we will prob use LirNode methods for node data
+// This isn't in principle limited to edges;
+// it's just that we will prob use LirNode methods for node data
 
 export interface EdgeAttributes<A extends Ord<A>> {
   getStyles(): EdgeStyles
@@ -159,10 +160,10 @@ export function mergeEdgeAttributes<A extends Ord<A>>(
   }
 
   function mergeEdgeStyles(s1: EdgeStyles, s2: EdgeStyles) {
-    if (s1.getRawStyles() === '') {
+    if (isEmptyEdgeStyles(s1)) {
       return s2
     }
-    if (s2.getRawStyles() === '') {
+    if (isEmptyEdgeStyles(s2)) {
       return s1
     }
     return s2
@@ -178,25 +179,44 @@ export function mergeEdgeAttributes<A extends Ord<A>>(
     Edge Label and Styles
 ****************************/
 
-export const emptyEdgeLabel = ''
-
 export interface EdgeStyles {
-  getRawStyles(): StyleStr
+  $type: 'EmptyEdgeStyles' | 'HighlightedEdgeStyles'
+  getStrokeColor(): StrokeColorCSSVar
+}
+
+export function isEmptyEdgeStyles(
+  styles: EdgeStyles
+): styles is EmptyEdgeStyles {
+  return styles.$type === 'EmptyEdgeStyles'
+}
+
+export function isHighlightedEdgeStyles(
+  styles: EdgeStyles
+): styles is HighlightedEdgeStyles {
+  return styles.$type === 'HighlightedEdgeStyles'
 }
 
 /** 'mempty' for EdgeStyles */
 export class EmptyEdgeStyles implements EdgeStyles {
+  $type = 'EmptyEdgeStyles' as const
   constructor() {}
 
-  getRawStyles() {
-    return ''
+  getStrokeColor() {
+    return '--default-internal-stroke-color' as const
   }
 }
 
-export class SelectedEdgeStyles implements EdgeStyles {
+export class HighlightedEdgeStyles implements EdgeStyles {
+  $type = 'HighlightedEdgeStyles' as const
   constructor() {}
 
-  getRawStyles() {
-    return 'stroke: var(--color-highlighted-path)'
+  getStrokeColor() {
+    return '--color-highlighted-path-in-flow' as const
   }
 }
+
+export const emptyEdgeLabel = ''
+
+export type StrokeColorCSSVar =
+  | '--color-highlighted-path-in-flow'
+  | '--default-internal-stroke-color'
