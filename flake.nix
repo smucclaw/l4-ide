@@ -24,6 +24,8 @@
                 acme-email = "magnus@well-typed.com";
                 root-ssh-keys = [
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEkSSWT6/5jBteJYcwiwltGp+hPZM/rQcqbOENvMvIj3 mangoiv@p14-nixos"
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJnW5fx9PJGfn5x6EcYdl2XlGxOiZKWfzPgzLYqCn7zW hannes@well-typed.com"
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfJEsr9v7Dh6uCv/gXRMW7AKGcBSprx23SwxiMPcYQP andres@well-typed.com"
                 ];
               };
             }
