@@ -48,6 +48,7 @@ All this documentation is still under construction.
   - The `ASSUME` environment
   - Term Substitution
   - Example: Must Sing
+  - Example: [The Dog Act](jl4/experiments/dogs.l4)
   - Example: Vermin
 
 - Tutorial: British Nationality Act
