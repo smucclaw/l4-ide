@@ -5,19 +5,15 @@ module L4.Lexer where
 
 import Base
 import qualified Base.Map as Map
+import qualified Base.Set as Set
 import qualified Base.Text as Text
 
-import Control.DeepSeq (NFData)
 import Data.Char hiding (Space)
-import Data.Proxy
 import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
 import qualified Text.Megaparsec.Char.Lexer as Lexer
-import Data.TreeDiff.Class (ToExpr)
-import qualified Control.Monad.Trans.State.Strict as State
-import qualified Data.Set as Set
 
 type Lexer = Parsec Void Text
 
@@ -597,19 +593,19 @@ errorBundleToErrorMessages ::
   NonEmpty (Text, SourcePos)
 errorBundleToErrorMessages ParseErrorBundle{..} =
   let
-    (results, _) = State.runState (traverse format bundleErrors) bundlePosState
+    (results, _) = runState (traverse format bundleErrors) bundlePosState
   in
     results
  where
-  format :: ParseError s e -> State.State (PosState s) (Text, SourcePos)
+  format :: ParseError s e -> Base.State (PosState s) (Text, SourcePos)
   format e = do
-    pst <- State.get
+    pst <- get
     let
       (msline, pst') = calculateOffset pst
       epos = pstateSourcePos pst'
       errMsg = parseErrorTextPretty e
       parseErrCtx = offendingLine msline epos
-    State.put pst'
+    put pst'
     pure $ (Text.pack $ parseErrCtx <> errMsg, epos)
    where
     calculateOffset pst = reachOffset (errorOffset e) pst

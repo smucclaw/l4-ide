@@ -1,0 +1,25 @@
+-- If a function f is defined in terms of Y, and Y is defined in terms of Z,
+-- then term expansion rewrites f in terms of Z.
+
+-- before:
+--   f x = x && y
+--     where y = z || z
+
+-- after:
+--   f x = x && (z || z)
+
+GIVETH A BOOLEAN
+z MEANS TRUE
+
+GIVETH A BOOLEAN
+y MEANS z OR z
+
+GIVEN x IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `after` IS x AND     z
+                         OR z
+
+GIVEN x IS A BOOLEAN
+DECIDE `before` IS x AND y
+
+#EVAL `after` TRUE

@@ -48,7 +48,10 @@ declare' ::=
   "DECLARE" appform typedecl
 
 typedecl ::=
-  recorddecl | enumdecl
+  recorddecl | enumdecl | synonymdecl
+
+synonymdecl ::=
+  "IS" type
 
 recorddecl ::=
   "HAS" reqparam{,}*

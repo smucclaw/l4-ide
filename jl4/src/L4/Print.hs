@@ -1,21 +1,28 @@
 module L4.Print where
 
+import Base
+import qualified Base.Text as Text
+import L4.Evaluate.Value
 import L4.Syntax
 
 import Data.Char
-import Data.Text (Text)
-import qualified Data.Text as Text
 import Prettyprinter
 import Prettyprinter.Render.Text
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
 
+quotedName :: Name -> Text
+quotedName n =
+    renderStrict
+  $ layoutPretty (LayoutOptions Unbounded)
+  $ pretty . quote . rawNameToText . rawName $ n
+
 class LayoutPrinter a where
   printWithLayout :: a -> Doc ann
 
 instance LayoutPrinter Name where
-  printWithLayout (MkName _ rawName) = printWithLayout rawName
+  printWithLayout n = printWithLayout (rawName n)
 
 instance LayoutPrinter Resolved where
   printWithLayout r = printWithLayout (getActual r)
@@ -35,17 +42,19 @@ instance LayoutPrinter a => LayoutPrinter (Type' a) where
     Type _ -> "TYPE"
     TyApp _ n ps -> printWithLayout n <> case ps of
       [] -> mempty
-      params@(_:_) -> space <> "OF" <+> hcat (punctuate comma (fmap printWithLayout params))
+      params@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap printWithLayout params))
     Fun _ args ty ->
-      "FUNCTION FROM" <> hcat (punctuate (space <> "AND") (fmap printWithLayout args))
+      "FUNCTION FROM" <+> hsep (punctuate (space <> "AND") (fmap printWithLayout args))
         <+> "TO" <+> printWithLayout ty
-    Forall _ vals ty -> "FOR ALL" <+> hcat (punctuate "AND" (fmap printWithLayout vals)) <+> "TO" <+> printWithLayout ty
+    Forall _ vals ty -> "FOR ALL" <+> hsep (punctuate (space <> "AND") (fmap printWithLayout vals))
+        <+> printWithLayout ty
     InfVar _ raw uniq -> printWithLayout raw <> pretty uniq
 
+-- We currently have no syntax for actual names occurring here
 instance LayoutPrinter a => LayoutPrinter (OptionallyNamedType a) where
   printWithLayout = \case
-    MkOptionallyNamedType _ a ty ->
-      printWithLayout a <+> printWithLayout ty
+    MkOptionallyNamedType _ _ ty ->
+      printWithLayout ty
 
 instance LayoutPrinter a => LayoutPrinter (OptionallyTypedName a) where
   printWithLayout = \case
@@ -101,7 +110,7 @@ instance LayoutPrinter a => LayoutPrinter (AppForm a) where
 
 instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
   printWithLayout = \case
-    RecordDecl _ fields  ->
+    RecordDecl _ _ fields  ->
       vcat
         [ "HAS"
         , indent 2 (vsep (fmap printWithLayout fields))
@@ -111,6 +120,12 @@ instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
         [ "IS ONE OF"
         , indent 2 (vsep (fmap printWithLayout enums))
         ]
+    SynonymDecl _ t ->
+      vcat
+        [ "IS"
+        , indent 2 (printWithLayout t)
+        ]
+
 instance LayoutPrinter a => LayoutPrinter (ConDecl a) where
   printWithLayout = \case
     MkConDecl _ n fields  ->
@@ -274,12 +289,28 @@ instance LayoutPrinter Nlg where
   printWithLayout = \case
     (MkNlg _ contents) -> pretty $ Text.concat contents
 
+instance LayoutPrinter Value where
+  printWithLayout = \case
+    ValNumber i               -> pretty i
+    ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
+    ValList vs                ->
+      "LIST" <+> hsep (punctuate comma (fmap valParensIfNeeded vs))
+    ValClosure _ _ _          -> "<function>"
+    ValAssumed r              -> printWithLayout r
+    ValUnappliedConstructor r -> printWithLayout r
+    ValConstructor r vs       -> printWithLayout r <> case vs of
+      [] -> mempty
+      vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap valParensIfNeeded vals))
+
 quoteIfNeeded :: Text.Text -> Text.Text
 quoteIfNeeded n = case Text.uncons n of
   Nothing -> n
   Just (c, xs)
     | isAlpha c && Text.all isAlphaNum xs -> n
-    | otherwise -> "`" <> n <> "`"
+    | otherwise -> quote n
+
+quote :: Text.Text -> Text.Text
+quote n = "`" <> n <> "`"
 
 scanAnd :: Expr a -> [Expr a]
 scanAnd (And _ e1 e2) =
@@ -309,6 +340,16 @@ parensIfNeeded e = case e of
   App _ _ [] -> printWithLayout e
   Var{} -> printWithLayout e
   _ -> surround (printWithLayout e) "(" ")"
+
+valParensIfNeeded :: Value -> Doc ann
+valParensIfNeeded v = case v of
+  ValNumber{}               -> printWithLayout v
+  ValString{}               -> printWithLayout v
+  ValClosure{}              -> printWithLayout v
+  ValUnappliedConstructor{} -> printWithLayout v
+  ValAssumed{}              -> printWithLayout v
+  ValConstructor r []       -> printWithLayout r
+  _ -> surround (printWithLayout v) "(" ")"
 
 escapeStringLiteral :: Text -> Text
 escapeStringLiteral = Text.concatMap (\case

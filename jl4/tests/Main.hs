@@ -114,8 +114,8 @@ parseFile file input =
   where
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-    evalResultToMessage (r, res) = (Just r, either Text.show JL4.renderValue res)
-    renderMessage (r, txt) = JL4.prettySrcRange fp r <> ":\n" <> txt
+    evalResultToMessage (r, res) = (Just r, [either Text.show Print.prettyLayout res])
+    renderMessage (r, txt) = JL4.cliErrorMessage fp r txt
 
 parseFiles :: [FilePath] -> IO ()
 parseFiles =
@@ -125,7 +125,7 @@ prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
 prettyNlgOutput p warns = Text.unlines $
   [ prettyNlgName n nlg
   | n <- toListOf gplate p
-  , Just nlg <- [n ^? JL4.annoOf % #extra % _Just % #nlg % _Just]
+  , Just nlg <- [n ^? JL4.annoOf % #extra % #nlg % _Just]
   ]
   <>
   [prettyWarning warning | warning <- warns]
@@ -144,7 +144,7 @@ prettyNlgOutput p warns = Text.unlines $
       ]
 
     prettyMaybeSrcRange :: Maybe JL4.SrcRange -> Text
-    prettyMaybeSrcRange srcRange = "[" <> JL4.prettySrcRange "" srcRange <> "]"
+    prettyMaybeSrcRange srcRange = "[" <> JL4.prettySrcRange Nothing srcRange <> "]"
 
     prettyNlg :: Nlg -> Text
     prettyNlg n = mconcat

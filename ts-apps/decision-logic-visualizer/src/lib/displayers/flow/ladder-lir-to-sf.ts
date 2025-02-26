@@ -64,7 +64,7 @@ export function ladderLirNodeToSfNode(
         type: boolVarNodeType,
         position: n.getPosition(context),
         data: n.getData(context),
-      } as SF.Node
+      }
     })
     .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
       return {
@@ -72,7 +72,7 @@ export function ladderLirNodeToSfNode(
         type: notStartNodeType,
         position: n.getPosition(context),
         data: {},
-      } as SF.Node
+      }
     })
     .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
       return {
@@ -80,7 +80,7 @@ export function ladderLirNodeToSfNode(
         type: notEndNodeType,
         position: n.getPosition(context),
         data: {},
-      } as SF.Node
+      }
     })
     .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
       return {
@@ -88,7 +88,7 @@ export function ladderLirNodeToSfNode(
         type: sourceNodeType,
         position: n.getPosition(context),
         data: {},
-      } as SF.Node
+      }
     })
     .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
@@ -96,7 +96,7 @@ export function ladderLirNodeToSfNode(
         type: sinkNodeType,
         position: n.getPosition(context),
         data: {},
-      } as SF.Node
+      }
     })
     .exhaustive()
 }

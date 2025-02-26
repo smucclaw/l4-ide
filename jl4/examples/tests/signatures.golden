@@ -1,8 +1,11 @@
 Parsing successful
 Typechecking successful
 signatures.l4:21:8-9:
-(FUNCTION FROM BOOLEAN TO BOOLEAN)
+  FUNCTION FROM BOOLEAN TO BOOLEAN
+
 signatures.l4:22:8-9:
-(T OF NUMBER)
+  T OF NUMBER
+
 signatures.l4:23:8-9:
-(FUNCTION FROM BOOLEAN TO NUMBER)
+  FUNCTION FROM BOOLEAN TO NUMBER
+

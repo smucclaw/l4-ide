@@ -1,16 +1,37 @@
 Parsing successful
 tdnr-ambiguous.l4:7:6-9:
-while checking DECIDE/MEANS of bar:
-ambiguous: foo, options:
-BOOLEAN
-NUMBER
+  I found a problem while checking the definition of `bar`:
+    There are multiple definitions for the identifier
+    
+      foo
+    
+    and I do not have sufficient information to make a choice between them.
+    The options are:
+    
+      foo (defined at 4:8-11) of type BOOLEAN
+      foo (defined at 3:8-11) of type NUMBER
+
 tdnr-ambiguous.l4:14:18-21:
-while checking DECIDE/MEANS of another:
-ambiguous: foo, options:
-BOOLEAN
-NUMBER
+  I found a problem while checking the definition of `another`:
+    There are multiple definitions for the identifier
+    
+      foo
+    
+    and I do not have sufficient information to make a choice between them.
+    The options are:
+    
+      foo (defined at 4:8-11) of type BOOLEAN
+      foo (defined at 3:8-11) of type NUMBER
+
 tdnr-ambiguous.l4:14:27-30:
-while checking DECIDE/MEANS of another:
-ambiguous: foo, options:
-BOOLEAN
-NUMBER
+  I found a problem while checking the definition of `another`:
+    There are multiple definitions for the identifier
+    
+      foo
+    
+    and I do not have sufficient information to make a choice between them.
+    The options are:
+    
+      foo (defined at 4:8-11) of type BOOLEAN
+      foo (defined at 3:8-11) of type NUMBER
+

@@ -74,6 +74,7 @@ data TypeCheckResult = TypeCheckResult
   , substitution :: Substitution
   , success :: Bool
   , environment :: TypeCheck.Environment
+  , entityInfo :: TypeCheck.EntityInfo
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
@@ -195,6 +196,7 @@ jl4Rules recorder = do
         { program = result.program
         , substitution = result.substitution
         , environment = result.environment
+        , entityInfo = result.entityInfo
         , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
         }
       )
@@ -212,7 +214,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
-    case runSemanticTokensM defaultSemanticTokenCtx tokens of
+    case runSemanticTokensM (defaultSemanticTokenCtx ()) tokens of
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
@@ -220,7 +222,7 @@ jl4Rules recorder = do
 
   define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
-    case runSemanticTokensM defaultSemanticTokenCtx prog of
+    case runSemanticTokensM (defaultSemanticTokenCtx CValue) prog of
       Left _err ->
         pure ([{- TODO: Log error -}], Nothing)
       Right tokenized -> do
@@ -404,7 +406,7 @@ jl4Rules recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either Text.show renderValue res
+        , _message = either Text.show Print.prettyLayout res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
@@ -418,7 +420,7 @@ jl4Rules recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "check"
-        , _message = TypeCheck.prettyCheckErrorWithContext checkError
+        , _message = Text.unlines (TypeCheck.prettyCheckError checkError.kind)
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

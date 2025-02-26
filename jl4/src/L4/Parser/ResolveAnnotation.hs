@@ -176,12 +176,15 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
   addNlg a = extendNlgA a $ case a of
-    RecordDecl ann typedNames -> do
+    RecordDecl ann mcon typedNames -> do
       typedNames' <- traverse addNlg typedNames
-      pure $ RecordDecl ann typedNames'
+      pure $ RecordDecl ann mcon typedNames'
     EnumDecl ann conDecls -> do
       conDecls' <- traverse addNlg conDecls
       pure $ EnumDecl ann conDecls'
+    SynonymDecl ann ty -> do
+      ty' <- addNlg ty
+      pure $ SynonymDecl ann ty'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypedName n) where
   addNlg a = extendNlgA a $ case a of
