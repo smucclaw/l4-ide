@@ -28,7 +28,7 @@ The classic example goes something like this.
 
 "Because there are over fifty billion birds in the world, and fewer than five hundred kakapo in the wild. As the saying goes, when you hear hoofbeats, think horses, not zebras; when you told me Oswald was a bird, I thought pigeon, not parrot."
 
-"But Oswald *can* fly, after all!"
+"But Oswald _can_ fly, after all!"
 
 "Oh?"
 
@@ -50,9 +50,9 @@ There is nothing wrong with this: it mirrors the way people think.
 
 In software, programmers often formalize this sort of rule with an "if/then/else" statement.
 
-Here's some Python that defines a decision -- whether one can park -- given the elements on which the decision depends. Those elements form the "fact pattern". They are "inputs". We say the decision is a *function* of those inputs, just as `y` is a function of `x`, in the algebraic formula `y = m(x) + b`.
+Here's some Python that defines a decision -- whether one can park -- given the elements on which the decision depends. Those elements form the "fact pattern". They are "inputs". We say the decision is a _function_ of those inputs, just as `y` is a function of `x`, in the algebraic formula `y = m(x) + b`.
 
-``` python
+```python
 def can_park(day, public_holiday, has_permit, is_ambulance, is_diplomat, city):
     if   day in ['Saturday', 'Sunday']:            return "No need to pay"
     elif public_holiday:                           return "No need to pay"
@@ -90,7 +90,7 @@ What about children born outside the UK, to British citizens, in some far-flung 
 
 The "if/then/else" pattern is sufficient to capture all of that complexity:
 
-``` python
+```python
 def citizenship(birthplace, parents_british, is_orphan, adopted_by_british):
     if birthplace == "UK" and parents_british:      return "British"
     elif is_orphan:                                 return "British"
@@ -209,11 +209,11 @@ A parking warden might see a Rolls Royce parked without paying. It's not clear w
 
 A parking warden might see an ambulance parked without paying. Are they actively responding to a call? Nobody's inside the ambulance -- it's hard to say. So, write the ticket, and let the ambulance subsequently submit evidence that they were working. When the wheels of justice grind fine, sometimes they're grinding away at `Unknowns`, trying to sift them into `True` or `False`.
 
-Operationally, the input to the decision function changes: the `is_responding_to_call` input starts off as `Unknown`. What does the parking warden do with `Unknown` values? Treat them, provisionally, as false, and write the ticket. Treating unknowns as false -- collapsing a ternary logic to a binary logic -- is called, by logicians, "negation as failure", as in "failure to prove that something is true, therefore considering it to be a negative, not a positive." We see "negation as failure" in law all the time: presumed innocent proven guilty is the most familiar example.
+Operationally, the input to the decision function changes: the `is_responding_to_call` input starts off as `Unknown`. What does the parking warden do with `Unknown` values? Treat them, provisionally, as false, and write the ticket. Treating unknowns as false -- collapsing a ternary logic to a binary logic -- is called, by logicians, "negation as failure", as in "failure to prove that something is true, therefore considering it to be a negative, not a positive." We see "negation as failure" in law all the time: "presumed innocent until proven guilty" is the most familiar example.
 
 ## The Optional Type is also called the Maybe Monad
 
-While most programming languages call it the `Optional` type, Haskell prefers to call it a `Maybe` type.
+While most programming languages call it `Optional`, Haskell prefers to call it `Maybe`.
 
 The word "optional" suggests some sort of choice, but often when an attribute it's missing it's not like somebody affirmatively elected to not have that attribute.
 
@@ -223,9 +223,8 @@ Less value-laden (ha, ha) to just say that maybe we know it, and maybe we don't.
 
 L4 documentation refers interchangeably to `Optional` and `Maybe` attributes. That means the same thing, it is just a different jargon convention.
 
-
 # Further Reading
 
-- 1980: R. Reiter, A Logic for Default Reasoning, 13 ARTIFICIAL INTELLIGENCE 81
-- 2017: Lawsky, A Logic for Statutes. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3088206
+- 1980: R. Reiter, [A Logic for Default Reasoning](https://www.sciencedirect.com/science/article/abs/pii/0004370280900144)
+- 2017: S. Lawsky, [A Logic for Statutes](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3088206)
 - 2020: http://catala-lang.org/
