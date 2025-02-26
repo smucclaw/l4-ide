@@ -45,12 +45,8 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
 */
 export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
-    const overallSource = vertex(
-      new SourceLirNode(nodeInfo).getId()
-    ) as DirectedAcyclicGraph<LirId>
-    const overallSink = vertex(
-      new SinkLirNode(nodeInfo).getId()
-    ) as DirectedAcyclicGraph<LirId>
+    const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
+    const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
     const middle = transform(nodeInfo, expr)
 
@@ -100,12 +96,8 @@ function transform(
     })
     .with({ $type: 'Not' }, (neg) => {
       const negand = transform(nodeInfo, neg.negand)
-      const notStart = vertex(
-        new NotStartLirNode(nodeInfo).getId()
-      ) as DirectedAcyclicGraph<LirId>
-      const notEnd = vertex(
-        new NotEndLirNode(nodeInfo).getId()
-      ) as DirectedAcyclicGraph<LirId>
+      const notStart = vertex(new NotStartLirNode(nodeInfo).getId())
+      const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
       return notStart
         .connect(negand.getSource())
         .overlay(negand)
@@ -123,12 +115,8 @@ function transform(
     .with({ $type: 'Or' }, (orExpr) => {
       const children = orExpr.args.map((n) => transform(nodeInfo, n))
 
-      const overallSource = vertex(
-        new SourceLirNode(nodeInfo).getId()
-      ) as DirectedAcyclicGraph<LirId>
-      const overallSink = vertex(
-        new SinkLirNode(nodeInfo).getId()
-      ) as DirectedAcyclicGraph<LirId>
+      const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
+      const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
       const leftEdges = children.map((child) =>
         overallSource.connect(child.getSource())

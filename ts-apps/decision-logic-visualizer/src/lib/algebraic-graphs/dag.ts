@@ -121,7 +121,9 @@ export class Empty<A extends Ord<A>> extends Dag<A> {
   }
 }
 
-export function isVertex<A extends Ord<A>>(g: DirectedAcyclicGraph<A>) {
+export function isVertex<A extends Ord<A>>(
+  g: DirectedAcyclicGraph<A>
+): g is Vertex<A> {
   return g instanceof Vertex
 }
 
@@ -217,9 +219,7 @@ export function edge<A extends Ord<A>>(x: A, y: A): DirectedAcyclicGraph<A> {
 export function vertices<A extends Ord<A>>(
   vertices: A[]
 ): DirectedAcyclicGraph<A> {
-  return vertices
-    .map((v) => vertex(v))
-    .reduce(overlay, empty() as DirectedAcyclicGraph<A>)
+  return vertices.map((v) => vertex(v)).reduce(overlay, empty())
 }
 
 /** Make path graph from an array of vertices */
