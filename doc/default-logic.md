@@ -224,3 +224,8 @@ Less value-laden (ha, ha) to just say that maybe we know it, and maybe we don't.
 L4 documentation refers interchangeably to `Optional` and `Maybe` attributes. That means the same thing, it is just a different jargon convention.
 
 
+# Further Reading
+
+- 1980: R. Reiter, A Logic for Default Reasoning, 13 ARTIFICIAL INTELLIGENCE 81
+- 2017: Lawsky, A Logic for Statutes. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3088206
+- 2020: http://catala-lang.org/
