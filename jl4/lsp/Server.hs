@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Main (main) where
 
@@ -47,13 +46,12 @@ import System.IO
 import System.Time.Extra
 import UnliftIO (withRunInIO, race_, withAsync, MVar)
 import qualified Data.ByteString.Lazy as BSL
-import System.Environment
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder.Extra (defaultChunkSize)
-import Text.Read (readMaybe)
 import qualified Network.WebSockets as WS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as C8L
+import qualified Options.Applicative as Opa
 
 -- ----------------------------------------------------------------------------
 
@@ -154,15 +152,27 @@ data CommunicationKind
   | Websocket {host :: String, port :: Int}
   deriving stock (Eq, Show)
 
+parseComm :: Opa.ParserInfo CommunicationKind
+parseComm =
+  Opa.info
+    (Opa.helper <*> Opa.hsubparser
+      (Opa.command "ws"
+        (Opa.info
+          (Websocket
+            <$> Opa.strOption (Opa.long "host" <> Opa.value  "localhost")
+            <*> Opa.option Opa.auto (Opa.long "port" <> Opa.value 8007)
+          )
+          (Opa.briefDesc <> Opa.progDesc "run the language server over a websocket connection")
+        )
+      )
+      Opa.<|> pure StdIO
+    )
+    (Opa.briefDesc <> Opa.progDesc "The L4 language server. Invoke to run using StdIO")
+
 getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
 getDefaultArguments recorder = do
   cwd <- getCurrentDirectory
-  args <- getArgs
-  let communication :: CommunicationKind = case args of
-        -- FIXME: proper argument parsing
-        [address, readMaybe -> Just port] -> Websocket address port
-        _ -> StdIO
-
+  communication <- Opa.execParser parseComm
   pure Arguments
     { projectRoot = cwd
     , rules = Rules.jl4Rules (cmapWithPrio LogRules recorder)
