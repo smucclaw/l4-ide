@@ -48,9 +48,6 @@ map2 f list MEANS
     WHEN EMPTY            THEN EMPTY
     WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map2 f xs
 
-
-
-
 -- polymorphic type
 ASSUME map3 IS
   FOR ALL a AND b
@@ -102,21 +99,3 @@ GIVETH A LIST OF PAIR a b
 zip list1 list2 MEANS
   zipWith PAIR list1 list2
 
-GIVEN  a      IS A TYPE
-       pred   IS A FUNCTION FROM a TO BOOLEAN
-       xxx    IS A List OF a
-GIVETH A BOOLEAN
-any pred xxx MEANS
-  CONSIDER xxx
-    WHEN Nil       THEN FALSE
-    WHEN Cons x xs THEN pred x OR any pred xs
-
-
-GIVEN  a      IS A TYPE
-       pred   IS A FUNCTION FROM a TO BOOLEAN
-       xxx    IS A List OF a
-GIVETH A BOOLEAN
-all pred xxx MEANS
-  CONSIDER xxx
-    WHEN Nil       THEN FALSE
-    WHEN Cons x xs THEN pred x AND all pred xs
