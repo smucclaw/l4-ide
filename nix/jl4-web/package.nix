@@ -17,13 +17,26 @@ buildNpmPackage {
   buildInputs = [ libsecret.dev ];
   buildPhase = ''
     runHook preBuild
+    set -x
     export VITE_BACKEND_URL=${if secure then "wss" else "ws"}://${url};
-    npm run build || true
-    # HACK: we need to build workspace dependencies but we don't care if
-    # not all of them succeed as long as enough succeed for the entire
-    # thing to build
-    cd ./ts-apps/jl4-web
+    pushd ./ts-shared/viz-expr
     npm run build
+    popd
+    pushd ./ts-apps
+    pushd ./decision-logic-visualizer
+    npm run build
+    popd
+
+    pushd ./webview
+    npm run build
+    popd
+
+    # HACK: we need to build workspace dependencies by hand because npm
+    # isn't clever enough to figure out workspace dependencies
+
+    pushd ./jl4-web
+    npm run build
+    set +x
     runHook postBuild
   '';
   installPhase = ''

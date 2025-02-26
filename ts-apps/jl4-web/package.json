@@ -22,13 +22,16 @@
   "dependencies": {
     "@codingame/monaco-vscode-api": "^14.0.4",
     "@repo/decision-logic-visualizer": "*",
+    "@repo/viz-expr": "*",
     "@repo/webview": "*",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "effect": "^3.13.2",
     "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@^14.0.4",
     "monaco-editor-wrapper": "^6.4.0",
     "monaco-languageclient": "^9.4.0",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@^14.0.4",
+    "vscode-languageclient": "^9.0.1",
     "vscode-ws-jsonrpc": "^3.4.0"
   }
 }
