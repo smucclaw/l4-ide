@@ -28,8 +28,8 @@
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   );
-  let declLabel = $derived(
-    declLirNode && (declLirNode as DeclLirNode).getLabel(context)
+  let funName = $derived(
+    declLirNode && (declLirNode as DeclLirNode).getFunName(context)
   );
   $effect(() => {
     if (declLirNode) {
@@ -239,7 +239,7 @@ DECIDE \`is a British citizen (variant)\` IS
 <div class="jl4-container">
   <div id="jl4-editor" bind:this={editorElement}></div>
   <div id="jl4-webview">
-    <h1>{declLabel}</h1>
+    <h1>{funName}</h1>
 
     {#if vizDecl && declLirNode}
       {#key declLirNode}
