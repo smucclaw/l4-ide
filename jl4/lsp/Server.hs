@@ -44,7 +44,7 @@ import qualified Language.LSP.Server as LSP
 import System.Directory (getCurrentDirectory)
 import System.IO
 import System.Time.Extra
-import UnliftIO (withRunInIO, race_, withAsync, MVar)
+import UnliftIO (withRunInIO, race_, withAsync, finally, MVar)
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder.Extra (defaultChunkSize)
@@ -108,6 +108,7 @@ data Log
 data WebsocketLog
   = WebsocketShutDown
   | WebsocketNewConnection
+  | WebsocketConnectionClosed
   deriving stock Show
 
 instance Pretty Log where
@@ -132,6 +133,7 @@ instance Pretty WebsocketLog where
   pretty = \case
     WebsocketShutDown -> "shut down server"
     WebsocketNewConnection -> "new connection established"
+    WebsocketConnectionClosed -> "closed connection to client"
 
 data Arguments = Arguments
   { projectRoot :: FilePath
@@ -317,7 +319,9 @@ defaultMain recorder args = do
                   let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
                   writeChan inChan msg'
                 )
-        logWith recorder Info $ LogWebsocket WebsocketShutDown
+          `finally` do
+            logWith recorder Info $ LogWebsocket WebsocketConnectionClosed
+        logWith recorder Error $ LogWebsocket WebsocketShutDown
 
 parseServerConfig :: Config -> Aeson.Value -> Either Text Config
 parseServerConfig _ v = do
