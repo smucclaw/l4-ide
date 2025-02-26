@@ -10,9 +10,39 @@ id x MEANS x
 revApp a b MEANS b a
 the MEANS revApp
 does MEANS id
+
+GIVEN a IS A TYPE
+      x IS AN a
 some x MEANS TRUE
-any  x MEANS TRUE
+
 person p f d MEANS f p d
+
+DECLARE List OF a
+  IS ONE OF
+    Nil
+    Cons HAS
+      head IS AN a
+      tail IS A List OF a
+
+GIVEN  a      IS A TYPE
+       pred   IS A FUNCTION FROM a TO BOOLEAN
+       xxx    IS A List OF a
+GIVETH A BOOLEAN
+any pred xxx MEANS
+  CONSIDER xxx
+    WHEN Nil       THEN FALSE
+    WHEN Cons x xs THEN pred x OR any pred xs
+
+
+GIVEN  a      IS A TYPE
+       pred   IS A FUNCTION FROM a TO BOOLEAN
+       xxx    IS A List OF a
+GIVETH A BOOLEAN
+all pred xxx MEANS
+  CONSIDER xxx
+    WHEN Nil       THEN FALSE
+    WHEN Cons x xs THEN pred x AND all pred xs
+
 
 DECLARE OPTIONAL a
   IS ONE OF
@@ -21,12 +51,13 @@ DECLARE OPTIONAL a
 
 § `application-specific data model`
 
+DECLARE Person
+    HAS name IS A STRING
+
 DECLARE Animal
     HAS name      IS A STRING
         dangerous IS A BOOLEAN
-
-DECLARE Person
-    HAS name IS A STRING
+        owner     IS A Person
 
 § `many-to-many relations between Person and Animal`
 ASSUME `is liable for the control of the` IS A FUNCTION FROM Person AND Animal TO BOOLEAN
@@ -57,7 +88,7 @@ GIVEN dp     IS A Person
 DECIDE `commits s1 offence`
  IF   some dog
  AND  attacks OR chases
- AND  any  victim
+ AND  some  victim
       AND  `causes injury to` victim
  AND  person dp
              `is liable for the control of the`
@@ -85,7 +116,7 @@ GIVEN dp     IS A Person
 DECIDE `commits s2 offence`
  IF   some dog
  AND  attacks OR chases
- AND  any  victim
+ AND  some victim
       AND  NOT `causes injury to` victim
  AND  person dp
              `is liable for the control of the`
@@ -125,28 +156,36 @@ IF    above dog
      AND [at the material time] `owns` otherOwner dog [was owned by another person who had reached 18 years of age]
      AND `identified by` otherOwner dp
 
--- attack, in relation to the behaviour of a dog, does not include behaviour which was an immediate response to, and was induced by, provocation, but includes —
---                  (a)    aggressively rushing at or harassing any person or animal; or
---                  (b)    biting, or otherwise causing physical injury to, a person or an animal; or
---                  (c)    tearing clothing on, or otherwise causing damage to the property of, the person attacked; or
---                  (d)    attempting to attack, or behaving in such a manner toward a person as would cause a reasonable person to fear physical injury,
---               unless the owner establishes that the behaviour was justified by a reasonable cause;
 
-ASSUME `aggressively rushing at` IS BOOLEAN
-ASSUME harassing IS BOOLEAN
-ASSUME biting IS BOOLEAN
-ASSUME `otherwise causing physical injury to` IS BOOLEAN
-ASSUME `tearing clothing on` IS BOOLEAN
-ASSUME `otherwise causing damage to the property of` IS BOOLEAN
-ASSUME `attempting to attack` IS BOOLEAN
-ASSUME `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury` IS BOOLEAN
 
-attacks MEANS
-        NOT provocation
-    AND     (`aggressively rushing at` OR harassing) [any person or animal]
-        OR  (biting OR `otherwise causing physical injury to`) [a person or an animal]
-        OR  (`tearing clothing on` OR `otherwise causing damage to the property of`) [the person attacked]
-        OR  (`attempting to attack` OR `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury`)
+of_ x MEANS TRUE
+of__ x MEANS TRUE
+of_which_ x MEANS TRUE
+on_ x MEANS TRUE
+by_ x MEANS TRUE
+said_ x MEANS TRUE
+where_said_ x MEANS TRUE
+is_   x MEANS TRUE
+
+ASSUME teasing IS BOOLEAN
+ASSUME tormenting IS BOOLEAN
+ASSUME abuse IS BOOLEAN
+ASSUME `assault_on` IS BOOLEAN
+ASSUME `cruelty_towards` IS BOOLEAN
+ASSUME entry IS BOOLEAN
+ASSUME `lawful excuse` IS BOOLEAN
+ASSUME land IS BOOLEAN
+ASSUME premises IS BOOLEAN
+ASSUME `an occupier` IS BOOLEAN
+ASSUME `ordinarily kept` IS BOOLEAN
+ASSUME intrusion IS BOOLEAN
+ASSUME into IS BOOLEAN
+ASSUME upon IS BOOLEAN
+ASSUME vehicle IS BOOLEAN
+ASSUME in IS BOOLEAN
+ASSUME on IS BOOLEAN
+ASSUME which IS BOOLEAN
+ASSUME present IS BOOLEAN
 
 GIVEN dog IS AN Animal
       dp  IS A Person   -- the dog-walker  person
@@ -154,23 +193,29 @@ GIVEN dog IS AN Animal
       pa  IS AN Animal  -- animal provocateur
 GIVETH A BOOLEAN
 provocation MEANS
-            (ANY OF teasing
-                    tormenting
-                    abuse) [of] dog [by] pp
-        OR  (ANY OF assault
-                    act of cruelty)
-            [by] pp
-            [toward] dog
-        OR  entry [without lawful excuse]
-            [by] pp
-            [on] (land OR premises)
-                  (    [of which the] dog's owner [is] an occupier
-                   OR  [where the] dog [is] ordinarily kept)
+                     teasing
+                  OR tormenting
+                  OR abuse
+            &&    of_  dog
+            &&    by_  pp
+        OR           assault_on
+                  OR cruelty_towards
+            &&    said_ dog
+            &&    by_ pp
+            
+        OR            entry [without] AND NOT `lawful excuse`
+            &&    by_  pp AND on
+            &&        (land OR premises)
+                       &&        of_which_ [which] (dog's owner)
+                            &&   is_ `an occupier`
+                          OR     [where the] where_said_ dog
+                              && is_ `ordinarily kept`
         OR       intrusion
-             []  (into OR upon)
-             []  vehicle
-                 [in] OR [on which]
-                 dog [is] present
+            &&   (into OR upon)
+            &&   vehicle
+            &&      (in OR on)
+               &&  which
+            &&     said_ dog && is_ present
 
 
 
@@ -191,6 +236,41 @@ provocation MEANS
 --                  (a)    a dangerous dog (declared); or
 --                  (b)    a dangerous dog (restricted breed); or
 --                  (c)    a commercial security dog;
+
+
+
+-- attack, in relation to the behaviour of a dog, does not include behaviour which was an immediate response to, and was induced by, provocation, but includes —
+--                  (a)    aggressively rushing at or harassing any person or animal; or
+--                  (b)    biting, or otherwise causing physical injury to, a person or an animal; or
+--                  (c)    tearing clothing on, or otherwise causing damage to the property of, the person attacked; or
+--                  (d)    attempting to attack, or behaving in such a manner toward a person as would cause a reasonable person to fear physical injury,
+--               unless the owner establishes that the behaviour was justified by a reasonable cause;
+
+ASSUME `aggressively rushing at` IS BOOLEAN
+ASSUME harassing IS BOOLEAN
+ASSUME biting IS BOOLEAN
+ASSUME `otherwise causing physical injury to` IS BOOLEAN
+ASSUME `tearing clothing on` IS BOOLEAN
+ASSUME `otherwise causing damage to the property of` IS BOOLEAN
+ASSUME `attempting to attack` IS BOOLEAN
+ASSUME `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury` IS BOOLEAN
+
+
+
+
+GIVEN dog IS AN Animal
+      dp  IS A Person   -- the dog-walker  person
+      pp  IS A Person   -- the agent provocateur
+      pa  IS AN Animal  -- animal provocateur
+GIVETH A BOOLEAN
+attacks MEANS
+        NOT provocation dog dp pp pa
+    AND     (`aggressively rushing at` OR harassing) [any person or animal]
+        OR  (biting OR `otherwise causing physical injury to`) [a person or an animal]
+        OR  (`tearing clothing on` OR `otherwise causing damage to the property of`) [the person attacked]
+        OR  (`attempting to attack` OR `behaving in such a manner toward a person as would cause a reasonable person to fear physical injury`)
+
+
 
 
 
