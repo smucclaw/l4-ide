@@ -158,11 +158,13 @@
     function mkMiddleware(logger: ConsoleLogger) {
       return {
         executeCommand: async (command: any, args: any, next: any) => {
-          logger.debug(`== trying to execute command ${command}`);
+          logger.debug(`trying to execute command ${command}`);
           // FIXME: he we can actually run everything that we also run in the vscode extension
+          logger.debug(`args are ${args.toString()}`)
           const response = await next(command, args);
+
           logger.debug(
-            `== received response from language server ${JSON.stringify(response)}`
+            `received response from language server ${JSON.stringify(response)}`
           );
           const decode = Schema.decodeUnknownSync(VisualizeDecisionLogicIRInfo);
 
@@ -172,9 +174,11 @@
         },
       };
     }
+    await runClient();
+  });
 
-    const britishCitizen = `
-§ \`Assumptions\`
+  const britishCitizen =
+`§ \`Assumptions\`
 
 ASSUME Person IS A TYPE
 ASSUME \`mother of\` IS A FUNCTION FROM Person TO Person
@@ -185,38 +189,7 @@ ASSUME \`is born in a qualifying territory after the appointed day\` IS A FUNCTI
 ASSUME \`is settled in the United Kingdom\` IS A FUNCTION FROM Person TO BOOLEAN
 ASSUME \`is settled in the qualifying territory in which the person is born\` IS A FUNCTION FROM Person TO BOOLEAN
 
-§ \`Expanded version\`
-
-GIVEN p IS A Person
-GIVETH A BOOLEAN
-DECIDE \`is a British citizen\` IS
-         \`is born in the United Kingdom after commencement\` p
-      OR \`is born in a qualifying territory after the appointed day\` p
-  AND -- when the person is born ...
-            \`is a British citizen\` OF \`father of\` p
-         OR \`is a British citizen\` OF \`mother of\` p
-      OR    \`is settled in the United Kingdom\` OF \`father of\` p
-         OR \`is settled in the United Kingdom\` OF \`mother of\` p
-      OR    \`is settled in the qualifying territory in which the person is born\` OF \`father of\` p
-         OR \`is settled in the qualifying territory in which the person is born\` OF \`mother of\` p
-
-§ \`Version using a local auxiliary declaration\`
-
-GIVEN p IS A Person
-GIVETH A BOOLEAN
-DECIDE \`is a British citizen (local)\` IS
-         \`is born in the United Kingdom after commencement\` p
-      OR \`is born in a qualifying territory after the appointed day\` p
-  AND -- when the person is born ...
-         \`father or mother\` \`is a British citizen\`
-      OR \`father or mother\` \`is settled in the United Kingdom\`
-      OR \`father or mother\` \`is settled in the qualifying territory in which the person is born\`
-      WHERE
-        \`father or mother\` property MEANS
-             property OF \`father of\` p
-          OR property OF \`mother of\` p
-
-§ \`Version using a global auxiliary declaration\`
+§ \`The British Citizen Act\`
 
 \`for father or mother of\` person property MEANS
       property OF \`father of\` person
@@ -230,10 +203,7 @@ DECIDE \`is a British citizen (variant)\` IS
   AND -- when the person is born ...
          \`for father or mother of\` p \`is a British citizen (variant)\`
       OR \`for father or mother of\` p \`is settled in the United Kingdom\`
-      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\`
-`;
-    await runClient();
-  });
+      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``;
 </script>
 
 <div class="jl4-container">
