@@ -1,0 +1,122 @@
+Parsing successful
+Typechecking successful
+comparisons.l4:2:7-12:
+  TRUE
+
+comparisons.l4:3:7-12:
+  TRUE
+
+comparisons.l4:4:7-12:
+  FALSE
+
+comparisons.l4:5:7-12:
+  FALSE
+
+comparisons.l4:7:7-20:
+  FALSE
+
+comparisons.l4:8:7-16:
+  FALSE
+
+comparisons.l4:10:7-13:
+  TRUE
+
+comparisons.l4:11:7-13:
+  TRUE
+
+comparisons.l4:12:7-13:
+  TRUE
+
+comparisons.l4:13:7-13:
+  FALSE
+
+comparisons.l4:15:7-18:
+  FALSE
+
+comparisons.l4:17:7-12:
+  TRUE
+
+comparisons.l4:18:7-12:
+  TRUE
+
+comparisons.l4:19:7-12:
+  FALSE
+
+comparisons.l4:20:7-12:
+  FALSE
+
+comparisons.l4:22:7-23:
+  TRUE
+
+comparisons.l4:23:7-16:
+  TRUE
+
+comparisons.l4:25:7-13:
+  TRUE
+
+comparisons.l4:26:7-13:
+  TRUE
+
+comparisons.l4:27:7-13:
+  TRUE
+
+comparisons.l4:28:7-13:
+  FALSE
+
+comparisons.l4:30:7-19:
+  FALSE
+
+comparisons.l4:32:7-12:
+  FALSE
+
+comparisons.l4:33:7-12:
+  TRUE
+
+comparisons.l4:35:7-17:
+  TRUE
+
+comparisons.l4:37:7-20:
+  TRUE
+
+comparisons.l4:38:7-20:
+  FALSE
+
+comparisons.l4:39:7-20:
+  TRUE
+
+comparisons.l4:41:7-21:
+  TRUE
+
+comparisons.l4:42:7-21:
+  TRUE
+
+comparisons.l4:43:7-21:
+  TRUE
+
+comparisons.l4:45:7-20:
+  TRUE
+
+comparisons.l4:46:7-20:
+  FALSE
+
+comparisons.l4:47:7-20:
+  FALSE
+
+comparisons.l4:49:7-19:
+  FALSE
+
+comparisons.l4:50:7-20:
+  FALSE
+
+comparisons.l4:51:7-21:
+  TRUE
+
+comparisons.l4:52:7-20:
+  TRUE
+
+comparisons.l4:54:7-18:
+  TRUE
+
+comparisons.l4:55:7-19:
+  FALSE
+

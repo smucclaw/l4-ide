@@ -307,17 +307,18 @@ handlers recorder =
 
             let topDeclItems
                   = filterMatchesOn CompletionItem._label
-                  $ foldMap
-                      (mapMaybe
-                        (\(_, name, checkEntity) ->
-                          topDeclToCompletionItem name
-                          $ Optics.over'
-                            (Optics.gplate @(Type' Resolved))
-                            (applyFinalSubstitution typeCheck.substitution)
-                            checkEntity
-                        )
+                  $ mapMaybe
+                      (\(name, checkEntity) ->
+                        topDeclToCompletionItem name
+                        $ Optics.over'
+                          (Optics.gplate @(Type' Resolved))
+                          (applyFinalSubstitution typeCheck.substitution)
+                          checkEntity
                       )
-                      typeCheck.environment
+                      (combineEnvironmentEntityInfo
+                        typeCheck.environment
+                        typeCheck.entityInfo
+                      )
 
             -- TODO: maybe we should sort these as follows
             -- 1 keywords
@@ -427,7 +428,7 @@ visualise recorder ide uri msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Just Extension {resolvedType = Just ty}} _tydec appform _expr) simplify substitution
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty)}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 
@@ -497,11 +498,12 @@ topDeclToCompletionItem name = \case
          (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
          _ -> CompletionItemKind_Constant
       }
-  KnownType kind tydec ->
+  KnownType kind _args tydec ->
     Just (defaultTopDeclCompletionItem (typeFunction kind))
       { CompletionItem._kind = Just $ case tydec of
           RecordDecl {} -> CompletionItemKind_Struct
           EnumDecl {} -> CompletionItemKind_Enum
+          SynonymDecl {} -> CompletionItemKind_Reference
       }
   KnownTypeVariable {} -> Nothing
   where
@@ -523,7 +525,7 @@ topDeclToCompletionItem name = \case
       , CompletionItem._labelDetails
         = Just CompletionItemLabelDetails
           { _description = Nothing
-          , _detail = Just $ " IS A " <> simpleprint ty
+          , _detail = Just $ " IS A " <> prettyLayout ty
           }
       }
       where
@@ -586,12 +588,22 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
       useWithStale TypeCheck nfp
     hoistMaybe do
       oldPos <- fromCurrentPosition positionMapping pos
-      (range, t) <- findType (lspPositionToSrcPos oldPos) m.program
+      (range, i) <- findInfo (lspPositionToSrcPos oldPos) m.program
       let lspRange = srcRangeToLspRange (Just range)
       newLspRange <- toCurrentRange positionMapping lspRange
-      pure (Hover (InL (mkPlainText (simpleprint (applyFinalSubstitution m.substitution t)))) (Just newLspRange))
+      pure (infoToHover m.substitution newLspRange i)
 
   nfp = fromUri fileUri
+
+infoToHover :: Substitution -> Range -> Info -> Hover
+infoToHover subst r i =
+  Hover (InL (mkPlainText x)) (Just r)
+  where
+    x =
+      case i of
+        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst t)
+        KindInfo k  -> "arity " <> Text.pack (show k)
+        KeywordInfo -> "keyword"
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions
@@ -652,7 +664,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   }
 
             Just $ CodeAction
-              { _title = "Assume `" <> simpleprint name <> "` is defined"
+              { _title = "Assume `" <> prettyLayout name <> "` is defined"
               , _kind = Just CodeActionKind_QuickFix
               , _diagnostics = Just [fd ^. fdLspDiagnosticL]
               , _isPreferred = Nothing

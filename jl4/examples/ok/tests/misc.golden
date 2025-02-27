@@ -1,0 +1,14 @@
+Parsing successful
+Typechecking successful
+misc.l4:53:7-14:
+  Suc OF (Suc OF (Suc OF Zero))
+
+misc.l4:54:7-15:
+  Suc OF (Suc OF (Suc OF Zero))
+
+misc.l4:55:7-15:
+  Suc OF (Suc OF (Suc OF (Suc OF (Suc OF (Suc OF Zero)))))
+
+misc.l4:66:7-43:
+  LIST 1, 2, 3, 4, 5, 6
+

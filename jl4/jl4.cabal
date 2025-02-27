@@ -6,7 +6,7 @@ tested-with: GHC==9.6.6
 
 common defaults
   default-language: GHC2021
-  ghc-options: -Wall -Wderiving-typeable -Wunused-packages
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
   default-extensions:
     BlockArguments
     DeriveAnyClass
@@ -28,6 +28,7 @@ library
   hs-source-dirs: src
   build-depends:
     containers,
+    data-default,
     deepseq,
     extra,
     generics-sop,
@@ -40,7 +41,6 @@ library
     pretty-simple,
     prettyprinter,
     text >= 2.1,
-    transformers,
     tree-diff
   exposed-modules:
     Base
@@ -49,8 +49,8 @@ library
     Base.Pretty
     Base.Text
     L4.Annotation
-    L4.CodeGen
     L4.Evaluate
+    L4.Evaluate.Value
     L4.ExactPrint
     L4.Main
     L4.Lexer

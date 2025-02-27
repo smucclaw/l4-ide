@@ -1,4 +1,6 @@
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module LSP.SemanticTokens where
 
@@ -6,7 +8,6 @@ import L4.Annotation
 import Base
 
 import Control.Applicative (Alternative (..))
-import Control.DeepSeq (NFData)
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Trans.Except
@@ -25,11 +26,9 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 -- Semantic Tokens Interface
 -- ----------------------------------------------------------------------------
 
-type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except TraverseAnnoError)
+type SemanticTokensM c t = ReaderT (SemanticTokenCtx c t) (Except TraverseAnnoError)
 
-type HoleFit_ t = SemanticTokensM t [SemanticToken]
-
-runSemanticTokensM :: ToSemTokens t a => SemanticTokenCtx t -> a -> Either TraverseAnnoError [SemanticToken]
+runSemanticTokensM :: ToSemTokens c t a => SemanticTokenCtx c t -> a -> Either TraverseAnnoError [SemanticToken]
 runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemTokens a) semTokenCtx
 
 -- I would prefer to avoid the duplication between this class and
@@ -37,22 +36,22 @@ runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemT
 --
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
-class ToSemTokens t a where
-  toSemTokens :: a -> HoleFit_ t
+class ToSemTokens c t a | a t -> c where
+  toSemTokens :: a -> SemanticTokensM c t [SemanticToken]
   default toSemTokens ::
-    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ t
+    SemanticTokensM c t [SemanticToken]
   toSemTokens = genericToSemTokens
 
-genericToSemTokens :: forall a t .
-    (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+genericToSemTokens :: forall a t c .
+    (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ t
+    SemanticTokensM c t [SemanticToken]
 genericToSemTokens =
-  genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
+  genericToNodes (Proxy @(ToSemTokens c t)) toSemTokens traverseCsnWithHoles
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
+traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [SemanticTokensM c t [SemanticToken]] -> SemanticTokensM c t [SemanticToken]
 traverseCsnWithHoles (Anno _ _ []) _ = pure []
 traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
   [] -> lift $ throwE $ InsufficientHoleFit callStack
@@ -68,7 +67,7 @@ traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
   restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
   pure $ concatMap toList thisSyntaxNode <> restOfTokens
 
-fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe (NonEmpty SemanticToken)
+fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx c t -> t -> Maybe (NonEmpty SemanticToken)
 fromSemanticTokenContext ctx token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token
 
 class ToSemToken t where
@@ -76,26 +75,31 @@ class ToSemToken t where
   -- that do not support tokens that span multiple lines
   toSemToken :: t -> SemanticTokenTypes -> [SemanticTokenModifiers] -> NonEmpty SemanticToken
 
-instance (ToSemTokens t a) => ToSemTokens t [a] where
+instance (ToSemTokens c t a) => ToSemTokens c t [a] where
   toSemTokens =
     Extra.concatMapM toSemTokens
 
-instance (ToSemTokens t a) => ToSemTokens t (Maybe a) where
+instance (ToSemTokens c t a) => ToSemTokens c t (Maybe a) where
   toSemTokens =
     maybe (pure []) toSemTokens
 
-data SemanticTokenCtx p = SemanticTokenCtx
-  { semanticTokenType :: p -> Maybe SemanticTokenTypes
-  , semanticTokenModifier :: p -> Maybe [SemanticTokenModifiers]
+data SemanticTokenCtx c t = SemanticTokenCtx
+  { semanticTokenType :: t -> Maybe SemanticTokenTypes
+  , semanticTokenModifier :: t -> Maybe [SemanticTokenModifiers]
+  , semanticTokenContext :: c
   }
 
-withModifier :: (t -> Maybe [SemanticTokenModifiers]) -> SemanticTokensM t a -> SemanticTokensM t a
+withModifier :: (t -> Maybe [SemanticTokenModifiers]) -> SemanticTokensM c t a -> SemanticTokensM c t a
 withModifier f act = do
   local (\i -> i{semanticTokenModifier = \t -> f t <|> i.semanticTokenModifier t}) act
 
-withTokenType :: (t -> Maybe SemanticTokenTypes) -> SemanticTokensM t a -> SemanticTokensM t a
+withTokenType :: (t -> Maybe SemanticTokenTypes) -> SemanticTokensM c t a -> SemanticTokensM c t a
 withTokenType f act = do
   local (\i -> i{semanticTokenType = \t -> f t <|> i.semanticTokenType t}) act
+
+withContext :: c -> SemanticTokensM c t a -> SemanticTokensM c t a
+withContext c =
+  local (\i -> i{semanticTokenContext = c })
 
 data SemanticToken = SemanticToken
   { start :: Position

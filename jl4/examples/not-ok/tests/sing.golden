@@ -1,0 +1,41 @@
+Parsing successful
+sing.l4:3:14-20:
+  I found a problem while checking the definition of `must sing`:
+    I could not find a definition for the identifier
+    
+      Person
+    
+    which I have inferred to be of type: 
+    
+      TYPE
+
+sing.l4:5:15-20:
+  I found a problem while checking the definition of `must sing`:
+    I could not find a definition for the identifier
+    
+      walks
+    
+    which I have inferred to be of type: 
+    
+      BOOLEAN
+
+sing.l4:6:15-19:
+  I found a problem while checking the definition of `must sing`:
+    I could not find a definition for the identifier
+    
+      eats
+    
+    which I have inferred to be of type: 
+    
+      BOOLEAN
+
+sing.l4:7:15-21:
+  I found a problem while checking the definition of `must sing`:
+    I could not find a definition for the identifier
+    
+      drinks
+    
+    which I have inferred to be of type: 
+    
+      BOOLEAN
+

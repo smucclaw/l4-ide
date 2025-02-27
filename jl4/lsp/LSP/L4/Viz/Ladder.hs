@@ -10,9 +10,7 @@ import qualified Data.Text as Text
 import GHC.Generics (Generic)
 import Optics.State.Operators ((<%=))
 
-import L4.Syntax (OptionallyTypedName (..), AppForm (..), Decide (..), Expr (..),
-  GivenSig (..), Name (..), TypeSig (..), Resolved, getOriginal, Unique (..))
-import L4.TypeCheck (rawNameToText, simpleprint, getUniqueName)
+import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     VisualizeDecisionLogicIRInfo (..),
@@ -115,7 +113,7 @@ translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funRe
         getResolved :: OptionallyTypedName Resolved -> Resolved
         getResolved (MkOptionallyTypedName _ paramName _) = paramName
 
-        mkSimpleVizName = mkVizNameWith simpleprint
+        mkSimpleVizName = mkVizNameWith prettyLayout
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -189,4 +187,4 @@ mkVizNameWith printer (getUniqueName -> (uniq, name)) =
     MkUnique _ u -> V.MkName u (printer name)
 
 nameToText :: Name -> Text
-nameToText (MkName _ rawName) = rawNameToText rawName
+nameToText = rawNameToText . rawName

@@ -5,6 +5,7 @@ import qualified Base.Text as Text
 
 import Options.Applicative as Options
 
+import L4.Lexer (SrcRange)
 import L4.Parser
 import L4.TypeCheck
 import L4.ExactPrint
@@ -64,7 +65,14 @@ checkAndExactPrintFile file input =
                Left epError -> prettyTraverseAnnoError epError
                Right ep -> ep
         CheckResult {errors} ->
-          Text.unlines (map (\ err -> prettySrcRange file (rangeOf err) <> ":\n" <> prettyCheckErrorWithContext err) errors)
+          Text.unlines (map (\ err -> cliErrorMessage file (rangeOf err) (prettyCheckErrorWithContext err)) errors)
+
+cliErrorMessage :: FilePath -> Maybe SrcRange -> [Text] -> Text
+cliErrorMessage fp mrange msg =
+  Text.unlines
+    ( prettySrcRange (Just fp) mrange <> ":"
+    : map ("  " <>) msg
+    )
 
 -- | Parse a source file and exact-print the result.
 exactprintProgram :: String -> Text -> Text
