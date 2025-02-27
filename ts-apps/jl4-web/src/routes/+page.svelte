@@ -230,7 +230,7 @@ DECIDE \`is a British citizen (variant)\` IS
       background-color: hsl(var(--neutral));
     }
     50% {
-      background-color: hsl(var(--muted));
+      background-color: oklch(0.951 0.026 236.824);
     }
   }
 
