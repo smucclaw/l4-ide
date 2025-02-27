@@ -1,7 +1,4 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
@@ -293,54 +290,68 @@ jl4Rules recorder = do
       -- TODO: in future we may want to use the parse of the tree to get the context of the references
       (tokens, _) <- use_ GetLexTokens uri
 
-
-      let stripReferenceHeralds r
-            | Text.isPrefixOf "@ref" r = Text.drop 4 r
-            | ("<<", (r', ">>")) <- Text.span (== '>') <$> Text.span (== '<') r = r'
-            | otherwise = r
-
-          normalizeRef = Text.toLower . Text.strip
-
-        rangeOfPosToken = \case
-          -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-          Lexer.MkPosToken {payload = Lexer.TRef r _, range} -> [(normalizeRef r, range)]
+    -- obtain a valid relative file path from the ref-src annos
+    let validRelPath = \case
+          Lexer.MkPosToken {payload = Lexer.TRefSrc src, range}
+            | Just osp <- Path.encodeUtf $ Text.unpack $ Text.strip src
+            , Path.isRelative osp
+            -> [(range, Path.normalise $ Path.takeDirectory ownPath Path.</> osp)]
           _ -> mempty
 
-          allReferencesInTree :: [(Text, SrcRange)]
-          allReferencesInTree = foldMap rangeOfPosToken tokens
+        refSrcs = foldMap validRelPath tokens
 
-          records = do
-            decoded <- Csv.decode Csv.NoHeader contents
+    -- read the contents of the filepaths specified
+    let readContents fp = liftIO
+          $ tryJust (\(e :: IOException) -> Just (displayException e))
+          $ Path.readFile fp
 
-            let mp = foldMap (uncurry Map.singleton) decoded
-                mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-                getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
+    contents <- traverse (traverse readContents) refSrcs
 
-            pure $ foldMap getReferences allReferencesInTree
+    -- parse the file contents from csv into intervalmaps from the sources of
+    -- the annos to the reference they represent
+    let normalizeRef = Text.toLower . Text.strip
 
-      pure case records of
-        Right recs -> ([], Just recs)
-        Left err ->
-          (
-            [ FileDiagnostic
-              { fdLspDiagnostic = Diagnostic
-                { _source = Just "jl4"
-                , _severity = Just DiagnosticSeverity_Warning
-                , _range = srcRangeToLspRange Nothing
-                , _message = Text.pack err
-                , _relatedInformation = Nothing
-                , _data_ = Nothing
-                , _codeDescription = Nothing
-                , _tags = Nothing
-                , _code = Nothing
-                }
-              , fdFilePath = uri
-              , fdShouldShowDiagnostic = ShowDiag
-              , fdOriginalSource = NoMessage
+        getReferences refLookup = \case
+          Lexer.MkPosToken {payload = Lexer.TRef reference _, range}
+            -> let mk v = IVMap.singleton (srcRangeToInterval range) (range.length, v)
+                in mk $ Map.lookup (normalizeRef reference) refLookup
+          _ -> IVMap.empty
+
+        recordToReferences refLookup = foldMap (getReferences refLookup) tokens
+
+        mkReferences csv = do
+          decoded <- Csv.decode Csv.NoHeader =<< csv
+          let refLookup = foldMap (uncurry Map.singleton) decoded
+          pure $ recordToReferences refLookup
+
+    -- report any errors encountered while parsing any of the ref-src annos,
+    -- annotate them on the ref-src annos they originated from and finally
+    -- union all interval maps
+    let sepErrs src csv = case mkReferences csv of
+          Left err -> ([mkDiagnostic src err], [])
+          Right rec -> ([], [rec])
+
+        (errs, mps) = foldMap (uncurry sepErrs) contents
+
+        mkDiagnostic loc err =
+          FileDiagnostic
+            { fdLspDiagnostic = Diagnostic
+              { _source = Just "jl4"
+              , _severity = Just DiagnosticSeverity_Warning
+              , _range = srcRangeToLspRange $ Just loc
+              , _message = Text.pack err
+              , _relatedInformation = Nothing
+              , _data_ = Nothing
+              , _codeDescription = Nothing
+              , _tags = Nothing
+              , _code = Nothing
               }
-            ]
-          , Nothing
-          )
+            , fdFilePath = f
+            , fdShouldShowDiagnostic = ShowDiag
+            , fdOriginalSource = NoMessage
+            }
+
+    pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f
