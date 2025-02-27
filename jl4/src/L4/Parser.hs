@@ -277,7 +277,8 @@ anonymousSection =
     MkSection emptyAnno
       <$> pure 0
       <*> annoHole (pure Nothing)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (pure Nothing)
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 section :: Parser (Section Name)
 section =
@@ -285,7 +286,8 @@ section =
     MkSection emptyAnno
       <$> sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (optional aka)
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
@@ -348,7 +350,7 @@ assume sig = do
     MkAssume emptyAnno
       <$> annoHole (pure sig)
       <*  annoLexeme (spacedToken_ TKAssume)
-      <*> annoHole appForm
+      <*> annoHole appFormAka
       <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole (indented type' current))
 
 declare :: TypeSig Name -> Parser (Declare Name)
@@ -357,7 +359,7 @@ declare sig =
     MkDeclare emptyAnno
       <$> annoHole (pure sig)
       <*  annoLexeme (spacedToken_ TKDeclare)
-      <*> annoHole appForm
+      <*> annoHole appFormAka
       <*> annoHole typeDecl
 
 typeDecl :: Parser (TypeDecl Name)
@@ -411,7 +413,7 @@ decide sig = do
         MkDecide emptyAnno
           <$> annoHole (pure sig)
           <*  annoLexeme (spacedToken_ TKDecide)
-          <*> annoHole appForm
+          <*> annoHole appFormAka
           <*  annoLexeme (spacedToken_ TKIs <|> spacedToken_ TKIf)
           <*> annoHole (indentedExpr current)
 
@@ -419,9 +421,16 @@ decide sig = do
       attachAnno $
         MkDecide emptyAnno
           <$> annoHole (pure sig)
-          <*> annoHole appForm
+          <*> annoHole appFormAka
           <*  annoLexeme (spacedToken_ TKMeans)
           <*> annoHole (indentedExpr current)
+
+appFormAka :: Parser (AppFormAka Name)
+appFormAka =
+  attachAnno $
+    MkAppFormAka emptyAnno
+      <$> annoHole appForm
+      <*> annoHole (optional aka)
 
 appForm :: Parser (AppForm Name)
 appForm = do
@@ -432,6 +441,13 @@ appForm = do
       <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TComma))
           <|> annoHole (lmany (indented name current))
           )
+
+aka :: Parser (Aka Name)
+aka =
+  attachAnno $
+    MkAka emptyAnno
+      <$  annoLexeme (spacedToken_ TKAka)
+      <*> annoHole (lsepBy name (spacedToken_ TComma))
 
 typeSig :: Parser (TypeSig Name)
 typeSig =

@@ -101,12 +101,23 @@ instance LayoutPrinter a => LayoutPrinter (Declare a) where
         , indent 2 (printWithLayout tyDecl)
         ]
 
+instance LayoutPrinter a => LayoutPrinter (AppFormAka a) where
+  printWithLayout = \case
+    MkAppFormAka _ appForm maka ->
+      case maka of
+        Nothing  -> printWithLayout appForm
+        Just aka -> printWithLayout appForm <+> printWithLayout aka
+
 instance LayoutPrinter a => LayoutPrinter (AppForm a) where
   printWithLayout = \case
     MkAppForm _ n ns  ->
       printWithLayout n <> case ns of
         [] -> mempty
         _ -> space <> hsep (fmap printWithLayout ns)
+
+instance LayoutPrinter a => LayoutPrinter (Aka a) where
+  printWithLayout = \case
+    MkAka _ ns -> "AKA" <+> vsep (punctuate comma $ fmap printWithLayout ns)
 
 instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
   printWithLayout = \case
@@ -161,15 +172,19 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
 
 instance LayoutPrinter a => LayoutPrinter (Section a) where
   printWithLayout = \case
-    MkSection _ _  Nothing ds    ->
+    MkSection _ _ Nothing _ ds    ->
       vcat (fmap printWithLayout ds)
-    MkSection _ ps name    ds ->
+    MkSection _ ps name maka ds ->
       vcat $
-        [ plural mempty (pretty (replicate ps '§') <+> printWithLayout name) (0 :: Int)
+        [ pretty (replicate ps '§') <+>
+          case maka of
+            Nothing  -> printWithLayout name
+            Just aka -> printWithLayout name <+> printWithLayout aka
         ]
         <> case ds of
           [] -> mempty
           _ -> fmap printWithLayout ds
+
 instance LayoutPrinter a => LayoutPrinter (Program a) where
   printWithLayout = \case
     MkProgram _ sects ->

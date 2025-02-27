@@ -821,13 +821,14 @@ ambiguousType n xs = do
   pure (OutOfScope u n)
 
 inferDeclare :: Declare Name -> Check (Declare Resolved)
-inferDeclare (MkDeclare ann tysig appForm t) = do
+inferDeclare (MkDeclare ann tysig (MkAppFormAka anna appForm maka) t) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDeclare (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+    rmaka <- traverse inferAka maka
     inferTypeAppForm' rappForm rtysig
     (rt, extend) <- inferTypeDecl rappForm t
-    pure (MkDeclare ann rtysig rappForm rt, extend)
+    pure (MkDeclare ann rtysig (MkAppFormAka anna rappForm rmaka) rt, extend)
   extend
   pure rd
 
@@ -846,11 +847,12 @@ inferDeclare (MkDeclare ann tysig appForm t) = do
 -- which would currently not match the first case.
 --
 inferAssume :: Assume Name -> Check (Assume Resolved)
-inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
+inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) (Just (Type tann))) = do
   -- declaration of a type
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+    rmaka <- traverse inferAka maka
     inferTypeAppForm' rappForm rtysig
     -- TODO: do we ever check the result kind?
     let
@@ -861,14 +863,15 @@ inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
             (view appFormArgs rappForm)
             (EnumDecl emptyAnno [])
           )
-    pure (MkAssume ann rtysig rappForm (Just (Type tann)), extend)
+    pure (MkAssume ann rtysig (MkAppFormAka anna rappForm rmaka) (Just (Type tann)), extend)
   extend
   pure rd
-inferAssume (MkAssume ann tysig appForm mt) = do
+inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) mt) = do
   -- declaration of a term
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig -- (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
+    rmaka <- traverse inferAka maka
     (ce, rt, result) <- inferTermAppForm rappForm rtysig
     -- check that the given result type matches the result type in the type signature
     rmt <- case mt of
@@ -877,7 +880,7 @@ inferAssume (MkAssume ann tysig appForm mt) = do
         rt' <- inferType t
         expect (ExpectAssumeSignatureContext (rangeOf result)) result rt'
         pure (Just rt')
-    let rd = setAnnResolvedType rt (MkAssume ann rtysig rappForm rmt)
+    let rd = setAnnResolvedType rt (MkAssume ann rtysig (MkAppFormAka anna rappForm rmaka) rmt)
     pure (rd, makeKnown (view appFormHead rappForm) ce)
   extend
   pure rd
@@ -894,10 +897,11 @@ inferDirective (Check ann e) = scope $ do
   pure (Check ann re)
 
 inferSection :: Section Name -> Check (Section Resolved)
-inferSection (MkSection ann lvl mn topdecls) = do
+inferSection (MkSection ann lvl mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
+  rmaka <- traverse inferAka maka
   rtopdecls <- traverse inferTopDecl topdecls
-  pure (MkSection ann lvl rmn rtopdecls)
+  pure (MkSection ann lvl rmn rmaka rtopdecls)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved)
 inferLocalDecl (LocalDecide ann decide) = do
@@ -940,14 +944,15 @@ inferProgram (MkProgram ann sections) = do
 -- TODO: This is more complicated due to potential polymorphism.
 --
 inferDecide :: Decide Name -> Check (Decide Resolved)
-inferDecide (MkDecide ann tysig appForm expr) = do
+inferDecide (MkDecide ann tysig (MkAppFormAka anna appForm maka) expr) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDecide (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    rmaka <- traverse inferAka maka
     (ce, rt, result) <- inferTermAppForm rappForm rtysig
     rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
     let ann' = set annInfo (Just (TypeInfo rt)) ann
-    pure (MkDecide ann' rtysig rappForm rexpr, makeKnown (view appFormHead rappForm) ce)
+    pure (MkDecide ann' rtysig (MkAppFormAka anna rappForm rmaka) rexpr, makeKnown (view appFormHead rappForm) ce)
   extend
   pure rd
 
@@ -1136,6 +1141,14 @@ appFormArgs = lensVL (\ wrap (MkAppForm ann n ns) -> (\ wns -> MkAppForm ann n w
 appFormType :: AppForm Resolved -> Type' Resolved
 appFormType (MkAppForm _ann n args) = app n (tyvar <$> args)
 
+-- | We do not make the names known, even though they are defining occurrences,
+-- because we do not have any information about what the names are supposed to be.
+--
+inferAka :: Aka Name -> Check (Aka Resolved)
+inferAka (MkAka ann ns) = do
+  rns <- traverse def ns
+  pure (MkAka ann rns)
+
 inferTypeDecl :: AppForm Resolved -> TypeDecl Name -> Check (TypeDecl Resolved, Check ())
 inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   let
@@ -1257,6 +1270,9 @@ instance HasName Name where
 
 instance HasName Resolved where
   getName = getActual
+
+instance HasName a => HasName (AppFormAka a) where
+  getName (MkAppFormAka _ appForm _) = getName appForm
 
 instance HasName a => HasName (AppForm a) where
   getName (MkAppForm _ n _) = getName n
@@ -2278,7 +2294,9 @@ deriving anyclass instance ToResolved (TypedName Resolved)
 deriving anyclass instance ToResolved (OptionallyTypedName Resolved)
 deriving anyclass instance ToResolved (OptionallyNamedType Resolved)
 deriving anyclass instance ToResolved (Decide Resolved)
+deriving anyclass instance ToResolved (AppFormAka Resolved)
 deriving anyclass instance ToResolved (AppForm Resolved)
+deriving anyclass instance ToResolved (Aka Resolved)
 deriving anyclass instance ToResolved (Expr Resolved)
 deriving anyclass instance ToResolved (NamedExpr Resolved)
 deriving anyclass instance ToResolved (Branch Resolved)
@@ -2385,7 +2403,9 @@ deriving anyclass instance ToInfoTree (TypedName Resolved)
 deriving anyclass instance ToInfoTree (OptionallyTypedName Resolved)
 deriving anyclass instance ToInfoTree (OptionallyNamedType Resolved)
 deriving anyclass instance ToInfoTree (Decide Resolved)
+deriving anyclass instance ToInfoTree (AppFormAka Resolved)
 deriving anyclass instance ToInfoTree (AppForm Resolved)
+deriving anyclass instance ToInfoTree (Aka Resolved)
 deriving anyclass instance ToInfoTree (Expr Resolved)
 deriving anyclass instance ToInfoTree (NamedExpr Resolved)
 deriving anyclass instance ToInfoTree (Branch Resolved)
