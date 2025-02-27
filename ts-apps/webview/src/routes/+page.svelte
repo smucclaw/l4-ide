@@ -77,7 +77,9 @@
 
 {#if vizDecl && declLirNode}
   {#key declLirNode}
-    <div class="flash-on-update visualization-container">
+    <div
+      class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
+    >
       <LadderFlow {context} node={declLirNode} />
     </div>
   {/key}
@@ -92,6 +94,11 @@
     50% {
       background-color: hsl(var(--muted));
     }
+  }
+
+  /** So there's space for the fn name */
+  .slightly-shorter-than-full-viewport-height {
+    height: 96svh;
   }
 
   .flash-on-update {
