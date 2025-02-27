@@ -1,0 +1,27 @@
+-- The term cooperate includes the following:
+-- (1) completing the child support enforcement referral form and, at a minimum, providing verifiable information on the form sufficient to identify and locate the absent parent or putative father, including:
+--   (i) the full name and social security number of the absent parent or putative father; or
+--   (ii) the full name of the absent parent or putative father and at least two of the following concerning such parent or father:
+--     (a) date of birth;
+--     (b) residential and, if different, mailing address;
+--     (c) telephone number; and
+--     (d) name and address of employer; or
+--   (iii) the full name and any additional information equivalent to the information contained in subparagraph (i) or (ii) of this paragraph that leads to the absent parent's or putative father's identity and location;
+
+cooperate MEANS
+  `completing the child support enforcement referral form`
+  AND `providing verifiable information on the form sufficient to`
+          AND ( identify AND locate)
+  AND     `the absent parent`
+       OR `putative father`
+  AND    `full name` OF     `the absent parent`
+                         OR `putative father`
+     OR `social security number` OF       `the absent parent`
+                                       OR `putative father`
+     OR `full name` OF `the absent parent`
+         AND `at least two of the following concerning such`
+         AND       parent`
+               OR `father`
+         AND     dateOfBirth
+              OR residential address
+              
