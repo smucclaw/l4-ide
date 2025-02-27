@@ -1,0 +1,82 @@
+DECLARE Date
+  HAS year    IS A NUMBER
+      month   ^  ^ ^
+      day     ^  ^ ^
+
+commencement MEANS Date OF 2000, 4, 1
+
+§ `Assumptions`
+ASSUME Person IS A TYPE
+ASSUME `is authorised officer` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `is an appropriate authority` IS A FUNCTION FROM Person TO BOOLEAN
+
+ASSUME Action IS A TYPE
+ASSUME ActionTarget IS A TYPE
+
+ASSUME Offence IS A TYPE
+ASSUME `is a Singapore offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is a foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is drug dealing offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is foreign tax evasion offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is a serious offence` IS A FUNCTION FROM Offence TO BOOLEAN
+
+ASSUME Matter IS A TYPE
+ASSUME `is ancillary criminal matter` IS A FUNCTION FROM Matter TO BOOLEAN
+ASSUME `is criminal matter` IS A FUNCTION FROM Matter TO BOOLEAN
+
+ASSUME Investigation IS A TYPE
+ASSUME `is criminal investigation` IS A FUNCTION FROM Investigation TO BOOLEAN
+
+ASSUME Proceedings IS A TYPE
+ASSUME `is criminal proceedings` IS A FUNCTION FROM Proceedings TO BOOLEAN
+ASSUME Authority IS A TYPE
+ASSUME `is an appropriate authority` IS A FUNCTION FROM Authority TO BOOLEAN
+
+ASSUME Organisation IS A TYPE
+ASSUME `is a financial institution` IS A FUNCTION FROM Organisation TO BOOLEAN
+
+ASSUME Order IS A TYPE
+ASSUME OrderType IS A TYPE
+ASSUME `is a foreign confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `is instrumentality forfeiture order` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `is a Singapore confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
+
+ASSUME Country IS A TYPE
+ASSUME Certificate IS A TYPE
+ASSUME `is a foreign law immunity certificate` IS A FUNCTION FROM Certificate TO BOOLEAN
+
+ASSUME Material IS A TYPE
+
+ASSUME Premises IS A TYPE
+ASSUME CourtOrder IS A TYPE
+ASSUME Company IS A TYPE
+ASSUME `is a VCC or variable capital company` IS A FUNCTION FROM Company TO BOOLEAN
+
+ASSUME Law IS A TYPE
+ASSUME `corresponding drug law` IS A FUNCTION FROM Law TO BOOLEAN
+
+ASSUME Item IS A TYPE
+ASSUME Client IS A TYPE
+ASSUME Lawyer IS A TYPE
+ASSUME JudicialPerson IS A TYPE
+ASSUME Court IS A TYPE
+
+ASSUME LegalDefinition IS A TYPE
+
+DECLARE dealing
+  HAS action IS A Action
+      property_relation IS A ActionTarget
+
+DECLARE MonetaryAuthorityOfSingapore
+  HAS legalDefinition IS A LegalDefinition
+
+DECLARE Thing
+  HAS material IS A Material
+
+
+DECLARE Process
+  HAS order_type IS A OrderType
+      origin_person IS A JudicialPerson
+      origin_forum IS A Court
+
