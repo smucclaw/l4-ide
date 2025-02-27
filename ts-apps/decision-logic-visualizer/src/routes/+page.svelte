@@ -181,7 +181,7 @@
     IRExpr that eventually gets transformed into a SvelteFlow graph
   </h2>
 </section>
-<section id="example 1" class="example w-3/4 mx-auto space-y-4">
+<section id="example 1" class="example w-3/4 mx-auto space-y-4 viewport-height">
   <h3 class="text-2xl font-semibold">Example 1</h3>
   <Flow {context} node={funDeclLirNode} />
   <section class="json-visualisation space-y-2">
@@ -208,8 +208,8 @@
   </section>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
-<section id="example 2" class="example w-3/4 mx-auto space-y-4">
-  <h3 class="text-2xl font-semibold">Example 2</h3>
+<section id="example 2" class="example w-3/4 mx-auto space-y-4 viewport-height">
+  <h3 class="text-2xl font-semibold viewport-height">Example 2</h3>
   <Flow {context} node={declLirNode2} />
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />
@@ -234,3 +234,9 @@
     </pre>
   </section>
 </section>
+
+<style>
+  .viewport-height {
+    height: 70vh;
+  }
+</style>
