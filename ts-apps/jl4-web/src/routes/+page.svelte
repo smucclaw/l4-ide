@@ -159,8 +159,6 @@
       return {
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`);
-          // FIXME: he we can actually run everything that we also run in the vscode extension
-          logger.debug(`args are ${args.toString()}`)
           const response = await next(command, args);
 
           logger.debug(

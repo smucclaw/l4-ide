@@ -305,6 +305,11 @@ defaultMain recorder args = do
             let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
 
             withAsync (runServerWithCommunication comm) \_lspAsync ->
+              -- NOTE: web clients don't add Content-Length headers since
+              -- websockets do the chunking for us, since the haskell lsp library
+              -- doesn't support this behaviour, we add and remove the header ourselves
+              -- We exploit the fact that LSP messages look like this:
+              -- <headers> Content-Length: <content length> \r\n\r\n { <json content> }
               race_
                 (forever do
                   msg <- readChan outChan
@@ -312,9 +317,6 @@ defaultMain recorder args = do
                   WS.sendTextData conn msg'
                 )
                 (forever do
-                  -- NOTE: web clients don't add Content-Length headers since
-                  -- websockets do the chunking for us, since the haskell lsp library
-                  -- doesn't support this behaviour, we add the header ourselves
                   msg <- WS.receiveData conn
                   let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
                   writeChan inChan msg'

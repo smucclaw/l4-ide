@@ -143,7 +143,6 @@ runLanguageServer recorder options comm defaultConfig parseConfig onConfigChange
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
         lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
-    -- TODO: use runServerWith instead of runServerWithHandles
     void $ untilMVar clientMsgVar $
           void $ LSP.runServerWith
             lspCologAction
