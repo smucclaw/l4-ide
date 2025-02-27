@@ -1,3 +1,15 @@
+/**************************************************************************
+  The DLV lib exports a style.css for the Ladder diagram
+  This stylesheet is required for the Ladder diagram to render correctly 
+
+  We may not want to import it here in the end,
+  but regardless of whether we do an @import in the css
+  or an import elsewhere, we want to make sure that
+  we are importing via the public entrypoint declared in the dlv's package.json,
+  and that we use the @repo/... alias (per Turborepo best practices).
+****************************************************************************/
+@import "@repo/decision-logic-visualizer/dist/style.css";
+
 body {
   margin: 0;
   height: 100vh;

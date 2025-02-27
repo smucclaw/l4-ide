@@ -1,6 +1,6 @@
-<script>
-  import '../style.css';
-  import '../../../decision-logic-visualizer/src/style.css'
+<script lang="ts">
+  import '../style.css'
+  let { children } = $props()
 </script>
 
-<slot />
+{@render children()}
