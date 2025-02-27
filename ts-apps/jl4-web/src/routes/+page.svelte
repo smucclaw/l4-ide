@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  let editorElement: HTMLDivElement;
   import {
     LadderFlow,
     LirContext,
@@ -15,6 +14,8 @@
   } from "@repo/viz-expr";
   import { type MessageTransports } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
+
+  let editorElement: HTMLDivElement;
 
   /**************************
       Set up Lir
@@ -31,6 +32,7 @@
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
   );
+  // TODO: YM has some ideas for how to improve / clean this up
   $effect(() => {
     if (declLirNode) {
       registry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
