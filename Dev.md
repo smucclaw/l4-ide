@@ -14,6 +14,21 @@ These instructions are intended for L4 internal developers with experience in Ty
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
 
+After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.6.6`; press `i` to install and then `s` to set that as the default.
+
+If you run into difficulty later with `npm`, you may benefit from first running
+
+```
+nvm install --lts
+```
+
+And if this is your first time doing any kind of development on your system, on a Mac, you will need to install the Xcode command line tools:
+
+```
+xcode-select --install
+```
+
+
 ## Quick build and install
 
 ```sh
