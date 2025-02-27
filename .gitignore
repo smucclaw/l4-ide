@@ -43,7 +43,7 @@ out/
 build
 dist
 */vscode/static/webview/
-*/webview/.svelte-kit/
+**/.svelte-kit/
 
 ## Built Visual Studio Code Extensions
 *.vsix

@@ -29,7 +29,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import Data.Text (Text)
-import qualified Data.Text as Text
+import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Text.Mixed.Rope as Rope
@@ -257,7 +257,7 @@ handlers recorder =
               Left $
                 TResponseError
                   { _code = InL LSPErrorCodes_RequestFailed
-                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.pack (show (show uri.getUri))
+                  , _message = "Internal error, failed to produce semantic tokens for " <> Text.show uri.getUri
                   , _xdata = Nothing
                   }
 
@@ -366,10 +366,10 @@ handlers recorder =
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
         let doc :: Uri = params ^. J.textDocument . J.uri
             pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
-            nfp :: NormalizedUri = toNormalizedUri doc
+            nuri :: NormalizedUri = toNormalizedUri doc
 
         refs <- liftIO $ runAction "getReferences" ide $
-          use_ GetReferences nfp
+          use_ GetReferences nuri
 
         let locs = map (Location doc . srcRangeToLspRange . Just) $ lookupReference pos refs
         pure (Right (InL locs))
@@ -402,14 +402,14 @@ visualise
   -- ^ The location of the `Decide` to visualize and whether or not to simplify it
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
 visualise recorder ide uri msrcPos = do
-  let nfp = toNormalizedUri uri
+  let nuri = toNormalizedUri uri
 
   mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
-      tcRes <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+      tcRes <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nuri
       recentlyVisualised <- MaybeT $ atomically $ getMostRecentVisualisation ide
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.program
       pure (decide, recentlyVisualised.simplify, tcRes.substitution)
@@ -417,7 +417,7 @@ visualise recorder ide uri msrcPos = do
     -- the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
       tcRes <- do
-        mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nfp
+        mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nuri
         case mTcResult of
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes

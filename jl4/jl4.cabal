@@ -40,7 +40,7 @@ library
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    text < 2.1.2,
+    text >= 2 && < 2.1.2,
     tree-diff
   exposed-modules:
     Base
@@ -118,8 +118,10 @@ executable jl4-lsp
     prettyprinter,
     safe-exceptions,
     stm,
-    text < 2.1.2,
-    text-rope > 0.2,
+    -- NOTE: the reason why we have an upperbound on text is that
+    -- it introduces new definitions that conflicts with ours
+    text >= 2 && < 2.1.2,
+    text-rope >= 0.3,
     transformers,
     unliftio,
     vector,

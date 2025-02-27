@@ -34,8 +34,6 @@ https://jl4.well-typed.com/
 
 ## VS Code Extension: Download, Install and Build
 
-[Web Demo](https://jl4.well-typed.com): for legal engineers to experiment with writing L4 code. Click the link and get started.
-
 [Dev Build](Dev.md): for Haskell and JS developers to improve the toolchain and IDE developer experience. Requires Haskell and Typscript.
 
 [Quickstart for a local build](Quickstart.md): for legal engineers to experiment with writing L4 code locally. Download the VS Code extension and get started.

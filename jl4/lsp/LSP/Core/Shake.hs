@@ -206,7 +206,7 @@ instance Pretty Log where
         pretty label <+> "of" <+> pretty number <+> "keys (took " <+> pretty (showDuration ds) <> ")"
     LogSetFilesOfInterest ofInterest ->
         "Set files of interest to" <> Pretty.line
-            <> indent 4 (pretty $ fmap (first show) ofInterest)
+            <> indent 4 (pretty $ fmap (first fromNormalizedUri) ofInterest)
 
 
 -- | Actions to queue up on the index worker thread
@@ -980,7 +980,7 @@ useWithStaleFast' key file = do
 
   -- Async trigger the key to be built anyway because we want to
   -- keep updating the value in the key.
-  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ show file) Debug $ use key file
+  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ T.unpack (fromNormalizedUri file).getUri) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
   r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key file
