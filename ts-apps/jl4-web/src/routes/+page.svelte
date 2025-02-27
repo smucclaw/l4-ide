@@ -230,12 +230,12 @@ DECIDE \`is a British citizen (variant)\` IS
       background-color: hsl(var(--neutral));
     }
     50% {
-      background-color: oklch(0.951 0.026 236.824);
+      background-color: oklch(0.951 0.026 236.824); /* Tailwind's --color-sky-100 */
     }
   }
 
   .panel {
-    background-color: oklch(0.977 0.013 236.62);
+    background-color: oklch(0.977 0.013 236.62); /* Tailwind's --color-sky-50 */
   }
 
   .header {
