@@ -17,5 +17,7 @@ This component only exists so that we can put SvelteFlowProvider
 </script>
 
 <SvelteFlowProvider>
-  <FlowBase {context} node={declLirNode} bind:this={baseFlowComponent} />
+  <div style="height: 100%">
+    <FlowBase {context} node={declLirNode} bind:this={baseFlowComponent} />
+  </div>
 </SvelteFlowProvider>

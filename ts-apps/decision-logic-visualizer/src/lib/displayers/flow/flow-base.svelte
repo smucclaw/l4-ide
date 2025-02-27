@@ -148,7 +148,8 @@
   }
 </script>
 
-<div style={`height:96svh; opacity: ${flowOpacity}`}>
+<!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
+<div style={`height:100%; opacity: ${flowOpacity}`}>
   <SvelteFlow
     bind:nodes={NODES}
     bind:edges={EDGES}
