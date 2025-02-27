@@ -69,6 +69,45 @@
   const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
   // $inspect('flowOpacity: ' + `${flowOpacity}`)
 
+  // keep track of currently selected path
+  let selectedPathId = $state<string | null>(null)
+
+  // path info with ids for each path for selection
+  const paths = ladderGraph.getPaths(context).map((path, index) => {
+  // path id based on vertices
+    const vertices = path.getVertices(context);
+    const pathId = vertices.map(v => v.getId().toString()).join('-');
+
+    return {
+      path,
+      index,
+      id: pathId,
+      displayId: `${index + 1}`,
+      pretty: path.toPretty(context)
+    };
+  });
+
+  // to handle radio button selection
+  // the radio button is actually a checkbox because radio buttons can't be toggled
+  function handlePathSelect(pathInfo: typeof paths[0]) {
+  if (selectedPathId === pathInfo.id) {
+    // deselect path if it's already selected
+    selectedPathId = null;
+    pathInfo.path.deselect(context);
+  } else {
+    // deselect previously selected path
+    if (selectedPathId !== null) {
+      const previousPath = paths.find(p => p.id === selectedPathId)?.path;
+      if (previousPath) {
+        previousPath.deselect(context);
+      }
+    }
+    // ...and select new path
+    selectedPathId = pathInfo.id;
+    pathInfo.path.select(context);
+  }
+}
+
   onMount(() => {
     // Layout only after the nodes have been measured (have a width and height)
     watch(
@@ -165,16 +204,30 @@
   </SvelteFlow>
 </div>
 <section>
-  <div class="flex flex-col gap-2">
-    {#each ladderGraph.getPaths(context) as path}
-      <button
-        class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
-        onmouseenter={() => path.select(context)}
-        onmouseleave={() => path.deselect(context)}
-      >
-        {path.toPretty(context)}
-      </button>
-    {/each}
+  <div class="flex flex-col gap-2 w-4/5">
+      <ul class="space-y-1 text-gray-500 list-none list-inside dark:text-gray-400">
+        {#each paths as pathInfo}
+        <li class="grid grid-cols-6">
+          <div class="font-semibold col-span-1">
+            <div class={`w-[30px] border-2 rounded-full text-center transition-colors ${selectedPathId === pathInfo.id ? 'bg-green-600 text-white border-green-600' : 'border-gray-300'}`}>
+              {pathInfo.displayId}
+            </div>
+          </div>
+          <label for={pathInfo.id} class="col-span-4 text-gray-700 dark:text-gray-400">
+            <div>{pathInfo.pretty}</div>
+          </label>
+          <input
+            id={pathInfo.id}
+            type="checkbox"
+            value={pathInfo.id}
+            name="expand-list"
+            class="appearance-none w-4 h-4 border-2 border-gray-300 rounded-full checked:bg-green-600 checked:border-green-600 focus:ring-green-500 focus:ring-2 transition-colors cursor-pointer"
+            checked={selectedPathId === pathInfo.id}
+            onchange={() => handlePathSelect(pathInfo)}
+          />
+        </li>
+      {/each}
+      </ul>
   </div>
 </section>
 <!-- For debugging -->
