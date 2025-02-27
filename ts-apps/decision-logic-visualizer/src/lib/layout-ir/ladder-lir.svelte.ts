@@ -12,6 +12,7 @@ import {
   type EdgeStyles,
   HighlightedEdgeStyles,
   EmptyEdgeStyles,
+  type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 
 /*
@@ -198,6 +199,15 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /*****************************
         Edge attributes
   ******************************/
+
+  getEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeAttributes {
+    return this.#dag.getAttributesForEdge(edge)
+  }
+
+  // TODO: Think more abt whether we really need the rest
 
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,

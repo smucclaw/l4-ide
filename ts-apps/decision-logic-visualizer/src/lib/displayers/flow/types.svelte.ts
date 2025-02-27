@@ -102,17 +102,16 @@ with their EdgeData */
 
 /** A ladder (SvelteFlow) edge is an edge that is highlightable
  * and can have a label */
-export interface LadderEdgeData extends Record<string, unknown> {
+export interface LadderEdgeAttrs extends Record<string, unknown> {
   label: string
   strokeColorCSSVar: StrokeColorCSSVar
 }
 
-export const defaultLadderEdgeData = {
+export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
   strokeColorCSSVar: new EmptyEdgeStyles().getStrokeColor(),
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {
-  /** SF.EdgeProps requires that `data` be optional */
-  data?: LadderEdgeData
+  attrs?: LadderEdgeAttrs
 }

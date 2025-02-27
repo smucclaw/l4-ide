@@ -18,7 +18,7 @@ export type DirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
-export type EdgeAttributeMap<A extends Ord<A>> = Map<string, EdgeAttributes<A>>
+export type EdgeAttributeMap<A extends Ord<A>> = Map<string, EdgeAttributes>
 
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors.
@@ -35,7 +35,7 @@ export class DirectedAMGraph<A extends Ord<A>>
     adjacencyMap?: Map<A, Set<A>>,
     protected edgeAttributes: EdgeAttributeMap<A> = new Map<
       string,
-      EdgeAttributes<A>
+      EdgeAttributes
     >()
   ) {
     super(adjacencyMap)
@@ -66,7 +66,7 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   // Getting / setting edge attributes
 
-  getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes<A> {
+  getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes {
     return (
       this.edgeAttributes.get(stringifyEdge(edge)) ??
       new DefaultEdgeAttributes()
@@ -77,7 +77,7 @@ export class DirectedAMGraph<A extends Ord<A>>
    *
    * Merges the input attribute with any existing ones
    */
-  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes<A>) {
+  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
     if (!this.hasEdge(edge.getU(), edge.getV())) {
       throw new Error(
         `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`

@@ -1,4 +1,4 @@
-import type { Ord } from '$lib/utils.js'
+import type { Eq, Ord } from '$lib/utils.js'
 import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
 
 /********************************
@@ -17,8 +17,10 @@ export interface Edge<A extends Ord<A>> {
   getV(): A
 }
 
-export interface EdgeWithOrd<A extends Ord<A>> extends Edge<A> {
-  isEqualTo<B extends this>(that: B): boolean
+export interface EdgeWithOrd<A extends Ord<A>>
+  extends Edge<A>,
+    Ord<EdgeWithOrd<A>> {
+  isEqualTo<B extends EdgeWithOrd<A>>(that: B): boolean
   compare(that: this): ComparisonResult
 }
 
@@ -40,7 +42,7 @@ export abstract class AbsEdgeWithOrd<A extends Ord<A>>
     return this.v
   }
 
-  abstract isEqualTo<B extends this>(that: B): boolean
+  abstract isEqualTo<B extends EdgeWithOrd<A>>(that: B): boolean
 
   compare(that: this) {
     // lexicographical comparison
@@ -67,7 +69,7 @@ export class UndirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
     }
   }
 
-  override isEqualTo<B extends UndirectedEdge<A>>(that: B): boolean {
+  override isEqualTo<B extends EdgeWithOrd<A>>(that: B): boolean {
     return (
       that instanceof UndirectedEdge &&
       ((this.u.isEqualTo(that.getU()) && this.v.isEqualTo(that.getV())) ||
@@ -86,7 +88,7 @@ export class DirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
     super(u, v)
   }
 
-  override isEqualTo<B extends DirectedEdge<A>>(that: B): boolean {
+  override isEqualTo<B extends EdgeWithOrd<A>>(that: B): boolean {
     return (
       that instanceof DirectedEdge &&
       this.getU().isEqualTo(that.getU()) &&
@@ -105,23 +107,30 @@ export class DirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
 // This isn't in principle limited to edges;
 // it's just that we will prob use LirNode methods for node data
 
-export interface EdgeAttributes<A extends Ord<A>> {
+export interface EdgeAttributes extends Eq<EdgeAttributes> {
   getStyles(): EdgeStyles
   setStyles(styles: EdgeStyles): void
 
   getLabel(): string
   setLabel(label: string): void
 
-  merge(other: EdgeAttributes<A>): EdgeAttributes<A>
+  isEqualTo<T extends EdgeAttributes>(other: T): boolean
+
+  merge(other: EdgeAttributes): EdgeAttributes
 }
 
-export class DefaultEdgeAttributes<A extends Ord<A>>
-  implements EdgeAttributes<A>
-{
+export class DefaultEdgeAttributes implements EdgeAttributes {
   constructor(
     protected styles: EdgeStyles = new EmptyEdgeStyles(),
     protected label: string = ''
   ) {}
+
+  isEqualTo<T extends EdgeAttributes>(other: T): boolean {
+    return (
+      this.getStyles().isEqualTo(other.getStyles()) &&
+      this.getLabel() === other.getLabel()
+    )
+  }
 
   getStyles(): EdgeStyles {
     return this.styles
@@ -139,16 +148,16 @@ export class DefaultEdgeAttributes<A extends Ord<A>>
     this.label = label
   }
 
-  merge(other: EdgeAttributes<A>): EdgeAttributes<A> {
+  merge(other: EdgeAttributes): EdgeAttributes {
     return mergeEdgeAttributes(this, other)
   }
 }
 
 /** <|> */
-export function mergeEdgeAttributes<A extends Ord<A>>(
-  a1: EdgeAttributes<A>,
-  a2: EdgeAttributes<A>
-): EdgeAttributes<A> {
+export function mergeEdgeAttributes(
+  a1: EdgeAttributes,
+  a2: EdgeAttributes
+): EdgeAttributes {
   function mergeEdgeLabels(l1: string, l2: string) {
     if (l1 === emptyEdgeLabel) {
       return l2
@@ -179,9 +188,12 @@ export function mergeEdgeAttributes<A extends Ord<A>>(
     Edge Label and Styles
 ****************************/
 
-export interface EdgeStyles {
+export interface EdgeStyles extends Eq<EdgeStyles> {
   $type: 'EmptyEdgeStyles' | 'HighlightedEdgeStyles'
+
   getStrokeColor(): StrokeColorCSSVar
+
+  isEqualTo(other: EdgeStyles): boolean
 }
 
 export function isEmptyEdgeStyles(
@@ -201,6 +213,10 @@ export class EmptyEdgeStyles implements EdgeStyles {
   $type = 'EmptyEdgeStyles' as const
   constructor() {}
 
+  isEqualTo(other: EdgeStyles): boolean {
+    return isEmptyEdgeStyles(other)
+  }
+
   getStrokeColor() {
     return '--default-internal-stroke-color' as const
   }
@@ -209,6 +225,10 @@ export class EmptyEdgeStyles implements EdgeStyles {
 export class HighlightedEdgeStyles implements EdgeStyles {
   $type = 'HighlightedEdgeStyles' as const
   constructor() {}
+
+  isEqualTo(other: EdgeStyles): boolean {
+    return isHighlightedEdgeStyles(other)
+  }
 
   getStrokeColor() {
     return '--color-highlighted-path-in-flow' as const

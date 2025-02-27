@@ -4,7 +4,7 @@
     // EdgeLabel,
   } from '@xyflow/svelte'
   import type { LadderEdgeProps } from '../types.svelte.js'
-  import { defaultLadderEdgeData } from '../types.svelte.js'
+  import { defaultLadderEdgeAttrs } from '../types.svelte.js'
 
   let {
     sourceX,
@@ -13,7 +13,7 @@
     targetX,
     targetY,
     targetPosition,
-    data = defaultLadderEdgeData,
+    attrs: data = defaultLadderEdgeAttrs,
   }: LadderEdgeProps = $props()
 
   // console.log(`var(${data.strokeColorCSSVar})`)
