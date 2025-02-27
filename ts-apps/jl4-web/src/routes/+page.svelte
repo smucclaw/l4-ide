@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   let editorElement: HTMLDivElement;
   import {
-  LadderFlow,
+    LadderFlow,
     LirContext,
     LirRegistry,
     VizDeclLirSource,
@@ -175,8 +175,7 @@
     await runClient();
   });
 
-  const britishCitizen =
-`§ \`Assumptions\`
+  const britishCitizen = `§ \`Assumptions\`
 
 ASSUME Person IS A TYPE
 ASSUME \`mother of\` IS A FUNCTION FROM Person TO Person
@@ -206,40 +205,56 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <div class="jl4-container">
   <div id="jl4-editor" bind:this={editorElement}></div>
-  <div id="jl4-webview">
-    <h1>{funName}</h1>
-
+  <div id="jl4-webview" class="panel">
+    <div class="header">
+      <h1>{funName}</h1>
+    </div>
     {#if vizDecl && declLirNode}
       {#key declLirNode}
-        <div class="flash-on-update visualization-container">
+        <div
+          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
+        >
           <LadderFlow {context} node={declLirNode} />
         </div>
       {/key}
     {/if}
-
-    <style>
-      @keyframes flash {
-        0%,
-        90% {
-          background-color: hsl(var(--neutral));
-        }
-        50% {
-          background-color: hsl(var(--muted));
-        }
-      }
-
-      .flash-on-update {
-        animation: flash 0.6s;
-      }
-
-      h1 {
-        margin-top: 10px;
-        padding-bottom: 2px;
-        font-size: 1.5rem;
-        line-height: 1.1rem;
-        font-weight: 700;
-        text-align: center;
-      }
-    </style>
   </div>
 </div>
+
+<style>
+  @keyframes flash {
+    0%,
+    90% {
+      background-color: hsl(var(--neutral));
+    }
+    50% {
+      background-color: hsl(var(--muted));
+    }
+  }
+
+  .panel {
+    background-color: oklch(0.977 0.013 236.62);
+  }
+
+  .header {
+    padding-top: 3px;
+    padding-bottom: 8px;
+  }
+
+  .slightly-shorter-than-full-viewport-height {
+    height: 95svh;
+  }
+
+  .flash-on-update {
+    animation: flash 0.6s;
+  }
+
+  h1 {
+    margin-top: 10px;
+    padding-bottom: 2px;
+    font-size: 1.5rem;
+    line-height: 1.1rem;
+    font-weight: 700;
+    text-align: center;
+  }
+</style>
