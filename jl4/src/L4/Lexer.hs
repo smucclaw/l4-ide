@@ -243,9 +243,9 @@ tokenPayload =
   <|> TGenitive       <$  string "'s"
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directiveLiteral
+  <|> TRefSrc         <$> refSrcAnnotation
   <|> uncurry TNlg    <$> nlgAnnotation
   <|> uncurry TRef    <$> refAnnotation
-  <|> TRefSrc         <$> refSrcAnnotation
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
