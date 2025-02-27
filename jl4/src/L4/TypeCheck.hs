@@ -795,6 +795,12 @@ def n = do
   u <- newUnique
   pure (Def u n)
 
+-- | Introduce the new name as a defining occurrence of an alias of an already existing name.
+defAka :: Resolved -> Name -> Check Resolved
+defAka r n = do
+  let u = getUnique r
+  pure (Def u n)
+
 ref :: Name -> Resolved -> Check Resolved
 ref n a =
   let
@@ -825,10 +831,11 @@ inferDeclare (MkDeclare ann tysig (MkAppFormAka anna appForm maka) t) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDeclare (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-    rmaka <- traverse inferAka maka
-    inferTypeAppForm' rappForm rtysig
-    (rt, extend) <- inferTypeDecl rappForm t
-    pure (MkDeclare ann rtysig (MkAppFormAka anna rappForm rmaka) rt, extend)
+    rmaka <- traverse (inferAka (view appFormHead rappForm)) maka
+    let rafa = MkAppFormAka anna rappForm rmaka
+    inferTypeAppForm' rafa rtysig
+    (rt, extend) <- inferTypeDecl rafa t
+    pure (MkDeclare ann rtysig rafa rt, extend)
   extend
   pure rd
 
@@ -852,18 +859,19 @@ inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) (Just (Type tan
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-    rmaka <- traverse inferAka maka
-    inferTypeAppForm' rappForm rtysig
+    rmaka <- traverse (inferAka (view appFormHead rappForm)) maka
+    let rafa = MkAppFormAka anna rappForm rmaka
+    inferTypeAppForm' rafa rtysig
     -- TODO: do we ever check the result kind?
     let
       extend =
-        makeKnown
-          (view appFormHead rappForm)
+        makeKnownMany
+          (appFormAkaHeads rafa)
           (KnownType (kindOfAppForm rappForm)
             (view appFormArgs rappForm)
             (EnumDecl emptyAnno [])
           )
-    pure (MkAssume ann rtysig (MkAppFormAka anna rappForm rmaka) (Just (Type tann)), extend)
+    pure (MkAssume ann rtysig rafa (Just (Type tann)), extend)
   extend
   pure rd
 inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) mt) = do
@@ -871,8 +879,9 @@ inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) mt) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingAssume (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig -- (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
-    rmaka <- traverse inferAka maka
-    (ce, rt, result) <- inferTermAppForm rappForm rtysig
+    rmaka <- traverse (inferAka (view appFormHead rappForm)) maka
+    let rafa = MkAppFormAka anna rappForm rmaka
+    (ce, rt, result) <- inferTermAppForm rafa rtysig
     -- check that the given result type matches the result type in the type signature
     rmt <- case mt of
       Nothing -> pure Nothing
@@ -880,8 +889,8 @@ inferAssume (MkAssume ann tysig (MkAppFormAka anna appForm maka) mt) = do
         rt' <- inferType t
         expect (ExpectAssumeSignatureContext (rangeOf result)) result rt'
         pure (Just rt')
-    let rd = setAnnResolvedType rt (MkAssume ann rtysig (MkAppFormAka anna rappForm rmaka) rmt)
-    pure (rd, makeKnown (view appFormHead rappForm) ce)
+    let rd = setAnnResolvedType rt (MkAssume ann rtysig rafa rmt)
+    pure (rd, makeKnownMany (appFormAkaHeads rafa) ce)
   extend
   pure rd
 
@@ -899,7 +908,10 @@ inferDirective (Check ann e) = scope $ do
 inferSection :: Section Name -> Check (Section Resolved)
 inferSection (MkSection ann lvl mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
-  rmaka <- traverse inferAka maka
+  rmaka <-
+    case rmn of
+      Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
+      Just rn -> traverse (inferAka rn) maka
   rtopdecls <- traverse inferTopDecl topdecls
   pure (MkSection ann lvl rmn rmaka rtopdecls)
 
@@ -948,11 +960,12 @@ inferDecide (MkDecide ann tysig (MkAppFormAka anna appForm maka) expr) = do
   (rd, extend) <- scope $ do
     setErrorContext (WhileCheckingDecide (getName appForm))
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
-    rmaka <- traverse inferAka maka
-    (ce, rt, result) <- inferTermAppForm rappForm rtysig
+    rmaka <- traverse (inferAka (view appFormHead rappForm)) maka
+    let rafa = MkAppFormAka anna rappForm rmaka
+    (ce, rt, result) <- inferTermAppForm rafa rtysig
     rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
     let ann' = set annInfo (Just (TypeInfo rt)) ann
-    pure (MkDecide ann' rtysig (MkAppFormAka anna rappForm rmaka) rexpr, makeKnown (view appFormHead rappForm) ce)
+    pure (MkDecide ann' rtysig (MkAppFormAka anna rappForm rmaka) rexpr, makeKnownMany (appFormAkaHeads rafa) ce)
   extend
   pure rd
 
@@ -1132,8 +1145,24 @@ mkref r (MkOptionallyTypedName ann n mt) = do
   rmt <- traverse inferType mt
   pure (MkOptionallyTypedName ann rn rmt)
 
+appFormAkaAppForm :: Lens' (AppFormAka n) (AppForm n)
+appFormAkaAppForm = lensVL (\ wrap (MkAppFormAka ann appForm maka) -> (\ wappForm -> MkAppFormAka ann wappForm maka) <$> wrap appForm)
+
+appFormAkaHead :: Lens' (AppFormAka n) n
+appFormAkaHead = appFormAkaAppForm % appFormHead
+
+appFormAkaArgs :: Lens' (AppFormAka n) [n]
+appFormAkaArgs = appFormAkaAppForm % appFormArgs
+
 appFormHead :: Lens' (AppForm n) n
 appFormHead = lensVL (\ wrap (MkAppForm ann n ns) -> (\ wn -> MkAppForm ann wn ns) <$> wrap n)
+
+appFormAkaHeads :: AppFormAka n -> [n]
+appFormAkaHeads (MkAppFormAka _ann appForm maka) =
+  view appFormHead appForm :
+  case maka of
+    Nothing           -> []
+    Just (MkAka _ ns) -> ns
 
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns) -> (\ wns -> MkAppForm ann n wns) <$> wrap ns)
@@ -1144,40 +1173,40 @@ appFormType (MkAppForm _ann n args) = app n (tyvar <$> args)
 -- | We do not make the names known, even though they are defining occurrences,
 -- because we do not have any information about what the names are supposed to be.
 --
-inferAka :: Aka Name -> Check (Aka Resolved)
-inferAka (MkAka ann ns) = do
-  rns <- traverse def ns
+inferAka :: Resolved -> Aka Name -> Check (Aka Resolved)
+inferAka r (MkAka ann ns) = do
+  rns <- traverse (defAka r) ns
   pure (MkAka ann rns)
 
-inferTypeDecl :: AppForm Resolved -> TypeDecl Name -> Check (TypeDecl Resolved, Check ())
-inferTypeDecl rappForm (EnumDecl ann conDecls) = do
+inferTypeDecl :: AppFormAka Resolved -> TypeDecl Name -> Check (TypeDecl Resolved, Check ())
+inferTypeDecl rafa@(MkAppFormAka _ rappForm _) (EnumDecl ann conDecls) = do
   let
-    r      = view appFormHead rappForm
+    rs     = appFormAkaHeads rafa
     td rcs = EnumDecl ann rcs
     kt     = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  makeKnown r (kt (td []))
+  makeKnownMany rs (kt (td []))
   ensureDistinct NonDistinctConstructors (getName <$> conDecls)
   (rconDecls, extends) <- unzip <$> traverse (inferConDecl rappForm) conDecls
-  pure (td rconDecls, makeKnown r (kt (td rconDecls)) >> sequence_ extends)
-inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
+  pure (td rconDecls, makeKnownMany rs (kt (td rconDecls)) >> sequence_ extends)
+inferTypeDecl rafa@(MkAppFormAka _ rappForm _) (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
   let
-    r  = view appFormHead rappForm
+    rs = appFormAkaHeads rafa
     kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  makeKnown r (kt (EnumDecl emptyAnno []))
+  makeKnownMany rs (kt (EnumDecl emptyAnno []))
   (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
   let
     td = RecordDecl ann (Just mrcon) rtns
-  pure (td, makeKnown r (kt td) >> extend)
-inferTypeDecl rappForm (SynonymDecl ann t) = do
+  pure (td, makeKnownMany rs (kt td) >> extend)
+inferTypeDecl rafa@(MkAppFormAka _ rappForm _) (SynonymDecl ann t) = do
   let
-    r  = view appFormHead rappForm
+    rs = appFormAkaHeads rafa
     kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
   rt <- inferType t
   let
     td = SynonymDecl ann rt
-  pure (td, makeKnown r (kt td))
+  pure (td, makeKnownMany rs (kt td))
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
 inferConDecl rappForm (MkConDecl ann n tns) = do
@@ -1294,21 +1323,24 @@ kindOfAppForm (MkAppForm _ann _ args) =
 -- of recursive types. The reason is that e.g. type synonyms cannot be recursive, and
 -- that we therefore do not have sufficient info yet.
 --
-inferTypeAppForm' :: AppForm Resolved -> TypeSig Resolved -> Check ()
-inferTypeAppForm' (MkAppForm _ n args) _tysig = do
-  ensureDistinct NonDistinctTypeAppForm (getName <$> (n : args)) -- should we do this earlier?
-  traverse_ (flip makeKnown KnownTypeVariable) args
-  pure ()
+inferTypeAppForm' :: AppFormAka Resolved -> TypeSig Resolved -> Check ()
+inferTypeAppForm' rappFormAka _tysig = do
+  let rs = appFormAkaHeads rappFormAka
+  let args = view appFormAkaArgs rappFormAka
+  ensureDistinct NonDistinctTypeAppForm (getName <$> (rs <> args)) -- should we do this earlier?
+  makeKnownMany args KnownTypeVariable
 
 -- | This happens after consistency checking which is in turn already doing part of
 -- name resolution, so this takes a resolved appform. We do the environment handling
 -- here.
-inferTermAppForm :: AppForm Resolved -> TypeSig Resolved -> Check (CheckEntity, Type' Resolved, Type' Resolved)
-inferTermAppForm (MkAppForm _ n args) tysig = do
-  ensureDistinct NonDistinctTermAppForm (getName <$> (n : args)) -- should we do this earlier?
+inferTermAppForm :: AppFormAka Resolved -> TypeSig Resolved -> Check (CheckEntity, Type' Resolved, Type' Resolved)
+inferTermAppForm rappFormAka tysig = do
+  let rs = appFormAkaHeads rappFormAka
+  let args = view appFormAkaArgs rappFormAka
+  ensureDistinct NonDistinctTermAppForm (getName <$> (rs <> args)) -- should we do this earlier?
   (rt, result, extend) <- typeSigType tysig
   let termInfo = KnownTerm rt Computable
-  makeKnown n termInfo -- this makes the name known for recursive uses
+  makeKnownMany rs termInfo -- this makes the name known for recursive uses
   extend
   pure (termInfo, rt, result)
 
@@ -1407,6 +1439,10 @@ makeKnown a ce = do
     proc :: Maybe [Unique] -> Maybe [Unique]
     proc Nothing   = Just [u]
     proc (Just xs) = Just (u : xs)
+
+makeKnownMany :: [Resolved] -> CheckEntity -> Check ()
+makeKnownMany rs ce =
+  traverse_ (flip makeKnown ce) rs
 
 checkExpr :: ExpectationContext -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr ec (IfThenElse ann e1 e2 e3) t = softprune $ scope $ do
