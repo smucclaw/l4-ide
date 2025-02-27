@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  // import { onMount } from "svelte";
   import {
     LadderFlow,
     LirContext,
@@ -8,14 +8,13 @@
     type DeclLirNode,
     type LirRootType,
   } from "@repo/decision-logic-visualizer";
-  import {
-    type VisualizeDecisionLogicIRInfo,
-    type FunDecl,
-  } from "@repo/viz-expr";
+  import { makeVizInfoDecoder, type FunDecl } from "@repo/viz-expr";
   import { type MessageTransports } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
 
+  /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
+  let errorMessage: string | undefined = $state(undefined);
 
   /**************************
       Set up Lir
@@ -39,11 +38,17 @@
     }
   });
 
+  /******************************
+      VizInfo Payload Decoder
+  *******************************/
+
+  const decodeVizInfo = makeVizInfoDecoder();
+
   // /**************************
   //       Monadco
   // ****************************/
 
-  onMount(async () => {
+  async function initMonaco() {
     const monaco = await import("@codingame/monaco-vscode-editor-api");
     const { initServices } = await import(
       "monaco-languageclient/vscode/services"
@@ -59,8 +64,6 @@
       "monaco-editor-wrapper/workers/workerLoaders"
     );
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
-    const { Schema } = await import("effect");
-    const { VisualizeDecisionLogicIRInfo } = await import("@repo/viz-expr");
 
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
@@ -84,6 +87,8 @@
           logger,
         }
       );
+
+      console.log("finished await initServices");
 
       configureDefaultWorkerFactory(logger);
 
@@ -161,21 +166,29 @@
       return {
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`);
-          const response = await next(command, args);
+          const response: unknown = await next(command, args);
 
           logger.debug(
             `received response from language server ${JSON.stringify(response)}`
           );
-          const decode = Schema.decodeUnknownSync(VisualizeDecisionLogicIRInfo);
 
-          const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(response);
-
-          vizDecl = vizProgramInfo.program;
+          const decoded = decodeVizInfo(response);
+          switch (decoded._tag) {
+            case "Right":
+              if (decoded.right) {
+                const vizProgramInfo = decoded.right;
+                vizDecl = vizProgramInfo.program;
+              }
+              break;
+            case "Left":
+              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`;
+              break;
+          }
         },
       };
     }
     await runClient();
-  });
+  }
 
   const britishCitizen = `§ \`Assumptions\`
 
@@ -207,20 +220,29 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <div class="jl4-container">
   <div id="jl4-editor" bind:this={editorElement}></div>
-  <div id="jl4-webview" class="panel">
-    <div class="header">
-      <h1>{funName}</h1>
+  {#await initMonaco()}
+    <p>Loading monaco...</p>
+  {:then}
+    <div id="jl4-webview" class="panel">
+      <div class="header">
+        <h1>{funName}</h1>
+      </div>
+      {#if vizDecl && declLirNode}
+        {#key declLirNode}
+          <div
+            class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
+          >
+            <LadderFlow {context} node={declLirNode} />
+          </div>
+        {/key}
+      {/if}
+      {#if errorMessage}
+        {errorMessage}
+      {/if}
     </div>
-    {#if vizDecl && declLirNode}
-      {#key declLirNode}
-        <div
-          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
-        >
-          <LadderFlow {context} node={declLirNode} />
-        </div>
-      {/key}
-    {/if}
-  </div>
+  {:catch error}
+    <p>{error.message}</p>
+  {/await}
 </div>
 
 <style>
@@ -230,7 +252,9 @@ DECIDE \`is a British citizen (variant)\` IS
       background-color: hsl(var(--neutral));
     }
     50% {
-      background-color: oklch(0.951 0.026 236.824); /* Tailwind's --color-sky-100 */
+      background-color: oklch(
+        0.951 0.026 236.824
+      ); /* Tailwind's --color-sky-100 */
     }
   }
 
