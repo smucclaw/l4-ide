@@ -299,7 +299,7 @@ instance LayoutPrinter a => LayoutPrinter (Pattern a) where
 
 instance LayoutPrinter Nlg where
   printWithLayout = \case
-    (MkNlg _ contents) -> pretty $ Text.concat contents
+    (MkNlg _ contents) -> pretty contents
 
 instance LayoutPrinter Value where
   printWithLayout = \case

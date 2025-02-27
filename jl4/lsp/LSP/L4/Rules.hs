@@ -301,10 +301,10 @@ jl4Rules recorder = do
 
           normalizeRef = Text.toLower . Text.strip
 
-          rangeOfPosToken = \case
-            -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-            Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
-            _ -> mempty
+        rangeOfPosToken = \case
+          -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
+          Lexer.MkPosToken {payload = Lexer.TRef r _, range} -> [(normalizeRef r, range)]
+          _ -> mempty
 
           allReferencesInTree :: [(Text, SrcRange)]
           allReferencesInTree = foldMap rangeOfPosToken tokens
