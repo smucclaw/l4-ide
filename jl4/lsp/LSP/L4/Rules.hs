@@ -7,6 +7,7 @@ module LSP.L4.Rules where
 
 import L4.Annotation
 import L4.Evaluate
+import L4.FindDefinition (toResolved)
 import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
@@ -350,7 +351,7 @@ jl4Rules recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ TypeCheck.toResolved tcRes.program
+        resolveds = foldMap spanOf $ toResolved tcRes.program
 
     pure ([], Just resolveds)
 

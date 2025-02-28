@@ -9,6 +9,7 @@ common defaults
   ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
   default-extensions:
     BlockArguments
+    DefaultSignatures
     DeriveAnyClass
     DerivingStrategies
     DerivingVia
@@ -52,6 +53,8 @@ library
     L4.Evaluate
     L4.Evaluate.Value
     L4.ExactPrint
+    L4.FindDefinition
+    L4.HoverInfo
     L4.Main
     L4.Lexer
     L4.Parser
@@ -62,6 +65,9 @@ library
     L4.Syntax
     L4.Transform
     L4.TypeCheck
+    L4.TypeCheck.Environment
+    L4.TypeCheck.Types
+    L4.TypeCheck.With
 
 executable jl4-cli
   import: defaults

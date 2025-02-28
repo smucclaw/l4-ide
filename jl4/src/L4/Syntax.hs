@@ -257,6 +257,20 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Program n -> m
 foldTopDecls = _foldNodeType
 
+
+appFormHead :: Lens' (AppForm n) n
+appFormHead = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wn -> MkAppForm ann wn ns maka) <$> wrap n)
+
+appFormHeads :: AppForm n -> [n]
+appFormHeads (MkAppForm _ann n _ns maka) =
+  n :
+  case maka of
+    Nothing           -> []
+    Just (MkAka _ ns) -> ns
+
+appFormArgs :: Lens' (AppForm n) [n]
+appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
+
 -- ----------------------------------------------------------------------------
 -- Source Annotations
 -- ----------------------------------------------------------------------------

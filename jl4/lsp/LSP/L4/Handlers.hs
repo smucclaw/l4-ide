@@ -34,6 +34,8 @@ import qualified Data.Text.Lazy as LazyText
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
+import L4.FindDefinition (findDefinition)
+import L4.HoverInfo (findInfo)
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
