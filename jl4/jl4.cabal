@@ -42,7 +42,7 @@ library
     pretty-simple,
     prettyprinter,
     text >= 2 && < 2.1.2,
-    tree-diff
+    tree-diff,
     hw-fingertree,
     filepath,
     file-io,

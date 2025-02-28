@@ -275,46 +275,42 @@ jl4Rules recorder = do
     Nothing -> pure ([], Nothing)
     Just f -> do
       ownPath <- normalizedFilePathToOsPath f
-      let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
-      -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
-      contents <- liftIO $ Path.readFile citationFilePath
-      -- TODO: in future we may want to use the parse of the tree to get the context of the references
       (tokens, _) <- use_ GetLexTokens uri
 
-    -- obtain a valid relative file path from the ref-src annos
-    let refSrcs = foldMap (validRelPath ownPath) tokens
+      -- obtain a valid relative file path from the ref-src annos
+      let refSrcs = foldMap (validRelPath ownPath) tokens
 
-    -- read the contents of the filepaths specified
-    contents <- traverse (liftIO . readContents) $ Compose refSrcs
+      -- read the contents of the filepaths specified
+      contents <- traverse (liftIO . readContents) $ Compose refSrcs
 
-    -- parse the file contents from csv into intervalmaps from the sources of
-    -- the annos to the reference they represent
-    let references = getCompose $ mkReferences tokens <$> contents
+      -- parse the file contents from csv into intervalmaps from the sources of
+      -- the annos to the reference they represent
+      let references = getCompose $ mkReferences tokens <$> contents
 
-    -- report any errors encountered while parsing any of the ref-src annos,
-    -- annotate them on the ref-src annos they originated from and finally
-    -- union all interval maps
-    let (errs, mps) = partitionEithersOnL mkDiagnostic references
-        mkDiagnostic loc err =
-          FileDiagnostic
-            { fdLspDiagnostic =
-              Diagnostic
-                { _source = Just "jl4"
-                , _severity = Just DiagnosticSeverity_Warning
-                , _range = srcRangeToLspRange $ Just loc
-                , _message = Text.pack err
-                , _relatedInformation = Nothing
-                , _data_ = Nothing
-                , _codeDescription = Nothing
-                , _tags = Nothing
-                , _code = Nothing
-                }
-            , fdFilePath = f
-            , fdShouldShowDiagnostic = ShowDiag
-            , fdOriginalSource = NoMessage
-            }
+      -- report any errors encountered while parsing any of the ref-src annos,
+      -- annotate them on the ref-src annos they originated from and finally
+      -- union all interval maps
+      let (errs, mps) = partitionEithersOnL mkDiagnostic references
+          mkDiagnostic loc err =
+            FileDiagnostic
+              { fdLspDiagnostic =
+                Diagnostic
+                  { _source = Just "jl4"
+                  , _severity = Just DiagnosticSeverity_Warning
+                  , _range = srcRangeToLspRange $ Just loc
+                  , _message = Text.pack err
+                  , _relatedInformation = Nothing
+                  , _data_ = Nothing
+                  , _codeDescription = Nothing
+                  , _tags = Nothing
+                  , _code = Nothing
+                  }
+              , fdFilePath = uri
+              , fdShouldShowDiagnostic = ShowDiag
+              , fdOriginalSource = NoMessage
+              }
 
-    pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
+      pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f
