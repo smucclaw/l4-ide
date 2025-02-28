@@ -45,6 +45,7 @@ deriving anyclass instance ToResolved (TypeSig Resolved)
 deriving anyclass instance ToResolved (GivethSig Resolved)
 deriving anyclass instance ToResolved (GivenSig Resolved)
 deriving anyclass instance ToResolved (Directive Resolved)
+deriving anyclass instance ToResolved (Import Resolved)
 
 instance ToResolved Lit where
   toResolved = const []

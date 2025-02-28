@@ -141,6 +141,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
     Directive ann directive -> do
       directive' <- addNlg directive
       pure $ Directive ann directive'
+    Import ann import_ -> do
+      import_' <- addNlg import_
+      pure $ Import ann import_'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of
@@ -173,6 +176,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
+  addNlg a = extendNlgA a $ case a of
+    MkImport ann n -> do
+      n' <- addNlg n
+      pure $ MkImport ann n'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
   addNlg a = extendNlgA a $ case a of
