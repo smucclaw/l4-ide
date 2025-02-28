@@ -1,8 +1,15 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances, DuplicateRecordFields #-}
-module L4.TypeCheck where
+module L4.TypeCheck
+  ( module X
+  , HasName(..)
+  , applyFinalSubstitution
+  , combineEnvironmentEntityInfo
+  , doCheckProgram
+  , isQuantifier
+  , prettyCheckError
+  , prettyCheckErrorWithContext
+  , severity
+  )
+  where
 
 -- We perform scope checking and type checking in one go.
 -- The reason is that we employ type-directed name resolution:
@@ -69,55 +76,18 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
-import L4.ExactPrint
-import L4.Lexer (PosToken (..), TokenType (..), SrcRange (..), SrcPos (..))
+import L4.Annotation
+import L4.Lexer (PosToken(..), prettySrcRange)
 import L4.Print (prettyLayout, quotedName)
 import L4.Syntax
-import L4.Annotation
+import L4.TypeCheck.Environment as X
+import L4.TypeCheck.Types as X
+import L4.TypeCheck.With as X
 
 import Control.Applicative
-import Control.Monad.Logic
 import Data.Bifunctor
 import Data.Either (partitionEithers)
-import qualified Generics.SOP as SOP
 import Optics.Core hiding (anyOf, re)
-
-newtype Check a =
-  MkCheck (CheckState -> [(With CheckErrorWithContext a, CheckState)])
-
--- NOTES on the Check monad:
---
--- Contrary to my first belief, we cannot
--- afford making the complete CheckState global, because the substitution
--- must be branch-dependent. Unification can create bindings for a
--- previously introduced unification variable (prior to branches) that
--- become invalid if the branch is not selected. So we have to backtrack
--- the current substitution.
---
--- I'm not sure if the environment and supply should be backtracked.
--- The supply would be better / safer to be global? Why? If we ever want
--- to accept / merge the results of several branches, then we'd have to
--- be careful that we don't get inconsistencies. On the other hand, we
--- probably only want to do this if unification variables introduced in
--- the different branches have been unambiguously resolved, so it should
--- probably be fine.
-
-data CheckState =
-  MkCheckState
-    { environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , errorContext :: !CheckErrorContext
-    , substitution :: !Substitution
-    , supply       :: !Int
-    }
-  deriving stock (Eq, Generic, Show)
-
-type Environment  = Map RawName [Unique]
-type EntityInfo   = Map Unique (Name, CheckEntity)
-type Substitution = Map Int (Type' Resolved)
-
-runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
-runCheck (MkCheck f) = f
 
 initialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
 initialCheckState environment entityInfo substitution =
@@ -158,16 +128,6 @@ doCheckProgram program =
               , entityInfo = s'.entityInfo
               }
 
-data CheckResult
-  = CheckResult
-  { program :: Program Resolved
-  , errors :: [CheckErrorWithContext]
-  , substitution :: Substitution
-  , environment :: Environment
-  , entityInfo :: EntityInfo
-  }
-  deriving stock (Eq, Show)
-
 -- | Combines environment and entityInfo into one single list
 --
 -- This is currently used to generate top-level completions.
@@ -202,355 +162,6 @@ runCheckUnique c s =
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
-
--- --------------------------------
--- Building the initial environment
--- --------------------------------
-
--- | Helper function to create a predefined name.
-preDef :: Text -> Name
-preDef t =
-  MkName
-    (mkAnno
-      [mkCluster
-        (CsnCluster
-          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos 0 0) (MkSrcPos 0 0) 0) (TIdentifier t)] Nothing Visible)
-          (ConcreteSyntaxNode [] Nothing Hidden)
-        )
-      ]
-    )
-    (PreDef t)
-
--- uniques of built-in / predefs are having the 'b' marker:
---
--- 10  BOOLEAN
--- 11  NUMBER
--- 12  STRING
--- 13  LIST
--- 30  FALSE
--- 31  TRUE
--- 32  EMPTY
--- 40  A (type variable in EMPTY)
-
--- BOOLEAN
-
-booleanUnique :: Unique
-booleanUnique = MkUnique 'b' 10
-
-booleanName :: Name
-booleanName = preDef "BOOLEAN"
-
-booleanRef :: Resolved
-booleanRef = Ref booleanName booleanUnique booleanName
-
-boolean :: Type' Resolved
-boolean = TyApp emptyAnno booleanRef []
-
-falseUnique :: Unique
-falseUnique = MkUnique 'b' 30
-
-falseName :: Name
-falseName = preDef "FALSE"
-
-falseDef :: Resolved
-falseDef = Def falseUnique falseName
-
-falseRef :: Resolved
-falseRef = Ref falseName falseUnique falseName
-
-trueUnique :: Unique
-trueUnique = MkUnique 'b' 31
-
-trueName :: Name
-trueName = preDef "TRUE"
-
-trueDef :: Resolved
-trueDef = Def trueUnique trueName
-
-trueRef :: Resolved
-trueRef = Ref trueName trueUnique trueName
-
--- NUMBER
-
-numberUnique :: Unique
-numberUnique = MkUnique 'b' 11
-
-numberName :: Name
-numberName = preDef "NUMBER"
-
-numberRef :: Resolved
-numberRef = Ref numberName numberUnique numberName
-
-number :: Type' Resolved
-number = TyApp emptyAnno numberRef []
-
--- STRING
-
-stringUnique :: Unique
-stringUnique = MkUnique 'b' 12
-
-stringName :: Name
-stringName = preDef "STRING"
-
-stringRef :: Resolved
-stringRef = Ref stringName stringUnique stringName
-
-string :: Type' Resolved
-string = TyApp emptyAnno stringRef []
-
--- LIST
-
-listUnique :: Unique
-listUnique = MkUnique 'b' 13
-
-listName :: Name
-listName = preDef "LIST"
-
-listRef :: Resolved
-listRef = Ref listName listUnique listName
-
-list :: Type' Resolved -> Type' Resolved
-list a = TyApp emptyAnno listRef [a]
-
-emptyUnique :: Unique
-emptyUnique = MkUnique 'b' 32
-
-emptyName :: Name
-emptyName = preDef "EMPTY"
-
-emptyDef :: Resolved
-emptyDef = Def emptyUnique emptyName
-
-emptyRef :: Resolved
-emptyRef = Ref emptyName emptyUnique emptyName
-
-aUnique :: Unique
-aUnique = MkUnique 'b' 40
-
-aName :: Name
-aName = MkName emptyAnno (NormalName "A")
-
-aDef :: Resolved
-aDef = Def aUnique aName
-
-aRef :: Resolved
-aRef = Ref aName aUnique aName
-
-booleanInfo :: CheckEntity
-booleanInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [MkConDecl emptyAnno falseDef [], MkConDecl emptyAnno trueDef []])
-
-falseInfo :: CheckEntity
-falseInfo =
-  KnownTerm boolean Constructor
-
-trueInfo :: CheckEntity
-trueInfo =
-  KnownTerm boolean Constructor
-
-numberInfo :: CheckEntity
-numberInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [])
-
-stringInfo :: CheckEntity
-stringInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [])
-
-listInfo :: CheckEntity
-listInfo =
-  KnownType 1 [aDef] (EnumDecl emptyAnno [MkConDecl emptyAnno emptyDef []])
-
-emptyInfo :: CheckEntity
-emptyInfo =
-  KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor
-
-initialEnvironment :: Environment
-initialEnvironment =
-  Map.fromList
-    [ (NormalName "BOOLEAN", [booleanUnique])
-    , (NormalName "FALSE",   [falseUnique  ])
-    , (NormalName "TRUE",    [trueUnique   ])
-    , (NormalName "NUMBER",  [numberUnique ])
-    , (NormalName "STRING",  [stringUnique ])
-    , (NormalName "LIST",    [listUnique   ])
-    , (NormalName "EMPTY",   [emptyUnique  ])
-    ]
-      -- NOTE: we currently do not include the Cons constructor because it has special syntax
-
-initialEntityInfo :: EntityInfo
-initialEntityInfo =
-  Map.fromList
-    [ (booleanUnique, (booleanName, booleanInfo))
-    , (falseUnique,   (falseName,   falseInfo  ))
-    , (trueUnique,    (trueName,    trueInfo   ))
-    , (numberUnique,  (numberName,  numberInfo ))
-    , (stringUnique,  (stringName,  stringInfo ))
-    , (listUnique,    (listName,    listInfo   ))
-    , (emptyUnique,   (emptyName,   emptyInfo  ))
-    ]
-
-instance Functor Check where
-  fmap = liftM
-
-instance Applicative Check where
-  pure x =
-    MkCheck $ \ s -> [(Plain x, s)]
-  (<*>) = ap
-
-instance Monad Check where
-  (>>=) :: forall a b. Check a -> (a -> Check b) -> Check b
-  m >>= f =
-    MkCheck $ \ s ->
-      let
-        results = runCheck m s
-      in
-        concatMap (\ (wea, s') -> distributeWith (fmap (flip runCheck s' . f) wea)) results
-
-distributeWith :: With e [(With e a, b)] -> [(With e a, b)]
-distributeWith (Plain xs) = xs
-distributeWith (With e w) = fmap (first (With e)) (distributeWith w)
-
-runWith :: With e a -> ([e], a)
-runWith (Plain a)  = ([], a)
-runWith (With e w) = first (e :) (runWith w)
-
-instance MonadState CheckState Check where
-  get :: Check CheckState
-  get = MkCheck $ \ s -> [(Plain s, s)]
-
-  put :: CheckState -> Check ()
-  put s = MkCheck $ \ _ -> [(Plain (), s)]
-
-instance MonadWith CheckErrorWithContext Check where
-  with :: CheckErrorWithContext -> Check ()
-  with e = MkCheck $ \ s -> [(With e (Plain ()), s)]
-
-instance Alternative Check where
-  empty :: Check a
-  empty = MkCheck $ \ _ -> []
-
-  (<|>) :: Check a -> Check a -> Check a
-  (<|>) m1 m2 = MkCheck $ \ s -> runCheck m1 s ++ runCheck m2 s
-
-data With e a =
-    With e (With e a)
-  | Plain a
-
-instance Functor (With e) where
-  fmap = liftM
-
-instance Applicative (With e) where
-  pure = Plain
-  (<*>) = ap
-
-instance Monad (With e) where
-  Plain a  >>= f = f a
-  With e m >>= f = With e (m >>= f)
-
-class MonadWith e m | m -> e where
-  with :: e -> m ()
-
-instance MonadWith e (With e) where
-  with e = With e (Plain ())
-
-instance (Monad m, MonadWith e m) => MonadWith e (LogicT m) where
-  with e = lift (with e)
-
-instance (Monad m, MonadWith e m) => MonadWith e (StateT s m) where
-  with e = lift (with e)
-
-data CheckErrorWithContext =
-  MkCheckErrorWithContext
-    { kind    :: !CheckError
-    , context :: !CheckErrorContext
-    }
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData)
-
-data CheckError =
-    OutOfScopeError Name (Type' Resolved)
-  | KindError Kind [Type' Name]
-  | TypeMismatch ExpectationContext (Type' Resolved) (Type' Resolved) -- expected, given
-  | InconsistentNameInSignature Name (Maybe Name)
-  | InconsistentNameInAppForm Name (Maybe Name)
-  | NonDistinctError NonDistinctContext [[Name]]
-  | AmbiguousTermError Name [(Resolved, Type' Resolved)]
-  | AmbiguousTypeError Name [(Resolved, Kind)]
-  | InternalAmbiguityError
-  | IncorrectArgsNumberApp Resolved Int Int -- expected, given
-  | IllegalApp Resolved (Type' Resolved) Int
-  | IllegalAppNamed Resolved (Type' Resolved)
-  | IncompleteAppNamed Resolved [OptionallyNamedType Resolved]
-  | CheckInfo (Type' Resolved)
-  | IllegalTypeInKindSignature (Type' Resolved)
-  | MissingEntityInfo Resolved
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
-
-data ExpectationContext =
-    ExpectAssumeSignatureContext (Maybe SrcRange) -- actual result range from the signature, if it exists
-  -- | ExpectProjectionSelectorContext
-  | ExpectIfConditionContext -- condition of if-then-else
-  | ExpectPatternScrutineeContext (Expr Resolved) -- pattern type must match type of scrutinee
-  | ExpectNotArgumentContext -- arg of NOT
-  | ExpectConsArgument2Context -- second arg of cons
-  | ExpectIfBranchesContext -- all branches of an if-then-else must have the same type
-  | ExpectConsiderBranchesContext -- all branches of a consider must have the same type
-  | ExpectHomogeneousListContext -- all elements of a list literal must have the same type
-  | ExpectNamedArgContext Resolved Resolved -- function, name of arg
-  | ExpectAppArgContext Bool Resolved Int -- projection?, function, number of arg
-  | ExpectBinOpArgContext Text Int -- opname, number of arg (TODO: it would be better to have the token and its range here!)
-  | ExpectDecideSignatureContext (Maybe SrcRange) -- actual result type range from the signature, if it exists
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
-
-data NonDistinctContext =
-    NonDistinctConstructors
-  | NonDistinctSelectors
-  | NonDistinctQuantifiers
-  | NonDistinctTypeAppForm
-  | NonDistinctTermAppForm
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
-
-data CheckErrorContext =
-    WhileCheckingDeclare Name CheckErrorContext
-  | WhileCheckingDecide Name CheckErrorContext
-  | WhileCheckingAssume Name CheckErrorContext
-  | WhileCheckingExpression (Expr Name) CheckErrorContext
-  | WhileCheckingPattern (Pattern Name) CheckErrorContext
-  | WhileCheckingType (Type' Name) CheckErrorContext
-  | None
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData)
-
--- | Note that 'KnownType' does not imply this is a new generative type on its own,
--- because it includes type synonyms now. For type synonyms primarily, we also store
--- the arguments, so that we can properly substitute when instantiated.
---
-data CheckEntity =
-    KnownType Kind [Resolved] (TypeDecl Resolved)
-  | KnownTerm (Type' Resolved) TermKind
-  | KnownTypeVariable
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData)
-
-data TypeSynonym =
-    MkTypeSynonym [Resolved] (Type' Resolved)
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData)
-
-typeSynonymKind :: TypeSynonym -> Kind
-typeSynonymKind (MkTypeSynonym args _) = length args
-
-data TermKind =
-    Computable -- ^ a variable with known definition (let or global)
-  | Assumed
-  | Local -- ^ a local variable (introduced by a lambda or pattern)
-  | Constructor
-  | Selector
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass (NFData)
 
 choose :: [Check a] -> Check a
 choose = asum
@@ -706,8 +317,8 @@ resolveTerm' p n = do
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
 resolveTerm = resolveTerm' (const True)
 
-resolveSelector :: Name -> Check (Resolved, Type' Resolved)
-resolveSelector = resolveTerm' (== Selector)
+_resolveSelector :: Name -> Check (Resolved, Type' Resolved)
+_resolveSelector = resolveTerm' (== Selector)
 
 resolveConstructor :: Name -> Check (Resolved, Type' Resolved)
 resolveConstructor = resolveTerm' (== Constructor)
@@ -1138,19 +749,6 @@ mkref r (MkOptionallyTypedName ann n mt) = do
   rn <- ref n r
   rmt <- traverse inferType mt
   pure (MkOptionallyTypedName ann rn rmt)
-
-appFormHead :: Lens' (AppForm n) n
-appFormHead = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wn -> MkAppForm ann wn ns maka) <$> wrap n)
-
-appFormHeads :: AppForm n -> [n]
-appFormHeads (MkAppForm _ann n _ns maka) =
-  n :
-  case maka of
-    Nothing           -> []
-    Just (MkAka _ ns) -> ns
-
-appFormArgs :: Lens' (AppForm n) [n]
-appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
 appFormType :: AppForm Resolved -> Type' Resolved
 appFormType (MkAppForm _ann n args _maka) = app n (tyvar <$> args)
@@ -1903,46 +1501,6 @@ bind i t = do
       pure True
     Just t' -> unify t' t -- addError (InternalUnificationErrorBind i t t')
 
--- TODO: eventually, we may want to take sufficient info so that we can print the file path
--- for "external" ranges, but not ranges in the current file.
-prettySrcRange :: Maybe FilePath -> Maybe SrcRange -> Text
-prettySrcRange fp Nothing = prettyFilePath fp <> "<unknown range>"
-prettySrcRange fp (Just (MkSrcRange p1 p2 _)) = prettyFilePath fp <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
-
-prettyFilePath :: Maybe FilePath -> Text
-prettyFilePath Nothing   = ""
-prettyFilePath (Just fp) = Text.pack fp <> ":"
-
-prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
-
-prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
-prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
-  | rl == l && rc == c = ""
-  | rl == l            = "-" <> Text.show c
-  | otherwise          = "-" <> prettySrcPos p
-
-instance HasSrcRange CheckErrorWithContext where
-  rangeOf (MkCheckErrorWithContext e ctx) = rangeOf e <|> rangeOf ctx
-
-instance HasSrcRange CheckErrorContext where
-  rangeOf None = Nothing
-  rangeOf (WhileCheckingDeclare n _)    = rangeOf n
-  rangeOf (WhileCheckingDecide n _)     = rangeOf n
-  rangeOf (WhileCheckingAssume n _)     = rangeOf n
-  rangeOf (WhileCheckingExpression e _) = rangeOf e
-  rangeOf (WhileCheckingPattern p _)    = rangeOf p
-  rangeOf (WhileCheckingType t _)       = rangeOf t
-
-instance HasSrcRange CheckError where
-  rangeOf (OutOfScopeError n _)             = rangeOf n
-  rangeOf (InconsistentNameInSignature n _) = rangeOf n
-  rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
-  rangeOf _                                 = Nothing
-
-data Severity = SWarn | SError | SInfo
-  deriving stock (Eq, Show)
-
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
   case e of
@@ -2240,12 +1798,6 @@ prettyNameWithRange :: Name -> Text
 prettyNameWithRange n =
   prettyLayout n <> " (at " <> prettySrcRange Nothing (rangeOf n) <> ")"
 
-exactprint' :: ToConcreteNodes PosToken a => a -> Text
-exactprint' x =
-  case exactprint x of
-    Left _  -> "<exactprint-error>"
-    Right t -> t
-
 -- | A class for applying the subsitution on inference variables exhaustively.
 --
 -- Note that we currently are applying the substitution late, which means we have
@@ -2281,190 +1833,3 @@ instance ApplySubst CheckErrorContext where
 
 instance ApplySubst CheckErrorWithContext where
   applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
-
--------------------------------------
--- Computing info for goto definition
--------------------------------------
-
--- | It would be better to have a tree structure so that we can exclude
--- large parts of the tree easily. However, right now we don't have range
--- information cheaply in the tree, so I thought I could as well build a
--- list.
---
--- Note that we are building a tree for type information, and possibly we
--- could do something similar here. It's just probably not worth it.
---
-class ToResolved a where
-  toResolved :: a -> [Resolved]
-  default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
-  toResolved = genericToResolved
-
-deriving anyclass instance ToResolved (Program Resolved)
-deriving anyclass instance ToResolved (Section Resolved)
-deriving anyclass instance ToResolved (TopDecl Resolved)
-deriving anyclass instance ToResolved (LocalDecl Resolved)
-deriving anyclass instance ToResolved (Assume Resolved)
-deriving anyclass instance ToResolved (Declare Resolved)
-deriving anyclass instance ToResolved (TypeDecl Resolved)
-deriving anyclass instance ToResolved (ConDecl Resolved)
-deriving anyclass instance ToResolved (Type' Resolved)
-deriving anyclass instance ToResolved (TypedName Resolved)
-deriving anyclass instance ToResolved (OptionallyTypedName Resolved)
-deriving anyclass instance ToResolved (OptionallyNamedType Resolved)
-deriving anyclass instance ToResolved (Decide Resolved)
-deriving anyclass instance ToResolved (AppForm Resolved)
-deriving anyclass instance ToResolved (Aka Resolved)
-deriving anyclass instance ToResolved (Expr Resolved)
-deriving anyclass instance ToResolved (NamedExpr Resolved)
-deriving anyclass instance ToResolved (Branch Resolved)
-deriving anyclass instance ToResolved (Pattern Resolved)
-deriving anyclass instance ToResolved (TypeSig Resolved)
-deriving anyclass instance ToResolved (GivethSig Resolved)
-deriving anyclass instance ToResolved (GivenSig Resolved)
-deriving anyclass instance ToResolved (Directive Resolved)
-
-instance ToResolved Lit where
-  toResolved = const []
-
-instance ToResolved Int where
-  toResolved = const []
-
-instance ToResolved RawName where
-  toResolved = const []
-
-instance ToResolved Resolved where
-  toResolved = pure
-
-instance ToResolved a => ToResolved (Maybe a) where
-  toResolved = concatMap toResolved
-
-instance ToResolved a => ToResolved [a] where
-  toResolved = concatMap toResolved
-
-genericToResolved :: forall a. (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
-genericToResolved =
-  genericToNodes
-    (Proxy @ToResolved)
-    toResolved
-    (const concat :: Anno' a -> [[Resolved]] -> [Resolved])
-
-findDefinition :: ToResolved a => SrcPos -> a -> Maybe SrcRange
-findDefinition pos a = do
-  r <- find matches (toResolved a)
-  rangeOf (getOriginal r)
-  where
-    matches :: Resolved -> Bool
-    matches r =
-      case rangeOf (getName r) of
-        Just range -> inRange pos range
-        Nothing -> False
-
--- | We ignore the file name, because we assume this has already been checked.
-inRange :: SrcPos -> SrcRange -> Bool
-inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _) =
-     (l, c) >= (l1, c1)
-  && (l, c) <= (l2, c2)
-
-----------------------------------------------------------------------
--- Computing info for hover (currently types and kinds of expressions)
-----------------------------------------------------------------------
-
-data InfoTree =
-  InfoNode
-    { range    :: Maybe SrcRange
-    , info     :: Maybe Info
-    , children :: [InfoTree]
-    }
-
-class ToInfoTree a where
-  toInfoTree :: a -> [InfoTree]
-  default toInfoTree :: (SOP.Generic a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension, SOP.All (AnnoFirst a ToInfoTree) (SOP.Code a)) => a -> [InfoTree]
-  toInfoTree = genericToInfoTree
-
-instance HasSrcRange InfoTree where
-  rangeOf = (.range)
-
-genericToInfoTree :: forall a. (SOP.Generic a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension, SOP.All (AnnoFirst a ToInfoTree) (SOP.Code a)) => a -> [InfoTree]
-genericToInfoTree =
-  genericToNodes
-    (Proxy @ToInfoTree)
-    toInfoTree
-    (mergeInfoTrees (Proxy @a))
-
-mergeInfoTrees :: (AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => Proxy a -> Anno' a -> [[InfoTree]] -> [InfoTree]
-mergeInfoTrees _ anno children =
-  [InfoNode (rangeOf anno) (getInfo anno) (concat children)]
-
-findInfo :: ToInfoTree a => SrcPos -> a -> Maybe (SrcRange, Info)
-findInfo pos a =
-  asum (go <$> toInfoTree a)
-  where
-    go :: InfoTree -> Maybe (SrcRange, Info)
-    go (InfoNode Nothing _info children)     =
-        asum (go <$> children) -- <|> if t == Nothing then Just (range, Type mempty) else (range,) <$> t
-    go (InfoNode (Just range) info children)
-      | pos `inRange` range                =
-        asum (go <$> children) <|> {- if t == Nothing then Just (range, Type mempty) else -} (range,) <$> info
-      | otherwise                          = Nothing
-
-deriving anyclass instance ToInfoTree (Program Resolved)
-deriving anyclass instance ToInfoTree (Section Resolved)
-deriving anyclass instance ToInfoTree (TopDecl Resolved)
-deriving anyclass instance ToInfoTree (LocalDecl Resolved)
-deriving anyclass instance ToInfoTree (Assume Resolved)
-deriving anyclass instance ToInfoTree (Declare Resolved)
-deriving anyclass instance ToInfoTree (TypeDecl Resolved)
-deriving anyclass instance ToInfoTree (ConDecl Resolved)
-deriving anyclass instance ToInfoTree (Type' Resolved)
-deriving anyclass instance ToInfoTree (TypedName Resolved)
-deriving anyclass instance ToInfoTree (OptionallyTypedName Resolved)
-deriving anyclass instance ToInfoTree (OptionallyNamedType Resolved)
-deriving anyclass instance ToInfoTree (Decide Resolved)
-deriving anyclass instance ToInfoTree (AppForm Resolved)
-deriving anyclass instance ToInfoTree (Aka Resolved)
-deriving anyclass instance ToInfoTree (Expr Resolved)
-deriving anyclass instance ToInfoTree (NamedExpr Resolved)
-deriving anyclass instance ToInfoTree (Branch Resolved)
-deriving anyclass instance ToInfoTree (Pattern Resolved)
-deriving anyclass instance ToInfoTree (TypeSig Resolved)
-deriving anyclass instance ToInfoTree (GivethSig Resolved)
-deriving anyclass instance ToInfoTree (GivenSig Resolved)
-deriving anyclass instance ToInfoTree (Directive Resolved)
-
--- | Extract suitable hover info from a tree node.
-getInfo :: (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => a -> Maybe Info
-getInfo x =
-  view annInfo (getAnno x)
-
-mkInfoLeaf :: (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => a -> InfoTree
-mkInfoLeaf x =
-  InfoNode (rangeOf (getAnno x)) (getInfo x) []
-
-instance ToInfoTree Lit where
-  toInfoTree l =
-    [mkInfoLeaf l]
-
-instance ToInfoTree Int where
-  toInfoTree _ =
-    [InfoNode Nothing Nothing []]
-
-instance ToInfoTree Name where
-  toInfoTree n =
-    [mkInfoLeaf n]
-
-instance ToInfoTree RawName where
-  toInfoTree _ =
-    [InfoNode Nothing Nothing []]
-
-instance ToInfoTree Resolved where
-  toInfoTree n =
-    toInfoTree (getName n)
-
-instance ToInfoTree a => ToInfoTree (Maybe a) where
-  toInfoTree =
-    concatMap toInfoTree
-
-instance ToInfoTree a => ToInfoTree [a] where
-  toInfoTree =
-    concatMap toInfoTree
-
