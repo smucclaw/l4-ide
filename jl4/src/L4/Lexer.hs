@@ -150,6 +150,7 @@ data TokenType =
   | TKFor
   | TKAll
   | TKAka
+  | TKImport
     -- annotations
   | TNlg          !Text
   | TRef          !Text
@@ -352,6 +353,7 @@ keywords =
     , ("FOR"        , TKFor        )
     , ("ALL"        , TKAll        )
     , ("AKA"        , TKAka        )
+    , ("IMPORT"     , TKImport     )
     ]
 
 trivialToken :: TokenType -> PosToken
@@ -757,6 +759,7 @@ displayPosToken (MkPosToken _r tt) =
     TKFor            -> "FOR"
     TKAll            -> "ALL"
     TKAka            -> "AKA"
+    TKImport         -> "IMPORT"
     TNlg t           -> t
     TRef t           -> t
     TSpace t         -> t
@@ -868,6 +871,7 @@ posTokenCategory =
     TKFor -> CKeyword
     TKAll -> CKeyword
     TKAka -> CKeyword
+    TKImport -> CKeyword
     TNlg _ -> CAnnotation
     TRef _ -> CAnnotation
     TSpace _ -> CWhitespace

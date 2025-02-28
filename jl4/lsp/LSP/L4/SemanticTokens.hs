@@ -186,6 +186,7 @@ deriving anyclass instance ToSemTokens Context PosToken (TypeSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (GivethSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (GivenSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (Directive Name)
+deriving anyclass instance ToSemTokens Context PosToken (Import Name)
 
 instance ToSemTokens Context PosToken Int where
   toSemTokens _ = pure []
