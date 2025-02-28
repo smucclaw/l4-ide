@@ -43,6 +43,13 @@ library
     prettyprinter,
     text >= 2 && < 2.1.2,
     tree-diff
+    hw-fingertree,
+    filepath,
+    file-io,
+    safe-exceptions,
+    cassava,
+    bytestring,
+
   exposed-modules:
     Base
     Base.Map
@@ -50,6 +57,7 @@ library
     Base.Pretty
     Base.Text
     L4.Annotation
+    L4.Citations
     L4.Evaluate
     L4.Evaluate.Value
     L4.ExactPrint
@@ -132,8 +140,6 @@ executable jl4-lsp
     unliftio,
     vector,
     fuzzy,
-    file-io,
-    cassava,
     monoidal-containers,
     optparse-applicative
 

@@ -10,6 +10,7 @@ import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.Print as Print
+import L4.Citations
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
@@ -19,17 +20,14 @@ import Control.DeepSeq
 import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
+import Data.Functor.Compose (Compose(..))
 import Data.Text (Text)
 import UnliftIO (liftIO)
-import qualified Data.Csv as Csv
-import qualified Data.Map.Lazy as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified System.OsPath as Path
-import qualified System.File.OsPath as Path
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
@@ -46,7 +44,6 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
-import Control.Exception.Safe
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -114,12 +111,6 @@ type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (Int, 
 data ResolveReferenceAnnotations = ResolveReferenceAnnotations
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
-
-srcRangeToInterval :: SrcRange -> IVMap.Interval SrcPos
-srcRangeToInterval range = IVMap.Interval range.start range.end
-
-intervalToSrcRange :: Int -> IVMap.Interval SrcPos -> SrcRange
-intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
 
 type instance RuleResult GetReferences = ReferenceMapping
 data GetReferences = GetReferences
@@ -291,61 +282,33 @@ jl4Rules recorder = do
       (tokens, _) <- use_ GetLexTokens uri
 
     -- obtain a valid relative file path from the ref-src annos
-    let validRelPath = \case
-          Lexer.MkPosToken {payload = Lexer.TRefSrc src, range}
-            | Just osp <- Path.encodeUtf $ Text.unpack $ Text.strip src
-            , Path.isRelative osp
-            -> [(range, Path.normalise $ Path.takeDirectory ownPath Path.</> osp)]
-          _ -> mempty
-
-        refSrcs = foldMap validRelPath tokens
+    let refSrcs = foldMap (validRelPath ownPath) tokens
 
     -- read the contents of the filepaths specified
-    let readContents fp = liftIO
-          $ tryJust (\(e :: IOException) -> Just (displayException e))
-          $ Path.readFile fp
-
-    contents <- traverse (traverse readContents) refSrcs
+    contents <- traverse (liftIO . readContents) $ Compose refSrcs
 
     -- parse the file contents from csv into intervalmaps from the sources of
     -- the annos to the reference they represent
-    let normalizeRef = Text.toLower . Text.strip
-
-        getReferences refLookup = \case
-          Lexer.MkPosToken {payload = Lexer.TRef reference _, range}
-            -> let mk v = IVMap.singleton (srcRangeToInterval range) (range.length, v)
-                in mk $ Map.lookup (normalizeRef reference) refLookup
-          _ -> IVMap.empty
-
-        recordToReferences refLookup = foldMap (getReferences refLookup) tokens
-
-        mkReferences csv = do
-          decoded <- Csv.decode Csv.NoHeader =<< csv
-          let refLookup = foldMap (uncurry Map.singleton) decoded
-          pure $ recordToReferences refLookup
+    let references = getCompose $ mkReferences tokens <$> contents
 
     -- report any errors encountered while parsing any of the ref-src annos,
     -- annotate them on the ref-src annos they originated from and finally
     -- union all interval maps
-    let sepErrs src csv = case mkReferences csv of
-          Left err -> ([mkDiagnostic src err], [])
-          Right rec -> ([], [rec])
-
-        (errs, mps) = foldMap (uncurry sepErrs) contents
-
+    let (errs, mps) = partitionEithersOnL mkDiagnostic references
         mkDiagnostic loc err =
           FileDiagnostic
-            { fdLspDiagnostic = Diagnostic
-              { _source = Just "jl4"
-              , _severity = Just DiagnosticSeverity_Warning
-              , _range = srcRangeToLspRange $ Just loc
-              , _message = Text.pack err
-              , _relatedInformation = Nothing
-              , _data_ = Nothing
-              , _codeDescription = Nothing
-              , _tags = Nothing
-              , _code = Nothing
-              }
+            { fdLspDiagnostic =
+              Diagnostic
+                { _source = Just "jl4"
+                , _severity = Just DiagnosticSeverity_Warning
+                , _range = srcRangeToLspRange $ Just loc
+                , _message = Text.pack err
+                , _relatedInformation = Nothing
+                , _data_ = Nothing
+                , _codeDescription = Nothing
+                , _tags = Nothing
+                , _code = Nothing
+                }
             , fdFilePath = f
             , fdShouldShowDiagnostic = ShowDiag
             , fdOriginalSource = NoMessage
