@@ -154,6 +154,8 @@ evalTopDecl (Assume _ann assume) =
   evalAssume assume
 evalTopDecl (Directive _ann directive) =
   evalDirective directive
+evalTopDecl (Import _ann _import_) =
+  pure ()
 
 evalLocalDecl :: LocalDecl Resolved -> Eval ()
 evalLocalDecl (LocalDecide _ann decide) =

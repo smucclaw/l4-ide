@@ -304,6 +304,8 @@ topdecl =
     <|> Assume    emptyAnno <$> annoHole (assume sig)
   ) <|> attachAnno
         (Directive emptyAnno <$> annoHole directive)
+    <|> attachAnno
+        (Import    emptyAnno <$> annoHole import')
 
 localdecl :: Parser (LocalDecl Name)
 localdecl =
@@ -318,7 +320,7 @@ withTypeSig p = do
   p sig
 
 directive :: Parser (Directive Name)
-directive = do
+directive =
   attachAnno $
     choice
       [ Eval emptyAnno
@@ -327,6 +329,13 @@ directive = do
           <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
       ]
       <*> annoHole expr
+
+import' :: Parser (Import Name)
+import' =
+  attachAnno $
+    MkImport emptyAnno
+      <$  annoLexeme (spacedToken_ TKImport)
+      <*> annoHole name
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do

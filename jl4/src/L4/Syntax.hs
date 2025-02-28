@@ -145,6 +145,11 @@ data Directive n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+data Import n =
+  MkImport Anno n
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
 data TypeDecl n =
     RecordDecl Anno (Maybe n) [TypedName n]
   | EnumDecl Anno [ConDecl n]
@@ -230,6 +235,7 @@ data TopDecl n =
   | Decide    Anno (Decide n)
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
+  | Import    Anno (Import n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -342,6 +348,8 @@ deriving via L4Syntax (Assume n)
   instance HasAnno (Assume n)
 deriving via L4Syntax (Directive n)
   instance HasAnno (Directive n)
+deriving via L4Syntax (Import n)
+  instance HasAnno (Import n)
 deriving via L4Syntax (TypeDecl n)
   instance HasAnno (TypeDecl n)
 deriving via L4Syntax (ConDecl n)
@@ -394,6 +402,7 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
+deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
 
 deriving anyclass instance ToConcreteNodes PosToken (Program Resolved)
@@ -424,6 +433,7 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
@@ -509,6 +519,7 @@ deriving anyclass instance HasSrcRange (TypeSig a)
 deriving anyclass instance HasSrcRange (GivethSig a)
 deriving anyclass instance HasSrcRange (GivenSig a)
 deriving anyclass instance HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 deriving anyclass instance HasSrcRange Nlg

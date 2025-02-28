@@ -24,7 +24,10 @@ sectionsymbols ::=
   '§'+
 
 topdecl ::=
-  declare | decide | assume | directive
+  declare | decide | assume | directive | import
+
+import ::=
+  "IMPORT" name
 
 localdecl ::=
   decide | assume

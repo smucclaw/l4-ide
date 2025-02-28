@@ -511,6 +511,12 @@ inferDirective (Check ann e) = scope $ do
   addError (CheckInfo te)
   pure (Check ann re)
 
+-- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
+inferImport :: Import Name -> Check (Import Resolved)
+inferImport (MkImport ann n) = do
+  rn <- def n
+  pure (MkImport ann rn)
+
 inferSection :: Section Name -> Check (Section Resolved)
 inferSection (MkSection ann lvl mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
@@ -542,6 +548,9 @@ inferTopDecl (Assume ann assume) = do
 inferTopDecl (Directive ann directive) = do
   rdirective <- inferDirective directive
   pure (Directive ann rdirective)
+inferTopDecl (Import ann import_) = do
+  rimport_ <- inferImport import_
+  pure (Import ann rimport_)
 
 -- TODO: Somewhere near the top we should do dependency analysis. Note that
 -- there is a potential problem. If we use type-directed name resolution but
