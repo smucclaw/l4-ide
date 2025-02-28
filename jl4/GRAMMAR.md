@@ -45,7 +45,7 @@ article ::=
   "A" | "AN" | "THE"
 
 declare' ::=
-  "DECLARE" appformaka typedecl
+  "DECLARE" appform typedecl
 
 typedecl ::=
   recorddecl | enumdecl | synonymdecl
@@ -98,13 +98,13 @@ giveth ::=
   "GIVETH" type
 
 decide' ::=
-    "DECIDE" appformaka ("IS" | "IF") expr  -- all forms are equivalent
-  | appformaka "MEANS" expr
-
-appformaka ::=
-    appform aka?
+    "DECIDE" appform ("IS" | "IF") expr  -- all forms are equivalent
+  | appform "MEANS" expr
 
 appform ::=
+    rawappform aka?
+
+rawappform ::=
     name+
   | name "OF" nameargs
   -- possibly allow "WITH" here as well?
@@ -116,7 +116,7 @@ assume ::=
   typesig assume'
 
 assume' ::=
-  "ASSUME" appformaka ("IS" type)?
+  "ASSUME" appform ("IS" type)?
 
 -- ignoring operator priority
 expr ::=

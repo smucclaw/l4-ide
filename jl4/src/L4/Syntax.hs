@@ -115,17 +115,12 @@ data GivethSig n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Decide n =
-  MkDecide Anno (TypeSig n) (AppFormAka n) (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
-  deriving anyclass (SOP.Generic, ToExpr, NFData)
-
-data AppFormAka n =
-  MkAppFormAka Anno (AppForm n) (Maybe (Aka n))
+  MkDecide Anno (TypeSig n) (AppForm n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AppForm n =
-  MkAppForm Anno n [n]
+  MkAppForm Anno n [n] (Maybe (Aka n))
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -135,12 +130,12 @@ data Aka n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
-  MkDeclare Anno (TypeSig n) (AppFormAka n) (TypeDecl n)
+  MkDeclare Anno (TypeSig n) (AppForm n) (TypeDecl n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
-  MkAssume Anno (TypeSig n) (AppFormAka n) (Maybe (Type' n))
+  MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -323,8 +318,6 @@ deriving via L4Syntax (GivethSig n)
   instance HasAnno (GivethSig n)
 deriving via L4Syntax (Decide n)
   instance HasAnno (Decide n)
-deriving via L4Syntax (AppFormAka n)
-  instance HasAnno (AppFormAka n)
 deriving via L4Syntax (AppForm n)
   instance HasAnno (AppForm n)
 deriving via L4Syntax (Aka n)
@@ -376,7 +369,6 @@ deriving anyclass instance ToConcreteNodes PosToken (TypedName Name)
 deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Name)
 deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Name)
 deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
-deriving anyclass instance ToConcreteNodes PosToken (AppFormAka Name)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
@@ -399,7 +391,6 @@ deriving anyclass instance ToConcreteNodes PosToken (TypedName Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (OptionallyTypedName Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (OptionallyNamedType Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (AppFormAka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
@@ -485,7 +476,6 @@ deriving anyclass instance HasSrcRange (TypedName a)
 deriving anyclass instance HasSrcRange (OptionallyTypedName a)
 deriving anyclass instance HasSrcRange (OptionallyNamedType a)
 deriving anyclass instance HasSrcRange (Decide a)
-deriving anyclass instance HasSrcRange (AppFormAka a)
 deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)

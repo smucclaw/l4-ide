@@ -156,13 +156,14 @@ instance ToSemTokens Context PosToken (Type' Name) where
   toSemTokens ty = withTokenType identIsType $ genericToSemTokens ty
 
 instance ToSemTokens Context PosToken (AppForm Name) where
-  toSemTokens a@(MkAppForm ann n ns) = do
+  toSemTokens a@(MkAppForm ann n ns maka) = do
     c <- asks (.semanticTokenContext)
     case c of
       CTypeSig ->
         traverseCsnWithHoles ann
           [ withTokenType identIsType $ toSemTokens n
           , withTokenType identIsTypeVar $ toSemTokens ns
+          , withTokenType identIsType $ toSemTokens maka
           ]
       CType -> genericToSemTokens a
       CValue -> functionApp ann n ns
@@ -176,7 +177,6 @@ deriving anyclass instance ToSemTokens Context PosToken (TypedName Name)
 deriving anyclass instance ToSemTokens Context PosToken (OptionallyTypedName Name)
 deriving anyclass instance ToSemTokens Context PosToken (OptionallyNamedType Name)
 deriving anyclass instance ToSemTokens Context PosToken (Decide Name)
-deriving anyclass instance ToSemTokens Context PosToken (AppFormAka Name)
 deriving anyclass instance ToSemTokens Context PosToken (Aka Name)
 deriving anyclass instance ToSemTokens Context PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (NamedExpr Name)

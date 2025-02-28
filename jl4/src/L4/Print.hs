@@ -101,19 +101,16 @@ instance LayoutPrinter a => LayoutPrinter (Declare a) where
         , indent 2 (printWithLayout tyDecl)
         ]
 
-instance LayoutPrinter a => LayoutPrinter (AppFormAka a) where
-  printWithLayout = \case
-    MkAppFormAka _ appForm maka ->
-      case maka of
-        Nothing  -> printWithLayout appForm
-        Just aka -> printWithLayout appForm <+> printWithLayout aka
-
 instance LayoutPrinter a => LayoutPrinter (AppForm a) where
   printWithLayout = \case
-    MkAppForm _ n ns  ->
-      printWithLayout n <> case ns of
+    MkAppForm _ n ns maka ->
+      (printWithLayout n <> case ns of
         [] -> mempty
         _ -> space <> hsep (fmap printWithLayout ns)
+      ) <>
+      case maka of
+        Nothing  -> mempty
+        Just aka -> space <> printWithLayout aka
 
 instance LayoutPrinter a => LayoutPrinter (Aka a) where
   printWithLayout = \case

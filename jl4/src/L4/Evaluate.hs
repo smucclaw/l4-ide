@@ -202,12 +202,12 @@ evalConDecl (MkConDecl _ann n tns) = do
 -- NOTE: We currently disallow recursive declarations that look like values.
 -- We could allow these by being more sophisticated.
 evalDecide :: Decide Resolved -> Eval ()
-evalDecide (MkDecide _ann _tysig (MkAppFormAka _ (MkAppForm _ n []) _maka) expr) = do
+evalDecide (MkDecide _ann _tysig (MkAppForm _ n [] _maka) expr) = do
   mr <- evalExpr expr
   case mr of
     Left _ -> pure () -- do something better?
     Right v -> makeKnown n v
-evalDecide (MkDecide _ann _tysig (MkAppFormAka _ (MkAppForm _ n args) _maka) expr) =
+evalDecide (MkDecide _ann _tysig (MkAppForm _ n args _maka) expr) =
   withEnvironment $ \ env -> do
     let
       v = ValClosure (MkGivenSig emptyAnno ((\ r -> MkOptionallyTypedName emptyAnno r Nothing) <$> args)) expr env'
@@ -215,9 +215,9 @@ evalDecide (MkDecide _ann _tysig (MkAppFormAka _ (MkAppForm _ n args) _maka) exp
     makeKnown n v
 
 evalAssume :: Assume Resolved -> Eval ()
-evalAssume (MkAssume _ann _tysig (MkAppFormAka _ (MkAppForm _ n []) _maka) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n [] _maka) _) =
   makeKnown n (ValAssumed n)
-evalAssume (MkAssume _ann _tysig (MkAppFormAka _ (MkAppForm _ n _args) _maka) _) =
+evalAssume (MkAssume _ann _tysig (MkAppForm _ n _args _maka) _) =
   makeKnown n (ValAssumed n) -- TODO: we should create a given here yielding an assumed, but we currently cannot do that easily
 
 evalExpr :: Expr Resolved -> Eval (Either EvalException Value)
