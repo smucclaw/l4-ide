@@ -60,14 +60,10 @@
       { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
     )
 
-    console.log('Webview: vsCodeApi:', vsCodeApi)
-    console.log('Webview: onMount!')
-
     messenger.onRequest(
       VisualizeDecisionLogicRequest,
       (payload: VisualizeDecisionLogicIRInfo) => {
         vizDecl = payload.program
-        console.log('vizDecl:', vizDecl)
 
         return makeSuccessVisualizeResponse()
       }

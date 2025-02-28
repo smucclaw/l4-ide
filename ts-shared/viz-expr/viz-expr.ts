@@ -1,5 +1,4 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
-// import { Either } from 'effect'
 
 /**********************
       VizExpr IR
@@ -227,6 +226,14 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRDecl,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
+
+/*************************
+    Decode
+**************************/
+
+export function makeVizInfoDecoder() {
+  return Schema.decodeUnknownEither(VisualizeDecisionLogicIRInfo)
+}
 
 /***********************************
         Examples of usage
