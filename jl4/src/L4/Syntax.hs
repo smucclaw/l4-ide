@@ -421,11 +421,11 @@ data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Nlg = MkNlg Anno [Text]
+data Nlg = MkNlg Anno Text
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Ref = MkRef Anno [Text]
+data Ref = MkRef Anno Text
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

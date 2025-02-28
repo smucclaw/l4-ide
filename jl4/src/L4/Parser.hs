@@ -87,6 +87,7 @@ spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
   nlgs <- many (fmap Left nlgP <|> fmap Right refP)
+  _ <- many refSrcP
   traverse_ addNlgOrRef nlgs
   let
     epaNlgs = fmap (either epaToHiddenCluster epaToHiddenCluster) nlgs
@@ -98,55 +99,33 @@ spaceOrAnnotations = do
 
 nlgP :: Parser (Epa Nlg)
 nlgP = do
-  nlgExpr <- nlgAnnotationP <|> blockNlgAnnotationP
+  nlgExpr <- nlgAnnotationP
   pure $ fmap (MkNlg (mkSimpleEpaAnno nlgExpr)) nlgExpr
 
 refP :: Parser (Epa Ref)
 refP = do
-  refExpr <- refAnnotationP <|> blockRefAnnotation
+  refExpr <- refAnnotationP
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
-nlgAnnotationP :: Parser (Epa [Text])
+nlgAnnotationP :: Parser (Epa Text)
 nlgAnnotationP = hidden $ onlySpacedToken (\case
-  TNlg t -> Just [t]
+  TNlg t ty -> Just $ toNlgAnno t ty
   _ -> Nothing)
   "Natural Language Annotation"
 
-blockNlgAnnotationP :: Parser (Epa [Text])
-blockNlgAnnotationP =
-  let
-    nlgParser = spacedP $
-      (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TNlgOpen)
-        <*> manyTill_
-              (anySingle <?> "Natural Language Annotation Block")
-              (plainToken TNlgClose)
-
-    epaNlg = lexesToEpa <$> nlgParser
-    epaTextNlg = fmap (fmap displayPosToken) <$> epaNlg
-  in
-    epaTextNlg
-
-blockRefAnnotation :: Parser (Epa [Text])
-blockRefAnnotation =
-  let
-    refParser = spacedP $
-      (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TRefOpen)
-        <*> manyTill_
-              (anySingle <?> "Reference Annotation Block")
-              (plainToken TRefClose)
-
-    epaRef = lexesToEpa <$> refParser
-    epaTextRef = fmap (fmap displayPosToken) <$> epaRef
-  in
-    epaTextRef
-
-refAnnotationP :: Parser (Epa [Text])
+refAnnotationP :: Parser (Epa Text)
 refAnnotationP = hidden $ onlySpacedToken (\case
-  TRef t -> Just [t]
+  TRef t ty -> Just $ toNlgAnno t ty
   _ -> Nothing)
   "Reference Annotation"
+
+-- TODO:
+-- (1) should ref-src be allowed anywhere else than at the toplevel
+-- (2) should we add it to the AST at all? Currently we don't need it
+refSrcP :: Parser (Epa ())
+refSrcP = hidden $ onlySpacedToken (\case
+  TRefSrc _t -> Just (); _ -> Nothing)
+  "Reference source Annotation"
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
@@ -237,7 +216,7 @@ program = do
     MkProgram emptyAnno
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
-          ((\s ss -> s:ss)
+          ((:)
             <$> anonymousSection
             <*> many section
           )
@@ -274,9 +253,8 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno
-      <$> pure 0
-      <*> annoHole (pure Nothing)
+    MkSection emptyAnno 0
+      <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
       <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 

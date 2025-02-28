@@ -60,6 +60,12 @@ data SrcPos =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+data AnnoType
+  = InlineAnno
+  | LineAnno
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToExpr, NFData)
+
 -- | The type of token, plus information needed to reconstruct its contents.
 data TokenType =
     TIdentifier   !Text
@@ -151,12 +157,9 @@ data TokenType =
   | TKAll
   | TKAka
     -- annotations
-  | TNlg          !Text
-  | TRef          !Text
-  | TRefOpen
-  | TRefClose
-  | TNlgOpen
-  | TNlgClose
+  | TNlg          !Text !AnnoType
+  | TRefSrc       !Text
+  | TRef          !Text !AnnoType
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -165,23 +168,31 @@ data TokenType =
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
-nlgAnnotation :: Lexer Text
+nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
-  (<>) <$> string "@nlg" <*> takeWhileP (Just "character") (/= '\n')
+  lineAnno "@nlg"
     <|> inlineAnno "[" "]"
   <?> "Natural Language Generation Annotation"
 
-refAnnotation :: Lexer Text
+refAnnotation :: Lexer (Text, AnnoType)
 refAnnotation =
-  (<>) <$> string "@ref" <*> takeWhileP (Just "character") (/= '\n')
+  lineAnno "@ref"
     <|> inlineAnno "<<" ">>"
   <?> "Reference Annotation"
 
-inlineAnno :: Text -> Text -> Lexer Text
-inlineAnno open close = do
-  o <- string open
-  (anno, c) <- manyTill_ anySingle (string close)
-  pure $ o <> Text.pack anno <> c
+refSrcAnnotation :: Lexer Text
+refSrcAnnotation = fst <$> lineAnno "@ref-src"
+
+inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
+inlineAnno openingHerald closingHerald = do
+  _o <- string openingHerald
+  (anno, _c) <- manyTill_ anySingle (string closingHerald)
+  pure (Text.pack anno, InlineAnno)
+
+lineAnno :: Text -> Lexer (Text, AnnoType)
+lineAnno herald = do
+  _ <- string herald
+  (, LineAnno) <$> takeWhileP (Just "character") (/= '\n')
 
 whitespace :: Lexer Text
 whitespace =
@@ -232,8 +243,9 @@ tokenPayload =
   <|> TGenitive       <$  string "'s"
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directiveLiteral
-  <|> TNlg            <$> nlgAnnotation
-  <|> TRef            <$> refAnnotation
+  <|> TRefSrc         <$> refSrcAnnotation
+  <|> uncurry TNlg    <$> nlgAnnotation
+  <|> uncurry TRef    <$> refAnnotation
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
@@ -241,10 +253,6 @@ tokenPayload =
   <|> TPClose         <$  char ')'
   <|> TCOpen          <$  char '{'
   <|> TCClose         <$  char '}'
-  <|> TNlgOpen          <$  "<<"
-  <|> TNlgClose         <$  ">>"
-  <|> TRefOpen          <$  char '['
-  <|> TRefClose         <$  char ']'
   <|> TParagraph      <$  char '§'
   <|> TComma          <$  char ','
   <|> TSemicolon      <$  char ';'
@@ -458,8 +466,8 @@ isSpaceToken t =
 isAnnotationToken :: PosToken -> Bool
 isAnnotationToken t =
   case computedPayload t of
-    TNlg _ -> True
-    TRef _ -> True
+    TNlg {} -> True
+    TRef {} -> True
     _      -> False
 
 -- | Convert from a Megaparsec source position to one of ours.
@@ -668,6 +676,27 @@ showStringLit :: Text -> Text
 showStringLit t =
   Text.pack ((showChar '"' . showLitString (Text.unpack t) . showChar '"') "")
 
+toAnno
+  :: Text
+  -- ^ line herald
+  -> Text
+  -- ^ inline herald opening
+  -> Text
+  -- ^ inline herald closing
+  -> Text
+  -- ^ anno contents
+  -> AnnoType
+  -- ^ inline or line anno
+  -> Text
+toAnno lh oh ch t = \case
+  InlineAnno -> oh <> t <> ch
+  LineAnno -> lh <> t
+
+
+toRefAnno, toNlgAnno :: Text -> AnnoType -> Text
+toRefAnno = toAnno "@ref" "<<" ">>"
+toNlgAnno = toAnno "@nlg" "[" "]"
+
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
   case tt of
@@ -681,10 +710,6 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
-    TRefOpen           -> "<<"
-    TRefClose          -> ">>"
-    TNlgOpen           -> "["
-    TNlgClose          -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -757,8 +782,9 @@ displayPosToken (MkPosToken _r tt) =
     TKFor            -> "FOR"
     TKAll            -> "ALL"
     TKAka            -> "AKA"
-    TNlg t           -> t
-    TRef t           -> t
+    TNlg t ty        -> toNlgAnno t ty
+    TRef t ty        -> toRefAnno t ty
+    TRefSrc t        -> "@ref-src" <> t
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -792,10 +818,6 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
-    TRefOpen -> CSymbol
-    TRefClose -> CSymbol
-    TNlgOpen -> CSymbol
-    TNlgClose -> CSymbol
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
@@ -868,8 +890,9 @@ posTokenCategory =
     TKFor -> CKeyword
     TKAll -> CKeyword
     TKAka -> CKeyword
-    TNlg _ -> CAnnotation
-    TRef _ -> CAnnotation
+    TNlg {} -> CAnnotation
+    TRef {} -> CAnnotation
+    TRefSrc _ -> CAnnotation
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment
