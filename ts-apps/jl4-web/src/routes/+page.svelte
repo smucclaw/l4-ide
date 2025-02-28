@@ -255,7 +255,7 @@ DECIDE \`is a British citizen (variant)\` IS
   }
 
   .panel {
-    background-color: oklch(0.977 0.013 236.62); /* Tailwind's --color-sky-50 */
+    background-color: white;
   }
 
   .header {
