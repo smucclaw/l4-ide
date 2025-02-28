@@ -18,7 +18,7 @@ anonymoussection ::=
   topdecl{;}*
 
 section ::=
-  sectionsymbols name? topdecl{;}*
+  sectionsymbols name? aka? topdecl{;}*
 
 sectionsymbols ::=
   '§'+
@@ -50,15 +50,15 @@ declare' ::=
 typedecl ::=
   recorddecl | enumdecl | synonymdecl
 
-synonymdecl ::=
-  "IS" type
-
 recorddecl ::=
   "HAS" reqparam{,}*
 
 enumdecl ::=
   "IS" "ONE" "OF"
     condecl{,}*
+
+synonymdecl ::=
+  "IS" type
 
 condecl ::=
   name recorddecl?
@@ -102,9 +102,15 @@ decide' ::=
   | appform "MEANS" expr
 
 appform ::=
+    rawappform aka?
+
+rawappform ::=
     name+
   | name "OF" nameargs
   -- possibly allow "WITH" here as well?
+
+aka ::=
+  "AKA" name{,}*
 
 assume ::=
   typesig assume'

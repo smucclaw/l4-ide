@@ -277,7 +277,8 @@ anonymousSection =
     MkSection emptyAnno
       <$> pure 0
       <*> annoHole (pure Nothing)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (pure Nothing)
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 section :: Parser (Section Name)
 section =
@@ -285,7 +286,8 @@ section =
     MkSection emptyAnno
       <$> sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (optional aka)
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
@@ -432,6 +434,14 @@ appForm = do
       <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TComma))
           <|> annoHole (lmany (indented name current))
           )
+      <*> annoHole (optional aka)
+
+aka :: Parser (Aka Name)
+aka =
+  attachAnno $
+    MkAka emptyAnno
+      <$  annoLexeme (spacedToken_ TKAka)
+      <*> annoHole (lsepBy name (spacedToken_ TComma))
 
 typeSig :: Parser (TypeSig Name)
 typeSig =

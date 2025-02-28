@@ -620,7 +620,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
               Assume emptyAnno
                 (MkAssume emptyAnno
                   (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
-                  (MkAppForm emptyAnno name [])
+                  (MkAppForm emptyAnno name [] Nothing)
                   (Just $ fmap getActual ty)
                 )
 

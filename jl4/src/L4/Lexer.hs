@@ -149,6 +149,7 @@ data TokenType =
   | TKFollowed
   | TKFor
   | TKAll
+  | TKAka
     -- annotations
   | TNlg          !Text
   | TRef          !Text
@@ -350,6 +351,7 @@ keywords =
     , ("FOLLOWED"   , TKFollowed   )
     , ("FOR"        , TKFor        )
     , ("ALL"        , TKAll        )
+    , ("AKA"        , TKAka        )
     ]
 
 trivialToken :: TokenType -> PosToken
@@ -754,6 +756,7 @@ displayPosToken (MkPosToken _r tt) =
     TKFollowed       -> "FOLLOWED"
     TKFor            -> "FOR"
     TKAll            -> "ALL"
+    TKAka            -> "AKA"
     TNlg t           -> t
     TRef t           -> t
     TSpace t         -> t
@@ -864,6 +867,7 @@ posTokenCategory =
     TKFollowed -> CKeyword
     TKFor -> CKeyword
     TKAll -> CKeyword
+    TKAka -> CKeyword
     TNlg _ -> CAnnotation
     TRef _ -> CAnnotation
     TSpace _ -> CWhitespace
