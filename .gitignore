@@ -7,7 +7,7 @@ cabal.project.local~
 *.actual
 
 ## test setup
-.vscode
+jl4/examples/.vscode
 
 # Typescript-monorepo stuff
 
@@ -43,7 +43,7 @@ out/
 build
 dist
 */vscode/static/webview/
-**/.svelte-kit/
+*/webview/.svelte-kit/
 
 ## Built Visual Studio Code Extensions
 *.vsix
@@ -63,4 +63,5 @@ yarn-error.log*
 # Nix
 .direnv
 .envrc
-result*
+flake.nix
+flake.lock
