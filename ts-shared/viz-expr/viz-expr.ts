@@ -1,7 +1,4 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
-import { Either } from 'effect'
-import { error } from 'effect/Console'
-import { ParseError } from 'effect/Cron'
 
 /**********************
       VizExpr IR
