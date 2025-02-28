@@ -9,13 +9,16 @@
     type LirRootType,
   } from "@repo/decision-logic-visualizer";
   import {
-    type VisualizeDecisionLogicIRInfo,
+    makeVizInfoDecoder,
     type FunDecl,
+    type VisualizeDecisionLogicIRInfo,
   } from "@repo/viz-expr";
   import { type MessageTransports } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
 
+  /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
+  let errorMessage: string | undefined = $state(undefined);
 
   /**************************
       Set up Lir
@@ -39,6 +42,11 @@
     }
   });
 
+  /******************************
+      VizInfo Payload Decoder
+  *******************************/
+  const decodeVizInfo = makeVizInfoDecoder();
+
   // /**************************
   //       Monadco
   // ****************************/
@@ -59,9 +67,7 @@
       "monaco-editor-wrapper/workers/workerLoaders"
     );
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
-    const { Schema } = await import("effect");
-    const { VisualizeDecisionLogicIRInfo } = await import("@repo/viz-expr");
-
+    
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
 
@@ -166,11 +172,20 @@
           logger.debug(
             `received response from language server ${JSON.stringify(response)}`
           );
-          const decode = Schema.decodeUnknownSync(VisualizeDecisionLogicIRInfo);
 
-          const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(response);
-
-          vizDecl = vizProgramInfo.program;
+          const decoded = decodeVizInfo(response);
+          // TODO: Can improve this later
+          switch (decoded._tag) {
+            case "Right":
+              if (decoded.right) {
+                const vizProgramInfo: VisualizeDecisionLogicIRInfo = decoded.right;
+                vizDecl = vizProgramInfo.program;
+              }
+              break;
+            case "Left":
+              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`;
+              break;
+          }
         },
       };
     }
@@ -220,6 +235,9 @@ DECIDE \`is a British citizen (variant)\` IS
         </div>
       {/key}
     {/if}
+    {#if errorMessage}
+      {errorMessage}
+    {/if}
   </div>
 </div>
 
@@ -230,7 +248,9 @@ DECIDE \`is a British citizen (variant)\` IS
       background-color: hsl(var(--neutral));
     }
     50% {
-      background-color: oklch(0.951 0.026 236.824); /* Tailwind's --color-sky-100 */
+      background-color: oklch(
+        0.951 0.026 236.824
+      ); /* Tailwind's --color-sky-100 */
     }
   }
 
