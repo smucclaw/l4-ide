@@ -6,6 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [
+        ".svelte-kit/**",
         "dist/**",
         "out/**",
         "build/**",

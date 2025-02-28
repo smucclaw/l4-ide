@@ -1,5 +1,15 @@
+<!-- Next things to try:
+ - a much more basic stock example -- just copy one of their examples
+    -- i prob just have to start from a very simple example and slowly work my way up
+    -- and try to elim variables like the bundler and other infra things
+
+ Promising leads:
+ - might be some issue with optimization of deps (https://github.com/CodinGame/monaco-vscode-api/issues/442)
+ - might be that things are being called more than once --- try refactoring stuff out to a module script
+
+ https://github.com/CodinGame/monaco-vscode-api/wiki/Getting-started-guide
+  -->
 <script lang="ts">
-  // import { onMount } from "svelte";
   import {
     LadderFlow,
     LirContext,
@@ -8,13 +18,18 @@
     type DeclLirNode,
     type LirRootType,
   } from "@repo/decision-logic-visualizer";
-  import { makeVizInfoDecoder, type FunDecl } from "@repo/viz-expr";
+  // makeVizInfoDecoder
+  import { type FunDecl } from "@repo/viz-expr";
   import { type MessageTransports } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
+  import {browser} from '$app/environment'
+  import { type MonacoEnvironmentEnhanced } from 'monaco-languageclient/vscode/services';
+
+  import { onMount } from "svelte";
 
   /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
-  let errorMessage: string | undefined = $state(undefined);
+  // let errorMessage: string | undefined = $state(undefined);
 
   /**************************
       Set up Lir
@@ -42,7 +57,7 @@
       VizInfo Payload Decoder
   *******************************/
 
-  const decodeVizInfo = makeVizInfoDecoder();
+  // const decodeVizInfo = makeVizInfoDecoder();
 
   // /**************************
   //       Monadco
@@ -64,6 +79,8 @@
       "monaco-editor-wrapper/workers/workerLoaders"
     );
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
+
+    // const { makeVizInfoDecoder } = await import("@repo/viz-expr");
 
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
@@ -88,7 +105,10 @@
         }
       );
 
+      const envEnhanced = (self as Window).MonacoEnvironment as MonacoEnvironmentEnhanced;
       console.log("finished await initServices");
+      console.log(`envEnhanced.vscodeInitialising: `, envEnhanced.vscodeInitialising);
+      console.log(`envEnhanced.vscodeApiInitialised: `, envEnhanced.vscodeApiInitialised);
 
       configureDefaultWorkerFactory(logger);
 
@@ -166,29 +186,32 @@
       return {
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`);
-          const response: unknown = await next(command, args);
+          const response = await next(command, args);
 
           logger.debug(
             `received response from language server ${JSON.stringify(response)}`
           );
 
-          const decoded = decodeVizInfo(response);
-          switch (decoded._tag) {
-            case "Right":
-              if (decoded.right) {
-                const vizProgramInfo = decoded.right;
-                vizDecl = vizProgramInfo.program;
-              }
-              break;
-            case "Left":
-              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`;
-              break;
-          }
+          // const decoded = decodeVizInfo(response);
+          // switch (decoded._tag) {
+          //   case "Right":
+          //     if (decoded.right) {
+          //       const vizProgramInfo = decoded.right;
+          //       vizDecl = vizProgramInfo.program;
+          //     }
+          //     break;
+          //   case "Left":
+          //     errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`;
+          //     break;
+          // }
         },
       };
     }
     await runClient();
   }
+  onMount(async () => {
+    await initMonaco();
+  });
 
   const britishCitizen = `§ \`Assumptions\`
 
@@ -220,29 +243,23 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <div class="jl4-container">
   <div id="jl4-editor" bind:this={editorElement}></div>
-  {#await initMonaco()}
-    <p>Loading monaco...</p>
-  {:then}
-    <div id="jl4-webview" class="panel">
-      <div class="header">
-        <h1>{funName}</h1>
-      </div>
-      {#if vizDecl && declLirNode}
-        {#key declLirNode}
-          <div
-            class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
-          >
-            <LadderFlow {context} node={declLirNode} />
-          </div>
-        {/key}
-      {/if}
-      {#if errorMessage}
-        {errorMessage}
-      {/if}
+  <div id="jl4-webview" class="panel">
+    <div class="header">
+      <h1>{funName}</h1>
     </div>
-  {:catch error}
-    <p>{error.message}</p>
-  {/await}
+    {#if vizDecl && declLirNode}
+      {#key declLirNode}
+        <div
+          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
+        >
+          <LadderFlow {context} node={declLirNode} />
+        </div>
+      {/key}
+    {/if}
+    <!-- {#if errorMessage}
+      {errorMessage}
+    {/if} -->
+  </div>
 </div>
 
 <style>

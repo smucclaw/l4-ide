@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   ssr: {
-    noExternal: ['@xyflow/svelte'],
+    noExternal: ['@xyflow/svelte', '@xyflow/system'],
   },
   test: {
     include: ['src/**/*.test.ts'],

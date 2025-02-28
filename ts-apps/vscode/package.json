@@ -107,6 +107,7 @@
   },
   "main": "./out/extension.js",
   "scripts": {
+    "clean": "git clean -xdf build dist out node_modules",
     "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
     "build": "npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
     "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",

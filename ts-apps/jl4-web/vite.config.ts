@@ -6,4 +6,10 @@ export default defineConfig({
   worker: {
     format: "es",
   },
+  // ssr: {
+  //   noExternal: ["@codingame/monaco-vscode-api"]
+  // },
+  optimizeDeps: {
+    exclude: ["@codingame/monaco-vscode-api", "monaco-editor"]
+  }
 });
