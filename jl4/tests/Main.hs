@@ -14,8 +14,7 @@ import L4.TypeCheck (CheckResult (CheckResult))
 import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import qualified Base.Text as Text
 import Optics
 import System.FilePath
 import System.FilePath.Glob
@@ -26,35 +25,31 @@ import Test.Hspec.Golden
 main :: IO ()
 main = do
   dataDir <- getDataDir
-  exampleSimalaFiles <- globDir1 (compile "*.l4") (dataDir </> "examples")
+  let examplesRoot = dataDir </> "examples"
+  exampleFiles <- sort <$> globDir1 (compile "**/*.l4") examplesRoot
   hspec $ do
-    forM_ exampleSimalaFiles $ \ inputFile -> do
-      describe (takeFileName inputFile) $ do
+    forM_ exampleFiles $ \ inputFile -> do
+      let testCase  = makeRelative examplesRoot inputFile
+      let goldenDir = takeDirectory inputFile </> "tests"
+      describe testCase $ do
         it "parses and checks" $
-          l4Golden (dataDir </> "examples") inputFile
+          l4Golden goldenDir inputFile
         it "exactprints" $
-          jl4ExactPrintGolden (dataDir </> "examples") inputFile
+          jl4ExactPrintGolden goldenDir inputFile
         it "natural language annotations" $
-          jl4NlgAnnotationsGolden (dataDir </> "examples") inputFile
+          jl4NlgAnnotationsGolden goldenDir inputFile
 
 l4Golden :: String -> String -> IO (Golden String)
 l4Golden dir inputFile = do
-  firstLine <- take 1 . lines <$> readFile inputFile
-  let
-    extraFiles =
-      case firstLine of
-        []                        -> []
-        [l] | take 5 l == "-- ! " -> ((dir </>) <$> words (drop 5 l))
-        _                         -> []
-  (output_, _) <- capture (parseFiles (extraFiles ++ [inputFile]))
+  (output_, _) <- capture (readAndParseFile inputFile)
   pure
     Golden
       { output = output_
       , encodePretty = show
       , writeToFile = writeFile
       , readFromFile = readFile
-      , goldenFile = dir </> "tests" </> (takeFileName inputFile -<.> "golden")
-      , actualFile = Just (dir </> "tests" </> (takeFileName inputFile -<.> "actual"))
+      , goldenFile = dir </> (takeFileName inputFile -<.> "golden")
+      , actualFile = Just (dir </> (takeFileName inputFile -<.> "actual"))
       , failFirstTime = False
       }
 
@@ -68,8 +63,8 @@ jl4ExactPrintGolden dir inputFile = do
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
-      , goldenFile = dir </> "tests" </> (takeFileName inputFile -<.> "ep.golden")
-      , actualFile = Just (dir </> "tests" </> (takeFileName inputFile -<.> "ep.actual"))
+      , goldenFile = dir </> (takeFileName inputFile -<.> "ep.golden")
+      , actualFile = Just (dir </> (takeFileName inputFile -<.> "ep.actual"))
       , failFirstTime = False
       }
 
@@ -85,8 +80,8 @@ jl4NlgAnnotationsGolden dir inputFile = do
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
-      , goldenFile = dir </> "tests" </> (takeFileName inputFile -<.> "nlg.golden")
-      , actualFile = Just (dir </> "tests" </> (takeFileName inputFile -<.> "nlg.actual"))
+      , goldenFile = dir </> (takeFileName inputFile -<.> "nlg.golden")
+      , actualFile = Just (dir </> (takeFileName inputFile -<.> "nlg.actual"))
       , failFirstTime = False
       }
 
@@ -117,9 +112,10 @@ parseFile file input =
     evalResultToMessage (r, res) = (Just r, [either Text.show Print.prettyLayout res])
     renderMessage (r, txt) = JL4.cliErrorMessage fp r txt
 
-parseFiles :: [FilePath] -> IO ()
-parseFiles =
-  traverse_ (\ file -> parseFile file =<< Text.readFile file)
+readAndParseFile :: FilePath -> IO ()
+readAndParseFile file = do
+  input <- Text.readFile file
+  parseFile file input
 
 prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
 prettyNlgOutput p warns = Text.unlines $

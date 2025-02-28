@@ -5,7 +5,7 @@ import Base
 import L4.Lexer
 
 import qualified Generics.SOP as SOP
-import qualified Data.Text as Text
+import qualified Base.Text as Text
 
 -- ----------------------------------------------------------------------------
 -- SrcSpan

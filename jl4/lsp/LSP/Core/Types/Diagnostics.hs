@@ -69,7 +69,7 @@ type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
 -- | Produce a 'FileDiagnostic' for the given 'NormalizedFilePath'
 -- with an error message.
-ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
+ideErrorText :: NormalizedUri -> T.Text -> FileDiagnostic
 ideErrorText nfp msg =
   ideErrorWithSource (Just "compiler") (Just DiagnosticSeverity_Error) nfp msg
 
@@ -84,7 +84,7 @@ ideErrorText nfp msg =
 -- to provide documentation and explanations for error messages.
 ideErrorFromLspDiag
   :: LSP.Diagnostic
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> FileDiagnostic
 ideErrorFromLspDiag lspDiag fdFilePath =
   let fdShouldShowDiagnostic = ShowDiag
@@ -100,7 +100,7 @@ attachedReason = data_ . non (JSON.object []) . JSON.atKey "attachedReason"
 ideErrorWithSource
   :: Maybe T.Text
   -> Maybe DiagnosticSeverity
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> T.Text
   -> FileDiagnostic
 ideErrorWithSource source sev fdFilePath msg =
@@ -144,7 +144,7 @@ instance NFData ShowDiagnostic where
 --   StructuredMessage.
 --
 data FileDiagnostic = FileDiagnostic
-  { fdFilePath             :: NormalizedFilePath
+  { fdFilePath             :: NormalizedUri
   , fdShouldShowDiagnostic :: ShowDiagnostic
   , fdLspDiagnostic        :: Diagnostic
   , fdOriginalSource       :: SomeMessage
@@ -233,7 +233,7 @@ prettyDiagnostics = vcat . map prettyDiagnostic
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     vcat
-        [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fdFilePath)
+        [ slabel_ "File:    " $ pretty fdFilePath
         , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
