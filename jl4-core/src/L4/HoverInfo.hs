@@ -72,6 +72,7 @@ deriving anyclass instance ToInfoTree (TypeSig Resolved)
 deriving anyclass instance ToInfoTree (GivethSig Resolved)
 deriving anyclass instance ToInfoTree (GivenSig Resolved)
 deriving anyclass instance ToInfoTree (Directive Resolved)
+deriving anyclass instance ToInfoTree (Import Resolved)
 
 -- | Extract suitable hover info from a tree node.
 getInfo :: (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => a -> Maybe Info
