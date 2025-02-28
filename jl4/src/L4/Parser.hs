@@ -121,7 +121,7 @@ refAnnotationP = hidden $ onlySpacedToken (\case
 
 -- TODO:
 -- (1) should ref-src be allowed anywhere else than at the toplevel
--- (2) should we at it to the AST at all? Currently we don't need it
+-- (2) should we add it to the AST at all? Currently we don't need it
 refSrcP :: Parser (Epa ())
 refSrcP = hidden $ onlySpacedToken (\case
   TRefSrc _t -> Just (); _ -> Nothing)
