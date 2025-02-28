@@ -13,7 +13,6 @@ module LSP.Core.FileStore (
     fileStoreRules,
     modificationTime,
     resetFileStore,
-    resetInterfaceStore,
     getModificationTimeImpl,
     addIdeGlobal,
     getFileContentsImpl,
@@ -24,7 +23,7 @@ module LSP.Core.FileStore (
     Log(..),
     ) where
 
-import           Control.Concurrent.STM.Stats                 (STM, atomically)
+import           Control.Concurrent.STM.Stats                 (atomically)
 import           Control.Exception
 import           Control.Lens                                 ((^.))
 import           Control.Monad.Extra
@@ -59,9 +58,9 @@ import qualified Language.LSP.Protocol.Message                as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types                  as LSP
 import           Language.LSP.VFS
-import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
+import Data.Maybe
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
@@ -80,7 +79,7 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake msg -> pretty msg
 
-addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedUri -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
@@ -90,11 +89,11 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
         case lspSink of
             Just sink -> fmap Just $ liftIO $ do
               clientCaps <- Options.currentClientCapabilities sink
-              case registerFileWatches clientCaps [fromNormalizedFilePath f] of
+              case registerFileWatches clientCaps (maybeToList $ fromNormalizedFilePath <$> uriToNormalizedFilePath f) of
                 Nothing -> pure False
                 Just regParams -> do
                   void $ Options.sendRequestToClient sink LSP.SMethod_ClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
-                  pure $ True
+                  pure True
             Nothing -> pure $ Just False
 
 
@@ -104,52 +103,40 @@ getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
 
 getModificationTimeImpl
   :: Bool
-  -> NormalizedFilePath
+  -> NormalizedUri
   -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl missingFileDiags file = do
-    let file' = fromNormalizedFilePath file
+getModificationTimeImpl missingFileDiags uri = do
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
-    mbVf <- getVirtualFile file
+    mbVf <- getVirtualFile uri
     case mbVf of
         Just (virtualFileVersion -> ver) -> do
             alwaysRerun
             pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
         Nothing -> do
-            isWF <- use_ AddWatchedFile file
+            isWF <- use_ AddWatchedFile uri
             if isWF
                 then -- the file is watched so we can rely on FileWatched notifications,
                         -- but also need a dependency on IsFileOfInterest to reinstall
                         -- alwaysRerun when the file becomes VFS
-                    void (use_ IsFileOfInterest file)
-                else if isInterface file
-                    then -- interface files are tracked specially using the closed world assumption
-                        pure ()
-                    else -- in all other cases we will need to freshly check the file system
-                        alwaysRerun
+                    void (use_ IsFileOfInterest uri)
+                else alwaysRerun -- NOTE: if we want to introduce interface files at some point, here we would not rerun
 
-            liftIO $ fmap wrap (getModTime file')
-                `catch` \(e :: IOException) -> do
-                    let err | isDoesNotExistError e = "File does not exist: " ++ file'
-                            | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                        diag = ideErrorText file (T.pack err)
-                    if isDoesNotExistError e && not missingFileDiags
-                        then return (Nothing, ([], Nothing))
-                        else return (Nothing, ([diag], Nothing))
-
--- | Interface files cannot be watched, since they live outside the workspace.
---   But interface files are private, in that only HLS writes them.
---   So we implement watching ourselves, and bypass the need for alwaysRerun.
-isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
-
--- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM [Key]
-resetInterfaceStore state f = do
-    deleteValue state GetModificationTime f
+            case fromNormalizedFilePath <$> uriToNormalizedFilePath uri of
+              Nothing -> do -- FIXME: No bueno
+                pure (Nothing, ([], Nothing))
+              Just file -> do
+                  liftIO $ fmap wrap (getModTime file)
+                      `catch` \(e :: IOException) -> do
+                          let err | isDoesNotExistError e = "File does not exist: " ++ file
+                                  | otherwise = "IO error while reading " ++ file ++ ", " ++ displayException e
+                              diag = ideErrorText uri (T.pack err)
+                          if isDoesNotExistError e && not missingFileDiags
+                              then return (Nothing, ([], Nothing))
+                              else return (Nothing, ([diag], Nothing))
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO [Key]
+resetFileStore :: IdeState -> [(NormalizedUri, LSP.FileChangeType)] -> IO [Key]
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
@@ -171,7 +158,7 @@ getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
 getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: NormalizedFilePath
+    :: NormalizedUri
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
@@ -183,26 +170,27 @@ getFileContentsImpl file = do
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
-getFileModTimeContents :: NormalizedFilePath -> Action (UTCTime, Maybe Rope)
-getFileModTimeContents f = do
-    (fv, contents) <- use_ GetFileContents f
+getFileModTimeContents :: NormalizedUri -> Action (UTCTime, Maybe Rope)
+getFileModTimeContents uri = do
+    (fv, contents) <- use_ GetFileContents uri
     modTime <- case modificationTime fv of
       Just t -> pure t
       Nothing -> do
-        foi <- use_ IsFileOfInterest f
+        foi <- use_ IsFileOfInterest uri
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
-          _ -> do
-            posix <- getModTime $ fromNormalizedFilePath f
-            pure $ posixSecondsToUTCTime posix
+          _ -> case uriToNormalizedFilePath uri of
+            Just f -> do
+              posix <- getModTime $ fromNormalizedFilePath f
+              pure $ posixSecondsToUTCTime posix
+            Nothing -> getCurrentTime -- FIXME: no bueno
     return (modTime, contents)
 
-getFileContents :: NormalizedFilePath -> Action (Maybe Rope)
+getFileContents :: NormalizedUri -> Action (Maybe Rope)
 getFileContents f = snd <$> use_ GetFileContents f
 
 getUriContents :: NormalizedUri -> Action (Maybe Rope)
-getUriContents uri =
-    join <$> traverse getFileContents (uriToNormalizedFilePath uri)
+getUriContents = getFileContents
 
 -- | Given a text document identifier, annotate it with the latest version.
 --
@@ -210,16 +198,14 @@ getUriContents uri =
 -- from the Shake VFS rather than the LSP VFS.
 getVersionedTextDoc :: TextDocumentIdentifier -> Action VersionedTextDocumentIdentifier
 getVersionedTextDoc doc = do
-  let uri = doc ^. L.uri
-  mvf <-
-    maybe (pure Nothing) getVirtualFile $
-        uriToNormalizedFilePath $ toNormalizedUri uri
+  let uri :: Uri = doc ^. L.uri
+  mvf <- getVirtualFile (toNormalizedUri uri)
   let ver = case mvf of
         Just (VirtualFile lspver _ _) -> lspver
         Nothing                       -> 0
   return (VersionedTextDocumentIdentifier uri ver)
 
-fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedUri -> Action Bool) -> Rules ()
 fileStoreRules recorder isWatched = do
     getModificationTimeRule recorder
     getFileContentsRule recorder
@@ -229,13 +215,13 @@ fileStoreRules recorder isWatched = do
 -- with what changes.
 setFileModified :: VFSModified
                 -> IdeState
-                -> NormalizedFilePath
+                -> NormalizedUri
                 -> IO [Key]
                 -> IO ()
-setFileModified vfs state nfp actionBefore = do
-    restartShakeSession (shakeExtras state) vfs (fromNormalizedFilePath nfp ++ " (modified)") [] $ do
+setFileModified vfs state uri actionBefore = do
+    restartShakeSession (shakeExtras state) vfs (show uri ++ " (modified)") [] $ do
         keys<-actionBefore
-        return (toKey GetModificationTime nfp:keys)
+        return (toKey GetModificationTime uri : keys)
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

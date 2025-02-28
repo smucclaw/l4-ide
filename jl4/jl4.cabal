@@ -40,7 +40,7 @@ library
     optparse-applicative,
     pretty-simple,
     prettyprinter,
-    text >= 2.1,
+    text >= 2 && < 2.1.2,
     tree-diff
   exposed-modules:
     Base
@@ -102,6 +102,7 @@ executable jl4-lsp
     binary,
     containers,
     co-log-core,
+    websockets,
     deepseq,
     Diff,
     directory,
@@ -117,8 +118,10 @@ executable jl4-lsp
     prettyprinter,
     safe-exceptions,
     stm,
-    text >= 2.1,
-    text-rope,
+    -- NOTE: the reason why we have an upperbound on text is that
+    -- it introduces new definitions that conflicts with ours
+    text >= 2 && < 2.1.2,
+    text-rope >= 0.3,
     transformers,
     unliftio,
     vector,
@@ -126,6 +129,7 @@ executable jl4-lsp
     file-io,
     cassava,
     monoidal-containers,
+    optparse-applicative
 
   if os(windows)
     build-depends: Win32
@@ -181,5 +185,4 @@ test-suite jl4-test
     hspec-golden,
     optics,
     silently,
-    text >= 2.1,
     jl4
