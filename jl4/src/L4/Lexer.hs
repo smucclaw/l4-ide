@@ -171,7 +171,7 @@ data TokenType =
 nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
   lineAnno "@nlg"
-    <|>  inlineAnno "[" "]"
+    <|> inlineAnno "[" "]"
   <?> "Natural Language Generation Annotation"
 
 refAnnotation :: Lexer (Text, AnnoType)

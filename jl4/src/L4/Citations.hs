@@ -11,15 +11,14 @@ module L4.Citations
 import Base
 import qualified Base.Text as Text
 import Control.Exception.Safe (IOException, displayException, tryJust)
+import Data.ByteString.Lazy (LazyByteString)
 import qualified System.OsPath as Path
 import qualified System.File.OsPath as Path
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
-
-
-import qualified L4.Lexer as Lexer
 import qualified Data.Map.Lazy as Map
 import qualified Data.Csv as Csv
-import Data.ByteString.Lazy (LazyByteString)
+
+import qualified L4.Lexer as Lexer
 
 -- | obtain a valid relative file path from the ref-src annos
 validRelPath :: Path.OsPath -> Lexer.PosToken -> [(Lexer.SrcRange, Path.OsPath)]

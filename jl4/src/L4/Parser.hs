@@ -100,12 +100,12 @@ spaceOrAnnotations = do
 nlgP :: Parser (Epa Nlg)
 nlgP = do
   nlgExpr <- nlgAnnotationP
-  pure $ fmap (MkNlg $ mkSimpleEpaAnno nlgExpr) nlgExpr
+  pure $ fmap (MkNlg (mkSimpleEpaAnno nlgExpr)) nlgExpr
 
 refP :: Parser (Epa Ref)
 refP = do
   refExpr <- refAnnotationP
-  pure $ fmap (MkRef $ mkSimpleEpaAnno refExpr) refExpr
+  pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
 nlgAnnotationP :: Parser (Epa Text)
 nlgAnnotationP = hidden $ onlySpacedToken (\case
