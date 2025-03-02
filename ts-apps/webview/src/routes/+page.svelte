@@ -81,9 +81,7 @@
 
 {#if vizDecl && declLirNode}
   {#key declLirNode}
-    <div
-      class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
-    >
+    <div class="flash-on-update visualization-container viz-container-height">
       <LadderFlow {context} node={declLirNode} />
     </div>
   {/key}
@@ -100,8 +98,10 @@
     }
   }
 
-  /** So there's space for the fn name */
-  .slightly-shorter-than-full-viewport-height {
+  /** So there's space for the fn name
+  TODO: Use calc or smtg like that to make the intent clearer
+  */
+  .viz-container-height {
     height: 96svh;
   }
 

@@ -3,6 +3,11 @@
  is because the SvelteFlow lib requires that any use of SF hooks happen
  in a component that descends from a component that initializes SvelteFlowProvider -->
 <script lang="ts">
+  import type { LirId } from '$lib/layout-ir/core.js'
+  import {
+    LirContext,
+    getLirRegistryFromSvelteContext,
+  } from '$lib/layout-ir/core.js'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -15,17 +20,27 @@
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
-    type LadderFlowDisplayerProps,
+    type BaseLadderFlowDisplayerProps,
     sfNodeTypes,
+    sfEdgeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
-  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
+  import { ladderGraphToSFGraph, lirIdToSFId } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
-  const { context, node: declLirNode }: LadderFlowDisplayerProps = $props()
+  /************************
+       Lir
+  *************************/
+
+  const { context, node: declLirNode }: BaseLadderFlowDisplayerProps = $props()
+  const lir = getLirRegistryFromSvelteContext()
+
+  /***********************************
+      SvelteFlow config
+  ************************************/
 
   /* TODO:
   - Come up with more-easily-understandable units for the minZoom
@@ -36,17 +51,16 @@
   }
 
   /***********************************
-    Make initial SF nodes and edges
-  ************************************/
-
-  const sfGraph = ladderGraphToSFGraph(context, declLirNode.getBody(context))
-
-  /***********************************
       SvelteFlow nodes and edges
   ************************************/
 
-  let NODES = $state.raw<Node[]>(sfGraph.nodes)
-  let EDGES = $state.raw<Edge[]>(sfGraph.edges)
+  // Initial nodes and edges
+  const ladderGraph = declLirNode.getBody(context)
+  const initialSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+
+  // SvelteFlow nodes and edges variables
+  let NODES = $state.raw<Node[]>(initialSfGraph.nodes)
+  let EDGES = $state.raw<Edge[]>(initialSfGraph.edges)
 
   /***********************************
       SvelteFlow hooks
@@ -78,11 +92,33 @@
         }
       }
     )
+
+    lir.subscribe(onLadderGraphChange)
+    // TODO: Clean up subscribers --- add an onDestroy in core.ts
   })
 
-  /***********************************
-      doLayout, Dagre Graph, Config
-  ************************************/
+  /*********************************************
+    Subscribe to changes in the LadderLirNodes
+  **********************************************/
+
+  /**
+   * Most naive version.
+   *
+   *  Assumes that the LadderGraphLirNode does NOT publish position changes (may revisit this in the future)
+   */
+  const onLadderGraphChange = (context: LirContext, id: LirId) => {
+    if (id === ladderGraph.getId()) {
+      // TODO: Need to preserve the positions
+      const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+      NODES = newSfGraph.nodes
+      EDGES = newSfGraph.edges
+      console.log('newSfGraph', newSfGraph)
+    }
+  }
+
+  /*********************************************
+        doLayout, Dagre Graph, Config
+  **********************************************/
 
   const dagreGraph = new dagre.graphlib.Graph()
   dagreGraph.setDefaultEdgeLabel(() => ({}))
@@ -149,21 +185,57 @@
 </script>
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
-<div style={`height:100%; opacity: ${flowOpacity}`}>
-  <SvelteFlow
-    bind:nodes={NODES}
-    bind:edges={EDGES}
-    nodeTypes={sfNodeTypes}
-    minZoom={sfVisualOptions.smallestThatCanZoomOutTo}
-    fitView
-    connectionLineType={ConnectionLineType.Bezier}
-    defaultEdgeOptions={{ type: 'bezier', animated: false }}
-  >
-    <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
-    <Controls position="bottom-right" showLock={false} />
-    <Background />
-  </SvelteFlow>
+<div class="overall-container">
+  <div class="flow-container" style={`height:100%; opacity: ${flowOpacity}`}>
+    <SvelteFlow
+      bind:nodes={NODES}
+      bind:edges={EDGES}
+      nodeTypes={sfNodeTypes}
+      edgeTypes={sfEdgeTypes}
+      minZoom={sfVisualOptions.smallestThatCanZoomOutTo}
+      fitView
+      connectionLineType={ConnectionLineType.Bezier}
+      defaultEdgeOptions={{ type: 'bezier', animated: false }}
+    >
+      <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
+      <Controls position="bottom-right" showLock={false} />
+      <Background />
+    </SvelteFlow>
+  </div>
+  <!-- Paths Section -->
+  <section class="paths-container">
+    <div class="flex flex-col gap-2">
+      {#each ladderGraph.getPaths(context) as path}
+        <button
+          class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
+          onmouseenter={() => path.highlight(context)}
+          onmouseleave={() => path.unhighlight(context)}
+        >
+          {path.toPretty(context)}
+        </button>
+      {/each}
+    </div>
+  </section>
 </div>
+
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
+
+<style>
+  .overall-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .flow-container {
+    flex: 1 1 auto;
+    min-height: 0; /* Prevents overflow */
+  }
+
+  .paths-container {
+    flex: 0 0 auto;
+    /* You can set a fixed height or let it occupy the space it needs */
+  }
+</style>

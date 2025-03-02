@@ -6,7 +6,14 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { DirectedEdge } from '../algebraic-graphs/edge.js'
+import {
+  type Edge,
+  DirectedEdge,
+  type EdgeStyles,
+  HighlightedEdgeStyles,
+  EmptyEdgeStyles,
+  type EdgeAttributes,
+} from '../algebraic-graphs/edge.js'
 
 /*
 Design principles:
@@ -53,7 +60,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return this.#params
   }
 
-  getBody(context: LirContext) {
+  getBody(_context: LirContext) {
     return this.#body
   }
 
@@ -63,6 +70,43 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 
   toString(): string {
     return 'FUN_DECL_LIR_NODE'
+  }
+}
+
+export class PathLirNode {
+  constructor(
+    protected ladderGraph: LadderGraphLirNode,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {}
+
+  /** Helper */
+  protected setStylesOnPathEdges(context: LirContext, styles: EdgeStyles) {
+    const edges = this.rawPath.getEdges()
+    edges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
+    })
+  }
+
+  highlight(context: LirContext) {
+    this.setStylesOnPathEdges(context, new HighlightedEdgeStyles())
+    // TODO: setbindings for the vars in the path too
+  }
+
+  unhighlight(context: LirContext) {
+    this.setStylesOnPathEdges(context, new EmptyEdgeStyles())
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
   }
 }
 
@@ -120,6 +164,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
   }
 
+  /*****************************
+      Basic graph ops
+  ******************************/
+
   /** The `id` should correspond to that of a LadderLirNode. */
   getNeighbors(context: LirContext, id: LirId): LadderLirNode[] {
     const neighbors = this.#dag.getAdjMap().get(id) || new Set()
@@ -135,14 +183,70 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
-  // When we associate data with edges, will want to add a getEdge method too
-
   getEdges(_context: LirContext): LadderLirEdge[] {
-    // TODO: In the future, will want to add any data associated with the edges too
     return this.#dag.getEdges().map((edge) => {
       return new DefaultLadderLirEdge(edge)
     })
   }
+
+  /** Get all simple paths through the Dag */
+  getPaths(_context: LirContext) {
+    return this.#dag
+      .getAllPaths()
+      .map((rawPath) => new PathLirNode(this, rawPath))
+  }
+
+  /*****************************
+        Edge attributes
+  ******************************/
+
+  getEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeAttributes {
+    return this.#dag.getAttributesForEdge(edge)
+  }
+
+  // TODO: Think more abt whether we really need the rest
+
+  getEdgeStyles<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeStyles {
+    return this.#dag.getAttributesForEdge(edge).getStyles()
+  }
+
+  setEdgeStyles<T extends Edge<LirId>>(
+    context: LirContext,
+    edge: T,
+    styles: EdgeStyles
+  ) {
+    this.#dag.getAttributesForEdge(edge).setStyles(styles)
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  getEdgeLabel<T extends Edge<LirId>>(_context: LirContext, edge: T): string {
+    return this.#dag.getAttributesForEdge(edge).getLabel()
+  }
+
+  setEdgeLabel<T extends Edge<LirId>>(
+    context: LirContext,
+    edge: T,
+    label: string
+  ) {
+    this.#dag.getAttributesForEdge(edge).setLabel(label)
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  /*****************************
+        Bindings
+  ******************************/
+
+  // setBinding(context: LirContext, binding: { name: Name, value: Value })
+
+  /*****************************
+            Misc
+  ******************************/
 
   getChildren(context: LirContext) {
     return this.getVertices(context)
@@ -199,9 +303,9 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.#value
   }
 
-  setValue(_context: LirContext, value: BoolValue) {
+  _setValue(context: LirContext, value: BoolValue) {
     this.#value = value
-    // TODO: Will probably want to publish that value has been set!
+    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(_context: LirContext) {

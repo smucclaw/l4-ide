@@ -1,5 +1,11 @@
 import type { Eq, Ord } from '$lib/utils.js'
-import { DirectedEdge } from './edge.js'
+import {
+  DirectedEdge,
+  stringifyEdge,
+  type Edge,
+  type EdgeAttributes,
+  DefaultEdgeAttributes,
+} from './edge.js'
 import { BaseAMGraph } from './base-adjacency-map.js'
 
 /****************************************************************************
@@ -12,6 +18,8 @@ export type DirectedGraph<A extends Ord<A>> =
   | Overlay<A>
   | Connect<A>
 
+export type EdgeAttributeMap<A extends Ord<A>> = Map<string, EdgeAttributes>
+
 /** The adjacency map of a graph:
  * each vertex is associated with a set of its direct neighbors.
 
@@ -23,7 +31,13 @@ export class DirectedAMGraph<A extends Ord<A>>
   extends BaseAMGraph<A>
   implements Eq<DirectedAMGraph<A>>
 {
-  constructor(adjacencyMap?: Map<A, Set<A>>) {
+  constructor(
+    adjacencyMap?: Map<A, Set<A>>,
+    protected edgeAttributes: EdgeAttributeMap<A> = new Map<
+      string,
+      EdgeAttributes
+    >()
+  ) {
     super(adjacencyMap)
   }
   // Alga ops
@@ -32,7 +46,7 @@ export class DirectedAMGraph<A extends Ord<A>>
   }
 
   connect(other: DirectedAMGraph<A>): DirectedAMGraph<A> {
-    return new DirectedAMGraph(makeDirectedConnectAdjacencyMap(this, other))
+    return new Connect(this, other)
   }
 
   // Misc useful
@@ -48,6 +62,35 @@ export class DirectedAMGraph<A extends Ord<A>>
   isEqualTo<T extends DirectedAMGraph<A>>(other: T): boolean {
     // TODO: Improve this!
     return this.toString() === other.toString()
+  }
+
+  // Getting / setting edge attributes
+
+  getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes {
+    return (
+      this.edgeAttributes.get(stringifyEdge(edge)) ??
+      new DefaultEdgeAttributes()
+    )
+  }
+
+  /** Will error if the input edge does not exist.
+   *
+   * Merges the input attribute with any existing ones
+   */
+  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
+    if (!this.hasEdge(edge.getU(), edge.getV())) {
+      throw new Error(
+        `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`
+      )
+    }
+
+    const currAttributes = this.getAttributesForEdge(edge)
+    this.edgeAttributes.set(stringifyEdge(edge), currAttributes.merge(newAttr))
+  }
+
+  /** Internal */
+  _getEdgeAttributesMap() {
+    return this.edgeAttributes
   }
 }
 
@@ -108,7 +151,8 @@ export class Overlay<A extends Ord<A>> extends DirectedAMGraph<A> {
       overlay :: Ord a => AdjacencyMap a -> AdjacencyMap a -> AdjacencyMap a
       overlay (AM x) (AM y) = AM $ Map.unionWith Set.union x y
     */
-    super(graphUnion(left.getAdjMap(), right.getAdjMap()))
+    const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
+    super(adjMap, edgeAttrs)
   }
 }
 
@@ -117,7 +161,12 @@ export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
     readonly from: DirectedAMGraph<A>,
     readonly to: DirectedAMGraph<A>
   ) {
-    super(makeDirectedConnectAdjacencyMap(from, to))
+    const adjMap = makeDirectedConnectAdjacencyMap(from, to) as Map<A, Set<A>>
+    const edgeAttributes = mergeEdgeAttributeMaps(
+      from._getEdgeAttributesMap(),
+      to._getEdgeAttributesMap()
+    )
+    super(adjMap, edgeAttributes)
   }
 }
 
@@ -146,7 +195,7 @@ export function makeDirectedConnectAdjacencyMapFromAdjMaps<A extends Ord<A>>(
 
 export function makeDirectedConnectAdjacencyMap<
   A extends Ord<A>,
-  T extends BaseAMGraph<A>,
+  T extends DirectedAMGraph<A>,
 >(from: T, to: T): Map<A, Set<A>> {
   return makeDirectedConnectAdjacencyMapFromAdjMaps(
     from.getAdjMap(),
@@ -171,7 +220,40 @@ export function appendVerticesToSourceNeighbors<A extends Ord<A>>(
   })
 }
 
-/** Union the domains and relations of two adj-map graphs */
+export function mergeEdgeAttributeMaps<A extends Ord<A>>(
+  left: EdgeAttributeMap<A>,
+  right: EdgeAttributeMap<A>
+): EdgeAttributeMap<A> {
+  const merged = new Map(left)
+
+  for (const [edge, rightAttributes] of right.entries()) {
+    const leftAttributes = merged.get(edge) || new DefaultEdgeAttributes()
+    merged.set(edge, leftAttributes.merge(rightAttributes))
+  }
+
+  return merged
+}
+
+/** Merge two directed adjacency maps and their edge-attribute maps.
+ */
+export function mergeDirectedGraphs<A extends Ord<A>>(
+  g1: DirectedAMGraph<A>,
+  g2: DirectedAMGraph<A>
+): {
+  adjMap: Map<A, Set<A>>
+  edgeAttrs: EdgeAttributeMap<A>
+} {
+  return {
+    adjMap: graphUnion(g1.getAdjMap(), g2.getAdjMap()),
+    edgeAttrs: mergeEdgeAttributeMaps(
+      g1._getEdgeAttributesMap(),
+      g2._getEdgeAttributesMap()
+    ),
+  }
+}
+
+/** Union the domains and relations of two adj-map graphs,
+but without taking the EdgeAttributes into account. */
 export function graphUnion<A extends Ord<A>>(
   x: Map<A, Set<A>>,
   y: Map<A, Set<A>>
