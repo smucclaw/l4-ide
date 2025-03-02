@@ -181,36 +181,18 @@
     IRExpr that eventually gets transformed into a SvelteFlow graph
   </h2>
 </section>
-<section id="example 1" class="example w-3/4 mx-auto space-y-4 viewport-height">
+<section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <h3 class="text-2xl font-semibold">Example 1</h3>
-  <Flow {context} node={funDeclLirNode} />
-  <section class="json-visualisation space-y-2">
-    <input type="checkbox" id="example-1-json" class="peer hidden" />
-    <label
-      for="example-1-json"
-      class="inline-flex w-fit cursor-pointer p-2 rounded-lg transition-colors"
-      onmouseover={() => (isHovered = true)}
-      onmouseout={() => (isHovered = false)}
-      onfocus={() => (isHovered = true)}
-      onblur={() => (isHovered = false)}
-      style="background-color: {isHovered
-        ? 'var(--color-button-hover)'
-        : 'var(--color-button)'}"
-    >
-      <h4>Expand to view source JSON of the IRExpr</h4>
-    </label>
-    <pre
-      class="max-h-0 overflow-hidden peer-checked:max-h-[500px] transition-[max-height] duration-300 ease-in-out bg-gray-100 p-2 rounded-md">
-      <code>
-        {JSON.stringify(example1, null, 2)}
-      </code>
-    </pre>
-  </section>
+  <div class="viz-container-with-height">
+    <Flow {context} node={funDeclLirNode} lir={lirRegistry} />
+  </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
-<section id="example 2" class="example w-3/4 mx-auto space-y-4 viewport-height">
-  <h3 class="text-2xl font-semibold viewport-height">Example 2</h3>
-  <Flow {context} node={declLirNode2} />
+<section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
+  <h3 class="text-2xl font-semibold">Example 2</h3>
+  <div class="viz-container-with-height">
+    <Flow {context} node={declLirNode2} lir={lirRegistry} />
+  </div>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />
     <label
@@ -236,7 +218,10 @@
 </section>
 
 <style>
-  .viewport-height {
-    height: 70vh;
+  .viz-container-with-height {
+    /* Seems best to set some kind of viewport-based height in the 'outermost' containing div */
+    height: 70svh;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
   }
 </style>
