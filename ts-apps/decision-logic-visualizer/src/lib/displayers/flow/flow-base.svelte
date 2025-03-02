@@ -3,6 +3,11 @@
  is because the SvelteFlow lib requires that any use of SF hooks happen
  in a component that descends from a component that initializes SvelteFlowProvider -->
 <script lang="ts">
+  import type { LirId } from '$lib/layout-ir/core.js'
+  import {
+    LirContext,
+    getLirRegistryFromSvelteContext,
+  } from '$lib/layout-ir/core.js'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -15,18 +20,27 @@
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
-    type LadderFlowDisplayerProps,
+    type BaseLadderFlowDisplayerProps,
     sfNodeTypes,
     sfEdgeTypes,
     type SFNodeWithMeasuredDimensions,
   } from './types.svelte.js'
-  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
+  import { ladderGraphToSFGraph, lirIdToSFId } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
 
-  const { context, node: declLirNode }: LadderFlowDisplayerProps = $props()
+  /************************
+       Lir
+  *************************/
+
+  const { context, node: declLirNode }: BaseLadderFlowDisplayerProps = $props()
+  const lir = getLirRegistryFromSvelteContext()
+
+  /***********************************
+      SvelteFlow config
+  ************************************/
 
   /* TODO:
   - Come up with more-easily-understandable units for the minZoom

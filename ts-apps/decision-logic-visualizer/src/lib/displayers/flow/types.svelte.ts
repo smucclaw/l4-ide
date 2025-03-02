@@ -1,5 +1,5 @@
 import type { Name, BoolValue } from '@repo/viz-expr'
-import type { LirContext } from '$lib/layout-ir/core.js'
+import type { RootDisplayerProps, DisplayerProps } from '$lib/layout-ir/core.js'
 import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
@@ -11,9 +11,12 @@ import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
 import type { StrokeColorCSSVar } from '../../algebraic-graphs/edge.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 
-export interface LadderFlowDisplayerProps {
-  context: LirContext
+export interface LadderFlowDisplayerProps extends RootDisplayerProps {
   node: DeclLirNode
+}
+
+export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
+  node: LadderFlowDisplayerProps['node']
 }
 
 /************************************************

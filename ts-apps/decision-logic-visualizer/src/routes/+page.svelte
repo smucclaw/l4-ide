@@ -61,12 +61,12 @@
   const decode = Schema.decodeSync(IRDecl)
   const decl = decode(example1)
   // Set up Lir
-  const registry = new LirRegistry()
+  const lirRegistry = new LirRegistry()
   const context = new LirContext()
-  const nodeInfo = { registry, context }
+  const nodeInfo = { registry: lirRegistry, context }
 
   const funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, decl)
-  registry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+  lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
 
   /***************************
       Example 2
@@ -171,7 +171,7 @@
 
   const decl2 = decode(example2)
   const declLirNode2 = VizDeclLirSource.toLir(nodeInfo, decl2)
-  registry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
+  lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
 </script>
 
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
