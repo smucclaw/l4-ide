@@ -28,7 +28,7 @@ jobs:
       - name: Update repositories
         run: apt update
       - name: Install deps
-        run: apt install -y git sudo software-properties-common
+        run: apt install -y git sudo software-properties-common curl
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
@@ -103,9 +103,9 @@ jobs:
 
     steps:
       - name: Update repositories
-        run: apt update      
+        run: apt update
       - name: Install deps
-        run: apt install -y git sudo software-properties-common
+        run: apt install -y git sudo software-properties-common curl
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
