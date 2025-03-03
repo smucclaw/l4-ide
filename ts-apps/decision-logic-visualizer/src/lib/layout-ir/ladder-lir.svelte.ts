@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // TODO: Need to refactor BoolValue to add a method for getting styles!
-import type { BoolVar, BoolValue, Name } from '@repo/viz-expr'
+import { type BoolVal, TrueVal, FalseVal, UnknownVal } from './bool-val.js'
+import type { BoolVar, Value, Unique, Name } from '@repo/viz-expr'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -15,6 +16,7 @@ import {
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
+import { match } from 'ts-pattern'
 
 /*
 Design principles:
@@ -339,10 +341,10 @@ export type VarLirNode = BoolVarLirNode
 
 export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
   readonly #originalExpr: BoolVar
-  #value = $state<BoolValue>()!
+  #value = $state<BoolVal>()!
 
   /** For the SF node we'll make from the BoolVarLirNode */
-  #data: { name: Name; value: BoolValue }
+  #data: { name: Name; value: BoolVal }
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -351,7 +353,11 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
   ) {
     super(nodeInfo, position)
     this.#originalExpr = originalExpr
-    this.#value = originalExpr.value // TO CHANGE
+    this.#value = match(originalExpr.value)
+      .with('True', () => new TrueVal())
+      .with('False', () => new FalseVal())
+      .with('Unknown', () => new UnknownVal())
+      .exhaustive()
     this.#data = { name: originalExpr.name, value: this.#value }
   }
 
@@ -367,11 +373,12 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.#data
   }
 
-  getValue(_context: LirContext): BoolValue {
+  getValue(_context: LirContext): BoolVal {
     return this.#value
   }
 
-  _setValue(context: LirContext, value: BoolValue) {
+  /** This will only be called by LadderGraphLirNode */
+  _setValue(context: LirContext, value: BoolVal) {
     this.#value = value
     this.getRegistry().publish(context, this.getId())
   }

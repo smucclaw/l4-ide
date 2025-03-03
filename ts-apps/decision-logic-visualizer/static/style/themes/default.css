@@ -9,10 +9,11 @@
 
   /* TODO: Need to check the colors against some color palette generator */
   --color-highlighted-path-in-flow: #047857;
-}
 
-/**
-From discussion of Meng's layman visualizer
-  --color-negative: #dc2626; red for negative path 
-  --color-path: #4b5563; dark grey for default path 
-*/
+  --color-incompatible-path: oklch(0.871 0.006 286.286);
+  /* Tailwind zinc 300 */
+
+  --color-true-value: oklch(0.938 0.127 124.321);
+  /* Tailwind lime 300 */
+  --color-false-value: oklch(0.81 0.117 11.638) /* Tailwind rose 300 */;
+}
