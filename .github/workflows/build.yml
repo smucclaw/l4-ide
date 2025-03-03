@@ -46,9 +46,7 @@ jobs:
           pkg-config
           zlib1g-dev
       - name: Update git config
-        run: |
-          locale
-          git config --global --add safe.directory $GITHUB_WORKSPACE
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
       # at the begin of a run
       - name: Remove cabal store
