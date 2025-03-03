@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Install deps
-        run: sudo apt install -y git
+        run: apt install -y git
       # FIXME: this is a temporary fix, the docker container should never be dirty
       # at the begin of a run
       - name: Remove cabal store
@@ -99,7 +99,7 @@ jobs:
 
     steps:
       - name: Install deps
-        run: sudo apt install -y git
+        run: apt install -y git
       - uses: actions/checkout@v4
       - name: Use Node.js
         uses: actions/setup-node@v4
