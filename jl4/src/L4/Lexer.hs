@@ -139,6 +139,7 @@ data TokenType =
     -- annotations
   | TNlg          !Text !AnnoType
   | TRefSrc       !Text
+  | TRefMap       !Text
   | TRef          !Text !AnnoType
     -- space
   | TSpace        !Text
@@ -162,6 +163,10 @@ refAnnotation =
 
 refSrcAnnotation :: Lexer Text
 refSrcAnnotation = fst <$> lineAnno "@ref-src"
+
+
+refMapAnnotation :: Lexer Text
+refMapAnnotation = fst <$> lineAnno "@ref-map"
 
 inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
 inlineAnno openingHerald closingHerald = do
@@ -224,6 +229,7 @@ tokenPayload =
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directiveLiteral
   <|> TRefSrc         <$> refSrcAnnotation
+  <|> TRefMap         <$> refMapAnnotation
   <|> uncurry TNlg    <$> nlgAnnotation
   <|> uncurry TRef    <$> refAnnotation
   <|> TSpace          <$> whitespace
@@ -798,6 +804,7 @@ displayPosToken (MkPosToken _r tt) =
     TNlg t ty        -> toNlgAnno t ty
     TRef t ty        -> toRefAnno t ty
     TRefSrc t        -> "@ref-src" <> t
+    TRefMap t        -> "@ref-map" <> t
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -906,6 +913,7 @@ posTokenCategory =
     TNlg {} -> CAnnotation
     TRef {} -> CAnnotation
     TRefSrc _ -> CAnnotation
+    TRefMap _ -> CAnnotation
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

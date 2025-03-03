@@ -1,7 +1,8 @@
 -- this is a reference source annotations. it tells where 
 -- to look for citations
 @ref-src citations.csv
-GIVEN x IS A BOOLEAN, y IS A BOOLEAN 
+@ref-map foo bar baz https://example.com
+GIVEN x IS A BOOLEAN, y IS A BOOLEAN @ref foo bar baz
 GIVETH A BOOLEAN @ref 1981/61 sec. 2
                   -- we can use ref annotations
                   -- with regexes which must be

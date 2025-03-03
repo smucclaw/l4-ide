@@ -573,6 +573,8 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
     hoistMaybe do
       -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
       let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
+      -- FIXME: this is subtly wrong: if there are multiple results for a location, then we want to
+      -- prefer Just's
       (range, mreference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
       let lspRange = srcRangeToLspRange (Just range)
       pure $ Hover
