@@ -30,18 +30,18 @@ jobs:
       - name: Install deps
         run: >
           apt install -y
-            git
-            sudo
-            software-properties-common
-            build-essential
-            curl
-            libffi-dev
-            libffi8
-            libgmp-dev
-            libgmp10
-            libncurses-dev
-            pkg-config
-            zlib1g-dev
+          git
+          sudo
+          software-properties-common
+          build-essential
+          curl
+          libffi-dev
+          libffi8
+          libgmp-dev
+          libgmp10
+          libncurses-dev
+          pkg-config
+          zlib1g-dev
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
