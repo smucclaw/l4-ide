@@ -42,8 +42,13 @@ jobs:
           libncurses-dev
           pkg-config
           zlib1g-dev
+          locales
+      - name: Set locale
+        run: update-locale LANG=C.UTF-8
       - name: Update git config
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+        run: |
+          locale
+          git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
       # at the begin of a run
       - name: Remove cabal store
