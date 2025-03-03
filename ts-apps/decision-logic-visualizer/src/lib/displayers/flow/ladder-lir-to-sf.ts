@@ -14,7 +14,8 @@ import {
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
-  type SfGraph,
+  type LadderSFGraph,
+  type LadderSFNode,
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -28,7 +29,7 @@ import { match, P } from 'ts-pattern'
 export function ladderGraphToSFGraph(
   context: LirContext,
   ladderGraph: LadderGraphLirNode
-): SfGraph {
+): LadderSFGraph {
   const nodes = (ladderGraph.getVertices(context) as LadderLirNode[])
     .toSorted((v1, v2) => v2.compare(v1))
     .map(ladderLirNodeToSfNode.bind(null, context))
@@ -58,7 +59,7 @@ export function lirIdToSFId(id: LirId): string {
 export function ladderLirNodeToSfNode(
   context: LirContext,
   node: LadderLirNode
-): SF.Node {
+): LadderSFNode {
   const defaults = {
     id: lirIdToSFId(node.getId()),
     originalLirId: node.getId(),

@@ -19,6 +19,11 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
   node: LadderFlowDisplayerProps['node']
 }
 
+export interface LadderSFGraph {
+  nodes: LadderSFNode[]
+  edges: LadderSFEdge[]
+}
+
 /************************************************
           SF Nodes
 *************************************************/
@@ -28,7 +33,11 @@ export interface Dimensions {
   height: number
 }
 
-export type SFNodeWithMeasuredDimensions = SF.Node & {
+export interface LadderSFNode extends SF.Node {
+  originalLirId: LirId
+}
+
+export type LadderSFNodeWithDims = LadderSFNode & {
   measured: Dimensions
 }
 
@@ -85,6 +94,8 @@ export interface BoolVarDisplayerProps extends SF.NodeProps {
 /************************************************
           SF Edges
 *************************************************/
+
+export type LadderSFEdge = SF.Edge
 
 export const ladderEdgeType = 'ladderEdge' as const
 
