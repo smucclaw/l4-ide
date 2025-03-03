@@ -25,6 +25,8 @@ jobs:
         ghc-version: ["9.6"]
 
     steps:
+      - name: Update repositories
+        run: apt update
       - name: Install deps
         run: apt install -y git
       # FIXME: this is a temporary fix, the docker container should never be dirty
@@ -98,6 +100,8 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
+      - name: Update repositories
+        run: apt update      
       - name: Install deps
         run: apt install -y git
       - uses: actions/checkout@v4
