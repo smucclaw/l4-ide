@@ -93,7 +93,7 @@
       }
     )
 
-    lir.subscribe(onLadderGraphChange)
+    lir.subscribe(onLadderGraphNonPositionalChange)
     // TODO: Clean up subscribers --- add an onDestroy in core.ts
   })
 
@@ -106,7 +106,7 @@
    *
    *  Assumes that the LadderGraphLirNode does NOT publish position changes (may revisit this in the future)
    */
-  const onLadderGraphChange = (context: LirContext, id: LirId) => {
+  const onLadderGraphNonPositionalChange = (context: LirContext, id: LirId) => {
     if (id === ladderGraph.getId()) {
       // TODO: Need to preserve the positions
       const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
