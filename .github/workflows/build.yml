@@ -28,7 +28,7 @@ jobs:
       - name: Update repositories
         run: apt update
       - name: Install deps
-        run: apt install -y git sudo software-properties-common curl
+        run: apt install -y git sudo software-properties-common build-essential curl libffi-dev libffi8 libgmp-dev libgmp10 libncurses-dev pkg-config
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
@@ -105,7 +105,7 @@ jobs:
       - name: Update repositories
         run: apt update
       - name: Install deps
-        run: apt install -y git sudo software-properties-common curl
+        run: apt install -y git sudo software-properties-common curl xvfb
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
