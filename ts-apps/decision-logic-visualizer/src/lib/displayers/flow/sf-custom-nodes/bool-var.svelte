@@ -10,12 +10,14 @@ TODO: Will add UI for things like Value in the next iteration
   // import { match } from 'ts-pattern'
 
   let { data }: BoolVarDisplayerProps = $props()
+  // const { context, originalLirId, name } = data
+  const { name } = data
 </script>
 
 <div class="svelte-flow__node-basic bool-var-node-border">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
   <div class="label-wrapper-for-content-bearing-sf-node">
-    {data.name.label}
+    {name.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>

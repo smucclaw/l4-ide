@@ -1,5 +1,9 @@
 import type { Name, BoolValue } from '@repo/viz-expr'
-import type { RootDisplayerProps, DisplayerProps } from '$lib/layout-ir/core.js'
+import type {
+  RootDisplayerProps,
+  DisplayerProps,
+  LirContext,
+} from '$lib/layout-ir/core.js'
 import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
@@ -34,9 +38,7 @@ export interface Dimensions {
   height: number
 }
 
-export interface LadderSFNode extends SF.Node {
-  originalLirId: LirId
-}
+export type LadderSFNode = SF.Node
 
 export type LadderSFNodeWithDims = LadderSFNode & {
   measured: Dimensions
@@ -88,8 +90,24 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
   targetPosition: SF.Position.Left,
 }
 
-export interface BoolVarDisplayerProps extends SF.NodeProps {
-  data: { name: Name; value: BoolValue }
+export function getOriginalLirIdFromSfNode(node: LadderSFNode): LirId {
+  if (!node.data.originalLirId) throw new Error('No originalLirId in node data')
+
+  return node.data.originalLirId as LirId
+}
+
+export interface LadderSFNodeData {
+  context: LirContext
+  originalLirId: LirId
+}
+
+export interface BoolVarDisplayerData extends LadderSFNodeData {
+  name: Name
+  value: BoolValue
+}
+
+export interface BoolVarDisplayerProps {
+  data: BoolVarDisplayerData
 }
 
 /************************************************

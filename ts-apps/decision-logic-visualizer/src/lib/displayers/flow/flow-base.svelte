@@ -23,6 +23,7 @@
     sfEdgeTypes,
     type LadderSFNodeWithDims,
     type LadderSFGraph,
+    getOriginalLirIdFromSfNode,
   } from './types.svelte.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
@@ -152,7 +153,9 @@
 
       // Update Lir with the positions and dimensions
       layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
-        const lirNode = context.get(sfNode.originalLirId) as LadderLirNode
+        const lirNode = context.get(
+          getOriginalLirIdFromSfNode(sfNode)
+        ) as LadderLirNode
         lirNode.setPosition(context, sfNode.position)
         lirNode.setDimensions(context, {
           width: sfNode.measured.width,

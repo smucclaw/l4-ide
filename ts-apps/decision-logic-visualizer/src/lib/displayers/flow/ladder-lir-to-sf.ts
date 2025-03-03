@@ -16,6 +16,7 @@ import {
 import {
   type LadderSFGraph,
   type LadderSFNode,
+  type LadderSFNodeData,
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -62,10 +63,14 @@ export function ladderLirNodeToSfNode(
 ): LadderSFNode {
   const defaults = {
     id: lirIdToSFId(node.getId()),
-    originalLirId: node.getId(),
     position: node.getPosition(context),
     initialWidth: node.getDimensions(context)?.width,
     initialHeight: node.getDimensions(context)?.height,
+  }
+
+  const defaultData = {
+    context,
+    originalLirId: node.getId(),
   }
 
   return match(node)
@@ -73,35 +78,35 @@ export function ladderLirNodeToSfNode(
       return {
         ...defaults,
         type: boolVarNodeType,
-        data: n.getData(context),
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.instanceOf(NotStartLirNode), () => {
       return {
         ...defaults,
         type: notStartNodeType,
-        data: {},
+        data: defaultData,
       }
     })
     .with(P.instanceOf(NotEndLirNode), () => {
       return {
         ...defaults,
         type: notEndNodeType,
-        data: {},
+        data: defaultData,
       }
     })
     .with(P.instanceOf(SourceLirNode), () => {
       return {
         ...defaults,
         type: sourceNodeType,
-        data: {},
+        data: defaultData,
       }
     })
     .with(P.instanceOf(SinkLirNode), () => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: {},
+        data: defaultData,
       }
     })
     .exhaustive()
