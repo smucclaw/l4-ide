@@ -44,6 +44,7 @@ library
     optics,
     optics-core,
     optparse-applicative,
+    pcre2,
     pretty-simple,
     prettyprinter,
     safe-exceptions,

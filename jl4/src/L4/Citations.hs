@@ -8,14 +8,15 @@ module L4.Citations
 , intervalToSrcRange
 ) where
 
-import Base
+import Base (Text)
+import Text.Regex.Pcre2
+import Data.Monoid (Alt (..))
 import qualified Base.Text as Text
 import Control.Exception.Safe (IOException, displayException, tryJust)
 import Data.ByteString.Lazy (LazyByteString)
 import qualified System.OsPath as Path
 import qualified System.File.OsPath as Path
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
-import qualified Data.Map.Lazy as Map
 import qualified Data.Csv as Csv
 
 import qualified L4.Lexer as Lexer
@@ -48,14 +49,36 @@ mkReferences
   --   given source position points to a reference
 mkReferences tokens csv = do
   decoded <- Csv.decode Csv.NoHeader =<< csv
-  let refLookup = foldMap (uncurry Map.singleton) decoded
-
+  let
       records = foldMap getReferences tokens
 
       getReferences = \case
         Lexer.MkPosToken {payload = Lexer.TRef reference _, range} ->
            let mk v = IVMap.singleton (srcRangeToInterval range) (range.length, v)
-            in mk $ Map.lookup (normalizeRef reference) refLookup
+               ref = normalizeRef reference
+
+               replaceVerbatim p r =
+                 Alt if ref == p
+                   then Just r
+                   else Nothing
+
+               replaceRegex p r =
+                 Alt if p `matches` ref
+                   then Just (sub p r ref)
+                   else Nothing
+
+               -- NOTE: we replace verbatim in any case, except if the pattern starts with
+               -- "regex:"
+               doMatching p r
+                 = case Text.stripPrefix "regex:" p of
+                     Nothing -> replaceVerbatim p r
+                     Just p' -> replaceRegex p' r
+
+            -- NOTE: This does linearly many matches (and thus makes the entire algorithm quadratic),
+            -- which could be more efficient by just unioning the regular expression, however,
+            -- in that case picking a replacement becomes extra work, so we just match each one
+            -- of them and then run the replacement
+            in mk $ getAlt $ foldMap (uncurry doMatching) decoded
         _ ->  IVMap.empty
 
   pure records
