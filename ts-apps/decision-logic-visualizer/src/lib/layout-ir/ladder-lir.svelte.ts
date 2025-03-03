@@ -14,6 +14,7 @@ import {
   // EmptyEdgeStyles,
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
+import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
 
 /*
 Design principles:
@@ -171,23 +172,41 @@ type Position = { x: number; y: number }
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
 export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
+  getDimensions(context: LirContext): Dimensions | undefined
+  setDimensions(context: LirContext, dimensions: Dimensions): void
+
   getPosition(context: LirContext): Position
+  setPosition(context: LirContext, position: Position): void
+
   toPretty(context: LirContext): string
 }
 
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
-  #position: Position
+  protected position: Position
+  protected dimensions?: Dimensions
 
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo)
-    this.#position = position
+    this.position = position
+  }
+
+  getDimensions(_context: LirContext) {
+    return this.dimensions
+  }
+
+  setDimensions(_context: LirContext, dimensions: Dimensions): void {
+    this.dimensions = dimensions
   }
 
   getPosition(_context: LirContext): Position {
-    return this.#position
+    return this.position
+  }
+
+  setPosition(_context: LirContext, position: Position): void {
+    this.position = position
   }
 
   isEqualTo<T extends LirNode>(other: T) {

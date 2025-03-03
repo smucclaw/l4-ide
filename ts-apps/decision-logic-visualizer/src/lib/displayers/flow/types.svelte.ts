@@ -23,16 +23,13 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
           SF Nodes
 *************************************************/
 
-export type NodeDimensions = {
+export interface Dimensions {
   width: number
   height: number
 }
 
 export type SFNodeWithMeasuredDimensions = SF.Node & {
-  measured: {
-    width: number
-    height: number
-  }
+  measured: Dimensions
 }
 
 export const boolVarNodeType = 'boolVarNode' as const

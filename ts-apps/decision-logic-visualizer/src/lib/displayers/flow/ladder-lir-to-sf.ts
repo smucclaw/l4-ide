@@ -14,6 +14,7 @@ import {
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
+  type SfGraph,
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -27,7 +28,7 @@ import { match, P } from 'ts-pattern'
 export function ladderGraphToSFGraph(
   context: LirContext,
   ladderGraph: LadderGraphLirNode
-) {
+): SfGraph {
   const nodes = (ladderGraph.getVertices(context) as LadderLirNode[])
     .toSorted((v1, v2) => v2.compare(v1))
     .map(ladderLirNodeToSfNode.bind(null, context))
@@ -58,44 +59,47 @@ export function ladderLirNodeToSfNode(
   context: LirContext,
   node: LadderLirNode
 ): SF.Node {
+  const defaults = {
+    id: lirIdToSFId(node.getId()),
+    originalLirId: node.getId(),
+    position: node.getPosition(context),
+    initialWidth: node.getDimensions(context)?.width,
+    initialHeight: node.getDimensions(context)?.height,
+  }
+
   return match(node)
     .with(P.instanceOf(BoolVarLirNode), (n) => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: boolVarNodeType,
-        position: n.getPosition(context),
         data: n.getData(context),
       }
     })
-    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.instanceOf(NotStartLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: notStartNodeType,
-        position: n.getPosition(context),
         data: {},
       }
     })
-    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
+    .with(P.instanceOf(NotEndLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: notEndNodeType,
-        position: n.getPosition(context),
         data: {},
       }
     })
-    .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
+    .with(P.instanceOf(SourceLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: sourceNodeType,
-        position: n.getPosition(context),
         data: {},
       }
     })
-    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
+    .with(P.instanceOf(SinkLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: sinkNodeType,
-        position: n.getPosition(context),
         data: {},
       }
     })
