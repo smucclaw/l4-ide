@@ -1,0 +1,8 @@
+-- this is a reference source annotations. it tells where 
+-- to look for citations
+@ref-src ./citations.csv
+GIVEN x IS A BOOLEAN, y IS A BOOLEAN 
+GIVETH A BOOLEAN @ref foo
+DECIDE xor x y IS
+     x AND NOT y
+  OR NOT x AND y
