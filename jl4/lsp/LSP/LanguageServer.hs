@@ -10,6 +10,7 @@ module LSP.LanguageServer (
   ServerM(..),
   requestHandler,
   notificationHandler,
+  defHandlers,
 ) where
 
 import qualified Colog.Core as Colog
@@ -43,6 +44,13 @@ import UnliftIO.Concurrent
 import UnliftIO.Directory
 import UnliftIO.Exception
 import qualified Control.Monad.Trans.Reader as ReaderT
+import LSP.Core.OfInterest hiding (Log(..))
+import LSP.Core.Types.Location
+import qualified LSP.Core.Shake as Shake
+import qualified Language.LSP.Protocol.Lens as J
+import qualified Language.LSP.Protocol.Types as LSP
+import Control.Lens
+import LSP.Core.FileStore hiding (Log, LogShake)
 
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
@@ -53,6 +61,12 @@ data Log
   | LogReactorThreadStopped
   | LogCancelledRequest !SomeLspId
   | LogLspServer LspServerLog
+
+  | LogOpenedTextDocument !Uri
+  | LogModifiedTextDocument !Uri
+  | LogSavedTextDocument !Uri
+  | LogClosedTextDocument !Uri
+  | LogShake Shake.Log
   | LogServerShutdownMessage
   deriving Show
 
@@ -80,6 +94,11 @@ instance Pretty Log where
     LogCancelledRequest requestId ->
       "Cancelled request" <+> viaShow requestId
     LogLspServer msg -> pretty msg
+    LogOpenedTextDocument uri ->  "Opened text document:" <+> pretty (getUri uri)
+    LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
+    LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
+    LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
+    LogShake msg -> pretty msg
     LogServerShutdownMessage -> "Received shutdown message"
     LogReactorOtherThreadException e ->
       vcat
@@ -374,3 +393,58 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
   -- on notifications
   vfs <- LSP.getVirtualFiles
   liftIO $ writeChan st.reactor $ ReactorNotification (LSP.runLspT env $ runServerM st $ k st.ideState vfs _params)
+
+
+defHandlers :: Recorder (WithPriority Log) -> Handlers (ServerM config)
+defHandlers recorder = mconcat
+  [ -- We need these notifications handlers to declare that we handle these requests
+    notificationHandler SMethod_Initialized $ \ide _ _ -> do
+      liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
+  , -- Handling of the virtual file system
+    notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
+      let
+        doc = msg ^. J.textDocument . J.uri
+        version = msg ^. J.textDocument . J.version
+      atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
+      whenUriFile doc $ \file -> do
+          -- We don't know if the file actually exists, or if the contents match those on disk
+          -- For example, vscode restores previously unsaved contents on open
+          setFileModified (VFSModified vfs) ide file $
+            addFileOfInterest ide file Modified{firstOpen=True}
+      logWith recorder Debug $ LogOpenedTextDocument doc
+  , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
+      let
+        doc = msg ^. J.textDocument . J.uri
+        version = msg ^. J.textDocument . J.version
+        changes = msg ^. J.contentChanges
+      atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
+      whenUriFile doc $ \file -> do
+          setFileModified (VFSModified vfs) ide file $
+            addFileOfInterest ide file Modified{firstOpen=False}
+      logWith recorder Debug $ LogModifiedTextDocument doc
+  , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
+      let
+        doc = msg ^. J.textDocument . J.uri
+      whenUriFile doc $ \file -> do
+          setFileModified (VFSModified vfs) ide file $
+            addFileOfInterest ide file OnDisk
+      logWith recorder Debug $ LogSavedTextDocument doc
+  , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
+      let
+        doc = msg ^. J.textDocument . J.uri
+      whenUriFile doc $ \file -> do
+        let herald = "Closed text document: " <> getUri doc
+        setSomethingModified (VFSModified vfs) ide (Text.unpack herald) $ do
+          scheduleGarbageCollection ide
+          deleteFileOfInterest ide file
+        logWith recorder Debug $ LogClosedTextDocument doc
+
+  , notificationHandler SMethod_SetTrace $ \_ _ _msg -> do
+      pure ()
+  , -- Subscribe to notification changes
+    notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
+  ]
+
+whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
+

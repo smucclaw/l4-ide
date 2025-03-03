@@ -189,15 +189,24 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
     maybe (pure []) toNodes
 
 flattenConcreteNodes :: (HasCallStack, MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
-flattenConcreteNodes (Anno _ _ csns) = go csns
-  where
-    go []                 _        = pure []
-    go (AnnoHole _ : cs)  holeFits =
-      case holeFits of
-        [] -> throwError $ InsufficientHoleFit callStack
-        (x : xs) -> (<>) <$> x <*> go cs xs
-    go (AnnoCsn _ m : cs) holeFits =
-      (m :) <$> go cs holeFits
+flattenConcreteNodes ann = flattenAnnoElements (pure . List.singleton) ann.payload
+
+flattenAnnoElements :: (HasCallStack, MonadError TraverseAnnoError m) =>
+  (CsnCluster_ t -> m [a]) ->
+  [AnnoElement_ t] ->
+  [m [a]] ->
+  m [a]
+flattenAnnoElements _ [] _ = pure []
+flattenAnnoElements trans (AnnoHole _ : cs) holeFits = case holeFits of
+  [] -> throwError $ InsufficientHoleFit callStack
+  (x : xs) -> do
+    toks <- x
+    restOfTokens <- flattenAnnoElements trans cs xs
+    pure $ toks <> restOfTokens
+flattenAnnoElements trans (AnnoCsn _ m: cs) xs = do
+  thisSyntaxNode <- trans m
+  restOfTokens <- flattenAnnoElements trans cs xs
+  pure $ thisSyntaxNode <> restOfTokens
 
 -- ----------------------------------------------------------------------------
 -- Source Range manipulation

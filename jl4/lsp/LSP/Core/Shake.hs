@@ -1027,12 +1027,16 @@ uses_ key files = do
 -- | Plural version of 'use'
 uses :: (Traversable f, IdeRule k v)
     => k -> f NormalizedFilePath -> Action (f (Maybe v))
-uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
+uses key files = do
+  res <- apply (fmap (Q . (key,)) files)
+  pure $ fmap (\(A value) -> currentValue value) res
 
 -- | Plural version of 'use'
 usesNoValue :: (Traversable f, IdeRule k v)
     => k -> f NormalizedFilePath -> Action (f ())
-usesNoValue key files = fmap void $ fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
+usesNoValue key files = do
+  res <- apply (fmap (Q . (key,)) files)
+  pure $ void $ fmap (\(A value) -> currentValue value) res
 
 -- | Return the last computed result which might be stale.
 usesWithStale :: (Traversable f, IdeRule k v)

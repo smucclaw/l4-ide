@@ -9,7 +9,6 @@ import Control.Applicative (Alternative (..))
 import Control.DeepSeq (NFData)
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.Except as Except
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.List as List
@@ -27,8 +26,6 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 
 type SemanticTokensM t = ReaderT (SemanticTokenCtx t) (Except TraverseAnnoError)
 
-type HoleFit_ t = SemanticTokensM t [SemanticToken]
-
 runSemanticTokensM :: ToSemTokens t a => SemanticTokenCtx t -> a -> Either TraverseAnnoError [SemanticToken]
 runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemTokens a) semTokenCtx
 
@@ -38,35 +35,26 @@ runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemT
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
 class ToSemTokens t a where
-  toSemTokens :: a -> HoleFit_ t
+  toSemTokens :: a -> SemanticTokensM t [SemanticToken]
   default toSemTokens ::
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ t
+    SemanticTokensM t [SemanticToken]
   toSemTokens = genericToSemTokens
 
 genericToSemTokens :: forall a t .
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
-    HoleFit_ t
+    SemanticTokensM t [SemanticToken]
 genericToSemTokens =
-  genericToNodes (Proxy @(ToSemTokens t)) toSemTokens traverseCsnWithHoles
+  genericToNodes (Proxy @(ToSemTokens t)) toSemTokens flattenSemanticTokens
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [HoleFit_ t] -> SemanticTokensM t [SemanticToken]
-traverseCsnWithHoles (Anno _ _ []) _ = pure []
-traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
-  [] -> lift $ throwE $ InsufficientHoleFit callStack
-  (x : xs) -> do
-    toks <- x
-    restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
-    pure $ toks <> restOfTokens
-traverseCsnWithHoles (Anno e mSrcRange (AnnoCsn _ m: cs)) xs = do
-  ctx <- ask
-  let
-    thisSyntaxNode = Maybe.mapMaybe (fromSemanticTokenContext ctx) (allClusterTokens m)
-
-  restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs
-  pure $ concatMap toList thisSyntaxNode <> restOfTokens
+flattenSemanticTokens :: (HasCallStack, ToSemToken t) => Anno_ t e -> [SemanticTokensM t [SemanticToken]] -> SemanticTokensM t [SemanticToken]
+flattenSemanticTokens ann = flattenAnnoElements worker ann.payload
+  where
+    worker cluster = do
+      ctx <- ask
+      pure $ concatMap toList $ Maybe.mapMaybe (fromSemanticTokenContext ctx) (allClusterTokens cluster)
 
 fromSemanticTokenContext :: ToSemToken t => SemanticTokenCtx t -> t -> Maybe (NonEmpty SemanticToken)
 fromSemanticTokenContext ctx token = toSemToken token <$> ctx.semanticTokenType token <*> ctx.semanticTokenModifier token

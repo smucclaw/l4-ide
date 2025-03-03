@@ -15,7 +15,7 @@ import LSP.L4.Handlers hiding (Log)
 import qualified LSP.L4.Handlers as Handlers
 import LSP.L4.Rules hiding (Log)
 import qualified LSP.L4.Rules as Rules
-import LSP.LanguageServer (ServerM, setupLSP)
+import LSP.LanguageServer (ServerM, setupLSP, defHandlers)
 import qualified LSP.LanguageServer as LanguageServer
 import LSP.Logger
 import LSP.Server hiding (Log)
@@ -42,7 +42,7 @@ jl4ServerConfig recorder =
     , parseServerConfig = parseServerConfig
     , onConfigChange = defOnConfigChange serverRecorder
     , rules = jl4Rules rulesLogger
-    , handlers = lspHandlers
+    , handlers = lspHandlers <> defHandlers languageServerRecorder
     , kick = kickRules $ \files -> do
         void $
              uses GetLexTokens files

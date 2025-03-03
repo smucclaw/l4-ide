@@ -54,32 +54,22 @@ import qualified Text.Fuzzy as Fuzzy
 import UnliftIO (STM, atomically)
 
 data Log
-  = LogOpenedTextDocument !Uri
-  | LogModifiedTextDocument !Uri
-  | LogSavedTextDocument !Uri
-  | LogClosedTextDocument !Uri
-  | LogRequestedCompletionsFor !Text
+  = LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
   | LogDecideMissingInformation
-  | LogShake Shake.Log
   deriving (Show)
 
 instance Pretty Log where
   pretty = \case
-    LogOpenedTextDocument uri ->  "Opened text document:" <+> pretty (getUri uri)
-    LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
-    LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
-    LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
     LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
     LogMultipleDecideClauses uri -> "Document contains multiple decide clauses:" <+> pretty (getUri uri)
     LogSuppliedTooManyArguments args -> "Visualization command was passed too many arguments, this is a bug:" <+> pretty (Aeson.encodeToLazyText args)
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
     LogDecideMissingInformation -> "Decide that we are visualising is missing type or source location information"
     LogFileStore msg -> pretty msg
-    LogShake msg -> pretty msg
 
 -- ----------------------------------------------------------------------------
 -- Handlers
@@ -88,53 +78,7 @@ instance Pretty Log where
 handlers :: Recorder (WithPriority Log) -> Handlers (ServerM Config)
 handlers recorder =
   mconcat
-    [ -- We need these notifications handlers to declare that we handle these requests
-      notificationHandler SMethod_Initialized $ \ide _ _ -> do
-        liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
-    , -- Handling of the virtual file system
-      notificationHandler SMethod_TextDocumentDidOpen $ \ide vfs msg -> liftIO $ do
-        let
-          doc = msg ^. J.textDocument . J.uri
-          version = msg ^. J.textDocument . J.version
-        atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) []
-        whenUriFile doc $ \file -> do
-            -- We don't know if the file actually exists, or if the contents match those on disk
-            -- For example, vscode restores previously unsaved contents on open
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file Modified{firstOpen=True}
-        logWith recorder Debug $ LogOpenedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidChange $ \ide vfs msg -> liftIO $ do
-        let
-          doc = msg ^. J.textDocument . J.uri
-          version = msg ^. J.textDocument . J.version
-          changes = msg ^. J.contentChanges
-        atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier doc version) changes
-        whenUriFile doc $ \file -> do
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file Modified{firstOpen=False}
-        logWith recorder Debug $ LogModifiedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidSave $ \ide vfs msg -> liftIO $ do
-        let
-          doc = msg ^. J.textDocument . J.uri
-        whenUriFile doc $ \file -> do
-            setFileModified (VFSModified vfs) ide file $
-              addFileOfInterest ide file OnDisk
-        logWith recorder Debug $ LogSavedTextDocument doc
-    , notificationHandler SMethod_TextDocumentDidClose $ \ide vfs msg -> liftIO $ do
-        let
-          doc = msg ^. J.textDocument . J.uri
-        whenUriFile doc $ \file -> do
-          let herald = "Closed text document: " <> getUri doc
-          setSomethingModified (VFSModified vfs) ide (Text.unpack herald) $ do
-            scheduleGarbageCollection ide
-            deleteFileOfInterest ide file
-          logWith recorder Debug $ LogClosedTextDocument doc
-
-    , notificationHandler SMethod_SetTrace $ \_ _ _msg -> do
-        pure ()
-    , -- Subscribe to notification changes
-      notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
-    , requestHandler SMethod_TextDocumentDefinition $ \ide params -> do
+    [ requestHandler SMethod_TextDocumentDefinition $ \ide params -> do
         let
           doc :: Uri
           doc = params ^. J.textDocument . J.uri

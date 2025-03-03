@@ -17,8 +17,6 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 -- JL4 specific implementation
 -- ----------------------------------------------------------------------------
 
-type HoleFit = HoleFit_ PosToken
-
 defaultSemanticTokenCtx :: SemanticTokenCtx PosToken
 defaultSemanticTokenCtx =
   SemanticTokenCtx
@@ -101,14 +99,14 @@ deriving anyclass instance ToSemTokens PosToken (Program Name)
 -- the token type for the name.
 instance ToSemTokens PosToken (Section Name) where
   toSemTokens (MkSection ann _lvl name decls) =
-    traverseCsnWithHoles ann [withTokenType nameIsDirective $ toSemTokens name, toSemTokens decls]
+    flattenSemanticTokens ann [withTokenType nameIsDirective $ toSemTokens name, toSemTokens decls]
 
 deriving anyclass instance ToSemTokens PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens PosToken (Assume Name)
 instance ToSemTokens PosToken (Declare Name) where
   toSemTokens (MkDeclare ann typesig appform decl) =
-    traverseCsnWithHoles ann [withTokenType identIsType $ toSemTokens typesig, toSemTokens appform, toSemTokens decl]
+    flattenSemanticTokens ann [withTokenType identIsType $ toSemTokens typesig, toSemTokens appform, toSemTokens decl]
 deriving anyclass instance ToSemTokens PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens PosToken (ConDecl Name)
 instance ToSemTokens PosToken (Type' Name) where
@@ -132,16 +130,16 @@ instance ToSemTokens PosToken Int where
 
 instance ToSemTokens PosToken Name where
   toSemTokens (MkName ann _) =
-    traverseCsnWithHoles ann []
+    flattenSemanticTokens ann []
 
 instance ToSemTokens PosToken RawName where
   toSemTokens _ = pure []
 
 instance ToSemTokens PosToken Lit where
   toSemTokens (NumericLit ann _) =
-    traverseCsnWithHoles ann []
+    flattenSemanticTokens ann []
   toSemTokens (StringLit ann _) =
-    traverseCsnWithHoles ann []
+    flattenSemanticTokens ann []
 
 instance ToSemTokens PosToken PosToken where
   toSemTokens t = do
