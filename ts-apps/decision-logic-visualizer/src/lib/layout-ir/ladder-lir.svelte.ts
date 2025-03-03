@@ -309,10 +309,16 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /*****************************
-        Bindings
+          Bindings
   ******************************/
 
-  // setBinding(context: LirContext, binding: { name: Name, value: Value })
+  submitNewBinding(
+    context: LirContext,
+    binding: { name: Unique; value: Value }
+  ) {
+    console.log('submitNewBinding', binding)
+    // TODO
+  }
 
   /*****************************
             Misc
