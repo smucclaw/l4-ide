@@ -15,21 +15,21 @@
     Background,
     Controls,
     ConnectionLineType,
-    type Node,
-    type Edge,
   } from '@xyflow/svelte'
   import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
   import {
     type BaseLadderFlowDisplayerProps,
     sfNodeTypes,
     sfEdgeTypes,
-    type SFNodeWithMeasuredDimensions,
+    type LadderSFNodeWithDims,
+    type LadderSFGraph,
   } from './types.svelte.js'
-  import { ladderGraphToSFGraph, lirIdToSFId } from './ladder-lir-to-sf.js'
+  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
+  import type { LadderLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 
   /************************
        Lir
@@ -59,8 +59,8 @@
   const initialSfGraph = ladderGraphToSFGraph(context, ladderGraph)
 
   // SvelteFlow nodes and edges variables
-  let NODES = $state.raw<Node[]>(initialSfGraph.nodes)
-  let EDGES = $state.raw<Edge[]>(initialSfGraph.edges)
+  let NODES = $state.raw<LadderSFGraph['nodes']>(initialSfGraph.nodes)
+  let EDGES = $state.raw<LadderSFGraph['edges']>(initialSfGraph.edges)
 
   /***********************************
       SvelteFlow hooks
@@ -117,7 +117,7 @@
   }
 
   /*********************************************
-        doLayout, Dagre Graph, Config
+            Layout & Fit View
   **********************************************/
 
   const dagreGraph = new dagre.graphlib.Graph()
@@ -139,17 +139,29 @@
       debouncedSfNodes$Initialized.current &&
       NODES.every((node) => node.measured?.height && node.measured?.width)
     ) {
+      // Layout
       const layoutedElements = getLayoutedElements(
         dagreConfig,
-        NODES as SFNodeWithMeasuredDimensions[],
+        NODES as LadderSFNodeWithDims[],
         EDGES
       )
       NODES = layoutedElements.nodes
       EDGES = layoutedElements.edges
       console.log('nodes', NODES)
       console.log('edges', EDGES)
+
+      // Update Lir with the positions and dimensions
+      layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
+        const lirNode = context.get(sfNode.originalLirId) as LadderLirNode
+        lirNode.setPosition(context, sfNode.position)
+        lirNode.setDimensions(context, {
+          width: sfNode.measured.width,
+          height: sfNode.measured.height,
+        })
+      })
     }
   }
+
   function doFitView() {
     window.requestAnimationFrame(() => {
       fitView({
@@ -176,6 +188,7 @@
        */
     })
   }
+
   function doLayoutAndFitView() {
     doLayout()
     nodes$AreLayouted = true
@@ -235,8 +248,7 @@
     min-height: 0; /* Prevents overflow */
   }
 
-  .paths-container {
+  /* .paths-container {
     flex: 0 0 auto;
-    /* You can set a fixed height or let it occupy the space it needs */
-  }
+  } */
 </style>

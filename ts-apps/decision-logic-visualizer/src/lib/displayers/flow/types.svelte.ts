@@ -10,6 +10,7 @@ import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
 import type { StrokeColorCSSVar } from '../../algebraic-graphs/edge.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
+import type { LirId } from '$lib/layout-ir/core.js'
 
 export interface LadderFlowDisplayerProps extends RootDisplayerProps {
   node: DeclLirNode
