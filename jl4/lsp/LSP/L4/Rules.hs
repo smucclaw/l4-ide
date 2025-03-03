@@ -1,17 +1,16 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
 import L4.Annotation
 import L4.Evaluate
+import L4.FindDefinition (toResolved)
 import L4.Lexer (PosToken, SrcPos (..), SrcRange)
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.Print as Print
+import L4.Citations
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
@@ -21,17 +20,14 @@ import Control.DeepSeq
 import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
+import Data.Functor.Compose (Compose(..))
 import Data.Text (Text)
 import UnliftIO (liftIO)
-import qualified Data.Csv as Csv
-import qualified Data.Map.Lazy as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified System.OsPath as Path
-import qualified System.File.OsPath as Path
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
@@ -115,12 +111,6 @@ type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (Int, 
 data ResolveReferenceAnnotations = ResolveReferenceAnnotations
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
-
-srcRangeToInterval :: SrcRange -> IVMap.Interval SrcPos
-srcRangeToInterval range = IVMap.Interval range.start range.end
-
-intervalToSrcRange :: Int -> IVMap.Interval SrcPos -> SrcRange
-intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
 
 type instance RuleResult GetReferences = ReferenceMapping
 data GetReferences = GetReferences
@@ -285,60 +275,42 @@ jl4Rules recorder = do
     Nothing -> pure ([], Nothing)
     Just f -> do
       ownPath <- normalizedFilePathToOsPath f
-      let citationFilePath = Path.takeDirectory ownPath Path.</> [Path.osp|citations.csv|]
-      -- NOTE: this uses lazy IO, which I think is fine here since the rule results are forced
-      contents <- liftIO $ Path.readFile citationFilePath
-      -- TODO: in future we may want to use the parse of the tree to get the context of the references
       (tokens, _) <- use_ GetLexTokens uri
 
+      -- obtain a valid relative file path from the ref-src annos
+      let refSrcs = foldMap (validRelPath ownPath) tokens
 
-      let stripReferenceHeralds r
-            | Text.isPrefixOf "@ref" r = Text.drop 4 r
-            | ("<<", (r', ">>")) <- Text.span (== '>') <$> Text.span (== '<') r = r'
-            | otherwise = r
+      -- read the contents of the filepaths specified
+      contents <- traverse (liftIO . readContents) $ Compose refSrcs
 
-          normalizeRef = Text.toLower . Text.strip
+      -- parse the file contents from csv into intervalmaps from the sources of
+      -- the annos to the reference they represent
+      let references = getCompose $ mkReferences tokens <$> contents
 
-          rangeOfPosToken = \case
-            -- NOTE: the Semigroup on Map is the wrong one, we want to concatenate values when the keys are identical
-            Lexer.MkPosToken {payload = Lexer.TRef r, range} -> [(normalizeRef $ stripReferenceHeralds r, range)]
-            _ -> mempty
-
-          allReferencesInTree :: [(Text, SrcRange)]
-          allReferencesInTree = foldMap rangeOfPosToken tokens
-
-          records = do
-            decoded <- Csv.decode Csv.NoHeader contents
-
-            let mp = foldMap (uncurry Map.singleton) decoded
-                mkMap r v = IVMap.singleton (srcRangeToInterval r) (r.length, v)
-                getReferences (reference, range) = mkMap range $ Map.lookup (normalizeRef reference) mp
-
-            pure $ foldMap getReferences allReferencesInTree
-
-      pure case records of
-        Right recs -> ([], Just recs)
-        Left err ->
-          (
-            [ FileDiagnostic
-              { fdLspDiagnostic = Diagnostic
-                { _source = Just "jl4"
-                , _severity = Just DiagnosticSeverity_Warning
-                , _range = srcRangeToLspRange Nothing
-                , _message = Text.pack err
-                , _relatedInformation = Nothing
-                , _data_ = Nothing
-                , _codeDescription = Nothing
-                , _tags = Nothing
-                , _code = Nothing
-                }
+      -- report any errors encountered while parsing any of the ref-src annos,
+      -- annotate them on the ref-src annos they originated from and finally
+      -- union all interval maps
+      let (errs, mps) = partitionEithersOnL mkDiagnostic references
+          mkDiagnostic loc err =
+            FileDiagnostic
+              { fdLspDiagnostic =
+                Diagnostic
+                  { _source = Just "jl4"
+                  , _severity = Just DiagnosticSeverity_Warning
+                  , _range = srcRangeToLspRange $ Just loc
+                  , _message = Text.pack err
+                  , _relatedInformation = Nothing
+                  , _data_ = Nothing
+                  , _codeDescription = Nothing
+                  , _tags = Nothing
+                  , _code = Nothing
+                  }
               , fdFilePath = uri
               , fdShouldShowDiagnostic = ShowDiag
               , fdOriginalSource = NoMessage
               }
-            ]
-          , Nothing
-          )
+
+      pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f
@@ -350,7 +322,7 @@ jl4Rules recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ TypeCheck.toResolved tcRes.program
+        resolveds = foldMap spanOf $ toResolved tcRes.program
 
     pure ([], Just resolveds)
 
