@@ -24,9 +24,9 @@
       Set up Lir
   ****************************/
 
-  const registry = new LirRegistry()
+  const lirRegistry = new LirRegistry()
   const context = new LirContext()
-  const nodeInfo = { registry, context }
+  const nodeInfo = { registry: lirRegistry, context }
 
   let vizDecl: IRDecl | undefined = $state(undefined)
   let declLirNode: DeclLirNode | undefined = $derived(
@@ -37,7 +37,7 @@
   )
   $effect(() => {
     if (declLirNode) {
-      registry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
+      lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
     }
   })
 
@@ -82,7 +82,7 @@
 {#if vizDecl && declLirNode}
   {#key declLirNode}
     <div class="flash-on-update visualization-container viz-container-height">
-      <LadderFlow {context} node={declLirNode} />
+      <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
     </div>
   {/key}
 {/if}
