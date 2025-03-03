@@ -45,9 +45,6 @@ jobs:
           libncurses-dev
           pkg-config
           zlib1g-dev
-          locales
-      - name: Set locale
-        run: update-locale LANG=C.UTF-8
       - name: Update git config
         run: |
           locale
