@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -43,6 +44,8 @@ module L4.Parser (
 import Base
 
 import qualified Control.Applicative as Applicative
+import Generics.SOP.BasicFunctors
+import Generics.SOP.NS
 import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
@@ -86,11 +89,10 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs <- many (fmap Left nlgP <|> fmap Right refP)
-  _ <- many refSrcP
+  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refSrcP <|> fmap (S . Z) nlgP <|> fmap Z refP)
   traverse_ addNlgOrRef nlgs
   let
-    epaNlgs = fmap (either epaToHiddenCluster epaToHiddenCluster) nlgs
+    epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
   pure $ Lexeme
     { trailingTokens = ws
     , payload = ()
@@ -137,10 +139,11 @@ lexeme p = do
     , hiddenClusters = wsOrAnnotation.hiddenClusters
     }
 
-addNlgOrRef :: Either (Epa Nlg) (Epa Ref) -> Parser ()
+addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
 addNlgOrRef = \case
-  Left nlg -> modify' (addNlg nlg.payload)
-  Right ref -> modify' (addRef ref.payload)
+  S (Z nlg) -> modify' (addNlg nlg.payload)
+  Z ref -> modify' (addRef ref.payload)
+  _ -> pure ()
 
 spacedP :: Parser a -> Parser (Lexeme a)
 spacedP p = do
