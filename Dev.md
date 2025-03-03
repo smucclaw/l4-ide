@@ -28,7 +28,6 @@ And if this is your first time doing any kind of development on your system, on 
 xcode-select --install
 ```
 
-
 ## Quick build and install
 
 ```sh
