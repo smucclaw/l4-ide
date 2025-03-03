@@ -137,8 +137,7 @@
   function doLayout() {
     if (
       debouncedSfNodes$Initialized.current &&
-      NODES[0] &&
-      NODES[0].measured?.width
+      NODES.every((node) => node.measured?.height && node.measured?.width)
     ) {
       const layoutedElements = getLayoutedElements(
         dagreConfig,
