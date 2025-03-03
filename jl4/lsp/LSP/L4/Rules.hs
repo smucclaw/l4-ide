@@ -18,9 +18,9 @@ import L4.Parser.SrcSpan
 
 import Control.DeepSeq
 import Control.Lens ((^.))
+import Control.Monad.Except (runExceptT)
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Functor.Compose (Compose(..))
 import Data.Text (Text)
 import UnliftIO (liftIO)
 import Data.Map.Monoidal (MonoidalMap)
@@ -44,6 +44,8 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
+import Data.Either (partitionEithers)
+import Debug.Trace
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -284,20 +286,36 @@ jl4Rules recorder = do
       ownPath <- normalizedFilePathToOsPath f
       (tokens, _) <- use_ GetLexTokens uri
 
-      -- obtain a valid relative file path from the ref-src annos
-      let refSrcs = foldMap (validRelPath ownPath) tokens
-
-      -- read the contents of the filepaths specified
-      contents <- traverse (liftIO . readContents) $ Compose refSrcs
-
+      -- obtain a valid relative file path from the ref-src annos and
       -- parse the file contents from csv into intervalmaps from the sources of
       -- the annos to the reference they represent
-      let references = getCompose $ mkReferences tokens <$> contents
+      refSrcs <- liftIO
+        $ traverse
+          (\n -> runExceptT do
+             refSrc <- withRefSrc ownPath n
+             let refMap = withRefMap n
+             pure (refSrc <> refMap)
+          )
+          tokens
+
+      traceShowM refSrcs
+
 
       -- report any errors encountered while parsing any of the ref-src annos,
       -- annotate them on the ref-src annos they originated from and finally
       -- union all interval maps
-      let (errs, mps) = partitionEithersOnL mkDiagnostic references
+      let (errs, references) = partitionEithers refSrcs
+
+          mkReferencesFromNonempty v
+            | null v = Nothing
+            | otherwise = Just $ mkReferences tokens v
+
+          mps = case Maybe.mapMaybe mkReferencesFromNonempty references of
+            [] -> Nothing
+            xs -> Just $ mconcat xs
+
+          diags = map (uncurry mkDiagnostic) errs
+
           mkDiagnostic loc err =
             FileDiagnostic
               { fdLspDiagnostic =
@@ -317,7 +335,9 @@ jl4Rules recorder = do
               , fdOriginalSource = NoMessage
               }
 
-      pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
+      traceShowM $ fmap toList mps
+
+      pure (diags, mps)
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f
