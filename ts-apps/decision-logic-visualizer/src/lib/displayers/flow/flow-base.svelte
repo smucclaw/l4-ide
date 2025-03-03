@@ -203,6 +203,8 @@
     </SvelteFlow>
   </div>
   <!-- Paths Section -->
+  <!-- 
+  NOW OUTDATED --- WILL BE REFACTORING THIS
   <section class="paths-container">
     <div class="flex flex-col gap-2">
       {#each ladderGraph.getPaths(context) as path}
@@ -215,7 +217,7 @@
         </button>
       {/each}
     </div>
-  </section>
+  </section> -->
 </div>
 
 <!-- For debugging -->

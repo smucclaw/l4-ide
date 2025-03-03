@@ -10,8 +10,8 @@ import {
   type Edge,
   DirectedEdge,
   type EdgeStyles,
-  HighlightedEdgeStyles,
-  EmptyEdgeStyles,
+  // HighlightedEdgeStyles,
+  // EmptyEdgeStyles,
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 
@@ -24,7 +24,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
-                  Decl Lir Node 
+                Decl Lir Node 
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -73,27 +73,18 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-export class PathLirNode {
+/*************************************************
+              Path Lir Node 
+ *************************************************/
+
+// TODO: Might also need something like a container lir node for the Array<PathLirNode>
+
+abstract class BasePathLirNode extends DefaultLirNode {
   constructor(
-    protected ladderGraph: LadderGraphLirNode,
+    nodeInfo: LirNodeInfo,
     protected rawPath: DirectedAcyclicGraph<LirId>
-  ) {}
-
-  /** Helper */
-  protected setStylesOnPathEdges(context: LirContext, styles: EdgeStyles) {
-    const edges = this.rawPath.getEdges()
-    edges.forEach((edge) => {
-      this.ladderGraph.setEdgeStyles(context, edge, styles)
-    })
-  }
-
-  highlight(context: LirContext) {
-    this.setStylesOnPathEdges(context, new HighlightedEdgeStyles())
-    // TODO: setbindings for the vars in the path too
-  }
-
-  unhighlight(context: LirContext) {
-    this.setStylesOnPathEdges(context, new EmptyEdgeStyles())
+  ) {
+    super(nodeInfo)
   }
 
   getVertices(context: LirContext) {
@@ -110,12 +101,70 @@ export class PathLirNode {
   }
 }
 
+/** For the first version, we'll take the LinearizedPaths to be wholly controlled by interactions on the ladder graph;
+ * i.e., let's not worry about the linearized path -> ladder graph interactions for the v1,
+ * and instead just focus on ladder graph -> linearized paths.
+ *
+ * The v1 could be as simple as:
+ * - whenever new bindings are submitted on the ladder graph,
+ *    re-compute (via `induce`) the subgraph that is compatible with the new scoreboard / env,
+ *    then generate the linearized paths of that subgraph.
+ */
+export type PathLirNode = CompatiblePathLirNode | IncompatiblePathLirNode
+
+export class CompatiblePathLirNode extends BasePathLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo, rawPath)
+  }
+
+  toString() {
+    return 'COMPATIBLE_PATH_LIR_NODE'
+  }
+
+  /** Note: This is styling for the *linearized* paths below the ladder graph,
+   * as opposed to styles for paths *in* the ladder graph */
+  getPathStyles() {
+    console.error('TODO')
+  }
+}
+
+export class IncompatiblePathLirNode
+  extends BasePathLirNode
+  implements LirNode
+{
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo, rawPath)
+  }
+
+  toString() {
+    return 'INCOMPATIBLE_PATH_LIR_NODE'
+  }
+
+  /** Note: This is styling for the *linearized* paths below the ladder graph,
+   * as opposed to styles for paths *in* the ladder graph */
+  getPathStyles() {
+    console.error('TODO')
+  }
+}
+
 /******************************************************
                   Flow Lir Nodes
  ******************************************************/
 
 // There's a 1-1 correspondence between the Flow Lir Nodes and the SF Nodes that are fed to SvelteFlow
 // (and similarly with Flow Lir Edges)
+
+/*
+TO THINK ABT:
+- do we even want to put Position on the lir nodes?
+perhaps position should be handled entirely at the SF Node level?
+*/
 
 type Position = { x: number; y: number }
 
@@ -189,11 +238,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
+  // TODO: prob need to refactor: want to be able to
+  // generate the linearized paths of the the subgraph that is compatible with the updated scoreboard / env,.
   /** Get all simple paths through the Dag */
   getPaths(_context: LirContext) {
-    return this.#dag
-      .getAllPaths()
-      .map((rawPath) => new PathLirNode(this, rawPath))
+    return this.#dag.getAllPaths()
   }
 
   /*****************************
