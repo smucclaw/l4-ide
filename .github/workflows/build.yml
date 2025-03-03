@@ -28,9 +28,9 @@ jobs:
       - name: Update repositories
         run: apt update
       - name: Install deps
-        run: apt install -y git
+        run: apt install -y git sudo
       - name: Update git config
-        run: git config --global --add safe.directory /__w/l4-ide/l4-ide
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty
       # at the begin of a run
       - name: Remove cabal store
@@ -105,9 +105,9 @@ jobs:
       - name: Update repositories
         run: apt update      
       - name: Install deps
-        run: apt install -y git
+        run: apt install -y git sudo
       - name: Update git config
-        run: git config --global --add safe.directory /__w/l4-ide/l4-ide
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
       - name: Use Node.js
         uses: actions/setup-node@v4
