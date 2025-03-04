@@ -50,6 +50,7 @@ library
     safe-exceptions,
     text >= 2 && < 2.1.2,
     tree-diff,
+    vector,
 
   exposed-modules:
     Base
