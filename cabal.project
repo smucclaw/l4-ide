@@ -1,1 +1,3 @@
-packages: ./jl4
+packages: 
+  ./jl4
+  ./jl4-websessions
