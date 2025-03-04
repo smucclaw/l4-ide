@@ -1397,6 +1397,7 @@ mkLexeme trail a = Lexeme
   , hiddenClusters = []
   }
 
+-- | 'Epa_' stands for _E_xact_p_rint _a_nnotation
 data Epa_ t a = Epa
   { original :: [t]
   , trailingTokens :: [t]
