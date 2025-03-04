@@ -13,6 +13,7 @@
         { pkgs, ... }:
         {
           packages = import ./nix/default.nix { inherit pkgs; };
+          devShells.default = import ./nix/shell.nix { inherit pkgs; };
         };
       flake = {
         nixosConfigurations.jl4-demo = inputs.nixpkgs.lib.nixosSystem {
