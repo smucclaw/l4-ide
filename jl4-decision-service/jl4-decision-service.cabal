@@ -1,0 +1,131 @@
+cabal-version: 3.0
+name: jl4-decision-service
+version: 0.1.0.0
+build-type: Simple
+tested-with: ghc ==9.6.6
+extra-source-files:
+  CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/cclaw/l4-ide/jl4-decision-service
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wderiving-typeable
+    -Wunused-packages
+    -Werror
+    -Wall
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    LambdaCase
+    NoFieldSelectors
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+
+  build-depends:
+    base >=4.7 && <5
+
+library
+  import: defaults
+  exposed-modules:
+    Application
+    Backend.Api
+    Backend.Jl4
+    Examples
+    Options
+    Schema
+    Server
+
+  other-modules:
+    Paths_jl4_decision_service
+
+  autogen-modules:
+    Paths_jl4_decision_service
+
+  hs-source-dirs:
+    src
+
+  build-depends:
+    aeson,
+    aeson-combinators,
+    bytestring,
+    chronos,
+    containers,
+    extra,
+    filepath,
+    jl4,
+    lens,
+    openapi3,
+    optics,
+    optparse-applicative,
+    scientific,
+    servant >=0.20.2 && <0.21,
+    servant-openapi3,
+    servant-server >=0.20.2 && <0.21,
+    servant-swagger-ui,
+    stm,
+    string-interpolate,
+    text,
+    transformers,
+    vector,
+    wai,
+    wai-logger,
+    warp,
+
+executable jl4-decision-service-exe
+  import: defaults
+  main-is: Main.hs
+  other-modules:
+    Paths_jl4_decision_service
+
+  autogen-modules:
+    Paths_jl4_decision_service
+
+  hs-source-dirs:
+    app
+
+  build-depends:
+    jl4-decision-service
+
+test-suite jl4-decision-service-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Paths_jl4_decision_service
+    SchemaSpec
+
+  hs-source-dirs:
+    test
+
+  build-tool-depends:
+    hspec-discover:hspec-discover
+
+  build-depends:
+    QuickCheck,
+    base >=4.7 && <5,
+    hspec,
+    quickcheck-instances,
+    servant >=0.20.2 && <0.21,
+    servant-openapi3,
+    text,
+    jl4-decision-service,
