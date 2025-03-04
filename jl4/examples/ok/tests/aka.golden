@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+aka.l4:3:7-8:
+  TRUE
+
+aka.l4:4:7-8:
+  TRUE
+
+aka.l4:5:7-8:
+  TRUE
+

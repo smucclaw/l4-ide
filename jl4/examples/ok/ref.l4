@@ -1,0 +1,14 @@
+-- this is a reference source annotations. it tells where 
+-- to look for citations
+@ref-src citations.csv
+GIVEN x IS A BOOLEAN, y IS A BOOLEAN 
+GIVETH A BOOLEAN @ref 1981/61 sec. 2
+                  -- we can use ref annotations
+                  -- with regexes which must be
+                  -- aware that before matching,
+                  -- the string in the reference
+                  -- is normalized
+DECIDE xor x y IS  @ref SG-c-2025-sghcf-14
+     x AND NOT y <<SG-c-2025-sghcf-12>>
+  OR NOT x AND y
+

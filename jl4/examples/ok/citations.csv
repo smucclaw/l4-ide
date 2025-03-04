@@ -1,3 +1,4 @@
-"foo","https://www.legislation.gov.uk/ukpga/2002/8/section/1"
-"bar","https://www.legislation.gov.uk/ukpga/1981/61/section/3"
-"baz","https://www.legislation.gov.uk/ukpga/1981/61/section/2"
+"regex:sg-c-(\d{4})-([a-z]+)-(\d+)","https://www.elitigation.sg/gd/s/$1_$2_$3"
+"1981/61 sec. 2","https://www.legislation.gov.uk/ukpga/1981/61/section/2"
+"1981/61 sec. 3","https://www.legislation.gov.uk/ukpga/1981/61/section/3"
+"2002/8 sec. 1","https://www.legislation.gov.uk/ukpga/2002/8/section/1"

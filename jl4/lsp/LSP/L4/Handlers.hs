@@ -8,6 +8,7 @@ module LSP.L4.Handlers where
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
+import qualified Optics
 import Control.Monad.Extra (guard, whenJust)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Reader (MonadReader (..))
@@ -18,6 +19,7 @@ import Data.Either (isRight)
 import Data.Monoid (Ap (..))
 import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
+import qualified StmContainers.Map as STM
 import Control.Applicative
 import Control.Monad.Except (throwError, runExceptT, ExceptT)
 import Control.Monad.Trans.Maybe
@@ -34,6 +36,14 @@ import qualified Data.Text.Lazy as LazyText
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
+import L4.FindDefinition (findDefinition)
+import L4.HoverInfo (findInfo)
+import L4.Citations
+import LSP.L4.Base
+import LSP.L4.Config
+import LSP.L4.Rules hiding (Log (..))
+import LSP.L4.SemanticTokens (srcPosToPosition)
+
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
@@ -43,12 +53,8 @@ import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
-import LSP.L4.Base
-import LSP.L4.Config
 import qualified LSP.L4.Viz.Ladder as Ladder
-import LSP.L4.Rules hiding (Log (..))
 import LSP.Logger
-import LSP.L4.SemanticTokens (srcPosToPosition)
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -57,8 +63,6 @@ import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
-import qualified Optics
-import qualified StmContainers.Map as STM
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -74,7 +78,7 @@ data ServerState =
 
 newtype ServerM c a = ServerM { runServerT :: ReaderT ServerState (LspT c IO) a }
   deriving (Semigroup, Monoid) via (Ap (ServerM c) a)
-  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' 'ServerM' c@
+  -- ^ 'Ap' lifts the @'Monoid' a@ through the @'Applicative' ('ServerM' c)@
   deriving newtype (Functor, Applicative, Monad, MonadReader ServerState)
   deriving newtype (MonadLsp c, MonadCatch, MonadIO, MonadMask, MonadThrow, MonadUnliftIO)
 
@@ -620,7 +624,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
               Assume emptyAnno
                 (MkAssume emptyAnno
                   (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
-                  (MkAppForm emptyAnno name [])
+                  (MkAppForm emptyAnno name [] Nothing)
                   (Just $ fmap getActual ty)
                 )
 

@@ -5,7 +5,6 @@ import Base
 import L4.Lexer
 
 import qualified Generics.SOP as SOP
-import qualified Base.Text as Text
 
 -- ----------------------------------------------------------------------------
 -- SrcSpan
@@ -47,12 +46,3 @@ rangeAfter s1 s2 =
 
 prettySrcSpan :: SrcSpan -> Text
 prettySrcSpan (MkSrcSpan p1 p2) = prettySrcPos p1 <> prettyPartialSrcPos p1 p2
-
-prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
-
-prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
-prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
-  | rl == l && rc == c = ""
-  | rl == l = "-" <> Text.show c
-  | otherwise = "-" <> prettySrcPos p

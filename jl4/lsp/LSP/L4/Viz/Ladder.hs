@@ -93,7 +93,7 @@ vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simp
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
 translateDecide :: Bool -> Decide Resolved -> Viz V.IRDecl
-translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _) body) =
+translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
     uid <- getFresh
     vizBody <- translateExpr simplify body

@@ -5,7 +5,7 @@ import qualified Base.Text as Text
 
 import Options.Applicative as Options
 
-import L4.Lexer (SrcRange)
+import L4.Lexer (SrcRange, prettySrcRange)
 import L4.Parser
 import L4.TypeCheck
 import L4.ExactPrint

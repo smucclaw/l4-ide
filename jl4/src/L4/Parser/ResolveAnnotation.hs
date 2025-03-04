@@ -122,10 +122,11 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Program n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Section n) where
   addNlg a = extendNlgA a $ case a of
-    MkSection ann lvl lbl topDecls -> do
+    MkSection ann lvl lbl maka topDecls -> do
       lbl' <- traverse addNlg lbl
+      maka' <- traverse addNlg maka
       topDecls' <- traverse addNlg topDecls
-      pure (MkSection ann lvl lbl' topDecls')
+      pure (MkSection ann lvl lbl' maka' topDecls')
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
   addNlg a = extendNlgA a $ case a of
@@ -144,26 +145,26 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of
-    MkDeclare ann tySig appForm tyDecl -> do
+    MkDeclare ann tySig appFormAka tyDecl -> do
       tySig' <- addNlg tySig
-      appForm' <- addNlg appForm
+      appFormAka' <- addNlg appFormAka
       tyDecl' <- addNlg tyDecl
-      pure $ MkDeclare ann tySig' appForm' tyDecl'
+      pure $ MkDeclare ann tySig' appFormAka' tyDecl'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Decide n) where
   addNlg a = extendNlgA a $ case a of
-    MkDecide ann tySig appForm expr -> do
+    MkDecide ann tySig appFormAka expr -> do
       tySig' <- addNlg tySig
-      appForm' <- addNlg appForm
+      appFormAka' <- addNlg appFormAka
       expr' <- addNlg expr
-      pure $ MkDecide ann tySig' appForm' expr'
+      pure $ MkDecide ann tySig' appFormAka' expr'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Assume n) where
   addNlg a = extendNlgA a $ case a of
-    MkAssume ann tySig appForm order -> do
+    MkAssume ann tySig appFormAka order -> do
       tySig' <- addNlg tySig
-      appForm' <- addNlg appForm
-      pure $ MkAssume ann tySig' appForm' order
+      appFormAka' <- addNlg appFormAka
+      pure $ MkAssume ann tySig' appFormAka' order
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
   addNlg a = extendNlgA a $ case a of
@@ -254,10 +255,17 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (OptionallyNamedType n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (AppForm n) where
   addNlg a = extendNlgA a $ case a of
-    MkAppForm ann n ns -> do
+    MkAppForm ann n ns maka -> do
       n' <- addNlg n
       ns' <- traverse addNlg ns
-      pure $ MkAppForm ann n' ns'
+      maka' <- traverse addNlg maka
+      pure $ MkAppForm ann n' ns' maka'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Aka n) where
+  addNlg a = extendNlgA a $ case a of
+    MkAka ann ns -> do
+      ns' <- traverse addNlg ns
+      pure $ MkAka ann ns'
 
 instance HasNlg Name where
   addNlg a = extendNlgA a $ case a of
