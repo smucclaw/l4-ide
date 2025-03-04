@@ -1,0 +1,57 @@
+
+DECLARE Inputs
+  HAS
+    `Loss or Damage.caused by rodents` IS A BOOLEAN
+    `Loss or Damage.caused by insects` IS A BOOLEAN
+    `Loss or Damage.caused by vermin` IS A BOOLEAN
+    `Loss or Damage.caused by birds` IS A BOOLEAN
+    `Loss or Damage.to Contents` IS A BOOLEAN
+    `any other exclusion applies` IS A BOOLEAN
+    `a household appliance` IS A BOOLEAN
+    `a swimming pool` IS A BOOLEAN
+    `a plumbing, heating, or air conditioning system` IS A BOOLEAN
+    `Loss or Damage.ensuing covered loss` IS A BOOLEAN
+
+GIVEN i IS Inputs
+GIVETH A BOOLEAN
+DECIDE `insurance covered` i IF
+    `not covered if`
+         `loss or damage by animals`
+     AND NOT               `damage to contents and caused by birds`
+                OR         `ensuing covered loss`
+                    AND NOT `exclusion apply`
+ WHERE
+    `not covered if` MEANS GIVEN x YIELD x
+
+    `loss or damage by animals` MEANS
+        i's `Loss or Damage.caused by rodents`
+     OR i's `Loss or Damage.caused by insects`
+     OR i's `Loss or Damage.caused by vermin`
+     OR i's `Loss or Damage.caused by birds`
+
+    `damage to contents and caused by birds` MEANS
+         i's `Loss or Damage.to Contents`
+     AND i's `Loss or Damage.caused by birds`
+
+    `ensuing covered loss` MEANS
+        i's `Loss or Damage.ensuing covered loss`
+
+    `exclusion apply` MEANS
+        i's `any other exclusion applies`
+     OR i's `a household appliance`
+     OR i's `a swimming pool`
+     OR i's `a plumbing, heating, or air conditioning system`
+
+#EVAL `insurance covered` OF
+        Inputs
+        WITH
+            `Loss or Damage.caused by rodents` IS FALSE
+            `Loss or Damage.caused by insects` IS FALSE
+            `Loss or Damage.caused by vermin` IS FALSE
+            `Loss or Damage.caused by birds` IS FALSE
+            `Loss or Damage.to Contents` IS FALSE
+            `any other exclusion applies` IS FALSE
+            `a household appliance` IS FALSE
+            `a swimming pool` IS FALSE
+            `a plumbing, heating, or air conditioning system` IS FALSE
+            `Loss or Damage.ensuing covered loss` IS FALSE
