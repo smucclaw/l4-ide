@@ -142,11 +142,15 @@ lookupReference pos mapping = do
 
 data Log
   = ShakeLog Shake.Log
+  | LogTraverseAnnoError !Text !TraverseAnnoError
+  | LogRelSemanticTokenError !Text
   deriving (Show)
 
 instance Pretty Log where
   pretty = \case
     ShakeLog msg -> pretty msg
+    LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
+    LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
 
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
@@ -205,16 +209,18 @@ jl4Rules recorder = do
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
     case runSemanticTokensM (defaultSemanticTokenCtx ()) tokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "Lexer" err
+        pure ([], Nothing)
       Right tokenized -> do
         pure ([], Just tokenized)
 
   define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
     case runSemanticTokensM (defaultSemanticTokenCtx CValue) prog of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "Parser" err
+        pure ([], Nothing)
       Right tokenized -> do
           pure ([], Just tokenized)
 
@@ -265,8 +271,9 @@ jl4Rules recorder = do
     tokens <- use_ GetSemanticTokens f
     let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
     case encodeTokens defaultSemanticTokensLegend semanticTokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogRelSemanticTokenError err
+        pure ([], Nothing)
       Right relSemTokens ->
           pure ([], Just relSemTokens)
   define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
