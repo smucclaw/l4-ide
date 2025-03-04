@@ -1,12 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // TODO: Need to refactor BoolValue to add a method for getting styles!
-import type { BoolVar, BoolValue, Name } from '@repo/viz-expr'
+import { type BoolVal, TrueVal, FalseVal, UnknownVal } from './bool-val.js'
+import type { BoolVar, Value, Unique, Name } from '@repo/viz-expr'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
-import { DirectedEdge } from '../algebraic-graphs/edge.js'
+import {
+  type Edge,
+  DirectedEdge,
+  type EdgeStyles,
+  // HighlightedEdgeStyles,
+  // EmptyEdgeStyles,
+  type EdgeAttributes,
+} from '../algebraic-graphs/edge.js'
+import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
+import { match } from 'ts-pattern'
 
 /*
 Design principles:
@@ -17,7 +27,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
-                  Decl Lir Node 
+                Decl Lir Node 
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -53,7 +63,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return this.#params
   }
 
-  getBody(context: LirContext) {
+  getBody(_context: LirContext) {
     return this.#body
   }
 
@@ -66,6 +76,86 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
+/*************************************************
+              Path Lir Node 
+ *************************************************/
+
+// TODO: Might also need something like a container lir node for the Array<PathLirNode>
+
+abstract class BasePathLirNode extends DefaultLirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo)
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
+  }
+}
+
+/** For the first version, we'll take the LinearizedPaths to be wholly controlled by interactions on the ladder graph;
+ * i.e., let's not worry about the linearized path -> ladder graph interactions for the v1,
+ * and instead just focus on ladder graph -> linearized paths.
+ *
+ * The v1 could be as simple as:
+ * - whenever new bindings are submitted on the ladder graph,
+ *    re-compute (via `induce`) the subgraph that is compatible with the new scoreboard / env,
+ *    then generate the linearized paths of that subgraph.
+ */
+export type PathLirNode = CompatiblePathLirNode | IncompatiblePathLirNode
+
+export class CompatiblePathLirNode extends BasePathLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo, rawPath)
+  }
+
+  toString() {
+    return 'COMPATIBLE_PATH_LIR_NODE'
+  }
+
+  /** Note: This is styling for the *linearized* paths below the ladder graph,
+   * as opposed to styles for paths *in* the ladder graph */
+  getPathStyles() {
+    console.error('TODO')
+  }
+}
+
+export class IncompatiblePathLirNode
+  extends BasePathLirNode
+  implements LirNode
+{
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo, rawPath)
+  }
+
+  toString() {
+    return 'INCOMPATIBLE_PATH_LIR_NODE'
+  }
+
+  /** Note: This is styling for the *linearized* paths below the ladder graph,
+   * as opposed to styles for paths *in* the ladder graph */
+  getPathStyles() {
+    console.error('TODO')
+  }
+}
+
 /******************************************************
                   Flow Lir Nodes
  ******************************************************/
@@ -73,28 +163,52 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 // There's a 1-1 correspondence between the Flow Lir Nodes and the SF Nodes that are fed to SvelteFlow
 // (and similarly with Flow Lir Edges)
 
+/*
+TO THINK ABT:
+- do we even want to put Position on the lir nodes?
+perhaps position should be handled entirely at the SF Node level?
+*/
+
 type Position = { x: number; y: number }
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
 export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
+  getDimensions(context: LirContext): Dimensions | undefined
+  setDimensions(context: LirContext, dimensions: Dimensions): void
+
   getPosition(context: LirContext): Position
+  setPosition(context: LirContext, position: Position): void
+
   toPretty(context: LirContext): string
 }
 
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
-  #position: Position
+  protected position: Position
+  protected dimensions?: Dimensions
 
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo)
-    this.#position = position
+    this.position = position
+  }
+
+  getDimensions(_context: LirContext) {
+    return this.dimensions
+  }
+
+  setDimensions(_context: LirContext, dimensions: Dimensions): void {
+    this.dimensions = dimensions
   }
 
   getPosition(_context: LirContext): Position {
-    return this.#position
+    return this.position
+  }
+
+  setPosition(_context: LirContext, position: Position): void {
+    this.position = position
   }
 
   isEqualTo<T extends LirNode>(other: T) {
@@ -120,6 +234,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
   }
 
+  /*****************************
+      Basic graph ops
+  ******************************/
+
   /** The `id` should correspond to that of a LadderLirNode. */
   getNeighbors(context: LirContext, id: LirId): LadderLirNode[] {
     const neighbors = this.#dag.getAdjMap().get(id) || new Set()
@@ -135,14 +253,76 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
-  // When we associate data with edges, will want to add a getEdge method too
-
   getEdges(_context: LirContext): LadderLirEdge[] {
-    // TODO: In the future, will want to add any data associated with the edges too
     return this.#dag.getEdges().map((edge) => {
       return new DefaultLadderLirEdge(edge)
     })
   }
+
+  // TODO: prob need to refactor: want to be able to
+  // generate the linearized paths of the the subgraph that is compatible with the updated scoreboard / env,.
+  /** Get all simple paths through the Dag */
+  getPaths(_context: LirContext) {
+    return this.#dag.getAllPaths()
+  }
+
+  /*****************************
+        Edge attributes
+  ******************************/
+
+  getEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeAttributes {
+    return this.#dag.getAttributesForEdge(edge)
+  }
+
+  // TODO: Think more abt whether we really need the rest
+
+  getEdgeStyles<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeStyles {
+    return this.#dag.getAttributesForEdge(edge).getStyles()
+  }
+
+  setEdgeStyles<T extends Edge<LirId>>(
+    context: LirContext,
+    edge: T,
+    styles: EdgeStyles
+  ) {
+    this.#dag.getAttributesForEdge(edge).setStyles(styles)
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  getEdgeLabel<T extends Edge<LirId>>(_context: LirContext, edge: T): string {
+    return this.#dag.getAttributesForEdge(edge).getLabel()
+  }
+
+  setEdgeLabel<T extends Edge<LirId>>(
+    context: LirContext,
+    edge: T,
+    label: string
+  ) {
+    this.#dag.getAttributesForEdge(edge).setLabel(label)
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  /*****************************
+          Bindings
+  ******************************/
+
+  submitNewBinding(
+    context: LirContext,
+    binding: { name: Unique; value: Value }
+  ) {
+    console.log('submitNewBinding', binding)
+    // TODO
+  }
+
+  /*****************************
+            Misc
+  ******************************/
 
   getChildren(context: LirContext) {
     return this.getVertices(context)
@@ -167,10 +347,10 @@ export type VarLirNode = BoolVarLirNode
 
 export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
   readonly #originalExpr: BoolVar
-  #value = $state<BoolValue>()!
+  #value = $state<BoolVal>()!
 
   /** For the SF node we'll make from the BoolVarLirNode */
-  #data: { name: Name; value: BoolValue }
+  #data: { name: Name; value: BoolVal }
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -179,7 +359,11 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
   ) {
     super(nodeInfo, position)
     this.#originalExpr = originalExpr
-    this.#value = originalExpr.value // TO CHANGE
+    this.#value = match(originalExpr.value)
+      .with('True', () => new TrueVal())
+      .with('False', () => new FalseVal())
+      .with('Unknown', () => new UnknownVal())
+      .exhaustive()
     this.#data = { name: originalExpr.name, value: this.#value }
   }
 
@@ -195,13 +379,14 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.#data
   }
 
-  getValue(_context: LirContext): BoolValue {
+  getValue(_context: LirContext): BoolVal {
     return this.#value
   }
 
-  setValue(_context: LirContext, value: BoolValue) {
+  /** This will only be called by LadderGraphLirNode */
+  _setValue(context: LirContext, value: BoolVal) {
     this.#value = value
-    // TODO: Will probably want to publish that value has been set!
+    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(_context: LirContext) {

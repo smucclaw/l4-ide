@@ -1,10 +1,7 @@
 import dagre from '@dagrejs/dagre'
 import type { Edge } from '@xyflow/svelte'
 import { Position } from '@xyflow/svelte'
-import {
-  isSFGroupingNode,
-  type SFNodeWithMeasuredDimensions,
-} from './types.svelte.js'
+import { isSFGroupingNode, type LadderSFNodeWithDims } from './types.svelte.js'
 
 export interface DagreConfig {
   // TODO: Clean this up in the future!
@@ -19,7 +16,7 @@ export interface DagreConfig {
 
 // TODO-IMPT: Check if Dagre / SF is able to get the right viewport size when this is opened in VSC
 
-// TODO: May want the layout function to work with the intermediate DAG representation,
+// TODO: Refactor the layout function to work with LirNodes,
 // as opposed to working with the SF nodes/edges directly
 /**
  * Assumes that the input nodes have already been measured (i.e., have a measured.width and measured.height).
@@ -27,28 +24,29 @@ export interface DagreConfig {
  * Adapted from SvelteFlow lib's sample code. */
 export function getLayoutedElements(
   config: DagreConfig,
-  nodes: SFNodeWithMeasuredDimensions[],
-  edges: Edge[]
+  sfNodes: LadderSFNodeWithDims[],
+  sfEdges: Edge[]
 ) {
   config.dagreGraph.setGraph({ rankdir: config.graph.direction })
 
-  // Node dimensions
-
-  nodes.forEach((node) => {
+  // Convey measured node dimensions to Dagre
+  sfNodes.forEach((node) => {
     // console.log(
     //   'node width, height',
     //   node.measured?.width,
     //   node.measured?.height
     // )
-    config.dagreGraph.setNode(node.id, {
+    const dims = {
       // including the fallback options because I don't fully trust TS' type system
       width: node.measured?.width ?? config.graph.defaultNodeWidth,
       height: node.measured?.height ?? config.graph.defaultNodeHeight,
-    })
+    }
+
+    config.dagreGraph.setNode(node.id, dims)
   })
 
   // Edges
-  edges.forEach((edge) => {
+  sfEdges.forEach((edge) => {
     config.dagreGraph.setEdge(edge.source, edge.target)
   })
 
@@ -57,7 +55,7 @@ export function getLayoutedElements(
    */
   dagre.layout(config.dagreGraph, { nodesep: 30 })
 
-  const layoutedNodes = nodes.map((node) => {
+  const layoutedNodes = sfNodes.map((node) => {
     const nodeWithPosition = config.dagreGraph.node(node.id)
     // these positions are what get recommended for a horizontal direction
     node.targetPosition = Position.Left
@@ -81,7 +79,7 @@ export function getLayoutedElements(
     }
   })
 
-  return { nodes: layoutedNodes, edges }
+  return { nodes: layoutedNodes, edges: sfEdges }
 }
 
 /* https://github.com/dagrejs/dagre/wiki#configuring-the-layout

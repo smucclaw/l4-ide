@@ -8,16 +8,23 @@ but this framework is now getting quite different from what it used to be.
 */
 
 import { ComparisonResult } from '../utils.js'
+import { setContext, getContext } from 'svelte'
 
 /*********************************************
-       Registry
+       Registry, Top-level Lir
 ***********************************************/
+
+export type Unsubscriber = { unsubscribe: () => void }
+
 export type LirRootType = string
 
 /** Lir := 'Layout IR' */
 export class LirRegistry {
   #roots: Map<LirRootType, LirNode> = new Map()
-  // Will add subscribers here in the future
+  #subscribers: Map<symbol, (context: LirContext, id: LirId) => void> =
+    new Map()
+
+  constructor() {}
 
   // @typescript-eslint/no-unused-vars
   getRoot(_context: LirContext, rootType: LirRootType): LirNode | undefined {
@@ -27,6 +34,21 @@ export class LirRegistry {
   // @typescript-eslint/no-unused-vars
   setRoot(_context: LirContext, rootType: LirRootType, node: LirNode) {
     this.#roots.set(rootType, node)
+  }
+
+  subscribe(callback: (_: LirContext, id: LirId) => void): Unsubscriber {
+    const callbackId = Symbol()
+    this.#subscribers.set(callbackId, callback)
+    return {
+      unsubscribe: () => this.#subscribers.delete(callbackId),
+    }
+  }
+
+  publish(context: LirContext, id: LirId) {
+    // must NOT use forEach on pain of running into issues with Safari, at least for me
+    for (const callback of this.#subscribers.values()) {
+      callback(context, id)
+    }
   }
 }
 
@@ -161,4 +183,33 @@ export class LirContext {
 
 export interface LirSource<A, B> {
   toLir(nodeInfo: LirNodeInfo, data: A): B
+}
+
+/*************************************************
+ ****************** Displayers *******************
+ *************************************************/
+
+export interface DisplayerProps {
+  context: LirContext
+  node: LirNode
+}
+
+export interface RootDisplayerProps extends DisplayerProps {
+  /** The root displayer will set the `lir` in the Svelte context so that children displayers can also access it */
+  lir: LirRegistry
+}
+
+const lirRegistryKey = 'lirRegistry'
+
+export function setLirRegistryInSvelteContext(
+  lir: ReturnType<typeof getLirRegistryFromSvelteContext>
+) {
+  setContext(lirRegistryKey, lir)
+}
+
+/** This must be called during component initialization
+ * since setContext / getContext must be called during component initialization.
+ */
+export function getLirRegistryFromSvelteContext(): LirRegistry {
+  return getContext(lirRegistryKey)
 }

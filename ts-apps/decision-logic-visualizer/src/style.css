@@ -102,7 +102,8 @@ body {
     font-style: normal;
   }
 
-  .svelte-flow__edge:hover .svelte-flow__edge-path {
-    stroke: var(--color-secondary) !important;
+  .svelte-flow__edge .svelte-flow__edge-path {
+    --default-internal-stroke-color: var(--stroke-color, var(--color-primary));
+    stroke: var(--default-internal-stroke-color) !important;
   }
 }

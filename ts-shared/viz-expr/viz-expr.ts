@@ -70,10 +70,12 @@ export const Name = Schema.Struct({
 
 export interface Name {
   /** For equality of exprs */
-  readonly unique: number
+  readonly unique: Unique
   /** The label is what gets displayed in or around the box. */
   readonly label: string
 }
+
+export type Unique = number
 
 /*******************************
     IRId (not currently used)
@@ -161,6 +163,8 @@ export interface BoolVar extends IRNode {
   readonly name: Name
   readonly value: BoolValue
 }
+
+export type Value = BoolValue
 
 /***********************************
   The corresponding Effect Schemas
