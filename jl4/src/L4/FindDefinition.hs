@@ -3,7 +3,7 @@ module L4.FindDefinition where
 
 import Base
 import L4.Annotation
-import L4.Lexer (SrcPos(..), SrcRange(..), inRange)
+import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..), inRange)
 import L4.Syntax
 import L4.TypeCheck
 

@@ -77,7 +77,8 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.Annotation
-import L4.Lexer (PosToken(..), prettySrcRange)
+import L4.Lexer (PosToken(..))
+import L4.Parser.SrcSpan (prettySrcRange)
 import L4.Print (prettyLayout, quotedName)
 import L4.Syntax
 import L4.TypeCheck.Environment as X

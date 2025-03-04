@@ -395,6 +395,14 @@ deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 
+
+deriving anyclass instance ToConcreteNodes PosToken (Program Resolved)
+
+-- Generic instance does not apply because we exclude the level.
+instance ToConcreteNodes PosToken (Section Resolved) where
+  toNodes (MkSection ann _lvl name maka decls) =
+    flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
+
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Assume Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Declare Resolved)

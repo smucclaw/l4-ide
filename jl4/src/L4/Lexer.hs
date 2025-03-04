@@ -14,6 +14,7 @@ import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
 import qualified Text.Megaparsec.Char.Lexer as Lexer
+import L4.Parser.SrcSpan
 
 type Lexer = Parsec Void Text
 
@@ -35,27 +36,6 @@ data PosToken =
   MkPosToken
     { range   :: !SrcRange
     , payload :: !TokenType
-    }
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToExpr, NFData)
-
--- | A range of source positions. We store the length of a range as well.
-data SrcRange =
-  MkSrcRange
-    { start   :: !SrcPos -- inclusive
-    , end     :: !SrcPos -- inclusive
-    , length  :: !Int
-    }
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToExpr, NFData)
-
--- | A single source position. Line and column numbers are 1-based.
-data SrcPos =
-  MkSrcPos
-    {
-    -- filename :: !FilePath
-      line     :: !Int
-    , column   :: !Int
     }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
@@ -375,14 +355,14 @@ trivialToken tt =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
-execLexer :: FilePath -> Text -> Either (NonEmpty (Text, SourcePos)) [PosToken]
+execLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 execLexer file input =
   let
     r = parse (rawTokens <* eof) file input
   in
     case r of
       Right rtoks -> Right (mkPosTokens file input rtoks)
-      Left errs   -> Left (errorBundleToErrorMessages errs)
+      Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
 
 data TokenState =
   MkTokenState
@@ -591,6 +571,38 @@ instance TraversableStream TokenStream where
       restOfLine :: String
       restOfLine = takeWhile (/= '\n') postTxt
 
+
+-- ----------------------------------------------------------------------------
+-- Parser error messages
+-- ----------------------------------------------------------------------------
+
+data PError
+  = PError
+    { message :: Text
+    , range :: SrcSpan
+    , origin :: Text
+    }
+  deriving (Show, Eq, Ord)
+
+mkPError :: Text -> (Text, SourcePos, SourcePos) -> PError
+mkPError orig (m, s, e) =
+  PError
+    { message = m
+    , range = MkSrcSpan
+      { start =
+          MkSrcPos
+            { line = unPos $ sourceLine s
+            , column = unPos $ sourceColumn s
+            }
+      , end =
+          MkSrcPos
+            { line = unPos $ sourceLine e
+            , column = unPos $ sourceColumn e
+            }
+      }
+    , origin = orig
+    }
+
 errorBundleToErrorMessages ::
   forall s e.
   ( VisualStream s
@@ -600,23 +612,24 @@ errorBundleToErrorMessages ::
   -- | Parse error bundle to display
   ParseErrorBundle s e ->
   -- | Textual rendition of the bundle
-  NonEmpty (Text, SourcePos)
+  NonEmpty (Text, SourcePos, SourcePos)
 errorBundleToErrorMessages ParseErrorBundle{..} =
   let
     (results, _) = runState (traverse format bundleErrors) bundlePosState
   in
     results
  where
-  format :: ParseError s e -> Base.State (PosState s) (Text, SourcePos)
+  format :: ParseError s e -> Base.State (PosState s) (Text, SourcePos, SourcePos)
   format e = do
     pst <- get
     let
       (msline, pst') = calculateOffset pst
       epos = pstateSourcePos pst'
+      eposNext = pstateSourcePos $ reachOffsetNoLine 1 pst'
       errMsg = parseErrorTextPretty e
       parseErrCtx = offendingLine msline epos
     put pst'
-    pure $ (Text.pack $ parseErrCtx <> errMsg, epos)
+    pure $ (Text.pack $ parseErrCtx <> errMsg, epos, eposNext)
    where
     calculateOffset pst = reachOffset (errorOffset e) pst
     offendingLine msline epos =
@@ -897,29 +910,3 @@ posTokenCategory =
     TLineComment _ -> CComment
     TBlockComment _ -> CComment
     EOF -> CEOF
-
--- | We ignore the file name, because we assume this has already been checked.
-inRange :: SrcPos -> SrcRange -> Bool
-inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _) =
-     (l, c) >= (l1, c1)
-  && (l, c) <= (l2, c2)
-
--- TODO: eventually, we may want to take sufficient info so that we can print the file path
--- for "external" ranges, but not ranges in the current file.
-prettySrcRange :: Maybe FilePath -> Maybe SrcRange -> Text
-prettySrcRange fp Nothing = prettyFilePath fp <> "<unknown range>"
-prettySrcRange fp (Just (MkSrcRange p1 p2 _)) = prettyFilePath fp <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
-
-prettyFilePath :: Maybe FilePath -> Text
-prettyFilePath Nothing   = ""
-prettyFilePath (Just fp) = Text.pack fp <> ":"
-
-prettySrcPos :: SrcPos -> Text
-prettySrcPos (MkSrcPos l c) = Text.show l <> ":" <> Text.show c
-
-prettyPartialSrcPos :: SrcPos -> SrcPos -> Text
-prettyPartialSrcPos (MkSrcPos rl rc) p@(MkSrcPos l c)
-  | rl == l && rc == c = ""
-  | rl == l            = "-" <> Text.show c
-  | otherwise          = "-" <> prettySrcPos p
-

@@ -5,7 +5,8 @@ module LSP.L4.Rules where
 import L4.Annotation
 import L4.Evaluate
 import L4.FindDefinition (toResolved)
-import L4.Lexer (PosToken, SrcPos (..), SrcRange)
+import L4.Lexer (PosToken, PError)
+import L4.Parser.SrcSpan
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Resolve
@@ -14,10 +15,8 @@ import L4.Citations
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
-import L4.Parser.SrcSpan
 
 import Control.DeepSeq
-import Control.Lens ((^.))
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
 import Data.Functor.Compose (Compose(..))
@@ -40,7 +39,6 @@ import LSP.Core.Types.Diagnostics
 import LSP.L4.SemanticTokens
 import LSP.Logger
 import LSP.SemanticTokens
-import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
@@ -164,7 +162,7 @@ jl4Rules recorder = do
         case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
           Left errs -> do
             let
-              diags = toList $ fmap (mkSimpleDiagnostic . Parser.mkPError "lexer") errs
+              diags = toList $ fmap mkSimpleDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)
           Right ts ->
             pure ([], Just (ts, contents))
@@ -365,9 +363,10 @@ jl4Rules recorder = do
           , _data_ = Nothing
           }
 
+    mkSimpleDiagnostic :: PError -> Diagnostic
     mkSimpleDiagnostic parseError =
       Diagnostic
-        { _range = LSP.Range start (extendToNextLine start)
+        { _range = srcSpanToLspRange $ Just parseError.range
         , _severity = Just LSP.DiagnosticSeverity_Error
         , _code = Nothing
         , _codeDescription = Nothing
@@ -377,8 +376,6 @@ jl4Rules recorder = do
         , _relatedInformation = Nothing
         , _data_ = Nothing
         }
-     where
-      start = srcPosToLspPosition parseError.start
 
     evalResultToDiagnostic :: EvalResult -> Diagnostic
     evalResultToDiagnostic (range, res) =
@@ -406,12 +403,6 @@ jl4Rules recorder = do
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
-        }
-
-    extendToNextLine p =
-      LSP.Position
-        { _character = 0
-        , _line = p ^. J.line + 1
         }
 
 translateSeverity :: TypeCheck.Severity -> DiagnosticSeverity
