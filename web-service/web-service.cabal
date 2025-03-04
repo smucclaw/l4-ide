@@ -1,0 +1,143 @@
+cabal-version: 3.0
+name: web-service
+version: 0.1.0.0
+build-type: Simple
+tested-with: ghc ==9.6.6
+extra-source-files:
+  CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/cclaw/l4-ide/web-service
+
+common defaults
+  default-language: GHC2021
+  ghc-options:
+    -Wall
+    -Wderiving-typeable
+    -Wunused-packages
+    -Werror
+    -Wall
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    LambdaCase
+    NoFieldSelectors
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+
+  build-depends:
+    base >=4.7 && <5
+
+library
+  import: defaults
+  exposed-modules:
+    Application
+    Backend.Api
+    Backend.Jl4
+    Examples
+    Options
+    Schema
+    Server
+
+  other-modules:
+    Paths_web_service
+
+  autogen-modules:
+    Paths_web_service
+
+  hs-source-dirs:
+    src
+
+  build-depends:
+    aeson,
+    aeson-combinators,
+    bytestring,
+    chronos,
+    containers,
+    directory,
+    extra,
+    filepath,
+    jl4,
+    lens,
+    mtl,
+    numeric-extras,
+    openapi3,
+    optics,
+    optics-core,
+    optparse-applicative,
+    prettyprinter,
+    scientific,
+    servant >=0.20.2 && <0.21,
+    servant-openapi3,
+    servant-server >=0.20.2 && <0.21,
+    servant-swagger-ui,
+    stm,
+    string-interpolate,
+    text,
+    transformers,
+    unordered-containers,
+    vector,
+    wai,
+    wai-logger,
+    warp,
+
+executable web-service-exe
+  import: defaults
+  main-is: Main.hs
+  other-modules:
+    Paths_web_service
+
+  autogen-modules:
+    Paths_web_service
+
+  hs-source-dirs:
+    app
+
+  build-depends:
+    web-service
+
+test-suite web-service-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+    Paths_web_service
+    SchemaSpec
+
+  hs-source-dirs:
+    test
+
+  build-tool-depends:
+    hspec-discover:hspec-discover
+
+  build-depends:
+    QuickCheck,
+    base >=4.7 && <5,
+    directory,
+    filepath,
+    hspec,
+    openapi3,
+    optics,
+    optics-core,
+    quickcheck-instances,
+    servant >=0.20.2 && <0.21,
+    servant-openapi3,
+    string-interpolate,
+    text,
+    web-service,
