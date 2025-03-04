@@ -3,7 +3,8 @@ module L4.HoverInfo where
 
 import Base
 import L4.Annotation
-import L4.Lexer (PosToken(..), SrcPos(..), SrcRange(..), inRange)
+import L4.Lexer (PosToken(..))
+import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..), inRange)
 import L4.Syntax
 import L4.TypeCheck
 

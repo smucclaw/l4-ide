@@ -19,6 +19,7 @@ import qualified System.File.OsPath as Path
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Csv as Csv
 
+import L4.Parser.SrcSpan  as Lexer
 import qualified L4.Lexer as Lexer
 
 -- | obtain a valid relative file path from the ref-src annos
