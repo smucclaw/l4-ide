@@ -11,12 +11,14 @@ TODO: Will add UI for things like Value in the next iteration
 
   let { data }: BoolVarDisplayerProps = $props()
   // const { context, originalLirId, name } = data
-  const { name } = data
+  const { name, value } = data
 </script>
 
 <div class="svelte-flow__node-basic bool-var-node-border">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="label-wrapper-for-content-bearing-sf-node">
+  <div
+    class={['label-wrapper-for-content-bearing-sf-node', ...value.getClasses()]}
+  >
     {name.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />

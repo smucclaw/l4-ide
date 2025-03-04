@@ -1,29 +1,29 @@
 export type BoolVal = TrueVal | FalseVal | UnknownVal
 
 interface BoolV {
-  getStyles(): string
+  getClasses(): string[]
 }
 
 export class TrueVal implements BoolV {
   constructor() {}
 
-  getStyles() {
-    return 'background-color: var(--color-true-value);'
+  getClasses() {
+    return ['true-val']
   }
 }
 
 export class FalseVal implements BoolV {
   constructor() {}
 
-  getStyles() {
-    return 'background-color: var(--color-false-value);'
+  getClasses() {
+    return ['false-val']
   }
 }
 
 export class UnknownVal implements BoolV {
   constructor() {}
 
-  getStyles() {
-    return ''
+  getClasses() {
+    return ['']
   }
 }

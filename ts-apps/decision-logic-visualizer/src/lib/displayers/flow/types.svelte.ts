@@ -1,4 +1,5 @@
-import type { Name, BoolValue } from '@repo/viz-expr'
+import type { Name } from '@repo/viz-expr'
+import type { BoolVal } from '$lib/layout-ir/bool-val.js'
 import type {
   RootDisplayerProps,
   DisplayerProps,
@@ -103,7 +104,7 @@ export interface LadderSFNodeData {
 
 export interface BoolVarDisplayerData extends LadderSFNodeData {
   name: Name
-  value: BoolValue
+  value: BoolVal
 }
 
 export interface BoolVarDisplayerProps {
