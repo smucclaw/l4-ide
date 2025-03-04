@@ -26,14 +26,25 @@ import {
 } from './types.svelte.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
+import _ from 'lodash'
 
 export function ladderGraphToSFGraph(
   context: LirContext,
   ladderGraph: LadderGraphLirNode
 ): LadderSFGraph {
-  const nodes = (ladderGraph.getVertices(context) as LadderLirNode[])
-    .toSorted((v1, v2) => v2.compare(v1))
-    .map(ladderLirNodeToSfNode.bind(null, context))
+  const ladderNodes = (
+    ladderGraph.getVertices(context) as LadderLirNode[]
+  ).toSorted((v1, v2) => v2.compare(v1))
+  const nodes = ladderNodes.map(ladderLirNodeToSfNode.bind(null, context))
+  const idsAssocList = _.zip(nodes, ladderNodes)
+    .filter(
+      (pair): pair is [LadderSFNode, LadderLirNode] => !!pair[0] && !!pair[1]
+    )
+    .map(([sfNode, ladderNode]): [string, LirId] => [
+      sfNode.id,
+      ladderNode.getId(),
+    ])
+  const sfIdToLirId = new Map(idsAssocList)
 
   // TODO: May want to sort as well
   const edges = ladderGraph
@@ -43,6 +54,7 @@ export function ladderGraphToSFGraph(
   return {
     nodes,
     edges,
+    sfIdToLirId,
   }
 }
 

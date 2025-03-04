@@ -28,6 +28,7 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
 export interface LadderSFGraph {
   nodes: LadderSFNode[]
   edges: LadderSFEdge[]
+  sfIdToLirId: Map<string, LirId>
 }
 
 /************************************************
