@@ -37,14 +37,16 @@ This approach would annoy the end-user quickly, because even after
 saying they are in a motorcycle they would still have to say they are
 not in a car, or van, or bus.
 
-A form given the above data model would not pass input validation. We
-can't build a practical live-updating evaluator of type `BoolTree1 ->
-Bool` around this data structure.
+A form working with the data model would not pass input validation
+until every single input is provided. We can't build a practical
+live-updating evaluator of type `BoolTree1 -> Bool` around this data
+structure, because the `BoolTree1` can't properly represent the start
+state of the form, when the user hasn't clicked on anything yet.
 
 ## Ternary Logic
 
-Every ground term can be true, false, or unknown. Unknown values are
-allowed. `(True OR Unknown)` is `True`.
+Every ground term can be true, false, or unknown. You can
+short-circuit: `(True OR Unknown)` is `True`.
 
 ``` haskell
 type Ternary = Maybe Bool
@@ -54,10 +56,11 @@ data BoolTree2 = Leaf Ternary ID
 	           | All [BoolTree2]
 ```
 
-This is better. Even with everything set to `Nothing`, a live-updating
-evaluator (of type `BoolTree2 -> Bool`) could still run to
-completion and give an answer. The moment the "motorcycle" node turns
-`Just True` the overall computation evaluates to `True`.
+This is better. We could start the form with everything set to
+`Nothing`. A live-updating evaluator (of type `BoolTree2 -> Bool`)
+could consume those `Nothing`s, run to completion, and give an answer.
+The moment the "motorcycle" node turns `Just True` the overall
+computation evaluates to `True`.
 
 See also https://en.wikipedia.org/wiki/Ternary_logic
 
@@ -70,9 +73,14 @@ The evaluation engine may use "negation as failure" to collapse unknowns to fals
 Ground terms are equipped with default values. If the end-user chooses
 not to explicitly set a term to true, false, or unknown, the default
 value is used. The default value is one of true, false, or unknown.
+
 Default values are used to support default reasoning: if we say "a
 person" we assume the central case -- that it is a natural person,
 with mental capacity.
+
+In this example, we use it to suggest to the end-user that they're
+probably in a vehicle, which is the common case, and they should just
+accept the defaults and click through to the Vehicle Form.
 
 ``` haskell
 type WithDefault = Either Ternary Ternary
@@ -82,14 +90,13 @@ data BoolTree3 = Leaf WithDefault ID
 	           | All [BoolTree2]
 ```
 
-This lets us assume, unless the user specifies otherwise, that they
-are in a four-door vehicle. Of course we do still ask the user to
-confirm the assumption. But we set the common-case default for
-usability. Here the `form` serves multiple purposes:
+Of course we do still ask the user to confirm the assumption. But we
+set the common-case default for usability. Here the `form` serves
+multiple purposes:
 - it records the overall structure of the Boolean logic constructed from the upstream L4;
-- it reflects the assumption about the car;
+- it reflects the assumption about the car, also given in the L4 with `TYPICALLY`, in the `Left` of `Either`;
 - it records end-user input values in the `Right` of `Either`
-- it is an input to an evaluator
+- the whole thing is input to an evaluator
 
 ``` haskell
 form = Any [Any [ Leaf (Left Nothing) "On Actual Foot"
@@ -128,7 +135,8 @@ data BoolTree4 = Leaf WithDefault ID
 An experienced end-user might say, "look, I'm in a vehicle, don't
 worry your little head about the details, just give me the form."
 
-So there would be a checkbox against "in a vehicle".
+So we would give an explicit name to the "in a vehicle" parent, and
+allow the end-user to give it a value just like any other leaf.
 
 ``` haskell
 form = Any             (Left Nothing, "can cross border")
@@ -162,6 +170,13 @@ descendants have default values that would turn them true; we don't
 want to pre-cache that result. We want to recompute each time, because
 premature optimization is the root of all evil.
 
+What happens if the parent assignment conflicts with the computed
+value based on the children? Probably want to raise a warning at the
+UI level, but allow it; this is the sort of thing that
+humans-in-the-loop routinely want to do. To be super pedantic we can
+run everything through a combinator that prepends `human_override ??`
+to every node -- borrowing [that idea from JS](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Nullish_coalescing).
+
 ## Non-Boolean Inputs
 
 We broaden the input widgets to allow non-Boolean values, as long as
@@ -170,7 +185,7 @@ they are things that convert very soon into Boolean.
 For example we might want to know if someone is 21 years of age.
 
 We could simply ask if they are "over 21 years of age". That would be
-a `Boolean`, or rather our `WithDefault Ternary`.
+a `Boolean`, or rather our `WithDefault Ternary` taking the value `Right (Just True)`.
 
 Or we could give them a text input box for "how many years old are you".
 
