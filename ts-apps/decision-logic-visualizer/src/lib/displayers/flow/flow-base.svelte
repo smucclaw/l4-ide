@@ -274,22 +274,6 @@ Misc SF UI TODOs:
       <Background />
     </SvelteFlow>
   </div>
-  <!-- Paths Section -->
-  <!-- 
-  NOW OUTDATED --- WILL BE REFACTORING THIS
-  <section class="paths-container">
-    <div class="flex flex-col gap-2">
-      {#each ladderGraph.getPaths(context) as path}
-        <button
-          class="rounded-md border-1 p-2 max-w-fit hover:bg-green-100"
-          onmouseenter={() => path.highlight(context)}
-          onmouseleave={() => path.unhighlight(context)}
-        >
-          {path.toPretty(context)}
-        </button>
-      {/each}
-    </div>
-  </section> -->
 </div>
 
 <!-- For debugging -->
