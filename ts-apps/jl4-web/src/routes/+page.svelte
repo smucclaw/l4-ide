@@ -24,9 +24,9 @@
       Set up Lir
   ****************************/
 
-  const registry = new LirRegistry();
+  const lirRegistry = new LirRegistry();
   const context = new LirContext();
-  const nodeInfo = { registry, context };
+  const nodeInfo = { registry: lirRegistry, context };
 
   let vizDecl: undefined | FunDecl = $state(undefined);
   let declLirNode: DeclLirNode | undefined = $derived(
@@ -38,7 +38,7 @@
   // TODO: YM has some ideas for how to improve / clean this up
   $effect(() => {
     if (declLirNode) {
-      registry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
+      lirRegistry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
     }
   });
 
@@ -231,7 +231,7 @@ DECIDE \`is a British citizen (variant)\` IS
         <div
           class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
         >
-          <LadderFlow {context} node={declLirNode} />
+          <LadderFlow {context} node={declLirNode} lir={lirRegistry}/>
         </div>
       {/key}
     {/if}
