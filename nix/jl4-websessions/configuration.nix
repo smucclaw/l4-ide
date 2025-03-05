@@ -20,7 +20,7 @@
 
   config.services.nginx.virtualHosts.${config.networking.domain}.locations = {
     ${config.services.jl4-websessions.path}.proxyPass =
-      "http://localhost:${toString config.services.jl4-websessions.port}";
+      "http://localhost:${toString config.services.jl4-websessions.port}/";
   };
 
   config.systemd.services.jl4-websessions = {
@@ -32,9 +32,12 @@
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-websessions \
           ${toString config.services.jl4-websessions.port} \
-          "sessions.db"
+          /var/lib/private/jl4-websessions/sessions.db
       '';
       Restart = "always";
+
+      StateDirectory = "jl4-websessions";
+      WorkingDirectory = "%S";
 
       # Security
       DynamicUser = true;
