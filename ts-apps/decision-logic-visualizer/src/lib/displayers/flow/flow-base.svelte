@@ -129,6 +129,17 @@
     })
   }
 
+  const onNodeDragStop: SF.NodeTargetEventWithPointer<
+    MouseEvent | TouchEvent
+  > = (event) => {
+    if (event.targetNode) {
+      const lirNode = context.get(
+        sfIdToLirId(event.targetNode.id)
+      ) as LadderLirNode
+      lirNode.setPosition(context, event.targetNode.position)
+    }
+  }
+
   /*********************************************
         LadderGraph event listener
   **********************************************/
@@ -253,6 +264,7 @@ Misc SF UI TODOs:
       onnodeclick={(event) => {
         if (isBoolVarSFNode(event.node)) onBoolVarNodeClick(event)
       }}
+      onnodedragstop={onNodeDragStop}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
       <Controls position="bottom-right" showLock={false} />
