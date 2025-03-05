@@ -185,7 +185,7 @@ calculate the result.
 
 ## Composition with XOR
 
-A close read may suggest that one crosses the border either on foot, or in a vehicle, but not both. So the logic is really an
+A close read may suggest that one crosses the border either on foot, or in a vehicle, but not both. So the logic is really an XOR:
 
 ``` haskell
 form = Xor             (Left Nothing, "can cross border")
