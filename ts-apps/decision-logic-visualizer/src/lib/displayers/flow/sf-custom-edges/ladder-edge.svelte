@@ -16,15 +16,10 @@
     attrs: data = defaultLadderEdgeAttrs,
   }: LadderEdgeProps = $props()
 
-  // console.log(`var(${data.strokeColorCSSVar})`)
   const pathStyle = `stroke: var(${data.strokeColorCSSVar});`
-  console.log(pathStyle)
+  // console.log(pathStyle)
 </script>
 
-<!-- Simple Bezier Edge version -->
-<!-- {labelStyle} -->
-<!-- {markerStart} -->
-<!-- {markerEnd} -->
 <BezierEdge
   {sourceX}
   {sourceY}

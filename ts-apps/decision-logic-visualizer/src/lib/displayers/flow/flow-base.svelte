@@ -172,8 +172,6 @@
       )
       NODES = layoutedElements.nodes
       EDGES = layoutedElements.edges
-      console.log('nodes', NODES)
-      console.log('edges', EDGES)
 
       // Update Lir with the positions and dimensions
       layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
