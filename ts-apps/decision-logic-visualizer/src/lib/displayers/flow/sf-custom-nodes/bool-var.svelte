@@ -1,25 +1,24 @@
 <!-- Adopted from the SF DefaultNode implementation
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
-
-TODO: Will add UI for things like Value in the next iteration
 -->
 <script lang="ts">
   import type { BoolVarDisplayerProps } from '../types.svelte.js'
   import { defaultSFHandlesInfo } from '../types.svelte.js'
   import { Handle } from '@xyflow/svelte'
-  // import { match } from 'ts-pattern'
 
   let { data }: BoolVarDisplayerProps = $props()
-  // const { context, originalLirId, name } = data
-  const { name, value } = data
 </script>
 
+<!-- Need to use data.value instead of value to maintain reactivity -->
 <div class="svelte-flow__node-basic bool-var-node-border">
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
   <div
-    class={['label-wrapper-for-content-bearing-sf-node', ...value.getClasses()]}
+    class={[
+      'label-wrapper-for-content-bearing-sf-node',
+      ...data.value.getClasses(),
+    ]}
   >
-    {name.label}
+    {data.name.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
 </div>
@@ -31,5 +30,13 @@ TODO: Will add UI for things like Value in the next iteration
       --xy-node-border-radius,
       var(--xy-node-border-radius-default)
     );
+  }
+
+  .true-val {
+    background-color: var(--color-true-value);
+  }
+
+  .false-val {
+    background-color: var(--color-false-value);
   }
 </style>

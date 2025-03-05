@@ -7,6 +7,7 @@ import {
   UnknownVal,
 } from './value.js'
 import type { BoolVar, Unique, Name } from '@repo/viz-expr'
+import { Environment } from './environment.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -229,10 +230,27 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+  #environment: Environment
 
   constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
     super(nodeInfo)
     this.#dag = dag
+
+    // Make the initial environment
+    const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
+      (n) => n instanceof BoolVarLirNode
+    )
+    const initialEnv = varNodes.map((n) => n.getValue(nodeInfo.context))
+    const initialCoreferents: Array<Set<LirId>> = []
+    varNodes.forEach((n) => {
+      const unique = n.getUnique(nodeInfo.context)
+      if (!initialCoreferents[unique]) {
+        initialCoreferents[unique] = new Set<LirId>([n.getId()])
+      } else {
+        initialCoreferents[unique].add(n.getId())
+      }
+    })
+    this.#environment = new Environment(initialEnv, initialCoreferents)
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
@@ -253,9 +271,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   getVertices(context: LirContext): LadderLirNode[] {
-    return Array.from(this.#dag.getVertices()).map(
-      (id) => context.get(id) as LadderLirNode
-    )
+    return getVerticesFromAlgaDag(context, this.#dag)
   }
 
   getEdges(_context: LirContext): LadderLirEdge[] {
@@ -317,12 +333,23 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
           Bindings
   ******************************/
 
+  /** This sets off the 'compound logic' */
   submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: Value }
   ) {
-    console.log('submitNewBinding', binding)
-    // TODO
+    // Set the new binding
+    this.#environment.set(binding)
+
+    // The key step: Update all VarLirNodes with this Unique with the new Value
+    const corefs = Array.from(this.#environment.getCoreferents(binding.unique))
+    // console.log('corefs: ', corefs)
+    corefs.forEach((coref) => {
+      const node = context.get(coref) as VarLirNode
+      node._setValue(context, binding.value)
+    })
+
+    this.getRegistry().publish(context, this.getId())
   }
 
   /*****************************
@@ -338,6 +365,16 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
+/** Helper function */
+function getVerticesFromAlgaDag(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): LadderLirNode[] {
+  return Array.from(dag.getVertices()).map(
+    (id) => context.get(id) as LadderLirNode
+  )
+}
+
 /**********************************************
           Ladder Lir Node
 ***********************************************/
@@ -348,14 +385,20 @@ export type LadderLirNode =
   | NotEndLirNode
   | BundlingFlowLirNode
 
-export type VarLirNode = BoolVarLirNode
+export interface VarLirNode extends FlowLirNode {
+  getUnique(context: LirContext): Unique
 
-export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
+  getValue(context: LirContext): Value
+  /** For displayers.
+   *
+   * This will only be invoked by LadderGraphLirNode. */
+  _setValue(context: LirContext, value: Value): void
+}
+
+export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   readonly #originalExpr: BoolVar
-  #value = $state<BoolVal>()!
-
-  /** For the SF node we'll make from the BoolVarLirNode */
-  #data: { name: Name; value: BoolVal }
+  #value: BoolVal
+  #name: Name
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -369,19 +412,19 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
       .with('False', () => new FalseVal())
       .with('Unknown', () => new UnknownVal())
       .exhaustive()
-    this.#data = { name: originalExpr.name, value: this.#value }
+    this.#name = originalExpr.name
   }
 
   getLabel(_context: LirContext) {
-    return this.#data.name.label
+    return this.#name.label
   }
 
   getUnique(_context: LirContext) {
-    return this.#originalExpr.name.unique
+    return this.#name.unique
   }
 
   getData(_context: LirContext) {
-    return this.#data
+    return { name: this.#name, value: this.#value }
   }
 
   getValue(_context: LirContext): BoolVal {
@@ -389,9 +432,8 @@ export class BoolVarLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   /** This will only be called by LadderGraphLirNode */
-  _setValue(context: LirContext, value: BoolVal) {
+  _setValue(_context: LirContext, value: BoolVal) {
     this.#value = value
-    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(_context: LirContext) {

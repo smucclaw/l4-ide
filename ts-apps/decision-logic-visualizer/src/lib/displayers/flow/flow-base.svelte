@@ -69,6 +69,7 @@
   // SvelteFlow nodes and edges variables
   let NODES = $state.raw<LadderSFGraph['nodes']>(initialSfGraph.nodes)
   let EDGES = $state.raw<LadderSFGraph['edges']>(initialSfGraph.edges)
+  // $inspect(NODES)
 
   let sfIdToLirId = initialSfGraph.sfIdToLirId
   let lirIdToSfId = initialSfGraph.lirIdToSFId
@@ -108,6 +109,25 @@
     // TODO: Clean up subscribers --- add an onDestroy in core.ts
   })
 
+  /*************************************
+      Other SvelteFlow event listeners
+  ***************************************/
+
+  // TODO: prob better to put this in bool-var.svelte.ts
+  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
+    event
+  ) => {
+    const node = event.node
+    const lirId = sfIdToLirId(node.id)
+    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
+
+    const newValue = cycle(lirBoolVarNode.getValue(context))
+    ladderGraph.submitNewBinding(context, {
+      unique: lirBoolVarNode.getUnique(context),
+      value: newValue,
+    })
+  }
+
   /*********************************************
     Subscribe to changes in the LadderLirNodes
   **********************************************/
@@ -123,22 +143,10 @@
       const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
       NODES = newSfGraph.nodes
       EDGES = newSfGraph.edges
-      console.log('newSfGraph', newSfGraph)
+      sfIdToLirId = newSfGraph.sfIdToLirId
+      lirIdToSfId = newSfGraph.lirIdToSFId
+      console.log('newSfGraph NODES', NODES)
     }
-  }
-
-  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
-    event
-  ) => {
-    const node = event.node
-    const lirId = sfIdToLirId(node.id)
-    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
-
-    const newValue = cycle(lirBoolVarNode.getValue(context))
-    ladderGraph.submitNewBinding(context, {
-      unique: lirBoolVarNode.getUnique(context),
-      value: newValue,
-    })
   }
 
   /*********************************************
