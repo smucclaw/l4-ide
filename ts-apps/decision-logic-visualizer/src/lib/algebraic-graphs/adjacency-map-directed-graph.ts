@@ -1,7 +1,7 @@
 import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
-  stringifyEdge,
+  stringifyEdge as makeEdgeKey,
   type Edge,
   type EdgeAttributes,
   DefaultEdgeAttributes,
@@ -67,25 +67,26 @@ export class DirectedAMGraph<A extends Ord<A>>
   // Getting / setting edge attributes
 
   getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes {
-    return (
-      this.edgeAttributes.get(stringifyEdge(edge)) ??
-      new DefaultEdgeAttributes()
-    )
+    console.log('ea map', this.edgeAttributes)
+    const edgeKey = makeEdgeKey(edge)
+    const attrs = this.edgeAttributes.get(edgeKey)
+    if (attrs) {
+      return attrs
+    } else {
+      this.edgeAttributes.set(edgeKey, new DefaultEdgeAttributes())
+      return this.edgeAttributes.get(edgeKey) as EdgeAttributes
+    }
   }
 
   /** Will error if the input edge does not exist.
-   *
-   * Merges the input attribute with any existing ones
    */
-  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
+  setEdgeAttributes<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
     if (!this.hasEdge(edge.getU(), edge.getV())) {
       throw new Error(
         `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`
       )
     }
-
-    const currAttributes = this.getAttributesForEdge(edge)
-    this.edgeAttributes.set(stringifyEdge(edge), currAttributes.merge(newAttr))
+    this.edgeAttributes.set(makeEdgeKey(edge), newAttr)
   }
 
   /** Internal */

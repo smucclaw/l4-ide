@@ -228,7 +228,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge)
   }
 
-  // TODO: Think more abt whether we really need the following edge related methods
+  /** internal helper method */
+  protected setEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T,
+    attrs: EdgeAttributes
+  ) {
+    this.#dag.setEdgeAttributes(edge, attrs)
+  }
 
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
@@ -242,7 +249,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     edge: T,
     styles: EdgeStyles
   ) {
-    this.#dag.getAttributesForEdge(edge).setStyles(styles)
+    const attrs = this.#dag.getAttributesForEdge(edge)
+    const newAttrs = new DefaultEdgeAttributes().merge(attrs)
+    newAttrs.setStyles(styles)
+    this.#dag.setEdgeAttributes(edge, newAttrs)
+
     this.getRegistry().publish(context, this.getId())
   }
 
