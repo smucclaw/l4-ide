@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    BaseEdge,
     BezierEdge,
     // EdgeLabel,
   } from '@xyflow/svelte'
@@ -13,11 +14,13 @@
     targetX,
     targetY,
     targetPosition,
-    attrs: data = defaultLadderEdgeAttrs,
+    data = defaultLadderEdgeAttrs,
   }: LadderEdgeProps = $props()
 
-  const pathStyle = `stroke: var(${data.strokeColorCSSVar});`
-  // console.log(pathStyle)
+  // stroke-width: 2px;
+  // TODO: try using a css class instead; might be able to avoid the !important that way
+  const pathStyle = `stroke: var(${data.strokeColorCSSVar}) !important;`
+  console.log(pathStyle)
 </script>
 
 <BezierEdge

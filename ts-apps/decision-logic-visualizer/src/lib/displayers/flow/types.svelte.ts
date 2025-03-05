@@ -152,5 +152,5 @@ export const defaultLadderEdgeAttrs = {
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {
-  attrs?: LadderEdgeAttrs
+  data?: LadderEdgeAttrs
 }
