@@ -29,12 +29,15 @@
     getOriginalLirIdFromSfNode,
   } from './types.svelte.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/layout-ir/bool-val.js'
+  import { cycle } from '$lib/layout-ir/value.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css'
-  import type { LadderLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import type {
+    BoolVarLirNode,
+    LadderLirNode,
+  } from '$lib/layout-ir/ladder-lir.svelte.js'
 
   /************************
        Lir

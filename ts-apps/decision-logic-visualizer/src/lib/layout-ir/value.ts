@@ -1,5 +1,7 @@
 import { match } from 'ts-pattern'
 
+export type Value = BoolVal
+
 export type BoolVal = TrueVal | FalseVal | UnknownVal
 
 interface BoolV {

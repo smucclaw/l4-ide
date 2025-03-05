@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// TODO: Need to refactor BoolValue to add a method for getting styles!
-import { type BoolVal, TrueVal, FalseVal, UnknownVal } from './bool-val.js'
-import type { BoolVar, Value, Unique, Name } from '@repo/viz-expr'
+import {
+  type Value,
+  type BoolVal,
+  TrueVal,
+  FalseVal,
+  UnknownVal,
+} from './value.js'
+import type { BoolVar, Unique, Name } from '@repo/viz-expr'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'

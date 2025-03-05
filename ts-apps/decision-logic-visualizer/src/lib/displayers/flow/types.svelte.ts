@@ -1,5 +1,5 @@
 import type { Name } from '@repo/viz-expr'
-import type { BoolVal } from '$lib/layout-ir/bool-val.js'
+import type { BoolVal } from '$lib/layout-ir/value.js'
 import type {
   RootDisplayerProps,
   DisplayerProps,
