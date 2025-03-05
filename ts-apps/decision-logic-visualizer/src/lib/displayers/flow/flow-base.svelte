@@ -127,6 +127,20 @@
     }
   }
 
+  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
+    event
+  ) => {
+    const node = event.node
+    const lirId = sfIdToLirId(node.id)
+    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
+
+    const newValue = cycle(lirBoolVarNode.getValue(context))
+    ladderGraph.submitNewBinding(context, {
+      unique: lirBoolVarNode.getUnique(context),
+      value: newValue,
+    })
+  }
+
   /*********************************************
             Layout & Fit View
   **********************************************/
@@ -206,12 +220,6 @@
     doLayout()
     nodes$AreLayouted = true
     doFitView()
-  }
-
-  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
-    event
-  ) => {
-    console.log('click', event.node)
   }
 </script>
 
