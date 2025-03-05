@@ -281,11 +281,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   // TODO: prob need to refactor: want to be able to
-  // generate the linearized paths of the the subgraph that is compatible with the updated scoreboard / env,.
+  // generate the linearized paths of the the subgraph that is compatible with the updated env
   /** Get all simple paths through the Dag */
-  getPaths(_context: LirContext) {
-    return this.#dag.getAllPaths()
-  }
+  // getPaths(_context: LirContext) {
+  //   return this.#dag.getAllPaths()
+  // }
 
   /*****************************
         Edge attributes
