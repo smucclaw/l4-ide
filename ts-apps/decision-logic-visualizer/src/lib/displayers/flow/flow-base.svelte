@@ -71,7 +71,9 @@
   let EDGES = $state.raw<LadderSFGraph['edges']>(initialSfGraph.edges)
   // $inspect(NODES)
 
+  // SfId, LirId helpers
   let sfIdToLirId = initialSfGraph.sfIdToLirId
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let lirIdToSfId = initialSfGraph.lirIdToSFId
 
   /***********************************
@@ -117,8 +119,7 @@
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
-    const node = event.node
-    const lirId = sfIdToLirId(node.id)
+    const lirId = sfIdToLirId(event.node.id)
     const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
 
     const newValue = cycle(lirBoolVarNode.getValue(context))
@@ -129,7 +130,7 @@
   }
 
   /*********************************************
-    Subscribe to changes in the LadderLirNodes
+        LadderGraph event listener
   **********************************************/
 
   /**
@@ -139,13 +140,12 @@
    */
   const onLadderGraphNonPositionalChange = (context: LirContext, id: LirId) => {
     if (id === ladderGraph.getId()) {
-      // TODO: Need to preserve the positions
       const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
       NODES = newSfGraph.nodes
       EDGES = newSfGraph.edges
       sfIdToLirId = newSfGraph.sfIdToLirId
       lirIdToSfId = newSfGraph.lirIdToSFId
-      console.log('newSfGraph NODES', NODES)
+      // console.log('newSfGraph NODES', NODES)
     }
   }
 
@@ -182,6 +182,8 @@
       EDGES = layoutedElements.edges
 
       // Update Lir with the positions and dimensions
+      // (We need to do this, because we re-generate the SF graph from the LadderGraphLirNode
+      // when data associated with the Lir nodes or edges changes.)
       layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
         const lirNode = context.get(
           getOriginalLirIdFromSfNode(sfNode)
@@ -228,6 +230,13 @@
     doFitView()
   }
 </script>
+
+<!-- 
+Misc SF UI TODOs:
+
+* Make it clearer that the bool var nodes are clickable 
+(should at least change the cursor to a pointer on mouseover)
+-->
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">

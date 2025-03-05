@@ -16,7 +16,6 @@ import {
 import {
   type LadderSFGraph,
   type LadderSFNode,
-  type LadderSFNodeData,
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -95,7 +94,7 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
-    .with(P.instanceOf(BoolVarLirNode), (n) => {
+    .with(P.instanceOf(BoolVarLirNode), (n: BoolVarLirNode) => {
       return {
         ...defaults,
         type: boolVarNodeType,

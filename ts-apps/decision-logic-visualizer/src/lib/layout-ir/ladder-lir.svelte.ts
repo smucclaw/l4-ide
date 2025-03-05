@@ -380,7 +380,7 @@ function getVerticesFromAlgaDag(
 ***********************************************/
 
 export type LadderLirNode =
-  | VarLirNode
+  | BoolVarLirNode
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
@@ -396,7 +396,6 @@ export interface VarLirNode extends FlowLirNode {
 }
 
 export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
-  readonly #originalExpr: BoolVar
   #value: BoolVal
   #name: Name
 
@@ -406,7 +405,6 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
-    this.#originalExpr = originalExpr
     this.#value = match(originalExpr.value)
       .with('True', () => new TrueVal())
       .with('False', () => new FalseVal())
