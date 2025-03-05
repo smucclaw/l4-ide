@@ -169,10 +169,10 @@ export class IncompatiblePathLirNode
 // There's a 1-1 correspondence between the Flow Lir Nodes and the SF Nodes that are fed to SvelteFlow
 // (and similarly with Flow Lir Edges)
 
-/*
-TO THINK ABT:
-- do we even want to put Position on the lir nodes?
-perhaps position should be handled entirely at the SF Node level?
+/* Why should Position be put on the Lir nodes, as opposed to being handled entirely at the SF Node level?
+  
+Main argument: for more complicated layouts,
+we'll want to be able to use info that's more readily available at the level of the Lir LadderGraph.
 */
 
 type Position = { x: number; y: number }
@@ -228,6 +228,18 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
           Ladder Graph Lir Node
 ***********************************************/
 
+/*
+* Proposals to update (non-positional or non-dimensions) data associated with the nodes/edges
+will go through the LadderGraphLirNode.
+* Displayers should listen for updates to the LadderGraphLirNode,
+* and re-render on changes.
+*
+* State ownership:
+  - The Lir nodes only own, and publish changes to, state that's not about the positions 
+    or dimensions of the nodes.
+  - For instance, we do not publish changes to the position of the nodes/edges --- that is state that
+    is owned by SvelteFlow.
+*/
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
   #environment: Environment
@@ -298,7 +310,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge)
   }
 
-  // TODO: Think more abt whether we really need the rest
+  // TODO: Think more abt whether we really need the following edge related methods
 
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
@@ -395,6 +407,9 @@ export interface VarLirNode extends FlowLirNode {
   _setValue(context: LirContext, value: Value): void
 }
 
+/* For now, changes to the data associated with BoolVarLirNodes will be published
+by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
+*/
 export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   #value: BoolVal
   #name: Name
@@ -429,7 +444,7 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return this.#value
   }
 
-  /** This will only be called by LadderGraphLirNode */
+  /** This will only be invoked by LadderGraphLirNode */
   _setValue(_context: LirContext, value: BoolVal) {
     this.#value = value
   }
