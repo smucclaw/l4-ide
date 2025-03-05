@@ -6,14 +6,20 @@
   importNpmLock,
   pkg-config,
   libsecret,
+  lib,
   ...
 }:
-buildNpmPackage {
+buildNpmPackage rec {
   pname = "jl4-web";
   version = "0-latest";
-  src = ../../.;
-  npmDeps = importNpmLock { npmRoot = ../../.; };
-  npmWorkspace = ../../.;
+  src =  lib.sources.sourceByRegex ../../. [
+      "^ts-apps.*"
+      "^ts-shared.*"
+      "^package-lock.json$"
+      "^package.json$"
+  ]; 
+  npmDeps = importNpmLock { npmRoot = src; };
+  npmWorkspace = src;
   nativeBuildInputs = [ pkg-config ];
   buildInputs = [ libsecret.dev ];
   buildPhase = ''
@@ -44,6 +50,5 @@ buildNpmPackage {
   installPhase = ''
     mv build $out
   '';
-  npmFlags = [ ];
   npmConfigHook = importNpmLock.npmConfigHook;
 }

@@ -3,7 +3,7 @@ module Main where
 import Base
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
-import qualified L4.Lexer as JL4
+import qualified L4.Parser.SrcSpan as JL4
 import qualified L4.Main as JL4
 import L4.Parser (execProgramParser)
 import qualified L4.Parser as Parser

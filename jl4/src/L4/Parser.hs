@@ -65,6 +65,7 @@ import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
+import L4.Parser.SrcSpan
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -1204,9 +1205,7 @@ execParserForTokens p file input ts =
 
 runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 runLexer file input =
-  case execLexer file input of
-    Left errs -> Left $ fmap (mkPError "lexer") errs
-    Right ts -> pure ts
+  execLexer file input
 
 -- ----------------------------------------------------------------------------
 -- JL4 Program parser
@@ -1241,29 +1240,6 @@ parseFile p file input =
 
 parseTest :: Show a => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
-
--- ----------------------------------------------------------------------------
--- Parser error messages
--- ----------------------------------------------------------------------------
-
-data PError
-  = PError
-    { message :: Text
-    , start :: SrcPos
-    , origin :: Text
-    }
-  deriving (Show, Eq, Ord)
-
-mkPError :: Text -> (Text, SourcePos) -> PError
-mkPError orig (m, s) =
-  PError
-    { message = m
-    , start = MkSrcPos
-        { line = unPos $ sourceLine s
-        , column = unPos $ sourceColumn s
-        }
-    , origin = orig
-    }
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers

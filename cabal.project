@@ -1,3 +1,4 @@
 packages: 
   ./jl4
+  ./jl4-decision-service
   ./jl4-websessions
