@@ -8,6 +8,7 @@ import GHC.Generics
 import System.Environment
 import Text.Read
 
+import Control.Monad (unless)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Aeson (FromJSON, ToJSON)
@@ -21,10 +22,10 @@ import Database.SQLite.Simple.QQ (sql)
 import qualified Database.SQLite.Simple.ToField as SQLite
 import qualified Database.SQLite.Simple.ToRow as SQLite
 import System.Directory
+import Network.Wai.Logger (ApacheLogger, withStdoutLogger)
 
 import Servant
 import Servant.Server.Generic
-import Control.Monad (unless)
 
 data JL4Program
   = MkJL4Program
@@ -40,19 +41,20 @@ instance SQLite.ToRow JL4Program where
 mkApp :: HandlerEnv -> Application
 mkApp env = genericServeT (runHandlerM env) server
 
-withEnv :: (Int -> HandlerEnv -> IO r) -> IO r
+withEnv :: (Int -> ApacheLogger -> HandlerEnv -> IO r) -> IO r
 withEnv k = do
   [readMaybe -> Just port, dbPath] <- getArgs
   createDB dbPath
-  SQLite.withConnection dbPath \dbConn -> do
-    let env = MkHandlerEnv{dbConn}
-    k port env
+  SQLite.withConnection dbPath \dbConn ->
+    withStdoutLogger \logger -> do
+      let env = MkHandlerEnv{dbConn}
+      k port logger env
 
 data Api mode
   = MkApi
-  { createSession :: mode :- ReqBody '[JSON] Text       :> Post '[JSON] UUID
-  , readSession   :: mode :- ReqBody '[JSON] UUID       :> Get '[JSON] Text
-  , updateSession :: mode :- ReqBody '[JSON] JL4Program :> PutNoContent
+  { createSession :: mode :- ReqBody '[JSON] Text                       :> Post '[JSON] UUID
+  , readSession   :: mode :- QueryParam' '[Required, Strict] "id" UUID  :> Get '[JSON] Text
+  , updateSession :: mode :- ReqBody '[JSON] JL4Program                 :> PutNoContent
   }
   deriving stock (Generic)
 

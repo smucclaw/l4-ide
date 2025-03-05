@@ -36,6 +36,7 @@ library
     sqlite-simple,
     text,
     uuid,
+    wai-logger,
 
   exposed-modules:
     L4.CRUD
