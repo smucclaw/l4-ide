@@ -15,17 +15,21 @@
     Background,
     Controls,
     ConnectionLineType,
+    useNodesInitialized,
+    useSvelteFlow,
   } from '@xyflow/svelte'
-  import { useNodesInitialized, useSvelteFlow } from '@xyflow/svelte'
+  import * as SF from '@xyflow/svelte'
   import {
     type BaseLadderFlowDisplayerProps,
     sfNodeTypes,
     sfEdgeTypes,
+    isBoolVarSFNode,
     type LadderSFNodeWithDims,
     type LadderSFGraph,
     getOriginalLirIdFromSfNode,
   } from './types.svelte.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
+  import { cycle } from '$lib/layout-ir/bool-val.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
@@ -62,6 +66,9 @@
   // SvelteFlow nodes and edges variables
   let NODES = $state.raw<LadderSFGraph['nodes']>(initialSfGraph.nodes)
   let EDGES = $state.raw<LadderSFGraph['edges']>(initialSfGraph.edges)
+
+  let sfIdToLirId = initialSfGraph.sfIdToLirId
+  let lirIdToSfId = initialSfGraph.lirIdToSFId
 
   /***********************************
       SvelteFlow hooks
@@ -197,6 +204,12 @@
     nodes$AreLayouted = true
     doFitView()
   }
+
+  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
+    event
+  ) => {
+    console.log('click', event.node)
+  }
 </script>
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
@@ -211,6 +224,9 @@
       fitView
       connectionLineType={ConnectionLineType.Bezier}
       defaultEdgeOptions={{ type: 'bezier', animated: false }}
+      onnodeclick={(event) => {
+        if (isBoolVarSFNode(event.node)) onBoolVarNodeClick(event)
+      }}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
       <Controls position="bottom-right" showLock={false} />
