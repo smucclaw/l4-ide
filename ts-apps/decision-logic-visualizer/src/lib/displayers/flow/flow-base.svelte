@@ -274,6 +274,24 @@ Misc SF UI TODOs:
       <Background />
     </SvelteFlow>
   </div>
+  <!-- Paths Section -->
+  <!-- TODO: Add expand/collapse  -->
+  <!-- TODO: Move the following into a lin paths container component -->
+  <section class="paths-container">
+    <div class="flex flex-col gap-1">
+      {#each ladderGraph.getLinearizedPaths(context) as path}
+        <button
+          class="rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs"
+          onmouseenter={() =>
+            path.highlightCorrespondingPathInLadderGraph(context)}
+          onmouseleave={() =>
+            path.unhighlightCorrespondingPathInLadderGraph(context)}
+        >
+          {path.toPretty(context)}
+        </button>
+      {/each}
+    </div>
+  </section>
 </div>
 
 <!-- For debugging -->

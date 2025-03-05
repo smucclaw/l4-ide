@@ -16,8 +16,11 @@ import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
+  EmptyEdgeStyles,
+  HighlightedEdgeStyles,
   type EdgeStyles,
   type EdgeAttributes,
+  DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
 import { match } from 'ts-pattern'
@@ -79,6 +82,141 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return 'FUN_DECL_LIR_NODE'
   }
 }
+
+/*************************************************
+              Path Lir Node 
+ *************************************************/
+
+// TODO: Might also need something like a container lir node for the Array<PathLirNode>
+
+/** The simplest version of the LinPathLirNode -- no distinguishing between
+ * compatible and incompatible linearized paths
+ */
+export class LinPathLirNode extends DefaultLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected ladderGraph: LadderGraphLirNode,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo)
+  }
+
+  protected setStylesOnCorrespondingPathInLadderGraph(
+    context: LirContext,
+    styles: EdgeStyles
+  ) {
+    const pathEdges = this.rawPath.getEdges()
+    pathEdges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
+    })
+  }
+
+  highlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new HighlightedEdgeStyles()
+    )
+  }
+
+  unhighlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new EmptyEdgeStyles()
+    )
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
+  }
+
+  toString() {
+    return 'LIN_PATH_LIR_NODE'
+  }
+}
+
+// The more complicated version that differentiates between compatible and incompatible linearized paths
+// abstract class BasePathLirNode extends DefaultLirNode {
+//   constructor(
+//     nodeInfo: LirNodeInfo,
+//     protected rawPath: DirectedAcyclicGraph<LirId>
+//   ) {
+//     super(nodeInfo)
+//   }
+
+//   getVertices(context: LirContext) {
+//     return this.rawPath
+//       .getVertices()
+//       .map((id) => context.get(id))
+//       .filter((n) => !!n) as LadderLirNode[]
+//   }
+
+//   toPretty(context: LirContext) {
+//     return this.getVertices(context)
+//       .map((n) => n.toPretty(context))
+//       .join(' ')
+//   }
+// }
+//
+// /** For the first version, we'll take the LinearizedPaths to be wholly controlled by interactions on the ladder graph;
+//  * i.e., let's not worry about the linearized path -> ladder graph interactions for the v1,
+//  * and instead just focus on ladder graph -> linearized paths.
+//  *
+//  * The v1 could be as simple as:
+//  * - whenever new bindings are submitted on the ladder graph,
+//  *    re-compute (via `induce`) the subgraph that is compatible with the new env,
+//  *    then generate the linearized paths of that subgraph.
+//  */
+// export type LinPathLirNode = CompatiblePathLirNode | IncompatiblePathLirNode
+
+// export class CompatiblePathLirNode extends BasePathLirNode implements LirNode {
+//   constructor(
+//     nodeInfo: LirNodeInfo,
+//     protected rawPath: DirectedAcyclicGraph<LirId>
+//   ) {
+//     super(nodeInfo, rawPath)
+//   }
+
+//   toString() {
+//     return 'COMPATIBLE_PATH_LIR_NODE'
+//   }
+
+//   /** Note: This is styling for the *linearized* paths below the ladder graph,
+//    * as opposed to styles for paths *in* the ladder graph */
+//   getPathStyles() {
+//     console.error('TODO')
+//   }
+// }
+
+// export class IncompatiblePathLirNode
+//   extends BasePathLirNode
+//   implements LirNode
+// {
+//   constructor(
+//     nodeInfo: LirNodeInfo,
+//     protected rawPath: DirectedAcyclicGraph<LirId>
+//   ) {
+//     super(nodeInfo, rawPath)
+//   }
+
+//   toString() {
+//     return 'INCOMPATIBLE_PATH_LIR_NODE'
+//   }
+
+//   /** Note: This is styling for the *linearized* paths below the ladder graph,
+//    * as opposed to styles for paths *in* the ladder graph */
+//   getPathStyles() {
+//     console.error('TODO')
+//   }
+// }
 
 /******************************************************
                   Flow Lir Nodes
@@ -210,12 +348,16 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  // TODO: prob need to refactor: want to be able to
-  // generate the linearized paths of the the subgraph that is compatible with the updated env
+  // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
   /** Get all simple paths through the Dag */
-  // getPaths(_context: LirContext) {
-  //   return this.#dag.getAllPaths()
-  // }
+  getLinearizedPaths(context: LirContext) {
+    return this.#dag
+      .getAllPaths()
+      .map(
+        (rawPath) =>
+          new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
+      )
+  }
 
   /*****************************
         Edge attributes

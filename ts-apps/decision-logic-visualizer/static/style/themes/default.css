@@ -8,7 +8,8 @@
   --theme-border-radius: 5px;
 
   /* TODO: Need to check the colors against some color palette generator */
-  --color-highlighted-path-in-flow: #047857;
+  --color-highlighted-path-in-flow: oklch(0.828 0.111 230.318);
+  /* Tailwind sky 300 */
 
   --color-incompatible-path: oklch(0.871 0.006 286.286);
   /* Tailwind zinc 300 */
