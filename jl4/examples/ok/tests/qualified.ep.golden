@@ -7,7 +7,7 @@ DECLARE Inputs
 
 GIVEN i IS Inputs
 GIVETH A BOOLEAN
-DECIDE `qualifies` i IF
+DECIDE `compute_qualifies` i IF
      i's walks
  AND    i's drinks
      OR i's eats

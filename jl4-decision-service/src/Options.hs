@@ -14,7 +14,7 @@ data Options = Options
 optionsParser :: Parser Options
 optionsParser = do
   Options
-    <$> ( option
+    <$> option
             auto
             ( long "port"
                 <> short 'p'
@@ -22,7 +22,6 @@ optionsParser = do
                 <> value 8081
                 <> help "HTTP port to use"
             )
-        )
     <*> optional
       ( strOption
           ( long "serverName"

@@ -10,7 +10,7 @@ module Schema (
 
 --
 
-import Backend.Api hiding (description, name)
+import Backend.Api
 import Control.Lens hiding ((.=))
 import Data.Aeson ((.=))
 import qualified Data.Aeson as Aeson
@@ -23,16 +23,16 @@ import qualified Data.Text as Text
 import GHC.TypeLits
 import Servant
 import Servant.OpenApi
-import Server hiding (description, name)
+import Server
 
 type ServerName = Text
 
 serverOpenApi :: Maybe ServerName -> OpenApi
 serverOpenApi serverName =
   toOpenApi (Proxy :: Proxy Api)
-    & info . title .~ "MathLang Function API"
+    & info . title .~ "JL4 Function API"
     & info . version .~ "1.0"
-    & info . description ?~ "API for invoking MathLang functions"
+    & info . description ?~ "API for invoking JL4 functions"
     & servers .~ Maybe.maybeToList ((\sName -> Server sName mempty mempty) <$> serverName)
 
 instance (KnownSymbol desc, HasOpenApi api) => HasOpenApi (OperationId desc :> api) where
@@ -197,7 +197,7 @@ instance ToSchema FnLiteral where
     fnLiteralSchema <- declareSchemaRef (Proxy @FnLiteral)
     pure $
       NamedSchema (Just "Literal") $
-        (toParamSchema p)
+        toParamSchema p
           & oneOf
             ?~ [ intSchema
                , mTextSchema
@@ -252,7 +252,7 @@ instance ToSchema BatchRequest where
     let
       intRef =
         Inline $
-          (toParamSchema $ Proxy @Int)
+          toParamSchema (Proxy @Int)
             & default_ ?~ Aeson.Number 0
             & example ?~ Aeson.Number 0
     pure $
@@ -305,7 +305,7 @@ instance ToSchema BatchResponse where
     let
       intRef =
         Inline $
-          (toParamSchema $ Proxy @Int)
+          toParamSchema (Proxy @Int)
             & default_ ?~ Aeson.Number 0
             & example ?~ Aeson.Number 0
     doubleRef <- declareSchemaRef (Proxy @Double)
