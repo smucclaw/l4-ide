@@ -101,6 +101,9 @@
     watch(
       () => debouncedSfNodes$Initialized.current,
       () => {
+        // sfNodes$Initialized seems to get updated twice on the first render.
+        // But it does NOT re-fire if e.g. we re-generate the SF graph
+        // after the first complete initialization
         if (debouncedSfNodes$Initialized.current) {
           doLayoutAndFitView()
         }
