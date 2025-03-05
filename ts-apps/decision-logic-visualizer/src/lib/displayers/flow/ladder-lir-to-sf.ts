@@ -44,7 +44,15 @@ export function ladderGraphToSFGraph(
       sfNode.id,
       ladderNode.getId(),
     ])
-  const sfIdToLirId = new Map(idsAssocList)
+  // TODO: Refactor to use an array instead of a map
+  const sfIdToLirIdMap = new Map(idsAssocList)
+  const sfIdToLirId = (sfId: string) => {
+    const lirId = sfIdToLirIdMap.get(sfId)
+    if (!lirId) {
+      throw new Error(`Internal Error: No LIR ID found for SF ID: ${sfId}`)
+    }
+    return lirId
+  }
 
   // TODO: May want to sort as well
   const edges = ladderGraph
@@ -55,6 +63,7 @@ export function ladderGraphToSFGraph(
     nodes,
     edges,
     sfIdToLirId,
+    lirIdToSFId,
   }
 }
 
@@ -62,7 +71,7 @@ export function ladderGraphToSFGraph(
  ************* LadderLirNode to SF.Node ***************
  ******************************************************/
 
-export function lirIdToSFId(id: LirId): string {
+function lirIdToSFId(id: LirId): string {
   return id.toString()
 }
 

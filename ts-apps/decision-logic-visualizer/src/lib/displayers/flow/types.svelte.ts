@@ -28,7 +28,8 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
 export interface LadderSFGraph {
   nodes: LadderSFNode[]
   edges: LadderSFEdge[]
-  sfIdToLirId: Map<string, LirId>
+  sfIdToLirId(sfId: string): LirId
+  lirIdToSFId(lirId: LirId): string
 }
 
 /************************************************
@@ -56,6 +57,10 @@ export type SFNode<T extends string> = SF.Node & { type: T }
 function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
   return node.type === type
 }
+
+export const isBoolVarSFNode = (
+  node: SF.Node
+): node is SFNode<typeof boolVarNodeType> => isSFNode(node, boolVarNodeType)
 
 export type SFSourceNode = SFNode<typeof sourceNodeType>
 export type SFSinkNode = SFNode<typeof sinkNodeType>
@@ -92,12 +97,14 @@ export const defaultSFHandlesInfo: SFHandlesInfo = {
   targetPosition: SF.Position.Left,
 }
 
+// TODO: Not sure we want this after all
 export function getOriginalLirIdFromSfNode(node: LadderSFNode): LirId {
   if (!node.data.originalLirId) throw new Error('No originalLirId in node data')
 
   return node.data.originalLirId as LirId
 }
 
+// TODO: Not sure we need this after all
 export interface LadderSFNodeData {
   context: LirContext
   originalLirId: LirId
