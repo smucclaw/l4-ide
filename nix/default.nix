@@ -8,4 +8,5 @@
     secure = false;
   };
   jl4-lsp = pkgs.callPackage ./jl4-lsp/package.nix { };
+  jl4-websessions = pkgs.callPackage ./jl4-websessions/package.nix { };
 }

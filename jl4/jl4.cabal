@@ -85,23 +85,6 @@ executable jl4-cli
     jl4
   main-is: Main.hs
 
-executable jl4-web
-  import: defaults
-  hs-source-dirs: web
-  build-depends:
-    aeson,
-    bytestring,
-    servant,
-    servant-server,
-    sqlite-simple,
-    transformers,
-    mtl,
-    text,
-    uuid,
-    warp,
-  ghc-options: -threaded -rtsopts
-  main-is: Main.hs
-
 executable jl4-lsp
   import: defaults
   ghc-options:

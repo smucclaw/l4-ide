@@ -30,9 +30,10 @@ library
   build-depends:
     aeson,
     bytestring,
+    directory,
+    mtl,
     servant-server,
     sqlite-simple,
-    mtl,
     text,
     uuid,
 
@@ -51,14 +52,19 @@ executable jl4-websessions
 test-suite jl4-websessions-test
   import: defaults
   type: exitcode-stdio-1.0
-  hs-source-dirs: tests
+  hs-source-dirs: test
   main-is: Main.hs
-  other-modules:
-    Paths_jl4_websessions
-  autogen-modules:
-    Paths_jl4_websessions
+
   build-depends:
+    filepath,
     hspec,
-    temporary,
+    http-client,
     jl4-websessions,
+    process,
+    servant,
     servant-client,
+    servant-client-core,
+    sqlite-simple,
+    temporary,
+    text,
+    warp,

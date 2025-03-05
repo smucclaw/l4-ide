@@ -1,7 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ViewPatterns #-}
-module L4.CRUD (mkApp, withEnv) where
+module L4.CRUD (mkApp, withEnv, createDB, Api (..), HandlerEnv (..), JL4Program (..)) where
 
 import GHC.Exts (withDict)
 import GHC.Generics
@@ -10,7 +10,7 @@ import Text.Read
 
 import Control.Monad.Except
 import Control.Monad.Reader
-import Data.Aeson (FromJSON)
+import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Data.UUID (UUID)
@@ -20,9 +20,11 @@ import qualified Database.SQLite.Simple as SQLite
 import Database.SQLite.Simple.QQ (sql)
 import qualified Database.SQLite.Simple.ToField as SQLite
 import qualified Database.SQLite.Simple.ToRow as SQLite
+import System.Directory
 
 import Servant
 import Servant.Server.Generic
+import Control.Monad (unless)
 
 data JL4Program
   = MkJL4Program
@@ -30,7 +32,7 @@ data JL4Program
   , jl4program :: Text
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (FromJSON)
+  deriving anyclass (FromJSON, ToJSON)
 
 instance SQLite.ToRow JL4Program where
   toRow = withToFieldUUID $ SQLite.gtoRow . from
@@ -41,14 +43,15 @@ mkApp env = genericServeT (runHandlerM env) server
 withEnv :: (Int -> HandlerEnv -> IO r) -> IO r
 withEnv k = do
   [readMaybe -> Just port, dbPath] <- getArgs
+  createDB dbPath
   SQLite.withConnection dbPath \dbConn -> do
     let env = MkHandlerEnv{dbConn}
     k port env
 
 data Api mode
   = MkApi
-  { createSession :: mode :- ReqBody '[JSON] Text :> Put '[JSON] UUID
-  , readSession :: mode :- ReqBody '[JSON] UUID :> Get '[JSON] Text
+  { createSession :: mode :- ReqBody '[JSON] Text       :> Post '[JSON] UUID
+  , readSession   :: mode :- ReqBody '[JSON] UUID       :> Get '[JSON] Text
   , updateSession :: mode :- ReqBody '[JSON] JL4Program :> PutNoContent
   }
   deriving stock (Generic)
@@ -87,7 +90,7 @@ updateSession pl = do
   conn <- asks (.dbConn)
   liftIO
     $ withToFieldUUID
-    $ SQLite.execute conn updateStmt (pl.sessionid, pl.jl4program)
+    $ SQLite.execute conn updateStmt (pl.jl4program, pl.sessionid)
   pure NoContent
 
 updateStmt :: SQLite.Query
@@ -115,3 +118,12 @@ withToFieldUUID = withDict $ SQLite.SQLBlob . BS.toStrict . UUID.toByteString
 
 _deleteStmt :: SQLite.Query
 _deleteStmt = [sql| DELETE FROM session WHERE sessionid = ? |]
+
+createDB :: FilePath -> IO ()
+createDB dbPath = do
+  fe <- doesFileExist dbPath
+  unless fe do
+    SQLite.withConnection dbPath (`SQLite.execute_` createDBStmt)
+
+createDBStmt :: SQLite.Query
+createDBStmt = [sql|CREATE TABLE sessions (sessionid BLOB PRIMARY KEY, jl4program TEXT NOT NULL) |]
