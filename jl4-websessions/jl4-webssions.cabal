@@ -1,0 +1,69 @@
+cabal-version: 3.0
+name: jl4-websessions
+version: 0.1
+build-type: Simple
+tested-with: GHC==9.6.6
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+    LambdaCase
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  build-depends:
+    aeson,
+    bytestring,
+    directory,
+    mtl,
+    servant-server,
+    sqlite-simple,
+    text,
+    uuid,
+    wai-logger,
+
+  exposed-modules:
+    L4.CRUD
+
+executable jl4-websessions
+  import: defaults
+  hs-source-dirs: app
+  build-depends:
+    jl4-websessions,
+    warp,
+  ghc-options: -threaded -rtsopts
+  main-is: Main.hs
+
+test-suite jl4-websessions-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+
+  build-depends:
+    filepath,
+    hspec,
+    http-client,
+    jl4-websessions,
+    servant,
+    servant-client,
+    servant-client-core,
+    sqlite-simple,
+    temporary,
+    warp,

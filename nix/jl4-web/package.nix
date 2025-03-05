@@ -1,6 +1,7 @@
 {
-  url,
-  secure,
+  socket-url ? "localhost:5007",
+  session-url ? "localhost:5008",
+  secure ? false,
   buildNpmPackage,
   importNpmLock,
   pkg-config,
@@ -18,7 +19,8 @@ buildNpmPackage {
   buildPhase = ''
     runHook preBuild
     set -x
-    export VITE_BACKEND_URL=${if secure then "wss" else "ws"}://${url};
+    export VITE_SOCKET_URL=${if secure then "wss" else "ws"}://${socket-url};
+    export VITE_SESSION_URL=${if secure then "https" else "http"}://${session-url};
     pushd ./ts-shared/viz-expr
     npm run build
     popd

@@ -11,5 +11,6 @@ pkgs.mkShell {
     pkgs.nodejs
     pkgs.typescript
     pkgs.nixos-anywhere
+    pkgs.sqlite
   ];
 }
