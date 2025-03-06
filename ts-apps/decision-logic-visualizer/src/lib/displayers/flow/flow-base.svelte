@@ -278,18 +278,24 @@ Misc SF UI TODOs:
   <!-- TODO: Add expand/collapse  -->
   <!-- TODO: Move the following into a lin paths container component -->
   <section class="paths-container">
-    <div class="flex flex-col gap-1">
-      {#each ladderGraph.getLinearizedPaths(context) as path}
-        <button
-          class="rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs"
-          onmouseenter={() =>
-            path.highlightCorrespondingPathInLadderGraph(context)}
-          onmouseleave={() =>
-            path.unhighlightCorrespondingPathInLadderGraph(context)}
-        >
-          {path.toPretty(context)}
-        </button>
-      {/each}
+    <div class="flex flex-col">
+      <ul class="space-y-1">
+        {#each ladderGraph.getLinearizedPaths(context) as path, pathIndex}
+          <li class="grid grid-cols-6">
+            <!-- Row number / path index -->
+            <div class="font-semibold col-span-1">{pathIndex + 1}</div>
+            <button
+              class="col-span-5 rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs"
+              onmouseenter={() =>
+                path.highlightCorrespondingPathInLadderGraph(context)}
+              onmouseleave={() =>
+                path.unhighlightCorrespondingPathInLadderGraph(context)}
+            >
+              {path.toPretty(context)}
+            </button>
+          </li>
+        {/each}
+      </ul>
     </div>
   </section>
 </div>
@@ -310,7 +316,7 @@ Misc SF UI TODOs:
     min-height: 0; /* Prevents overflow */
   }
 
-  /* .paths-container {
+  .paths-container {
     flex: 0 0 auto;
-  } */
+  }
 </style>
