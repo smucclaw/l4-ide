@@ -64,6 +64,13 @@ ASSUME Court IS A TYPE
 
 ASSUME LegalDefinition IS A TYPE
 
+ASSUME Reference IS A TYPE
+ASSUME `a reference to a foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a reference to the law of a foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a territory of that country, other than a territory that is itself a prescribed foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a ship or aircraft of, or registered in, that country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `the law in force in any part of that country` IS A FUNCTION FROM Reference TO BOOLEAN
+
 DECLARE dealing
   HAS action IS A Action
       property_relation IS A ActionTarget
@@ -74,9 +81,18 @@ DECLARE MonetaryAuthorityOfSingapore
 DECLARE Thing
   HAS material IS A Material
 
-
 DECLARE Process
   HAS order_type IS A OrderType
       origin_person IS A JudicialPerson
       origin_forum IS A Court
 
+GIVEN r IS A Reference
+GIVETH A BOOLEAN
+DECIDE `is a reference to a foreign country` IS
+            `a territory of that country, other than a territory that is itself a prescribed foreign country` r
+        OR  `a ship or aircraft of, or registered in, that country` r
+
+GIVEN r IS A Reference
+GIVETH A BOOLEAN
+DECIDE `is a reference to the law of a foreign country` IS
+            `the law in force in any part of that country` r
