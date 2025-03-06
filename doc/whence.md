@@ -1,3 +1,164 @@
+# Meng's thoughts on L4's state transition system
+
+## Requirements / Real-World Patterns
+
+"In the wild", certain patterns recur in legal drafting.
+
+We seek to equip L4 with a semantics and idiomatic syntax that allows
+a legal drafter to express those patterns, and a compiler developer to
+translate L4 code into downstream formalizations without loss of
+semantic validity.
+
+### Party A does something, then Party B, then Party A, and we're done.
+
+Simple contracts typically look like:
+1. Party A tells Party B what she wants to buy
+2. Party B tells Party A what it costs
+3. Party A transfers that amount of money, by a certain deadline.
+4. Party B transfers the thing, by a certain deadline.
+5. Party A signs a receipt
+6. Everybody's happy
+
+We consider this to be a multi-agent system, which can be modeled as
+communicating sequential processes, synchronizing over notices,
+payment, and delivery -- three possible actions, of many.
+
+The above specification is given in an ordered sequence of events that
+represent the "happy path".
+
+Contracts also deal with what happens when parties fall off the happy
+path -- a required action is not done by the deadline. *Reparations*
+can be made to restore relations.
+
+So we need a way to represent not just a linear sequence, but a graph
+of events and consequences.
+
+### An Action Expression Language
+
+We need a way to represent parties taking certain actions, like
+sending money, or delivering goods, or otherwise communicating with
+each other.
+
+Meng has previously suggested a "prepositional logic" to describe
+actions complexly. This logic overlaps with the decision logic aspect
+of the language. The question of whether an action was taken or not
+can be expressed as a Boolean circuit.
+
+### Contract Composition
+
+If reparations fail, the contract ends in breach. Whose fault is the
+breach? Hvitved's CSL likes to ask and answer that question. CSL
+provides a compositional semantics, where the "fulfilled" and "breach"
+primitive contracts form the top and bottom elements of a lattice.
+
+CSL contracts can be composed from subcontracts using contract
+disjunction, conjunction, and sequencing.
+
+### Preconditions for a state transition to be enabled
+
+Conditions are located in "guards"; when the conditions are met, the transition is "enabled".
+
+### Temporals
+
+Actions need to be completed by a certain deadline. So time is a factor, and we need a way to model it.
+
+### Updating State Variables
+
+A contract, or law, that computes a certain numeric value may refer to
+the history of "how we got here", and perform arithmetic on a formula
+whose terms are set in the course of execution.
+
+For example, Party A tells Party B she wants to buy a bicycle. Later
+she realizes she also needs a helmet. And a bike lock. These state
+transitions loop over the "order" subcontract, and write values to a
+data structure somewhere that tracks a list of dicts, or something
+like that. When we move to the cash register we take the sum over the
+elements, and apply further logic: some of the items may be taxable
+and other items may not.
+
+These ideas of updating state variables, and filtering a list, need to
+be expressible in the language.
+
+Haskell's State monad offers `get` and `put` operators.
+
+### Data Modeling
+
+We already have a `DECLARE` data modelling expression minilanguage. We
+can instantiate those classes (as records) and use `get` and `put` to
+update those records.
+
+### Master Contracts and Transaction Instances
+
+The above contract only really begins in earnest at step 3. But if it
+is an of many routine transactions occurring under some sort of Master
+Services Agreement, then the larger contract is the MSA and the
+particular concrete purchase -- the instance of the transaction --
+could be said to start at step 1.
+
+## Background
+
+### Hvitved is an inspiration
+
+See Hvitved's PhD thesis on a contract language, CSL, with a
+trace-based evaluation and blame assignment model; if we analyze its
+DNA we can detect traces of CSP (Communicating Sequential Processes)
+as well as FSA (Finite-State Automata) and ECA
+(Event-Condition-Action) systems.
+
+Process algebras typically allow synchronization. We would extend CSL
+to express legal "notices" to serve the function of message passing.
+Synchronization could occur over other events as well.
+
+Previously we have extracted a Petri Net representation of a contract,
+though some other formalism may be preferred for our next iteration.
+
+### Model Checking is a desired goal
+
+Model checking systems like UPPAAL illustrate the notion of testing
+contracts for satisfaction of assertions, or properties, expressed in
+CTL. SPIN could be used to model-check assertions in LTL.
+
+See original inspiration [Model Checking Contracts](https://drive.google.com/file/d/1X9NB5itJjXeZCZcJ4vsmZhm3EoTLD2_Z/view?usp=drive_link).
+
+See [previous paper published by Joe Seng
+Watt](https://ink.library.smu.edu.sg/sol_research/4367), where much of
+the heavy lifting was done in Maude. This allowed us to detect a race
+condition.
+
+This model checking becomes relevant below, because it allows us to
+"squeeze out the deontics" into an **object-level contract** vs
+**property-level assertions** *about* the contract.
+
+### Hypotheticals
+
+Sometimes a contract will want to run a subcontract in a modified environment.
+
+The Reader Monad's `local` operator may suffice for this.
+
+It will likely be necessary to expose the "call stack" to a function, because some functions are defined in terms of the context in which they are being evaulated.
+
+For example, see the definition of "Conversion Price" in the [500 Startups' KISS instrument](https://kindrik.sg/template/se-asia-convertible-note-kiss-terms-2021-05-25.pdf)
+
+## Bugs in contracts and legislation can be due to a number of factors
+
+### Ambiguities
+
+Lexical and syntactic ambiguities (e.g. steak and fries or salad)
+
+Definitional ambiguities (Section A does not apply if Section B applies. If Section K later refers to Section A in a situation where it is unknown if Section B applies ... how do we evaluate it?)
+
+Incomplete Pattern Matches. Sometimes a particular edge case is not addressed.
+
+### Type Errors
+
+Sometimes two passages, which are supposed to be syntactic
+transformations of each other, may fail to align, leading to
+difficulties with interpretation.
+
+Or some equivocation occurs, causing a two instances of the same
+variable to be overloaded with different types, in a pathological case
+of shadowing.
+
 # Committing an Offence separate from Liability for Penalty
 
 > > Some criminal legislation/regulation is structured in an interesting way: instead of saying that a certain crime is punishable by a certain penalty, it will say that an offence is committed if X, Y, Z; multiple offences are defined; and then penalties are stated in a separate section. I suppose this makes sense because many offences can be committed together, and penalties can be assessed against them all at once.
@@ -12,6 +173,12 @@
 > This approach is particularly common in regulatory frameworks where multiple technical violations might occur simultaneously. For example, environmental regulations might separately define various prohibited discharges, record-keeping violations, and permit infractions, while providing a unified penalty structure that accounts for factors like willfulness, harm caused, and economic benefit gained.
 
 > Criminal codes often use this structure to establish a coherent sentencing philosophy across different offense categories, making the punishment system more consistent and proportional.
+
+This can be handled by the State Monad's `get` and `put`.
+
+
+
+
 
 ## Squeezing out the deontics
 
@@ -30,23 +197,24 @@ These questions are endlessly debated by philosophers.
 
 L4's position is set out below.
 
+
 ## The Object Level: from a coldly dispassionate perspective, an automaton simply executes a trace.
 
 > When you borrow a book from a library, a clock starts ticking.
 
-> You could return the book after a day.
+> You could return the book after a day. This is choice A.
 
-> You could return the book after six months.
+> You could return the book after six months. This is choice B.
 
-> One of those choices leads to a fine, and restricted borrowing privileges.
+> One of those choices (B) leads to a fine, and restricted borrowing privileges.
 
-> One of those choices does not.
+> One of those choices (A) does not.
 
-> If you pay the fine, the library will let you check out more books.
+> If you pay the fine (choice C), the library will let you check out more books.
 
-> If you do not pay the fine, the library will not.
+> If you do not pay the fine (choice D), the library will not.
 
-The above wording may appear oddly non-judgmental.
+The above wording may appear oddly non-judgmental; it focuses on the mechanics. There is a sort of Sartrean existentialism here.
 
 Most library rules tend to use more weighted phrasing: "you **must** return borrowed books within 14 days, or be subject to a fine."
 
@@ -54,9 +222,11 @@ Most library rules tend to use more weighted phrasing: "you **must** return borr
 
 "When no fines are outstanding, you **may** borrow books for up to 14 days, unless they are in the reserve."
 
-These are "deontic modals". The "if" and "unless" keywords are "conditional operators".
+These are "deontic modals" used in "normative statements". They
+indicate that a certain choice is strongly preferable, and that
+alternative choices lead to negative consequences.
 
-
+The "if" and "unless" keywords are "conditional operators".
 
 ## State
 
@@ -72,21 +242,27 @@ are assessed, the way the bill is calculated at the end of the meal.
 
 The notepad relays the order from the patron via the waiter to the bill.
 
-In L4, the State mechanism relays information about offences to the penalty section.
+In L4, the State mechanism relays information about offences to the penalty section. We `put` information into state variables, and `get` them out later.
 
 ## Object-Level versus Assertion-Level
 
 L4 uses a state transition formalism to represent the moving parts of
-a regulative rule. Any time somebody has to do something -- or refrain
-from doing something -- within a certain time period, and face
-consequences for noncompliance, we use L4's regulative statements to
-express those rules.
+a regulative rule.
 
-That formalism *could* use the bloodless form of the rules: one thing
-leads to another and another and another. We could render a finite
-state automaton, or a state transition system, using the most
-unopinionated, nonjudgemental language imaginable. This is the "object
-level" representation of a normative system.
+Whenever somebody has to do something -- or refrain from doing
+something -- within a certain time period, and face consequences for
+noncompliance, we use L4's regulative statements to express those
+rules.
+
+That formalism *could* use the bloodless, mechanical form of the
+rules: one thing leads to another and another and another. We could
+render a finite state automaton, or a state transition system, using
+the most unopinionated, nonjudgemental language imaginable. This is
+the "object level" representation of a normative system.
+
+"If this action is not taken, a penalty fee will be added to the invoice."
+
+"If the penalty fee is not paid, borrowing privileges will be suspended."
 
 Maybe a library user doesn't care if they lose borrowing privileges
 forever. Then the "you must pay a fine" is a toothless rule: it is not
@@ -97,7 +273,7 @@ strongly *enforceable*.
 The statement "you must pay a fine" carries with it an unspoken
 complement: "or else you will not be allowed to borrow again."
 
-These complements usually exist, yet they usually go unspoken, in informal discourse.
+These complements usually exist in informal discourse, yet they usually go unspoken.
 
 When you hear a "must" but don't hear the explicit consequence, the
 consequence is frequently "or you commit an offence, and are subject
@@ -121,6 +297,37 @@ not.
 
 These kinds of statements are formalized in LTL / CTL as assertions,
 or properties, *over* the object level of the state transition system.
+
+## We can treat `MUST`, `MAY`, and `SHANT` as sugar over a simple `DO`
+
+The purely mechanistic object-level form of a regulative rule is structured like this:
+
+```
+    §  clause 1
+   IF  preconditions
+ UPON  trigger event  -- only used at top-level, otherwise this clause follows from some other clause
+PARTY  p
+   DO  action
+       with  certain criteria
+	   to    some target
+HENCE  clause 2 (... AND clause 4 AND clause 6 OR clause 8)
+ LEST  clause 3
+```
+
+That `DO` represents an action that party P needs to take or not take;
+or, as a special case, procure that someone else take. So `PROCURE`
+could also be a special action with its own keyword? Or not.
+
+We can replace the `DO` with the following operators. Each one differs
+in that, if the `HENCE` or `LEST` elements are omitted from the
+stanza, default values are interpolated.
+
+| deontic modal | if the action | default `HENCE` | if the action | default `LEST` |
+|---------------|---------------|-----------------|---------------|----------------|
+| DO            | is taken      | required        | is not taken  | required       |
+| MUST          | is taken      | FULFILLED       | is not taken  | BREACH         |
+| MAY           | is taken      | FULFILLED       | is not taken  | FULFILLED      |
+| SHANT         | is not taken  | FULFILLED       | is taken      | BREACH         |
 
 ## Is UPON sufficient or do we need a WHENCE?
 
@@ -155,3 +362,22 @@ However we may want to dip into a State monad that allows us to update certain v
           SUM p.points
 	    "years"
 ```
+
+### Introspection
+
+We have previously suggested that a decision function have access to its call stack.
+
+What if we allow regulative clauses to examine the history trace so far?
+
+We could say "if we got here via path A, vs if we got here via path B".
+
+```
+§ 9 penalties
+   UPON `an offence is committed` `under`  § 1
+                                           § 2
+   CONSIDER history
+     WHENCE § 1 abuse of dogs THEN p.points += 3
+            § 2 abuse of cats THEN p.points += 2
+```
+
+
