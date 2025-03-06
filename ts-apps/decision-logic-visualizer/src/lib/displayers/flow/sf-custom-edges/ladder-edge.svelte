@@ -15,10 +15,6 @@
     targetPosition,
     data = defaultLadderEdgeAttrs,
   }: LadderEdgeProps = $props()
-
-  // stroke-width: 2px;
-  // TODO: try using a css class instead; might be able to avoid the !important that way
-  const pathStyle = `stroke: var(${data.strokeColorCSSVar}) !important;`
 </script>
 
 <BezierEdge
@@ -30,7 +26,7 @@
   {targetPosition}
   label={data.label}
   pathOptions={{ curvature: 1 }}
-  style={pathStyle}
+  style={data.edgeStyles}
 />
 
 <!-- 

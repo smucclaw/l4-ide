@@ -13,7 +13,6 @@ import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
-import type { StrokeColorCSSVar } from '../../algebraic-graphs/edge.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import type { LirId } from '$lib/layout-ir/core.js'
 
@@ -143,12 +142,12 @@ with their EdgeData */
  * and can have a label */
 export interface LadderEdgeAttrs extends Record<string, unknown> {
   label: string
-  strokeColorCSSVar: StrokeColorCSSVar
+  edgeStyles: string
 }
 
 export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
-  strokeColorCSSVar: new EmptyEdgeStyles().getStrokeColor(),
+  edgeStyles: new EmptyEdgeStyles().getStyleString(),
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {

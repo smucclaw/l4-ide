@@ -197,7 +197,7 @@ export function mergeEdgeAttributes(
 export interface EdgeStyles extends Eq<EdgeStyles> {
   $type: 'EmptyEdgeStyles' | 'HighlightedEdgeStyles'
 
-  getStrokeColor(): StrokeColorCSSVar
+  getStyleString(): string
 
   isEqualTo(other: EdgeStyles): boolean
 }
@@ -223,8 +223,8 @@ export class EmptyEdgeStyles implements EdgeStyles {
     return isEmptyEdgeStyles(other)
   }
 
-  getStrokeColor() {
-    return '--default-internal-stroke-color' as const
+  getStyleString(): EdgeStyleString {
+    return 'stroke: var(--default-internal-stroke-color) !important;' as const
   }
 }
 
@@ -236,13 +236,13 @@ export class HighlightedEdgeStyles implements EdgeStyles {
     return isHighlightedEdgeStyles(other)
   }
 
-  getStrokeColor() {
-    return '--color-highlighted-path-in-flow' as const
+  getStyleString(): EdgeStyleString {
+    return 'stroke: var(--color-highlighted-path-in-flow) !important; stroke-width: 3px;' as const
   }
 }
 
 export const emptyEdgeLabel = ''
 
-export type StrokeColorCSSVar =
-  | '--color-highlighted-path-in-flow'
-  | '--default-internal-stroke-color'
+export type EdgeStyleString =
+  | 'stroke: var(--color-highlighted-path-in-flow) !important; stroke-width: 3px;'
+  | 'stroke: var(--default-internal-stroke-color) !important;'

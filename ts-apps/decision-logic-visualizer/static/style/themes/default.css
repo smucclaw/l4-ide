@@ -8,7 +8,7 @@
   --theme-border-radius: 5px;
 
   /* TODO: Need to check the colors against some color palette generator */
-  --color-highlighted-path-in-flow: var(--color-sky-300);
+  --color-highlighted-path-in-flow: var(--color-sky-600);
 
   --color-incompatible-path: var(--color-zinc-300);
 
