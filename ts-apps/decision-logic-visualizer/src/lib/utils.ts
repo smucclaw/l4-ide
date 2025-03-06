@@ -38,8 +38,6 @@ export interface HasId {
 
 /* ====== CSS ============ */
 
-export type CSSClass = string
-
 export type Styles = {
   [val: string]: CSSProperties | Styles
 }
