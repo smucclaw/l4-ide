@@ -73,12 +73,14 @@ body {
   margin: 0;
 }
 
+/* TODO: Check if this class really can be used w/o @utility */
 .visualization-container {
   min-height: 400px;
   max-width: 96svw;
   margin: 0 auto;
 }
 
+/* TODO: Check if this class really can be used w/o @utility */
 .button {
   background-color: var(--color-secondary);
   color: transparent;
