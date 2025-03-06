@@ -45,6 +45,8 @@ jobs:
           libncurses-dev
           pkg-config
           zlib1g-dev
+          liblzma-dev
+          xz-utils
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       # FIXME: this is a temporary fix, the docker container should never be dirty

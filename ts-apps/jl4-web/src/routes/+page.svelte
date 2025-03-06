@@ -13,7 +13,7 @@
     type FunDecl,
     type VisualizeDecisionLogicIRInfo,
   } from "@repo/viz-expr";
-  import { type MessageTransports } from "vscode-languageclient";
+  import { type MessageTransports, type Middleware } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
 
   /* eslint-disable-next-line editorElement does not need to be reactive */
@@ -29,6 +29,7 @@
   const nodeInfo = { registry: lirRegistry, context };
 
   let vizDecl: undefined | FunDecl = $state(undefined);
+  let persistSession: undefined | (() => Promise<void>) = $state(undefined);
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   );
@@ -67,9 +68,12 @@
       "monaco-editor-wrapper/workers/workerLoaders"
     );
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
-    
-    const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "ws://localhost:5007";
+
+    const websocketUrl =
+      import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007';
+
+    const sessionUrl =
+      import.meta.env.VITE_SESSION_URL || 'http://localhost:5008';
 
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug);
@@ -81,6 +85,7 @@
             json: JSON.stringify({
               "editor.semanticHighlighting.enabled": true,
               "editor.experimental.asyncTokenization": true,
+              'editor.lightbulb.enabled': 'on',
             }),
           },
           serviceOverrides: {},
@@ -110,7 +115,7 @@
         colors: {},
       });
 
-      monaco.editor.create(editorElement, {
+      const editor = monaco.editor.create(editorElement, {
         value: britishCitizen,
         language: "jl4",
         automaticLayout: true,
@@ -119,7 +124,46 @@
         "semanticHighlighting.enabled": true,
       });
 
-      initWebSocketAndStartClient(backendUrl, logger);
+      const ownUrl: URL = new URL(window.location.href);
+      const sessionid: string | null = ownUrl.searchParams.get('id');
+      if (sessionid) {
+         const response = await fetch(`${sessionUrl}?id=${sessionid}`)
+         logger.debug("sent GET for session")
+         const prog = await response.json();
+         if (prog) {
+           editor.setValue(prog);
+         }
+      }
+
+      persistSession = async () => {
+        const bufferContent: string = editor.getValue();
+        const ownUrl: URL = new URL(window.location.href);
+        const sessionid: string | null = ownUrl.searchParams.get('id');
+        if (sessionid) {
+          await fetch(sessionUrl, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({jl4program: bufferContent, sessionid: sessionid})
+          });
+          logger.debug("sent PUT for session")
+        } else {
+          const response = await fetch(sessionUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(bufferContent)
+          });
+          logger.debug("sent POST for session")
+          const newSessionId = await response.json()
+          if (newSessionId) {
+            ownUrl.searchParams.set('id', newSessionId.toString())
+            history.pushState(null, '', ownUrl)
+          } else {
+            console.error(`response was not present`)
+          }
+        };
+      }
+
+      initWebSocketAndStartClient(websocketUrl, logger);
     };
 
     /** parameterized version , support all languageId */
@@ -163,7 +207,7 @@
       });
     };
 
-    function mkMiddleware(logger: ConsoleLogger) {
+    function mkMiddleware(logger: ConsoleLogger): Middleware {
       return {
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`);
@@ -187,6 +231,12 @@
               break;
           }
         },
+        didChange: async (event, next) => {
+          await next(event)
+          if (persistSession) {
+            await persistSession()
+          }
+        }
       };
     }
     await runClient();

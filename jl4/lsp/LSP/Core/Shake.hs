@@ -145,7 +145,7 @@ import System.FilePath hiding (makeRelative)
 import System.Time.Extra
 import UnliftIO (MonadUnliftIO (withRunInIO))
 import qualified "list-t" ListT
-import L4.Lexer
+import L4.Parser.SrcSpan
 import L4.Syntax
 
 data Log

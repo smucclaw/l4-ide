@@ -50,6 +50,7 @@ library
     safe-exceptions,
     text >= 2 && < 2.1.2,
     tree-diff,
+    vector,
 
   exposed-modules:
     Base
@@ -114,7 +115,7 @@ executable jl4-lsp
     focus ^>=1.0.3.2,
     fuzzy,
     generics-sop,
-    hashable ^>=1.5.0.0,
+    hashable >=1.4.0.0,
     hls-graph ^>=2.9.0.0,
     hw-fingertree,
     jl4,

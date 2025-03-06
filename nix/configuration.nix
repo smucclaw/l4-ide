@@ -3,6 +3,8 @@
   imports = [
     ./jl4-web/configuration.nix
     ./jl4-lsp/configuration.nix
+    ./jl4-decision-service/configuration.nix
+    ./jl4-websessions/configuration.nix
     ./module.nix
   ];
 

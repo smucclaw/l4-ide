@@ -3,7 +3,7 @@ module L4.TypeCheck.Types where
 
 import Base
 import L4.Annotation (HasSrcRange(..))
-import L4.Lexer (SrcRange(..))
+import L4.Parser.SrcSpan (SrcRange(..))
 import L4.Syntax
 import L4.TypeCheck.With
 

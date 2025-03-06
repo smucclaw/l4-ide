@@ -65,6 +65,7 @@ import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
+import L4.Parser.SrcSpan
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -89,7 +90,7 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refSrcP <|> fmap (S . Z) nlgP <|> fmap Z refP)
+  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgP <|> fmap Z refP)
   traverse_ addNlgOrRef nlgs
   let
     epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
@@ -117,17 +118,20 @@ nlgAnnotationP = hidden $ onlySpacedToken (\case
 
 refAnnotationP :: Parser (Epa Text)
 refAnnotationP = hidden $ onlySpacedToken (\case
-  TRef t ty -> Just $ toNlgAnno t ty
+  TRef t ty -> Just $ toRefAnno t ty
   _ -> Nothing)
   "Reference Annotation"
 
 -- TODO:
--- (1) should ref-src be allowed anywhere else than at the toplevel
+-- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
 -- (2) should we add it to the AST at all? Currently we don't need it
-refSrcP :: Parser (Epa ())
-refSrcP = hidden $ onlySpacedToken (\case
-  TRefSrc _t -> Just (); _ -> Nothing)
-  "Reference source Annotation"
+refAdditionalP :: Parser (Epa ())
+refAdditionalP = hidden $ onlySpacedToken (\case
+  TRefSrc _t -> Just ()
+  TRefMap _t -> Just ()
+  _ -> Nothing
+  )
+  "Reference source or map annotation"
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
@@ -1204,9 +1208,7 @@ execParserForTokens p file input ts =
 
 runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 runLexer file input =
-  case execLexer file input of
-    Left errs -> Left $ fmap (mkPError "lexer") errs
-    Right ts -> pure ts
+  execLexer file input
 
 -- ----------------------------------------------------------------------------
 -- JL4 Program parser
@@ -1241,29 +1243,6 @@ parseFile p file input =
 
 parseTest :: Show a => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
-
--- ----------------------------------------------------------------------------
--- Parser error messages
--- ----------------------------------------------------------------------------
-
-data PError
-  = PError
-    { message :: Text
-    , start :: SrcPos
-    , origin :: Text
-    }
-  deriving (Show, Eq, Ord)
-
-mkPError :: Text -> (Text, SourcePos) -> PError
-mkPError orig (m, s) =
-  PError
-    { message = m
-    , start = MkSrcPos
-        { line = unPos $ sourceLine s
-        , column = unPos $ sourceColumn s
-        }
-    , origin = orig
-    }
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers
@@ -1394,6 +1373,7 @@ mkLexeme trail a = Lexeme
   , hiddenClusters = []
   }
 
+-- | 'Epa_' stands for _E_xact_p_rint _a_nnotation
 data Epa_ t a = Epa
   { original :: [t]
   , trailingTokens :: [t]
