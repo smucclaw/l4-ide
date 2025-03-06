@@ -17,6 +17,7 @@ import Data.Char (isAlphaNum)
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
+import Data.Ord (Down(Down))
 import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import qualified StmContainers.Map as STM
@@ -573,7 +574,15 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
     hoistMaybe do
       -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
       let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
-      (range, mreference) <- listToMaybe $ ivToRange <$> IVMap.search (lspPositionToSrcPos pos) refs
+      -- NOTE: this is subtle: if there are multiple results for a location, then we want to
+      -- prefer Just's, so we reverse sort the references we get.
+      -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would
+      -- mean that we'd get no result, when actually we want to have a list with a single element
+      -- that is Nothing, on that range.
+      (range, mreference) <- listToMaybe
+        $ List.sortOn (Down . snd)
+        $ ivToRange
+        <$> IVMap.search (lspPositionToSrcPos pos) refs
       let lspRange = srcRangeToLspRange (Just range)
       pure $ Hover
         (InL
