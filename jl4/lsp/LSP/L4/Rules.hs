@@ -43,7 +43,6 @@ import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
 import Data.Either (partitionEithers)
-import Debug.Trace
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -296,9 +295,6 @@ jl4Rules recorder = do
           )
           tokens
 
-      traceShowM refSrcs
-
-
       -- report any errors encountered while parsing any of the ref-src annos,
       -- annotate them on the ref-src annos they originated from and finally
       -- union all interval maps
@@ -332,8 +328,6 @@ jl4Rules recorder = do
               , fdShouldShowDiagnostic = ShowDiag
               , fdOriginalSource = NoMessage
               }
-
-      traceShowM $ fmap toList mps
 
       pure (diags, mps)
 

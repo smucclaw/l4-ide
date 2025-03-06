@@ -577,7 +577,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
       -- NOTE: this is subtle: if there are multiple results for a location, then we want to
       -- prefer Just's, so we reverse sort the references we get.
       -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would
-      -- mean that we'd get no result, when actually we want to have a list with a snigle element
+      -- mean that we'd get no result, when actually we want to have a list with a single element
       -- that is Nothing, on that range.
       (range, mreference) <- listToMaybe
         $ List.sortOn (Down . snd)
