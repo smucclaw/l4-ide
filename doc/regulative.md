@@ -1,4 +1,11 @@
-# Meng's thoughts on L4's state transition system
+# Meng's thoughts on L4's syntax and semantics for regulative rules
+
+Unlike constitutive rules which create institutional facts, and have
+the pattern "for the purposes of P, X counts as a Y if conditions C are met",
+
+regulative rules govern the behaviour of parties: "if a person meets
+criteria C, then they must, may, or must-not, perform some action; if
+they do, then this happens, and if they don't, then that happens."
 
 ## Requirements / Real-World Patterns
 
@@ -61,6 +68,13 @@ Conditions are located in "guards"; when the conditions are met, the transition 
 ### Temporals
 
 Actions need to be completed by a certain deadline. So time is a factor, and we need a way to model it.
+
+In law, certain regulative rules are always in effect. Usually it is
+only when a rule is triggered by noncompliance that a clock starts to
+tick.
+
+But sometimes, as with borrowing a library book, a voluntary action
+starts the clock.
 
 ### Updating State Variables
 
