@@ -117,6 +117,8 @@ export interface EdgeAttributes extends Eq<EdgeAttributes> {
   isEqualTo<T extends EdgeAttributes>(other: T): boolean
 
   merge(other: EdgeAttributes): EdgeAttributes
+
+  clone(): EdgeAttributes
 }
 
 export class DefaultEdgeAttributes implements EdgeAttributes {
@@ -130,6 +132,10 @@ export class DefaultEdgeAttributes implements EdgeAttributes {
       this.getStyles().isEqualTo(other.getStyles()) &&
       this.getLabel() === other.getLabel()
     )
+  }
+
+  clone(): EdgeAttributes {
+    return new DefaultEdgeAttributes(this.styles, this.label)
   }
 
   getStyles(): EdgeStyles {

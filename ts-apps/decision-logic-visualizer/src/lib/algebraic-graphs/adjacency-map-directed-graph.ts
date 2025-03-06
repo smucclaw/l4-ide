@@ -71,10 +71,10 @@ export class DirectedAMGraph<A extends Ord<A>>
     const edgeKey = makeEdgeKey(edge)
     const attrs = this.edgeAttributes.get(edgeKey)
     if (attrs) {
-      return attrs
+      return attrs.clone()
     } else {
       this.edgeAttributes.set(edgeKey, new DefaultEdgeAttributes())
-      return this.edgeAttributes.get(edgeKey) as EdgeAttributes
+      return new DefaultEdgeAttributes() as EdgeAttributes
     }
   }
 
