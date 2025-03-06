@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    BaseEdge,
     BezierEdge,
     // EdgeLabel,
   } from '@xyflow/svelte'
