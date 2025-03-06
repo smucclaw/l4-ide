@@ -19,7 +19,6 @@
   // stroke-width: 2px;
   // TODO: try using a css class instead; might be able to avoid the !important that way
   const pathStyle = `stroke: var(${data.strokeColorCSSVar}) !important;`
-  console.log(pathStyle)
 </script>
 
 <BezierEdge
