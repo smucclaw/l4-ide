@@ -21,6 +21,7 @@
 
   /* Stroke width */
   --default-stroke-width: 1px;
+  /* TODO: Think about whether the default should be 2px */
   --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
 
   /* Stroke color */
