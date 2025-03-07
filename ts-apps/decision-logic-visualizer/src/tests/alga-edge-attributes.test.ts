@@ -13,8 +13,8 @@ import { NumberWrapper } from './number-wrapper.js'
 describe('Edge Attributes - DefaultEdgeAttributes', () => {
   test('DefaultEdgeAttributes have fallback / default styles and empty label', () => {
     const attrs = new DefaultEdgeAttributes()
-    expect(attrs.getStyles().getStrokeColor()).toBe(
-      '--default-internal-stroke-color'
+    expect(attrs.getStyles().getStyleString()).toBe(
+      new EmptyEdgeStyles().getStyleString()
     )
     expect(attrs.getLabel()).toBe(emptyEdgeLabel)
   })
@@ -39,8 +39,8 @@ describe('Edge Attributes - Setting and Getting', () => {
     // Get the attributes
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
-    expect(retrievedAttrs.getStyles().getStrokeColor()).toBe(
-      new HighlightedEdgeStyles().getStrokeColor()
+    expect(retrievedAttrs.getStyles().getStyleString()).toBe(
+      new HighlightedEdgeStyles().getStyleString()
     )
   })
 
@@ -72,8 +72,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStrokeColor()).toBe(
-      styles2.getStrokeColor()
+    expect(mergedAttrs.getStyles().getStyleString()).toBe(
+      styles2.getStyleString()
     )
   })
 
@@ -87,8 +87,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStrokeColor()).toBe(
-      styles2.getStrokeColor()
+    expect(mergedAttrs.getStyles().getStyleString()).toBe(
+      styles2.getStyleString()
     )
   })
 })
@@ -117,8 +117,8 @@ describe('Edge Attributes - Graph Operations', () => {
     // Get edge attributes from overlaid graph
     const resultAttr = overlaid.getAttributesForEdge(edge)
     expect(resultAttr.getLabel()).toBe('Label2')
-    expect(resultAttr.getStyles().getStrokeColor()).toBe(
-      attr2.getStyles().getStrokeColor()
+    expect(resultAttr.getStyles().getStyleString()).toBe(
+      attr2.getStyles().getStyleString()
     )
   })
 
