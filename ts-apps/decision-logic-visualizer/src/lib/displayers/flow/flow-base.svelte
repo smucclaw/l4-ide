@@ -288,7 +288,7 @@ Misc SF UI TODOs:
         }, 10)
       }}
     >
-      <Collapsible.Trigger class="flex items-center gap-2">
+      <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
         <!-- TODO: Improve the button styles -->
         <button
           class="rounded-md border-1 px-2 py-1 text-sm hover:bg-sky-100 flex items-center gap-1"
@@ -297,7 +297,7 @@ Misc SF UI TODOs:
         </button>
       </Collapsible.Trigger>
       <Collapsible.Content class="pt-2">
-        <section>
+        <section class="paths-list-content-wrapper">
           <ul class="space-y-1">
             {#each ladderGraph.getLinearizedPaths(context) as path, pathIndex}
               <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
@@ -333,7 +333,7 @@ Misc SF UI TODOs:
     flex-direction: column;
     height: 100%;
     /* Gap between the flow and the paths list container */
-    row-gap: 20px;
+    row-gap: 6px;
   }
 
   .flow-container {
@@ -345,5 +345,12 @@ Misc SF UI TODOs:
     flex: 0 0 auto;
     max-height: 45%;
     overflow-y: auto;
+    padding-bottom: 6px;
+  }
+
+  .paths-list-content-wrapper {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 65ch;
   }
 </style>
