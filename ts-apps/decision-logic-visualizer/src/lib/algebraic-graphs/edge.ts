@@ -224,7 +224,7 @@ export class EmptyEdgeStyles implements EdgeStyles {
   }
 
   getStyleString(): EdgeStyleString {
-    return 'stroke: var(--default-internal-stroke-color) !important;' as const
+    return 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);' as const
   }
 }
 
@@ -237,12 +237,12 @@ export class HighlightedEdgeStyles implements EdgeStyles {
   }
 
   getStyleString(): EdgeStyleString {
-    return 'stroke: var(--color-highlighted-path-in-flow) !important; stroke-width: 3px;' as const
+    return 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);' as const
   }
 }
 
 export const emptyEdgeLabel = ''
 
 export type EdgeStyleString =
-  | 'stroke: var(--color-highlighted-path-in-flow) !important; stroke-width: 3px;'
-  | 'stroke: var(--default-internal-stroke-color) !important;'
+  | 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);'
+  | 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);'

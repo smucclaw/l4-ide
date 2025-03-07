@@ -8,7 +8,14 @@
   --theme-border-radius: 5px;
 
   /* TODO: Need to check the colors against some color palette generator */
+  /* Stroke width */
+  --default-stroke-width: 1px;
+  --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
+
+  /* Stroke color */
+  --default-stroke-color: var(--color-primary);
   --color-highlighted-path-in-flow: var(--color-sky-600);
+  /* TODO: Should check the colors against some color palette generator */
 
   --color-incompatible-path: var(--color-zinc-300);
 
