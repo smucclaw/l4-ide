@@ -285,7 +285,7 @@ Misc SF UI TODOs:
         // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
         setTimeout(() => {
           doFitView()
-        }, 20)
+        }, 10)
       }}
     >
       <Collapsible.Trigger class="flex items-center gap-2">
