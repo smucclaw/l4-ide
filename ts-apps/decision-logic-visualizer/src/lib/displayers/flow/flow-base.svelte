@@ -38,6 +38,8 @@
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import { Collapsible } from 'bits-ui'
+  import List from 'lucide-svelte/icons/list'
 
   /************************
        Lir
@@ -275,29 +277,50 @@ Misc SF UI TODOs:
     </SvelteFlow>
   </div>
   <!-- Paths Section -->
-  <!-- TODO: Add expand/collapse  -->
   <!-- TODO: Move the following into a lin paths container component -->
-  <section class="paths-container">
-    <div class="flex flex-col">
-      <ul class="space-y-1">
-        {#each ladderGraph.getLinearizedPaths(context) as path, pathIndex}
-          <li class="grid grid-cols-6">
-            <!-- Row number / path index -->
-            <div class="font-semibold col-span-1">{pathIndex + 1}</div>
-            <button
-              class="col-span-5 rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs"
-              onmouseenter={() =>
-                path.highlightCorrespondingPathInLadderGraph(context)}
-              onmouseleave={() =>
-                path.unhighlightCorrespondingPathInLadderGraph(context)}
-            >
-              {path.toPretty(context)}
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  </section>
+  <div class="paths-container">
+    <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
+    <Collapsible.Root
+      onOpenChange={() => {
+        // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
+        setTimeout(() => {
+          doFitView()
+        }, 20)
+      }}
+    >
+      <Collapsible.Trigger class="flex items-center gap-2">
+        <!-- TODO: Improve the button styles -->
+        <button
+          class="rounded-md border-1 px-2 py-1 text-sm hover:bg-sky-100 flex items-center gap-1"
+        >
+          <List /><span>List paths</span>
+        </button>
+      </Collapsible.Trigger>
+      <Collapsible.Content class="pt-2">
+        <section>
+          <ul class="space-y-1">
+            {#each ladderGraph.getLinearizedPaths(context) as path, pathIndex}
+              <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
+                <!-- Row number / path index -->
+                <div class="font-semibold px-3 max-w-[25px] text-right">
+                  {pathIndex + 1}
+                </div>
+                <button
+                  class="rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs text-left"
+                  onmouseenter={() =>
+                    path.highlightCorrespondingPathInLadderGraph(context)}
+                  onmouseleave={() =>
+                    path.unhighlightCorrespondingPathInLadderGraph(context)}
+                >
+                  {path.toPretty(context)}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      </Collapsible.Content>
+    </Collapsible.Root>
+  </div>
 </div>
 
 <!-- For debugging -->
@@ -309,6 +332,8 @@ Misc SF UI TODOs:
     display: flex;
     flex-direction: column;
     height: 100%;
+    /* Gap between the flow and the paths list container */
+    row-gap: 20px;
   }
 
   .flow-container {
@@ -318,5 +343,7 @@ Misc SF UI TODOs:
 
   .paths-container {
     flex: 0 0 auto;
+    max-height: 45%;
+    overflow-y: auto;
   }
 </style>
