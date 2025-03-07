@@ -173,26 +173,26 @@ Or some equivocation occurs, causing a two instances of the same
 variable to be overloaded with different types, in a pathological case
 of shadowing.
 
-# Committing an Offence separate from Liability for Penalty
 
-> > Some criminal legislation/regulation is structured in an interesting way: instead of saying that a certain crime is punishable by a certain penalty, it will say that an offence is committed if X, Y, Z; multiple offences are defined; and then penalties are stated in a separate section. I suppose this makes sense because many offences can be committed together, and penalties can be assessed against them all at once.
+# A Two-Level Framework for Regulative Formalization
 
-> You're right about this interesting structure in criminal legislation. Many legal codes organize offenses and penalties separately for several practical reasons:
+Model checkers like UPPAAL and SPIN help to verify properties about
+object-level timed automata or process models of communicating FSMs.
+Those properties are written in CTL and LTL, at a higher level than
+the system descriptions they verify.
 
-> * Efficiency in drafting - Defining offenses separately from penalties allows lawmakers to establish multiple related offenses without repetitively stating the same penalty provisions.
-> * Graduated punishment schemes - This structure facilitates systems where penalties escalate based on factors like prior convictions or aggravating circumstances, without needing to redefine the underlying offense.
-> * Judicial discretion - Separating offenses from penalties gives judges flexibility to consider multiple violations holistically when determining appropriate sentences.
-> * Legislative updates - When legislatures wish to modify penalties (often due to changing social attitudes or prison capacity concerns), they can amend just the penalty provisions without redefining the substantive offenses.
+When humans ask questions about legal scenarios, they often want to know:
+- based on what has happened so far, what situation am I in?
+- based on the situation I am in, what immediate obligations do I face?
+- if I want to achieve a particular outcome state, what courses of action should I consider?
+- if I want to achieve any outcome state that satisfies certain properties, what courses of action should I consider?
+- given those courses of action, what immediate next steps should I take?
+- given multiple courses of action, optimize / order them by some value function.
+- how might other players in the game seek to frustrate my courses of action?
+- is it true that if I want to achieve X goal, I must do Y? How much time do I have?
+- what if I want to achieve X goal without doing Y?
 
-> This approach is particularly common in regulatory frameworks where multiple technical violations might occur simultaneously. For example, environmental regulations might separately define various prohibited discharges, record-keeping violations, and permit infractions, while providing a unified penalty structure that accounts for factors like willfulness, harm caused, and economic benefit gained.
-
-> Criminal codes often use this structure to establish a coherent sentencing philosophy across different offense categories, making the punishment system more consistent and proportional.
-
-This can be handled by the State Monad's `get` and `put`.
-
-
-
-
+Encoding regulative rules in L4 should facilitate machine-assisted answering of the above questions.
 
 ## Squeezing out the deontics
 
@@ -242,7 +242,7 @@ alternative choices lead to negative consequences.
 
 The "if" and "unless" keywords are "conditional operators".
 
-## State
+## State Variables for long-distance cause-and-effect
 
 The immediate consequences of noncompliance are often spelled out in close proximity to the regulative rule that prescribes the required behaviour.
 
@@ -343,6 +343,8 @@ stanza, default values are interpolated.
 | MAY           | is taken      | FULFILLED       | is not taken  | FULFILLED      |
 | SHANT         | is not taken  | FULFILLED       | is taken      | BREACH         |
 
+
+
 ## Is UPON sufficient or do we need a WHENCE?
 
 L4's state transition model is oriented around the regulative clause, typically structured `PARTY p MUST Action BEFORE D HENCE c1 LEST c2`.
@@ -377,7 +379,7 @@ However we may want to dip into a State monad that allows us to update certain v
 	    "years"
 ```
 
-### Introspection
+## Introspection
 
 We have previously suggested that a decision function have access to its call stack.
 
@@ -394,4 +396,60 @@ We could say "if we got here via path A, vs if we got here via path B".
             § 2 abuse of cats THEN p.points += 2
 ```
 
+## Homoiconicity, Introspection, Reflection, Reification
 
+Annoyingly, some rules are phrased in a way that blurs the boundary
+between object level and assertion level: "If any rule in this section
+would cause undue hardship as a result of tight deadlines, the
+Commissioner may, upon application, extend deadlines at his
+discretion."
+
+The notion of a "tight deadline" is something that could be evaluated
+at the assertion level: is it true that every path that leads to
+compliance with this rule, involves at least one tight deadline,
+defined as a situation where an obligation arises less than five
+working days before it needs to be met?"
+
+This is the sort of question we can phrase in LTL/CTL.
+
+But the rule then wants to introspect that property at the object
+level, in something like reflection or reification. Hoo boy.
+
+## Textual Homoiconicity
+
+[Section 8 of the Nationality and Borders Act 2022 (UK)](https://www.legislation.gov.uk/ukpga/2022/36/section/8) inserts a section 4L into the British Nationality Act 1981.
+
+This is basically a Git commit, but the textual change is itself recorded in the form of a legal rule -- what we might call an "outer" legal rule.
+
+The "inner" legal rule is a good example of homoiconicity:
+
+> For the purposes of subsection (1)(a), “historical legislative unfairness” includes circumstances where P would have become, or would not have ceased to be, a British subject, a citizen of the United Kingdom and Colonies or a British citizen, if an Act of Parliament or subordinate legislation (within the meaning of the Interpretation Act 1978) had, for the purposes of determining a person’s nationality status—
+
+> a. treated males and females equally,
+
+> b. treated children of unmarried couples in the same way as children of married couples, or
+
+> c. treated children of couples where the mother was married to someone other than the natural father in the same way as children of couples where the mother was married to the natural father.
+
+These propositions could, in theory, be evaluated by a reasoner engine, operating purely against syntax.
+
+
+
+## Our LTS allows us to distinguish Committing an Offence from Liability for Penalty
+
+> > Some criminal legislation/regulation is structured in an interesting way: instead of saying that a certain crime is punishable by a certain penalty, it will say that an offence is committed if X, Y, Z; multiple offences are defined; and then penalties are stated in a separate section. I suppose this makes sense because many offences can be committed together, and penalties can be assessed against them all at once.
+
+> You're right about this interesting structure in criminal legislation. Many legal codes organize offenses and penalties separately for several practical reasons:
+
+> * Efficiency in drafting - Defining offenses separately from penalties allows lawmakers to establish multiple related offenses without repetitively stating the same penalty provisions.
+> * Graduated punishment schemes - This structure facilitates systems where penalties escalate based on factors like prior convictions or aggravating circumstances, without needing to redefine the underlying offense.
+> * Judicial discretion - Separating offenses from penalties gives judges flexibility to consider multiple violations holistically when determining appropriate sentences.
+> * Legislative updates - When legislatures wish to modify penalties (often due to changing social attitudes or prison capacity concerns), they can amend just the penalty provisions without redefining the substantive offenses.
+
+> This approach is particularly common in regulatory frameworks where multiple technical violations might occur simultaneously. For example, environmental regulations might separately define various prohibited discharges, record-keeping violations, and permit infractions, while providing a unified penalty structure that accounts for factors like willfulness, harm caused, and economic benefit gained.
+
+> Criminal codes often use this structure to establish a coherent sentencing philosophy across different offense categories, making the punishment system more consistent and proportional.
+
+This can be handled by the State Monad's `get` and `put`.
+
+Or by examining the history trace.
