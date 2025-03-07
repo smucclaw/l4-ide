@@ -1,13 +1,24 @@
 :root {
+  /***************************************
+             Colors
+  ****************************************/
+
   --color-node-text: #00004d;
   --color-primary: #001188;
   --color-secondary: #2563eb;
   --color-button: #c7d2fe;
   --color-button-hover: #a5b4fc;
 
+  /***************************************
+          Border radius
+  ****************************************/
+
   --theme-border-radius: 5px;
 
-  /* TODO: Need to check the colors against some color palette generator */
+  /***************************************
+        Highlighted vs normal paths 
+  ****************************************/
+
   /* Stroke width */
   --default-stroke-width: 1px;
   --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
@@ -17,7 +28,15 @@
   --color-highlighted-path-in-flow: var(--color-sky-600);
   /* TODO: Should check the colors against some color palette generator */
 
+  /***************************************
+      Compatible vs incompatible paths 
+  ****************************************/
+
   --color-incompatible-path: var(--color-zinc-300);
+
+  /***************************************
+         BoolValue: True vs False 
+  ****************************************/
 
   --color-true-value: var(--color-lime-200);
   --color-false-value: var(--color-rose-200);
