@@ -1,5 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
-module L4.Evaluate where
+module L4.Evaluate
+  ( EvalDirectiveResult(..)
+  , EvalState(..)
+  , doEvalProgram
+  )
+  where
 
 import Base
 import qualified Base.Map as Map
@@ -15,13 +20,17 @@ newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState)
     via ExceptT EvalException (StateT EvalState Identity)
 
-type EvalResult = (SrcRange, Either EvalException Value)
+data EvalDirectiveResult =
+  MkEvalDirectiveResult
+    { range  :: !SrcRange -- ^ of the EVAL directive
+    , result :: Either EvalException Value -- ^ of the EVAL directive
+    }
 
 data EvalState =
   MkEvalState
-    { environment :: !Environment
-    , results     :: [EvalResult]
-    , supply      :: !Int
+    { environment      :: !Environment
+    , directiveResults :: [EvalDirectiveResult]
+    , supply           :: !Int
     }
   deriving Generic
 
@@ -87,12 +96,12 @@ makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
-addEvalResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
-addEvalResult a val =
+addEvalDirectiveResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
+addEvalDirectiveResult a val =
   let
-    res = (, val) <$> rangeOf a
+    res = flip MkEvalDirectiveResult val <$> rangeOf a
   in
-    maybe (pure ()) (modifying #results . (:)) res
+    maybe (pure ()) (modifying #directiveResults . (:)) res
 
 data BinOp =
     BinOpPlus
@@ -229,7 +238,7 @@ evalExpr expr =
 evalDirective :: Directive Resolved -> Eval ()
 evalDirective (Eval _ann expr) = do
   v <- evalExpr expr
-  addEvalResult expr v
+  addEvalDirectiveResult expr v
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int
@@ -459,9 +468,9 @@ lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
   Map.lookup (getUnique r) env
 
-doEvalProgram :: Program Resolved -> [EvalResult]
+doEvalProgram :: Program Resolved -> [EvalDirectiveResult]
 doEvalProgram prog =
   case evalProgram prog of
     MkEval m ->
       case m (MkEvalState initialEnvironment [] 0) of
-        (_, s) -> s.results
+        (_, s) -> s.directiveResults

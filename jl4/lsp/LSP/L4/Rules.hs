@@ -391,8 +391,8 @@ jl4Rules recorder = do
         , _data_ = Nothing
         }
 
-    evalResultToDiagnostic :: EvalResult -> Diagnostic
-    evalResultToDiagnostic (range, res) =
+    evalResultToDiagnostic :: EvalDirectiveResult -> Diagnostic
+    evalResultToDiagnostic (MkEvalDirectiveResult range res) =
       Diagnostic
         { _range = srcRangeToLspRange (Just range)
         , _severity = Just LSP.DiagnosticSeverity_Information
