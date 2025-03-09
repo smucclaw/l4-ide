@@ -120,7 +120,7 @@ doCheckProgram program =
         case runCheckUnique (traverse applySubst errs) s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
-            in CheckResult
+            in MkCheckResult
               { program = rprog
               , errors = substErrs ++ moreErrs
               , substitution = s'.substitution

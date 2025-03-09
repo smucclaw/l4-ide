@@ -10,7 +10,7 @@ import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Parser
 import qualified L4.Print as Print
 import L4.Syntax
-import L4.TypeCheck (CheckResult (CheckResult))
+import L4.TypeCheck (CheckResult(..))
 import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
@@ -97,11 +97,11 @@ parseFile file input =
     Right (prog, _) -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
-        CheckResult {errors, program}
+        MkCheckResult {errors, program}
           | all ((== JL4.SInfo) . JL4.severity) errors -> do
             Text.putStrLn "Typechecking successful"
             let results = JL4.doEvalProgram program
-            let msgs = (typeErrorToMessage <$> errors) ++ (evalResultToMessage <$> results)
+            let msgs = (typeErrorToMessage <$> errors) ++ (evalDirectiveResultToMessage <$> results)
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
           | otherwise -> do
             let msgs = typeErrorToMessage <$> errors
@@ -109,7 +109,7 @@ parseFile file input =
   where
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-    evalResultToMessage (r, res) = (Just r, [either Text.show Print.prettyLayout res])
+    evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res) = (Just r, [either Text.show Print.prettyLayout res])
     renderMessage (r, txt) = JL4.cliErrorMessage fp r txt
 
 readAndParseFile :: FilePath -> IO ()

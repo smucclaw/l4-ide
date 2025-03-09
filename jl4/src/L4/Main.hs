@@ -59,12 +59,12 @@ checkAndExactPrintFile file input =
       "Parsing successful\n\n"
       <>
       case doCheckProgram prog of
-        CheckResult {errors = []} ->
+        MkCheckResult {errors = []} ->
           "Typechecking successful\n\n"
           <> case exactprint prog of
                Left epError -> prettyTraverseAnnoError epError
                Right ep -> ep
-        CheckResult {errors} ->
+        MkCheckResult {errors} ->
           Text.unlines (map (\ err -> cliErrorMessage file (rangeOf err) (prettyCheckErrorWithContext err)) errors)
 
 cliErrorMessage :: FilePath -> Maybe SrcRange -> [Text] -> Text
