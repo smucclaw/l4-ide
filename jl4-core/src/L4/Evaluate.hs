@@ -1,5 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
-module L4.Evaluate where
+module L4.Evaluate
+  ( EvalDirectiveResult(..)
+  , EvalState(..)
+  , doEvalProgram
+  )
+  where
 
 import Base
 import qualified Base.Map as Map
@@ -16,13 +21,18 @@ newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState)
     via ExceptT EvalException (StateT EvalState Identity)
 
-type EvalResult = (SrcRange, Either EvalException Value, EvalTrace)
+data EvalDirectiveResult =
+  MkEvalDirectiveResult
+    { range  :: !SrcRange -- ^ of the EVAL directive
+    , result :: Either EvalException Value -- ^ of the EVAL directive
+    , trace  :: EvalTrace
+    }
 
 data EvalState =
   MkEvalState
-    { environment :: !Environment
-    , results     :: [EvalResult]
-    , supply      :: !Int
+    { environment      :: !Environment
+    , directiveResults :: [EvalDirectiveResult]
+    , supply           :: !Int
     , evalActions :: !(RevList EvalAction)
     }
   deriving Generic
@@ -142,15 +152,15 @@ makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
-addEvalResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
-addEvalResult a val = do
+addEvalDirectiveResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
+addEvalDirectiveResult a val = do
   evalTrace <- use #evalActions
   assign' #evalActions emptyRevList
   let
     esTrace = buildEvalTrace $ unRevList evalTrace
-    res = (, val, esTrace) <$> rangeOf a
+    res = (\r -> MkEvalDirectiveResult r val esTrace) <$> rangeOf a
 
-  maybe (pure ()) (modifying #results . (:)) res
+  maybe (pure ()) (modifying #directiveResults . (:)) res
 
 
 data BinOp =
@@ -290,7 +300,7 @@ evalExpr expr =
 evalDirective :: Directive Resolved -> Eval ()
 evalDirective (Eval _ann expr) = do
   v <- evalExpr expr
-  addEvalResult expr v
+  addEvalDirectiveResult expr v
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int
@@ -561,9 +571,9 @@ lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
   Map.lookup (getUnique r) env
 
-doEvalProgram :: Program Resolved -> [EvalResult]
+doEvalProgram :: Program Resolved -> [EvalDirectiveResult]
 doEvalProgram prog =
   case evalProgram prog of
     MkEval m ->
       case m (MkEvalState initialEnvironment [] 0 emptyRevList) of
-        (_, s) -> s.results
+        (_, s) -> s.directiveResults
