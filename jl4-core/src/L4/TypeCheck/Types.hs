@@ -153,7 +153,7 @@ runCheck (MkCheck f) = f
 -- probably be fine.
 
 data CheckResult =
-  CheckResult
+  MkCheckResult
     { program      :: Program Resolved
     , errors       :: [CheckErrorWithContext]
     , substitution :: Substitution
