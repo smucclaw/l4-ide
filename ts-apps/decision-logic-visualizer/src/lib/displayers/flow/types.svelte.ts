@@ -5,7 +5,10 @@ import type {
   DisplayerProps,
   LirContext,
 } from '$lib/layout-ir/core.js'
-import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+import type {
+  DeclLirNode,
+  PathListLirNode,
+} from '$lib/layout-ir/ladder-lir.svelte.js'
 import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
@@ -16,6 +19,17 @@ import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import type { LirId } from '$lib/layout-ir/core.js'
 
+export interface LadderSFGraph {
+  nodes: LadderSFNode[]
+  edges: LadderSFEdge[]
+  sfIdToLirId(sfId: string): LirId
+  lirIdToSFId(lirId: LirId): string
+}
+
+/************************************************
+        Displayer Props
+*************************************************/
+
 export interface LadderFlowDisplayerProps extends RootDisplayerProps {
   node: DeclLirNode
 }
@@ -24,11 +38,8 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
   node: LadderFlowDisplayerProps['node']
 }
 
-export interface LadderSFGraph {
-  nodes: LadderSFNode[]
-  edges: LadderSFEdge[]
-  sfIdToLirId(sfId: string): LirId
-  lirIdToSFId(lirId: LirId): string
+export interface PathListDisplayerProps extends DisplayerProps {
+  node: PathListLirNode
 }
 
 /************************************************

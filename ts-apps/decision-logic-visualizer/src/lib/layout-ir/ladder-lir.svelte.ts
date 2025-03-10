@@ -87,7 +87,26 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
               Path Lir Node
  *************************************************/
 
-// TODO: Might also need something like a container lir node for the Array<PathLirNode>
+export class PathListLirNode extends DefaultLirNode implements LirNode {
+  private paths: Array<LirId>
+
+  constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
+    super(nodeInfo)
+    this.paths = paths.map((n) => n.getId())
+  }
+
+  getPaths(context: LirContext) {
+    return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
+  }
+
+  getChildren(context: LirContext) {
+    return this.getPaths(context)
+  }
+
+  toString(): string {
+    return 'PATH_LIST_LIR_NODE'
+  }
+}
 
 /** The simplest version of the LinPathLirNode -- no distinguishing between
  * compatible and incompatible linearized paths
@@ -276,14 +295,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
-  /** Get all simple paths through the Dag */
-  getLinearizedPaths(context: LirContext) {
-    return this.#dag
+  /** Get list of all simple paths through the Dag */
+  getPathsList(context: LirContext) {
+    const paths = this.#dag
       .getAllPaths()
       .map(
         (rawPath) =>
           new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
       )
+    return new PathListLirNode(
+      this.makeNodeInfo(context),
+      paths as Array<LinPathLirNode>
+    )
   }
 
   /*****************************

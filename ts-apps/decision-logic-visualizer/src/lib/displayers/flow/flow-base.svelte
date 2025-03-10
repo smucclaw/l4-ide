@@ -33,13 +33,14 @@
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
-  import '@xyflow/svelte/dist/style.css'
+  import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
+  import PathsList from './paths-list.svelte'
 
   /************************
        Lir
@@ -297,27 +298,7 @@ Misc SF UI TODOs:
         </button>
       </Collapsible.Trigger>
       <Collapsible.Content class="pt-2">
-        <section class="paths-list-content-wrapper">
-          <ul class="space-y-1">
-            {#each ladderGraph.getLinearizedPaths(context) as path, pathIndex}
-              <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
-                <!-- Row number / path index -->
-                <div class="font-semibold px-3 max-w-[25px] text-right">
-                  {pathIndex + 1}
-                </div>
-                <button
-                  class="rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs text-left"
-                  onmouseenter={() =>
-                    path.highlightCorrespondingPathInLadderGraph(context)}
-                  onmouseleave={() =>
-                    path.unhighlightCorrespondingPathInLadderGraph(context)}
-                >
-                  {path.toPretty(context)}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        </section>
+        <PathsList {context} node={ladderGraph.getPathsList(context)} />
       </Collapsible.Content>
     </Collapsible.Root>
   </div>
@@ -346,11 +327,5 @@ Misc SF UI TODOs:
     max-height: 45%;
     overflow-y: auto;
     padding-bottom: 6px;
-  }
-
-  .paths-list-content-wrapper {
-    margin-left: auto;
-    margin-right: auto;
-    max-width: 65ch;
   }
 </style>
