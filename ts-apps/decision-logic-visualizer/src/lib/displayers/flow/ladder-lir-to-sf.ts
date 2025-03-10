@@ -14,31 +14,55 @@ import {
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
+  type LadderSFGraph,
+  type LadderSFNode,
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
   sourceNodeType,
   sinkNodeType,
+  ladderEdgeType,
 } from './types.svelte.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
+import _ from 'lodash'
 
 export function ladderGraphToSFGraph(
   context: LirContext,
   ladderGraph: LadderGraphLirNode
-) {
-  const nodes = (ladderGraph.getVertices(context) as LadderLirNode[])
-    .toSorted((v1, v2) => v2.compare(v1))
-    .map(ladderLirNodeToSfNode.bind(null, context))
+): LadderSFGraph {
+  const ladderNodes = (
+    ladderGraph.getVertices(context) as LadderLirNode[]
+  ).toSorted((v1, v2) => v2.compare(v1))
+  const nodes = ladderNodes.map(ladderLirNodeToSfNode.bind(null, context))
+  const idsAssocList = _.zip(nodes, ladderNodes)
+    .filter(
+      (pair): pair is [LadderSFNode, LadderLirNode] => !!pair[0] && !!pair[1]
+    )
+    .map(([sfNode, ladderNode]): [string, LirId] => [
+      sfNode.id,
+      ladderNode.getId(),
+    ])
+  // TODO: Refactor to use an array instead of a map
+  const sfIdToLirIdMap = new Map(idsAssocList)
+  const sfIdToLirId = (sfId: string) => {
+    const lirId = sfIdToLirIdMap.get(sfId)
+    if (!lirId) {
+      throw new Error(`Internal Error: No LIR ID found for SF ID: ${sfId}`)
+    }
+    return lirId
+  }
 
   // TODO: May want to sort as well
   const edges = ladderGraph
     .getEdges(context)
-    .map(ladderLirEdgeToSfEdge.bind(null, context))
+    .map(ladderLirEdgeToSfEdge.bind(null, context, ladderGraph))
 
   return {
     nodes,
     edges,
+    sfIdToLirId,
+    lirIdToSFId,
   }
 }
 
@@ -46,7 +70,7 @@ export function ladderGraphToSFGraph(
  ************* LadderLirNode to SF.Node ***************
  ******************************************************/
 
-export function lirIdToSFId(id: LirId): string {
+function lirIdToSFId(id: LirId): string {
   return id.toString()
 }
 
@@ -56,46 +80,53 @@ export function lirIdToSFId(id: LirId): string {
 export function ladderLirNodeToSfNode(
   context: LirContext,
   node: LadderLirNode
-): SF.Node {
+): LadderSFNode {
+  const defaults = {
+    id: lirIdToSFId(node.getId()),
+    position: node.getPosition(context),
+    initialWidth: node.getDimensions(context)?.width,
+    initialHeight: node.getDimensions(context)?.height,
+  }
+
+  const defaultData = {
+    context,
+    originalLirId: node.getId(),
+  }
+
   return match(node)
-    .with(P.instanceOf(BoolVarLirNode), (n) => {
+    .with(P.instanceOf(BoolVarLirNode), (n: BoolVarLirNode) => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: boolVarNodeType,
-        position: n.getPosition(context),
-        data: n.getData(context),
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.instanceOf(NotStartLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: notStartNodeType,
-        position: n.getPosition(context),
-        data: {},
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
+    .with(P.instanceOf(NotEndLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: notEndNodeType,
-        position: n.getPosition(context),
-        data: {},
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
+    .with(P.instanceOf(SourceLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: sourceNodeType,
-        position: n.getPosition(context),
-        data: {},
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
+    .with(P.instanceOf(SinkLirNode), () => {
       return {
-        id: lirIdToSFId(n.getId()),
+        ...defaults,
         type: sinkNodeType,
-        position: n.getPosition(context),
-        data: {},
+        data: defaultData,
       }
     })
     .exhaustive()
@@ -106,11 +137,20 @@ export function ladderLirNodeToSfNode(
  ******************************************************/
 
 export function ladderLirEdgeToSfEdge(
-  _context: LirContext,
+  context: LirContext,
+  graph: LadderGraphLirNode,
   edge: LadderLirEdge
 ): SF.Edge {
+  const label = graph.getEdgeLabel(context, edge)
+  const strokeColorCSSVar = graph.getEdgeStyles(context, edge).getStrokeColor()
+
   return {
     id: edge.getId(),
+    type: ladderEdgeType,
+    data: {
+      label,
+      strokeColorCSSVar,
+    },
     source: edge.getU().toString(),
     target: edge.getV().toString(),
   }

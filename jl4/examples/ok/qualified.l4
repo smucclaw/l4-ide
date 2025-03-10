@@ -1,0 +1,13 @@
+
+DECLARE Inputs
+  HAS
+    walks IS A BOOLEAN
+    drinks IS A BOOLEAN
+    eats IS A BOOLEAN
+
+GIVEN i IS Inputs
+GIVETH A BOOLEAN
+DECIDE `compute_qualifies` i IF
+     i's walks
+ AND    i's drinks
+     OR i's eats

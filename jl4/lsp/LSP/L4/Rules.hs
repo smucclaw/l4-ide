@@ -5,7 +5,8 @@ module LSP.L4.Rules where
 import L4.Annotation
 import L4.Evaluate
 import L4.FindDefinition (toResolved)
-import L4.Lexer (PosToken, SrcPos (..), SrcRange)
+import L4.Lexer (PosToken, PError)
+import L4.Parser.SrcSpan
 import qualified L4.Lexer as Lexer
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Resolve
@@ -14,13 +15,11 @@ import L4.Citations
 import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
-import L4.Parser.SrcSpan
 
 import Control.DeepSeq
-import Control.Lens ((^.))
+import Control.Monad.Except (runExceptT)
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Functor.Compose (Compose(..))
 import Data.Text (Text)
 import UnliftIO (liftIO)
 import Data.Map.Monoidal (MonoidalMap)
@@ -40,10 +39,10 @@ import LSP.Core.Types.Diagnostics
 import LSP.L4.SemanticTokens
 import LSP.Logger
 import LSP.SemanticTokens
-import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
+import Data.Either (partitionEithers)
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -142,11 +141,15 @@ lookupReference pos mapping = do
 
 data Log
   = ShakeLog Shake.Log
+  | LogTraverseAnnoError !Text !TraverseAnnoError
+  | LogRelSemanticTokenError !Text
   deriving (Show)
 
 instance Pretty Log where
   pretty = \case
     ShakeLog msg -> pretty msg
+    LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
+    LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
 
 jl4Rules :: Recorder (WithPriority Log) -> Rules ()
 jl4Rules recorder = do
@@ -160,7 +163,7 @@ jl4Rules recorder = do
         case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
           Left errs -> do
             let
-              diags = toList $ fmap (mkSimpleDiagnostic . Parser.mkPError "lexer") errs
+              diags = toList $ fmap mkSimpleDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)
           Right ts ->
             pure ([], Just (ts, contents))
@@ -205,16 +208,18 @@ jl4Rules recorder = do
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
     case runSemanticTokensM (defaultSemanticTokenCtx ()) tokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "Lexer" err
+        pure ([], Nothing)
       Right tokenized -> do
         pure ([], Just tokenized)
 
   define shakeRecorder $ \ParserSemanticTokens f -> do
     prog <- use_ GetParsedAst f
     case runSemanticTokensM (defaultSemanticTokenCtx CValue) prog of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "Parser" err
+        pure ([], Nothing)
       Right tokenized -> do
           pure ([], Just tokenized)
 
@@ -265,8 +270,9 @@ jl4Rules recorder = do
     tokens <- use_ GetSemanticTokens f
     let semanticTokens = relativizeTokens $ fmap toSemanticTokenAbsolute tokens
     case encodeTokens defaultSemanticTokensLegend semanticTokens of
-      Left _err ->
-        pure ([{- TODO: Log error -}], Nothing)
+      Left err -> do
+        logWith recorder Error $ LogRelSemanticTokenError err
+        pure ([], Nothing)
       Right relSemTokens ->
           pure ([], Just relSemTokens)
   define shakeRecorder $ \ResolveReferenceAnnotations uri -> case uriToNormalizedFilePath uri of
@@ -277,20 +283,33 @@ jl4Rules recorder = do
       ownPath <- normalizedFilePathToOsPath f
       (tokens, _) <- use_ GetLexTokens uri
 
-      -- obtain a valid relative file path from the ref-src annos
-      let refSrcs = foldMap (validRelPath ownPath) tokens
-
-      -- read the contents of the filepaths specified
-      contents <- traverse (liftIO . readContents) $ Compose refSrcs
-
+      -- obtain a valid relative file path from the ref-src annos and
       -- parse the file contents from csv into intervalmaps from the sources of
       -- the annos to the reference they represent
-      let references = getCompose $ mkReferences tokens <$> contents
+      refSrcs <- liftIO
+        $ traverse
+          (\n -> runExceptT do
+             refSrc <- withRefSrc ownPath n
+             let refMap = withRefMap n
+             pure (refSrc <> refMap)
+          )
+          tokens
 
       -- report any errors encountered while parsing any of the ref-src annos,
       -- annotate them on the ref-src annos they originated from and finally
       -- union all interval maps
-      let (errs, mps) = partitionEithersOnL mkDiagnostic references
+      let (errs, references) = partitionEithers refSrcs
+
+          mkReferencesFromNonempty v
+            | null v = Nothing
+            | otherwise = Just $ mkReferences tokens v
+
+          mps = case Maybe.mapMaybe mkReferencesFromNonempty references of
+            [] -> Nothing
+            xs -> Just $ mconcat xs
+
+          diags = map (uncurry mkDiagnostic) errs
+
           mkDiagnostic loc err =
             FileDiagnostic
               { fdLspDiagnostic =
@@ -310,7 +329,7 @@ jl4Rules recorder = do
               , fdOriginalSource = NoMessage
               }
 
-      pure (errs, case mps of [] -> Nothing; xs -> Just $ mconcat xs)
+      pure (diags, mps)
 
   define shakeRecorder $ \GetReferences f -> do
     tcRes <- use_ TypeCheck f
@@ -358,9 +377,10 @@ jl4Rules recorder = do
           , _data_ = Nothing
           }
 
+    mkSimpleDiagnostic :: PError -> Diagnostic
     mkSimpleDiagnostic parseError =
       Diagnostic
-        { _range = LSP.Range start (extendToNextLine start)
+        { _range = srcSpanToLspRange $ Just parseError.range
         , _severity = Just LSP.DiagnosticSeverity_Error
         , _code = Nothing
         , _codeDescription = Nothing
@@ -370,8 +390,6 @@ jl4Rules recorder = do
         , _relatedInformation = Nothing
         , _data_ = Nothing
         }
-     where
-      start = srcPosToLspPosition parseError.start
 
     evalResultToDiagnostic :: EvalResult -> Diagnostic
     evalResultToDiagnostic (range, res) =
@@ -399,12 +417,6 @@ jl4Rules recorder = do
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
-        }
-
-    extendToNextLine p =
-      LSP.Position
-        { _character = 0
-        , _line = p ^. J.line + 1
         }
 
 translateSeverity :: TypeCheck.Severity -> DiagnosticSeverity

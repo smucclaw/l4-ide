@@ -7,9 +7,11 @@ This component only exists so that we can put SvelteFlowProvider
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import type { LadderFlowDisplayerProps } from './types.svelte.js'
+  import { setLirRegistryInSvelteContext } from '$lib/layout-ir/core.js'
   import FlowBase from './flow-base.svelte'
 
-  const { context, node: declLirNode }: LadderFlowDisplayerProps = $props()
+  const { context, node: declLirNode, lir }: LadderFlowDisplayerProps = $props()
+  setLirRegistryInSvelteContext(lir)
 
   let baseFlowComponent: ReturnType<typeof FlowBase>
 

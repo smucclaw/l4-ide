@@ -245,8 +245,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
     AppNamed   _ n namedExpr _ ->
           printWithLayout n
       <+> "WITH"
-      <> line
-      <> indent 2 (align (vcat (fmap printWithLayout namedExpr)))
+      <+> hang 2 (align (vcat (fmap printWithLayout namedExpr)))
     IfThenElse _ cond then' else' ->
       vcat
         [ "IF" <+> printWithLayout cond

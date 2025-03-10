@@ -5,6 +5,7 @@ import Base
 import qualified Base.Map as Map
 import L4.Annotation
 import L4.Lexer
+import L4.Parser.SrcSpan
 import L4.Syntax
 import L4.TypeCheck.Types
 
