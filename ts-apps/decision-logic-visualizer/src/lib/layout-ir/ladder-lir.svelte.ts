@@ -34,7 +34,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
-                Decl Lir Node 
+                Decl Lir Node
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -84,7 +84,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /*************************************************
-              Path Lir Node 
+              Path Lir Node
  *************************************************/
 
 // TODO: Might also need something like a container lir node for the Array<PathLirNode>
@@ -143,80 +143,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-// The more complicated version that differentiates between compatible and incompatible linearized paths
-// abstract class BasePathLirNode extends DefaultLirNode {
-//   constructor(
-//     nodeInfo: LirNodeInfo,
-//     protected rawPath: DirectedAcyclicGraph<LirId>
-//   ) {
-//     super(nodeInfo)
-//   }
-
-//   getVertices(context: LirContext) {
-//     return this.rawPath
-//       .getVertices()
-//       .map((id) => context.get(id))
-//       .filter((n) => !!n) as LadderLirNode[]
-//   }
-
-//   toPretty(context: LirContext) {
-//     return this.getVertices(context)
-//       .map((n) => n.toPretty(context))
-//       .join(' ')
-//   }
-// }
-//
-// /** For the first version, we'll take the LinearizedPaths to be wholly controlled by interactions on the ladder graph;
-//  * i.e., let's not worry about the linearized path -> ladder graph interactions for the v1,
-//  * and instead just focus on ladder graph -> linearized paths.
-//  *
-//  * The v1 could be as simple as:
-//  * - whenever new bindings are submitted on the ladder graph,
-//  *    re-compute (via `induce`) the subgraph that is compatible with the new env,
-//  *    then generate the linearized paths of that subgraph.
-//  */
-// export type LinPathLirNode = CompatiblePathLirNode | IncompatiblePathLirNode
-
-// export class CompatiblePathLirNode extends BasePathLirNode implements LirNode {
-//   constructor(
-//     nodeInfo: LirNodeInfo,
-//     protected rawPath: DirectedAcyclicGraph<LirId>
-//   ) {
-//     super(nodeInfo, rawPath)
-//   }
-
-//   toString() {
-//     return 'COMPATIBLE_PATH_LIR_NODE'
-//   }
-
-//   /** Note: This is styling for the *linearized* paths below the ladder graph,
-//    * as opposed to styles for paths *in* the ladder graph */
-//   getPathStyles() {
-//     console.error('TODO')
-//   }
-// }
-
-// export class IncompatiblePathLirNode
-//   extends BasePathLirNode
-//   implements LirNode
-// {
-//   constructor(
-//     nodeInfo: LirNodeInfo,
-//     protected rawPath: DirectedAcyclicGraph<LirId>
-//   ) {
-//     super(nodeInfo, rawPath)
-//   }
-
-//   toString() {
-//     return 'INCOMPATIBLE_PATH_LIR_NODE'
-//   }
-
-//   /** Note: This is styling for the *linearized* paths below the ladder graph,
-//    * as opposed to styles for paths *in* the ladder graph */
-//   getPathStyles() {
-//     console.error('TODO')
-//   }
-// }
+// TODO: Differentiate between compatible and incompatible linearized paths
 
 /******************************************************
                   Flow Lir Nodes
@@ -226,7 +153,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
 // (and similarly with Flow Lir Edges)
 
 /* Why should Position be put on the Lir nodes, as opposed to being handled entirely at the SF Node level?
-  
+
 Main argument: for more complicated layouts,
 we'll want to be able to use info that's more readily available at the level of the Lir LadderGraph.
 */
@@ -291,7 +218,7 @@ will go through the LadderGraphLirNode.
 * and re-render on changes.
 *
 * State ownership:
-  - The Lir nodes only own, and publish changes to, state that's not about the positions 
+  - The Lir nodes only own, and publish changes to, state that's not about the positions
     or dimensions of the nodes.
   - For instance, we do not publish changes to the position of the nodes/edges --- that is state that
     is owned by SvelteFlow.
