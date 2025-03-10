@@ -121,19 +121,22 @@ defaultIdeOptions = IdeOptions
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
-defaultSkipProgress key = case () of
+defaultSkipProgress key
     -- don't do progress for GetFileContents as it's cheap
-    _ | Just GetFileContents <- cast key        -> True
+    | Just GetFileContents <- cast key        = True
     -- don't do progress for GetFileExists, as there are lots of redundant nodes
     -- (normally there is one node per file, but this is not the case for GetFileExists)
-    _ | Just GetFileExists <- cast key          -> True
+    | Just GetFileExists <- cast key          = True
     -- don't do progress for GetModificationTime as there are lot of redundant nodes
     -- (for the interface files)
-    _ | Just GetModificationTime_{} <- cast key -> True
-    _                                           -> False
+    | Just GetModificationTime_{} <- cast key = True
+    | otherwise                               = False
+
 data LspSink = LspSink
     { sendNotificationToClient :: forall (m :: Method 'ServerToClient 'Notification) . SServerMethod m -> MessageParams m -> IO ()
-    , sendRequestToClient :: forall (m :: Method 'ServerToClient 'Request) . SServerMethod m -> MessageParams m -> ((Either (TResponseError m) (MessageResult m) -> IO ())) -> IO (LspId m)
+    , sendRequestToClient ::
+      forall (m :: Method 'ServerToClient 'Request). SServerMethod m -> MessageParams m
+      -> (Either (TResponseError m) (MessageResult m) -> IO ()) -> IO (LspId m)
     , withClientProgress :: WithProgressFunc
     , withIndefiniteClientProgress :: WithIndefiniteProgressFunc
     , takeVfsSnapshot :: IO VFS

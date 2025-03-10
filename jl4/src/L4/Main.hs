@@ -43,7 +43,8 @@ main = do
       exactprintFiles options.files
 
 exactprintFiles :: [FilePath] -> IO ()
-exactprintFiles =
+exactprintFiles = do
+  -- recorder <- makeDefaultStderrRecorder
   traverse_ $ \ file -> do
     input <- Text.readFile file
     Text.putStr (checkAndExactPrintFile file input)
