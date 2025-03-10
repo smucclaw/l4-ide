@@ -142,14 +142,13 @@ export function ladderLirEdgeToSfEdge(
   edge: LadderLirEdge
 ): SF.Edge {
   const label = graph.getEdgeLabel(context, edge)
-  const strokeColorCSSVar = graph.getEdgeStyles(context, edge).getStrokeColor()
 
   return {
     id: edge.getId(),
     type: ladderEdgeType,
     data: {
       label,
-      strokeColorCSSVar,
+      edgeStyles: graph.getEdgeStyles(context, edge).getStyleString(),
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),

@@ -5,7 +5,10 @@ import type {
   DisplayerProps,
   LirContext,
 } from '$lib/layout-ir/core.js'
-import type { DeclLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+import type {
+  DeclLirNode,
+  PathListLirNode,
+} from '$lib/layout-ir/ladder-lir.svelte.js'
 import * as SF from '@xyflow/svelte'
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
@@ -13,9 +16,19 @@ import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
-import type { StrokeColorCSSVar } from '../../algebraic-graphs/edge.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import type { LirId } from '$lib/layout-ir/core.js'
+
+export interface LadderSFGraph {
+  nodes: LadderSFNode[]
+  edges: LadderSFEdge[]
+  sfIdToLirId(sfId: string): LirId
+  lirIdToSFId(lirId: LirId): string
+}
+
+/************************************************
+        Displayer Props
+*************************************************/
 
 export interface LadderFlowDisplayerProps extends RootDisplayerProps {
   node: DeclLirNode
@@ -25,11 +38,8 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
   node: LadderFlowDisplayerProps['node']
 }
 
-export interface LadderSFGraph {
-  nodes: LadderSFNode[]
-  edges: LadderSFEdge[]
-  sfIdToLirId(sfId: string): LirId
-  lirIdToSFId(lirId: LirId): string
+export interface PathListDisplayerProps extends DisplayerProps {
+  node: PathListLirNode
 }
 
 /************************************************
@@ -143,14 +153,14 @@ with their EdgeData */
  * and can have a label */
 export interface LadderEdgeAttrs extends Record<string, unknown> {
   label: string
-  strokeColorCSSVar: StrokeColorCSSVar
+  edgeStyles: string
 }
 
 export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
-  strokeColorCSSVar: new EmptyEdgeStyles().getStrokeColor(),
+  edgeStyles: new EmptyEdgeStyles().getStyleString(),
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {
-  attrs?: LadderEdgeAttrs
+  data?: LadderEdgeAttrs
 }

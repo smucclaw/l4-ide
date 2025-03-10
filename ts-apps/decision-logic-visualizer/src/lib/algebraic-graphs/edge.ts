@@ -117,6 +117,8 @@ export interface EdgeAttributes extends Eq<EdgeAttributes> {
   isEqualTo<T extends EdgeAttributes>(other: T): boolean
 
   merge(other: EdgeAttributes): EdgeAttributes
+
+  clone(): EdgeAttributes
 }
 
 export class DefaultEdgeAttributes implements EdgeAttributes {
@@ -130,6 +132,10 @@ export class DefaultEdgeAttributes implements EdgeAttributes {
       this.getStyles().isEqualTo(other.getStyles()) &&
       this.getLabel() === other.getLabel()
     )
+  }
+
+  clone(): EdgeAttributes {
+    return new DefaultEdgeAttributes(this.styles, this.label)
   }
 
   getStyles(): EdgeStyles {
@@ -191,7 +197,7 @@ export function mergeEdgeAttributes(
 export interface EdgeStyles extends Eq<EdgeStyles> {
   $type: 'EmptyEdgeStyles' | 'HighlightedEdgeStyles'
 
-  getStrokeColor(): StrokeColorCSSVar
+  getStyleString(): string
 
   isEqualTo(other: EdgeStyles): boolean
 }
@@ -217,8 +223,8 @@ export class EmptyEdgeStyles implements EdgeStyles {
     return isEmptyEdgeStyles(other)
   }
 
-  getStrokeColor() {
-    return '--default-internal-stroke-color' as const
+  getStyleString(): EdgeStyleString {
+    return 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);' as const
   }
 }
 
@@ -230,13 +236,13 @@ export class HighlightedEdgeStyles implements EdgeStyles {
     return isHighlightedEdgeStyles(other)
   }
 
-  getStrokeColor() {
-    return '--color-highlighted-path-in-flow' as const
+  getStyleString(): EdgeStyleString {
+    return 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);' as const
   }
 }
 
 export const emptyEdgeLabel = ''
 
-export type StrokeColorCSSVar =
-  | '--color-highlighted-path-in-flow'
-  | '--default-internal-stroke-color'
+export type EdgeStyleString =
+  | 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);'
+  | 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);'

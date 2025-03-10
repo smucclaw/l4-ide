@@ -33,11 +33,14 @@
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
-  import '@xyflow/svelte/dist/style.css'
+  import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import { Collapsible } from 'bits-ui'
+  import List from 'lucide-svelte/icons/list'
+  import PathsList from './paths-list.svelte'
 
   /************************
        Lir
@@ -274,6 +277,31 @@ Misc SF UI TODOs:
       <Background />
     </SvelteFlow>
   </div>
+  <!-- Paths Section -->
+  <!-- TODO: Move the following into a lin paths container component -->
+  <div class="paths-container">
+    <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
+    <Collapsible.Root
+      onOpenChange={() => {
+        // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
+        setTimeout(() => {
+          doFitView()
+        }, 10)
+      }}
+    >
+      <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
+        <!-- TODO: Improve the button styles -->
+        <button
+          class="rounded-md border-1 px-2 py-1 text-sm hover:bg-sky-100 flex items-center gap-1"
+        >
+          <List /><span>List paths</span>
+        </button>
+      </Collapsible.Trigger>
+      <Collapsible.Content class="pt-2">
+        <PathsList {context} node={ladderGraph.getPathsList(context)} />
+      </Collapsible.Content>
+    </Collapsible.Root>
+  </div>
 </div>
 
 <!-- For debugging -->
@@ -285,6 +313,8 @@ Misc SF UI TODOs:
     display: flex;
     flex-direction: column;
     height: 100%;
+    /* Gap between the flow and the paths list container */
+    row-gap: 6px;
   }
 
   .flow-container {
@@ -292,7 +322,10 @@ Misc SF UI TODOs:
     min-height: 0; /* Prevents overflow */
   }
 
-  /* .paths-container {
+  .paths-container {
     flex: 0 0 auto;
-  } */
+    max-height: 45%;
+    overflow-y: auto;
+    padding-bottom: 6px;
+  }
 </style>
