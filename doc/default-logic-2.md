@@ -25,7 +25,7 @@ The naive approach asks the end-user for every single leaf node, aka
 ground term; undefined values are not allowed. Each ground term is
 true or false.
 
-``` haskell
+```haskell
 type ID = String
 data BoolTree1 = Leaf Bool ID
                | Not  BoolTree1
@@ -48,7 +48,7 @@ state of the form, when the user hasn't clicked on anything yet.
 Every ground term can be true, false, or unknown. You can
 short-circuit: `(True OR Unknown)` is `True`.
 
-``` haskell
+```haskell
 type Ternary = Maybe Bool
 data BoolTree2 = Leaf Ternary ID
                | Not  BoolTree2
@@ -82,7 +82,7 @@ In this example, we use it to suggest to the end-user that they're
 probably in a vehicle, which is the common case, and they should just
 accept the defaults and click through to the Vehicle Form.
 
-``` haskell
+```haskell
 type WithDefault = Either Ternary Ternary
 data BoolTree3 = Leaf WithDefault ID
                | Not  BoolTree2
@@ -93,12 +93,13 @@ data BoolTree3 = Leaf WithDefault ID
 Of course we do still ask the user to confirm the assumption. But we
 set the common-case default for usability. Here the `form` serves
 multiple purposes:
+
 - it records the overall structure of the Boolean logic constructed from the upstream L4;
 - it reflects the assumption about the car, also given in the L4 with `TYPICALLY`, in the `Left` of `Either`;
 - it records end-user input values in the `Right` of `Either`
 - the whole thing is input to an evaluator
 
-``` haskell
+```haskell
 form = Any [Any [ Leaf (Left Nothing) "On Actual Foot"
                 , Leaf (Left Nothing) "Wheelchair"
                 , Leaf (Left Nothing) "Skateboard"
@@ -114,7 +115,7 @@ form = Any [Any [ Leaf (Left Nothing) "On Actual Foot"
 
 When the end-user updates the form to say Actually I'm In A Motorcycle:
 
-``` haskell
+```haskell
                   Leaf (Right True)   "Motorcycle"
 ```
 
@@ -124,7 +125,7 @@ Then that user-given value outweighs the default assumption about the car.
 
 The end-user can set values not just for leaf nodes, but parent nodes also.
 
-``` haskell
+```haskell
 type Label     = WithDefault ID
 data BoolTree4 = Leaf WithDefault ID
                | Not  Label  BoolTree4
@@ -138,7 +139,7 @@ worry your little head about the details, just give me the form."
 So we would give an explicit name to the "in a vehicle" parent, and
 allow the end-user to give it a value just like any other leaf.
 
-``` haskell
+```haskell
 form = Any             (Left Nothing, "can cross border")
            [Any        (Left Nothing, "on foot")
                 [ Leaf (Left Nothing, "On Actual Foot")
@@ -161,7 +162,7 @@ terms, and use the computer to help think through that definition. But
 if they are satisfied they know enough to just assign to the parent
 node, they can go ahead and do that.
 
-``` haskell
+```haskell
 	       ,Any  (Right (Just True), "in a vehicle")
 ```
 
@@ -197,12 +198,11 @@ existing user account profile information; we don't have to ask the
 user at all. But the evaluator still needs to know it to be able to
 calculate the result.
 
-
 ## Composition with XOR
 
 A close read may suggest that one crosses the border either on foot, or in a vehicle, but not both. So the logic is really an XOR:
 
-``` haskell
+```haskell
 form = Xor             (Left Nothing, "can cross border")
            [Any        (Left Nothing, "on foot")      [...]
            ,Any        (Left Nothing, "in a vehicle") [...]
@@ -210,4 +210,3 @@ form = Xor             (Left Nothing, "can cross border")
 ```
 
 This opens the door to other operators, like `AtLeast Int`.
-

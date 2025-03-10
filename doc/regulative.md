@@ -19,6 +19,7 @@ semantic validity.
 ### Party A does something, then Party B, then Party A, and we're done.
 
 Simple contracts typically look like:
+
 1. Party A tells Party B what she wants to buy
 2. Party B tells Party A what it costs
 3. Party A transfers that amount of money, by a certain deadline.
@@ -34,7 +35,7 @@ The above specification is given in an ordered sequence of events that
 represent the "happy path".
 
 Contracts also deal with what happens when parties fall off the happy
-path -- a required action is not done by the deadline. *Reparations*
+path -- a required action is not done by the deadline. _Reparations_
 can be made to restore relations.
 
 So we need a way to represent not just a linear sequence, but a graph
@@ -141,7 +142,7 @@ condition.
 
 This model checking becomes relevant below, because it allows us to
 "squeeze out the deontics" into an **object-level contract** vs
-**property-level assertions** *about* the contract.
+**property-level assertions** _about_ the contract.
 
 ### Hypotheticals
 
@@ -173,7 +174,6 @@ Or some equivocation occurs, causing a two instances of the same
 variable to be overloaded with different types, in a pathological case
 of shadowing.
 
-
 # A Two-Level Framework for Regulative Formalization
 
 Model checkers like UPPAAL and SPIN help to verify properties about
@@ -182,6 +182,7 @@ Those properties are written in CTL and LTL, at a higher level than
 the system descriptions they verify.
 
 When humans ask questions about legal scenarios, they often want to know:
+
 - based on what has happened so far, what situation am I in?
 - based on the situation I am in, what immediate obligations do I face?
 - if I want to achieve a particular outcome state, what courses of action should I consider?
@@ -210,7 +211,6 @@ If there is no consequence, is the "must" really a "must", or more of a "should"
 These questions are endlessly debated by philosophers.
 
 L4's position is set out below.
-
 
 ## The Object Level: from a coldly dispassionate perspective, an automaton simply executes a trace.
 
@@ -268,7 +268,7 @@ something -- within a certain time period, and face consequences for
 noncompliance, we use L4's regulative statements to express those
 rules.
 
-That formalism *could* use the bloodless, mechanical form of the
+That formalism _could_ use the bloodless, mechanical form of the
 rules: one thing leads to another and another and another. We could
 render a finite state automaton, or a state transition system, using
 the most unopinionated, nonjudgemental language imaginable. This is
@@ -280,7 +280,7 @@ the "object level" representation of a normative system.
 
 Maybe a library user doesn't care if they lose borrowing privileges
 forever. Then the "you must pay a fine" is a toothless rule: it is not
-strongly *enforceable*.
+strongly _enforceable_.
 
 ## Deontic Statements are Bounded
 
@@ -310,7 +310,7 @@ not.
 "There is no way to reach a FULFILLED outcome without paying a penalty, other than by doing this thing."
 
 These kinds of statements are formalized in LTL / CTL as assertions,
-or properties, *over* the object level of the state transition system.
+or properties, _over_ the object level of the state transition system.
 
 ## We can treat `MUST`, `MAY`, and `SHANT` as sugar over a simple `DO`
 
@@ -337,13 +337,11 @@ in that, if the `HENCE` or `LEST` elements are omitted from the
 stanza, default values are interpolated.
 
 | deontic modal | if the action | default `HENCE` | if the action | default `LEST` |
-|---------------|---------------|-----------------|---------------|----------------|
+| ------------- | ------------- | --------------- | ------------- | -------------- |
 | DO            | is taken      | required        | is not taken  | required       |
 | MUST          | is taken      | FULFILLED       | is not taken  | BREACH         |
 | MAY           | is taken      | FULFILLED       | is not taken  | FULFILLED      |
 | SHANT         | is not taken  | FULFILLED       | is taken      | BREACH         |
-
-
 
 ## Is UPON sufficient or do we need a WHENCE?
 
@@ -353,7 +351,7 @@ The `c1` and `c2` are themselves clauses, or combinations of clauses `c1a AND c1
 
 However we may want to dip into a State monad that allows us to update certain variables.
 
-``` l4
+```l4
 § 1 abuse of dogs
  GIVEN p IS A Person
        d IS A Dog
@@ -433,18 +431,16 @@ The "inner" legal rule is a good example of homoiconicity:
 
 These propositions could, in theory, be evaluated by a reasoner engine, operating purely against syntax.
 
-
-
 ## Our LTS allows us to distinguish Committing an Offence from Liability for Penalty
 
 > > Some criminal legislation/regulation is structured in an interesting way: instead of saying that a certain crime is punishable by a certain penalty, it will say that an offence is committed if X, Y, Z; multiple offences are defined; and then penalties are stated in a separate section. I suppose this makes sense because many offences can be committed together, and penalties can be assessed against them all at once.
 
 > You're right about this interesting structure in criminal legislation. Many legal codes organize offenses and penalties separately for several practical reasons:
 
-> * Efficiency in drafting - Defining offenses separately from penalties allows lawmakers to establish multiple related offenses without repetitively stating the same penalty provisions.
-> * Graduated punishment schemes - This structure facilitates systems where penalties escalate based on factors like prior convictions or aggravating circumstances, without needing to redefine the underlying offense.
-> * Judicial discretion - Separating offenses from penalties gives judges flexibility to consider multiple violations holistically when determining appropriate sentences.
-> * Legislative updates - When legislatures wish to modify penalties (often due to changing social attitudes or prison capacity concerns), they can amend just the penalty provisions without redefining the substantive offenses.
+> - Efficiency in drafting - Defining offenses separately from penalties allows lawmakers to establish multiple related offenses without repetitively stating the same penalty provisions.
+> - Graduated punishment schemes - This structure facilitates systems where penalties escalate based on factors like prior convictions or aggravating circumstances, without needing to redefine the underlying offense.
+> - Judicial discretion - Separating offenses from penalties gives judges flexibility to consider multiple violations holistically when determining appropriate sentences.
+> - Legislative updates - When legislatures wish to modify penalties (often due to changing social attitudes or prison capacity concerns), they can amend just the penalty provisions without redefining the substantive offenses.
 
 > This approach is particularly common in regulatory frameworks where multiple technical violations might occur simultaneously. For example, environmental regulations might separately define various prohibited discharges, record-keeping violations, and permit infractions, while providing a unified penalty structure that accounts for factors like willfulness, harm caused, and economic benefit gained.
 
