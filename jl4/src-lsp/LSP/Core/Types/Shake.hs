@@ -98,8 +98,6 @@ instance Show k => Show (Q k) where
 newtype A v = A (Value v)
     deriving Show
 
-instance NFData (A v) where rnf (A v) = v `seq` ()
-
 -- In the Shake database we only store one type of key/result pairs,
 -- namely Q (question) / A (answer).
 type instance RuleResult (Q k) = A (RuleResult k)
