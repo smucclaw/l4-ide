@@ -66,6 +66,7 @@ library
     L4.FindDefinition
     L4.HoverInfo
     L4.Main
+    L4.Nlg
     L4.Lexer
     L4.Parser
     L4.Parser.ResolveAnnotation

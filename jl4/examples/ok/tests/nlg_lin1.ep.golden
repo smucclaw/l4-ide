@@ -1,0 +1,19 @@
+§ Example
+
+DECLARE Person
+    HAS
+        name IS A STRING
+ASSUME walks  IS A BOOLEAN
+ASSUME drinks IS A BOOLEAN
+ASSUME eats   IS A BOOLEAN
+
+GIVEN p [person] IS A Person
+DECIDE `must sing`
+    IF        walks [the person must walk]
+       AND    eats [the person must eat]
+           OR drinks
+
+#CHECK `must sing`
+    WITH p IS A Person
+        WITH name IS "Karl"
+

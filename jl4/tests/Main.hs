@@ -121,7 +121,7 @@ prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
 prettyNlgOutput p warns = Text.unlines $
   [ prettyNlgName n nlg
   | n <- toListOf gplate p
-  , Just nlg <- [n ^? JL4.annoOf % #extra % #nlg % _Just]
+  , Just nlg <- [n ^. annoOf % annNlg]
   ]
   <>
   [prettyWarning warning | warning <- warns]
