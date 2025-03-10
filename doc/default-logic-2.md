@@ -85,9 +85,9 @@ accept the defaults and click through to the Vehicle Form.
 ```haskell
 type WithDefault = Either Ternary Ternary
 data BoolTree3 = Leaf WithDefault ID
-               | Not  BoolTree2
-	           | Any [BoolTree2]
-	           | All [BoolTree2]
+               | Not  BoolTree3
+	           | Any [BoolTree3]
+	           | All [BoolTree3]
 ```
 
 Of course we do still ask the user to confirm the assumption. But we
