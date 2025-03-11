@@ -1,0 +1,21 @@
+x AKA y, z MEANS TRUE
+
+#EVAL x
+#EVAL y
+#EVAL z
+
+DECLARE B AKA YesNo IS BOOLEAN
+
+GIVETH B
+example MEANS TRUE
+
+GIVETH YesNo
+example MEANS FALSE
+
+DECLARE Pair OF a, b AKA `2-tuple`
+  HAS
+    px IS AN a
+    py IS A  b
+
+GIVETH `2-tuple` OF NUMBER, NUMBER
+test MEANS Pair WITH px IS 3, py IS 5

@@ -3,7 +3,7 @@ module Main where
 import Base
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
-import qualified L4.Lexer as JL4
+import qualified L4.Parser.SrcSpan as JL4
 import qualified L4.Main as JL4
 import L4.Parser (execProgramParser)
 import qualified L4.Parser as Parser
@@ -14,8 +14,7 @@ import L4.TypeCheck (CheckResult (CheckResult))
 import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import qualified Base.Text as Text
 import Optics
 import System.FilePath
 import System.FilePath.Glob
@@ -27,9 +26,9 @@ main :: IO ()
 main = do
   dataDir <- getDataDir
   let examplesRoot = dataDir </> "examples"
-  exampleSimalaFiles <- sort <$> globDir1 (compile "**/*.l4") examplesRoot
+  exampleFiles <- sort <$> globDir1 (compile "**/*.l4") examplesRoot
   hspec $ do
-    forM_ exampleSimalaFiles $ \ inputFile -> do
+    forM_ exampleFiles $ \ inputFile -> do
       let testCase  = makeRelative examplesRoot inputFile
       let goldenDir = takeDirectory inputFile </> "tests"
       describe testCase $ do

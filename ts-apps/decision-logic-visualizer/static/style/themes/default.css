@@ -1,17 +1,17 @@
 :root {
   --color-node-text: #00004d;
-  --color-primary: #1e40af;
+  --color-primary: #001188;
   --color-secondary: #2563eb;
   --color-button: #c7d2fe;
   --color-button-hover: #a5b4fc;
 
   --theme-border-radius: 5px;
+
+  /* This gets improved in the next PR */
+  --color-highlighted-path-in-flow: #047857;
+
+  --color-incompatible-path: var(--color-zinc-300);
+
+  --color-true-value: var(--color-lime-200);
+  --color-false-value: var(--color-rose-200);
 }
-
-/**
-From discussion of Meng's layman visualizer
-
-  --color-positive: #047857; green for positive path 
-  --color-negative: #dc2626; red for negative path 
-  --color-path: #4b5563; dark grey for default path 
-*/

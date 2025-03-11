@@ -1,7 +1,5 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main (main) where
@@ -22,13 +20,13 @@ import LSP.L4.Config
 import LSP.L4.Handlers hiding (Log (..))
 import qualified LSP.L4.Handlers as Handlers
 import qualified L4.Lexer as Lexer
-import LSP.L4.LanguageServer (runLanguageServer)
+import LSP.L4.LanguageServer (runLanguageServer, Communication (..))
 import qualified LSP.L4.LanguageServer as LanguageServer
 import qualified LSP.L4.Rules as Rules
 
 import Control.Concurrent.Strict
-    ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities )
-import Control.Monad (unless)
+    ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
+import Control.Monad (unless, forever)
 import Control.Monad.IO.Class
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson as J
@@ -46,7 +44,14 @@ import qualified Language.LSP.Server as LSP
 import System.Directory (getCurrentDirectory)
 import System.IO
 import System.Time.Extra
-import UnliftIO (withRunInIO)
+import UnliftIO (withRunInIO, race_, withAsync, finally, MVar)
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString as BS
+import Data.ByteString.Builder.Extra (defaultChunkSize)
+import qualified Network.WebSockets as WS
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy.Char8 as C8L
+import qualified Options.Applicative as Opa
 
 -- ----------------------------------------------------------------------------
 
@@ -97,7 +102,14 @@ data Log
   | LogLanguageServer LanguageServer.Log
   | LogHandlers Handlers.Log
   | LogRules Rules.Log
+  | LogWebsocket WebsocketLog
   deriving (Show)
+
+data WebsocketLog
+  = WebsocketShutDown
+  | WebsocketNewConnection
+  | WebsocketConnectionClosed
+  deriving stock Show
 
 instance Pretty Log where
   pretty = \case
@@ -115,6 +127,13 @@ instance Pretty Log where
     LogLanguageServer msg -> pretty msg
     LogHandlers msg -> pretty msg
     LogRules msg -> pretty msg
+    LogWebsocket wmsg -> "Websocket:" <+> pretty wmsg
+
+instance Pretty WebsocketLog where
+  pretty = \case
+    WebsocketShutDown -> "shut down server"
+    WebsocketNewConnection -> "new connection established"
+    WebsocketConnectionClosed -> "closed connection to client"
 
 data Arguments = Arguments
   { projectRoot :: FilePath
@@ -123,28 +142,49 @@ data Arguments = Arguments
   , defaultConfig :: Config
   , debouncer :: IO (Debouncer NormalizedUri)
   -- ^ Debouncer used for diagnostics
-  , handleIn :: IO Handle
-  , handleOut :: IO Handle
+  , communication :: CommunicationKind
   , threads :: Maybe Natural
   , monitoring :: IO Monitoring
   , disableKick :: Bool
   -- ^ flag to disable kick used for testing
   }
 
+data CommunicationKind
+  = StdIO
+  | Websocket {host :: String, port :: Int}
+  deriving stock (Eq, Show)
+
+parseComm :: Opa.ParserInfo CommunicationKind
+parseComm =
+  Opa.info
+    (Opa.helper <*> Opa.hsubparser
+      (Opa.command "ws"
+        (Opa.info
+          (Websocket
+            <$> Opa.strOption (Opa.long "host" <> Opa.value  "localhost")
+            <*> Opa.option Opa.auto (Opa.long "port" <> Opa.value 8007)
+          )
+          (Opa.briefDesc <> Opa.progDesc "run the language server over a websocket connection")
+        )
+      )
+      Opa.<|> pure StdIO
+    )
+    (Opa.briefDesc <> Opa.progDesc "The L4 language server. Invoke to run using StdIO")
+
 getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
 getDefaultArguments recorder = do
   cwd <- getCurrentDirectory
+  communication <- Opa.execParser parseComm
   pure Arguments
     { projectRoot = cwd
     , rules = Rules.jl4Rules (cmapWithPrio LogRules recorder)
     , lspOptions = lspOptions
     , defaultConfig = defConfig
     , debouncer = newAsyncDebouncer
-    , handleIn = pure stdin
-    , handleOut = pure stdout
     , threads = Nothing
     , monitoring = mempty
     , disableKick = False
+    , communication
     }
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
@@ -159,8 +199,6 @@ defaultMain recorder args = do
       unless args.disableKick $ action LanguageServer.kick
 
   debouncer <- args.debouncer
-  inH <- args.handleIn
-  outH <- args.handleOut
 
   numProcessors <- getNumProcessors
   let
@@ -168,12 +206,11 @@ defaultMain recorder args = do
 
   withNumCapabilities numCapabilities $ do
     ioT <- offsetTime
-    logWith recorder Info $ LogLspStart
+    logWith recorder Info LogLspStart
 
-    ideStateVar <- newEmptyMVar
     let
-      getIdeState :: LSP.LanguageContextEnv Config -> FilePath -> Shake.ThreadQueue -> IO IdeState
-      getIdeState env rootPath threadQueue = do
+      getIdeState :: MVar IdeState -> LSP.LanguageContextEnv Config -> FilePath -> Shake.ThreadQueue -> IO IdeState
+      getIdeState ideStateVar env rootPath threadQueue = do
         t <- ioT
         logWith recorder Info $ LogLspStartDuration t
         clientCaps <- LSP.runLspT env LSP.getClientCapabilities
@@ -213,10 +250,10 @@ defaultMain recorder args = do
           (cmapWithPrio LogLanguageServer recorder)
           args.projectRoot
           (handlers (cmapWithPrio LogHandlers recorder))
-          getIdeState
+
       -- See Note [Client configuration in Rules]
-      onConfigChange :: Config -> ServerM Config ()
-      onConfigChange cfg = do
+      onConfigChange :: MVar IdeState -> Config -> ServerM Config ()
+      onConfigChange ideStateVar cfg = do
         -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
         let
           cfgObj = J.toJSON cfg
@@ -225,13 +262,68 @@ defaultMain recorder args = do
           Nothing -> pure ()
           Just ide -> liftIO $ do
             let
-              msg = Text.show cfg
+              msg = Text.pack $ show cfg
             setSomethingModified Shake.VFSUnmodified ide "config change" $ do
               logWith recorder Debug $ LogConfigurationChange msg
               modifyClientSettings ide (const $ Just cfgObj)
               return [toNoFileKey Rules.GetClientSettings]
 
-    runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH args.defaultConfig parseServerConfig onConfigChange setup
+    let runServerWithCommunication comm
+          = do
+            ideStateVar <- newEmptyMVar
+            runLanguageServer
+              (cmapWithPrio LogLanguageServer recorder)
+              options
+              comm
+              args.defaultConfig
+              parseServerConfig
+              (onConfigChange ideStateVar)
+              (setup (getIdeState ideStateVar))
+    case args.communication of
+      StdIO -> runServerWithCommunication =<< do
+        let hin = stdin
+            hout = stdout
+        hSetBuffering hin NoBuffering
+        hSetEncoding hin utf8
+        pure Communication
+          { inwards = BS.hGetSome hin defaultChunkSize
+          , outwards = \out -> do
+              BSL.hPut hout out
+              hFlush hout
+          }
+
+      Websocket host port -> do
+        WS.runServer host port \pending -> do
+          -- NOTE: this is where to send back headers if any
+          conn <- WS.acceptRequest pending
+          logWith recorder Info $ LogWebsocket WebsocketNewConnection
+
+          WS.withPingThread conn 30 (pure ()) do
+            outChan <- newChan
+            inChan <- newChan
+
+            let comm = Communication {inwards = readChan inChan, outwards = writeChan outChan}
+
+            withAsync (runServerWithCommunication comm) \_lspAsync ->
+              -- NOTE: web clients don't add Content-Length headers since
+              -- websockets do the chunking for us, since the haskell lsp library
+              -- doesn't support this behaviour, we add and remove the header ourselves
+              -- We exploit the fact that LSP messages look like this:
+              -- <headers> Content-Length: <content length> \r\n\r\n { <json content> }
+              race_
+                (forever do
+                  msg <- readChan outChan
+                  let msg' = C8L.dropWhile (/= '{') msg
+                  WS.sendTextData conn msg'
+                )
+                (forever do
+                  msg <- WS.receiveData conn
+                  let msg' = "Content-Length: " <> C8.pack (show (BS.length msg)) <> "\r\n\r\n" <> msg
+                  writeChan inChan msg'
+                )
+          `finally` do
+            logWith recorder Info $ LogWebsocket WebsocketConnectionClosed
+        logWith recorder Error $ LogWebsocket WebsocketShutDown
 
 parseServerConfig :: Config -> Aeson.Value -> Either Text Config
 parseServerConfig _ v = do

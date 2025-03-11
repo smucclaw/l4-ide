@@ -14,6 +14,7 @@ import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
 import qualified Text.Megaparsec.Char.Lexer as Lexer
+import L4.Parser.SrcSpan
 
 type Lexer = Parsec Void Text
 
@@ -39,24 +40,9 @@ data PosToken =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
--- | A range of source positions. We store the length of a range as well.
-data SrcRange =
-  MkSrcRange
-    { start   :: !SrcPos -- inclusive
-    , end     :: !SrcPos -- inclusive
-    , length  :: !Int
-    }
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (ToExpr, NFData)
-
--- | A single source position. Line and column numbers are 1-based.
-data SrcPos =
-  MkSrcPos
-    {
-    -- filename :: !FilePath
-      line     :: !Int
-    , column   :: !Int
-    }
+data AnnoType
+  = InlineAnno
+  | LineAnno
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
@@ -149,13 +135,12 @@ data TokenType =
   | TKFollowed
   | TKFor
   | TKAll
+  | TKAka
     -- annotations
-  | TNlg          !Text
-  | TRef          !Text
-  | TRefOpen
-  | TRefClose
-  | TNlgOpen
-  | TNlgClose
+  | TNlg          !Text !AnnoType
+  | TRefSrc       !Text
+  | TRefMap       !Text
+  | TRef          !Text !AnnoType
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -164,23 +149,35 @@ data TokenType =
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
-nlgAnnotation :: Lexer Text
+nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
-  (<>) <$> string "@nlg" <*> takeWhileP (Just "character") (/= '\n')
+  lineAnno "@nlg"
     <|> inlineAnno "[" "]"
   <?> "Natural Language Generation Annotation"
 
-refAnnotation :: Lexer Text
+refAnnotation :: Lexer (Text, AnnoType)
 refAnnotation =
-  (<>) <$> string "@ref" <*> takeWhileP (Just "character") (/= '\n')
+  lineAnno "@ref"
     <|> inlineAnno "<<" ">>"
   <?> "Reference Annotation"
 
-inlineAnno :: Text -> Text -> Lexer Text
-inlineAnno open close = do
-  o <- string open
-  (anno, c) <- manyTill_ anySingle (string close)
-  pure $ o <> Text.pack anno <> c
+refSrcAnnotation :: Lexer Text
+refSrcAnnotation = fst <$> lineAnno "@ref-src"
+
+
+refMapAnnotation :: Lexer Text
+refMapAnnotation = fst <$> lineAnno "@ref-map"
+
+inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
+inlineAnno openingHerald closingHerald = do
+  _o <- string openingHerald
+  (anno, _c) <- manyTill_ anySingle (string closingHerald)
+  pure (Text.pack anno, InlineAnno)
+
+lineAnno :: Text -> Lexer (Text, AnnoType)
+lineAnno herald = do
+  _ <- string herald
+  (, LineAnno) <$> takeWhileP (Just "character") (/= '\n')
 
 whitespace :: Lexer Text
 whitespace =
@@ -231,8 +228,10 @@ tokenPayload =
   <|> TGenitive       <$  string "'s"
   <|> TQuoted         <$> quoted
   <|> TDirective      <$> directiveLiteral
-  <|> TNlg            <$> nlgAnnotation
-  <|> TRef            <$> refAnnotation
+  <|> TRefSrc         <$> refSrcAnnotation
+  <|> TRefMap         <$> refMapAnnotation
+  <|> uncurry TNlg    <$> nlgAnnotation
+  <|> uncurry TRef    <$> refAnnotation
   <|> TSpace          <$> whitespace
   <|> TLineComment    <$> lineComment
   <|> TBlockComment   <$> blockComment
@@ -240,10 +239,6 @@ tokenPayload =
   <|> TPClose         <$  char ')'
   <|> TCOpen          <$  char '{'
   <|> TCClose         <$  char '}'
-  <|> TNlgOpen          <$  "<<"
-  <|> TNlgClose         <$  ">>"
-  <|> TRefOpen          <$  char '['
-  <|> TRefClose         <$  char ']'
   <|> TParagraph      <$  char '§'
   <|> TComma          <$  char ','
   <|> TSemicolon      <$  char ';'
@@ -350,6 +345,7 @@ keywords =
     , ("FOLLOWED"   , TKFollowed   )
     , ("FOR"        , TKFor        )
     , ("ALL"        , TKAll        )
+    , ("AKA"        , TKAka        )
     ]
 
 trivialToken :: TokenType -> PosToken
@@ -365,14 +361,14 @@ trivialToken tt =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
-execLexer :: FilePath -> Text -> Either (NonEmpty (Text, SourcePos)) [PosToken]
+execLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 execLexer file input =
   let
     r = parse (rawTokens <* eof) file input
   in
     case r of
       Right rtoks -> Right (mkPosTokens file input rtoks)
-      Left errs   -> Left (errorBundleToErrorMessages errs)
+      Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
 
 data TokenState =
   MkTokenState
@@ -456,8 +452,8 @@ isSpaceToken t =
 isAnnotationToken :: PosToken -> Bool
 isAnnotationToken t =
   case computedPayload t of
-    TNlg _ -> True
-    TRef _ -> True
+    TNlg {} -> True
+    TRef {} -> True
     _      -> False
 
 -- | Convert from a Megaparsec source position to one of ours.
@@ -581,6 +577,38 @@ instance TraversableStream TokenStream where
       restOfLine :: String
       restOfLine = takeWhile (/= '\n') postTxt
 
+
+-- ----------------------------------------------------------------------------
+-- Parser error messages
+-- ----------------------------------------------------------------------------
+
+data PError
+  = PError
+    { message :: Text
+    , range :: SrcSpan
+    , origin :: Text
+    }
+  deriving (Show, Eq, Ord)
+
+mkPError :: Text -> (Text, SourcePos, SourcePos) -> PError
+mkPError orig (m, s, e) =
+  PError
+    { message = m
+    , range = MkSrcSpan
+      { start =
+          MkSrcPos
+            { line = unPos $ sourceLine s
+            , column = unPos $ sourceColumn s
+            }
+      , end =
+          MkSrcPos
+            { line = unPos $ sourceLine e
+            , column = unPos $ sourceColumn e
+            }
+      }
+    , origin = orig
+    }
+
 errorBundleToErrorMessages ::
   forall s e.
   ( VisualStream s
@@ -590,23 +618,24 @@ errorBundleToErrorMessages ::
   -- | Parse error bundle to display
   ParseErrorBundle s e ->
   -- | Textual rendition of the bundle
-  NonEmpty (Text, SourcePos)
+  NonEmpty (Text, SourcePos, SourcePos)
 errorBundleToErrorMessages ParseErrorBundle{..} =
   let
     (results, _) = runState (traverse format bundleErrors) bundlePosState
   in
     results
  where
-  format :: ParseError s e -> Base.State (PosState s) (Text, SourcePos)
+  format :: ParseError s e -> Base.State (PosState s) (Text, SourcePos, SourcePos)
   format e = do
     pst <- get
     let
       (msline, pst') = calculateOffset pst
       epos = pstateSourcePos pst'
+      eposNext = pstateSourcePos $ reachOffsetNoLine 1 pst'
       errMsg = parseErrorTextPretty e
       parseErrCtx = offendingLine msline epos
     put pst'
-    pure $ (Text.pack $ parseErrCtx <> errMsg, epos)
+    pure $ (Text.pack $ parseErrCtx <> errMsg, epos, eposNext)
    where
     calculateOffset pst = reachOffset (errorOffset e) pst
     offendingLine msline epos =
@@ -666,6 +695,27 @@ showStringLit :: Text -> Text
 showStringLit t =
   Text.pack ((showChar '"' . showLitString (Text.unpack t) . showChar '"') "")
 
+toAnno
+  :: Text
+  -- ^ line herald
+  -> Text
+  -- ^ inline herald opening
+  -> Text
+  -- ^ inline herald closing
+  -> Text
+  -- ^ anno contents
+  -> AnnoType
+  -- ^ inline or line anno
+  -> Text
+toAnno lh oh ch t = \case
+  InlineAnno -> oh <> t <> ch
+  LineAnno -> lh <> t
+
+
+toRefAnno, toNlgAnno :: Text -> AnnoType -> Text
+toRefAnno = toAnno "@ref" "<<" ">>"
+toNlgAnno = toAnno "@nlg" "[" "]"
+
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
   case tt of
@@ -679,10 +729,6 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
-    TRefOpen           -> "<<"
-    TRefClose          -> ">>"
-    TNlgOpen           -> "["
-    TNlgClose          -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -754,8 +800,11 @@ displayPosToken (MkPosToken _r tt) =
     TKFollowed       -> "FOLLOWED"
     TKFor            -> "FOR"
     TKAll            -> "ALL"
-    TNlg t           -> t
-    TRef t           -> t
+    TKAka            -> "AKA"
+    TNlg t ty        -> toNlgAnno t ty
+    TRef t ty        -> toRefAnno t ty
+    TRefSrc t        -> "@ref-src" <> t
+    TRefMap t        -> "@ref-map" <> t
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -789,10 +838,6 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
-    TRefOpen -> CSymbol
-    TRefClose -> CSymbol
-    TNlgOpen -> CSymbol
-    TNlgClose -> CSymbol
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
@@ -864,8 +909,11 @@ posTokenCategory =
     TKFollowed -> CKeyword
     TKFor -> CKeyword
     TKAll -> CKeyword
-    TNlg _ -> CAnnotation
-    TRef _ -> CAnnotation
+    TKAka -> CKeyword
+    TNlg {} -> CAnnotation
+    TRef {} -> CAnnotation
+    TRefSrc _ -> CAnnotation
+    TRefMap _ -> CAnnotation
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

@@ -21,7 +21,7 @@ import           Control.Exception
 import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
 import           Data.Hashable
-import           Data.Typeable                        (cast)
+import           Data.Typeable                        (cast, type (:~~:) (HRefl))
 import           Data.Vector                          (Vector)
 import           LSP.Core.PositionMapping
 import           LSP.Core.RuleTypes       (FileVersion)
@@ -33,10 +33,9 @@ import           GHC.Generics
 import qualified StmContainers.Map                    as STM
 import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
                                                        pattern App, pattern Con,
-                                                       typeOf, typeRep,
-                                                       typeRepTyCon)
-import           Unsafe.Coerce                        (unsafeCoerce)
+                                                       typeOf, typeRep, eqTypeRep)
 import           Language.LSP.Protocol.Types
+import qualified Base.Text as Text
 
 data Value v
     = Succeeded (Maybe FileVersion) v
@@ -50,8 +49,8 @@ instance NFData v => NFData (Value v)
 -- up2date results not for stale values.
 currentValue :: Value v -> Maybe v
 currentValue (Succeeded _ v) = Just v
-currentValue (Stale _ _ _)   = Nothing
-currentValue Failed{}        = Nothing
+currentValue Stale  {}       = Nothing
+currentValue Failed {}       = Nothing
 
 data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
@@ -69,30 +68,30 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-toKey :: Graph.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey :: Graph.ShakeValue k => k -> NormalizedUri -> Key
 toKey = (newKey.) . curry Q
 
-fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedUri)
 fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
 -- | fromKeyType (Q (k,f)) = (typeOf k, f)
-fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedUri)
 fromKeyType (Key k) = case typeOf k of
-    App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
-        -> case unsafeCoerce k of
-         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
+    App con@(Con _) a
+        | Just HRefl <- con `eqTypeRep` typeRep @Q
+        -> case k of  Q (_, f) -> Just (SomeTypeRep a, f)
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = newKey $ Q (k, emptyNormalizedFilePath)
+toNoFileKey k = newKey $ Q (k, normalizedFilePathToUri emptyNormalizedFilePath)
 
-newtype Q k = Q (k, NormalizedFilePath)
+newtype Q k = Q (k, NormalizedUri)
     deriving newtype (Eq, Hashable, NFData)
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
+    show (Q (k, file)) = show k ++ "; " ++ Text.unpack (fromNormalizedUri file).getUri
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database

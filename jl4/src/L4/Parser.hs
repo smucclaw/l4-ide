@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -43,6 +44,8 @@ module L4.Parser (
 import Base
 
 import qualified Control.Applicative as Applicative
+import Generics.SOP.BasicFunctors
+import Generics.SOP.NS
 import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
@@ -62,6 +65,7 @@ import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
+import L4.Parser.SrcSpan
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -86,10 +90,10 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs <- many (fmap Left nlgP <|> fmap Right refP)
+  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgP <|> fmap Z refP)
   traverse_ addNlgOrRef nlgs
   let
-    epaNlgs = fmap (either epaToHiddenCluster epaToHiddenCluster) nlgs
+    epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
   pure $ Lexeme
     { trailingTokens = ws
     , payload = ()
@@ -98,55 +102,36 @@ spaceOrAnnotations = do
 
 nlgP :: Parser (Epa Nlg)
 nlgP = do
-  nlgExpr <- nlgAnnotationP <|> blockNlgAnnotationP
+  nlgExpr <- nlgAnnotationP
   pure $ fmap (MkNlg (mkSimpleEpaAnno nlgExpr)) nlgExpr
 
 refP :: Parser (Epa Ref)
 refP = do
-  refExpr <- refAnnotationP <|> blockRefAnnotation
+  refExpr <- refAnnotationP
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
 
-nlgAnnotationP :: Parser (Epa [Text])
+nlgAnnotationP :: Parser (Epa Text)
 nlgAnnotationP = hidden $ onlySpacedToken (\case
-  TNlg t -> Just [t]
+  TNlg t ty -> Just $ toNlgAnno t ty
   _ -> Nothing)
   "Natural Language Annotation"
 
-blockNlgAnnotationP :: Parser (Epa [Text])
-blockNlgAnnotationP =
-  let
-    nlgParser = spacedP $
-      (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TNlgOpen)
-        <*> manyTill_
-              (anySingle <?> "Natural Language Annotation Block")
-              (plainToken TNlgClose)
-
-    epaNlg = lexesToEpa <$> nlgParser
-    epaTextNlg = fmap (fmap displayPosToken) <$> epaNlg
-  in
-    epaTextNlg
-
-blockRefAnnotation :: Parser (Epa [Text])
-blockRefAnnotation =
-  let
-    refParser = spacedP $
-      (\open (mid, close) -> [open] <> mid <> [close])
-        <$> hidden (plainToken TRefOpen)
-        <*> manyTill_
-              (anySingle <?> "Reference Annotation Block")
-              (plainToken TRefClose)
-
-    epaRef = lexesToEpa <$> refParser
-    epaTextRef = fmap (fmap displayPosToken) <$> epaRef
-  in
-    epaTextRef
-
-refAnnotationP :: Parser (Epa [Text])
+refAnnotationP :: Parser (Epa Text)
 refAnnotationP = hidden $ onlySpacedToken (\case
-  TRef t -> Just [t]
+  TRef t ty -> Just $ toRefAnno t ty
   _ -> Nothing)
   "Reference Annotation"
+
+-- TODO:
+-- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
+-- (2) should we add it to the AST at all? Currently we don't need it
+refAdditionalP :: Parser (Epa ())
+refAdditionalP = hidden $ onlySpacedToken (\case
+  TRefSrc _t -> Just ()
+  TRefMap _t -> Just ()
+  _ -> Nothing
+  )
+  "Reference source or map annotation"
 
 lexeme :: Parser a -> Parser (Lexeme a)
 lexeme p = do
@@ -158,10 +143,11 @@ lexeme p = do
     , hiddenClusters = wsOrAnnotation.hiddenClusters
     }
 
-addNlgOrRef :: Either (Epa Nlg) (Epa Ref) -> Parser ()
+addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
 addNlgOrRef = \case
-  Left nlg -> modify' (addNlg nlg.payload)
-  Right ref -> modify' (addRef ref.payload)
+  S (Z nlg) -> modify' (addNlg nlg.payload)
+  Z ref -> modify' (addRef ref.payload)
+  _ -> pure ()
 
 spacedP :: Parser a -> Parser (Lexeme a)
 spacedP p = do
@@ -237,7 +223,7 @@ program = do
     MkProgram emptyAnno
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
-          ((\s ss -> s:ss)
+          ((:)
             <$> anonymousSection
             <*> many section
           )
@@ -274,10 +260,10 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno
-      <$> pure 0
+    MkSection emptyAnno 0
+      <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 section :: Parser (Section Name)
 section =
@@ -285,7 +271,8 @@ section =
     MkSection emptyAnno
       <$> sectionSymbols
       <*> annoHole (optional name)
-      <*> annoHole (manyLines topdeclWithRecovery) -- TODO: semicolon
+      <*> annoHole (optional aka)
+      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
@@ -432,6 +419,14 @@ appForm = do
       <*> (   annoLexeme (spacedToken_ TKOf) *> annoHole (lsepBy1 name (spacedToken_ TComma))
           <|> annoHole (lmany (indented name current))
           )
+      <*> annoHole (optional aka)
+
+aka :: Parser (Aka Name)
+aka =
+  attachAnno $
+    MkAka emptyAnno
+      <$  annoLexeme (spacedToken_ TKAka)
+      <*> annoHole (lsepBy name (spacedToken_ TComma))
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
@@ -1213,9 +1208,7 @@ execParserForTokens p file input ts =
 
 runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
 runLexer file input =
-  case execLexer file input of
-    Left errs -> Left $ fmap (mkPError "lexer") errs
-    Right ts -> pure ts
+  execLexer file input
 
 -- ----------------------------------------------------------------------------
 -- JL4 Program parser
@@ -1250,29 +1243,6 @@ parseFile p file input =
 
 parseTest :: Show a => Parser a -> Text -> IO ()
 parseTest p = parseFile p ""
-
--- ----------------------------------------------------------------------------
--- Parser error messages
--- ----------------------------------------------------------------------------
-
-data PError
-  = PError
-    { message :: Text
-    , start :: SrcPos
-    , origin :: Text
-    }
-  deriving (Show, Eq, Ord)
-
-mkPError :: Text -> (Text, SourcePos) -> PError
-mkPError orig (m, s) =
-  PError
-    { message = m
-    , start = MkSrcPos
-        { line = unPos $ sourceLine s
-        , column = unPos $ sourceColumn s
-        }
-    , origin = orig
-    }
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers
@@ -1403,6 +1373,7 @@ mkLexeme trail a = Lexeme
   , hiddenClusters = []
   }
 
+-- | 'Epa_' stands for _E_xact_p_rint _a_nnotation
 data Epa_ t a = Epa
   { original :: [t]
   , trailingTokens :: [t]

@@ -8,7 +8,7 @@ module L4.Annotation where
 
 import Base
 import qualified Base.Text as Text
-import L4.Lexer ( SrcRange (..) )
+import L4.Parser.SrcSpan
 
 import qualified Control.Monad.Extra as Extra
 import Data.Default

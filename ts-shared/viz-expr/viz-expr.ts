@@ -1,5 +1,4 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
-// import { Either } from 'effect'
 
 /**********************
       VizExpr IR
@@ -71,10 +70,12 @@ export const Name = Schema.Struct({
 
 export interface Name {
   /** For equality of exprs */
-  readonly unique: number
+  readonly unique: Unique
   /** The label is what gets displayed in or around the box. */
   readonly label: string
 }
+
+export type Unique = number
 
 /*******************************
     IRId (not currently used)
@@ -163,6 +164,8 @@ export interface BoolVar extends IRNode {
   readonly value: BoolValue
 }
 
+export type Value = BoolValue
+
 /***********************************
   The corresponding Effect Schemas
 ************************************/
@@ -227,6 +230,14 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
   program: IRDecl,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
+
+/*************************
+    Decode
+**************************/
+
+export function makeVizInfoDecoder() {
+  return Schema.decodeUnknownEither(VisualizeDecisionLogicIRInfo)
+}
 
 /***********************************
         Examples of usage

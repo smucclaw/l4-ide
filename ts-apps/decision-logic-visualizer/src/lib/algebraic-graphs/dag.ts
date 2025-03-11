@@ -1,15 +1,19 @@
 import type { Eq, Ord, HasId } from '$lib/utils.js'
 import {
   DirectedAMGraph,
-  graphUnion,
-  makeDirectedConnectAdjacencyMapFromAdjMaps,
+  makeDirectedConnectAdjacencyMap,
+  mergeEdgeAttributeMaps,
+  mergeDirectedGraphs,
+  type EdgeAttributeMap,
 } from './adjacency-map-directed-graph.js'
 import * as GY from 'graphology'
 import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
 
 /*
-TODO: There is currently a fair bit of code duplication between the various kinds of alga graphs in this mini-lib.
+TODO: There is currently a fair bit of code duplication 
+between the various kinds of alga graphs in this mini-lib
+(eg between this and adjacency-map-directed-graph.ts).
 Would be good to improve that.
 */
 
@@ -31,8 +35,11 @@ export abstract class Dag<A extends Ord<A>>
   /** A cached topological ordering */
   private topologicalOrdering?: A[]
 
-  constructor(adjacencyMap?: Map<A, Set<A>>) {
-    super(adjacencyMap)
+  constructor(
+    adjacencyMap?: Map<A, Set<A>>,
+    edgeAttributes?: EdgeAttributeMap<A>
+  ) {
+    super(adjacencyMap, edgeAttributes)
   }
 
   override overlay(other: DirectedAcyclicGraph<A>): DirectedAcyclicGraph<A> {
@@ -169,7 +176,8 @@ export class Overlay<A extends Ord<A>> extends Dag<A> {
       overlay :: Ord a => AdjacencyMap a -> AdjacencyMap a -> AdjacencyMap a
       overlay (AM x) (AM y) = AM $ Map.unionWith Set.union x y
     */
-    super(graphUnion(left.getAdjMap(), right.getAdjMap()))
+    const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
+    super(adjMap, edgeAttrs)
   }
 }
 
@@ -185,12 +193,12 @@ export class Connect<A extends Ord<A>> extends Dag<A> {
     readonly from: DirectedAcyclicGraph<A>,
     readonly to: DirectedAcyclicGraph<A>
   ) {
-    super(
-      makeDirectedConnectAdjacencyMapFromAdjMaps(
-        from.getAdjMap(),
-        to.getAdjMap()
-      )
+    const adjMap = makeDirectedConnectAdjacencyMap(from, to) as Map<A, Set<A>>
+    const edgeAttributes = mergeEdgeAttributeMaps(
+      from._getEdgeAttributesMap(),
+      to._getEdgeAttributesMap()
     )
+    super(adjMap, edgeAttributes)
   }
 }
 
