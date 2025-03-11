@@ -16,8 +16,11 @@ import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
+  EmptyEdgeStyles,
+  HighlightedEdgeStyles,
   type EdgeStyles,
   type EdgeAttributes,
+  DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
 import { match } from 'ts-pattern'
@@ -31,7 +34,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
-                Decl Lir Node 
+                Decl Lir Node
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -80,6 +83,87 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
+/*************************************************
+              Path Lir Node
+ *************************************************/
+
+export class PathListLirNode extends DefaultLirNode implements LirNode {
+  private paths: Array<LirId>
+
+  constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
+    super(nodeInfo)
+    this.paths = paths.map((n) => n.getId())
+  }
+
+  getPaths(context: LirContext) {
+    return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
+  }
+
+  getChildren(context: LirContext) {
+    return this.getPaths(context)
+  }
+
+  toString(): string {
+    return 'PATH_LIST_LIR_NODE'
+  }
+}
+
+/** The simplest version of the LinPathLirNode -- no distinguishing between
+ * compatible and incompatible linearized paths
+ */
+export class LinPathLirNode extends DefaultLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected ladderGraph: LadderGraphLirNode,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo)
+  }
+
+  protected setStylesOnCorrespondingPathInLadderGraph(
+    context: LirContext,
+    styles: EdgeStyles
+  ) {
+    const pathEdges = this.rawPath.getEdges()
+    pathEdges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
+    })
+  }
+
+  highlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new HighlightedEdgeStyles()
+    )
+  }
+
+  unhighlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new EmptyEdgeStyles()
+    )
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
+  }
+
+  toString() {
+    return 'LIN_PATH_LIR_NODE'
+  }
+}
+
+// TODO: Differentiate between compatible and incompatible linearized paths
+
 /******************************************************
                   Flow Lir Nodes
  ******************************************************/
@@ -88,7 +172,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 // (and similarly with Flow Lir Edges)
 
 /* Why should Position be put on the Lir nodes, as opposed to being handled entirely at the SF Node level?
-  
+
 Main argument: for more complicated layouts,
 we'll want to be able to use info that's more readily available at the level of the Lir LadderGraph.
 */
@@ -153,7 +237,7 @@ will go through the LadderGraphLirNode.
 * and re-render on changes.
 *
 * State ownership:
-  - The Lir nodes only own, and publish changes to, state that's not about the positions 
+  - The Lir nodes only own, and publish changes to, state that's not about the positions
     or dimensions of the nodes.
   - For instance, we do not publish changes to the position of the nodes/edges --- that is state that
     is owned by SvelteFlow.
@@ -210,12 +294,20 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  // TODO: prob need to refactor: want to be able to
-  // generate the linearized paths of the the subgraph that is compatible with the updated env
-  /** Get all simple paths through the Dag */
-  // getPaths(_context: LirContext) {
-  //   return this.#dag.getAllPaths()
-  // }
+  // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
+  /** Get list of all simple paths through the Dag */
+  getPathsList(context: LirContext) {
+    const paths = this.#dag
+      .getAllPaths()
+      .map(
+        (rawPath) =>
+          new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
+      )
+    return new PathListLirNode(
+      this.makeNodeInfo(context),
+      paths as Array<LinPathLirNode>
+    )
+  }
 
   /*****************************
         Edge attributes
@@ -228,7 +320,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge)
   }
 
-  // TODO: Think more abt whether we really need the following edge related methods
+  /** internal helper method */
+  protected setEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T,
+    attrs: EdgeAttributes
+  ) {
+    this.#dag.setEdgeAttributes(edge, attrs)
+  }
 
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
@@ -242,7 +341,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     edge: T,
     styles: EdgeStyles
   ) {
-    this.#dag.getAttributesForEdge(edge).setStyles(styles)
+    const attrs = this.#dag.getAttributesForEdge(edge)
+    const newAttrs = new DefaultEdgeAttributes().merge(attrs)
+    newAttrs.setStyles(styles)
+    this.#dag.setEdgeAttributes(edge, newAttrs)
+
     this.getRegistry().publish(context, this.getId())
   }
 
