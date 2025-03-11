@@ -246,6 +246,8 @@
         },
         didChange: async (event, next) => {
           await next(event)
+          // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
+          // the rest of the didChange callback does not run, at least not when testing on localhost.
           if (persistSession) {
             await persistSession()
           }
