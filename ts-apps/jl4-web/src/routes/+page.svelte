@@ -29,13 +29,18 @@
   let persistSession: undefined | (() => Promise<void>) = undefined;
   const sessionUrl =
     import.meta.env.VITE_SESSION_URL || "http://localhost:5008";
+
+  /***********************************
+        UI-related vars
+  ************************************/
+
   /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
   let errorMessage: string | undefined = $state(undefined);
 
-  /**************************
-      Set up Lir
-  ****************************/
+  /***********************************
+          Set up Lir
+  ************************************/
 
   const lirRegistry = new LirRegistry();
   const context = new LirContext();
@@ -96,9 +101,6 @@
 
     const websocketUrl =
       import.meta.env.VITE_SOCKET_URL || "ws://localhost:5007";
-
-    const sessionUrl =
-      import.meta.env.VITE_SESSION_URL || "http://localhost:5008";
 
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug);
@@ -265,7 +267,7 @@
           // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
           // the rest of the didChange callback does not run, at least not when testing on localhost.
           if (persistSession) {
-            await persistSession()
+            await persistSession();
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
