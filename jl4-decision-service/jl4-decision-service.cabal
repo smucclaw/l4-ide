@@ -3,8 +3,6 @@ name: jl4-decision-service
 version: 0.1.0.0
 build-type: Simple
 tested-with: ghc ==9.6.6
-extra-source-files:
-  CHANGELOG.md
 
 source-repository head
   type: git
