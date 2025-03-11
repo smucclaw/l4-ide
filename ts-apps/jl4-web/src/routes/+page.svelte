@@ -21,6 +21,14 @@
   import * as vscode from "vscode";
   import { debounce } from "$lib/utils";
 
+  /***********************************
+    Persistent-session-related vars
+  ************************************/
+
+  // `persistSession` does not need to be reactive
+  let persistSession: undefined | (() => Promise<void>) = undefined;
+  const sessionUrl =
+    import.meta.env.VITE_SESSION_URL || "http://localhost:5008";
   /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
   let errorMessage: string | undefined = $state(undefined);
@@ -34,7 +42,6 @@
   const nodeInfo = { registry: lirRegistry, context };
 
   let vizDecl: undefined | FunDecl = $state(undefined);
-  let persistSession: undefined | (() => Promise<void>) = $state(undefined);
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
   );
