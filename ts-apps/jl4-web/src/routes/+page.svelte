@@ -15,6 +15,8 @@
   } from "@repo/viz-expr";
   import { type MessageTransports, type Middleware } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
+  import * as vscode from "vscode";
+  import { debounce } from "$lib/utils";
 
   /* eslint-disable-next-line editorElement does not need to be reactive */
   let editorElement: HTMLDivElement;
@@ -48,6 +50,17 @@
   *******************************/
   const decodeVizInfo = makeVizInfoDecoder();
 
+  /**********************************
+      Debounced run visualize cmd
+  ***********************************/
+
+  const debouncedVisualize = debounce(async (uri: string) => {
+    await vscode.commands.executeCommand(
+      // TODO: Should probably put the command in the viz-expr package
+      "l4.visualize",
+      uri
+    );
+  }, 150);
   // /**************************
   //       Monadco
   // ****************************/
@@ -237,6 +250,12 @@
             await persistSession()
           }
         }
+
+          // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
+          // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
+          // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
+          debouncedVisualize(event.document.uri.toString());
+        },
       };
     }
     await runClient();
