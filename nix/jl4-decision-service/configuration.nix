@@ -32,7 +32,7 @@
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service-exe \
           --port ${toString config.services.jl4-decision-service.port} \
-          --serverName ${config.networking.domain + config.services.jl4-decision-service.path}
+          --serverName https://${config.networking.domain + config.services.jl4-decision-service.path}
       '';
       Restart = "always";
 
