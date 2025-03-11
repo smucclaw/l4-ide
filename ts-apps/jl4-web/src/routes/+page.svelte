@@ -13,7 +13,10 @@
     type FunDecl,
     type VisualizeDecisionLogicIRInfo,
   } from "@repo/viz-expr";
-  import { type MessageTransports, type Middleware } from "vscode-languageclient";
+  import {
+    type MessageTransports,
+    type Middleware,
+  } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
   import * as vscode from "vscode";
   import { debounce } from "$lib/utils";
@@ -48,6 +51,7 @@
   /******************************
       VizInfo Payload Decoder
   *******************************/
+
   const decodeVizInfo = makeVizInfoDecoder();
 
   /**********************************
@@ -61,6 +65,7 @@
       uri
     );
   }, 150);
+
   // /**************************
   //       Monadco
   // ****************************/
@@ -83,10 +88,10 @@
     const { ConsoleLogger } = await import("monaco-languageclient/tools");
 
     const websocketUrl =
-      import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007';
+      import.meta.env.VITE_SOCKET_URL || "ws://localhost:5007";
 
     const sessionUrl =
-      import.meta.env.VITE_SESSION_URL || 'http://localhost:5008';
+      import.meta.env.VITE_SESSION_URL || "http://localhost:5008";
 
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug);
@@ -98,7 +103,7 @@
             json: JSON.stringify({
               "editor.semanticHighlighting.enabled": true,
               "editor.experimental.asyncTokenization": true,
-              'editor.lightbulb.enabled': 'on',
+              "editor.lightbulb.enabled": "on",
             }),
           },
           serviceOverrides: {},
@@ -138,43 +143,46 @@
       });
 
       const ownUrl: URL = new URL(window.location.href);
-      const sessionid: string | null = ownUrl.searchParams.get('id');
+      const sessionid: string | null = ownUrl.searchParams.get("id");
       if (sessionid) {
-         const response = await fetch(`${sessionUrl}?id=${sessionid}`)
-         logger.debug("sent GET for session")
-         const prog = await response.json();
-         if (prog) {
-           editor.setValue(prog);
-         }
+        const response = await fetch(`${sessionUrl}?id=${sessionid}`);
+        logger.debug("sent GET for session");
+        const prog = await response.json();
+        if (prog) {
+          editor.setValue(prog);
+        }
       }
 
       persistSession = async () => {
         const bufferContent: string = editor.getValue();
         const ownUrl: URL = new URL(window.location.href);
-        const sessionid: string | null = ownUrl.searchParams.get('id');
+        const sessionid: string | null = ownUrl.searchParams.get("id");
         if (sessionid) {
           await fetch(sessionUrl, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({jl4program: bufferContent, sessionid: sessionid})
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jl4program: bufferContent,
+              sessionid: sessionid,
+            }),
           });
-          logger.debug("sent PUT for session")
+          logger.debug("sent PUT for session");
         } else {
           const response = await fetch(sessionUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(bufferContent)
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bufferContent),
           });
-          logger.debug("sent POST for session")
-          const newSessionId = await response.json()
+          logger.debug("sent POST for session");
+          const newSessionId = await response.json();
           if (newSessionId) {
-            ownUrl.searchParams.set('id', newSessionId.toString())
-            history.pushState(null, '', ownUrl)
+            ownUrl.searchParams.set("id", newSessionId.toString());
+            history.pushState(null, "", ownUrl);
           } else {
-            console.error(`response was not present`)
+            console.error(`response was not present`);
           }
-        };
-      }
+        }
+      };
 
       initWebSocketAndStartClient(websocketUrl, logger);
     };
@@ -235,7 +243,8 @@
           switch (decoded._tag) {
             case "Right":
               if (decoded.right) {
-                const vizProgramInfo: VisualizeDecisionLogicIRInfo = decoded.right;
+                const vizProgramInfo: VisualizeDecisionLogicIRInfo =
+                  decoded.right;
                 vizDecl = vizProgramInfo.program;
               }
               break;
@@ -245,13 +254,12 @@
           }
         },
         didChange: async (event, next) => {
-          await next(event)
+          await next(event);
           // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
           // the rest of the didChange callback does not run, at least not when testing on localhost.
           if (persistSession) {
             await persistSession()
           }
-        }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
@@ -302,7 +310,7 @@ DECIDE \`is a British citizen (variant)\` IS
         <div
           class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
         >
-          <LadderFlow {context} node={declLirNode} lir={lirRegistry}/>
+          <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
         </div>
       {/key}
     {/if}
