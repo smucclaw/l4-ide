@@ -323,7 +323,7 @@ DECIDE \`is a British citizen (variant)\` IS
       {#if vizDecl && declLirNode}
         {#key declLirNode}
           <div
-            class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height pb-2"
+            class="flash-on-update slightly-shorter-than-full-viewport-height pb-2"
           >
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
