@@ -316,7 +316,7 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle />
   <Resizable.Pane> 
-    <div id="jl4-webview" class="h-full">
+    <div id="jl4-webview" class="h-full bg-white">
       <div class="header">
         <h1>{funName}</h1>
       </div>
@@ -350,10 +350,6 @@ DECIDE \`is a British citizen (variant)\` IS
         ); /* Tailwind's --color-sky-100 */
       }
     }
-
-  .panel {
-    background-color: white;
-  }
 
   .header {
     padding-top: 3px;
