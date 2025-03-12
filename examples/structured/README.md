@@ -1,12 +1,4 @@
-# README
-
-## Examples
-
-Dec 18 2024: I've focused on examples that seemed trickier to me, though the examples I've highlighted also don't seem high-priority.
-
-Examples that don't seem tricky but that would be worth using as examples in our cookbook / docs include, e.g.,:
-
-### Matt Waddington's rewrite of part of the British Nationality Act (<https://osf.io/mt78r>):
+# About Multi-Temporal (and Bi-Temporal) Database Modelling
 
 ```text
 1(1) A person is a British citizen if –
@@ -19,7 +11,6 @@ Examples that don't seem tricky but that would be worth using as examples in our
       (ii) settled in the qualifying territory in which the person is born.
 ```
 
-#### Everything in good time
 
 Let's break out the temporal aspects of this decision logic. Let us say that every truth value is indexed to a point in time: in 1936 Edward VIII is King of UK; in 1937 he is no longer King but merely Duke of Windsor.
 
