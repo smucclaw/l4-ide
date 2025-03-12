@@ -43,6 +43,7 @@ import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
 import Data.Either (partitionEithers)
+import qualified L4.ExactPrint as ExactPrint
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -116,6 +117,11 @@ data GetReferences = GetReferences
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
+type instance RuleResult ExactPrint = Text
+data ExactPrint = ExactPrint
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
 data ReferenceMapping =
   ReferenceMapping
   { actualToOriginal :: IntervalMap SrcPos Unique
@@ -156,14 +162,16 @@ jl4Rules recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
     (_, mRope) <- use_ GetFileContents uri
     case mRope of
-      Nothing -> pure ([{- TODO: report internal errors -}], Nothing)
+      -- FIXME: this doesn't mean that we encountered an internal error but
+      -- that the file has to be fetched from disk!
+      Nothing -> pure ([], Nothing)
       Just rope -> do
         let
           contents = Rope.toText rope
         case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
           Left errs -> do
             let
-              diags = toList $ fmap mkSimpleDiagnostic errs
+              diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)
           Right ts ->
             pure ([], Just (ts, contents))
@@ -173,7 +181,7 @@ jl4Rules recorder = do
     case Parser.execProgramParserForTokens (Text.unpack (fromNormalizedUri uri).getUri) contents tokens of
       Left errs -> do
         let
-          diags = toList $ fmap mkSimpleDiagnostic errs
+          diags = toList $ fmap mkParseErrorDiagnostic errs
         pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
       Right (prog, warns) -> do
         let
@@ -345,6 +353,13 @@ jl4Rules recorder = do
 
     pure ([], Just resolveds)
 
+  define shakeRecorder $ \ExactPrint f -> do
+    parsed <- use_ GetParsedAst f
+    let pfp = prettyFilePath $ fromNormalizedFilePath <$> uriToNormalizedFilePath f
+    pure case ExactPrint.exactprint parsed of
+      Left trErr -> ([mkSimpleFileDiagnostic f $ mkSimpleDiagnostic pfp (prettyTraverseAnnoError trErr) Nothing], Nothing)
+      Right ep'd -> ([], Just ep'd)
+
   where
     shakeRecorder = cmapWithPrio ShakeLog recorder
     mkSimpleFileDiagnostic nfp diag =
@@ -377,15 +392,18 @@ jl4Rules recorder = do
           , _data_ = Nothing
           }
 
-    mkSimpleDiagnostic :: PError -> Diagnostic
-    mkSimpleDiagnostic parseError =
+    mkParseErrorDiagnostic :: PError -> Diagnostic
+    mkParseErrorDiagnostic parseError = mkSimpleDiagnostic parseError.origin parseError.message (Just parseError.range)
+
+    mkSimpleDiagnostic :: Text -> Text -> Maybe SrcSpan -> Diagnostic
+    mkSimpleDiagnostic origin message range =
       Diagnostic
-        { _range = srcSpanToLspRange $ Just parseError.range
+        { _range = srcSpanToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Error
         , _code = Nothing
         , _codeDescription = Nothing
-        , _source = Just parseError.origin
-        , _message = parseError.message
+        , _source = Just origin
+        , _message = message
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

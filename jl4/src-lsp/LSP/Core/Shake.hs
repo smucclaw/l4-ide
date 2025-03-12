@@ -27,11 +27,11 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module LSP.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras, rootDir,
+    IdeState (..), shakeSessionInit,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
-    shakeOpen, shakeShut,
+    shakeOpen, shakeShut, oneshotIdeState,
     shakeEnqueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
@@ -53,7 +53,7 @@ module LSP.Core.Shake(
     GlobalIdeOptions(..),
     ideLogger,
     actionLogger,
-    getVirtualFile,
+    getVirtualFile, addVirtualFileFromFS,
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
@@ -83,7 +83,7 @@ import Control.Concurrent.STM.Stats (atomicallyNamed)
 import Control.Concurrent.Strict
 import Control.DeepSeq
 import Control.Exception.Extra hiding (bracket_)
-import Control.Lens ((%~), (&), (?~))
+import Control.Lens ((%~), (&), (?~), over)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader
@@ -147,6 +147,8 @@ import UnliftIO (MonadUnliftIO (withRunInIO))
 import qualified "list-t" ListT
 import L4.Parser.SrcSpan
 import L4.Syntax
+import qualified Base.Text as Text
+import qualified Data.Text.Mixed.Rope as Rope
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -189,14 +191,14 @@ instance Pretty Log where
         [ "Finished build session"
         , pretty (fmap displayException e) ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
-      "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
-      <+> pretty (showDiagnosticsColored fileDiagnostics)
+      "updateFileDiagnostics published different from new diagnostics - file diagnostics:" <> Pretty.line
+      <> pretty (showDiagnosticsColored fileDiagnostics)
     LogDefineEarlyCutoffRuleNoDiagHasDiag fileDiagnostic ->
-      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:"
-      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:" <> Pretty.line
+      <> pretty (showDiagnosticsColored [fileDiagnostic])
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
-      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
-      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:" <> Pretty.line
+      <> pretty (showDiagnosticsColored [fileDiagnostic])
     LogCancelledAction action ->
         pretty action <+> "was cancelled"
     LogSessionInitialised -> "Shake session initialized"
@@ -215,8 +217,7 @@ instance Pretty Log where
 type IndexQueue = TQueue (IO ())
 
 data ThreadQueue = ThreadQueue {
-    tIndexQueue     :: IndexQueue
-    , tRestartQueue :: TQueue (IO ())
+     tRestartQueue :: TQueue (IO ())
     , tLoaderQueue  :: TQueue (IO ())
 }
 
@@ -321,6 +322,11 @@ getVirtualFile :: NormalizedUri -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup nf vfs -- Don't leak a reference to the entire map
+
+addVirtualFileFromFS :: NormalizedFilePath -> Action ()
+addVirtualFileFromFS nf = do
+  rope <- liftIO $ Rope.fromText <$> Text.readFile (fromNormalizedFilePath nf)
+  liftIO . atomically . flip stateTVar (\vfs -> ((), over vfsMap (Map.insert (normalizedFilePathToUri nf) (VirtualFile 0 0 rope)) vfs)) . vfsVar =<< getShakeExtras
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe LspSink -> IO VFS
@@ -634,6 +640,28 @@ shakeOpen recorder lspSink mClientCapabilities debouncer
     let ideState = IdeState{..}
     return ideState
 
+oneshotIdeState :: Recorder (WithPriority Log) -> FilePath -> Rules () -> IO IdeState
+oneshotIdeState recorder curDir rules = do
+    tRestartQueue <- newTQueueIO
+    tLoaderQueue <- newTQueueIO
+
+    shakeOpen
+      recorder
+      Nothing
+      Nothing
+      noopDebouncer
+      Nothing
+      (IdeReportProgress False)
+      (IdeTesting False)
+      ThreadQueue{tLoaderQueue, tRestartQueue}
+      defaultIdeOptions.optShakeOptions
+      mempty
+      do
+        -- FIXME: refactor shakeOpen to be more lazy or to not do this lookup
+        -- FIXME: isWorkSpaceFile expects an ide configuration that sets the workspace dir
+        addIdeGlobal $ GlobalIdeOptions defaultIdeOptions
+        rules
+      curDir
 
 getStateKeys :: ShakeExtras -> IO [Key]
 getStateKeys = (fmap . fmap) fst . atomically . ListT.toList . STM.listT . state

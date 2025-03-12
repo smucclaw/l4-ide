@@ -232,7 +232,7 @@ prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
-    vcat
+    hang 2 $ vcat
         [ slabel_ "File:    " $ pretty fdFilePath
         , slabel_ "Hidden:  " $ if fdShouldShowDiagnostic == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range

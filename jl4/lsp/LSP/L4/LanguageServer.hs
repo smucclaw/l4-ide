@@ -286,8 +286,7 @@ runWithWorkerThreads :: (ThreadQueue -> IO ()) -> IO ()
 runWithWorkerThreads f = evalContT $ do
   sessionRestartTQueue <- withWorkerQueue id
   sessionLoaderTQueue <- withWorkerQueue id
-  threadQueue <- withWorkerQueue id
-  liftIO $ f (ThreadQueue threadQueue sessionRestartTQueue sessionLoaderTQueue)
+  liftIO $ f (ThreadQueue sessionRestartTQueue sessionLoaderTQueue)
 
 -- | Runs the action until it ends or until the given MVar is put.
 --   Rethrows any exceptions.

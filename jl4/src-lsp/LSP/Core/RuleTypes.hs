@@ -15,8 +15,6 @@ import           Data.Text.Utf16.Rope.Mixed                   (Rope)
 import           LSP.Logger                                   (Pretty (..), viaShow)
 import           Language.LSP.Protocol.Types                  (Int32)
 
--- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
-type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
 
 type instance RuleResult GetFileExists = Bool
 
@@ -64,6 +62,8 @@ vfsVersion :: FileVersion -> Maybe Int32
 vfsVersion (VFSVersion i)     = Just i
 vfsVersion ModificationTime{} = Nothing
 
+-- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
+type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
 instance Hashable GetFileContents
