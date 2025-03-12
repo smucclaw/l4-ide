@@ -4,7 +4,6 @@ import Base
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
 import qualified L4.Parser.SrcSpan as JL4
-import qualified L4.Main as JL4
 import L4.Parser (execProgramParser)
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Parser
@@ -21,6 +20,12 @@ import System.FilePath.Glob
 import System.IO.Silently
 import Test.Hspec
 import Test.Hspec.Golden
+import qualified LSP.Core.Shake as Shake
+import qualified LSP.L4.Rules as Rules
+import qualified LSP.Core.FileStore as Store
+import LSP.Logger
+import Development.IDE.Graph.Database
+import Language.LSP.Protocol.Types
 
 main :: IO ()
 main = do
@@ -53,13 +58,36 @@ l4Golden dir inputFile = do
       , failFirstTime = False
       }
 
+data Log
+  = ShakeLog Shake.Log
+  | RulesLog Rules.Log
+  | StoreLog Store.Log
+
+instance Pretty Log where
+  pretty = \case
+    ShakeLog l -> pretty l
+    RulesLog l -> pretty l
+    StoreLog l -> pretty l
+
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
-  input <- Text.readFile inputFile
-  let output_ = JL4.exactprintProgram (takeFileName inputFile) input
+  (getLog, recorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
+  ideState <- Shake.oneshotIdeState (cmapWithPrio ShakeLog recorder) inputFile do
+    Store.fileStoreRules (cmapWithPrio StoreLog recorder) (const $ pure False)
+    Rules.jl4Rules (cmapWithPrio RulesLog recorder)
+  [moutput] <- shakeRunDatabase
+      ideState.shakeDb
+      [ do
+          let nfp = toNormalizedFilePath inputFile
+              uri = normalizedFilePathToUri nfp
+          Shake.addVirtualFileFromFS nfp
+          Shake.use Rules.ExactPrint uri
+      ]
+  output <- maybe (fmap mconcat getLog) pure moutput
+
   pure
     Golden
-      { output = output_
+      { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
@@ -110,7 +138,27 @@ parseFile file input =
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
     evalResultToMessage (r, res) = (Just r, [either Text.show Print.prettyLayout res])
-    renderMessage (r, txt) = JL4.cliErrorMessage fp r txt
+    renderMessage (r, txt) = cliErrorMessage fp r txt
+
+data CliError
+  = CliParserError FilePath (NonEmpty Parser.PError)
+  | CliCheckError FilePath CheckResult
+  deriving stock (Show, Eq)
+
+prettyCliError :: CliError -> Text
+prettyCliError = \case
+  CliParserError file perrors ->
+    "While parsing " <> Text.pack file <> ":" <>
+    Text.unlines (((.message)) <$> toList perrors)
+  CliCheckError file CheckResult{errors} ->
+    Text.unlines (map (\ err -> cliErrorMessage file (JL4.rangeOf err) (JL4.prettyCheckErrorWithContext err)) errors)
+
+cliErrorMessage :: FilePath -> Maybe JL4.SrcRange -> [Text] -> Text
+cliErrorMessage fp mrange msg =
+  Text.unlines
+    ( JL4.prettySrcRange (Just fp) mrange <> ":"
+    : map ("  " <>) msg
+    )
 
 readAndParseFile :: FilePath -> IO ()
 readAndParseFile file = do

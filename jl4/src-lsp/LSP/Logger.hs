@@ -20,6 +20,7 @@ module LSP.Logger
   , withFileRecorder
   , makeDefaultStderrRecorder
   , makeDefaultHandleRecorder
+  , makeRefRecorder
   , LoggingColumn(..)
   , cmapWithPrio
   , withBacklog
@@ -65,7 +66,7 @@ import           Prettyprinter.Render.Text     (renderStrict)
 import           System.IO                     (Handle, IOMode (AppendMode),
                                                 hClose, hFlush, openFile,
                                                 stderr)
-import           UnliftIO                      (MonadUnliftIO, finally, try)
+import           UnliftIO                      (MonadUnliftIO, finally, try, newIORef, modifyIORef', readIORef)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -125,6 +126,17 @@ textHandleRecorder handle =
   Recorder
     { logger_ = \text -> liftIO $ Text.hPutStrLn handle text *> hFlush handle }
 
+-- | build a recorder whose entries can be inspected with the action returned.
+--   Mind that inspecting is /O(n)/
+makeRefRecorder :: MonadIO m => m (m [Text], Recorder (WithPriority (Doc a)))
+makeRefRecorder = do
+   ref <- newIORef []
+   let recorder
+        = Recorder \doc -> liftIO do
+          rendered <- textWithPriorityToText defaultLoggingColumns $ docToText <$> doc
+          modifyIORef' ref (rendered :)
+   pure (reverse <$> readIORef ref, recorder)
+
 makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> m (Recorder (WithPriority (Doc a)))
 makeDefaultStderrRecorder columns = do
   lock <- liftIO newLock
@@ -161,9 +173,10 @@ makeDefaultHandleRecorder columns lock handle = do
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
   let loggingColumns = fromMaybe defaultLoggingColumns columns
   let textWithPriorityRecorder = cmapIO (textWithPriorityToText loggingColumns) threadSafeRecorder
-  pure (cmap docToText textWithPriorityRecorder)
-  where
-    docToText = fmap (renderStrict . layoutPretty defaultLayoutOptions)
+  pure (cmap (fmap docToText) textWithPriorityRecorder)
+
+docToText :: Doc ann -> Text
+docToText = renderStrict . layoutPretty defaultLayoutOptions
 
 data LoggingColumn
   = TimeColumn

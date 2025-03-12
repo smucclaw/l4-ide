@@ -65,7 +65,6 @@ library
     L4.ExactPrint
     L4.FindDefinition
     L4.HoverInfo
-    L4.Main
     L4.Lexer
     L4.Parser
     L4.Parser.ResolveAnnotation
@@ -92,6 +91,7 @@ library jl4-lsp-core
     deepseq,
     extra,
     focus,
+    generics-sop,
     hashable,
     hls-graph,
     jl4,
@@ -100,6 +100,9 @@ library jl4-lsp-core
     lsp,
     lsp-types,
     mtl,
+    monoidal-containers,
+    optics,
+    hw-fingertree,
     prettyprinter,
     prettyprinter-ansi-terminal,
     safe-exceptions,
@@ -131,6 +134,8 @@ library jl4-lsp-core
     Control.Concurrent.Strict
 
     LSP.Logger
+    LSP.SemanticTokens
+
     LSP.Core.Action
     LSP.Core.Debouncer
     LSP.Core.FileExists
@@ -150,11 +155,21 @@ library jl4-lsp-core
     LSP.Core.Types.Options
     LSP.Core.Types.Shake
 
+    LSP.L4.SemanticTokens
+    LSP.L4.Rules
+
 executable jl4-cli
   import: defaults
   hs-source-dirs: app
   build-depends:
-    jl4
+    co-log-core,
+    jl4,
+    jl4-lsp-core,
+    stm,
+    directory,
+    hls-graph,
+    lsp-types,
+    optparse-applicative,
   main-is: Main.hs
 
 executable jl4-lsp
@@ -177,8 +192,6 @@ executable jl4-lsp
     directory,
     extra,
     fuzzy,
-    generics-sop,
-    hashable >=1.4.0.0,
     hls-graph ^>=2.9.0.0,
     hw-fingertree,
     jl4,
@@ -186,7 +199,6 @@ executable jl4-lsp
     lens,
     lsp ^>=2.7.0.0,
     lsp-types ^>=2.3.0.0,
-    monoidal-containers,
     mtl,
     optics,
     optparse-applicative,
@@ -204,15 +216,12 @@ executable jl4-lsp
 
   main-is: Server.hs
   other-modules:
-    LSP.SemanticTokens
     LSP.L4.Base
     LSP.L4.Config
     LSP.L4.Handlers
     LSP.L4.Viz.VizExpr
     LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
-    LSP.L4.Rules
-    LSP.L4.SemanticTokens
 
 test-suite jl4-test
   import: defaults
@@ -229,5 +238,8 @@ test-suite jl4-test
     hspec,
     hspec-golden,
     jl4,
+    jl4-lsp-core,
     optics,
     silently,
+    lsp-types,
+    hls-graph,
