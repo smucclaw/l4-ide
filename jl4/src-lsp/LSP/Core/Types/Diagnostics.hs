@@ -27,8 +27,8 @@ module LSP.Core.Types.Diagnostics (
   ideErrorText,
   ideErrorWithSource,
   ideErrorFromLspDiag,
-  showDiagnostics,
-  showDiagnosticsColored,
+  prettyDiagnostics,
+  prettyDiagnostic,
   IdeResultNoDiagnosticsEarlyCutoff,
   attachedReason,
   ) where
@@ -46,10 +46,7 @@ import           Language.LSP.Diagnostics
 import           Language.LSP.Protocol.Lens     (data_)
 import           Language.LSP.Protocol.Types    as LSP
 import           Prettyprinter
-import           Prettyprinter.Render.Terminal  (Color (..), color)
-import qualified Prettyprinter.Render.Terminal  as Terminal
-import           Prettyprinter.Render.Text
-import Type.Reflection
+import           Type.Reflection
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -213,24 +210,18 @@ fromNfDynamic (MkNfDynamic t v)
   | otherwise                       = Nothing
   where rep = typeRep :: TypeRep a
 
-prettyRange :: Range -> Doc Terminal.AnsiStyle
+prettyRange :: Range -> Doc a
 prettyRange Range{..} = f _start <> "-" <> f _end
     where f Position{..} = pretty (show $ _line+1) <> colon <> pretty (show $ _character+1)
 
 stringParagraphs :: T.Text -> Doc a
 stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
 
-showDiagnostics :: [FileDiagnostic] -> T.Text
-showDiagnostics = srenderPlain . prettyDiagnostics
 
-showDiagnosticsColored :: [FileDiagnostic] -> T.Text
-showDiagnosticsColored = srenderColored . prettyDiagnostics
-
-
-prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
+prettyDiagnostics :: [FileDiagnostic] -> Doc a
 prettyDiagnostics = vcat . map prettyDiagnostic
 
-prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
+prettyDiagnostic :: FileDiagnostic -> Doc a
 prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagnostic = LSP.Diagnostic{..} } =
     hang 2 $ vcat
         [ slabel_ "File:    " $ pretty fdFilePath
@@ -242,43 +233,14 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
                                   Just (InR text) -> pretty text
                                   Just (InL i)    -> pretty i
                                   Nothing         -> "<none>"
-        , slabel_ "Message: "
-            $ case sev of
-              LSP.DiagnosticSeverity_Error       -> annotate $ color Red
-              LSP.DiagnosticSeverity_Warning     -> annotate $ color Yellow
-              LSP.DiagnosticSeverity_Information -> annotate $ color Blue
-              LSP.DiagnosticSeverity_Hint        -> annotate $ color Magenta
-            $ stringParagraphs _message
+        , slabel_ "Message: " $ stringParagraphs _message
         ]
     where
         sev = fromMaybe LSP.DiagnosticSeverity_Error _severity
 
-
 -- | Label a document.
 slabel_ :: String -> Doc a -> Doc a
 slabel_ t d = nest 2 $ sep [pretty t, d]
-
--- | The layout options used for the SDK assistant.
-cliLayout ::
-       Int
-    -- ^ Rendering width of the pretty printer.
-    -> LayoutOptions
-cliLayout renderWidth = LayoutOptions
-    { layoutPageWidth = AvailablePerLine renderWidth 0.9
-    }
-
--- | Render without any syntax annotations
-srenderPlain :: Doc ann -> T.Text
-srenderPlain = renderStrict . layoutSmart (cliLayout defaultTermWidth)
-
--- | Render a 'Document' as an ANSII colored string.
-srenderColored :: Doc Terminal.AnsiStyle -> T.Text
-srenderColored =
-    Terminal.renderStrict .
-    layoutSmart defaultLayoutOptions { layoutPageWidth = AvailablePerLine 100 1.0 }
-
-defaultTermWidth :: Int
-defaultTermWidth = 80
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))

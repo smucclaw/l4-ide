@@ -133,7 +133,7 @@ makeRefRecorder = do
    ref <- newIORef []
    let recorder
         = Recorder \doc -> liftIO do
-          rendered <- textWithPriorityToText defaultLoggingColumns $ docToText <$> doc
+          rendered <- textWithPriorityToText [PriorityColumn, DataColumn] $ docToText <$> doc
           modifyIORef' ref (rendered :)
    pure (reverse <$> readIORef ref, recorder)
 
