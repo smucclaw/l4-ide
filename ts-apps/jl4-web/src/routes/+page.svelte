@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount } from 'svelte'
   import {
     LadderFlow,
     LirContext,
@@ -7,12 +7,12 @@
     VizDeclLirSource,
     type DeclLirNode,
     type LirRootType,
-  } from "@repo/decision-logic-visualizer";
+  } from '@repo/decision-logic-visualizer'
   import {
     makeVizInfoDecoder,
     type FunDecl,
     type VisualizeDecisionLogicIRInfo,
-  } from "@repo/viz-expr";
+  } from '@repo/viz-expr'
   import {
     type MessageTransports,
     type Middleware,
@@ -27,45 +27,44 @@
   ************************************/
 
   // `persistSession` does not need to be reactive
-  let persistSession: undefined | (() => Promise<void>) = undefined;
-  const sessionUrl =
-    import.meta.env.VITE_SESSION_URL || "http://localhost:5008";
+  let persistSession: undefined | (() => Promise<void>) = undefined
+  const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   /***********************************
         UI-related vars
   ************************************/
 
-  /* eslint-disable-next-line editorElement does not need to be reactive */
-  let editorElement: HTMLDivElement;
-  let errorMessage: string | undefined = $state(undefined);
+  /* editorElement does not need to be reactive */
+  let editorElement: HTMLDivElement
+  let errorMessage: string | undefined = $state(undefined)
 
   /***********************************
           Set up Lir
   ************************************/
 
-  const lirRegistry = new LirRegistry();
-  const context = new LirContext();
-  const nodeInfo = { registry: lirRegistry, context };
+  const lirRegistry = new LirRegistry()
+  const context = new LirContext()
+  const nodeInfo = { registry: lirRegistry, context }
 
-  let vizDecl: undefined | FunDecl = $state(undefined);
+  let vizDecl: undefined | FunDecl = $state(undefined)
   let declLirNode: DeclLirNode | undefined = $derived(
     vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
-  );
+  )
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  );
+  )
   // TODO: YM has some ideas for how to improve / clean this up
   $effect(() => {
     if (declLirNode) {
-      lirRegistry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
+      lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
     }
-  });
+  })
 
   /******************************
       VizInfo Payload Decoder
   *******************************/
 
-  const decodeVizInfo = makeVizInfoDecoder();
+  const decodeVizInfo = makeVizInfoDecoder()
 
   /**********************************
       Debounced run visualize cmd
@@ -74,46 +73,46 @@
   const debouncedVisualize = debounce(async (uri: string) => {
     await vscode.commands.executeCommand(
       // TODO: Should probably put the command in the viz-expr package
-      "l4.visualize",
+      'l4.visualize',
       uri
-    );
-  }, 150);
+    )
+  }, 150)
 
   // /**************************
   //       Monadco
   // ****************************/
 
   onMount(async () => {
-    const monaco = await import("@codingame/monaco-vscode-editor-api");
+    const monaco = await import('@codingame/monaco-vscode-editor-api')
     const { initServices } = await import(
-      "monaco-languageclient/vscode/services"
-    );
-    const { LogLevel } = await import("@codingame/monaco-vscode-api");
+      'monaco-languageclient/vscode/services'
+    )
+    const { LogLevel } = await import('@codingame/monaco-vscode-api')
     const { CloseAction, ErrorAction } = await import(
-      "vscode-languageclient/browser.js"
-    );
-    const { MonacoLanguageClient } = await import("monaco-languageclient");
+      'vscode-languageclient/browser.js'
+    )
+    const { MonacoLanguageClient } = await import('monaco-languageclient')
     const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } =
-      await import("vscode-ws-jsonrpc");
+      await import('vscode-ws-jsonrpc')
     const { configureDefaultWorkerFactory } = await import(
-      "monaco-editor-wrapper/workers/workerLoaders"
-    );
-    const { ConsoleLogger } = await import("monaco-languageclient/tools");
+      'monaco-editor-wrapper/workers/workerLoaders'
+    )
+    const { ConsoleLogger } = await import('monaco-languageclient/tools')
 
     const websocketUrl =
-      import.meta.env.VITE_SOCKET_URL || "ws://localhost:5007";
+      import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007'
 
     const runClient = async () => {
-      const logger = new ConsoleLogger(LogLevel.Debug);
+      const logger = new ConsoleLogger(LogLevel.Debug)
 
       await initServices(
         {
           loadThemes: true,
           userConfiguration: {
             json: JSON.stringify({
-              "editor.semanticHighlighting.enabled": true,
-              "editor.experimental.asyncTokenization": true,
-              "editor.lightbulb.enabled": "on",
+              'editor.semanticHighlighting.enabled': true,
+              'editor.experimental.asyncTokenization': true,
+              'editor.lightbulb.enabled': 'on',
             }),
           },
           serviceOverrides: {},
@@ -122,110 +121,110 @@
           htmlContainer: editorElement,
           logger,
         }
-      );
+      )
 
-      configureDefaultWorkerFactory(logger);
+      configureDefaultWorkerFactory(logger)
 
       // register the jl4 language with Monaco
       monaco.languages.register({
-        id: "jl4",
-        extensions: [".jl4"],
-        aliases: ["JL4", "jl4"],
-      });
+        id: 'jl4',
+        extensions: ['.jl4'],
+        aliases: ['JL4', 'jl4'],
+      })
 
-      monaco.editor.defineTheme("jl4Theme", {
-        base: "vs",
+      monaco.editor.defineTheme('jl4Theme', {
+        base: 'vs',
         inherit: true,
         rules: [
-          { token: "decorator", foreground: "ffbd33" }, // for annotations
+          { token: 'decorator', foreground: 'ffbd33' }, // for annotations
         ],
         encodedTokensColors: [],
         colors: {},
-      });
+      })
 
       const editor = monaco.editor.create(editorElement, {
         value: britishCitizen,
-        language: "jl4",
+        language: 'jl4',
         automaticLayout: true,
-        wordBasedSuggestions: "off",
-        theme: "jl4Theme",
-        "semanticHighlighting.enabled": true,
-      });
+        wordBasedSuggestions: 'off',
+        theme: 'jl4Theme',
+        'semanticHighlighting.enabled': true,
+      })
 
-      const ownUrl: URL = new URL(window.location.href);
-      const sessionid: string | null = ownUrl.searchParams.get("id");
+      const ownUrl: URL = new URL(window.location.href)
+      const sessionid: string | null = ownUrl.searchParams.get('id')
       if (sessionid) {
-        const response = await fetch(`${sessionUrl}?id=${sessionid}`);
-        logger.debug("sent GET for session");
-        const prog = await response.json();
+        const response = await fetch(`${sessionUrl}?id=${sessionid}`)
+        logger.debug('sent GET for session')
+        const prog = await response.json()
         if (prog) {
-          editor.setValue(prog);
+          editor.setValue(prog)
         }
       }
 
       persistSession = async () => {
-        const bufferContent: string = editor.getValue();
-        const ownUrl: URL = new URL(window.location.href);
-        const sessionid: string | null = ownUrl.searchParams.get("id");
+        const bufferContent: string = editor.getValue()
+        const ownUrl: URL = new URL(window.location.href)
+        const sessionid: string | null = ownUrl.searchParams.get('id')
         if (sessionid) {
           await fetch(sessionUrl, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               jl4program: bufferContent,
               sessionid: sessionid,
             }),
-          });
-          logger.debug("sent PUT for session");
+          })
+          logger.debug('sent PUT for session')
         } else {
           const response = await fetch(sessionUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bufferContent),
-          });
-          logger.debug("sent POST for session");
-          const newSessionId = await response.json();
+          })
+          logger.debug('sent POST for session')
+          const newSessionId = await response.json()
           if (newSessionId) {
-            ownUrl.searchParams.set("id", newSessionId.toString());
-            history.pushState(null, "", ownUrl);
+            ownUrl.searchParams.set('id', newSessionId.toString())
+            history.pushState(null, '', ownUrl)
           } else {
-            console.error(`response was not present`);
+            console.error(`response was not present`)
           }
         }
-      };
+      }
 
-      initWebSocketAndStartClient(websocketUrl, logger);
-    };
+      initWebSocketAndStartClient(websocketUrl, logger)
+    }
 
     /** parameterized version , support all languageId */
     const initWebSocketAndStartClient = (
       url: string,
       logger: ConsoleLogger
     ): WebSocket => {
-      const webSocket = new WebSocket(url);
+      const webSocket = new WebSocket(url)
       webSocket.onopen = () => {
-        const socket = toSocket(webSocket);
-        const reader = new WebSocketMessageReader(socket);
-        const writer = new WebSocketMessageWriter(socket);
+        const socket = toSocket(webSocket)
+        const reader = new WebSocketMessageReader(socket)
+        const writer = new WebSocketMessageWriter(socket)
         const languageClient = createLanguageClient(logger, {
           reader,
           writer,
-        });
-        languageClient.start();
-        reader.onClose(() => languageClient.stop());
-      };
-      return webSocket;
-    };
+        })
+        languageClient.start()
+        reader.onClose(() => languageClient.stop())
+      }
+      return webSocket
+    }
 
     const createLanguageClient = (
       logger: ConsoleLogger,
       messageTransports: MessageTransports
     ) => {
       return new MonacoLanguageClient({
-        name: "JL4 Language Client",
+        name: 'JL4 Language Client',
         clientOptions: {
           // use a language id as a document selector
-          documentSelector: ["jl4"],
+          documentSelector: ['jl4'],
           // disable the default error handler
           errorHandler: {
             error: () => ({ action: ErrorAction.Continue }),
@@ -235,51 +234,52 @@
         },
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
-      });
-    };
+      })
+    }
 
     function mkMiddleware(logger: ConsoleLogger): Middleware {
       return {
+        /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
-          logger.debug(`trying to execute command ${command}`);
-          const response = await next(command, args);
+          logger.debug(`trying to execute command ${command}`)
+          const response = await next(command, args)
 
           logger.debug(
             `received response from language server ${JSON.stringify(response)}`
-          );
+          )
 
-          const decoded = decodeVizInfo(response);
+          const decoded = decodeVizInfo(response)
           // TODO: Can improve this later
           switch (decoded._tag) {
-            case "Right":
+            case 'Right':
               if (decoded.right) {
                 const vizProgramInfo: VisualizeDecisionLogicIRInfo =
-                  decoded.right;
-                vizDecl = vizProgramInfo.program;
+                  decoded.right
+                vizDecl = vizProgramInfo.program
               }
-              break;
-            case "Left":
-              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`;
-              break;
+              break
+            case 'Left':
+              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`
+              break
           }
         },
         didChange: async (event, next) => {
-          await next(event);
+          await next(event)
           // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
           // the rest of the didChange callback does not run, at least not when testing on localhost.
           if (persistSession) {
-            await persistSession();
+            await persistSession()
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
           // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
-          debouncedVisualize(event.document.uri.toString());
+          debouncedVisualize(event.document.uri.toString())
         },
-      };
+      }
     }
-    await runClient();
-  });
+    await runClient()
+  })
 
   const britishCitizen = `§ \`Assumptions\`
 
@@ -306,7 +306,7 @@ DECIDE \`is a British citizen (variant)\` IS
   AND -- when the person is born ...
          \`for father or mother of\` p \`is a British citizen (variant)\`
       OR \`for father or mother of\` p \`is settled in the United Kingdom\`
-      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``;
+      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``
 </script>
 
 
