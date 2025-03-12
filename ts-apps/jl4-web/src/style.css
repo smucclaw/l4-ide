@@ -9,6 +9,8 @@
   and that we use the @repo/... alias (per Turborepo best practices).
 ****************************************************************************/
 @import "@repo/decision-logic-visualizer/dist/style.css";
+@import "tailwindcss"; 
+/* ladder lib's css needs to come before tailwind import */
 
 body {
   margin: 0;
