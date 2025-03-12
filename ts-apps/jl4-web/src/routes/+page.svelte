@@ -317,7 +317,7 @@ DECIDE \`is a British citizen (variant)\` IS
     {#if vizDecl && declLirNode}
       {#key declLirNode}
         <div
-          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height"
+          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height pb-2"
         >
           <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
         </div>
@@ -329,7 +329,9 @@ DECIDE \`is a British citizen (variant)\` IS
   </div>
 </div>
 
-<style>
+<style lang="postcss">
+  @reference "tailwindcss"
+  
   @keyframes flash {
     0%,
     90% {
