@@ -10,7 +10,7 @@ export function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
       clearTimeout(timer)
       timer = setTimeout(() => {
         try {
-          let output = callback(...args)
+          const output = callback(...args)
           resolve(output)
         } catch (err) {
           if (err instanceof Error) {

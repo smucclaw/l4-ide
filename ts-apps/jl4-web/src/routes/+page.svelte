@@ -33,7 +33,7 @@
         UI-related vars
   ************************************/
 
-  /* eslint-disable-next-line editorElement does not need to be reactive */
+  /* editorElement does not need to be reactive */
   let editorElement: HTMLDivElement
   let errorMessage: string | undefined = $state(undefined)
 
@@ -238,6 +238,7 @@
 
     function mkMiddleware(logger: ConsoleLogger): Middleware {
       return {
+        /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`)
           const response = await next(command, args)
