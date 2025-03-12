@@ -16,11 +16,11 @@
   import {
     type MessageTransports,
     type Middleware,
-  } from "vscode-languageclient";
-  import { type ConsoleLogger } from "monaco-languageclient/tools";
-  import * as vscode from "vscode";
-  import { debounce } from "$lib/utils";
-  import * as Resizable from "$lib/components/ui/resizable/index.js";
+  } from 'vscode-languageclient'
+  import { type ConsoleLogger } from 'monaco-languageclient/tools'
+  import * as vscode from 'vscode'
+  import { debounce } from '$lib/utils'
+  import * as Resizable from '$lib/components/ui/resizable/index.js'
 
   /***********************************
     Persistent-session-related vars
@@ -309,13 +309,12 @@ DECIDE \`is a British citizen (variant)\` IS
       OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``
 </script>
 
-
 <Resizable.PaneGroup direction="horizontal">
   <Resizable.Pane defaultSize={60}>
     <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
   </Resizable.Pane>
   <Resizable.Handle withHandle />
-  <Resizable.Pane> 
+  <Resizable.Pane>
     <div id="jl4-webview" class="h-full bg-white">
       <div class="header">
         <h1>{funName}</h1>
@@ -336,20 +335,20 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
 </Resizable.PaneGroup>
 
-  <style lang="postcss">
-    @reference "tailwindcss"
+<style lang="postcss">
+  @reference "tailwindcss"
     
     @keyframes flash {
-      0%,
-      90% {
-        background-color: hsl(var(--neutral));
-      }
-      50% {
-        background-color: oklch(
-          0.951 0.026 236.824
-        ); /* Tailwind's --color-sky-100 */
-      }
+    0%,
+    90% {
+      background-color: hsl(var(--neutral));
     }
+    50% {
+      background-color: oklch(
+        0.951 0.026 236.824
+      ); /* Tailwind's --color-sky-100 */
+    }
+  }
 
   .header {
     padding-top: 3px;
