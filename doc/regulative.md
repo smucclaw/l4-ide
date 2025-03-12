@@ -34,12 +34,22 @@ payment, and delivery -- three possible actions, of many.
 The above specification is given in an ordered sequence of events that
 represent the "happy path".
 
-Contracts also deal with what happens when parties fall off the happy
-path -- a required action is not done by the deadline. _Reparations_
-can be made to restore relations.
+Legal contracts also deal with what happens when parties fall off the
+happy path -- a required action is not done by the deadline.
+_Reparations_ can be made to restore relations.
+
+This is an important point of departure from computer systems which
+are often written to "do the right thing". Such operational systems
+tend to focus on the happy path. Programs do handle exceptions, but
+any departure from intended, desired behaviour is considered a bug.
+
+In legal specification, "rules are made to be broken". A law or
+contract must give equal weight to the possibility that things might
+go wrong, intentionally or not. The criminal code is all about leaving
+the happy path.
 
 So we need a way to represent not just a linear sequence, but a graph
-of events and consequences.
+of events, choices, and consequences.
 
 ### An Action Expression Language
 
@@ -48,25 +58,57 @@ sending money, or delivering goods, or otherwise communicating with
 each other.
 
 Meng has previously suggested a "prepositional logic" to describe
-actions complexly. This logic overlaps with the decision logic aspect
-of the language. The question of whether an action was taken or not
-can be expressed as a Boolean circuit.
+actions complexly -- parameters to actions which clarify when exactly
+those actions have been performed to spec.
 
-### Contract Composition
+This logic overlaps with the decision logic aspect of the language.
+The question of whether an action was taken or not can be expressed as
+a Boolean circuit.
+
+### A Decision Expression Language
+
+In any programming language with `if (...)` statements, we need to be
+able to evaluate the conditions between the parentheses.
+
+Internally, L4 reframes the binary operators `OR` and `AND` into
+disjunctive `ANY` lists and conjunctive `ALL` lists. We also have the
+usual `NOT` negation.
+
+We extend this basic logic with unknown and default values.
+
+See <default-logic-1.md> and <default-logic-2.md>
+
+### Contract Composition and State Transitions
 
 If reparations fail, the contract ends in breach. Whose fault is the
-breach? Hvitved's CSL likes to ask and answer that question. CSL
-provides a compositional semantics, where the "fulfilled" and "breach"
-primitive contracts form the top and bottom elements of a lattice.
+breach? Hvitved's CSL likes to ask and answer that question. In CSL,
+the "fulfilled" and "breach" primitives are the final states of any
+contract -- in the language of finite automata, they are the
+"accepting states".
+
+Composition means that a completed subcontract is merely one step
+along the path of a larger contract. Wiring up the "fulfilled" and
+"breach" outputs of a subcontract to the inputs of a larger contract
+happens through our `HENCE` and `LEST` operators.
 
 CSL contracts can be composed from subcontracts using contract
 disjunction, conjunction, and sequencing.
 
-### Preconditions for a state transition to be enabled
+### Applicability: Preconditions for a state transition to be enabled
 
-Conditions are located in "guards"; when the conditions are met, the transition is "enabled".
+In legal drafting, certain clauses or sections are said to "apply" if
+certain conditions are met. If they do not apply, then the rules
+within them are, in some sense, inactive.
 
-### Temporals
+In the language of state transition modelling, conditions are located
+in "guards"; when the conditions are met, the transition is "enabled".
+
+When conditions are not met, even if a party attempts to perform some
+action described in that section, the action is not recognized as
+valid. As far as the contract or law is concerned, nothing significant
+has happened, and nobody needs to respond to that action.
+
+### Temporals for Deadlines
 
 Actions need to be completed by a certain deadline. So time is a factor, and we need a way to model it.
 
@@ -77,11 +119,19 @@ tick.
 But sometimes, as with borrowing a library book, a voluntary action
 starts the clock.
 
+There is a rich literature and a wide variety of software that models
+and verifies temporal automata, concurrent processes, and timed Petri
+Nets.
+
 ### Updating State Variables
 
 A contract, or law, that computes a certain numeric value may refer to
 the history of "how we got here", and perform arithmetic on a formula
 whose terms are set in the course of execution.
+
+Sometimes introspection to the history of the trace is appropriate.
+
+Sometimes it is more appropriate to update a symbol table of variables.
 
 For example, Party A tells Party B she wants to buy a bicycle. Later
 she realizes she also needs a helmet. And a bike lock. These state
@@ -96,19 +146,105 @@ be expressible in the language.
 
 Haskell's State monad offers `get` and `put` operators.
 
+#### State Variables allow long-distance cause-and-effect
+
+The immediate consequences of noncompliance are often spelled out in close proximity to the regulative rule that prescribes the required behaviour.
+
+But sometimes the penalties are written in a different section.
+
+"A person who commits an offence under sections 10 through 20 is liable to the following penalties, according to the number of offences committed ..."
+
+The offences are first enumerated, the way a diner might speak to a
+waiter, who writes down the order on a notepad; later, the penalties
+are assessed, the way the bill is calculated at the end of the meal.
+
+The notepad relays the order from the patron via the waiter to the bill.
+
+In L4, the State mechanism relays information about offences to the penalty section. We `put` information into state variables, and `get` them out later.
+
 ### Data Modeling
 
 We already have a `DECLARE` data modelling expression minilanguage. We
 can instantiate those classes (as records) and use `get` and `put` to
 update those records.
 
+Type inference becomes ontology inference: when a human hears "if a
+person has a pet, and that pet is male" we can infer the following:
+
+```l4
+ DECLARE Person
+     HAS OPTIONAL Pet
+	     HAS sex OPTIONAL ONE OF Male, Female
+```
+
+Which is really two `DECLARE` stanzas sugared into one.
+
+### Temporal Modeling of Rules and Instance Data
+
+A fuller treatment of multi-temporal databases is given in <multitemporals.md>
+
 ### Master Contracts and Transaction Instances
 
-The above contract only really begins in earnest at step 3. But if it
+The above example contract only really begins in earnest at step 3. But if it
 is an of many routine transactions occurring under some sort of Master
 Services Agreement, then the larger contract is the MSA and the
 particular concrete purchase -- the instance of the transaction --
 could be said to start at step 1.
+
+We want to be able to instantiate particular `person`s into the class
+of `Person`, and use those instances as part of an operationalization
+of a contract.
+
+### Despite / Notwithstanding
+
+These modifiers frequently appear at the start of clauses.
+
+> §10 Beer taxes. The retail sale of beer shall be taxed at 6%.
+
+> §11 Sunday beer. Notwithstanding §10, on Sundays, the retail sale of beer shall be taxed at 9%.
+
+We consider these modifiers to indicate a priority relation that
+resolves a conflict between two clauses by establishing a partial
+ordering. They can also be understood as an exception vs default: the
+exception has higher priority.
+
+Usually, the ordering between clauses (functions) is limited to a
+subset of possibilities (the domain). If the override were total then
+what would be the point of giving the default?
+
+### Subject To
+
+Sometimes as simple as a priority relation, indicating exceptions to a default -- the dual to "despite / notwithstanding".
+
+More comprehensively, a monadic function that transforms the inputs and outputs of one function by another.
+
+See this discussion with Claude: https://claude.ai/share/d0c10a0d-9402-4bbc-bd83-0b1c0e5db42a
+
+> §20 Wine taxes. Subject to §21, the retail sale of wine shall be taxed at 12%.
+
+> §21 Sunday wine. Subject to §22, on Sundays, the retail tax rate of wine shall be increased by one-half of the existing rate. For example, a 10% rate shall increase to 15%.
+
+> §22 Public Holidays. On public holidays, the retail sale of wine shall be untaxed.
+
+The eagle-eyed will spot a conflict between clauses: what about a public holiday that does not fall on a Sunday?
+
+Should we consider this a drafting error? To be remedied with a "Subject to §21 and §22"?
+
+Or should we invoke the interpretation rules:
+- Lex posterior derogat priori
+- Lex specialis derogat legi generali
+
+Our monadic "subject to" operator could also modify the inputs to the inner function, and also wrap the outputs.
+
+> §30 Liquor taxes. Subject to §31 and §32, the retail sale of liquor shall be taxed at 18%.
+
+> §31 Sunday wine. Subject to §32, on Sundays, the retail tax rate of liquor shall be increased by one-third of the existing rate. For example, a 12% rate shall increase by 4% to 16%.
+
+> §32 Public Holidays. On public holidays, the retail sale of liquor shall be subject to a cap of $36. For example, if a purchase of liquor were priced at $300, and taxed at 18%, the cap would reduce the tax payable from $54 to $36.
+
+This is a common function-wrapper pattern which a Haskell programmer will recognize as essentially monadic.
+
+See this conversation for details: <https://claude.ai/share/703d98b0-e339-47ee-9eb5-416c74d272de>
 
 ## Background
 
@@ -142,7 +278,7 @@ condition.
 
 This model checking becomes relevant below, because it allows us to
 "squeeze out the deontics" into an **object-level contract** vs
-**property-level assertions** _about_ the contract.
+**property-level assertions** _about_ the contract. More on that later.
 
 ### Hypotheticals
 
@@ -212,6 +348,46 @@ These questions are endlessly debated by philosophers.
 
 L4's position is set out below.
 
+## Distinguishing the letter of the law from the spirit of the law
+
+The spirit of a law may claim to allow certain small businesses to receive some sort of relief.
+
+The letter of the law may introduce requirements that are so onerous nobody can actually receive that relief.
+
+For example, a circular requirement:
+1. to obtain relief, submit a form C.
+2. to obtain a form C, file a form B.
+3. to obtain a form B, file a form A.
+4. to obtain a form A, file a form C.
+
+More sophisticated versions of such rules may hide the fact that a particular rule is not meant to be "winnable".
+
+Or, requirements that may turn out to be impossible to satisfy, depending on the whims of the bureaucracy:
+
+1. Relief will be available if requested in June. Requests after June will be disregarded.
+2. To request relief, file a form C. It may take up to three months to receive a response after filing form C.
+3. To obtain a form C, file a form B. It may take up to two months to receive a response after filing form B.
+4. To obtain a form B, file a form A. It may take up to one month to receive a response after filing form A.
+5. Form A filings will be accepted no sooner than March.
+
+Static analysis methods and formal verification allow software to automatically detect such scenarios.
+
+This is done by writing the object level program separately from a
+property-level assertion *about* the program. A formal verification
+engine then statically analyzes that program to see if the assertions
+hold or fail. Counterexamples can be automatically generated to show
+how it is possible, or impossible, to "win" the game.
+
+At the "spirit" level we may say "you must pay a fine if you return a book late".
+
+At the "letter" level we set out the exact fee schedules, definition
+of lateness according to which category the book is in, and mechanics
+of fine assessment and payment.
+
+Then we can see if the spirit of the law matches the letter of the
+law. Is there some loophole that allows someone to get away with not
+paying the fine?
+
 ## The Object Level: from a coldly dispassionate perspective, an automaton simply executes a trace.
 
 > When you borrow a book from a library, a clock starts ticking.
@@ -241,22 +417,6 @@ indicate that a certain choice is strongly preferable, and that
 alternative choices lead to negative consequences.
 
 The "if" and "unless" keywords are "conditional operators".
-
-## State Variables for long-distance cause-and-effect
-
-The immediate consequences of noncompliance are often spelled out in close proximity to the regulative rule that prescribes the required behaviour.
-
-But sometimes the penalties are written in a different section.
-
-"A person who commits an offence under sections 10 through 20 is liable to the following penalties, according to the number of offences committed ..."
-
-The offences are first enumerated, the way a diner might speak to a
-waiter, who writes down the order on a notepad; later, the penalties
-are assessed, the way the bill is calculated at the end of the meal.
-
-The notepad relays the order from the patron via the waiter to the bill.
-
-In L4, the State mechanism relays information about offences to the penalty section. We `put` information into state variables, and `get` them out later.
 
 ## Object-Level versus Assertion-Level
 
@@ -296,7 +456,8 @@ to some sort of legal penalty."
 Or it might be "or you sin against your fellows, and are subject to
 social misapprobation."
 
-"You must pick up your child from childcare before 7pm."
+Rustichini & Gneezy asked what the complement -- the bound -- was, for
+the rule "You must pick up your child from childcare before 7pm."
 
 In L4, every deontic statement is bounded. Even a "may" permission is
 bounded, in that taking that course of action that eventually causes
@@ -323,7 +484,7 @@ The purely mechanistic object-level form of a regulative rule is structured like
 PARTY  p
    DO  action
        with  certain criteria
-	   to    some target
+	   to    some recipient
 HENCE  clause 2 (... AND clause 4 AND clause 6 OR clause 8)
  LEST  clause 3
 ```
@@ -431,21 +592,3 @@ The "inner" legal rule is a good example of homoiconicity:
 
 These propositions could, in theory, be evaluated by a reasoner engine, operating purely against syntax.
 
-## Our LTS allows us to distinguish Committing an Offence from Liability for Penalty
-
-> > Some criminal legislation/regulation is structured in an interesting way: instead of saying that a certain crime is punishable by a certain penalty, it will say that an offence is committed if X, Y, Z; multiple offences are defined; and then penalties are stated in a separate section. I suppose this makes sense because many offences can be committed together, and penalties can be assessed against them all at once.
-
-> You're right about this interesting structure in criminal legislation. Many legal codes organize offenses and penalties separately for several practical reasons:
-
-> - Efficiency in drafting - Defining offenses separately from penalties allows lawmakers to establish multiple related offenses without repetitively stating the same penalty provisions.
-> - Graduated punishment schemes - This structure facilitates systems where penalties escalate based on factors like prior convictions or aggravating circumstances, without needing to redefine the underlying offense.
-> - Judicial discretion - Separating offenses from penalties gives judges flexibility to consider multiple violations holistically when determining appropriate sentences.
-> - Legislative updates - When legislatures wish to modify penalties (often due to changing social attitudes or prison capacity concerns), they can amend just the penalty provisions without redefining the substantive offenses.
-
-> This approach is particularly common in regulatory frameworks where multiple technical violations might occur simultaneously. For example, environmental regulations might separately define various prohibited discharges, record-keeping violations, and permit infractions, while providing a unified penalty structure that accounts for factors like willfulness, harm caused, and economic benefit gained.
-
-> Criminal codes often use this structure to establish a coherent sentencing philosophy across different offense categories, making the punishment system more consistent and proportional.
-
-This can be handled by the State Monad's `get` and `put`.
-
-Or by examining the history trace.
