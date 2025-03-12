@@ -311,7 +311,7 @@ DECIDE \`is a British citizen (variant)\` IS
 
 
 <Resizable.PaneGroup direction="horizontal" class="">
-  <Resizable.Pane>
+  <Resizable.Pane defaultSize={60}>
     <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
   </Resizable.Pane>
   <Resizable.Handle />
