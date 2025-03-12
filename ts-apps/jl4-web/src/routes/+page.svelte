@@ -15,10 +15,50 @@
   } from "@repo/viz-expr";
   import { type MessageTransports, type Middleware } from "vscode-languageclient";
   import { type ConsoleLogger } from "monaco-languageclient/tools";
+  import { type editor as MonacoEditor } from "monaco-editor";
 
   /* eslint-disable-next-line editorElement does not need to be reactive */
+  let container: HTMLDivElement;
   let editorElement: HTMLDivElement;
+  let splitter: HTMLButtonElement;
+  let webview: HTMLDivElement;
+  let isResizing = $state(false);
   let errorMessage: string | undefined = $state(undefined);
+
+  let editor: MonacoEditor.IStandaloneCodeEditor;
+
+
+  function handleMouseMove (event: MouseEvent): void {
+    if (!isResizing) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const newEditorWidth = event.clientX - containerRect.left;
+
+    // console.log("Container rect:", containerRect);
+    // console.log("Mouse X:", event.clientX);
+    // console.log("New editor width:", newEditorWidth);
+    // console.log("Splitter width:", splitter.offsetWidth);
+
+    editorElement.style.width = `${newEditorWidth}px`;
+    webview.style.width = `${containerRect.width - newEditorWidth - splitter.offsetWidth}px`;
+
+    if (editor) {
+      editor.layout();
+    }
+
+    // console.log("Editor computed width:", window.getComputedStyle(editorElement).width);
+    // console.log("Webview computed width:", window.getComputedStyle(webview).width);
+
+  }
+
+  function handleMouseUp(): void {
+    isResizing = false;
+  }
+
+  function handleMouseDown(event: MouseEvent): void {
+    isResizing = true;
+  }
+
 
   /**************************
       Set up Lir
@@ -40,6 +80,16 @@
   $effect(() => {
     if (declLirNode) {
       lirRegistry.setRoot(context, "VizDecl" as LirRootType, declLirNode);
+    }
+
+    if (isResizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     }
   });
 
@@ -115,10 +165,10 @@
         colors: {},
       });
 
-      const editor = monaco.editor.create(editorElement, {
+      editor = monaco.editor.create(editorElement, {
         value: britishCitizen,
         language: "jl4",
-        automaticLayout: true,
+        automaticLayout: false,
         wordBasedSuggestions: "off",
         theme: "jl4Theme",
         "semanticHighlighting.enabled": true,
@@ -270,9 +320,11 @@ DECIDE \`is a British citizen (variant)\` IS
       OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``;
 </script>
 
-<div class="jl4-container">
+<div class="jl4-container" bind:this={container}>
   <div id="jl4-editor" bind:this={editorElement}></div>
-  <div id="jl4-webview" class="panel">
+  <button id="jl4-splitter" onmousedown={handleMouseDown} bind:this={splitter}>
+  </button>
+  <div id="jl4-webview" class="panel" bind:this={webview}>
     <div class="header">
       <h1>{funName}</h1>
     </div>
@@ -302,10 +354,6 @@ DECIDE \`is a British citizen (variant)\` IS
         0.951 0.026 236.824
       ); /* Tailwind's --color-sky-100 */
     }
-  }
-
-  .panel {
-    background-color: white;
   }
 
   .header {

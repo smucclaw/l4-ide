@@ -18,15 +18,30 @@ body {
   background-color: #242424;
 }
 
-#jl4-editor {
-  border: 1px solid grey;
-}
+ .jl4-container {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+    width: 100%;
+  }
 
-#jl4-webview {
-}
+  #jl4-editor {
+    border: 1px solid grey;
+    box-sizing: border-box;
+    width: 50%;
+    min-width: 100px;
+    background-color: white;
+  }
 
-.jl4-container {
-  display: grid;
-  grid-template-columns: 60% 40%;
-  grid-template-rows: 100vh;
-}
+  #jl4-webview {
+    width: 50%;
+    min-width: 100px;
+    overflow: hidden;
+    background-color: white;
+  }
+
+  #jl4-splitter {
+    background-color: #ccc;
+    width: 16px;
+    cursor: col-resize;
+  }
