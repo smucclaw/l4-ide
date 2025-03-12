@@ -20,6 +20,7 @@
   import { type ConsoleLogger } from "monaco-languageclient/tools";
   import * as vscode from "vscode";
   import { debounce } from "$lib/utils";
+  import * as Resizable from "$lib/components/ui/resizable/index.js";
 
   /***********************************
     Persistent-session-related vars
@@ -308,41 +309,47 @@ DECIDE \`is a British citizen (variant)\` IS
       OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``;
 </script>
 
-<div class="jl4-container">
-  <div id="jl4-editor" bind:this={editorElement}></div>
-  <div id="jl4-webview" class="panel">
-    <div class="header">
-      <h1>{funName}</h1>
-    </div>
-    {#if vizDecl && declLirNode}
-      {#key declLirNode}
-        <div
-          class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height pb-2"
-        >
-          <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
-        </div>
-      {/key}
-    {/if}
-    {#if errorMessage}
-      {errorMessage}
-    {/if}
-  </div>
-</div>
 
-<style lang="postcss">
-  @reference "tailwindcss"
-  
-  @keyframes flash {
-    0%,
-    90% {
-      background-color: hsl(var(--neutral));
+<Resizable.PaneGroup direction="horizontal" class="">
+  <Resizable.Pane>
+    <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
+  </Resizable.Pane>
+  <Resizable.Handle />
+  <Resizable.Pane> 
+    <div id="jl4-webview" class="h-full">
+      <div class="header">
+        <h1>{funName}</h1>
+      </div>
+      {#if vizDecl && declLirNode}
+        {#key declLirNode}
+          <div
+            class="flash-on-update visualization-container slightly-shorter-than-full-viewport-height pb-2"
+          >
+            <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
+          </div>
+        {/key}
+      {/if}
+      {#if errorMessage}
+        {errorMessage}
+      {/if}
+    </div>
+  </Resizable.Pane>
+</Resizable.PaneGroup>
+
+  <style lang="postcss">
+    @reference "tailwindcss"
+    
+    @keyframes flash {
+      0%,
+      90% {
+        background-color: hsl(var(--neutral));
+      }
+      50% {
+        background-color: oklch(
+          0.951 0.026 236.824
+        ); /* Tailwind's --color-sky-100 */
+      }
     }
-    50% {
-      background-color: oklch(
-        0.951 0.026 236.824
-      ); /* Tailwind's --color-sky-100 */
-    }
-  }
 
   .panel {
     background-color: white;
