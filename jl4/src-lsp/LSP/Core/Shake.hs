@@ -192,13 +192,13 @@ instance Pretty Log where
         , pretty (fmap displayException e) ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:" <> Pretty.line
-      <> pretty (showDiagnosticsColored fileDiagnostics)
+      <> prettyDiagnostics fileDiagnostics
     LogDefineEarlyCutoffRuleNoDiagHasDiag fileDiagnostic ->
       "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:" <> Pretty.line
-      <> pretty (showDiagnosticsColored [fileDiagnostic])
+      <> prettyDiagnostic fileDiagnostic
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
       "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:" <> Pretty.line
-      <> pretty (showDiagnosticsColored [fileDiagnostic])
+      <> prettyDiagnostic fileDiagnostic
     LogCancelledAction action ->
         pretty action <+> "was cancelled"
     LogSessionInitialised -> "Shake session initialized"

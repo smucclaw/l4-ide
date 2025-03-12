@@ -1,4 +1,4 @@
-2025-03-12T18:00:01.103797Z | Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File:    
     file:///home/mangoiv/Devel/well-typed/cclaw/l4-ide/jl4/examples/not-ok/scombinator-fragment.l4
   Hidden:   no
@@ -6,4 +6,4 @@ File:
   Source:   parser
   Severity: DiagnosticSeverity_Error
   Code:     <none>
-  Message:  [0;91m|11 || ^incorrect indentation (got 1, should be greater than 3)[0m
+  Message:  |11 || ^incorrect indentation (got 1, should be greater than 3)
