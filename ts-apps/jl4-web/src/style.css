@@ -9,24 +9,55 @@
   and that we use the @repo/... alias (per Turborepo best practices).
 ****************************************************************************/
 @import '@repo/decision-logic-visualizer/dist/style.css';
+@import 'tailwindcss';
+/* ladder lib's css needs to come before tailwind import */
 
-body {
-  margin: 0;
-  height: 100vh;
-  width: 100%;
-  overflow-y: hidden;
-  background-color: #242424;
+@config "../tailwind.config.js";
+
+/* Shadcn theme */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 20 14.3% 4.1%;
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --primary: 24 9.8% 10%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 60 4.8% 95.9%;
+    --secondary-foreground: 24 9.8% 10%;
+    --accent: 60 4.8% 95.9%;
+    --accent-foreground: 24 9.8% 10%;
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --ring: 20 14.3% 4.1%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
 }
 
-#jl4-editor {
-  border: 1px solid grey;
-}
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+    height: 100svh;
+    width: 100%;
+    overflow-y: hidden;
+    background-color: #242424;
+  }
 
-#jl4-webview {
-}
-
-.jl4-container {
-  display: grid;
-  grid-template-columns: 60% 40%;
-  grid-template-rows: 100vh;
+  #jl4-editor {
+    border: 1px solid grey;
+  }
 }
