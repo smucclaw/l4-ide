@@ -1,4 +1,6 @@
-hself: hsuper: {
+hlib: hself: hsuper: {
   megaparsec = hsuper.callHackage "megaparsec" "9.7.0" { };
   text-rope = hsuper.callHackage "text-rope" "0.3" { };
+  jl4-core = hlib.doJailbreak (hself.callCabal2nix "jl4-core" ../../jl4-core { });
+  jl4-lsp = hlib.doJailbreak (hself.callCabal2nix "jl4-lsp" ../../jl4-lsp { });
 }
