@@ -12,12 +12,12 @@
 buildNpmPackage rec {
   pname = "jl4-web";
   version = "0-latest";
-  src =  lib.sources.sourceByRegex ../../. [
-      "^ts-apps.*"
-      "^ts-shared.*"
-      "^package-lock.json$"
-      "^package.json$"
-  ]; 
+  src = lib.sources.sourceByRegex ../../. [
+    "^ts-apps.*"
+    "^ts-shared.*"
+    "^package-lock.json$"
+    "^package.json$"
+  ];
   npmDeps = importNpmLock { npmRoot = src; };
   npmWorkspace = src;
   nativeBuildInputs = [ pkg-config ];

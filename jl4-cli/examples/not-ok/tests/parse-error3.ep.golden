@@ -1,0 +1,25 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File:<<file>>
+  Hidden:   no
+  Range:    5:1-5:1
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    |
+    5 | ASSUME one IS A NUMBER
+    | ^^^^^^
+    unexpected ASSUME
+    expecting FUNCTION, LIST, TYPE, identifier, or space token
+File:<<file>>
+  Hidden:   no
+  Range:    7:1-7:1
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    |
+    7 |
+    | ^
+    unexpected end of input
+    expecting FUNCTION, LIST, TYPE, identifier, or space token

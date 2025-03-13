@@ -1,6 +1,0 @@
-   |
-12 | GIVEN n IS A NUMBER
-   | ^^^^^
-unexpected GIVEN
-expecting ELSE or space token
-
