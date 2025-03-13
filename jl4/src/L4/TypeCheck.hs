@@ -1607,7 +1607,7 @@ prettyCheckError (IncorrectArgsNumberApp r expected given)   =
   , "  " <> prettyResolvedWithRange r
   , ""
   , "expects " <> prettyCount expected "argument" <> ","
-  , "but your are applying it to " <> prettyCount given "argument" <> " here."
+  , "but you are applying it to " <> prettyCount given "argument" <> " here."
   ]
 prettyCheckError (IllegalApp r t n)                          =
   [ "You are trying to apply"
