@@ -1,6 +1,6 @@
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
 File:    
-    file:///home/mangoiv/Devel/well-typed/cclaw/l4-ide/jl4/examples/not-ok/parse-error1.l4
+    <<file>>
   Hidden:   no
   Range:    12:1-12:1
   Source:   parser
