@@ -51,6 +51,7 @@ test-suite jl4-test
     hspec-golden,
     jl4-core,
     jl4-lsp,
+    pcre2,
     optics,
     silently,
     lsp-types,
