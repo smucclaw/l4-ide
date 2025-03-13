@@ -6,7 +6,7 @@ tested-with: ghc ==9.6.6
 
 source-repository head
   type: git
-  location: https://github.com/cclaw/l4-ide/jl4-decision-service
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-decision-service
 
 common defaults
   default-language: GHC2021
