@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: jl4
+name: jl4-lsp
 version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
@@ -28,60 +28,6 @@ library
   import: defaults
   hs-source-dirs: src
   build-depends:
-    bytestring,
-    cassava,
-    containers,
-    data-default,
-    deepseq,
-    extra,
-    file-io,
-    filepath,
-    generics-sop,
-    hw-fingertree,
-    logict,
-    megaparsec,
-    mtl,
-    optics,
-    optics-core,
-    pcre2,
-    pretty-simple,
-    prettyprinter,
-    safe-exceptions,
-    text >= 2 && < 2.1.2,
-    tree-diff,
-    vector,
-
-  exposed-modules:
-    Base
-    Base.Map
-    Base.Set
-    Base.Pretty
-    Base.Text
-    L4.Annotation
-    L4.Citations
-    L4.Evaluate
-    L4.Evaluate.Value
-    L4.ExactPrint
-    L4.FindDefinition
-    L4.HoverInfo
-    L4.Lexer
-    L4.Parser
-    L4.Parser.ResolveAnnotation
-    L4.Parser.SrcSpan
-    L4.ParserCombinators
-    L4.Print
-    L4.Syntax
-    L4.Transform
-    L4.TypeCheck
-    L4.TypeCheck.Environment
-    L4.TypeCheck.Types
-    L4.TypeCheck.With
-
-library jl4-lsp-core
-  import: defaults
-  visibility: public
-  hs-source-dirs: src-lsp
-  build-depends:
     Diff,
     aeson,
     async,
@@ -93,7 +39,7 @@ library jl4-lsp-core
     generics-sop,
     hashable,
     hls-graph,
-    jl4,
+    jl4-core,
     lens,
     lens-aeson,
     lsp,
@@ -157,18 +103,6 @@ library jl4-lsp-core
     LSP.L4.Rules
     LSP.L4.Oneshot
 
-executable jl4-cli
-  import: defaults
-  hs-source-dirs: app
-  build-depends:
-    jl4,
-    jl4-lsp-core,
-    directory,
-    hls-graph,
-    lsp-types,
-    optparse-applicative,
-  main-is: Main.hs
-
 executable jl4-lsp
   import: defaults
   ghc-options:
@@ -178,7 +112,7 @@ executable jl4-lsp
     -- increase nursery size
     -- Enable collection of heap statistics
     "-with-rtsopts=-I0 -A128M -T"
-  hs-source-dirs: lsp
+  hs-source-dirs: app
   build-depends:
     aeson,
     autodocodec,
@@ -191,8 +125,8 @@ executable jl4-lsp
     fuzzy,
     hls-graph ^>=2.9.0.0,
     hw-fingertree,
-    jl4,
-    jl4-lsp-core,
+    jl4-core,
+    jl4-lsp,
     lens,
     lsp ^>=2.7.0.0,
     lsp-types ^>=2.3.0.0,
@@ -219,23 +153,3 @@ executable jl4-lsp
     LSP.L4.Viz.VizExpr
     LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
-
-test-suite jl4-test
-  import: defaults
-  type: exitcode-stdio-1.0
-  hs-source-dirs: tests
-  main-is: Main.hs
-  other-modules:
-    Paths_jl4
-  autogen-modules:
-    Paths_jl4
-  build-depends:
-    Glob,
-    filepath,
-    hspec,
-    hspec-golden,
-    jl4,
-    jl4-lsp-core,
-    optics,
-    silently,
-    lsp-types,
