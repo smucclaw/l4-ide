@@ -24,7 +24,9 @@ import System.FilePath.Glob
 import System.IO.Silently
 import Test.Hspec
 import Test.Hspec.Golden
-import qualified Text.Regex.Pcre2 as PCRE2
+import qualified Regex.Text as RE
+import Data.Char (isSpace)
+import Control.Applicative (some, many)
 
 main :: IO ()
 main = do
@@ -64,7 +66,9 @@ jl4ExactPrintGolden dir inputFile = do
     Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
-  let output = fromMaybe (PCRE2.gsub "file://\\S+" "<<file>>" $ mconcat errs) moutput
+  let regex = Text.pack "<<file>>" <$ (
+        many (RE.satisfy isSpace) *> RE.text "file://" *> some (RE.satisfy (not . isSpace)))
+      output = fromMaybe (RE.replaceAll regex $ mconcat errs) moutput
 
   pure
     Golden
