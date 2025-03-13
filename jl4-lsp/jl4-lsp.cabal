@@ -31,11 +31,13 @@ library
     Diff,
     aeson,
     async,
+    autodocodec,
     bytestring,
     co-log-core,
     deepseq,
     extra,
     focus,
+    fuzzy,
     generics-sop,
     hashable,
     hls-graph,
@@ -99,9 +101,12 @@ library
     LSP.Core.Types.Options
     LSP.Core.Types.Shake
 
+    LSP.L4.Actions
     LSP.L4.SemanticTokens
     LSP.L4.Rules
     LSP.L4.Oneshot
+    LSP.L4.Viz.VizExpr
+    LSP.L4.Viz.Ladder
 
 executable jl4-lsp
   import: defaults
@@ -115,23 +120,18 @@ executable jl4-lsp
   hs-source-dirs: app
   build-depends:
     aeson,
-    autodocodec,
     bytestring ^>=0.11.5.3,
     co-log-core,
     containers,
-    deepseq,
     directory,
     extra,
-    fuzzy,
     hls-graph ^>=2.9.0.0,
-    hw-fingertree,
     jl4-core,
     jl4-lsp,
     lens,
     lsp ^>=2.7.0.0,
     lsp-types ^>=2.3.0.0,
     mtl,
-    optics,
     optparse-applicative,
     safe-exceptions,
     stm,
@@ -139,7 +139,6 @@ executable jl4-lsp
     -- NOTE: the reason why we have an upperbound on text is that
     -- it introduces new definitions that conflicts with ours
     text >= 2 && < 2.1.2,
-    text-rope >= 0.3,
     transformers,
     unliftio,
     unordered-containers ^>=0.2.20,
@@ -150,6 +149,4 @@ executable jl4-lsp
     LSP.L4.Base
     LSP.L4.Config
     LSP.L4.Handlers
-    LSP.L4.Viz.VizExpr
-    LSP.L4.Viz.Ladder
     LSP.L4.LanguageServer
