@@ -113,8 +113,12 @@
       }
     )
 
-    lir.subscribe(onLadderGraphNonPositionalChange)
-    // TODO: Clean up subscribers --- add an onDestroy in core.ts
+    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+
+    // Clean up when component is destroyed
+    return () => {
+      unsub.unsubscribe()
+    }
   })
 
   /*************************************
