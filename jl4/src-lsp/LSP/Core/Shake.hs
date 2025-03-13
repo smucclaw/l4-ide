@@ -53,7 +53,7 @@ module LSP.Core.Shake(
     GlobalIdeOptions(..),
     ideLogger,
     actionLogger,
-    getVirtualFile, addVirtualFileFromFS,
+    getVirtualFile, addVirtualFile, addVirtualFileFromFS,
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
@@ -149,6 +149,7 @@ import L4.Parser.SrcSpan
 import L4.Syntax
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
+import Base.Text (Text)
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -323,10 +324,15 @@ getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup nf vfs -- Don't leak a reference to the entire map
 
+addVirtualFile :: NormalizedFilePath -> Text -> Action ()
+addVirtualFile nfp t = do
+  let rope = Rope.fromText t
+      insertToVfs vfs =  ((), over vfsMap (Map.insert (normalizedFilePathToUri nfp) (VirtualFile 0 0 rope)) vfs)
+  liftIO . atomically . flip stateTVar insertToVfs . vfsVar =<< getShakeExtras
+
 addVirtualFileFromFS :: NormalizedFilePath -> Action ()
-addVirtualFileFromFS nf = do
-  rope <- liftIO $ Rope.fromText <$> Text.readFile (fromNormalizedFilePath nf)
-  liftIO . atomically . flip stateTVar (\vfs -> ((), over vfsMap (Map.insert (normalizedFilePathToUri nf) (VirtualFile 0 0 rope)) vfs)) . vfsVar =<< getShakeExtras
+addVirtualFileFromFS nfp = do
+  addVirtualFile nfp =<< liftIO (Text.readFile (fromNormalizedFilePath nfp))
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe LspSink -> IO VFS
