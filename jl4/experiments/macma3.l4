@@ -1,0 +1,304 @@
+-- https://sso.agc.gov.sg/Act/MACMA2000
+DECLARE Date
+  HAS year    IS A NUMBER
+      month   ^  ^ ^
+      day     ^  ^ ^
+
+commencement MEANS Date OF 2000, 4, 1
+
+§ `Assumptions`
+ASSUME Person IS A TYPE
+ASSUME `is authorised officer` IS A FUNCTION FROM Person TO BOOLEAN
+-- for the following section: see notes in the DECIDE below
+ASSUME `is an appropriate authority` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `Attorney-General is satisfied is authorised under the law of that country`
+ASSUME `to make that request` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `to receive that request` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `the Director, a Deputy Director, a Divisional Director or any other officer, of the Central Narcotics Bureau, appointed under section 3(1) of the Misuse of Drugs Act 1973` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `any special investigator of the Corrupt Practices Investigation Bureau appointed under section 3(2) of the Prevention of Corruption Act 1960` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `any Commercial Affairs Officer appointed under section 64 of the Police Force Act 2004` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `any police officer` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `any other person or class of persons appointed by the Minister as an authorised officer or authorised officers for the purposes of this Act` IS A FUNCTION FROM Person TO BOOLEAN
+
+ASSUME Action IS A TYPE
+ASSUME ActionTarget IS A TYPE
+
+ASSUME Offence IS A TYPE
+ASSUME `is a Singapore offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is a foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is drug dealing offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is foreign tax evasion offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `is a serious offence` IS A FUNCTION FROM Offence TO BOOLEAN
+
+ASSUME Matter IS A TYPE
+ASSUME `is criminal matter` IS A FUNCTION FROM Matter TO BOOLEAN
+ASSUME `the restraining of dealing with, or the seizure, forfeiture or confiscation of, property in connection with a Singapore offence or foreign offence`
+ASSUME `the obtaining, enforcement or satisfaction of a Singapore confiscation order or foreign confiscation order`
+-- not so clear whether this setup is correct.
+-- this pattern is common in the legislation, but it is not clear how to model it.
+-- where a definition sets up tests, rather than going into the substance of the test in the provisions
+-- should I remove 'as the case may be'?
+
+-- obtaining    \
+-- enforcement  - of - a Singapore confiscation order
+-- satisfaction /    \ a foreign confiscantion order
+
+
+ASSUME `is criminal proceedings` IS A FUNCTION FROM Matter TO BOOLEAN
+
+
+ASSUME Investigation IS A TYPE
+
+ASSUME `is investigation into a Singapore offence` IS A FUNCTION FROM Investigation TO BOOLEAN
+ASSUME `is investigation into a foreign offence` IS A FUNCTION FROM Investigation TO BOOLEAN
+ASSUME `is investigation for the purposes of an ancillary criminal matter` IS A FUNCTION FROM Investigation TO BOOLEAN
+
+ASSUME Proceedings IS A TYPE
+ASSUME `a trial of a person for a Singapore offence` IS A FUNCTION FROM Proceedings TO BOOLEAN
+ASSUME `a trial of a person for a foreign offence` IS A FUNCTION FROM Proceedings TO BOOLEAN
+ASSUME `any proceeding to determine whether a particular person should be tried for the offence` IS A FUNCTION FROM Proceedings TO BOOLEAN
+
+ASSUME Organisation IS A TYPE
+ASSUME `is a financial institution` IS A FUNCTION FROM Organisation TO BOOLEAN
+-- Do I put appropriate authority here too, or define Authority as a Type?
+
+-- If you already some type, such as Organisation
+-- and then you have properties of Organisations that identify "suitable" organisations
+
+
+-- see notes on Person and Organisation, especially in relation to appropriate authority
+DECLARE Authority IS ONE OF
+  `Person Authority` HAS person IS A Person
+  `Organisation Authority` HAS organisation IS AN Organisation
+ASSUME `is an appropriate authority` IS A FUNCTION FROM Authority TO BOOLEAN
+
+ASSUME `Person as Authority` IS A FUNCTION FROM Person TO Authority
+ASSUME `Organisation as Authority` IS A FUNCTION FROM Organisation TO Authority
+
+ASSUME Order IS A TYPE
+ASSUME OrderType IS A TYPE
+ASSUME `is a foreign confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `is instrumentality forfeiture order` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `is a Singapore confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
+
+ASSUME Country IS A TYPE
+ASSUME Certificate IS A TYPE
+ASSUME `is a foreign law immunity certificate` IS A FUNCTION FROM Certificate TO BOOLEAN
+
+ASSUME Material IS A TYPE
+
+ASSUME Premises IS A TYPE
+ASSUME CourtOrder IS A TYPE
+ASSUME Company IS A TYPE
+ASSUME `is a VCC or variable capital company` IS A FUNCTION FROM Company TO BOOLEAN
+
+ASSUME Law IS A TYPE
+ASSUME `corresponding drug law` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `in relation to a foreign country` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `law of that foreign country providing for control and regulation of` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `in that country` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `the production, supply, use, export and import of drugs and other substances in accordance with the provisions of the Single Convention on Narcotic Drugs signed at New York on 30 March 1961` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `the production, supply, use, export and import of dangerous or otherwise harmful drugs pursuant to any treaty, convention or other agreement or arrangement to which the Government and the government of that country are for the time being parties` IS A FUNCTION FROM Law TO BOOLEAN
+ASSUME `the benefits of trafficking in the drugs or substances referred to in paragraph (a) or (b)` IS A FUNCTION FROM Law TO BOOLEAN
+
+ASSUME Item IS A TYPE
+ASSUME Client IS A TYPE
+ASSUME Lawyer IS A TYPE
+ASSUME JudicialPerson IS A TYPE
+ASSUME Court IS A TYPE
+
+ASSUME LegalDefinition IS A TYPE
+
+ASSUME Reference IS A TYPE
+ASSUME `a reference to a foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a reference to the law of a foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a territory of that country, other than a territory that is itself a prescribed foreign country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `a ship or aircraft of, or registered in, that country` IS A FUNCTION FROM Reference TO BOOLEAN
+ASSUME `the law in force in any part of that country` IS A FUNCTION FROM Reference TO BOOLEAN
+
+DECLARE dealing
+  HAS action IS A Action
+      property_relation IS A ActionTarget
+-- do I model 'dealing using this sort of syntax or the one below?
+
+DECLARE MonetaryAuthorityOfSingapore
+  HAS legalDefinition IS A LegalDefinition
+
+DECLARE Thing
+  HAS material IS A Material
+
+DECLARE Process
+  HAS order_type IS A OrderType
+      origin_person IS A JudicialPerson
+      origin_forum IS A Court
+
+{-
+GIVEN acm IS A Matter
+GIVETH A BOOLEAN
+DECIDE `is ancillary criminal matter` IS
+            `the restraining of dealing with, or the seizure, forfeiture or confiscation of, property in connection with a Singapore offence or foreign offence` acm
+          OR `the obtaining, enforcement or satisfaction of a Singapore confiscation order or foreign confiscation order` acm
+-- how do I capture relationships with 'dealing', 'Singapore offence', 'foreign offence', etc.?
+-}
+
+ASSUME seizure IS A FUNCTION FROM Action TO BOOLEAN
+ASSUME forfeiture IS A FUNCTION FROM Action TO BOOLEAN
+ASSUME confiscation IS A FUNCTION FROM Action TO BOOLEAN
+
+ASSUME `of property in connection with` IS
+  A FUNCTION FROM
+      A FUNCTION FROM Action  TO BOOLEAN
+  AND A FUNCTION FROM Offence TO BOOLEAN
+  TO  A FUNCTION FROM Matter  TO BOOLEAN
+
+-- cartesian product of the two list, using f as the pairing function
+-- this can be defined in a library
+GIVEN a IS A TYPE
+      b IS A TYPE
+      c IS A TYPE
+      f IS A FUNCTION FROM a AND b TO c
+      xs IS A LIST OF a
+      ys IS A LIST OF b
+GIVETH A LIST OF c
+ASSUME combine 
+
+GIVEN  a  IS A TYPE
+       xs IS A LIST OF FUNCTION FROM a TO BOOLEAN
+       x  IS AN a
+GIVETH A BOOLEAN
+ASSUME `lifted or`
+
+GIVEN acm IS A Matter
+GIVETH A BOOLEAN
+DECIDE `is ancillary criminal matter` acm IS
+  `lifted or` OF
+    combine OF
+      `of property in connection with`
+      `actions`
+      `offences`
+    acm
+  WHERE
+    actions  MEANS LIST `seizure`, `forfeiture`, `confiscation`
+    offences MEANS LIST `is a Singapore offence`, `is a foreign offence`
+
+
+-- actions :: [Action -> Bool]
+-- actions =
+-- [ `the restraining of` `dealing`
+-- , `seizure`
+-- , `forfeiture`
+-- , `confiscation`
+-- ]
+--
+-- offences :: [Offence -> Bool]
+-- [ `Singapore offence`
+-- , `foreign offence`
+-- ]
+
+-- of_property_in_connection_with `seizure` `Singapore offence` :: Matter -> Bool
+-- `seizure` :: Action -> Bool
+-- `Singapore offence` :: Offence -> Bool
+
+-- of_property_in_connection_with :: (Action -> Bool) -> (Offence -> Bool) -> (Matter -> Bool)
+
+-- lifted_or [ of_property_in_connection_with a o | a <- actions, o <- offences ] :: Matter -> Bool
+
+
+
+{-
+GIVEN acm  IS A Matter
+      act  IS AN Action
+      p    IS A  Person
+      prop IS A  Property
+`is ancillary criminal matter` MEANS
+              `the restraining of` `dealing` "with"
+           OR (   seizure
+               OR forfeiture
+               OR confiscation
+              ) "of"
+           prop
+      AND `in connection with`
+             `Singapore offence` act p, -- implicit AND on this line at same level as above AND, due to indentation of OR below.
+          OR `foreign offence`   act p
+   
+   OR       obtaining
+        OR  enforcement
+        OR  satisfaction
+     .. "of"                            -- .. is syntactic sugar for a silent AND -- an "asyndetic conjunction"
+     ..    `Singapore confiscation order`
+        OR `foreign confiscation order`
+-}
+
+GIVEN appAuth IS A Person
+-- Can I do an OR? It could a Person or an Organisation
+GIVETH A BOOLEAN
+DECIDE `is an appropriate authority` IS
+            `Attorney-General is satisfied is authorised under the law of that country` appAuth
+          AND `to make that request` appAuth
+              OR `to receive that request` appAuth
+-- I have left out a fair bit here which gives context about which OR limb applies
+-- e.g. 'in the case of a request by that country to Singapore for assistance in a criminal matter'
+
+GIVEN authOffr IS A Person
+GIVETH A BOOLEAN
+DECIDE `is authorised officer` IS
+            `the Director, a Deputy Director, a Divisional Director or any other officer, of the Central Narcotics Bureau, appointed under section 3(1) of the Misuse of Drugs Act 1973` authOffr
+            OR `any special investigator of the Corrupt Practices Investigation Bureau appointed under section 3(2) of the Prevention of Corruption Act 1960` authOffr
+            OR `any Commercial Affairs Officer appointed under section 64 of the Police Force Act 2004` authOffr
+            OR `any police officer` authOffr
+            OR `any other person or class of persons appointed by the Minister as an authorised officer or authorised officers for the purposes of this Act` authOffr
+
+-- is this best practice for casing?
+GIVEN corrDrugLaw IS A Law
+GIVETH A BOOLEAN
+DECIDE `corresponding drug law` IS
+            `in relation to a foreign country` corrDrugLaw
+            AND `law of that foreign country providing for control and regulation of` corrDrugLaw
+            AND `in that country` corrDrugLaw
+            AND `the production, supply, use, export and import of drugs and other substances in accordance with the provisions of the Single Convention on Narcotic Drugs signed at New York on 30 March 1961` corrDrugLaw
+                  OR `the production, supply, use, export and import of dangerous or otherwise harmful drugs pursuant to any treaty, convention or other agreement or arrangement to which the Government and the government of that country are for the time being parties` corrDrugLaw
+                  OR `the benefits of trafficking in the drugs or substances referred to in paragraph (a) or (b)` corrDrugLaw
+-- how should I model intra-provision or inter-provision references?
+
+GIVEN crimInves IS AN Investigation
+GIVETH A BOOLEAN
+DECIDE `is criminal investigation` IS
+            `is investigation into a Singapore offence` crimInves
+          OR `is investigation into a foreign offence` crimInves
+          OR `is investigation for the purposes of an ancillary criminal matter` crimInves
+-- modelling it this way actually made the provision a lot clearer
+-- should I include the 'is'?
+
+GIVEN crimProc IS A Proceedings
+GIVETH A BOOLEAN
+DECIDE `is criminal proceedings` IS
+            `a trial of a person for a Singapore offence` crimProc
+          OR `a trial of a person for a foreign offence` crimProc
+          OR `any proceeding to determine whether a particular person should be tried for the offence` crimProc
+-- how do I include a Person here? Or should I?
+
+GIVEN crimMatter IS A Matter, crimInves IS AN Investigation, crimProc IS A Proceedings
+GIVETH A BOOLEAN
+DECIDE `is criminal matter` IS
+            `is criminal investigation` crimInves
+            OR `is criminal proceedings` crimProc
+            OR `is ancillary criminal matter` crimMatter
+-- this provision was great in showing me how to use multiple GIVENs and Types
+
+-- how do I model 'whom the Attorney-General is satisfied is authorised under the law of that Country'?
+GIVEN r IS A Reference
+GIVETH A BOOLEAN
+DECIDE `is a reference to a foreign country` IS
+            `a territory of that country, other than a territory that is itself a prescribed foreign country` r
+        OR  `a ship or aircraft of, or registered in, that country` r
+
+GIVEN r IS A Reference
+GIVETH A BOOLEAN
+DECIDE `is a reference to the law of a foreign country` IS
+            `the law in force in any part of that country` r
+
+-- Next Provisions:
+-- Very lengthy definition of "item subject to legal privilege"
+-- Object of the Act - how should I model this?
+-- Clarificatory provisions vis-a-vis cooperation with international organisations and extradition
