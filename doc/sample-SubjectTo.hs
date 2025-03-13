@@ -6,6 +6,7 @@ module Main where
 -- §32 Public Holidays. On public holidays, the retail sale of liquor shall be subject to a cap of $36. For example, if a purchase of liquor were priced at $300, and taxed at 18%, the cap would reduce the tax payable from $54 to $36.
 
 import Data.Map (Map, fromList, insert, findWithDefault)
+import Control.Monad (when)
 import Control.Monad.RWS
 import System.Environment (getArgs)
 
@@ -58,14 +59,27 @@ section32 f = do
 main :: IO ()
 main = do
   args <- getArgs
-  let price = if null args then 100 else read (head args) :: Float
-  let myenv = fromList [("dayOfWeek", 7), ("isHoliday", 1)]
+  when (length args == 1 && head args == "--help") $ do
+    putStrLn "Usage: sample-SubjectTo <price> [<dayOfWeek> [<isHoliday>]]"
+    putStrLn "  price: the price of the item"
+    putStrLn "  dayOfWeek: 1-7. 1 is Monday, 7 is Sunday"
+    putStrLn "  isHoliday: 0 or 1. 1 if today is a public holiday"
+    putStrLn "  Example: sample-SubjectTo 1000"
+    putStrLn "  Example: sample-SubjectTo 1000 7"
+    putStrLn "  Example: sample-SubjectTo 1000 6 1"
+    putStrLn "  Example: sample-SubjectTo 1000 7 1"
+    putStrLn "  Example: sample-SubjectTo --help"
+    return ()
 
-  let (result, loglines) = evalRWS ( 
-                                     section30 id >>=
-                                     section31 >>=
-                                     section32 >>=
-                                     baseComputation
+  let price = if null args then 100 else read (head args) :: Float
+  let dayOfWeek = if length args > 1 then read (args !! 1) :: Float else 0
+  let isHoliday = if length args > 2 then read (args !! 2) :: Float else 0
+  let myenv = fromList [("dayOfWeek", dayOfWeek), ("isHoliday", isHoliday)]
+
+  let (result, loglines) = evalRWS ( baseComputation =<< -- price is Subject To a tax rate
+                                     ( section30 id  >>= --                   the tax rate by default is 18
+                                       section31     >>= -- Subject To a Sunday exception
+                                       section32 )       -- Subject To a Public Holiday exception
                                     ) () myenv
   mapM_ putStrLn (loglines)
   putStrLn $ "resulting tax: " ++ show (result price)
