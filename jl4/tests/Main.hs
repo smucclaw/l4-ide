@@ -22,9 +22,7 @@ import Test.Hspec
 import Test.Hspec.Golden
 import qualified LSP.Core.Shake as Shake
 import qualified LSP.L4.Rules as Rules
-import qualified LSP.Core.FileStore as Store
-import LSP.Logger
-import Development.IDE.Graph.Database
+import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import Language.LSP.Protocol.Types
 
 main :: IO ()
@@ -58,33 +56,14 @@ l4Golden dir inputFile = do
       , failFirstTime = False
       }
 
-data Log
-  = ShakeLog Shake.Log
-  | RulesLog Rules.Log
-  | StoreLog Store.Log
-
-instance Pretty Log where
-  pretty = \case
-    ShakeLog l -> pretty l
-    RulesLog l -> pretty l
-    StoreLog l -> pretty l
-
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
-  (getLog, recorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
-  ideState <- Shake.oneshotIdeState (cmapWithPrio ShakeLog recorder) inputFile do
-    Store.fileStoreRules (cmapWithPrio StoreLog recorder) (const $ pure False)
-    Rules.jl4Rules (cmapWithPrio RulesLog recorder)
-  [moutput] <- shakeRunDatabase
-      ideState.shakeDb
-      [ do
-          let nfp = toNormalizedFilePath inputFile
-              uri = normalizedFilePathToUri nfp
-          Shake.addVirtualFileFromFS nfp
-          Shake.use Rules.ExactPrint uri
-      ]
-  output <- maybe (fmap mconcat getLog) pure moutput
+  (errs, moutput) <-  oneshotL4ActionAndErrors inputFile \nfp -> do
+     let uri = normalizedFilePathToUri nfp
+     Shake.addVirtualFileFromFS nfp
+     Shake.use Rules.ExactPrint uri
 
+  let output = fromMaybe (mconcat errs) moutput
   pure
     Golden
       { output

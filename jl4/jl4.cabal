@@ -155,15 +155,14 @@ library jl4-lsp-core
 
     LSP.L4.SemanticTokens
     LSP.L4.Rules
+    LSP.L4.Oneshot
 
 executable jl4-cli
   import: defaults
   hs-source-dirs: app
   build-depends:
-    co-log-core,
     jl4,
     jl4-lsp-core,
-    stm,
     directory,
     hls-graph,
     lsp-types,
@@ -240,4 +239,3 @@ test-suite jl4-test
     optics,
     silently,
     lsp-types,
-    hls-graph,

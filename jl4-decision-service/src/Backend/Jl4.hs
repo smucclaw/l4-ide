@@ -7,18 +7,20 @@ import Control.Monad.Trans.Except
 import L4.Annotation
 import qualified L4.Evaluate as Evaluate
 import qualified L4.Evaluate.Value as Eval
-import L4.Main
 import L4.Print
 import L4.Syntax
 import System.FilePath ((<.>))
+import Base (liftIO)
+import Language.LSP.Protocol.Types (normalizedFilePathToUri)
+import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
+import qualified LSP.L4.Rules as Rules
+import qualified LSP.Core.Shake as Shake
 
 createFunction ::
-  (Monad m) =>
   FunctionDeclaration ->
   Text ->
-  ExceptT EvaluatorError m RunFunction
+  RunFunction
 createFunction fnDecl fnImpl =
-  pure $
     RunFunction
       { runFunction = \params _outFilter {- TODO: how to handle the outFilter? -} -> do
           l4Params <- traverse (uncurry toL4Param) params
@@ -28,13 +30,14 @@ createFunction fnDecl fnImpl =
                 [ fnImpl
                 , prettyLayout $ evalStatement l4Params
                 ]
-          case parseAndCheck file l4InputWithEval of
-            Left cliError -> do
-              let
-                errMsg = prettyCliError cliError
-              throwE $ InterpreterError errMsg
-            Right p -> do
-              case Evaluate.doEvalProgram p of
+          (errs, mp) <- liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+            let  uri = normalizedFilePathToUri nfp
+            Shake.addVirtualFile nfp l4InputWithEval
+            Shake.use Rules.TypeCheck uri
+          case mp of
+            Nothing -> throwE $ InterpreterError (mconcat errs)
+            Just tcRes -> do
+              case Evaluate.doEvalProgram tcRes.program of
                 [(_srcRange, valEither)] -> case valEither of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
@@ -88,8 +91,7 @@ valueToFnLiteral = \case
   Eval.ValList vals -> do
     lits <- traverse valueToFnLiteral vals
     pure $ FnArray lits
-  Eval.ValClosure _ _ _ -> do
-    throwE $ InterpreterError $ "#EVAL produced function closure."
+  Eval.ValClosure {} -> throwE $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
