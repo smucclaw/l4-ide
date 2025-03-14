@@ -19,6 +19,7 @@
   import type { WebviewApi } from 'vscode-webview'
   import { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
+  import { watch } from 'runed'
 
   /**************************
       Set up Lir
@@ -35,11 +36,14 @@
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
   )
-  $effect(() => {
-    if (declLirNode) {
-      lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
+  watch(
+    () => declLirNode,
+    () => {
+      if (declLirNode) {
+        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
+      }
     }
-  })
+  )
 
   /**************************
         VSCode

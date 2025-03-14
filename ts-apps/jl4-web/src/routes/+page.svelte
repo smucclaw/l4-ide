@@ -22,6 +22,7 @@
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
+  import { watch } from 'runed'
 
   /***********************************
     Persistent-session-related vars
@@ -54,12 +55,14 @@
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
   )
-  // TODO: YM has some ideas for how to improve / clean this up
-  $effect(() => {
-    if (declLirNode) {
-      lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
+  watch(
+    () => declLirNode,
+    () => {
+      if (declLirNode) {
+        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
+      }
     }
-  })
+  )
 
   /******************************
       VizInfo Payload Decoder
