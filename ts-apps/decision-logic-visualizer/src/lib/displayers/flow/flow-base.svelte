@@ -104,10 +104,10 @@
   )
   const { fitView } = $derived(useSvelteFlow())
 
-  // Keep track of whether nodes have been layouted, so that won't display them before then
-  let nodes$AreLayouted = $state(false)
+  // Keep track of whether nodes have been layouted and fit to view, so that won't display them before then
+  let nodes$AreLayoutedAndFitToView = $state(false)
   // $inspect('nodes layouted', nodes$AreLayouted)
-  const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
+  const flowOpacity = $derived(nodes$AreLayoutedAndFitToView ? 1 : 0)
   // $inspect('flowOpacity: ' + `${flowOpacity}`)
 
   onMount(() => {
@@ -231,36 +231,37 @@
   }
 
   function doFitView() {
-    window.requestAnimationFrame(() => {
-      fitView({
-        padding: 0.1,
-        minZoom: sfVisualOptions.smallestThatCanZoomOutTo,
-        duration: 15,
-      })
-      /***************************
-       * Notes on fitView options
-       ***************************
-       *
-       * 0.1 is the default
-       *
-       * The padding gets used in `getViewportForBounds` in @xyflow/system:
-       *
-       * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
-       *
-       * See their `src/lib/container/SvelteFlow/types.ts` for the defaults they use.
-       *
-       * `minZoom` is the smallest zoom level that the view *can* be zoomed to when the flow is fit to view.
-       * I.e., decreasing it means that fitView can zoom out more for wider graphs.
-       * Being able to zoom out more seems helpful for our usecase (understanding the broad structure of the law).
-       * The default minZoom is 0.5.
-       */
+    fitView({
+      padding: 0.1,
+      minZoom: sfVisualOptions.smallestThatCanZoomOutTo,
     })
+    /***************************
+     * Notes on fitView options
+     ***************************
+     *
+     * 0.1 is the default
+     *
+     * The padding gets used in `getViewportForBounds` in @xyflow/system:
+     *
+     * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
+     *
+     * See their `src/lib/container/SvelteFlow/types.ts` for the defaults they use.
+     *
+     * `minZoom` is the smallest zoom level that the view *can* be zoomed to when the flow is fit to view.
+     * I.e., decreasing it means that fitView can zoom out more for wider graphs.
+     * Being able to zoom out more seems helpful for our usecase (understanding the broad structure of the law).
+     * The default minZoom is 0.5.
+     */
   }
 
   function doLayoutAndFitView() {
     doLayout()
-    nodes$AreLayouted = true
-    doFitView()
+    // requestAnimationFrame in order to schedule the fit view for *after* the layouting is done
+    // There may be better ways to do this
+    window.requestAnimationFrame(() => {
+      doFitView()
+      nodes$AreLayoutedAndFitToView = true
+    })
   }
 </script>
 
