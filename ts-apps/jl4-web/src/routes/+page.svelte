@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import {
     LadderFlow,
     LirContext,
@@ -19,6 +19,7 @@
   } from 'vscode-languageclient'
   import { type ConsoleLogger } from 'monaco-languageclient/tools'
   import * as vscode from 'vscode'
+  import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
@@ -82,8 +83,9 @@
   //       Monadco
   // ****************************/
 
+  let editor: monaco.editor.IStandaloneCodeEditor | undefined
+
   onMount(async () => {
-    const monaco = await import('@codingame/monaco-vscode-editor-api')
     const { initServices } = await import(
       'monaco-languageclient/vscode/services'
     )
@@ -142,7 +144,7 @@
         colors: {},
       })
 
-      const editor = monaco.editor.create(editorElement, {
+      editor = monaco.editor.create(editorElement, {
         value: britishCitizen,
         language: 'jl4',
         automaticLayout: true,
@@ -163,6 +165,8 @@
       }
 
       persistSession = async () => {
+        if (!editor) return
+
         const bufferContent: string = editor.getValue()
         const ownUrl: URL = new URL(window.location.href)
         const sessionid: string | null = ownUrl.searchParams.get('id')
@@ -279,6 +283,14 @@
       }
     }
     await runClient()
+  })
+
+  onDestroy(() => {
+    if (editor) {
+      editor.dispose()
+      editor = undefined
+    }
+    // TODO: May also want to clean up the websocket, but not sure if necessary
   })
 
   const britishCitizen = `§ \`Assumptions\`
