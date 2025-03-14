@@ -304,6 +304,7 @@ The spirit of a law may claim to allow certain small businesses to receive some 
 The letter of the law may introduce requirements that are so onerous nobody can actually receive that relief.
 
 For example, a circular requirement:
+
 1. to obtain relief, submit a form C.
 2. to obtain a form C, file a form B.
 3. to obtain a form B, file a form A.
@@ -322,7 +323,7 @@ Or, requirements that may turn out to be impossible to satisfy, depending on the
 Static analysis methods and formal verification allow software to automatically detect such scenarios.
 
 This is done by writing the object level program separately from a
-property-level assertion *about* the program. A formal verification
+property-level assertion _about_ the program. A formal verification
 engine then statically analyzes that program to see if the assertions
 hold or fail. Counterexamples can be automatically generated to show
 how it is possible, or impossible, to "win" the game.
@@ -540,4 +541,3 @@ The "inner" legal rule is a good example of homoiconicity:
 > c. treated children of couples where the mother was married to someone other than the natural father in the same way as children of couples where the mother was married to the natural father.
 
 These propositions could, in theory, be evaluated by a reasoner engine, operating purely against syntax.
-

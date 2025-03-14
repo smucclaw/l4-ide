@@ -11,24 +11,23 @@
       (ii) settled in the qualifying territory in which the person is born.
 ```
 
-
 Let's break out the temporal aspects of this decision logic. Let us say that every truth value is indexed to a point in time: in 1936 Edward VIII is King of UK; in 1937 he is no longer King but merely Duke of Windsor.
 
 So our first-order logic equips every predicate with a timepoint: instead of
 
-``` prolog
+```prolog
 is_king(edward_viii).
 ```
 
 We can only say
 
-``` prolog
+```prolog
 is_king(edward_viii, 1936).
 ```
 
 giving
 
-``` prolog
+```prolog
 :- is_king(edward_viii, 1936).
 ```
 
@@ -38,11 +37,11 @@ This is enough for us to start thinking with temporals:
    1. the person was born
       1. in the UK (`born_in(P, uk)`) after commencement of this act (`Time_Of_Birth > T_Act_Commencement`)
       2. in a qualifying territory (`born_in(P, QT), qualifying_territory(QT)`) on or after the appointed day (`Time_Of_Birth >= T_BCIA_Commencement`)
-   and
+         and
    2. `AS AT Time_Of_Birth`, some parent (`parentOf(Parent, P)`)
       1. was a British citizen (`is_British(Parent)`); or
       2. was settled in the UK (`is_settled_in(Parent, uk)`); or
-      3. *(1.i.b and)* was settled in a qualifying territory in which the person is born (`is_settled(QT, Parent)`).
+      3. _(1.i.b and)_ was settled in a qualifying territory in which the person is born (`is_settled(QT, Parent)`).
 
 The Prolog bits are in [bna.pl](bna.pl).
 
@@ -86,7 +85,7 @@ The "with system DT" refers to the decision time DT.
 
 These operators `in`, `as at`, and `with system` can themselves nest, as understandings of the past, and of retroactive evaluations, are increasingly refined.
 
-* The other examples from `examples_for_parsing`
+- The other examples from `examples_for_parsing`
 
 ## Tech stack
 

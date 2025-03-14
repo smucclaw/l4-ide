@@ -34,6 +34,7 @@ The eagle-eyed will spot a conflict between clauses: what about a public holiday
 Should we consider this a drafting error? To be remedied with a "Subject to §21 and §22"?
 
 Or should we invoke the interpretation rules:
+
 - Lex posterior derogat priori
 - Lex specialis derogat legi generali
 
@@ -48,4 +49,3 @@ Our monadic "subject to" operator could also modify the inputs to the inner func
 This is a common function-wrapper pattern which a Haskell programmer will recognize as essentially monadic.
 
 See this conversation for details: <https://claude.ai/share/703d98b0-e339-47ee-9eb5-416c74d272de>
-
