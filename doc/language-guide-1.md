@@ -125,9 +125,9 @@ DECIDE `numbers are big`
 
 This method of grouping was inspired by legal sub-paragraphs and sub-lists. The main difference is in where the "OR" and "AND" words appear.
 
-### DECIDE ... IS/IF
+### DECIDE ... IS/IF == MEANS
 
-Syntactic sugar for `MEANS`:
+These forms are equivalent:
 
 ```l4
 DECIDE `numbers are big`
@@ -136,6 +136,7 @@ DECIDE `numbers are big`
 
 ```l4
 `numbers are big` MEANS ...
+```
 
 ### IDE feature: Inline EVAL
 
