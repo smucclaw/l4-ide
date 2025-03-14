@@ -75,6 +75,17 @@ GIVETH A LIST OF NUMBER
 primes MEANS LIST 2, 3, 5, 7, 11
 ```
 
+As a low-code environment, L4 attempts to give human coders an alternative to punctuation. If your comma key is broken, lists can go down the page:
+
+```l4
+GIVETH A LIST OF NUMBER
+primes MEANS LIST 2
+                  3
+                  5
+                  7
+                  11
+```
+
 ### Comments
 
 Comments are written using the `--` syntax.
