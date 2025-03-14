@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
-    IRDecl,
     VisualizeDecisionLogicIRInfo,
     VisualizeDecisionLogicRequest,
     makeSuccessVisualizeResponse,
@@ -19,7 +18,6 @@
   import type { WebviewApi } from 'vscode-webview'
   import { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
-  import { watch } from 'runed'
 
   /**************************
       Set up Lir
@@ -29,20 +27,9 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let vizDecl: IRDecl | undefined = $state(undefined)
-  let declLirNode: DeclLirNode | undefined = $derived(
-    vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
-  )
+  let declLirNode: DeclLirNode | undefined = $state(undefined)
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  )
-  watch(
-    () => declLirNode,
-    () => {
-      if (declLirNode) {
-        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
-      }
-    }
   )
 
   /**************************
@@ -67,8 +54,8 @@
     messenger.onRequest(
       VisualizeDecisionLogicRequest,
       (payload: VisualizeDecisionLogicIRInfo) => {
-        vizDecl = payload.program
-
+        declLirNode = VizDeclLirSource.toLir(nodeInfo, payload.program)
+        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
         return makeSuccessVisualizeResponse()
       }
     )
@@ -79,34 +66,23 @@
 
 <h1>{funName}</h1>
 
-{#if vizDecl && declLirNode}
+{#if declLirNode}
+  <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key declLirNode}
-    <div class="flash-on-update visualization-container viz-container-height">
+    <div
+      class="slightly-shorter-than-full-viewport-height"
+    >
       <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
     </div>
   {/key}
 {/if}
 
 <style>
-  @keyframes flash {
-    0%,
-    90% {
-      background-color: hsl(var(--neutral));
-    }
-    50% {
-      background-color: hsl(var(--muted));
-    }
-  }
-
   /** So there's space for the fn name
   TODO: Use calc or smtg like that to make the intent clearer
   */
-  .viz-container-height {
+  .slightly-shorter-than-full-viewport-height {
     height: 96svh;
-  }
-
-  .flash-on-update {
-    animation: flash 0.6s;
   }
 
   h1 {
