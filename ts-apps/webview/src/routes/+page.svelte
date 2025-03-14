@@ -69,9 +69,7 @@
 {#if declLirNode}
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key declLirNode}
-    <div
-      class="slightly-shorter-than-full-viewport-height"
-    >
+    <div class="slightly-shorter-than-full-viewport-height">
       <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
     </div>
   {/key}

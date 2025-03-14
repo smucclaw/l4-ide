@@ -11,7 +11,7 @@ import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
 
 /*
-TODO: There is currently a fair bit of code duplication 
+TODO: There is currently a fair bit of code duplication
 between the various kinds of alga graphs in this mini-lib
 (eg between this and adjacency-map-directed-graph.ts).
 Would be good to improve that.
@@ -96,8 +96,6 @@ export abstract class Dag<A extends Ord<A>>
     return pathsFromNeighbors.map((path) => [vertex, ...path])
   }
 
-  // TODO: The ret type should be Dag[], so tt
-  // it's easier to preserve metadata associated with the edges
   getAllPaths() {
     const source = this.getSource()
     const barePaths: Array<Array<A>> = match(source)
