@@ -1,0 +1,21 @@
+#+TITLE: This document proposes a syntax and semantics for regulative rules in JL4.
+
+For background, please see [[regulative.md]]
+
+* Regulative Rule Syntax
+
+#+begin_src bnf
+  
+#+end_src
+
+* Translational semantics
+
+** CSL
+
+** Petri Nets
+
+** LTL
+
+
+
+
