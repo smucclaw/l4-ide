@@ -27,4 +27,9 @@ export class Environment {
   get(unique: Unique): Value | undefined {
     return this.#env[unique]
   }
+
+  dispose() {
+    this.#env = []
+    this.#coreferents = []
+  }
 }

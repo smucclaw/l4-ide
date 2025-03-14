@@ -84,4 +84,8 @@ export abstract class BaseAMGraph<A extends Ord<A>> {
     if (edges.length === 0) return `vertices [${vertices.join(', ')}]`
     return `edges [${edges.join(', ')}]`
   }
+
+  dispose() {
+    this.adjacencyMap.clear()
+  }
 }

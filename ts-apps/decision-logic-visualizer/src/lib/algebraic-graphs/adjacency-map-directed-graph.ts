@@ -92,6 +92,11 @@ export class DirectedAMGraph<A extends Ord<A>>
   _getEdgeAttributesMap() {
     return this.edgeAttributes
   }
+
+  dispose() {
+    super.dispose() // Clears the adj map
+    this.edgeAttributes.clear()
+  }
 }
 
 /*********************
@@ -154,6 +159,11 @@ export class Overlay<A extends Ord<A>> extends DirectedAMGraph<A> {
     const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
     super(adjMap, edgeAttrs)
   }
+
+  dispose() {
+    this.left.dispose()
+    this.right.dispose()
+  }
 }
 
 export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
@@ -167,6 +177,11 @@ export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
       to._getEdgeAttributesMap()
     )
     super(adjMap, edgeAttributes)
+  }
+
+  dispose() {
+    this.from.dispose()
+    this.to.dispose()
   }
 }
 
