@@ -8,9 +8,9 @@ L4 is a functional programming language inspired by Haskell. It is indentation-s
 
 ### Strings and Terms
 
-Strings are quoted using double-quotes.
+Strings are quoted using double-quotes: `"Alice Avocado"` is a string.
 
-Function names and record attributes are quoted using backticks. Where other programming languages which might use `camelCase` or `snake_case`, L4 allows the use of `space separated words` to form a single token.
+Function names and record attributes are quoted using backticks. Where other programming languages might use `camelCase` or `snake_case`, L4 allows the use of `space separated words` to form a single token.
 
 ### Sections
 
