@@ -46,7 +46,18 @@
        Lir
   *************************/
 
-  const { context, node: declLirNode }: BaseLadderFlowDisplayerProps = $props()
+  const { context, node }: BaseLadderFlowDisplayerProps = $props()
+
+  /** `node` is reactive (because props are implicitly reactive),
+   * but `declLirNode` is not.
+   * So, if you want to render a new declLirNode,
+   * you'll need to destroy and re-mount the LadderFlow displayer.
+   *
+   * We could also work with the reactive `node` and update the sf graph
+   * whenever `node` changes --- I'm not sure offhand which is better.
+   * This was just the simpler route given what I already have.
+   */
+  const declLirNode = node
   const lir = getLirRegistryFromSvelteContext()
 
   /***********************************
@@ -113,8 +124,13 @@
       }
     )
 
-    lir.subscribe(onLadderGraphNonPositionalChange)
-    // TODO: Clean up subscribers --- add an onDestroy in core.ts
+    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+
+    // Clean up when component is destroyed
+    return () => {
+      declLirNode.dispose(context)
+      unsub.unsubscribe()
+    }
   })
 
   /*************************************
@@ -248,10 +264,10 @@
   }
 </script>
 
-<!-- 
+<!--
 Misc SF UI TODOs:
 
-* Make it clearer that the bool var nodes are clickable 
+* Make it clearer that the bool var nodes are clickable
 (should at least change the cursor to a pointer on mouseover)
 -->
 
