@@ -134,6 +134,9 @@ DECIDE `numbers are big`
     IF ...
 ```
 
+```l4
+`numbers are big` MEANS ...
+
 ### IDE feature: Inline EVAL
 
 This is a quick way to test expressions.
