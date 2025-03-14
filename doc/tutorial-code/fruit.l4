@@ -1,0 +1,45 @@
+DECLARE `count of fruit in my bag` IS A NUMBER
+
+§ `fruit part 1`
+GIVEN apples        IS A `count of fruit in my bag`
+      bananas       IS A `count of fruit in my bag`
+      oranges       IS A `count of fruit in my bag`
+      `in the bowl` IS A NUMBER
+DECIDE `total fruit` IS
+  apples + bananas + oranges + `in the bowl`
+
+#EVAL `total fruit` 1 2 3 4
+
+
+
+
+§ `fruit part 2 - MEANS syntax`
+GIVEN apples        IS A `count of fruit in my bag`
+      bunches       ^  ^ ^
+      oranges       ^  ^ ^
+      `in the bowl` IS A NUMBER
+`total fruit v2` MEANS
+       apples
+     + bunches * `bananas per bunch`
+     + oranges
+     + `in the bowl`
+  WHERE
+    `bananas per bunch` MEANS 5
+
+#EVAL `total fruit v2` 1 2 3 4
+
+
+
+§ `fruit part 3 - WHERE syntax`
+GIVEN apples        IS A `count of fruit in my bag`
+      bunches       ^  ^ ^
+      oranges       ^  ^ ^
+      `in the bowl` IS A NUMBER
+`total fruit v3` MEANS
+     apples
+   + bunches * `bananas per bunch`
+   + oranges
+   + `in the bowl`
+  WHERE `bananas per bunch` MEANS 5
+
+#EVAL `total fruit v3` 1 2 3 4
