@@ -12,6 +12,16 @@ Strings are quoted using double-quotes: `"Alice Avocado"` is a string.
 
 Function names and record attributes are quoted using backticks. Where other programming languages might use `camelCase` or `snake_case`, L4 allows the use of `` `space separated words` `` to form a single token.
 
+### Comments
+
+Comments are written using the `--` syntax.
+
+```l4
+-- This is a comment
+```
+
+You can also use `{- .... -}` syntax.
+
 ### Sections
 
 Sections are denoted by the `§` symbol followed by the section title. Subsections can be created by repeating the `§` symbol.
@@ -53,6 +63,9 @@ x MEANS 2 + 2
 y MEANS x * x
 ```
 
+See below, Indentation in Expressions.
+
+
 ### Conditionals
 
 Conditionals are written using the `IF`, `THEN`, and `ELSE` keywords.
@@ -86,12 +99,70 @@ primes MEANS LIST 2
                   11
 ```
 
-### Comments
+### Indentation in Expressions
 
-Comments are written using the `--` syntax.
+In a conventional language, one would group boolean and arithmetic expressions using parentheses:
+
+```javascript
+function numbersAreBig(x, y) {
+  return (x > 1000 && y > 250 * (2+2)) || x > 10000 || y > 20000;
+}
+```
+
+In L4, indentation replaces parentheses:
 
 ```l4
--- This is a comment
+GIVEN x IS A NUMBER
+      y IS A NUMBER
+DECIDE `numbers are big`
+    IF     x GREATER THAN 1000
+       AND y GREATER THAN   250
+                          *   2
+                            + 2
+    OR x GREATER THAN 10000
+    OR y GREATER THAN 20000
+```
+
+This method of grouping was inspired by legal sub-paragraphs and sub-lists. The main difference is in where the "OR" and "AND" words appear.
+
+### DECIDE ... IS/IF
+
+Syntactic sugar for `MEANS`:
+
+```l4
+DECIDE `numbers are big`
+    IF ...
+```
+
+### IDE feature: Inline EVAL
+
+This is a quick way to test expressions.
+
+In the VS Code IDE with L4 extensions enabled, if you write
+
+```
+#EVAL `numbers are big` 1 2
+
+#EVAL `numbers are big` 1000 1000
+#EVAL `numbers are big` 1000 1001
+#EVAL `numbers are big` 1001 1000
+#EVAL `numbers are big` 1001 1001
+
+#EVAL `numbers are big` 10001 0
+#EVAL `numbers are big` 0 20001
+```
+
+You can mouseover the expressions and see the result of evaluation:
+```
+False
+
+False
+False
+False
+True
+
+True
+True
 ```
 
 ### Records
@@ -228,6 +299,25 @@ DECIDE fibNaive n IS
 
 #EVAL fibNaive 20
 ```
+
+## IDE Affordances
+
+### CHECK
+
+Besides the inline `#EVAL` discussed above, the L4 IDE plugin also supports the `#CHECK` directive. This shows typechecking.
+
+### Jump To Definition and References
+
+Legal drafters may also appreciate VS Code's native "jump to definition" and "jump to references" features, available with a right-click on an expression of interest.
+
+### Decision Logic Visualizer
+
+Click on "visualize" to see a visual representation of a given Boolean function, as a circuit. "OR" disjunctions are represented as parallel circuits. "AND" conjunctions are represented as series circuits.
+
+
+### Future Features
+
+Asyndetic conjunction operator: `..` instead of "AND" for readability.
 
 ## Conclusion
 
