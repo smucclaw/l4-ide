@@ -13,8 +13,8 @@ import { NumberWrapper } from './number-wrapper.js'
 describe('Edge Attributes - DefaultEdgeAttributes', () => {
   test('DefaultEdgeAttributes have fallback / default styles and empty label', () => {
     const attrs = new DefaultEdgeAttributes()
-    expect(attrs.getStyles().getStrokeColor()).toBe(
-      '--default-internal-stroke-color'
+    expect(attrs.getStyles().getStyleString()).toBe(
+      new EmptyEdgeStyles().getStyleString()
     )
     expect(attrs.getLabel()).toBe(emptyEdgeLabel)
   })
@@ -34,13 +34,13 @@ describe('Edge Attributes - Setting and Getting', () => {
 
     // Set attributes on the edge from nw1 to nw2
     const edge = new DirectedEdge(nw1, nw2)
-    g.setEdgeAttribute(edge, edgeAttrs)
+    g.setEdgeAttributes(edge, edgeAttrs)
 
     // Get the attributes
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
-    expect(retrievedAttrs.getStyles().getStrokeColor()).toBe(
-      new HighlightedEdgeStyles().getStrokeColor()
+    expect(retrievedAttrs.getStyles().getStyleString()).toBe(
+      new HighlightedEdgeStyles().getStyleString()
     )
   })
 
@@ -55,7 +55,7 @@ describe('Edge Attributes - Setting and Getting', () => {
     edgeAttrs.setLabel('Non-existent Edge')
     const edge = new DirectedEdge(nw1, nw3)
 
-    expect(() => g.setEdgeAttribute(edge, edgeAttrs)).toThrowError(
+    expect(() => g.setEdgeAttributes(edge, edgeAttrs)).toThrowError(
       `setEdgeAttribute: Edge (${edge.u}, ${edge.v}) does not exist`
     )
   })
@@ -72,8 +72,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStrokeColor()).toBe(
-      styles2.getStrokeColor()
+    expect(mergedAttrs.getStyles().getStyleString()).toBe(
+      styles2.getStyleString()
     )
   })
 
@@ -87,8 +87,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStrokeColor()).toBe(
-      styles2.getStrokeColor()
+    expect(mergedAttrs.getStyles().getStyleString()).toBe(
+      styles2.getStyleString()
     )
   })
 })
@@ -103,22 +103,22 @@ describe('Edge Attributes - Graph Operations', () => {
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes()
     attr1.setLabel('Label1')
-    g1.setEdgeAttribute(edge, attr1)
+    g1.setEdgeAttributes(edge, attr1)
 
     const g2 = vertex(nw1).connect(vertex(nw2))
     const attr2 = new DefaultEdgeAttributes(
       new HighlightedEdgeStyles(),
       'Label2'
     )
-    g2.setEdgeAttribute(edge, attr2)
+    g2.setEdgeAttributes(edge, attr2)
 
     const overlaid = g1.overlay(g2)
 
     // Get edge attributes from overlaid graph
     const resultAttr = overlaid.getAttributesForEdge(edge)
     expect(resultAttr.getLabel()).toBe('Label2')
-    expect(resultAttr.getStyles().getStrokeColor()).toBe(
-      attr2.getStyles().getStrokeColor()
+    expect(resultAttr.getStyles().getStyleString()).toBe(
+      attr2.getStyles().getStyleString()
     )
   })
 
@@ -133,12 +133,12 @@ describe('Edge Attributes - Graph Operations', () => {
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes()
     attr1.setLabel('Edge1')
-    g1.setEdgeAttribute(edge1, attr1)
+    g1.setEdgeAttributes(edge1, attr1)
 
     const g2 = vertex(nw1).connect(vertex(nw3))
     const attr2 = new DefaultEdgeAttributes()
     attr2.setLabel('Edge2')
-    g2.setEdgeAttribute(edge2, attr2)
+    g2.setEdgeAttributes(edge2, attr2)
 
     // Connect g1 and g2
     const connected = g1.connect(g2)
@@ -159,12 +159,12 @@ describe('Edge Attributes - Graph Operations', () => {
 
     const g1 = vertex(nw1).connect(vertex(nw2))
     const attr1 = new DefaultEdgeAttributes(new EmptyEdgeStyles(), 'Label1')
-    g1.setEdgeAttribute(edge, attr1)
+    g1.setEdgeAttributes(edge, attr1)
 
     // Create g2 with edge nw1 -> nw2, set attribute attr2
     const g2 = vertex(nw1).connect(vertex(nw2))
     const attr2 = new DefaultEdgeAttributes(new HighlightedEdgeStyles())
-    g2.setEdgeAttribute(edge, attr2)
+    g2.setEdgeAttributes(edge, attr2)
 
     const overlaid = g1.overlay(g2)
 
