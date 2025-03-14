@@ -6,6 +6,12 @@ L4 is a functional programming language inspired by Haskell. It is indentation-s
 
 ## Basic Syntax
 
+### Strings and Terms
+
+Strings are quoted using double-quotes.
+
+Function names and record attributes are quoted using backticks. Where other programming languages which might use `camelCase` or `snake_case`, L4 allows the use of `space separated words` to form a single token.
+
 ### Sections
 
 Sections are denoted by the `§` symbol followed by the section title. Subsections can be created by repeating the `§` symbol.
@@ -77,7 +83,66 @@ Comments are written using the `--` syntax.
 -- This is a comment
 ```
 
+### Records
+
+Records in L4 are used to group related data together. They can be defined using the `WITH ... IS ...` syntax or the shorter `Constructor OF ...` syntax.
+
+#### Record Definition
+
+Record types are declared using `DECLARE ... HAS ... IS A ...` syntax.
+
+```l4
+DECLARE Person
+  HAS name IS A STRING
+      age  IS A NUMBER
+```
+
+Once the type has been declared, you can instantiate it by defining variables using `MEANS` syntax.
+
+There are two ways to give the attributes.
+
+Using `WITH ... IS ...` syntax:
+
+```l4
+alice MEANS
+  Person WITH name IS "Alice Avocado"
+              age  IS 21
+```
+
+This can also be written using the shorter `Constructor OF ...` syntax:
+
+```l4
+alice MEANS Person OF "Alice Avocado", 21
+```
+
+#### Accessing Record Fields
+
+Fields of a record can be accessed using the possessive apostrophe-s (`'s`) notation:
+
+```l4
+GIVEN john IS A Person
+GIVETH A STRING
+johnsName MEANS john's name
+
+GIVETH A NUMBER
+johnsAge MEANS john's age
+```
+
+This is analogous to the use of a dot (`.`) used in most other languages for record accessors: `john.age` becomes `john's age`
+
+
 ## Advanced Features
+
+### Ditto Syntax
+
+Strunk & White said: "Omit needless words".
+
+Edward Tufte talked about "data-ink".
+
+Following these principles, L4's ditto syntax will expand a caret (`^`) to the word appearing directly above it.
+
+Judicious use of this convention improves the readability of multiline expressions that would otherwise be over-noised with boilerplate.
+
 
 ### Annotations
 
