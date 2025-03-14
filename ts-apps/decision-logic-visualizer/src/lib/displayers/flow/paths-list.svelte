@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { type PathListDisplayerProps } from './types.svelte.js'
 
   /************************
@@ -6,6 +7,10 @@
   *************************/
 
   const { context, node }: PathListDisplayerProps = $props()
+
+  onDestroy(() => {
+    node.dispose(context)
+  })
 </script>
 
 <section class="paths-list-content-wrapper">

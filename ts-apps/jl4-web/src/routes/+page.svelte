@@ -10,7 +10,6 @@
   } from '@repo/decision-logic-visualizer'
   import {
     makeVizInfoDecoder,
-    type FunDecl,
     type VisualizeDecisionLogicIRInfo,
   } from '@repo/viz-expr'
   import {
@@ -22,7 +21,6 @@
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
-  import { watch } from 'runed'
 
   /***********************************
     Persistent-session-related vars
@@ -48,20 +46,9 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let vizDecl: undefined | FunDecl = $state(undefined)
-  let declLirNode: DeclLirNode | undefined = $derived(
-    vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
-  )
+  let declLirNode: DeclLirNode | undefined = $state(undefined)
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  )
-  watch(
-    () => declLirNode,
-    () => {
-      if (declLirNode) {
-        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
-      }
-    }
   )
 
   /******************************
@@ -262,7 +249,19 @@
               if (decoded.right) {
                 const vizProgramInfo: VisualizeDecisionLogicIRInfo =
                   decoded.right
-                vizDecl = vizProgramInfo.program
+                declLirNode = VizDeclLirSource.toLir(
+                  nodeInfo,
+                  vizProgramInfo.program
+                )
+                lirRegistry.setRoot(
+                  context,
+                  'VizDecl' as LirRootType,
+                  declLirNode
+                )
+                logger.debug(
+                  'New declLirNode ',
+                  (declLirNode as DeclLirNode).getId().toString()
+                )
               }
               break
             case 'Left':
@@ -334,11 +333,10 @@ DECIDE \`is a British citizen (variant)\` IS
       <div class="header">
         <h1>{funName}</h1>
       </div>
-      {#if vizDecl && declLirNode}
+      {#if declLirNode}
+        <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
-          <div
-            class="flash-on-update slightly-shorter-than-full-viewport-height pb-2"
-          >
+          <div class="slightly-shorter-than-full-viewport-height pb-2">
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
         {/key}
@@ -352,7 +350,7 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <style lang="postcss">
   @reference "tailwindcss"
-    
+
     @keyframes flash {
     0%,
     90% {
@@ -372,10 +370,6 @@ DECIDE \`is a British citizen (variant)\` IS
 
   .slightly-shorter-than-full-viewport-height {
     height: 95svh;
-  }
-
-  .flash-on-update {
-    animation: flash 0.6s;
   }
 
   h1 {
