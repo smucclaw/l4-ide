@@ -5,7 +5,7 @@
 
 module Application (defaultMain) where
 
-import Control.Concurrent.STM (newTVarIO)
+import Control.Concurrent.STM (newTVarIO, atomically, modifyTVar')
 import Control.Monad.Trans.Reader (ReaderT (..))
 import qualified Examples
 import Network.Wai
@@ -18,7 +18,9 @@ import Servant
 import Servant.Swagger.UI (SwaggerSchemaUI, swaggerSchemaUIServer)
 import Server
 import System.Directory (doesDirectoryExist, listDirectory)
-import System.FilePath (takeExtension, (</>))
+import System.FilePath (takeExtension, (</>), takeBaseName)
+import Data.Text (Text)
+import qualified Data.Text.IO as TIO
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -41,9 +43,11 @@ defaultMain :: IO ()
 defaultMain = do
   Options{port, serverName, sourcePaths} <- execParser opts
   l4Files <- expandSourcePaths sourcePaths
+  l4Contents <- mapM loadL4File l4Files
   dbRef <- newTVarIO Examples.functionSpecs
   let
     initialState = DbState dbRef
+  atomically $ modifyTVar' dbRef (++ l4Contents)
   putStrLn $ "Application started on port: " <> show port
   putStrLn $ "Loading L4 files from: " <> show l4Files
   withStdoutLogger $ \aplogger -> do
@@ -64,6 +68,11 @@ expandPath path = do
       contents <- listDirectory path
       concat <$> mapM (expandPath . (path </>)) contents
     else return [path]
+
+loadL4File :: FilePath -> IO (String, Text)
+loadL4File path = do
+  content <- TIO.readFile path
+  return (takeBaseName path, content)
 
 type ApiWithSwagger =
   SwaggerSchemaUI "swagger-ui" "swagger.json"
