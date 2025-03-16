@@ -15,12 +15,12 @@ DECIDE `total fruit` IS
 
 § `fruit part 2 - MEANS syntax`
 GIVEN apples        IS A `count of fruit in my bag`
-      bunches       ^  ^ ^
+      bananas       ^  ^ ^
       oranges       ^  ^ ^
       `in the bowl` IS A NUMBER
 `total fruit v2` MEANS
        apples
-     + bunches * `bananas per bunch`
+     + bananas * `bananas per bunch`
      + oranges
      + `in the bowl`
   WHERE
@@ -32,12 +32,12 @@ GIVEN apples        IS A `count of fruit in my bag`
 
 § `fruit part 3 - WHERE syntax`
 GIVEN apples        IS A `count of fruit in my bag`
-      bunches       ^  ^ ^
+      bananas       ^  ^ ^
       oranges       ^  ^ ^
       `in the bowl` IS A NUMBER
 `total fruit v3` MEANS
      apples
-   + bunches * `bananas per bunch`
+   + bananas * `bananas per bunch`
    + oranges
    + `in the bowl`
   WHERE `bananas per bunch` MEANS 5

@@ -5,8 +5,9 @@
 
 module Application (defaultMain) where
 
-import Control.Concurrent.STM (newTVarIO, atomically, modifyTVar')
+import Control.Concurrent.STM (newTVarIO)
 import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad (unless)
 import qualified Examples
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -18,9 +19,8 @@ import Servant
 import Servant.Swagger.UI (SwaggerSchemaUI, swaggerSchemaUIServer)
 import Server
 import System.Directory (doesDirectoryExist, listDirectory)
-import System.FilePath (takeExtension, (</>), takeBaseName)
-import Data.Text (Text)
-import qualified Data.Text.IO as TIO
+import System.FilePath (takeExtension, (</>))
+import qualified Data.Map as Map
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -42,14 +42,18 @@ opts =
 defaultMain :: IO ()
 defaultMain = do
   Options{port, serverName, sourcePaths} <- execParser opts
+
   l4Files <- expandSourcePaths sourcePaths
-  l4Contents <- mapM loadL4File l4Files
-  dbRef <- newTVarIO Examples.functionSpecs
+  unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
+
+  l4Functions <- Examples.loadL4Functions l4Files
+  unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
+  unless (null l4Functions) $ print $ Map.keys l4Functions
+
+  dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
   let
     initialState = DbState dbRef
-  atomically $ modifyTVar' dbRef (++ l4Contents)
   putStrLn $ "Application started on port: " <> show port
-  putStrLn $ "Loading L4 files from: " <> show l4Files
   withStdoutLogger $ \aplogger -> do
     let
       settings = setPort port $ setLogger aplogger defaultSettings
@@ -68,11 +72,6 @@ expandPath path = do
       contents <- listDirectory path
       concat <$> mapM (expandPath . (path </>)) contents
     else return [path]
-
-loadL4File :: FilePath -> IO (String, Text)
-loadL4File path = do
-  content <- TIO.readFile path
-  return (takeBaseName path, content)
 
 type ApiWithSwagger =
   SwaggerSchemaUI "swagger-ui" "swagger.json"

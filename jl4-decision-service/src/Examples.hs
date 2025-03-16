@@ -3,17 +3,73 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Examples (functionSpecs) where
+module Examples (functionSpecs, loadL4File, loadL4Functions) where
 
 import Backend.Jl4 as Jl4
 import Control.Monad.Trans.Except
+import Control.Monad (when, unless)
 import qualified Data.Map.Strict as Map
 import Data.String.Interpolate
 import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.IO as TIO
+import qualified Data.Yaml as Yaml
 import Server
+import System.FilePath (replaceExtension, takeBaseName)
+import System.Directory (doesFileExist)
+import Data.Maybe (catMaybes)
+-- ----------------------------------------------------------------------------
+-- load example L4 files and descriptions from disk.
+-- ----------------------------------------------------------------------------
+
+loadL4File :: FilePath -> IO (Maybe (Text, Text, Function))
+loadL4File path = do
+  let yamlPath = replaceExtension path ".yaml"
+  yamlExists <- doesFileExist yamlPath
+  if not yamlExists
+    then return Nothing
+    else do
+      content <- TIO.readFile path
+      yamlContent <- TIO.readFile yamlPath
+      putStrLn $ "- for " <> path <> " found yaml file " <> yamlPath
+      case Yaml.decodeEither' (encodeUtf8 yamlContent) of
+        Left err -> do
+          putStrLn "YAML decoding error: "
+          print err
+          return Nothing
+        Right (fnDecl :: Function) -> do
+          let fnDeclWithName = if T.null (fnDecl.name) then fnDecl { name = T.pack $ takeBaseName path } else fnDecl
+          print fnDeclWithName
+          return (Just (fnDecl.name, content, fnDeclWithName))
+
+loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction)
+loadL4Functions paths = do
+  files <- mapM loadL4File paths
+  when (null paths) $ do
+     putStrLn "* to load L4 functions from disk, run with --sourcePaths"
+     putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
+     putStrLn "  each .l4 file needs a matching .yaml definition"
+  unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
+  let
+    validFiles = catMaybes files
+    functions = Map.fromList [(name, createValidatedFunction name content fn) | (name, content, fn) <- validFiles]
+  return functions
+
+
+
+createValidatedFunction :: Text -> Text -> Function -> ValidatedFunction
+createValidatedFunction _filename content fnDecl = 
+  ValidatedFunction
+    { fnImpl = fnDecl
+    , fnEvaluator =
+        Map.fromList
+          [ (JL4, builtinProgram $ Jl4.createFunction (toDecl fnDecl) content)
+          ]
+    }
 
 -- ----------------------------------------------------------------------------
--- Example data
+-- Example data, hardcoded
 -- ----------------------------------------------------------------------------
 
 functionSpecs :: Map.Map Text ValidatedFunction

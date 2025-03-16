@@ -62,7 +62,7 @@ import Control.Monad (forM, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.=))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
 import qualified Data.Aeson.Combinators.Decode as ACD
@@ -596,7 +596,7 @@ instance ToJSON Parameter where
   toJSON p =
     Aeson.object
       [ "type" .= p.parameterType
-      , "alias" .= p.parameterAlias
+      , "alias" .= p.parameterAlias -- omitNothingFields?
       , "enum" .= p.parameterEnum
       , "description" .= p.parameterDescription
       ]
@@ -605,8 +605,8 @@ instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
     Parameter
       <$> p .: "type"
-      <*> p .: "alias"
-      <*> p .: "enum"
+      <*> p .:? "alias"
+      <*> p .:? "enum" .!= []
       <*> p .: "description"
 
 instance FromHttpApiData EvalBackend where

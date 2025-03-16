@@ -141,7 +141,7 @@ We can relegate it to a coda at the end of the function definition:
 ```l4
 `total fruit` MEANS
      apples
-   + bunches * `bananas per bunch`
+   + bananas * `bananas per bunch`
    + oranges
    + `in the bowl`
   WHERE `bananas per bunch` MEANS 5
