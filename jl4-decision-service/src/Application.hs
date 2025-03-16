@@ -17,6 +17,8 @@ import Schema
 import Servant
 import Servant.Swagger.UI (SwaggerSchemaUI, swaggerSchemaUIServer)
 import Server
+import System.Directory (doesDirectoryExist, listDirectory)
+import System.FilePath (takeExtension, (</>))
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -37,15 +39,31 @@ opts =
 
 defaultMain :: IO ()
 defaultMain = do
-  Options{port, serverName} <- execParser opts
+  Options{port, serverName, sourcePaths} <- execParser opts
+  l4Files <- expandSourcePaths sourcePaths
   dbRef <- newTVarIO Examples.functionSpecs
   let
     initialState = DbState dbRef
   putStrLn $ "Application started on port: " <> show port
+  putStrLn $ "Loading L4 files from: " <> show l4Files
   withStdoutLogger $ \aplogger -> do
     let
       settings = setPort port $ setLogger aplogger defaultSettings
     runSettings settings (app initialState serverName)
+
+expandSourcePaths :: [FilePath] -> IO [FilePath]
+expandSourcePaths paths = do
+  files <- concat <$> mapM expandPath paths
+  return $ filter (\f -> takeExtension f == ".l4") files
+
+expandPath :: FilePath -> IO [FilePath]
+expandPath path = do
+  isDir <- doesDirectoryExist path
+  if isDir
+    then do
+      contents <- listDirectory path
+      concat <$> mapM (expandPath . (path </>)) contents
+    else return [path]
 
 type ApiWithSwagger =
   SwaggerSchemaUI "swagger-ui" "swagger.json"

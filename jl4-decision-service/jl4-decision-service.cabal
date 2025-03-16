@@ -69,6 +69,7 @@ library
     chronos,
     containers,
     extra,
+    directory,
     filepath,
     jl4,
     lens,
@@ -88,7 +89,6 @@ library
     wai,
     wai-logger,
     warp,
-
 executable jl4-decision-service-exe
   import: defaults
   main-is: Main.hs
