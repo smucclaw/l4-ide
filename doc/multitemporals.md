@@ -43,7 +43,7 @@ This is enough for us to start thinking with temporals:
       2. was settled in the UK (`is_settled_in(Parent, uk)`); or
       3. _(1.i.b and)_ was settled in a qualifying territory in which the person is born (`is_settled(QT, Parent)`).
 
-The Prolog bits are in [bna.pl](bna.pl).
+The Prolog bits are in [temporals-bna.pl](temporals-bna.pl).
 
 There is much more to the act; we know (from world knowledge) that a person can stop being a British citizen if, for example, they renounce their citizenship and go off to marry an American divorcee. So we know that the fragment above confers British citizenship at a point in time, but that state can change subsequently; it is not permanent.
 
