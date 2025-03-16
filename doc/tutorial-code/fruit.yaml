@@ -19,13 +19,5 @@ function:
         type: "number"
         description: Number of fruit in the bowl
         alias: null
-      "bonus color":
-        type: "string"
-        description: A bonus color for the fruit
-        alias: null
-        enum:
-          - "red"
-          - "green"
-          - "yellow"
   supportedBackends:
     - "jl4"

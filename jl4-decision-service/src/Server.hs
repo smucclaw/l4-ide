@@ -584,6 +584,7 @@ instance ToJSON Parameters where
     Aeson.object
       [ "type" .= Aeson.String "object"
       , "properties" .= props
+      , "required" .= Map.keys props
       ]
 
 instance FromJSON Parameters where
