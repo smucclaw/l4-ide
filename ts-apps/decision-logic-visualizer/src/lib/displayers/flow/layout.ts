@@ -1,7 +1,10 @@
 import dagre from '@dagrejs/dagre'
 import type { Edge } from '@xyflow/svelte'
 import { Position } from '@xyflow/svelte'
-import { isSFGroupingNode, type LadderSFNodeWithDims } from './svelteflow-types.js'
+import {
+  isSFGroupingNode,
+  type LadderSFNodeWithDims,
+} from './svelteflow-types.js'
 
 export interface DagreConfig {
   // TODO: Clean this up in the future!
