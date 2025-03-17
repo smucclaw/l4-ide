@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 module Main where
 
 import Base
@@ -11,7 +12,7 @@ import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckResult (CheckResult))
 import qualified L4.TypeCheck as JL4
-import Paths_jl4_cli
+import Paths_jl4
 
 import qualified Base.Text as Text
 import qualified LSP.Core.Shake as Shake
@@ -25,8 +26,10 @@ import System.IO.Silently
 import Test.Hspec
 import Test.Hspec.Golden
 import qualified Regex.Text as RE
+import qualified Data.CharSet as CharSet
 import Data.Char (isSpace)
-import Control.Applicative (some, many)
+import Control.Applicative (many)
+import qualified System.OsPath as OsPath
 
 main :: IO ()
 main = do
@@ -66,8 +69,13 @@ jl4ExactPrintGolden dir inputFile = do
     Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
-  let regex = Text.pack "<<file>>" <$ (
-        many (RE.satisfy isSpace) *> RE.text "file://" *> some (RE.satisfy (not . isSpace)))
+  let mkFileName (Text.unpack -> fp) = Text.pack case OsPath.decodeUtf $ OsPath.takeFileName $ OsPath.unsafeEncodeUtf fp of
+        Just p | not (null p) -> p
+        _ -> fp
+
+      regex = fmap mkFileName $
+        many (RE.satisfy isSpace) *> RE.text "file://" *>
+           RE.manyTextOf (CharSet.not CharSet.space)
       output = fromMaybe (RE.replaceAll regex $ mconcat errs) moutput
 
   pure

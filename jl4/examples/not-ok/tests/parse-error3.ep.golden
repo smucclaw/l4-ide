@@ -1,5 +1,5 @@
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File:<<file>>
+File:parse-error3.l4
   Hidden:   no
   Range:    5:1-5:1
   Source:   parser
@@ -11,7 +11,7 @@ File:<<file>>
     | ^^^^^^
     unexpected ASSUME
     expecting FUNCTION, LIST, TYPE, identifier, or space token
-File:<<file>>
+File:parse-error3.l4
   Hidden:   no
   Range:    7:1-7:1
   Source:   parser
