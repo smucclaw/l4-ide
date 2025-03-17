@@ -12,6 +12,8 @@ import L4.ExactPrint
 import L4.Annotation
 import qualified Generics.SOP as SOP
 import L4.Syntax
+import L4.Evaluate
+import qualified L4.Print as Print
 
 data Options =
   MkOptions
@@ -88,6 +90,26 @@ exactprintProgram file input =
         Left epError -> prettyTraverseAnnoError epError
         Right ep -> ep
 
+loadProgram :: FilePath -> IO (Either CliError (Program Resolved))
+loadProgram file = do
+  input <- Text.readFile file
+  pure $ parseAndCheck file input
+
+evaluateAndTrace :: FilePath -> IO ()
+evaluateAndTrace file =
+  loadProgram file >>= \case
+    Left err -> Text.putStrLn $ "Failed to check " <> Text.show file <> ":\n" <> prettyCliError err
+    Right prog -> case doEvalProgram prog of
+      evals -> do
+        Text.putStr $
+          Text.unlines $
+            fmap
+              (uncurry (cliErrorMessage file) . evalResultToMessage)
+              evals
+
+evalResultToMessage :: EvalResult -> (Maybe SrcRange, [Text])
+evalResultToMessage (r, res, _t) = (Just r, [either Text.show Print.prettyLayout res])
+
 -- ----------------------------------------------------------------------------
 -- Error Handling
 -- ----------------------------------------------------------------------------
@@ -102,13 +124,13 @@ prettyCliError :: CliError -> Text
 prettyCliError = \case
   CliParserError file perrors ->
     "While parsing " <> Text.pack file <> ":" <>
-    Text.unlines (fmap (.message) $ toList perrors)
+    Text.intercalate "\n" (fmap (.message) $ toList perrors)
   CliCheckError file CheckResult{errors} ->
-    Text.unlines (map (\ err -> cliErrorMessage file (rangeOf err) (prettyCheckErrorWithContext err)) errors)
+    Text.intercalate "\n" (map (\ err -> cliErrorMessage file (rangeOf err) (prettyCheckErrorWithContext err)) errors)
 
 cliErrorMessage :: FilePath -> Maybe SrcRange -> [Text] -> Text
 cliErrorMessage fp mrange msg =
-  Text.unlines
+  Text.intercalate "\n"
     ( prettySrcRange (Just fp) mrange <> ":"
     : map ("  " <>) msg
     )

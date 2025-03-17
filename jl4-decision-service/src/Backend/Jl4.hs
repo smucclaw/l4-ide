@@ -5,10 +5,12 @@ import Base.Text
 import qualified Base.Text as Text
 import Control.Monad.Trans.Except
 import L4.Annotation
+import L4.Evaluate
 import qualified L4.Evaluate as Evaluate
 import qualified L4.Evaluate.Value as Eval
 import L4.Main
 import L4.Print
+import qualified L4.Print as Print
 import L4.Syntax
 import System.FilePath ((<.>))
 
@@ -35,14 +37,14 @@ createFunction fnDecl fnImpl =
               throwE $ InterpreterError errMsg
             Right p -> do
               case Evaluate.doEvalProgram p of
-                [(_srcRange, valEither)] -> case valEither of
+                [(_srcRange, valEither, evalTrace)] -> case valEither of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
                     r <- valueToFnLiteral val
                     pure $
                       ResponseWithReason
                         { values = [("result", r)]
-                        , reasoning = emptyTree
+                        , reasoning = buildReasoningTree evalTrace
                         }
                 [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
                 _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
@@ -103,6 +105,31 @@ valueToFnLiteral = \case
         ]
   Eval.ValAssumed var ->
     throwE $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
+
+buildReasoningTree :: EvalTrace -> Reasoning
+buildReasoningTree xs =
+  Reasoning
+    { payload = toReasoningTree xs
+    }
+
+toReasoningTree :: EvalTrace -> ReasoningTree
+toReasoningTree (Trace herald expr children val) =
+  ReasoningTree
+    { payload =
+        ReasonNode
+          { exampleCode =
+              [Print.prettyLayout expr]
+          , explanation =
+              case herald of
+                Nothing -> []
+                Just h -> [h]
+                <> [ "the result is: " <> case val of
+                      Left exc -> Text.show exc
+                      Right v -> Print.prettyLayout v
+                   ]
+          }
+    , children = fmap toReasoningTree children
+    }
 
 -- ----------------------------------------------------------------------------
 -- L4 syntax builders

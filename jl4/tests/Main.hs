@@ -109,7 +109,7 @@ parseFile file input =
   where
     fp = takeFileName file
     typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-    evalResultToMessage (r, res) = (Just r, [either Text.show Print.prettyLayout res])
+    evalResultToMessage (r, res, _trace) = (Just r, [either Text.show Print.prettyLayout res])
     renderMessage (r, txt) = JL4.cliErrorMessage fp r txt
 
 readAndParseFile :: FilePath -> IO ()

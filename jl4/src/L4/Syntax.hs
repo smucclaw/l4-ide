@@ -68,6 +68,9 @@ rawNameToText :: RawName -> Text
 rawNameToText (NormalName n) = n
 rawNameToText (PreDef n)     = n
 
+nameToText :: Name -> Text
+nameToText = rawNameToText . rawName
+
 data Type' n =
     Type   Anno -- ^ the type of types
   | TyApp  Anno n [Type' n] -- ^ an application of a type constructor

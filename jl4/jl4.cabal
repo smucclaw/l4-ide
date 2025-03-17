@@ -78,6 +78,7 @@ library
     L4.TypeCheck.Environment
     L4.TypeCheck.Types
     L4.TypeCheck.With
+    L4.Utils.RevList
 
 executable jl4-cli
   import: defaults

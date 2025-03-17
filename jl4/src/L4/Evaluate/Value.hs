@@ -14,6 +14,7 @@ data Value =
   | ValConstructor Resolved [Value]
   | ValAssumed Resolved
   -- | ValEnvironment Environment
+  deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
