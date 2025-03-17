@@ -95,7 +95,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
               Path Lir Node
  *************************************************/
 
-export class PathListLirNode extends DefaultLirNode implements LirNode {
+export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
   constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
@@ -270,6 +270,10 @@ will go through the LadderGraphLirNode.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+  /** This will have to be updated if (and only if) we change the structure of the graph.
+   * No need to update it, tho, if changing edge attributes.
+   */
+  #rawPaths?: DirectedAcyclicGraph<LirId>[]
   #environment: Environment
 
   constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
@@ -323,16 +327,21 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
-    const paths = this.#dag
-      .getAllPaths()
-      .map(
+    const makePathsList = (rawPaths: DirectedAcyclicGraph<LirId>[]) => {
+      const paths = rawPaths.map(
         (rawPath) =>
           new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
       )
-    return new PathListLirNode(
-      this.makeNodeInfo(context),
-      paths as Array<LinPathLirNode>
-    )
+      return new PathsListLirNode(
+        this.makeNodeInfo(context),
+        paths as Array<LinPathLirNode>
+      )
+    }
+
+    if (!this.#rawPaths) {
+      this.#rawPaths = this.#dag.getAllPaths()
+    }
+    return makePathsList(this.#rawPaths)
   }
 
   getOverallSource(context: LirContext): undefined | SourceLirNode {
