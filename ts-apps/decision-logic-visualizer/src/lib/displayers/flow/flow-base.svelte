@@ -318,7 +318,7 @@ Misc SF UI TODOs:
       <Controls position="bottom-right" showLock={false}>
         <ControlButton onclick={() => ladderGraph.toggleZenModeStatus(context)}>
           <!-- TODO: Make our own menu to get more real estate and use a Switch component -->
-          <div class="text-[0.7rem]">Zen</div>
+          <div class="text-[0.7rem] p-1">Zen</div>
         </ControlButton>
       </Controls>
       <Background />
