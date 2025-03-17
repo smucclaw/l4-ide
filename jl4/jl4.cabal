@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name: jl4-cli
+name: jl4
 version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
