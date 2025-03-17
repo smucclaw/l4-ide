@@ -244,7 +244,7 @@
       // (We need to do this, because we re-generate the SF graph from the LadderGraphLirNode
       // when data associated with the Lir nodes or edges changes.)
       layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
-        const lirNode = context.get(sfIdToLirId(sfNode.id)) as LadderLirNode
+        const lirNode = context.get(sfNodeToLirId(sfNode)) as LadderLirNode
         lirNode.setPosition(context, sfNode.position)
         lirNode.setDimensions(context, {
           width: sfNode.measured.width,
