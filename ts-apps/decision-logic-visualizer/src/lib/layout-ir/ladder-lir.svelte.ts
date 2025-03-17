@@ -22,7 +22,7 @@ import {
   type EdgeAttributes,
   DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
-import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
+import type { Dimensions } from '$lib/displayers/flow/svelteflow-types.js'
 import { match } from 'ts-pattern'
 
 /*

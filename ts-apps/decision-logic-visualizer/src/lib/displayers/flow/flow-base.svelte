@@ -28,7 +28,7 @@
     isBoolVarSFNode,
     getSFNodeId,
     type LadderSFNode,
-  } from './types.svelte.js'
+  } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { cycle } from '$lib/layout-ir/value.js'
   import { onMount } from 'svelte'
