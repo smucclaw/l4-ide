@@ -9,8 +9,9 @@ function:
       c:
         type: "string"
         description: A Colour
-	enum:
-	  - red
-	  - green
-	  - blue
+        enum:
+          - red
+          - green
+          - blue
+  supportedBackends:
     - "jl4"
