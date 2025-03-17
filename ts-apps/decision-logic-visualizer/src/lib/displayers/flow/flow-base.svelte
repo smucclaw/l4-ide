@@ -46,7 +46,18 @@
        Lir
   *************************/
 
-  const { context, node: declLirNode }: BaseLadderFlowDisplayerProps = $props()
+  const { context, node }: BaseLadderFlowDisplayerProps = $props()
+
+  /** `node` is reactive (because props are implicitly reactive),
+   * but `declLirNode` is not.
+   * So, if you want to render a new declLirNode,
+   * you'll need to destroy and re-mount the LadderFlow displayer.
+   *
+   * We could also work with the reactive `node` and update the sf graph
+   * whenever `node` changes --- I'm not sure offhand which is better.
+   * This was just the simpler route given what I already have.
+   */
+  const declLirNode = node
   const lir = getLirRegistryFromSvelteContext()
 
   /***********************************
@@ -113,8 +124,30 @@
       }
     )
 
-    lir.subscribe(onLadderGraphNonPositionalChange)
-    // TODO: Clean up subscribers --- add an onDestroy in core.ts
+    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+
+    /** Clean up when component is destroyed.
+     *
+     * Why is this necessary? One simple reason has to do with the LirNodes and what happens when the visualization command is run.
+     * - For something to be eligible for garbage collection, it must not be reachable from a GC root.
+     * - The visualizer is structured so that there's a LirContext, with a mapping from LirIds to LirNodes,
+     *   that persists through, e.g., changes in the visualization calls from the language server.
+     *   In particular, this mapping from LirIds to LirNodes persists even when the LadderFlow component
+     *   is destroyed and re-created (which is what happens every time the 'visualize L4' LSP command is run).
+     * - So, when destroying a LaddderFlow component,
+     *   if we don't remove references to LirNodes that were used in the component from the LirContext,
+     *   those LirNodes will not be eligible for garbage collection.
+     *   I.e., every time you (e.g.) run the visualize L4 command, you'd be accumulating LirNodes in memory that will never be GC'd.
+     * - (Similar considerations might also apply, mutatis mutandis, to other actions that create LirNodes.)
+     *
+     * For future work: I've checked, via the Chrome memory profiler, that this seems to be making a difference
+     * when it comes to whether certain LirNodes stick around, but I haven't checked this for *every* potential LirNode.
+     * In particular, I might need to do more when it comes to the PathsList and PathLirNodes.
+     */
+    return () => {
+      declLirNode.dispose(context)
+      unsub.unsubscribe()
+    }
   })
 
   /*************************************
@@ -248,10 +281,10 @@
   }
 </script>
 
-<!-- 
+<!--
 Misc SF UI TODOs:
 
-* Make it clearer that the bool var nodes are clickable 
+* Make it clearer that the bool var nodes are clickable
 (should at least change the cursor to a pointer on mouseover)
 -->
 
