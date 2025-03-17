@@ -369,9 +369,9 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     styles: EdgeStyles
   ) {
     const attrs = this.#dag.getAttributesForEdge(edge)
-    const newAttrs = new DefaultEdgeAttributes().merge(attrs)
-    newAttrs.setStyles(styles)
-    this.#dag.setEdgeAttributes(edge, newAttrs)
+    // Ok to mutate because getAttributesForEdge returns a cloned object
+    attrs.setStyles(styles)
+    this.#dag.setEdgeAttributes(edge, attrs)
 
     this.getRegistry().publish(context, this.getId())
   }
@@ -386,9 +386,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     label: string
   ) {
     const attrs = this.#dag.getAttributesForEdge(edge)
-    const newAttrs = new DefaultEdgeAttributes().merge(attrs)
-    newAttrs.setLabel(label)
-    this.#dag.setEdgeAttributes(edge, newAttrs)
+    attrs.setLabel(label)
+    this.#dag.setEdgeAttributes(edge, attrs)
 
     this.getRegistry().publish(context, this.getId())
   }
