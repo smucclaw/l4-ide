@@ -12,7 +12,11 @@ import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import {
+  isEmpty,
+  isVertex,
+  type DirectedAcyclicGraph,
+} from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
@@ -336,6 +340,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
+  getOverallSource(context: LirContext): undefined | SourceLirNode {
+    const source = this.#dag.getSource()
+    if (!isVertex(source)) return undefined
+    return context.get(source.getValue()) as SourceLirNode
+  }
+
   /*****************************
         Edge attributes
   ******************************/
@@ -484,6 +494,10 @@ export interface VarLirNode extends FlowLirNode {
   _setValue(context: LirContext, value: Value): void
 }
 
+export function isBoolVarLirNode(node: LadderLirNode): node is BoolVarLirNode {
+  return node instanceof BoolVarLirNode
+}
+
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
@@ -533,6 +547,12 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   toString(): string {
     return 'BOOL_VAR_LIR_NODE'
   }
+}
+
+export function isNotStartLirNode(
+  node: LadderLirNode
+): node is NotStartLirNode {
+  return node instanceof NotStartLirNode
 }
 
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
@@ -601,9 +621,18 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
     super(nodeInfo, position)
   }
 
-  getData(_context: LirContext) {
+  getData() {
     return { annotation: this.annotation }
   }
+}
+
+export function isAnyOfAnnoSourceLirNode(
+  node: LadderLirNode
+): node is SourceLirNode {
+  return (
+    node instanceof SourceLirNode &&
+    node.getData().annotation === anyOfBundlingNodeAnno.annotation
+  )
 }
 
 export class SourceLirNode
@@ -690,4 +719,37 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
 
     return this.getV().compare(that.getV())
   }
+}
+
+export function augmentEdgesWithExplanatoryLabel(
+  context: LirContext,
+  ladderGraph: LadderGraphLirNode
+) {
+  const edges = ladderGraph.getEdges(context)
+  const isEdgeToAddAndLabel = (edge: LadderLirEdge) => {
+    const edgeU = context.get(edge.getU()) as LadderLirNode
+    const edgeV = context.get(edge.getV()) as LadderLirNode
+
+    const edgeSourceIsNotOverallSource =
+      ladderGraph.getOverallSource(context) &&
+      !edge
+        .getU()
+        .isEqualTo(ladderGraph.getOverallSource(context)?.getId() as LirId)
+
+    const edgeSourceIsAnyOfAnnoSource = isAnyOfAnnoSourceLirNode(edgeU)
+    return (
+      !edgeSourceIsAnyOfAnnoSource &&
+      edgeSourceIsNotOverallSource &&
+      (isBoolVarLirNode(edgeV) ||
+        isNotStartLirNode(edgeV) ||
+        isAnyOfAnnoSourceLirNode(edgeV))
+    )
+  }
+  const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
+
+  // TODO: Think abt where this const should be put
+  const EXPLANATORY_EDGE_LABEL = 'and'
+  edgesToAddLabel.forEach((edge) => {
+    ladderGraph.setEdgeLabel(context, edge, EXPLANATORY_EDGE_LABEL)
+  })
 }

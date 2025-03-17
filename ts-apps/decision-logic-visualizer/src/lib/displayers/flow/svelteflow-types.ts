@@ -194,6 +194,10 @@ export const defaultLadderEdgeAttrs = {
   edgeStyles: new EmptyEdgeStyles().getStyleString(),
 }
 
+export interface LadderEdgeData extends LadderEdgeAttrs {
+  context: LirContext
+}
+
 export interface LadderEdgeProps extends SF.EdgeProps {
-  data?: LadderEdgeAttrs
+  data: LadderEdgeData
 }

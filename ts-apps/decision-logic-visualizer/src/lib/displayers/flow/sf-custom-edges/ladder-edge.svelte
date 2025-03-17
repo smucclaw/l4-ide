@@ -4,7 +4,6 @@
     // EdgeLabel,
   } from '@xyflow/svelte'
   import type { LadderEdgeProps } from '../svelteflow-types.js'
-  import { defaultLadderEdgeAttrs } from '../svelteflow-types.js'
 
   let {
     sourceX,
@@ -13,7 +12,7 @@
     targetX,
     targetY,
     targetPosition,
-    data = defaultLadderEdgeAttrs,
+    data,
   }: LadderEdgeProps = $props()
 </script>
 
@@ -24,7 +23,9 @@
   {targetX}
   {targetY}
   {targetPosition}
-  label={data.label}
+  label={data.context.getVizConfig().displayExplanatoryAnnotations
+    ? data.label.toUpperCase()
+    : undefined}
   pathOptions={{ curvature: 1 }}
   style={data.edgeStyles}
 />
