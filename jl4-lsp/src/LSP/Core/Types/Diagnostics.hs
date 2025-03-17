@@ -214,9 +214,6 @@ prettyRange :: Range -> Doc a
 prettyRange Range{..} = f _start <> "-" <> f _end
     where f Position{..} = pretty (show $ _line+1) <> colon <> pretty (show $ _character+1)
 
-stringParagraphs :: T.Text -> Doc a
-stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
-
 
 prettyDiagnostics :: [FileDiagnostic] -> Doc a
 prettyDiagnostics = vcat . map prettyDiagnostic
@@ -233,7 +230,7 @@ prettyDiagnostic FileDiagnostic { fdFilePath, fdShouldShowDiagnostic, fdLspDiagn
                                   Just (InR text) -> pretty text
                                   Just (InL i)    -> pretty i
                                   Nothing         -> "<none>"
-        , slabel_ "Message: " $ stringParagraphs _message
+        , slabel_ "Message: " $ pretty _message
         ]
     where
         sev = fromMaybe LSP.DiagnosticSeverity_Error _severity

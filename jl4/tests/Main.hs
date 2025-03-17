@@ -69,13 +69,13 @@ jl4ExactPrintGolden dir inputFile = do
     Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
-  let mkFileName (Text.unpack -> fp) = Text.pack case OsPath.decodeUtf $ OsPath.takeFileName $ OsPath.unsafeEncodeUtf fp of
+  let mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
         Just p | not (null p) -> p
         _ -> fp
 
       regex = fmap mkFileName $
         many (RE.satisfy isSpace) *> RE.text "file://" *>
-           RE.manyTextOf (CharSet.not CharSet.space)
+          RE.manyTextOf (CharSet.not CharSet.space)
       output = fromMaybe (RE.replaceAll regex $ mconcat errs) moutput
 
   pure

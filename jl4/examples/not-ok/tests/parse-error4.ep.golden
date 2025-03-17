@@ -1,13 +1,13 @@
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File:parse-error4.l4
+File: parse-error4.l4
   Hidden:   no
   Range:    8:18-8:18
   Source:   parser
   Severity: DiagnosticSeverity_Error
   Code:     <none>
   Message: 
-    |
+      |
     8 | DECIDE factorial MEANS n
-    | ^^^^^
+      |                  ^^^^^
     unexpected MEANS
     expecting AKA, IF, IS, OF, identifier, or space token
