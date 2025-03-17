@@ -8,38 +8,28 @@ module LSP.L4.Handlers where
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
-import qualified Optics
 import Control.Monad.Extra (guard, whenJust)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
-import Data.Char (isAlphaNum)
-import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Either (isRight)
 import Data.Monoid (Ap (..))
-import Data.Ord (Down(Down))
 import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import qualified StmContainers.Map as STM
 import Control.Applicative
-import Control.Monad.Except (throwError, runExceptT, ExceptT)
+import Control.Monad.Except (runExceptT)
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson
-import qualified Text.Fuzzy as Fuzzy
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
-import qualified Data.Text.Mixed.Rope as Rope
 import GHC.Generics
-import L4.FindDefinition (findDefinition)
-import L4.HoverInfo (findInfo)
-import L4.Citations
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))
@@ -48,7 +38,6 @@ import LSP.L4.SemanticTokens (srcPosToPosition)
 import LSP.Core.FileStore hiding (Log (..))
 import qualified LSP.Core.FileStore as FileStore
 import LSP.Core.OfInterest hiding (Log (..))
-import LSP.Core.PositionMapping
 import LSP.Core.Service hiding (Log (..))
 import LSP.Core.Shake hiding (Log (..))
 import qualified LSP.Core.Shake as Shake
@@ -60,10 +49,10 @@ import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
 import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
+import LSP.L4.Actions
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -97,7 +86,6 @@ data Log
   | LogMultipleDecideClauses !Uri
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
-  | LogDecideMissingInformation
   | LogShake Shake.Log
   deriving (Show)
 
@@ -111,7 +99,6 @@ instance Pretty Log where
     LogMultipleDecideClauses uri -> "Document contains multiple decide clauses:" <+> pretty (getUri uri)
     LogSuppliedTooManyArguments args -> "Visualization command was passed too many arguments, this is a bug:" <+> pretty (Aeson.encodeToLazyText args)
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
-    LogDecideMissingInformation -> "Decide that we are visualising is missing type or source location information"
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
 
@@ -201,15 +188,17 @@ handlers recorder =
       notificationHandler SMethod_WorkspaceDidChangeConfiguration mempty
     , requestHandler SMethod_TextDocumentDefinition $ \ide params -> do
         let
-          doc :: Uri
-          doc = params ^. J.textDocument . J.uri
           pos :: Position
           pos = params ^. J.position
-        mloc <- gotoDefinition ide (LSP.toNormalizedUri doc) pos
-        case mloc of
-          Nothing  -> pure $ Right $ InR $ InR Null
-          Just loc -> pure $ Right $ InL $ Definition (InL loc)
-    , requestHandler SMethod_TextDocumentHover $ \ ide params -> do
+          uri = params ^. J.textDocument . J.uri
+          nuri = LSP.toNormalizedUri uri
+        mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
+          useWithStale TypeCheck nuri
+        let mloc = uncurry (gotoDefinition pos uri) =<< mTypeCheckedModule
+        pure $ Right case mloc of
+          Nothing  -> InR $ InR Null
+          Just loc -> InL $ Definition (InL loc)
+    , requestHandler SMethod_TextDocumentHover $ \ide params -> do
         let
           doc :: Uri
           doc = params ^. J.textDocument . J.uri
@@ -230,8 +219,9 @@ handlers recorder =
                   , msrcPos <- case args of
                      [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
                      _ -> Nothing
-                  = visualise recorder ide uri msrcPos
-
+                  = do
+                    mtcRes <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck $ toNormalizedUri uri
+                    visualise mtcRes (atomically $ getMostRecentVisualisation ide, atomically . setMostRecentVisualisation ide) uri msrcPos
                   | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
             decodeXdata
 
@@ -276,62 +266,13 @@ handlers recorder =
                     }
     , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
         let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
-            Position ln col = params ^. J.position
         liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
           Nothing -> pure (Right (InL []))
           Just rope -> do
-            let completionPrefix =
-                  Text.takeWhileEnd isAlphaNum
-                  $ Rope.toText
-                  $ fst -- we don't care for the rest of the line
-                  $ Rope.charSplitAt (fromIntegral col)
-                  $ Rope.getLine (fromIntegral ln) rope
-
-            let filterMatchesOn f is =
-                  map Fuzzy.original $ Fuzzy.filter
-                    completionPrefix
-                    is
-                    mempty
-                    mempty
-                    f
-                    False
-
-            let mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
-                  { CompletionItem._kind =  Just CompletionItemKind_Keyword
-                  }
-                keyWordMatches = filterMatchesOn id $ Map.keys keywords
-                -- FUTUREWORK(mangoiv): we could
-                -- 1 pass through the token here
-                -- 2 check the token category and if the category is COperator
-                -- 3 set the CompletionItemKind to CompletionItemKind_Operator
-                keywordItems = map mkKeyWordCompletionItem keyWordMatches
-
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
               useWithStale_ TypeCheck (toNormalizedUri uri)
 
-            let topDeclItems
-                  = filterMatchesOn CompletionItem._label
-                  $ mapMaybe
-                      (\(name, checkEntity) ->
-                        topDeclToCompletionItem name
-                        $ Optics.over'
-                          (Optics.gplate @(Type' Resolved))
-                          (applyFinalSubstitution typeCheck.substitution)
-                          checkEntity
-                      )
-                      (combineEnvironmentEntityInfo
-                        typeCheck.environment
-                        typeCheck.entityInfo
-                      )
-
-            -- TODO: maybe we should sort these as follows
-            -- 1 keywords
-            -- 2 toplevel values
-            -- 3 toplevel types
-
-            let items = keywordItems <> topDeclItems
-
-            logWith recorder Debug $ LogRequestedCompletionsFor completionPrefix
+            let items = completions rope typeCheck (params ^. J.position)
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
@@ -394,225 +335,21 @@ activeFileDiagnosticsInRange extras nfu rng = do
     ]
 
 -- ----------------------------------------------------------------------------
--- Ladder visualisation
--- ----------------------------------------------------------------------------
-
-visualise
-  :: MonadIO m
-  => Recorder (WithPriority Log)
-  -> IdeState
-  -> Uri
-  -- ^ The document uri whose decides should be visualised
-  -> Maybe (SrcPos, Bool)
-  -- ^ The location of the `Decide` to visualize and whether or not to simplify it
-  -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
-visualise recorder ide uri msrcPos = do
-  let nuri = toNormalizedUri uri
-
-  mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
-    -- the command was issued by the button in vscode or autorefresh
-    -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
-    -- exits by returning Nothing instead of throwing an error
-    Nothing -> runMaybeT do
-      tcRes <- MaybeT $ liftIO $ runAction "l4.visualize" ide $ use TypeCheck nuri
-      recentlyVisualised <- MaybeT $ atomically $ getMostRecentVisualisation ide
-      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.program
-      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
-
-    -- the command was issued by a code action or codelens
-    Just (srcPos, simp) -> do
-      tcRes <- do
-        mTcResult <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck nuri
-        case mTcResult of
-          Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
-          Just tcRes -> pure tcRes
-      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.program of
-        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
-        -- NOTE: if this becomes a problem, we should use
-        -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
-        _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
-
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty)}} _tydec appform _expr) simplify substitution
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
-      recentlyVisualisedDecide _ _ _ = Nothing
-
-  case mdecide of
-    Nothing -> pure (InR Null)
-    Just (decide, simp, substitution) -> case Ladder.doVisualize decide simp of
-      Right vizProgramInfo -> do
-        maybe
-          (logWith recorder Warning LogDecideMissingInformation)
-          (atomically . setMostRecentVisualisation ide)
-          (recentlyVisualisedDecide decide simp substitution)
-        pure $ InL $ Aeson.toJSON vizProgramInfo
-      Left vizError ->
-        defaultResponseError $ Text.unlines
-          [ "Could not visualize:"
-          , getUri uri
-          , Ladder.prettyPrintVizError vizError
-          ]
-  where
-
-    -- TODO: in the future we want to be a bit more clever wrt. which
-    -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
-    -- (by requiring extra = Just ty) or the name of the 'Decide' by the means
-    -- of checking its 'Resolved'
-    matchOnAvailableDecides :: RecentlyVisualised -> Decide Resolved -> One (Decide Resolved)
-    matchOnAvailableDecides v decide = One do
-      guard (decideNodeStartsAtPos v.pos decide)
-        <|> guard case decide of
-               (MkDecide _ _ appform _) -> rawName (getName appform) == v.name
-        -- NOTE: this heuristic is wrong if there are ambiguous names in scope. that's why it will
-        -- only succeed if there's exactly one match
-
-      pure decide
-
--- | the 'Monoid' 'Maybe' that returns the only occurrence of 'Just'
-newtype One a = One {getOne :: Maybe a}
-  deriving stock (Eq, Ord, Show)
-
-instance Semigroup (One a) where
-  One (Just a) <> One Nothing = One (Just a)
-  One Nothing <> One (Just a) = One (Just a)
-  _ <> _ = One Nothing
-
-instance Monoid (One a) where
-  mempty = One Nothing
-
-defaultResponseError :: Monad m => Text -> ExceptT (TResponseError method) m a
-defaultResponseError _message
-  = throwError TResponseError { _code = InL LSPErrorCodes_RequestFailed , _xdata = Nothing, _message }
-
-decideNodeStartsAtPos :: SrcPos -> Decide Resolved -> Bool
-decideNodeStartsAtPos pos d = Just pos == do
-  node <- rangeOfNode d
-  pure node.start
-
--- ----------------------------------------------------------------------------
--- LSP Autocompletions
--- ----------------------------------------------------------------------------
-
-topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
-topDeclToCompletionItem name = \case
-  KnownTerm ty term ->
-    Just (defaultTopDeclCompletionItem ty)
-      { CompletionItem._kind = Just $ case (term, ty) of
-         (Constructor, _) -> CompletionItemKind_Constructor
-         (Selector, _) -> CompletionItemKind_Field
-         (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
-         _ -> CompletionItemKind_Constant
-      }
-  KnownType kind _args tydec ->
-    Just (defaultTopDeclCompletionItem (typeFunction kind))
-      { CompletionItem._kind = Just $ case tydec of
-          RecordDecl {} -> CompletionItemKind_Struct
-          EnumDecl {} -> CompletionItemKind_Enum
-          SynonymDecl {} -> CompletionItemKind_Reference
-      }
-  KnownTypeVariable {} -> Nothing
-  where
-    -- a function (but also a constant, in theory) can be polymorphic, so we have to strip
-    -- all the foralls to get to the "actual" type.
-    unrollForall :: Type' Resolved -> Type' Resolved
-    unrollForall (Forall _ _ ty) = unrollForall ty
-    unrollForall ty = ty
-
-    -- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
-    typeFunction :: Kind -> Type' Resolved
-    typeFunction 0 = Type emptyAnno
-    typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
-    typeFunction _ = error "Internal error: negative arity of type constructor"
-
-    defaultTopDeclCompletionItem :: Type' Resolved -> CompletionItem
-    defaultTopDeclCompletionItem ty = (defaultCompletionItem $ quoteIfNeeded prepared)
-      { CompletionItem._filterText = Just prepared
-      , CompletionItem._labelDetails
-        = Just CompletionItemLabelDetails
-          { _description = Nothing
-          , _detail = Just $ " IS A " <> prettyLayout ty
-          }
-      }
-      where
-        prepared :: Text
-        prepared = case name of MkName _ raw -> rawNameToText raw
-
-defaultCompletionItem :: Text -> CompletionItem
-defaultCompletionItem label = CompletionItem label
-  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-  Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-
--- ----------------------------------------------------------------------------
--- LSP Go to Definition
--- ----------------------------------------------------------------------------
-
-gotoDefinition :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Location)
-gotoDefinition ide fileUri pos = do
-  mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
-    useWithStale TypeCheck fileUri
-  case mTypeCheckedModule of
-    Nothing -> pure Nothing
-    Just (m, positionMapping) -> do
-      pure $ do
-        oldPos <- fromCurrentPosition positionMapping pos
-        range <- findDefinition (lspPositionToSrcPos oldPos) m.program
-        let lspRange = srcRangeToLspRange (Just range)
-        newRange <- toCurrentRange positionMapping lspRange
-        pure (Location uri newRange)
-  where
-    uri = LSP.fromNormalizedUri fileUri
-
--- ----------------------------------------------------------------------------
 -- LSP Hover
 -- ----------------------------------------------------------------------------
 
 findHover :: IdeState -> NormalizedUri -> Position -> ServerM Config (Maybe Hover)
-findHover ide fileUri pos = runMaybeT $ refHover <|> typeHover
+findHover ide fileUri pos = runMaybeT $ refHover <|> tyHover
   where
   refHover = do
     refs <- MaybeT $ liftIO $ runAction "refHover" ide $
       use ResolveReferenceAnnotations fileUri
-    hoistMaybe do
-      -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
-      let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
-      -- NOTE: this is subtle: if there are multiple results for a location, then we want to
-      -- prefer Just's, so we reverse sort the references we get.
-      -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would
-      -- mean that we'd get no result, when actually we want to have a list with a single element
-      -- that is Nothing, on that range.
-      (range, mreference) <- listToMaybe
-        $ List.sortOn (Down . snd)
-        $ ivToRange
-        <$> IVMap.search (lspPositionToSrcPos pos) refs
-      let lspRange = srcRangeToLspRange (Just range)
-      pure $ Hover
-        (InL
-          (MarkupContent
-            -- TODO: should be more descriptive
-            { _value = Maybe.fromMaybe "Reference not found" mreference
-            , _kind = MarkupKind_Markdown}
-          )
-        )
-        (Just lspRange)
+    hoistMaybe $ referenceHover pos refs
 
-  typeHover = do
+  tyHover = do
     (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
       useWithStale TypeCheck fileUri
-    hoistMaybe do
-      oldPos <- fromCurrentPosition positionMapping pos
-      (range, i) <- findInfo (lspPositionToSrcPos oldPos) m.program
-      let lspRange = srcRangeToLspRange (Just range)
-      newLspRange <- toCurrentRange positionMapping lspRange
-      pure (infoToHover m.substitution newLspRange i)
-
-infoToHover :: Substitution -> Range -> Info -> Hover
-infoToHover subst r i =
-  Hover (InL (mkPlainText x)) (Just r)
-  where
-    x =
-      case i of
-        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst t)
-        KindInfo k  -> "arity " <> Text.pack (show k)
-        KeywordInfo -> "keyword"
+    hoistMaybe $ typeHover pos m positionMapping
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions
