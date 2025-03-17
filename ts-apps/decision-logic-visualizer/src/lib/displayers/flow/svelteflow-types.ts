@@ -199,5 +199,9 @@ export interface LadderEdgeData extends LadderEdgeAttrs {
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {
+  /** `data` has to be optional because of current SF limitations.
+   * But I've been told by a SF developer that this will be improved in the future
+   * (i.e., we should be able to specify that it's non-optional in the future)
+   */
   data?: LadderEdgeData
 }
