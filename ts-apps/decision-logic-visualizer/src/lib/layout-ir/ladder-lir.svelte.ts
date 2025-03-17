@@ -748,7 +748,7 @@ export function augmentEdgesWithExplanatoryLabel(
   const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
 
   // TODO: Think abt where this const should be put
-  const EXPLANATORY_EDGE_LABEL = 'and'
+  const EXPLANATORY_EDGE_LABEL = 'AND'
   edgesToAddLabel.forEach((edge) => {
     ladderGraph.setEdgeLabel(context, edge, EXPLANATORY_EDGE_LABEL)
   })

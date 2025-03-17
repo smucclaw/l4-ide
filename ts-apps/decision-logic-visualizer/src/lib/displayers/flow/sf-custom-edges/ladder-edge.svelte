@@ -23,11 +23,11 @@
   {targetX}
   {targetY}
   {targetPosition}
-  label={data.context.getVizConfig().displayExplanatoryAnnotations
-    ? data.label.toUpperCase()
+  label={data?.context.getVizConfig().displayExplanatoryAnnotations
+    ? data.label
     : undefined}
   pathOptions={{ curvature: 1 }}
-  style={data.edgeStyles}
+  style={data?.edgeStyles}
 />
 
 <!-- 

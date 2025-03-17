@@ -199,5 +199,5 @@ export interface LadderEdgeData extends LadderEdgeAttrs {
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {
-  data: LadderEdgeData
+  data?: LadderEdgeData
 }
