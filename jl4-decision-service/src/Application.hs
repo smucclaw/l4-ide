@@ -21,6 +21,7 @@ import Server
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
+import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy)
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -57,7 +58,10 @@ defaultMain = do
   withStdoutLogger $ \aplogger -> do
     let
       settings = setPort port $ setLogger aplogger defaultSettings
-    runSettings settings (app initialState serverName)
+    runSettings settings (corsMiddleware $ app initialState serverName)
+
+corsMiddleware :: Middleware
+corsMiddleware = cors (const $ Just simpleCorsResourcePolicy)
 
 expandSourcePaths :: [FilePath] -> IO [FilePath]
 expandSourcePaths paths = do

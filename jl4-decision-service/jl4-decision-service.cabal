@@ -87,10 +87,11 @@ library
     transformers,
     vector,
     wai,
+    wai-cors,
     wai-logger,
     warp,
     yaml,
-    
+
 executable jl4-decision-service-exe
   import: defaults
   main-is: Main.hs
@@ -105,6 +106,7 @@ executable jl4-decision-service-exe
 
   build-depends:
     jl4-decision-service
+
 
 test-suite jl4-decision-service-test
   import: defaults
