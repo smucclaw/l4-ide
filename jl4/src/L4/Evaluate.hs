@@ -11,7 +11,6 @@ import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
 
 import Data.Either
-import qualified L4.Print as Print
 
 newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState)
@@ -29,16 +28,16 @@ data EvalState =
   deriving Generic
 
 data EvalAction =
-    Enter (Maybe Text) (Expr Resolved)
+    Enter (Expr Resolved)
   | Exit Value
   | Exception EvalException
   deriving stock Show
 
-pushFrame :: Maybe Text -> Expr Resolved -> Eval ()
-pushFrame mName e = do
+pushFrame :: Expr Resolved -> Eval ()
+pushFrame e = do
   modifying' #evalActions (pushRevList enter)
   where
-    enter = Enter mName e
+    enter = Enter e
 
 popFrame :: Value -> Eval ()
 popFrame val =
@@ -53,32 +52,32 @@ unwindStack e =
     exc = Exception e
 
 data EvalTrace =
-  Trace (Maybe Text) (Expr Resolved) [EvalTrace] (Either EvalException Value)
+  Trace (Expr Resolved) [EvalTrace] (Either EvalException Value)
   deriving stock Show
 
 -- | Intermediate structure used for building something resembling a "Stack Frame".
 data EvalFrame =
-  Frame (Maybe Text) (Expr Resolved) (RevList EvalTrace)
+  Frame (Expr Resolved) (RevList EvalTrace)
 
 buildEvalTrace :: [EvalAction] -> EvalTrace
 buildEvalTrace = go []
   where
     go :: [EvalFrame] -> [EvalAction] -> EvalTrace
-    go fs                     (Enter mn e : actions) = go (Frame mn e emptyRevList : fs) actions
-    go (Frame mn e subs : fs) (Exit v     : actions) =
+    go fs                  (Enter e : actions)    = go (Frame e emptyRevList : fs) actions
+    go (Frame e subs : fs) (Exit v     : actions) =
       let
-        t = Trace mn e (unRevList subs) (Right v)
+        t = Trace e (unRevList subs) (Right v)
       in
         case fs of
           []                         -> t
-          (Frame mn' e' subs' : fs') -> go (Frame mn' e' (pushRevList t subs') : fs') actions
-    go (Frame mn e subs : fs) actions@(Exception exc : _) =
+          (Frame e' subs' : fs') -> go (Frame e' (pushRevList t subs') : fs') actions
+    go (Frame e subs : fs) actions@(Exception exc : _) =
       let
-        t = Trace mn e (unRevList subs) (Left exc)
+        t = Trace e (unRevList subs) (Left exc)
       in
         case fs of
           []                     -> t
-          (Frame mn' e' subs' : fs') -> go (Frame mn' e' (pushRevList t subs') : fs') actions
+          (Frame e' subs' : fs') -> go (Frame e' (pushRevList t subs') : fs') actions
     go _ _ = error "illegal eval action sequence"
 
 data EvalException =
@@ -283,7 +282,7 @@ evalAssume (MkAssume _ann _tysig (MkAppForm _ n _args _maka) _) =
 evalExpr :: Expr Resolved -> Eval (Either EvalException Value)
 evalExpr expr =
   tryError (withEnvironment $ \ env -> do
-    pushFrame Nothing expr
+    pushFrame expr
     v <- forwardExpr env 0 Empty expr
     popFrame v
     pure v
@@ -302,55 +301,65 @@ forwardExpr :: Environment -> Int -> Stack -> Expr Resolved -> Eval Value
 forwardExpr _env ss stack _e
   | ss > maximumStackSize =
     exception StackOverflow stack
-forwardExpr env !ss stack (And _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 falseExpr)
-forwardExpr env !ss stack (Or _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse emptyAnno e1 trueExpr e2)
-forwardExpr env !ss stack (Implies _ann e1 e2) =
-  forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 trueExpr)
-forwardExpr env !ss stack (Not _ann e) =
-  forwardExpr env ss stack (IfThenElse emptyAnno e falseExpr trueExpr)
+forwardExpr env !ss stack (And _ann e1 e2) = do
+  pushFrame (IfThenElse emptyAnno e1 e2 falseExpr)
+  v <- forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 falseExpr)
+  popFrame v
+  pure v
+forwardExpr env !ss stack (Or _ann e1 e2) = do
+  pushFrame (IfThenElse emptyAnno e1 trueExpr e2)
+  v <- forwardExpr env ss stack (IfThenElse emptyAnno e1 trueExpr e2)
+  popFrame v
+  pure v
+forwardExpr env !ss stack (Implies _ann e1 e2) = do
+  pushFrame (IfThenElse emptyAnno e1 e2 trueExpr)
+  v <- forwardExpr env ss stack (IfThenElse emptyAnno e1 e2 trueExpr)
+  popFrame v
+  pure v
+forwardExpr env !ss stack (Not _ann e) = do
+  pushFrame (IfThenElse emptyAnno e falseExpr trueExpr)
+  v <- forwardExpr env ss stack (IfThenElse emptyAnno e falseExpr trueExpr)
+  popFrame v
+  pure v
 forwardExpr env !ss stack (Equals _ann e1 e2) = do
-  pushFrame Nothing (Equals _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpEquals e2 env stack) e1
 forwardExpr env !ss stack (Plus _ann e1 e2) = do
-  pushFrame Nothing (Plus _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpPlus e2 env stack) e1
 forwardExpr env !ss stack (Minus _ann e1 e2) = do
-  pushFrame Nothing (Minus _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpMinus e2 env stack) e1
 forwardExpr env !ss stack (Times _ann e1 e2) = do
-  pushFrame Nothing (Times _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpTimes e2 env stack) e1
 forwardExpr env !ss stack (DividedBy _ann e1 e2) = do
-  pushFrame Nothing (DividedBy _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpDividedBy e2 env stack) e1
 forwardExpr env !ss stack (Modulo _ann e1 e2) = do
-  pushFrame Nothing (Modulo _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpModulo e2 env stack) e1
 forwardExpr env !ss stack (Cons _ann e1 e2) = do
-  pushFrame Nothing (Cons _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpCons e2 env stack) e1
 forwardExpr env !ss stack (Leq _ann e1 e2) = do
-  pushFrame Nothing (Leq _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpLeq e2 env stack) e1
 forwardExpr env !ss stack (Geq _ann e1 e2) = do
-  pushFrame Nothing (Geq _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpGeq e2 env stack) e1
 forwardExpr env !ss stack (Lt _ann e1 e2) = do
-  pushFrame Nothing (Lt _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpLt e2 env stack) e1
 forwardExpr env !ss stack (Gt _ann e1 e2) = do
-  pushFrame Nothing (Gt _ann e1 e2)
+  pushFrame e1
   forwardExpr env (ss + 1) (BinOp1 BinOpGt e2 env stack) e1
 forwardExpr env !ss stack (Proj _ann e l) =
   forwardExpr env ss stack (App emptyAnno l [e]) -- we desugar projection to plain function application
 forwardExpr env !ss stack (Var _ann n) = do
-  pushFrame (Just $ Print.prettyLayout n) (Var _ann n)
   case lookupTerm env n of
     Nothing -> exception (RuntimeScopeError n) stack
     Just val -> do
-      popFrame val
       backwardExpr ss stack val
 forwardExpr env !ss stack (Lam _ann givens e) =
   backwardExpr ss stack (ValClosure givens e env)
@@ -359,7 +368,7 @@ forwardExpr env !ss stack (App _ann n []) =
     Nothing -> exception (RuntimeScopeError n) stack
     Just val -> backwardExpr ss stack val
 forwardExpr env !ss stack (App _ann n (e : es)) = do
-  pushFrame Nothing (App _ann n (e : es))
+  pushFrame e
   forwardExpr env (ss + 1) (App1 n [] es env stack) e
 forwardExpr env !ss stack (AppNamed ann n [] _) =
   forwardExpr env ss stack (App ann n [])
@@ -372,21 +381,18 @@ forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
   in
     forwardExpr env ss stack (App ann n es)
 forwardExpr env !ss stack (IfThenElse _ann e1 e2 e3) = do
-  pushFrame Nothing (IfThenElse _ann e1 e2 e3)
+  pushFrame e1
   forwardExpr env (ss + 1) (IfThenElse1 e2 e3 env stack) e1
 forwardExpr env !ss stack (Consider _ann e branches) = do
-  pushFrame Nothing (Consider _ann e branches)
+  pushFrame e
   forwardExpr env (ss + 1) (Consider1 branches env stack) e
 forwardExpr _env !ss stack (Lit _ann lit) = do
-  pushFrame Nothing (Lit _ann lit)
   rval <- runLit lit
-  popFrame rval
   backwardExpr ss stack rval
 forwardExpr _env !ss stack (List _ann []) = do
-  pushFrame Nothing (List _ann [])
   backwardExpr ss stack (ValList [])
 forwardExpr env !ss stack (List _ann (e : es)) = do
-  pushFrame Nothing (List _ann (e : es))
+  pushFrame e
   forwardExpr env (ss + 1) (List1 [] es env stack) e
 forwardExpr env !ss stack (Where _ann e ds) = do
   -- TODO: I don't like the weird mix between abstract machine style
@@ -398,7 +404,7 @@ forwardExpr env !ss stack (Where _ann e ds) = do
 backwardExpr :: Int -> Stack -> Value -> Eval Value
 backwardExpr !ss (BinOp1 binOp e2 env stack) val1 = do
   popFrame val1
-  pushFrame Nothing e2
+  pushFrame e2
   forwardExpr env ss (BinOp2 binOp val1 stack) e2
 backwardExpr !ss (BinOp2 binOp val1 stack) val2 = do
   popFrame val2
@@ -413,20 +419,31 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
     Just (ValClosure givens e env') -> do
       popFrame val
       env'' <- matchGivens givens (reverse (val : vals)) stack0
-      forwardExpr (Map.union env'' env') (ss - 1) stack e
+      pushFrame e
+      v <- forwardExpr (Map.union env'' env') (ss - 1) stack e
+      popFrame v
+      pure v
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
-    _                       -> exception RuntimeTypeError stack0
+    _ -> exception RuntimeTypeError stack0
 backwardExpr !ss (App1 n vals (e : es) env stack) val = do
   popFrame val
-  pushFrame Nothing e
+  pushFrame e
   forwardExpr env ss (App1 n (val : vals) es env stack) e
 backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
   popFrame val1
   case boolView val1 of
-    Just True  -> forwardExpr env (ss - 1) stack e2
-    Just False -> forwardExpr env (ss - 1) stack e3
+    Just True  -> do
+      pushFrame e2
+      v <- forwardExpr env (ss - 1) stack e2
+      popFrame v
+      pure v
+    Just False -> do
+      pushFrame e2
+      v <- forwardExpr env (ss - 1) stack e3
+      popFrame v
+      pure v
     Nothing    -> exception RuntimeTypeError stack0
 backwardExpr !ss stack0@(Consider1 branches env stack) val = do
   popFrame val
@@ -436,7 +453,10 @@ backwardExpr !ss (List1 vals [] _env stack) val = do
   backwardExpr (ss - 1) stack (ValList (reverse (val : vals)))
 backwardExpr !ss (List1 vals (e : es) env stack) val = do
   popFrame val
-  forwardExpr env ss (List1 (val : vals) es env stack) e
+  pushFrame e
+  v <- forwardExpr env ss (List1 (val : vals) es env stack) e
+  popFrame v
+  pure v
 backwardExpr _ss Empty val =
   pure val
 
@@ -460,13 +480,20 @@ matchGivens (MkGivenSig _ann otns) vals stack0 = do
 matchBranches :: Value -> [Branch Resolved] -> Environment -> Stack -> Int -> Stack -> Eval Value
 matchBranches _val [] _env stack0 _ss _stack =
   exception NonExhaustivePatterns stack0
-matchBranches _val (Otherwise _ann e : _) env _stack0 !ss stack =
-  forwardExpr env ss stack e
+matchBranches _val (Otherwise _ann e : _) env _stack0 !ss stack = do
+  pushFrame e
+  v <- forwardExpr env ss stack e
+  popFrame v
+  pure v
 matchBranches val (When _ann pat e : branches) env stack0 !ss stack = do
   menv' <- matchPattern stack0 val pat
   case menv' of
     Nothing   -> matchBranches val branches env stack0 ss stack
-    Just env' -> forwardExpr (Map.union env' env) ss stack e
+    Just env' -> do
+      pushFrame e
+      v <- forwardExpr (Map.union env' env) ss stack e
+      popFrame v
+      pure v
 
 matchPattern :: Stack -> Value -> Pattern Resolved -> Eval (Maybe Environment)
 matchPattern _stack0 val (PatVar _ann n) =

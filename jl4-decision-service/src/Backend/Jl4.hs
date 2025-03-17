@@ -113,20 +113,17 @@ buildReasoningTree xs =
     }
 
 toReasoningTree :: EvalTrace -> ReasoningTree
-toReasoningTree (Trace herald expr children val) =
+toReasoningTree (Trace expr children val) =
   ReasoningTree
     { payload =
         ReasonNode
           { exampleCode =
               [Print.prettyLayout expr]
           , explanation =
-              case herald of
-                Nothing -> []
-                Just h -> [h]
-                <> [ "the result is: " <> case val of
-                      Left exc -> Text.show exc
-                      Right v -> Print.prettyLayout v
-                   ]
+              [ "Result: " <> case val of
+                  Left exc -> Text.show exc
+                  Right v -> Print.prettyLayout v
+              ]
           }
     , children = fmap toReasoningTree children
     }
