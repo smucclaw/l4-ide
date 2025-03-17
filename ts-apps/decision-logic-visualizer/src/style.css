@@ -69,7 +69,7 @@
   transform: translateX(-58%); /* Centers the text horizontally, ish */
 
   @apply uppercase;
-  @apply text-lg leading-none;
+  @apply text-base leading-none;
   @apply text-(--color-node-annotation);
 }
 
