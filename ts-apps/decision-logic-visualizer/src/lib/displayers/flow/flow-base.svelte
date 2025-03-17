@@ -21,12 +21,13 @@
   import * as SF from '@xyflow/svelte'
   import {
     type BaseLadderFlowDisplayerProps,
+    type LadderSFNodeWithDims,
+    type LadderSFGraph,
     sfNodeTypes,
     sfEdgeTypes,
     isBoolVarSFNode,
-    type LadderSFNodeWithDims,
-    type LadderSFGraph,
-    getOriginalLirIdFromSfNode,
+    getSFNodeId,
+    type LadderSFNode,
   } from './types.svelte.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { cycle } from '$lib/layout-ir/value.js'
@@ -89,6 +90,9 @@
   let sfIdToLirId = initialSfGraph.sfIdToLirId
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let lirIdToSfId = initialSfGraph.lirIdToSFId
+  const sfNodeToLirId = (sfNode: LadderSFNode) => {
+    return sfIdToLirId(getSFNodeId(sfNode))
+  }
 
   /***********************************
       SvelteFlow hooks
@@ -158,7 +162,7 @@
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
-    const lirId = sfIdToLirId(event.node.id)
+    const lirId = sfNodeToLirId(event.node)
     const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
 
     const newValue = cycle(lirBoolVarNode.getValue(context))
@@ -173,7 +177,7 @@
   > = (event) => {
     if (event.targetNode) {
       const lirNode = context.get(
-        sfIdToLirId(event.targetNode.id)
+        sfNodeToLirId(event.targetNode)
       ) as LadderLirNode
       lirNode.setPosition(context, event.targetNode.position)
     }
@@ -184,9 +188,14 @@
   **********************************************/
 
   /**
-   * Most naive version.
+   * Most naive version: When a non-positional change occurs in the LadderGraphLirNode,
+   * we generate and re-render the SF graph.
    *
-   *  Assumes that the LadderGraphLirNode does NOT publish position changes (may revisit this in the future)
+   *  Assumptions:
+   *  - The id of the LadderGraphLirNode is stable / the same throughout the lifetime of this component.
+   *  - The LadderGraphLirNode does NOT publish position changes (may revisit this in the future)
+   *  - The LadderGraphLirNode has all the info we need to render the SF graph; in particular,
+   *    it is up to date with any changes to the graph.
    */
   const onLadderGraphNonPositionalChange = (context: LirContext, id: LirId) => {
     if (id === ladderGraph.getId()) {
@@ -235,9 +244,7 @@
       // (We need to do this, because we re-generate the SF graph from the LadderGraphLirNode
       // when data associated with the Lir nodes or edges changes.)
       layoutedElements.nodes.forEach((sfNode: LadderSFNodeWithDims) => {
-        const lirNode = context.get(
-          getOriginalLirIdFromSfNode(sfNode)
-        ) as LadderLirNode
+        const lirNode = context.get(sfIdToLirId(sfNode.id)) as LadderLirNode
         lirNode.setPosition(context, sfNode.position)
         lirNode.setDimensions(context, {
           width: sfNode.measured.width,
