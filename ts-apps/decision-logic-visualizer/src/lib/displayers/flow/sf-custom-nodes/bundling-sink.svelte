@@ -17,11 +17,11 @@ TODO: reduce code duplication between this and SourceSFNode
     style="opacity:0;"
     position={defaultSFHandlesInfo.sourcePosition}
   />
-  <div class="node-annotation">
-    {data.context.getVizConfig().displayExplanatoryAnnotations
-      ? data.annotation
-      : ''}
-  </div>
+  {#if data.context.getVizConfig().displayExplanatoryAnnotations}
+    <div class="node-annotation">
+      {data.annotation}
+    </div>
+  {/if}
   <!-- The bit of text is there to improve the layouting -->
   <div style="opacity:0">-</div>
   <Handle

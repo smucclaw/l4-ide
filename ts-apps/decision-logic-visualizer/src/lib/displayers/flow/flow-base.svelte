@@ -14,6 +14,7 @@
     SvelteFlow,
     Background,
     Controls,
+    ControlButton,
     ConnectionLineType,
     useNodesInitialized,
     useSvelteFlow,
@@ -314,7 +315,12 @@ Misc SF UI TODOs:
       onnodedragstop={onNodeDragStop}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
-      <Controls position="bottom-right" showLock={false} />
+      <Controls position="bottom-right" showLock={false}>
+        <ControlButton onclick={() => ladderGraph.toggleZenModeStatus(context)}>
+          <!-- TODO: Make our own menu to get more real estate and use a Switch component -->
+          <div class="text-[0.7rem]">Zen</div>
+        </ControlButton>
+      </Controls>
       <Background />
     </SvelteFlow>
   </div>
