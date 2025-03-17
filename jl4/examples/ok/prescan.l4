@@ -1,0 +1,14 @@
+GIVETH AN Integer
+x MEANS 5
+
+GIVETH AN Integer
+z MEANS x + y
+
+DECLARE Integer IS A NUMBER
+ASSUME y IS A NUMBER
+
+#EVAL x
+
+-- This yields a run-time scope error because we did not adapt
+-- the evaluator:
+#EVAL z

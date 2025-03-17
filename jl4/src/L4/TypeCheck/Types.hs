@@ -40,6 +40,7 @@ data CheckState =
     , errorContext :: !CheckErrorContext
     , substitution :: !Substitution
     , supply       :: !Int
+    , prescanned   :: [TopDecl Resolved]
     }
   deriving stock (Eq, Generic, Show)
 

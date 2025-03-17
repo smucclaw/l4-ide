@@ -98,6 +98,7 @@ initialCheckState environment entityInfo substitution =
     , substitution
     , errorContext = None
     , supply       = 0
+    , prescanned   = []
     }
 
 -- | Main entry point for scope- and type-checking.
@@ -336,6 +337,23 @@ setAnnResolvedKind ::
 setAnnResolvedKind k x =
   setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
 
+storePrescan :: TopDecl Resolved -> Check ()
+storePrescan topdecl =
+  modifying' #prescanned (topdecl :)
+
+finalisePrescan :: Check ()
+finalisePrescan =
+  modifying' #prescanned reverse
+
+usePrescan :: Check (Maybe (TopDecl Resolved))
+usePrescan = do
+  ps <- use #prescanned
+  case ps of
+    []       -> pure Nothing
+    (p : ps') -> do
+      assign' #prescanned ps'
+      pure (Just p)
+
 instantiate :: Type' Resolved -> Check (Type' Resolved)
 instantiate (Forall _ann ns t) = do
   substitution <- Map.fromList <$> traverse (\ n -> let (u, o) = getUniqueName n; r = rawName o in fresh r >>= \ v -> pure (u, v)) ns
@@ -531,14 +549,22 @@ inferLocalDecl (LocalAssume ann assume) = do
 
 inferTopDecl :: TopDecl Name -> Check (TopDecl Resolved)
 inferTopDecl (Declare ann declare) = do
-  rdeclare <- prune $ inferDeclare declare
-  pure (Declare ann rdeclare)
+  mr <- usePrescan
+  case mr of
+    Nothing -> do
+      rdeclare <- prune $ inferDeclare declare
+      pure (Declare ann rdeclare)
+    Just r' -> pure r'
 inferTopDecl (Decide ann decide) = do
   rdecide <- prune $ inferDecide decide
   pure (Decide ann rdecide)
 inferTopDecl (Assume ann assume) = do
-  rassume <- prune $ inferAssume assume
-  pure (Assume ann rassume)
+  mr <- usePrescan
+  case mr of
+    Nothing -> do
+      rassume <- prune $ inferAssume assume
+      pure (Assume ann rassume)
+    Just r' -> pure r'
 inferTopDecl (Directive ann directive) = do
   rdirective <- inferDirective directive
   pure (Directive ann rdirective)
@@ -549,9 +575,29 @@ inferTopDecl (Directive ann directive) = do
 -- recursion? Optimistically, pessimistically, something in between?
 --
 inferProgram :: Program Name -> Check (Program Resolved)
-inferProgram (MkProgram ann sections) = do
+inferProgram program@(MkProgram ann sections) = do
+  prescanProgram program
   rsections <- traverse inferSection sections
   pure (MkProgram ann rsections)
+
+prescanProgram :: Program Name -> Check ()
+prescanProgram (MkProgram _ann sections) = do
+  traverse_ prescanSection sections
+  finalisePrescan
+
+prescanSection :: Section Name -> Check ()
+prescanSection (MkSection _ann _lvl _mn _maka topdecls) = do
+  traverse_ prescanTopDecl topdecls
+
+prescanTopDecl :: TopDecl Name -> Check ()
+prescanTopDecl (Declare ann declare) = do
+  rdeclare <- prune $ inferDeclare declare
+  storePrescan (Declare ann rdeclare)
+prescanTopDecl (Assume ann assume) = do
+  rassume <- prune $ inferAssume assume
+  storePrescan (Assume ann rassume)
+prescanTopDecl _topdecl =
+  pure ()
 
 -- | This covers constants and functions being defined.
 --
