@@ -13,7 +13,6 @@ import {
   SinkLirNode,
   LadderGraphLirNode,
   anyOfBundlingNodeAnno,
-  emptyBundlingNodeAnno
 } from '../layout-ir/ladder-lir.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -117,7 +116,9 @@ function transform(
     .with({ $type: 'Or' }, (orExpr) => {
       const children = orExpr.args.map((n) => transform(nodeInfo, n))
 
-      const overallSource = vertex(new SourceLirNode(nodeInfo, anyOfBundlingNodeAnno.annotation).getId())
+      const overallSource = vertex(
+        new SourceLirNode(nodeInfo, anyOfBundlingNodeAnno.annotation).getId()
+      )
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
       const leftEdges = children.map((child) =>
