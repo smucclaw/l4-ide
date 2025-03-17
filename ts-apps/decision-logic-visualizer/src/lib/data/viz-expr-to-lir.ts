@@ -13,6 +13,7 @@ import {
   SinkLirNode,
   LadderGraphLirNode,
   anyOfBundlingNodeAnno,
+  augmentEdgesWithExplanatoryLabel,
 } from '../layout-ir/ladder-lir.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -46,6 +47,7 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
 */
 export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
+    // 1. Get structure of the graph
     const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
     const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
@@ -56,7 +58,12 @@ export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
 
-    return new LadderGraphLirNode(nodeInfo, dag)
+    const ladderGraph = new LadderGraphLirNode(nodeInfo, dag)
+
+    // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
+    augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
+
+    return ladderGraph
   },
 }
 

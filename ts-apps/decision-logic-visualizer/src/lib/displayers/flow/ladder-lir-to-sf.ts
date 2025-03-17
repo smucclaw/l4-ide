@@ -119,14 +119,14 @@ export function ladderLirNodeToSfNode(
       return {
         ...defaults,
         type: sourceNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: { ...defaultData, ...n.getData() },
       }
     })
     .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: { ...defaultData, ...n.getData() },
       }
     })
     .exhaustive()
@@ -147,6 +147,7 @@ export function ladderLirEdgeToSfEdge(
     id: edge.getId(),
     type: ladderEdgeType,
     data: {
+      context,
       label,
       edgeStyles: graph.getEdgeStyles(context, edge).getStyleString(),
     },
