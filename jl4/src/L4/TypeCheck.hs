@@ -1349,7 +1349,12 @@ matchFunTy  isProjection r t args =
       where
         nonts = length onts
         nargs = length args
-    _ -> do
+    TyApp _ann n ts -> do
+      mt' <- tryExpandTypeSynonym n ts
+      maybe illegalAppError (\ t' -> matchFunTy isProjection r t' args) mt'
+    _ -> illegalAppError
+  where
+    illegalAppError = do
       -- We are trying to apply a non-function.
       addError (IllegalApp r t (length args))
       rargs <- fst . unzip <$> traverse inferExpr args
