@@ -288,6 +288,8 @@
   })
 
   onDestroy(() => {
+    // YM: I'm not sure that this is necessary --- just adding it for now because I've seen examples on GitHub that do this.
+    // I'll look into this more in the future.
     if (editor) {
       editor.dispose()
       editor = undefined
