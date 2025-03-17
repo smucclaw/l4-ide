@@ -385,7 +385,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     edge: T,
     label: string
   ) {
-    this.#dag.getAttributesForEdge(edge).setLabel(label)
+    const attrs = this.#dag.getAttributesForEdge(edge)
+    const newAttrs = new DefaultEdgeAttributes().merge(attrs)
+    newAttrs.setLabel(label)
+    this.#dag.setEdgeAttributes(edge, newAttrs)
+
     this.getRegistry().publish(context, this.getId())
   }
 
