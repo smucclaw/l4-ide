@@ -154,6 +154,18 @@ export abstract class DefaultLirNode
 }
 
 /*********************************************
+       Viz Config
+***********************************************/
+
+export interface VizConfig {
+  displayExplanatoryAnnotations: boolean
+}
+
+const defaultVizConfig = {
+  displayExplanatoryAnnotations: true,
+} as const
+
+/*********************************************
        LirContext
 ***********************************************/
 
@@ -170,7 +182,7 @@ export class LirContext {
   /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
-  constructor() {}
+  constructor(private config: VizConfig = defaultVizConfig) {}
 
   get(id: LirId) {
     return this.#nodes.get(id)
@@ -182,6 +194,14 @@ export class LirContext {
 
   clear(id: LirId) {
     this.#nodes.delete(id)
+  }
+
+  getVizConfig() {
+    return this.config
+  }
+
+  setVizConfig(newConfig: Partial<VizConfig>) {
+    this.config = { ...this.config, ...newConfig }
   }
 }
 
