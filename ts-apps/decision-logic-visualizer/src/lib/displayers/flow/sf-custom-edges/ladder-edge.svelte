@@ -23,9 +23,7 @@
   {targetX}
   {targetY}
   {targetPosition}
-  label={data?.context.getVizConfig().displayExplanatoryAnnotations
-    ? data.label
-    : undefined}
+  label={data?.context.shouldEnableZenMode() ? undefined : data?.label}
   pathOptions={{ curvature: 1 }}
   style={data?.edgeStyles}
 />

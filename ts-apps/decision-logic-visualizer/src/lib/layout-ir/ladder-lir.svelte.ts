@@ -432,15 +432,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     explanatory annotations are visible
   ***************************************/
 
-  zenModeIsEnabled(context: LirContext) {
-    return !context.getVizConfig().displayExplanatoryAnnotations
-  }
-
   toggleZenModeStatus(context: LirContext) {
-    const explanatoryAnnoAreDisplayed = !this.zenModeIsEnabled(context)
-    context.setVizConfig({
-      displayExplanatoryAnnotations: !explanatoryAnnoAreDisplayed,
-    })
+    const currZenModeStatus = context.shouldEnableZenMode()
+    if (currZenModeStatus) {
+      context.disableZenMode()
+    } else {
+      context.enableZenMode()
+    }
+
     this.getRegistry().publish(context, this.getId())
   }
 
