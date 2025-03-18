@@ -185,6 +185,3 @@ mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
 mkVizNameWith printer (getUniqueName -> (uniq, name)) =
   case uniq of
     MkUnique _ u -> V.MkName u (printer name)
-
-nameToText :: Name -> Text
-nameToText = rawNameToText . rawName
