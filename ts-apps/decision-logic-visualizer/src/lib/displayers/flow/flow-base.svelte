@@ -330,10 +330,7 @@ Misc SF UI TODOs:
     <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
     <Collapsible.Root
       onOpenChange={() => {
-        // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
-        setTimeout(() => {
-          doFitView()
-        }, 10)
+        window.requestAnimationFrame(doFitView)
       }}
     >
       <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
