@@ -310,7 +310,7 @@ pushExprFrame env ss stack e = do
 pushEvalFrame :: Environment -> Int -> Stack -> Expr Resolved -> Eval Value
 pushEvalFrame env ss stack e = do
   pushFrame e
-  forwardExpr env (ss + 1) stack e
+  pushExprFrame env (ss + 1) stack e
 
 -- | Pop the given value from the stack evaluation and start evaluation
 -- of the next 'Expr Resolved'.
