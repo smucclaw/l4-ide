@@ -1,12 +1,9 @@
 
-DECLARE Colour IS ONE OF red, green, blue
 
 § qing
 @ref url https://www.lomography.com/magazine/337259-color-chronicles-deconstructing-qing
-GIVEN c IS A Colour
+GIVEN c IS A String
 DECIDE `is qing` IF
-   CONSIDER c
-       WHEN red   THEN FALSE
-       ^    green THEN TRUE
-       ^    blue  THEN TRUE
+       c EQUALS "green"
+    OR c EQUALS "blue"
 
