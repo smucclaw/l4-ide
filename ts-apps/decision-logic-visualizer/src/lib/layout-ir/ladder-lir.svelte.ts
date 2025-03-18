@@ -590,9 +590,6 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
 export type BundlingNodeAnno = Pick<BundlingNodeDisplayerData, 'annotation'>
 
 export const emptyBundlingNodeAnno: BundlingNodeAnno = { annotation: '' }
-export const anyOfBundlingNodeAnno: BundlingNodeAnno = {
-  annotation: 'any of',
-}
 
 export function isBundlingFlowLirNode(
   node: LadderLirNode
