@@ -611,6 +611,7 @@ export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
 abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
+    /** TODO: Think about whether to have the param be a `data` plain object / record instead */
     protected readonly annotation: BundlingNodeDisplayerData['annotation'],
     position: Position
   ) {
@@ -745,6 +746,7 @@ export function augmentEdgesWithExplanatoryLabel(
   ladderGraph: LadderGraphLirNode
 ) {
   const edges = ladderGraph.getEdges(context)
+
   const isEdgeToAddAndLabel = (edge: LadderLirEdge) => {
     const edgeU = context.get(edge.getU()) as LadderLirNode
     const edgeV = context.get(edge.getV()) as LadderLirNode
@@ -764,8 +766,8 @@ export function augmentEdgesWithExplanatoryLabel(
         isSourceWithOrAnnoLirNode(edgeV))
     )
   }
-  const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
 
+  const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
   edgesToAddLabel.forEach((edge) => {
     ladderGraph.setEdgeLabel(
       context,
