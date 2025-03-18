@@ -183,7 +183,7 @@ GIVEN walks  IS A BOOLEAN
       drinks IS A BOOLEAN
       eats   IS A BOOLEAN
 GIVETH A BOOLEAN
-DECIDE `compute_qualifies` i IF
+DECIDE `compute_qualifies` IF
         walks
  AND    drinks
      OR eats
