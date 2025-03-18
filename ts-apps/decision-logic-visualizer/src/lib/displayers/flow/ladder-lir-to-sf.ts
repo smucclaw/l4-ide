@@ -2,17 +2,21 @@ import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import type {
   LadderLirNode,
   LadderLirEdge,
+  SourceNoAnnoLirNode,
+  SourceWithOrAnnoLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
-import { LadderGraphLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+import {
+  isSourceNoAnnoLirNode,
+  isSourceWithOrAnnoLirNode,
+  LadderGraphLirNode,
+} from '$lib/layout-ir/ladder-lir.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
-  type SourceLirNode,
   isBoolVarLirNode,
   BoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
-  isSourceLirNode,
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
@@ -21,7 +25,8 @@ import {
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
-  sourceNodeType,
+  sourceNoAnnoNodeType,
+  sourceWithOrAnnoNodeType,
   sinkNodeType,
   ladderEdgeType,
 } from './svelteflow-types.js'
@@ -117,10 +122,17 @@ export function ladderLirNodeToSfNode(
         data: defaultData,
       }
     })
-    .with(P.when(isSourceLirNode), (n: SourceLirNode) => {
+    .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,
-        type: sourceNodeType,
+        type: sourceNoAnnoNodeType,
+        data: { ...defaultData, ...n.getData() },
+      }
+    })
+    .with(P.when(isSourceWithOrAnnoLirNode), (n: SourceWithOrAnnoLirNode) => {
+      return {
+        ...defaults,
+        type: sourceWithOrAnnoNodeType,
         data: { ...defaultData, ...n.getData() },
       }
     })
