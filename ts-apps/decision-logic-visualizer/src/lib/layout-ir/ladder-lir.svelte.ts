@@ -645,7 +645,7 @@ export class SourceNoAnnoLirNode
   }
 
   toString(): string {
-    return 'SOURCE_LIR_NODE'
+    return 'SOURCE_NO_ANNO_LIR_NODE'
   }
 }
 
@@ -672,7 +672,7 @@ export class SourceWithOrAnnoLirNode
   }
 
   toString(): string {
-    return 'SOURCE_LIR_NODE'
+    return 'SOURCE_WITH_OR_ANNO_LIR_NODE'
   }
 }
 
