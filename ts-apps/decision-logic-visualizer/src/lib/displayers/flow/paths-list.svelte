@@ -25,7 +25,7 @@
         <!-- TODO: Refactor the hover CSS to use our css vars -->
         <Toggle
           pressed={path.is$Selected()}
-          class="rounded-md border-1 p-2 max-w-fit text-xs text-left"
+          class="rounded-lg border-1 p-2 max-w-fit hover:bg-accent text-xs text-left"
           onPressedChange={(pressed: boolean) => {
             if (pressed) {
               path.highlightCorrespondingPathInLadderGraph(context)
