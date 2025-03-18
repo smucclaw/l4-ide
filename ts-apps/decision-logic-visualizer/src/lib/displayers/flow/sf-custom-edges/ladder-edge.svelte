@@ -13,11 +13,8 @@
     targetX,
     targetY,
     targetPosition,
-    attrs: data = defaultLadderEdgeAttrs,
+    data = defaultLadderEdgeAttrs,
   }: LadderEdgeProps = $props()
-
-  const pathStyle = `stroke: var(${data.strokeColorCSSVar});`
-  // console.log(pathStyle)
 </script>
 
 <BezierEdge
@@ -29,7 +26,7 @@
   {targetPosition}
   label={data.label}
   pathOptions={{ curvature: 1 }}
-  style={pathStyle}
+  style={data.edgeStyles}
 />
 
 <!-- 

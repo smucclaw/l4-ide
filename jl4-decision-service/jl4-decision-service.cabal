@@ -3,12 +3,10 @@ name: jl4-decision-service
 version: 0.1.0.0
 build-type: Simple
 tested-with: ghc ==9.6.6
-extra-source-files:
-  CHANGELOG.md
 
 source-repository head
   type: git
-  location: https://github.com/cclaw/l4-ide/jl4-decision-service
+  location: https://github.com/smucclaw/l4-ide/tree/main/jl4-decision-service
 
 common defaults
   default-language: GHC2021
@@ -72,8 +70,10 @@ library
     containers,
     extra,
     filepath,
-    jl4,
+    jl4-core,
+    jl4-lsp,
     lens,
+    lsp-types,
     openapi3,
     optics,
     optparse-applicative,

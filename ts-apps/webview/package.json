@@ -59,6 +59,7 @@
     "lodash": "^4.17.21",
     "ts-pattern": "^5.6.2",
     "vscode-messenger": "^0.5.1",
-    "vscode-messenger-webview": "^0.5.1"
+    "vscode-messenger-webview": "^0.5.1",
+    "runed": "^0.23.3"
   }
 }

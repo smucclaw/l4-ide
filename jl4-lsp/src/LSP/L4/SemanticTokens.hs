@@ -1,17 +1,18 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module LSP.L4.SemanticTokens where
 
 import Base
-import LSP.L4.Base
 
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types hiding (Pattern)
+
+import L4.Lexer
+import L4.Parser.SrcSpan
+import L4.Syntax
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation

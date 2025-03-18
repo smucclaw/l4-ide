@@ -33,17 +33,31 @@
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
-  import '@xyflow/svelte/dist/style.css'
+  import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import { Collapsible } from 'bits-ui'
+  import List from 'lucide-svelte/icons/list'
+  import PathsList from './paths-list.svelte'
 
   /************************
        Lir
   *************************/
 
-  const { context, node: declLirNode }: BaseLadderFlowDisplayerProps = $props()
+  const { context, node }: BaseLadderFlowDisplayerProps = $props()
+
+  /** `node` is reactive (because props are implicitly reactive),
+   * but `declLirNode` is not.
+   * So, if you want to render a new declLirNode,
+   * you'll need to destroy and re-mount the LadderFlow displayer.
+   *
+   * We could also work with the reactive `node` and update the sf graph
+   * whenever `node` changes --- I'm not sure offhand which is better.
+   * This was just the simpler route given what I already have.
+   */
+  const declLirNode = node
   const lir = getLirRegistryFromSvelteContext()
 
   /***********************************
@@ -90,10 +104,10 @@
   )
   const { fitView } = $derived(useSvelteFlow())
 
-  // Keep track of whether nodes have been layouted, so that won't display them before then
-  let nodes$AreLayouted = $state(false)
+  // Keep track of whether nodes have been layouted and fit to view, so that won't display them before then
+  let nodes$AreLayoutedAndFitToView = $state(false)
   // $inspect('nodes layouted', nodes$AreLayouted)
-  const flowOpacity = $derived(nodes$AreLayouted ? 1 : 0)
+  const flowOpacity = $derived(nodes$AreLayoutedAndFitToView ? 1 : 0)
   // $inspect('flowOpacity: ' + `${flowOpacity}`)
 
   onMount(() => {
@@ -110,8 +124,30 @@
       }
     )
 
-    lir.subscribe(onLadderGraphNonPositionalChange)
-    // TODO: Clean up subscribers --- add an onDestroy in core.ts
+    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+
+    /** Clean up when component is destroyed.
+     *
+     * Why is this necessary? One simple reason has to do with the LirNodes and what happens when the visualization command is run.
+     * - For something to be eligible for garbage collection, it must not be reachable from a GC root.
+     * - The visualizer is structured so that there's a LirContext, with a mapping from LirIds to LirNodes,
+     *   that persists through, e.g., changes in the visualization calls from the language server.
+     *   In particular, this mapping from LirIds to LirNodes persists even when the LadderFlow component
+     *   is destroyed and re-created (which is what happens every time the 'visualize L4' LSP command is run).
+     * - So, when destroying a LaddderFlow component,
+     *   if we don't remove references to LirNodes that were used in the component from the LirContext,
+     *   those LirNodes will not be eligible for garbage collection.
+     *   I.e., every time you (e.g.) run the visualize L4 command, you'd be accumulating LirNodes in memory that will never be GC'd.
+     * - (Similar considerations might also apply, mutatis mutandis, to other actions that create LirNodes.)
+     *
+     * For future work: I've checked, via the Chrome memory profiler, that this seems to be making a difference
+     * when it comes to whether certain LirNodes stick around, but I haven't checked this for *every* potential LirNode.
+     * In particular, I might need to do more when it comes to the PathsList and PathLirNodes.
+     */
+    return () => {
+      declLirNode.dispose(context)
+      unsub.unsubscribe()
+    }
   })
 
   /*************************************
@@ -212,43 +248,44 @@
   }
 
   function doFitView() {
-    window.requestAnimationFrame(() => {
-      fitView({
-        padding: 0.1,
-        minZoom: sfVisualOptions.smallestThatCanZoomOutTo,
-        duration: 15,
-      })
-      /***************************
-       * Notes on fitView options
-       ***************************
-       *
-       * 0.1 is the default
-       *
-       * The padding gets used in `getViewportForBounds` in @xyflow/system:
-       *
-       * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
-       *
-       * See their `src/lib/container/SvelteFlow/types.ts` for the defaults they use.
-       *
-       * `minZoom` is the smallest zoom level that the view *can* be zoomed to when the flow is fit to view.
-       * I.e., decreasing it means that fitView can zoom out more for wider graphs.
-       * Being able to zoom out more seems helpful for our usecase (understanding the broad structure of the law).
-       * The default minZoom is 0.5.
-       */
+    fitView({
+      padding: 0.1,
+      minZoom: sfVisualOptions.smallestThatCanZoomOutTo,
     })
+    /***************************
+     * Notes on fitView options
+     ***************************
+     *
+     * 0.1 is the default
+     *
+     * The padding gets used in `getViewportForBounds` in @xyflow/system:
+     *
+     * https://github.com/xyflow/xyflow/blob/23669c330d2344d6ae19a237b69a74ee34fc64e8/packages/system/src/utils/general.ts#L177
+     *
+     * See their `src/lib/container/SvelteFlow/types.ts` for the defaults they use.
+     *
+     * `minZoom` is the smallest zoom level that the view *can* be zoomed to when the flow is fit to view.
+     * I.e., decreasing it means that fitView can zoom out more for wider graphs.
+     * Being able to zoom out more seems helpful for our usecase (understanding the broad structure of the law).
+     * The default minZoom is 0.5.
+     */
   }
 
   function doLayoutAndFitView() {
     doLayout()
-    nodes$AreLayouted = true
-    doFitView()
+    // requestAnimationFrame in order to schedule the fit view for *after* the layouting is done
+    // There may be better ways to do this
+    window.requestAnimationFrame(() => {
+      doFitView()
+      nodes$AreLayoutedAndFitToView = true
+    })
   }
 </script>
 
-<!-- 
+<!--
 Misc SF UI TODOs:
 
-* Make it clearer that the bool var nodes are clickable 
+* Make it clearer that the bool var nodes are clickable
 (should at least change the cursor to a pointer on mouseover)
 -->
 
@@ -274,6 +311,31 @@ Misc SF UI TODOs:
       <Background />
     </SvelteFlow>
   </div>
+  <!-- Paths Section -->
+  <!-- TODO: Move the following into a lin paths container component -->
+  <div class="paths-container">
+    <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
+    <Collapsible.Root
+      onOpenChange={() => {
+        // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
+        setTimeout(() => {
+          doFitView()
+        }, 10)
+      }}
+    >
+      <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
+        <!-- TODO: Improve the button styles -->
+        <button
+          class="rounded-md border-1 px-2 py-1 text-sm hover:bg-sky-100 flex items-center gap-1"
+        >
+          <List /><span>List paths</span>
+        </button>
+      </Collapsible.Trigger>
+      <Collapsible.Content class="pt-2">
+        <PathsList {context} node={ladderGraph.getPathsList(context)} />
+      </Collapsible.Content>
+    </Collapsible.Root>
+  </div>
 </div>
 
 <!-- For debugging -->
@@ -285,6 +347,8 @@ Misc SF UI TODOs:
     display: flex;
     flex-direction: column;
     height: 100%;
+    /* Gap between the flow and the paths list container */
+    row-gap: 6px;
   }
 
   .flow-container {
@@ -292,7 +356,10 @@ Misc SF UI TODOs:
     min-height: 0; /* Prevents overflow */
   }
 
-  /* .paths-container {
+  .paths-container {
     flex: 0 0 auto;
-  } */
+    max-height: 45%;
+    overflow-y: auto;
+    padding-bottom: 6px;
+  }
 </style>

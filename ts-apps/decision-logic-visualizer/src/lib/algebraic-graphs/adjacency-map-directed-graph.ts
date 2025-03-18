@@ -1,7 +1,7 @@
 import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
-  stringifyEdge,
+  stringifyEdge as makeEdgeKey,
   type Edge,
   type EdgeAttributes,
   DefaultEdgeAttributes,
@@ -67,30 +67,35 @@ export class DirectedAMGraph<A extends Ord<A>>
   // Getting / setting edge attributes
 
   getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes {
-    return (
-      this.edgeAttributes.get(stringifyEdge(edge)) ??
-      new DefaultEdgeAttributes()
-    )
+    const edgeKey = makeEdgeKey(edge)
+    const attrs = this.edgeAttributes.get(edgeKey)
+    if (attrs) {
+      return attrs.clone()
+    } else {
+      this.edgeAttributes.set(edgeKey, new DefaultEdgeAttributes())
+      return new DefaultEdgeAttributes() as EdgeAttributes
+    }
   }
 
   /** Will error if the input edge does not exist.
-   *
-   * Merges the input attribute with any existing ones
    */
-  setEdgeAttribute<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
+  setEdgeAttributes<T extends Edge<A>>(edge: T, newAttr: EdgeAttributes) {
     if (!this.hasEdge(edge.getU(), edge.getV())) {
       throw new Error(
         `setEdgeAttribute: Edge (${edge.getU()}, ${edge.getV()}) does not exist`
       )
     }
-
-    const currAttributes = this.getAttributesForEdge(edge)
-    this.edgeAttributes.set(stringifyEdge(edge), currAttributes.merge(newAttr))
+    this.edgeAttributes.set(makeEdgeKey(edge), newAttr)
   }
 
   /** Internal */
   _getEdgeAttributesMap() {
     return this.edgeAttributes
+  }
+
+  dispose() {
+    super.dispose() // Clears the adj map
+    this.edgeAttributes.clear()
   }
 }
 
@@ -154,6 +159,11 @@ export class Overlay<A extends Ord<A>> extends DirectedAMGraph<A> {
     const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
     super(adjMap, edgeAttrs)
   }
+
+  dispose() {
+    this.left.dispose()
+    this.right.dispose()
+  }
 }
 
 export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
@@ -167,6 +177,11 @@ export class Connect<A extends Ord<A>> extends DirectedAMGraph<A> {
       to._getEdgeAttributesMap()
     )
     super(adjMap, edgeAttributes)
+  }
+
+  dispose() {
+    this.from.dispose()
+    this.to.dispose()
   }
 }
 

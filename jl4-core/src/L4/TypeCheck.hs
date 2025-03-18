@@ -1349,7 +1349,12 @@ matchFunTy  isProjection r t args =
       where
         nonts = length onts
         nargs = length args
-    _ -> do
+    TyApp _ann n ts -> do
+      mt' <- tryExpandTypeSynonym n ts
+      maybe illegalAppError (\ t' -> matchFunTy isProjection r t' args) mt'
+    _ -> illegalAppError
+  where
+    illegalAppError = do
       -- We are trying to apply a non-function.
       addError (IllegalApp r t (length args))
       rargs <- fst . unzip <$> traverse inferExpr args
@@ -1607,7 +1612,7 @@ prettyCheckError (IncorrectArgsNumberApp r expected given)   =
   , "  " <> prettyResolvedWithRange r
   , ""
   , "expects " <> prettyCount expected "argument" <> ","
-  , "but your are applying it to " <> prettyCount given "argument" <> " here."
+  , "but you are applying it to " <> prettyCount given "argument" <> " here."
   ]
 prettyCheckError (IllegalApp r t n)                          =
   [ "You are trying to apply"
