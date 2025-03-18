@@ -140,7 +140,7 @@
         automaticLayout: true,
         wordBasedSuggestions: 'off',
         theme: 'jl4Theme',
-        'semanticHighlighting.enabled': true,
+        'semanticHighlighting.enabled': true
       })
 
       const ownUrl: URL = new URL(window.location.href)
