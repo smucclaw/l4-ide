@@ -8,10 +8,6 @@ GIVEN apples        IS A `count of fruit in my bag`
 DECIDE `total fruit` IS
   apples + bananas + oranges + `in the bowl`
 
-#EVAL `total fruit` 1 2 3 4
-
-
-
 
 § `fruit part 2 - MEANS syntax`
 GIVEN apples        IS A `count of fruit in my bag`
@@ -25,8 +21,6 @@ GIVEN apples        IS A `count of fruit in my bag`
      + `in the bowl`
   WHERE
     `bananas per bunch` MEANS 5
-
-#EVAL `total fruit v2` 1 2 3 4
 
 
 
@@ -42,4 +36,4 @@ GIVEN apples        IS A `count of fruit in my bag`
    + `in the bowl`
   WHERE `bananas per bunch` MEANS 5
 
-#EVAL `total fruit v3` 1 2 3 4
+
