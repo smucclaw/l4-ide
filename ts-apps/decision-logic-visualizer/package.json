@@ -84,6 +84,7 @@
     "lodash": "^4.17.21",
     "lucide-svelte": "^0.477.0",
     "runed": "^0.23.3",
+    "tailwind-variants": "^1.0.0",
     "ts-pattern": "^5.6.1"
   }
 }
