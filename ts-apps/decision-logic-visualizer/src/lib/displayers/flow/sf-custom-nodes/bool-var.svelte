@@ -2,8 +2,8 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
-  import type { BoolVarDisplayerProps } from '../types.svelte.js'
-  import { defaultSFHandlesInfo } from '../types.svelte.js'
+  import type { BoolVarDisplayerProps } from '../svelteflow-types.js'
+  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   import { Handle } from '@xyflow/svelte'
 
   let { data }: BoolVarDisplayerProps = $props()

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { defaultSFHandlesInfo } from '../types.svelte.js'
+  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   import type { NodeProps, Node } from '@xyflow/svelte'
   import { Handle } from '@xyflow/svelte'
 

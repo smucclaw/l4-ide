@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { type PathListDisplayerProps } from './types.svelte.js'
+  import { type PathListDisplayerProps } from './svelteflow-types.js'
 
   /************************
        Lir

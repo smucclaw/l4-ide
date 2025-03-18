@@ -3,8 +3,8 @@
     BezierEdge,
     // EdgeLabel,
   } from '@xyflow/svelte'
-  import type { LadderEdgeProps } from '../types.svelte.js'
-  import { defaultLadderEdgeAttrs } from '../types.svelte.js'
+  import type { LadderEdgeProps } from '../svelteflow-types.js'
+  import { defaultLadderEdgeAttrs } from '../svelteflow-types.js'
 
   let {
     sourceX,

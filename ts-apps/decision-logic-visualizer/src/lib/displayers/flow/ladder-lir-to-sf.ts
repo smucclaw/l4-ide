@@ -22,7 +22,7 @@ import {
   sourceNodeType,
   sinkNodeType,
   ladderEdgeType,
-} from './types.svelte.js'
+} from './svelteflow-types.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'

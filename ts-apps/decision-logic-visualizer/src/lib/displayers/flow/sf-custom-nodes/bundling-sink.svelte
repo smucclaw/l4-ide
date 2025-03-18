@@ -4,7 +4,7 @@ TODO: maybe reduce code duplication between this and SourceSFNode
 <script lang="ts">
   import { Handle } from '@xyflow/svelte'
   import type { NodeProps, Node } from '@xyflow/svelte'
-  import { defaultSFHandlesInfo } from '../types.svelte.js'
+  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   // eslint-disable-next-line no-empty-pattern
   let {}: NodeProps<Node> = $props()
 </script>

@@ -1,24 +1,34 @@
+// Types and util functions for the Svelte Flow graph
+
 import type { Name } from '@repo/viz-expr'
 import type { BoolVal } from '$lib/layout-ir/value.js'
 import type {
   RootDisplayerProps,
   DisplayerProps,
   LirContext,
+  LirId,
 } from '$lib/layout-ir/core.js'
 import type {
   DeclLirNode,
   PathListLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
+import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import * as SF from '@xyflow/svelte'
+// SF custom node components
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
 import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
-import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
-import type { LirId } from '$lib/layout-ir/core.js'
 
+/**
+ * The result type of the ladder lir graph to SF graph conversion.
+ *
+ * This should have everything you need to render the SF graph
+ * and to translate changes back and forth between the intermediate Ladder Lir representation
+ * and the concrete SF gui.
+ */
 export interface LadderSFGraph {
   nodes: LadderSFNode[]
   edges: LadderSFEdge[]
@@ -46,16 +56,24 @@ export interface PathListDisplayerProps extends DisplayerProps {
           SF Nodes
 *************************************************/
 
+export type LadderSFNode = SF.Node
+
+export function getSFNodeId(node: LadderSFNode): string {
+  return node.id
+}
+
+export type LadderSFNodeWithDims = LadderSFNode & {
+  measured: Dimensions
+}
+
 export interface Dimensions {
   width: number
   height: number
 }
 
-export type LadderSFNode = SF.Node
-
-export type LadderSFNodeWithDims = LadderSFNode & {
-  measured: Dimensions
-}
+/************************************************
+    Custom node types and type guards
+*************************************************/
 
 export const boolVarNodeType = 'boolVarNode' as const
 export const notStartNodeType = 'notStartNode' as const
@@ -85,7 +103,7 @@ export const isSFGroupingNode = (
   isSFSourceNode(node) || isSFSinkNode(node)
 
 /************************************************
-          Custom Nodes
+           Custom node type map
 *************************************************/
 
 /** This is where we declare all the custom nodes for Svelte Flow */
@@ -97,6 +115,10 @@ export const sfNodeTypes: SF.NodeTypes = {
   sinkNode: SinkSFNode,
 }
 
+/************************************************
+          Stuff for SF Node data
+*************************************************/
+
 export interface SFHandlesInfo {
   sourcePosition: SF.Position
   targetPosition: SF.Position
@@ -105,13 +127,6 @@ export interface SFHandlesInfo {
 export const defaultSFHandlesInfo: SFHandlesInfo = {
   sourcePosition: SF.Position.Right,
   targetPosition: SF.Position.Left,
-}
-
-// TODO: Not sure we want this after all
-export function getOriginalLirIdFromSfNode(node: LadderSFNode): LirId {
-  if (!node.data.originalLirId) throw new Error('No originalLirId in node data')
-
-  return node.data.originalLirId as LirId
 }
 
 // TODO: Not sure we need this after all
