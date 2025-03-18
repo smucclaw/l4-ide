@@ -66,7 +66,7 @@ jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
     let uri = normalizedFilePathToUri nfp
-    Shake.addVirtualFileFromFS nfp
+    _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
   let mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
@@ -117,17 +117,18 @@ parseFile file input =
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right (prog, _) -> do
       Text.putStrLn "Parsing successful"
-      case JL4.doCheckProgram prog of
+      case JL4.doCheckProgram nuri prog of
         MkCheckResult {errors, program}
           | all ((== JL4.SInfo) . JL4.severity) errors -> do
             Text.putStrLn "Typechecking successful"
-            let results = JL4.doEvalProgram program
+            let results = JL4.doEvalProgram program nuri
             let msgs = (typeErrorToMessage <$> errors) ++ (evalDirectiveResultToMessage <$> results)
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
           | otherwise -> do
               let msgs = typeErrorToMessage <$> errors
               Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
  where
+  nuri = toNormalizedUri $ filePathToUri file
   fp = takeFileName file
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, [either Text.show Print.prettyLayout res])

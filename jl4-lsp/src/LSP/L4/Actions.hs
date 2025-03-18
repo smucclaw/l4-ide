@@ -138,7 +138,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
   let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty)}} _tydec appform _expr) simplify substitution
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution ty, simplify}
+        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 
   case mdecide of
@@ -194,8 +194,8 @@ decideNodeStartsAtPos pos d = Just pos == do
 -- LSP Code Actions
 -- ----------------------------------------------------------------------------
 
-completions :: Rope -> TypeCheckResult -> Position -> [CompletionItem]
-completions rope typeCheck (Position ln col) = do
+completions :: Rope -> NormalizedUri -> TypeCheckResult -> Position -> [CompletionItem]
+completions rope nuri typeCheck (Position ln col) = do
   let completionPrefix =
         Text.takeWhileEnd isAlphaNum
         $ Rope.toText
@@ -229,7 +229,7 @@ completions rope typeCheck (Position ln col) = do
               topDeclToCompletionItem name
               $ Optics.over'
                 (Optics.gplate @(Type' Resolved))
-                (applyFinalSubstitution typeCheck.substitution)
+                (applyFinalSubstitution typeCheck.substitution nuri)
                 checkEntity
             )
             (combineEnvironmentEntityInfo
@@ -272,20 +272,20 @@ referenceHover pos refs = do
     )
     (Just lspRange)
 
-typeHover :: Position -> TypeCheckResult -> PositionMapping -> Maybe Hover
-typeHover pos tcRes positionMapping = do
+typeHover :: Position -> NormalizedUri -> TypeCheckResult -> PositionMapping -> Maybe Hover
+typeHover pos nuri tcRes positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
   (range, i) <- findInfo (lspPositionToSrcPos oldPos) tcRes.program
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
-  pure (infoToHover tcRes.substitution newLspRange i)
+  pure (infoToHover nuri tcRes.substitution newLspRange i)
 
-infoToHover :: Substitution -> Range -> Info -> Hover
-infoToHover subst r i =
+infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Hover
+infoToHover nuri subst r i =
   Hover (InL (mkPlainText x)) (Just r)
   where
     x =
       case i of
-        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst t)
+        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst nuri t)
         KindInfo k  -> "arity " <> Text.pack (show k)
         KeywordInfo -> "keyword"

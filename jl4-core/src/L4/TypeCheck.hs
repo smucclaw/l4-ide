@@ -4,6 +4,8 @@ module L4.TypeCheck
   , applyFinalSubstitution
   , combineEnvironmentEntityInfo
   , doCheckProgram
+  , doCheckProgramWithDependencies
+  , initialCheckState
   , isQuantifier
   , prettyCheckError
   , prettyCheckErrorWithContext
@@ -89,9 +91,10 @@ import Control.Applicative
 import Data.Bifunctor
 import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
+import Language.LSP.Protocol.Types (NormalizedUri, fromNormalizedUri, Uri (..))
 
-initialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
-initialCheckState environment entityInfo substitution =
+mkInitialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
+mkInitialCheckState environment entityInfo substitution =
   MkCheckState
     { environment
     , entityInfo
@@ -110,15 +113,21 @@ initialCheckState environment entityInfo substitution =
 -- - a resolved and type-annotated version of the program
 -- - the final substitution (for resolving type annotations in the program)
 --
-doCheckProgram :: Program Name -> CheckResult
-doCheckProgram program =
-  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment initialEntityInfo Map.empty) of
+doCheckProgram :: NormalizedUri -> Program Name -> CheckResult
+doCheckProgram = doCheckProgramWithDependencies initialCheckState
+
+initialCheckState :: CheckState
+initialCheckState = mkInitialCheckState initialEnvironment initialEntityInfo Map.empty
+
+doCheckProgramWithDependencies :: CheckState -> NormalizedUri -> Program Name -> CheckResult
+doCheckProgramWithDependencies checkState moduleUri program =
+  case runCheckUnique (inferProgram program) MkCheckEnv {moduleUri} checkState of
     (w, s) ->
       let
         (errs, rprog) = runWith w
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
-        case runCheckUnique (traverse applySubst errs) s of
+        case runCheckUnique (traverse applySubst errs) MkCheckEnv {moduleUri} s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
             in MkCheckResult
@@ -144,12 +153,12 @@ combineEnvironmentEntityInfo env ei =
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
 --
-applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
-applyFinalSubstitution subst t =
+applyFinalSubstitution :: ApplySubst a => Substitution -> NormalizedUri -> a -> a
+applyFinalSubstitution subst moduleUri t =
   let
-    cs = initialCheckState Map.empty Map.empty subst
+    cs = mkInitialCheckState Map.empty Map.empty subst
   in
-    case runCheckUnique (applySubst t) cs of
+    case runCheckUnique (applySubst t) MkCheckEnv {moduleUri} cs of
       (w, _cs') ->
         let
           (_errs, r) = runWith w
@@ -157,9 +166,9 @@ applyFinalSubstitution subst t =
           r
 
 -- | Helper function to run the check monad an expect a unique result.
-runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckState)
-runCheckUnique c s =
-  case runCheck c s of
+runCheckUnique :: Check a -> CheckEnv-> CheckState  -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique c s e =
+  case runCheck c s e of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
@@ -174,15 +183,15 @@ anyOf = asum . fmap pure
 --
 orElse :: Check a -> Check a -> Check a
 orElse m1 m2 = do
-  MkCheck $ \ s ->
+  MkCheck $ \ s e ->
     let
-      candidates = runCheck m1 s
+      candidates = runCheck m1 s e
 
       isSuccess (Plain _, _)  = True
       isSuccess (With _ _, _) = False
     in
       case filter isSuccess candidates of
-        [] -> runCheck m2 s
+        [] -> runCheck m2 s e
         xs -> xs
 
 -- | Allow the subcomputation to have at most one result.
@@ -190,10 +199,10 @@ orElse m1 m2 = do
 prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- use #errorContext
-  MkCheck $ \ s ->
+  MkCheck $ \ s env ->
     let
       candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s
+      candidates = runCheck m s env
 
       proc []                    = [] -- should never occur
       proc [a]                   = [a]
@@ -219,10 +228,10 @@ prune m = do
 --
 softprune :: forall a. Check a -> Check a
 softprune m = do
-  MkCheck $ \ s ->
+  MkCheck $ \ s env ->
     let
       candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s
+      candidates = runCheck m s env
 
       proc []                    = [] -- should never occur
       proc [a]                   = [a]
@@ -253,7 +262,8 @@ step = do
 newUnique :: Check Unique
 newUnique = do
   i <- step
-  pure (MkUnique 'c' i)
+  u <- asks (.moduleUri)
+  pure (MkUnique 'c' i u)
 
 fresh :: RawName -> Check (Type' Resolved)
 fresh prefix = do
@@ -1801,10 +1811,11 @@ prettyOptionallyNamedType (MkOptionallyNamedType _ (Just r) t) =
 --
 -- TODO: eventually, we will have to print a file path here for potentially external locations
 prettyResolvedWithRange :: Resolved -> Text
-prettyResolvedWithRange r =
+prettyResolvedWithRange r = do
+  let u = getUnique r
   case rangeOf (getOriginal r) of
     Nothing    -> prettyLayout r <> " (predefined)"
-    Just range -> prettyLayout r <> " (defined at " <> prettySrcRange Nothing (Just range) <> ")"
+    Just range -> prettyLayout r <> " (defined at " <> (fromNormalizedUri u.moduleUri).getUri <> ":" <> prettySrcRange Nothing (Just range) <>  ")"
 
 -- | Show the name with its source range.
 --

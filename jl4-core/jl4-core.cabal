@@ -39,6 +39,7 @@ library
     generics-sop,
     hw-fingertree,
     logict,
+    lsp-types,
     megaparsec,
     mtl,
     optics,

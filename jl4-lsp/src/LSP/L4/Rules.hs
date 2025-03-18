@@ -16,17 +16,22 @@ import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
 
+import Control.Applicative
 import Control.DeepSeq
+import Control.Exception (assert)
 import Control.Monad.Except (runExceptT)
+import Control.Monad.Trans.Maybe
+import Control.Monad.State
 import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
 import Data.Text (Text)
-import UnliftIO (liftIO)
+import qualified Data.Map.Strict as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
+import System.FilePath
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
@@ -44,6 +49,7 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
+import qualified Data.List as List
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -52,6 +58,11 @@ data GetLexTokens = GetLexTokens
 
 type instance RuleResult GetParsedAst = Program Name
 data GetParsedAst = GetParsedAst
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetDependencies = [TypeCheckResult]
+data GetDependencies = GetDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -157,21 +168,27 @@ instance Pretty Log where
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
 
-jl4Rules :: Recorder (WithPriority Log) -> Rules ()
-jl4Rules recorder = do
+jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
+jl4Rules rootDirectory recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
-    (_, mRope) <- use_ GetFileContents uri
+    mRope <- runMaybeT $
+      MaybeT (snd <$> use_ GetFileContents uri)
+      <|> do
+        -- FIXME: how do we actually invalidate this VFS file
+        -- (except by opening in the same editor session)
+        -- do we check the last modified time or smth like that?
+        -- I think basically as it is now we don't do anything like
+        -- that and the current time check is basically redundant
+        file <- hoistMaybe $ uriToNormalizedFilePath uri
+        lift $ addVirtualFileFromFS file
+
     case mRope of
-      -- FIXME: this doesn't mean that we encountered an internal error but
-      -- that the file has to be fetched from disk!
-      Nothing -> pure ([], Nothing)
+      Nothing -> pure ([mkSimpleFileDiagnostic uri (mkSimpleDiagnostic (fromNormalizedUri uri).getUri "could not obtain file contents" Nothing)], Nothing)
       Just rope -> do
-        let
-          contents = Rope.toText rope
+        let contents = Rope.toText rope
         case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
           Left errs -> do
-            let
-              diags = toList $ fmap mkParseErrorDiagnostic errs
+            let diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)
           Right ts ->
             pure ([], Just (ts, contents))
@@ -188,11 +205,36 @@ jl4Rules recorder = do
           diags = fmap mkNlgWarning warns
         pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
 
-  define shakeRecorder $ \TypeCheck f -> do
-    parsed <- use_ GetParsedAst f
-    let result = TypeCheck.doCheckProgram parsed
+  define shakeRecorder $ \GetDependencies uri -> do
+    prog <- use_ GetParsedAst uri
+    let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
+        mkImportUri (MkImport _a n)
+          = let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
+             in toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
+        getImport = \case Import _ann i -> [i]; _ -> []
+        imports  = foldTopDecls getImport prog
+    res <- uses_ TypeCheck (map mkImportUri imports)
+    pure ([], Just res)
+
+  define shakeRecorder $ \TypeCheck uri -> do
+    parsed <- use_ GetParsedAst    uri
+    deps   <- use_ GetDependencies uri
+    let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
+        unionCheckStates cState tcRes =
+          TypeCheck.MkCheckState
+          -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
+          { environment = Map.unionWith List.union cState.environment tcRes.environment
+          -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
+          -- same module. That means that the rhs of it should be identical.
+          , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.entityInfo tcRes.entityInfo
+          , substitution = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.substitution tcRes.substitution
+          , errorContext = cState.errorContext
+          , supply = cState.supply
+          }
+        initial = foldl' unionCheckStates TypeCheck.initialCheckState deps
+        result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
     pure
-      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) result.errors
+      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
       , Just TypeCheckResult
         { program = result.program
         , substitution = result.substitution
@@ -208,10 +250,10 @@ jl4Rules recorder = do
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
-  define shakeRecorder $ \Evaluate f -> do
-    r <- use_ SuccessfulTypeCheck f
-    let results = doEvalProgram r.program
-    pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
+  define shakeRecorder $ \Evaluate uri -> do
+    r <- use_ SuccessfulTypeCheck uri
+    let results = doEvalProgram r.program uri
+    pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just ())
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f

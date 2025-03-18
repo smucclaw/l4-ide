@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Syntax where
 
@@ -15,6 +14,7 @@ import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
+import Language.LSP.Protocol.Types (NormalizedUri)
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -26,9 +26,11 @@ data RawName =
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Unique = MkUnique !Char !Int
+data Unique = MkUnique {sort :: !Char, unique :: !Int, moduleUri :: !NormalizedUri}
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+instance ToExpr NormalizedUri
 
 data Resolved =
     Def Unique Name        -- ^ defining occurrence of name
@@ -407,7 +409,6 @@ deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
-
 deriving anyclass instance ToConcreteNodes PosToken (Program Resolved)
 
 -- Generic instance does not apply because we exclude the level.
@@ -462,7 +463,6 @@ instance ToConcreteNodes PosToken Comment where
 
 instance ToConcreteNodes PosToken Nlg where
   toNodes (MkNlg ann _) = flattenConcreteNodes ann []
-
 
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
