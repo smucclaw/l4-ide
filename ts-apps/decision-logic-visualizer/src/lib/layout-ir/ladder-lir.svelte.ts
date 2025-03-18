@@ -661,7 +661,7 @@ export class SourceWithOrAnnoLirNode
 {
   constructor(
     nodeInfo: LirNodeInfo,
-    annotation: BundlingNodeDisplayerData['annotation'] = emptyBundlingNodeAnno.annotation,
+    annotation: BundlingNodeDisplayerData['annotation'],
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, annotation, position)
