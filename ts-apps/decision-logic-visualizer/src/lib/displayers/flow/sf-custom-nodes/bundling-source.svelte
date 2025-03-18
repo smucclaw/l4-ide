@@ -15,9 +15,11 @@
     position={defaultSFHandlesInfo.sourcePosition}
   />
   <div class="node-annotation">
-    {data.context.getVizConfig().displayExplanatoryAnnotations
-      ? data.annotation
-      : ''}
+    {#if !data.context.shouldEnableZenMode()}
+      <div class="node-annotation">
+        {data.annotation}
+      </div>
+    {/if}
   </div>
   <!-- The bit of text is there to improve the layouting -->
   <div style="opacity:0;">-</div>

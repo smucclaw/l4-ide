@@ -158,12 +158,12 @@ export abstract class DefaultLirNode
 ***********************************************/
 
 export interface VizConfig {
-  displayExplanatoryAnnotations: boolean
+  shouldEnableZenMode: boolean
 }
 
-const defaultVizConfig = {
-  displayExplanatoryAnnotations: true,
-} as const
+const defaultVizConfig: VizConfig = {
+  shouldEnableZenMode: false,
+}
 
 /*********************************************
        LirContext
@@ -196,12 +196,18 @@ export class LirContext {
     this.#nodes.delete(id)
   }
 
-  getVizConfig() {
-    return this.config
+  /* Viz Config */
+
+  shouldEnableZenMode() {
+    return this.config.shouldEnableZenMode
   }
 
-  setVizConfig(newConfig: Partial<VizConfig>) {
-    this.config = { ...this.config, ...newConfig }
+  enableZenMode() {
+    this.config.shouldEnableZenMode = true
+  }
+
+  disableZenMode() {
+    this.config.shouldEnableZenMode = false
   }
 }
 
