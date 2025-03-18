@@ -27,11 +27,11 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module LSP.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras, rootDir,
+    IdeState (..), shakeSessionInit,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
-    shakeOpen, shakeShut,
+    shakeOpen, shakeShut, oneshotIdeState,
     shakeEnqueue,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
@@ -43,7 +43,7 @@ module LSP.Core.Shake(
     RuleBody(..),
     define, defineNoDiagnostics,
     defineEarlyCutoff,
-    defineNoFile, defineEarlyCutOffNoFile,
+    defineNoFile,
     getDiagnostics,
     getHiddenDiagnostics,
     IsIdeGlobal, addIdeGlobal, addIdeGlobalExtras, getIdeGlobalState, getIdeGlobalAction,
@@ -53,7 +53,7 @@ module LSP.Core.Shake(
     GlobalIdeOptions(..),
     ideLogger,
     actionLogger,
-    getVirtualFile,
+    getVirtualFile, addVirtualFile, addVirtualFileFromFS,
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
@@ -83,7 +83,7 @@ import Control.Concurrent.STM.Stats (atomicallyNamed)
 import Control.Concurrent.Strict
 import Control.DeepSeq
 import Control.Exception.Extra hiding (bracket_)
-import Control.Lens ((%~), (&), (?~))
+import Control.Lens ((%~), (&), (?~), over)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Control.Monad.Reader
@@ -147,6 +147,9 @@ import UnliftIO (MonadUnliftIO (withRunInIO))
 import qualified "list-t" ListT
 import L4.Parser.SrcSpan
 import L4.Syntax
+import qualified Base.Text as Text
+import qualified Data.Text.Mixed.Rope as Rope
+import Base.Text (Text)
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -189,14 +192,14 @@ instance Pretty Log where
         [ "Finished build session"
         , pretty (fmap displayException e) ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
-      "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
-      <+> pretty (showDiagnosticsColored fileDiagnostics)
+      "updateFileDiagnostics published different from new diagnostics - file diagnostics:" <> Pretty.line
+      <> prettyDiagnostics fileDiagnostics
     LogDefineEarlyCutoffRuleNoDiagHasDiag fileDiagnostic ->
-      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:"
-      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:" <> Pretty.line
+      <> prettyDiagnostic fileDiagnostic
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
-      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
-      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:" <> Pretty.line
+      <> prettyDiagnostic fileDiagnostic
     LogCancelledAction action ->
         pretty action <+> "was cancelled"
     LogSessionInitialised -> "Shake session initialized"
@@ -215,8 +218,7 @@ instance Pretty Log where
 type IndexQueue = TQueue (IO ())
 
 data ThreadQueue = ThreadQueue {
-    tIndexQueue     :: IndexQueue
-    , tRestartQueue :: TQueue (IO ())
+     tRestartQueue :: TQueue (IO ())
     , tLoaderQueue  :: TQueue (IO ())
 }
 
@@ -321,6 +323,16 @@ getVirtualFile :: NormalizedUri -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup nf vfs -- Don't leak a reference to the entire map
+
+addVirtualFile :: NormalizedFilePath -> Text -> Action ()
+addVirtualFile nfp t = do
+  let rope = Rope.fromText t
+      insertToVfs vfs =  ((), over vfsMap (Map.insert (normalizedFilePathToUri nfp) (VirtualFile 0 0 rope)) vfs)
+  liftIO . atomically . flip stateTVar insertToVfs . vfsVar =<< getShakeExtras
+
+addVirtualFileFromFS :: NormalizedFilePath -> Action ()
+addVirtualFileFromFS nfp = do
+  addVirtualFile nfp =<< liftIO (Text.readFile (fromNormalizedFilePath nfp))
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe LspSink -> IO VFS
@@ -634,6 +646,28 @@ shakeOpen recorder lspSink mClientCapabilities debouncer
     let ideState = IdeState{..}
     return ideState
 
+oneshotIdeState :: Recorder (WithPriority Log) -> FilePath -> Rules () -> IO IdeState
+oneshotIdeState recorder curDir rules = do
+    tRestartQueue <- newTQueueIO
+    tLoaderQueue <- newTQueueIO
+
+    shakeOpen
+      recorder
+      Nothing
+      Nothing
+      noopDebouncer
+      Nothing
+      (IdeReportProgress False)
+      (IdeTesting False)
+      ThreadQueue{tLoaderQueue, tRestartQueue}
+      defaultIdeOptions.optShakeOptions
+      mempty
+      do
+        -- FIXME: refactor shakeOpen to be more lazy or to not do this lookup
+        -- FIXME: isWorkSpaceFile expects an ide configuration that sets the workspace dir
+        addIdeGlobal $ GlobalIdeOptions defaultIdeOptions
+        rules
+      curDir
 
 getStateKeys :: ShakeExtras -> IO [Key]
 getStateKeys = (fmap . fmap) fst . atomically . ListT.toList . STM.listT . state
@@ -1051,11 +1085,6 @@ useWithoutDependency key file =
 data RuleBody k v
   = Rule (k -> NormalizedUri -> Action (Maybe BS.ByteString, IdeResult v))
   | RuleNoDiagnostics (k -> NormalizedUri -> Action (Maybe BS.ByteString, Maybe v))
-  | RuleWithCustomNewnessCheck
-    { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
-    , build :: k -> NormalizedUri -> Action (Maybe BS.ByteString, Maybe v)
-    }
-  | RuleWithOldValue (k -> NormalizedUri -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
@@ -1072,26 +1101,10 @@ defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (
     let diagnostics _ver diags = do
             mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
-defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
-    addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> do
-            let diagnostics _ver diags = do
-                    mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
-            defineEarlyCutoff' diagnostics newnessCheck key file old mode $
-                const $ second (mempty,) <$> build key file
-defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> do
-    extras <- getShakeExtras
-    let diagnostics ver diags = do
-            updateFileDiagnostics recorder file ver (newKey key) extras diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == normalizedFilePathToUri emptyNormalizedFilePath then do res <- f k; return (Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
-
-defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == normalizedFilePathToUri emptyNormalizedFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'

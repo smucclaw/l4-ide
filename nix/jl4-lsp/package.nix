@@ -2,8 +2,7 @@
 let
   hlib = haskell.lib.compose;
   hpkgs = haskell.packages.ghc98.override {
-    overrides = import ./hs-overlay.nix;
+    overrides = import ./hs-overlay.nix hlib;
   };
-  jl4 = hpkgs.callCabal2nix "jl4" ../../jl4 { };
 in
-hlib.justStaticExecutables (hlib.doJailbreak jl4)
+hlib.justStaticExecutables hpkgs.jl4-lsp

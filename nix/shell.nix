@@ -7,6 +7,7 @@ pkgs.mkShell {
     pkgs.haskell.compiler.ghc98
     pkgs.haskell.packages.ghc98.haskell-language-server
     pkgs.cabal-install
+    pkgs.ghciwatch
     pkgs.zlib
     pkgs.xz
     pkgs.pkg-config

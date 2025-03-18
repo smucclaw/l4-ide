@@ -1,0 +1,152 @@
+cabal-version: 3.0
+name: jl4-lsp
+version: 0.1
+build-type: Simple
+tested-with: GHC==9.6.6
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+    LambdaCase
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  build-depends:
+    Diff,
+    aeson,
+    async,
+    autodocodec,
+    bytestring,
+    co-log-core,
+    deepseq,
+    extra,
+    focus,
+    fuzzy,
+    generics-sop,
+    hashable,
+    hls-graph,
+    jl4-core,
+    lens,
+    lens-aeson,
+    lsp,
+    lsp-types,
+    mtl,
+    monoidal-containers,
+    optics,
+    hw-fingertree,
+    prettyprinter,
+    safe-exceptions,
+    stm,
+    stm-containers,
+    text,
+    text-rope,
+    time,
+    unliftio,
+    unordered-containers,
+    vector,
+    list-t,
+    enummapset,
+    sorted-list,
+    filepath,
+    transformers,
+    data-default,
+    containers,
+    binary,
+    directory,
+    Glob,
+
+  if os(windows)
+    build-depends: Win32
+  else
+    build-depends: unix
+
+  exposed-modules:
+    Control.Concurrent.Strict
+
+    LSP.Logger
+    LSP.SemanticTokens
+
+    LSP.Core.Action
+    LSP.Core.Debouncer
+    LSP.Core.FileExists
+    LSP.Core.FileStore
+    LSP.Core.FileUtils
+    LSP.Core.PositionMapping
+    LSP.Core.IdeConfiguration
+    LSP.Core.OfInterest
+    LSP.Core.ProgressReporting
+    LSP.Core.RuleTypes
+    LSP.Core.Shake
+    LSP.Core.Service
+    LSP.Core.WorkerThread
+    LSP.Core.Types.Diagnostics
+    LSP.Core.Types.Location
+    LSP.Core.Types.Monitoring
+    LSP.Core.Types.Options
+    LSP.Core.Types.Shake
+
+    LSP.L4.Actions
+    LSP.L4.SemanticTokens
+    LSP.L4.Rules
+    LSP.L4.Oneshot
+    LSP.L4.Viz.VizExpr
+    LSP.L4.Viz.Ladder
+
+executable jl4-lsp
+  import: defaults
+  ghc-options:
+    -threaded
+    -rtsopts
+    -- disable idle GC
+    -- increase nursery size
+    -- Enable collection of heap statistics
+    "-with-rtsopts=-I0 -A128M -T"
+  hs-source-dirs: app
+  build-depends:
+    aeson,
+    bytestring ^>=0.11.5.3,
+    co-log-core,
+    containers,
+    directory,
+    extra,
+    hls-graph ^>=2.9.0.0,
+    jl4-core,
+    jl4-lsp,
+    lens,
+    lsp ^>=2.7.0.0,
+    lsp-types ^>=2.3.0.0,
+    mtl,
+    optparse-applicative,
+    safe-exceptions,
+    stm,
+    stm-containers ^>=1.2.1,
+    -- NOTE: the reason why we have an upperbound on text is that
+    -- it introduces new definitions that conflicts with ours
+    text >= 2 && < 2.1.2,
+    transformers,
+    unliftio,
+    unordered-containers ^>=0.2.20,
+    websockets,
+
+  main-is: Server.hs
+  other-modules:
+    LSP.L4.Base
+    LSP.L4.Config
+    LSP.L4.Handlers
+    LSP.L4.LanguageServer

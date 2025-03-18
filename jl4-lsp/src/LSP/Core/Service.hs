@@ -74,10 +74,10 @@ initialise recorder mainRule mLspSink mClientCapabilities debouncer options thre
         mClientCapabilities
         debouncer
         shakeProfiling
-        (options.optReportProgress)
-        (options.optTesting)
+        options.optReportProgress
+        options.optTesting
         threadQueue
-        (options.optShakeOptions)
+        options.optShakeOptions
         metrics
         (do
             addIdeGlobal $ GlobalIdeOptions options
