@@ -253,10 +253,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "ELSE" <+> printWithLayout else'
         ]
     Consider   _ expr branches ->
-      vcat
-        [ "CONSIDER" <+> printWithLayout expr
-        , indent 2 (vsep $ punctuate comma (fmap printWithLayout branches))
-        ]
+      "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
     Lit        _ lit -> printWithLayout lit
     List       _ exprs ->
@@ -291,9 +288,9 @@ instance LayoutPrinter a => LayoutPrinter (Branch a) where
 instance LayoutPrinter a => LayoutPrinter (Pattern a) where
   printWithLayout = \case
     PatVar _ n -> printWithLayout n
-    PatApp _ n pats -> printWithLayout n <> case pats of
+    PatApp _ n pats -> printWithLayout n <> hang 2 case pats of
       [] -> mempty
-      pats'@(_:_) -> vsep (fmap printWithLayout pats')
+      pats'@(_:_) -> space <> vsep (fmap printWithLayout pats')
     PatCons _ patHead patTail -> printWithLayout patHead <+> "FOLLOWED BY" <+> printWithLayout patTail
 
 instance LayoutPrinter Nlg where

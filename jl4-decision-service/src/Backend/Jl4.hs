@@ -5,9 +5,10 @@ import Base.Text
 import qualified Base.Text as Text
 import Control.Monad.Trans.Except
 import L4.Annotation
-import qualified L4.Evaluate as Evaluate
+import L4.Evaluate
 import qualified L4.Evaluate.Value as Eval
 import L4.Print
+import qualified L4.Print as Print
 import L4.Syntax
 import System.FilePath ((<.>))
 import Base (liftIO)
@@ -37,15 +38,15 @@ createFunction fnDecl fnImpl =
           case mp of
             Nothing -> throwE $ InterpreterError (mconcat errs)
             Just tcRes -> do
-              case Evaluate.doEvalProgram tcRes.program of
-                [(_srcRange, valEither)] -> case valEither of
+              case doEvalProgram tcRes.program of
+                [(_srcRange, valEither, evalTrace)] -> case valEither of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
                     r <- valueToFnLiteral val
                     pure $
                       ResponseWithReason
                         { values = [("result", r)]
-                        , reasoning = emptyTree
+                        , reasoning = buildReasoningTree evalTrace
                         }
                 [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
                 _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
@@ -105,6 +106,28 @@ valueToFnLiteral = \case
         ]
   Eval.ValAssumed var ->
     throwE $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
+
+buildReasoningTree :: EvalTrace -> Reasoning
+buildReasoningTree xs =
+  Reasoning
+    { payload = toReasoningTree xs
+    }
+
+toReasoningTree :: EvalTrace -> ReasoningTree
+toReasoningTree (Trace expr children val) =
+  ReasoningTree
+    { payload =
+        ReasonNode
+          { exampleCode =
+              [Print.prettyLayout expr]
+          , explanation =
+              [ "Result: " <> case val of
+                  Left exc -> Text.show exc
+                  Right v -> Print.prettyLayout v
+              ]
+          }
+    , children = fmap toReasoningTree children
+    }
 
 -- ----------------------------------------------------------------------------
 -- L4 syntax builders

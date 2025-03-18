@@ -410,7 +410,7 @@ jl4Rules recorder = do
         }
 
     evalResultToDiagnostic :: EvalResult -> Diagnostic
-    evalResultToDiagnostic (range, res) =
+    evalResultToDiagnostic (range, res, _trace) =
       Diagnostic
         { _range = srcRangeToLspRange (Just range)
         , _severity = Just LSP.DiagnosticSeverity_Information
