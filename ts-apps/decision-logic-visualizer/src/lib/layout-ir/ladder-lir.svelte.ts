@@ -12,11 +12,7 @@ import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import {
-  isEmpty,
-  isVertex,
-  type DirectedAcyclicGraph,
-} from '../algebraic-graphs/dag.js'
+import { isVertex, type DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
