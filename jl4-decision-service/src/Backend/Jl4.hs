@@ -59,16 +59,17 @@ createFunction fnDecl fnImpl =
   funName = mkName fnDecl.name
 
   inputName = mkName "Inputs"
- 
+
   evalStatement :: WrapStyle -> [(Name, Expr Name)] -> TopDecl Name
   evalStatement wrapstyle args =
     mkTopDeclDirective $
       mkEval $
-        mkFunApp
-          funName $
           case wrapstyle of
-            WrapInInputs -> [ mkInputs inputName $ fmap (uncurry mkArg) args ]
-            NoWrap       -> snd <$> args
+            WrapInInputs ->
+              mkFunApp funName [ mkNamedFunApp inputName $ fmap (uncurry mkArg) args ]
+            NoWrap       ->
+              mkNamedFunApp
+                funName $ fmap (uncurry mkArg) args
 
 data WrapStyle = WrapInInputs | NoWrap
 
@@ -122,8 +123,8 @@ mkFunApp :: n -> [Expr n] -> Expr n
 mkFunApp =
   App emptyAnno
 
-mkInputs :: n -> [NamedExpr n] -> Expr n
-mkInputs con args =
+mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
+mkNamedFunApp con args =
   AppNamed emptyAnno con args Nothing
 
 mkArg :: n -> Expr n -> NamedExpr n
