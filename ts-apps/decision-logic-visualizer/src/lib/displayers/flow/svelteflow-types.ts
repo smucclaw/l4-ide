@@ -97,7 +97,7 @@ export const isSFSourceNode = (node: SF.Node): node is SFSourceNode =>
   isSFNode(node, sourceNodeType)
 export const isSFSinkNode = (node: SF.Node): node is SFSinkNode =>
   isSFNode(node, sinkNodeType)
-export const isSFGroupingNode = (
+export const isSFBundlingNode = (
   node: SF.Node
 ): node is SFSourceNode | SFSinkNode =>
   isSFSourceNode(node) || isSFSinkNode(node)
