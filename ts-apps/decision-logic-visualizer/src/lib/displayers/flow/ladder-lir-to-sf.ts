@@ -7,10 +7,12 @@ import { LadderGraphLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
+  type SourceLirNode,
+  isBoolVarLirNode,
   BoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
-  SourceLirNode,
+  isSourceLirNode,
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
@@ -94,7 +96,7 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
-    .with(P.instanceOf(BoolVarLirNode), (n: BoolVarLirNode) => {
+    .with(P.when(isBoolVarLirNode), (n: BoolVarLirNode) => {
       return {
         ...defaults,
         type: boolVarNodeType,
@@ -115,7 +117,7 @@ export function ladderLirNodeToSfNode(
         data: defaultData,
       }
     })
-    .with(P.instanceOf(SourceLirNode), (n: SourceLirNode) => {
+    .with(P.when(isSourceLirNode), (n: SourceLirNode) => {
       return {
         ...defaults,
         type: sourceNodeType,

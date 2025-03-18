@@ -9,10 +9,10 @@ import {
   BoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
-  SourceLirNode,
+  SourceNoAnnoLirNode,
+  SourceWithOrAnnoLirNode,
   SinkLirNode,
   LadderGraphLirNode,
-  anyOfBundlingNodeAnno,
   augmentEdgesWithExplanatoryLabel,
 } from '../layout-ir/ladder-lir.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
@@ -48,7 +48,7 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
 export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
     // 1. Get structure of the graph
-    const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
+    const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
     const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
     const middle = transform(nodeInfo, expr)
@@ -124,7 +124,10 @@ function transform(
       const children = orExpr.args.map((n) => transform(nodeInfo, n))
 
       const overallSource = vertex(
-        new SourceLirNode(nodeInfo, anyOfBundlingNodeAnno.annotation).getId()
+        new SourceWithOrAnnoLirNode(
+          nodeInfo,
+          nodeInfo.context.getOrBundlingNodeLabel()
+        ).getId()
       )
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 

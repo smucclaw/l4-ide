@@ -24,7 +24,6 @@ import {
   HighlightedEdgeStyles,
   type EdgeStyles,
   type EdgeAttributes,
-  DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 import type {
   Dimensions,
@@ -600,9 +599,9 @@ export const anyOfBundlingNodeAnno: BundlingNodeAnno = {
 }
 
 export function isBundlingFlowLirNode(
-  node: FlowLirNode
+  node: LadderLirNode
 ): node is BundlingFlowLirNode {
-  return node instanceof SourceLirNode || node instanceof SinkLirNode
+  return isSourceLirNode(node) || node instanceof SinkLirNode
 }
 
 /** A Flow Lir Node that's used solely to visually group or 'bundle' other nodes.
@@ -610,6 +609,11 @@ export function isBundlingFlowLirNode(
  * Using `bundling` because `group` has a specific meaning in the React/SvelteFlow context.
  */
 export type BundlingFlowLirNode = SourceLirNode | SinkLirNode
+export type SourceLirNode = SourceWithOrAnnoLirNode | SourceNoAnnoLirNode
+
+export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
+  return isSourceNoAnnoLirNode(node) || isSourceWithOrAnnoLirNode(node)
+}
 
 abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
   constructor(
@@ -625,16 +629,39 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
   }
 }
 
-export function isAnyOfAnnoSourceLirNode(
+export function isSourceNoAnnoLirNode(
   node: LadderLirNode
-): node is SourceLirNode {
-  return (
-    node instanceof SourceLirNode &&
-    node.getData().annotation === anyOfBundlingNodeAnno.annotation
-  )
+): node is SourceNoAnnoLirNode {
+  return node instanceof SourceNoAnnoLirNode
 }
 
-export class SourceLirNode
+export class SourceNoAnnoLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
+  constructor(
+    nodeInfo: LirNodeInfo,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, emptyBundlingNodeAnno.annotation, position)
+  }
+
+  toPretty() {
+    return ''
+  }
+
+  toString(): string {
+    return 'SOURCE_LIR_NODE'
+  }
+}
+
+export function isSourceWithOrAnnoLirNode(
+  node: LadderLirNode
+): node is SourceWithOrAnnoLirNode {
+  return node instanceof SourceWithOrAnnoLirNode
+}
+
+export class SourceWithOrAnnoLirNode
   extends BaseBundlingFlowLirNode
   implements FlowLirNode
 {
@@ -735,20 +762,22 @@ export function augmentEdgesWithExplanatoryLabel(
         .getU()
         .isEqualTo(ladderGraph.getOverallSource(context)?.getId() as LirId)
 
-    const edgeSourceIsAnyOfAnnoSource = isAnyOfAnnoSourceLirNode(edgeU)
+    const edgeSourceIsAnyOfAnnoSource = isSourceWithOrAnnoLirNode(edgeU)
     return (
       !edgeSourceIsAnyOfAnnoSource &&
       edgeSourceIsNotOverallSource &&
       (isBoolVarLirNode(edgeV) ||
         isNotStartLirNode(edgeV) ||
-        isAnyOfAnnoSourceLirNode(edgeV))
+        isSourceWithOrAnnoLirNode(edgeV))
     )
   }
   const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
 
-  // TODO: Think abt where this const should be put
-  const EXPLANATORY_EDGE_LABEL = 'AND'
   edgesToAddLabel.forEach((edge) => {
-    ladderGraph.setEdgeLabel(context, edge, EXPLANATORY_EDGE_LABEL)
+    ladderGraph.setEdgeLabel(
+      context,
+      edge,
+      context.getExplanatoryAndEdgeLabel()
+    )
   })
 }
