@@ -328,11 +328,8 @@ Misc SF UI TODOs:
   <!-- TODO: Move the following into a lin paths container component -->
   <div class="paths-container">
     <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
-    <Collapsible.Root
-      onOpenChange={() => {
-        window.requestAnimationFrame(doFitView)
-      }}
-    >
+    <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
+    <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
       <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
         <!-- TODO: Improve the button styles -->
         <button
