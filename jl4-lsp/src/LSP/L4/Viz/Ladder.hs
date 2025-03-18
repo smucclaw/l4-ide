@@ -184,4 +184,4 @@ leaf subject complement = do
 mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
 mkVizNameWith printer (getUniqueName -> (uniq, name)) =
   case uniq of
-    MkUnique _ u -> V.MkName u (printer name)
+    MkUnique {unique} -> V.MkName unique (printer name)

@@ -8,7 +8,7 @@ module LSP.L4.Handlers where
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
-import Control.Monad.Extra (guard, whenJust)
+import Control.Monad.Extra (guard)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
@@ -272,7 +272,7 @@ handlers recorder =
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
               useWithStale_ TypeCheck (toNormalizedUri uri)
 
-            let items = completions rope typeCheck (params ^. J.position)
+            let items = completions rope (toNormalizedUri uri) typeCheck (params ^. J.position)
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
@@ -321,9 +321,6 @@ handlers recorder =
         pure (Right (InL locs))
     ]
 
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
-
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
 activeFileDiagnosticsInRange extras nfu rng = do
   mDiags <- STM.lookup nfu (publishedDiagnostics extras)
@@ -349,7 +346,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> tyHover
   tyHover = do
     (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
       useWithStale TypeCheck fileUri
-    hoistMaybe $ typeHover pos m positionMapping
+    hoistMaybe $ typeHover pos fileUri m positionMapping
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions

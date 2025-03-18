@@ -34,7 +34,7 @@ oneshotL4Action :: Recorder (WithPriority Log) -> FilePath -> (NormalizedFilePat
 oneshotL4Action recorder curDir act = do
   state <- Shake.oneshotIdeState (cmapWithPrio ShakeLog recorder) curDir do
     Store.fileStoreRules (cmapWithPrio StoreLog recorder) (const $ pure False)
-    Rules.jl4Rules (cmapWithPrio RulesLog recorder)
+    Rules.jl4Rules curDir (cmapWithPrio RulesLog recorder)
 
   let nfp = normalizeFilePath curDir
 

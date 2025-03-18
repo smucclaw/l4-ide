@@ -169,8 +169,7 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
-    MkImport _ n ->
-      "IMPORT" <+> printWithLayout n
+    MkImport _ n -> "IMPORT" <+> printWithLayout n
 
 instance LayoutPrinter a => LayoutPrinter (Section a) where
   printWithLayout = \case

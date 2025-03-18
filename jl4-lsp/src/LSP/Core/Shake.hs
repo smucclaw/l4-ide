@@ -324,13 +324,14 @@ getVirtualFile nf = do
   vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup nf vfs -- Don't leak a reference to the entire map
 
-addVirtualFile :: NormalizedFilePath -> Text -> Action ()
+addVirtualFile :: NormalizedFilePath -> Text -> Action Rope.Rope
 addVirtualFile nfp t = do
   let rope = Rope.fromText t
       insertToVfs vfs =  ((), over vfsMap (Map.insert (normalizedFilePathToUri nfp) (VirtualFile 0 0 rope)) vfs)
   liftIO . atomically . flip stateTVar insertToVfs . vfsVar =<< getShakeExtras
+  pure rope
 
-addVirtualFileFromFS :: NormalizedFilePath -> Action ()
+addVirtualFileFromFS :: NormalizedFilePath -> Action Rope.Rope
 addVirtualFileFromFS nfp = do
   addVirtualFile nfp =<< liftIO (Text.readFile (fromNormalizedFilePath nfp))
 

@@ -16,10 +16,11 @@ import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
 
 import Data.Either
+import Language.LSP.Protocol.Types (NormalizedUri)
 
-newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
-  deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState)
-    via ExceptT EvalException (StateT EvalState Identity)
+newtype Eval a = MkEval (EvalState -> EvalEnv -> (Either EvalException a, EvalState))
+  deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState, MonadReader EvalEnv)
+    via ExceptT EvalException (StateT EvalState (Reader EvalEnv))
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
@@ -27,6 +28,10 @@ data EvalDirectiveResult =
     , result :: Either EvalException Value -- ^ of the EVAL directive
     , trace  :: EvalTrace
     }
+
+newtype EvalEnv
+  = MkEvalEnv
+  { moduleUri :: NormalizedUri }
 
 data EvalState =
   MkEvalState
@@ -116,7 +121,8 @@ step = do
 newUnique :: Eval Unique
 newUnique = do
   i <- step
-  pure (MkUnique 'e' i)
+  u <- asks (.moduleUri)
+  pure (MkUnique 'e' i u)
 
 def :: Name -> Eval Resolved
 def n = do
@@ -571,9 +577,9 @@ lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
   Map.lookup (getUnique r) env
 
-doEvalProgram :: Program Resolved -> [EvalDirectiveResult]
-doEvalProgram prog =
+doEvalProgram :: Program Resolved -> NormalizedUri -> [EvalDirectiveResult]
+doEvalProgram prog moduleUri =
   case evalProgram prog of
     MkEval m ->
-      case m (MkEvalState initialEnvironment [] 0 emptyRevList) of
+      case m (MkEvalState initialEnvironment [] 0 emptyRevList) MkEvalEnv {moduleUri} of
         (_, s) -> s.directiveResults
