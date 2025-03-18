@@ -175,6 +175,20 @@ DECIDE `compute_qualifies` i IF
      OR i's eats
 |]
 
+-- [TODO]: this would be the preferred calling style, but we get L4 ERror: More than ONE #EVAL found
+computeQualifiesJL4NoInput :: Text
+computeQualifiesJL4NoInput =
+  [i|
+GIVEN walks  IS A BOOLEAN
+      drinks IS A BOOLEAN
+      eats   IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `compute_qualifies` i IF
+        walks
+ AND    drinks
+     OR eats
+|]
+
 rodentsAndVerminJL4 :: Text
 rodentsAndVerminJL4 =
   [i|

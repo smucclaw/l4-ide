@@ -23,10 +23,11 @@ createFunction fnDecl fnImpl =
       { runFunction = \params _outFilter {- TODO: how to handle the outFilter? -} -> do
           l4Params <- traverse (uncurry toL4Param) params
           let
+            wrapstyle = if "DECLARE Inputs" `Text.isInfixOf` fnImpl then WrapInInputs else NoWrap
             l4InputWithEval =
               Text.unlines
                 [ fnImpl
-                , prettyLayout $ evalStatement l4Params
+                , prettyLayout $ evalStatement wrapstyle l4Params
                 ]
           case parseAndCheck file l4InputWithEval of
             Left cliError -> do
@@ -58,15 +59,18 @@ createFunction fnDecl fnImpl =
   funName = mkName fnDecl.name
 
   inputName = mkName "Inputs"
-
-  evalStatement args =
+ 
+  evalStatement :: WrapStyle -> [(Name, Expr Name)] -> TopDecl Name
+  evalStatement wrapstyle args =
     mkTopDeclDirective $
       mkEval $
         mkFunApp
-          funName
-          [ mkInputs inputName $
-              fmap (uncurry mkArg) args
-          ]
+          funName $
+          case wrapstyle of
+            WrapInInputs -> [ mkInputs inputName $ fmap (uncurry mkArg) args ]
+            NoWrap       -> snd <$> args
+
+data WrapStyle = WrapInInputs | NoWrap
 
 literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
 literalToExpr = \case
