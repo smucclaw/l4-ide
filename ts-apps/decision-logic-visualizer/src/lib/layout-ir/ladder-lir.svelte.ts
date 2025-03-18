@@ -129,12 +129,18 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
  * compatible and incompatible linearized paths
  */
 export class LinPathLirNode extends DefaultLirNode implements LirNode {
+  #is$Selected: boolean = $state(false)
+
   constructor(
     nodeInfo: LirNodeInfo,
     protected ladderGraph: LadderGraphLirNode,
     protected rawPath: DirectedAcyclicGraph<LirId>
   ) {
     super(nodeInfo)
+  }
+
+  is$Selected() {
+    return this.#is$Selected
   }
 
   protected setStylesOnCorrespondingPathInLadderGraph(
