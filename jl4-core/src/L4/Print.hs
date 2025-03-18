@@ -27,9 +27,6 @@ instance LayoutPrinter Name where
 instance LayoutPrinter Resolved where
   printWithLayout r = printWithLayout (getActual r)
 
-instance (LayoutPrinter a, LayoutPrinter b) => LayoutPrinter (Either a b) where
-  printWithLayout = either printWithLayout printWithLayout
-
 instance LayoutPrinter a => LayoutPrinter (Maybe a) where
   printWithLayout = \case
     Nothing -> mempty
