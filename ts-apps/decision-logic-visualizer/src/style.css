@@ -165,11 +165,6 @@
   }
 }
 
-/* TODO: NEED TO DEBUG THIS */
-/* Needs to be specified because 
-Tailwind v4 doesn't automatically check for a tailwind.config.js file */
-/* @config "../tailwind.config.js"; */
-
 /*************************************
   Utility SF styles
 *************************************/

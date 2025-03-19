@@ -22,7 +22,6 @@
         <div class="px-3 max-w-[25px] text-right">
           {pathIndex + 1}
         </div>
-        <!-- TODO: Refactor the hover CSS to use our css vars -->
         <Toggle
           pressed={path.is$Selected()}
           class="rounded-lg border-1 p-2 max-w-fit hover:bg-accent text-xs text-left"
@@ -40,11 +39,6 @@
     {/each}
   </ul>
 </section>
-
-<!-- onmouseenter={() =>
-  path.highlightCorrespondingPathInLadderGraph(context)}
-onmouseleave={() =>
-  path.unhighlightCorrespondingPathInLadderGraph(context)} -->
 
 <style>
   .paths-list-content-wrapper {
