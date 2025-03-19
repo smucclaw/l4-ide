@@ -67,8 +67,8 @@ data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetDependencies = [TypeCheckResult]
-data GetDependencies = GetDependencies
+type instance RuleResult GetTypeCheckDependencies = [TypeCheckResult]
+data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -226,14 +226,14 @@ jl4Rules rootDirectory recorder = do
         imports  = map mkImportUri $ foldTopDecls getImport prog
     pure ([], Just imports)
 
-  define shakeRecorder $ \GetDependencies uri -> do
-    imports  <- use_ GetImports uri
-    res <- uses_ TypeCheck imports
+  define shakeRecorder $ \GetTypeCheckDependencies uri -> do
+    imports  <- use_  GetImports uri
+    res      <- uses_ TypeCheck  imports
     pure ([], Just res)
 
   define shakeRecorder $ \TypeCheck uri -> do
-    parsed <- use_ GetParsedAst    uri
-    deps   <- use_ GetDependencies uri
+    parsed <- use_ GetParsedAst             uri
+    deps   <- use_ GetTypeCheckDependencies uri
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
@@ -267,7 +267,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetEvaluationDependencies f -> do
     imports <- use_  GetImports f
-    tcRes   <- use_  TypeCheck f
+    tcRes   <- use_  SuccessfulTypeCheck f
     deps    <- uses_ GetEvaluationDependencies imports
     let environment = Evaluate.unionEnvironments $ map (.environment) deps
         own = execEvalModuleWithEnv environment tcRes.module'
