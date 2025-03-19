@@ -5,6 +5,7 @@ module L4.Evaluate
   , doEvalModule
   , buildModuleEnvironment
   , execEvalModuleWithEnv
+  , unionEnvironments
   )
   where
 
@@ -601,3 +602,6 @@ doEvalModule m = (execEvalModule m).directiveResults
 
 buildModuleEnvironment :: Environment -> Module Resolved -> Environment
 buildModuleEnvironment initial m = (execEvalModuleWithEnv initial m).environment
+
+unionEnvironments :: Foldable f => f (Map Unique Value) -> Environment
+unionEnvironments m = if null m then initialEnvironment else Map.unions m
