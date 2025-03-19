@@ -113,13 +113,13 @@ mkInitialCheckState environment entityInfo substitution =
 -- - a resolved and type-annotated version of the program
 -- - the final substitution (for resolving type annotations in the program)
 --
-doCheckProgram :: NormalizedUri -> Program Name -> CheckResult
+doCheckProgram :: NormalizedUri -> Module  Name -> CheckResult
 doCheckProgram = doCheckProgramWithDependencies initialCheckState
 
 initialCheckState :: CheckState
 initialCheckState = mkInitialCheckState initialEnvironment initialEntityInfo Map.empty
 
-doCheckProgramWithDependencies :: CheckState -> NormalizedUri -> Program Name -> CheckResult
+doCheckProgramWithDependencies :: CheckState -> NormalizedUri -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState moduleUri program =
   case runCheckUnique (inferProgram program) MkCheckEnv {moduleUri} checkState of
     (w, s) ->
@@ -567,10 +567,10 @@ inferTopDecl (Import ann import_) = do
 -- also allow forward references, then how are we going to determine mutual
 -- recursion? Optimistically, pessimistically, something in between?
 --
-inferProgram :: Program Name -> Check (Program Resolved)
-inferProgram (MkProgram ann sections) = do
+inferProgram :: Module  Name -> Check (Module  Resolved)
+inferProgram (MkModule ann uri sections) = do
   rsections <- traverse inferSection sections
-  pure (MkProgram ann rsections)
+  pure (MkModule ann uri rsections)
 
 -- | This covers constants and functions being defined.
 --

@@ -66,6 +66,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
 import L4.Parser.SrcSpan
+import Language.LSP.Protocol.Types (NormalizedUri, filePathToUri, toNormalizedUri)
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -217,10 +218,10 @@ indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
 indented parser pos =
   withIndent GT pos $ \ _ -> parser
 
-program :: Parser (Program Name)
-program = do
+program :: NormalizedUri -> Parser (Module Name)
+program uri = do
   attachAnno $
-    MkProgram emptyAnno
+    MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
           ((:)
@@ -1223,15 +1224,15 @@ runLexer file input =
 -- JL4 Program parser
 -- ----------------------------------------------------------------------------
 
-execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Module  Name, [Resolve.Warning])
 execProgramParser file input =
   case runLexer file input of
     Left err -> Left err
     Right ts -> execProgramParserForTokens file input ts
 
-execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
 execProgramParserForTokens file input ts =
-  case execParserForTokens program file input ts of
+  case execParserForTokens (program $ toNormalizedUri $ filePathToUri file) file input ts of
     Left err -> Left err
     Right (prog, pstate) ->
       let

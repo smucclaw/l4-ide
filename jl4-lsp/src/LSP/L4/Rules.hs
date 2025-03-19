@@ -50,14 +50,20 @@ import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
+import qualified L4.Evaluate as Evaluate
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetParsedAst = Program Name
+type instance RuleResult GetParsedAst = Module Name
 data GetParsedAst = GetParsedAst
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetImports = [NormalizedUri]
+data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -77,7 +83,7 @@ data SuccessfulTypeCheck = SuccessfulTypeCheck
   deriving anyclass (NFData, Hashable)
 
 data TypeCheckResult = TypeCheckResult
-  { program :: Program Resolved
+  { module' :: Module  Resolved
   , substitution :: Substitution
   , success :: Bool
   , environment :: TypeCheck.Environment
@@ -88,6 +94,11 @@ data TypeCheckResult = TypeCheckResult
 
 type instance RuleResult Evaluate = ()
 data Evaluate = Evaluate
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetEvaluationDependencies = Evaluate.EvalState
+data GetEvaluationDependencies = GetEvaluationDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -174,7 +185,7 @@ jl4Rules rootDirectory recorder = do
     mRope <- runMaybeT $
       MaybeT (snd <$> use_ GetFileContents uri)
       <|> do
-        -- FIXME: how do we actually invalidate this VFS file
+        -- TODO: how do we actually invalidate this VFS file
         -- (except by opening in the same editor session)
         -- do we check the last modified time or smth like that?
         -- I think basically as it is now we don't do anything like
@@ -205,15 +216,19 @@ jl4Rules rootDirectory recorder = do
           diags = fmap mkNlgWarning warns
         pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
 
-  define shakeRecorder $ \GetDependencies uri -> do
-    prog <- use_ GetParsedAst uri
+  define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
         mkImportUri (MkImport _a n)
           = let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
              in toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
-        getImport = \case Import _ann i -> [i]; _ -> []
-        imports  = foldTopDecls getImport prog
-    res <- uses_ TypeCheck (map mkImportUri imports)
+    prog <- use_ GetParsedAst uri
+    let getImport = \case Import _ann i -> [i]; _ -> []
+        imports  = map mkImportUri $ foldTopDecls getImport prog
+    pure ([], Just imports)
+
+  define shakeRecorder $ \GetDependencies uri -> do
+    imports  <- use_ GetImports uri
+    res <- uses_ TypeCheck imports
     pure ([], Just res)
 
   define shakeRecorder $ \TypeCheck uri -> do
@@ -236,7 +251,7 @@ jl4Rules rootDirectory recorder = do
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
       , Just TypeCheckResult
-        { program = result.program
+        { module' = result.program
         , substitution = result.substitution
         , environment = result.environment
         , entityInfo = result.entityInfo
@@ -250,9 +265,16 @@ jl4Rules rootDirectory recorder = do
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
+  define shakeRecorder $ \GetEvaluationDependencies f -> do
+    imports <- use_  GetImports f
+    tcRes   <- use_  TypeCheck f
+    deps    <- uses_ GetEvaluationDependencies imports
+    let own = execEvalModuleWithEnv (Map.unions $ map (.environment) deps) tcRes.module'
+    pure ([], Just own)
+
   define shakeRecorder $ \Evaluate uri -> do
-    r <- use_ SuccessfulTypeCheck uri
-    let results = doEvalProgram r.program uri
+    res  <- use_ GetEvaluationDependencies uri
+    let results = res.directiveResults
     pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just ())
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
@@ -391,7 +413,7 @@ jl4Rules rootDirectory recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ toResolved tcRes.program
+        resolveds = foldMap spanOf $ toResolved tcRes.module'
 
     pure ([], Just resolveds)
 
@@ -438,21 +460,21 @@ jl4Rules rootDirectory recorder = do
     mkParseErrorDiagnostic parseError = mkSimpleDiagnostic parseError.origin parseError.message (Just parseError.range)
 
     mkSimpleDiagnostic :: Text -> Text -> Maybe SrcSpan -> Diagnostic
-    mkSimpleDiagnostic origin message range =
+    mkSimpleDiagnostic origin _message range =
       Diagnostic
         { _range = srcSpanToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Error
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just origin
-        , _message = message
+        , _message
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
         }
 
     evalResultToDiagnostic :: EvalDirectiveResult -> Diagnostic
-    evalResultToDiagnostic (MkEvalDirectiveResult range res _trace) =
+    evalResultToDiagnostic (MkEvalDirectiveResult range res _trace) = do
       Diagnostic
         { _range = srcRangeToLspRange (Just range)
         , _severity = Just LSP.DiagnosticSeverity_Information

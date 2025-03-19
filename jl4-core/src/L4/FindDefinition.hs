@@ -8,6 +8,7 @@ import L4.Syntax
 import L4.TypeCheck
 
 import qualified Generics.SOP as SOP
+import Language.LSP.Protocol.Types (NormalizedUri)
 
 -- | It would be better to have a tree structure so that we can exclude
 -- large parts of the tree easily. However, right now we don't have range
@@ -22,7 +23,7 @@ class ToResolved a where
   default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
   toResolved = genericToResolved
 
-deriving anyclass instance ToResolved (Program Resolved)
+deriving anyclass instance ToResolved (Module  Resolved)
 deriving anyclass instance ToResolved (Section Resolved)
 deriving anyclass instance ToResolved (TopDecl Resolved)
 deriving anyclass instance ToResolved (LocalDecl Resolved)
@@ -46,6 +47,9 @@ deriving anyclass instance ToResolved (GivethSig Resolved)
 deriving anyclass instance ToResolved (GivenSig Resolved)
 deriving anyclass instance ToResolved (Directive Resolved)
 deriving anyclass instance ToResolved (Import Resolved)
+
+instance ToResolved NormalizedUri where
+  toResolved = const []
 
 instance ToResolved Lit where
   toResolved = const []

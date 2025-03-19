@@ -4,13 +4,11 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Syntax where
 
+import Base
 import L4.Annotation
 import L4.Lexer (PosToken)
 
-import Control.DeepSeq (NFData)
 import Data.Default
-import Data.Text (Text)
-import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
@@ -223,8 +221,12 @@ data Pattern n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Program n =
-  MkProgram Anno [Section n]
+-- | A 'Program' is a module with some 'Module's it directly depends on
+data Program n
+  = MkProgram (Module n) [Module n]
+
+data Module n =
+  MkModule Anno NormalizedUri [Section n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -250,22 +252,22 @@ data LocalDecl n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
--- | Given a @'Program' n@, runs a 'foldMap' over all of
+-- | Given a @'Module' n@, runs a 'foldMap' over all of
 -- nodes of the specified type
 _foldNodeType
   :: forall nodeType n m
-   . (Monoid m, Optics.GPlate (nodeType n) (Program n))
-  => (nodeType n -> m) -> Program n -> m
+   . (Monoid m, Optics.GPlate (nodeType n) (Module n))
+  => (nodeType n -> m) -> Module n -> m
 _foldNodeType = Optics.foldMapOf Optics.gplate
 
--- | Given a @'Program' n@, runs a 'foldMap' over 'Decide's at the toplevel
+-- | Given a @'Module' n@, runs a 'foldMap' over 'Decide's at the toplevel
 foldTopLevelDecides
-  :: forall n m. (Monoid m) => (Decide n -> m) -> Program n -> m
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Module n -> m
 foldTopLevelDecides = _foldNodeType
 
--- | Given a @'Program' n@, runs a 'foldMap' over 'TopDecl's at the toplevel
+-- | Given a @'Module' n@, runs a 'foldMap' over 'TopDecl's at the toplevel
 foldTopDecls
-  :: forall n m. (Monoid m) => (TopDecl n -> m) -> Program n -> m
+  :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
 
@@ -369,8 +371,8 @@ deriving via L4Syntax (Branch n)
   instance HasAnno (Branch n)
 deriving via L4Syntax (Pattern n)
   instance HasAnno (Pattern n)
-deriving via L4Syntax (Program n)
-  instance HasAnno (Program n)
+deriving via L4Syntax (Module n)
+  instance HasAnno (Module n)
 deriving via L4Syntax (Section n)
   instance HasAnno (Section n)
 deriving via L4Syntax (TopDecl n)
@@ -379,7 +381,10 @@ deriving via L4Syntax (LocalDecl n)
   instance HasAnno (LocalDecl n)
 
 
-deriving anyclass instance ToConcreteNodes PosToken (Program Name)
+deriving anyclass instance ToConcreteNodes PosToken (Module Name)
+
+instance ToConcreteNodes PosToken NormalizedUri where
+  toNodes = const $ pure []
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Name) where
@@ -409,7 +414,7 @@ deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
-deriving anyclass instance ToConcreteNodes PosToken (Program Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Module Resolved)
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where
@@ -499,7 +504,7 @@ instance ToConcreteNodes PosToken Lit where
   toNodes (StringLit ann _) =
     flattenConcreteNodes ann []
 
-deriving anyclass instance HasSrcRange (Program a)
+deriving anyclass instance HasSrcRange (Module a)
 deriving anyclass instance HasSrcRange (Section a)
 deriving anyclass instance HasSrcRange (TopDecl a)
 deriving anyclass instance HasSrcRange (Assume a)

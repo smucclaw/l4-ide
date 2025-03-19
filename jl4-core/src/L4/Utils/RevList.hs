@@ -3,7 +3,8 @@ module L4.Utils.RevList where
 import Base
 
 newtype RevList a = MkRevList [a]
-  deriving stock Show
+  deriving stock (Show, Generic)
+  deriving anyclass NFData
 
 unRevList :: RevList a -> [a]
 unRevList (MkRevList xs) = reverse xs

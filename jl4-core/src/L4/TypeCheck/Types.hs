@@ -161,7 +161,7 @@ runCheck' e s (MkCheck f) = f e s
 
 data CheckResult =
   MkCheckResult
-    { program      :: Program Resolved
+    { program      :: Module  Resolved
     , errors       :: [CheckErrorWithContext]
     , substitution :: Substitution
     , environment  :: Environment
