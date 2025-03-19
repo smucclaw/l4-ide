@@ -269,7 +269,8 @@ jl4Rules rootDirectory recorder = do
     imports <- use_  GetImports f
     tcRes   <- use_  TypeCheck f
     deps    <- uses_ GetEvaluationDependencies imports
-    let own = execEvalModuleWithEnv (Map.unions $ map (.environment) deps) tcRes.module'
+    let environment = Evaluate.unionEnvironments $ map (.environment) deps
+        own = execEvalModuleWithEnv environment tcRes.module'
     pure ([], Just own)
 
   define shakeRecorder $ \Evaluate uri -> do
