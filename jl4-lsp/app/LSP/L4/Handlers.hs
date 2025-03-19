@@ -306,7 +306,7 @@ handlers recorder =
               Nothing -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
-          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program
+          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.module'
 
         pure (Right (InL visualizeDecides))
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
@@ -371,7 +371,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   (Just $ fmap getActual ty)
                 )
 
-            topDecls = foldTopDecls (: []) typeCheck.program
+            topDecls = foldTopDecls (: []) typeCheck.module'
 
             enclosingTopDecl = do
               target <- rangeOf name

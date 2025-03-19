@@ -56,7 +56,7 @@ data WithSpan a = WithSpan
 --
 -- Note, the 'Program Name's exactprint annotations are not modified,
 -- we merely add structured data to the ast node's respective 'Anno'.
-addNlgCommentsToAst :: [Nlg] -> Program Name -> (Program Name, NlgS)
+addNlgCommentsToAst :: [Nlg] -> Module  Name -> (Module Name, NlgS)
 addNlgCommentsToAst nlgs p = do
   let
     (nlgWithSpan, unfindable) = preprocessNlgs nlgs
@@ -113,11 +113,11 @@ class HasNlg a where
   -- based on the 'SrcSpan' of 'a' and its neighbours.
   addNlg :: a -> NlgA a
 
-instance (HasSrcRange n, HasNlg n) => HasNlg (Program n) where
+instance (HasSrcRange n, HasNlg n) => HasNlg (Module n) where
   addNlg a = extendNlgA a $ case a of
-    MkProgram ann sects -> do
+    MkModule uri ann sects -> do
       sects' <- traverse addNlg sects
-      pure (MkProgram ann sects')
+      pure (MkModule uri ann sects')
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Section n) where
   addNlg a = extendNlgA a $ case a of

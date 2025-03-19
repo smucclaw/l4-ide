@@ -96,7 +96,7 @@ defaultCompletionItem label = CompletionItem label
 gotoDefinition :: Position -> Uri -> TypeCheckResult -> PositionMapping -> Maybe Location
 gotoDefinition pos uri m positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  range <- findDefinition (lspPositionToSrcPos oldPos) m.program
+  range <- findDefinition (lspPositionToSrcPos oldPos) m.module'
   let lspRange = srcRangeToLspRange (Just range)
   newRange <- toCurrentRange positionMapping lspRange
   pure (Location uri newRange)
@@ -122,7 +122,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
     Nothing -> runMaybeT do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
-      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.program
+      decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
       pure (decide, recentlyVisualised.simplify, tcRes.substitution)
 
     -- the command was issued by a code action or codelens
@@ -131,7 +131,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
         case mtcRes of
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
-      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.program of
+      case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
         [decide] -> pure $ Just (decide, simp, tcRes.substitution)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
@@ -275,7 +275,7 @@ referenceHover pos refs = do
 typeHover :: Position -> NormalizedUri -> TypeCheckResult -> PositionMapping -> Maybe Hover
 typeHover pos nuri tcRes positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  (range, i) <- findInfo (lspPositionToSrcPos oldPos) tcRes.program
+  (range, i) <- findInfo (lspPositionToSrcPos oldPos) tcRes.module'
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
   pure (infoToHover nuri tcRes.substitution newLspRange i)

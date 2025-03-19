@@ -10,6 +10,7 @@ import L4.TypeCheck
 
 import Control.Applicative
 import qualified Generics.SOP as SOP
+import Language.LSP.Protocol.Types (NormalizedUri)
 
 data InfoTree =
   InfoNode
@@ -49,7 +50,7 @@ findInfo pos a =
         asum (go <$> children) <|> {- if t == Nothing then Just (range, Type mempty) else -} (range,) <$> info
       | otherwise                          = Nothing
 
-deriving anyclass instance ToInfoTree (Program Resolved)
+deriving anyclass instance ToInfoTree (Module  Resolved)
 deriving anyclass instance ToInfoTree (Section Resolved)
 deriving anyclass instance ToInfoTree (TopDecl Resolved)
 deriving anyclass instance ToInfoTree (LocalDecl Resolved)
@@ -86,6 +87,9 @@ mkInfoLeaf x =
 instance ToInfoTree Lit where
   toInfoTree l =
     [mkInfoLeaf l]
+
+instance ToInfoTree NormalizedUri where
+  toInfoTree = const []
 
 instance ToInfoTree Int where
   toInfoTree _ =

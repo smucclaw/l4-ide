@@ -186,9 +186,9 @@ instance LayoutPrinter a => LayoutPrinter (Section a) where
           [] -> mempty
           _ -> fmap printWithLayout ds
 
-instance LayoutPrinter a => LayoutPrinter (Program a) where
+instance LayoutPrinter a => LayoutPrinter (Module  a) where
   printWithLayout = \case
-    MkProgram _ sects ->
+    MkModule _ _ sects ->
       vcat (fmap printWithLayout sects)
 
 instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
