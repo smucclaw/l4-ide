@@ -158,6 +158,12 @@ export function overlay<A extends Ord<A>>(
   return new Overlay(x, y)
 }
 
+export function isOverlay<A extends Ord<A>>(
+  g: DirectedAcyclicGraph<A>
+): g is Overlay<A> {
+  return g instanceof Overlay
+}
+
 export class Overlay<A extends Ord<A>> extends Dag<A> {
   constructor(
     readonly left: DirectedAcyclicGraph<A>,
@@ -177,6 +183,14 @@ export class Overlay<A extends Ord<A>> extends Dag<A> {
     const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
     super(adjMap, edgeAttrs)
   }
+
+  getLeft() {
+    return this.left
+  }
+
+  getRight() {
+    return this.right
+  }
 }
 
 export function connect<A extends Ord<A>>(
@@ -184,6 +198,12 @@ export function connect<A extends Ord<A>>(
   y: DirectedAcyclicGraph<A>
 ): DirectedAcyclicGraph<A> {
   return new Connect(x, y)
+}
+
+export function isConnect<A extends Ord<A>>(
+  g: DirectedAcyclicGraph<A>
+): g is Connect<A> {
+  return g instanceof Connect
 }
 
 export class Connect<A extends Ord<A>> extends Dag<A> {
@@ -198,6 +218,15 @@ export class Connect<A extends Ord<A>> extends Dag<A> {
     )
     super(adjMap, edgeAttributes)
   }
+
+  getFrom() {
+    return this.from
+  }
+
+  getTo() {
+    return this.to
+  }
+}
 }
 
 /**************************************
