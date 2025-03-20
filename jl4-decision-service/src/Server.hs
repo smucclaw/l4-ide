@@ -80,8 +80,6 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Tuple.Extra as Tuple
 import Data.Typeable
 import qualified GHC.Clock as Clock
@@ -453,10 +451,7 @@ validateFunction fn = do
       }
  where
   validateImplementation :: EvalBackend -> Text -> AppM RunFunction
-  validateImplementation JL4 program = do
-    case runExcept $ Jl4.createFunction (toDecl fn.declaration) program of
-      Left err -> throwError err422{errBody = "Failed to parse program: " <> TL.encodeUtf8 (TL.pack $ show err)}
-      Right parsed -> pure parsed
+  validateImplementation JL4 program =  pure $ Jl4.createFunction (toDecl fn.declaration) program
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do

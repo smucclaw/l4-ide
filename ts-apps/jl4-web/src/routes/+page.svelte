@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import {
     LadderFlow,
     LirContext,
@@ -10,7 +10,6 @@
   } from '@repo/decision-logic-visualizer'
   import {
     makeVizInfoDecoder,
-    type FunDecl,
     type VisualizeDecisionLogicIRInfo,
   } from '@repo/viz-expr'
   import {
@@ -19,6 +18,7 @@
   } from 'vscode-languageclient'
   import { type ConsoleLogger } from 'monaco-languageclient/tools'
   import * as vscode from 'vscode'
+  import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
@@ -46,19 +46,10 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let vizDecl: undefined | FunDecl = $state(undefined)
-  let declLirNode: DeclLirNode | undefined = $derived(
-    vizDecl && VizDeclLirSource.toLir(nodeInfo, vizDecl)
-  )
+  let declLirNode: DeclLirNode | undefined = $state(undefined)
   let funName = $derived(
     declLirNode && (declLirNode as DeclLirNode).getFunName(context)
   )
-  // TODO: YM has some ideas for how to improve / clean this up
-  $effect(() => {
-    if (declLirNode) {
-      lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
-    }
-  })
 
   /******************************
       VizInfo Payload Decoder
@@ -82,8 +73,9 @@
   //       Monadco
   // ****************************/
 
+  let editor: monaco.editor.IStandaloneCodeEditor | undefined
+
   onMount(async () => {
-    const monaco = await import('@codingame/monaco-vscode-editor-api')
     const { initServices } = await import(
       'monaco-languageclient/vscode/services'
     )
@@ -142,7 +134,7 @@
         colors: {},
       })
 
-      const editor = monaco.editor.create(editorElement, {
+      editor = monaco.editor.create(editorElement, {
         value: britishCitizen,
         language: 'jl4',
         automaticLayout: true,
@@ -163,6 +155,8 @@
       }
 
       persistSession = async () => {
+        if (!editor) return
+
         const bufferContent: string = editor.getValue()
         const ownUrl: URL = new URL(window.location.href)
         const sessionid: string | null = ownUrl.searchParams.get('id')
@@ -255,7 +249,19 @@
               if (decoded.right) {
                 const vizProgramInfo: VisualizeDecisionLogicIRInfo =
                   decoded.right
-                vizDecl = vizProgramInfo.program
+                declLirNode = VizDeclLirSource.toLir(
+                  nodeInfo,
+                  vizProgramInfo.program
+                )
+                lirRegistry.setRoot(
+                  context,
+                  'VizDecl' as LirRootType,
+                  declLirNode
+                )
+                logger.debug(
+                  'New declLirNode ',
+                  (declLirNode as DeclLirNode).getId().toString()
+                )
               }
               break
             case 'Left':
@@ -279,6 +285,16 @@
       }
     }
     await runClient()
+  })
+
+  onDestroy(() => {
+    // YM: I'm not sure that this is necessary --- just adding it for now because I've seen examples on GitHub that do this.
+    // I'll look into this more in the future.
+    if (editor) {
+      editor.dispose()
+      editor = undefined
+    }
+    // TODO: May also want to clean up the websocket, but not sure if necessary
   })
 
   const britishCitizen = `§ \`Assumptions\`
@@ -319,11 +335,10 @@ DECIDE \`is a British citizen (variant)\` IS
       <div class="header">
         <h1>{funName}</h1>
       </div>
-      {#if vizDecl && declLirNode}
+      {#if declLirNode}
+        <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
-          <div
-            class="flash-on-update slightly-shorter-than-full-viewport-height pb-2"
-          >
+          <div class="slightly-shorter-than-full-viewport-height pb-2">
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
         {/key}
@@ -337,7 +352,7 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <style lang="postcss">
   @reference "tailwindcss"
-    
+
     @keyframes flash {
     0%,
     90% {
@@ -357,10 +372,6 @@ DECIDE \`is a British citizen (variant)\` IS
 
   .slightly-shorter-than-full-viewport-height {
     height: 95svh;
-  }
-
-  .flash-on-update {
-    animation: flash 0.6s;
   }
 
   h1 {

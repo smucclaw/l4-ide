@@ -123,6 +123,8 @@ export interface LirNode {
 
   /** NON-pretty */
   toString(): string
+
+  dispose(context: LirContext): void
 }
 
 export abstract class DefaultLirNode
@@ -147,6 +149,8 @@ export abstract class DefaultLirNode
   }
 
   abstract toString(): string
+
+  abstract dispose(context: LirContext): void
 }
 
 /*********************************************
@@ -174,6 +178,10 @@ export class LirContext {
 
   set(node: LirNode) {
     this.#nodes.set(node.getId(), node)
+  }
+
+  clear(id: LirId) {
+    this.#nodes.delete(id)
   }
 }
 

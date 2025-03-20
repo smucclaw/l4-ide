@@ -49,6 +49,7 @@
     "monaco-languageclient": "^9.4.0",
     "vscode": "npm:@codingame/monaco-vscode-extension-api@^14.0.4",
     "vscode-languageclient": "^9.0.1",
-    "vscode-ws-jsonrpc": "^3.4.0"
+    "vscode-ws-jsonrpc": "^3.4.0",
+    "runed": "^0.23.3"
   }
 }

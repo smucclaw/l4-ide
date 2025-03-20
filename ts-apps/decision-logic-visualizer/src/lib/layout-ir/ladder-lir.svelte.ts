@@ -22,7 +22,7 @@ import {
   type EdgeAttributes,
   DefaultEdgeAttributes,
 } from '../algebraic-graphs/edge.js'
-import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
+import type { Dimensions } from '$lib/displayers/flow/svelteflow-types.js'
 import { match } from 'ts-pattern'
 
 /*
@@ -78,6 +78,12 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return [this.getBody(context)]
   }
 
+  dispose(context: LirContext) {
+    this.getChildren(context).map((n) => n.dispose(context))
+
+    context.clear(this.getId())
+  }
+
   toString(): string {
     return 'FUN_DECL_LIR_NODE'
   }
@@ -101,6 +107,15 @@ export class PathListLirNode extends DefaultLirNode implements LirNode {
 
   getChildren(context: LirContext) {
     return this.getPaths(context)
+  }
+
+  dispose(context: LirContext) {
+    // Dispose members
+    this.getChildren(context).map((n) => n.dispose(context))
+    this.paths = []
+
+    // Dispose self
+    context.clear(this.getId())
   }
 
   toString(): string {
@@ -149,6 +164,11 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
       .getVertices()
       .map((id) => context.get(id))
       .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  dispose(context: LirContext) {
+    this.rawPath.dispose()
+    context.clear(this.getId())
   }
 
   toPretty(context: LirContext) {
@@ -221,6 +241,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 
   isEqualTo<T extends LirNode>(other: T) {
     return this.getId().isEqualTo(other.getId())
+  }
+
+  dispose(context: LirContext): void {
+    context.clear(this.getId())
   }
 
   abstract toPretty(context: LirContext): string
@@ -395,6 +419,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   toString(): string {
     return 'LADDER_GRAPH_LIR_NODE'
+  }
+
+  dispose(context: LirContext) {
+    this.getVertices(context).map((n) => n.dispose(context))
+    this.#environment.dispose()
+    this.#dag.dispose()
+    context.clear(this.getId())
   }
 }
 

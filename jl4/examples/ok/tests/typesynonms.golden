@@ -1,2 +1,8 @@
 Parsing successful
 Typechecking successful
+typesynonms.l4:32:7-15:
+  FALSE
+
+typesynonms.l4:53:7-15:
+  TRUE
+

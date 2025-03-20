@@ -1,6 +1,13 @@
-   |
-12 | GIVEN n IS A NUMBER
-   | ^^^^^
-unexpected GIVEN
-expecting ELSE or space token
-
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: parse-error1.l4
+  Hidden:   no
+  Range:    12:1-12:1
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+       |
+    12 | GIVEN n IS A NUMBER
+       | ^^^^^
+    unexpected GIVEN
+    expecting ELSE or space token

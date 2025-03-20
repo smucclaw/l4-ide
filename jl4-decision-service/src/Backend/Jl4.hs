@@ -5,20 +5,23 @@ import Base.Text
 import qualified Base.Text as Text
 import Control.Monad.Trans.Except
 import L4.Annotation
-import qualified L4.Evaluate as Evaluate
+import L4.Evaluate
 import qualified L4.Evaluate.Value as Eval
-import L4.Main
 import L4.Print
+import qualified L4.Print as Print
 import L4.Syntax
 import System.FilePath ((<.>))
+import Base (liftIO)
+import Language.LSP.Protocol.Types (normalizedFilePathToUri)
+import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
+import qualified LSP.L4.Rules as Rules
+import qualified LSP.Core.Shake as Shake
 
 createFunction ::
-  (Monad m) =>
   FunctionDeclaration ->
   Text ->
-  ExceptT EvaluatorError m RunFunction
+  RunFunction
 createFunction fnDecl fnImpl =
-  pure $
     RunFunction
       { runFunction = \params _outFilter {- TODO: how to handle the outFilter? -} -> do
           l4Params <- traverse (uncurry toL4Param) params
@@ -29,21 +32,22 @@ createFunction fnDecl fnImpl =
                 [ fnImpl
                 , prettyLayout $ evalStatement wrapstyle l4Params
                 ]
-          case parseAndCheck file l4InputWithEval of
-            Left cliError -> do
-              let
-                errMsg = prettyCliError cliError
-              throwE $ InterpreterError errMsg
-            Right p -> do
-              case Evaluate.doEvalProgram p of
-                [(_srcRange, valEither)] -> case valEither of
+          (errs, mp) <- liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+            let  uri = normalizedFilePathToUri nfp
+            Shake.addVirtualFile nfp l4InputWithEval
+            Shake.use Rules.TypeCheck uri
+          case mp of
+            Nothing -> throwE $ InterpreterError (mconcat errs)
+            Just tcRes -> do
+              case doEvalProgram tcRes.program of
+                [(_srcRange, valEither, evalTrace)] -> case valEither of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
                     r <- valueToFnLiteral val
                     pure $
                       ResponseWithReason
                         { values = [("result", r)]
-                        , reasoning = emptyTree
+                        , reasoning = buildReasoningTree evalTrace
                         }
                 [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
                 _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
@@ -93,8 +97,7 @@ valueToFnLiteral = \case
   Eval.ValList vals -> do
     lits <- traverse valueToFnLiteral vals
     pure $ FnArray lits
-  Eval.ValClosure _ _ _ -> do
-    throwE $ InterpreterError $ "#EVAL produced function closure."
+  Eval.ValClosure {} -> throwE $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
@@ -108,6 +111,28 @@ valueToFnLiteral = \case
         ]
   Eval.ValAssumed var ->
     throwE $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
+
+buildReasoningTree :: EvalTrace -> Reasoning
+buildReasoningTree xs =
+  Reasoning
+    { payload = toReasoningTree xs
+    }
+
+toReasoningTree :: EvalTrace -> ReasoningTree
+toReasoningTree (Trace expr children val) =
+  ReasoningTree
+    { payload =
+        ReasonNode
+          { exampleCode =
+              [Print.prettyLayout expr]
+          , explanation =
+              [ "Result: " <> case val of
+                  Left exc -> Text.show exc
+                  Right v -> Print.prettyLayout v
+              ]
+          }
+    , children = fmap toReasoningTree children
+    }
 
 -- ----------------------------------------------------------------------------
 -- L4 syntax builders

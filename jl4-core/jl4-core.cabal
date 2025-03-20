@@ -1,0 +1,79 @@
+cabal-version: 3.0
+name: jl4-core
+version: 0.1
+build-type: Simple
+tested-with: GHC==9.6.6
+
+common defaults
+  default-language: GHC2021
+  ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
+  default-extensions:
+    BlockArguments
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    NoFieldSelectors
+    OverloadedRecordDot
+    OverloadedStrings
+    OverloadedLabels
+    LambdaCase
+    -- This is annoying with fourmolu
+    NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  build-depends:
+    bytestring,
+    cassava,
+    containers,
+    data-default,
+    deepseq,
+    extra,
+    file-io,
+    filepath,
+    generics-sop,
+    hw-fingertree,
+    logict,
+    megaparsec,
+    mtl,
+    optics,
+    optics-core,
+    pcre2,
+    pretty-simple,
+    prettyprinter,
+    safe-exceptions,
+    text >= 2 && < 2.1.2,
+    tree-diff,
+    vector,
+
+  exposed-modules:
+    Base
+    Base.Map
+    Base.Set
+    Base.Pretty
+    Base.Text
+    L4.Annotation
+    L4.Citations
+    L4.Evaluate
+    L4.Evaluate.Value
+    L4.ExactPrint
+    L4.FindDefinition
+    L4.HoverInfo
+    L4.Lexer
+    L4.Parser
+    L4.Parser.ResolveAnnotation
+    L4.Parser.SrcSpan
+    L4.ParserCombinators
+    L4.Print
+    L4.Syntax
+    L4.Transform
+    L4.TypeCheck
+    L4.TypeCheck.Environment
+    L4.TypeCheck.Types
+    L4.TypeCheck.With
+    L4.Utils.RevList

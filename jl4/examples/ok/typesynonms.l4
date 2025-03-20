@@ -25,3 +25,29 @@ odd  MEANS GIVEN x YIELD x MODULO 2 EQUALS 1
 
 GIVETH LL OF A NumPredicate
 example3 MEANS LIST (LIST even, odd)
+
+GIVETH A BOOLEAN
+example4 MEANS even 3
+
+#EVAL example4
+
+DECLARE Transformer a IS A FUNCTION FROM Predicate a TO Predicate a
+DECLARE NumPredicateTransformer IS A Transformer OF NUMBER
+
+negate MEANS
+  GIVEN p YIELD GIVEN x YIELD NOT p x
+
+-- It is still a weakness of the current language that
+-- we do not have full currying and no truly first-class
+-- higher-order functions.
+--
+-- We cannot directly apply negate. We have to introduce
+-- an intermediate name.
+
+GIVETH A NumPredicate
+odd2 MEANS negate even
+
+GIVETH A BOOLEAN
+example5 MEANS odd2 3
+
+#EVAL example5
