@@ -227,11 +227,60 @@ export class Connect<A extends Ord<A>> extends Dag<A> {
     return this.to
   }
 }
+
+/********************************************
+         Graph folding
+**********************************************/
+
+/**
+ * Adapted from
+ *  https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph.hs#L466
+ * Generalised 'Graph' folding: recursively collapse a 'Graph' by applying
+ * the provided functions to the leaves and internal nodes of the expression.
+ * Complexity: O(s) applications of the given functions.
+ *
+ * Example usages:
+ * - size computation: foldg(0, _ => 1, (x, y) => x + y, (x, y) => x + y, g)
+ * - checking for emptiness: foldg(true, _ => false, (x, y) => x && y, (x, y) => x && y, g) == 'isEmpty'
+ * - checking for a vertex: foldg(false, x => x === a, (x, y) => x || y, (x, y) => x || y, g)  == 'hasVertex' x
+ *
+ * Other noteworthy things:
+ * - foldg 'empty' 'vertex'        'overlay' 'connect'        == id
+ *
+ * @param e The value to return for an Empty graph.
+ * @param v Function to apply to a vertex's value.
+ * @param o Combine results of Overlay nodes.
+ * @param c Combine results of Connect nodes.
+ * @param g The graph to fold over.
+ */
+export function foldg<A extends Ord<A>, B>(
+  e: B,
+  v: (a: A) => B,
+  o: (b1: B, b2: B) => B,
+  c: (b1: B, b2: B) => B,
+  g: DirectedAcyclicGraph<A>
+): B {
+  return match(g)
+    .with(P.when(isEmpty<A>), () => e)
+    .with(P.when(isVertex<A>), (vtx: Vertex<A>) => v(vtx.getValue()))
+    .with(P.when(isOverlay<A>), (overlayG: Overlay<A>) =>
+      o(
+        foldg(e, v, o, c, overlayG.getLeft()),
+        foldg(e, v, o, c, overlayG.getRight())
+      )
+    )
+    .with(P.when(isConnect<A>), (connectG: Connect<A>) =>
+      c(
+        foldg(e, v, o, c, connectG.getFrom()),
+        foldg(e, v, o, c, connectG.getTo())
+      )
+    )
+    .exhaustive()
 }
 
-/**************************************
-  Other graph construction functions
-***************************************/
+/********************************************
+    Basic graph construction primitives
+**********************************************/
 
 /** Construct the graph comprising /a single edge/.
  *
