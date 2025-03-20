@@ -54,4 +54,5 @@ test-suite jl4-test
     parser-regex,
     optics,
     silently,
+    transformers,
     lsp-types,

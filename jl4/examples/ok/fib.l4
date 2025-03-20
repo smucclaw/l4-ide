@@ -14,7 +14,7 @@ DECIDE fibNaive n IS
                         n
                   MINUS 2
 
-#EVAL fibNaive 20
+#EVAL fibNaive 15
 
 DECIDE fibHelper m n o IS
   IF o EQUALS 0

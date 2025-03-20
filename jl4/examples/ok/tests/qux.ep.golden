@@ -1,0 +1,5 @@
+baz x y MEANS x * y
+
+bingus a b c MEANS a + baz 5 9 * c
+
+res x y MEANS IF baz x y EQUALS 5 THEN FALSE ELSE TRUE
