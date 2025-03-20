@@ -34,20 +34,20 @@ createFunction fnDecl fnImpl =
                 ]
           (errs, mp) <- liftIO $ oneshotL4ActionAndErrors file \nfp -> do
             let  uri = normalizedFilePathToUri nfp
-            Shake.addVirtualFile nfp l4InputWithEval
+            _ <- Shake.addVirtualFile nfp l4InputWithEval
             Shake.use Rules.TypeCheck uri
           case mp of
             Nothing -> throwE $ InterpreterError (mconcat errs)
             Just tcRes -> do
-              case doEvalProgram tcRes.program of
-                [(_srcRange, valEither, evalTrace)] -> case valEither of
+              case doEvalModule tcRes.module' of
+                [ MkEvalDirectiveResult { result, trace } ] -> case result of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
                     r <- valueToFnLiteral val
                     pure $
                       ResponseWithReason
                         { values = [("result", r)]
-                        , reasoning = buildReasoningTree evalTrace
+                        , reasoning = buildReasoningTree trace
                         }
                 [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
                 _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
