@@ -59,7 +59,7 @@ each other.
 
 Meng has previously suggested a "prepositional logic" to describe
 actions complexly -- parameters to actions which clarify when exactly
-those actions have been performed to spec.
+those actions have been performed to spec. The most general parameter is "such that".
 
 This logic overlaps with the decision logic aspect of the language.
 The question of whether an action was taken or not can be expressed as
