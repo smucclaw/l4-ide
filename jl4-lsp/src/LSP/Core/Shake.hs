@@ -42,6 +42,8 @@ module LSP.Core.Shake(
     BadDependency(..),
     RuleBody(..),
     define, defineNoDiagnostics,
+    WithCallStack (..),
+    defineWithCallStack,
     defineEarlyCutoff,
     defineNoFile,
     getDiagnostics,
@@ -150,6 +152,8 @@ import L4.Syntax
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
 import Base.Text (Text)
+import GHC.Generics
+import Data.Hashable (Hashable)
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -939,6 +943,68 @@ define
     :: IdeRule k v
     => Recorder (WithPriority Log) -> (k -> NormalizedUri -> Action (IdeResult v)) -> Rules ()
 define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
+
+data WithCallStack k = AttachCallStack {callStack :: [NormalizedUri], key :: k}
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult (WithCallStack k) = RuleResult k
+
+-- | defines a rule that can check the callstack. Every time a rule that is defined with callstack is used,
+-- it has to be wrapped in 'WithCallStack'
+defineWithCallStack
+    :: (IdeRule k v)
+    => Recorder (WithPriority Log)
+    -> (k -> [NormalizedUri] -> NormalizedUri -> Action (IdeResult v))
+    -> Rules ()
+defineWithCallStack recorder op =
+  defineEarlyCutoff recorder $ Rule $ \(AttachCallStack cs k) v ->
+    -- NOTE: We add ourselves to the callstack within the rule so we have to cut off the head
+    case cs of
+      (_: c : _) | c == v -> pure (Nothing, ([
+        FileDiagnostic
+          { fdLspDiagnostic =
+            Diagnostic
+              { _source = Just "jl4"
+              , _severity = Just DiagnosticSeverity_Error
+              , _range = LSP.Range (Position 0 0) (Position 0 0)
+              , _message = "Your module depends on itself:"
+              , _relatedInformation = Nothing
+              , _data_ = Nothing
+              , _codeDescription = Nothing
+              , _tags = Nothing
+              , _code = Nothing
+              }
+          , fdFilePath = v
+          , fdShouldShowDiagnostic = ShowDiag
+          , fdOriginalSource = NoMessage
+          }
+
+        ], Nothing))
+      (_: cs')   |  v `elem` cs' ->
+        pure (Nothing, ([
+              FileDiagnostic
+                { fdLspDiagnostic =
+                  Diagnostic
+                    { _source = Just "jl4"
+                    , _severity = Just DiagnosticSeverity_Error
+                    , _range = LSP.Range (Position 0 0) (Position 0 0)
+                    , _message = Text.unlines
+                        $ "One of your dependencies depends on this module and forms a cycle:"
+                        : map ((.getUri) . fromNormalizedUri) (reverse $ v : cs)
+                    , _relatedInformation = Nothing
+                    , _data_ = Nothing
+                    , _codeDescription = Nothing
+                    , _tags = Nothing
+                    , _code = Nothing
+                    }
+                , fdFilePath = v
+                , fdShouldShowDiagnostic = ShowDiag
+                , fdOriginalSource = NoMessage
+                }
+
+        ], Nothing))
+      _ -> (Nothing,) <$> op k cs v
 
 defineNoDiagnostics
     :: IdeRule k v

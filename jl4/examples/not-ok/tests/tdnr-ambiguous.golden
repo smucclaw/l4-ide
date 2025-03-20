@@ -8,8 +8,8 @@ tdnr-ambiguous.l4:7:6-9:
     and I do not have sufficient information to make a choice between them.
     The options are:
     
-      foo (defined at 4:8-11) of type BOOLEAN
-      foo (defined at 3:8-11) of type NUMBER
+      foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
 
 tdnr-ambiguous.l4:14:18-21:
   I found a problem while checking the definition of `another`:
@@ -20,8 +20,8 @@ tdnr-ambiguous.l4:14:18-21:
     and I do not have sufficient information to make a choice between them.
     The options are:
     
-      foo (defined at 4:8-11) of type BOOLEAN
-      foo (defined at 3:8-11) of type NUMBER
+      foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
 
 tdnr-ambiguous.l4:14:27-30:
   I found a problem while checking the definition of `another`:
@@ -32,6 +32,6 @@ tdnr-ambiguous.l4:14:27-30:
     and I do not have sufficient information to make a choice between them.
     The options are:
     
-      foo (defined at 4:8-11) of type BOOLEAN
-      foo (defined at 3:8-11) of type NUMBER
+      foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
 

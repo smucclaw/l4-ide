@@ -27,8 +27,6 @@ import Test.Hspec
 import Test.Hspec.Golden
 import qualified Regex.Text as RE
 import qualified Data.CharSet as CharSet
-import Data.Char (isSpace)
-import Control.Applicative (many)
 import qualified System.OsPath as OsPath
 
 main :: IO ()
@@ -69,14 +67,7 @@ jl4ExactPrintGolden dir inputFile = do
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
-  let mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
-        Just p | not (null p) -> p
-        _ -> fp
-
-      regex = fmap mkFileName $
-        many (RE.satisfy isSpace) *> RE.text "file://" *>
-          RE.manyTextOf (CharSet.not CharSet.space)
-      output = fromMaybe (RE.replaceAll regex $ mconcat errs) moutput
+  let output = fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
 
   pure
     Golden
@@ -110,6 +101,17 @@ jl4NlgAnnotationsGolden dir inputFile = do
 -- Test helpers
 -- ----------------------------------------------------------------------------
 
+sanitizeFilePaths :: Text -> Text
+sanitizeFilePaths = RE.replaceAll regex
+  where
+  mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
+    Just p | not (null p) -> p
+    _ -> fp
+
+  regex = fmap mkFileName $
+    RE.manyTextOf CharSet.space *> RE.text "file://" *>
+      RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
+
 -- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
 parseFile :: String -> Text -> IO ()
 parseFile file input =
@@ -121,12 +123,12 @@ parseFile file input =
         MkCheckResult {errors, program}
           | all ((== JL4.SInfo) . JL4.severity) errors -> do
             Text.putStrLn "Typechecking successful"
-            let results = JL4.doEvalProgram program nuri
+            let results = JL4.doEvalModule program
             let msgs = (typeErrorToMessage <$> errors) ++ (evalDirectiveResultToMessage <$> results)
             Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
           | otherwise -> do
               let msgs = typeErrorToMessage <$> errors
-              Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
+              Text.putStr $ sanitizeFilePaths $ Text.unlines (renderMessage <$> sortOn fst msgs)
  where
   nuri = toNormalizedUri $ filePathToUri file
   fp = takeFileName file
@@ -161,7 +163,7 @@ readAndParseFile file = do
   input <- Text.readFile file
   parseFile file input
 
-prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
+prettyNlgOutput :: Module Name -> [Parser.Warning] -> Text
 prettyNlgOutput p warns =
   Text.unlines $
     [ prettyNlgName n nlg

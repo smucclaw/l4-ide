@@ -5,7 +5,7 @@ module L4.Parser (
   parseFile,
   execParser,
   execParserForTokens,
-  program,
+  module',
   PError (..),
   mkPError,
   PState (..),
@@ -218,8 +218,8 @@ indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
 indented parser pos =
   withIndent GT pos $ \ _ -> parser
 
-program :: NormalizedUri -> Parser (Module Name)
-program uri = do
+module' :: NormalizedUri -> Parser (Module Name)
+module' uri = do
   attachAnno $
     MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
@@ -1232,7 +1232,7 @@ execProgramParser file input =
 
 execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
 execProgramParserForTokens file input ts =
-  case execParserForTokens (program $ toNormalizedUri $ filePathToUri file) file input ts of
+  case execParserForTokens (module' $ toNormalizedUri $ filePathToUri file) file input ts of
     Left err -> Left err
     Right (prog, pstate) ->
       let
