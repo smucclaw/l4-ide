@@ -50,6 +50,34 @@ export abstract class Dag<A extends Ord<A>>
     return new Connect(this, other)
   }
 
+  /**
+  * instance Functor Graph where
+      fmap f g = g >>= (vertex . f)
+  */
+  gmap<B extends Ord<B>>(f: (a: A) => B): DirectedAcyclicGraph<B> {
+    return this.bind((a) => vertex(f(a)))
+  }
+
+  /**
+   * FlatMap (bind) operation for the Dag monad.
+   * Applies a function to each vertex in the graph and flattens the result.
+   */
+  bind<B extends Ord<B>>(
+    f: (a: A) => DirectedAcyclicGraph<B>
+  ): DirectedAcyclicGraph<B> {
+    return buildg<B>((e, v, o, c) =>
+      foldg<A, DirectedAcyclicGraph<B>>(
+        e,
+        (a: A) => foldg(e, v, o, c, f(a)),
+        o,
+        c,
+        this
+      )
+    )
+  }
+
+  }
+
   /** Errors if not a DAG */
   getTopSort(): Array<A> {
     if (this.topologicalOrdering) return this.topologicalOrdering as A[]
@@ -232,6 +260,9 @@ export class Connect<A extends Ord<A>> extends Dag<A> {
          Graph folding
 **********************************************/
 
+// TODO: Right now foldg etc are only implemented for Dag;
+// would be better if the base graph classes also had them
+
 /**
  * Adapted from
  *  https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph.hs#L466
@@ -276,6 +307,37 @@ export function foldg<A extends Ord<A>, B>(
       )
     )
     .exhaustive()
+}
+
+/**
+ * Adapted from https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph.hs#L522
+ * Build a graph given an interpretation of the four graph construction
+ * primitives 'empty', 'vertex', 'overlay' and 'connect', in that order.
+ *
+ *
+ * Example usages:
+ * - buildg((e, v, o, c) => e)                                    == empty()
+ * - buildg((e, v, o, c) => v(x))                                 == vertex(x)
+ * - buildg((e, v, o, c) => o(foldg(e, v, o, c, x), foldg(e, v, o, c, y))) == overlay(x, y)
+ * - buildg((e, v, o, c) => c(foldg(e, v, o, c, x), foldg(e, v, o, c, y))) == connect(x, y)
+ * - buildg((e, v, o, _c) => xs.map(v).reduce(o, e))              == vertices(xs)
+ * - foldg(e, v, o, c, buildg(f))                                 == f(e, v, o, c)
+ */
+export function buildg<A extends Ord<A>>(
+  f: (
+    e: DirectedAcyclicGraph<A>,
+    v: (a: A) => DirectedAcyclicGraph<A>,
+    o: (
+      x: DirectedAcyclicGraph<A>,
+      y: DirectedAcyclicGraph<A>
+    ) => DirectedAcyclicGraph<A>,
+    c: (
+      x: DirectedAcyclicGraph<A>,
+      y: DirectedAcyclicGraph<A>
+    ) => DirectedAcyclicGraph<A>
+  ) => DirectedAcyclicGraph<A>
+): DirectedAcyclicGraph<A> {
+  return f(empty<A>(), vertex, overlay, connect)
 }
 
 /********************************************

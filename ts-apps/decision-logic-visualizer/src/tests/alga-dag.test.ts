@@ -6,6 +6,7 @@ import {
   connect,
   connectNodeToSource,
   connectSinkToNode,
+  pathFromValues,
 } from '../lib/algebraic-graphs/dag.js'
 import { NumberWrapper } from './number-wrapper.js'
 
@@ -333,5 +334,88 @@ describe('DAG - toString', () => {
     const nw2 = new NumberWrapper(2)
     const dag = connect(vertex(nw1), vertex(nw2))
     expect(dag.toString()).toBe('edges [<NWrapper 1,NWrapper 2>]')
+  })
+})
+
+/******************************************
+       gmap (Graph Map)
+*******************************************/
+
+// TODO: I really should randomly generate graphs, or aat least make a couple of different test graphs
+
+describe('DAG - gmap (Graph Map)', () => {
+  test('gmap with id should return the same (structurally speaking) graph', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+
+    const mappedDag = dag.gmap((a) => a)
+
+    expect(mappedDag.isEqualTo(dag)).toBeTruthy()
+  })
+
+  test('gmap with a function should apply to all vertices', () => {
+    const vertices = [
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ]
+    const dag = pathFromValues(vertices)
+
+    const mappedDag = dag.gmap(
+      (a) => new NumberWrapper(a.getValueAsNumber() + 1)
+    )
+
+    const expectedVertices = [
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+      new NumberWrapper(4),
+    ]
+    const expectedDag = pathFromValues(expectedVertices)
+
+    expect(mappedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('gmap should satisfy functor composition law: map f (map g) x == map (f . g) x', () => {
+    const dag = connect(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(2))
+    ).overlay(vertex(new NumberWrapper(3)))
+
+    const f = (a: NumberWrapper) => new NumberWrapper(a.getValueAsNumber() + 1)
+    const g = (a: NumberWrapper) => new NumberWrapper(a.getValueAsNumber() * 2)
+
+    const composed = dag.gmap((a) => f(g(a)))
+    const mappedSequentially = dag.gmap(g).gmap(f)
+
+    expect(composed.isEqualTo(mappedSequentially)).toBeTruthy()
+  })
+})
+
+/******************************************
+        bind (FlatMap)
+*******************************************/
+
+describe('DAG - bind (FlatMap)', () => {
+  test('bind with `vertex` function should replace vertices', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+
+    const boundDag = dag.bind((a) =>
+      vertex(new NumberWrapper(a.getValueAsNumber() * 2))
+    )
+
+    const expectedDag = pathFromValues([
+      new NumberWrapper(2),
+      new NumberWrapper(4),
+      new NumberWrapper(6),
+    ])
+
+    expect(boundDag.isEqualTo(expectedDag)).toBeTruthy()
   })
 })
