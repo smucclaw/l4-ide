@@ -30,7 +30,7 @@ The general form of a regulative clause says who is supposed to do what, under c
   ELSE      <transition>
 #+end_src
 
-Note that ~THEN/ELSE~ replaces previous usages of ~HENCE/LEST~.
+Note that ~THEN/ELSE~ replaces previous usages of ~HENCE/LEST~. Let's parse ~HENCE~ and ~THEN~ as equivalent, and ~LEST~ and ~ELSE~ as equivalent, and we can run usability experiments.
 
 We introduce sugared forms of the ~DO~ expression above by introducing
 ~MUST~, ~MAY~, and ~MUSTNT~ operators, which are specified to give
