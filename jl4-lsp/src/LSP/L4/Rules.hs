@@ -1,7 +1,9 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
+import Base hiding (use)
 import L4.Annotation
 import L4.Evaluate
 import L4.FindDefinition (toResolved)
@@ -17,14 +19,9 @@ import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
 
 import Control.Applicative
-import Control.DeepSeq
 import Control.Exception (assert)
-import Control.Monad.Except (runExceptT)
 import Control.Monad.Trans.Maybe
-import Control.Monad.State
-import Data.Foldable (Foldable (..))
 import Data.Hashable (Hashable)
-import Data.Text (Text)
 import qualified Data.Map.Strict as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
@@ -35,7 +32,7 @@ import System.FilePath
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
-import GHC.Generics (Generic, Generically (..))
+import GHC.Generics (Generically (..))
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -73,9 +70,12 @@ data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving anyclass (NFData, Hashable)
 
 type instance RuleResult TypeCheck = TypeCheckResult
-data TypeCheck = TypeCheck
+data TypeCheck = TypeCheckNoCallstack
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
+
+pattern TypeCheck :: WithCallStack TypeCheck
+pattern TypeCheck = AttachCallStack [] TypeCheckNoCallstack
 
 type instance RuleResult SuccessfulTypeCheck = TypeCheckResult
 data SuccessfulTypeCheck = SuccessfulTypeCheck
@@ -226,14 +226,14 @@ jl4Rules rootDirectory recorder = do
         imports  = map mkImportUri $ foldTopDecls getImport prog
     pure ([], Just imports)
 
-  define shakeRecorder $ \GetTypeCheckDependencies uri -> do
+  defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
     imports  <- use_  GetImports uri
-    res      <- uses_ TypeCheck  imports
+    res      <- uses_ (AttachCallStack cs TypeCheckNoCallstack) imports
     pure ([], Just res)
 
-  define shakeRecorder $ \TypeCheck uri -> do
-    parsed <- use_ GetParsedAst             uri
-    deps   <- use_ GetTypeCheckDependencies uri
+  defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
+    parsed <- use_ GetParsedAst uri
+    deps   <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
@@ -265,16 +265,20 @@ jl4Rules rootDirectory recorder = do
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
-  define shakeRecorder $ \GetEvaluationDependencies f -> do
+  defineWithCallStack shakeRecorder $ \GetEvaluationDependencies cs f -> do
     imports <- use_  GetImports f
     tcRes   <- use_  SuccessfulTypeCheck f
-    deps    <- uses_ GetEvaluationDependencies imports
+    -- TODO: when checking for cycles, we should check which one is the
+    -- first element in the cycle that is, i.e. which IMPORT, then scan
+    -- for the IMPORT again and
+    -- put the diagnostic on that IMPORT
+    deps    <- uses_ (AttachCallStack (f : cs) GetEvaluationDependencies) imports
     let environment = Evaluate.unionEnvironments $ map (.environment) deps
         own = execEvalModuleWithEnv environment tcRes.module'
     pure ([], Just own)
 
   define shakeRecorder $ \Evaluate uri -> do
-    res  <- use_ GetEvaluationDependencies uri
+    res  <- use_ (AttachCallStack [uri] GetEvaluationDependencies) uri
     let results = res.directiveResults
     pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just ())
 

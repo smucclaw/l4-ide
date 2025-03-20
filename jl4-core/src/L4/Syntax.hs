@@ -381,11 +381,6 @@ deriving via L4Syntax (LocalDecl n)
   instance HasAnno (LocalDecl n)
 
 
-deriving anyclass instance ToConcreteNodes PosToken (Module Name)
-
-instance ToConcreteNodes PosToken NormalizedUri where
-  toNodes = const $ pure []
-
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Name) where
   toNodes (MkSection ann _lvl name maka decls) =
@@ -414,7 +409,8 @@ deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
-deriving anyclass instance ToConcreteNodes PosToken (Module Resolved)
+instance ToConcreteNodes PosToken (Module Name) where
+  toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where
@@ -443,6 +439,9 @@ deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
+instance ToConcreteNodes PosToken (Module Resolved) where
+  toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
+
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
