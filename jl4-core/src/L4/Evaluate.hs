@@ -1,7 +1,8 @@
 {-# LANGUAGE ViewPatterns #-}
 module L4.Evaluate
-  ( EvalDirectiveResult(..)
-  , EvalState(..)
+  ( EvalDirectiveResult (..)
+  , EvalState (..)
+  , EvalTrace (..)
   , doEvalModule
   , buildModuleEnvironment
   , execEvalModuleWithEnv
