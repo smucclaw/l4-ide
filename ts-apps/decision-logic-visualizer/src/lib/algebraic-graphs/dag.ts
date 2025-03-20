@@ -76,6 +76,11 @@ export abstract class Dag<A extends Ord<A>>
     )
   }
 
+  /**
+   * Constructs the induced subgraph by removing vertices that do not satisfy `p`.
+   */
+  induce(p: (a: A) => boolean): DirectedAcyclicGraph<A> {
+    return this.bind((a) => (p(a) ? vertex(a) : empty<A>()))
   }
 
   /** Errors if not a DAG */

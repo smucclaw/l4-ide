@@ -437,8 +437,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   /**************************************
       Zen mode,
-    which is currently being treated as 
-    being equivalent to whether 
+    which is currently being treated as
+    being equivalent to whether
     explanatory annotations are visible
   ***************************************/
 

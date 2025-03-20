@@ -422,22 +422,87 @@ describe('DAG - bind (FlatMap)', () => {
     expect(boundDag.isEqualTo(expectedDag)).toBeTruthy()
   })
 })
+
+/******************************************
+         induce (a kind of filter)
+*******************************************/
+
+describe('DAG - induce using bind', () => {
+  test('induce with predicate that always returns true should return the original graph', () => {
+    const vertices = [
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ]
+    const dag = pathFromValues(vertices)
+
+    const inducedDag = dag.induce(() => true)
+
+    expect(inducedDag.isEqualTo(dag)).toBeTruthy()
+  })
+
+  test('induce with predicate that always returns false should return an empty graph', () => {
     const dag = pathFromValues([
       new NumberWrapper(1),
       new NumberWrapper(2),
       new NumberWrapper(3),
     ])
 
-    const boundDag = dag.bind((a) =>
-      vertex(new NumberWrapper(a.getValueAsNumber() * 2))
-    )
+    const inducedDag = dag.induce(() => false)
 
-    const expectedDag = pathFromValues([
+    expect(inducedDag.getVertices().length).toStrictEqual(0)
+  })
+
+  test('induce can be used to remove a specific vertex', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
       new NumberWrapper(2),
-      new NumberWrapper(4),
-      new NumberWrapper(6),
+      new NumberWrapper(3),
     ])
 
-    expect(boundDag.isEqualTo(expectedDag)).toBeTruthy()
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() !== 2)
+
+    const expectedDag = overlay(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(3))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('induce preserves edges between remaining vertices', () => {
+    const dag = connect(
+      vertex(new NumberWrapper(1)),
+      connect(vertex(new NumberWrapper(2)), vertex(new NumberWrapper(3)))
+    )
+
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() !== 2)
+
+    const expectedDag = connect(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(3))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('induce with a complex predicate', () => {
+    const dag =
+      // (1 + 2) -> ( (3 -> 4) + 5 -> 6 )
+      overlay(vertex(nws[1]), vertex(nws[2])).connect(
+        connect(
+          vertex(nws[3]),
+          vertex(nws[4]).overlay(connect(vertex(nws[5]), vertex(nws[6])))
+        )
+      )
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() % 2 === 0)
+
+    // 2 -> 4 + 2 -> 6
+    const expectedDag = overlay(
+      vertex(nws[2]).connect(vertex(nws[4])),
+      vertex(nws[2]).connect(vertex(nws[6]))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
   })
 })
