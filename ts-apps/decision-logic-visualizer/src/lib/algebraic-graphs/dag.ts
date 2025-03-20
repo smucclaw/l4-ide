@@ -9,6 +9,7 @@ import {
 import * as GY from 'graphology'
 import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
+import _ from 'lodash'
 
 /*
 TODO: There is currently a fair bit of code duplication
@@ -77,10 +78,21 @@ export abstract class Dag<A extends Ord<A>>
   }
 
   /**
-   * Constructs the induced subgraph by removing vertices that do not satisfy `p`.
+   * Constructs the induced subgraph by removing vertices that do not satisfy `predicate`.
    */
-  induce(p: (a: A) => boolean): DirectedAcyclicGraph<A> {
-    return this.bind((a) => (p(a) ? vertex(a) : empty<A>()))
+  induce(predicate: (a: A) => boolean): DirectedAcyclicGraph<A> {
+    return this.bind((a) => (predicate(a) ? vertex(a) : empty<A>()))
+  }
+
+  partition(predicate: (a: A) => boolean): {
+    induced: DirectedAcyclicGraph<A>
+    complement: DirectedAcyclicGraph<A>
+  } {
+    const complementPred = _.negate(predicate)
+    return {
+      induced: this.induce(predicate),
+      complement: this.induce(complementPred),
+    }
   }
 
   /** Errors if not a DAG */

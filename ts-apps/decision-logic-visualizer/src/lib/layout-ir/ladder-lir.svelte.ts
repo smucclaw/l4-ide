@@ -12,7 +12,12 @@ import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import { isVertex, type DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import {
+  isVertex,
+  overlay,
+  empty,
+  type DirectedAcyclicGraph,
+} from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
@@ -26,6 +31,7 @@ import type {
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
 import { match } from 'ts-pattern'
+import _ from 'lodash'
 
 /*
 Design principles:
@@ -97,14 +103,54 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 
 export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
+  private highlightedPaths: LirId[] = []
 
-  constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected ladderGraph: LadderGraphLirNode,
+    paths: Array<LinPathLirNode>
+  ) {
     super(nodeInfo)
     this.paths = paths.map((n) => n.getId())
   }
 
   getPaths(context: LirContext) {
     return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
+  }
+
+  highlightPaths(context: LirContext, paths: LirId[]) {
+    const pathLirNodes = paths.map((id) =>
+      context.get(id)
+    ) as Array<LinPathLirNode>
+
+    // 1. Get the subgraph to be highlighted
+    // Exploits the property that (G, +, ε) is an idempotent monoid
+    const graphToHighlight = pathLirNodes
+      .map((p) => p._getRawPath())
+      .reduceRight(overlay, empty())
+
+    // 2. Reset all edge styles on ladder graph, then highlight the subgraph
+    this.ladderGraph.clearAllEdgeStyles(context)
+    this.setStylesOnLadderSubgraph(
+      context,
+      new HighlightedEdgeStyles(),
+      graphToHighlight
+    )
+  }
+
+  getHighlightedPaths() {
+    return this.highlightedPaths
+  }
+
+  protected setStylesOnLadderSubgraph(
+    context: LirContext,
+    styles: EdgeStyles,
+    subgraph: DirectedAcyclicGraph<LirId>
+  ) {
+    const pathEdges = subgraph.getEdges()
+    pathEdges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
+    })
   }
 
   getChildren(context: LirContext) {
@@ -121,7 +167,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
   }
 
   toString(): string {
-    return 'PATH_LIST_LIR_NODE'
+    return 'PATHS_LIST_LIR_NODE'
   }
 }
 
@@ -133,7 +179,6 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
 
   constructor(
     nodeInfo: LirNodeInfo,
-    protected ladderGraph: LadderGraphLirNode,
     protected rawPath: DirectedAcyclicGraph<LirId>
   ) {
     super(nodeInfo)
@@ -143,28 +188,9 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
     return this.#is$Selected
   }
 
-  protected setStylesOnCorrespondingPathInLadderGraph(
-    context: LirContext,
-    styles: EdgeStyles
-  ) {
-    const pathEdges = this.rawPath.getEdges()
-    pathEdges.forEach((edge) => {
-      this.ladderGraph.setEdgeStyles(context, edge, styles)
-    })
-  }
-
-  highlightCorrespondingPathInLadderGraph(context: LirContext) {
-    this.setStylesOnCorrespondingPathInLadderGraph(
-      context,
-      new HighlightedEdgeStyles()
-    )
-  }
-
-  unhighlightCorrespondingPathInLadderGraph(context: LirContext) {
-    this.setStylesOnCorrespondingPathInLadderGraph(
-      context,
-      new EmptyEdgeStyles()
-    )
+  /** To be called only by the PathsListLirNode */
+  _getRawPath() {
+    return this.rawPath
   }
 
   getVertices(context: LirContext) {
@@ -335,11 +361,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   getPathsList(context: LirContext) {
     const makePathsList = (rawPaths: DirectedAcyclicGraph<LirId>[]) => {
       const paths = rawPaths.map(
-        (rawPath) =>
-          new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
+        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
       )
       return new PathsListLirNode(
         this.makeNodeInfo(context),
+        this,
         paths as Array<LinPathLirNode>
       )
     }
@@ -392,6 +418,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     // Ok to mutate because getAttributesForEdge returns a cloned object
     attrs.setStyles(styles)
     this.#dag.setEdgeAttributes(edge, attrs)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  clearAllEdgeStyles(context: LirContext) {
+    const edges = this.#dag.getEdges()
+    edges.forEach((edge) => {
+      const attrs = this.#dag.getAttributesForEdge(edge)
+      // Ok to mutate because getAttributesForEdge returns a cloned object
+      attrs.setStyles(new EmptyEdgeStyles())
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
 
     this.getRegistry().publish(context, this.getId())
   }
