@@ -64,7 +64,7 @@ createValidatedFunction _filename content fnDecl =
     { fnImpl = fnDecl
     , fnEvaluator =
         Map.fromList
-          [ (JL4, builtinProgram $ Jl4.createFunction (toDecl fnDecl) content)
+          [ (JL4, Jl4.createFunction (toDecl fnDecl) content)
           ]
     }
 
@@ -114,7 +114,7 @@ personQualifiesFunction = do
       { fnImpl = fnDecl
       , fnEvaluator =
           Map.fromList
-            [ (JL4, builtinProgram $ Jl4.createFunction (toDecl fnDecl) computeQualifiesJL4NoInput)
+            [ (JL4, Jl4.createFunction (toDecl fnDecl) computeQualifiesJL4NoInput)
             ]
       }
 
@@ -158,24 +158,6 @@ rodentsAndVerminFunction = do
             ]
       }
 
--- computeQualifiesJL4 :: Text
--- computeQualifiesJL4 =
---   [i|
--- DECLARE Inputs
---   HAS
---     walks IS A BOOLEAN
---     drinks IS A BOOLEAN
---     eats IS A BOOLEAN
-
--- GIVEN i IS Inputs
--- GIVETH A BOOLEAN
--- DECIDE `compute_qualifies` i IF
---         i's walks
---  AND    i's drinks
---      OR i's eats
--- |]
-
--- [TODO]: this would be the preferred calling style, but we get L4 ERror: More than ONE #EVAL found
 computeQualifiesJL4NoInput :: Text
 computeQualifiesJL4NoInput =
   [i|
