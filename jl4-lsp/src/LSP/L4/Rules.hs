@@ -88,11 +88,12 @@ data TypeCheckResult = TypeCheckResult
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
+  , infos :: [TypeCheck.CheckErrorWithContext]
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
 
-type instance RuleResult Evaluate = ()
+type instance RuleResult Evaluate = [EvalDirectiveResult]
 data Evaluate = Evaluate
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -248,6 +249,7 @@ jl4Rules rootDirectory recorder = do
           }
         initial = foldl' unionCheckStates TypeCheck.initialCheckState deps
         result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
+        (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
       , Just TypeCheckResult
@@ -255,7 +257,8 @@ jl4Rules rootDirectory recorder = do
         , substitution = result.substitution
         , environment = result.environment
         , entityInfo = result.entityInfo
-        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
+        , success = null errors
+        , infos
         }
       )
 
@@ -280,7 +283,7 @@ jl4Rules rootDirectory recorder = do
   define shakeRecorder $ \Evaluate uri -> do
     res  <- use_ (AttachCallStack [uri] GetEvaluationDependencies) uri
     let results = res.directiveResults
-    pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just ())
+    pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just results)
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f

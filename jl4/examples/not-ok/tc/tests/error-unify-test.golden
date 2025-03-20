@@ -1,0 +1,18 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: error-unify-test.l4
+  Hidden:   no
+  Range:    5:23-5:24
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    All elements in a LIST literal must have the same type.
+    From looking at the context, I have inferred that this type must be
+
+      FUNCTION FROM BOOLEAN TO BOOLEAN
+
+    but this element is of type
+
+      FUNCTION FROM NUMBER TO BOOLEAN
