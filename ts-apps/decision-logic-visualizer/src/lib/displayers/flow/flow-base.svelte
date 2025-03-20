@@ -14,6 +14,7 @@
     SvelteFlow,
     Background,
     Controls,
+    ControlButton,
     ConnectionLineType,
     useNodesInitialized,
     useSvelteFlow,
@@ -314,7 +315,12 @@ Misc SF UI TODOs:
       onnodedragstop={onNodeDragStop}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
-      <Controls position="bottom-right" showLock={false} />
+      <Controls position="bottom-right" showLock={false}>
+        <ControlButton onclick={() => ladderGraph.toggleZenModeStatus(context)}>
+          <!-- TODO: Make our own menu to get more real estate and use a Switch component -->
+          <div class="text-[0.7rem] p-1">Zen</div>
+        </ControlButton>
+      </Controls>
       <Background />
     </SvelteFlow>
   </div>
@@ -322,14 +328,8 @@ Misc SF UI TODOs:
   <!-- TODO: Move the following into a lin paths container component -->
   <div class="paths-container">
     <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
-    <Collapsible.Root
-      onOpenChange={() => {
-        // Need the timeout to synchronize the fit view properly (probably because we use window.requestAnimationFrame in doFitView?)
-        setTimeout(() => {
-          doFitView()
-        }, 10)
-      }}
-    >
+    <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
+    <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
       <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
         <!-- TODO: Improve the button styles -->
         <button

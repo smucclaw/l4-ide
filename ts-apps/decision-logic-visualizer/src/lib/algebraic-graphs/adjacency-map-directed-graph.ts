@@ -66,6 +66,7 @@ export class DirectedAMGraph<A extends Ord<A>>
 
   // Getting / setting edge attributes
 
+  /** Get a *cloned* EdgeAttributes */
   getAttributesForEdge<T extends Edge<A>>(edge: T): EdgeAttributes {
     const edgeKey = makeEdgeKey(edge)
     const attrs = this.edgeAttributes.get(edgeKey)

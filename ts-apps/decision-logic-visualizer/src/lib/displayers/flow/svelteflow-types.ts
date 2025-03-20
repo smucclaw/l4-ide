@@ -78,7 +78,8 @@ export interface Dimensions {
 export const boolVarNodeType = 'boolVarNode' as const
 export const notStartNodeType = 'notStartNode' as const
 export const notEndNodeType = 'notEndNode' as const
-export const sourceNodeType = 'sourceNode' as const
+export const sourceNoAnnoNodeType = 'sourceNoAnnoNode' as const
+export const sourceWithOrAnnoNodeType = 'sourceWithOrAnnoNode' as const
 export const sinkNodeType = 'sinkNode' as const
 
 export type SFNode<T extends string> = SF.Node & { type: T }
@@ -90,17 +91,18 @@ export const isBoolVarSFNode = (
   node: SF.Node
 ): node is SFNode<typeof boolVarNodeType> => isSFNode(node, boolVarNodeType)
 
-export type SFSourceNode = SFNode<typeof sourceNodeType>
+export type SFSourceNoAnnoNode = SFNode<typeof sourceNoAnnoNodeType>
 export type SFSinkNode = SFNode<typeof sinkNodeType>
 
-export const isSFSourceNode = (node: SF.Node): node is SFSourceNode =>
-  isSFNode(node, sourceNodeType)
+export const isSFSourceNoAnnoNode = (
+  node: SF.Node
+): node is SFSourceNoAnnoNode => isSFNode(node, sourceNoAnnoNodeType)
 export const isSFSinkNode = (node: SF.Node): node is SFSinkNode =>
   isSFNode(node, sinkNodeType)
-export const isSFGroupingNode = (
+export const isSFBundlingNode = (
   node: SF.Node
-): node is SFSourceNode | SFSinkNode =>
-  isSFSourceNode(node) || isSFSinkNode(node)
+): node is SFSourceNoAnnoNode | SFSinkNode =>
+  isSFSourceNoAnnoNode(node) || isSFSinkNode(node)
 
 /************************************************
            Custom node type map
@@ -111,23 +113,26 @@ export const sfNodeTypes: SF.NodeTypes = {
   boolVarNode: BoolVarSFNode,
   notStartNode: NotStartSFNode,
   notEndNode: NotEndSFNode,
-  sourceNode: SourceSFNode,
+  sourceNoAnnoNode: SourceSFNode,
+  sourceWithOrAnnoNode: SourceSFNode,
   sinkNode: SinkSFNode,
 }
 
 /************************************************
-          Stuff for SF Node data
+        SF Node data, displayer props
 *************************************************/
 
-export interface SFHandlesInfo {
-  sourcePosition: SF.Position
-  targetPosition: SF.Position
+// Displayer props
+
+export interface BoolVarDisplayerProps {
+  data: BoolVarDisplayerData
 }
 
-export const defaultSFHandlesInfo: SFHandlesInfo = {
-  sourcePosition: SF.Position.Right,
-  targetPosition: SF.Position.Left,
+export interface BundlingNodeDisplayerProps {
+  data: BundlingNodeDisplayerData
 }
+
+// Node data
 
 // TODO: Not sure we need this after all
 export interface LadderSFNodeData {
@@ -140,8 +145,24 @@ export interface BoolVarDisplayerData extends LadderSFNodeData {
   value: BoolVal
 }
 
-export interface BoolVarDisplayerProps {
-  data: BoolVarDisplayerData
+export interface BundlingNodeDisplayerData extends LadderSFNodeData {
+  /** Currently used for the explanatory labels */
+  annotation: string
+}
+
+/************************************************
+        SF Node handles
+*************************************************/
+
+export interface SFHandlesInfo {
+  sourcePosition: SF.Position
+  targetPosition: SF.Position
+}
+
+// TODO: Improve how this is used -- took a shortcut here
+export const defaultSFHandlesInfo: SFHandlesInfo = {
+  sourcePosition: SF.Position.Right,
+  targetPosition: SF.Position.Left,
 }
 
 /************************************************
@@ -176,6 +197,14 @@ export const defaultLadderEdgeAttrs = {
   edgeStyles: new EmptyEdgeStyles().getStyleString(),
 }
 
+export interface LadderEdgeData extends LadderEdgeAttrs {
+  context: LirContext
+}
+
 export interface LadderEdgeProps extends SF.EdgeProps {
-  data?: LadderEdgeAttrs
+  /** `data` has to be optional because of current SF limitations.
+   * But I've been told by a SF developer that this will be improved in the future
+   * (i.e., we should be able to specify that it's non-optional in the future)
+   */
+  data?: LadderEdgeData
 }

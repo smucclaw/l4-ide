@@ -54,13 +54,23 @@
   max-width: 40ch;
 }
 
-@utility grouping-node {
+/** For the source and sink bundling nodes */
+@utility bundling-node {
   @apply svelte-flow__node-basic;
-  /* Will lose the grouping node if make width 0 px */
+  /* Will lose the bundling node if width is 0 px */
   width: 1px;
   height: 1px;
+}
 
-  opacity: 0.3;
+@utility node-annotation {
+  position: absolute;
+  top: -25px; /* Adjust this value to control the vertical position */
+  left: 50%;
+  transform: translateX(-58%); /* Centers the text horizontally, ish */
+
+  @apply uppercase;
+  @apply text-base leading-none;
+  @apply text-(--color-node-annotation);
 }
 
 /*************************************

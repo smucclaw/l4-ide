@@ -154,6 +154,27 @@ export abstract class DefaultLirNode
 }
 
 /*********************************************
+       Viz Config
+***********************************************/
+
+export interface VizConfig {
+  constants: {
+    readonly EXPLANATORY_AND_EDGE_LABEL: string
+    readonly OR_BUNDLING_NODE_LABEL: string
+  }
+  shouldEnableZenMode: boolean
+}
+
+const defaultVizConfig: VizConfig = {
+  constants: {
+    EXPLANATORY_AND_EDGE_LABEL: 'AND',
+    /** aka anyOfBundlingNodeAnno.annotation */
+    OR_BUNDLING_NODE_LABEL: 'ANY OF',
+  },
+  shouldEnableZenMode: false,
+}
+
+/*********************************************
        LirContext
 ***********************************************/
 
@@ -170,7 +191,7 @@ export class LirContext {
   /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
-  constructor() {}
+  constructor(private config: VizConfig = defaultVizConfig) {}
 
   get(id: LirId) {
     return this.#nodes.get(id)
@@ -182,6 +203,36 @@ export class LirContext {
 
   clear(id: LirId) {
     this.#nodes.delete(id)
+  }
+
+  /***************
+     Viz Config 
+  ****************/
+
+  // Zen mode
+
+  shouldEnableZenMode() {
+    return this.config.shouldEnableZenMode
+  }
+
+  enableZenMode() {
+    this.config.shouldEnableZenMode = true
+  }
+
+  disableZenMode() {
+    this.config.shouldEnableZenMode = false
+  }
+
+  // Constants
+  // (The rough thought for now is, if we want to change these,
+  // we'd make and pass in a different Context. But not sure.)
+
+  getExplanatoryAndEdgeLabel() {
+    return this.config.constants.EXPLANATORY_AND_EDGE_LABEL
+  }
+
+  getOrBundlingNodeLabel() {
+    return this.config.constants.OR_BUNDLING_NODE_LABEL
   }
 }
 

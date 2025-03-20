@@ -4,6 +4,8 @@
   ****************************************/
 
   --color-node-text: #00004d;
+  /* Another color to consider for node annotations? --color-zinc-400 */
+  --color-node-annotation: var(--color-node-text);
   --color-primary: #001188;
   --color-secondary: #2563eb;
   --color-button: #c7d2fe;
