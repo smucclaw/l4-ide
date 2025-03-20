@@ -103,7 +103,6 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 
 export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
-  private highlightedPaths: LirId[] = []
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -136,10 +135,6 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
       new HighlightedEdgeStyles(),
       graphToHighlight
     )
-  }
-
-  getHighlightedPaths() {
-    return this.highlightedPaths
   }
 
   protected setStylesOnLadderSubgraph(
@@ -175,17 +170,11 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
  * compatible and incompatible linearized paths
  */
 export class LinPathLirNode extends DefaultLirNode implements LirNode {
-  #is$Selected: boolean = $state(false)
-
   constructor(
     nodeInfo: LirNodeInfo,
     protected rawPath: DirectedAcyclicGraph<LirId>
   ) {
     super(nodeInfo)
-  }
-
-  is$Selected() {
-    return this.#is$Selected
   }
 
   /** To be called only by the PathsListLirNode */
