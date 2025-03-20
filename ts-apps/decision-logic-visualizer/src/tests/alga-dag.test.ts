@@ -10,6 +10,8 @@ import {
 } from '../lib/algebraic-graphs/dag.js'
 import { NumberWrapper } from './number-wrapper.js'
 
+const nws = [0, 1, 2, 3, 4, 5, 6].map((n) => new NumberWrapper(n))
+
 /*******************
       Overlay
 ********************/
@@ -333,7 +335,28 @@ describe('DAG - toString', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const dag = connect(vertex(nw1), vertex(nw2))
-    expect(dag.toString()).toBe('edges [<NWrapper 1,NWrapper 2>]')
+    expect(dag.toString()).toBe(
+      'vertices [NWrapper 1, NWrapper 2]\n edges [<NWrapper 1,NWrapper 2>]'
+    )
+  })
+})
+
+/********************************************************************
+  Note that the raw vertices
+  can't just be a member of our pseudo Eq and Ord
+  --- must also have the kind of referential equality that you want
+**********************************************************************/
+
+describe('the kind of equality in this alga mini-lib', () => {
+  test('Alga: not enough for raw vertices to be pseudo Eq -- must also have the kind of referential equality you want', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+    const mappedDag = dag.gmap((a) => new NumberWrapper(a.getValueAsNumber()))
+
+    expect(mappedDag.isEqualTo(dag)).toBeFalsy()
   })
 })
 
@@ -341,7 +364,7 @@ describe('DAG - toString', () => {
        gmap (Graph Map)
 *******************************************/
 
-// TODO: I really should randomly generate graphs, or aat least make a couple of different test graphs
+// TODO: I really should randomly generate graphs, or at least make a couple of different test graphs
 
 describe('DAG - gmap (Graph Map)', () => {
   test('gmap with id should return the same (structurally speaking) graph', () => {
@@ -357,22 +380,12 @@ describe('DAG - gmap (Graph Map)', () => {
   })
 
   test('gmap with a function should apply to all vertices', () => {
-    const vertices = [
-      new NumberWrapper(1),
-      new NumberWrapper(2),
-      new NumberWrapper(3),
-    ]
+    const vertices = [nws[1], nws[2], nws[3]]
     const dag = pathFromValues(vertices)
 
-    const mappedDag = dag.gmap(
-      (a) => new NumberWrapper(a.getValueAsNumber() + 1)
-    )
+    const mappedDag = dag.gmap((a) => nws[a.getValueAsNumber() + 1])
 
-    const expectedVertices = [
-      new NumberWrapper(2),
-      new NumberWrapper(3),
-      new NumberWrapper(4),
-    ]
+    const expectedVertices = [nws[2], nws[3], nws[4]]
     const expectedDag = pathFromValues(expectedVertices)
 
     expect(mappedDag.isEqualTo(expectedDag)).toBeTruthy()
@@ -400,6 +413,15 @@ describe('DAG - gmap (Graph Map)', () => {
 
 describe('DAG - bind (FlatMap)', () => {
   test('bind with `vertex` function should replace vertices', () => {
+    const dag = pathFromValues([nws[1], nws[2], nws[3]])
+
+    const boundDag = dag.bind((a) => vertex(nws[a.getValueAsNumber() * 2]))
+
+    const expectedDag = pathFromValues([nws[2], nws[4], nws[6]])
+
+    expect(boundDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+})
     const dag = pathFromValues([
       new NumberWrapper(1),
       new NumberWrapper(2),
