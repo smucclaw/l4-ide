@@ -40,7 +40,7 @@
           </div>
           <ToggleGroupItem
             value={`${pathIndex}`}
-            class="rounded-lg border-1 p-2 max-w-fit hover:bg-accent text-xs text-left"
+            class="rounded-lg border-1 p-2 max-w-fit hover:border-sky-700 hover:bg-stone-50 text-xs text-left"
           >
             {path.toPretty(context)}
           </ToggleGroupItem>
