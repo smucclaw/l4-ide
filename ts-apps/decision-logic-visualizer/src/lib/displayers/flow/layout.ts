@@ -2,7 +2,7 @@ import dagre from '@dagrejs/dagre'
 import type { Edge } from '@xyflow/svelte'
 import { Position } from '@xyflow/svelte'
 import {
-  isSFGroupingNode,
+  isSFBundlingNode,
   type LadderSFNodeWithDims,
 } from './svelteflow-types.js'
 
@@ -70,7 +70,7 @@ export function getLayoutedElements(
       // TODO: Clean up code below
       // Shift the dagre node position (anchor=center center) for NON-grouping nodes to the top left
       // so it matches the React Flow node anchor point (top left).
-      position: isSFGroupingNode(node)
+      position: isSFBundlingNode(node)
         ? {
             x: nodeWithPosition.x,
             y: nodeWithPosition.y,
