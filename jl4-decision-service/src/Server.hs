@@ -586,6 +586,7 @@ instance FromJSON Parameters where
   parseJSON = Aeson.withObject "Parameters" $ \o -> do
     _ :: Text <- o .: "type"
     props <- o .: "properties"
+    _ :: Text <- o .: "required"
     pure $ Parameters props
 
 instance ToJSON Parameter where
