@@ -107,25 +107,19 @@ instance ToSchema Function where
         mempty
           & title ?~ "Function"
           & type_ ?~ OpenApiObject
+          & required .~ ["type", "function"]
           & properties
             .~ [ ("type", textRef)
                ,
                  ( "function"
                  , Inline $
                     mempty
+                      & required .~ ["name", "description", "supportedBackends", "parameters"] -- the keys to the Map in parametersRef
                       & properties
                         .~ [ ("name", textRef)
                            , ("description", textRef)
                            , ("supportedBackends", evalBackendsRef)
-                           ,
-                             ( "parameters"
-                             , Inline $
-                                mempty
-                                  & properties
-                                    .~ [ ("type", textRef)
-                                       , ("properties", parametersRef)
-                                       ]
-                             )
+                           , ("parameters", parametersRef)
                            ]
                  )
                ]
@@ -143,14 +137,24 @@ instance ToSchema FunctionImplementation where
             .~ [ ("declaration", functionDeclRef)
                , ("implementation", implRef)
                ]
+          & required .~ ["declaration", "implementation"]
 
 instance ToSchema Parameters where
   declareNamedSchema _ = do
-    -- parameterSchema <- declareSchemaRef (Proxy @Parameter)
-    mapSchema <- declareNamedSchema (Proxy @(Map Text Parameter))
+    textSchema <- declareSchemaRef (Proxy @Text)
+    textListSchema <- declareSchemaRef (Proxy @[Text])
+    mapSchema <- declareSchemaRef (Proxy @(Map Text Parameter))
     pure $
-      mapSchema
-        & name ?~ "FunctionParameters"
+      NamedSchema (Just "FunctionParameters") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & title ?~ "FunctionParameters"
+          & properties
+            .~ [ ("type", textSchema)
+               , ("properties", mapSchema)
+               , ("required", textListSchema)
+               ]
+          & required .~ ["type", "properties", "required"]
 
 instance ToSchema Parameter where
   declareNamedSchema _ = do

@@ -13,9 +13,21 @@ In a future iteration the backend will
 
 Run the decision service backend locally:
 
-    cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/
+    cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths ../doc/tutorial-code/
 
 Then try executing a few things at http://localhost:8081/swagger-ui/
+
+## Loading L4 Functions
+
+Two functions are hardcoded by default; see [src/Examples.hs](Examples.hs) for details.
+
+Other functions can be loaded at start time using the `--sourcePaths` command line option.
+
+The argument to the option is a directory or individual `.l4` files.
+
+This option looks for `.l4/.yaml` file pairs, containing additional functions to be exposed via the API. Files without `.yaml` metadata will be ignored.
+
+Multiple `--sourcePaths` can be given.
 
 # See Also
 
