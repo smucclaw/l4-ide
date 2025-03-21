@@ -125,6 +125,7 @@ instance ToSchema Function where
                                     .~ [ ("type", textRef)
                                        , ("properties", parametersRef)
                                        ]
+                          -- [TODO] & required .~ [] -- the keys to the Map in parametersRef
                              )
                            ]
                  )
