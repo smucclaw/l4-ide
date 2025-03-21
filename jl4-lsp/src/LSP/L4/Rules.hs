@@ -22,6 +22,7 @@ import Control.Applicative
 import Control.Exception (assert)
 import Control.Monad.Trans.Maybe
 import Data.Hashable (Hashable)
+import Data.Monoid (Ap (..))
 import qualified Data.Map.Strict as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
@@ -60,7 +61,7 @@ data GetParsedAst = GetParsedAst
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetImports = [NormalizedUri]
+type instance RuleResult GetImports = [(Maybe SrcRange, NormalizedUri)]
 data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -220,7 +221,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
-        mkImportUri (MkImport _a n) = do
+        mkImportPath (MkImport a n) = do
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
           -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
           mFileDirectory <- runMaybeT do
@@ -231,17 +232,31 @@ jl4Rules rootDirectory recorder = do
             guard =<< liftIO (doesFileExist (dir </> modName <.> "l4"))
             pure dir
 
-          pure $ toNormalizedUri $ filePathToUri $ fromMaybe rootDirectory mFileDirectory </> modName <.> "l4"
+          pure (rangeOf a, fromMaybe rootDirectory mFileDirectory </> modName <.> "l4")
+
+        mkImportUri range fp = do
+          e <- doesFileExist fp
+          let u = toNormalizedUri $ filePathToUri fp
+              diag = do
+                guard $ not e
+                [mkSimpleFileDiagnostic u $ mkSimpleDiagnostic (fromNormalizedUri uri).getUri ("File does not exist: " <> Text.pack fp) (fromSrcRange <$> range)]
+          pure (diag, range, u)
+
+        mkDiagsAndImports = \case
+          Import _a i -> Ap do
+            (diag, r, u) <- liftIO . uncurry mkImportUri =<< mkImportPath i
+            pure [(diag, (r, u))]
+          _ -> pure []
+
 
     prog <- use_ GetParsedAst uri
-    let getImport = \case Import _ann i -> [i]; _ -> []
-    imports <- traverse mkImportUri $ foldTopDecls getImport prog
-    pure ([], Just imports)
+    (diags, imports) <- fmap unzip $ getAp $ foldTopDecls mkDiagsAndImports prog
+    pure (concat diags, Just imports)
 
   defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
-    imports  <- use_  GetImports uri
-    res      <- uses_ (AttachCallStack cs TypeCheckNoCallstack) imports
-    pure ([], Just res)
+    imports <- use_  GetImports uri
+    ress    <- fmap catMaybes $ uses (AttachCallStack cs TypeCheckNoCallstack) $ map snd imports
+    pure ([], Just ress)
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
     parsed <- use_ GetParsedAst uri
@@ -286,7 +301,7 @@ jl4Rules rootDirectory recorder = do
     -- first element in the cycle that is, i.e. which IMPORT, then scan
     -- for the IMPORT again and
     -- put the diagnostic on that IMPORT
-    deps    <- uses_ (AttachCallStack (f : cs) GetEvaluationDependencies) imports
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map snd imports
     let environment = Evaluate.unionEnvironments $ map (.environment) deps
         own = execEvalModuleWithEnv environment tcRes.module'
     pure ([], Just own)
