@@ -1,39 +1,53 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { type PathListDisplayerProps } from './svelteflow-types.js'
+  import type { PathListDisplayerProps } from './svelteflow-types.js'
+  import {
+    ToggleGroup,
+    ToggleGroupItem,
+  } from '$lib/ui-primitives/toggle-group/index.js'
 
   /************************
        Lir
   *************************/
 
-  const { context, node }: PathListDisplayerProps = $props()
+  const { context, node: pathsListLirNode }: PathListDisplayerProps = $props()
 
   onDestroy(() => {
-    node.dispose(context)
+    pathsListLirNode.dispose(context)
   })
+
+  const paths = pathsListLirNode.getPaths(context)
 </script>
 
 <section class="paths-list-content-wrapper">
-  <ul class="space-y-1">
-    {#each node.getPaths(context) as path, pathIndex}
-      <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
-        <!-- Row number / path index -->
-        <div class="font-semibold px-3 max-w-[25px] text-right">
-          {pathIndex + 1}
-        </div>
-        <!-- TODO: Refactor the hover CSS to use our css vars -->
-        <button
-          class="rounded-md border-1 p-2 max-w-fit hover:bg-sky-100 text-xs text-left"
-          onmouseenter={() =>
-            path.highlightCorrespondingPathInLadderGraph(context)}
-          onmouseleave={() =>
-            path.unhighlightCorrespondingPathInLadderGraph(context)}
-        >
-          {path.toPretty(context)}
-        </button>
-      </li>
-    {/each}
-  </ul>
+  <ToggleGroup
+    type="multiple"
+    onValueChange={(value: string[]) => {
+      const selectedPathLirIds = value
+        .map((v) => parseInt(v)) // the `value` for this component must be a string
+        .map((pathIndex) => paths[pathIndex].getId())
+      console.log('onvalueChange', value)
+      console.log('onValueChange', selectedPathLirIds)
+      pathsListLirNode.highlightPaths(context, selectedPathLirIds)
+    }}
+  >
+    <ul class="space-y-1">
+      {#each paths as path, pathIndex}
+        <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
+          <!-- Row number / path index -->
+          <div class="px-3 max-w-[25px] text-right">
+            {pathIndex + 1}
+          </div>
+          <ToggleGroupItem
+            value={`${pathIndex}`}
+            class="rounded-lg border-1 hover:border-2 data-[state=on]:border-2 p-2 max-w-fit data-[state=on]:border-sky-600 hover:border-sky-600 hover:bg-transparent text-xs text-left"
+          >
+            {path.toPretty(context)}
+          </ToggleGroupItem>
+        </li>
+      {/each}
+    </ul>
+  </ToggleGroup>
 </section>
 
 <style>

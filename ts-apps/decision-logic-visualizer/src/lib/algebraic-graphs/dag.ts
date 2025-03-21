@@ -9,6 +9,7 @@ import {
 import * as GY from 'graphology'
 import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
+import _ from 'lodash'
 
 /*
 TODO: There is currently a fair bit of code duplication
@@ -48,6 +49,50 @@ export abstract class Dag<A extends Ord<A>>
 
   override connect(other: DirectedAcyclicGraph<A>): DirectedAcyclicGraph<A> {
     return new Connect(this, other)
+  }
+
+  /**
+  * instance Functor Graph where
+      fmap f g = g >>= (vertex . f)
+  */
+  gmap<B extends Ord<B>>(f: (a: A) => B): DirectedAcyclicGraph<B> {
+    return this.bind((a) => vertex(f(a)))
+  }
+
+  /**
+   * FlatMap (bind) operation for the Dag monad.
+   * Applies a function to each vertex in the graph and flattens the result.
+   */
+  bind<B extends Ord<B>>(
+    f: (a: A) => DirectedAcyclicGraph<B>
+  ): DirectedAcyclicGraph<B> {
+    return buildg<B>((e, v, o, c) =>
+      foldg<A, DirectedAcyclicGraph<B>>(
+        e,
+        (a: A) => foldg(e, v, o, c, f(a)),
+        o,
+        c,
+        this
+      )
+    )
+  }
+
+  /**
+   * Constructs the induced subgraph by removing vertices that do not satisfy `predicate`.
+   */
+  induce(predicate: (a: A) => boolean): DirectedAcyclicGraph<A> {
+    return this.bind((a) => (predicate(a) ? vertex(a) : empty<A>()))
+  }
+
+  partition(predicate: (a: A) => boolean): {
+    induced: DirectedAcyclicGraph<A>
+    complement: DirectedAcyclicGraph<A>
+  } {
+    const complementPred = _.negate(predicate)
+    return {
+      induced: this.induce(predicate),
+      complement: this.induce(complementPred),
+    }
   }
 
   /** Errors if not a DAG */
@@ -158,6 +203,12 @@ export function overlay<A extends Ord<A>>(
   return new Overlay(x, y)
 }
 
+export function isOverlay<A extends Ord<A>>(
+  g: DirectedAcyclicGraph<A>
+): g is Overlay<A> {
+  return g instanceof Overlay
+}
+
 export class Overlay<A extends Ord<A>> extends Dag<A> {
   constructor(
     readonly left: DirectedAcyclicGraph<A>,
@@ -177,6 +228,14 @@ export class Overlay<A extends Ord<A>> extends Dag<A> {
     const { adjMap, edgeAttrs } = mergeDirectedGraphs(left, right)
     super(adjMap, edgeAttrs)
   }
+
+  getLeft() {
+    return this.left
+  }
+
+  getRight() {
+    return this.right
+  }
 }
 
 export function connect<A extends Ord<A>>(
@@ -184,6 +243,12 @@ export function connect<A extends Ord<A>>(
   y: DirectedAcyclicGraph<A>
 ): DirectedAcyclicGraph<A> {
   return new Connect(x, y)
+}
+
+export function isConnect<A extends Ord<A>>(
+  g: DirectedAcyclicGraph<A>
+): g is Connect<A> {
+  return g instanceof Connect
 }
 
 export class Connect<A extends Ord<A>> extends Dag<A> {
@@ -198,11 +263,103 @@ export class Connect<A extends Ord<A>> extends Dag<A> {
     )
     super(adjMap, edgeAttributes)
   }
+
+  getFrom() {
+    return this.from
+  }
+
+  getTo() {
+    return this.to
+  }
 }
 
-/**************************************
-  Other graph construction functions
-***************************************/
+/********************************************
+         Graph folding
+**********************************************/
+
+// TODO: Right now foldg etc are only implemented for Dag;
+// would be better if the base graph classes also had them
+
+/**
+ * Adapted from
+ *  https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph.hs#L466
+ * Generalised 'Graph' folding: recursively collapse a 'Graph' by applying
+ * the provided functions to the leaves and internal nodes of the expression.
+ * Complexity: O(s) applications of the given functions.
+ *
+ * Example usages:
+ * - size computation: foldg(0, _ => 1, (x, y) => x + y, (x, y) => x + y, g)
+ * - checking for emptiness: foldg(true, _ => false, (x, y) => x && y, (x, y) => x && y, g) == 'isEmpty'
+ * - checking for a vertex: foldg(false, x => x === a, (x, y) => x || y, (x, y) => x || y, g)  == 'hasVertex' x
+ *
+ * Other noteworthy things:
+ * - foldg 'empty' 'vertex'        'overlay' 'connect'        == id
+ *
+ * @param e The value to return for an Empty graph.
+ * @param v Function to apply to a vertex's value.
+ * @param o Combine results of Overlay nodes.
+ * @param c Combine results of Connect nodes.
+ * @param g The graph to fold over.
+ */
+export function foldg<A extends Ord<A>, B>(
+  e: B,
+  v: (a: A) => B,
+  o: (b1: B, b2: B) => B,
+  c: (b1: B, b2: B) => B,
+  g: DirectedAcyclicGraph<A>
+): B {
+  return match(g)
+    .with(P.when(isEmpty<A>), () => e)
+    .with(P.when(isVertex<A>), (vtx: Vertex<A>) => v(vtx.getValue()))
+    .with(P.when(isOverlay<A>), (overlayG: Overlay<A>) =>
+      o(
+        foldg(e, v, o, c, overlayG.getLeft()),
+        foldg(e, v, o, c, overlayG.getRight())
+      )
+    )
+    .with(P.when(isConnect<A>), (connectG: Connect<A>) =>
+      c(
+        foldg(e, v, o, c, connectG.getFrom()),
+        foldg(e, v, o, c, connectG.getTo())
+      )
+    )
+    .exhaustive()
+}
+
+/**
+ * Adapted from https://github.com/snowleopard/alga/blob/b50c5c3b0c80ff559d1ba75f31bd86dba1546bb2/src/Algebra/Graph.hs#L522
+ * Build a graph given an interpretation of the four graph construction
+ * primitives 'empty', 'vertex', 'overlay' and 'connect', in that order.
+ *
+ *
+ * Example usages:
+ * - buildg((e, v, o, c) => e)                                    == empty()
+ * - buildg((e, v, o, c) => v(x))                                 == vertex(x)
+ * - buildg((e, v, o, c) => o(foldg(e, v, o, c, x), foldg(e, v, o, c, y))) == overlay(x, y)
+ * - buildg((e, v, o, c) => c(foldg(e, v, o, c, x), foldg(e, v, o, c, y))) == connect(x, y)
+ * - buildg((e, v, o, _c) => xs.map(v).reduce(o, e))              == vertices(xs)
+ * - foldg(e, v, o, c, buildg(f))                                 == f(e, v, o, c)
+ */
+export function buildg<A extends Ord<A>>(
+  f: (
+    e: DirectedAcyclicGraph<A>,
+    v: (a: A) => DirectedAcyclicGraph<A>,
+    o: (
+      x: DirectedAcyclicGraph<A>,
+      y: DirectedAcyclicGraph<A>
+    ) => DirectedAcyclicGraph<A>,
+    c: (
+      x: DirectedAcyclicGraph<A>,
+      y: DirectedAcyclicGraph<A>
+    ) => DirectedAcyclicGraph<A>
+  ) => DirectedAcyclicGraph<A>
+): DirectedAcyclicGraph<A> {
+  return f(empty<A>(), vertex, overlay, connect)
+}
+
+/********************************************
+    Basic graph construction primitives
+**********************************************/
 
 /** Construct the graph comprising /a single edge/.
  *
