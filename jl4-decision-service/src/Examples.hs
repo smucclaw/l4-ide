@@ -114,7 +114,7 @@ personQualifiesFunction = do
       { fnImpl = fnDecl
       , fnEvaluator =
           Map.fromList
-            [ (JL4, Jl4.createFunction (toDecl fnDecl) computeQualifiesJL4)
+            [ (JL4, Jl4.createFunction (toDecl fnDecl) computeQualifiesJL4NoInput)
             ]
       }
 
@@ -158,21 +158,17 @@ rodentsAndVerminFunction = do
             ]
       }
 
-computeQualifiesJL4 :: Text
-computeQualifiesJL4 =
+computeQualifiesJL4NoInput :: Text
+computeQualifiesJL4NoInput =
   [i|
-DECLARE Inputs
-  HAS
-    walks IS A BOOLEAN
-    drinks IS A BOOLEAN
-    eats IS A BOOLEAN
-
-GIVEN i IS Inputs
+GIVEN walks  IS A BOOLEAN
+      drinks IS A BOOLEAN
+      eats   IS A BOOLEAN
 GIVETH A BOOLEAN
-DECIDE `compute_qualifies` i IF
-        i's walks
- AND    i's drinks
-     OR i's eats
+DECIDE `compute_qualifies` IF
+        walks
+ AND    drinks
+     OR eats
 |]
 
 rodentsAndVerminJL4 :: Text
