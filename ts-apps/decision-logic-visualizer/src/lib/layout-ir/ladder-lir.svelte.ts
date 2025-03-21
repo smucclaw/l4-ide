@@ -12,14 +12,19 @@ import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import { isVertex, type DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 import {
   type Edge,
   DirectedEdge,
+  EmptyEdgeStyles,
+  HighlightedEdgeStyles,
   type EdgeStyles,
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
-import type { Dimensions } from '$lib/displayers/flow/types.svelte.js'
+import type {
+  Dimensions,
+  BundlingNodeDisplayerData,
+} from '$lib/displayers/flow/svelteflow-types.js'
 import { match } from 'ts-pattern'
 
 /*
@@ -31,7 +36,7 @@ is to make it easy to experiment with different displayers/renderers.
 */
 
 /*************************************************
-                Decl Lir Node 
+                Decl Lir Node
  *************************************************/
 
 export type DeclLirNode = FunDeclLirNode
@@ -75,10 +80,111 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return [this.getBody(context)]
   }
 
+  dispose(context: LirContext) {
+    this.getChildren(context).map((n) => n.dispose(context))
+
+    context.clear(this.getId())
+  }
+
   toString(): string {
     return 'FUN_DECL_LIR_NODE'
   }
 }
+
+/*************************************************
+              Path Lir Node
+ *************************************************/
+
+export class PathListLirNode extends DefaultLirNode implements LirNode {
+  private paths: Array<LirId>
+
+  constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
+    super(nodeInfo)
+    this.paths = paths.map((n) => n.getId())
+  }
+
+  getPaths(context: LirContext) {
+    return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
+  }
+
+  getChildren(context: LirContext) {
+    return this.getPaths(context)
+  }
+
+  dispose(context: LirContext) {
+    // Dispose members
+    this.getChildren(context).map((n) => n.dispose(context))
+    this.paths = []
+
+    // Dispose self
+    context.clear(this.getId())
+  }
+
+  toString(): string {
+    return 'PATH_LIST_LIR_NODE'
+  }
+}
+
+/** The simplest version of the LinPathLirNode -- no distinguishing between
+ * compatible and incompatible linearized paths
+ */
+export class LinPathLirNode extends DefaultLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    protected ladderGraph: LadderGraphLirNode,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo)
+  }
+
+  protected setStylesOnCorrespondingPathInLadderGraph(
+    context: LirContext,
+    styles: EdgeStyles
+  ) {
+    const pathEdges = this.rawPath.getEdges()
+    pathEdges.forEach((edge) => {
+      this.ladderGraph.setEdgeStyles(context, edge, styles)
+    })
+  }
+
+  highlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new HighlightedEdgeStyles()
+    )
+  }
+
+  unhighlightCorrespondingPathInLadderGraph(context: LirContext) {
+    this.setStylesOnCorrespondingPathInLadderGraph(
+      context,
+      new EmptyEdgeStyles()
+    )
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  dispose(context: LirContext) {
+    this.rawPath.dispose()
+    context.clear(this.getId())
+  }
+
+  toPretty(context: LirContext) {
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
+  }
+
+  toString() {
+    return 'LIN_PATH_LIR_NODE'
+  }
+}
+
+// TODO: Differentiate between compatible and incompatible linearized paths
 
 /******************************************************
                   Flow Lir Nodes
@@ -88,7 +194,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 // (and similarly with Flow Lir Edges)
 
 /* Why should Position be put on the Lir nodes, as opposed to being handled entirely at the SF Node level?
-  
+
 Main argument: for more complicated layouts,
 we'll want to be able to use info that's more readily available at the level of the Lir LadderGraph.
 */
@@ -139,6 +245,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
     return this.getId().isEqualTo(other.getId())
   }
 
+  dispose(context: LirContext): void {
+    context.clear(this.getId())
+  }
+
   abstract toPretty(context: LirContext): string
 }
 
@@ -153,7 +263,7 @@ will go through the LadderGraphLirNode.
 * and re-render on changes.
 *
 * State ownership:
-  - The Lir nodes only own, and publish changes to, state that's not about the positions 
+  - The Lir nodes only own, and publish changes to, state that's not about the positions
     or dimensions of the nodes.
   - For instance, we do not publish changes to the position of the nodes/edges --- that is state that
     is owned by SvelteFlow.
@@ -210,12 +320,26 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  // TODO: prob need to refactor: want to be able to
-  // generate the linearized paths of the the subgraph that is compatible with the updated env
-  /** Get all simple paths through the Dag */
-  // getPaths(_context: LirContext) {
-  //   return this.#dag.getAllPaths()
-  // }
+  // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
+  /** Get list of all simple paths through the Dag */
+  getPathsList(context: LirContext) {
+    const paths = this.#dag
+      .getAllPaths()
+      .map(
+        (rawPath) =>
+          new LinPathLirNode(this.makeNodeInfo(context), this, rawPath)
+      )
+    return new PathListLirNode(
+      this.makeNodeInfo(context),
+      paths as Array<LinPathLirNode>
+    )
+  }
+
+  getOverallSource(context: LirContext): undefined | SourceLirNode {
+    const source = this.#dag.getSource()
+    if (!isVertex(source)) return undefined
+    return context.get(source.getValue()) as SourceLirNode
+  }
 
   /*****************************
         Edge attributes
@@ -228,7 +352,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge)
   }
 
-  // TODO: Think more abt whether we really need the following edge related methods
+  /** internal helper method */
+  protected setEdgeAttributes<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T,
+    attrs: EdgeAttributes
+  ) {
+    this.#dag.setEdgeAttributes(edge, attrs)
+  }
 
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
@@ -242,7 +373,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     edge: T,
     styles: EdgeStyles
   ) {
-    this.#dag.getAttributesForEdge(edge).setStyles(styles)
+    const attrs = this.#dag.getAttributesForEdge(edge)
+    // Ok to mutate because getAttributesForEdge returns a cloned object
+    attrs.setStyles(styles)
+    this.#dag.setEdgeAttributes(edge, attrs)
+
     this.getRegistry().publish(context, this.getId())
   }
 
@@ -255,7 +390,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     edge: T,
     label: string
   ) {
-    this.#dag.getAttributesForEdge(edge).setLabel(label)
+    const attrs = this.#dag.getAttributesForEdge(edge)
+    attrs.setLabel(label)
+    this.#dag.setEdgeAttributes(edge, attrs)
+
     this.getRegistry().publish(context, this.getId())
   }
 
@@ -282,6 +420,24 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.getRegistry().publish(context, this.getId())
   }
 
+  /**************************************
+      Zen mode,
+    which is currently being treated as 
+    being equivalent to whether 
+    explanatory annotations are visible
+  ***************************************/
+
+  toggleZenModeStatus(context: LirContext) {
+    const currZenModeStatus = context.shouldEnableZenMode()
+    if (currZenModeStatus) {
+      context.disableZenMode()
+    } else {
+      context.enableZenMode()
+    }
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
   /*****************************
             Misc
   ******************************/
@@ -292,6 +448,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   toString(): string {
     return 'LADDER_GRAPH_LIR_NODE'
+  }
+
+  dispose(context: LirContext) {
+    this.getVertices(context).map((n) => n.dispose(context))
+    this.#environment.dispose()
+    this.#dag.dispose()
+    context.clear(this.getId())
   }
 }
 
@@ -323,6 +486,10 @@ export interface VarLirNode extends FlowLirNode {
    *
    * This will only be invoked by LadderGraphLirNode. */
   _setValue(context: LirContext, value: Value): void
+}
+
+export function isBoolVarLirNode(node: LadderLirNode): node is BoolVarLirNode {
+  return node instanceof BoolVarLirNode
 }
 
 /* For now, changes to the data associated with BoolVarLirNodes will be published
@@ -376,6 +543,12 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   }
 }
 
+export function isNotStartLirNode(
+  node: LadderLirNode
+): node is NotStartLirNode {
+  return node instanceof NotStartLirNode
+}
+
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
@@ -414,10 +587,14 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
     Bundling Flow Lir Node
 *******************************/
 
+export type BundlingNodeAnno = Pick<BundlingNodeDisplayerData, 'annotation'>
+
+export const emptyBundlingNodeAnno: BundlingNodeAnno = { annotation: '' }
+
 export function isBundlingFlowLirNode(
-  node: FlowLirNode
+  node: LadderLirNode
 ): node is BundlingFlowLirNode {
-  return node instanceof SourceLirNode || node instanceof SinkLirNode
+  return isSourceLirNode(node) || node instanceof SinkLirNode
 }
 
 /** A Flow Lir Node that's used solely to visually group or 'bundle' other nodes.
@@ -425,13 +602,42 @@ export function isBundlingFlowLirNode(
  * Using `bundling` because `group` has a specific meaning in the React/SvelteFlow context.
  */
 export type BundlingFlowLirNode = SourceLirNode | SinkLirNode
+export type SourceLirNode = SourceWithOrAnnoLirNode | SourceNoAnnoLirNode
 
-export class SourceLirNode extends BaseFlowLirNode implements FlowLirNode {
+export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
+  return isSourceNoAnnoLirNode(node) || isSourceWithOrAnnoLirNode(node)
+}
+
+abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    /** TODO: Think about whether to have the param be a `data` plain object / record instead */
+    protected readonly annotation: BundlingNodeDisplayerData['annotation'],
+    position: Position
+  ) {
+    super(nodeInfo, position)
+  }
+
+  getData() {
+    return { annotation: this.annotation }
+  }
+}
+
+export function isSourceNoAnnoLirNode(
+  node: LadderLirNode
+): node is SourceNoAnnoLirNode {
+  return node instanceof SourceNoAnnoLirNode
+}
+
+export class SourceNoAnnoLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
-    super(nodeInfo, position)
+    super(nodeInfo, emptyBundlingNodeAnno.annotation, position)
   }
 
   toPretty() {
@@ -439,16 +645,47 @@ export class SourceLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toString(): string {
-    return 'SOURCE_LIR_NODE'
+    return 'SOURCE_NO_ANNO_LIR_NODE'
   }
 }
 
-export class SinkLirNode extends BaseFlowLirNode implements FlowLirNode {
+export function isSourceWithOrAnnoLirNode(
+  node: LadderLirNode
+): node is SourceWithOrAnnoLirNode {
+  return node instanceof SourceWithOrAnnoLirNode
+}
+
+export class SourceWithOrAnnoLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
+    annotation: BundlingNodeDisplayerData['annotation'],
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
-    super(nodeInfo, position)
+    super(nodeInfo, annotation, position)
+  }
+
+  toPretty() {
+    return ''
+  }
+
+  toString(): string {
+    return 'SOURCE_WITH_OR_ANNO_LIR_NODE'
+  }
+}
+
+export class SinkLirNode
+  extends BaseBundlingFlowLirNode
+  implements FlowLirNode
+{
+  constructor(
+    nodeInfo: LirNodeInfo,
+    annotation: BundlingNodeDisplayerData['annotation'] = emptyBundlingNodeAnno.annotation,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, annotation, position)
   }
 
   toPretty() {
@@ -502,4 +739,40 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
 
     return this.getV().compare(that.getV())
   }
+}
+
+export function augmentEdgesWithExplanatoryLabel(
+  context: LirContext,
+  ladderGraph: LadderGraphLirNode
+) {
+  const edges = ladderGraph.getEdges(context)
+
+  const isEdgeToAddAndLabel = (edge: LadderLirEdge) => {
+    const edgeU = context.get(edge.getU()) as LadderLirNode
+    const edgeV = context.get(edge.getV()) as LadderLirNode
+
+    const edgeSourceIsNotOverallSource =
+      ladderGraph.getOverallSource(context) &&
+      !edge
+        .getU()
+        .isEqualTo(ladderGraph.getOverallSource(context)?.getId() as LirId)
+
+    const edgeSourceIsAnyOfAnnoSource = isSourceWithOrAnnoLirNode(edgeU)
+    return (
+      !edgeSourceIsAnyOfAnnoSource &&
+      edgeSourceIsNotOverallSource &&
+      (isBoolVarLirNode(edgeV) ||
+        isNotStartLirNode(edgeV) ||
+        isSourceWithOrAnnoLirNode(edgeV))
+    )
+  }
+
+  const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
+  edgesToAddLabel.forEach((edge) => {
+    ladderGraph.setEdgeLabel(
+      context,
+      edge,
+      context.getExplanatoryAndEdgeLabel()
+    )
+  })
 }

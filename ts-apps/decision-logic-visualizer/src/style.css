@@ -2,9 +2,168 @@
 
 @import '@xyflow/svelte/dist/style.css';
 
-@import '../static/style/themes/default.css';
-
 @import 'tailwindcss';
+@import './tailwindcss-animate.css';
+
+/*******************************************************
+  Base theme variables / styles
+  -- includes variables for Shadcn Svelte
+*********************************************************
+
+  Shadcn Svelte stuff adapted from https://github.com/MattL-NZ/svelte-tailwind4-starter/blob/main/src/app.css
+
+  > The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  > If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+:root {
+  /* Base Shadcn Svelte colors */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  /* The default shadcn svelte border color: 214.3 31.8% 91.4%; */
+  --border: var(--color-sky-700);
+
+  --input: 214.3 31.8% 91.4%;
+
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+
+  /*  The default shadcn svelte accent: 210 40% 96.1%;
+   * The old color-button-hover: #a5b4fc; */
+  --accent: var(--color-sky-100);
+  --accent-foreground: 222.2 47.4% 11.2%;
+
+  --destructive: 0 72.2% 50.6%;
+  --destructive-foreground: 210 40% 98%;
+  --ring: 222.2 84% 4.9%;
+  /* TODO: Might want to tweak `radius` */
+  --radius: 0.3rem;
+
+  /* 
+  CSS vars that we aren't currently using:
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 232 27% 35%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217.2 91.2% 59.8%; */
+}
+
+@theme inline {
+  /***************************************
+       Shadcn Svelte border
+  ****************************************/
+
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /***************************************
+      More base Shadcn Svelte colors
+  ****************************************/
+
+  --color-border: var(--border);
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-caution: var(--color-red-500);
+  --color-warning: var(--color-amber-500);
+  --color-info: var(--color-sky-500);
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: var(--accent);
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  /***************************************
+        Our specific colors
+  ****************************************/
+
+  /* The old primary was #001188. This is quite close -- just more convenient to be able to use a Tailwind color var. 
+  * The original shadcn svelte default is 
+      --primary: 190 91% 36%; 
+  */
+  --primary: var(--color-cyan-900);
+  --color-node-text: #00004d;
+  /* Another color to consider for node annotations? --color-zinc-400 */
+  --color-node-annotation: var(--color-node-text);
+  --color-secondary: #2563eb;
+  --color-button: #c7d2fe;
+
+  /***************************************
+        Highlighted vs normal paths 
+  ****************************************/
+
+  /* Stroke width */
+  --default-stroke-width: 1px;
+  /* TODO: Think about whether the default should be 2px */
+  --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
+
+  /* Stroke color */
+  --default-stroke-color: var(--color-primary);
+  --color-highlighted-path-in-flow: var(--color-sky-600);
+
+  /***************************************
+      Compatible vs incompatible paths 
+  ****************************************/
+
+  --color-incompatible-path: var(--color-zinc-300);
+
+  /***************************************
+         BoolValue: True vs False 
+  ****************************************/
+
+  --color-true-value: var(--color-lime-200);
+  --color-false-value: var(--color-rose-200);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
 
 /*************************************
   Utility SF styles
@@ -54,13 +213,23 @@
   max-width: 40ch;
 }
 
-@utility grouping-node {
+/** For the source and sink bundling nodes */
+@utility bundling-node {
   @apply svelte-flow__node-basic;
-  /* Will lose the grouping node if make width 0 px */
+  /* Will lose the bundling node if width is 0 px */
   width: 1px;
   height: 1px;
+}
 
-  opacity: 0.3;
+@utility node-annotation {
+  position: absolute;
+  top: -25px; /* Adjust this value to control the vertical position */
+  left: 50%;
+  transform: translateX(-58%); /* Centers the text horizontally, ish */
+
+  @apply uppercase;
+  @apply text-base leading-none;
+  @apply text-(--color-node-annotation);
 }
 
 /*************************************
@@ -73,12 +242,7 @@ body {
   margin: 0;
 }
 
-.visualization-container {
-  min-height: 400px;
-  max-width: 96svw;
-  margin: 0 auto;
-}
-
+/* TODO: Check if this class really can be used w/o @utility */
 .button {
   background-color: var(--color-secondary);
   color: transparent;
@@ -90,7 +254,7 @@ body {
 
 :root,
 .svelte-flow {
-  --xy-node-border-radius: var(--theme-border-radius);
+  --xy-node-border-radius: var(--radius);
   --xy-node-color: var(--color-node-text);
   --xy-node-border: 2px solid var(--color-primary);
   --xy-handle-background-color: var(--color-primary);
@@ -100,10 +264,5 @@ body {
     font-family: 'Source Sans 3', serif;
     font-optical-sizing: auto;
     font-style: normal;
-  }
-
-  .svelte-flow__edge .svelte-flow__edge-path {
-    --default-internal-stroke-color: var(--stroke-color, var(--color-primary));
-    stroke: var(--default-internal-stroke-color) !important;
   }
 }

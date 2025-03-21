@@ -2,15 +2,21 @@ import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import type {
   LadderLirNode,
   LadderLirEdge,
+  SourceNoAnnoLirNode,
+  SourceWithOrAnnoLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
-import { LadderGraphLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+import {
+  isSourceNoAnnoLirNode,
+  isSourceWithOrAnnoLirNode,
+  LadderGraphLirNode,
+} from '$lib/layout-ir/ladder-lir.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
+  isBoolVarLirNode,
   BoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
-  SourceLirNode,
   SinkLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import {
@@ -19,10 +25,11 @@ import {
   boolVarNodeType,
   notStartNodeType,
   notEndNodeType,
-  sourceNodeType,
+  sourceNoAnnoNodeType,
+  sourceWithOrAnnoNodeType,
   sinkNodeType,
   ladderEdgeType,
-} from './types.svelte.js'
+} from './svelteflow-types.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
@@ -94,7 +101,7 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
-    .with(P.instanceOf(BoolVarLirNode), (n: BoolVarLirNode) => {
+    .with(P.when(isBoolVarLirNode), (n: BoolVarLirNode) => {
       return {
         ...defaults,
         type: boolVarNodeType,
@@ -115,18 +122,25 @@ export function ladderLirNodeToSfNode(
         data: defaultData,
       }
     })
-    .with(P.instanceOf(SourceLirNode), () => {
+    .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,
-        type: sourceNodeType,
-        data: defaultData,
+        type: sourceNoAnnoNodeType,
+        data: { ...defaultData, ...n.getData() },
       }
     })
-    .with(P.instanceOf(SinkLirNode), () => {
+    .with(P.when(isSourceWithOrAnnoLirNode), (n: SourceWithOrAnnoLirNode) => {
+      return {
+        ...defaults,
+        type: sourceWithOrAnnoNodeType,
+        data: { ...defaultData, ...n.getData() },
+      }
+    })
+    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData() },
       }
     })
     .exhaustive()
@@ -142,14 +156,14 @@ export function ladderLirEdgeToSfEdge(
   edge: LadderLirEdge
 ): SF.Edge {
   const label = graph.getEdgeLabel(context, edge)
-  const strokeColorCSSVar = graph.getEdgeStyles(context, edge).getStrokeColor()
 
   return {
     id: edge.getId(),
     type: ladderEdgeType,
     data: {
+      context,
       label,
-      strokeColorCSSVar,
+      edgeStyles: graph.getEdgeStyles(context, edge).getStyleString(),
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),
