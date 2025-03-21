@@ -69,6 +69,7 @@ library
     chronos,
     containers,
     extra,
+    directory,
     filepath,
     jl4-core,
     jl4-lsp,
@@ -90,6 +91,7 @@ library
     wai,
     wai-logger,
     warp,
+    yaml,
 
 executable jl4-decision-service-exe
   import: defaults
