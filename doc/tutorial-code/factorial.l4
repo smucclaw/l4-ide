@@ -1,0 +1,8 @@
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+factorial n MEANS
+  IF n EQUALS 0
+  THEN 1
+  ELSE n * factorial (n - 1)
+
+#EVAL factorial 4

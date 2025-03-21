@@ -1,0 +1,18 @@
+
+DECLARE Person
+  HAS name IS A STRING
+      age  IS A NUMBER
+
+alice1 MEANS
+  Person WITH name IS "Alice Avocado"
+              age  IS 21
+#EVAL alice1
+
+alice2 MEANS Person OF "Alice Avocado", 21
+#EVAL alice2
+
+alice3 MEANS Person  "Alice Avocado"
+                     21
+#EVAL alice3
+
+

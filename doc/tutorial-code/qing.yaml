@@ -1,0 +1,13 @@
+---
+type: function
+function:
+  name: "is qing"
+  description: Given a colour, which is one of red, green, or blue, determine if that colour is considered "qing" according to the Chinese colour spectrum.
+  parameters:
+    type: object
+    properties:
+      c:
+        type: "string"
+        description: A Colour
+  supportedBackends:
+    - "jl4"

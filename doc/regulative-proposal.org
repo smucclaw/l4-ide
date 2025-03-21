@@ -1,0 +1,242 @@
+#+TITLE: This document proposes a syntax and semantics for regulative rules in JL4.
+
+For background, please see [[regulative.md]]
+
+This aspect of the L4 language seeks to formalize regulative rules, as defined by Searle and elaborated in LegalRuleML.
+
+* Fundamental Paradigm
+
+L4 interprets regulative rules into a verification paradigm.
+
+In a verification paradigm, the object-level rules are given as a labeled transition system.
+The semantics of L4's LTS lie roughly at the intersection of CSP, Petri Nets, and NFA/DFAs.
+
+
+* The Object/Model Level: Regulative Rule Syntax
+
+What are the basic "moving parts" of a contract?
+
+The general form of a regulative clause says who is supposed to do what, under certain conditions, by when:
+
+#+begin_src
+  UPON      <trigger event expression>
+  PROVIDED  <preconditions> -- a guard
+  IF        <preconditions> -- any arguments given are merged with PROVIDED, but the arguments can be empty
+  PARTY     <entity>
+  DO        <action> <action_parameters>
+  BEFORE    <temporal expression> -- sets an upper bound, may be absolute or relative to other events in trace
+  AFTER     <temporal expression> -- sets a lower bound, may be absolute or relative to other events in trace
+  THEN      <transition>
+  ELSE      <transition>
+#+end_src
+
+Note that ~THEN/ELSE~ replaces previous usages of ~HENCE/LEST~. Let's parse ~HENCE~ and ~THEN~ as equivalent, and ~LEST~ and ~ELSE~ as equivalent, and we can run usability experiments.
+
+We introduce sugared forms of the ~DO~ expression above by introducing
+~MUST~, ~MAY~, and ~MUSTNT~ operators, which are specified to give
+default values to any omitted ~THEN~ and ~ELSE~ arguments. These
+operators can also be introspected at the specification level.
+
+~IF~ and ~PROVIDED~ are equivalent alternatives. By convention, we
+pair ~IF~ with ~DO~ and we pair ~PROVIDED~ with ~MUST~, ~MAY~, and
+~MUSTNT~.
+
+A ~transition~ expression can be a collection of subcontracts composed using ~AND~, ~OR~, ~THEN~ operators from CSL. (What about NOT and XOR?).
+
+We augment CSL's notion of a subcontract with an ~UPDATE~ operator
+which acts similar to a ~PUT~ in a State monad -- we write a value to
+a variable recorded in a symbol table. This allows us to express
+notions like "an offence is committed" or "the borrower repays $Int of
+the loan." ~UPDATE~ contracts are epsilon transitions.
+
+** Running example: Borrowing a Book from a Library
+
+[TODO] We give the L4 text of a book-borrowing rule.
+
+* Object-Level translational semantics
+
+** LTS generally
+
+Using labeled transition systems as the unifying framework, we read an
+L4 contract into a collection of states/locations, transitions between
+them, and guards and deadlines on those transitions.
+
+The LTS representation of an L4 contract can be further refined toward
+one or more backends.
+
+The ~UPON~ keyword suggests an [[https://en.wikipedia.org/wiki/Event_condition_action][ECA]] paradigm for certain rules which
+could fire any time the preconditions are met.
+
+*** L4 to LTS
+
+[TODO] We give the LTS version of the above L4 rule.
+
+** Time / Timed, Colored Petri Nets
+
+As deadlines are fundamental to legal contracts, we can use Time,
+Timed, or Hybrid Petri Nets to represent state changes that involve
+deadlines.
+
+https://chatgpt.com/share/67db8645-d2f8-8011-814c-fb5775aa613a
+
+*** L4 to LTS to Hybrid Petri Nets
+
+[TODO] we give the Petri Net form of the above rule.
+
+*** L4 to LTS to DFA
+
+[TODO] we give the DFA form of the above rule.
+
+** CSL
+
+This treatment is consistent with Hvitved's CSL.
+
+[TODO] we give the CSL form of the above rule.
+
+* The Specification Level: Deontics Squeezed Out
+
+Normative statements are represented as *specification-level*
+assertions /about/ the object level. User queries can also be
+expressions as assertions. Those assertions reduce to LTL or CTL
+expressions.
+
+Deontic modals can be extracted from the L4 text and converted to
+assertions which represent a "unit testing" paradigm over
+modifications to the text. In other words, during negotiations, the
+draft is edited, and we use computers to help check that the letter of
+the law continues to match the spirit of the law.
+
+
+We can verify properties of contracts by translating certain
+assertions to a model checking language.
+
+** Bounded Deontics
+
+Every deontic assertion -- that somebody must do something -- has its
+complement -- its "bound" -- which lays out what happens if the
+obligation is violated, or if the permission is opted for, so somebody
+else now needs to do something that they wouldn't otherwise have had
+to.
+
+"You *must* return the book within two weeks."
+
+"Or else what?"
+
+"Or else you will be charged a penalty fine, which you *must* pay within the month."
+
+"Or else what?"
+
+"Or else you will not be allowed to borrow any more books."
+
+"Oh. Well, if I don't care about that, then I won't be returning the book."
+
+
+*** Default Bounds
+
+"You are going straight to hell, young man."
+
+"That is a matter between me and my God."
+
+Sometimes a contract will terminate in a ~Breach~ outcome. When that
+happens, we expect that mechanisms from the "background theory" of the
+real world will step in to handle things further.
+
+By analogy, within a program, exceptions can be thrown and caught. An
+uncaught exception might result in the program itself terminating with
+an error message to STDERR, and a nonzero exitcode. That error message
+and exitcode can in turn be read at the inter-process level, and dealt
+with within the context of the calling program, say a build tool.
+
+These default bounds do not need to be specified within a particular
+contract, but jurisprudential theorists are welcome to specify their
+notion of what is supposed to happen if, say, a Minister does not
+respond in time to a request from a citizen.
+
+* Translational Semantics
+
+** SPIN/Promela
+
+The above library example can be represented as a state transition
+system at the object level, and a collection of queries at the
+verification level.
+
+We give the Promela version of the above example.
+
+#+begin_src promela
+mtype = { BORROWED, RETURNED, OVERDUE, FINE_APPLIED, SUSPENDED }
+
+active proctype LibraryUser() {
+    mtype state = BORROWED;
+
+    do
+    :: state == BORROWED -> 
+        if
+        :: state = RETURNED
+        :: skip /* Do nothing, let time pass */
+        fi
+    :: state == BORROWED && timeout(14) -> state = OVERDUE
+    :: state == OVERDUE && timeout(1) -> state = FINE_APPLIED
+    :: state == FINE_APPLIED && timeout(30) -> state = SUSPENDED
+    od;
+}
+#+end_src
+
+At the specification level,
+
+#+begin_src
+/* If a book is borrowed, it must eventually be returned */
+ltl L1 { [](borrowed -> <>returned) }
+
+/* If a book is borrowed, it must be returned within 2 weeks to avoid a fine */
+ltl L2 { [](borrowed -> !fine U[14] returned) }
+
+/* If a fine is unpaid for 1 month, the account gets suspended */
+ltl L3 { [](fine_applied -> <>[30] suspended) }
+
+#+end_src
+
+** UPPAAL
+
+Object
+#+begin_src
+  template LibraryUser() {
+    clock t;
+
+    state Borrowed, Returned, Overdue, FineApplied, Suspended;
+
+    init Borrowed;
+
+    transition Borrowed -> Returned { provided true; }
+    transition Borrowed -> Overdue { provided t >= 14; reset t; }
+    transition Overdue -> FineApplied { provided t >= 1; reset t; }
+    transition FineApplied -> Suspended { provided t >= 30; }
+  }
+#+end_src
+
+Specification
+
+#+begin_src
+  // If a book is borrowed, it must eventually be returned
+  A[] (Borrowed --> <> Returned)
+
+  // If a book is borrowed, it must be returned within 14 days to avoid a fine
+  A[] (Borrowed --> A<>[0,14] !FineApplied)
+
+  // If a fine is unpaid for 30 days, borrowing privileges are suspended
+  A[] (FineApplied --> A<>[0,30] Suspended)
+#+end_src
+
+** TAPAAL
+
+#+begin_src 
+  // A book that is borrowed will eventually be returned
+  A[] Borrowed -> <> Returned
+
+  // A book must be returned within 14 days to avoid a fine
+  A[] (Borrowed -> A<>[0,14] !FineApplied)
+
+  // If a fine is unpaid for 30 days, privileges are suspended
+  A[] (FineApplied -> A<>[0,30] Suspended)
+#+end_src
+
+
