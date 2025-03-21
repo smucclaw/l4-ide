@@ -107,7 +107,7 @@ jl4NlgLinearizeGolden dir inputFile = do
                     Check _ e -> Just e
                     ) directives
                 in
-                  Text.intercalate "\n" $ fmap Nlg.simpleLinearizer dirExprs
+                  Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
               | otherwise -> do
                 "Failed to type check"
   pure

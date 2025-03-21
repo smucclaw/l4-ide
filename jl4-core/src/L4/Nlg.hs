@@ -6,7 +6,6 @@ import qualified Base.Text as Text
 import L4.Syntax
 import L4.Annotation
 import Optics
-import L4.Print
 import L4.TypeCheck
 import L4.Lexer (PosToken)
 import L4.Parser.SrcSpan
@@ -72,10 +71,10 @@ simpleLinearizer a =
     prettyLinTok :: LinToken -> Text
     prettyLinTok t = case t.type' of
       LinPossessive -> "'" <> t.payload
-      LinPunctuation -> t.payload
-      LinUser -> sp <> "``" <> t.payload <> "``"
-      LinVar -> sp <> "`" <> t.payload <> "`"
-      LinText -> sp <> t.payload
+      LinPunctuation -> t.payload <> sp
+      LinUser -> t.payload
+      LinVar -> "`" <> t.payload <> "`"
+      LinText -> t.payload
   in
     case tree.tokens of
       [] -> ""
@@ -87,33 +86,33 @@ class Linearize a where
 
 instance Linearize (Expr Resolved) where
   linearize = \case
-    And _ e1 e2 -> mconcat
+    And _ e1 e2 -> hcat
       [ lin e1
       , text "and"
       , lin e2
       ]
-    Or _ e1 e2 -> mconcat
+    Or _ e1 e2 -> hcat
       [ lin e1
       , text "and"
       , lin e2
       ]
-    Implies _ e1 e2 -> mconcat
+    Implies _ e1 e2 -> hcat
       [ lin e1
       , text "and"
       , lin e2
       ]
-    Equals _ e1 e2 -> mconcat
+    Equals _ e1 e2 -> hcat
       [ lin e1
       , text "is"
       , text "equal"
       , text "to"
       , lin e2
       ]
-    Not _ e -> mconcat
+    Not _ e -> hcat
       [ text "not"
       , lin e
       ]
-    Plus _ e1 e2 -> mconcat
+    Plus _ e1 e2 -> hcat
       [ text "the"
       , text "sum"
       , text "of"
@@ -121,7 +120,7 @@ instance Linearize (Expr Resolved) where
       , text "and"
       , lin e2
       ]
-    Minus _ e1 e2 -> mconcat
+    Minus _ e1 e2 -> hcat
       [ text "the"
       , text "subtraction"
       , text "of"
@@ -129,7 +128,7 @@ instance Linearize (Expr Resolved) where
       , text "from"
       , lin e1
       ]
-    Times _ e1 e2 -> mconcat
+    Times _ e1 e2 -> hcat
       [ text "the"
       , text "multiplication"
       , text "of"
@@ -137,7 +136,7 @@ instance Linearize (Expr Resolved) where
       , text "and"
       , lin e2
       ]
-    DividedBy _ e1 e2 -> mconcat
+    DividedBy _ e1 e2 -> hcat
       [ text "the"
       , text "division"
       , text "of"
@@ -145,7 +144,7 @@ instance Linearize (Expr Resolved) where
       , text "by"
       , lin e2
       ]
-    Modulo _ e1 e2 -> mconcat
+    Modulo _ e1 e2 -> hcat
       [ text "the"
       , text "result"
       , text "of"
@@ -153,41 +152,41 @@ instance Linearize (Expr Resolved) where
       , text "modulo"
       , lin e2
       ]
-    Cons _ e1 e2 -> mconcat
+    Cons _ e1 e2 -> hcat
       [ lin e1
       , text "followed"
       , text "by"
       , lin e2
       ]
-    Leq _ e1 e2 -> mconcat
+    Leq _ e1 e2 -> hcat
       [ lin e1
       , text "is"
       , text "at"
       , text "most"
       , lin e2
       ]
-    Geq _ e1 e2 -> mconcat
+    Geq _ e1 e2 -> hcat
       [ lin e1
       , text "is"
       , text "at"
       , text "least"
       , lin e2
       ]
-    Lt _ e1 e2 -> mconcat
+    Lt _ e1 e2 -> hcat
       [ lin e1
       , text "is"
       , text "less"
       , text "than"
       , lin e2
       ]
-    Gt _ e1 e2 -> mconcat
+    Gt _ e1 e2 -> hcat
       [ lin e1
       , text "is"
       , text "greater"
       , text "than"
       , lin e2
       ]
-    Proj _ e1 e2 -> mconcat
+    Proj _ e1 e2 -> hcat
       [ lin e1
       , possessive "s"
       , -- Resolved can't use 'lin', as it doesn't have an 'Anno'
@@ -195,21 +194,21 @@ instance Linearize (Expr Resolved) where
       ]
     Var _ v -> linearize v
     Lam _ _ _ -> mempty
-    App _ n es -> mconcat
+    App _ n es -> hcat $
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize n
       ]
-      <> ifNonEmpty es (\ _ -> mconcat
+      <> ifNonEmpty es (\ _ ->
             [ text "with"
             , enumerate (punctuate ",") (text "and") (fmap lin es)
             ])
-    AppNamed _ n es _order -> mconcat
+    AppNamed _ n es _order -> hcat
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize n
       , text "where"
       , enumerate (punctuate ",") (text "and") (fmap lin es)
       ]
-    IfThenElse _ cond then' else' -> mconcat
+    IfThenElse _ cond then' else' -> hcat
       [ text "if"
       , lin cond
       , text "then"
@@ -217,7 +216,7 @@ instance Linearize (Expr Resolved) where
       , text "else"
       , lin else'
       ]
-    Consider _ e br -> mconcat
+    Consider _ e br -> hcat
       [ text "consider"
       , text "the"
       , text "case"
@@ -228,12 +227,12 @@ instance Linearize (Expr Resolved) where
       , enumerate (punctuate ".") (punctuate ".") (fmap lin br)
       ]
     Lit _ l -> lin l
-    List _ es -> mconcat
+    List _ es -> hcat
       [ text "list"
       , text "of"
       , enumerate (punctuate ",") (text "and") (fmap lin es)
       ]
-    Where _ e lcl -> mconcat
+    Where _ e lcl -> hcat
       [ lin e
       , text "where"
       , enumerate (punctuate ",") (text "and") (fmap lin lcl)
@@ -241,7 +240,7 @@ instance Linearize (Expr Resolved) where
 
 instance Linearize (NamedExpr Resolved) where
   linearize = \case
-    MkNamedExpr _ n e -> mconcat
+    MkNamedExpr _ n e -> hcat
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize n
       , text "is"
@@ -260,13 +259,13 @@ instance Linearize Lit where
 
 instance Linearize (Branch Resolved) where
   linearize = \case
-    When _ pat e -> mconcat
+    When _ pat e -> hcat
       [ text "when"
       , lin pat
       , text "then"
       , lin e
       ]
-    Otherwise _ e -> mconcat
+    Otherwise _ e -> hcat
       [ text "in"
       , text "any"
       , text "other"
@@ -279,13 +278,13 @@ instance Linearize (Pattern Resolved) where
     PatVar _ v ->
       -- Resolved can't use 'lin', as it doesn't have an 'Anno'
       linearize v
-    PatApp _ constructor pats -> mconcat
+    PatApp _ constructor pats -> hcat
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize constructor
       , text "has"
       , enumerate (punctuate ",") (text "and") (fmap lin pats)
       ]
-    PatCons _ start rest -> mconcat
+    PatCons _ start rest -> hcat
       [ lin start
       , text "is"
       , text "followed"
@@ -302,14 +301,37 @@ instance Linearize Name where
 instance Linearize Resolved where
   linearize = \case
     Def _ name -> lin name
-    Ref actual _ original
-      | Just _ <- actual ^. annoOf % annNlg
+    Ref ref _ original
+      | Just _ <- ref ^. annoOf % annNlg
       , Nothing <- original ^. annoOf % annNlg
-       -> lin actual
+       -> lin ref
       | otherwise -> lin original
     OutOfScope _ n -> lin n
 
-ifNonEmpty :: [a] -> (NonEmpty a -> LinTree) -> LinTree
+instance Linearize Nlg where
+  linearize = \case
+    MkInvalidNlg _ -> text "(internal error)"
+    MkParsedNlg _ frags -> mconcat $ fmap linParsedFragment frags
+    MkResolvedNlg _ frags -> mconcat $ fmap linResolvedFragment frags
+   where
+    linParsedFragment :: NlgFragment Name -> LinTree
+    linParsedFragment = \case
+      MkNlgText _ t -> user t
+      MkNlgRef  _ n -> linearize n
+
+    linResolvedFragment :: NlgFragment Resolved -> LinTree
+    linResolvedFragment = \case
+      MkNlgText _ t -> user t
+      MkNlgRef  _ n ->
+        -- Don't linearize 'Resolved', since the we are reaching this
+        -- code path by linearising the 'Nlg' annotation of an 'Resolved'.
+        -- TODO: this might be wrong when referencing 'Name's within the 'Nlg' annotation.
+        linearize (getActual n)
+
+hcat :: [LinTree] -> LinTree
+hcat = mconcat . intersperse (text " ")
+
+ifNonEmpty :: Monoid m => [a] -> (NonEmpty a -> m) -> m
 ifNonEmpty [] _ = mempty
 ifNonEmpty (x:xs) f = f (x :| xs)
 
@@ -318,8 +340,8 @@ ifNonEmpty (x:xs) f = f (x :| xs)
 -- replaces the linearization of 'a'.
 lin :: (HasAnno a, AnnoExtra a ~ Extension, AnnoToken a ~ PosToken, Linearize a) => a -> LinTree
 lin a
-  | Just nlg <- (getAnno a) ^. annNlg =
-      user (prettyLayout nlg)
+  | Just nlg <- a ^. annoOf % annNlg =
+      linearize nlg
   | otherwise =
       linearize a
 
@@ -346,6 +368,9 @@ user t = MkLinTree
     , payload = t
     }
   ]
+
+empty :: LinTree
+empty = mempty
 
 possessive :: Text -> LinTree
 possessive t = MkLinTree

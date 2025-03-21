@@ -1,7 +1,7 @@
 the multiplication of `x` and `x`
 the multiplication of `x` and `x`
 if `y` then 3 else 5
-`MkPair` with 1 and 2
-`addPair` with `MkPair` with 1 and 2
+`MkPair` with 1and2
+`addPair` with `MkPair` with 1and2
 `l`
-`sumList` with list of 1, 2 and 3
+`sumList` with list of 1, 2and3

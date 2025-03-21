@@ -438,10 +438,27 @@ data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- | Natural Language Generation Annotation type.
+--
+-- A NLG annotation has three distinct states:
+--
+-- * @Invalid@ 'MkInvalidNlg'.
+-- * @Parsed@ 'MkParsedNlg'.
+--   A valid annotation which we have processed to figure out the
+--   'Name's that occur in it.
+-- * @Resolved@ 'MkResolvedNlg'.
+--   A resolved annotation is a 'MkParsedNlg' annotation which contained only
+--   resolvable 'Name's.
 data Nlg =
     MkInvalidNlg Anno
+    -- ^ This is an invalid annotation, we failed to parse it further.
+    -- This means it likely has mismatching '%' tokens or the 'name' parser failed.
   | MkParsedNlg Anno [NlgFragment Name]
+    -- ^ An annotation where we extracted the 'Name's that are mentioned.
   | MkResolvedNlg Anno [NlgFragment Resolved]
+    -- ^ Same as 'MkParsedNlg', but we have additionally typechecked and resolved the
+    -- annotation.
+    -- Typechecking merely means we have performed scope checking.
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
