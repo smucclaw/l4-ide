@@ -579,7 +579,155 @@ nlgDecide (MkDecide ann tySig appForm body) =
   MkDecide ann
     <$> nlgTypeSig tySig
     <*> nlgAppForm appForm
-    <*> pure body
+    <*> nlgExpr body
+
+nlgExpr :: Expr Resolved -> Check (Expr Resolved)
+nlgExpr = \case
+    And ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ And ann e1' e2'
+    Or ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Or ann e1' e2'
+    Implies ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Implies ann e1' e2'
+    Equals ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Equals ann e1' e2'
+    Not ann e -> do
+      e' <- nlgExpr e
+      pure $ Not ann e'
+    Plus ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Plus ann e1' e2'
+    Minus ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Minus ann e1' e2'
+    Times ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Times ann e1' e2'
+    DividedBy ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ DividedBy ann e1' e2'
+    Modulo ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Modulo ann e1' e2'
+    Cons ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Cons ann e1' e2'
+    Leq ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Leq ann e1' e2'
+    Lt ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Lt ann e1' e2'
+    Gt ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Gt ann e1' e2'
+    Geq ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Geq ann e1' e2'
+    Proj ann e1 n -> do
+      e1' <- nlgExpr e1
+      n' <- resolveNlgAnnotationInResolved n
+      pure $ Proj ann e1' n'
+    Var ann v -> do
+      v' <- resolveNlgAnnotationInResolved v
+      pure $ Var ann v'
+    Lam ann sig body -> do
+      -- TODO: this is definitely wrong, 'Lam' introduces new, local bindings
+      sig' <- nlgGivenSig sig
+      body' <- nlgExpr body
+      pure $ Lam ann sig' body'
+    App ann n ns -> do
+      n' <- resolveNlgAnnotationInResolved n
+      ns' <- traverse nlgExpr ns
+      pure $ App ann n' ns'
+    AppNamed ann n ns order -> do
+      n' <- resolveNlgAnnotationInResolved n
+      ns' <- traverse nlgNamedExpr ns
+      pure $ AppNamed ann n' ns' order
+    IfThenElse ann b e1 e2 -> do
+      b' <- nlgExpr b
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ IfThenElse ann b' e1' e2'
+    Consider ann e branches  -> do
+      e' <- nlgExpr e
+      pure $ Consider ann e' branches
+    expr@Lit{} -> do
+      pure expr
+    List ann es -> do
+      es' <- traverse nlgExpr es
+      pure $ List ann es'
+    Where ann e lcl -> do
+      -- TODO: this is definitely wrong, 'Where' introduces new, local bindings
+      e' <- nlgExpr e
+      lcl' <- traverse nlgLocalDecl lcl
+      pure $ Where ann e' lcl'
+
+-- nlgBranch :: Branch Resolved -> Check (Branch Resolved)
+-- nlgBranch = \case
+--   When ann pat expr   ->
+--     When ann
+--       <$> nlgPattern pat
+--       <*> nlgExpr expr
+--   Otherwise ann expr ->
+--     Otherwise ann
+--       <$> nlgExpr expr
+
+nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
+nlgPattern = \case
+  PatVar ann n ->
+    PatVar ann
+      <$> resolveNlgAnnotationInResolved n
+  PatApp ann n pats ->
+    PatApp ann
+      <$> resolveNlgAnnotationInResolved n
+      <*> traverse nlgPattern pats
+  PatCons ann pat pats ->
+    PatCons ann
+      <$> nlgPattern pat
+      <*> nlgPattern pats
+
+nlgLocalDecl :: LocalDecl Resolved -> Check (LocalDecl Resolved)
+nlgLocalDecl = \case
+  LocalDecide ann decide ->
+    LocalDecide ann
+      <$> nlgDecide decide
+  LocalAssume ann assume ->
+    LocalAssume ann
+      <$> nlgAssume assume
+
+nlgAssume :: Assume Resolved -> Check (Assume Resolved)
+nlgAssume = \case
+  MkAssume ann tySig appForm mTy ->
+    MkAssume ann
+      <$> nlgTypeSig tySig
+      <*> nlgAppForm appForm
+      <*> traverse nlgType mTy
+
+nlgNamedExpr :: NamedExpr Resolved -> Check (NamedExpr Resolved)
+nlgNamedExpr = \case
+  MkNamedExpr ann n expr ->
+    MkNamedExpr ann
+      <$> resolveNlgAnnotationInResolved n
+      <*> nlgExpr expr
 
 nlgAppForm :: AppForm Resolved -> Check (AppForm Resolved)
 nlgAppForm (MkAppForm ann n ns maka) =
@@ -1339,10 +1487,17 @@ checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = scope $ do
   (rpat, extend) <- checkPattern (ExpectPatternScrutineeContext scrutinee) pat tscrutinee
   extend
   re <- checkExpr ec e tresult
-  pure (When ann rpat re)
+  When ann
+    -- We can only now resolve NLG annotations because
+    -- bound variables are brought into scope.
+    <$> nlgPattern rpat
+    <*> nlgExpr re
 checkBranch ec _scrutinee _tscrutinee tresult (Otherwise ann e) = do
   re <- checkExpr ec e tresult
-  pure (Otherwise ann re)
+  Otherwise ann
+    -- We can only now resolve NLG annotations because
+    -- bound variables are brought into scope for 'When' case.
+    <$> nlgExpr re
 
 checkPattern :: ExpectationContext -> Pattern Name -> Type' Resolved -> Check (Pattern Resolved, Check ())
 checkPattern ec p t = do

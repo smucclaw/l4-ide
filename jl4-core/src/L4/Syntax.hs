@@ -210,7 +210,8 @@ data Branch n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Pattern n =
-    PatVar Anno n -- not used during parsing, but after scope-checking
+    PatVar Anno n
+    -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show)
