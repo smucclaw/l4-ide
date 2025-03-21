@@ -89,6 +89,7 @@ library
     transformers,
     vector,
     wai,
+    wai-cors,
     wai-logger,
     warp,
     yaml,
