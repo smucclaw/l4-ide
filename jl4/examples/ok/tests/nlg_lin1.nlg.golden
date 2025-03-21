@@ -1,6 +1,1 @@
-[10:7-8] p
-  [10:9-17] person
-[12:15-20] walks
-  [12:21-43] the person must walk
-[13:15-19] eats
-  [13:20-41] the person must eat
+`must sing` where ``person`` is `Person` where `name` is Karl

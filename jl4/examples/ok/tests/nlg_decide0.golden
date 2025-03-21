@@ -1,2 +1,4 @@
 Parsing successful
 Typechecking successful
+[1:8-11] foo
+  [1:12-21] the foo

@@ -3,3 +3,5 @@ Typechecking successful
 nlg_lin0.l4:3:8-11:
   NUMBER
 
+[1:8-11] foo
+  [1:12-21] the foo

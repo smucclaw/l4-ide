@@ -4,6 +4,7 @@ module Main where
 import Base
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
+import qualified L4.Nlg as Nlg
 import L4.Parser (execProgramParser)
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Parser
@@ -12,6 +13,7 @@ import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckResult (CheckResult))
 import qualified L4.TypeCheck as JL4
+
 import Paths_jl4
 
 import qualified Base.Text as Text
@@ -46,7 +48,7 @@ main = do
         it "exactprints" $
           jl4ExactPrintGolden goldenDir inputFile
         it "natural language annotations" $
-          jl4NlgAnnotationsGolden goldenDir inputFile
+          jl4NlgLinearizeGolden goldenDir inputFile
 
 l4Golden :: String -> String -> IO (Golden String)
 l4Golden dir inputFile = do
@@ -89,20 +91,33 @@ jl4ExactPrintGolden dir inputFile = do
       , failFirstTime = False
       }
 
-jl4NlgAnnotationsGolden :: String -> String -> IO (Golden Text)
-jl4NlgAnnotationsGolden dir inputFile = do
+jl4NlgLinearizeGolden :: FilePath -> FilePath -> IO (Golden Text)
+jl4NlgLinearizeGolden dir inputFile = do
   input <- Text.readFile inputFile
   let output_ = case execProgramParser (takeFileName inputFile) input of
         Left _err -> "Failed to parse"
-        Right (prog, warns) -> prettyNlgOutput prog warns
+        Right (p, _) ->
+          case JL4.doCheckProgram p of
+            CheckResult{errors, program}
+              | all ((== JL4.SInfo) . JL4.severity) errors ->
+                let
+                  directives = toListOf (gplate @(Directive Resolved)) program
+                  dirExprs = mapMaybe (\case
+                    Eval _ e -> Just e
+                    Check _ e -> Just e
+                    ) directives
+                in
+                  Text.intercalate "\n" $ fmap Nlg.simpleLinearizer dirExprs
+              | otherwise -> do
+                "Failed to type check"
   pure
     Golden
       { output = output_
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
-      , goldenFile = dir </> (takeFileName inputFile -<.> "nlg.golden")
-      , actualFile = Just (dir </> (takeFileName inputFile -<.> "nlg.actual"))
+      , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
+      , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = False
       }
 
@@ -111,11 +126,11 @@ jl4NlgAnnotationsGolden dir inputFile = do
 -- ----------------------------------------------------------------------------
 
 -- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
-parseFile :: String -> Text -> IO ()
+parseFile :: FilePath -> Text -> IO ()
 parseFile file input =
   case Parser.execProgramParser fp input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right (prog, _) -> do
+    Right (prog, warns) -> do
       Text.putStrLn "Parsing successful"
       case JL4.doCheckProgram prog of
         CheckResult{errors, program}
@@ -127,6 +142,8 @@ parseFile file input =
           | otherwise -> do
               let msgs = typeErrorToMessage <$> errors
               Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
+
+      Text.putStr $ prettyNlgOutput prog warns
  where
   fp = takeFileName file
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)

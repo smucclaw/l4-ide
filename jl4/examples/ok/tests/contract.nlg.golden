@@ -1,12 +1,1 @@
-[8:24-30] Person
-  [8:31-35] 
-[9:25-31] Person
-  [9:32-36] 
-[10:25-31] NUMBER
-  [10:32-36] 
-[43:8-36] `can transfer car ownership`
-  [44:1-68] %`the seller`% %`can transfer car ownership`% to %`the buyer`%
-[45:9-21] `the seller`
-  [45:22-36] [Subject]
-[46:9-20] `the buyer`
-  [46:22-32] [...]
+`can purchase car` where `the buyer` is `Person` with Hannes, `the seller` is `Person` with Magnus and `the amount` is 1000

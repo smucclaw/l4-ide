@@ -3,3 +3,9 @@ Typechecking successful
 nlg_lin1.l4:16:8-18:28:
   BOOLEAN
 
+[10:7-8] p
+  [10:9-17] person
+[12:15-20] walks
+  [12:21-43] the person must walk
+[13:15-19] eats
+  [13:20-41] the person must eat
