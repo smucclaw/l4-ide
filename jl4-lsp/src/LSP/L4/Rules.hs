@@ -48,6 +48,7 @@ import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
 import qualified L4.Evaluate as Evaluate
+import System.Directory
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -219,12 +220,22 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
-        mkImportUri (MkImport _a n)
-          = let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-             in toNormalizedUri $ filePathToUri $ rootDirectory </> modName <.> "l4"
+        mkImportUri (MkImport _a n) = do
+          let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
+          -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
+          mFileDirectory <- runMaybeT do
+            -- TODO: idk if this is the best way of doing it, maybe trying the entire rule that uses the import and then
+            -- failing there if the rule fails would be morally better? Seems like it is more incremental than doing it
+            -- like this
+            dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+            guard =<< liftIO (doesFileExist (dir </> modName <.> "l4"))
+            pure dir
+
+          pure $ toNormalizedUri $ filePathToUri $ fromMaybe rootDirectory mFileDirectory </> modName <.> "l4"
+
     prog <- use_ GetParsedAst uri
     let getImport = \case Import _ann i -> [i]; _ -> []
-        imports  = map mkImportUri $ foldTopDecls getImport prog
+    imports <- traverse mkImportUri $ foldTopDecls getImport prog
     pure ([], Just imports)
 
   defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
