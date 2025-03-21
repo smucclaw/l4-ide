@@ -1,0 +1,7 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+foo.l4:4:8-11:
+  FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
+foo.l4:5:7-19:
+  136

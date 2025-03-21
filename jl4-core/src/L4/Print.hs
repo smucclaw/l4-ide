@@ -167,6 +167,10 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
     Check _ e ->
       "#CHECK" <+> printWithLayout e
 
+instance LayoutPrinter a => LayoutPrinter (Import a) where
+  printWithLayout = \case
+    MkImport _ n -> "IMPORT" <+> printWithLayout n
+
 instance LayoutPrinter a => LayoutPrinter (Section a) where
   printWithLayout = \case
     MkSection _ _ Nothing _ ds    ->
@@ -182,9 +186,9 @@ instance LayoutPrinter a => LayoutPrinter (Section a) where
           [] -> mempty
           _ -> fmap printWithLayout ds
 
-instance LayoutPrinter a => LayoutPrinter (Program a) where
+instance LayoutPrinter a => LayoutPrinter (Module  a) where
   printWithLayout = \case
-    MkProgram _ sects ->
+    MkModule _ _ sects ->
       vcat (fmap printWithLayout sects)
 
 instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
@@ -193,6 +197,7 @@ instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
     Decide    _ t -> printWithLayout t
     Assume    _ t -> printWithLayout t
     Directive _ t -> printWithLayout t
+    Import    _ t -> printWithLayout t
 
 instance LayoutPrinter a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann

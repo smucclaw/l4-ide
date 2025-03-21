@@ -11,6 +11,7 @@ import Base.Text (Text)
 import Development.IDE.Graph (Action)
 import Development.IDE.Graph.Database (shakeRunDatabase)
 import Language.LSP.Protocol.Types (NormalizedFilePath)
+import System.FilePath
 
 data Log
   = ShakeLog Shake.Log
@@ -31,12 +32,13 @@ oneshotL4ActionAndErrors fp act = do
   pure (errs, res)
 
 oneshotL4Action :: Recorder (WithPriority Log) -> FilePath -> (NormalizedFilePath -> Action b) -> IO b
-oneshotL4Action recorder curDir act = do
+oneshotL4Action recorder fp act = do
+  let curDir = takeDirectory fp
   state <- Shake.oneshotIdeState (cmapWithPrio ShakeLog recorder) curDir do
     Store.fileStoreRules (cmapWithPrio StoreLog recorder) (const $ pure False)
-    Rules.jl4Rules (cmapWithPrio RulesLog recorder)
+    Rules.jl4Rules curDir (cmapWithPrio RulesLog recorder)
 
-  let nfp = normalizeFilePath curDir
+  let nfp = normalizeFilePath fp
 
   [res] <- shakeRunDatabase state.shakeDb [act nfp]
   pure res

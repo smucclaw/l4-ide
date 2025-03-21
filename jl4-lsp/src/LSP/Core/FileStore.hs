@@ -164,8 +164,8 @@ getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
     res <- do
-        mbVirtual <- getVirtualFile file
-        pure $ _file_text <$> mbVirtual
+      mbVirtual <- getVirtualFile file
+      pure $ _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.

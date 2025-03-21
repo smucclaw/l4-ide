@@ -1,0 +1,62 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: sing.l4
+  Hidden:   no
+  Range:    3:14-3:20
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      Person
+
+    which I have inferred to be of type: 
+
+      TYPE
+
+File: sing.l4
+  Hidden:   no
+  Range:    5:15-5:20
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      walks
+
+    which I have inferred to be of type: 
+
+      BOOLEAN
+
+File: sing.l4
+  Hidden:   no
+  Range:    6:15-6:19
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      eats
+
+    which I have inferred to be of type: 
+
+      BOOLEAN
+
+File: sing.l4
+  Hidden:   no
+  Range:    7:15-7:21
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      drinks
+
+    which I have inferred to be of type: 
+
+      BOOLEAN

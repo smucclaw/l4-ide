@@ -63,6 +63,7 @@ vfsVersion (VFSVersion i)     = Just i
 vfsVersion ModificationTime{} = Nothing
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
+-- FIXME: should be renamed to `GetVirtualFileContents`
 type instance RuleResult GetFileContents = (FileVersion, Maybe Rope)
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)

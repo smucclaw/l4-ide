@@ -136,6 +136,7 @@ data TokenType =
   | TKFor
   | TKAll
   | TKAka
+  | TKImport
     -- annotations
   | TNlg          !Text !AnnoType
   | TRefSrc       !Text
@@ -346,6 +347,7 @@ keywords =
     , ("FOR"        , TKFor        )
     , ("ALL"        , TKAll        )
     , ("AKA"        , TKAka        )
+    , ("IMPORT"     , TKImport     )
     ]
 
 trivialToken :: TokenType -> PosToken
@@ -805,6 +807,7 @@ displayPosToken (MkPosToken _r tt) =
     TRef t ty        -> toRefAnno t ty
     TRefSrc t        -> "@ref-src" <> t
     TRefMap t        -> "@ref-map" <> t
+    TKImport         -> "IMPORT"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
@@ -914,6 +917,7 @@ posTokenCategory =
     TRef {} -> CAnnotation
     TRefSrc _ -> CAnnotation
     TRefMap _ -> CAnnotation
+    TKImport -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment

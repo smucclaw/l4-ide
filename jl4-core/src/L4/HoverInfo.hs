@@ -10,6 +10,7 @@ import L4.TypeCheck
 
 import Control.Applicative
 import qualified Generics.SOP as SOP
+import Language.LSP.Protocol.Types (NormalizedUri)
 
 data InfoTree =
   InfoNode
@@ -49,7 +50,7 @@ findInfo pos a =
         asum (go <$> children) <|> {- if t == Nothing then Just (range, Type mempty) else -} (range,) <$> info
       | otherwise                          = Nothing
 
-deriving anyclass instance ToInfoTree (Program Resolved)
+deriving anyclass instance ToInfoTree (Module  Resolved)
 deriving anyclass instance ToInfoTree (Section Resolved)
 deriving anyclass instance ToInfoTree (TopDecl Resolved)
 deriving anyclass instance ToInfoTree (LocalDecl Resolved)
@@ -72,6 +73,7 @@ deriving anyclass instance ToInfoTree (TypeSig Resolved)
 deriving anyclass instance ToInfoTree (GivethSig Resolved)
 deriving anyclass instance ToInfoTree (GivenSig Resolved)
 deriving anyclass instance ToInfoTree (Directive Resolved)
+deriving anyclass instance ToInfoTree (Import Resolved)
 
 -- | Extract suitable hover info from a tree node.
 getInfo :: (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension) => a -> Maybe Info
@@ -85,6 +87,9 @@ mkInfoLeaf x =
 instance ToInfoTree Lit where
   toInfoTree l =
     [mkInfoLeaf l]
+
+instance ToInfoTree NormalizedUri where
+  toInfoTree = const []
 
 instance ToInfoTree Int where
   toInfoTree _ =
