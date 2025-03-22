@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "prettier --check . --ignore-path ../../.prettierignore && eslint --max-warnings=0 .",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
