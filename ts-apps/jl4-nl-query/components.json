@@ -2,14 +2,13 @@
   "$schema": "https://next.shadcn-svelte.com/schema.json",
   "style": "default",
   "tailwind": {
-    // we don't actually use tailwind.config.ts tho! it's all in app.css now
     "config": "tailwind.config.ts",
     "css": "src/app.css",
     "baseColor": "neutral"
   },
   "aliases": {
     "components": "$lib/components",
-		"utils": "$lib/utils/shadcn",
+    "utils": "$lib/utils/shadcn",
     "ui": "$lib/components/ui",
     "hooks": "$lib/hooks"
   },
