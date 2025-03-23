@@ -22,11 +22,12 @@
   <div class="flex space-x-3">
     <Input
       type="text"
-      placeholder="Ask a question about Jersey laws..."
+      placeholder="Ask about any of the above Jersey laws..."
       class="flex-1 px-4 py-2 mb-2 border-2 border-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      bind:value={query}
     />
     <Button
-      class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      class="px-4 py-2 bg-stone-500 text-white font-semibold rounded-md hover:bg-stone-600 focus:outline-none focus:ring-2 focus:ring-purple-300"
     >
       Submit
     </Button>
