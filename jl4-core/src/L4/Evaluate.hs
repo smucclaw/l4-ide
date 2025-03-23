@@ -20,7 +20,6 @@ import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
 
 import Data.Either
-import Language.LSP.Protocol.Types (NormalizedUri)
 
 newtype Eval a = MkEval (EvalState -> EvalEnv -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState, MonadReader EvalEnv)

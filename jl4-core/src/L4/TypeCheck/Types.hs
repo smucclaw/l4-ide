@@ -8,7 +8,6 @@ import L4.Syntax
 import L4.TypeCheck.With
 
 import Control.Applicative
-import Language.LSP.Protocol.Types (NormalizedUri)
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)

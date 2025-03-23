@@ -12,7 +12,6 @@ import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
-import Language.LSP.Protocol.Types (NormalizedUri)
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)

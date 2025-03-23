@@ -91,7 +91,6 @@ import Control.Applicative
 import Data.Bifunctor
 import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
-import Language.LSP.Protocol.Types (NormalizedUri, fromNormalizedUri, Uri (..))
 
 mkInitialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
 mkInitialCheckState environment entityInfo substitution =
@@ -166,9 +165,9 @@ applyFinalSubstitution subst moduleUri t =
           r
 
 -- | Helper function to run the check monad an expect a unique result.
-runCheckUnique :: Check a -> CheckEnv-> CheckState  -> (With CheckErrorWithContext a, CheckState)
-runCheckUnique c s e =
-  case runCheck c s e of
+runCheckUnique :: Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique c e s =
+  case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
@@ -183,15 +182,15 @@ anyOf = asum . fmap pure
 --
 orElse :: Check a -> Check a -> Check a
 orElse m1 m2 = do
-  MkCheck $ \ s e ->
+  MkCheck $ \ e s ->
     let
-      candidates = runCheck m1 s e
+      candidates = runCheck m1 e s
 
       isSuccess (Plain _, _)  = True
       isSuccess (With _ _, _) = False
     in
       case filter isSuccess candidates of
-        [] -> runCheck m2 s e
+        [] -> runCheck m2 e s
         xs -> xs
 
 -- | Allow the subcomputation to have at most one result.
@@ -1808,8 +1807,6 @@ prettyOptionallyNamedType (MkOptionallyNamedType _ (Just r) t) =
   prettyLayout r <> " of type " <> prettyLayout t
 
 -- | Show the name with its original / definition source range.
---
--- TODO: eventually, we will have to print a file path here for potentially external locations
 prettyResolvedWithRange :: Resolved -> Text
 prettyResolvedWithRange r = do
   let u = getUnique r

@@ -66,7 +66,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
 import L4.Parser.SrcSpan
-import Language.LSP.Protocol.Types (NormalizedUri, filePathToUri, toNormalizedUri)
+import Language.LSP.Protocol.Types (filePathToUri)
 
 type Parser = StateT PState (Parsec Void TokenStream)
 

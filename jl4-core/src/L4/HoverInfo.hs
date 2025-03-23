@@ -10,7 +10,6 @@ import L4.TypeCheck
 
 import Control.Applicative
 import qualified Generics.SOP as SOP
-import Language.LSP.Protocol.Types (NormalizedUri)
 
 data InfoTree =
   InfoNode

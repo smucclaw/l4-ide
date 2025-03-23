@@ -19,7 +19,7 @@ type ExactPrintM = Except TraverseAnnoError
 
 type HoleFit_ t = ExactPrintM [t]
 
-concreteNodesToTokens :: ToConcreteNodes t a => a -> ExceptT TraverseAnnoError Identity [t]
+concreteNodesToTokens :: ToConcreteNodes t a => a -> Except TraverseAnnoError [t]
 concreteNodesToTokens a = concatMap allClusterTokens <$> toNodes a
 
 class ToTokens t a where

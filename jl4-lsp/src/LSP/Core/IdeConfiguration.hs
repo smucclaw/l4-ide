@@ -14,7 +14,8 @@ module LSP.Core.IdeConfiguration
 where
 
 import           Control.Concurrent.Strict
-import           Control.Exception.Safe (SomeException, try)
+import           Control.Exception (ErrorCall)
+import           Control.Exception.Safe (try)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
@@ -92,7 +93,7 @@ isWorkspaceFile uri =
           pure case mconfig of
             -- NOTE: if we are not in an editor context, we assume that every file is part
             -- of our "workspace" as in this case there's not really a concept of a workspace
-            Left (_ :: SomeException) -> True
+            Left (_ :: ErrorCall) -> True
             Right config ->
               any
                 (\root -> toText root `isPrefixOf` toText (normalizedFilePathToUri file))

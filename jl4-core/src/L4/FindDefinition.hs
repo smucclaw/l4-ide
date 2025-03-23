@@ -8,7 +8,6 @@ import L4.Syntax
 import L4.TypeCheck
 
 import qualified Generics.SOP as SOP
-import Language.LSP.Protocol.Types (NormalizedUri)
 
 -- | It would be better to have a tree structure so that we can exclude
 -- large parts of the tree easily. However, right now we don't have range

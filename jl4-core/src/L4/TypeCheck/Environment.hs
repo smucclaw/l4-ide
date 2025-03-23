@@ -8,7 +8,6 @@ import L4.Lexer
 import L4.Parser.SrcSpan
 import L4.Syntax
 import L4.TypeCheck.Types
-import Language.LSP.Protocol.Types (NormalizedUri, toNormalizedUri, Uri (Uri))
 
 -- | Helper function to create a predefined name.
 preDef :: Text -> Name
@@ -24,6 +23,9 @@ preDef t =
     )
     (PreDef t)
 
+builtinUri :: NormalizedUri
+builtinUri = toNormalizedUri (Uri "jl4:builtin")
+
 -- uniques of built-in / predefs are having the 'b' marker:
 --
 -- 10  BOOLEAN
@@ -36,9 +38,6 @@ preDef t =
 -- 40  A (type variable in EMPTY)
 
 -- BOOLEAN
-
-builtinUri :: NormalizedUri
-builtinUri = toNormalizedUri (Uri "jl4:builtin")
 
 booleanUnique :: Unique
 booleanUnique = MkUnique 'b' 10 builtinUri
