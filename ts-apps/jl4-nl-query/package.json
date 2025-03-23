@@ -41,9 +41,12 @@
   },
   "dependencies": {
     "@instructor-ai/instructor": "^1.7.0",
+    "dotenv": "^16.4.7",
     "openai": "^4.47.1",
+    "openapi-typescript": "^7.6.1",
     "runed": "^0.23.3",
     "ts-pattern": "^5.6.1",
+    "tslog": "^4.9.3",
     "zod": "^3.24.2"
   }
 }
