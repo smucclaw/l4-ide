@@ -12,5 +12,6 @@ function:
       y:
         type: "number"
         description: The second number
+    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
   supportedBackends:
     - "jl4"
