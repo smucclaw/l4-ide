@@ -16,7 +16,7 @@ import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
 import L4.FindDefinition
-import L4.Lexer (keywords)
+import L4.Lexer (keywords, directives, annotations)
 import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
@@ -64,12 +64,6 @@ topDeclToCompletionItem name = \case
     unrollForall :: Type' Resolved -> Type' Resolved
     unrollForall (Forall _ _ ty) = unrollForall ty
     unrollForall ty = ty
-
-    -- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
-    typeFunction :: Kind -> Type' Resolved
-    typeFunction 0 = Type emptyAnno
-    typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
-    typeFunction _ = error "Internal error: negative arity of type constructor"
 
     defaultTopDeclCompletionItem :: Type' Resolved -> CompletionItem
     defaultTopDeclCompletionItem ty = (defaultCompletionItem $ quoteIfNeeded prepared)
@@ -215,7 +209,10 @@ completions rope nuri typeCheck (Position ln col) = do
       mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
         { CompletionItem._kind =  Just CompletionItemKind_Keyword
         }
-      keyWordMatches = filterMatchesOn id $ Map.keys keywords
+      keyWordMatches = filterMatchesOn id
+        $ Map.keys keywords
+        <> annotations
+        <> map snd directives
       -- FUTUREWORK(mangoiv): we could
       -- 1 pass through the token here
       -- 2 check the token category and if the category is COperator
@@ -286,6 +283,16 @@ infoToHover nuri subst r i =
   where
     x =
       case i of
-        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst nuri t)
-        KindInfo k  -> "arity " <> Text.pack (show k)
+        TypeInfo t  -> prettyLayout $ applyFinalSubstitution subst nuri t
+        KindInfo k  -> prettyLayout $ typeFunction k
         KeywordInfo -> "keyword"
+
+-- ----------------------------------------------------------------------------
+-- Common utility functions
+-- ----------------------------------------------------------------------------
+
+-- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
+typeFunction :: Kind -> Type' Resolved
+typeFunction 0 = Type emptyAnno
+typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
+typeFunction _ = error "Internal error: negative arity of type constructor"

@@ -9,6 +9,7 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
 
+import Data.Monoid (Alt (..))
 import Data.Char hiding (Space)
 import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec
@@ -49,13 +50,19 @@ data AnnoType
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+data DirectiveType
+  = TEvalDirective
+  | TCheckDirective
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
 -- | The type of token, plus information needed to reconstruct its contents.
 data TokenType =
     TIdentifier   !Text
   | TQuoted       !Text
   | TIntLit       !Text !Int
   | TStringLit    !Text
-  | TDirective    !Text
+  | TDirective    !DirectiveType
     -- copy token / ditto mark, currently '^'
   | TCopy         (Maybe TokenType)
     -- parentheses
@@ -153,6 +160,9 @@ data TokenType =
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
+annotations :: [Text]
+annotations = ["nlg", "ref", "ref-map", "ref-src"]
+
 nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
   lineAnno "@nlg"
@@ -167,7 +177,6 @@ refAnnotation =
 
 refSrcAnnotation :: Lexer Text
 refSrcAnnotation = fst <$> lineAnno "@ref-src"
-
 
 refMapAnnotation :: Lexer Text
 refMapAnnotation = fst <$> lineAnno "@ref-map"
@@ -206,9 +215,13 @@ quoted :: Lexer Text
 quoted =
   char '`' *> takeWhile1P (Just "printable char except backticks") (\ x -> isPrint x && not (x `elem` ("`" :: String))) <* char '`'
 
-directiveLiteral :: Lexer Text
-directiveLiteral =
-  char '#' *> identifier
+directiveLiteral :: Lexer DirectiveType
+directiveLiteral = do
+  _herald <- "#"
+  getAlt $ foldMap (\(d, t) -> Alt $ d <$ chunk t) directives
+
+directives :: [(DirectiveType, Text)]
+directives = [(TEvalDirective, "EVAL"), (TCheckDirective, "CHECK")]
 
 integerLiteral :: Lexer (Text, Int)
 integerLiteral =
@@ -728,7 +741,7 @@ displayPosToken (MkPosToken _r tt) =
     TQuoted t        -> "`" <> t <> "`"
     TIntLit t _i     -> t
     TStringLit s     -> showStringLit s
-    TDirective t     -> "#" <> t
+    TDirective d     -> showDirective d
     TCopy _          -> "^"
     TPOpen           -> "("
     TPClose          -> ")"
@@ -815,6 +828,11 @@ displayPosToken (MkPosToken _r tt) =
     TLineComment t   -> t
     TBlockComment t  -> t
     EOF              -> ""
+
+showDirective :: DirectiveType -> Text
+showDirective = \case
+  TEvalDirective -> "#EVAL"
+  TCheckDirective -> "#CHECK"
 
 data TokenCategory
   = CIdentifier

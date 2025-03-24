@@ -326,9 +326,9 @@ directive =
   attachAnno $
     choice
       [ Eval emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective "EVAL"))
+          <$ annoLexeme (spacedToken_ (TDirective TEvalDirective))
       , Check emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
+          <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
       ]
       <*> annoHole expr
 
