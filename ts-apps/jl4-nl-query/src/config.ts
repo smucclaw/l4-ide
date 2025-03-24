@@ -25,10 +25,10 @@ const logger = new Logger({
 export type AppLogger = typeof logger
 
 // TODO: Remove this before pushing to prod
-logger.debug(
-  process.env.OPENAI_API_KEY,
-  process.env.REMOTE_DECISION_SERVICE_URL
-)
+// logger.debug(
+//   process.env.OPENAI_API_KEY,
+//   process.env.REMOTE_DECISION_SERVICE_URL
+// )
 
 /*****************
    App Config
