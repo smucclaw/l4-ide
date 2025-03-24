@@ -65,12 +65,6 @@ topDeclToCompletionItem name = \case
     unrollForall (Forall _ _ ty) = unrollForall ty
     unrollForall ty = ty
 
-    -- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
-    typeFunction :: Kind -> Type' Resolved
-    typeFunction 0 = Type emptyAnno
-    typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
-    typeFunction _ = error "Internal error: negative arity of type constructor"
-
     defaultTopDeclCompletionItem :: Type' Resolved -> CompletionItem
     defaultTopDeclCompletionItem ty = (defaultCompletionItem $ quoteIfNeeded prepared)
       { CompletionItem._filterText = Just prepared
@@ -289,6 +283,16 @@ infoToHover nuri subst r i =
   where
     x =
       case i of
-        TypeInfo t  -> prettyLayout (applyFinalSubstitution subst nuri t)
-        KindInfo k  -> "arity " <> Text.pack (show k)
+        TypeInfo t  -> prettyLayout $ applyFinalSubstitution subst nuri t
+        KindInfo k  -> prettyLayout $ typeFunction k
         KeywordInfo -> "keyword"
+
+-- ----------------------------------------------------------------------------
+-- Common utility functions
+-- ----------------------------------------------------------------------------
+
+-- a list : Type -> Type should be pretty printed as FUNCTION FROM TYPE TO TYPE
+typeFunction :: Kind -> Type' Resolved
+typeFunction 0 = Type emptyAnno
+typeFunction n | n > 0 = Fun emptyAnno (replicate n (MkOptionallyNamedType emptyAnno Nothing (Type emptyAnno))) (Type emptyAnno)
+typeFunction _ = error "Internal error: negative arity of type constructor"
