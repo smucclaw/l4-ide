@@ -103,6 +103,7 @@ data Log
   | LogHandlers Handlers.Log
   | LogRules Rules.Log
   | LogWebsocket WebsocketLog
+  | LogWorkingDirectory FilePath
   deriving (Show)
 
 data WebsocketLog
@@ -128,6 +129,7 @@ instance Pretty Log where
     LogHandlers msg -> pretty msg
     LogRules msg -> pretty msg
     LogWebsocket wmsg -> "Websocket:" <+> pretty wmsg
+    LogWorkingDirectory wd -> "Starting with working directory:" <+> pretty wd
 
 instance Pretty WebsocketLog where
   pretty = \case
@@ -187,6 +189,7 @@ getDefaultArguments recorder = do
   MkCliOptions
     { communication, cwd } <- Opa.execParser parseComm
   projectRoot <- maybe getCurrentDirectory pure cwd
+  logWith recorder Debug $ LogWorkingDirectory projectRoot
   pure Arguments
     { projectRoot
     , rules = Rules.jl4Rules projectRoot (cmapWithPrio LogRules recorder)

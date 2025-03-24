@@ -36,11 +36,12 @@ main = do
   dataDir <- getDataDir
   let examplesRoot = dataDir </> "examples"
   okFiles <- sort <$> globDir1 (compile "ok/**/*.l4") examplesRoot
+  librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDir </> "libraries")
   legalFiles <- sort <$> globDir1 (compile "legal/**/*.l4") examplesRoot
   tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
   hspec do
-    describe "ok files" $ tests (True, True) (okFiles <> legalFiles) examplesRoot
+    describe "ok files" $ tests (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
     describe "tc fails" $ tests (False, True) tcFailsFiles examplesRoot
     describe "nlg fails" $ tests (True, False) nlgFailsFiles examplesRoot
   where
