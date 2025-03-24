@@ -1,7 +1,7 @@
 ---
 type: function
 function:
-  name: "calculate parking fee cost"
+  name: "parking_cost"
   description: Given the day of the week, a flag about whether it's a public holiday, and prevailing weather conditions, calculate the cost of parking.
   parameters:
     type: object
