@@ -1,7 +1,11 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalPassThroughEnv": ["OPENAI_API_KEY", "REMOTE_DECISION_SERVICE_URL"],
+  "globalPassThroughEnv": [
+    "OPENAI_API_KEY",
+    "REMOTE_DECISION_SERVICE_URL",
+    "envPath"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
