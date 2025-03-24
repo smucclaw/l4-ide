@@ -34,3 +34,149 @@ DECIDE parking_cost IS
                        THEN 1
                        ELSE 4
 
+-- this works
+-- #EVAL parking_cost 8 FALSE "fair" "new moon"
+
+-- but calling it via Swagger
+-- curl -X 'POST' \
+--   'http://localhost:8081/functions/calculate%20parking%20fee%20cost/evaluation' \
+--   -H 'accept: application/json;charset=utf-8' \
+--   -H 'Content-Type: application/json;charset=utf-8' \
+--   -d '{
+--   "fnArguments": {
+--     "day_of_week": 6,
+--     "is_public_holiday": false,
+--     "current_weather": "rain",
+--     "phase_of_moon": "new"
+--   },
+--   "fnEvalBackend": "jl4"
+-- }'
+
+-- produces this error message
+-- RuntimeScopeError
+--     ( OutOfScope
+--         ( MkUnique 'c' 13 )
+--         ( MkName
+--             ( Anno
+--                 { extra = Extension
+--                     { resolvedInfo = Just
+--                         ( TypeInfo
+--                             ( InfVar
+--                                 ( Anno
+--                                     { extra = Extension
+--                                         { resolvedInfo = Nothing
+--                                         , nlg = Nothing
+--                                         }
+--                                     , range = Nothing
+--                                     , payload = []
+--                                     }
+--                                 )
+--                                 ( NormalName "calculate parking fee cost" ) 12
+--                             )
+--                         )
+--                     , nlg = Nothing
+--                     }
+--                 , range = Just
+--                     ( MkSrcRange
+--                         { start = MkSrcPos
+--                             { line = 38
+--                             , column = 7
+--                             }
+--                         , end = MkSrcPos
+--                             { line = 38
+--                             , column = 35
+--                             }
+--                         , length = 28
+--                         }
+--                     )
+--                 , payload =
+--                     [ AnnoCsn
+--                         ( Just
+--                             ( MkSrcRange
+--                                 { start = MkSrcPos
+--                                     { line = 38
+--                                     , column = 7
+--                                     }
+--                                 , end = MkSrcPos
+--                                     { line = 38
+--                                     , column = 35
+--                                     }
+--                                 , length = 28
+--                                 }
+--                             )
+--                         )
+--                         ( CsnCluster
+--                             { payload = ConcreteSyntaxNode
+--                                 { tokens =
+--                                     [ MkPosToken
+--                                         { range = MkSrcRange
+--                                             { start = MkSrcPos
+--                                                 { line = 38
+--                                                 , column = 7
+--                                                 }
+--                                             , end = MkSrcPos
+--                                                 { line = 38
+--                                                 , column = 35
+--                                                 }
+--                                             , length = 28
+--                                             }
+--                                         , payload = TQuoted "calculate parking fee cost"
+--                                         }
+--                                     ]
+--                                 , range = Just
+--                                     ( MkSrcRange
+--                                         { start = MkSrcPos
+--                                             { line = 38
+--                                             , column = 7
+--                                             }
+--                                         , end = MkSrcPos
+--                                             { line = 38
+--                                             , column = 35
+--                                             }
+--                                         , length = 28
+--                                         }
+--                                     )
+--                                 , visibility = Visible
+--                                 }
+--                             , trailing = ConcreteSyntaxNode
+--                                 { tokens =
+--                                     [ MkPosToken
+--                                         { range = MkSrcRange
+--                                             { start = MkSrcPos
+--                                                 { line = 38
+--                                                 , column = 35
+--                                                 }
+--                                             , end = MkSrcPos
+--                                                 { line = 38
+--                                                 , column = 36
+--                                                 }
+--                                             , length = 1
+--                                             }
+--                                         , payload = TSpace " "
+--                                         }
+--                                     ]
+--                                 , range = Just
+--                                     ( MkSrcRange
+--                                         { start = MkSrcPos
+--                                             { line = 38
+--                                             , column = 35
+--                                             }
+--                                         , end = MkSrcPos
+--                                             { line = 38
+--                                             , column = 36
+--                                             }
+--                                         , length = 1
+--                                         }
+--                                     )
+--                                 , visibility = Hidden
+--                                 }
+--                             }
+--                         )
+--                     ]
+--                 }
+--             )
+--             ( NormalName "calculate parking fee cost" )
+--         )
+--     )
+-- 
+-- 
