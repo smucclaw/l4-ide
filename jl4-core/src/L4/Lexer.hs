@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Lexer where
 
 import Base
@@ -39,6 +40,8 @@ data PosToken =
     }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
+
+instance ToExpr NormalizedUri
 
 data AnnoType
   = InlineAnno
@@ -363,13 +366,13 @@ trivialToken tt =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
-execLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
-execLexer file input =
+execLexer :: NormalizedUri -> Text -> Either (NonEmpty PError) [PosToken]
+execLexer uri input =
   let
-    r = parse (rawTokens <* eof) file input
+    r = parse (rawTokens <* eof) (showNormalizedUri uri) input
   in
     case r of
-      Right rtoks -> Right (mkPosTokens file input rtoks)
+      Right rtoks -> Right (mkPosTokens uri input rtoks)
       Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
 
 data TokenState =
@@ -381,10 +384,10 @@ data TokenState =
     }
   deriving Generic
 
-initialTokenState :: FilePath -> Text -> TokenState
-initialTokenState filepath txt =
+initialTokenState :: NormalizedUri -> Text -> TokenState
+initialTokenState uri txt =
   MkTokenState
-    (initialPosState filepath txt)
+    (initialPosState (showNormalizedUri uri) txt)
     0
     []
     []
@@ -394,11 +397,11 @@ initialTokenState filepath txt =
 --
 -- At the same time, we interpret copy tokens.
 --
-mkPosTokens :: FilePath -> Text -> [RawToken] -> [PosToken]
-mkPosTokens filepath txt rtoks =
-    evalState (traverse go rtoks) (initialTokenState filepath txt)
+mkPosTokens :: NormalizedUri -> Text -> [RawToken] -> [PosToken]
+mkPosTokens uri txt rtoks =
+    evalState (traverse go rtoks) (initialTokenState uri txt)
   where
-    go :: RawToken -> StateT TokenState Identity PosToken
+    go :: RawToken -> Base.State TokenState PosToken
     go rtok = do
       ts <- get
       let
@@ -922,3 +925,6 @@ posTokenCategory =
     TLineComment _ -> CComment
     TBlockComment _ -> CComment
     EOF -> CEOF
+
+showNormalizedUri :: NormalizedUri -> String
+showNormalizedUri =  Text.unpack . (.getUri) . fromNormalizedUri

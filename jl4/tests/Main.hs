@@ -91,10 +91,10 @@ jl4ExactPrintGolden dir inputFile = do
       , failFirstTime = False
       }
 
-jl4NlgAnnotationsGolden :: Bool -> String -> String -> IO (Golden Text)
+jl4NlgAnnotationsGolden :: Bool -> String -> FilePath -> IO (Golden Text)
 jl4NlgAnnotationsGolden isOk dir inputFile = do
   input <- Text.readFile inputFile
-  output_ <- case execProgramParser (takeFileName inputFile) input of
+  output_ <- case execProgramParser (toNormalizedUri $ filePathToUri inputFile) input of
     Left _err -> pure "Failed to parse"
     Right (prog, warns) -> do
       null warns `shouldBe` isOk
