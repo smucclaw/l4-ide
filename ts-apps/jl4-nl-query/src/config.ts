@@ -1,26 +1,34 @@
 import { config } from 'dotenv'
+
 import { Logger } from 'tslog'
 
 /*****************
   Load .env
 ******************/
 
+const envPath = process.env.envPath || './.env.local'
+
 config({
-  path: '.env.local',
+  path: envPath,
 })
-console.log(process.env)
 
 /*****************
    Init logger
 ******************/
 
 const logger = new Logger({
-  name: 'LSP',
+  name: 'nlq-logger',
   // minLevel: 1,
-  prettyLogTemplate: '{{name}}  {{logLevelName}}  ',
+  prettyLogTemplate: '{{logLevelName}}  ',
 })
 
 export type AppLogger = typeof logger
+
+// TODO: Remove this before pushing to prod
+logger.debug(
+  process.env.OPENAI_API_KEY,
+  process.env.REMOTE_DECISION_SERVICE_URL
+)
 
 /*****************
    App Config
