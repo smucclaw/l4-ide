@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../jl4"
+		},
+		{
+			"path": "../doc"
+		}
+	],
+	"settings": {}
+}
