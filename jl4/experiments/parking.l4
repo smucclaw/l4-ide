@@ -11,9 +11,9 @@ GIVEN current_weather   IS A STRING
       phase_of_moon     IS A STRING
 sky_is_romantic MEANS
        current_weather EQUALS "fair"
-   AND     phase_of_moon   EQUALS "new moon"
+   AND     phase_of_moon   EQUALS "full"
+       OR  ^               ^      "new moon"
        OR  ^               ^      "new"
-       OR  ^               ^      "full"
        OR  ^               ^      "full moon"
 
 GIVEN day_of_week       IS A NUMBER
@@ -38,146 +38,15 @@ DECIDE parking_cost IS
 -- this works
 -- #EVAL parking_cost 8 FALSE "fair" "new moon"
 
--- but calling it via Swagger
--- curl -X 'POST' \
---   'http://localhost:8081/functions/calculate%20parking%20fee%20cost/evaluation' \
---   -H 'accept: application/json;charset=utf-8' \
---   -H 'Content-Type: application/json;charset=utf-8' \
---   -d '{
---   "fnArguments": {
---     "day_of_week": 6,
---     "is_public_holiday": false,
---     "current_weather": "rain",
---     "phase_of_moon": "new"
---   },
---   "fnEvalBackend": "jl4"
--- }'
+-- let's convert the above logic to a decision table, just so we can see how it looks differently.
+-- e.g. "new moon", "full moon", "new", "full"
 
--- produces this error message
--- RuntimeScopeError
---     ( OutOfScope
---         ( MkUnique 'c' 13 )
---         ( MkName
---             ( Anno
---                 { extra = Extension
---                     { resolvedInfo = Just
---                         ( TypeInfo
---                             ( InfVar
---                                 ( Anno
---                                     { extra = Extension
---                                         { resolvedInfo = Nothing
---                                         , nlg = Nothing
---                                         }
---                                     , range = Nothing
---                                     , payload = []
---                                     }
---                                 )
---                                 ( NormalName "calculate parking fee cost" ) 12
---                             )
---                         )
---                     , nlg = Nothing
---                     }
---                 , range = Just
---                     ( MkSrcRange
---                         { start = MkSrcPos
---                             { line = 38
---                             , column = 7
---                             }
---                         , end = MkSrcPos
---                             { line = 38
---                             , column = 35
---                             }
---                         , length = 28
---                         }
---                     )
---                 , payload =
---                     [ AnnoCsn
---                         ( Just
---                             ( MkSrcRange
---                                 { start = MkSrcPos
---                                     { line = 38
---                                     , column = 7
---                                     }
---                                 , end = MkSrcPos
---                                     { line = 38
---                                     , column = 35
---                                     }
---                                 , length = 28
---                                 }
---                             )
---                         )
---                         ( CsnCluster
---                             { payload = ConcreteSyntaxNode
---                                 { tokens =
---                                     [ MkPosToken
---                                         { range = MkSrcRange
---                                             { start = MkSrcPos
---                                                 { line = 38
---                                                 , column = 7
---                                                 }
---                                             , end = MkSrcPos
---                                                 { line = 38
---                                                 , column = 35
---                                                 }
---                                             , length = 28
---                                             }
---                                         , payload = TQuoted "calculate parking fee cost"
---                                         }
---                                     ]
---                                 , range = Just
---                                     ( MkSrcRange
---                                         { start = MkSrcPos
---                                             { line = 38
---                                             , column = 7
---                                             }
---                                         , end = MkSrcPos
---                                             { line = 38
---                                             , column = 35
---                                             }
---                                         , length = 28
---                                         }
---                                     )
---                                 , visibility = Visible
---                                 }
---                             , trailing = ConcreteSyntaxNode
---                                 { tokens =
---                                     [ MkPosToken
---                                         { range = MkSrcRange
---                                             { start = MkSrcPos
---                                                 { line = 38
---                                                 , column = 35
---                                                 }
---                                             , end = MkSrcPos
---                                                 { line = 38
---                                                 , column = 36
---                                                 }
---                                             , length = 1
---                                             }
---                                         , payload = TSpace " "
---                                         }
---                                     ]
---                                 , range = Just
---                                     ( MkSrcRange
---                                         { start = MkSrcPos
---                                             { line = 38
---                                             , column = 35
---                                             }
---                                         , end = MkSrcPos
---                                             { line = 38
---                                             , column = 36
---                                             }
---                                         , length = 1
---                                         }
---                                     )
---                                 , visibility = Hidden
---                                 }
---                             }
---                         )
---                     ]
---                 }
---             )
---             ( NormalName "calculate parking fee cost" )
---         )
---     )
--- 
--- 
+-- #TABLE parking_cost
+-- | is_public_holiday | day_of_week | current_weather | phase_of_moon | parking_cost |
+-- |----------------------------------------------------------------------------------|
+-- | true              | -           | -               | -             | 0            |
+-- | false             | -           | rain, snow      | -             | 2            |
+-- | false             | 1-5         | -               | -             | 5            |
+-- | false             | 6           | fair            | full, new     | 3            |
+-- | false             | 7           | -               | -             | 1            |
+-- | false             | -           | -               | -             | 4            |
