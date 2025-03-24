@@ -32,7 +32,8 @@
       ExecStart = ''
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp ws \
           --host localhost \
-          --port ${toString config.services.jl4-lsp.port}
+          --port ${toString config.services.jl4-lsp.port} \
+          --cwd ${../../jl4/libraries}
       '';
       Restart = "always";
 
