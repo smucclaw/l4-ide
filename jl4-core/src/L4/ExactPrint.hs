@@ -1,9 +1,6 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 
 module L4.ExactPrint where
 
@@ -22,8 +19,8 @@ type ExactPrintM = Except TraverseAnnoError
 
 type HoleFit_ t = ExactPrintM [t]
 
-concreteNodesToTokens :: ToConcreteNodes t a => a -> ExceptT TraverseAnnoError Identity [t]
-concreteNodesToTokens a = fmap (concatMap allClusterTokens) $ toNodes a
+concreteNodesToTokens :: ToConcreteNodes t a => a -> Except TraverseAnnoError [t]
+concreteNodesToTokens a = concatMap allClusterTokens <$> toNodes a
 
 class ToTokens t a where
   toTokens :: a -> HoleFit_ t

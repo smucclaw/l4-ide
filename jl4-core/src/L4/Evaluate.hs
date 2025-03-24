@@ -1,5 +1,14 @@
 {-# LANGUAGE ViewPatterns #-}
-module L4.Evaluate where
+module L4.Evaluate
+  ( EvalDirectiveResult (..)
+  , EvalState (..)
+  , EvalTrace (..)
+  , doEvalModule
+  , buildModuleEnvironment
+  , execEvalModuleWithEnv
+  , unionEnvironments
+  )
+  where
 
 import Base
 import qualified Base.Map as Map
@@ -12,26 +21,39 @@ import L4.Utils.RevList
 
 import Data.Either
 
-newtype Eval a = MkEval (EvalState -> (Either EvalException a, EvalState))
-  deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState)
-    via ExceptT EvalException (StateT EvalState Identity)
+newtype Eval a = MkEval (EvalState -> EvalEnv -> (Either EvalException a, EvalState))
+  deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState, MonadReader EvalEnv)
+    via ExceptT EvalException (StateT EvalState (Reader EvalEnv))
 
-type EvalResult = (SrcRange, Either EvalException Value, EvalTrace)
+data EvalDirectiveResult =
+  MkEvalDirectiveResult
+    { range  :: !SrcRange -- ^ of the EVAL directive
+    , result :: Either EvalException Value -- ^ of the EVAL directive
+    , trace  :: EvalTrace
+    }
+  deriving stock Generic
+  deriving anyclass NFData
+
+newtype EvalEnv
+  = MkEvalEnv
+  { moduleUri :: NormalizedUri }
 
 data EvalState =
   MkEvalState
-    { environment :: !Environment
-    , results     :: [EvalResult]
-    , supply      :: !Int
-    , evalActions :: !(RevList EvalAction)
+    { environment      :: !Environment
+    , directiveResults :: [EvalDirectiveResult]
+    , supply           :: !Int
+    , evalActions      :: !(RevList EvalAction)
     }
-  deriving Generic
+  deriving stock Generic
+  deriving anyclass NFData
 
 data EvalAction =
     Enter (Expr Resolved)
   | Exit Value
   | Exception EvalException
-  deriving stock Show
+  deriving stock (Show, Generic)
+  deriving anyclass NFData
 
 pushFrame :: Expr Resolved -> Eval ()
 pushFrame e = do
@@ -53,7 +75,8 @@ unwindStack e =
 
 data EvalTrace =
   Trace (Expr Resolved) [EvalTrace] (Either EvalException Value)
-  deriving stock Show
+  deriving stock (Show, Generic)
+  deriving anyclass NFData
 
 -- | Intermediate structure used for building something resembling a "Stack Frame".
 data EvalFrame =
@@ -82,7 +105,7 @@ buildEvalTrace = go []
 
 data EvalException =
     RuntimeScopeError Resolved -- internal
-  | RuntimeTypeError -- internal
+  | RuntimeTypeError String -- internal
   | EqualityOnUnsupportedType
   | NonExhaustivePatterns -- we could try to warn statically
   | StackOverflow
@@ -106,7 +129,8 @@ step = do
 newUnique :: Eval Unique
 newUnique = do
   i <- step
-  pure (MkUnique 'e' i)
+  u <- asks (.moduleUri)
+  pure (MkUnique 'e' i u)
 
 def :: Name -> Eval Resolved
 def n = do
@@ -142,15 +166,15 @@ makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
-addEvalResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
-addEvalResult a val = do
+addEvalDirectiveResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
+addEvalDirectiveResult a val = do
   evalTrace <- use #evalActions
   assign' #evalActions emptyRevList
   let
     esTrace = buildEvalTrace $ unRevList evalTrace
-    res = (, val, esTrace) <$> rangeOf a
+    res = (\r -> MkEvalDirectiveResult r val esTrace) <$> rangeOf a
 
-  maybe (pure ()) (modifying #results . (:)) res
+  maybe (pure ()) (modifying #directiveResults . (:)) res
 
 
 data BinOp =
@@ -165,6 +189,7 @@ data BinOp =
   | BinOpGeq
   | BinOpLt
   | BinOpGt
+  deriving stock Show
 
 data Stack =
     BinOp1 BinOp {- -} (Expr Resolved) Environment Stack
@@ -175,6 +200,7 @@ data Stack =
   | Consider1 {- -} [Branch Resolved] Environment Stack
   | List1 [Value] {- -} [Expr Resolved] Environment Stack -- values in reverse order
   | Empty
+  deriving stock Show
 
 falseExpr :: Expr Resolved
 falseExpr = App emptyAnno TypeCheck.falseRef []
@@ -196,8 +222,8 @@ initialEnvironment =
     , (TypeCheck.emptyUnique, ValList [])
     ]
 
-evalProgram :: Program Resolved -> Eval ()
-evalProgram (MkProgram _ann sections) =
+evalModule :: Module Resolved -> Eval ()
+evalModule (MkModule _ann _uri sections) =
   traverse_ evalSection sections
 
 evalSection :: Section Resolved -> Eval ()
@@ -213,6 +239,8 @@ evalTopDecl (Assume _ann assume) =
   evalAssume assume
 evalTopDecl (Directive _ann directive) =
   evalDirective directive
+evalTopDecl (Import _ann _import_) =
+  pure ()
 
 evalLocalDecl :: LocalDecl Resolved -> Eval ()
 evalLocalDecl (LocalDecide _ann decide) =
@@ -288,7 +316,7 @@ evalExpr expr =
 evalDirective :: Directive Resolved -> Eval ()
 evalDirective (Eval _ann expr) = do
   v <- evalExpr expr
-  addEvalResult expr v
+  addEvalDirectiveResult expr v
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int
@@ -374,7 +402,7 @@ forwardExpr env !ss stack (App _ann n (e : es)) = do
 forwardExpr env !ss stack (AppNamed ann n [] _) =
   forwardExpr env ss stack (App ann n [])
 forwardExpr _env !_ss stack (AppNamed _ann _n _nes Nothing) =
-  exception RuntimeTypeError stack
+  exception (RuntimeTypeError "named application where the order of arguments is not resolved") stack
 forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
   let
     -- move expressions into order, drop names
@@ -419,7 +447,7 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
-    _ -> exception RuntimeTypeError stack0
+    res -> exception (RuntimeTypeError $ "unexpected value when looking up term: " <> show res) stack0
 backwardExpr !ss (App1 n vals (e : es) env stack) val = do
   popAndPushFrame val env ss (App1 n (val : vals) es env stack) e
 backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
@@ -429,7 +457,7 @@ backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
       pushExprFrame env (ss - 1) stack e2
     Just False -> do
       pushExprFrame env (ss - 1) stack e3
-    Nothing    -> exception RuntimeTypeError stack0
+    Nothing    -> exception (RuntimeTypeError "expected a bool frame when checking if then else") stack0
 backwardExpr !ss stack0@(Consider1 branches env stack) val = do
   popFrame val
   matchBranches val branches env stack0 ss stack
@@ -457,7 +485,7 @@ matchGivens (MkGivenSig _ann otns) vals stack0 = do
     (_tyvars, others) = partitionEithers (TypeCheck.isQuantifier <$> otns)
   if length others == length vals
     then pure $ Map.fromList (zipWith (\ (r, _) v -> (getUnique r, v)) others vals)
-    else exception RuntimeTypeError stack0
+    else exception (RuntimeTypeError "given signatures' values' lengths do not match") stack0
 
 matchBranches :: Value -> [Branch Resolved] -> Environment -> Stack -> Int -> Stack -> Eval Value
 matchBranches _val [] _env stack0 _ss _stack =
@@ -487,10 +515,10 @@ matchPattern stack0 (ValConstructor n vals) (PatApp _ann n' pats)
   | sameResolved n n' =
     if length vals == length pats
       then (fmap Map.unions . sequence) <$> sequence (zipWith (matchPattern stack0) vals pats)
-      else exception RuntimeTypeError stack0
+      else exception (RuntimeTypeError "matching patterns with differnt amounts of patterns and values") stack0
   | otherwise         = pure Nothing
 matchPattern stack0 _ _ =
-  exception RuntimeTypeError stack0
+  exception (RuntimeTypeError "matching patterns with malformed value constructor and pattern application") stack0
 
 sameResolved :: Resolved -> Resolved -> Bool
 sameResolved r1 r2 =
@@ -523,7 +551,7 @@ runBinOp BinOpLt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2) _stack = pure $ valBool (str1 > str2)
 runBinOp BinOpGt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 > b2)
-runBinOp _           _                _                 stack = exception RuntimeTypeError stack
+runBinOp _           _                _                 stack = exception (RuntimeTypeError "running bin op with invalid operation / value combination") stack
 
 runBinOpEquals :: Value -> Value -> Stack -> Eval Value
 runBinOpEquals val1 val2 stack =
@@ -559,9 +587,21 @@ lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
   Map.lookup (getUnique r) env
 
-doEvalProgram :: Program Resolved -> [EvalResult]
-doEvalProgram prog =
-  case evalProgram prog of
-    MkEval m ->
-      case m (MkEvalState initialEnvironment [] 0 emptyRevList) of
-        (_, s) -> s.results
+execEvalModuleWithEnv :: Environment -> Module Resolved -> EvalState
+execEvalModuleWithEnv env m@(MkModule _ moduleUri _) =
+  case evalModule m of
+    MkEval f ->
+      case f (MkEvalState env [] 0 emptyRevList) MkEvalEnv {moduleUri} of
+        (_, s) -> s
+
+execEvalModule :: Module Resolved -> EvalState
+execEvalModule = execEvalModuleWithEnv initialEnvironment
+
+doEvalModule :: Module Resolved -> [EvalDirectiveResult]
+doEvalModule m = (execEvalModule m).directiveResults
+
+buildModuleEnvironment :: Environment -> Module Resolved -> Environment
+buildModuleEnvironment initial m = (execEvalModuleWithEnv initial m).environment
+
+unionEnvironments :: Foldable f => f (Map Unique Value) -> Environment
+unionEnvironments m = if null m then initialEnvironment else Map.unions m

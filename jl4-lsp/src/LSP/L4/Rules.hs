@@ -1,7 +1,9 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module LSP.L4.Rules where
 
+import Base hiding (use)
 import L4.Annotation
 import L4.Evaluate
 import L4.FindDefinition (toResolved)
@@ -16,21 +18,22 @@ import L4.Syntax
 import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
 import qualified L4.TypeCheck as TypeCheck
 
-import Control.DeepSeq
-import Control.Monad.Except (runExceptT)
-import Data.Foldable (Foldable (..))
+import Control.Applicative
+import Control.Exception (assert)
+import Control.Monad.Trans.Maybe
 import Data.Hashable (Hashable)
-import Data.Text (Text)
-import UnliftIO (liftIO)
+import Data.Monoid (Ap (..))
+import qualified Data.Map.Strict as Map
 import Data.Map.Monoidal (MonoidalMap)
 import qualified Data.Map.Monoidal as MonoidalMap
 import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
+import System.FilePath
 import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Development.IDE.Graph
-import GHC.Generics (Generic, Generically (..))
+import GHC.Generics (Generically (..))
 import LSP.Core.PositionMapping
 import LSP.Core.RuleTypes
 import LSP.Core.Shake hiding (Log)
@@ -44,21 +47,37 @@ import qualified Language.LSP.Protocol.Types as LSP
 import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
+import qualified Data.List as List
+import qualified L4.Evaluate as Evaluate
+import System.Directory
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetParsedAst = Program Name
+type instance RuleResult GetParsedAst = Module Name
 data GetParsedAst = GetParsedAst
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult TypeCheck = TypeCheckResult
-data TypeCheck = TypeCheck
+type instance RuleResult GetImports = [(Maybe SrcRange, NormalizedUri)]
+data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetTypeCheckDependencies = [TypeCheckResult]
+data GetTypeCheckDependencies = GetTypeCheckDependencies
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult TypeCheck = TypeCheckResult
+data TypeCheck = TypeCheckNoCallstack
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+pattern TypeCheck :: WithCallStack TypeCheck
+pattern TypeCheck = AttachCallStack [] TypeCheckNoCallstack
 
 type instance RuleResult SuccessfulTypeCheck = TypeCheckResult
 data SuccessfulTypeCheck = SuccessfulTypeCheck
@@ -66,17 +85,23 @@ data SuccessfulTypeCheck = SuccessfulTypeCheck
   deriving anyclass (NFData, Hashable)
 
 data TypeCheckResult = TypeCheckResult
-  { program :: Program Resolved
+  { module' :: Module  Resolved
   , substitution :: Substitution
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
+  , infos :: [TypeCheck.CheckErrorWithContext]
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
 
-type instance RuleResult Evaluate = ()
+type instance RuleResult Evaluate = [EvalDirectiveResult]
 data Evaluate = Evaluate
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetEvaluationDependencies = Evaluate.EvalState
+data GetEvaluationDependencies = GetEvaluationDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -157,21 +182,27 @@ instance Pretty Log where
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
 
-jl4Rules :: Recorder (WithPriority Log) -> Rules ()
-jl4Rules recorder = do
+jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
+jl4Rules rootDirectory recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
-    (_, mRope) <- use_ GetFileContents uri
+    mRope <- runMaybeT $
+      MaybeT (snd <$> use_ GetFileContents uri)
+      <|> do
+        -- TODO: how do we actually invalidate this VFS file
+        -- (except by opening in the same editor session)
+        -- do we check the last modified time or smth like that?
+        -- I think basically as it is now we don't do anything like
+        -- that and the current time check is basically redundant
+        file <- hoistMaybe $ uriToNormalizedFilePath uri
+        lift $ addVirtualFileFromFS file
+
     case mRope of
-      -- FIXME: this doesn't mean that we encountered an internal error but
-      -- that the file has to be fetched from disk!
-      Nothing -> pure ([], Nothing)
+      Nothing -> pure ([mkSimpleFileDiagnostic uri (mkSimpleDiagnostic (fromNormalizedUri uri).getUri "could not obtain file contents" Nothing)], Nothing)
       Just rope -> do
-        let
-          contents = Rope.toText rope
+        let contents = Rope.toText rope
         case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
           Left errs -> do
-            let
-              diags = toList $ fmap mkParseErrorDiagnostic errs
+            let diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)
           Right ts ->
             pure ([], Just (ts, contents))
@@ -188,17 +219,72 @@ jl4Rules recorder = do
           diags = fmap mkNlgWarning warns
         pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
 
-  define shakeRecorder $ \TypeCheck f -> do
-    parsed <- use_ GetParsedAst f
-    let result = TypeCheck.doCheckProgram parsed
+  define shakeRecorder $ \GetImports uri -> do
+    let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
+        mkImportPath (MkImport a n) = do
+          let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
+          -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
+          mFileDirectory <- runMaybeT do
+            -- TODO: idk if this is the best way of doing it, maybe trying the entire rule that uses the import and then
+            -- failing there if the rule fails would be morally better? Seems like it is more incremental than doing it
+            -- like this
+            dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+            guard =<< liftIO (doesFileExist (dir </> modName <.> "l4"))
+            pure dir
+
+          pure (rangeOf a, fromMaybe rootDirectory mFileDirectory </> modName <.> "l4")
+
+        mkImportUri range fp = do
+          e <- doesFileExist fp
+          let u = toNormalizedUri $ filePathToUri fp
+              diag = do
+                guard $ not e
+                [mkSimpleFileDiagnostic u $ mkSimpleDiagnostic (fromNormalizedUri uri).getUri ("File does not exist: " <> Text.pack fp) (fromSrcRange <$> range)]
+          pure (diag, range, u)
+
+        mkDiagsAndImports = \case
+          Import _a i -> Ap do
+            (diag, r, u) <- liftIO . uncurry mkImportUri =<< mkImportPath i
+            pure [(diag, (r, u))]
+          _ -> pure []
+
+
+    prog <- use_ GetParsedAst uri
+    (diags, imports) <- fmap unzip $ getAp $ foldTopDecls mkDiagsAndImports prog
+    pure (concat diags, Just imports)
+
+  defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
+    imports <- use_  GetImports uri
+    ress    <- fmap catMaybes $ uses (AttachCallStack cs TypeCheckNoCallstack) $ map snd imports
+    pure ([], Just ress)
+
+  defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
+    parsed <- use_ GetParsedAst uri
+    deps   <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+    let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
+        unionCheckStates cState tcRes =
+          TypeCheck.MkCheckState
+          -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
+          { environment = Map.unionWith List.union cState.environment tcRes.environment
+          -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
+          -- same module. That means that the rhs of it should be identical.
+          , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.entityInfo tcRes.entityInfo
+          , substitution = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.substitution tcRes.substitution
+          , errorContext = cState.errorContext
+          , supply = cState.supply
+          }
+        initial = foldl' unionCheckStates TypeCheck.initialCheckState deps
+        result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
+        (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
-      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource f) result.errors
+      ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
       , Just TypeCheckResult
-        { program = result.program
+        { module' = result.program
         , substitution = result.substitution
         , environment = result.environment
         , entityInfo = result.entityInfo
-        , success = all ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
+        , success = null errors
+        , infos
         }
       )
 
@@ -208,10 +294,22 @@ jl4Rules recorder = do
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
-  define shakeRecorder $ \Evaluate f -> do
-    r <- use_ SuccessfulTypeCheck f
-    let results = doEvalProgram r.program
-    pure (mkSimpleFileDiagnostic f . evalResultToDiagnostic <$> results, Just ())
+  defineWithCallStack shakeRecorder $ \GetEvaluationDependencies cs f -> do
+    imports <- use_  GetImports f
+    tcRes   <- use_  SuccessfulTypeCheck f
+    -- TODO: when checking for cycles, we should check which one is the
+    -- first element in the cycle that is, i.e. which IMPORT, then scan
+    -- for the IMPORT again and
+    -- put the diagnostic on that IMPORT
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map snd imports
+    let environment = Evaluate.unionEnvironments $ map (.environment) deps
+        own = execEvalModuleWithEnv environment tcRes.module'
+    pure ([], Just own)
+
+  define shakeRecorder $ \Evaluate uri -> do
+    res  <- use_ (AttachCallStack [uri] GetEvaluationDependencies) uri
+    let results = res.directiveResults
+    pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just results)
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
@@ -349,7 +447,7 @@ jl4Rules recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ toResolved tcRes.program
+        resolveds = foldMap spanOf $ toResolved tcRes.module'
 
     pure ([], Just resolveds)
 
@@ -396,21 +494,21 @@ jl4Rules recorder = do
     mkParseErrorDiagnostic parseError = mkSimpleDiagnostic parseError.origin parseError.message (Just parseError.range)
 
     mkSimpleDiagnostic :: Text -> Text -> Maybe SrcSpan -> Diagnostic
-    mkSimpleDiagnostic origin message range =
+    mkSimpleDiagnostic origin _message range =
       Diagnostic
         { _range = srcSpanToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Error
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just origin
-        , _message = message
+        , _message
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
         }
 
-    evalResultToDiagnostic :: EvalResult -> Diagnostic
-    evalResultToDiagnostic (range, res, _trace) =
+    evalResultToDiagnostic :: EvalDirectiveResult -> Diagnostic
+    evalResultToDiagnostic (MkEvalDirectiveResult range res _trace) = do
       Diagnostic
         { _range = srcRangeToLspRange (Just range)
         , _severity = Just LSP.DiagnosticSeverity_Information

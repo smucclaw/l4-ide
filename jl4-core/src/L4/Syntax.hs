@@ -1,17 +1,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Syntax where
 
+import Base
 import L4.Annotation
 import L4.Lexer (PosToken)
 
-import Control.DeepSeq (NFData)
 import Data.Default
-import Data.Text (Text)
-import Data.TreeDiff (ToExpr)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
@@ -26,9 +23,11 @@ data RawName =
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Unique = MkUnique !Char !Int
+data Unique = MkUnique {sort :: !Char, unique :: !Int, moduleUri :: !NormalizedUri}
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+instance ToExpr NormalizedUri
 
 data Resolved =
     Def Unique Name        -- ^ defining occurrence of name
@@ -148,6 +147,11 @@ data Directive n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+data Import n =
+  MkImport Anno n
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
 data TypeDecl n =
     RecordDecl Anno (Maybe n) [TypedName n]
   | EnumDecl Anno [ConDecl n]
@@ -216,8 +220,12 @@ data Pattern n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Program n =
-  MkProgram Anno [Section n]
+-- | A 'Program' is a module with some 'Module's it directly depends on
+data Program n
+  = MkProgram (Module n) [Module n]
+
+data Module n =
+  MkModule Anno NormalizedUri [Section n]
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -233,6 +241,7 @@ data TopDecl n =
   | Decide    Anno (Decide n)
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
+  | Import    Anno (Import n)
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -242,22 +251,22 @@ data LocalDecl n =
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
--- | Given a @'Program' n@, runs a 'foldMap' over all of
+-- | Given a @'Module' n@, runs a 'foldMap' over all of
 -- nodes of the specified type
 _foldNodeType
   :: forall nodeType n m
-   . (Monoid m, Optics.GPlate (nodeType n) (Program n))
-  => (nodeType n -> m) -> Program n -> m
+   . (Monoid m, Optics.GPlate (nodeType n) (Module n))
+  => (nodeType n -> m) -> Module n -> m
 _foldNodeType = Optics.foldMapOf Optics.gplate
 
--- | Given a @'Program' n@, runs a 'foldMap' over 'Decide's at the toplevel
+-- | Given a @'Module' n@, runs a 'foldMap' over 'Decide's at the toplevel
 foldTopLevelDecides
-  :: forall n m. (Monoid m) => (Decide n -> m) -> Program n -> m
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Module n -> m
 foldTopLevelDecides = _foldNodeType
 
--- | Given a @'Program' n@, runs a 'foldMap' over 'TopDecl's at the toplevel
+-- | Given a @'Module' n@, runs a 'foldMap' over 'TopDecl's at the toplevel
 foldTopDecls
-  :: forall n m. (Monoid m) => (TopDecl n -> m) -> Program n -> m
+  :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
 
@@ -345,6 +354,8 @@ deriving via L4Syntax (Assume n)
   instance HasAnno (Assume n)
 deriving via L4Syntax (Directive n)
   instance HasAnno (Directive n)
+deriving via L4Syntax (Import n)
+  instance HasAnno (Import n)
 deriving via L4Syntax (TypeDecl n)
   instance HasAnno (TypeDecl n)
 deriving via L4Syntax (ConDecl n)
@@ -359,8 +370,8 @@ deriving via L4Syntax (Branch n)
   instance HasAnno (Branch n)
 deriving via L4Syntax (Pattern n)
   instance HasAnno (Pattern n)
-deriving via L4Syntax (Program n)
-  instance HasAnno (Program n)
+deriving via L4Syntax (Module n)
+  instance HasAnno (Module n)
 deriving via L4Syntax (Section n)
   instance HasAnno (Section n)
 deriving via L4Syntax (TopDecl n)
@@ -368,8 +379,6 @@ deriving via L4Syntax (TopDecl n)
 deriving via L4Syntax (LocalDecl n)
   instance HasAnno (LocalDecl n)
 
-
-deriving anyclass instance ToConcreteNodes PosToken (Program Name)
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Name) where
@@ -397,9 +406,10 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
+deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
-
-deriving anyclass instance ToConcreteNodes PosToken (Program Resolved)
+instance ToConcreteNodes PosToken (Module Name) where
+  toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where
@@ -427,6 +437,10 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
+instance ToConcreteNodes PosToken (Module Resolved) where
+  toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
+
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
@@ -452,7 +466,6 @@ instance ToConcreteNodes PosToken Comment where
 
 instance ToConcreteNodes PosToken Nlg where
   toNodes (MkNlg ann _) = flattenConcreteNodes ann []
-
 
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
@@ -489,7 +502,7 @@ instance ToConcreteNodes PosToken Lit where
   toNodes (StringLit ann _) =
     flattenConcreteNodes ann []
 
-deriving anyclass instance HasSrcRange (Program a)
+deriving anyclass instance HasSrcRange (Module a)
 deriving anyclass instance HasSrcRange (Section a)
 deriving anyclass instance HasSrcRange (TopDecl a)
 deriving anyclass instance HasSrcRange (Assume a)
@@ -512,6 +525,7 @@ deriving anyclass instance HasSrcRange (TypeSig a)
 deriving anyclass instance HasSrcRange (GivethSig a)
 deriving anyclass instance HasSrcRange (GivenSig a)
 deriving anyclass instance HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 deriving anyclass instance HasSrcRange Nlg

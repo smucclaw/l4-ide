@@ -23,6 +23,9 @@ preDef t =
     )
     (PreDef t)
 
+builtinUri :: NormalizedUri
+builtinUri = toNormalizedUri (Uri "jl4:builtin")
+
 -- uniques of built-in / predefs are having the 'b' marker:
 --
 -- 10  BOOLEAN
@@ -37,7 +40,7 @@ preDef t =
 -- BOOLEAN
 
 booleanUnique :: Unique
-booleanUnique = MkUnique 'b' 10
+booleanUnique = MkUnique 'b' 10 builtinUri
 
 booleanName :: Name
 booleanName = preDef "BOOLEAN"
@@ -49,7 +52,7 @@ boolean :: Type' Resolved
 boolean = TyApp emptyAnno booleanRef []
 
 falseUnique :: Unique
-falseUnique = MkUnique 'b' 30
+falseUnique = MkUnique 'b' 30 builtinUri
 
 falseName :: Name
 falseName = preDef "FALSE"
@@ -61,7 +64,7 @@ falseRef :: Resolved
 falseRef = Ref falseName falseUnique falseName
 
 trueUnique :: Unique
-trueUnique = MkUnique 'b' 31
+trueUnique = MkUnique 'b' 31 builtinUri
 
 trueName :: Name
 trueName = preDef "TRUE"
@@ -75,7 +78,7 @@ trueRef = Ref trueName trueUnique trueName
 -- NUMBER
 
 numberUnique :: Unique
-numberUnique = MkUnique 'b' 11
+numberUnique = MkUnique 'b' 11 builtinUri
 
 numberName :: Name
 numberName = preDef "NUMBER"
@@ -89,7 +92,7 @@ number = TyApp emptyAnno numberRef []
 -- STRING
 
 stringUnique :: Unique
-stringUnique = MkUnique 'b' 12
+stringUnique = MkUnique 'b' 12 builtinUri
 
 stringName :: Name
 stringName = preDef "STRING"
@@ -103,7 +106,7 @@ string = TyApp emptyAnno stringRef []
 -- LIST
 
 listUnique :: Unique
-listUnique = MkUnique 'b' 13
+listUnique = MkUnique 'b' 13 builtinUri
 
 listName :: Name
 listName = preDef "LIST"
@@ -115,7 +118,7 @@ list :: Type' Resolved -> Type' Resolved
 list a = TyApp emptyAnno listRef [a]
 
 emptyUnique :: Unique
-emptyUnique = MkUnique 'b' 32
+emptyUnique = MkUnique 'b' 32 builtinUri
 
 emptyName :: Name
 emptyName = preDef "EMPTY"
@@ -127,7 +130,7 @@ emptyRef :: Resolved
 emptyRef = Ref emptyName emptyUnique emptyName
 
 aUnique :: Unique
-aUnique = MkUnique 'b' 40
+aUnique = MkUnique 'b' 40 builtinUri
 
 aName :: Name
 aName = MkName emptyAnno (NormalName "A")

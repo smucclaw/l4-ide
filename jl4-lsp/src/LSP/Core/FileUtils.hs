@@ -2,10 +2,15 @@
 
 module LSP.Core.FileUtils(
     getModTime,
+    whenUriFile,
     ) where
 
 
 import           Data.Time.Clock.POSIX
+import           Language.LSP.Protocol.Types
+                 (Uri, NormalizedFilePath, uriToFilePath)
+import           LSP.Core.Types.Location
+                 (normalizeFilePath)
 
 #ifdef mingw32_HOST_OS
 import qualified System.Directory      as Dir
@@ -29,3 +34,6 @@ getModTime f =
 #else
     modificationTimeHiRes <$> getFileStatus f
 #endif
+
+whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = maybe (pure ()) (act . normalizeFilePath) (uriToFilePath uri)

@@ -5,7 +5,7 @@ module L4.Parser (
   parseFile,
   execParser,
   execParserForTokens,
-  program,
+  module',
   PError (..),
   mkPError,
   PState (..),
@@ -66,6 +66,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
 import L4.Parser.SrcSpan
+import Language.LSP.Protocol.Types (filePathToUri)
 
 type Parser = StateT PState (Parsec Void TokenStream)
 
@@ -217,10 +218,10 @@ indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
 indented parser pos =
   withIndent GT pos $ \ _ -> parser
 
-program :: Parser (Program Name)
-program = do
+module' :: NormalizedUri -> Parser (Module Name)
+module' uri = do
   attachAnno $
-    MkProgram emptyAnno
+    MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
           ((:)
@@ -304,6 +305,8 @@ topdecl =
     <|> Assume    emptyAnno <$> annoHole (assume sig)
   ) <|> attachAnno
         (Directive emptyAnno <$> annoHole directive)
+    <|> attachAnno
+        (Import    emptyAnno <$> annoHole import')
 
 localdecl :: Parser (LocalDecl Name)
 localdecl =
@@ -318,7 +321,7 @@ withTypeSig p = do
   p sig
 
 directive :: Parser (Directive Name)
-directive = do
+directive =
   attachAnno $
     choice
       [ Eval emptyAnno
@@ -327,6 +330,13 @@ directive = do
           <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
       ]
       <*> annoHole expr
+
+import' :: Parser (Import Name)
+import' =
+  attachAnno $
+    MkImport emptyAnno
+      <$  annoLexeme (spacedToken_ TKImport)
+      <*> annoHole name
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do
@@ -1214,15 +1224,15 @@ runLexer file input =
 -- JL4 Program parser
 -- ----------------------------------------------------------------------------
 
-execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Module  Name, [Resolve.Warning])
 execProgramParser file input =
   case runLexer file input of
     Left err -> Left err
     Right ts -> execProgramParserForTokens file input ts
 
-execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
+execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
 execProgramParserForTokens file input ts =
-  case execParserForTokens program file input ts of
+  case execParserForTokens (module' $ toNormalizedUri $ filePathToUri file) file input ts of
     Left err -> Left err
     Right (prog, pstate) ->
       let
