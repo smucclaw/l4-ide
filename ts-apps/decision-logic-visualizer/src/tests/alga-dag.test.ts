@@ -6,31 +6,11 @@ import {
   connect,
   connectNodeToSource,
   connectSinkToNode,
-} from '../lib/algebraic-graphs/dag.js' // Adjust the import path accordingly
-import type { Ord, HasId } from '$lib/utils.js'
-import { ComparisonResult } from '$lib/utils.js'
+  pathFromValues,
+} from '../lib/algebraic-graphs/dag.js'
+import { NumberWrapper } from './number-wrapper.js'
 
-class NumberWrapper implements Ord<NumberWrapper>, HasId {
-  constructor(private value: number) {}
-
-  isEqualTo(other: NumberWrapper): boolean {
-    return other instanceof NumberWrapper && this.value === other.value
-  }
-
-  compare(other: NumberWrapper): ComparisonResult {
-    if (this.value < other.value) return ComparisonResult.LessThan
-    if (this.value > other.value) return ComparisonResult.GreaterThan
-    return ComparisonResult.Equal
-  }
-
-  getId(): string {
-    return this.value.toString()
-  }
-
-  toString(): string {
-    return `NWrapper ${this.value}`
-  }
-}
+const nws = [0, 1, 2, 3, 4, 5, 6].map((n) => new NumberWrapper(n))
 
 /*******************
       Overlay
@@ -355,6 +335,174 @@ describe('DAG - toString', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const dag = connect(vertex(nw1), vertex(nw2))
-    expect(dag.toString()).toBe('edges [<NWrapper 1,NWrapper 2>]')
+    expect(dag.toString()).toBe(
+      'vertices [NWrapper 1, NWrapper 2]\n edges [<NWrapper 1,NWrapper 2>]'
+    )
+  })
+})
+
+/********************************************************************
+  Note that the raw vertices
+  can't just be a member of our pseudo Eq and Ord
+  --- must also have the kind of referential equality that you want
+**********************************************************************/
+
+describe('the kind of equality in this alga mini-lib', () => {
+  test('Alga: not enough for raw vertices to be pseudo Eq -- must also have the kind of referential equality you want', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+    const mappedDag = dag.gmap((a) => new NumberWrapper(a.getValueAsNumber()))
+
+    expect(mappedDag.isEqualTo(dag)).toBeFalsy()
+  })
+})
+
+/******************************************
+       gmap (Graph Map)
+*******************************************/
+
+// TODO: I really should randomly generate graphs, or at least make a couple of different test graphs
+
+describe('DAG - gmap (Graph Map)', () => {
+  test('gmap with id should return the same (structurally speaking) graph', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+
+    const mappedDag = dag.gmap((a) => a)
+
+    expect(mappedDag.isEqualTo(dag)).toBeTruthy()
+  })
+
+  test('gmap with a function should apply to all vertices', () => {
+    const vertices = [nws[1], nws[2], nws[3]]
+    const dag = pathFromValues(vertices)
+
+    const mappedDag = dag.gmap((a) => nws[a.getValueAsNumber() + 1])
+
+    const expectedVertices = [nws[2], nws[3], nws[4]]
+    const expectedDag = pathFromValues(expectedVertices)
+
+    expect(mappedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('gmap should satisfy functor composition law: map f (map g) x == map (f . g) x', () => {
+    const dag = connect(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(2))
+    ).overlay(vertex(new NumberWrapper(3)))
+
+    const f = (a: NumberWrapper) => new NumberWrapper(a.getValueAsNumber() + 1)
+    const g = (a: NumberWrapper) => new NumberWrapper(a.getValueAsNumber() * 2)
+
+    const composed = dag.gmap((a) => f(g(a)))
+    const mappedSequentially = dag.gmap(g).gmap(f)
+
+    expect(composed.isEqualTo(mappedSequentially)).toBeTruthy()
+  })
+})
+
+/******************************************
+        bind (FlatMap)
+*******************************************/
+
+describe('DAG - bind (FlatMap)', () => {
+  test('bind with `vertex` function should replace vertices', () => {
+    const dag = pathFromValues([nws[1], nws[2], nws[3]])
+
+    const boundDag = dag.bind((a) => vertex(nws[a.getValueAsNumber() * 2]))
+
+    const expectedDag = pathFromValues([nws[2], nws[4], nws[6]])
+
+    expect(boundDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+})
+
+/******************************************
+         induce (a kind of filter)
+*******************************************/
+
+describe('DAG - induce using bind', () => {
+  test('induce with predicate that always returns true should return the original graph', () => {
+    const vertices = [
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ]
+    const dag = pathFromValues(vertices)
+
+    const inducedDag = dag.induce(() => true)
+
+    expect(inducedDag.isEqualTo(dag)).toBeTruthy()
+  })
+
+  test('induce with predicate that always returns false should return an empty graph', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+
+    const inducedDag = dag.induce(() => false)
+
+    expect(inducedDag.getVertices().length).toStrictEqual(0)
+  })
+
+  test('induce can be used to remove a specific vertex', () => {
+    const dag = pathFromValues([
+      new NumberWrapper(1),
+      new NumberWrapper(2),
+      new NumberWrapper(3),
+    ])
+
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() !== 2)
+
+    const expectedDag = overlay(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(3))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('induce preserves edges between remaining vertices', () => {
+    const dag = connect(
+      vertex(new NumberWrapper(1)),
+      connect(vertex(new NumberWrapper(2)), vertex(new NumberWrapper(3)))
+    )
+
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() !== 2)
+
+    const expectedDag = connect(
+      vertex(new NumberWrapper(1)),
+      vertex(new NumberWrapper(3))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
+  })
+
+  test('induce with a complex predicate', () => {
+    const dag =
+      // (1 + 2) -> ( (3 -> 4) + 5 -> 6 )
+      overlay(vertex(nws[1]), vertex(nws[2])).connect(
+        connect(
+          vertex(nws[3]),
+          vertex(nws[4]).overlay(connect(vertex(nws[5]), vertex(nws[6])))
+        )
+      )
+    const inducedDag = dag.induce((a) => a.getValueAsNumber() % 2 === 0)
+
+    // 2 -> 4 + 2 -> 6
+    const expectedDag = overlay(
+      vertex(nws[2]).connect(vertex(nws[4])),
+      vertex(nws[2]).connect(vertex(nws[6]))
+    )
+
+    expect(inducedDag.isEqualTo(expectedDag)).toBeTruthy()
   })
 })
