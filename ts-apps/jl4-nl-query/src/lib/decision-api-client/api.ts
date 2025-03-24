@@ -12,6 +12,7 @@ type Client = ReturnType<typeof createClient<paths>>
 
 export type FunctionEndpointInfo = components['schemas']['Function']
 
+// TODO: Improve error handling. Use structured errors
 export class APIClient {
   #client: Client
   #endpoints: Set<EndpointName> = new Set()
