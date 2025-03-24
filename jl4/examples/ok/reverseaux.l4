@@ -1,0 +1,6 @@
+go acc l MEANS
+  CONSIDER l
+  WHEN EMPTY            THEN acc
+  WHEN x FOLLOWED BY xs THEN go (x FOLLOWED BY acc) xs
+
+#CHECK go
