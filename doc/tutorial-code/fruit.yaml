@@ -1,0 +1,23 @@
+---
+type: function
+function:
+  name: "total fruit v3"
+  description: Calculate the total number of fruit on hand. Each bunch has 5 bananas.
+  parameters:
+    type: object
+    properties:
+      apples:
+        type: "number"
+        description: Count of apples in my bag
+      bananas:
+        type: "number"
+        description: Number of bunches of bananas in my bag
+      oranges:
+        type: "number"
+        description: Count of oranges in my bag
+      in_the_bowl:
+        type: "number"
+        description: Number of fruit in the bowl
+        alias: null
+  supportedBackends:
+    - "jl4"
