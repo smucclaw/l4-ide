@@ -13,7 +13,7 @@
         "**/*.tsbuildinfo",
         ".svelte-kit/**",
         "ts-apps/vscode/static/**"
-      ],
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
