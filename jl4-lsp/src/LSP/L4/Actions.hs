@@ -16,7 +16,7 @@ import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
 import L4.FindDefinition
-import L4.Lexer (keywords)
+import L4.Lexer (keywords, directives, annotations)
 import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
@@ -215,7 +215,10 @@ completions rope nuri typeCheck (Position ln col) = do
       mkKeyWordCompletionItem kw = (defaultCompletionItem kw)
         { CompletionItem._kind =  Just CompletionItemKind_Keyword
         }
-      keyWordMatches = filterMatchesOn id $ Map.keys keywords
+      keyWordMatches = filterMatchesOn id
+        $ Map.keys keywords
+        <> annotations
+        <> map snd directives
       -- FUTUREWORK(mangoiv): we could
       -- 1 pass through the token here
       -- 2 check the token category and if the category is COperator
