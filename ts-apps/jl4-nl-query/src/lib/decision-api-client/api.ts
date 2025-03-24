@@ -10,15 +10,21 @@ type EndpointName = string
 
 type Client = ReturnType<typeof createClient<paths>>
 
+export type FunctionEndpointInfo = components['schemas']['Function']
+
 export class APIClient {
   #client: Client
-  #currentEndpoints: Set<EndpointName>
+  #endpoints: Set<EndpointName> = new Set()
+  #detailedEndpointInfo: Map<EndpointName, FunctionEndpointInfo> = new Map()
+
   #logger: AppLogger
 
-  static make(config: AppConfig) {
-    const client = new APIClient(config)
-    client.updateEndpointInfo()
-    return client
+  static async make(config: AppConfig) {
+    const wrapperClient = new APIClient(config)
+    wrapperClient.setDetailedEndpointInfo(
+      new Map(await wrapperClient.getDetailedFunctionEndpointPairs())
+    )
+    return wrapperClient
   }
 
   private constructor(config: AppConfig) {
@@ -26,7 +32,6 @@ export class APIClient {
       baseUrl: config.getDecisionServiceUrl(),
     })
 
-    this.#currentEndpoints = new Set()
     this.#logger = config.getLogger()
   }
 
@@ -36,14 +41,11 @@ export class APIClient {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     init: any
   ) {
-    if (!this.#currentEndpoints.has(endpointName)) {
+    if (!this.#endpoints.has(endpointName)) {
       const { data, error } = await this.#client.POST(path, init)
       if (data) {
-        this.#currentEndpoints.add(endpointName)
-        this.#logger.info(
-          "Successfully POST'd decision service program: ",
-          data
-        )
+        this.#endpoints.add(endpointName)
+        this.#logger.info("Successfully POST'd program: ", data)
       } else if (error) {
         this.#logger.error('ERROR', error)
       }
@@ -51,15 +53,15 @@ export class APIClient {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await this.#client.PUT(path as any, init)
       if (data) {
-        this.#currentEndpoints.add(endpointName)
-        this.#logger.info("Successfully PUT'd decision service program: ", data)
+        this.#endpoints.add(endpointName)
+        this.#logger.info("Successfully PUT'd program: ", data)
       } else if (error) {
-        this.#logger.error('ERROR', error)
+        this.#logger.error('ERROR when trying to PUT program', error)
       }
     }
   }
 
-  async getCurrentEndpoints() {
+  async getSimpleFunctionEndpoints() {
     const { data, error } = await this.#client.GET('/functions', {})
     if (data) {
       return data
@@ -68,16 +70,92 @@ export class APIClient {
     }
   }
 
-  async updateEndpointInfo() {
+  private async getDetailedFunctionEndpointPairs(): Promise<
+    Array<[EndpointName, FunctionEndpointInfo]>
+  > {
+    await this.updateSimpleFunctionEndpointInfo()
+
+    const endpointInfoPairs = await Promise.all(
+      Array.from(this.#endpoints).map(async (fnName) => {
+        const { data, error } = await this.#client.GET('/functions/{name}', {
+          params: { path: { name: fnName } },
+        })
+
+        if (!data) {
+          this.#logger.error('ERROR getDetailedFunctionEndpoints:', error)
+          return null
+        }
+
+        return [fnName, data as FunctionEndpointInfo]
+      })
+    )
+
+    return endpointInfoPairs.filter(
+      (entry): entry is [EndpointName, FunctionEndpointInfo] => !!entry
+    )
+  }
+
+  async updateDetailedFunctionEndpointInfo() {
+    const endpoints = await this.getDetailedFunctionEndpointPairs()
+    if (endpoints) {
+      this.setDetailedEndpointInfo(new Map(endpoints))
+    }
+  }
+
+  async getDetailedEndpointInfoMap() {
+    await this.updateDetailedFunctionEndpointInfo()
+    return this.#detailedEndpointInfo
+  }
+
+  async getInfoFor(functionName: EndpointName) {
+    await this.updateDetailedFunctionEndpointInfo()
+    return this.#detailedEndpointInfo.get(functionName)
+  }
+
+  setDetailedEndpointInfo(
+    detailedEndpointInfo: Map<EndpointName, FunctionEndpointInfo>
+  ) {
+    this.#detailedEndpointInfo = detailedEndpointInfo
+  }
+
+  async updateSimpleFunctionEndpointInfo() {
     const { data, error } = await this.#client.GET('/functions', {})
     if (data) {
       const endpoints: EndpointName[] = data
         .map((fn) => fn.function?.name)
         .filter((n): n is string => n !== undefined)
-      this.#currentEndpoints = new Set(endpoints)
+      this.#endpoints = new Set(endpoints)
     } else {
-      console.error(error)
+      this.#logger.error(error)
     }
+  }
+
+  /**
+   * Evaluates a function endpoint by making a POST request to the `/functions/{name}/evaluation` endpoint.
+   *
+   * @param functionName - The name of the function to evaluate.
+   * @param args - The function arguments as per the `FnArguments` schema.
+   * @returns A promise resolving to the data or error from the API response.
+   */
+  async evalFunctionEndpoint(
+    functionName: EndpointName,
+    args: components['schemas']['FnArguments']['fnArguments']
+  ) {
+    const { data, error } = await this.#client.POST(
+      '/functions/{name}/evaluation',
+      {
+        params: { path: { name: functionName } },
+        body: { fnArguments: args, fnEvalBackend: 'jl4' },
+      }
+    )
+
+    // Log any errors
+    if (error) {
+      this.#logger.error('Error evaluateFunctionEndpoint', error)
+      return
+    }
+
+    return { ok: data, error }
   }
 
   PUT: Client['PUT'] = (path, ...init) => {

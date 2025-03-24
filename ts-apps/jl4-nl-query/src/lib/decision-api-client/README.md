@@ -7,7 +7,7 @@ import { APIClient } from '$lib/decision-api-client/api.js'
 import { appConfig } from '../config.js'
 const client = APIClient.make(appConfig)
 
-client.getCurrentEndpoints().then((endpoints) => {
+client.getSimpleFunctionEndpoints().then((endpoints) => {
   console.log(endpoints)
 })
 ```
