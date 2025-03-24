@@ -14,6 +14,7 @@ sky_is_romantic MEANS
    AND     phase_of_moon   EQUALS "new moon"
        OR  ^               ^      "new"
        OR  ^               ^      "full"
+       OR  ^               ^      "full moon"
 
 GIVEN day_of_week       IS A NUMBER
       is_public_holiday IS A BOOLEAN
