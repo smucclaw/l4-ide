@@ -200,7 +200,7 @@ jl4Rules rootDirectory recorder = do
       Nothing -> pure ([mkSimpleFileDiagnostic uri (mkSimpleDiagnostic (fromNormalizedUri uri).getUri "could not obtain file contents" Nothing)], Nothing)
       Just rope -> do
         let contents = Rope.toText rope
-        case Lexer.execLexer (Text.unpack (fromNormalizedUri uri).getUri) contents of
+        case Lexer.execLexer uri contents of
           Left errs -> do
             let diags = toList $ fmap mkParseErrorDiagnostic errs
             pure (fmap (mkSimpleFileDiagnostic uri) diags, Nothing)

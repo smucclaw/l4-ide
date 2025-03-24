@@ -66,6 +66,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
 import L4.Parser.SrcSpan
+import L4.TypeCheck (builtinUri)
 import Language.LSP.Protocol.Types (filePathToUri)
 
 type Parser = StateT PState (Parsec Void TokenStream)
@@ -1204,11 +1205,12 @@ _example11e =
 -- JL4 parsers
 -- ----------------------------------------------------------------------------
 
-execParser :: Parser a -> String -> Text -> Either (NonEmpty PError) (a, PState)
-execParser p file input =
-  case runLexer file input of
+execParser :: Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, PState)
+execParser p uri input =
+  case execLexer uri input of
     Left errs -> Left errs
-    Right ts -> execParserForTokens p file input ts
+    -- TODO: we should probably push in the uri even further.
+    Right ts -> execParserForTokens p (showNormalizedUri uri) input ts
 
 execParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, PState)
 execParserForTokens p file input ts =
@@ -1216,19 +1218,15 @@ execParserForTokens p file input ts =
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right x  -> Right x
 
-runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
-runLexer file input =
-  execLexer file input
-
 -- ----------------------------------------------------------------------------
 -- JL4 Program parser
 -- ----------------------------------------------------------------------------
 
-execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Module  Name, [Resolve.Warning])
-execProgramParser file input =
-  case runLexer file input of
+execProgramParser :: NormalizedUri -> Text -> Either (NonEmpty PError) (Module  Name, [Resolve.Warning])
+execProgramParser uri input =
+  case execLexer uri input of
     Left err -> Left err
-    Right ts -> execProgramParserForTokens file input ts
+    Right ts -> execProgramParserForTokens (showNormalizedUri uri) input ts
 
 execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
 execProgramParserForTokens file input ts =
@@ -1245,14 +1243,14 @@ execProgramParserForTokens file input ts =
 -- ----------------------------------------------------------------------------
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
-parseFile :: Show a => Parser a -> String -> Text -> IO ()
-parseFile p file input =
-  case execParser p file input of
+parseFile :: Show a => Parser a -> NormalizedUri -> Text -> IO ()
+parseFile p uri input =
+  case execParser p uri input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right (x, _pState) -> pPrint x
 
 parseTest :: Show a => Parser a -> Text -> IO ()
-parseTest p = parseFile p ""
+parseTest p = parseFile p builtinUri
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers

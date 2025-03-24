@@ -27,7 +27,6 @@ data Unique = MkUnique {sort :: !Char, unique :: !Int, moduleUri :: !NormalizedU
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-instance ToExpr NormalizedUri
 
 data Resolved =
     Def Unique Name        -- ^ defining occurrence of name

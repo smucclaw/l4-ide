@@ -93,13 +93,13 @@ defaultCompletionItem label = CompletionItem label
 -- LSP Go to Definition
 -- ----------------------------------------------------------------------------
 
-gotoDefinition :: Position -> Uri -> TypeCheckResult -> PositionMapping -> Maybe Location
-gotoDefinition pos uri m positionMapping = do
+gotoDefinition :: Position -> TypeCheckResult -> PositionMapping -> Maybe Location
+gotoDefinition pos m positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  range <- findDefinition (lspPositionToSrcPos oldPos) m.module'
+  (defnUri, range) <- findDefinition (lspPositionToSrcPos oldPos) m.module'
   let lspRange = srcRangeToLspRange (Just range)
   newRange <- toCurrentRange positionMapping lspRange
-  pure (Location uri newRange)
+  pure (Location (fromNormalizedUri defnUri) newRange)
 
 -- ----------------------------------------------------------------------------
 -- Ladder visualisation

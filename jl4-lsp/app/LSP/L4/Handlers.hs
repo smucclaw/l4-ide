@@ -194,7 +194,7 @@ handlers recorder =
           nuri = LSP.toNormalizedUri uri
         mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
           useWithStale TypeCheck nuri
-        let mloc = uncurry (gotoDefinition pos uri) =<< mTypeCheckedModule
+        let mloc = uncurry (gotoDefinition pos) =<< mTypeCheckedModule
         pure $ Right case mloc of
           Nothing  -> InR $ InR Null
           Just loc -> InL $ Definition (InL loc)
