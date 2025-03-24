@@ -35,7 +35,7 @@ DECIDE parking_cost IS
                        ELSE 4
 
 -- this works
--- #EVAL parking_cost 8 FALSE "fair" "new moon"
+-- EVAL parking_cost 8 FALSE "fair" "new moon"
 
 -- but calling it via Swagger
 -- curl -X 'POST' \
