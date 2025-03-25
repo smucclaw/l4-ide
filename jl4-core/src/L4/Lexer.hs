@@ -175,8 +175,14 @@ annotations = ["nlg", "ref", "ref-map", "ref-src"]
 nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
   lineAnno "@nlg"
-    <|> inlineAnno "[" "]"
+    <|> inlineAnno (Text.singleton nlgInlineAnnotationOpenChar) (Text.singleton nlgInlineAnnotationCloseChar)
   <?> "Natural Language Generation Annotation"
+
+nlgInlineAnnotationCloseChar :: Char
+nlgInlineAnnotationCloseChar = ']'
+
+nlgInlineAnnotationOpenChar :: Char
+nlgInlineAnnotationOpenChar = '['
 
 refAnnotation :: Lexer (Text, AnnoType)
 refAnnotation =
@@ -192,11 +198,19 @@ refMapAnnotation = fst <$> lineAnno "@ref-map"
 
 nlgString :: Lexer Text
 nlgString =
-  takeWhile1P (Just "character") (`notElem` ['\n', ' ', ']', '%']) -- TODO: incomplete and destined to be outdated
+  takeWhile1P (Just "character") (\c -> c `notElem` nlgSpecialChars && not (isSpace c))
+  where
+    nlgSpecialChars =
+      [ nlgInlineAnnotationCloseChar
+      , nlgExprDelimiterSymbol
+      ]
 
 nlgExprDelimiter :: Lexer Char
 nlgExprDelimiter =
-  satisfy (== '%')
+  satisfy (== nlgExprDelimiterSymbol)
+
+nlgExprDelimiterSymbol :: Char
+nlgExprDelimiterSymbol = '%'
 
 inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
 inlineAnno openingHerald closingHerald = do
@@ -285,8 +299,8 @@ nlgTokenPayload :: Lexer TokenType
 nlgTokenPayload =
       TPercent    <$  nlgExprDelimiter
   <|> TQuoted     <$> quoted
-  <|> TNlgOpen    <$  char '['
-  <|> TNlgClose   <$  char ']'
+  <|> TNlgOpen    <$  char nlgInlineAnnotationOpenChar
+  <|> TNlgClose   <$  char nlgInlineAnnotationCloseChar
   <|> TNlgPrefix  <$  "@nlg"
   <|> TSpace      <$> whitespace
   <|> TIdentifier <$> identifier
