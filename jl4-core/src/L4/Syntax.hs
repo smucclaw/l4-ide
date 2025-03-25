@@ -76,7 +76,7 @@ data Type' n =
   | Forall Anno [n] (Type' n) -- ^ universally quantified type
   | InfVar Anno RawName Int -- ^ only used during type inference
   -- | ParenType Anno (Type' n) -- temporary
-  deriving stock (GHC.Generic, Eq, Show, Functor)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | A kind of a type is its arity.
@@ -87,80 +87,80 @@ type Kind = Int
 
 data TypedName n =
   MkTypedName Anno n (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyTypedName n =
   MkOptionallyTypedName Anno n (Maybe (Type' n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyNamedType n =
   MkOptionallyNamedType Anno (Maybe n) (Type' n)
-  deriving stock (GHC.Generic, Eq, Show, Functor)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeSig n =
   MkTypeSig Anno (GivenSig n) (Maybe (GivethSig n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivenSig n =
   MkGivenSig Anno [OptionallyTypedName n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data GivethSig n =
   MkGivethSig Anno (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Decide n =
   MkDecide Anno (TypeSig n) (AppForm n) (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AppForm n =
   MkAppForm Anno n [n] (Maybe (Aka n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Aka n =
   MkAka Anno [n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Declare n =
   MkDeclare Anno (TypeSig n) (AppForm n) (TypeDecl n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
   MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
     Eval Anno (Expr n)
   | Check Anno (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Import n =
   MkImport Anno n
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data TypeDecl n =
     RecordDecl Anno (Maybe n) [TypedName n]
   | EnumDecl Anno [ConDecl n]
   | SynonymDecl Anno (Type' n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data ConDecl n =
   MkConDecl Anno n [TypedName n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Expr n =
@@ -192,12 +192,12 @@ data Expr n =
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data NamedExpr n =
   MkNamedExpr Anno n (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Lit =
@@ -209,7 +209,7 @@ data Lit =
 data Branch n =
     When Anno (Pattern n) (Expr n)
   | Otherwise Anno (Expr n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Pattern n =
@@ -217,7 +217,7 @@ data Pattern n =
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | A 'Program' is a module with some 'Module's it directly depends on
@@ -226,12 +226,12 @@ data Program n
 
 data Module n =
   MkModule Anno NormalizedUri [Section n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Section n =
   MkSection Anno SectionLevel (Maybe n) (Maybe (Aka n)) [TopDecl n]
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 type SectionLevel = Int
@@ -242,13 +242,13 @@ data TopDecl n =
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
   | Import    Anno (Import n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data LocalDecl n =
     LocalDecide Anno (Decide n)
   | LocalAssume Anno (Assume n)
-  deriving stock (GHC.Generic, Eq, Show)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | Given a @'Module' n@, runs a 'foldMap' over all of
@@ -295,7 +295,7 @@ data Extension = Extension
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Info =
-    TypeInfo (Type' Resolved)
+    TypeInfo (Type' Resolved) (Maybe Nlg)
   | KindInfo Kind
   | KeywordInfo
   deriving stock (GHC.Generic, Eq, Show)

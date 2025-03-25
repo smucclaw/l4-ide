@@ -237,3 +237,35 @@ nlgOptionallyTypedName (MkOptionallyTypedName ann n mty) =
   MkOptionallyTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> traverse nlgType mty
+
+nlgDeclare :: Declare Resolved -> Check (Declare Resolved)
+nlgDeclare (MkDeclare ann tysig appForm tydecl) =
+  MkDeclare ann
+    <$> nlgTypeSig tysig
+    <*> nlgAppForm appForm
+    <*> nlgTypeDecl tydecl
+
+nlgTypeDecl :: TypeDecl Resolved -> Check (TypeDecl Resolved)
+nlgTypeDecl = \case
+  RecordDecl ann mName typedNames ->
+    RecordDecl ann
+      <$> traverse resolveNlgAnnotationInResolved mName
+      <*> traverse nlgTypedName typedNames
+  EnumDecl ann condecls->
+    EnumDecl ann
+      <$> traverse nlgConDecl condecls
+  SynonymDecl ann ty->
+    SynonymDecl ann
+      <$> nlgType ty
+
+nlgConDecl :: ConDecl Resolved -> Check (ConDecl Resolved)
+nlgConDecl (MkConDecl ann n typedName) =
+  MkConDecl ann
+    <$> resolveNlgAnnotationInResolved n
+    <*> traverse nlgTypedName typedName
+
+nlgTypedName :: TypedName Resolved -> Check (TypedName Resolved)
+nlgTypedName (MkTypedName ann n ty) =
+  MkTypedName ann
+    <$> resolveNlgAnnotationInResolved n
+    <*> nlgType ty
