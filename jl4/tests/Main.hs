@@ -98,17 +98,18 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
     let uri = normalizedFilePathToUri nfp
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.SuccessfulTypeCheck uri
-  output_ <- case moutput of
-    Nothing -> pure "Failed to typecheck"
-    Just checkResult -> do
-      let
-        mod' = checkResult.module'
-        directives = toListOf (gplate @(Directive Resolved)) mod'
-        dirExprs = mapMaybe (\case
-          Eval _ e -> Just e
-          Check _ e -> Just e
-          ) directives
-      pure $ Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
+  let output_ = case moutput of
+        Nothing -> "Failed to typecheck\n"
+        Just checkResult ->
+          let
+            mod' = checkResult.module'
+            directives = toListOf (gplate @(Directive Resolved)) mod'
+            dirExprs = mapMaybe (\case
+              Eval _ e -> Just e
+              Check _ e -> Just e
+              ) directives
+          in
+            Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
   let output =
         if isOk
           then output_

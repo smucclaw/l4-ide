@@ -1,13 +1,17 @@
-module L4.Nlg where
+module L4.Nlg (
+  simpleLinearizer,
+  Linearize (..),
+  lin,
+) where
 
 import Base
 import qualified Base.Text as Text
 
-import L4.Syntax
+import GHC.Generics (Generically (..))
 import L4.Annotation
-import Optics
 import L4.Lexer (PosToken)
-import GHC.Generics (Generically(..))
+import L4.Syntax
+import Optics
 
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
@@ -175,13 +179,13 @@ instance Linearize (Expr Resolved) where
       ]
       <> ifNonEmpty es (\ _ ->
             [ text "with"
-            , enumerate (punctuate ",") (text "and") (fmap lin es)
+            , enumerate (punctuate ",") (spaced $ text "and") (fmap lin es)
             ])
     AppNamed _ n es _order -> hcat
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize n
       , text "where"
-      , enumerate (punctuate ",") (text "and") (fmap lin es)
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin es)
       ]
     IfThenElse _ cond then' else' -> hcat
       [ text "if"
@@ -205,12 +209,12 @@ instance Linearize (Expr Resolved) where
     List _ es -> hcat
       [ text "list"
       , text "of"
-      , enumerate (punctuate ",") (text "and") (fmap lin es)
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin es)
       ]
     Where _ e lcl -> hcat
       [ lin e
       , text "where"
-      , enumerate (punctuate ",") (text "and") (fmap lin lcl)
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
       ]
 
 instance Linearize (NamedExpr Resolved) where
@@ -257,7 +261,7 @@ instance Linearize (Pattern Resolved) where
       [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
         linearize constructor
       , text "has"
-      , enumerate (punctuate ",") (text "and") (fmap lin pats)
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin pats)
       ]
     PatCons _ start rest -> hcat
       [ lin start
@@ -350,9 +354,6 @@ user t = MkLinTree
     }
   ]
 
-empty :: LinTree
-empty = mempty
-
 possessive :: Text -> LinTree
 possessive t = MkLinTree
   [ MkLinToken
@@ -375,3 +376,5 @@ enumerate _   _       [x]    = x
 enumerate _   _       []     = mempty
 enumerate sep lastSep (x:xs) = x <> sep <> enumerate sep lastSep xs
 
+spaced :: LinTree -> LinTree
+spaced p = text " " <> p <> text " "
