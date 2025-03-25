@@ -14,18 +14,19 @@ module LSP.Core.IdeConfiguration
 where
 
 import           Control.Concurrent.Strict
-import           Control.Exception (ErrorCall)
+import           Control.Exception (ErrorCall, assert)
 import           Control.Exception.Safe (try)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
-import           Data.Text                      (isPrefixOf)
 import           LSP.Core.Shake
 import           Development.IDE.Graph
 import           Language.LSP.Protocol.Types
-import           System.FilePath                (isRelative)
+import           System.FilePath                (isRelative, splitPath)
+import qualified Data.List as List
+import Data.Function (on)
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration
@@ -89,14 +90,17 @@ isWorkspaceFile uri =
         else do
           mconfig <- try getIdeConfiguration
 
-          let toText = getUri . fromNormalizedUri
           pure case mconfig of
             -- NOTE: if we are not in an editor context, we assume that every file is part
             -- of our "workspace" as in this case there's not really a concept of a workspace
             Left (_ :: ErrorCall) -> True
             Right config ->
               any
-                (\root -> toText root `isPrefixOf` toText (normalizedFilePathToUri file))
+                (\root -> case uriToNormalizedFilePath root of
+                   -- a non-file uri cannot contain a file uri, but really, this should never happen
+                   Nothing -> assert False False
+                   Just rootFp -> (List.isPrefixOf `on` splitPath . fromNormalizedFilePath) rootFp file
+                )
                 config.workspaceFolders
 
 getClientSettings :: Action (Maybe Value)
