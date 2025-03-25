@@ -295,7 +295,7 @@ data Extension = Extension
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Info =
-    TypeInfo (Type' Resolved)
+    TypeInfo (Type' Resolved) (Maybe Nlg)
   | KindInfo Kind
   | KeywordInfo
   deriving stock (GHC.Generic, Eq, Show)

@@ -316,7 +316,7 @@ setAnnResolvedType ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
   => Type' Resolved -> a -> a
 setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t)) (getAnno x)) x
+  setAnno (set annInfo (Just (TypeInfo t Nothing)) (getAnno x)) x
 
 setAnnResolvedKind ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)

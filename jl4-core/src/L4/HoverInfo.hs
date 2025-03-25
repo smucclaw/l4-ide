@@ -10,6 +10,7 @@ import L4.TypeCheck
 
 import Control.Applicative
 import qualified Generics.SOP as SOP
+import Optics
 
 data InfoTree =
   InfoNode
@@ -104,7 +105,16 @@ instance ToInfoTree RawName where
 
 instance ToInfoTree Resolved where
   toInfoTree n =
-    toInfoTree (getName n)
+    [ InfoNode (rangeOf a) thisInfo []
+    ]
+    where
+      hasNlgAnnotation name = name ^. annoOf % annNlg
+      a = getName n
+      thisInfo = case getInfo a of
+        Nothing -> Nothing
+        Just info -> case info of
+          TypeInfo ty _ -> Just $ TypeInfo ty (hasNlgAnnotation (getActual n) <|> hasNlgAnnotation (getOriginal n))
+          _ -> Just info
 
 instance ToInfoTree a => ToInfoTree (Maybe a) where
   toInfoTree =

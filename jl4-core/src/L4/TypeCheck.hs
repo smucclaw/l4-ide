@@ -478,7 +478,7 @@ inferDecide (MkDecide ann tysig appForm expr) = do
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, rt, result) <- inferTermAppForm rappForm rtysig
     rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
-    let ann' = set annInfo (Just (TypeInfo rt)) ann
+    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
     decide <- nlgDecide $ MkDecide ann' rtysig rappForm rexpr
     pure (decide, makeKnownMany (appFormHeads rappForm) ce)
   extend

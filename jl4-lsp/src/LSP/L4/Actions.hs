@@ -35,6 +35,7 @@ import qualified Data.List as List
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import Data.Ord (Down(..))
 import L4.HoverInfo
+import L4.Nlg (simpleLinearizer)
 
 -- ----------------------------------------------------------------------------
 -- LSP Autocompletions
@@ -131,7 +132,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty)}} _tydec appform _expr) simplify substitution
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 
@@ -283,9 +284,13 @@ infoToHover nuri subst r i =
   where
     x =
       case i of
-        TypeInfo t  -> prettyLayout $ applyFinalSubstitution subst nuri t
-        KindInfo k  -> prettyLayout $ typeFunction k
-        KeywordInfo -> "keyword"
+        TypeInfo t mNlg -> prettyLayout (applyFinalSubstitution subst nuri t) <>
+          case mNlg of
+            Nothing -> ""
+            Just nlg -> "\n---\n\n" <> simpleLinearizer nlg
+
+        KindInfo k      -> prettyLayout $ typeFunction k
+        KeywordInfo     -> "keyword"
 
 -- ----------------------------------------------------------------------------
 -- Common utility functions
