@@ -890,7 +890,7 @@ posTokenCategory =
     TKIf -> CKeyword
     TKThen -> CKeyword
     TKElse -> CKeyword
-    TKOtherwise -> CIdentifier
+    TKOtherwise -> CKeyword
     -- TKFalse -> CKeyword
     -- TKTrue -> CKeyword
     TKAnd -> CKeyword
