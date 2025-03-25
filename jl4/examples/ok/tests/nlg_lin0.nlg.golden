@@ -1,9 +1,1 @@
 the foo
-Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: nlg_lin0.l4
-  Hidden:   no
-  Range:    3:8-3:11
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  NUMBER 

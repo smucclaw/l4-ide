@@ -1,10 +1,2 @@
 `res`
 `bingus` with 1, 2and3
-Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: foo.l4
-  Hidden:   no
-  Range:    4:8-4:11
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN 

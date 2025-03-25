@@ -1,25 +1,3 @@
 `f`
 `g`
 `h`
-Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: signatures.l4
-  Hidden:   no
-  Range:    21:8-21:9
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM BOOLEAN TO BOOLEAN 
-File: signatures.l4
-  Hidden:   no
-  Range:    22:8-22:9
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  T OF NUMBER 
-File: signatures.l4
-  Hidden:   no
-  Range:    23:8-23:9
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM BOOLEAN TO NUMBER 

@@ -7,25 +7,3 @@
 `exampleRecord` 's `field3`
 `field1` with `exampleRecord`
 `anotherExampleRecord`
-Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: selectors.l4
-  Hidden:   no
-  Range:    22:8-22:14
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM Record TO BOOLEAN 
-File: selectors.l4
-  Hidden:   no
-  Range:    23:8-23:14
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM Record TO NUMBER 
-File: selectors.l4
-  Hidden:   no
-  Range:    24:8-24:14
-  Source:   check
-  Severity: DiagnosticSeverity_Information
-  Code:     <none>
-  Message:  FUNCTION FROM Record TO LIST OF NUMBER 

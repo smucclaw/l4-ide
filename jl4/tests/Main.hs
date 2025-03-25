@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Main where
+module Main (main) where
 
 import Base
 import Control.Monad.Trans.Maybe
@@ -100,7 +100,7 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.SuccessfulTypeCheck uri
   output_ <- case moutput of
-    Nothing -> pure "Failed to parse"
+    Nothing -> pure "Failed to typecheck"
     Just checkResult -> do
       let
         mod' = checkResult.module'
@@ -110,9 +110,13 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
           Check _ e -> Just e
           ) directives
       pure $ Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
+  let output =
+        if isOk
+          then output_
+          else output_ <> "\n" <> Text.unlines (fmap Text.strip errs)
   pure
     Golden
-      { output = output_ <> foldMap sanitizeFilePaths errs
+      { output = output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
