@@ -8,7 +8,7 @@ function:
     properties:
       day_of_week:
         type: "number"
-        description: the day of the week (1 == Monday, 7 == Sunday)
+        description: the day of the week (1 = Monday, 2 = Tuesday, 3 = Wednesday, 4 = Thursday, 5 = Friday, 6 = Saturday, 7 = Sunday)
       is_public_holiday:
         type: "boolean"
         description: whether it is a public holiday
