@@ -33,3 +33,4 @@ import Optics.Setter as X
 import Optics.State as X
 import Prettyprinter as X (Doc, Pretty(..), (<+>))
 import System.IO as X
+import Language.LSP.Protocol.Types as X (NormalizedUri, toNormalizedUri, fromNormalizedUri, Uri(..))

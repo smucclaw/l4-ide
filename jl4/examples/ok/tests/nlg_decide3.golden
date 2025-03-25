@@ -1,8 +1,3 @@
 Parsing successful
 Typechecking successful
-[15:16-17] a
-  [16:5-30] This is attached to %a%
-[16:41-42] a
-  [16:43-73] This is also attached to %a%
-[17:30-31] b
-  [17:33-79] Might be attached to %right b% in the future
+Evaluation successful

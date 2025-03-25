@@ -131,11 +131,17 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
-newtype Check a =
-  MkCheck (CheckState -> [(With CheckErrorWithContext a, CheckState)])
+newtype CheckEnv = MkCheckEnv { moduleUri :: NormalizedUri }
 
-runCheck :: Check a -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
+newtype Check a =
+  MkCheck (CheckEnv -> CheckState -> [(With CheckErrorWithContext a, CheckState)])
+
+runCheck :: Check a -> CheckEnv -> CheckState -> [(With CheckErrorWithContext a, CheckState)]
 runCheck (MkCheck f) = f
+
+runCheck' :: CheckEnv -> CheckState -> Check a -> [(With CheckErrorWithContext a, CheckState)]
+runCheck' e s (MkCheck f) = f e s
+
 
 -- NOTES on the Check monad:
 --
@@ -155,8 +161,8 @@ runCheck (MkCheck f) = f
 -- probably be fine.
 
 data CheckResult =
-  CheckResult
-    { program      :: Program Resolved
+  MkCheckResult
+    { program      :: Module  Resolved
     , errors       :: [CheckErrorWithContext]
     , substitution :: Substitution
     , environment  :: Environment
@@ -173,44 +179,43 @@ instance Functor Check where
 
 instance Applicative Check where
   pure x =
-    MkCheck $ \ s -> [(Plain x, s)]
+    MkCheck $ \_ s -> [(Plain x, s)]
   (<*>) = ap
 
 instance Monad Check where
   (>>=) :: forall a b. Check a -> (a -> Check b) -> Check b
   m >>= f =
-    MkCheck $ \ s ->
+    MkCheck $ \e s ->
       let
-        results = runCheck m s
+        results = runCheck m e s
       in
-        concatMap (\ (wea, s') -> distributeWith (fmap (flip runCheck s' . f) wea)) results
+        concatMap (\ (wea, s') -> distributeWith (fmap (runCheck' e s' . f) wea)) results
 
 instance MonadState CheckState Check where
   get :: Check CheckState
-  get = MkCheck $ \ s -> [(Plain s, s)]
+  get = MkCheck $ \_ s -> [(Plain s, s)]
 
   put :: CheckState -> Check ()
-  put s = MkCheck $ \ _ -> [(Plain (), s)]
+  put s = MkCheck $ \_ _ -> [(Plain (), s)]
+
+instance MonadReader CheckEnv Check where
+  ask = MkCheck \e s -> [(Plain e, s)]
+  local f c = MkCheck $ runCheck c . f
 
 instance MonadWith CheckErrorWithContext Check where
   with :: CheckErrorWithContext -> Check ()
-  with e = MkCheck $ \ s -> [(With e (Plain ()), s)]
+  with e = MkCheck $ \_ s -> [(With e (Plain ()), s)]
 
 instance Alternative Check where
   empty :: Check a
-  empty = MkCheck $ \ _ -> []
+  empty = MkCheck $ \_ _ -> []
 
   (<|>) :: Check a -> Check a -> Check a
-  (<|>) m1 m2 = MkCheck $ \ s -> runCheck m1 s ++ runCheck m2 s
+  (<|>) m1 m2 = MkCheck $ \e s -> runCheck m1 e s ++ runCheck m2 e s
 
 -- ----------------------------------------------------------------------------
 -- Primitives for Uniques, Errors and similar.
 -- ----------------------------------------------------------------------------
-
-addError :: CheckError -> Check ()
-addError e = do
-  ctx <- use #errorContext
-  with (MkCheckErrorWithContext e ctx)
 
 step :: Check Int
 step = do
@@ -222,7 +227,13 @@ step = do
 newUnique :: Check Unique
 newUnique = do
   i <- step
-  pure (MkUnique 'c' i)
+  u <- asks (.moduleUri)
+  pure (MkUnique 'c' i u)
+
+addError :: CheckError -> Check ()
+addError e = do
+  ctx <- use #errorContext
+  with (MkCheckErrorWithContext e ctx)
 
 choose :: [Check a] -> Check a
 choose = asum

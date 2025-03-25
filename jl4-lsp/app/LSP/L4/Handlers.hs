@@ -8,7 +8,7 @@ module LSP.L4.Handlers where
 import Control.Concurrent.Strict (Chan, writeChan)
 import Control.Exception.Safe (MonadCatch, MonadMask, MonadThrow)
 import Control.Lens ((^.))
-import Control.Monad.Extra (guard, whenJust)
+import Control.Monad.Extra (guard)
 import qualified Control.Monad.Extra as Extra
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Reader (ReaderT)
@@ -194,7 +194,7 @@ handlers recorder =
           nuri = LSP.toNormalizedUri uri
         mTypeCheckedModule <- liftIO $ runAction "gotoDefinition" ide $
           useWithStale TypeCheck nuri
-        let mloc = uncurry (gotoDefinition pos uri) =<< mTypeCheckedModule
+        let mloc = uncurry (gotoDefinition pos) =<< mTypeCheckedModule
         pure $ Right case mloc of
           Nothing  -> InR $ InR Null
           Just loc -> InL $ Definition (InL loc)
@@ -272,7 +272,7 @@ handlers recorder =
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
               useWithStale_ TypeCheck (toNormalizedUri uri)
 
-            let items = completions rope typeCheck (params ^. J.position)
+            let items = completions rope (toNormalizedUri uri) typeCheck (params ^. J.position)
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
@@ -306,7 +306,7 @@ handlers recorder =
               Nothing -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses
-          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.program
+          visualizeDecides :: [CodeLens] = foldTopLevelDecides decideToCodeLens typeCheck.module'
 
         pure (Right (InL visualizeDecides))
     , requestHandler SMethod_TextDocumentReferences $ \ide params -> do
@@ -320,9 +320,6 @@ handlers recorder =
         let locs = map (Location doc . srcRangeToLspRange . Just) $ lookupReference pos refs
         pure (Right (InL locs))
     ]
-
-whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . normalizeFilePath
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
 activeFileDiagnosticsInRange extras nfu rng = do
@@ -349,7 +346,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> tyHover
   tyHover = do
     (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
       useWithStale TypeCheck fileUri
-    hoistMaybe $ typeHover pos m positionMapping
+    hoistMaybe $ typeHover pos fileUri m positionMapping
 
 -- ----------------------------------------------------------------------------
 -- LSP Code Actions
@@ -374,7 +371,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   (Just $ fmap getActual ty)
                 )
 
-            topDecls = foldTopDecls (: []) typeCheck.program
+            topDecls = foldTopDecls (: []) typeCheck.module'
 
             enclosingTopDecl = do
               target <- rangeOf name

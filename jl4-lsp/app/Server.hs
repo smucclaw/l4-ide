@@ -103,6 +103,7 @@ data Log
   | LogHandlers Handlers.Log
   | LogRules Rules.Log
   | LogWebsocket WebsocketLog
+  | LogWorkingDirectory FilePath
   deriving (Show)
 
 data WebsocketLog
@@ -128,6 +129,7 @@ instance Pretty Log where
     LogHandlers msg -> pretty msg
     LogRules msg -> pretty msg
     LogWebsocket wmsg -> "Websocket:" <+> pretty wmsg
+    LogWorkingDirectory wd -> "Starting with working directory:" <+> pretty wd
 
 instance Pretty WebsocketLog where
   pretty = \case
@@ -149,35 +151,48 @@ data Arguments = Arguments
   -- ^ flag to disable kick used for testing
   }
 
+data CliOptions
+  = MkCliOptions
+  { cwd :: Maybe FilePath
+  , communication :: CommunicationKind
+  }
+  deriving (Eq, Show)
+
 data CommunicationKind
   = StdIO
   | Websocket {host :: String, port :: Int}
   deriving stock (Eq, Show)
 
-parseComm :: Opa.ParserInfo CommunicationKind
+parseComm :: Opa.ParserInfo CliOptions
 parseComm =
   Opa.info
-    (Opa.helper <*> Opa.hsubparser
-      (Opa.command "ws"
-        (Opa.info
-          (Websocket
-            <$> Opa.strOption (Opa.long "host" <> Opa.value  "localhost")
-            <*> Opa.option Opa.auto (Opa.long "port" <> Opa.value 8007)
+    (MkCliOptions
+      <$> Opa.optional (Opa.strOption (Opa.long "cwd"))
+      <*>
+      (Opa.helper <*> Opa.hsubparser
+        (Opa.command "ws"
+          (Opa.info
+            (Websocket
+              <$> Opa.strOption (Opa.long "host" <> Opa.value  "localhost")
+              <*> Opa.option Opa.auto (Opa.long "port" <> Opa.value 8007)
+            )
+            (Opa.briefDesc <> Opa.progDesc "run the language server over a websocket connection")
           )
-          (Opa.briefDesc <> Opa.progDesc "run the language server over a websocket connection")
         )
+        Opa.<|> pure StdIO
       )
-      Opa.<|> pure StdIO
     )
     (Opa.briefDesc <> Opa.progDesc "The L4 language server. Invoke to run using StdIO")
 
 getDefaultArguments :: Recorder (WithPriority Log) -> IO Arguments
 getDefaultArguments recorder = do
-  cwd <- getCurrentDirectory
-  communication <- Opa.execParser parseComm
+  MkCliOptions
+    { communication, cwd } <- Opa.execParser parseComm
+  projectRoot <- maybe getCurrentDirectory pure cwd
+  logWith recorder Debug $ LogWorkingDirectory projectRoot
   pure Arguments
-    { projectRoot = cwd
-    , rules = Rules.jl4Rules (cmapWithPrio LogRules recorder)
+    { projectRoot
+    , rules = Rules.jl4Rules projectRoot (cmapWithPrio LogRules recorder)
     , lspOptions = lspOptions
     , defaultConfig = defConfig
     , debouncer = newAsyncDebouncer

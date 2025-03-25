@@ -4,6 +4,8 @@ module L4.TypeCheck
   , applyFinalSubstitution
   , combineEnvironmentEntityInfo
   , doCheckProgram
+  , doCheckProgramWithDependencies
+  , initialCheckState
   , isQuantifier
   , prettyCheckError
   , prettyCheckErrorWithContext
@@ -90,8 +92,8 @@ import Data.Bifunctor
 import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
 
-initialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
-initialCheckState environment entityInfo substitution =
+mkInitialCheckState :: Environment -> EntityInfo -> Substitution -> CheckState
+mkInitialCheckState environment entityInfo substitution =
   MkCheckState
     { environment
     , entityInfo
@@ -110,18 +112,24 @@ initialCheckState environment entityInfo substitution =
 -- - a resolved and type-annotated version of the program
 -- - the final substitution (for resolving type annotations in the program)
 --
-doCheckProgram :: Program Name -> CheckResult
-doCheckProgram program =
-  case runCheckUnique (inferProgram program) (initialCheckState initialEnvironment initialEntityInfo Map.empty) of
+doCheckProgram :: NormalizedUri -> Module  Name -> CheckResult
+doCheckProgram = doCheckProgramWithDependencies initialCheckState
+
+initialCheckState :: CheckState
+initialCheckState = mkInitialCheckState initialEnvironment initialEntityInfo Map.empty
+
+doCheckProgramWithDependencies :: CheckState -> NormalizedUri -> Module  Name -> CheckResult
+doCheckProgramWithDependencies checkState moduleUri program =
+  case runCheckUnique (inferProgram program) MkCheckEnv {moduleUri} checkState of
     (w, s) ->
       let
         (errs, rprog) = runWith w
       in
         -- might be nicer to be able to do this within the inferProgram call / at the end of it
-        case runCheckUnique (traverse applySubst errs) s of
+        case runCheckUnique (traverse applySubst errs) MkCheckEnv {moduleUri} s of
           (w', s') ->
             let (moreErrs, substErrs) = runWith w'
-            in CheckResult
+            in MkCheckResult
               { program = rprog
               , errors = substErrs ++ moreErrs
               , substitution = s'.substitution
@@ -144,12 +152,12 @@ combineEnvironmentEntityInfo env ei =
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
 --
-applyFinalSubstitution :: ApplySubst a => Substitution -> a -> a
-applyFinalSubstitution subst t =
+applyFinalSubstitution :: ApplySubst a => Substitution -> NormalizedUri -> a -> a
+applyFinalSubstitution subst moduleUri t =
   let
-    cs = initialCheckState Map.empty Map.empty subst
+    cs = mkInitialCheckState Map.empty Map.empty subst
   in
-    case runCheckUnique (applySubst t) cs of
+    case runCheckUnique (applySubst t) MkCheckEnv {moduleUri} cs of
       (w, _cs') ->
         let
           (_errs, r) = runWith w
@@ -157,9 +165,9 @@ applyFinalSubstitution subst t =
           r
 
 -- | Helper function to run the check monad an expect a unique result.
-runCheckUnique :: Check a -> CheckState -> (With CheckErrorWithContext a, CheckState)
-runCheckUnique c s =
-  case runCheck c s of
+runCheckUnique :: Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique c e s =
+  case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
@@ -168,15 +176,15 @@ runCheckUnique c s =
 --
 orElse :: Check a -> Check a -> Check a
 orElse m1 m2 = do
-  MkCheck $ \ s ->
+  MkCheck $ \ e s ->
     let
-      candidates = runCheck m1 s
+      candidates = runCheck m1 e s
 
       isSuccess (Plain _, _)  = True
       isSuccess (With _ _, _) = False
     in
       case filter isSuccess candidates of
-        [] -> runCheck m2 s
+        [] -> runCheck m2 e s
         xs -> xs
 
 -- | Allow the subcomputation to have at most one result.
@@ -184,10 +192,10 @@ orElse m1 m2 = do
 prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- use #errorContext
-  MkCheck $ \ s ->
+  MkCheck $ \ s env ->
     let
       candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s
+      candidates = runCheck m s env
 
       proc []                    = [] -- should never occur
       proc [a]                   = [a]
@@ -213,10 +221,10 @@ prune m = do
 --
 softprune :: forall a. Check a -> Check a
 softprune m = do
-  MkCheck $ \ s ->
+  MkCheck $ \ s env ->
     let
       candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s
+      candidates = runCheck m s env
 
       proc []                    = [] -- should never occur
       proc [a]                   = [a]
@@ -404,6 +412,12 @@ inferDirective (Check ann e) = scope $ do
   addError (CheckInfo te)
   pure (Check ann re)
 
+-- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
+inferImport :: Import Name -> Check (Import Resolved)
+inferImport (MkImport ann n) = do
+  rn <- def n
+  pure (MkImport ann rn)
+
 inferSection :: Section Name -> Check (Section Resolved)
 inferSection (MkSection ann lvl mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
@@ -435,16 +449,19 @@ inferTopDecl (Assume ann assume) = do
 inferTopDecl (Directive ann directive) = do
   rdirective <- inferDirective directive
   pure (Directive ann rdirective)
+inferTopDecl (Import ann import_) = do
+  rimport_ <- inferImport import_
+  pure (Import ann rimport_)
 
 -- TODO: Somewhere near the top we should do dependency analysis. Note that
 -- there is a potential problem. If we use type-directed name resolution but
 -- also allow forward references, then how are we going to determine mutual
 -- recursion? Optimistically, pessimistically, something in between?
 --
-inferProgram :: Program Name -> Check (Program Resolved)
-inferProgram (MkProgram ann sections) = do
+inferProgram :: Module  Name -> Check (Module  Resolved)
+inferProgram (MkModule ann uri sections) = do
   rsections <- traverse inferSection sections
-  pure (MkProgram ann rsections)
+  pure (MkModule ann uri rsections)
 
 -- | This covers constants and functions being defined.
 --
@@ -1340,8 +1357,20 @@ tryExpandTypeSynonym r args = do
 -- In general, types should be instantiated prior to unification, and
 -- kind-checking should not involve unification.
 --
--- One major complication are type synonyms which we have to expand
--- during unification. When do we want to expand a type synonym?
+-- Unify proceeds in multiple layers.
+--
+-- First, we have to substitute. (TODO: We should probably just apply
+-- the substitution eagerly all the time. There is a reason other
+-- implementations do this as well.) Why? Because we have to prevent
+-- infinite types from arising (which are usually unwanted, but more
+-- importantly even, can make the system loop very easily). And in
+-- order to detect cycles, we need to know the full set of inference
+-- variables that occur in the target type once we try to bind an
+-- inference variable. The easiest way to achieve this is to
+-- substitute first.
+--
+-- Next, we have to expand type synonyms.
+-- When do we want to expand a type synonym?
 --
 -- Basically whenever we have ruled out the inference variable cases,
 -- because if we have one inference variable against a type synonym,
@@ -1352,24 +1381,33 @@ tryExpandTypeSynonym r args = do
 -- expand, we handle the remaining cases in 'unifyBase'.
 --
 unify :: Type' Resolved -> Type' Resolved -> Check Bool
-unify (InfVar _ann1 _pre1 i1) t2@(InfVar _ann2 _pre2 i2)
+unify t1 t2 = do
+  t1' <- applySubst t1
+  t2' <- applySubst t2
+  unify' t1' t2'
+
+-- | Unify cases for inference variables, after substitution. Prevent
+-- infinite types by performing the so-called "occurs check".
+--
+unify' :: Type' Resolved -> Type' Resolved -> Check Bool
+unify' (InfVar _ann1 _pre1 i1) t2@(InfVar _ann2 _pre2 i2)
   | i1 == i2             = pure True
   | otherwise            = bind i1 t2
-unify (InfVar _ann1 _pre1 i1) t2
+unify' (InfVar _ann1 _pre1 i1) t2
   | i1 `elem` infVars t2 = pure False -- addError (OccursCheck t1 t2)
   | otherwise            = bind i1 t2
-unify t1 (InfVar _ann2 _pre2 i2)
+unify' t1 (InfVar _ann2 _pre2 i2)
   | i2 `elem` infVars t1 = pure False -- addError (OccursCheck t1 t2)
   | otherwise            = bind i2 t1
-unify t1 t2              = expandAndUnify t1 t2
+unify' t1 t2             = expandAndUnify t1 t2
 
 -- | Handles the cases where we've established we have no top-level
 -- inference variables.
 --
 expandAndUnify :: Type' Resolved -> Type' Resolved -> Check Bool
 expandAndUnify t1 t2 =
-  tryExpand t1 (\ t1' -> unify t1' t2) $
-  tryExpand t2 (\ t2' -> unify t1 t2') $
+  tryExpand t1 (\ t1' -> unify' t1' t2) $
+  tryExpand t2 (\ t2' -> unify' t1 t2') $
   unifyBase t1 t2
   where
     -- Tries to expand the given type synonym. If expansion succeeds,
@@ -1390,12 +1428,12 @@ unifyBase (TyApp _ann1 n1 ts1) (TyApp _ann2 n2 ts2) = do
   -- both are type constructors or type variables
   r <- ensureSameRef n1 n2
   -- We should not need to check the same length because we've done kind checking.
-  rs <- traverse (uncurry unify) (zip ts1 ts2)
+  rs <- traverse (uncurry unify') (zip ts1 ts2)
   pure (and (r : rs))
 unifyBase (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
   | length onts1 == length onts2 = do
-    rs <- traverse (uncurry unify) (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
-    r <- unify t1 t2
+    rs <- traverse (uncurry unify') (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
+    r <- unify' t1 t2
     pure (and (r : rs))
 unifyBase (Type _ann1) (Type _ann2) = pure True
 unifyBase _t1 _t2 = pure False -- addError (UnificationError t1 t2)
@@ -1410,12 +1448,8 @@ infVars (InfVar _ _ i)  = [i]
 
 bind :: Int -> Type' Resolved -> Check Bool
 bind i t = do
-  subst <- use #substitution
-  case Map.lookup i subst of
-    Nothing -> do
-      assign #substitution (Map.insert i t subst)
-      pure True
-    Just t' -> unify t' t -- addError (InternalUnificationErrorBind i t t')
+  modifying' #substitution (Map.insert i t)
+  pure True
 
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
@@ -1699,13 +1733,12 @@ prettyOptionallyNamedType (MkOptionallyNamedType _ (Just r) t) =
   prettyLayout r <> " of type " <> prettyLayout t
 
 -- | Show the name with its original / definition source range.
---
--- TODO: eventually, we will have to print a file path here for potentially external locations
 prettyResolvedWithRange :: Resolved -> Text
-prettyResolvedWithRange r =
+prettyResolvedWithRange r = do
+  let u = getUnique r
   case rangeOf (getOriginal r) of
     Nothing    -> prettyLayout r <> " (predefined)"
-    Just range -> prettyLayout r <> " (defined at " <> prettySrcRange Nothing (Just range) <> ")"
+    Just range -> prettyLayout r <> " (defined at " <> (fromNormalizedUri u.moduleUri).getUri <> ":" <> prettySrcRange Nothing (Just range) <>  ")"
 
 -- | Show the name with its source range.
 --

@@ -2,16 +2,16 @@
 module Main where
 
 import Base
+import Control.Monad.Trans.Maybe
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
 import qualified L4.Nlg as Nlg
-import L4.Parser (execProgramParser)
 import qualified L4.Parser as Parser
 import qualified L4.Parser.ResolveAnnotation as Parser
 import qualified L4.Parser.SrcSpan as JL4
 import qualified L4.Print as Print
 import L4.Syntax
-import L4.TypeCheck (CheckResult (CheckResult))
+import L4.TypeCheck (CheckResult(..))
 import qualified L4.TypeCheck as JL4
 
 import Paths_jl4
@@ -29,30 +29,38 @@ import Test.Hspec
 import Test.Hspec.Golden
 import qualified Regex.Text as RE
 import qualified Data.CharSet as CharSet
-import Data.Char (isSpace)
-import Control.Applicative (many)
 import qualified System.OsPath as OsPath
+import LSP.L4.Rules
 
 main :: IO ()
 main = do
   dataDir <- getDataDir
   let examplesRoot = dataDir </> "examples"
-  exampleFiles <- sort <$> globDir1 (compile "**/*.l4") examplesRoot
-  hspec $ do
-    forM_ exampleFiles $ \inputFile -> do
-      let testCase = makeRelative examplesRoot inputFile
-      let goldenDir = takeDirectory inputFile </> "tests"
-      describe testCase $ do
-        it "parses and checks" $
-          l4Golden goldenDir inputFile
-        it "exactprints" $
-          jl4ExactPrintGolden goldenDir inputFile
-        it "natural language annotations" $
-          jl4NlgLinearizeGolden goldenDir inputFile
+  okFiles <- sort <$> globDir1 (compile "ok/**/*.l4") examplesRoot
+  librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDir </> "libraries")
+  legalFiles <- sort <$> globDir1 (compile "legal/**/*.l4") examplesRoot
+  tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
+  nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
+  hspec do
+    describe "ok files" $ tests (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
+    describe "tc fails" $ tests (False, True) tcFailsFiles examplesRoot
+    describe "nlg fails" $ tests (True, False) nlgFailsFiles examplesRoot
+  where
+    tests (tcOk, nlgOk) files root =
+      forM_ files $ \inputFile -> do
+        let testCase = makeRelative root inputFile
+        let goldenDir = takeDirectory inputFile </> "tests"
+        describe testCase $ do
+          it "parses and checks" $
+            l4Golden tcOk goldenDir inputFile
+          it "exactprints" $
+            jl4ExactPrintGolden goldenDir inputFile
+          it "natural language annotations" $
+            jl4NlgAnnotationsGolden nlgOk goldenDir inputFile
 
-l4Golden :: String -> String -> IO (Golden String)
-l4Golden dir inputFile = do
-  (output_, _) <- capture (readAndParseFile inputFile)
+l4Golden :: Bool -> String -> String -> IO (Golden String)
+l4Golden isOk dir inputFile = do
+  (output_, _) <- capture (checkFile isOk inputFile)
   pure
     Golden
       { output = output_
@@ -68,17 +76,11 @@ jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
 jl4ExactPrintGolden dir inputFile = do
   (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
     let uri = normalizedFilePathToUri nfp
-    Shake.addVirtualFileFromFS nfp
+    _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
 
-  let mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
-        Just p | not (null p) -> p
-        _ -> fp
-
-      regex = fmap mkFileName $
-        many (RE.satisfy isSpace) *> RE.text "file://" *>
-          RE.manyTextOf (CharSet.not CharSet.space)
-      output = fromMaybe (RE.replaceAll regex $ mconcat errs) moutput
+  -- NOTE: we sort the output, because the traces are concurrent and might not be in order
+  let output = fromMaybe (sanitizeFilePaths $ mconcat errs) moutput
 
   pure
     Golden
@@ -91,28 +93,26 @@ jl4ExactPrintGolden dir inputFile = do
       , failFirstTime = False
       }
 
-jl4NlgLinearizeGolden :: FilePath -> FilePath -> IO (Golden Text)
-jl4NlgLinearizeGolden dir inputFile = do
-  input <- Text.readFile inputFile
-  let output_ = case execProgramParser (takeFileName inputFile) input of
-        Left _err -> "Failed to parse"
-        Right (p, _) ->
-          case JL4.doCheckProgram p of
-            CheckResult{errors, program}
-              | all ((== JL4.SInfo) . JL4.severity) errors ->
-                let
-                  directives = toListOf (gplate @(Directive Resolved)) program
-                  dirExprs = mapMaybe (\case
-                    Eval _ e -> Just e
-                    Check _ e -> Just e
-                    ) directives
-                in
-                  Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
-              | otherwise -> do
-                "Failed to type check"
+jl4NlgAnnotationsGolden :: Bool -> String -> FilePath -> IO (Golden Text)
+jl4NlgAnnotationsGolden isOk dir inputFile = do
+  (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
+    let uri = normalizedFilePathToUri nfp
+    _ <- Shake.addVirtualFileFromFS nfp
+    Shake.use Rules.SuccessfulTypeCheck uri
+  output_ <- case moutput of
+    Nothing -> pure "Failed to parse"
+    Just checkResult -> do
+      let
+        mod' = checkResult.module'
+        directives = toListOf (gplate @(Directive Resolved)) mod'
+        dirExprs = mapMaybe (\case
+          Eval _ e -> Just e
+          Check _ e -> Just e
+          ) directives
+      pure $ Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
   pure
     Golden
-      { output = output_
+      { output = output_ <> foldMap sanitizeFilePaths errs
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
@@ -125,29 +125,37 @@ jl4NlgLinearizeGolden dir inputFile = do
 -- Test helpers
 -- ----------------------------------------------------------------------------
 
--- TODO: This function should be unified / merged with checkAndExactPrintFile from L4.TypeCheck
-parseFile :: FilePath -> Text -> IO ()
-parseFile file input =
-  case Parser.execProgramParser fp input of
-    Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
-    Right (prog, warns) -> do
-      Text.putStrLn "Parsing successful"
-      case JL4.doCheckProgram prog of
-        CheckResult{errors, program}
-          | all ((== JL4.SInfo) . JL4.severity) errors -> do
-              Text.putStrLn "Typechecking successful"
-              let results = JL4.doEvalProgram program
-              let msgs = (typeErrorToMessage <$> errors) ++ (evalResultToMessage <$> results)
-              Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
-          | otherwise -> do
-              let msgs = typeErrorToMessage <$> errors
-              Text.putStr (Text.unlines (renderMessage <$> sortOn fst msgs))
+sanitizeFilePaths :: Text -> Text
+sanitizeFilePaths = RE.replaceAll regex
+  where
+  mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
+    Just p | not (null p) -> p
+    _ -> fp
 
-      Text.putStr $ prettyNlgOutput prog warns
+  regex = fmap mkFileName $
+    RE.manyTextOf CharSet.space *> RE.text "file://" *>
+      RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
+
+checkFile :: Bool -> FilePath -> IO ()
+checkFile isOk file = do
+  (errs, isJust ->  success) <- oneshotL4ActionAndErrors file \nfp -> runMaybeT do
+      let uri = normalizedFilePathToUri nfp
+      _       <- lift   $ Shake.addVirtualFileFromFS nfp
+      _       <- MaybeT $ Shake.use GetParsedAst uri        <* liftIO (Text.putStrLn "Parsing successful")
+      checked <- MaybeT $ Shake.use SuccessfulTypeCheck uri <* liftIO (Text.putStrLn "Typechecking successful")
+      results <- MaybeT $ Shake.use Evaluate uri            <* liftIO (Text.putStrLn "Evaluation successful")
+      let msgs = map typeErrorToMessage checked.infos <> map evalDirectiveResultToMessage results
+          formatted = foldMap (sanitizeFilePaths . renderMessage) $ sortOn fst msgs
+      liftIO $ Text.putStr formatted
+  -- NOTE: if we're okay, we don't expect any errors, if we are not, we do expect them
+  success `shouldBe` isOk
+  unless success do
+    Text.putStr $ foldMap sanitizeFilePaths errs
+
  where
   fp = takeFileName file
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-  evalResultToMessage (r, res, _trace) = (Just r, [either Text.show Print.prettyLayout res])
+  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, [either Text.show Print.prettyLayout res])
   renderMessage (r, txt) = cliErrorMessage fp r txt
 
 data CliError
@@ -162,7 +170,7 @@ prettyCliError = \case
       <> Text.pack file
       <> ":"
       <> Text.unlines (((.message)) <$> toList perrors)
-  CliCheckError file CheckResult{errors} ->
+  CliCheckError file MkCheckResult{errors} ->
     Text.unlines (map (\err -> cliErrorMessage file (JL4.rangeOf err) (JL4.prettyCheckErrorWithContext err)) errors)
 
 cliErrorMessage :: FilePath -> Maybe JL4.SrcRange -> [Text] -> Text
@@ -172,20 +180,15 @@ cliErrorMessage fp mrange msg =
         : map ("  " <>) msg
     )
 
-readAndParseFile :: FilePath -> IO ()
-readAndParseFile file = do
-  input <- Text.readFile file
-  parseFile file input
-
-prettyNlgOutput :: Program Name -> [Parser.Warning] -> Text
-prettyNlgOutput p warns = Text.unlines $
-  [ prettyNlgName n nlg
-  | n <- toListOf gplate p
-  , Just nlg <- [n ^. annoOf % annNlg]
-  ]
-  <>
-  [prettyWarning warning | warning <- warns]
-  where
+prettyNlgOutput :: Module Name -> [Parser.Warning] -> Text
+prettyNlgOutput p warns =
+  Text.unlines $
+    [ prettyNlgName n nlg
+    | n <- toListOf gplate p
+    , Just nlg <- [n ^. annoOf % annNlg]
+    ]
+      <> [prettyWarning warning | warning <- warns]
+ where
   prettyNlgName :: Name -> Nlg -> Text
   prettyNlgName name nlg = mconcat
     [ prettyName name

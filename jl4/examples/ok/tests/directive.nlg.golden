@@ -1,3 +1,11 @@
 `adder` with 4and6
 `adder` with 4and6
 `must sing` with `Person` where `name` is Taylor Swift
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: directive.l4
+  Hidden:   no
+  Range:    25:8-25:57
+  Source:   check
+  Severity: DiagnosticSeverity_Information
+  Code:     <none>
+  Message:  BOOLEAN 

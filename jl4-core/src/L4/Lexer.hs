@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Lexer where
 
 import Base
@@ -8,6 +9,7 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
 
+import Data.Monoid (Alt (..))
 import Data.Char hiding (Space)
 import GHC.Show (showLitString)
 import Optics ((&), (%~))
@@ -41,10 +43,18 @@ data PosToken =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+instance ToExpr NormalizedUri
+
 data AnnoType
   = InlineAnno
   | LineAnno
   deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (ToExpr, NFData)
+
+data DirectiveType
+  = TEvalDirective
+  | TCheckDirective
+  deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
 -- | The type of token, plus information needed to reconstruct its contents.
@@ -53,7 +63,7 @@ data TokenType =
   | TQuoted       !Text
   | TIntLit       !Text !Int
   | TStringLit    !Text
-  | TDirective    !Text
+  | TDirective    !DirectiveType
     -- copy token / ditto mark, currently '^'
   | TCopy         (Maybe TokenType)
     -- parentheses
@@ -137,6 +147,7 @@ data TokenType =
   | TKFor
   | TKAll
   | TKAka
+  | TKImport
     -- annotations
   | TNlg          !Text !AnnoType
   | TRefSrc       !Text
@@ -157,6 +168,9 @@ data TokenType =
   | EOF
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
+
+annotations :: [Text]
+annotations = ["nlg", "ref", "ref-map", "ref-src"]
 
 nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
@@ -218,9 +232,13 @@ quoted :: Lexer Text
 quoted =
   char '`' *> takeWhile1P (Just "printable char except backticks") (\ x -> isPrint x && not (x `elem` ("`" :: String))) <* char '`'
 
-directiveLiteral :: Lexer Text
-directiveLiteral =
-  char '#' *> identifier
+directiveLiteral :: Lexer DirectiveType
+directiveLiteral = do
+  _herald <- "#"
+  getAlt $ foldMap (\(d, t) -> Alt $ d <$ chunk t) directives
+
+directives :: [(DirectiveType, Text)]
+directives = [(TEvalDirective, "EVAL"), (TCheckDirective, "CHECK")]
 
 integerLiteral :: Lexer (Text, Int)
 integerLiteral =
@@ -373,6 +391,7 @@ keywords =
     , ("FOR"        , TKFor        )
     , ("ALL"        , TKAll        )
     , ("AKA"        , TKAka        )
+    , ("IMPORT"     , TKImport     )
     ]
 
 trivialToken :: TokenType -> PosToken
@@ -391,23 +410,22 @@ rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 rawNlgTokens :: Lexer [RawToken]
 rawNlgTokens = many (MkRawToken <$> getOffset <*> nlgTokenPayload <*> getOffset)
 
-execLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
-execLexer file input =
+execLexer :: NormalizedUri -> Text -> Either (NonEmpty PError) [PosToken]
+execLexer uri input =
   let
-    r = parse (rawTokens <* eof) file input
+    r = parse (rawTokens <* eof) (showNormalizedUri uri) input
   in
     case r of
-      Right rtoks -> Right (mkPosTokens Nothing file input rtoks)
+      Right rtoks -> Right (mkPosTokens Nothing uri input rtoks)
       Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
 
-execNlgLexer :: SourcePos -> Text -> Either (ParseErrorBundle Text Void) [PosToken]
-execNlgLexer offset input =
+execNlgLexer :: SourcePos -> NormalizedUri -> Text -> Either (ParseErrorBundle Text Void) [PosToken]
+execNlgLexer offset uri input =
   let
-    file = sourceName offset
-    r = parse (rawNlgTokens <* eof) file input
+    r = parse (rawNlgTokens <* eof) (showNormalizedUri uri) input
   in
     case r of
-      Right rtoks -> Right (mkPosTokens (Just offset) file input rtoks)
+      Right rtoks -> Right (mkPosTokens (Just offset) uri input rtoks)
       Left errs   -> Left errs
 
 data TokenState =
@@ -419,10 +437,10 @@ data TokenState =
     }
   deriving Generic
 
-initialTokenState :: FilePath -> Text -> TokenState
-initialTokenState filepath txt =
+initialTokenState :: NormalizedUri -> Text -> TokenState
+initialTokenState uri txt =
   MkTokenState
-    (initialPosState filepath txt)
+    (initialPosState (showNormalizedUri uri) txt)
     0
     []
     []
@@ -432,15 +450,15 @@ initialTokenState filepath txt =
 --
 -- At the same time, we interpret copy tokens.
 --
-mkPosTokens :: Maybe SourcePos -> FilePath -> Text -> [RawToken] -> [PosToken]
-mkPosTokens sourcePosOffset filepath txt rtoks =
+mkPosTokens :: Maybe SourcePos -> NormalizedUri -> Text -> [RawToken] -> [PosToken]
+mkPosTokens sourcePosOffset uri txt rtoks =
     evalState (traverse go rtoks) tokenSt
   where
     tokenSt = case sourcePosOffset of
-      Nothing -> initialTokenState filepath txt
-      Just offset -> initialTokenState filepath txt
+      Nothing -> initialTokenState uri txt
+      Just offset -> initialTokenState uri txt
         & #posState %~ (\p -> p { pstateSourcePos = offset} )
-    go :: RawToken -> StateT TokenState Identity PosToken
+    go :: RawToken -> Base.State TokenState PosToken
     go rtok = do
       ts <- get
       let
@@ -771,7 +789,7 @@ displayTokenType tt =
     TQuoted t        -> "`" <> t <> "`"
     TIntLit t _i     -> t
     TStringLit s     -> showStringLit s
-    TDirective t     -> "#" <> t
+    TDirective d     -> showDirective d
     TCopy _          -> "^"
     TPOpen           -> "("
     TPClose          -> ")"
@@ -860,10 +878,16 @@ displayTokenType tt =
     TNlgString t     -> t
     TNlgPrefix       -> "@nlg"
     TPercent         -> "%"
+    TKImport         -> "IMPORT"
     TSpace t         -> t
     TLineComment t   -> t
     TBlockComment t  -> t
     EOF              -> ""
+
+showDirective :: DirectiveType -> Text
+showDirective = \case
+  TEvalDirective -> "#EVAL"
+  TCheckDirective -> "#CHECK"
 
 data TokenCategory
   = CIdentifier
@@ -925,7 +949,7 @@ posTokenCategory =
     TKIf -> CKeyword
     TKThen -> CKeyword
     TKElse -> CKeyword
-    TKOtherwise -> CIdentifier
+    TKOtherwise -> CKeyword
     -- TKFalse -> CKeyword
     -- TKTrue -> CKeyword
     TKAnd -> CKeyword
@@ -976,7 +1000,11 @@ posTokenCategory =
     TNlgString _ -> CAnnotation
     TNlgPrefix -> CAnnotation
     TPercent -> CSymbol
+    TKImport -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
     TBlockComment _ -> CComment
     EOF -> CEOF
+
+showNormalizedUri :: NormalizedUri -> String
+showNormalizedUri =  Text.unpack . (.getUri) . fromNormalizedUri

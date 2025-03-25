@@ -35,7 +35,7 @@ main = do
     for_ options.files \fp -> do
       let nfp = toNormalizedFilePath fp
           uri = normalizedFilePathToUri nfp
-      Shake.addVirtualFileFromFS nfp
+      _ <- Shake.addVirtualFileFromFS nfp
       mtc <- Shake.use Rules.TypeCheck  uri
       mep <- Shake.use Rules.ExactPrint uri
       case (mtc, mep) of

@@ -5,3 +5,11 @@ if `y` then 3 else 5
 `addPair` with `MkPair` with 1and2
 `l`
 `sumList` with list of 1, 2and3
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: eval.l4
+  Hidden:   no
+  Range:    22:8-22:13
+  Source:   check
+  Severity: DiagnosticSeverity_Information
+  Code:     <none>
+  Message:  NUMBER 

@@ -114,11 +114,11 @@ class HasNlg a where
   -- based on the 'SrcSpan' of 'a' and its neighbours.
   addNlg :: a -> NlgA a
 
-instance (HasSrcRange n, HasNlg n) => HasNlg (Program n) where
+instance (HasSrcRange n, HasNlg n) => HasNlg (Module n) where
   addNlg a = extendNlgA a $ case a of
-    MkProgram ann sects -> do
+    MkModule uri ann sects -> do
       sects' <- traverse addNlg sects
-      pure (MkProgram ann sects')
+      pure (MkModule uri ann sects')
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Section n) where
   addNlg a = extendNlgA a $ case a of
@@ -142,6 +142,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
     Directive ann directive -> do
       directive' <- addNlg directive
       pure $ Directive ann directive'
+    Import ann import_ -> do
+      import_' <- addNlg import_
+      pure $ Import ann import_'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of
@@ -174,6 +177,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
+  addNlg a = extendNlgA a $ case a of
+    MkImport ann n -> do
+      n' <- addNlg n
+      pure $ MkImport ann n'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
   addNlg a = extendNlgA a $ case a of

@@ -6,11 +6,8 @@ import qualified Base.Text as Text
 import L4.Syntax
 import L4.Annotation
 import Optics
-import L4.TypeCheck
 import L4.Lexer (PosToken)
-import L4.Parser.SrcSpan
 import GHC.Generics (Generically(..))
-import qualified L4.Parser as Parser
 
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
@@ -35,28 +32,6 @@ data LinTree = MkLinTree
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Semigroup, Monoid) via Generically LinTree
-
-debugAllChecksAndEvals :: FilePath -> IO ()
-debugAllChecksAndEvals file = do
-  input <- Text.readFile file
-  case Parser.execProgramParser file input of
-    Left errs -> Text.putStrLn $ Text.unlines $ fmap (.message) $ toList errs
-    Right (prog, _) ->
-      case doCheckProgram prog of
-        CheckResult {errors, program} -> do
-          Text.putStrLn $ Text.unlines
-            ( map
-                (\ err -> prettySrcRange (Just file) (rangeOf err) <> ":\n" <> Text.unlines (prettyCheckErrorWithContext err))
-                errors
-            )
-
-          let directives = toListOf (gplate @(Directive Resolved)) program
-              checkExprs = mapMaybe (\case
-                Eval _ e -> Just e
-                Check _ e -> Just e
-                ) directives
-
-          traverse_ (Text.putStrLn . simpleLinearizer) checkExprs
 
 -- | Linearize an expression into plain text.
 -- This linearizer does not attempt to do any smart operations, such as capitalization.

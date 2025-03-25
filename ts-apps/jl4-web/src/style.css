@@ -12,6 +12,8 @@
 @import 'tailwindcss';
 /* ladder lib's css needs to come before tailwind import */
 
+/* Needs to be specified because 
+Tailwind v4 doesn't automatically check for a tailwind.config.js file */
 @config "../tailwind.config.js";
 
 /* Shadcn theme */
@@ -60,4 +62,17 @@
   #jl4-editor {
     border: 1px solid grey;
   }
+}
+
+.quick-input-widget {
+  position: absolute !important;
+  left: 25px !important;
+  right: auto !important;
+  top: 25px !important;
+}
+
+div[widgetid='editor.contrib.quickInputWidget'] {
+  position: absolute !important;
+  left: 0 !important;
+  right: auto !important;
 }

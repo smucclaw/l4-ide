@@ -5,7 +5,7 @@ module L4.Parser (
   parseFile,
   execParser,
   execParserForTokens,
-  program,
+  module',
   PError (..),
   mkPError,
   PState (..),
@@ -17,9 +17,6 @@ module L4.Parser (
   -- * High-level JL4 parser
   execProgramParser,
   execProgramParserForTokens,
-
-  -- * Testing API
-  parseTest,
 
   -- * Annotation helpers
   WithAnno_ (..),
@@ -70,8 +67,15 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
 import L4.Syntax
 import L4.Parser.SrcSpan
+import qualified Generics.SOP as SOP
 
-type Parser = StateT PState (Parsec Void TokenStream)
+type Parser = ReaderT Env (StateT PState (Parsec Void TokenStream))
+
+data Env = Env
+  { modLocation :: NormalizedUri
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic)
 
 data PState = PState
   { comments :: [Comment]
@@ -112,14 +116,13 @@ refP = do
 nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
   currentPosition <- getSourcePos
+  modLocation <- asks (.modLocation)
   rawText <- hidden $ spacedTokenWs (\case
     TNlg t ty -> Just $ toNlgAnno t ty
     _ -> Nothing)
     "Natural Language Annotation"
 
   let
-    inputFp = sourceName currentPosition
-
     nlgParser :: Parser Nlg
     nlgParser =
       blockNlg <|> lineNlg
@@ -146,12 +149,12 @@ nlgAnnotationP = do
             try nameRefP
         <|> textFragment isBlock
 
-    runNlgParserForInputAt initPos input = case execNlgLexer initPos input of
+    runNlgParserForInputAt initPos input = case execNlgLexer initPos modLocation input of
       Left err -> do
         -- traverse_ registerParseError (bundleErrors err)
         fancyFailure $ Set.singleton $ ErrorFail $ errorBundlePretty err -- TODO: no idea how to lift this properly
       Right toks ->
-        case execNlgParserForTokens (nlgParser <* eof) inputFp rawText.payload toks of
+        case execNlgParserForTokens (nlgParser <* eof) modLocation rawText.payload toks of
           Left err -> do
             -- TODO: register delayed parser error
             traverse_ registerParseError (bundleErrors err)
@@ -310,10 +313,10 @@ indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
 indented parser pos =
   withIndent GT pos $ \ _ -> parser
 
-program :: Parser (Program Name)
-program = do
+module' :: NormalizedUri -> Parser (Module Name)
+module' uri = do
   attachAnno $
-    MkProgram emptyAnno
+    MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole
           ((:)
@@ -397,6 +400,8 @@ topdecl =
     <|> Assume    emptyAnno <$> annoHole (assume sig)
   ) <|> attachAnno
         (Directive emptyAnno <$> annoHole directive)
+    <|> attachAnno
+        (Import    emptyAnno <$> annoHole import')
 
 localdecl :: Parser (LocalDecl Name)
 localdecl =
@@ -411,15 +416,22 @@ withTypeSig p = do
   p sig
 
 directive :: Parser (Directive Name)
-directive = do
+directive =
   attachAnno $
     choice
       [ Eval emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective "EVAL"))
+          <$ annoLexeme (spacedToken_ (TDirective TEvalDirective))
       , Check emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective "CHECK"))
+          <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
       ]
       <*> annoHole expr
+
+import' :: Parser (Import Name)
+import' =
+  attachAnno $
+    MkImport emptyAnno
+      <$  annoLexeme (spacedToken_ TKImport)
+      <*> annoHole name
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do
@@ -1288,51 +1300,70 @@ _example11e =
 -- Parse NLG annotations such that we can process them later.
 -- ----------------------------------------------------------------------------
 
-execNlgParserForTokens :: Parser a -> String -> Text -> [PosToken] -> Either (ParseErrorBundle TokenStream Void) a
-execNlgParserForTokens p file input ts =
-  case parse (runStateT (p <* eof) mempty) file (MkTokenStream (Text.unpack input) ts) of
+execNlgParserForTokens :: Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (ParseErrorBundle TokenStream Void) a
+execNlgParserForTokens p uri input ts =
+  case runJl4Parser env st p (showNormalizedUri uri) stream of
     Left err -> Left err
     Right (a, _pstate) -> Right a
+  where
+    env = Env
+      { modLocation = uri
+      }
+    st = PState
+      { nlgs = []
+      , comments = []
+      , refs = []
+      }
+    stream = MkTokenStream (Text.unpack input) ts
 
 -- ----------------------------------------------------------------------------
 -- JL4 parsers
 -- ----------------------------------------------------------------------------
 
-execParser :: Resolve.HasNlg a => Parser a -> String -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
-execParser p file input =
-  case runLexer file input of
+execParser :: Resolve.HasNlg a => Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParser p uri input =
+  case execLexer uri input of
     Left errs -> Left errs
-    Right ts -> execParserForTokens p file input ts
+    -- TODO: we should probably push in the uri even further.
+    Right ts -> execParserForTokens p uri input ts
 
-execParserForTokens :: Resolve.HasNlg a => Parser a -> String -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserForTokens :: Resolve.HasNlg a => Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
 execParserForTokens p file input ts =
-  case parse (runStateT (p <* eof) mempty) file (MkTokenStream (Text.unpack input) ts) of
+  case runJl4Parser env st p (showNormalizedUri file) stream  of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right (a, pstate)  ->
       let
         (annotatedA, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs a
       in
         Right (annotatedA, nlgS.warnings, pstate)
+  where
+    env = Env
+      { modLocation = file
+      }
+    st = PState
+      { nlgs = []
+      , comments = []
+      , refs = []
+      }
+    stream = MkTokenStream (Text.unpack input) ts
 
-
-
-runLexer :: FilePath -> Text -> Either (NonEmpty PError) [PosToken]
-runLexer file input =
-  execLexer file input
+runJl4Parser :: Env -> PState -> Parser a -> FilePath -> TokenStream -> Either (ParseErrorBundle TokenStream Void) (a, PState)
+runJl4Parser env initState p input stream =
+  parse (runStateT (runReaderT (p <* eof) env) initState) input stream
 
 -- ----------------------------------------------------------------------------
 -- JL4 Program parser
 -- ----------------------------------------------------------------------------
 
-execProgramParser :: FilePath -> Text -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
-execProgramParser file input =
-  forgetPState $ execParser program file input
+execProgramParser :: NormalizedUri -> Text -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParser uri input =
+  forgetPState $ execParser (module' uri) uri input
   where
     forgetPState = fmap (\(p, warns, _) -> (p, warns))
 
-execProgramParserForTokens :: FilePath -> Text -> [PosToken] -> Either (NonEmpty PError) (Program Name, [Resolve.Warning])
-execProgramParserForTokens file input ts =
-  forgetPState $  execParserForTokens program file input ts
+execProgramParserForTokens :: NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParserForTokens uri input ts =
+  forgetPState $  execParserForTokens (module' uri) uri input ts
   where
     forgetPState = fmap (\(p, warns, _) -> (p, warns))
 
@@ -1341,14 +1372,11 @@ execProgramParserForTokens file input ts =
 -- ----------------------------------------------------------------------------
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
-parseFile :: (Show a, Resolve.HasNlg a) => Parser a -> String -> Text -> IO ()
-parseFile p file input =
-  case execParser p file input of
+parseFile :: (Show a, Resolve.HasNlg a) => Parser a -> NormalizedUri -> Text -> IO ()
+parseFile p uri input =
+  case execParser p uri input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)
     Right (x, _, _pState) -> pPrint x
-
-parseTest :: (Show a, Resolve.HasNlg a) => Parser a -> Text -> IO ()
-parseTest p = parseFile p ""
 
 -- ----------------------------------------------------------------------------
 -- jl4 specific annotation helpers

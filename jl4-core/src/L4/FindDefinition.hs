@@ -22,7 +22,7 @@ class ToResolved a where
   default toResolved :: (SOP.Generic a, SOP.All (AnnoFirst a ToResolved) (SOP.Code a)) => a -> [Resolved]
   toResolved = genericToResolved
 
-deriving anyclass instance ToResolved (Program Resolved)
+deriving anyclass instance ToResolved (Module  Resolved)
 deriving anyclass instance ToResolved (Section Resolved)
 deriving anyclass instance ToResolved (TopDecl Resolved)
 deriving anyclass instance ToResolved (LocalDecl Resolved)
@@ -45,6 +45,10 @@ deriving anyclass instance ToResolved (TypeSig Resolved)
 deriving anyclass instance ToResolved (GivethSig Resolved)
 deriving anyclass instance ToResolved (GivenSig Resolved)
 deriving anyclass instance ToResolved (Directive Resolved)
+deriving anyclass instance ToResolved (Import Resolved)
+
+instance ToResolved NormalizedUri where
+  toResolved = const []
 
 instance ToResolved Lit where
   toResolved = const []
@@ -71,10 +75,12 @@ genericToResolved =
     toResolved
     (const concat :: Anno' a -> [[Resolved]] -> [Resolved])
 
-findDefinition :: ToResolved a => SrcPos -> a -> Maybe SrcRange
+findDefinition :: ToResolved a => SrcPos -> a -> Maybe (NormalizedUri, SrcRange)
 findDefinition pos a = do
-  r <- find matches (toResolved a)
-  rangeOf (getOriginal r)
+  resolved <- find matches (toResolved a)
+  let original = getOriginal resolved
+      uniq = getUnique resolved
+  (uniq.moduleUri,) <$> rangeOf original
   where
     matches :: Resolved -> Bool
     matches r =

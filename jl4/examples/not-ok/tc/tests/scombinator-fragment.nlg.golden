@@ -1,0 +1,12 @@
+Failed to parseInfo | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: scombinator-fragment.l4
+  Hidden:   no
+  Range:    11:1-11:1
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+       |
+    11 | 
+       | ^
+    incorrect indentation (got 1, should be greater than 3)

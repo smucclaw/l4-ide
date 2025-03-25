@@ -1,0 +1,113 @@
+-- Sale of Alcohol (Jersey) Regulations 202–
+
+@ref url https://crlp-jerseyldo.github.io/ilde-mockup/
+-- §1     Interpretation
+-- (1) In these Regulations —
+-- “alcohol” means liquor as defined in the Customs and Excise (Jersey) Law 1999;
+-- “commercial operator” means a body corporate that engages in business for profit but is not a public house or hotel;
+-- “enforcement officer” means person appointed under Regulation 19;
+-- “fraud” includes providing (whether intentionally or not) misleading information in relation to an application for a license under an enactment.
+-- 
+
+IMPORT jerseyCustomsAndExcise1999 AS customsAndExcise
+
+§ 1 Interpretation
+alcohol MEANS customsAndExcise.liquor
+`commercial operator` MEANS
+      `body corporate`
+  AND `engages in business for profit`
+  AND NOT    `public house`
+          OR `hotel`
+`enforcement officer` MEANS §19's person
+
+GIVEN fraudPrime
+DECIDE fraud IS
+  fraudPrime
+  OR  providing
+      "whether"     intentionally
+            OR NOT  ^
+      `misleading information`
+      AND "in relation to" `an application for a license under an enactment`
+
+-- §2     Sale of alcohol
+-- (1) A person must not sell alcohol, if —
+-- (a) the person is a commercial operator; and
+-- (b) the person has —
+--    (i) an unspent conviction for fraud, or
+--    (ii) an alcohol banning order.
+-- (2) A person who contravenes paragraph (1) commits an offence and is liable to imprisonment for a term of 1 year and to a fine.
+-- 
+
+§ 2 Sale of alcohol
+EVERY p IS A Person
+MUSTNT sell alcohol
+   IF person p `is a commercial operator`
+   AND p's
+           an `unspent conviction for fraud`
+       OR  an `alcohol banning order`
+LEST {
+       APPEND offence { committed = True, dueTo = this }
+       incurLiability Penalty WITH jailTerm 1 year, WITH fine unspecified
+     }
+
+§ 3 Penalties for Bad Behaviour Generally
+GIVEN offences
+GIVETH penalty
+FOREACH offence in offences
+CONSIDER offence's value
+   WHEN  fraud            ....  penalty = penalty + 1 year
+   WHEN  sell alcohol     ....  penalty = penalty + 2 years
+return penalty
+
+-- 
+-- §3     Misleading price lists
+-- (1) An enforcement officer may issue a warning to the proprietor of premises if —
+-- (a) a price list for alcohol is displayed on the premises;
+-- (b) the premises are registered as a hotel; and
+-- (c) the enforcement officer believes that the price list is misleading to customers.
+-- (2) The enforcement officer may cancel the registration of the hotel if the proprietor fails to correct the price list to the satisfaction of the enforcement officer within 5 days after the warning was issued.
+-- 
+
+§ 3 Misleading price lists
+GIVEN enforcementOfficer
+      premises
+      hotel
+      priceList
+      customers
+      warning
+      registration
+   IF   priceList `is displayed on` premises
+   AND  premises `are registered as a hotel`
+   AND  enforcementOfficer BELIEVES priceList `is misleading to` customers
+PERSON enforcementOfficer
+   MAY issue warning
+       TO proprietor
+
+  HENCE PERSON proprietor
+        SHOULD `correct priceList to the satisfaction of` enforcementOfficer
+        BEFORE 5 days
+
+          LEST PERSON enforcementOfficer
+                  MAY `cancel` registration OF hotel
+
+-- requirement: to be able to elegantly subsequently point to a particular state
+-- transition, e.g. "if the proprietor fails to correct the price list to the satisfaction of the enforcement officer within 5 days after the warning was issued."
+-- goes straight to a state transition on line 90
+-- and "if the proprietor does not fail"
+-- we go to the implicit HENCE that is dual to the LEST on line 90
+
+
+
+PERSON
+  MUST / MAY / MUSTNT
+  [HENCE]
+  [LEST]
+
+IF PERSON Alice DOES a thing
+THEN IF PERSON Bob DOES a thing
+     THEN IF PERSON Alice DOES a thing
+          THEN the money is $10
+          ELSE the money is $5
+     ELSE the money is $3
+ELSE the money is $1
+

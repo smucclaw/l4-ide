@@ -1,11 +1,9 @@
 Parsing successful
 Typechecking successful
+Evaluation successful
 directive.l4:7:7-20:
   10
-
 directive.l4:8:7-10:10:
   10
-
 directive.l4:25:8-57:
   BOOLEAN
-

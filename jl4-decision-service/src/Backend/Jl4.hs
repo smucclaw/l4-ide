@@ -26,27 +26,28 @@ createFunction fnDecl fnImpl =
       { runFunction = \params _outFilter {- TODO: how to handle the outFilter? -} -> do
           l4Params <- traverse (uncurry toL4Param) params
           let
+            wrapstyle = if "DECLARE Inputs" `Text.isInfixOf` fnImpl then WrapInInputs else NoWrap
             l4InputWithEval =
               Text.unlines
                 [ fnImpl
-                , prettyLayout $ evalStatement l4Params
+                , prettyLayout $ evalStatement wrapstyle l4Params
                 ]
           (errs, mp) <- liftIO $ oneshotL4ActionAndErrors file \nfp -> do
             let  uri = normalizedFilePathToUri nfp
-            Shake.addVirtualFile nfp l4InputWithEval
+            _ <- Shake.addVirtualFile nfp l4InputWithEval
             Shake.use Rules.TypeCheck uri
           case mp of
             Nothing -> throwE $ InterpreterError (mconcat errs)
             Just tcRes -> do
-              case doEvalProgram tcRes.program of
-                [(_srcRange, valEither, evalTrace)] -> case valEither of
+              case doEvalModule tcRes.module' of
+                [ MkEvalDirectiveResult { result, trace } ] -> case result of
                   Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
                   Right val -> do
                     r <- valueToFnLiteral val
                     pure $
                       ResponseWithReason
                         { values = [("result", r)]
-                        , reasoning = buildReasoningTree evalTrace
+                        , reasoning = buildReasoningTree trace
                         }
                 [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
                 _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
@@ -63,14 +64,18 @@ createFunction fnDecl fnImpl =
 
   inputName = mkName "Inputs"
 
-  evalStatement args =
+  evalStatement :: WrapStyle -> [(Name, Expr Name)] -> TopDecl Name
+  evalStatement wrapstyle args =
     mkTopDeclDirective $
       mkEval $
-        mkFunApp
-          funName
-          [ mkInputs inputName $
-              fmap (uncurry mkArg) args
-          ]
+          case wrapstyle of
+            WrapInInputs ->
+              mkFunApp funName [ mkNamedFunApp inputName $ fmap (uncurry mkArg) args ]
+            NoWrap       ->
+              mkNamedFunApp
+                funName $ fmap (uncurry mkArg) args
+
+data WrapStyle = WrapInInputs | NoWrap
 
 literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
 literalToExpr = \case
@@ -143,8 +148,8 @@ mkFunApp :: n -> [Expr n] -> Expr n
 mkFunApp =
   App emptyAnno
 
-mkInputs :: n -> [NamedExpr n] -> Expr n
-mkInputs con args =
+mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
+mkNamedFunApp con args =
   AppNamed emptyAnno con args Nothing
 
 mkArg :: n -> Expr n -> NamedExpr n

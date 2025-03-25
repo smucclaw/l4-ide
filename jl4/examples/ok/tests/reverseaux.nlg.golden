@@ -1,0 +1,9 @@
+`go`
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: reverseaux.l4
+  Hidden:   no
+  Range:    6:8-6:10
+  Source:   check
+  Severity: DiagnosticSeverity_Information
+  Code:     <none>
+  Message:  FUNCTION FROM LIST OF p8 AND LIST OF p8 TO LIST OF p8 
