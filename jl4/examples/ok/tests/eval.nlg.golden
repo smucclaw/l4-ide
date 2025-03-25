@@ -1,5 +1,5 @@
-the multiplication of `x` and `x`
-the multiplication of `x` and `x`
+the product of `x` and `x`
+the product of `x` and `x`
 if `y` then 3 else 5
 `MkPair` with 1 and 2
 `addPair` with `MkPair` with 1 and 2

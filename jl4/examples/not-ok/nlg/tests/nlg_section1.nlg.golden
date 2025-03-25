@@ -1,7 +1,6 @@
 
 Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File:    
-    file:///home/hugin/Documents/haskell/cclaw/l4-ide/jl4/examples/not-ok/nlg/nlg_section1.l4
+File: nlg_section1.l4
   Hidden:   no
   Range:    1:1-1:68
   Source:   parser

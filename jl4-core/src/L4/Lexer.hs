@@ -426,21 +426,14 @@ rawNlgTokens = many (MkRawToken <$> getOffset <*> nlgTokenPayload <*> getOffset)
 
 execLexer :: NormalizedUri -> Text -> Either (NonEmpty PError) [PosToken]
 execLexer uri input =
-  let
-    r = parse (rawTokens <* eof) (showNormalizedUri uri) input
-  in
-    case r of
-      Right rtoks -> Right (mkPosTokens Nothing uri input rtoks)
-      Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
+  case parse (rawTokens <* eof) (showNormalizedUri uri) input of
+    Right rtoks -> Right (mkPosTokens Nothing uri input rtoks)
+    Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
 
 execNlgLexer :: SourcePos -> NormalizedUri -> Text -> Either (ParseErrorBundle Text Void) [PosToken]
-execNlgLexer offset uri input =
-  let
-    r = parse (rawNlgTokens <* eof) (showNormalizedUri uri) input
-  in
-    case r of
-      Right rtoks -> Right (mkPosTokens (Just offset) uri input rtoks)
-      Left errs   -> Left errs
+execNlgLexer offset uri input = do
+  rtoks <- parse (rawNlgTokens <* eof) (showNormalizedUri uri) input
+  pure (mkPosTokens (Just offset) uri input rtoks)
 
 data TokenState =
   MkTokenState
@@ -1007,7 +1000,7 @@ posTokenCategory =
     TKFor -> CKeyword
     TKAll -> CKeyword
     TKAka -> CKeyword
-    TNlg {} -> CKeyword
+    TNlg {} -> CAnnotation
     TRef {} -> CAnnotation
     TRefSrc _ -> CAnnotation
     TRefMap _ -> CAnnotation

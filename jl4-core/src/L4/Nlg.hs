@@ -72,12 +72,12 @@ instance Linearize (Expr Resolved) where
       ]
     Or _ e1 e2 -> hcat
       [ lin e1
-      , text "and"
+      , text "or"
       , lin e2
       ]
     Implies _ e1 e2 -> hcat
       [ lin e1
-      , text "and"
+      , text "implies"
       , lin e2
       ]
     Equals _ e1 e2 -> hcat
@@ -101,15 +101,15 @@ instance Linearize (Expr Resolved) where
       ]
     Minus _ e1 e2 -> hcat
       [ text "the"
-      , text "subtraction"
-      , text "of"
+      , text "difference"
+      , text "between"
       , lin e2
-      , text "from"
+      , text "and"
       , lin e1
       ]
     Times _ e1 e2 -> hcat
       [ text "the"
-      , text "multiplication"
+      , text "product"
       , text "of"
       , lin e1
       , text "and"
@@ -117,8 +117,9 @@ instance Linearize (Expr Resolved) where
       ]
     DividedBy _ e1 e2 -> hcat
       [ text "the"
-      , text "division"
+      , text "result"
       , text "of"
+      , text "dividing"
       , lin e1
       , text "by"
       , lin e2
@@ -168,22 +169,19 @@ instance Linearize (Expr Resolved) where
     Proj _ e1 e2 -> hcat
       [ lin e1
       , possessive "s"
-      , -- Resolved can't use 'lin', as it doesn't have an 'Anno'
-        linearize e2
+      , linearize e2
       ]
     Var _ v -> linearize v
     Lam _ _ _ -> mempty
     App _ n es -> hcat $
-      [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
-        linearize n
+      [ linearize n
       ]
-      <> ifNonEmpty es (\ _ ->
+      <> ifNonEmpty es
             [ text "with"
             , enumerate (punctuate ",") (spaced $ text "and") (fmap lin es)
-            ])
+            ]
     AppNamed _ n es _order -> hcat
-      [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
-        linearize n
+      [ linearize n
       , text "where"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin es)
       ]
@@ -220,8 +218,7 @@ instance Linearize (Expr Resolved) where
 instance Linearize (NamedExpr Resolved) where
   linearize = \case
     MkNamedExpr _ n e -> hcat
-      [ -- Resolved can't use 'lin', as it doesn't have an 'Anno'
-        linearize n
+      [ linearize n
       , text "is"
       , lin e
       ]
@@ -272,10 +269,7 @@ instance Linearize (Pattern Resolved) where
       ]
 
 instance Linearize Name where
-  linearize = \case
-    MkName _ raw -> case raw of
-      NormalName n -> var n
-      PreDef n -> var n
+  linearize = var . nameToText
 
 instance Linearize Resolved where
   linearize = \case
@@ -296,8 +290,8 @@ instance Linearize Resolved where
 instance Linearize Nlg where
   linearize = \case
     MkInvalidNlg _ -> text "(internal error)"
-    MkParsedNlg _ frags -> mconcat $ fmap linParsedFragment frags
-    MkResolvedNlg _ frags -> mconcat $ fmap linResolvedFragment frags
+    MkParsedNlg _ frags -> foldMap linParsedFragment frags
+    MkResolvedNlg _ frags -> foldMap linResolvedFragment frags
    where
     linParsedFragment :: NlgFragment Name -> LinTree
     linParsedFragment = \case
@@ -316,13 +310,15 @@ instance Linearize Nlg where
 hcat :: [LinTree] -> LinTree
 hcat = mconcat . intersperse (text " ")
 
-ifNonEmpty :: Monoid m => [a] -> (NonEmpty a -> m) -> m
+ifNonEmpty :: Monoid m => [a] -> m -> m
 ifNonEmpty [] _ = mempty
-ifNonEmpty (x:xs) f = f (x :| xs)
+ifNonEmpty (_:_) f = f
 
 -- | 'lin' is like 'linearize', but first checks whether the 'a' has any 'Nlg'
 -- annotations associated with it. If it does, then the 'Nlg' annotations
 -- replaces the linearization of 'a'.
+--
+-- 'Resolved' can't use 'lin', as it doesn't have an 'Anno'
 lin :: (HasAnno a, AnnoExtra a ~ Extension, AnnoToken a ~ PosToken, Linearize a) => a -> LinTree
 lin a
   | Just nlg <- a ^. annoOf % annNlg =

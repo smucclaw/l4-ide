@@ -99,24 +99,24 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.SuccessfulTypeCheck uri
   let output_ = case moutput of
-        Nothing -> "Failed to typecheck\n"
+        Nothing -> "Cannot linearize module that doesn't typecheck\n"
         Just checkResult ->
           let
             mod' = checkResult.module'
             directives = toListOf (gplate @(Directive Resolved)) mod'
-            dirExprs = mapMaybe (\case
-              Eval _ e -> Just e
-              Check _ e -> Just e
+            directiveExprs = fmap (\case
+              Eval _ e -> e
+              Check _ e -> e
               ) directives
           in
-            Text.unlines $ fmap Nlg.simpleLinearizer dirExprs
+            Text.unlines $ fmap Nlg.simpleLinearizer directiveExprs
   let output =
         if isOk
           then output_
-          else output_ <> "\n" <> Text.unlines (fmap Text.strip errs)
+          else output_ <> "\n" <> Text.unlines (fmap (Text.strip . sanitizeFilePaths) errs)
   pure
     Golden
-      { output = output
+      { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile

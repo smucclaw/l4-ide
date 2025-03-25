@@ -71,8 +71,8 @@ import qualified Generics.SOP as SOP
 
 type Parser = ReaderT Env (StateT PState (Parsec Void TokenStream))
 
-data Env = Env
-  { modLocation :: NormalizedUri
+newtype Env = Env
+  { moduleUri :: NormalizedUri
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (SOP.Generic)
@@ -116,7 +116,7 @@ refP = do
 nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
   currentPosition <- getSourcePos
-  modLocation <- asks (.modLocation)
+  moduleUri <- asks (.moduleUri)
   rawText <- hidden $ spacedTokenWs (\case
     TNlg t ty -> Just $ toNlgAnno t ty
     _ -> Nothing)
@@ -149,14 +149,15 @@ nlgAnnotationP = do
             try nameRefP
         <|> textFragment isBlock
 
-    runNlgParserForInputAt initPos input = case execNlgLexer initPos modLocation input of
+    runNlgParserForInputAt initPos input = case execNlgLexer initPos moduleUri input of
       Left err -> do
-        -- traverse_ registerParseError (bundleErrors err)
-        fancyFailure $ Set.singleton $ ErrorFail $ errorBundlePretty err -- TODO: no idea how to lift this properly
+        -- TODO: We should delay the parse error since parser failures in the
+        -- annotation are not immediately fatal, we could report much more errors this way.
+        -- Just like we when parsing fails
+        fancyFailure $ Set.singleton $ ErrorFail $ errorBundlePretty err
       Right toks ->
-        case execNlgParserForTokens (nlgParser <* eof) modLocation rawText.payload toks of
+        case execNlgParserForTokens (nlgParser <* eof) moduleUri rawText.payload toks of
           Left err -> do
-            -- TODO: register delayed parser error
             traverse_ registerParseError (bundleErrors err)
             attachAnno $
               MkInvalidNlg emptyAnno
@@ -193,7 +194,7 @@ textFragment isBlock = do
     notFollowedBy (plainToken TNlgClose *> eof)
   attachAnno $
     MkNlgText emptyAnno
-      <$> annoEpa (wrapInEpa <$> anyToken)
+      <$> annoEpa (wrapInEpa <$> anySingle)
   where
     -- We replace any 'PosToken' we are parsing with 'TNlgString' to make sure
     -- it is highlighted correctly
@@ -267,9 +268,6 @@ plainToken tt =
   token
     (\ t -> if computedPayload t == tt then Just t else Nothing)
     (Set.singleton (Tokens (L.trivialToken tt :| [])))
-
-anyToken :: Parser PosToken
-anyToken = anySingle
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -1307,7 +1305,7 @@ execNlgParserForTokens p uri input ts =
     Right (a, _pstate) -> Right a
   where
     env = Env
-      { modLocation = uri
+      { moduleUri = uri
       }
     st = PState
       { nlgs = []
@@ -1338,7 +1336,7 @@ execParserForTokens p file input ts =
         Right (annotatedA, nlgS.warnings, pstate)
   where
     env = Env
-      { modLocation = file
+      { moduleUri = file
       }
     st = PState
       { nlgs = []
@@ -1435,7 +1433,7 @@ epaToCluster p = CsnCluster
   , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
   }
 
-epaToHiddenCluster :: (HasField "range" t SrcRange, Show t) => Epa_ t a -> CsnCluster_ t
+epaToHiddenCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
 epaToHiddenCluster p = CsnCluster
   { payload =  mkHiddenConcreteSyntaxNode p.original
   , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
