@@ -15,7 +15,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.Print as Print
 import L4.Citations
 import L4.Syntax
-import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution)
+import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution)
 import qualified L4.TypeCheck as TypeCheck
 
 import Control.Applicative
@@ -269,11 +269,12 @@ jl4Rules rootDirectory recorder = do
           -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
           -- same module. That means that the rhs of it should be identical.
           , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.entityInfo tcRes.entityInfo
-          , substitution = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.substitution tcRes.substitution
+          , substitution = tcRes.substitution
           , errorContext = cState.errorContext
           , supply = cState.supply
           }
-        initial = foldl' unionCheckStates TypeCheck.initialCheckState deps
+        -- NOTE: we don't want to leak the inference variables from the substitution
+        initial = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState deps
         result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
         (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
@@ -282,7 +283,7 @@ jl4Rules rootDirectory recorder = do
         { module' = result.program
         , substitution = result.substitution
         , environment = result.environment
-        , entityInfo = result.entityInfo
+        , entityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
         , success = null errors
         , infos
         }
