@@ -650,10 +650,10 @@ nlgExpr = \case
       v' <- resolveNlgAnnotationInResolved v
       pure $ Var ann v'
     Lam ann sig body -> do
-      -- TODO: this is definitely wrong, 'Lam' introduces new, local bindings
-      sig' <- nlgGivenSig sig
-      body' <- nlgExpr body
-      pure $ Lam ann sig' body'
+      -- Since the parameters in the lambda bring new variables into
+      -- scope, we have to resolve the annotations when checking the 'Lam'
+      -- case. Thus, we don't need to traverse it here again.
+      pure $ Lam ann sig body
     App ann n ns -> do
       n' <- resolveNlgAnnotationInResolved n
       ns' <- traverse nlgExpr ns
@@ -669,6 +669,9 @@ nlgExpr = \case
       pure $ IfThenElse ann b' e1' e2'
     Consider ann e branches  -> do
       e' <- nlgExpr e
+      -- Since the bindings in the branches bring new variables into
+      -- scope, we have to resolve the annotations when checking the 'Consider'
+      -- case. Thus, we don't need to traverse it here again.
       pure $ Consider ann e' branches
     expr@Lit{} -> do
       pure expr
@@ -676,20 +679,10 @@ nlgExpr = \case
       es' <- traverse nlgExpr es
       pure $ List ann es'
     Where ann e lcl -> do
-      -- TODO: this is definitely wrong, 'Where' introduces new, local bindings
-      e' <- nlgExpr e
-      lcl' <- traverse nlgLocalDecl lcl
-      pure $ Where ann e' lcl'
-
--- nlgBranch :: Branch Resolved -> Check (Branch Resolved)
--- nlgBranch = \case
---   When ann pat expr   ->
---     When ann
---       <$> nlgPattern pat
---       <*> nlgExpr expr
---   Otherwise ann expr ->
---     Otherwise ann
---       <$> nlgExpr expr
+      -- Since the bindings in the 'LocalDecl' bring new variables into
+      -- scope, we have to resolve the annotations when checking the 'Where'
+      -- case. Thus, we don't need to traverse it here again.
+      pure $ Where ann e lcl
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \case
@@ -1277,9 +1270,12 @@ checkExpr ec (Consider ann e branches) t = softprune $ scope $ do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
 checkExpr ec (Where ann e ds) t = softprune $ scope $ do
-  rds <- traverse inferLocalDecl ds
+  rds <- traverse (nlgLocalDecl <=< inferLocalDecl) ds
   re <- checkExpr ec e t
-  let re' = setAnnResolvedType t (Where ann re rds)
+  -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+  -- brings new bindings into scope.
+  re2 <- nlgExpr re
+  let re' = setAnnResolvedType t (Where ann re2 rds)
   pure re'
 checkExpr ec e t = softprune $ scope $ do
   setErrorContext (WhileCheckingExpression e)
@@ -1385,7 +1381,10 @@ inferExpr' g =
     Lam ann givens e -> do
       (rgivens, rargts) <- inferLamGivens givens
       (re, te) <- inferExpr e
-      pure (Lam ann rgivens re, fun_ rargts te)
+      -- We have to resolve NLG annotations now, as the 'Lam' brings new
+      -- variables into scope.
+      re2 <- nlgExpr re
+      pure (Lam ann rgivens re2, fun_ rargts te)
     App ann n es -> do
       -- We want good type error messages. Therefore, we pursue the
       -- following strategy:
@@ -1482,15 +1481,17 @@ checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = scope $ do
   extend
   re <- checkExpr ec e tresult
   When ann
-    -- We can only now resolve NLG annotations because
+    -- We have to resolve NLG annotations now because
     -- bound variables are brought into scope.
     <$> nlgPattern rpat
     <*> nlgExpr re
 checkBranch ec _scrutinee _tscrutinee tresult (Otherwise ann e) = do
   re <- checkExpr ec e tresult
   Otherwise ann
-    -- We can only now resolve NLG annotations because
-    -- bound variables are brought into scope for 'When' case.
+    -- We have to resolve NLG annotations now because
+    -- bound variables are brought into scope.
+    -- In the 'Otherwise' case, there are no new variables, but
+    -- for consistency, we still resolve the NLG annotations now.
     <$> nlgExpr re
 
 checkPattern :: ExpectationContext -> Pattern Name -> Type' Resolved -> Check (Pattern Resolved, Check ())
