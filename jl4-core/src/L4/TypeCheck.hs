@@ -915,12 +915,6 @@ ensureNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
   (_, rotns) <- ensureNameConsistency [] otns
   pure ([], MkOptionallyTypedName ann rn rmt : rotns)
 
-setResolvedAnno :: Anno -> Resolved -> Resolved
-setResolvedAnno ann = \case
-  Def uniq name -> Def uniq (setAnno ann name)
-  Ref reference uniq original -> Ref reference uniq (setAnno ann original)
-  OutOfScope uniq name -> OutOfScope uniq (setAnno ann name)
-
 -- | Checks that the names are consistent, and resolve the 'OptionallyTypedName's.
 --
 -- Note that the list of 'OptionallyTypedName's can in principle contain both
@@ -961,7 +955,7 @@ ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
 
 mkref :: Resolved -> OptionallyTypedName Name -> Check (OptionallyTypedName Resolved)
 mkref r (MkOptionallyTypedName ann n mt) = do
-  rn <- ref n (setResolvedAnno (getAnno n) r)
+  rn <- ref n r
   rmt <- traverse inferType mt
   pure (MkOptionallyTypedName ann rn rmt)
 

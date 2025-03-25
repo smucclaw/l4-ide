@@ -302,11 +302,17 @@ instance Linearize Resolved where
   linearize = \case
     Def _ name -> lin name
     Ref ref _ original
-      | Just _ <- ref ^. annoOf % annNlg
-      , Nothing <- original ^. annoOf % annNlg
-       -> lin ref
-      | otherwise -> lin original
+      | hasNlgAnnotation original && not (hasNlgAnnotation ref) ->
+          -- If the binding has an NLG annotation, but the use-site does not
+          -- have an NLG annotation, we use the NLG annotation of the binding.
+        lin original
+      | otherwise ->
+        -- In all other cases, we just use the NLG annotation of the use-site.
+        -- This behaves correctly when there is no NLG annotation at all.
+        lin ref
     OutOfScope _ n -> lin n
+   where
+    hasNlgAnnotation name = isJust $ name ^. annoOf % annNlg
 
 instance Linearize Nlg where
   linearize = \case
