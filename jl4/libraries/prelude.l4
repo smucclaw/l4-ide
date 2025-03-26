@@ -1,6 +1,392 @@
+GIVEN
+  a IS A TYPE
+  x IS AN a
+GIVETH AN a
+id x MEANS x
+
+GIVEN
+  a IS A TYPE
+  b IS A TYPE
+  x IS AN a
+  y IS A b
+GIVETH AN a
+const x y MEANS x
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+null list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN FALSE
+
+GIVEN
+  a     IS A TYPE
+  list1 IS A LIST OF a
+  list2 IS A LIST OF a
+GIVETH A LIST OF a
+append list1 list2 MEANS
+  CONSIDER list1
+  WHEN EMPTY            THEN list2
+  WHEN x FOLLOWED BY xs THEN x FOLLOWED BY append xs list2
+
+GIVEN
+  a     IS A TYPE
+  lists IS A LIST OF LIST OF a
+GIVETH A LIST OF a
+concat lists MEANS
+  CONSIDER lists
+  WHEN EMPTY              THEN EMPTY
+  WHEN xs FOLLOWED BY xss THEN append xs (concat xss)
+
+GIVEN
+  a       IS A TYPE
+  b       IS A TYPE
+  f       IS A FUNCTION FROM a TO b
+  list    IS A LIST OF a
+GIVETH A LIST OF b
+map f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map f xs
+
+GIVEN
+  a       IS A TYPE
+  f       IS A FUNCTION FROM a TO BOOLEAN
+  list    IS A LIST OF a
+GIVETH A LIST OF a
+filter f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN x FOLLOWED BY filter f xs
+      ELSE filter f xs
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+  i    IS A NUMBER
+GIVETH AN a
+at list i MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN
+    IF i <= 0
+      THEN x
+      ELSE at xs (i - 1)
+
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF a
+GIVETH A LIST OF a
+reverse list MEANS go EMPTY list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY            THEN acc
+      WHEN x FOLLOWED BY xs THEN go (x FOLLOWED BY acc) xs
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  x    IS AN a
+GIVETH A LIST OF a
+replicate n x MEANS
+  IF n <= 0
+    THEN EMPTY
+    ELSE x FOLLOWED BY replicate (n - 1) x
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  list IS A LIST OF a
+GIVETH A LIST OF a
+take n list MEANS
+  IF n <= 0
+    THEN EMPTY
+    ELSE CONSIDER list
+         WHEN EMPTY            THEN EMPTY
+         WHEN x FOLLOWED BY xs THEN x FOLLOWED BY take (n - 1) xs
+
+GIVEN
+  a    IS A TYPE
+  n    IS A NUMBER
+  list IS A LIST OF a
+GIVETH A LIST OF a
+drop n list MEANS
+  IF n <= 0
+    THEN list
+    ELSE CONSIDER list
+         WHEN EMPTY            THEN EMPTY
+         WHEN x FOLLOWED BY xs THEN drop (n - 1) xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+takeWhile f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN x FOLLOWED BY takeWhile f xs
+      ELSE EMPTY
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+dropWhile f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    IF f x
+      THEN dropWhile f xs
+      ELSE list
+
+GIVEN
+  list    IS A LIST OF BOOLEAN
+GIVETH A BOOLEAN
+and list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN x AND and xs
+
+GIVEN
+  list    IS A LIST OF BOOLEAN
+GIVETH A BOOLEAN
+or list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN FALSE
+  WHEN x FOLLOWED BY xs THEN x OR or xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+all f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN f x AND all f xs
+
+GIVEN
+  a    IS A TYPE
+  f    IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+any f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN TRUE
+  WHEN x FOLLOWED BY xs THEN f x OR any f xs
+
+GIVEN
+  list    IS A LIST OF NUMBER
+GIVETH A NUMBER
+sum list MEANS go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + x) xs
+
+GIVEN
+  list    IS A LIST OF NUMBER
+GIVETH A NUMBER
+product list MEANS go 1 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc * x) xs
+
+GIVEN
+  x IS A NUMBER
+GIVETH A BOOLEAN
+even x MEANS x MODULO 2 EQUALS 0
+
+GIVEN
+  x IS A NUMBER
+GIVETH A BOOLEAN
+odd x MEANS x MODULO 2 EQUALS 1
+
+GIVEN
+  x IS A NUMBER
+  y IS A NUMBER
+GIVETH A NUMBER
+max x y MEANS IF x >= y THEN x ELSE y
+
+GIVEN
+  x IS A NUMBER
+  y IS A NUMBER
+GIVETH A NUMBER
+min x y MEANS IF x <= y THEN x ELSE y
+
+GIVEN
+  x    IS A NUMBER
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+maximum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN maximum1 (max x y) ys
+
+GIVEN
+  x    IS A NUMBER
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+minimum1 x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN x
+  WHEN y FOLLOWED BY ys THEN minimum1 (min x y) ys
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+maximum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN maximum1 x xs
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A NUMBER
+minimum list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN minimum1 x xs
+
+GIVEN
+  low    IS A NUMBER
+  high   IS A NUMBER
+GIVETH A LIST OF NUMBER
+range low high MEANS
+  IF low > high
+    THEN EMPTY
+    ELSE low FOLLOWED BY range (low + 1) high
+
+GIVEN
+  a    IS A TYPE
+  cmp  IS A FUNCTION FROM a AND a TO BOOLEAN
+  x    IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+insertBy cmp x list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN LIST x
+  WHEN y FOLLOWED BY ys THEN
+    IF cmp x y
+      THEN x FOLLOWED BY list
+      ELSE y FOLLOWED BY insertBy cmp x ys
+
+GIVEN
+  a    IS A TYPE
+  cmp  IS A FUNCTION FROM a AND a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+sortBy cmp list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN insertBy cmp x (sortBy cmp xs)
+
+GIVEN
+  list IS A LIST OF NUMBER
+GIVETH A LIST OF NUMBER
+sort list MEANS
+  sortBy (GIVEN x, y YIELD x <= y) list
+
+GIVEN
+  a IS A TYPE
+  x    IS AN a
+  list IS A LIST OF a
+GIVETH A BOOLEAN
+elem x list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN FALSE
+  WHEN y FOLLOWED BY ys THEN x EQUALS y OR elem x ys
+
+GIVEN a IS A TYPE
+GIVETH A TYPE
+DECLARE MAYBE a AKA OPTIONAL
+  IS ONE OF
+    NOTHING
+    JUST
+      HAS
+        payload IS AN a
+
+GIVEN
+  a       IS A TYPE
+  default IS AN a
+  x       IS A MAYBE a
+GIVETH AN a
+fromMaybe default x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN default
+  WHEN JUST x  THEN x
+
+GIVEN
+  a       IS A TYPE
+  b       IS A TYPE
+  just    IS A FUNCTION FROM a TO b
+  nothing IS A b
+  x       IS A MAYBE a
+GIVETH A b
+maybe just nothing x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN nothing
+  WHEN JUST x  THEN just x
+
+GIVEN
+  a       IS A TYPE
+  x       IS A MAYBE a
+  y       IS A MAYBE a
+GIVETH A MAYBE a
+orElse x y MEANS
+  CONSIDER x
+  WHEN NOTHING THEN y
+  WHEN JUST x  THEN JUST x
+
+GIVEN
+  a       IS A TYPE
+  x       IS A MAYBE a
+GIVETH A LIST OF a
+maybeToList x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN EMPTY
+  WHEN JUST x  THEN LIST x
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  f    IS A FUNCTION FROM a TO MAYBE b
+  list IS A LIST OF a
+GIVETH A LIST OF b
+mapMaybe f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER f x
+    WHEN NOTHING THEN mapMaybe f xs
+    WHEN JUST y  THEN y FOLLOWED BY mapMaybe f xs
+
 DECLARE PAIR OF a, b
   HAS fst IS AN a
       snd IS A  b
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  key  IS AN a
+  list IS A LIST OF PAIR OF a, b
+GIVETH A MAYBE b
+lookup key list MEANS
+  CONSIDER list
+  WHEN EMPTY                       THEN NOTHING
+  WHEN PAIR OF k, v FOLLOWED BY xs THEN
+    IF key EQUALS k
+      THEN JUST v
+      ELSE lookup key xs
 
 GIVEN a IS A TYPE
       b IS A TYPE

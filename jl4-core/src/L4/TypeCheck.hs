@@ -1782,3 +1782,9 @@ instance ApplySubst CheckErrorContext where
 
 instance ApplySubst CheckErrorWithContext where
   applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
+
+instance ApplySubst EntityInfo where
+  applySubst = traverse (\(n, entity) -> (n, ) <$> applySubst entity)
+
+instance ApplySubst CheckEntity where
+  applySubst = traverseOf (gplate @(Type' Resolved)) applySubst
