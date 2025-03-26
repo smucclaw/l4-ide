@@ -14,8 +14,11 @@
 @import 'tailwindcss';
 @import './tailwindcss-animate.css';
 
-/* Shadcn theme
+/** Shadcn theme
 * NOTE: Color css vars that don't have the `color-` prefix  should be 'raw' oklch values.
+* See https://next.shadcn-svelte.com/docs/theming
+* > CSS variables must be defined without the color space function.
+* This is probably a holdover from TW 3 which they haven't updated yet.
 */
 @layer base {
   :root {
@@ -24,12 +27,6 @@
 
     --muted: 0.96 0.002 60;
     --muted-foreground: 0.44 0.029 30.3;
-
-    --popover: 1 0 0;
-    --popover-foreground: 0.04 0.051 22.8;
-
-    --card: 1 0 0;
-    --card-foreground: 0.04 0.051 22.8;
 
     --border: 0.9 0.016 22.8;
 
@@ -49,14 +46,6 @@
 
     --ring: 0.04 0.051 22.8;
     --radius: 0.5rem;
-    --sidebar-background: 0.98 0 0;
-    --sidebar-foreground: 0.26 0.022 240;
-    --sidebar-primary: 0.1 0.019 240;
-    --sidebar-primary-foreground: 0.98 0 0;
-    --sidebar-accent: 0.96 0.002 240;
-    --sidebar-accent-foreground: 0.1 0.019 240;
-    --sidebar-border: 0.91 0.016 220;
-    --sidebar-ring: 0.6 0.45 217.2;
   }
 }
 
@@ -96,9 +85,11 @@
   --color-muted-foreground: oklch(var(--muted-foreground));
   --color-accent: oklch(var(--accent));
   --color-accent-foreground: oklch(var(--accent-foreground));
-  --color-popover: oklch(var(--popover));
-  --color-popover-foreground: oklch(var(--popover-foreground));
 }
+
+/*--------------------------------------------------------------------
+          END of shadcn svelte related variables 
+**********************************************************************/
 
 @layer base {
   body {
