@@ -236,14 +236,6 @@ body {
   margin: 0;
 }
 
-/* TODO: Check if this class really can be used w/o @utility */
-.button {
-  background-color: var(--color-secondary);
-  color: transparent;
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-}
-
 /* svelte-flow specific */
 
 :root,
