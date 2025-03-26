@@ -19,34 +19,34 @@ Tailwind v4 doesn't automatically check for a tailwind.config.js file */
 /* Shadcn theme */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
-    --muted: 60 4.8% 95.9%;
-    --muted-foreground: 25 5.3% 44.7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
-    --border: 20 5.9% 90%;
-    --input: 20 5.9% 90%;
-    --primary: 24 9.8% 10%;
-    --primary-foreground: 60 9.1% 97.8%;
-    --secondary: 60 4.8% 95.9%;
-    --secondary-foreground: 24 9.8% 10%;
-    --accent: 60 4.8% 95.9%;
-    --accent-foreground: 24 9.8% 10%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --ring: 20 14.3% 4.1%;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.04 0.051 22.8);
+    --muted: oklch(0.96 0.002 60.0);
+    --muted-foreground: oklch(0.44 0.029 30.3);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.04 0.051 22.8);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.04 0.051 22.8);
+    --border: oklch(0.9 0.016 22.8);
+    --input: oklch(0.9 0.016 22.8);
+    --primary: oklch(0.1 0.11 25.3);
+    --primary-foreground: oklch(0.98 0.005 60.0);
+    --secondary: oklch(0.96 0.002 60.0);
+    --secondary-foreground: oklch(0.1 0.11 25.3);
+    --accent: oklch(0.96 0.002 60.0);
+    --accent-foreground: oklch(0.1 0.11 25.3);
+    --destructive: oklch(0.55 0.23 29.2);
+    --destructive-foreground: oklch(0.98 0.005 60.0);
+    --ring: oklch(0.04 0.051 22.8);
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: oklch(0.98 0 0);
+    --sidebar-foreground: oklch(0.26 0.022 240.0);
+    --sidebar-primary: oklch(0.1 0.019 240.0);
+    --sidebar-primary-foreground: oklch(0.98 0 0);
+    --sidebar-accent: oklch(0.96 0.002 240.0);
+    --sidebar-accent-foreground: oklch(0.1 0.019 240.0);
+    --sidebar-border: oklch(0.91 0.016 220.0);
+    --sidebar-ring: oklch(0.6 0.45 217.2);
   }
 }
 

@@ -31,35 +31,35 @@
 
 :root {
   /* Base Shadcn Svelte colors */
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.137 0.036 258.53);
 
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: oklch(0.96 0.005 249.1);
+  --muted-foreground: oklch(0.53 0.035 251.2);
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.137 0.036 258.53);
 
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.137 0.036 258.53);
 
   /* The default shadcn svelte border color: 214.3 31.8% 91.4%; */
   --border: var(--color-sky-700);
 
-  --input: 214.3 31.8% 91.4%;
+  --input: oklch(0.91 0.035 240.2);
 
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  --primary-foreground: oklch(0.98 0.005 249.1);
+  --secondary: oklch(0.96 0.005 249.1);
+  --secondary-foreground: oklch(0.19 0.045 257.2);
 
   /*  The default shadcn svelte accent: 210 40% 96.1%;
    * The old color-button-hover: #a5b4fc; */
   --accent: var(--color-sky-100);
-  --accent-foreground: 222.2 47.4% 11.2%;
+  --accent-foreground: oklch(0.19 0.045 257.2);
 
-  --destructive: 0 72.2% 50.6%;
-  --destructive-foreground: 210 40% 98%;
-  --ring: 222.2 84% 4.9%;
+  --destructive: oklch(0.55 0.23 29.2);
+  --destructive-foreground: oklch(0.98 0.005 249.1);
+  --ring: oklch(0.137 0.036 258.53);
   /* TODO: Might want to tweak `radius` */
   --radius: 0.3rem;
 
@@ -90,29 +90,29 @@
   ****************************************/
 
   --color-border: var(--border);
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
 
   --color-primary: var(--primary);
-  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-foreground: var(--primary-foreground);
 
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-caution: var(--color-red-500);
   --color-warning: var(--color-amber-500);
   --color-info: var(--color-sky-500);
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
   /***************************************
         Our specific colors
