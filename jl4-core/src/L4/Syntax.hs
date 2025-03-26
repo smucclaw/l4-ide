@@ -213,7 +213,8 @@ data Branch n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Pattern n =
-    PatVar Anno n -- not used during parsing, but after scope-checking
+    PatVar Anno n
+    -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show)
@@ -302,6 +303,11 @@ data Info =
 
 instance Default Extension where
   def = Extension Nothing Nothing
+
+annoOf :: HasAnno a => Lens' a (Anno' a)
+annoOf = lens
+  getAnno
+  (flip setAnno)
 
 annInfo :: Lens' Anno (Maybe Info)
 annInfo = annoExtra % #resolvedInfo
@@ -445,8 +451,34 @@ data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-data Nlg = MkNlg Anno Text
+-- | Natural Language Generation Annotation type.
+--
+-- A NLG annotation has three distinct states:
+--
+-- * @Invalid@ 'MkInvalidNlg'.
+-- * @Parsed@ 'MkParsedNlg'.
+--   A valid annotation which we have processed to figure out the
+--   'Name's that occur in it.
+-- * @Resolved@ 'MkResolvedNlg'.
+--   A resolved annotation is a 'MkParsedNlg' annotation which contained only
+--   resolvable 'Name's.
+data Nlg =
+    MkInvalidNlg Anno
+    -- ^ This is an invalid annotation, we failed to parse it further.
+    -- This means it likely has mismatching '%' tokens or the 'name' parser failed.
+  | MkParsedNlg Anno [NlgFragment Name]
+    -- ^ An annotation where we extracted the 'Name's that are mentioned.
+  | MkResolvedNlg Anno [NlgFragment Resolved]
+    -- ^ Same as 'MkParsedNlg', but we have additionally typechecked and resolved the
+    -- annotation.
+    -- Typechecking merely means we have performed scope checking.
   deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data NlgFragment n
+  = MkNlgText Anno Text
+  | MkNlgRef  Anno n
+  deriving stock (Show, Eq, GHC.Generic, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Ref = MkRef Anno Text
@@ -455,6 +487,8 @@ data Ref = MkRef Anno Text
 
 deriving via L4Syntax Nlg
   instance HasAnno Nlg
+deriving via L4Syntax (NlgFragment n)
+  instance HasAnno (NlgFragment n)
 deriving via L4Syntax Comment
   instance HasAnno Comment
 deriving via L4Syntax Ref
@@ -463,8 +497,12 @@ deriving via L4Syntax Ref
 instance ToConcreteNodes PosToken Comment where
   toNodes (MkComment ann _) = flattenConcreteNodes ann []
 
-instance ToConcreteNodes PosToken Nlg where
-  toNodes (MkNlg ann _) = flattenConcreteNodes ann []
+deriving anyclass instance ToConcreteNodes PosToken Nlg
+
+instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (NlgFragment n) where
+  toNodes = \case
+    MkNlgText ann _ -> flattenConcreteNodes ann []
+    MkNlgRef ann n -> flattenConcreteNodes ann [toNodes n]
 
 instance ToConcreteNodes PosToken Int where
   toNodes _txt = pure []
@@ -528,6 +566,7 @@ deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 deriving anyclass instance HasSrcRange Nlg
+deriving anyclass instance HasSrcRange (NlgFragment n)
 deriving anyclass instance HasSrcRange Comment
 deriving anyclass instance HasSrcRange Ref
 

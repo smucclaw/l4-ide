@@ -2,12 +2,14 @@
 module L4.TypeCheck.Types where
 
 import Base
-import L4.Annotation (HasSrcRange(..))
+import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Parser.SrcSpan (SrcRange(..))
 import L4.Syntax
 import L4.TypeCheck.With
 
 import Control.Applicative
+import L4.Lexer (PosToken)
+import qualified Data.Map.Strict as Map
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
@@ -210,3 +212,114 @@ instance Alternative Check where
 
   (<|>) :: Check a -> Check a -> Check a
   (<|>) m1 m2 = MkCheck $ \e s -> runCheck m1 e s ++ runCheck m2 e s
+
+-- ----------------------------------------------------------------------------
+-- Primitives for Uniques, Errors and similar.
+-- ----------------------------------------------------------------------------
+
+step :: Check Int
+step = do
+  current <- use #supply
+  let next = current + 1
+  assign #supply next
+  pure current
+
+newUnique :: Check Unique
+newUnique = do
+  i <- step
+  u <- asks (.moduleUri)
+  pure (MkUnique 'c' i u)
+
+addError :: CheckError -> Check ()
+addError e = do
+  ctx <- use #errorContext
+  with (MkCheckErrorWithContext e ctx)
+
+choose :: [Check a] -> Check a
+choose = asum
+
+anyOf :: [a] -> Check a
+anyOf = asum . fmap pure
+
+-- ----------------------------------------------------------------------------
+-- JL4 specific primitives
+-- ----------------------------------------------------------------------------
+
+fresh :: RawName -> Check (Type' Resolved)
+fresh prefix = do
+  i <- step
+  pure (InfVar emptyAnno prefix i)
+
+outOfScope :: Name -> Type' Resolved -> Check Resolved
+outOfScope n t = do
+  addError (OutOfScopeError n t)
+  u <- newUnique
+  pure (OutOfScope u n)
+
+ambiguousTerm :: Name -> [(Resolved, Type' Resolved)] -> Check Resolved
+ambiguousTerm n xs = do
+  addError (AmbiguousTermError n xs)
+  u <- newUnique
+  pure (OutOfScope u n)
+
+ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
+ambiguousType n xs = do
+  addError (AmbiguousTypeError n xs)
+  u <- newUnique
+  pure (OutOfScope u n)
+
+-- ----------------------------------------------------------------------------
+-- JL4 specific primitives for resolving names
+-- ----------------------------------------------------------------------------
+
+lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
+lookupRawNameInEnvironment n = do
+  env <- use #environment
+  ei  <- use #entityInfo
+  let
+    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
+    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
+
+    candidates :: [(Unique, Name, CheckEntity)]
+    candidates = mapMaybe proc (Map.findWithDefault [] n env)
+
+  pure candidates
+
+resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
+resolveTerm' p n = do
+  options <- lookupRawNameInEnvironment (rawName n)
+  case mapMaybe proc options of
+    [] -> do
+      v <- fresh (rawName n)
+      rn <- outOfScope (setAnnResolvedType v n) v
+      pure (rn, v)
+    [x] -> pure x
+    xs -> anyOf xs <|> do
+      v <- fresh (rawName n)
+      rn <- ambiguousTerm (setAnnResolvedType v n) xs
+      pure (rn, v)
+  where
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
+    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnnResolvedType t n) u o, t)
+    proc _                             = Nothing
+
+resolveTerm :: Name -> Check (Resolved, Type' Resolved)
+resolveTerm = resolveTerm' (const True)
+
+_resolveSelector :: Name -> Check (Resolved, Type' Resolved)
+_resolveSelector = resolveTerm' (== Selector)
+
+resolveConstructor :: Name -> Check (Resolved, Type' Resolved)
+resolveConstructor = resolveTerm' (== Constructor)
+
+setAnnResolvedType ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => Type' Resolved -> a -> a
+setAnnResolvedType t x =
+  setAnno (set annInfo (Just (TypeInfo t)) (getAnno x)) x
+
+setAnnResolvedKind ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => Kind -> a -> a
+setAnnResolvedKind k x =
+  setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x

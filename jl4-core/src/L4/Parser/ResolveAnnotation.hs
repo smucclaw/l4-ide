@@ -2,6 +2,7 @@
 
 module L4.Parser.ResolveAnnotation (
   -- * main function
+  HasNlg(..),
   addNlgCommentsToAst,
   -- * Annotate Syntax Nodes with definite 'SrcSpan's.
   WithSpan (..),
@@ -56,7 +57,7 @@ data WithSpan a = WithSpan
 --
 -- Note, the 'Program Name's exactprint annotations are not modified,
 -- we merely add structured data to the ast node's respective 'Anno'.
-addNlgCommentsToAst :: [Nlg] -> Module  Name -> (Module Name, NlgS)
+addNlgCommentsToAst :: HasNlg a => [Nlg] -> a -> (a, NlgS)
 addNlgCommentsToAst nlgs p = do
   let
     (nlgWithSpan, unfindable) = preprocessNlgs nlgs

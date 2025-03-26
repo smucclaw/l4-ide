@@ -209,7 +209,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetParsedAst uri -> do
     (tokens, contents) <- use_ GetLexTokens uri
-    case Parser.execProgramParserForTokens (Text.unpack (fromNormalizedUri uri).getUri) contents tokens of
+    case Parser.execProgramParserForTokens uri contents tokens of
       Left errs -> do
         let
           diags = toList $ fmap mkParseErrorDiagnostic errs

@@ -152,6 +152,14 @@ data TokenType =
   | TRefSrc       !Text
   | TRefMap       !Text
   | TRef          !Text !AnnoType
+  | TRefOpen
+  | TRefClose
+  | TNlgOpen
+  | TNlgClose
+    -- tokens within annotations
+  | TNlgString    !Text
+  | TNlgPrefix    -- ^ "@nlg"
+  | TPercent
     -- space
   | TSpace        !Text
   | TLineComment  !Text
@@ -166,8 +174,14 @@ annotations = ["nlg", "ref", "ref-map", "ref-src"]
 nlgAnnotation :: Lexer (Text, AnnoType)
 nlgAnnotation =
   lineAnno "@nlg"
-    <|> inlineAnno "[" "]"
+    <|> inlineAnno (Text.singleton nlgInlineAnnotationOpenChar) (Text.singleton nlgInlineAnnotationCloseChar)
   <?> "Natural Language Generation Annotation"
+
+nlgInlineAnnotationCloseChar :: Char
+nlgInlineAnnotationCloseChar = ']'
+
+nlgInlineAnnotationOpenChar :: Char
+nlgInlineAnnotationOpenChar = '['
 
 refAnnotation :: Lexer (Text, AnnoType)
 refAnnotation =
@@ -180,6 +194,22 @@ refSrcAnnotation = fst <$> lineAnno "@ref-src"
 
 refMapAnnotation :: Lexer Text
 refMapAnnotation = fst <$> lineAnno "@ref-map"
+
+nlgString :: Lexer Text
+nlgString =
+  takeWhile1P (Just "character") (\c -> c `notElem` nlgSpecialChars && not (isSpace c))
+  where
+    nlgSpecialChars =
+      [ nlgInlineAnnotationCloseChar
+      , nlgExprDelimiterSymbol
+      ]
+
+nlgExprDelimiter :: Lexer Char
+nlgExprDelimiter =
+  satisfy (== nlgExprDelimiterSymbol)
+
+nlgExprDelimiterSymbol :: Char
+nlgExprDelimiterSymbol = '%'
 
 inlineAnno :: Text -> Text -> Lexer (Text, AnnoType)
 inlineAnno openingHerald closingHerald = do
@@ -263,6 +293,17 @@ tokenPayload =
   <|> TCopy Nothing   <$  char '^'
   <|> symbolic
   <|> identifierOrKeyword
+
+nlgTokenPayload :: Lexer TokenType
+nlgTokenPayload =
+      TPercent    <$  nlgExprDelimiter
+  <|> TQuoted     <$> quoted
+  <|> TNlgOpen    <$  char nlgInlineAnnotationOpenChar
+  <|> TNlgClose   <$  char nlgInlineAnnotationCloseChar
+  <|> TNlgPrefix  <$  "@nlg"
+  <|> TSpace      <$> whitespace
+  <|> TIdentifier <$> identifier
+  <|> TNlgString  <$> nlgString
 
 symbolic :: Lexer TokenType
 symbolic =
@@ -379,14 +420,19 @@ trivialToken tt =
 rawTokens :: Lexer [RawToken]
 rawTokens = many (MkRawToken <$> getOffset <*> tokenPayload <*> getOffset)
 
+rawNlgTokens :: Lexer [RawToken]
+rawNlgTokens = many (MkRawToken <$> getOffset <*> nlgTokenPayload <*> getOffset)
+
 execLexer :: NormalizedUri -> Text -> Either (NonEmpty PError) [PosToken]
 execLexer uri input =
-  let
-    r = parse (rawTokens <* eof) (showNormalizedUri uri) input
-  in
-    case r of
-      Right rtoks -> Right (mkPosTokens uri input rtoks)
-      Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
+  case parse (rawTokens <* eof) (showNormalizedUri uri) input of
+    Right rtoks -> Right (mkPosTokens Nothing uri input rtoks)
+    Left errs   -> Left (fmap (mkPError "lexer") $ errorBundleToErrorMessages errs)
+
+execNlgLexer :: SourcePos -> NormalizedUri -> Text -> Either (ParseErrorBundle Text Void) [PosToken]
+execNlgLexer offset uri input = do
+  rtoks <- parse (rawNlgTokens <* eof) (showNormalizedUri uri) input
+  pure (mkPosTokens (Just offset) uri input rtoks)
 
 data TokenState =
   MkTokenState
@@ -410,10 +456,18 @@ initialTokenState uri txt =
 --
 -- At the same time, we interpret copy tokens.
 --
-mkPosTokens :: NormalizedUri -> Text -> [RawToken] -> [PosToken]
-mkPosTokens uri txt rtoks =
-    evalState (traverse go rtoks) (initialTokenState uri txt)
+mkPosTokens :: Maybe SourcePos -> NormalizedUri -> Text -> [RawToken] -> [PosToken]
+mkPosTokens sourcePosOffset uri txt rtoks =
+    evalState (traverse go rtoks) tokenSt
   where
+    startTokenState = initialTokenState uri txt
+    tokenSt = case sourcePosOffset of
+      Nothing -> startTokenState
+      Just offset -> startTokenState
+        { posState = startTokenState.posState
+          { pstateSourcePos = offset
+          }
+        }
     go :: RawToken -> Base.State TokenState PosToken
     go rtok = do
       ts <- get
@@ -736,6 +790,10 @@ toNlgAnno = toAnno "@nlg" "[" "]"
 
 displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
+  displayTokenType tt
+
+displayTokenType :: TokenType -> Text
+displayTokenType tt =
   case tt of
     TIdentifier t    -> t
     TQuoted t        -> "`" <> t <> "`"
@@ -747,6 +805,10 @@ displayPosToken (MkPosToken _r tt) =
     TPClose          -> ")"
     TCOpen           -> "{"
     TCClose          -> "}"
+    TRefOpen         -> "<<"
+    TRefClose        -> ">>"
+    TNlgOpen         -> "["
+    TNlgClose        -> "]"
     TParagraph       -> "§"
     TComma           -> ","
     TSemicolon       -> ";"
@@ -823,6 +885,9 @@ displayPosToken (MkPosToken _r tt) =
     TRef t ty        -> toRefAnno t ty
     TRefSrc t        -> "@ref-src" <> t
     TRefMap t        -> "@ref-map" <> t
+    TNlgString t     -> t
+    TNlgPrefix       -> "@nlg"
+    TPercent         -> "%"
     TKImport         -> "IMPORT"
     TSpace t         -> t
     TLineComment t   -> t
@@ -862,6 +927,10 @@ posTokenCategory =
     TPClose -> CSymbol
     TCOpen -> CSymbol
     TCClose -> CSymbol
+    TRefOpen -> CSymbol
+    TRefClose -> CSymbol
+    TNlgOpen -> CAnnotation
+    TNlgClose -> CAnnotation
     TParagraph -> CSymbol
     TComma -> CSymbol
     TSemicolon -> CSymbol
@@ -938,6 +1007,9 @@ posTokenCategory =
     TRef {} -> CAnnotation
     TRefSrc _ -> CAnnotation
     TRefMap _ -> CAnnotation
+    TNlgString _ -> CAnnotation
+    TNlgPrefix -> CAnnotation
+    TPercent -> CSymbol
     TKImport -> CKeyword
     TSpace _ -> CWhitespace
     TLineComment _ -> CComment
