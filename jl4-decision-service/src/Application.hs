@@ -21,7 +21,7 @@ import Server
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
-import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy)
+import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods)
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
