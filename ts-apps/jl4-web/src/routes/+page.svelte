@@ -353,18 +353,6 @@ DECIDE \`is a British citizen (variant)\` IS
 <style lang="postcss">
   @reference "tailwindcss"
 
-    @keyframes flash {
-    0%,
-    90% {
-      background-color: hsl(var(--neutral));
-    }
-    50% {
-      background-color: oklch(
-        0.951 0.026 236.824
-      ); /* Tailwind's --color-sky-100 */
-    }
-  }
-
   .header {
     padding-top: 3px;
     padding-bottom: 8px;
