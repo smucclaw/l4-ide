@@ -204,7 +204,7 @@
       onblur={() => (isHovered = false)}
       style="background-color: {isHovered
         ? 'var(--accent)'
-        : 'var(--color-button)'}"
+        : 'var(--ladder-color-button)'}"
     >
       <h4>Expand to view source JSON of the IRExpr</h4>
     </label>
