@@ -92,7 +92,7 @@
     @apply border-border;
   }
   body {
-    @apply text-foreground;
+    @apply bg-background text-foreground;
   }
 }
 
@@ -106,7 +106,6 @@
     height: 100svh;
     width: 100%;
     overflow-y: hidden;
-    background-color: #242424;
   }
 
   #jl4-editor {
