@@ -5,7 +5,7 @@ DECIDE `numbers are big`
     IF     x GREATER THAN 1000
        AND y GREATER THAN   250
                           *   2
-                          +   2
+                            + 2
     OR x GREATER THAN 10000
     OR y ^       ^    20000
 
