@@ -86,57 +86,68 @@
       More base Shadcn Svelte colors
   ****************************************/
 
-  --ladder-color-border: oklch(var(--border));
-  --ladder-color-input: oklch(var(--input));
-  --ladder-color-ring: oklch(var(--ring));
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
 
-  --ladder-color-background: oklch(var(--background));
-  --ladder-color-foreground: oklch(var(--foreground));
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
 
-  --ladder-color-primary: oklch(var(--ladder-primary));
-  --ladder-color-primary-foreground: oklch(var(--ladder-primary-foreground));
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
 
-  --ladder-color-secondary: oklch(var(--ladder-secondary));
-  --ladder-color-secondary-foreground: oklch(
-    var(--ladder-secondary-foreground)
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(
+    var(--secondary-foreground)
   );
 
-  --ladder-color-destructive: oklch(var(--ladder-destructive));
-  --ladder-color-destructive-foreground: oklch(
-    var(--ladder-destructive-foreground)
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(
+    var(--destructive-foreground)
   );
-  --ladder-color-caution: oklch(var(--ladder-color-red-500));
-  --ladder-color-warning: oklch(var(--ladder-color-amber-500));
-  --ladder-color-info: oklch(var(--ladder-color-sky-500));
-  --ladder-color-muted: oklch(var(--muted));
-  --ladder-color-muted-foreground: oklch(var(--muted-foreground));
-  --ladder-color-accent: oklch(var(--accent));
-  --ladder-color-accent-foreground: oklch(var(--accent-foreground));
+  --color-caution: oklch(var(--color-red-500));
+  --color-warning: oklch(var(--color-amber-500));
+  --color-info: oklch(var(--color-sky-500));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+}
 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/*--------------------------------------------------------------------
+          END of shadcn svelte related variables 
+**********************************************************************/
+
+@theme inline {
   /*******************************************
-      Other specific --ladder-color-* things
+      Other specific --color-* things
   ********************************************/
 
-  --ladder-color-node-text: #00004d;
+  --color-node-text: #00004d;
   /* Another color to consider for node annotations? --color-zinc-400 */
-  --ladder-color-node-annotation: var(--ladder-color-node-text);
-  --ladder-color-button: #c7d2fe;
-
-  /*--------------------------------------------------------------------
-            END of shadcn svelte related variables 
-  **********************************************************************/
+  --color-node-annotation: var(--color-node-text);
+  --color-button: #c7d2fe;
 
   /***************************************
         Highlighted vs normal paths 
   ****************************************/
 
   /* Stroke width */
-  --default-stroke-width: 1px;
+  --stroke-width-default: 1px;
   /* TODO: Think about whether the default should be 2px */
-  --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
+  --highlighted-stroke-width: calc(var(--stroke-width-default) + 2px);
 
   /* Stroke color */
-  --default-stroke-color: var(--ladder-color-primary);
+  --ladder-stroke-color-default: var(--color-primary);
   --color-highlighted-path-in-flow: var(--color-sky-600);
 
   /***************************************
@@ -153,15 +164,6 @@
   --color-false-value: var(--color-rose-200);
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
 /*************************************
   Utility SF styles
 *************************************/
@@ -170,7 +172,7 @@
   font-size: 1rem;
   text-align: center;
 
-  color: var(--xy-node-color, var(--xy-node-color-default));
+  color: var(--ladder-node-color, var(--ladder-node-color-default));
   background-color: var(
     --xy-node-background-color,
     var(--xy-node-background-color-default)
@@ -234,7 +236,7 @@
 *************************************/
 
 body {
-  color: var(--ladder-color-primary);
+  color: var(--color-primary);
   background-color: white;
   margin: 0;
 }
@@ -243,11 +245,14 @@ body {
 
 :root,
 .svelte-flow {
-  --xy-node-border-radius: var(--radius);
-  --xy-node-color: var(--ladder-color-node-text);
-  --xy-node-border: 2px solid var(--ladder-color-primary);
-  --xy-handle-background-color: var(--ladder-color-primary);
-  --xy-edge-stroke: var(--ladder-color-primary);
+  --ladder-node-border-radius: var(--radius);
+  --ladder-node-color: var(--ladder-color-node-text);
+  --ladder-node-border: 2px solid var(--color-primary);
+
+  /* TODO: Refactor the stuff below to move away from fragile overriding of
+  --xy-* styles  */
+  --xy-handle-background-color: var(--color-primary);
+  --xy-edge-stroke: var(--color-primary);
 
   .svelte-flow__node {
     font-family: 'Source Sans 3', serif;

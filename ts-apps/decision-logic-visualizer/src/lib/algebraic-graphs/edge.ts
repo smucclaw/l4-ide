@@ -224,7 +224,7 @@ export class EmptyEdgeStyles implements EdgeStyles {
   }
 
   getStyleString(): EdgeStyleString {
-    return 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);' as const
+    return 'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);' as const
   }
 }
 
@@ -245,4 +245,4 @@ export const emptyEdgeLabel = ''
 
 export type EdgeStyleString =
   | 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);'
-  | 'stroke: var(--default-stroke-color); stroke-width: var(--default-stroke-width);'
+  | 'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);'

@@ -25,10 +25,10 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
 <style>
   .bool-var-node-border {
-    border: var(--xy-node-border, var(--xy-node-border-default));
+    border: var(--ladder-node-border, var(--ladder-node-border-default));
     border-radius: var(
-      --xy-node-border-radius,
-      var(--xy-node-border-radius-default)
+      --ladder-node-border-radius,
+      var(--ladder-node-border-radius-default)
     );
   }
 
