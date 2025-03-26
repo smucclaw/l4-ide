@@ -79,10 +79,10 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.Annotation
-import L4.Lexer (PosToken(..))
 import L4.Parser.SrcSpan (prettySrcRange)
 import L4.Print (prettyLayout, quotedName)
 import L4.Syntax
+import L4.TypeCheck.Annotation
 import L4.TypeCheck.Environment as X
 import L4.TypeCheck.Types as X
 import L4.TypeCheck.With as X
@@ -172,12 +172,6 @@ runCheckUnique c e s =
     [(w, s')] -> (w, s')
     _ -> error "internal error: expected unique result, got several"
 
-choose :: [Check a] -> Check a
-choose = asum
-
-anyOf :: [a] -> Check a
-anyOf = asum . fmap pure
-
 -- | Biased choice. Only takes the second option if the first fails.
 --
 orElse :: Check a -> Check a -> Check a
@@ -251,29 +245,6 @@ softprune m = do
     in
       proc candidates
 
-step :: Check Int
-step = do
-  current <- use #supply
-  let next = current + 1
-  assign #supply next
-  pure current
-
-newUnique :: Check Unique
-newUnique = do
-  i <- step
-  u <- asks (.moduleUri)
-  pure (MkUnique 'c' i u)
-
-fresh :: RawName -> Check (Type' Resolved)
-fresh prefix = do
-  i <- step
-  pure (InfVar emptyAnno prefix i)
-
-addError :: CheckError -> Check ()
-addError e = do
-  ctx <- use #errorContext
-  with (MkCheckErrorWithContext e ctx)
-
 -- | Should never return 'Nothing' if our system is OK.
 getEntityInfo :: Resolved -> Check (Maybe CheckEntity)
 getEntityInfo r = do
@@ -283,67 +254,6 @@ getEntityInfo r = do
       addError (MissingEntityInfo r)
       pure Nothing
     Just (_n, ce) -> pure (Just ce)
-
-lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
-lookupRawNameInEnvironment n = do
-  env <- use #environment
-  ei  <- use #entityInfo
-  let
-    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
-    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
-
-    candidates :: [(Unique, Name, CheckEntity)]
-    candidates = mapMaybe proc (Map.findWithDefault [] n env)
-
-  -- traceM ("Trying to look up " <> Text.unpack (prettyLayout n))
-  -- traceM ("Returning with " <> show (length candidates) <> " candidates")
-  -- traverse_ (traceM . debugCandidate) candidates
-  pure candidates
-
--- debugCandidate :: (Unique, Name, CheckEntity) -> String
--- debugCandidate (u, _, KnownType kind _)   = show u <> " of kind " <> show kind
--- debugCandidate (u, _, KnownTerm _ _)      = show u <> " is a term"
--- debugCandidate (u, _, KnownTypeVariable)  = show u <> " is a type variable"
-
-
-resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
-resolveTerm' p n = do
-  options <- lookupRawNameInEnvironment (rawName n)
-  case mapMaybe proc options of
-    [] -> do
-      v <- fresh (rawName n)
-      rn <- outOfScope (setAnnResolvedType v n) v
-      pure (rn, v)
-    [x] -> pure x
-    xs -> anyOf xs <|> do
-      v <- fresh (rawName n)
-      rn <- ambiguousTerm (setAnnResolvedType v n) xs
-      pure (rn, v)
-  where
-    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnnResolvedType t n) u o, t)
-    proc _                             = Nothing
-
-resolveTerm :: Name -> Check (Resolved, Type' Resolved)
-resolveTerm = resolveTerm' (const True)
-
-_resolveSelector :: Name -> Check (Resolved, Type' Resolved)
-_resolveSelector = resolveTerm' (== Selector)
-
-resolveConstructor :: Name -> Check (Resolved, Type' Resolved)
-resolveConstructor = resolveTerm' (== Constructor)
-
-setAnnResolvedType ::
-     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Type' Resolved -> a -> a
-setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t)) (getAnno x)) x
-
-setAnnResolvedKind ::
-     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Kind -> a -> a
-setAnnResolvedKind k x =
-  setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
 
 instantiate :: Type' Resolved -> Check (Type' Resolved)
 instantiate (Forall _ann ns t) = do
@@ -428,24 +338,6 @@ ref n a =
     (u, o) = getUniqueName a
   in
     pure (Ref n u o)
-
-outOfScope :: Name -> Type' Resolved -> Check Resolved
-outOfScope n t = do
-  addError (OutOfScopeError n t)
-  u <- newUnique
-  pure (OutOfScope u n)
-
-ambiguousTerm :: Name -> [(Resolved, Type' Resolved)] -> Check Resolved
-ambiguousTerm n xs = do
-  addError (AmbiguousTermError n xs)
-  u <- newUnique
-  pure (OutOfScope u n)
-
-ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
-ambiguousType n xs = do
-  addError (AmbiguousTypeError n xs)
-  u <- newUnique
-  pure (OutOfScope u n)
 
 inferDeclare :: Declare Name -> Check (Declare Resolved)
 inferDeclare (MkDeclare ann tysig appForm t) = do
@@ -587,9 +479,11 @@ inferDecide (MkDecide ann tysig appForm expr) = do
     (ce, rt, result) <- inferTermAppForm rappForm rtysig
     rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
     let ann' = set annInfo (Just (TypeInfo rt)) ann
-    pure (MkDecide ann' rtysig rappForm rexpr, makeKnownMany (appFormHeads rappForm) ce)
+    decide <- nlgDecide $ MkDecide ann' rtysig rappForm rexpr
+    pure (decide, makeKnownMany (appFormHeads rappForm) ce)
   extend
   pure rd
+
 
 -- | We allow the following cases:
 --
@@ -1056,9 +950,12 @@ checkExpr ec (Consider ann e branches) t = softprune $ scope $ do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
 checkExpr ec (Where ann e ds) t = softprune $ scope $ do
-  rds <- traverse inferLocalDecl ds
+  rds <- traverse (nlgLocalDecl <=< inferLocalDecl) ds
   re <- checkExpr ec e t
-  let re' = setAnnResolvedType t (Where ann re rds)
+  -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+  -- brings new bindings into scope.
+  re2 <- nlgExpr re
+  let re' = setAnnResolvedType t (Where ann re2 rds)
   pure re'
 checkExpr ec e t = softprune $ scope $ do
   setErrorContext (WhileCheckingExpression e)
@@ -1164,7 +1061,10 @@ inferExpr' g =
     Lam ann givens e -> do
       (rgivens, rargts) <- inferLamGivens givens
       (re, te) <- inferExpr e
-      pure (Lam ann rgivens re, fun_ rargts te)
+      -- We have to resolve NLG annotations now, as the 'Lam' brings new
+      -- variables into scope.
+      re2 <- nlgExpr re
+      pure (Lam ann rgivens re2, fun_ rargts te)
     App ann n es -> do
       -- We want good type error messages. Therefore, we pursue the
       -- following strategy:
@@ -1260,10 +1160,19 @@ checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = scope $ do
   (rpat, extend) <- checkPattern (ExpectPatternScrutineeContext scrutinee) pat tscrutinee
   extend
   re <- checkExpr ec e tresult
-  pure (When ann rpat re)
+  When ann
+    -- We have to resolve NLG annotations now because
+    -- bound variables are brought into scope.
+    <$> nlgPattern rpat
+    <*> nlgExpr re
 checkBranch ec _scrutinee _tscrutinee tresult (Otherwise ann e) = do
   re <- checkExpr ec e tresult
-  pure (Otherwise ann re)
+  Otherwise ann
+    -- We have to resolve NLG annotations now because
+    -- bound variables are brought into scope.
+    -- In the 'Otherwise' case, there are no new variables, but
+    -- for consistency, we still resolve the NLG annotations now.
+    <$> nlgExpr re
 
 checkPattern :: ExpectationContext -> Pattern Name -> Type' Resolved -> Check (Pattern Resolved, Check ())
 checkPattern ec p t = do
