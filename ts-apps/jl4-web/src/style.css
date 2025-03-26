@@ -87,6 +87,15 @@
   --color-accent-foreground: oklch(var(--accent-foreground));
 }
 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply text-foreground;
+  }
+}
+
 /*--------------------------------------------------------------------
           END of shadcn svelte related variables 
 **********************************************************************/
