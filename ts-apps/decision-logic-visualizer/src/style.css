@@ -30,36 +30,47 @@
 }
 
 :root {
-  /* Base Shadcn Svelte colors */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.137 0.036 258.53);
+  /* Base Shadcn Svelte colors.
+  Color css vars that don't have the "color-" prefix
+  should be 'raw' oklch values. 
+  */
+  --background: 1 0 0;
+  --foreground: 0.137 0.036 258.53;
 
-  --muted: oklch(0.96 0.005 249.1);
-  --muted-foreground: oklch(0.53 0.035 251.2);
+  --muted: 0.96 0.005 249.1;
+  --muted-foreground: 0.53 0.035 251.2;
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.137 0.036 258.53);
+  --popover: 1 0 0;
+  --popover-foreground: 0.137 0.036 258.53;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.137 0.036 258.53);
+  --card: 1 0 0;
+  --card-foreground: 0.137 0.036 258.53;
 
   /* The default shadcn svelte border color: 214.3 31.8% 91.4%; */
-  --border: var(--color-sky-700);
+  --border: 0.5 0.134 242.749;
+  /* raw oklch value of --color-sky-700; */
 
-  --input: oklch(0.91 0.035 240.2);
+  --input: 0.91 0.035 240.2;
 
-  --primary-foreground: oklch(0.98 0.005 249.1);
-  --secondary: oklch(0.96 0.005 249.1);
-  --secondary-foreground: oklch(0.19 0.045 257.2);
+  /* The old primary was #001188. This is quite close -- just more convenient to align with Tailwind color palette. 
+   * The original shadcn svelte default is 
+      --primary: 190 91% 36%; 
+    The following is the raw value of --color-cyan-900.
+  */
+  --primary: 0.398 0.07 227.392;
+  --primary-foreground: 0.98 0.005 249.1;
+  --secondary: 0.96 0.005 249.1;
+  --secondary-foreground: 0.19 0.045 257.2;
 
   /*  The default shadcn svelte accent: 210 40% 96.1%;
-   * The old color-button-hover: #a5b4fc; */
-  --accent: var(--color-sky-100);
-  --accent-foreground: oklch(0.19 0.045 257.2);
+   * The old color-button-hover: #a5b4fc;
+    The following is the raw value of --color-sky-100 */
+  --accent: 0.951 0.026 236.824;
+  --accent-foreground: 0.19 0.045 257.2;
 
-  --destructive: oklch(0.55 0.23 29.2);
-  --destructive-foreground: oklch(0.98 0.005 249.1);
-  --ring: oklch(0.137 0.036 258.53);
+  --destructive: 0.55 0.23 29.2;
+  --destructive-foreground: 0.98 0.005 249.1;
+  --ring: 0.137 0.036 258.53;
   /* TODO: Might want to tweak `radius` */
   --radius: 0.3rem;
 
@@ -89,40 +100,35 @@
       More base Shadcn Svelte colors
   ****************************************/
 
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
 
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
 
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
 
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-caution: var(--color-red-500);
-  --color-warning: var(--color-amber-500);
-  --color-info: var(--color-sky-500);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-caution: oklch(var(--color-red-500));
+  --color-warning: oklch(var(--color-amber-500));
+  --color-info: oklch(var(--color-sky-500));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
 
   /***************************************
-        Our specific colors
+      Other specific --color-* things
   ****************************************/
 
-  /* The old primary was #001188. This is quite close -- just more convenient to be able to use a Tailwind color var. 
-  * The original shadcn svelte default is 
-      --primary: 190 91% 36%; 
-  */
-  --primary: var(--color-cyan-900);
   --color-node-text: #00004d;
   /* Another color to consider for node annotations? --color-zinc-400 */
   --color-node-annotation: var(--color-node-text);
