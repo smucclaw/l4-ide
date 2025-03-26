@@ -9,45 +9,95 @@
   and that we use the @repo/... alias (per Turborepo best practices).
 ****************************************************************************/
 @import '@repo/decision-logic-visualizer/dist/style.css';
-@import 'tailwindcss';
 /* ladder lib's css needs to come before tailwind import */
 
-/* Needs to be specified because 
-Tailwind v4 doesn't automatically check for a tailwind.config.js file */
-@config "../tailwind.config.js";
+@import 'tailwindcss';
+@import './tailwindcss-animate.css';
 
-/* Shadcn theme */
+/* Shadcn theme
+* NOTE: Color css vars that don't have the `color-` prefix  should be 'raw' oklch values.
+*/
 @layer base {
   :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.04 0.051 22.8);
-    --muted: oklch(0.96 0.002 60.0);
-    --muted-foreground: oklch(0.44 0.029 30.3);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.04 0.051 22.8);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.04 0.051 22.8);
-    --border: oklch(0.9 0.016 22.8);
-    --input: oklch(0.9 0.016 22.8);
-    --primary: oklch(0.1 0.11 25.3);
-    --primary-foreground: oklch(0.98 0.005 60.0);
-    --secondary: oklch(0.96 0.002 60.0);
-    --secondary-foreground: oklch(0.1 0.11 25.3);
-    --accent: oklch(0.96 0.002 60.0);
-    --accent-foreground: oklch(0.1 0.11 25.3);
-    --destructive: oklch(0.55 0.23 29.2);
-    --destructive-foreground: oklch(0.98 0.005 60.0);
-    --ring: oklch(0.04 0.051 22.8);
+    --background: 1 0 0;
+    --foreground: 0.04 0.051 22.8;
+
+    --muted: 0.96 0.002 60;
+    --muted-foreground: 0.44 0.029 30.3;
+
+    --popover: 1 0 0;
+    --popover-foreground: 0.04 0.051 22.8;
+
+    --card: 1 0 0;
+    --card-foreground: 0.04 0.051 22.8;
+
+    --border: 0.9 0.016 22.8;
+
+    --input: 0.9 0.016 22.8;
+
+    --primary: 0.1 0.11 25.3;
+    --primary-foreground: 0.98 0.005 60;
+
+    --secondary: 0.96 0.002 60;
+    --secondary-foreground: 0.1 0.11 25.3;
+
+    --accent: 0.96 0.002 60;
+    --accent-foreground: 0.1 0.11 25.3;
+
+    --destructive: 0.55 0.23 29.2;
+    --destructive-foreground: 0.98 0.005 60;
+
+    --ring: 0.04 0.051 22.8;
     --radius: 0.5rem;
-    --sidebar-background: oklch(0.98 0 0);
-    --sidebar-foreground: oklch(0.26 0.022 240.0);
-    --sidebar-primary: oklch(0.1 0.019 240.0);
-    --sidebar-primary-foreground: oklch(0.98 0 0);
-    --sidebar-accent: oklch(0.96 0.002 240.0);
-    --sidebar-accent-foreground: oklch(0.1 0.019 240.0);
-    --sidebar-border: oklch(0.91 0.016 220.0);
-    --sidebar-ring: oklch(0.6 0.45 217.2);
+    --sidebar-background: 0.98 0 0;
+    --sidebar-foreground: 0.26 0.022 240;
+    --sidebar-primary: 0.1 0.019 240;
+    --sidebar-primary-foreground: 0.98 0 0;
+    --sidebar-accent: 0.96 0.002 240;
+    --sidebar-accent-foreground: 0.1 0.019 240;
+    --sidebar-border: 0.91 0.016 220;
+    --sidebar-ring: 0.6 0.45 217.2;
   }
+}
+
+@theme inline {
+  /***************************************
+       Shadcn Svelte border
+  ****************************************/
+
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /***************************************
+      More base Shadcn Svelte colors
+  ****************************************/
+
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
+
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
+
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
+
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
+
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-caution: oklch(var(--color-red-500));
+  --color-warning: oklch(var(--color-amber-500));
+  --color-info: oklch(var(--color-sky-500));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
 }
 
 @layer base {
