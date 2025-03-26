@@ -172,7 +172,11 @@ instance Linearize (Expr Resolved) where
       , linearize e2
       ]
     Var _ v -> linearize v
-    Lam _ _ _ -> mempty
+    Lam _ sig e -> hcat
+      [ lin sig
+      , text "then"
+      , lin e
+      ]
     App _ n es -> hcat $
       [ linearize n
       ]
@@ -266,6 +270,19 @@ instance Linearize (Pattern Resolved) where
       , text "followed"
       , text "by"
       , lin rest
+      ]
+
+instance Linearize (GivenSig Resolved) where
+  linearize = \case
+    MkGivenSig _ args -> hcat
+      [ text "given"
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin args)
+      ]
+
+instance Linearize (OptionallyTypedName Resolved) where
+  linearize = \case
+    MkOptionallyTypedName _ name _mty -> hcat
+      [ linearize name
       ]
 
 instance Linearize Name where
