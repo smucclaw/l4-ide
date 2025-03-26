@@ -12,7 +12,6 @@ import qualified Base.Text as Text
 import Data.Monoid (Alt (..))
 import Data.Char hiding (Space)
 import GHC.Show (showLitString)
-import Optics ((&), (%~))
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.State
@@ -461,10 +460,14 @@ mkPosTokens :: Maybe SourcePos -> NormalizedUri -> Text -> [RawToken] -> [PosTok
 mkPosTokens sourcePosOffset uri txt rtoks =
     evalState (traverse go rtoks) tokenSt
   where
+    startTokenState = initialTokenState uri txt
     tokenSt = case sourcePosOffset of
-      Nothing -> initialTokenState uri txt
-      Just offset -> initialTokenState uri txt
-        & #posState %~ (\p -> p { pstateSourcePos = offset} )
+      Nothing -> startTokenState
+      Just offset -> startTokenState
+        { posState = startTokenState.posState
+          { pstateSourcePos = offset
+          }
+        }
     go :: RawToken -> Base.State TokenState PosToken
     go rtok = do
       ts <- get
