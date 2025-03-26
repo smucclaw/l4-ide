@@ -97,14 +97,10 @@
   --color-primary-foreground: oklch(var(--primary-foreground));
 
   --color-secondary: oklch(var(--secondary));
-  --color-secondary-foreground: oklch(
-    var(--secondary-foreground)
-  );
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
 
   --color-destructive: oklch(var(--destructive));
-  --color-destructive-foreground: oklch(
-    var(--destructive-foreground)
-  );
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
   --color-caution: oklch(var(--color-red-500));
   --color-warning: oklch(var(--color-amber-500));
   --color-info: oklch(var(--color-sky-500));
