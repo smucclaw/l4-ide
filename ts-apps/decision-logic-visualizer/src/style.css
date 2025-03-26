@@ -86,38 +86,41 @@
       More base Shadcn Svelte colors
   ****************************************/
 
-  --color-border: oklch(var(--border));
-  --color-input: oklch(var(--input));
-  --color-ring: oklch(var(--ring));
+  --ladder-color-border: oklch(var(--border));
+  --ladder-color-input: oklch(var(--input));
+  --ladder-color-ring: oklch(var(--ring));
 
-  --color-background: oklch(var(--background));
-  --color-foreground: oklch(var(--foreground));
+  --ladder-color-background: oklch(var(--background));
+  --ladder-color-foreground: oklch(var(--foreground));
 
-  --color-primary: oklch(var(--primary));
-  --color-primary-foreground: oklch(var(--primary-foreground));
+  --ladder-color-primary: oklch(var(--ladder-primary));
+  --ladder-color-primary-foreground: oklch(var(--ladder-primary-foreground));
 
-  --color-secondary: oklch(var(--secondary));
-  --color-secondary-foreground: oklch(var(--secondary-foreground));
+  --ladder-color-secondary: oklch(var(--ladder-secondary));
+  --ladder-color-secondary-foreground: oklch(
+    var(--ladder-secondary-foreground)
+  );
 
-  --color-destructive: oklch(var(--destructive));
-  --color-destructive-foreground: oklch(var(--destructive-foreground));
-  --color-caution: oklch(var(--color-red-500));
-  --color-warning: oklch(var(--color-amber-500));
-  --color-info: oklch(var(--color-sky-500));
-  --color-muted: oklch(var(--muted));
-  --color-muted-foreground: oklch(var(--muted-foreground));
-  --color-accent: oklch(var(--accent));
-  --color-accent-foreground: oklch(var(--accent-foreground));
+  --ladder-color-destructive: oklch(var(--ladder-destructive));
+  --ladder-color-destructive-foreground: oklch(
+    var(--ladder-destructive-foreground)
+  );
+  --ladder-color-caution: oklch(var(--ladder-color-red-500));
+  --ladder-color-warning: oklch(var(--ladder-color-amber-500));
+  --ladder-color-info: oklch(var(--ladder-color-sky-500));
+  --ladder-color-muted: oklch(var(--muted));
+  --ladder-color-muted-foreground: oklch(var(--muted-foreground));
+  --ladder-color-accent: oklch(var(--accent));
+  --ladder-color-accent-foreground: oklch(var(--accent-foreground));
 
-  /***************************************
-      Other specific --color-* things
-  ****************************************/
+  /*******************************************
+      Other specific --ladder-color-* things
+  ********************************************/
 
-  --color-node-text: #00004d;
+  --ladder-color-node-text: #00004d;
   /* Another color to consider for node annotations? --color-zinc-400 */
-  --color-node-annotation: var(--color-node-text);
-  --color-secondary: #2563eb;
-  --color-button: #c7d2fe;
+  --ladder-color-node-annotation: var(--ladder-color-node-text);
+  --ladder-color-button: #c7d2fe;
 
   /*--------------------------------------------------------------------
             END of shadcn svelte related variables 
@@ -133,7 +136,7 @@
   --highlighted-stroke-width: calc(var(--default-stroke-width) + 2px);
 
   /* Stroke color */
-  --default-stroke-color: var(--color-primary);
+  --default-stroke-color: var(--ladder-color-primary);
   --color-highlighted-path-in-flow: var(--color-sky-600);
 
   /***************************************
@@ -223,7 +226,7 @@
 
   @apply uppercase;
   @apply text-base leading-none;
-  @apply text-(--color-node-annotation);
+  @apply text-(--ladder-color-node-annotation);
 }
 
 /*************************************
@@ -231,7 +234,7 @@
 *************************************/
 
 body {
-  color: var(--color-primary);
+  color: var(--ladder-color-primary);
   background-color: white;
   margin: 0;
 }
@@ -241,10 +244,10 @@ body {
 :root,
 .svelte-flow {
   --xy-node-border-radius: var(--radius);
-  --xy-node-color: var(--color-node-text);
-  --xy-node-border: 2px solid var(--color-primary);
-  --xy-handle-background-color: var(--color-primary);
-  --xy-edge-stroke: var(--color-primary);
+  --xy-node-color: var(--ladder-color-node-text);
+  --xy-node-border: 2px solid var(--ladder-color-primary);
+  --xy-handle-background-color: var(--ladder-color-primary);
+  --xy-edge-stroke: var(--ladder-color-primary);
 
   .svelte-flow__node {
     font-family: 'Source Sans 3', serif;
