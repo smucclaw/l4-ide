@@ -236,13 +236,17 @@
         /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`)
-          const response = await next(command, args)
+          const responseFromLangServer = await next(command, args)
 
           logger.debug(
-            `received response from language server ${JSON.stringify(response)}`
+            `received response from language server ${JSON.stringify(responseFromLangServer)}`
           )
+          if (responseFromLangServer === null) {
+            logger.info('language server returned `null`, so doing nothing')
+            return
+          }
 
-          const decoded = decodeVizInfo(response)
+          const decoded = decodeVizInfo(responseFromLangServer)
           // TODO: Can improve this later
           switch (decoded._tag) {
             case 'Right':
@@ -265,7 +269,7 @@
               }
               break
             case 'Left':
-              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`
+              errorMessage = `Internal error: Failed to decode response. Please report this to the JL4 developers. ${decoded?.left}`
               break
           }
         },
