@@ -314,10 +314,11 @@ handlers recorder =
             pos :: SrcPos = lspPositionToSrcPos $ params ^. J.position
             nuri :: NormalizedUri = toNormalizedUri doc
 
-        refs <- liftIO $ runAction "getReferences" ide $
-          use_ GetReferences nuri
+        refs <- liftIO $ runAction "getReferences" ide do
+          revDeps <- use_ GetReverseDependencies nuri
+          mconcat <$> uses_ GetReferences (nuri : revDeps)
 
-        let locs = map (Location doc . srcRangeToLspRange . Just) $ lookupReference pos refs
+        let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
         pure (Right (InL locs))
     ]
 

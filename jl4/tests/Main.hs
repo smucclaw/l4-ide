@@ -132,12 +132,12 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
 sanitizeFilePaths :: Text -> Text
 sanitizeFilePaths = RE.replaceAll regex
   where
-  mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
-    Just p | not (null p) -> p
-    _ -> fp
+  mkFileName (Text.null -> hadNoWhiteSpace) (Text.unpack -> fp)
+    = Text.pack $ (if hadNoWhiteSpace then id else (' ' :)) case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
+      Just p | not (null p) -> p
+      _ -> fp
 
-  regex = fmap mkFileName $
-    RE.manyTextOf CharSet.space *> RE.text "file://" *>
+  regex = mkFileName <$> RE.manyTextOf CharSet.space <* RE.text "file://" <*>
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
 
 checkFile :: Bool -> FilePath -> IO ()
@@ -157,19 +157,18 @@ checkFile isOk file = do
     Text.putStr $ foldMap sanitizeFilePaths errs
 
  where
-  fp = takeFileName file
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, [either Text.show Print.prettyLayout res])
-  renderMessage (r, txt) = cliErrorMessage fp r txt
+  renderMessage (r, txt) = cliErrorMessage r txt
 
 data CliError
   = CliParserError FilePath (NonEmpty Parser.PError)
   | CliCheckError FilePath CheckResult
   deriving stock (Show, Eq)
 
-cliErrorMessage :: FilePath -> Maybe JL4.SrcRange -> [Text] -> Text
-cliErrorMessage fp mrange msg =
+cliErrorMessage :: Maybe JL4.SrcRange -> [Text] -> Text
+cliErrorMessage mrange msg =
   Text.unlines
-    ( JL4.prettySrcRange (Just fp) mrange <> ":"
+    ( JL4.prettySrcRangeM  mrange <> ":"
         : map ("  " <>) msg
     )
