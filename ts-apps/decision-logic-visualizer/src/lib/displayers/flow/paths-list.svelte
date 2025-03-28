@@ -33,9 +33,9 @@
   >
     <ul class="space-y-1">
       {#each paths as path, pathIndex}
-        <li class="grid grid-cols-[max-content_1fr] gap-x-2 items-center">
+        <li class="grid grid-cols-[max-content_1fr] gap-x-3 items-center">
           <!-- Row number / path index -->
-          <div class="px-3 max-w-[25px] text-right">
+          <div class="px-2 max-w-[25px] text-right">
             {pathIndex + 1}
           </div>
           <ToggleGroupItem
