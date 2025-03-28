@@ -3,6 +3,7 @@
   This stylesheet is required for the Ladder diagram to render correctly 
 ****************************************************************************/
 @import '@repo/decision-logic-visualizer/dist/style.css';
+@import 'tailwindcss';
 
 /* ===== Basic 'CSS reset' ======================= 
 
