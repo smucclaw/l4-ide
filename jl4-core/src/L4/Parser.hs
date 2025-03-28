@@ -264,10 +264,11 @@ spacedTokenWs_ tt =
   lexemeWs (plainToken tt)
 
 plainToken :: TokenType -> Parser PosToken
-plainToken tt =
+plainToken tt = do
+  uri <- asks (.moduleUri)
   token
     (\ t -> if computedPayload t == tt then Just t else Nothing)
-    (Set.singleton (Tokens (L.trivialToken tt :| [])))
+    (Set.singleton (Tokens (L.trivialToken uri tt :| [])))
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
@@ -1406,6 +1407,7 @@ mkConcreteSyntaxNode posTokens =
           { start = l.range.start
           , end = h.range.end
           , length = sum $ fmap (.range.length) ne
+          , moduleUri = l.range.moduleUri
           }
     , visibility =
         if Foldable.null posTokens

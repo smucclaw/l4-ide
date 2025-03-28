@@ -79,7 +79,7 @@ import qualified Base.Map as Map
 import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.Annotation
-import L4.Parser.SrcSpan (prettySrcRange)
+import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM)
 import L4.Print (prettyLayout, quotedName)
 import L4.Syntax
 import L4.TypeCheck.Annotation
@@ -1626,7 +1626,7 @@ prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
   [ "A pattern in a WHEN-clause of a CONSIDER construct is expected to have the type of the expression being matched."
   , "The expression being matched here is"
   , ""
-  , "  " <> prettyLayout scrutinee <> " (at " <> prettySrcRange Nothing (rangeOf scrutinee) <> ")"
+  , "  " <> prettyLayout scrutinee <> " (at " <> prettySrcRangeM (rangeOf scrutinee) <> ")"
   , ""
   , "of type"
   , ""
@@ -1669,11 +1669,11 @@ prettyTypeMismatch ExpectHomogeneousListContext expected given =
 prettyTypeMismatch (ExpectDecideSignatureContext Nothing) expected given =
   standardTypeMismatch [ "From looking at the context, I have inferred that the type of this definition must be" ] expected given
 prettyTypeMismatch (ExpectDecideSignatureContext (Just range)) expected given =
-  standardTypeMismatch [ "The type of this definition must match its type signature at " <> prettySrcRange Nothing (Just range) <> ", namely" ] expected given
+  standardTypeMismatch [ "The type of this definition must match its type signature at " <> prettySrcRange range <> ", namely" ] expected given
 prettyTypeMismatch (ExpectAssumeSignatureContext Nothing) expected given =
   standardTypeMismatch [ "From looking at the context, I have inferred that the type of this assumption must be" ] expected given
 prettyTypeMismatch (ExpectAssumeSignatureContext (Just range)) expected given =
-  standardTypeMismatch [ "The type of this assumption must match its type signature at " <> prettySrcRange Nothing (Just range) <> ", namely" ] expected given
+  standardTypeMismatch [ "The type of this assumption must match its type signature at " <> prettySrcRange range <> ", namely" ] expected given
 prettyTypeMismatch (ExpectAppArgContext True r _i) expected given =
   standardTypeMismatch
     [ "The argument of the projection "
@@ -1734,18 +1734,17 @@ prettyOptionallyNamedType (MkOptionallyNamedType _ (Just r) t) =
 
 -- | Show the name with its original / definition source range.
 prettyResolvedWithRange :: Resolved -> Text
-prettyResolvedWithRange r = do
-  let u = getUnique r
+prettyResolvedWithRange r =
   case rangeOf (getOriginal r) of
     Nothing    -> prettyLayout r <> " (predefined)"
-    Just range -> prettyLayout r <> " (defined at " <> (fromNormalizedUri u.moduleUri).getUri <> ":" <> prettySrcRange Nothing (Just range) <>  ")"
+    Just range -> prettyLayout r <> " (defined at " <> prettySrcRange range <>  ")"
 
 -- | Show the name with its source range.
 --
 -- TODO: eventually, we will have to print a file path here for potentially external locations
 prettyNameWithRange :: Name -> Text
 prettyNameWithRange n =
-  prettyLayout n <> " (at " <> prettySrcRange Nothing (rangeOf n) <> ")"
+  prettyLayout n <> " (at " <> prettySrcRangeM (rangeOf n) <> ")"
 
 -- | A class for applying the subsitution on inference variables exhaustively.
 --

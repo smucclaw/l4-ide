@@ -231,6 +231,7 @@ instance HasSrcRange a => HasSrcRange [a] where
       { start = h.start
       , end = l.end
       , length = sum $ fmap (.length) rs'
+      , moduleUri = l.moduleUri
       }
 
 instance HasTrailingSrcRange a => HasTrailingSrcRange [a] where

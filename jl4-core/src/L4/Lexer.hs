@@ -42,8 +42,6 @@ data PosToken =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
-instance ToExpr NormalizedUri
-
 data AnnoType
   = InlineAnno
   | LineAnno
@@ -407,12 +405,12 @@ keywords =
     , ("IMPORT"     , TKImport     )
     ]
 
-trivialToken :: TokenType -> PosToken
-trivialToken tt =
+trivialToken :: NormalizedUri -> TokenType -> PosToken
+trivialToken uri tt =
   MkPosToken trivialRange tt
   where
     trivialRange :: SrcRange
-    trivialRange = MkSrcRange trivialPos trivialPos 0
+    trivialRange = MkSrcRange trivialPos trivialPos 0 uri
 
     trivialPos :: SrcPos
     trivialPos = MkSrcPos 0 0
@@ -495,6 +493,7 @@ mkPosTokens sourcePosOffset uri txt rtoks =
               posStart
               posEnd
               (rtok.end - rtok.start)
+              uri
             )
             payload
       modifying #currentLineToks (pt :)
