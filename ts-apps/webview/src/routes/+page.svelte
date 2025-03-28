@@ -75,6 +75,6 @@
   TODO: Use calc or smtg like that to make the intent clearer
   */
   .slightly-shorter-than-full-viewport-height {
-    height: 96svh;
+    height: 98svh;
   }
 </style>

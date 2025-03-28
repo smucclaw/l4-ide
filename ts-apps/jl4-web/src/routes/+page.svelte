@@ -350,6 +350,6 @@ DECIDE \`is a British citizen (variant)\` IS
 
 <style>
   .slightly-shorter-than-full-viewport-height {
-    height: 96svh;
+    height: 98svh;
   }
 </style>
