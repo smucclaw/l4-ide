@@ -336,7 +336,7 @@ DECIDE \`is a British citizen (variant)\` IS
       {#if declLirNode}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
-          <div class="slightly-shorter-than-full-viewport-height pb-2">
+          <div class="slightly-shorter-than-full-viewport-height pb-1">
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
         {/key}
