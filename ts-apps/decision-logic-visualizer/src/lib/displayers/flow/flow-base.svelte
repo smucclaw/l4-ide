@@ -299,7 +299,8 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <div class="flow-container" style={`height:100%; opacity: ${flowOpacity}`}>
+  <h1>{declLirNode.getFunName(context)}</h1>
+  <div class="flow-container" style={`opacity: ${flowOpacity}`}>
     <SvelteFlow
       bind:nodes={NODES}
       bind:edges={EDGES}
@@ -349,7 +350,16 @@ Misc SF UI TODOs:
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
 
-<style>
+<style lang="postcss">
+  @reference 'tailwindcss';
+  /* Would be better to reference our stylesheet so we can use our theme vars if necessary,
+  but there are complications that have to do with how the stylesheet is exported for consumers.
+  Maybe the thing to do in the future is to have a common theme stylesheet that is shared among the lib and consumers? */
+
+  h1 {
+    @apply text-2xl font-semibold text-center mt-1;
+  }
+
   .overall-container {
     display: flex;
     flex-direction: column;

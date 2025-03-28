@@ -47,9 +47,6 @@
   const nodeInfo = { registry: lirRegistry, context }
 
   let declLirNode: DeclLirNode | undefined = $state(undefined)
-  let funName = $derived(
-    declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  )
 
   /******************************
       VizInfo Payload Decoder
@@ -336,9 +333,6 @@ DECIDE \`is a British citizen (variant)\` IS
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full bg-white">
-      <div class="header">
-        <h1>{funName}</h1>
-      </div>
       {#if declLirNode}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
@@ -354,24 +348,8 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
 </Resizable.PaneGroup>
 
-<style lang="postcss">
-  @reference "tailwindcss"
-
-  .header {
-    padding-top: 3px;
-    padding-bottom: 8px;
-  }
-
+<style>
   .slightly-shorter-than-full-viewport-height {
-    height: 95svh;
-  }
-
-  h1 {
-    margin-top: 10px;
-    padding-bottom: 2px;
-    font-size: 1.5rem;
-    line-height: 1.1rem;
-    font-weight: 700;
-    text-align: center;
+    height: 96svh;
   }
 </style>
