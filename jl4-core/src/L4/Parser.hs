@@ -1014,6 +1014,7 @@ negation = do
   attachAnno $
     Not emptyAnno
       <$  annoLexeme (spacedToken_ TKNot)
+      <*  optional (annoLexeme (spacedToken_ TKOf))
       <*> annoHole (indentedExpr current)
 
 lam :: Parser (Expr Name)
