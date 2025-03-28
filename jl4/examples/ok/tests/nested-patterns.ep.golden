@@ -1,0 +1,25 @@
+DECLARE PAIR a b HAS
+  fst IS AN a
+  snd IS A  b
+
+GIVEN x IS A
+  PAIR OF
+    PAIR OF NUMBER, NUMBER
+    PAIR OF NUMBER, NUMBER
+GIVETH A NUMBER
+sumPairs1 x MEANS
+  CONSIDER x
+  WHEN PAIR (PAIR a b) (PAIR c d) THEN a + b + c + d
+
+GIVEN x IS A
+  PAIR OF
+    PAIR OF NUMBER, NUMBER
+    PAIR OF NUMBER, NUMBER
+GIVETH A NUMBER
+sumPairs2 x MEANS
+  CONSIDER x
+  WHEN
+    PAIR OF
+      PAIR OF a, b
+      PAIR OF c, d
+      THEN a + b + c + d

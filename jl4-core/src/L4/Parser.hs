@@ -554,7 +554,9 @@ giveth = do
 --      <*  optional article
       <*> annoHole (indented type' current)
 
--- primarily for testing
+-- This isn't ideal, because it says an expr must be indented
+-- (and `mkPos` does not allow 0).
+--
 expr :: Parser (Expr Name)
 expr =
   indentedExpr (mkPos 1)
@@ -567,7 +569,7 @@ type' =
       <|> fun
       )
   <|> forall'
-  <|> parenType
+  <|> paren type'
 
 typeKind :: Parser (Type' Name)
 typeKind =
@@ -580,14 +582,14 @@ atomicType =
       (   typeKind
       <|> nameAsApp TyApp
       )
-  <|> parenType
+  <|> paren type'
 
-parenType :: Parser (Type' Name)
-parenType =
+paren :: (AnnoToken a ~ PosToken, HasAnno a, HasSrcRange a) => Parser a -> Parser a
+paren p =
   inlineAnnoHole $
     id
     <$  annoLexeme (spacedToken_ TPOpen)
-    <*> annoHole type'
+    <*> annoHole p
     <*  annoLexeme (spacedToken_ TPClose)
 
 -- We don't actually currently allow parsing an optional name
@@ -930,13 +932,13 @@ baseExpr =
   <|> app
   <|> lit
   <|> list
-  <|> parenExpr
+  <|> paren expr
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr =
       lit
   <|> nameAsApp App
-  <|> parenExpr
+  <|> paren expr
 
 nameAsApp :: (HasField "range" (AnnoToken b) SrcRange, HasAnno b, HasSrcRange a) => (Anno -> Name -> [a] -> b) -> Parser b
 nameAsApp f =
@@ -968,14 +970,6 @@ stringLit =
   attachAnno $
     StringLit emptyAnno
       <$> annoEpa (spacedToken (preview #_TStringLit) "String Literal")
-
-parenExpr :: Parser (Expr Name)
-parenExpr =
-  inlineAnnoHole $
-    id
-    <$  annoLexeme (spacedToken_ TPOpen)
-    <*> annoHole expr
-    <*  annoLexeme (spacedToken_ TPClose)
 
 -- | Parser for function application.
 --
@@ -1076,14 +1070,26 @@ indentedPattern p =
     pfs <- many (patternCont p)
     pure (combine End l pat pfs)
 
+-- This isn't ideal, because it says a pattern must be indented
+-- (and 'mkPos' does not allow 0).
+--
+-- See also 'expr'.
+--
+pattern' :: Parser (Pattern Name)
+pattern' =
+  indentedPattern (mkPos 1)
+
+
 basePattern :: Parser (Pattern Name)
 basePattern =
-  patApp
+      patApp
+  <|> paren pattern'
 
 atomicPattern :: Parser (Pattern Name)
 atomicPattern =
   --    lit
   nameAsPatApp
+  <|> paren pattern'
 
 nameAsPatApp :: Parser (Pattern Name)
 nameAsPatApp =
