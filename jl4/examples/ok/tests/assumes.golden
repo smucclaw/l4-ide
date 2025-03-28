@@ -1,0 +1,9 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+assumes.l4:2:7-12:
+  Stuck "foo OF 2 (foo is assumed)"
+assumes.l4:6:7-14:
+  Stuck "baz OF bar (bar is assumed)"
+assumes.l4:7:7-27:
+  Stuck "IF bar\nTHEN 2\nELSE 3 (bar is assumed)"
