@@ -22,6 +22,6 @@ elem.l4:55:7-27:
 elem.l4:57:7-25:
   TRUE
 elem.l4:62:7-23:
-  EqualityOnUnsupportedType
+  Trying to check equality on types that do not support it.
 elem.l4:63:7-23:
-  EqualityOnUnsupportedType
+  Trying to check equality on types that do not support it.
