@@ -22,6 +22,32 @@ null list MEANS
   WHEN x FOLLOWED BY xs THEN FALSE
 
 GIVEN
+  a    IS A TYPE
+  r    IS A TYPE
+  cons IS A FUNCTION FROM a AND r TO r
+  nil  IS AN r
+  list IS A LIST OF a
+GIVETH AN r
+foldr cons nil list MEANS go list
+  WHERE
+    go l MEANS CONSIDER l
+      WHEN EMPTY            THEN nil
+      WHEN x FOLLOWED BY xs THEN cons OF x, go xs
+
+GIVEN
+  a    IS A TYPE
+  r    IS A TYPE
+  op   IS A FUNCTION FROM r AND a TO r
+  ini  IS AN r
+  list IS A LIST OF a
+GIVETH AN r
+foldl op ini list MEANS go ini list
+  WHERE
+    go acc l MEANS CONSIDER l
+      WHEN EMPTY            THEN acc
+      WHEN x FOLLOWED BY xs THEN go OF op acc x, xs
+
+GIVEN
   a     IS A TYPE
   list1 IS A LIST OF a
   list2 IS A LIST OF a
@@ -357,6 +383,33 @@ maybeToList x MEANS
   WHEN JUST x  THEN LIST x
 
 GIVEN
+  a       IS A TYPE
+  list    IS A LIST OF a
+GIVETH A MAYBE OF a
+listToMaybe list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN JUST x
+
+GIVEN
+  a IS A TYPE
+  x IS A MAYBE a
+GIVETH A BOOLEAN
+isNothing x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN TRUE
+  WHEN JUST y  THEN FALSE
+
+GIVEN
+  a IS A TYPE
+  x IS A MAYBE a
+GIVETH A BOOLEAN
+isJust x MEANS
+  CONSIDER x
+  WHEN NOTHING THEN FALSE
+  WHEN JUST y  THEN TRUE
+
+GIVEN
   a    IS A TYPE
   b    IS A TYPE
   f    IS A FUNCTION FROM a TO MAYBE b
@@ -410,3 +463,82 @@ GIVEN a IS A TYPE
 GIVETH A LIST OF PAIR a b
 zip list1 list2 MEANS
   zipWith PAIR list1 list2
+
+GIVEN
+  a IS A TYPE
+  b IS A TYPE
+GIVETH A TYPE
+DECLARE EITHER a b IS ONE OF
+  LEFT  HAS payload IS AN a
+  RIGHT HAS payload IS A  b
+
+GIVEN
+  a IS A TYPE
+  b IS A TYPE
+  c IS A TYPE
+  left  IS A FUNCTION FROM a TO c
+  right IS A FUNCTION FROM b TO c
+  x IS AN EITHER a b
+GIVETH A c
+either left right x MEANS
+  CONSIDER x
+  WHEN LEFT  a THEN left  a
+  WHEN RIGHT b THEN right b
+
+GIVEN
+  a IS A TYPE
+  f IS A FUNCTION FROM a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A PAIR OF A LIST a, A LIST a
+partition f list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN PAIR EMPTY EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER partition f xs
+    WHEN PAIR ys zs THEN
+      IF f x
+        THEN PAIR OF x FOLLOWED BY ys, zs
+        ELSE PAIR OF ys, x FOLLOWED BY zs
+
+GIVEN
+  a IS A TYPE
+  op IS A FUNCTION FROM a AND a TO BOOLEAN
+  x IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+deleteBy op x list MEANS go list
+  WHERE
+    go l MEANS
+      CONSIDER l
+        WHEN EMPTY            THEN EMPTY
+        WHEN y FOLLOWED BY ys THEN
+          IF op x y
+            THEN ys
+            ELSE y FOLLOWED BY go ys
+
+GIVEN
+  a IS A TYPE
+  op IS A FUNCTION FROM a AND a TO BOOLEAN
+  list IS A LIST OF a
+GIVETH A LIST OF a
+nubBy op list MEANS go list
+  WHERE
+    go l MEANS
+      CONSIDER l
+      WHEN EMPTY            THEN EMPTY
+      WHEN x FOLLOWED BY xs THEN x FOLLOWED BY deleteBy op x (go xs)
+
+GIVEN
+  a IS A TYPE
+  x IS AN a
+  list IS A LIST OF a
+GIVETH A LIST OF a
+delete x list MEANS
+  deleteBy (GIVEN y, z YIELD y EQUALS z) x list
+
+GIVEN
+  a IS A TYPE
+  list IS A LIST OF a
+GIVETH A LIST OF a
+nub list MEANS
+  nubBy (GIVEN x, y YIELD x EQUALS y) list
