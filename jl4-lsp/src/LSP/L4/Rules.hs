@@ -561,8 +561,7 @@ jl4Rules rootDirectory recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        -- TODO: we probably want to improve this to use a printer instead of show
-        , _message = either Text.show Print.prettyLayout res
+        , _message = either prettyEvalException Print.prettyLayout res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

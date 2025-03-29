@@ -7,10 +7,12 @@ module L4.Evaluate
   , buildModuleEnvironment
   , execEvalModuleWithEnv
   , unionEnvironments
+  , prettyEvalException
   )
   where
 
 import Base
+import qualified Base.Text as Text
 import Optics ((%))
 import qualified Base.Map as Map
 import L4.Annotation
@@ -107,15 +109,52 @@ buildEvalTrace = go []
 
 data EvalException =
     RuntimeScopeError Resolved -- internal
-  | RuntimeTypeError String -- internal
+  | RuntimeTypeError Text -- internal
   | InvariantViolated Text -- internal
   | EqualityOnUnsupportedType
-  | NonExhaustivePatterns -- we could try to warn statically
+  | NonExhaustivePatterns Value -- we could try to warn statically
   | StackOverflow
-  | Unimplemented
-  | Stuck Text
+  | Stuck
+    (Expr Resolved)
+    -- ^ the expression we were evaluating when getting stuck
+    Resolved
+    -- ^ the term we got stuck on
   deriving stock (Generic, Show)
   deriving anyclass NFData
+
+prettyEvalException :: EvalException -> Text
+prettyEvalException = \case
+  RuntimeScopeError r -> Text.unlines
+    [ "Internal error:"
+    , prettyLayout r
+    , "is not in scope."
+    , "Please report this as a bug." ]
+  RuntimeTypeError err -> Text.unlines
+    [ "Internal error:"
+    , err
+    , "is not in scope."
+    , "Please report this as a bug." ]
+  InvariantViolated inv -> Text.unlines
+    [ "Invariant violated:"
+    , inv
+    , "Please report this as a bug." ]
+  EqualityOnUnsupportedType -> "Trying to check equality on types that do not support it."
+  NonExhaustivePatterns val -> Text.unlines
+    [ "Value"
+    , prettyLayout val
+    , "has no corresponding pattern."
+    ]
+  StackOverflow -> Text.unlines
+    [ "Stack overflow: "
+    , "Recursion depth of " <> Text.show maximumStackSize
+    , "exceeded." ]
+  Stuck expr r -> Text.unlines
+    [ "Expression stuck while evaluating:"
+    , prettyLayout expr
+    , "This happened because"
+    , prettyLayout r
+    , "is assumed" ]
+
 
 emptyEnvironment :: Environment
 emptyEnvironment = Map.empty
@@ -452,7 +491,7 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
     Just (ValAssumed r) -> stuckOnAssumed r stack0
-    res -> exception (RuntimeTypeError $ "unexpected value when looking up term: " <> show res) stack0
+    res -> exception (RuntimeTypeError $ "unexpected value when looking up term: " <> Text.show res) stack0
 backwardExpr !ss (App1 n vals (e : es) env stack) val = do
   popAndPushFrame val env ss (App1 n (val : vals) es env stack) e
 backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
@@ -494,8 +533,8 @@ matchGivens (MkGivenSig _ann otns) vals stack0 = do
     else exception (RuntimeTypeError "given signatures' values' lengths do not match") stack0
 
 matchBranches :: Value -> [Branch Resolved] -> Environment -> Stack -> Int -> Stack -> Eval Value
-matchBranches _val [] _env stack0 _ss _stack =
-  exception NonExhaustivePatterns stack0
+matchBranches val [] _env stack0 _ss _stack =
+  exception (NonExhaustivePatterns val) stack0
 matchBranches _val (Otherwise _ann e : _) env _stack0 !ss stack = do
   pushExprFrame env ss stack e
 matchBranches val (When _ann pat e : branches) env stack0 !ss stack = do
@@ -566,7 +605,7 @@ stuckOnAssumed :: Resolved -> Stack -> Eval b
 stuckOnAssumed assumedResolved stack = do
   exprs <- use (#evalActions % to unRevList)
   case exprs of
-    Enter expr : _ -> exception (Stuck $ prettyLayout expr <> " (" <> prettyLayout assumedResolved <> " is assumed)") stack
+    Enter expr : _ -> exception (Stuck expr assumedResolved) stack
     _ -> exception (InvariantViolated "no corresponding Enter stackframe for expression") stack
 
 runBinOpEquals :: Value -> Value -> Stack -> Eval Value

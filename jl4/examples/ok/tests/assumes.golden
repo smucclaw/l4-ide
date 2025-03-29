@@ -2,8 +2,25 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 assumes.l4:2:7-12:
-  Stuck "foo OF 2 (foo is assumed)"
+  Expression stuck while evaluating:
+foo OF 2
+This happened because
+foo
+is assumed
+
 assumes.l4:6:7-14:
-  Stuck "baz OF bar (bar is assumed)"
+  Expression stuck while evaluating:
+baz OF bar
+This happened because
+bar
+is assumed
+
 assumes.l4:7:7-27:
-  Stuck "IF bar\nTHEN 2\nELSE 3 (bar is assumed)"
+  Expression stuck while evaluating:
+IF bar
+THEN 2
+ELSE 3
+This happened because
+bar
+is assumed
+
