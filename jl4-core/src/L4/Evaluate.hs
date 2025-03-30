@@ -122,38 +122,42 @@ data EvalException =
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
-prettyEvalException :: EvalException -> Text
+prettyEvalException :: EvalException -> [Text]
 prettyEvalException = \case
-  RuntimeScopeError r -> Text.unlines
+  RuntimeScopeError r ->
+    [ "Internal error:" ]
+    <> prepare r
+    <> [ "is not in scope."
+    , "Please report this as a bug." ]
+  RuntimeTypeError err ->
     [ "Internal error:"
-    , prettyLayout r
+    , ind err
     , "is not in scope."
     , "Please report this as a bug." ]
-  RuntimeTypeError err -> Text.unlines
-    [ "Internal error:"
-    , err
-    , "is not in scope."
-    , "Please report this as a bug." ]
-  InvariantViolated inv -> Text.unlines
+  InvariantViolated inv ->
     [ "Invariant violated:"
-    , inv
+    , ind inv
     , "Please report this as a bug." ]
-  EqualityOnUnsupportedType -> "Trying to check equality on types that do not support it."
-  NonExhaustivePatterns val -> Text.unlines
-    [ "Value"
-    , prettyLayout val
-    , "has no corresponding pattern."
-    ]
-  StackOverflow -> Text.unlines
+  EqualityOnUnsupportedType -> ["Trying to check equality on types that do not support it."]
+  NonExhaustivePatterns val ->
+    [ "Value" ]
+    <> prepare val
+    <> [ "has no corresponding pattern." ]
+  StackOverflow ->
     [ "Stack overflow: "
     , "Recursion depth of " <> Text.show maximumStackSize
     , "exceeded." ]
-  Stuck expr r -> Text.unlines
-    [ "Expression stuck while evaluating:"
-    , prettyLayout expr
-    , "This happened because"
-    , prettyLayout r
-    , "is assumed" ]
+  Stuck expr r ->
+    [ "Expression stuck while evaluating:" ]
+    <> prepare expr
+    <> [ "This happened because" ]
+    <> prepare r
+    <> [ "is assumed" ]
+  where
+    ind = ("  " <>)
+
+    prepare :: LayoutPrinter a => a -> [Text]
+    prepare = map ind . Text.lines .  prettyLayout
 
 
 emptyEnvironment :: Environment
