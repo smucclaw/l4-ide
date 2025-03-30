@@ -603,7 +603,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty() {
-    return 'NOT'
+    return 'NOT ('
   }
 
   toString(): string {
@@ -620,7 +620,7 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty() {
-    return ''
+    return ')'
   }
 
   toString(): string {
