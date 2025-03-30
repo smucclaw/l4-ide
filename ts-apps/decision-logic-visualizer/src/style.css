@@ -245,7 +245,7 @@ body {
 :root,
 .svelte-flow {
   --ladder-node-border-radius: var(--radius);
-  --ladder-node-color: var(--ladder-color-node-text);
+  --ladder-node-color: var(--color-node-text, var(--color-primary));
   --ladder-node-border: 2px solid var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of
