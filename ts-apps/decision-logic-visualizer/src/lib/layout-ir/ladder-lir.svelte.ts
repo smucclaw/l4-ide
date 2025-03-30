@@ -806,6 +806,7 @@ export function augmentEdgesWithExplanatoryLabel(
     return (
       !edgeSourceIsAnyOfAnnoSource &&
       edgeSourceIsNotOverallSource &&
+      !isNotStartLirNode(edgeU) &&
       (isBoolVarLirNode(edgeV) ||
         isNotStartLirNode(edgeV) ||
         isSourceWithOrAnnoLirNode(edgeV))
