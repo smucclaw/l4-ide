@@ -16,6 +16,7 @@ import qualified L4.TypeCheck as JL4
 import Paths_jl4
 
 import qualified Base.Text as Text
+import qualified Data.List as List
 import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
@@ -158,7 +159,7 @@ checkFile isOk file = do
 
  where
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, [either Text.show Print.prettyLayout res])
+  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
   renderMessage (r, txt) = cliErrorMessage r txt
 
 data CliError
