@@ -41,7 +41,7 @@
           <!-- Why h-full: so that height of rows can increase to fit content when, e.g., browser window is made narrower -->
           <ToggleGroupItem
             value={`${pathIndex}`}
-            class="rounded-lg max-w-fit border-1 hover:border-2 data-[state=on]:border-2 p-2 h-full data-[state=on]:border-sky-600 hover:border-sky-600 hover:bg-transparent text-xs text-left break-words"
+            class="rounded-lg max-w-fit border-1 data-[state=on]:border-2 p-2 h-full data-[state=on]:border-sky-600 hover:border-sky-800 text-xs text-left break-words"
           >
             {path.toPretty(context)}
           </ToggleGroupItem>
