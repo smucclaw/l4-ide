@@ -40,7 +40,9 @@
   --background: 1 0 0;
   --foreground: 0.137 0.036 258.53;
 
-  --muted: 0.96 0.005 249.1;
+  /* fuschia 50
+  Formerly: 0.96 0.005 249.1 */
+  --muted: 0.977 0.017 320.058;
   --muted-foreground: 0.53 0.035 251.2;
 
   /* The default shadcn svelte border color: 214.3 31.8% 91.4%; 
