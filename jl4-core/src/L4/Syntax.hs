@@ -194,6 +194,7 @@ data Expr n =
   | App        Anno n [Expr n]
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
+  | Regulative Anno (Expr n) (Expr n) (Maybe (Expr n)) (Maybe (Expr n))
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit

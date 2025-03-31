@@ -910,6 +910,13 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
+checkRegulative :: ExpectationContext -> Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Expr Resolved)
+checkRegulative ec ann e1 e2 me3 me4 t1 t2 = do
+  e1' <- checkExpr _ e1 t1
+  e2' <- checkExpr _ e2 t2
+  me3' <- checkExpr _ _ _
+  undefined
+
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
@@ -1048,6 +1055,8 @@ inferExpr' g =
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
       pure (re, v)
+    Regulative ann e1 e2 me3 me4 -> do
+      _
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
       re <- checkConsider ExpectConsiderBranchesContext ann e branches v

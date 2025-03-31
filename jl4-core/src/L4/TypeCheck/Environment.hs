@@ -32,6 +32,7 @@ builtinUri = toNormalizedUri (Uri "jl4:builtin")
 -- 11  NUMBER
 -- 12  STRING
 -- 13  LIST
+-- 14  CONTRACT
 -- 30  FALSE
 -- 31  TRUE
 -- 32  EMPTY
@@ -141,6 +142,22 @@ aDef = Def aUnique aName
 aRef :: Resolved
 aRef = Ref aName aUnique aName
 
+-- CONTRACT
+
+contractUnique :: Unique
+contractUnique = MkUnique 'b' 14 builtinUri
+
+contractName :: Name
+contractName = preDef "CONTRACT"
+
+contractRef :: Resolved
+contractRef = Ref listName listUnique listName
+
+contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
+contract party action = TyApp emptyAnno contractRef [party, action]
+
+-- infos
+
 booleanInfo :: CheckEntity
 booleanInfo =
   KnownType 0 [] Nothing
@@ -169,27 +186,33 @@ emptyInfo :: CheckEntity
 emptyInfo =
   KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor
 
+contractInfo :: CheckEntity
+contractInfo =
+  KnownType 2 [] (EnumDecl emptyAnno [])
+
 initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN", [booleanUnique])
-    , (NormalName "FALSE",   [falseUnique  ])
-    , (NormalName "TRUE",    [trueUnique   ])
-    , (NormalName "NUMBER",  [numberUnique ])
-    , (NormalName "STRING",  [stringUnique ])
-    , (NormalName "LIST",    [listUnique   ])
-    , (NormalName "EMPTY",   [emptyUnique  ])
+    [ (NormalName "BOOLEAN",  [booleanUnique ])
+    , (NormalName "FALSE",    [falseUnique   ])
+    , (NormalName "TRUE",     [trueUnique    ])
+    , (NormalName "NUMBER",   [numberUnique  ])
+    , (NormalName "STRING",   [stringUnique  ])
+    , (NormalName "LIST",     [listUnique    ])
+    , (NormalName "EMPTY",    [emptyUnique   ])
+    , (NormalName "CONTRACT", [contractUnique])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
 initialEntityInfo :: EntityInfo
 initialEntityInfo =
   Map.fromList
-    [ (booleanUnique, (booleanName, booleanInfo))
-    , (falseUnique,   (falseName,   falseInfo  ))
-    , (trueUnique,    (trueName,    trueInfo   ))
-    , (numberUnique,  (numberName,  numberInfo ))
-    , (stringUnique,  (stringName,  stringInfo ))
-    , (listUnique,    (listName,    listInfo   ))
-    , (emptyUnique,   (emptyName,   emptyInfo  ))
+    [ (booleanUnique,  (booleanName,  booleanInfo ))
+    , (falseUnique,    (falseName,    falseInfo   ))
+    , (trueUnique,     (trueName,     trueInfo    ))
+    , (numberUnique,   (numberName,   numberInfo  ))
+    , (stringUnique,   (stringName,   stringInfo  ))
+    , (listUnique,     (listName,     listInfo    ))
+    , (emptyUnique,    (emptyName,    emptyInfo   ))
+    , (contractUnique, (contractName, contractInfo))
     ]

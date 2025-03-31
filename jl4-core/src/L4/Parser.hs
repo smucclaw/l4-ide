@@ -976,6 +976,7 @@ baseExpr =
       try projection
   <|> negation
   <|> ifthenelse
+  <|> regulative
   <|> lam
   <|> consider
   <|> try namedApp -- This is not nice
@@ -1081,6 +1082,26 @@ ifthenelse = do
       <*> annoHole (indentedExpr current)
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
+
+regulative :: Parser (Expr Name)
+regulative = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Regulative emptyAnno
+      <$  annoLexeme (spacedToken_ TKParty)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKDo <|> spacedToken_ TKMust)
+      <*> annoHole (indentedExpr current)
+      <*> optional (deadline current)
+      <*> optional (hence current)
+
+deadline :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
+deadline current =
+  annoLexeme (spacedToken_ TKWithin) *> annoHole (indentedExpr current)
+
+hence :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
+hence current =
+  annoLexeme (spacedToken_ TKHence) *> annoHole (indentedExpr current)
 
 consider :: Parser (Expr Name)
 consider = do

@@ -381,6 +381,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ IfThenElse ann b' e1' e2'
+    Regulative ann e1 e2 me3 me4 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      me3' <- traverse addNlg me3
+      me4' <- traverse addNlg me4
+      pure $ Regulative ann e1' e2' me3' me4'
     Consider ann e branches  -> do
       e' <- addNlg e
       branches' <- traverse addNlg branches

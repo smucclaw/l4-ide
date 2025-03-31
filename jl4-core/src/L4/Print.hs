@@ -270,6 +270,13 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
+    Regulative _ party rule mdeadline mfollowup ->
+      vcat $
+        [ "PARTY" <+> printWithLayout party
+        , "DO" <+> printWithLayout rule
+        ]
+        <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) mdeadline
+        <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) mfollowup
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
