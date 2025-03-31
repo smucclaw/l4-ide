@@ -76,7 +76,6 @@ module L4.TypeCheck
 
 import Base
 import qualified Base.Map as Map
-import qualified Base.Set as Set
 import qualified Base.Text as Text
 import L4.Annotation
 import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM)
@@ -143,11 +142,16 @@ doCheckProgramWithDependencies checkState moduleUri program =
 --
 combineEnvironmentEntityInfo :: Environment -> EntityInfo -> [(Name, CheckEntity)]
 combineEnvironmentEntityInfo env ei =
-  let
-    uniques :: Set Unique
-    uniques = Set.fromList (concat (snd <$> Map.toList env))
-  in
-    snd <$> filter (flip Set.member uniques . fst) (Map.toList ei)
+    foldMap (uncurry lookupUniques) $ Map.toList env
+    where
+      lookupUniques rn = mapMaybe \unique -> do
+        (n, ce) <- ei Map.!? unique
+        pure (replaceRawName rn n, ce)
+
+      -- NOTE: the reason why we do this is because the CheckEntity doesn't contain the original name
+      -- e.g. if you have `foo AKA bar`, the CheckEntity will always contain `bar`. However, the environment
+      -- still has the correct name.
+      replaceRawName rn (MkName a _) = MkName a rn
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
