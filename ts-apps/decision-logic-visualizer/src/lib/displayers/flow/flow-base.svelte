@@ -334,7 +334,7 @@ Misc SF UI TODOs:
       <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
         <!-- TODO: Improve the button styles -->
         <button
-          class="rounded-md border-1 border-sky-700 px-2 py-1 text-xs hover:bg-accent flex items-center gap-1"
+          class="rounded-md border-1 border-sky-700 px-2 py-1 text-sm hover:bg-accent flex items-center gap-1"
         >
           <List /><span>List paths</span>
         </button>

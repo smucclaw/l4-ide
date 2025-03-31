@@ -40,9 +40,7 @@
   --background: 1 0 0;
   --foreground: 0.137 0.036 258.53;
 
-  /* fuschia 50
-  Formerly: 0.96 0.005 249.1 */
-  --muted: 0.977 0.017 320.058;
+  --muted: 0.96 0.005 249.1;
   --muted-foreground: 0.53 0.035 251.2;
 
   /* The default shadcn svelte border color: 214.3 31.8% 91.4%; 
@@ -245,7 +243,7 @@ body {
 :root,
 .svelte-flow {
   --ladder-node-border-radius: var(--radius);
-  --ladder-node-color: var(--color-node-text, var(--color-primary));
+  --ladder-node-color: var(--ladder-color-node-text);
   --ladder-node-border: 2px solid var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of

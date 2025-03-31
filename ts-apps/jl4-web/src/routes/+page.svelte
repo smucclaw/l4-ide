@@ -332,11 +332,11 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
-    <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
+    <div id="jl4-webview" class="h-full bg-white">
       {#if declLirNode}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
-          <div class="slightly-shorter-than-full-viewport-height pb-1">
+          <div class="slightly-shorter-than-full-viewport-height pb-2">
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
         {/key}

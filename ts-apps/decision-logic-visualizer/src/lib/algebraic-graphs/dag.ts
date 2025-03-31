@@ -148,14 +148,7 @@ export abstract class Dag<A extends Ord<A>>
       .otherwise((source) =>
         this.getAllPathsFromVertex((source as Vertex<A>).getValue())
       )
-    const pathGraphs = barePaths.map(pathFromValues)
-    pathGraphs.forEach((pathGraph) => {
-      const edges = pathGraph.getEdges()
-      edges.forEach((edge) => {
-        pathGraph.setEdgeAttributes(edge, this.getAttributesForEdge(edge))
-      })
-    })
-    return pathGraphs
+    return barePaths.map(pathFromValues)
   }
 }
 

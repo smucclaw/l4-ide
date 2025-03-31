@@ -13,16 +13,9 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import {
-  isEmpty,
   isVertex,
-  isOverlay,
-  isConnect,
   overlay,
   empty,
-  foldg,
-  type Overlay,
-  type Connect,
-  type Vertex,
   type DirectedAcyclicGraph,
 } from '../algebraic-graphs/dag.js'
 import {
@@ -37,7 +30,7 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { match, P } from 'ts-pattern'
+import { match } from 'ts-pattern'
 import _ from 'lodash'
 
 /*
@@ -202,7 +195,9 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
   }
 
   toPretty(context: LirContext) {
-    return pprintPathGraph(context, this.rawPath)
+    return this.getVertices(context)
+      .map((n) => n.toPretty(context))
+      .join(' ')
   }
 
   toString() {
@@ -603,7 +598,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty() {
-    return 'NOT ('
+    return 'NOT'
   }
 
   toString(): string {
@@ -620,7 +615,7 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty() {
-    return ')'
+    return ''
   }
 
   toString(): string {
@@ -806,7 +801,6 @@ export function augmentEdgesWithExplanatoryLabel(
     return (
       !edgeSourceIsAnyOfAnnoSource &&
       edgeSourceIsNotOverallSource &&
-      !isNotStartLirNode(edgeU) &&
       (isBoolVarLirNode(edgeV) ||
         isNotStartLirNode(edgeV) ||
         isSourceWithOrAnnoLirNode(edgeV))
@@ -821,52 +815,4 @@ export function augmentEdgesWithExplanatoryLabel(
       context.getExplanatoryAndEdgeLabel()
     )
   })
-}
-
-/** Bit hacky? */
-function pprintPathGraph(
-  context: LirContext,
-  initialGraph: DirectedAcyclicGraph<LirId>
-): string {
-  const processed = new Set<LirId>()
-
-  function pprintHelper(
-    context: LirContext,
-    g: DirectedAcyclicGraph<LirId>
-  ): string {
-    return match(g)
-      .with(P.when(isEmpty<LirId>), () => '')
-      .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
-        if (processed.has(v.getValue())) return ''
-        processed.add(v.getValue())
-        return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
-      })
-      .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
-        return (
-          pprintHelper(context, o.getLeft()) +
-          ' ' +
-          pprintHelper(context, o.getRight())
-        )
-      })
-      .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
-        const from = pprintHelper(context, c.getFrom())
-        const to = pprintHelper(context, c.getTo())
-
-        if (isVertex(c.getFrom()) && isVertex(c.getTo())) {
-          const edgeAttrs = initialGraph.getAttributesForEdge(
-            new DirectedEdge(
-              (c.getFrom() as Vertex<LirId>).getValue(),
-              (c.getTo() as Vertex<LirId>).getValue()
-            )
-          )
-          const label = edgeAttrs.getLabel()
-          return `${from} ${label} ${to}`
-        } else {
-          return `${from} ${to}`
-        }
-      })
-      .exhaustive()
-  }
-
-  return pprintHelper(context, initialGraph)
 }
