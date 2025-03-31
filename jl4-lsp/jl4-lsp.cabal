@@ -142,7 +142,7 @@ executable jl4-lsp
     transformers,
     unliftio,
     unordered-containers ^>=0.2.20,
-    websockets,
+    websockets ^>=0.13.0.0,
 
   main-is: Server.hs
   other-modules:
