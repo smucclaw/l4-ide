@@ -11,7 +11,6 @@ import Data.Char (isAlphaNum)
 import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Aeson as Aeson
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified Optics
 import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
@@ -224,10 +223,7 @@ completions rope nuri typeCheck (Position ln col) = do
         $ mapMaybe
             (\(name, checkEntity) ->
               topDeclToCompletionItem name
-              $ Optics.over'
-                (Optics.gplate @(Type' Resolved))
-                (applyFinalSubstitution typeCheck.substitution nuri)
-                checkEntity
+              $ applyFinalSubstitution typeCheck.substitution nuri checkEntity
             )
             (combineEnvironmentEntityInfo
               typeCheck.environment
