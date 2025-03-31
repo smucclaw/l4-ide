@@ -197,6 +197,15 @@ instance Linearize (Expr Resolved) where
       , text "else"
       , lin else'
       ]
+    Regulative _ party rule mdeadline mfollowup -> hcat $
+      [ text "party"
+      , lin party
+      , text "does"
+      , lin rule
+      ]
+      <> maybe [] (\ deadline -> [ text "within", lin deadline ]) mdeadline
+      <> maybe [] (\ followup -> [ text "hence",  lin followup ]) mfollowup
+
     Consider _ e br -> hcat
       [ text "consider"
       , text "the"

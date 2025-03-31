@@ -121,6 +121,11 @@ data TokenType =
   | TKAssume
   | TKWhen
   | TKType
+  | TKParty
+  | TKDo
+  | TKMust
+  | TKWithin
+  | TKHence
   | TKFunction
   | TKFrom
   | TKTo
@@ -379,6 +384,11 @@ keywords =
     , ("ASSUME"     , TKAssume     )
     , ("WHEN"       , TKWhen       )
     , ("TYPE"       , TKType       )
+    , ("PARTY"      , TKParty      )
+    , ("DO"         , TKDo         )
+    , ("MUST"       , TKMust       )
+    , ("WITHIN"     , TKWithin     )
+    , ("HENCE"      , TKHence      )
     , ("FUNCTION"   , TKFunction   )
     , ("FROM"       , TKFrom       )
     , ("TO"         , TKTo         )
@@ -857,6 +867,11 @@ displayTokenType tt =
     TKAssume         -> "ASSUME"
     TKWhen           -> "WHEN"
     TKType           -> "TYPE"
+    TKParty          -> "PARTY"
+    TKDo             -> "DO"
+    TKMust           -> "MUST"
+    TKWithin         -> "WITHIN"
+    TKHence          -> "HENCE"
     TKFunction       -> "FUNCTION"
     TKFrom           -> "FROM"
     TKTo             -> "TO"
@@ -979,6 +994,11 @@ posTokenCategory =
     TKAssume -> CKeyword
     TKWhen -> CKeyword
     TKType -> CKeyword
+    TKParty -> CKeyword
+    TKDo -> CKeyword
+    TKMust -> CKeyword
+    TKWithin -> CKeyword
+    TKHence -> CKeyword
     TKFunction -> CKeyword
     TKFrom -> CKeyword
     TKTo -> CKeyword
