@@ -193,6 +193,7 @@ data Log
   = ShakeLog Shake.Log
   | LogTraverseAnnoError !Text !TraverseAnnoError
   | LogRelSemanticTokenError !Text
+  | LogSemanticTokens !Text [SemanticToken]
   deriving (Show)
 
 instance Pretty Log where
@@ -200,6 +201,14 @@ instance Pretty Log where
     ShakeLog msg -> pretty msg
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
+    LogSemanticTokens herald toks ->
+      "Semantic Tokens of" <+> pretty herald <+> align (vcat (fmap prettyToken toks))
+      where
+        prettyToken :: SemanticToken -> Doc ann
+        prettyToken s =
+          pretty (s.start._line) <> ":" <> pretty s.start._character <> "-"
+            <> pretty (s.start._character + s.length)
+            <+> pretty s.category
 
 jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
 jl4Rules rootDirectory recorder = do
@@ -373,7 +382,7 @@ jl4Rules rootDirectory recorder = do
         logWith recorder Error $ LogTraverseAnnoError "Parser" err
         pure ([], Nothing)
       Right tokenized -> do
-          pure ([], Just tokenized)
+        pure ([], Just tokenized)
 
   define shakeRecorder $ \GetSemanticTokens f -> do
     mSemTokens <- useWithStale ParserSemanticTokens f
