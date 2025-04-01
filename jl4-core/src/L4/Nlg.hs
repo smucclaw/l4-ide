@@ -318,11 +318,7 @@ instance Linearize Nlg where
     linResolvedFragment :: NlgFragment Resolved -> LinTree
     linResolvedFragment = \case
       MkNlgText _ t -> user t
-      MkNlgRef  _ n ->
-        -- Don't linearize 'Resolved', since the we are reaching this
-        -- code path by linearising the 'Nlg' annotation of an 'Resolved'.
-        -- TODO: this might be wrong when referencing 'Name's within the 'Nlg' annotation.
-        linearize $ getActual n
+      MkNlgRef  _ n -> linearize n
 
 hcat :: [LinTree] -> LinTree
 hcat = mconcat . intersperse space
