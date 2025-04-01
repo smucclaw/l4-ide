@@ -21,14 +21,14 @@
     <Toolbar.GroupItem
       aria-label="select paths"
       value="selectPaths"
-      class="rounded-9px text-foreground/60 data-[state=on]:text-foreground/80 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
+      class="rounded-9px text-foreground/60 hover:bg-yellow-100 active:bg-yellow-300 data-[state=on]:bg-yellow-100 data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
       <Tooltip.Provider>
         <Tooltip.Root>
           <Tooltip.Trigger
-            class="shadow-btn hover:bg-muted background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
+            class="shadow-btn hover:bg-yellow-100 background focus-visible:outline-hidden inline-flex size-10 items-center justify-center group"
           >
-            <Fa icon={faDiagramProject} class="size-6" />
+            <Fa icon={faDiagramProject} class="size-6 text-current transition-colors duration-300 group-hover:text-sky-700" />
           </Tooltip.Trigger>
           <Tooltip.Content side="bottom">
             <div
@@ -43,14 +43,14 @@
     <Toolbar.GroupItem
       aria-label="what if"
       value="whatIf"
-      class="rounded-9px text-foreground/60 data-[state=on]:text-foreground/80 active:data-[state=on]inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
+      class="rounded-9px text-foreground/60 hover:bg-yellow-100 active:bg-yellow-300 data-[state=on]:bg-yellow-100 data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
       <Tooltip.Provider>
         <Tooltip.Root>
           <Tooltip.Trigger
-            class="shadow-btn hover:bg-muted background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
+            class="shadow-btn hover:bg-yellow-100 background focus-visible:outline-hidden inline-flex size-10 items-center justify-center group"
           >
-            <Fa icon={faPersonCircleQuestion} class="size-6" />
+            <Fa icon={faPersonCircleQuestion}  class="size-6 text-current transition-colors duration-300 group-hover:text-violet-600" />
           </Tooltip.Trigger>
           <Tooltip.Content side="bottom">
             <div
@@ -74,14 +74,14 @@
     <Toolbar.GroupItem
       aria-label="zen mode"
       value="zenMode"
-      class="rounded-9px bg-background-alt text-foreground/60 hover:bg-muted active:bg-dark-10 data-[state=on]:bg-muted data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
+      class="rounded-9px text-foreground/60 hover:bg-yellow-100 active:bg-yellow-300 data-[state=on]:bg-yellow-100 data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
     <Tooltip.Provider>
       <Tooltip.Root>
         <Tooltip.Trigger
-          class="shadow-btn hover:bg-muted background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
+          class="shadow-btn hover:bg-yellow-100 background focus-visible:outline-hidden inline-flex size-10 items-center justify-center group"
         >
-          <Fa icon={faVolumeXmark} class="size-6" />
+          <Fa icon={faVolumeXmark} class="size-6 text-current transition-colors duration-300 group-hover:text-slate-400" />
           </Tooltip.Trigger>
           <Tooltip.Content side="bottom">
             <div
