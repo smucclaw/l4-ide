@@ -32,8 +32,11 @@ resolveNlgAnnotationInResolved :: Resolved -> Check Resolved
 resolveNlgAnnotationInResolved = \case
   Def uniq name -> do
     Def uniq <$> resolveNlgAnnotation name
-  Ref refName uniq origName -> do
-    Ref refName uniq <$> resolveNlgAnnotation origName
+  Ref refName uniq origName ->
+    Ref
+      <$> resolveNlgAnnotation refName
+      <*> pure uniq
+      <*> pure origName
   OutOfScope uniq origName -> do
     OutOfScope uniq <$> resolveNlgAnnotation origName
 
