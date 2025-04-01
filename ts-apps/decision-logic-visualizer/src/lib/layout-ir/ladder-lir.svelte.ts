@@ -105,10 +105,42 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /*************************************************
-              Path Lir Node
+          Paths List, Lin Path
  *************************************************/
 
-export class PathsListLirNode extends DefaultLirNode implements LirNode {
+export type PathsListLirNode = InvalidPathsListLirNode | ValidPathsListLirNode
+
+export function isInvalidPathsListLirNode(
+  node: PathsListLirNode
+): node is InvalidPathsListLirNode {
+  return node instanceof InvalidPathsListLirNode
+}
+
+export class InvalidPathsListLirNode extends DefaultLirNode implements LirNode {
+  constructor(nodeInfo: LirNodeInfo) {
+    super(nodeInfo)
+  }
+
+  toString(): string {
+    return 'INVALID_PATHS_LIST_LIR_NODE'
+  }
+
+  getChildren(_context: LirContext) {
+    return []
+  }
+
+  dispose(context: LirContext) {
+    context.clear(this.getId())
+  }
+}
+
+export function isValidPathsListLirNode(
+  node: PathsListLirNode
+): node is ValidPathsListLirNode {
+  return node instanceof ValidPathsListLirNode
+}
+
+export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
   constructor(
@@ -169,7 +201,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
   }
 
   toString(): string {
-    return 'PATHS_LIST_LIR_NODE'
+    return 'VALID_PATHS_LIST_LIR_NODE'
   }
 }
 
@@ -354,15 +386,23 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
     if (!this.#pathsList) {
-      const rawPaths = this.#dag.getAllPaths()
-      const paths = rawPaths.map(
-        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-      )
-      this.#pathsList = new PathsListLirNode(
-        this.makeNodeInfo(context),
-        this,
-        paths
-      )
+      // Don't show the lin paths for a non-NNF
+      if (isNnf(context, this)) {
+        const rawPaths = this.#dag.getAllPaths()
+        const paths = rawPaths.map(
+          (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
+        )
+
+        this.#pathsList = new ValidPathsListLirNode(
+          this.makeNodeInfo(context),
+          this,
+          paths
+        )
+      } else {
+        this.#pathsList = new InvalidPathsListLirNode(
+          this.makeNodeInfo(context)
+        )
+      }
     }
 
     return this.#pathsList
@@ -597,9 +637,14 @@ export function isNotStartLirNode(
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
+    private readonly negand: DirectedAcyclicGraph<LirId>,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
+  }
+
+  getNegand(_context: LirContext) {
+    return this.negand
   }
 
   toPretty() {
@@ -822,6 +867,35 @@ export function augmentEdgesWithExplanatoryLabel(
     )
   })
 }
+
+/************************************************
+ ******************* Utils ***********************
+ *************************************************/
+
+/************************************************
+          isNnf
+*************************************************/
+
+function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
+  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
+
+  const negandIsSimpleVar = (notStart: NotStartLirNode) => {
+    // TODO: Will have to update this when we add more complicated Lir Nodes
+    const negandVertices = notStart
+      .getNegand(context)
+      .getVertices()
+      .map((v) => context.get(v))
+    return match(negandVertices)
+      .with([P.when(isBoolVarLirNode)], () => true)
+      .otherwise(() => false)
+  }
+
+  return notStartVertices.every(negandIsSimpleVar)
+}
+
+/************************************************
+          Pretty print path graph
+*************************************************/
 
 /** Bit hacky? */
 function pprintPathGraph(

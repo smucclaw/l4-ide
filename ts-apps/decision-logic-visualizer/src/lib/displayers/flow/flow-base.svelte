@@ -40,6 +40,7 @@
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
   import PathsList from './paths-list.svelte'
@@ -94,6 +95,10 @@
   const sfNodeToLirId = (sfNode: LadderSFNode) => {
     return sfIdToLirId(getSFNodeId(sfNode))
   }
+
+  // PathsList
+  // TODO: Would be better to compute this on demand
+  const pathsList = ladderGraph.getPathsList(context)
 
   /***********************************
       SvelteFlow hooks
@@ -327,23 +332,25 @@ Misc SF UI TODOs:
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
-  <div class="paths-container">
-    <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
-    <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
-    <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
-      <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
-        <!-- TODO: Improve the button styles -->
-        <button
-          class="rounded-md border-1 border-sky-700 px-2 py-1 text-xs hover:bg-accent flex items-center gap-1"
-        >
-          <List /><span>List paths</span>
-        </button>
-      </Collapsible.Trigger>
-      <Collapsible.Content class="pt-2">
-        <PathsList {context} node={ladderGraph.getPathsList(context)} />
-      </Collapsible.Content>
-    </Collapsible.Root>
-  </div>
+  {#if isValidPathsListLirNode(pathsList)}
+    <div class="paths-container">
+      <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
+      <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
+      <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
+        <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
+          <!-- TODO: Improve the button styles -->
+          <button
+            class="rounded-md border-1 border-sky-700 px-2 py-1 text-xs hover:bg-accent flex items-center gap-1"
+          >
+            <List /><span>List paths</span>
+          </button>
+        </Collapsible.Trigger>
+        <Collapsible.Content class="pt-2">
+          <PathsList {context} node={pathsList} />
+        </Collapsible.Content>
+      </Collapsible.Root>
+    </div>
+  {/if}
 </div>
 
 <!-- For debugging -->
