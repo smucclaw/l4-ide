@@ -128,7 +128,12 @@
           { token: 'decorator', foreground: 'ffbd33' }, // for annotations
         ],
         encodedTokensColors: [],
-        colors: {},
+        colors: {
+          // The following is the hex version of the --primary css variable in the default ladder diagram theme (modulo rounding error)
+          // TODO: Would be better to reference our --primary css variable directly if possible
+          'editor.foreground': '#104e64',
+          foreground: '#104e64',
+        },
       })
 
       editor = monaco.editor.create(editorElement, {
