@@ -8,7 +8,6 @@ import GHC.Generics
 import System.Environment
 import Text.Read
 
-import Control.Monad (unless)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Data.Aeson (FromJSON, ToJSON)
