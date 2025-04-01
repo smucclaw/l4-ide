@@ -370,7 +370,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
-    Lazy.ValClosure _ _ _          -> "<function>"
+    Lazy.ValClosure{}              -> "<function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of

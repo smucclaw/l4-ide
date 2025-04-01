@@ -13,6 +13,7 @@ data Value =
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [Value]
   | ValAssumed Resolved
+  | ValRegulative -- TODO
   -- | ValEnvironment Environment
   deriving stock (Show)
 
@@ -28,5 +29,6 @@ instance NFData Value where
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
+  rnf ValRegulative               = ()
   -- rnf (ValEnvironment env)        = env `seq` ()
 
