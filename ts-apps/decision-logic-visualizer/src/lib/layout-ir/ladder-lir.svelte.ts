@@ -823,6 +823,10 @@ export function augmentEdgesWithExplanatoryLabel(
   })
 }
 
+/************************************************
+          Pretty print path graph
+*************************************************/
+
 /** Bit hacky? */
 function pprintPathGraph(
   context: LirContext,
