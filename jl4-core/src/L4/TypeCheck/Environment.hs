@@ -151,7 +151,7 @@ contractName :: Name
 contractName = preDef "CONTRACT"
 
 contractRef :: Resolved
-contractRef = Ref listName listUnique listName
+contractRef = Ref contractName contractUnique contractName
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]

@@ -333,6 +333,7 @@ instance LayoutPrinter Value where
     ValConstructor r vs       -> printWithLayout r <> case vs of
       [] -> mempty
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap valParensIfNeeded vals))
+    ValRegulative             -> "<contract>"
 
 quoteIfNeeded :: Text.Text -> Text.Text
 quoteIfNeeded n = case Text.uncons n of
