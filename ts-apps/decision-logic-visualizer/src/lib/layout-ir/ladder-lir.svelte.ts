@@ -386,15 +386,23 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
     if (!this.#pathsList) {
-      const rawPaths = this.#dag.getAllPaths()
-      const paths = rawPaths.map(
-        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-      )
-      this.#pathsList = new PathsListLirNode(
-        this.makeNodeInfo(context),
-        this,
-        paths
-      )
+      // Don't show the lin paths for a non-NNF
+      if (isNnf(context, this)) {
+        const rawPaths = this.#dag.getAllPaths()
+        const paths = rawPaths.map(
+          (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
+        )
+
+        this.#pathsList = new ValidPathsListLirNode(
+          this.makeNodeInfo(context),
+          this,
+          paths
+        )
+      } else {
+        this.#pathsList = new InvalidPathsListLirNode(
+          this.makeNodeInfo(context)
+        )
+      }
     }
 
     return this.#pathsList
@@ -629,9 +637,14 @@ export function isNotStartLirNode(
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
+    private readonly negand: DirectedAcyclicGraph<LirId>,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
+  }
+
+  getNegand(_context: LirContext) {
+    return this.negand
   }
 
   toPretty() {
@@ -853,6 +866,31 @@ export function augmentEdgesWithExplanatoryLabel(
       context.getExplanatoryAndEdgeLabel()
     )
   })
+}
+
+/************************************************
+ ******************* Utils ***********************
+ *************************************************/
+
+/************************************************
+          isNnf
+*************************************************/
+
+function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
+  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
+
+  const negandIsSimpleVar = (notStart: NotStartLirNode) => {
+    // TODO: Will have to update this when we add more complicated Lir Nodes
+    const negandVertices = notStart
+      .getNegand(context)
+      .getVertices()
+      .map((v) => context.get(v))
+    return match(negandVertices)
+      .with([P.when(isBoolVarLirNode)], () => true)
+      .otherwise(() => false)
+  }
+
+  return notStartVertices.every(negandIsSimpleVar)
 }
 
 /************************************************
