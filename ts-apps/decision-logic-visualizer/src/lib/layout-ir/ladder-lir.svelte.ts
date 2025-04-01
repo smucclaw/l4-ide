@@ -105,10 +105,42 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /*************************************************
-              Path Lir Node
+          Paths List, Lin Path
  *************************************************/
 
-export class PathsListLirNode extends DefaultLirNode implements LirNode {
+export type PathsListLirNode = InvalidPathsListLirNode | ValidPathsListLirNode
+
+export function isInvalidPathsListLirNode(
+  node: PathsListLirNode
+): node is InvalidPathsListLirNode {
+  return node instanceof InvalidPathsListLirNode
+}
+
+export class InvalidPathsListLirNode extends DefaultLirNode implements LirNode {
+  constructor(nodeInfo: LirNodeInfo) {
+    super(nodeInfo)
+  }
+
+  toString(): string {
+    return 'INVALID_PATHS_LIST_LIR_NODE'
+  }
+
+  getChildren(_context: LirContext) {
+    return []
+  }
+
+  dispose(context: LirContext) {
+    context.clear(this.getId())
+  }
+}
+
+export function isValidPathsListLirNode(
+  node: PathsListLirNode
+): node is ValidPathsListLirNode {
+  return node instanceof ValidPathsListLirNode
+}
+
+export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
   constructor(
@@ -169,7 +201,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
   }
 
   toString(): string {
-    return 'PATHS_LIST_LIR_NODE'
+    return 'VALID_PATHS_LIST_LIR_NODE'
   }
 }
 
