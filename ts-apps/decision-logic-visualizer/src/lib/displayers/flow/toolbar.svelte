@@ -48,7 +48,7 @@
       <Tooltip.Provider>
         <Tooltip.Root>
           <Tooltip.Trigger
-            class="shadow-btn background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
+            class="shadow-btn hover:bg-muted background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
           >
             <Fa icon={faPersonCircleQuestion} class="size-6" />
           </Tooltip.Trigger>
@@ -74,12 +74,12 @@
     <Toolbar.GroupItem
       aria-label="align left"
       value="left"
-      class="rounded-9px text-foreground/60 data-[state=on]:text-foreground/80 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
+      class="rounded-9px bg-background-alt text-foreground/60 hover:bg-muted active:bg-dark-10 data-[state=on]:bg-muted data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
     <Tooltip.Provider>
       <Tooltip.Root>
         <Tooltip.Trigger
-          class="shadow-btn background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
+          class="shadow-btn hover:bg-muted background focus-visible:outline-hidden inline-flex size-10 items-center justify-center"
         >
           <Fa icon={faVolumeXmark} class="size-6" />
           </Tooltip.Trigger>
