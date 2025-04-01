@@ -19,8 +19,8 @@
     class="flex items-center gap-x-0.5"
   >
     <Toolbar.GroupItem
-      aria-label="toggle italic"
-      value="italic"
+      aria-label="select paths"
+      value="selectPaths"
       class="rounded-9px text-foreground/60 data-[state=on]:text-foreground/80 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
       <Tooltip.Provider>
@@ -41,8 +41,8 @@
       </Tooltip.Provider>
     </Toolbar.GroupItem>
     <Toolbar.GroupItem
-      aria-label="toggle strikethrough"
-      value="strikethrough"
+      aria-label="what if"
+      value="whatIf"
       class="rounded-9px text-foreground/60 data-[state=on]:text-foreground/80 active:data-[state=on]inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
       <Tooltip.Provider>
@@ -72,8 +72,8 @@
     class="flex items-center gap-x-0.5"
   >
     <Toolbar.GroupItem
-      aria-label="align left"
-      value="left"
+      aria-label="zen mode"
+      value="zenMode"
       class="rounded-9px bg-background-alt text-foreground/60 hover:bg-muted active:bg-dark-10 data-[state=on]:bg-muted data-[state=on]:text-foreground/80 active:data-[state=on]:bg-dark-10 inline-flex size-10 items-center justify-center transition-all active:scale-[0.98]"
     >
     <Tooltip.Provider>
