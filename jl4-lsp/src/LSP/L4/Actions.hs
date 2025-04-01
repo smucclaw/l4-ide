@@ -11,7 +11,6 @@ import Data.Char (isAlphaNum)
 import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Aeson as Aeson
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified Optics
 import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
@@ -90,10 +89,10 @@ defaultCompletionItem label = CompletionItem label
 gotoDefinition :: Position -> TypeCheckResult -> PositionMapping -> Maybe Location
 gotoDefinition pos m positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  (defnUri, range) <- findDefinition (lspPositionToSrcPos oldPos) m.module'
+  range <- findDefinition (lspPositionToSrcPos oldPos) m.module'
   let lspRange = srcRangeToLspRange (Just range)
   newRange <- toCurrentRange positionMapping lspRange
-  pure (Location (fromNormalizedUri defnUri) newRange)
+  pure (Location (fromNormalizedUri range.moduleUri) newRange)
 
 -- ----------------------------------------------------------------------------
 -- Ladder visualisation
@@ -224,10 +223,7 @@ completions rope nuri typeCheck (Position ln col) = do
         $ mapMaybe
             (\(name, checkEntity) ->
               topDeclToCompletionItem name
-              $ Optics.over'
-                (Optics.gplate @(Type' Resolved))
-                (applyFinalSubstitution typeCheck.substitution nuri)
-                checkEntity
+              $ applyFinalSubstitution typeCheck.substitution nuri checkEntity
             )
             (combineEnvironmentEntityInfo
               typeCheck.environment
@@ -245,10 +241,10 @@ completions rope nuri typeCheck (Position ln col) = do
 -- LSP Hovers
 -- ----------------------------------------------------------------------------
 
-referenceHover :: Position -> IVMap.IntervalMap SrcPos (Int, Maybe Text) -> Maybe Hover
+referenceHover :: Position -> IVMap.IntervalMap SrcPos (NormalizedUri, Int, Maybe Text) -> Maybe Hover
 referenceHover pos refs = do
   -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
-  let ivToRange (iv, (len, reference)) = (intervalToSrcRange len iv, reference)
+  let ivToRange (iv, (uri, len, reference)) = (intervalToSrcRange uri len iv, reference)
   -- NOTE: this is subtle: if there are multiple results for a location, then we want to
   -- prefer Just's, so we reverse sort the references we get.
   -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would

@@ -47,9 +47,6 @@
   const nodeInfo = { registry: lirRegistry, context }
 
   let declLirNode: DeclLirNode | undefined = $state(undefined)
-  let funName = $derived(
-    declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  )
 
   /******************************
       VizInfo Payload Decoder
@@ -236,13 +233,17 @@
         /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`)
-          const response = await next(command, args)
+          const responseFromLangServer = await next(command, args)
 
           logger.debug(
-            `received response from language server ${JSON.stringify(response)}`
+            `received response from language server ${JSON.stringify(responseFromLangServer)}`
           )
+          if (responseFromLangServer === null) {
+            logger.info('language server returned `null`, so doing nothing')
+            return
+          }
 
-          const decoded = decodeVizInfo(response)
+          const decoded = decodeVizInfo(responseFromLangServer)
           // TODO: Can improve this later
           switch (decoded._tag) {
             case 'Right':
@@ -265,7 +266,7 @@
               }
               break
             case 'Left':
-              errorMessage = `Internal error: Failed to decode response. ${decoded?.left}`
+              errorMessage = `Internal error: Failed to decode response. Please report this to the JL4 developers. ${decoded?.left}`
               break
           }
         },
@@ -331,14 +332,11 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
-    <div id="jl4-webview" class="h-full bg-white">
-      <div class="header">
-        <h1>{funName}</h1>
-      </div>
+    <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
       {#if declLirNode}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key declLirNode}
-          <div class="slightly-shorter-than-full-viewport-height pb-2">
+          <div class="slightly-shorter-than-full-viewport-height pb-1">
             <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
           </div>
         {/key}
@@ -350,36 +348,8 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
 </Resizable.PaneGroup>
 
-<style lang="postcss">
-  @reference "tailwindcss"
-
-    @keyframes flash {
-    0%,
-    90% {
-      background-color: hsl(var(--neutral));
-    }
-    50% {
-      background-color: oklch(
-        0.951 0.026 236.824
-      ); /* Tailwind's --color-sky-100 */
-    }
-  }
-
-  .header {
-    padding-top: 3px;
-    padding-bottom: 8px;
-  }
-
+<style>
   .slightly-shorter-than-full-viewport-height {
-    height: 95svh;
-  }
-
-  h1 {
-    margin-top: 10px;
-    padding-bottom: 2px;
-    font-size: 1.5rem;
-    line-height: 1.1rem;
-    font-weight: 700;
-    text-align: center;
+    height: 98svh;
   }
 </style>

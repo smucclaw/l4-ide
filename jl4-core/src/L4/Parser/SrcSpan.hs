@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Parser.SrcSpan where
 
 import Base
@@ -50,26 +51,24 @@ prettySrcSpan (MkSrcSpan p1 p2) = prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 -- SrcRange
 -- ----------------------------------------------------------------------------
 
+instance ToExpr NormalizedUri
+
 -- | A range of source positions. We store the length of a range as well.
 data SrcRange =
   MkSrcRange
-    { start   :: !SrcPos -- inclusive
-    , end     :: !SrcPos -- inclusive
-    , length  :: !Int
+    { start     :: !SrcPos -- inclusive
+    , end       :: !SrcPos -- inclusive
+    , length    :: !Int
+    , moduleUri :: !NormalizedUri
     }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+prettySrcRange :: SrcRange -> Text
+prettySrcRange (MkSrcRange p1 p2 _ uri) = (fromNormalizedUri uri).getUri <> ":" <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
 
--- TODO: eventually, we may want to take sufficient info so that we can print the file path
--- for "external" ranges, but not ranges in the current file.
-prettySrcRange :: Maybe FilePath -> Maybe SrcRange -> Text
-prettySrcRange fp Nothing = prettyFilePath fp <> "<unknown range>"
-prettySrcRange fp (Just (MkSrcRange p1 p2 _)) = prettyFilePath fp <> prettySrcPos p1 <> prettyPartialSrcPos p1 p2
-
-prettyFilePath :: Maybe FilePath -> Text
-prettyFilePath Nothing   = ""
-prettyFilePath (Just fp) = Text.pack fp <> ":"
+prettySrcRangeM :: Maybe SrcRange -> Text
+prettySrcRangeM = maybe "<no location>" prettySrcRange
 
 -- ----------------------------------------------------------------------------
 -- SrcPos
@@ -89,7 +88,7 @@ data SrcPos =
 
 -- | We ignore the file name, because we assume this has already been checked.
 inRange :: SrcPos -> SrcRange -> Bool
-inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _) =
+inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _ _) =
      (l, c) >= (l1, c1)
   && (l, c) <= (l2, c2)
 

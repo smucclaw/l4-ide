@@ -40,7 +40,7 @@
   const example1 = {
     $type: 'FunDecl' as const,
     id: { id: 100 },
-    name: { label: 'Example1', unique: 1 },
+    name: { label: 'Example 1', unique: 1 },
     params: [],
     body: {
       $type: 'And' as const,
@@ -94,7 +94,7 @@
   const example2 = {
     $type: 'FunDecl' as const,
     id: { id: 200 },
-    name: { label: 'Example2', unique: 5 },
+    name: { label: 'Example 2', unique: 5 },
     params: [],
     body: {
       $type: 'And' as const,
@@ -211,14 +211,12 @@
   </h2>
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
-  <h3 class="text-2xl font-semibold">Example 1</h3>
   <div class="viz-container-with-height">
     <Flow {context} node={funDeclLirNode} lir={lirRegistry} />
   </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
-  <h3 class="text-2xl font-semibold">Example 2</h3>
   <div class="viz-container-with-height">
     <Flow {context} node={declLirNode2} lir={lirRegistry} />
   </div>
@@ -233,7 +231,7 @@
       onblur={() => (isHovered = false)}
       style="background-color: {isHovered
         ? 'var(--accent)'
-        : 'var(--color-button)'}"
+        : 'var(--ladder-color-button)'}"
     >
       <h4>Expand to view source JSON of the IRExpr</h4>
     </label>

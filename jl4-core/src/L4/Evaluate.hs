@@ -7,14 +7,18 @@ module L4.Evaluate
   , buildModuleEnvironment
   , execEvalModuleWithEnv
   , unionEnvironments
+  , prettyEvalException
   )
   where
 
 import Base
+import qualified Base.Text as Text
+import Optics ((%))
 import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Value
 import L4.Parser.SrcSpan (SrcRange)
+import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
@@ -105,13 +109,56 @@ buildEvalTrace = go []
 
 data EvalException =
     RuntimeScopeError Resolved -- internal
-  | RuntimeTypeError String -- internal
+  | RuntimeTypeError Text -- internal
+  | InvariantViolated Text -- internal
   | EqualityOnUnsupportedType
-  | NonExhaustivePatterns -- we could try to warn statically
+  | NonExhaustivePatterns Value -- we could try to warn statically
   | StackOverflow
-  | Unimplemented
+  | Stuck
+    (Expr Resolved)
+    -- ^ the expression we were evaluating when getting stuck
+    Resolved
+    -- ^ the term we got stuck on
   deriving stock (Generic, Show)
   deriving anyclass NFData
+
+prettyEvalException :: EvalException -> [Text]
+prettyEvalException = \case
+  RuntimeScopeError r ->
+    [ "Internal error:" ]
+    <> prepare r
+    <> [ "is not in scope."
+    , "Please report this as a bug." ]
+  RuntimeTypeError err ->
+    [ "Internal error:"
+    , ind err
+    , "is not in scope."
+    , "Please report this as a bug." ]
+  InvariantViolated inv ->
+    [ "Invariant violated:"
+    , ind inv
+    , "Please report this as a bug." ]
+  EqualityOnUnsupportedType -> ["Trying to check equality on types that do not support it."]
+  NonExhaustivePatterns val ->
+    [ "Value" ]
+    <> prepare val
+    <> [ "has no corresponding pattern." ]
+  StackOverflow ->
+    [ "Stack overflow: "
+    , "Recursion depth of " <> Text.show maximumStackSize
+    , "exceeded." ]
+  Stuck expr r ->
+    [ "Expression stuck while evaluating:" ]
+    <> prepare expr
+    <> [ "This happened because" ]
+    <> prepare r
+    <> [ "is assumed" ]
+  where
+    ind = ("  " <>)
+
+    prepare :: LayoutPrinter a => a -> [Text]
+    prepare = map ind . Text.lines .  prettyLayout
+
 
 emptyEnvironment :: Environment
 emptyEnvironment = Map.empty
@@ -447,7 +494,8 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
-    res -> exception (RuntimeTypeError $ "unexpected value when looking up term: " <> show res) stack0
+    Just (ValAssumed r) -> stuckOnAssumed r stack0
+    res -> exception (RuntimeTypeError $ "unexpected value when looking up term: " <> Text.show res) stack0
 backwardExpr !ss (App1 n vals (e : es) env stack) val = do
   popAndPushFrame val env ss (App1 n (val : vals) es env stack) e
 backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
@@ -457,7 +505,8 @@ backwardExpr !ss stack0@(IfThenElse1 e2 e3 env stack) val1 = do
       pushExprFrame env (ss - 1) stack e2
     Just False -> do
       pushExprFrame env (ss - 1) stack e3
-    Nothing    -> exception (RuntimeTypeError "expected a bool frame when checking if then else") stack0
+    Nothing | ValAssumed r <- val1 -> stuckOnAssumed r stack0
+    Nothing -> exception (RuntimeTypeError "expected a bool frame when checking if then else") stack0
 backwardExpr !ss stack0@(Consider1 branches env stack) val = do
   popFrame val
   matchBranches val branches env stack0 ss stack
@@ -488,8 +537,8 @@ matchGivens (MkGivenSig _ann otns) vals stack0 = do
     else exception (RuntimeTypeError "given signatures' values' lengths do not match") stack0
 
 matchBranches :: Value -> [Branch Resolved] -> Environment -> Stack -> Int -> Stack -> Eval Value
-matchBranches _val [] _env stack0 _ss _stack =
-  exception NonExhaustivePatterns stack0
+matchBranches val [] _env stack0 _ss _stack =
+  exception (NonExhaustivePatterns val) stack0
 matchBranches _val (Otherwise _ann e : _) env _stack0 !ss stack = do
   pushExprFrame env ss stack e
 matchBranches val (When _ann pat e : branches) env stack0 !ss stack = do
@@ -515,8 +564,9 @@ matchPattern stack0 (ValConstructor n vals) (PatApp _ann n' pats)
   | sameResolved n n' =
     if length vals == length pats
       then (fmap Map.unions . sequence) <$> sequence (zipWith (matchPattern stack0) vals pats)
-      else exception (RuntimeTypeError "matching patterns with differnt amounts of patterns and values") stack0
+      else exception (RuntimeTypeError "matching patterns with different amounts of patterns and values") stack0
   | otherwise         = pure Nothing
+matchPattern stack0 (ValAssumed r) _ = stuckOnAssumed r stack0
 matchPattern stack0 _ _ =
   exception (RuntimeTypeError "matching patterns with malformed value constructor and pattern application") stack0
 
@@ -551,7 +601,16 @@ runBinOp BinOpLt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2) _stack = pure $ valBool (str1 > str2)
 runBinOp BinOpGt     (boolView -> Just b1) (boolView -> Just b2) _stack = pure $ valBool (b1 > b2)
+runBinOp _op         (ValAssumed r) _e2 stack = stuckOnAssumed r stack
+runBinOp _op         _e1 (ValAssumed r) stack = stuckOnAssumed r stack
 runBinOp _           _                _                 stack = exception (RuntimeTypeError "running bin op with invalid operation / value combination") stack
+
+stuckOnAssumed :: Resolved -> Stack -> Eval b
+stuckOnAssumed assumedResolved stack = do
+  exprs <- use (#evalActions % to unRevList)
+  case exprs of
+    Enter expr : _ -> exception (Stuck expr assumedResolved) stack
+    _ -> exception (InvariantViolated "no corresponding Enter stackframe for expression") stack
 
 runBinOpEquals :: Value -> Value -> Stack -> Eval Value
 runBinOpEquals val1 val2 stack =

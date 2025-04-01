@@ -1,21 +1,22 @@
 {-# LANGUAGE ViewPatterns #-}
-module Main where
+module Main (main) where
 
 import Base
 import Control.Monad.Trans.Maybe
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
-import L4.Parser (execProgramParser)
+import qualified L4.Nlg as Nlg
 import qualified L4.Parser as Parser
-import qualified L4.Parser.ResolveAnnotation as Parser
 import qualified L4.Parser.SrcSpan as JL4
 import qualified L4.Print as Print
 import L4.Syntax
 import L4.TypeCheck (CheckResult(..))
 import qualified L4.TypeCheck as JL4
+
 import Paths_jl4
 
 import qualified Base.Text as Text
+import qualified Data.List as List
 import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
@@ -94,20 +95,34 @@ jl4ExactPrintGolden dir inputFile = do
 
 jl4NlgAnnotationsGolden :: Bool -> String -> FilePath -> IO (Golden Text)
 jl4NlgAnnotationsGolden isOk dir inputFile = do
-  input <- Text.readFile inputFile
-  output_ <- case execProgramParser (toNormalizedUri $ filePathToUri inputFile) input of
-    Left _err -> pure "Failed to parse"
-    Right (prog, warns) -> do
-      null warns `shouldBe` isOk
-      pure $ prettyNlgOutput prog warns
+  (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
+    let uri = normalizedFilePathToUri nfp
+    _ <- Shake.addVirtualFileFromFS nfp
+    Shake.use Rules.SuccessfulTypeCheck uri
+  let output_ = case moutput of
+        Nothing -> "Cannot linearize module that doesn't typecheck\n"
+        Just checkResult ->
+          let
+            mod' = checkResult.module'
+            directives = toListOf (gplate @(Directive Resolved)) mod'
+            directiveExprs = fmap (\case
+              Eval _ e -> e
+              Check _ e -> e
+              ) directives
+          in
+            Text.unlines $ fmap Nlg.simpleLinearizer directiveExprs
+  let output =
+        if isOk
+          then output_
+          else output_ <> "\n" <> Text.unlines (fmap (Text.strip . sanitizeFilePaths) errs)
   pure
     Golden
-      { output = output_
+      { output
       , encodePretty = Text.unpack
       , writeToFile = Text.writeFile
       , readFromFile = Text.readFile
-      , goldenFile = dir </> (takeFileName inputFile -<.> "nlg.golden")
-      , actualFile = Just (dir </> (takeFileName inputFile -<.> "nlg.actual"))
+      , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
+      , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = False
       }
 
@@ -118,12 +133,12 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
 sanitizeFilePaths :: Text -> Text
 sanitizeFilePaths = RE.replaceAll regex
   where
-  mkFileName (Text.unpack -> fp) = Text.pack $ ' ' : case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
-    Just p | not (null p) -> p
-    _ -> fp
+  mkFileName (Text.null -> hadNoWhiteSpace) (Text.unpack -> fp)
+    = Text.pack $ (if hadNoWhiteSpace then id else (' ' :)) case OsPath.decodeUtf . OsPath.takeFileName =<< OsPath.encodeUtf fp of
+      Just p | not (null p) -> p
+      _ -> fp
 
-  regex = fmap mkFileName $
-    RE.manyTextOf CharSet.space *> RE.text "file://" *>
+  regex = mkFileName <$> RE.manyTextOf CharSet.space <* RE.text "file://" <*>
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
 
 checkFile :: Bool -> FilePath -> IO ()
@@ -143,79 +158,18 @@ checkFile isOk file = do
     Text.putStr $ foldMap sanitizeFilePaths errs
 
  where
-  fp = takeFileName file
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, [either Text.show Print.prettyLayout res])
-  renderMessage (r, txt) = cliErrorMessage fp r txt
+  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
+  renderMessage (r, txt) = cliErrorMessage r txt
 
 data CliError
   = CliParserError FilePath (NonEmpty Parser.PError)
   | CliCheckError FilePath CheckResult
   deriving stock (Show, Eq)
 
-prettyCliError :: CliError -> Text
-prettyCliError = \case
-  CliParserError file perrors ->
-    "While parsing "
-      <> Text.pack file
-      <> ":"
-      <> Text.unlines (((.message)) <$> toList perrors)
-  CliCheckError file MkCheckResult{errors} ->
-    Text.unlines (map (\err -> cliErrorMessage file (JL4.rangeOf err) (JL4.prettyCheckErrorWithContext err)) errors)
-
-cliErrorMessage :: FilePath -> Maybe JL4.SrcRange -> [Text] -> Text
-cliErrorMessage fp mrange msg =
+cliErrorMessage :: Maybe JL4.SrcRange -> [Text] -> Text
+cliErrorMessage mrange msg =
   Text.unlines
-    ( JL4.prettySrcRange (Just fp) mrange <> ":"
+    ( JL4.prettySrcRangeM  mrange <> ":"
         : map ("  " <>) msg
     )
-
-prettyNlgOutput :: Module Name -> [Parser.Warning] -> Text
-prettyNlgOutput p warns =
-  Text.unlines $
-    [ prettyNlgName n nlg
-    | n <- toListOf gplate p
-    , Just nlg <- [n ^? JL4.annoOf % #extra % #nlg % _Just]
-    ]
-      <> [prettyWarning warning | warning <- warns]
- where
-  prettyNlgName :: Name -> Nlg -> Text
-  prettyNlgName name nlg =
-    mconcat
-      [ prettyName name
-      , "\n  "
-      , prettyNlg nlg
-      ]
-
-  prettyName name =
-    mconcat
-      [ prettyMaybeSrcRange (JL4.rangeOf name)
-      , " "
-      , Print.prettyLayout name
-      ]
-
-  prettyMaybeSrcRange :: Maybe JL4.SrcRange -> Text
-  prettyMaybeSrcRange srcRange = "[" <> JL4.prettySrcRange Nothing srcRange <> "]"
-
-  prettyNlg :: Nlg -> Text
-  prettyNlg n =
-    mconcat
-      [ prettyMaybeSrcRange (JL4.rangeOf n)
-      , " "
-      , Print.prettyLayout n
-      ]
-
-  prettyWarning = \case
-    Parser.NotAttached nlg ->
-      "Not attached to any node:\n  " <> prettyNlg nlg.payload
-    Parser.UnknownLocation nlg ->
-      "Annotation without location:\n  " <> prettyNlg nlg
-    Parser.Ambiguous n nlgs ->
-      Text.unlines
-        [ "Too many annotations:"
-        , Text.replicate 2 " " <> "Name: " <> prettyName n
-        , Text.unlines $
-            [ Text.replicate 4 " " <> prettyNlg nlg.payload
-            | nlg <- nlgs
-            ]
-        ]
