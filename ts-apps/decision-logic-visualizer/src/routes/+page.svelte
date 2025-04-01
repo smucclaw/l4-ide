@@ -10,14 +10,13 @@
 
   import Flow from '$lib/displayers/flow/flow.svelte'
   import Toolbar from '$lib/displayers/flow/toolbar.svelte'
-  import { draggable } from "@neodrag/svelte"
+  import { draggable } from '@neodrag/svelte'
   import type { DragOptions } from '@neodrag/svelte'
-  import { divide } from 'lodash'
 
   let options: DragOptions = {
     bounds: 'parent',
     handle: '.handle',
-    onDragStart: ({currentNode}) => {
+    onDragStart: ({ currentNode }) => {
       const handle = currentNode.querySelector('.handle')
       handle?.classList.remove('cursor-grab')
       handle?.classList.add('cursor-grabbing')
@@ -196,7 +195,9 @@
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
 
 <div use:draggable={options} class="z-[9999] absolute">
-  <div class="handle w-full h-8 bg-gray-700 text-gray-100 cursor-grab text-center text-sm">
+  <div
+    class="handle w-full h-8 bg-gray-700 text-gray-100 cursor-grab text-center text-sm"
+  >
     Toolbar
   </div>
   <div class="bg-white">
