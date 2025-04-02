@@ -556,6 +556,7 @@ function getVerticesFromAlgaDag(
           Ladder Lir Node
 ***********************************************/
 
+/** LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
   | BoolVarLirNode
   | NotStartLirNode
