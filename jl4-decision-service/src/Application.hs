@@ -21,7 +21,7 @@ import Server
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
-import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy)
+import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -61,7 +61,10 @@ defaultMain = do
     runSettings settings (corsMiddleware $ app initialState serverName)
 
 corsMiddleware :: Middleware
-corsMiddleware = cors (const $ Just simpleCorsResourcePolicy)
+corsMiddleware = cors (const $ Just (simpleCorsResourcePolicy
+  { corsMethods = corsMethods simpleCorsResourcePolicy <> ["OPTIONS"]
+  , corsRequestHeaders = ["content-type"] -- Allow Content-Type header
+  }))
 
 expandSourcePaths :: [FilePath] -> IO [FilePath]
 expandSourcePaths paths = do
