@@ -739,6 +739,35 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
+export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
+  private readonly opening: LirId
+  private readonly closing: LirId
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    opening: NotStartLirNode,
+    private readonly negand: DirectedAcyclicGraph<LirId>,
+    closing: NotEndLirNode,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.opening = opening.getId()
+    this.closing = closing.getId()
+  }
+
+  getNegand(_context: LirContext) {
+    return this.negand
+  }
+
+  toPretty() {
+    return ')'
+  }
+
+  toString(): string {
+    return 'MERGED_NOT_LIR_NODE'
+  }
+}
+
 /******************************
     Bundling Flow Lir Node
 *******************************/
