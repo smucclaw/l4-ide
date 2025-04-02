@@ -1,6 +1,6 @@
 import type { Unique } from '@repo/viz-expr'
 import type { Value } from './value.js'
-import type { LirId } from './core.js'
+import type { LirId } from '../layout-ir/core.js'
 
 export class Environment {
   // A Unique is a non-negative integer

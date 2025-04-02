@@ -1,5 +1,9 @@
 import { match } from 'ts-pattern'
 
+/**************************
+        Raw Value
+***************************/
+
 export type Value = BoolVal
 
 export type BoolVal = TrueVal | FalseVal | UnknownVal
@@ -42,4 +46,17 @@ export function cycle(val: BoolVal): BoolVal {
     .with({ $type: 'FalseVal' }, () => new UnknownVal())
     .with({ $type: 'UnknownVal' }, () => new TrueVal())
     .exhaustive()
+}
+
+/**************************
+       Result Value
+***************************/
+
+export class ResultValue {
+  constructor(private readonly rawValue: Value) {}
+
+  getClasses() {
+    // TODO: Will prob wnat to add more
+    return this.rawValue.getClasses()
+  }
 }

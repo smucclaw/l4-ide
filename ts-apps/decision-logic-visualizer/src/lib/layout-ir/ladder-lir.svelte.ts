@@ -5,9 +5,9 @@ import {
   TrueVal,
   FalseVal,
   UnknownVal,
-} from './value.js'
+} from '../interpreter/value.js'
 import type { BoolVar, Unique, Name } from '@repo/viz-expr'
-import { Environment } from './environment.js'
+import { Environment } from '../interpreter/environment.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
