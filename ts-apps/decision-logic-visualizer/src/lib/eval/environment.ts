@@ -23,6 +23,10 @@ export class Subst {
   getUniques(): Array<Unique> {
     return this.#subst.map((_, i) => i)
   }
+
+  getEntries(): Array<[Unique, Value]> {
+    return this.#subst.map((value, i) => [i, value])
+  }
 }
 
 /**

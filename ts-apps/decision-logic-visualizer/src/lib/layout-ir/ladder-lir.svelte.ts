@@ -5,9 +5,11 @@ import {
   TrueVal,
   FalseVal,
   UnknownVal,
-} from '../interpreter/value.js'
+} from '../eval/type.js'
+import * as EV from '../eval/type.js'
 import type { BoolVar, Unique, Name } from '@repo/viz-expr'
-import { Environment } from '../interpreter/environment.js'
+import { Subst, Corefs } from '../eval/environment.js'
+import { type Evaluator, SimpleEvaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -331,17 +333,26 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
    * No need to update it, tho, if changing edge attributes.
    */
   #pathsList?: PathsListLirNode
-  #environment: Environment
+  #corefs: Corefs
+  #argSubst: Subst
+  #evaluator: Evaluator = SimpleEvaluator
 
   constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
     super(nodeInfo)
     this.#dag = dag
 
-    // Make the initial environment
+    // Make the initial arg subst
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       (n) => n instanceof BoolVarLirNode
     )
-    const initialEnv = varNodes.map((n) => n.getValue(nodeInfo.context))
+    const initialArgSubst: Array<BoolVal> = []
+    varNodes.forEach((varN) => {
+      const uniq = varN.getUnique(nodeInfo.context)
+      initialArgSubst[uniq] = varN.getValue(nodeInfo.context)
+    })
+    this.#argSubst = new Subst(initialArgSubst)
+
+    // Make the initial corefs
     const initialCoreferents: Array<Set<LirId>> = []
     varNodes.forEach((n) => {
       const unique = n.getUnique(nodeInfo.context)
@@ -351,7 +362,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         initialCoreferents[unique].add(n.getId())
       }
     })
-    this.#environment = new Environment(initialEnv, initialCoreferents)
+    this.#corefs = new Corefs(initialCoreferents)
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
@@ -490,16 +501,71 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     context: LirContext,
     binding: { unique: Unique; value: Value }
   ) {
-    // Set the new binding
-    this.#environment.set(binding)
+    // Update the arg substitution with the new binding
+    this.#argSubst.set(binding.unique, binding.value)
 
-    // The key step: Update all VarLirNodes with this Unique with the new Value
-    const corefs = Array.from(this.#environment.getCoreferents(binding.unique))
+    // Update all VarLirNodes with this Unique with the new Value
+    const corefs = Array.from(this.#corefs.getCoreferents(binding.unique))
     // console.log('corefs: ', corefs)
     corefs.forEach((coref) => {
       const node = context.get(coref) as VarLirNode
       node._setValue(context, binding.value)
     })
+
+    // --------------------------------------------------------------------------
+    // TODO: Simplify this if the EV.Expr stuff doesn't seem worth it in the end
+    // --------------------------------------------------------------------------
+    /*
+    Try #WhatIf-style evaluation.
+
+    See Note [WhatIf-style evaluation]
+
+    We can understand #WhatIf-style evaluation in this context
+    in terms of normal evaluation (of a lexically scoped language) as follows.
+    Given a LadderGraph, we can define a boolean function `f`
+    whose params correspond to the var nodes of the ladder graph
+    and whose body corresponds to the ladder graph.
+    Note that f may not be the same as the IRExpr FunDecl associated with this LadderGraph,
+    since the params of this f are by construction exactly the var nodes of the ladder graph,
+    and those may not be the same as the params of the FunDecl.
+
+    Suppose, then, that we had the closure corresponding to this boolean function
+    (ignore the closure environment for now) --- for concreteness, suppose we had a
+
+        (FunV params body fenv)
+
+    #WhatIf-style evaluation corresponds to evaluating
+    the application of this closure to our arg subst (a mapping from Uniques to
+    the values that have been specified by the user, or pre-specified from the backend).
+    I.e., to evaluating
+
+        (App (FunV params body fenv) argSubst)
+
+    ---------
+
+    Note that
+    * the argSubst will have a Unique key for every Var node,
+      including Var nodes that the user hasn't specified a value for
+    * the default value for a VarNode is UnknownV
+
+    */
+    const argsMap: Map<Unique, EV.Expr> = new Map(
+      this.#argSubst
+        .getEntries()
+        .map(([unique, value]) => [unique, new EV.BoolLit(value as BoolVal)])
+    )
+    const app = new EV.App(
+      new EV.Lam(
+        new Set(this.#argSubst.getUniques()),
+        new EV.CompoundBoolE(this.#dag)
+      ),
+      argsMap
+    )
+    const result = this.#evaluator.eval(context, app)
+    console.log(result)
+    // TODO: Add concrete UI for the result
+
+    // TODO for v2: Grey out incompatible subgraphs
 
     this.getRegistry().publish(context, this.getId())
   }
@@ -536,7 +602,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   dispose(context: LirContext) {
     this.getVertices(context).map((n) => n.dispose(context))
-    this.#environment.dispose()
+    this.#corefs.dispose()
     this.#dag.dispose()
     context.clear(this.getId())
   }

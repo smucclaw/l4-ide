@@ -31,7 +31,7 @@
     type LadderSFNode,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/layout-ir/value.js'
+  import { cycle } from '$lib/eval/type.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
