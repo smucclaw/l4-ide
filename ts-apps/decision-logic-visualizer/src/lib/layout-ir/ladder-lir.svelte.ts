@@ -19,7 +19,6 @@ import {
   isConnect,
   overlay,
   empty,
-  foldg,
   type Overlay,
   type Connect,
   type Vertex,
@@ -881,13 +880,11 @@ function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
 
   const negandIsSimpleVar = (notStart: NotStartLirNode) => {
     // TODO: Will have to update this when we add more complicated Lir Nodes
-    const negandVertices = notStart
-      .getNegand(context)
-      .getVertices()
-      .map((v) => context.get(v))
-    return match(negandVertices)
-      .with([P.when(isBoolVarLirNode)], () => true)
-      .otherwise(() => false)
+    const negand = notStart.getNegand(context)
+    return (
+      isVertex(negand) &&
+      isBoolVarLirNode(context.get(negand.getValue()) as LadderLirNode)
+    )
   }
 
   return notStartVertices.every(negandIsSimpleVar)
@@ -897,11 +894,11 @@ function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
           Pretty print path graph
 *************************************************/
 
-/** Bit hacky? */
 function pprintPathGraph(
   context: LirContext,
   initialGraph: DirectedAcyclicGraph<LirId>
 ): string {
+  // Each node should only be pprinted once in the linearization of the dag
   const processed = new Set<LirId>()
 
   function pprintHelper(
