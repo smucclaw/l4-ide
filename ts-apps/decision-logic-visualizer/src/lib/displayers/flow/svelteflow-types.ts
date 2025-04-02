@@ -1,7 +1,7 @@
 // Types and util functions for the Svelte Flow graph
 
 import type { Name } from '@repo/viz-expr'
-import type { BoolVal } from '$lib/interpreter/value.js'
+import type { BoolVal } from '$lib/eval/type.js'
 import type {
   RootDisplayerProps,
   DisplayerProps,
