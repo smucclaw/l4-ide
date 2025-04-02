@@ -41,7 +41,7 @@ GIVEN
   `the amount` IS A NUMBER
 GIVETH A BOOLEAN
 DECIDE `can transfer car ownership`
-@nlg %the seller% %can transfer car ownership% to %the buyer%
+@nlg %`the seller`% %`can transfer car ownership`% to %`the buyer`%
         `the seller` @nlg [Subject]
         `the buyer`  @nlg [...]
         `the amount`

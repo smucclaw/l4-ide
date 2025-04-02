@@ -40,6 +40,7 @@
     BoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-lir.svelte.js'
+  import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
   import PathsList from './paths-list.svelte'
@@ -94,6 +95,10 @@
   const sfNodeToLirId = (sfNode: LadderSFNode) => {
     return sfIdToLirId(getSFNodeId(sfNode))
   }
+
+  // PathsList
+  // TODO: Would be better to compute this on demand
+  const pathsList = ladderGraph.getPathsList(context)
 
   /***********************************
       SvelteFlow hooks
@@ -299,7 +304,8 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <div class="flow-container" style={`height:100%; opacity: ${flowOpacity}`}>
+  <h1>{declLirNode.getFunName(context)}</h1>
+  <div class="flow-container" style={`opacity: ${flowOpacity}`}>
     <SvelteFlow
       bind:nodes={NODES}
       bind:edges={EDGES}
@@ -326,30 +332,41 @@ Misc SF UI TODOs:
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
-  <div class="paths-container">
-    <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
-    <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
-    <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
-      <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
-        <!-- TODO: Improve the button styles -->
-        <button
-          class="rounded-md border-1 border-sky-700 px-2 py-1 text-sm hover:bg-accent flex items-center gap-1"
-        >
-          <List /><span>List paths</span>
-        </button>
-      </Collapsible.Trigger>
-      <Collapsible.Content class="pt-2">
-        <PathsList {context} node={ladderGraph.getPathsList(context)} />
-      </Collapsible.Content>
-    </Collapsible.Root>
-  </div>
+  {#if isValidPathsListLirNode(pathsList)}
+    <div class="paths-container">
+      <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
+      <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
+      <Collapsible.Root onOpenChange={() => setTimeout(doFitView, 10)}>
+        <Collapsible.Trigger class="flex items-center justify-end w-full gap-2">
+          <!-- TODO: Improve the button styles -->
+          <button
+            class="rounded-md border-1 border-sky-700 px-2 py-1 text-xs hover:bg-accent flex items-center gap-1"
+          >
+            <List /><span>List paths</span>
+          </button>
+        </Collapsible.Trigger>
+        <Collapsible.Content class="pt-2">
+          <PathsList {context} node={pathsList} />
+        </Collapsible.Content>
+      </Collapsible.Root>
+    </div>
+  {/if}
 </div>
 
 <!-- For debugging -->
 <!-- <button onclick={doLayout}>Do layout</button>
 <button onclick={doLayoutAndFitView}>Do layout and fit view</button> -->
 
-<style>
+<style lang="postcss">
+  @reference 'tailwindcss';
+  /* Would be better to reference our stylesheet so we can use our theme vars if necessary,
+  but there are complications that have to do with how the stylesheet is exported for consumers.
+  Maybe the thing to do in the future is to have a common theme stylesheet that is shared among the lib and consumers? */
+
+  h1 {
+    @apply text-2xl font-semibold text-center mt-1;
+  }
+
   .overall-container {
     display: flex;
     flex-direction: column;

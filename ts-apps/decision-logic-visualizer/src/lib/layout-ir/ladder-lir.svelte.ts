@@ -13,9 +13,16 @@ import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import {
+  isEmpty,
   isVertex,
+  isOverlay,
+  isConnect,
   overlay,
   empty,
+  foldg,
+  type Overlay,
+  type Connect,
+  type Vertex,
   type DirectedAcyclicGraph,
 } from '../algebraic-graphs/dag.js'
 import {
@@ -30,7 +37,7 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { match } from 'ts-pattern'
+import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
 /*
@@ -98,10 +105,42 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /*************************************************
-              Path Lir Node
+          Paths List, Lin Path
  *************************************************/
 
-export class PathsListLirNode extends DefaultLirNode implements LirNode {
+export type PathsListLirNode = InvalidPathsListLirNode | ValidPathsListLirNode
+
+export function isInvalidPathsListLirNode(
+  node: PathsListLirNode
+): node is InvalidPathsListLirNode {
+  return node instanceof InvalidPathsListLirNode
+}
+
+export class InvalidPathsListLirNode extends DefaultLirNode implements LirNode {
+  constructor(nodeInfo: LirNodeInfo) {
+    super(nodeInfo)
+  }
+
+  toString(): string {
+    return 'INVALID_PATHS_LIST_LIR_NODE'
+  }
+
+  getChildren(_context: LirContext) {
+    return []
+  }
+
+  dispose(context: LirContext) {
+    context.clear(this.getId())
+  }
+}
+
+export function isValidPathsListLirNode(
+  node: PathsListLirNode
+): node is ValidPathsListLirNode {
+  return node instanceof ValidPathsListLirNode
+}
+
+export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
   constructor(
@@ -162,7 +201,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
   }
 
   toString(): string {
-    return 'PATHS_LIST_LIR_NODE'
+    return 'VALID_PATHS_LIST_LIR_NODE'
   }
 }
 
@@ -195,9 +234,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
   }
 
   toPretty(context: LirContext) {
-    return this.getVertices(context)
-      .map((n) => n.toPretty(context))
-      .join(' ')
+    return pprintPathGraph(context, this.rawPath)
   }
 
   toString() {
@@ -349,15 +386,23 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
     if (!this.#pathsList) {
-      const rawPaths = this.#dag.getAllPaths()
-      const paths = rawPaths.map(
-        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-      )
-      this.#pathsList = new PathsListLirNode(
-        this.makeNodeInfo(context),
-        this,
-        paths
-      )
+      // Don't show the lin paths for a non-NNF
+      if (isNnf(context, this)) {
+        const rawPaths = this.#dag.getAllPaths()
+        const paths = rawPaths.map(
+          (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
+        )
+
+        this.#pathsList = new ValidPathsListLirNode(
+          this.makeNodeInfo(context),
+          this,
+          paths
+        )
+      } else {
+        this.#pathsList = new InvalidPathsListLirNode(
+          this.makeNodeInfo(context)
+        )
+      }
     }
 
     return this.#pathsList
@@ -592,13 +637,18 @@ export function isNotStartLirNode(
 export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
+    private readonly negand: DirectedAcyclicGraph<LirId>,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
   }
 
+  getNegand(_context: LirContext) {
+    return this.negand
+  }
+
   toPretty() {
-    return 'NOT'
+    return 'NOT ('
   }
 
   toString(): string {
@@ -615,7 +665,7 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty() {
-    return ''
+    return ')'
   }
 
   toString(): string {
@@ -801,6 +851,7 @@ export function augmentEdgesWithExplanatoryLabel(
     return (
       !edgeSourceIsAnyOfAnnoSource &&
       edgeSourceIsNotOverallSource &&
+      !isNotStartLirNode(edgeU) &&
       (isBoolVarLirNode(edgeV) ||
         isNotStartLirNode(edgeV) ||
         isSourceWithOrAnnoLirNode(edgeV))
@@ -815,4 +866,81 @@ export function augmentEdgesWithExplanatoryLabel(
       context.getExplanatoryAndEdgeLabel()
     )
   })
+}
+
+/************************************************
+ ******************* Utils ***********************
+ *************************************************/
+
+/************************************************
+          isNnf
+*************************************************/
+
+function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
+  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
+
+  const negandIsSimpleVar = (notStart: NotStartLirNode) => {
+    // TODO: Will have to update this when we add more complicated Lir Nodes
+    const negandVertices = notStart
+      .getNegand(context)
+      .getVertices()
+      .map((v) => context.get(v))
+    return match(negandVertices)
+      .with([P.when(isBoolVarLirNode)], () => true)
+      .otherwise(() => false)
+  }
+
+  return notStartVertices.every(negandIsSimpleVar)
+}
+
+/************************************************
+          Pretty print path graph
+*************************************************/
+
+/** Bit hacky? */
+function pprintPathGraph(
+  context: LirContext,
+  initialGraph: DirectedAcyclicGraph<LirId>
+): string {
+  const processed = new Set<LirId>()
+
+  function pprintHelper(
+    context: LirContext,
+    g: DirectedAcyclicGraph<LirId>
+  ): string {
+    return match(g)
+      .with(P.when(isEmpty<LirId>), () => '')
+      .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
+        if (processed.has(v.getValue())) return ''
+        processed.add(v.getValue())
+        return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
+      })
+      .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
+        return (
+          pprintHelper(context, o.getLeft()) +
+          ' ' +
+          pprintHelper(context, o.getRight())
+        )
+      })
+      .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
+        const from = pprintHelper(context, c.getFrom())
+        const to = pprintHelper(context, c.getTo())
+
+        if (isVertex(c.getFrom()) && isVertex(c.getTo())) {
+          const edgeAttrs = initialGraph.getAttributesForEdge(
+            new DirectedEdge(
+              (c.getFrom() as Vertex<LirId>).getValue(),
+              (c.getTo() as Vertex<LirId>).getValue()
+            )
+          )
+          const label = edgeAttrs.getLabel()
+          return `${from} ${label} ${to}`
+        } else {
+          return `${from} ${to}`
+        }
+      })
+      .exhaustive()
+  }
+
+  return pprintHelper(context, initialGraph)
 }

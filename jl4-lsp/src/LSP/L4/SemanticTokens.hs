@@ -170,7 +170,9 @@ instance ToSemTokens Context PosToken (AppForm Name) where
       CValue -> genericToSemTokens a
 
 deriving anyclass instance ToSemTokens Context PosToken (Expr Name)
-deriving anyclass instance ToSemTokens Context PosToken (Module  Name)
+instance ToSemTokens Context PosToken (Module  Name) where
+  toSemTokens (MkModule ann _uri sects) =
+    traverseCsnWithHoles ann [toSemTokens sects]
 deriving anyclass instance ToSemTokens Context PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (Assume Name)
@@ -190,9 +192,6 @@ deriving anyclass instance ToSemTokens Context PosToken (Directive Name)
 deriving anyclass instance ToSemTokens Context PosToken (Import Name)
 
 instance ToSemTokens Context PosToken Int where
-  toSemTokens _ = pure []
-
-instance ToSemTokens Context PosToken NormalizedUri where
   toSemTokens _ = pure []
 
 instance ToSemTokens Context PosToken Name where

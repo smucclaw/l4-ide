@@ -27,7 +27,7 @@
     <path
       d="M40,10 L5,50 L40,90"
       fill="none"
-      stroke="var(--xy-node-color)"
+      stroke="var(--ladder-node-color)"
       stroke-width="3"
       stroke-linecap="round"
     />
@@ -49,7 +49,7 @@
       y1="10"
       x2="100"
       y2="90"
-      stroke="var(--xy-node-color)"
+      stroke="var(--ladder-node-color)"
       stroke-width="2"
       stroke-linecap="round"
     /> -->

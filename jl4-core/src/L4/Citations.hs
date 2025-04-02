@@ -8,7 +8,7 @@ module L4.Citations
 , intervalToSrcRange
 ) where
 
-import Base (Text)
+import Base (Text, NormalizedUri)
 import Data.Monoid (Alt (..))
 import Data.Char (isSpace)
 import Data.Vector (Vector)
@@ -66,7 +66,7 @@ mkReferences
   -- ^ The tokens containing the @ref annotations
   -> Vector (Text, Text)
   -- ^ the references in that document
-  -> IVMap.IntervalMap Lexer.SrcPos (Int, Maybe Text)
+  -> IVMap.IntervalMap Lexer.SrcPos (NormalizedUri, Int, Maybe Text)
   -- ^ an intervalmap that can be used to check whether a
   --   given source position points to a reference
 mkReferences tokens decoded = do
@@ -74,7 +74,7 @@ mkReferences tokens decoded = do
   where
     getReferences = \case
       Lexer.MkPosToken {payload = Lexer.TRef reference _, range} ->
-        let mk v = IVMap.singleton (srcRangeToInterval range) (range.length, v)
+        let mk v = IVMap.singleton (srcRangeToInterval range) (range.moduleUri, range.length, v)
             ref = normalizeRef reference
 
             replaceVerbatim p r =
@@ -104,5 +104,5 @@ mkReferences tokens decoded = do
 srcRangeToInterval :: Lexer.SrcRange -> IVMap.Interval Lexer.SrcPos
 srcRangeToInterval range = IVMap.Interval range.start range.end
 
-intervalToSrcRange :: Int -> IVMap.Interval Lexer.SrcPos -> Lexer.SrcRange
-intervalToSrcRange len iv = Lexer.MkSrcRange iv.low iv.high len
+intervalToSrcRange :: NormalizedUri -> Int -> IVMap.Interval Lexer.SrcPos -> Lexer.SrcRange
+intervalToSrcRange uri len iv = Lexer.MkSrcRange iv.low iv.high len uri

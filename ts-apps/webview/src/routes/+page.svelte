@@ -28,9 +28,6 @@
   const nodeInfo = { registry: lirRegistry, context }
 
   let declLirNode: DeclLirNode | undefined = $state(undefined)
-  let funName = $derived(
-    declLirNode && (declLirNode as DeclLirNode).getFunName(context)
-  )
 
   /**************************
         VSCode
@@ -64,8 +61,6 @@
   })
 </script>
 
-<h1>{funName}</h1>
-
 {#if declLirNode}
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key declLirNode}
@@ -80,15 +75,6 @@
   TODO: Use calc or smtg like that to make the intent clearer
   */
   .slightly-shorter-than-full-viewport-height {
-    height: 96svh;
-  }
-
-  h1 {
-    margin-top: 10px;
-    padding-bottom: 2px;
-    font-size: 1.5rem;
-    line-height: 1.1rem;
-    font-weight: 700;
-    text-align: center;
+    height: 98svh;
   }
 </style>

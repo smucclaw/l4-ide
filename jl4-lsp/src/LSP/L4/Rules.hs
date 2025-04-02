@@ -61,6 +61,24 @@ data GetParsedAst = GetParsedAst
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
+type instance RuleResult GetReverseDependencies = [NormalizedUri]
+data GetReverseDependencies = GetReverseDependenciesNoCallStack
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+pattern GetReverseDependencies :: WithCallStack GetReverseDependencies
+pattern GetReverseDependencies = AttachCallStack [] GetReverseDependenciesNoCallStack
+
+type instance RuleResult ListRootDirectory = [NormalizedUri]
+data ListRootDirectory = ListRootDirectory
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult ListOwnDirectory = [NormalizedUri]
+data ListOwnDirectory = ListOwnDirectory
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
 type instance RuleResult GetImports = [(Maybe SrcRange, NormalizedUri)]
 data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
@@ -91,6 +109,7 @@ data TypeCheckResult = TypeCheckResult
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
   , infos :: [TypeCheck.CheckErrorWithContext]
+  , dependencies :: [TypeCheckResult]
   }
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
@@ -132,7 +151,7 @@ data GetRelSemanticTokens = GetRelSemanticTokens
 --   IF bar <<sec. 3>>
 -- then this should assemble the uri into one link based on
 -- an uri scheme described in the original file
-type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (Int, Maybe Text)
+type instance RuleResult ResolveReferenceAnnotations = IntervalMap SrcPos (NormalizedUri, Int, Maybe Text)
 data ResolveReferenceAnnotations = ResolveReferenceAnnotations
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -150,7 +169,7 @@ data ExactPrint = ExactPrint
 data ReferenceMapping =
   ReferenceMapping
   { actualToOriginal :: IntervalMap SrcPos Unique
-  -- ^ getting the original occurence of a name, based on its source range
+  -- ^ getting the original occurence of a name, based on its reference's source range
   , originalToActual :: MonoidalMap Unique [SrcRange]
   -- ^ getting the source range of all references of an original definition
   }
@@ -174,6 +193,7 @@ data Log
   = ShakeLog Shake.Log
   | LogTraverseAnnoError !Text !TraverseAnnoError
   | LogRelSemanticTokenError !Text
+  | LogSemanticTokens !Text [SemanticToken]
   deriving (Show)
 
 instance Pretty Log where
@@ -181,6 +201,14 @@ instance Pretty Log where
     ShakeLog msg -> pretty msg
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
+    LogSemanticTokens herald toks ->
+      "Semantic Tokens of" <+> pretty herald <+> align (vcat (fmap prettyToken toks))
+      where
+        prettyToken :: SemanticToken -> Doc ann
+        prettyToken s =
+          pretty (s.start._line) <> ":" <> pretty s.start._character <> "-"
+            <> pretty (s.start._character + s.length)
+            <+> pretty s.category
 
 jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
 jl4Rules rootDirectory recorder = do
@@ -209,7 +237,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetParsedAst uri -> do
     (tokens, contents) <- use_ GetLexTokens uri
-    case Parser.execProgramParserForTokens (Text.unpack (fromNormalizedUri uri).getUri) contents tokens of
+    case Parser.execProgramParserForTokens uri contents tokens of
       Left errs -> do
         let
           diags = toList $ fmap mkParseErrorDiagnostic errs
@@ -259,8 +287,8 @@ jl4Rules rootDirectory recorder = do
     pure ([], Just ress)
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
-    parsed <- use_ GetParsedAst uri
-    deps   <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+    parsed       <- use_ GetParsedAst uri
+    dependencies <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
@@ -274,7 +302,7 @@ jl4Rules rootDirectory recorder = do
           , supply = cState.supply
           }
         -- NOTE: we don't want to leak the inference variables from the substitution
-        initial = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState deps
+        initial = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
         result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
         (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
@@ -286,8 +314,34 @@ jl4Rules rootDirectory recorder = do
         , entityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
         , success = null errors
         , infos
+        , dependencies = dependencies <> foldMap (.dependencies) dependencies
         }
       )
+
+  define shakeRecorder \ListRootDirectory _emptyUri -> do
+    cts <- liftIO $ listL4Files rootDirectory
+    pure ([], Just cts)
+
+  define shakeRecorder \ListOwnDirectory uri -> do
+    case fromNormalizedFilePath <$> uriToNormalizedFilePath uri of
+      Nothing -> pure ([], Just [])
+      Just fp -> liftIO do
+        uris <- listL4Files $ takeDirectory fp
+        pure ([], Just uris)
+
+  -- NOTE: currently it's not possible to get references coming from the original reference
+  defineWithCallStack shakeRecorder $ \GetReverseDependenciesNoCallStack cs uri -> do
+    potentialDependencies <-
+      (<>)
+        <$> useNoFile_ ListRootDirectory
+        <*> use_ ListOwnDirectory uri
+    importers <-
+      mapMaybe
+        (\(importerUri, imports) -> if uri `elem` map snd imports then Just importerUri else Nothing)
+       . zip potentialDependencies
+       <$> uses_ GetImports potentialDependencies
+    transitiveImporters <- concat <$> uses_ (AttachCallStack (uri : cs) GetReverseDependenciesNoCallStack) importers
+    pure ([], Just $ importers <> transitiveImporters)
 
   define shakeRecorder $ \SuccessfulTypeCheck f -> do
     typeCheckResult <- use_ TypeCheck f
@@ -328,7 +382,7 @@ jl4Rules rootDirectory recorder = do
         logWith recorder Error $ LogTraverseAnnoError "Parser" err
         pure ([], Nothing)
       Right tokenized -> do
-          pure ([], Just tokenized)
+        pure ([], Just tokenized)
 
   define shakeRecorder $ \GetSemanticTokens f -> do
     mSemTokens <- useWithStale ParserSemanticTokens f
@@ -438,8 +492,8 @@ jl4Rules rootDirectory recorder = do
 
       pure (diags, mps)
 
-  define shakeRecorder $ \GetReferences f -> do
-    tcRes <- use_ TypeCheck f
+  define shakeRecorder $ \GetReferences uri -> do
+    tcRes <- use_ TypeCheck uri
 
     let spanOf resolved
           = maybe
@@ -448,13 +502,13 @@ jl4Rules rootDirectory recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ toResolved tcRes.module'
+        resolveds = foldMap spanOf $ toResolved tcRes.module' <> foldMap (toResolved . (.module')) tcRes.dependencies
 
     pure ([], Just resolveds)
 
   define shakeRecorder $ \ExactPrint f -> do
     parsed <- use_ GetParsedAst f
-    let pfp = prettyFilePath $ fromNormalizedFilePath <$> uriToNormalizedFilePath f
+    let pfp = (fromNormalizedUri f).getUri
     pure case ExactPrint.exactprint parsed of
       Left trErr -> ([mkSimpleFileDiagnostic f $ mkSimpleDiagnostic pfp (prettyTraverseAnnoError trErr) Nothing], Nothing)
       Right ep'd -> ([], Just ep'd)
@@ -516,7 +570,7 @@ jl4Rules rootDirectory recorder = do
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either Text.show Print.prettyLayout res
+        , _message = either (Text.unlines . prettyEvalException) Print.prettyLayout res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing
@@ -578,6 +632,12 @@ prettyNlgResolveWarning = \case
     , "The following annotations would be attached:"
     , ""
     ] <> [ "* `" <> Print.prettyLayout n.payload <> "`" | n <- nlgs]
+
+listL4Files :: FilePath -> IO [NormalizedUri]
+listL4Files dir = do
+  files <- filterM doesFileExist . map (dir </>) =<< listDirectory dir
+  pure $ toNormalizedUri . filePathToUri <$> filter ((== ".l4") . takeExtension) files
+
 
 rangeOfResolveWarning :: Resolve.Warning -> LSP.Range
 rangeOfResolveWarning = \case

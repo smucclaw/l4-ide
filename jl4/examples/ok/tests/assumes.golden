@@ -1,0 +1,23 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+assumes.l4:2:7-12:
+  Expression stuck while evaluating:
+    foo OF 2
+  This happened because
+    foo
+  is assumed
+assumes.l4:6:7-14:
+  Expression stuck while evaluating:
+    baz OF bar
+  This happened because
+    bar
+  is assumed
+assumes.l4:7:7-27:
+  Expression stuck while evaluating:
+    IF bar
+    THEN 2
+    ELSE 3
+  This happened because
+    bar
+  is assumed

@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+not-of.l4:1:7-15:
+  FALSE
+not-of.l4:2:7-19:
+  TRUE
+not-of.l4:3:7-18:
+  FALSE
+not-of.l4:4:7-25:
+  TRUE

@@ -26,7 +26,7 @@
     <path
       d="M0,0 L60,50 L0,100"
       fill="none"
-      stroke="var(--xy-node-color)"
+      stroke="var(--ladder-node-color)"
       stroke-width="3"
       stroke-linecap="round"
     />

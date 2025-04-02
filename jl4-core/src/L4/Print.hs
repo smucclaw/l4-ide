@@ -300,7 +300,19 @@ instance LayoutPrinter a => LayoutPrinter (Pattern a) where
 
 instance LayoutPrinter Nlg where
   printWithLayout = \case
-    (MkNlg _ contents) -> pretty contents
+    MkInvalidNlg _ -> "Invalid Nlg"
+    MkParsedNlg _ frags -> prettyNlgs frags
+    MkResolvedNlg _ frags -> prettyNlgs frags
+    where
+      prettyNlgs [] = mempty
+      prettyNlgs [x@MkNlgRef{}] = printWithLayout x
+      prettyNlgs (x@MkNlgRef{}:xs) = printWithLayout x <+> prettyNlgs xs
+      prettyNlgs (x:xs) = printWithLayout x <> prettyNlgs xs
+
+instance LayoutPrinter a => LayoutPrinter (NlgFragment a) where
+  printWithLayout = \case
+    MkNlgText _ t -> pretty t
+    MkNlgRef  _ n -> "%" <> printWithLayout n <> "%"
 
 instance LayoutPrinter Value where
   printWithLayout = \case

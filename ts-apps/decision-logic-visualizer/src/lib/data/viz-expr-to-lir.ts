@@ -104,7 +104,7 @@ function transform(
     })
     .with({ $type: 'Not' }, (neg) => {
       const negand = transform(nodeInfo, neg.negand)
-      const notStart = vertex(new NotStartLirNode(nodeInfo).getId())
+      const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
       return notStart
         .connect(negand.getSource())

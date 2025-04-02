@@ -9,46 +9,106 @@
   and that we use the @repo/... alias (per Turborepo best practices).
 ****************************************************************************/
 @import '@repo/decision-logic-visualizer/dist/style.css';
-@import 'tailwindcss';
 /* ladder lib's css needs to come before tailwind import */
 
-/* Needs to be specified because 
-Tailwind v4 doesn't automatically check for a tailwind.config.js file */
-@config "../tailwind.config.js";
+@import 'tailwindcss';
+@import './tailwindcss-animate.css';
 
-/* Shadcn theme */
+/* TODO:
+might be less fragile and def clearer
+to export a theme from ladder visualizer
+and then use that theme here and in webview package
+*/
+
+/** Shadcn theme
+* NOTE: Color css vars that don't have the `color-` prefix  should be 'raw' oklch values.
+* See https://next.shadcn-svelte.com/docs/theming
+* > CSS variables must be defined without the color space function.
+* This is probably a holdover from TW 3 which they haven't updated yet.
+*/
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 20 14.3% 4.1%;
-    --muted: 60 4.8% 95.9%;
-    --muted-foreground: 25 5.3% 44.7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 14.3% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 20 14.3% 4.1%;
-    --border: 20 5.9% 90%;
-    --input: 20 5.9% 90%;
-    --primary: 24 9.8% 10%;
-    --primary-foreground: 60 9.1% 97.8%;
-    --secondary: 60 4.8% 95.9%;
-    --secondary-foreground: 24 9.8% 10%;
-    --accent: 60 4.8% 95.9%;
-    --accent-foreground: 24 9.8% 10%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --ring: 20 14.3% 4.1%;
+    --background: 1 0 0;
+    --foreground: 0.04 0.051 22.8;
+
+    --muted: 0.96 0.002 60;
+    --muted-foreground: 0.44 0.029 30.3;
+
+    /* Same as ladder */
+    --border: 0.5 0.134 242.749;
+
+    --input: 0.9 0.016 22.8;
+
+    /* Same as ladder viz */
+    --primary: 0.398 0.07 227.392;
+    --primary-foreground: 0.98 0.005 249.1;
+
+    /* Same as ladder viz */
+    --secondary: 0.96 0.005 249.1;
+    --secondary-foreground: 0.19 0.045 257.2;
+
+    /* Same as ladder viz */
+    --accent: 0.951 0.026 236.824;
+    --accent-foreground: 0.19 0.045 257.2;
+
+    --destructive: 0.55 0.23 29.2;
+    --destructive-foreground: 0.98 0.005 60;
+
+    --ring: 0.04 0.051 22.8;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
+
+@theme inline {
+  /***************************************
+       Shadcn Svelte border
+  ****************************************/
+
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /***************************************
+      More base Shadcn Svelte colors
+  ****************************************/
+
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
+
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
+
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
+
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
+
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-caution: oklch(var(--color-red-500));
+  --color-warning: oklch(var(--color-amber-500));
+  --color-info: oklch(var(--color-sky-500));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/*--------------------------------------------------------------------
+          END of shadcn svelte related variables 
+**********************************************************************/
 
 @layer base {
   body {
@@ -56,7 +116,6 @@ Tailwind v4 doesn't automatically check for a tailwind.config.js file */
     height: 100svh;
     width: 100%;
     overflow-y: hidden;
-    background-color: #242424;
   }
 
   #jl4-editor {
