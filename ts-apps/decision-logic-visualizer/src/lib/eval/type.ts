@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern'
-import { Subst, Environment } from './environment.js'
+import { Environment } from './environment.js'
 import type { Unique } from '@repo/viz-expr'
 import type { DirectedAcyclicGraph } from '$lib/algebraic-graphs/dag'
 import type { LirId } from '../layout-ir/core.js'
@@ -14,9 +14,25 @@ export type Value = BoolVal | FunV
 
 export type BoolVal = TrueVal | FalseVal | UnknownVal
 
+export function isBoolVal(val: Value): val is BoolVal {
+  return (
+    val.$type === 'TrueVal' ||
+    val.$type === 'FalseVal' ||
+    val.$type === 'UnknownVal'
+  )
+}
+
 interface BoolV {
   $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
   getClasses(): string[]
+}
+
+export function isTrueVal(val: BoolVal): val is TrueVal {
+  return val.$type === 'TrueVal'
+}
+
+export function isFalseVal(val: BoolVal): val is FalseVal {
+  return val.$type === 'FalseVal'
 }
 
 export class TrueVal implements BoolV {
@@ -102,7 +118,7 @@ export class FunV {
 /** Using these fake expressions just because it feels
 conceptually clearer (or maybe just more natural) to me
 to set up the evaluation using this.*/
-export type Expr = Lam | App | CompoundBoolE | BoolLit
+export type Expr = Lam | App | LadderDagExpr | BoolLit
 
 export function isApp(expr: Expr) {
   return expr.$type === 'EVApp'
@@ -158,12 +174,12 @@ export class BoolLit {
   }
 }
 
-export function isCompoundBoolE(expr: Expr) {
-  return expr.$type === 'EVCompoundBoolE'
+export function isLadderGraphExpr(expr: Expr) {
+  return expr.$type === 'EVLadderGraphExpr'
 }
 
-export class CompoundBoolE {
-  $type: 'EVCompoundBoolE' = 'EVCompoundBoolE' as const
+export class LadderDagExpr {
+  $type: 'EVLadderGraphExpr' = 'EVLadderGraphExpr' as const
   constructor(private readonly expr: DirectedAcyclicGraph<LirId>) {}
 
   getExprGraph() {
