@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern'
-import { Subst } from './environment.js'
+import { Subst, Environment } from './environment.js'
 import type { Unique } from '@repo/viz-expr'
 import type { DirectedAcyclicGraph } from '$lib/algebraic-graphs/dag'
 import type { LirId } from '../layout-ir/core.js'
@@ -8,7 +8,7 @@ import type { LirId } from '../layout-ir/core.js'
           Value
 *********************************/
 
-export type Value = BoolVal
+export type Value = BoolVal | FunV
 // Actually not sure we need ResolvedValue after all!
 // export type ResolvedValue = Omit<Value, 'UnknownVal'>
 
@@ -58,15 +58,39 @@ export function cycle(val: BoolVal): BoolVal {
     .exhaustive()
 }
 
+/* There's an 'EV' prefix in the following $types to distinguish them
+ from, e.g., the VizExpr exprs and values.
+ I.e., the EV-prefixed exprs and values are, at least for now,
+ used only to make the WhatIf-style, frontend-side evaluation
+conceptually clearer.
+*/
+
+export function isFunVal(val: Value): val is FunV {
+  return val.$type === 'EVFunV'
+}
+
 /** Aka ClosureV.
  *
  * TODO: Maybe don't bother with this and just use an Evaluator type that feels wrong but that is probably enough for our purposes? */
 export class FunV {
+  $type: 'EVFunV' = 'EVFunV' as const
   constructor(
     readonly params: Set<Unique>,
     readonly body: Expr,
-    readonly env: Subst
+    readonly env: Environment
   ) {}
+
+  getParams() {
+    return this.params
+  }
+
+  getBody() {
+    return this.body
+  }
+
+  getEnv() {
+    return this.env
+  }
 }
 
 /**********************************************************
@@ -80,29 +104,69 @@ conceptually clearer (or maybe just more natural) to me
 to set up the evaluation using this.*/
 export type Expr = Lam | App | CompoundBoolE | BoolLit
 
+export function isApp(expr: Expr) {
+  return expr.$type === 'EVApp'
+}
+
 export class App {
   $type: 'EVApp' = 'EVApp' as const
   constructor(
-    readonly func: Expr,
+    private readonly func: Expr,
     /** Possibly partial */
-    readonly args: Map<Unique, Expr>
+    private readonly args: Map<Unique, Expr>
   ) {}
+
+  getFunc() {
+    return this.func
+  }
+
+  getArgs() {
+    return this.args
+  }
+}
+
+export function isLam(expr: Expr) {
+  return expr.$type === 'EVLam'
 }
 
 export class Lam {
   $type: 'EVLam' = 'EVLam' as const
   constructor(
-    readonly params: Set<Unique>,
-    readonly body: Expr
+    private readonly params: Set<Unique>,
+    private readonly body: Expr
   ) {}
+
+  getBody() {
+    return this.body
+  }
+
+  getParams() {
+    return this.params
+  }
+}
+
+export function isBoolLit(expr: Expr) {
+  return expr.$type === 'EVBoolLit'
 }
 
 export class BoolLit {
   $type: 'EVBoolLit' = 'EVBoolLit' as const
-  constructor(readonly value: BoolV) {}
+  constructor(private readonly value: BoolVal) {}
+
+  getValue() {
+    return this.value
+  }
+}
+
+export function isCompoundBoolE(expr: Expr) {
+  return expr.$type === 'EVCompoundBoolE'
 }
 
 export class CompoundBoolE {
   $type: 'EVCompoundBoolE' = 'EVCompoundBoolE' as const
-  constructor(readonly expr: DirectedAcyclicGraph<LirId>) {}
+  constructor(private readonly expr: DirectedAcyclicGraph<LirId>) {}
+
+  getExprGraph() {
+    return this.expr
+  }
 }
