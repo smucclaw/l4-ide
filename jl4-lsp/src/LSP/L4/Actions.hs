@@ -2,38 +2,38 @@
 module LSP.L4.Actions where
 
 import Base
-import qualified Base.Text as Text
 import qualified Base.Map as Map
+import qualified Base.Text as Text
 
 import Control.Applicative
 import Control.Monad.Trans.Maybe
-import Data.Char (isAlphaNum)
-import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Aeson as Aeson
+import Data.Char (isAlphaNum)
+import qualified Data.List as List
+import Data.Ord (Down (..))
+import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Text.Mixed.Rope as Rope
+import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
+import L4.Citations
 import L4.FindDefinition
-import L4.Lexer (keywords, directives, annotations)
+import L4.HoverInfo
+import L4.Lexer (annotations, directives, keywords)
+import L4.Nlg (simpleLinearizer)
 import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck
-
-import LSP.Core.Shake
 import LSP.Core.PositionMapping
+import LSP.Core.Shake
 import LSP.L4.Rules
 import qualified LSP.L4.Viz.Ladder as Ladder
 
+import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
-import Language.LSP.Protocol.Message
-import L4.Citations
-import qualified Data.List as List
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
-import Data.Ord (Down(..))
-import L4.HoverInfo
 
 -- ----------------------------------------------------------------------------
 -- LSP Autocompletions
@@ -130,7 +130,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty)}} _tydec appform _expr) simplify substitution
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
 
@@ -275,13 +275,28 @@ typeHover pos nuri tcRes positionMapping = do
 
 infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Hover
 infoToHover nuri subst r i =
-  Hover (InL (mkPlainText x)) (Just r)
+  Hover (InL (mkMarkdown x)) (Just r)
   where
     x =
       case i of
-        TypeInfo t  -> prettyLayout $ applyFinalSubstitution subst nuri t
-        KindInfo k  -> prettyLayout $ typeFunction k
-        KeywordInfo -> "keyword"
+        TypeInfo t mNlg -> mdCodeBlock (prettyLayout (applyFinalSubstitution subst nuri t)) <>
+          case mNlg of
+            Nothing -> mempty
+            Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
+
+        KindInfo k      -> mdCodeBlock $ prettyLayout $ typeFunction k
+        KeywordInfo     -> mdCodeBlock "keyword"
+
+mdCodeBlock :: Text -> Text
+mdCodeBlock c =
+  Text.unlines
+    [ "```"
+    , c
+    , "```"
+    ]
+
+mdSeparator :: Text
+mdSeparator = "\n---\n\n"
 
 -- ----------------------------------------------------------------------------
 -- Common utility functions

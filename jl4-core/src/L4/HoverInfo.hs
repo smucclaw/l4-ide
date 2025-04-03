@@ -3,13 +3,14 @@ module L4.HoverInfo where
 
 import Base
 import L4.Annotation
-import L4.Lexer (PosToken(..))
-import L4.Parser.SrcSpan (SrcPos(..), SrcRange(..), inRange)
+import L4.Lexer (PosToken (..))
+import L4.Parser.SrcSpan (SrcPos (..), SrcRange (..), inRange)
 import L4.Syntax
 import L4.TypeCheck
 
 import Control.Applicative
 import qualified Generics.SOP as SOP
+import Optics
 
 data InfoTree =
   InfoNode
@@ -103,8 +104,20 @@ instance ToInfoTree RawName where
     [InfoNode Nothing Nothing []]
 
 instance ToInfoTree Resolved where
-  toInfoTree n =
-    toInfoTree (getName n)
+  toInfoTree resolved =
+    [ InfoNode (rangeOf name) thisInfo []
+    ]
+    where
+      hasNlgAnnotation n = n ^. annoOf % annNlg
+      name = getName resolved
+      thisInfo = case getInfo name of
+        Nothing -> Nothing
+        Just info -> case info of
+          TypeInfo ty _ -> Just $ TypeInfo ty $ asum
+            [ hasNlgAnnotation (getActual resolved)
+            , hasNlgAnnotation (getOriginal resolved)
+            ]
+          _ -> Just info
 
 instance ToInfoTree a => ToInfoTree (Maybe a) where
   toInfoTree =

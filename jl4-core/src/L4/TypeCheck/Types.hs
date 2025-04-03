@@ -272,6 +272,22 @@ ambiguousType n xs = do
 -- JL4 specific primitives for resolving names
 -- ----------------------------------------------------------------------------
 
+resolvedType :: Resolved -> Check Resolved
+resolvedType n = do
+  ei <- use #entityInfo
+  case Map.lookup (getUnique n) ei of
+    Nothing -> do
+      -- TODO: there are cases where this situation is a clear bug.
+      -- Sometimes, it is fine, e.g. when the 'Resolved' is 'OutOfScope'.
+      -- Tricky what to do here.
+      -- addError $ MissingEntityInfo n
+      pure n
+    Just (_, checkEntity) ->
+      pure case checkEntity of
+        KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
+        KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
+        KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
+
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment n = do
   env <- use #environment
@@ -316,10 +332,22 @@ setAnnResolvedType ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
   => Type' Resolved -> a -> a
 setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t)) (getAnno x)) x
+  setAnno (set annInfo (Just (TypeInfo t Nothing)) (getAnno x)) x
 
 setAnnResolvedKind ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
   => Kind -> a -> a
 setAnnResolvedKind k x =
   setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
+
+setAnnResolvedTypeOfResolved :: Type' Resolved -> Resolved -> Resolved
+setAnnResolvedTypeOfResolved t = \case
+  Def u n -> Def u (setAnnResolvedType t n)
+  Ref r u o -> Ref (setAnnResolvedType t r) u o
+  OutOfScope u n -> OutOfScope u (setAnnResolvedType t n)
+
+setAnnResolvedKindOfResolved :: Kind -> Resolved -> Resolved
+setAnnResolvedKindOfResolved k = \case
+  Def u n -> Def u (setAnnResolvedKind k n)
+  Ref r u o -> Ref (setAnnResolvedKind k r) u o
+  OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
