@@ -5,6 +5,7 @@ import {
   TrueVal,
   FalseVal,
   UnknownVal,
+  LadderDagExpr,
 } from '../eval/type.js'
 import * as EV from '../eval/type.js'
 import type { BoolVar, Unique, Name } from '@repo/viz-expr'
@@ -551,20 +552,20 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     * the default value for a VarNode is UnknownV
 
     */
-    const argsMap: Map<Unique, EV.Expr> = new Map(
-      this.#argSubst
-        .getEntries()
-        .map(([unique, value]) => [unique, new EV.BoolLit(value as BoolVal)])
-    )
+    const args: Array<[Unique, EV.Expr]> = this.#argSubst
+      .getEntries()
+      .map(([unique, value]) => [unique, new EV.BoolLit(value as BoolVal)])
+    const argsMap: Map<Unique, EV.Expr> = new Map(args)
     const app = new EV.App(
       new EV.Lam(
         new Set(this.#argSubst.getUniques()),
-        new EV.CompoundBoolE(this.#dag)
+        new EV.LadderDagExpr(this.#dag)
       ),
       argsMap
     )
     const result = this.#evaluator.eval(context, app)
-    console.log(result)
+    console.log('evaluating ', app)
+    console.log('whatif eval result: ', result)
     // TODO: Add concrete UI for the result
 
     // TODO for v2: Grey out incompatible subgraphs
@@ -630,6 +631,16 @@ export type LadderLirNode =
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
+// MergedNotLirNode or something like that might be added
+// if we end up making Not a subflow
+
+export type CompactLadderLirNode = BoolVarLirNode | MergedNotLirNode
+
+export function isCompactLadderLirNode(
+  node: LadderLirNode
+): node is CompactLadderLirNode {
+  return isBoolVarLirNode(node) || isMergedNotLirNode(node)
+}
 
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
@@ -745,6 +756,12 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
+export function isMergedNotLirNode(
+  node: LadderLirNode
+): node is MergedNotLirNode {
+  return node instanceof MergedNotLirNode
+}
+
 export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
   private readonly opening: LirId
   private readonly closing: LirId
@@ -752,7 +769,7 @@ export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     opening: NotStartLirNode,
-    private readonly negand: DirectedAcyclicGraph<LirId>,
+    private readonly negand: LadderDagExpr,
     closing: NotEndLirNode,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {

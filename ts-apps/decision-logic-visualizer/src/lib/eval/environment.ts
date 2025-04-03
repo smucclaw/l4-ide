@@ -77,7 +77,10 @@ export class Subst {
   }
 
   getEntries(): Array<[Unique, Value]> {
-    return this.#subst.map((value, i) => [i, value])
+    // Need the filter because the underlying array can be sparse / have holes
+    return Array.from(this.#subst.entries()).filter(
+      ([, value]) => value !== undefined
+    )
   }
 
   asArray(): Array<Value> {
