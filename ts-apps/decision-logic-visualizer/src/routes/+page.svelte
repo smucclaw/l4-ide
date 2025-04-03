@@ -194,17 +194,6 @@
 
 <h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
 
-<div use:draggable={options} class="z-[9999] absolute">
-  <div
-    class="handle w-full h-8 bg-gray-700 text-gray-100 cursor-grab text-center text-sm"
-  >
-    Toolbar
-  </div>
-  <div class="bg-white">
-    <Toolbar />
-  </div>
-</div>
-
 <section class="flex items-center justify-center my-8">
   <h2 class="text-2xl italic text-center text-gray-700 w-3/4">
     Examples of decision logic visualizations, starting from a 'json' of the
@@ -244,6 +233,17 @@
     </pre>
   </section>
 </section>
+
+<div use:draggable={options} class="absolute top-5 left-5">
+  <div
+    class="handle w-full h-8 bg-gray-700 text-gray-100 cursor-grab text-center text-sm"
+  >
+    Toolbar
+  </div>
+  <div class="bg-white">
+    <Toolbar />
+  </div>
+</div>
 
 <style>
   .viz-container-with-height {
