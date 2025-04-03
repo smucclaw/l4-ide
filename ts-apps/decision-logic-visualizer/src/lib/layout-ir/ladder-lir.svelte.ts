@@ -518,8 +518,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     /*
     Try #WhatIf-style evaluation.
 
-    See Note [WhatIf-style evaluation]
 
+
+    Note [WhatIf-style evaluation]
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     We can understand #WhatIf-style evaluation in this context
     in terms of normal evaluation (of a lexically scoped language) as follows.
     Given a LadderGraph, we can define a boolean function `f`
@@ -647,6 +649,9 @@ export function isBoolVarLirNode(node: LadderLirNode): node is BoolVarLirNode {
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
 export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+  /** The value here is used only for UI purposes
+   * The actual evaluation uses a different data structure (that is nevertheless kept
+   * in sync with what values are stored on the VarLirNodes) */
   #value: BoolVal
   #name: Name
 
@@ -676,6 +681,7 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return { name: this.#name, value: this.#value }
   }
 
+  /** This should be used only for UI purposes (and not, e.g., for evaluation) */
   getValue(_context: LirContext): BoolVal {
     return this.#value
   }
@@ -753,6 +759,14 @@ export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
     super(nodeInfo, position)
     this.opening = opening.getId()
     this.closing = closing.getId()
+  }
+
+  getOpening(context: LirContext) {
+    return context.get(this.opening) as NotStartLirNode
+  }
+
+  getClosing(context: LirContext) {
+    return context.get(this.closing) as NotEndLirNode
   }
 
   getNegand(_context: LirContext) {
