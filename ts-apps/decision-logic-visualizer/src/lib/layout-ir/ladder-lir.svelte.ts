@@ -793,7 +793,7 @@ export const emptyBundlingNodeAnno: BundlingNodeAnno = { annotation: '' }
 export function isBundlingFlowLirNode(
   node: LadderLirNode
 ): node is BundlingFlowLirNode {
-  return isSourceLirNode(node) || node instanceof SinkLirNode
+  return isSourceLirNode(node) || isSinkLirNode(node)
 }
 
 /** A Flow Lir Node that's used solely to visually group or 'bundle' other nodes.
@@ -805,6 +805,9 @@ export type SourceLirNode = SourceWithOrAnnoLirNode | SourceNoAnnoLirNode
 
 export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
   return isSourceNoAnnoLirNode(node) || isSourceWithOrAnnoLirNode(node)
+}
+export function isSinkLirNode(node: LadderLirNode): node is SinkLirNode {
+  return node instanceof SinkLirNode
 }
 
 abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
