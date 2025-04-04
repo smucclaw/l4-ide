@@ -5,12 +5,12 @@ import {
   TrueVal,
   FalseVal,
   UnknownVal,
-  LadderDagExpr,
+  LadderGraphExpr,
 } from '../eval/type.js'
 import * as EV from '../eval/type.js'
 import type { BoolVar, Unique, Name } from '@repo/viz-expr'
 import { Subst, Corefs } from '../eval/environment.js'
-import { type Evaluator, SimpleEvaluator } from '$lib/eval/eval.js'
+import { type Evaluator, SimpleEagerEvaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -336,7 +336,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #pathsList?: PathsListLirNode
   #corefs: Corefs
   #argSubst: Subst
-  #evaluator: Evaluator = SimpleEvaluator
+  #evaluator: Evaluator = SimpleEagerEvaluator
 
   constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
     super(nodeInfo)
@@ -559,7 +559,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     const app = new EV.App(
       new EV.Lam(
         new Set(this.#argSubst.getUniques()),
-        new EV.LadderDagExpr(this.#dag)
+        new EV.LadderGraphExpr(this.#dag)
       ),
       argsMap
     )
@@ -634,11 +634,11 @@ export type LadderLirNode =
 // MergedNotLirNode or something like that might be added
 // if we end up making Not a subflow
 
-export type CompactLadderLirNode = BoolVarLirNode | MergedNotLirNode
+export type SemanticLadderLirNode = BoolVarLirNode | MergedNotLirNode
 
-export function isCompactLadderLirNode(
+export function isSemanticLadderLirNode(
   node: LadderLirNode
-): node is CompactLadderLirNode {
+): node is SemanticLadderLirNode {
   return isBoolVarLirNode(node) || isMergedNotLirNode(node)
 }
 
@@ -763,27 +763,15 @@ export function isMergedNotLirNode(
 }
 
 export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
-  private readonly opening: LirId
-  private readonly closing: LirId
-
   constructor(
     nodeInfo: LirNodeInfo,
-    opening: NotStartLirNode,
-    private readonly negand: LadderDagExpr,
-    closing: NotEndLirNode,
+    private readonly negand: LadderGraphExpr,
     position: Position = DEFAULT_INITIAL_POSITION
+    // TODO: Do we even want to include ui info like position?
+    // Perhaps the eval shouldn't be over LirNodes --- might be better
+    // to map the SemanticLadderLirNodes to something that doesn't have any UI info at all
   ) {
     super(nodeInfo, position)
-    this.opening = opening.getId()
-    this.closing = closing.getId()
-  }
-
-  getOpening(context: LirContext) {
-    return context.get(this.opening) as NotStartLirNode
-  }
-
-  getClosing(context: LirContext) {
-    return context.get(this.closing) as NotEndLirNode
   }
 
   getNegand(_context: LirContext) {
