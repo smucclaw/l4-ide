@@ -9,8 +9,6 @@ import type { LirId } from '../layout-ir/core.js'
 *********************************/
 
 export type Value = BoolVal | FunV
-// Actually not sure we need ResolvedValue after all!
-// export type ResolvedValue = Omit<Value, 'UnknownVal'>
 
 export type BoolVal = TrueVal | FalseVal | UnknownVal
 
