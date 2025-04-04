@@ -767,6 +767,9 @@ export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
     nodeInfo: LirNodeInfo,
     private readonly negand: LadderGraphExpr,
     position: Position = DEFAULT_INITIAL_POSITION
+    // TODO: Do we even want to include ui info like position?
+    // Perhaps the eval shouldn't be over LirNodes --- might be better
+    // to map the SemanticLadderLirNodes to something that doesn't have any UI info at all
   ) {
     super(nodeInfo, position)
   }

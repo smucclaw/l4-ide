@@ -96,6 +96,13 @@ function eval_(context: LirContext, expr: Expr, env: Environment): Value {
     .exhaustive()
 }
 
+/*
+TODO: might be better to map the SemanticLadderLirNodes to 
+something that doesn't have any UI info at all --- perhaps just re-use something like
+the original VizExpr / IRExpr --- and have the eval be over that.
+So, e.g., instead of Dag<LirId>, would have something like Dag<SemanticNodeWithoutUIInfo>,
+but each SemanticNodeWithoutUIInfo can be traced back to the corresponding SemanticLadderNode
+*/
 function evalSemanticLadderNode(
   context: LirContext,
   node: SemanticLadderLirNode,
