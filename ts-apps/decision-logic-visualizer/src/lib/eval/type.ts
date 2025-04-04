@@ -118,7 +118,7 @@ export class FunV {
 /** Using these fake expressions just because it feels
 conceptually clearer (or maybe just more natural) to me
 to set up the evaluation using this.*/
-export type Expr = Lam | App | LadderDagExpr | BoolLit
+export type Expr = Lam | App | LadderGraphExpr | BoolLit
 
 export function isApp(expr: Expr) {
   return expr.$type === 'EVApp'
@@ -178,7 +178,7 @@ export function isLadderGraphExpr(expr: Expr) {
   return expr.$type === 'EVLadderGraphExpr'
 }
 
-export class LadderDagExpr {
+export class LadderGraphExpr {
   $type: 'EVLadderGraphExpr' = 'EVLadderGraphExpr' as const
   constructor(private readonly expr: DirectedAcyclicGraph<LirId>) {}
 
