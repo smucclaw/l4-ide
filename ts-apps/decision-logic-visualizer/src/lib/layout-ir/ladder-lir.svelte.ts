@@ -5,12 +5,11 @@ import {
   TrueVal,
   FalseVal,
   UnknownVal,
-  LadderGraphExpr,
+  veExprToEvExpr,
 } from '../eval/type.js'
-import * as EV from '../eval/type.js'
-import type { BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
-import { Subst, Corefs } from '../eval/environment.js'
-import { type Evaluator, SimpleEagerEvaluator } from '$lib/eval/eval.js'
+import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
+import { Assignment, Corefs } from '../eval/environment.js'
+import { Evaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -330,34 +329,36 @@ will go through the LadderGraphLirNode.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+  #originalExpr: IRExpr
   #vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
   #pathsList?: PathsListLirNode
   #corefs: Corefs
-  #argSubst: Subst
-  #evaluator: Evaluator = SimpleEagerEvaluator
+  #args: Assignment
 
   constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
-    vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>
+    vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr
   ) {
     super(nodeInfo)
     this.#dag = dag
+    this.#originalExpr = originalExpr
     this.#vizExprToLirEnv = vizExprToLirEnv
 
     // Make the initial arg subst
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       (n) => n instanceof BoolVarLirNode
     )
-    const initialArgSubst: Array<BoolVal> = []
+    const initialAssignment: Array<BoolVal> = []
     varNodes.forEach((varN) => {
       const uniq = varN.getUnique(nodeInfo.context)
-      initialArgSubst[uniq] = varN.getValue(nodeInfo.context)
+      initialAssignment[uniq] = varN.getValue(nodeInfo.context)
     })
-    this.#argSubst = new Subst(initialArgSubst)
+    this.#args = new Assignment(initialAssignment)
 
     // Make the initial corefs
     const initialCoreferents: Array<Set<LirId>> = []
@@ -513,7 +514,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     binding: { unique: Unique; value: Value }
   ) {
     // Update the arg substitution with the new binding
-    this.#argSubst.set(binding.unique, binding.value)
+    this.#args.set(binding.unique, binding.value)
 
     // Update all VarLirNodes with this Unique with the new Value
     const corefs = Array.from(this.#corefs.getCoreferents(binding.unique))
@@ -529,52 +530,19 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     /*
     Try #WhatIf-style evaluation.
 
-
-
-    Note [WhatIf-style evaluation]
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    We can understand #WhatIf-style evaluation in this context
-    in terms of normal evaluation (of a lexically scoped language) as follows.
-    Given a LadderGraph, we can define a boolean function `f`
-    whose params correspond to the var nodes of the ladder graph
-    and whose body corresponds to the ladder graph.
-    Note that f may not be the same as the IRExpr FunDecl associated with this LadderGraph,
-    since the params of this f are by construction exactly the var nodes of the ladder graph,
-    and those may not be the same as the params of the FunDecl.
-
-    Suppose, then, that we had the closure corresponding to this boolean function
-    (ignore the closure environment for now) --- for concreteness, suppose we had a
-
-        (FunV params body fenv)
-
-    #WhatIf-style evaluation corresponds to evaluating
-    the application of this closure to our arg subst (a mapping from Uniques to
-    the values that have been specified by the user, or pre-specified from the backend).
-    I.e., to evaluating
-
-        (App (FunV params body fenv) argSubst)
-
     ---------
 
     Note that
-    * the argSubst will have a Unique key for every Var node,
+    * the `args` map will have a Unique key for every Var node,
       including Var nodes that the user hasn't specified a value for
     * the default value for a VarNode is UnknownV
 
     */
-    const args: Array<[Unique, EV.Expr]> = this.#argSubst
-      .getEntries()
-      .map(([unique, value]) => [unique, new EV.BoolLit(value as BoolVal)])
-    const argsMap: Map<Unique, EV.Expr> = new Map(args)
-    const app = new EV.App(
-      new EV.Lam(
-        new Set(this.#argSubst.getUniques()),
-        new EV.LadderGraphExpr(this.#dag)
-      ),
-      argsMap
+    const result = Evaluator.evaluate(
+      veExprToEvExpr(this.#originalExpr),
+      this.#args
     )
-    const result = this.#evaluator.eval(context, app)
-    console.log('evaluating ', app)
+    console.log('evaluating ', this.#args)
     console.log('whatif eval result: ', result)
     // TODO: Add concrete UI for the result
 
@@ -641,16 +609,6 @@ export type LadderLirNode =
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
-// MergedNotLirNode or something like that might be added
-// if we end up making Not a subflow
-
-export type SemanticLadderLirNode = BoolVarLirNode | MergedNotLirNode
-
-export function isSemanticLadderLirNode(
-  node: LadderLirNode
-): node is SemanticLadderLirNode {
-  return isBoolVarLirNode(node) || isMergedNotLirNode(node)
-}
 
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
@@ -763,37 +721,6 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
 
   toString(): string {
     return 'NOT_END_LIR_NODE'
-  }
-}
-
-export function isMergedNotLirNode(
-  node: LadderLirNode
-): node is MergedNotLirNode {
-  return node instanceof MergedNotLirNode
-}
-
-export class MergedNotLirNode extends BaseFlowLirNode implements FlowLirNode {
-  constructor(
-    nodeInfo: LirNodeInfo,
-    private readonly negand: LadderGraphExpr,
-    position: Position = DEFAULT_INITIAL_POSITION
-    // TODO: Do we even want to include ui info like position?
-    // Perhaps the eval shouldn't be over LirNodes --- might be better
-    // to map the SemanticLadderLirNodes to something that doesn't have any UI info at all
-  ) {
-    super(nodeInfo, position)
-  }
-
-  getNegand(_context: LirContext) {
-    return this.negand
-  }
-
-  toPretty() {
-    return ')'
-  }
-
-  toString(): string {
-    return 'MERGED_NOT_LIR_NODE'
   }
 }
 

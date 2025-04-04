@@ -1,122 +1,60 @@
-import type { Unique } from '@repo/viz-expr'
-import type {
-  Value,
-  BoolVal,
-  BoolLit,
-  Lam,
-  App,
-  LadderGraphExpr,
-  Expr,
-} from './type.js'
+import type { Value, BoolVal, Expr, EVBoolVar, Not, Or, And } from './type.js'
 import {
   TrueVal,
   FalseVal,
   UnknownVal,
-  isFunVal,
   isTrueVal,
   isFalseVal,
   isBoolVal,
-  isBoolLit,
-  FunV,
-  isApp,
-  isLam,
-  isLadderGraphExpr,
 } from './type.js'
-import { Environment } from './environment.js'
-import { LirContext } from '../layout-ir/core.js'
-import type { LirId } from '../layout-ir/core.js'
-import type {
-  LadderLirNode,
-  BoolVarLirNode,
-  MergedNotLirNode,
-  SemanticLadderLirNode,
-} from '../layout-ir/ladder-lir.svelte.js'
-import {
-  isBoolVarLirNode,
-  isMergedNotLirNode,
-  isBundlingFlowLirNode,
-  isSemanticLadderLirNode,
-} from '../layout-ir/ladder-lir.svelte.js'
-import type { DirectedAcyclicGraph } from '$lib/algebraic-graphs/dag'
-import { match, P } from 'ts-pattern'
+import { Assignment } from './environment.js'
+import { match } from 'ts-pattern'
 
 /**********************************************************
                    Evaluator
 **********************************************************/
 
-/* 
+/*
 ---------------------------------
-       UI vs. semantics
+       UI vs. evaln
 ----------------------------------
-The Evaluator should be using the Environment and NOT the get/setValue methods on LirNodes,
+The Evaluator should be using the Subst and NOT the get/setValue methods on LirNodes,
 since the LirNode values are meant to be for UI purposes
 (and hence fall under the purview of the LadderGraphLirNode).
 
-----------------------------------
-See Note [WhatIf-style evaluation]
-----------------------------------
-
 */
 
-export interface Evaluator {
-  eval(context: LirContext, expr: Expr): Value
-}
+/*
+At least two approaches:
 
-export const SimpleEagerEvaluator: Evaluator = {
-  /** An UnknownVal result means there wasn't enough info */
-  eval(context: LirContext, expr: Expr): Value {
-    return eval_(context, expr, new Environment([]))
+1. Do eval on the original IRExpr. 
+   Apply whatever UI stuff is needed on the Dag<LirId> using the 
+   IRId => LirId mapping
+   -- eg for incompatible paths, for each IRNode that's false, 
+      grey out the corresponding Dag<LirId>
+
+2. Do eval on the Dag<LirId> directly
+
+Ended up going with 2, since the postprocessing of the Dag<LirId> gets a bit involved,
+and since 2 might align more with synchronizing with the backend in the future.
+*/
+
+export const Evaluator = {
+  evaluate(ladder: Expr, assignment: Assignment): Value {
+    return eval_(ladder, assignment)
   },
 }
 
-/** Internal helper */
-function eval_(context: LirContext, expr: Expr, env: Environment): Value {
-  return match(expr)
-    .with(P.when(isBoolLit), (bl: BoolLit) => bl.getValue())
-    .with(P.when(isLam), (lam: Lam) => {
-      return new FunV(lam.getParams(), lam.getBody(), env)
-    })
-    .with(P.when(isApp), (app: App) => {
-      const closureV = eval_(context, app.getFunc(), env)
-      if (!isFunVal(closureV)) {
-        throw new Error(`Expected a function value, but got ${closureV}`)
-      }
-
-      const paramArgPairs: Array<[Unique, Value]> = Array.from(
-        app.getArgs()
-      ).map(([uniq, expr]) => [uniq, eval_(context, expr, env)])
-      const extendedEnv = closureV
-        .getEnv()
-        .getClonedEnvExtendedWith(paramArgPairs)
-      return eval_(context, closureV.body, extendedEnv)
-    })
-    .with(P.when(isLadderGraphExpr), (ladder: LadderGraphExpr) =>
-      evalLadderGraphExpr(context, env, ladder)
-    )
-    .exhaustive()
-}
-
-/*
-TODO: might be better to map the SemanticLadderLirNodes to 
-something that doesn't have any UI info at all --- perhaps just re-use something like
-the original VizExpr / IRExpr --- and have the eval be over that.
-So, e.g., instead of Dag<LirId>, would have something like Dag<SemanticNodeWithoutUIInfo>,
-but each SemanticNodeWithoutUIInfo can be traced back to the corresponding SemanticLadderNode
-*/
-function evalSemanticLadderNode(
-  context: LirContext,
-  node: SemanticLadderLirNode,
-  env: Environment
-): BoolVal {
-  return match(node)
+function eval_(ladder: Expr, assignment: Assignment): Value {
+  return match(ladder)
     .with(
-      P.when(isBoolVarLirNode),
-      (node: BoolVarLirNode) => env.get(node.getUnique(context)) as BoolVal
+      { $type: 'BoolVar' },
+      (expr: EVBoolVar) => assignment.get(expr.name.unique) as BoolVal
     )
-    .with(P.when(isMergedNotLirNode), (node: MergedNotLirNode) => {
-      const negandV = evalLadderGraphExpr(context, env, node.getNegand(context))
+    .with({ $type: 'Not' }, (expr: Not) => {
+      const negandV = eval_(expr.negand, assignment)
       if (!isBoolVal(negandV)) {
-        throw new Error('Expected the negand to eval to a BoolVal')
+        throw new Error('Expected the negajnd to eval to a BoolVal')
       }
       return match(negandV)
         .with({ $type: 'TrueVal' }, () => new FalseVal())
@@ -124,27 +62,15 @@ function evalSemanticLadderNode(
         .with({ $type: 'UnknownVal' }, () => new UnknownVal())
         .exhaustive()
     })
+    .with({ $type: 'And' }, (expr: And) => {
+      const andVals = expr.args.map((arg) => eval_(arg, assignment))
+      return evalAndChain(andVals)
+    })
+    .with({ $type: 'Or' }, (expr: Or) => {
+      const orVals = expr.args.map((arg) => eval_(arg, assignment))
+      return evalOrChain(orVals)
+    })
     .exhaustive()
-}
-
-function evalLadderGraphExpr(
-  context: LirContext,
-  env: Environment,
-  ladder: LadderGraphExpr
-): Value {
-  const flow = ladder.getExprGraph()
-  // TODO: Implement: for each NotStartNode, merge the < NotStart, ...negand, NotEnd> into one compact MergedNotNode.
-  // ---------
-
-  /* Assume we have an NNF.
-
-  * If there's any path where where all the non-bundling-node vertices
-  (which at this point would either be a MergedNot node or a bool var node) evaluate to true, then result is True
-  * If no path satisfies the formula, then result is False
-  * Otherwise, indeterminate / unknown result
-  */
-  const pathVals = flow.getAllPaths().map((p) => evalPath(context, env, p))
-  return evalOrChain(pathVals)
 }
 
 /***************************
@@ -171,36 +97,57 @@ function evalOrChain(bools: BoolVal[]) {
   return new UnknownVal()
 }
 
-/***************************
-      evalPath
-****************************/
+// function evalLadderGraph(
+//   context: LirContext,
+//   assignment: Assignment,
+//   ladder: DirectedAcyclicGraph<LirId>
+// ): Value {
+//   // TODO: Implement: for each NotStartNode, merge the < NotStart, ...negand, NotEnd> into one compact MergedNotNode.
+//   // ---------
 
-function evalPath(
-  context: LirContext,
-  env: Environment,
-  /** A path graph that is a subgraph of the Ladder graph
-   * (and where the Ladder graph is an NNF and
-   * the Nots have been merged into a MergedNotLirNode)
-   * TODO: Add more type safety here
-   */
-  pathGraph: DirectedAcyclicGraph<LirId>
-) {
-  const substantiveVertices = pathGraph
-    .getVertices()
-    .map((v) => context.get(v) as LadderLirNode)
-    .filter((n) => !isBundlingFlowLirNode(n))
+//   /* Assume we have an NNF.
 
-  if (!substantiveVertices.every(isSemanticLadderLirNode)) {
-    throw new Error(
-      'Not all vertices are compact -- the Nots have not been merged!'
-    )
-    // TODO: replace this with more type-level stuff
-  }
+//   * If there's any path where where all the non-bundling-node vertices
+//   (which at this point would either be a MergedNot node or a bool var node) evaluate to true, then result is True
+//   * If no path satisfies the formula, then result is False
+//   * Otherwise, indeterminate / unknown result
+//   */
+//   const pathVals = ladder
+//     .getAllPaths()
+//     .map((p) => evalPath(context, assignment, p))
+//   return evalOrChain(pathVals)
+// }
 
-  const evalResults = substantiveVertices.map((node) =>
-    evalSemanticLadderNode(context, node, env)
-  )
+// /***************************
+//       evalPath
+// ****************************/
 
-  // Remember that a 'path' here is basically an AndChain
-  return evalAndChain(evalResults)
-}
+// function evalPath(
+//   context: LirContext,
+//   args: Assignment,
+//   /** A path graph that is a subgraph of the Ladder graph
+//    * (and where the Ladder graph is an NNF and
+//    * the Nots have been merged into a MergedNotLirNode)
+//    * TODO: Add more type safety here
+//    */
+//   pathGraph: DirectedAcyclicGraph<LirId>
+// ) {
+//   const substantiveVertices = pathGraph
+//     .getVertices()
+//     .map((v) => context.get(v) as LadderLirNode)
+//     .filter((n) => !isBundlingFlowLirNode(n))
+
+//   if (!substantiveVertices.every(isSemanticLadderLirNode)) {
+//     throw new Error(
+//       'Not all vertices are SemanticLadderLirNodes -- the Nots have not been merged!'
+//     )
+//     // TODO: replace this with more type-level stuff
+//   }
+
+//   const evalResults = substantiveVertices.map((node) =>
+//     evalSemanticLadderNode(context, args, node)
+//   )
+
+//   // Remember that a 'path' here is basically an AndChain
+//   return evalAndChain(evalResults)
+// }
