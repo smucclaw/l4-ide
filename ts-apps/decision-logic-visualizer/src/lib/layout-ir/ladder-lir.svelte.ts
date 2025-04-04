@@ -8,7 +8,7 @@ import {
   LadderGraphExpr,
 } from '../eval/type.js'
 import * as EV from '../eval/type.js'
-import type { BoolVar, Unique, Name } from '@repo/viz-expr'
+import type { BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import { Subst, Corefs } from '../eval/environment.js'
 import { type Evaluator, SimpleEagerEvaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
@@ -330,6 +330,7 @@ will go through the LadderGraphLirNode.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+  #vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
@@ -338,9 +339,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #argSubst: Subst
   #evaluator: Evaluator = SimpleEagerEvaluator
 
-  constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>
+  ) {
     super(nodeInfo)
     this.#dag = dag
+    this.#vizExprToLirEnv = vizExprToLirEnv
 
     // Make the initial arg subst
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
@@ -364,6 +370,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       }
     })
     this.#corefs = new Corefs(initialCoreferents)
+  }
+
+  getvizExprToLirEnv() {
+    return this.#vizExprToLirEnv
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
