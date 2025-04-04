@@ -58,7 +58,12 @@ export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
 
-    const ladderGraph = new LadderGraphLirNode(nodeInfo, dag, vizExprToLir)
+    const ladderGraph = new LadderGraphLirNode(
+      nodeInfo,
+      dag,
+      vizExprToLir,
+      expr
+    )
 
     // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
     augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
