@@ -226,11 +226,12 @@ whitespace =
 
 lineComment :: Lexer Text
 lineComment =
-  (<>) <$> string "--" <*> takeWhileP (Just "character") (/= '\n')
+  (<>) <$> (string "--" <|> string "//") <*> takeWhileP (Just "character") (/= '\n')
 
 blockComment :: Lexer Text
 blockComment =
-  (\ b (c, e) -> Text.concat (b : c ++ [e])) <$> string "{-" <*> manyTill_ inner (string "-}")
+      (\ b (c, e) -> Text.concat (b : c ++ [e])) <$> string "{-" <*> manyTill_ inner (string "-}")
+  <|> (\ b (c, e) -> Text.concat (b : c ++ [e])) <$> string "/*" <*> manyTill_ inner (string "*/")
   where
     inner = blockComment <|> Text.singleton <$> anySingle
 

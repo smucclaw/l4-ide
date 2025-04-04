@@ -1,0 +1,122 @@
+---
+type: function
+function:
+  supportedBackends:
+    - "jl4"
+  name: "british nationality"
+  description: Given some information about a person's birthplace and parentage, determine if that person is a British citizen.
+  parameters:
+    type: object
+    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    properties:
+      person:
+        type: object
+        description: a natural person, the subject of the question of British citizenship
+        properties:
+          name:
+            type: string
+            description: the name of ther person
+          "settled in":
+            type: object
+            description: if this is not provided by the user, fill this in using the birthPlace field.
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place they were settled in
+          birthPlace:
+            type: object
+            description: the birth-place of the person
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place
+          birthDate:
+            type: object
+            description: the birth-date of the person
+            properties:
+              year:
+                type: number
+                description: the year part of the date, a number such as 1954
+              month:
+                type: number
+                description: the month part of the date, a number from 1 to 12
+              day:
+                type: number
+                description: the day part of the date, a number from 1 to 31
+          "known to be British":
+              type: boolean
+              description: if we know, a priori, that the person is a British citizen; default this to false.
+      father:
+        type: object
+        description: the father of the person who is the subject of the question of British citizenship
+        properties:
+          name:
+            type: string
+            description: the name of the father
+          "settled in":
+            type: object
+            description: where the father was settled at the time of the birth of the person
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place they were settled in
+          birthPlace:
+            type: object
+            description: the birth-place of the father. If this is not provided, default it to the value of the `settled in` field.
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place
+          birthDate:
+            type: object
+            description: the birth-date of the father. If this is not provided, default it to 1954, as it is not used in the logic.
+            properties:
+              year:
+                type: number
+                description: the year part of the date, a number such as 1954
+              month:
+                type: number
+                description: the month part of the date, a number from 1 to 12
+              day:
+                type: number
+                description: the day part of the date, a number from 1 to 31
+          "known to be British":
+              type: boolean
+              description: if we know, a priori, that the father is a British citizen. This is a required field.
+      mother:
+        type: object
+        description: the mother of the person who is the subject of the question of British citizenship
+        properties:
+          name:
+            type: string
+            description: the name of the mother
+          "settled in":
+            type: object
+            description: where the mother was settled at the time of the birth of the person
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place they were settled in
+          birthPlace:
+            type: object
+            description: the birth-place of the mother. If this is not provided, default it to the value of the `settled in` field.
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place
+          birthDate:
+            type: object
+            description: the birth-date of the mother. If this is not provided, default it to 1954, as it is not used in the logic.
+            properties:
+              year:
+                type: number
+                description: the year part of the date, a number such as 1954
+              month:
+                type: number
+                description: the month part of the date, a number from 1 to 12
+              day:
+                type: number
+                description: the day part of the date, a number from 1 to 31
+          "known to be British":
+              type: boolean
+              description: if we know, a priori, that the mother is a British citizen. This is a required field.

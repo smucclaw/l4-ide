@@ -54,92 +54,10 @@ DECIDE `is a qualifying territory` p IF
 
 DECLARE NaturalPerson
   HAS name         IS A   STRING
-      mother       IS A   Maybe NaturalPerson
-      father       IS A   Maybe NaturalPerson
       birthPlace   ^  ^     Place
       birthDate    ^  ^     Date
       `settled in` IS A     Place
       `known to be British` IS A BOOLEAN
-
-GIVETH A NaturalPerson
-betty MEANS NaturalPerson WITH
-    name   IS "Betty"
-    mother IS Unknown
-    father IS Unknown
-    birthPlace   IS Place OF "UK"
-    birthDate    IS Date OF 1930, 1, 1
-    `settled in` IS Place OF "UK"
-    `known to be British` IS TRUE
-
-GIVETH A NaturalPerson
-charlie MEANS NaturalPerson WITH    name   IS "Charlie"
-                                    mother IS Unknown
-                                    father IS Unknown
-                                    birthPlace   IS Place OF "UK"
-                                    birthDate    IS Date OF 1920, 1, 1
-                                    `settled in` IS Place OF "UK"
-                                    `known to be British` IS TRUE
-
-GIVETH A NaturalPerson
-alice MEANS NaturalPerson WITH name                  IS "Alice"
-                               mother                IS Known betty
-                               father                IS Known charlie
-                               birthPlace            IS Place OF "UK"
-                               birthDate             IS Date OF 2000, 1, 1
-                               `settled in`          IS Place OF "UK"
-                               `known to be British` IS FALSE
-
--- as a JSON object, alice looks like this
--- {
---   "name": "Alice",
---   "mother": {
---     "name": "Betty",
---     "mother": null,
---     "father": null,
---     "birthPlace": {
---       "English name": "UK"
---     },
---     "birthDate": {
---       "year": 1930,
---       "month": 1,
---       "day": 1
---     },
---     "settled in": {
---       "English name": "UK"
---     },
---     "known to be British": true
---   },
---   "father": {
---     "name": "Charlie",
---     "mother": null,
---     "father": null,
---     "birthPlace": {
---       "English name": "UK"
---     },
---     "birthDate": {
---       "year": 1930,
---       "month": 1,
---       "day": 1
---     },
---     "settled in": {
---       "English name": "UK"
---     },
---     "known to be British": true
---   },
---   "birthPlace": {
---     "English name": "UK"
---   },
---   "birthDate": {
---     "year": 2000,
---     "month": 1,
---     "day": 1
---   },
---   "settled in": {
---     "English name": "UK"
---   },
---   "known to be British": false
--- }
-
 
 
 GIVEN d IS A Date -- date of birth
@@ -180,35 +98,127 @@ ascertain MEANS flip
 is        ^     ^
 person    ^     ^
 
+-- we borrow Soren Kierkegaard to act as the negative case for a parent. 
+-- This is meant to fit into a data modeling tutorial about the importance of Nulls
+-- and handling them correctly using a Maybe type.
+GIVETH A NaturalPerson
+danish MEANS NaturalPerson WITH     name         IS "Kierkegaard"
+                                    birthPlace   IS Place OF "DK"
+                                    birthDate    IS Date  OF 1813, 5, 5
+                                    `settled in` IS Place OF "DK"
+                                    `known to be British` IS FALSE
+
 
 § `S1 BNA possible redraft form`
 GIVEN p IS A NaturalPerson
+      m ^  ^ ^
+      f ^  ^ ^
 GIVETH A BOOLEAN
-DECIDE `is British citizen` p
-  IF       person p `is born in the UK`
+DECIDE `is British citizen`
+    -- Sometimes we are simply given a fact, that some parent is a British citizen.
+  IF   p's `known to be British`
+
+  OR       person p `is born in the UK`
       AND  person p `is born after commencement`
-      AND       `father or mother` `is British citizen`
-            OR  `father or mother` `is settled in the UK`
+      AND       `father or mother`   `is settled in the UK`
+            OR  `father or mother 2` `is British citizen`
 
     OR   person p `is born in a qualifying territory after the appointed day`
-      AND       `father or mother` `is British citizen`
-            OR  `father or mother` `is settled in the UK`
-            OR  `father or mother` `is settled in the qualifying territory in which the person is born`
+      AND       `father or mother`   `is settled in the UK`
+            OR  `father or mother`   `is settled in the qualifying territory in which the person is born`
+            OR  `father or mother 2` `is British citizen`
 
-    -- Sometimes we are simply given a fact, that some parent is a British citizen.
-    OR   p's `known to be British`
 
   WHERE
     `father or mother` someProperty MEANS
-        CONSIDER p's father
-            WHEN Known f THEN someProperty OF f
-            WHEN Unknown THEN FALSE
-     OR CONSIDER p's mother
-            WHEN Known m THEN someProperty OF m
-            WHEN Unknown THEN FALSE
+          someProperty OF f
+       OR ^            OF m
+
+    `father or mother 2` someProperty MEANS
+          IF NOT f EQUALS danish THEN someProperty OF f, danish, danish ELSE FALSE
+       OR IF NOT m EQUALS danish THEN someProperty OF m, danish, danish ELSE FALSE
 
     `is settled in the qualifying territory in which the person is born` parent MEANS
                  `is born in a qualifying territory after the appointed day` p
          AND     `English name` OF parent's `settled in`
          EQUALS  `English name` OF p's birthPlace
 
+
+GIVETH A NaturalPerson
+alice MEANS NaturalPerson WITH name                  IS "Alice"
+                               birthPlace            IS Place OF "Gibraltar"
+                               birthDate             IS Date  OF 2005, 1, 1
+                               `settled in`          IS Place OF "Italy"
+                               `known to be British` IS FALSE
+
+GIVETH A NaturalPerson
+betty MEANS NaturalPerson WITH
+    name                  IS "Betty"
+    birthPlace            IS Place OF "France"
+    birthDate             IS Date OF 1970, 1, 1
+    `settled in`          IS Place OF "Gibraltar"
+    `known to be British` IS FALSE
+
+GIVETH A NaturalPerson
+charlie MEANS NaturalPerson WITH    name   IS "Charlie"
+                                    birthPlace   IS Place OF "France"
+                                    birthDate    IS Date OF 1966, 1, 1
+                                    `settled in` IS Place OF "France"
+                                    `known to be British` IS FALSE
+
+{- 
+
+{
+  "alice": {
+    "name": "Alice",
+    "birthPlace": {
+      "English name": "Gibraltar"
+    },
+    "birthDate": {
+      "year": 2005,
+      "month": 1,
+      "day": 1
+    },
+    "settled in": {
+      "English name": "Italy"
+    },
+    "known to be British": false
+  },
+
+  "betty": {
+    "name": "Betty",
+    "birthPlace": {
+      "English name": "France"
+    },
+    "birthDate": {
+      "year": 1970,
+      "month": 1,
+      "day": 1
+    },
+    "settled in": {
+      "English name": "Gibraltar"
+    },
+    "known to be British": true
+  },
+
+  "charlie": {
+    "name": "Charlie",
+    "birthPlace": {
+      "English name": "France"
+    },
+    "birthDate": {
+      "year": 1966,
+      "month": 1,
+      "day": 1
+    },
+    "settled in": {
+      "English name": "UK"
+    },
+    "known to be British": false
+  }
+}
+
+-}
+
+
+#EVAL `is British citizen` alice betty charlie

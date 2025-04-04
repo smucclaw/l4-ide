@@ -1,0 +1,53 @@
+{
+  "name": "Alice",
+  "mother": {
+    "Known": {
+      "name": "Betty",
+      "mother": null,
+      "father": null,
+      "birthPlace": {
+        "English name": "UK"
+      },
+      "birthDate": {
+        "year": 1930,
+        "month": 1,
+        "day": 1
+      },
+      "settled in": {
+        "English name": "UK"
+      },
+      "known to be British": true
+    }
+  },
+  "father": {
+    "Known": {
+      "name": "Charlie",
+      "mother": null,
+      "father": null,
+      "birthPlace": {
+        "English name": "UK"
+      },
+      "birthDate": {
+        "year": 1920,
+        "month": 1,
+        "day": 1
+      },
+      "settled in": {
+        "English name": "UK"
+      },
+      "known to be British": true
+    }
+  },
+  "birthPlace": {
+    "English name": "UK"
+  },
+  "birthDate": {
+    "year": 2000,
+    "month": 1,
+    "day": 1
+  },
+  "settled in": {
+    "English name": "UK"
+  },
+  "known to be British": false
+}

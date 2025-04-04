@@ -1,0 +1,121 @@
+---
+type: function
+function:
+  supportedBackends:
+    - "jl4"
+  name: "british nationality"
+  description: Given some information about a person's birthplace and parentage, determine if that person is a British citizen.
+  parameters:
+    type: object
+    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    properties:
+      person:
+        type: object
+        description: a natural person, the subject of the question of British citizenship
+        properties:
+          name:
+            type: string
+            description: the name of ther person
+          "settled in":
+            type: object
+            description: where the person was settled at the time of their birth
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place they were settled in
+          birthPlace:
+            type: object
+            description: the birth-place of the mother
+            properties:
+              "english name":
+                type: string
+                description: the English name of the place
+          birthDate:
+            type: object
+            description: the birth-date of the person
+            properties:
+              year:
+                type: number
+                description: the year part of the date, a number such as 1954
+              month:
+                type: number
+                description: the month part of the date, a number from 1 to 12
+              day:
+                type: number
+                description: the day part of the date, a number from 1 to 31
+          mother:
+            type: object
+            description: the mother of the person, who is herself a natural person
+            properties:
+              Unknown:
+                type: object
+                description: the Maybe wrapper for a null value
+              Known:
+                type: object
+                description: the Maybe wrapper for a non-null value
+                properties:
+                  name:
+                    type: string
+                    description: the name of the mother
+                  birthPlace:
+                    type: object
+                    description: the birth-place of the mother
+                    properties:
+                      "english name":
+                        type: string
+                        description: the English name of the mother's birth-place
+                  birthDate:
+                    type: object
+                    description: the birth-date of the mother
+                    properties:
+                      year:
+                        type: number
+                        description: the year part of the date, a number such as 1954
+                      month:
+                        type: number
+                        description: the month part of the date, a number from 1 to 12
+                      day:
+                        type: number
+                        description: the day part of the date, a number from 1 to 31
+                  "known to be British":
+                    type: boolean
+                    description: if we know, a priori, that the mother is a British citizen
+          father:
+            type: object
+            description: the father of the person
+            properties:
+              Unknown:
+                type: object
+                description: the Maybe wrapper for a null value
+              Known:
+                type: object
+                description: the Maybe wrapper for a non-null value
+                properties:
+                  name:
+                    type: string
+                    description: the name of the mother
+                  birthPlace:
+                    type: object
+                    description: the birth-place of the father
+                    properties:
+                      "english name":
+                        type: string
+                        description: the English name of the father's birth-place
+                  birthDate:
+                    type: object
+                    description: the birth-date of the father
+                    properties:
+                      year:
+                        type: number
+                        description: the year part of the date, a number such as 1954
+                      month:
+                        type: number
+                        description: the month part of the date, a number from 1 to 12
+                      day:
+                        type: number
+                        description: the day part of the date, a number from 1 to 31
+                  "known to be British":
+                    type: boolean
+                    description: if we know, a priori, that the father is a British citizen
+
+                    

@@ -1,0 +1,98 @@
+§ `British Nationality Act`
+
+-- definitions of Place, Date, and Person belong in a supporting library, but are here for exposition
+DECLARE Date IS A STRING -- "YYYY-MM-DD"
+DECLARE Place IS A STRING
+
+BNA_commencement    MEANS "1983-01-01" -- of the main British Nationality Act 1981
+@ref source: section 1 of British Nationality Act 1981 c.61 @ 2021-07-01
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/section/1
+
+`appointed day` MEANS "2002-02-21" -- from various acts that subsequently updated the British Nationality Act 1981
+@ref source: section 1 of British Overseas Territories Act 2002 c.8 @ 2002-02-26
+@ref url: https://www.legislation.gov.uk/ukpga/2002/8/section/1
+
+GIVEN p IS A Place
+GIVETH A BOOLEAN
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/schedule/6
+`is British Overseas Territory` MEANS
+      p    = "Anguilla"
+   OR ^    = "Bermuda"
+   ^  ^    = "British Antarctic Territory"
+   ^  ^    = "British Indian Ocean Territory"
+   ^  ^    = "Cayman Islands"
+   ^  ^    = "Falkland Islands"
+   ^  ^    = "Gibraltar"
+   ^  ^    = "Hong Kong"
+   ^  ^    = "Montserrat"
+   ^  ^    = "Pitcairn, Henderson, Ducie and Oeno Islands"
+   ^  ^    = "St Helena, Ascension and Tristan da Cunha"
+   ^  ^    = "Sovereign Base Areas of Akrotiri and Dhekelia"
+   ^  ^    = "South Georgia and the South Sandwich Islands"
+   ^  ^    = "Turks and Caicos Islands"
+   ^  ^    = "Virgin Islands"
+
+GIVEN p IS A Place
+GIVETH A BOOLEAN
+DECIDE `is a qualifying territory` p IF
+           `is British Overseas Territory` p
+   AND NOT p = "Sovereign Base Areas of Akrotiri and Dhekelia"
+@ref url: https://www.legislation.gov.uk/ukpga/1981/61/section/50#term-qualifying-territory
+
+GIVEN d IS A Date -- date of birth
+      c IS A Date -- commencement
+GIVETH A BOOLEAN
+DECIDE `after` IF d GREATER THAN c
+
+-- syntactic sugar for the visualization to read more naturally
+flip a b MEANS b a
+ascertain MEANS flip
+is        ^     ^
+person    ^     ^
+
+§ `S1 BNA possible redraft form`
+GIVEN p_name         IS A STRING
+      p_birthPlace   IS A Place
+      p_birthDate    IS A Date
+      m_settledIn    IS A Place
+      m_knownBritish IS A BOOLEAN
+      f_settledIn    IS A Place
+      f_knownBritish IS A BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `is British citizen`
+  IF       `p is born in the UK`
+      AND  `p is born after commencement`
+      AND       `father is settled in the UK` OR `father is British citizen`
+            OR  `mother is settled in the UK` OR `mother is British citizen`
+
+    OR      `p is born in a qualifying territory after the appointed day`
+      AND       `father is British citizen` OR `father is settled in the qualifying territory in which the person is born`
+            OR  `mother is British citizen` OR `mother is settled in the qualifying territory in which the person is born`
+
+  WHERE
+    `p is born in the UK`  MEANS p_birthPlace EQUALS "UK"
+    `p is born after commencement` MEANS `after` p_birthDate BNA_commencement
+ 
+    `father is settled in the UK` MEANS f_settledIn EQUALS "UK"
+    `mother is settled in the UK` MEANS m_settledIn ^      ^
+
+    `father is British citizen` MEANS f_knownBritish
+    `mother is British citizen` MEANS m_knownBritish
+
+    `is born in a qualifying territory` MEANS `is a qualifying territory` p_birthPlace
+
+    `born after AppointedDay`           MEANS `after` p_birthDate `appointed day`
+
+    `p is born in a qualifying territory after the appointed day` MEANS
+          `is born in a qualifying territory`
+      AND `born after AppointedDay`
+
+    `mother is settled in the qualifying territory in which the person is born` MEANS
+                 `p is born in a qualifying territory after the appointed day`
+         AND     m_settledIn EQUALS p_birthPlace
+
+    `father is settled in the qualifying territory in which the person is born` MEANS
+                 `p is born in a qualifying territory after the appointed day`
+         AND     f_settledIn EQUALS p_birthPlace
+
+
