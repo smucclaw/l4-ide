@@ -21,6 +21,7 @@ export function isBoolVal(val: Value): val is BoolVal {
 interface BoolV {
   $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
   getClasses(): string[]
+  toPretty(): string
 }
 
 export function isTrueVal(val: BoolVal): val is TrueVal {
@@ -38,6 +39,10 @@ export class TrueVal implements BoolV {
   getClasses() {
     return ['true-val']
   }
+
+  toPretty() {
+    return 'TRUE'
+  }
 }
 
 export class FalseVal implements BoolV {
@@ -46,6 +51,10 @@ export class FalseVal implements BoolV {
 
   getClasses() {
     return ['false-val']
+  }
+
+  toPretty() {
+    return 'FALSE'
   }
 }
 
@@ -59,6 +68,10 @@ export class UnknownVal implements BoolV {
 
   getClasses() {
     return []
+  }
+
+  toPretty() {
+    return 'UNKNOWN'
   }
 }
 

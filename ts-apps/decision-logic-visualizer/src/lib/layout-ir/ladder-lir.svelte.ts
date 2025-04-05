@@ -337,6 +337,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #pathsList?: PathsListLirNode
   #corefs: Corefs
   #args: Assignment
+  #result: Value = new UnknownVal()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -371,6 +372,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       }
     })
     this.#corefs = new Corefs(initialCoreferents)
+
+    this.doEval(nodeInfo.context)
   }
 
   getvizExprToLirEnv() {
@@ -505,8 +508,21 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /*****************************
-          Bindings
+        Eval, Bindings
   ******************************/
+
+  private doEval(context: LirContext) {
+    const result = Evaluator.evaluate(
+      veExprToEvExpr(this.#originalExpr),
+      this.#args
+    )
+    this.setResult(context, result)
+
+    console.log('evaluating ', this.#args)
+    console.log('whatif eval result: ', result)
+
+    return result
+  }
 
   /** This sets off the 'compound logic' */
   submitNewBinding(
@@ -538,17 +554,24 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     * the default value for a VarNode is UnknownV
 
     */
-    const result = Evaluator.evaluate(
-      veExprToEvExpr(this.#originalExpr),
-      this.#args
-    )
-    console.log('evaluating ', this.#args)
-    console.log('whatif eval result: ', result)
+    this.doEval(context)
     // TODO: Add concrete UI for the result
 
     // TODO for v2: Grey out incompatible subgraphs
 
     this.getRegistry().publish(context, this.getId())
+  }
+
+  /*************************************
+         Result
+  **************************************/
+
+  getResult(_context: LirContext) {
+    return this.#result
+  }
+
+  setResult(_context: LirContext, result: Value) {
+    this.#result = result
   }
 
   /**************************************

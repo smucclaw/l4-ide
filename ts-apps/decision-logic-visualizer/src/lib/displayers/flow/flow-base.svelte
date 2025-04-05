@@ -131,6 +131,7 @@
         if (debouncedSfNodes$Initialized.current) {
           doLayoutAndFitView()
         }
+        updateResultMessage()
       }
     )
 
@@ -189,6 +190,16 @@
     }
   }
 
+  /***********************************
+             Result
+  ************************************/
+
+  let resultMessage: string = $state('')
+  function updateResultMessage() {
+    resultMessage = `is ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
+    console.log(resultMessage)
+  }
+
   /*********************************************
         LadderGraph event listener
   **********************************************/
@@ -211,6 +222,8 @@
       sfIdToLirId = newSfGraph.sfIdToLirId
       lirIdToSfId = newSfGraph.lirIdToSFId
       // console.log('newSfGraph NODES', NODES)
+
+      updateResultMessage()
     }
   }
 
@@ -304,7 +317,7 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <h1>{declLirNode.getFunName(context)}</h1>
+  <h1>{`${declLirNode.getFunName(context)} ${resultMessage}`}</h1>
   <div class="flow-container" style={`opacity: ${flowOpacity}`}>
     <SvelteFlow
       bind:nodes={NODES}
