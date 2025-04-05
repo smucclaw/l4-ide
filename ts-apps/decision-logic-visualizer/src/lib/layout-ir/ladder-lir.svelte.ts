@@ -540,9 +540,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       node._setValue(context, binding.value)
     })
 
-    // --------------------------------------------------------------------------
-    // TODO: Simplify this if the EV.Expr stuff doesn't seem worth it in the end
-    // --------------------------------------------------------------------------
     /*
     Try #WhatIf-style evaluation.
 
@@ -555,7 +552,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
     */
     this.doEval(context)
-    // TODO: Add concrete UI for the result
 
     // TODO for v2: Grey out incompatible subgraphs
 
