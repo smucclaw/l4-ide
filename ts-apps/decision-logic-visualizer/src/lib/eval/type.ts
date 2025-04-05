@@ -93,7 +93,8 @@ export function cycle(val: BoolVal): BoolVal {
  */
 export type Expr = Exclude<IRExpr, { $type: 'BoolVar' }> | EVBoolVar
 
-/** The IRExpr BoolVar, except without the `value` field */
+/** The IRExpr BoolVar, except without the `value` field
+ * (since we want to use values from the user, as opposed to the initial values) */
 export type EVBoolVar = Omit<VE.BoolVar, 'value'>
 export type Not = VE.Not
 export type Or = VE.Or
@@ -105,6 +106,6 @@ export function veExprToEvExpr(expr: IRExpr): Expr {
     .otherwise(() => expr)
 }
 
-function veBoolVarToEVBoolVar(expr: VE.BoolVar): EVBoolVar {
+function veBoolVarToEVBoolVar(expr: VE.BoolVar) {
   return expr as EVBoolVar
 }

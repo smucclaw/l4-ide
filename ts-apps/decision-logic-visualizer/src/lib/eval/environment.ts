@@ -28,10 +28,6 @@ export class Assignment {
     return this.#subst[unique]
   }
 
-  getMaxUnique(): Unique {
-    return this.#subst.length - 1
-  }
-
   getUniques(): Array<Unique> {
     return this.#subst.map((_, i) => i)
   }

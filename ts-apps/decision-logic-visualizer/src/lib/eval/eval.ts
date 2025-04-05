@@ -39,8 +39,13 @@ Ended up going with 2, since the postprocessing of the Dag<LirId> gets a bit inv
 and since 2 might align more with synchronizing with the backend in the future.
 */
 
-export const Evaluator = {
-  evaluate(ladder: Expr, assignment: Assignment): Value {
+/** Boolean operator evaluator */
+export interface Evaluator {
+  eval(ladder: Expr, assignment: Assignment): Value
+}
+
+export const Evaluator: Evaluator = {
+  eval(ladder: Expr, assignment: Assignment): Value {
     return eval_(ladder, assignment)
   },
 }
