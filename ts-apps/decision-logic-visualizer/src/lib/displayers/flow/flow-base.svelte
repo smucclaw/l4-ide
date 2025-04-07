@@ -131,7 +131,7 @@
         if (debouncedSfNodes$Initialized.current) {
           doLayoutAndFitView()
         }
-        updateResultMessage()
+        updateResultDisplay()
       }
     )
 
@@ -191,13 +191,12 @@
   }
 
   /***********************************
-             Result
+            Result UI
   ************************************/
 
   let resultMessage: string = $state('')
-  function updateResultMessage() {
-    resultMessage = `is ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
-    console.log(resultMessage)
+  function updateResultDisplay() {
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
   }
 
   /*********************************************
@@ -223,7 +222,7 @@
       lirIdToSfId = newSfGraph.lirIdToSFId
       // console.log('newSfGraph NODES', NODES)
 
-      updateResultMessage()
+      updateResultDisplay()
     }
   }
 
@@ -317,7 +316,8 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <h1>{`${declLirNode.getFunName(context)} ${resultMessage}`}</h1>
+  <h1>{declLirNode.getFunName(context)}</h1>
+  <h2>{resultMessage}</h2>
   <div class="flow-container" style={`opacity: ${flowOpacity}`}>
     <SvelteFlow
       bind:nodes={NODES}
@@ -378,6 +378,10 @@ Misc SF UI TODOs:
 
   h1 {
     @apply text-2xl font-semibold text-center mt-1;
+  }
+
+  h2 {
+    @apply text-lg text-center -mt-2;
   }
 
   .overall-container {
