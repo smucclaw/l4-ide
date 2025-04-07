@@ -6,7 +6,7 @@ This component only exists so that we can put SvelteFlowProvider
  above FlowBase (which uses SF hooks) in the component hierarchy -->
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
-  import type { LadderFlowDisplayerProps } from '../displayer-props.js'
+  import type { LadderFlowDisplayerProps } from '../props.js'
   import { setLirRegistryInSvelteContext } from '$lib/layout-ir/core.js'
   import FlowBase from './flow-base.svelte'
 
