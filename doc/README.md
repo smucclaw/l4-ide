@@ -59,7 +59,7 @@ contracts describe both the desired scenarios and the mechanisms of
 reparation. L4 uses **labeled transition systems** to represent these
 moving parts. Conversion to Petri Nets, Non-deterministic Finite
 Automata, finite state machines, BPMN diagrams, and the like are
-supported by the L4 toolchain. (See: [./regulative-proposal.org](regulative-proposal))
+supported by the L4 toolchain. (See: [regulative rules](./regulative-proposal.org))
 
 Legislation and regulation can be thought of a special kind of rule
 where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
