@@ -1,0 +1,8 @@
+
+foo MEANS bar 1 2 3 4
+
+bar a b c d MEANS
+    a PLUS b PLUS c PLUS d
+
+bar a b c MEANS
+    a PLUS b PLUS c

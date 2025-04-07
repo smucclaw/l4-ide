@@ -92,6 +92,8 @@ import Data.Bifunctor
 import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
 import Data.Tuple.Extra (firstM)
+import Control.Monad.Extra (mapMaybeM)
+import GHC.Stack.Types
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -106,9 +108,11 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     { environment
     , entityInfo
     , errorContext = None
+    , scannedDecides = Map.empty
+    , scannedDeclareHeads = Map.empty
+    , scannedDeclares = Map.empty
     , moduleUri
     }
-
 -- | Main entry point for scope- and type-checking.
 --
 -- Takes the program as input.
@@ -130,7 +134,7 @@ initialCheckEnv moduleUri = mkInitialCheckEnv moduleUri initialEnvironment initi
 
 doCheckProgramWithDependencies :: CheckState -> CheckEnv -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState checkEnv program =
-  case runCheckUnique (inferProgram program) checkEnv checkState of
+  case runCheckUnique (checkProgram program) checkEnv checkState of
     (w, s) ->
       let
         (errs, (rprog, topEnv)) = runWith w
@@ -147,6 +151,105 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , environment = env.environment
               , entityInfo = env.entityInfo
               }
+
+type DecideCache = (Anno, TypeSig Resolved, AppForm Resolved, Type' Resolved, CheckInfo, [CheckInfo])
+type DeclareHeadCache = (Anno, TypeSig Resolved, AppForm Resolved, CheckInfo)
+type DeclareCache = (Declare Resolved, [CheckInfo])
+
+checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
+checkProgram module' = do
+  (rdecides, rdeclares) <- scanTopEnvironment module'
+  let topDecides = fmap (^. _5) rdecides
+      topDeclares = fmap (^. _2) rdeclares
+  local (addToTopEnv rdecides rdeclares) $ extendKnownMany (topDecides <> concat topDeclares) do
+    inferProgram module'
+  where
+    addToTopEnv rdecides rdeclares s = s
+      { scannedDecides = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf (getAnno (d^._1))) rdecides
+      , scannedDeclares = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf (getAnno (d^._1))) rdeclares
+      }
+
+scanTopEnvironment :: Module Name -> Check ([DecideCache], [DeclareCache])
+scanTopEnvironment module' = do
+  let declares = toListOf (gplate @(Declare Name)) module'
+  rdeclares <- traverse inferDeclareHead declares
+
+  let declareAppForms = fmap (\rd -> rd ^. _4) rdeclares
+
+  local (addToTopEnv rdeclares) $ extendKnownMany declareAppForms do
+    alldeclares <- mapMaybeM inferDeclareFull declares
+
+    extendKnownMany (foldMap (\d -> d ^. _2) alldeclares) do
+      let decides = toListOf (gplate @(Decide Name)) module'
+      rdecides <- mapMaybeM decideToCheckEntity decides
+      pure (rdecides, alldeclares)
+  where
+    decideToCheckEntity (MkDecide ann tysig appForm _) =
+      errorContext (WhileCheckingDecide (getName appForm)) do
+        (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+        (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
+          inferTermAppForm rappForm rtysig
+        let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+        pure $ Just (ann', rtysig, rappForm, result, makeKnownMany (appFormHeads rappForm) ce, extendsTySig <> extendsAppForm)
+
+    addToTopEnv rdeclares s = s
+      { scannedDeclareHeads = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf (getAnno (d^._1))) rdeclares
+      }
+
+inferDeclareHead :: Declare Name -> Check DeclareHeadCache
+inferDeclareHead (MkDeclare ann tysig appForm _decl) =
+  errorContext (WhileCheckingDeclare (getName appForm)) do
+    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+    extendsTyApp <- inferTypeAppForm' rappForm rtysig
+    traceShowM extendsTyApp
+    pure (ann, rtysig, rappForm, extendsTyApp)
+
+inferDeclareFull :: Declare Name -> Check (Maybe DeclareCache)
+inferDeclareFull (MkDeclare ann _tysig appForm t) =
+  errorContext (WhileCheckingDeclare (getName appForm)) do
+    lookupDeclareHeadByAnno ann >>= \case
+      Nothing -> pure Nothing
+      Just (_, rtysig, rappForm, extendsTyApp) -> do
+        -- extendKnown extendsTyApp do
+          (rt, extendsTyDecl) <- inferTypeDecl rappForm t
+          -- See Note [Adding type information to all binders]
+          -- TODO: if we did this later during typecheck, we would be
+          -- able to forward reference functions.
+          declare <- MkDeclare ann
+            <$> traverse resolvedType rtysig
+            <*> traverse resolvedType rappForm
+            <*> pure rt
+            >>= nlgDeclare
+          pure $ Just $
+            (declare, [extendsTyApp] <> extendsTyDecl)
+
+lookupInferDecideByAnno :: Anno -> Check (Maybe DecideCache)
+lookupInferDecideByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.scannedDecides)
+    pure $ Map.lookup r topEnv
+
+lookupDeclareHeadByAnno :: Anno -> Check (Maybe DeclareHeadCache)
+lookupDeclareHeadByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.scannedDeclareHeads)
+    pure $ Map.lookup r topEnv
+
+lookupDeclareByAnno :: Anno -> Check (Maybe DeclareCache)
+lookupDeclareByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.scannedDeclares)
+    pure $ Map.lookup r topEnv
+
 
 -- | Combines environment and entityInfo into one single list
 --
@@ -182,7 +285,7 @@ applyFinalSubstitution subst moduleUri t =
           r
 
 -- | Helper function to run the check monad an expect a unique result.
-runCheckUnique :: Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique :: HasCallStack => Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
 runCheckUnique c e s =
   case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
@@ -192,11 +295,6 @@ runCheckUnique c e s =
 -- ------------------------------------
 -- Scope Manipulation
 -- ------------------------------------
-
-data CheckInfo = MkCheckInfo
-  { names :: [Resolved]
-  , checkEntity :: CheckEntity
-  }
 
 -- | Make the given 'CheckInfo' known in the given scope.
 extendKnown :: CheckInfo -> Check a -> Check a
@@ -223,6 +321,9 @@ extendEnv cis env =
     , entityInfo = Map.insert u (n, ce) e.entityInfo
     , moduleUri = e.moduleUri
     , errorContext = e.errorContext
+    , scannedDecides = e.scannedDecides
+    , scannedDeclareHeads = e.scannedDeclareHeads
+    , scannedDeclares = e.scannedDeclares
     }
     where
       u :: Unique
@@ -423,19 +524,25 @@ ref n a =
 inferDeclare :: Declare Name -> Check (Declare Resolved, [CheckInfo])
 inferDeclare (MkDeclare ann tysig appForm t) =
   errorContext (WhileCheckingDeclare (getName appForm)) do
-    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-    extendsTyApp <- inferTypeAppForm' rappForm rtysig
-    (declare, extends) <- extendKnown extendsTyApp do
-      (rt, extendsTyDecl) <- inferTypeDecl rappForm t
-      -- See Note [Adding type information to all binders]
-      declare <- MkDeclare ann
-        <$> traverse resolvedType rtysig
-        <*> traverse resolvedType rappForm
-        <*> pure rt
-        >>= nlgDeclare
-      pure (declare, extendsTyDecl)
+    lookupDeclareByAnno ann >>= \case
+      Nothing -> do
+        (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+        extendsTyApp <- inferTypeAppForm' rappForm rtysig
+        (declare, extends) <- extendKnown extendsTyApp do
+          (rt, extendsTyDecl) <- inferTypeDecl rappForm t
+          -- See Note [Adding type information to all binders]
+          declare <- MkDeclare ann
+            <$> traverse resolvedType rtysig
+            <*> traverse resolvedType rappForm
+            <*> pure rt
+            >>= nlgDeclare
+          pure (declare, extendsTyDecl)
+        pure (declare, [extendsTyApp] <> extends)
+      Just (decl, _extends) -> do
+        -- We don't want to return the '_extends' here,
+        -- as it has already been added to the top environment
+        pure (decl, [])
 
-    pure (declare, extends)
 
 -- | We allow assumptions for types, but we could potentially be more
 -- sophisticated here.
@@ -579,19 +686,30 @@ sequentialTraverse f = go []
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
 inferDecide (MkDecide ann tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    (rappForm, rtysig, tySigExtends) <- checkTermAppFormTypeSigConsistency appForm tysig
-    (ce, rt, result, termAppExtends) <- inferTermAppForm rappForm rtysig
-    decide <- extendKnownMany (termAppExtends <> tySigExtends) $ do
-      rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
-      let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
-      -- See Note [Adding type information to all binders]
-      MkDecide ann'
-        <$> traverse resolvedType rtysig
-        <*> traverse resolvedType rappForm
-        <*> pure rexpr
-        >>= nlgDecide
-
-    pure (decide, [makeKnownMany (appFormHeads rappForm) ce])
+    lookupInferDecideByAnno ann >>= \case
+      Nothing -> do
+        (rappForm, rtysig, tySigExtends) <- checkTermAppFormTypeSigConsistency appForm tysig
+        (ce, rt, result, termAppExtends) <- inferTermAppForm rappForm rtysig
+        decide <- extendKnownMany (termAppExtends <> tySigExtends) $ do
+          rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
+          let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+          -- See Note [Adding type information to all binders]
+          MkDecide ann'
+            <$> traverse resolvedType rtysig
+            <*> traverse resolvedType rappForm
+            <*> pure rexpr
+            >>= nlgDecide
+        pure (decide, [makeKnownMany (appFormHeads rappForm) ce])
+      Just (ann', rtysig, rappForm, result, extendsFun, extendsArgs) -> do
+        decide <- extendKnownMany ([extendsFun] <> extendsArgs) $ do
+          rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
+          -- See Note [Adding type information to all binders]
+          MkDecide ann'
+            <$> traverse resolvedType rtysig
+            <*> traverse resolvedType rappForm
+            <*> pure rexpr
+            >>= nlgDecide
+        pure (decide, [])
 
 -- | We allow the following cases:
 --

@@ -143,7 +143,7 @@ aRef = Ref aName aUnique aName
 
 booleanInfo :: CheckEntity
 booleanInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [MkConDecl emptyAnno falseDef [], MkConDecl emptyAnno trueDef []])
+  KnownType 0 []
 
 falseInfo :: CheckEntity
 falseInfo =
@@ -155,15 +155,15 @@ trueInfo =
 
 numberInfo :: CheckEntity
 numberInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [])
+  KnownType 0 []
 
 stringInfo :: CheckEntity
 stringInfo =
-  KnownType 0 [] (EnumDecl emptyAnno [])
+  KnownType 0 []
 
 listInfo :: CheckEntity
 listInfo =
-  KnownType 1 [aDef] (EnumDecl emptyAnno [MkConDecl emptyAnno emptyDef []])
+  KnownType 1 [aDef]
 
 emptyInfo :: CheckEntity
 emptyInfo =

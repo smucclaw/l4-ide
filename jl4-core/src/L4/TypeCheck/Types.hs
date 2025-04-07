@@ -20,7 +20,7 @@ type Substitution = Map Int (Type' Resolved)
 -- the arguments, so that we can properly substitute when instantiated.
 --
 data CheckEntity =
-    KnownType Kind [Resolved] (TypeDecl Resolved)
+    KnownType Kind [Resolved]
   | KnownTerm (Type' Resolved) TermKind
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
@@ -133,8 +133,21 @@ data CheckEnv =
     { moduleUri    :: !NormalizedUri
     , environment  :: !Environment
     , entityInfo   :: !EntityInfo
+    , scannedDecides ::
+        !(Map SrcRange (Anno, TypeSig Resolved, AppForm Resolved, Type' Resolved, CheckInfo, [CheckInfo]))
+    , scannedDeclareHeads ::
+        !(Map SrcRange (Anno, TypeSig Resolved, AppForm Resolved, CheckInfo))
+    , scannedDeclares ::
+        !(Map SrcRange (Declare Resolved, [CheckInfo]))
     , errorContext :: !CheckErrorContext
     }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
+
+data CheckInfo = MkCheckInfo
+  { names :: [Resolved]
+  , checkEntity :: CheckEntity
+  }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -289,7 +302,7 @@ resolvedType n = do
       pure n
     Just (_, checkEntity) ->
       pure case checkEntity of
-        KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
+        KnownType kind _resolved -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
 
