@@ -2,16 +2,7 @@
 
 import type { Name } from '@repo/viz-expr'
 import type { BoolVal } from '$lib/layout-ir/value.js'
-import type {
-  RootDisplayerProps,
-  DisplayerProps,
-  LirContext,
-  LirId,
-} from '$lib/layout-ir/core.js'
-import type {
-  DeclLirNode,
-  ValidPathsListLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
@@ -34,22 +25,6 @@ export interface LadderSFGraph {
   edges: LadderSFEdge[]
   sfIdToLirId(sfId: string): LirId
   lirIdToSFId(lirId: LirId): string
-}
-
-/************************************************
-        Displayer Props
-*************************************************/
-
-export interface LadderFlowDisplayerProps extends RootDisplayerProps {
-  node: DeclLirNode
-}
-
-export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
-  node: LadderFlowDisplayerProps['node']
-}
-
-export interface PathListDisplayerProps extends DisplayerProps {
-  node: ValidPathsListLirNode
 }
 
 /************************************************

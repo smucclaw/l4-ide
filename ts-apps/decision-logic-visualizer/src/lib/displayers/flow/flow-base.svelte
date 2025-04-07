@@ -20,8 +20,8 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import * as SF from '@xyflow/svelte'
+  import type { BaseLadderFlowDisplayerProps } from '../displayer-props.js'
   import {
-    type BaseLadderFlowDisplayerProps,
     type LadderSFNodeWithDims,
     type LadderSFGraph,
     sfNodeTypes,
