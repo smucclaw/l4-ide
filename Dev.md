@@ -45,7 +45,6 @@ sudo apt install pkg-config liblzma-dev libgmp-dev
 
 Under Nix you can run nix-shell in the current directory to pick up the above packages; it will read `shell.nix`.
 
-
 ## Tests
 
 ```sh
