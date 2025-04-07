@@ -1,0 +1,12 @@
+-- This is a comment
+// This is also a comment
+{- This is a block comment.
+  /* This is also a block comment.
+  */
+  {- And another one. -}
+-}
+/* This is a block comment.
+  {- This is also a block omment.
+  -}
+  /* And another one. */
+*/
