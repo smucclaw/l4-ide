@@ -15,8 +15,8 @@ File: tdnr-ambiguous.l4
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
       foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
 
 File: tdnr-ambiguous.l4
   Hidden:   no
@@ -32,8 +32,8 @@ File: tdnr-ambiguous.l4
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
       foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
 
 File: tdnr-ambiguous.l4
   Hidden:   no
@@ -49,5 +49,5 @@ File: tdnr-ambiguous.l4
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER
       foo (defined at tdnr-ambiguous.l4:4:8-11) of type BOOLEAN
+      foo (defined at tdnr-ambiguous.l4:3:8-11) of type NUMBER

@@ -92,6 +92,8 @@ import Data.Bifunctor
 import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
 import Data.Tuple.Extra (firstM)
+import Control.Monad.Extra (mapMaybeM)
+import qualified Data.List as List
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -106,6 +108,9 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     { environment
     , entityInfo
     , errorContext = None
+    , functionTypeSigs = Map.empty
+    , declTypeSigs = Map.empty
+    , datatypeDeclarations = Map.empty
     , moduleUri
     }
 
@@ -130,7 +135,7 @@ initialCheckEnv moduleUri = mkInitialCheckEnv moduleUri initialEnvironment initi
 
 doCheckProgramWithDependencies :: CheckState -> CheckEnv -> Module  Name -> CheckResult
 doCheckProgramWithDependencies checkState checkEnv program =
-  case runCheckUnique (inferProgram program) checkEnv checkState of
+  case runCheckUnique (checkProgram program) checkEnv checkState of
     (w, s) ->
       let
         (errs, (rprog, topEnv)) = runWith w
@@ -147,6 +152,63 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , environment = env.environment
               , entityInfo = env.entityInfo
               }
+
+checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
+checkProgram module' = do
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' do
+    inferProgram module'
+
+withDecides :: [FunTypeSig] -> Check a -> Check a
+withDecides rdecides =
+  extendKnownMany topDecides . local \s -> s
+    { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
+    }
+  where
+    topDecides = fmap (.name) rdecides
+
+withDeclares :: [DeclChecked] -> Check a -> Check a
+withDeclares rdeclares =
+  extendKnownMany topDeclares . local \s -> s
+    { datatypeDeclarations = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.payload) rdeclares
+    }
+  where
+    topDeclares = foldMap (.publicNames) rdeclares
+
+withDeclareTypeSigs :: [DeclTypeSig] -> Check a -> Check a
+withDeclareTypeSigs rdeclares =
+  extendKnownMany topDeclares . local \s -> s
+    { declTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdeclares
+    }
+  where
+    topDeclares = fmap (.name) rdeclares
+
+lookupFunTypeSigByAnno :: Anno -> Check (Maybe FunTypeSig)
+lookupFunTypeSigByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.functionTypeSigs)
+    pure $ Map.lookup r topEnv
+
+lookupDeclTypeSigByAnno :: Anno -> Check (Maybe DeclTypeSig)
+lookupDeclTypeSigByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.declTypeSigs)
+    pure $ Map.lookup r topEnv
+
+lookupDeclCheckedByAnno :: Anno -> Check (Maybe DeclChecked)
+lookupDeclCheckedByAnno ann = case rangeOf ann of
+  Nothing ->
+    -- TODO: should never happen, 'addError'
+    pure Nothing
+  Just r -> do
+    topEnv <- asks (.datatypeDeclarations)
+    pure $ Map.lookup r topEnv
+
 
 -- | Combines environment and entityInfo into one single list
 --
@@ -187,17 +249,11 @@ runCheckUnique c e s =
   case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
-    _ -> error "internal error: expected unique result, got several"
+    _ -> error $ "internal error: expected unique result, got several"
 
 -- ------------------------------------
 -- Scope Manipulation
 -- ------------------------------------
-
-data CheckInfo = MkCheckInfo
-  { names :: [Resolved]
-  , checkEntity :: CheckEntity
-  }
-  deriving stock (Eq, Show)
 
 -- | Make the given 'CheckInfo' known in the given scope.
 extendKnown :: CheckInfo -> Check a -> Check a
@@ -224,6 +280,9 @@ extendEnv cis env =
     , entityInfo = Map.insert u (n, ce) e.entityInfo
     , moduleUri = e.moduleUri
     , errorContext = e.errorContext
+    , functionTypeSigs = e.functionTypeSigs
+    , declTypeSigs = e.declTypeSigs
+    , datatypeDeclarations = e.datatypeDeclarations
     }
     where
       u :: Unique
@@ -422,21 +481,18 @@ ref n a =
     pure (Ref n u o)
 
 inferDeclare :: Declare Name -> Check (Declare Resolved, [CheckInfo])
-inferDeclare (MkDeclare ann tysig appForm t) =
+inferDeclare (MkDeclare ann _tysig appForm _t) =
   errorContext (WhileCheckingDeclare (getName appForm)) do
-    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-    extendsTyApp <- inferTypeAppForm' rappForm rtysig
-    (declare, extends) <- extendKnown extendsTyApp do
-      (rt, extendsTyDecl) <- inferTypeDecl rappForm t
-      -- See Note [Adding type information to all binders]
-      declare <- MkDeclare ann
-        <$> traverse resolvedType rtysig
-        <*> traverse resolvedType rappForm
-        <*> pure rt
-        >>= nlgDeclare
-      pure (declare, extendsTyDecl)
+    lookupDeclCheckedByAnno ann >>= \case
+      Nothing -> do
+        error "Should not happen"
+      Just d ->
+        case d.payload of
+          CompleteDeclare decl ->
+            pure (decl, d.publicNames)
+          CompleteAssume _ ->
+            error "This should never happen. inferDeclare"
 
-    pure (declare, extends)
 
 -- | We allow assumptions for types, but we could potentially be more
 -- sophisticated here.
@@ -447,54 +503,47 @@ inferDeclare (MkDeclare ann tysig appForm t) =
 -- TODO: I think the checking whether we have a type declaration or a term
 -- declaration is off, because we can have a type declaration of the form
 --
+-- @
 -- GIVETH A TYPE
 -- ASSUME T
+-- @
 --
 -- which would currently not match the first case.
 --
 inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
-inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
+inferAssume (MkAssume ann _tysig appForm (Just (Type _tann))) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
-    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-    extendTyApp <- inferTypeAppForm' rappForm rtysig
-    -- TODO: do we ever check the result kind?
-    let
-      extend =
-        makeKnownMany
-          (appFormHeads rappForm)
-          (KnownType (kindOfAppForm rappForm)
-            (view appFormArgs rappForm)
-            (EnumDecl emptyAnno [])
-          )
-    -- See Note [Adding type information to all binders]
-    assume <- extendKnownMany [extendTyApp, extend] do
-      traverse resolvedType (MkAssume ann rtysig rappForm (Just (Type tann)))
-        >>= nlgAssume
-    pure (assume, [extend])
-inferAssume (MkAssume ann tysig appForm mt) = do
+    lookupDeclCheckedByAnno ann >>= \case
+      Nothing -> error "This should not happen any more"
+      Just decl -> do
+        case decl.payload of
+          CompleteDeclare _ -> error "This should not happen"
+          CompleteAssume assume -> do
+            pure (assume, decl.publicNames)
+inferAssume (MkAssume ann _tysig appForm mt) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
-    (rappForm, rtysig, tySigExtends) <- checkTermAppFormTypeSigConsistency appForm tysig -- (MkTypeSig mempty (MkGivenSig mempty []) (Just (MkGivethSig mempty t)))
-    (ce, rt, result, appFormExtends) <- inferTermAppForm rappForm rtysig
-    -- check that the given result type matches the result type in the type signature
-    extendKnownMany (appFormExtends <> tySigExtends) do
-      rmt <- case mt of
-        Nothing -> pure Nothing
-        Just t  -> do
-          rt' <- inferType t
-          expect (ExpectAssumeSignatureContext (rangeOf result)) result rt'
-          pure (Just rt')
+    lookupFunTypeSigByAnno ann >>= \case
+      Nothing -> error "This should not happen any more"
+      Just dHead -> do
+        -- check that the given result type matches the result type in the type signature
+        extendKnownMany dHead.arguments do
+          rmt <- case mt of
+            Nothing -> pure Nothing
+            Just t  -> do
+              rt' <- inferType t
+              expect (ExpectAssumeSignatureContext (rangeOf dHead.resultType)) dHead.resultType rt'
+              pure (Just rt')
 
-      -- See Note [Adding type information to all binders]
-      assume <-
-        MkAssume ann
-          <$> traverse resolvedType rtysig
-          <*> traverse resolvedType rappForm
-          <*> pure rmt
-          >>= nlgAssume
-      let rd = setAnnResolvedType rt assume
-      pure (rd, [makeKnownMany (appFormHeads rappForm) ce])
+          -- See Note [Adding type information to all binders]
+          assume <-
+            MkAssume dHead.anno
+              <$> traverse resolvedType dHead.rtysig
+              <*> traverse resolvedType dHead.rappForm
+              <*> pure rmt
+              >>= nlgAssume
+          pure (assume, [dHead.name])
 
 inferDirective :: Directive Name -> Check (Directive Resolved)
 inferDirective (StrictEval ann e) = errorContext (WhileCheckingExpression e) do
@@ -524,36 +573,10 @@ inferSection (MkSection ann mn maka topdecls) = do
     case rmn of
       Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
       Just rn -> traverse (inferAka rn) maka
-  -- NOTE: sequentialTraverse doesn't quite cut it due to needing to remove the old
-  -- current section from the environment which it doesn't do
-  (rtopdecls, topDeclExtends) <-
-    unzip . snd <$> foldM
-      (uncurry inferTopDeclWithPartialSection)
-      (MkSection ann rmn rmaka [], [])
-      topdecls
 
-  let sec = MkSection ann rmn rmaka $ reverse rtopdecls
-      sectionExtends = foldMap (\r -> [makeKnown r (KnownSection sec)]) $ maybeToList rmn <> foldMap (\(MkAka _ rs) -> rs) rmaka
+  (rtopdecls, topDeclExtends) <- unzip <$> traverse inferTopDecl topdecls
 
-  pure (sec, concat topDeclExtends <> sectionExtends)
- where
-  inferTopDeclWithPartialSection
-    :: Section Resolved
-    -> [(TopDecl Resolved, [CheckInfo])]
-    -> TopDecl Name
-    -> Check (Section Resolved, [(TopDecl Resolved, [CheckInfo])])
-  inferTopDeclWithPartialSection oldSection@(MkSection ann' rmn rmaka tdecls) acc tdecl = do
-
-    let acc'dEnv = foldMap snd acc
-        -- NOTE: if we don't have a result, we extend with an empty list, i.e. no extension
-        extension = flip makeKnown (KnownSection oldSection) <$> maybeToList rmn
-
-    -- NOTE: extend the topdecl with the names we learnt in previous top decls (acc'dEnv)
-    -- but also with the currently known part of the section the topdecl that is currently
-    -- being checked is in
-    inf'dtdecl <- extendKnownMany (extension <> acc'dEnv) do
-      inferTopDecl tdecl
-    pure (MkSection ann' rmn rmaka (fst inf'dtdecl : tdecls), inf'dtdecl : acc)
+  pure (MkSection ann rmn rmaka rtopdecls, concat topDeclExtends)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -593,19 +616,6 @@ inferProgram (MkModule ann uri section) = do
   (rsections, extends) <- inferSection section
   pure (MkModule ann uri rsections, extends)
 
--- | Similar to a 'traverse', but subsequent operations have access to the extended environment.
--- This is necessary when checking multiple definitions where subsequent operations depend on the
--- environment of prior operations.
---
--- For example, 'inferDecide' needs access to all functions that have been previously checked.
-sequentialTraverse :: forall a b . (a -> Check (b, [CheckInfo])) -> [a] -> Check [(b, [CheckInfo])]
-sequentialTraverse f = go []
- where
-  go _extends [] = pure []
-  go extends (s' : ss) = do
-    (b, bExtends) <- extendKnownMany extends (f s')
-    ((b, bExtends) :) <$> go (bExtends <> extends) ss
-
 -- | This covers constants and functions being defined.
 --
 -- These have an optional type signature. We require some compatibility between
@@ -615,21 +625,21 @@ sequentialTraverse f = go []
 -- TODO: This is more complicated due to potential polymorphism.
 --
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
-inferDecide (MkDecide ann tysig appForm expr) = do
+inferDecide (MkDecide ann _tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    (rappForm, rtysig, tySigExtends) <- checkTermAppFormTypeSigConsistency appForm tysig
-    (ce, rt, result, termAppExtends) <- inferTermAppForm rappForm rtysig
-    decide <- extendKnownMany (termAppExtends <> tySigExtends) $ do
-      rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
-      let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
-      -- See Note [Adding type information to all binders]
-      MkDecide ann'
-        <$> traverse resolvedType rtysig
-        <*> traverse resolvedType rappForm
-        <*> pure rexpr
-        >>= nlgDecide
-
-    pure (decide, [makeKnownMany (appFormHeads rappForm) ce])
+    lookupFunTypeSigByAnno ann >>= \case
+      Nothing -> do
+        error "This should not happen any more"
+      Just dHead -> do
+        decide <- extendKnownMany dHead.arguments $ do
+          rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf dHead.resultType)) expr dHead.resultType
+          -- See Note [Adding type information to all binders]
+          MkDecide dHead.anno
+            <$> traverse resolvedType dHead.rtysig
+            <*> traverse resolvedType dHead.rappForm
+            <*> pure rexpr
+            >>= nlgDecide
+        pure (decide, [dHead.name])
 
 -- | We allow the following cases:
 --
@@ -825,38 +835,60 @@ inferAka r (MkAka ann ns) = do
 inferTypeDecl :: AppForm Resolved -> TypeDecl Name -> Check (TypeDecl Resolved, [CheckInfo])
 inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   let
-    rs     = appFormHeads rappForm
     td rcs = EnumDecl ann rcs
-    kt     = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  extendKnown (makeKnownMany rs (kt (td []))) $ do
-    ensureDistinct NonDistinctConstructors (getName <$> conDecls)
-    (rconDecls, extends) <- unzip <$> sequentialTraverse (inferConDecl rappForm) conDecls
-    pure (td rconDecls, makeKnownMany rs (kt (td rconDecls)) : concat extends)
+  ensureDistinct NonDistinctConstructors (getName <$> conDecls)
+  (rconDecls, extends) <- unzip <$> traverse (inferConDecl rappForm) conDecls
+  pure (td rconDecls, concat extends)
 inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
+  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
   let
-    rs = appFormHeads rappForm
-    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  extendKnown (makeKnownMany rs (kt (EnumDecl emptyAnno []))) do
-    (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
-    let
-      td = RecordDecl ann (Just mrcon) rtns
-    pure (td, makeKnownMany rs (kt td) : extend)
-inferTypeDecl rappForm (SynonymDecl ann t) = do
-  let
-    rs = appFormHeads rappForm
-    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
+    td = RecordDecl ann (Just mrcon) rtns
+  pure (td, extend)
+inferTypeDecl _rappForm (SynonymDecl ann t) = do
   rt <- inferType t
   let
     td = SynonymDecl ann rt
-  pure (td, [makeKnownMany rs (kt td)])
+  pure (td, [])
+
+inferTypeName :: AppForm Resolved -> TypeDecl Name -> Check CheckInfo
+inferTypeName rappForm (EnumDecl _ann _conDecls) = do
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure $ makeKnownMany rs kt
+inferTypeName rappForm (RecordDecl _ann _mcon _tns) = do
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure $ makeKnownMany rs kt
+inferTypeName rappForm (SynonymDecl _ann _t) = do
+  let
+    rs = appFormHeads rappForm
+    -- The 'Nothing' is wrong here, however, we can only insert it, once
+    -- we are fully typechecking the 'SynonymDecl'.
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure $ makeKnownMany rs kt
+
+inferTypeNameAndSynonym :: AppForm Resolved -> Maybe (Type' Name) -> Check CheckInfo
+inferTypeNameAndSynonym rappForm Nothing = do
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure $ makeKnownMany rs kt
+inferTypeNameAndSynonym rappForm (Just t) = do
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) . Just
+  rt <- inferType t
+  pure $ makeKnownMany rs (kt rt)
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, [CheckInfo])
 inferConDecl rappForm (MkConDecl ann n tns) = do
   ensureDistinct NonDistinctSelectors (getName <$> tns)
   dn <- def n
-  (rtns, extends) <- unzip <$> sequentialTraverse (inferSelector rappForm) tns
+  (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
   let
     conType = forall' (view appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
     conInfo = KnownTerm conType Constructor
@@ -986,7 +1018,7 @@ inferTermAppForm rappForm tysig = do
   ensureDistinct NonDistinctTermAppForm (getName <$> (rs <> args)) -- should we do this earlier?
   (rt, result, extend) <- typeSigType tysig
   let termInfo = KnownTerm rt Computable
-  pure (termInfo, rt, result, makeKnownMany rs termInfo : extend)
+  pure (termInfo, rt, result, extend)
 
 inferLamGivens :: GivenSig Name -> Check (GivenSig Resolved, [Type' Resolved], [CheckInfo])
 inferLamGivens (MkGivenSig ann otns) = do
@@ -1061,11 +1093,17 @@ checkExpr ec (Consider ann e branches) t = softprune $ do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
 checkExpr ec (Where ann e ds) t = softprune $ do
-  (rds, extends) <- unzip <$> sequentialTraverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+  let
+    preScanDecl = mapMaybeM scanTyDeclLocalDecl
+    scanDecl = mapMaybeM inferTyDeclLocalDecl
+    scanFuns = mapMaybeM scanFunSigLocalDecl
+
+  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
+     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
   re <- extendKnownMany (concat extends) do
     re <- checkExpr ec e t
-  -- We have to immediately resolve 'Nlg' annotations, as 'ds'
-  -- brings new bindings into scope.
+    -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+    -- brings new bindings into scope.
     nlgExpr re
   let re' = setAnnResolvedType t (Where ann re rds)
   pure re'
@@ -1234,7 +1272,13 @@ inferExpr' g =
       res <- traverse (\ e -> checkExpr ExpectHomogeneousListContext e v) es
       pure (List ann res, list v)
     Where ann e ds -> do
-      (rds, extends) <- unzip <$> sequentialTraverse inferLocalDecl ds
+      let
+        preScanDecl = mapMaybeM scanTyDeclLocalDecl
+        scanDecl = mapMaybeM inferTyDeclLocalDecl
+        scanFuns = mapMaybeM scanFunSigLocalDecl
+
+      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
+        unzip <$> traverse inferLocalDecl ds
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
 
@@ -1451,6 +1495,231 @@ matchPatFunTy  r t args =
       (rargs, _, extends) <- unzip3 <$> traverse inferPattern args
       pure (rargs, t, concat extends)
 
+-- ----------------------------------------------------------------------------
+-- Forward References high level helpers
+-- ----------------------------------------------------------------------------
+
+scanDeclares ::
+  (a -> Check [DeclTypeSig]) ->
+  (a -> Check [DeclChecked]) ->
+  a ->
+  Check [DeclChecked]
+scanDeclares preScanDecl scanDecl a = do
+  rdeclareTypeSigs <- preScanDecl a
+  withDeclareTypeSigs rdeclareTypeSigs do
+    scanDecl a
+
+withScanTypeAndSigEnvironment ::
+  (a -> Check [DeclTypeSig]) ->
+  (a -> Check [DeclChecked]) ->
+  (a -> Check [FunTypeSig]) ->
+  a ->
+  Check b ->
+  Check b
+withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
+  rdeclares <- scanDeclares preScanDecls scanDecl a
+  withDeclares rdeclares do
+    rdecides <- scanTySig a
+    withDecides rdecides $ do
+      act
+
+-- ----------------------------------------------------------------------------
+-- Phase 1: Scan & Check Type Declarations (DECLARE & ASSUME)
+-- ----------------------------------------------------------------------------
+
+inferTyDeclModule :: Module Name -> Check [DeclChecked]
+inferTyDeclModule (MkModule _ _ sects) =
+  inferTyDeclSection sects
+
+inferTyDeclSection :: Section Name -> Check [DeclChecked]
+inferTyDeclSection (MkSection _ _ _ topDecls) =
+  concat <$> traverse inferTyDeclTopLevel topDecls
+
+inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked]
+inferTyDeclTopLevel = \case
+  Declare   _ p -> maybeToList <$> inferTyDeclDeclare p
+  Decide    _ _ -> pure []
+  Assume    _ p -> maybeToList <$> inferTyDeclAssume p
+  Directive _ _ -> pure []
+  Import    _ _ -> pure []
+  Section   _ s -> inferTyDeclSection s
+
+inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclChecked)
+inferTyDeclLocalDecl = \case
+  LocalDecide _ _ -> pure Nothing
+  LocalAssume _ p -> inferTyDeclAssume p
+
+inferTyDeclDeclare :: Declare Name -> Check (Maybe DeclChecked)
+inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
+  errorContext (WhileCheckingDeclare (getName appForm)) do
+    lookupDeclTypeSigByAnno ann >>= \case
+      Nothing -> pure Nothing
+      Just declHead -> do
+        extendKnownMany declHead.tyVars do
+          extendTySynonym <- inferTypeNameAndSynonym declHead.rappForm declHead.typeSynonym
+          (rt, extendsTyDecl) <- inferTypeDecl declHead.rappForm t
+          -- See Note [Adding type information to all binders]
+          -- TODO: if we did this later during typecheck, we would be
+          -- able to forward reference functions.
+          declare <- MkDeclare ann
+            <$> traverse resolvedType declHead.rtysig
+            <*> traverse resolvedType declHead.rappForm
+            <*> pure rt
+            >>= nlgDeclare
+          pure $ Just MkDeclChecked
+            { payload = CompleteDeclare declare
+            , publicNames = extendTySynonym : extendsTyDecl
+            }
+
+inferTyDeclAssume :: Assume Name -> Check (Maybe DeclChecked)
+inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann))) =
+  -- declaration of a type
+  errorContext (WhileCheckingAssume (getName appForm)) do
+    lookupDeclTypeSigByAnno ann >>= \case
+      Nothing -> pure Nothing
+      Just declHead -> do
+        assume <- extendKnownMany (declHead.name:declHead.tyVars) do
+          traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)))
+            >>= nlgAssume
+        pure $ Just $ MkDeclChecked
+          { payload = CompleteAssume assume
+          , publicNames = [declHead.name]
+          }
+inferTyDeclAssume (MkAssume _   _      _        _) = pure Nothing
+
+scanTyDeclModule :: Module Name -> Check [DeclTypeSig]
+scanTyDeclModule (MkModule _ _ sects) =
+  scanTyDeclSection sects
+
+scanTyDeclSection :: Section Name -> Check [DeclTypeSig]
+scanTyDeclSection (MkSection _ _ _ topDecls) =
+  concat <$> traverse scanTyDeclTopLevel topDecls
+
+scanTyDeclTopLevel :: TopDecl Name -> Check [DeclTypeSig]
+scanTyDeclTopLevel = \case
+  Declare   _ p -> List.singleton <$> scanTyDeclDeclare p
+  Decide    _ _ -> pure []
+  Assume    _ p -> maybeToList <$> scanTyDeclAssume p
+  Directive _ _ -> pure []
+  Import    _ _ -> pure []
+  Section   _ s -> scanTyDeclSection s
+
+scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
+scanTyDeclLocalDecl = \case
+  LocalDecide _ _ -> pure Nothing
+  LocalAssume _ p -> scanTyDeclAssume p
+
+scanTyDeclDeclare :: Declare Name -> Check DeclTypeSig
+scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
+  errorContext (WhileCheckingDeclare (getName appForm)) do
+    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+    extendTyVars <- inferTypeAppForm' rappForm rtysig
+    extendTyName <- inferTypeName rappForm decl
+    pure $ MkDeclTypeSig
+      { anno = ann
+      , rtysig
+      , typeSynonym = isTypeSynonym decl
+      , rappForm
+      , tyVars = [extendTyVars]
+      , name = extendTyName
+      }
+  where
+    isTypeSynonym = \case
+      SynonymDecl _ ty -> Just ty
+      _ -> Nothing
+
+scanTyDeclAssume :: Assume Name -> Check (Maybe DeclTypeSig)
+scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
+  -- declaration of a type
+  errorContext (WhileCheckingAssume (getName appForm)) do
+    (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
+    extendTyVars <- inferTypeAppForm' rappForm rtysig
+    -- TODO: do we ever check the result kind?
+    let
+      extendTyName =
+        makeKnownMany
+          (appFormHeads rappForm)
+          (KnownType (kindOfAppForm rappForm)
+            (view appFormArgs rappForm)
+            Nothing
+          )
+
+    pure $ Just $ MkDeclTypeSig
+      { anno = ann
+      , rtysig
+      , typeSynonym = Nothing
+      , rappForm = rappForm
+      , tyVars = [extendTyVars]
+      , name = extendTyName
+      }
+scanTyDeclAssume _ = do
+  pure Nothing
+
+-- ----------------------------------------------------------------------------
+-- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
+-- ----------------------------------------------------------------------------
+
+scanFunSigModule :: Module Name -> Check [FunTypeSig]
+scanFunSigModule (MkModule _ _ sects) =
+  scanFunSigSection sects
+
+scanFunSigSection :: Section Name -> Check [FunTypeSig]
+scanFunSigSection (MkSection _ _ _ topDecls) =
+  concat <$> traverse scanFunSigTopLevel topDecls
+
+scanFunSigTopLevel :: TopDecl Name -> Check [FunTypeSig]
+scanFunSigTopLevel = \case
+  Declare   _ _ -> pure []
+  Decide    _ p -> List.singleton <$> scanFunSigDecide p
+  Assume    _ p -> maybeToList <$> scanFunSigAssume p
+  Directive _ _ -> pure []
+  Import    _ _ -> pure []
+  Section   _ s -> scanFunSigSection s
+
+scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
+scanFunSigLocalDecl = \case
+  LocalDecide _ p -> Just <$> scanFunSigDecide p
+  LocalAssume _ p -> scanFunSigAssume p
+
+scanFunSigDecide :: Decide Name -> Check FunTypeSig
+scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
+  errorContext (WhileCheckingDecide (getName appForm)) do
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
+      inferTermAppForm rappForm rtysig
+    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    pure $ MkFunTypeSig
+      { anno = ann'
+      , rtysig
+      , rappForm
+      , resultType = result
+      , name = makeKnownMany (appFormHeads rappForm) ce
+      , arguments = extendsTySig <> extendsAppForm
+      }
+
+scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
+scanFunSigAssume (MkAssume _   _     _       (Just (Type _tann))) = pure Nothing
+scanFunSigAssume (MkAssume ann tysig appForm _mt) = do
+  -- declaration of a term
+  errorContext (WhileCheckingAssume (getName appForm)) do
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
+    -- check that the given result type matches the result type in the type signature
+
+    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    pure $ Just $ MkFunTypeSig
+      { anno = ann'
+      , rtysig
+      , rappForm = rappForm
+      , resultType = result
+      , name = makeKnownMany (appFormHeads rappForm) ce
+      , arguments = extendsTySig <> extendsAppForm
+      }
+
+-- ----------------------------------------------------------------------------
+-- Typecheck Utils
+-- ----------------------------------------------------------------------------
+
 -- Wrapper for unify that fails at this point.
 -- First argument is the expected type (pushed in), the second argument is the
 -- given type (pulled out).
@@ -1463,7 +1732,7 @@ tryExpandTypeSynonym :: Resolved -> [Type' Resolved] -> Check (Maybe (Type' Reso
 tryExpandTypeSynonym r args = do
   ce <- getEntityInfo r
   case ce of
-    Just (KnownType _kind params (SynonymDecl _ t)) -> do
+    Just (KnownType _kind params (Just t)) -> do
       let substitution = Map.fromList (zipWith (\ n t' -> (getUnique n, t')) params args)
       pure (Just (substituteType substitution t))
     _ -> pure Nothing

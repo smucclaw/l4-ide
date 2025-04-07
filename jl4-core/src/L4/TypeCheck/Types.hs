@@ -11,6 +11,7 @@ import Control.Applicative
 import L4.Lexer (PosToken)
 import qualified Data.Map.Strict as Map
 import qualified Data.List.NonEmpty as NE
+import qualified Generics.SOP as SOP
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
@@ -21,7 +22,7 @@ type Substitution = Map Int (Type' Resolved)
 -- the arguments, so that we can properly substitute when instantiated.
 --
 data CheckEntity =
-    KnownType Kind [Resolved] (TypeDecl Resolved)
+    KnownType Kind [Resolved] (Maybe (Type' Resolved))
   | KnownTerm (Type' Resolved) TermKind
   | KnownSection (Section Resolved)
   | KnownTypeVariable
@@ -130,13 +131,76 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
+-- | A checked function signature.
+data FunTypeSig = MkFunTypeSig
+  { anno :: Anno
+  , rtysig :: TypeSig Resolved
+  -- ^ Already checked 'TypeSig'
+  , rappForm :: AppForm Resolved
+  -- ^ Already checked 'AppForm'
+  , resultType :: Type' Resolved
+  -- ^ Result type of the function
+  , name :: CheckInfo
+  -- ^ Name of this function
+  , arguments :: [CheckInfo]
+  -- ^ Arguments to the function.
+  -- Includes type variables.
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic, NFData)
+
+data DeclTypeSig = MkDeclTypeSig
+  { anno :: Anno
+  , rtysig :: TypeSig Resolved
+  -- ^ Already checked 'TypeSig'
+  , rappForm :: AppForm Resolved
+  -- ^ Already checked 'AppForm'
+  , typeSynonym :: Maybe (Type' Name)
+  -- ^ Whether this 'DeclaredHeadCache' is a type synonym.
+  -- If yes, what is its *unchecked* type?
+  , name :: CheckInfo
+  -- ^ Name of this data type.
+  , tyVars :: [CheckInfo]
+  -- ^ Type variable arguments of this data type.
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic, NFData)
+
+data DeclChecked = MkDeclChecked
+  { payload :: CheckedDataDecl
+  , publicNames :: [CheckInfo]
+  }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (SOP.Generic, NFData)
+
+data CheckedDataDecl =
+    CompleteDeclare (Declare Resolved)
+  | CompleteAssume (Assume Resolved)
+  deriving (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic, NFData)
+
+instance HasSrcRange CheckedDataDecl where
+  rangeOf = \case
+    CompleteDeclare decl -> rangeOf decl
+    CompleteAssume assume -> rangeOf assume
+
 data CheckEnv =
   MkCheckEnv
-    { moduleUri    :: !NormalizedUri
-    , environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , errorContext :: !CheckErrorContext
+    { moduleUri            :: !NormalizedUri
+    , environment          :: !Environment
+    , entityInfo           :: !EntityInfo
+    , functionTypeSigs     :: !(Map SrcRange FunTypeSig)
+    , declTypeSigs         :: !(Map SrcRange DeclTypeSig)
+    , datatypeDeclarations :: !(Map SrcRange DeclChecked)
+    , errorContext         :: !CheckErrorContext
     }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
+
+data CheckInfo = MkCheckInfo
+  { names :: [Resolved]
+  , checkEntity :: CheckEntity
+  }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -291,7 +355,7 @@ resolvedType n = do
       pure n
     Just (_, checkEntity) ->
       pure case checkEntity of
-        KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
+        KnownType kind _resolved _ -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
         KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?

@@ -355,6 +355,9 @@ jl4Rules rootDirectory recorder = do
             , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cEnv.entityInfo tcRes.entityInfo
             , errorContext = cEnv.errorContext
             , moduleUri = cEnv.moduleUri
+            , functionTypeSigs = Map.empty
+            , declTypeSigs = Map.empty
+            , datatypeDeclarations = Map.empty
             }
         -- NOTE: we don't want to leak the inference variables from the substitution
         initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
