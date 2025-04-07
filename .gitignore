@@ -63,7 +63,5 @@ yarn-error.log*
 # Nix
 .direnv
 .envrc
-result*
-
-# Specstory (code assistant persistence)
-.specstory/
+flake.nix
+flake.lock
