@@ -187,7 +187,6 @@ nameRefP = do
     -- the whitespace during natural language generation. Otherwise, the text looks scuffed.
     -- Thus, only parse the 'TPercent' here, and let the 'textFragment' parser
     -- take care of any leading whitespace.
-    --
     (plainToken_ TPercent)
     name
   attachAnno $
