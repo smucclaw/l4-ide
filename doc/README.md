@@ -1,37 +1,23 @@
 # L4 Language Reference
 
-## Quickstart and Installation
-
-
-
-## Demo of Features
-
-### Integrated Development Environment
-
-### Visualizers
-
-The decision logic visualizer 
-
-### Natural Language Generator
-
-### 
 
 ## Semantics
 
-The expressive domain of L4 covers the majority of current legal documents.
+L4 is designed for isomorphic formalization of the better part of most legal documents.
 
 ## Basic data types: true/false, numbers, strings, and records
 
-The operation of law frequently involves the reduction of a complex
-world, with many shades of grey, to a black and white decision.
-"Bright line" tests do this. In L4, **Boolean logic** is used to work
-with Yes/No values. These values are combined using the operators
-`AND`, `OR`, `NOT`, `ANY`, `ALL`. (See: Boolean logic)
+Laws and contracts frequently must reduce shades of grey to a black
+and white decision. Think "bright line" tests. In L4, **Boolean
+logic** is used to work with those black-and-white, Yes/No, True/False
+values. These values are combined using the operators `AND`, `OR`,
+`NOT`, `ANY`, `ALL`. (See: Boolean logic)
 
-Besides "yes" or "no" values, one often has to deal with numbers, or
-strings, or enums, or combinations of these **types**. L4's **data
-modelling** offers familiar record and OOP-class syntax for
-representing reality, backed by static type inference. (See: data types)
+Besides "yes" or "no" values, one often has to deal with numbers,
+strings, enums, or a combination of these basic **types**. L4's
+**data modelling** syntax offers familiar record and OOP-class syntax for
+representing reality, backed by static type inference. (See: data
+types)
 
 Sometimes the "yes" or "no" is not known, or does not apply. L4's
 **ternary logic** extends Boolean logic with "unknown" or "null"
