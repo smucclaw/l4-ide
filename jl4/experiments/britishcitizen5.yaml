@@ -1,0 +1,39 @@
+---
+type: function
+function:
+  supportedBackends:
+    - "jl4"
+  name: "is British citizen"
+  description: Given some information about a person's birthplace, birthdate, and parentage, determine if that person is a British citizen.
+  parameters:
+    type: object
+    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    properties:
+      p_name:
+        type: string
+        description: the name of a natural person, the subject of the question of British citizenship
+
+      p_birthPlace:
+        type: string
+        description: the birth-place of the person, such as "UK" or "US" or "Gibraltar" or "France". Convert "London", "England", and "United Kingdom" to "UK".
+
+      p_birthDate:
+        type: string
+        description: the birth-date of the person, given as a string in the format YYYY-MM-DD
+
+      f_settledIn:
+            type: string
+            description: where the father was settled at the time of the birth of the person. Convert "London", "England", and "United Kingdom" to "UK".
+
+      f_knownBritish:
+            type: boolean
+            description: if we know, a priori, that the father is a British citizen.
+
+      m_settledIn:
+            type: string
+            description: where the mother was settled at the time of the birth of the person. Convert "London", "England", and "United Kingdom" to "UK".
+
+      m_knownBritish:
+            type: boolean
+            description: if we know, a priori, that the mother is a British citizen.
+

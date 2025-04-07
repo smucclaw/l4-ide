@@ -2,11 +2,13 @@
 
 We use the following meta-notation for
 separated lists:
+
 ```
 foo{sep}* ::=
     epsilon             -- the empty symbol
   | foo "sep" foo{sep}*
 ```
+
 Most of these can be replaced using layout / indentation,
 see further below.
 
@@ -24,7 +26,10 @@ sectionsymbols ::=
   '§'+
 
 topdecl ::=
-  declare | decide | assume | directive
+  declare | decide | assume | directive | import
+
+import ::=
+  "IMPORT" name
 
 localdecl ::=
   decide | assume
@@ -204,6 +209,7 @@ DECLARE FOO IS ONE OF con1 HAS x IS A BOOL, y IS A NUMBER, con2
 ```
 
 Disambiguation with layout:
+
 ```
 DECLARE FOO IS ONE OF
   con1 HAS
@@ -215,10 +221,12 @@ DECLARE FOO IS ONE OF
 Disambiguation with parentheses:
 
 There are in principle two options:
+
 ```
 DECLARE FOO IS ONE OF (con1 HAS x IS A BOOL, y IS A NUMBER), con2
 DECLARE FOO IS ONE OF con1 HAS (x IS A BOOL, y IS A NUMBER), con2
 ```
+
 We will go for the first option.
 
 Annotations are treated just as lexical comments.

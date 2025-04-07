@@ -14,6 +14,10 @@ export class NumberWrapper implements Ord<NumberWrapper>, HasId {
     return ComparisonResult.Equal
   }
 
+  getValueAsNumber() {
+    return this.value
+  }
+
   getId(): string {
     return this.value.toString()
   }

@@ -62,7 +62,7 @@ import Control.Monad (forM, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.=))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
 import qualified Data.Aeson.Combinators.Decode as ACD
@@ -80,8 +80,6 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Tuple.Extra as Tuple
 import Data.Typeable
 import qualified GHC.Clock as Clock
@@ -453,10 +451,7 @@ validateFunction fn = do
       }
  where
   validateImplementation :: EvalBackend -> Text -> AppM RunFunction
-  validateImplementation JL4 program = do
-    case runExcept $ Jl4.createFunction (toDecl fn.declaration) program of
-      Left err -> throwError err422{errBody = "Failed to parse program: " <> TL.encodeUtf8 (TL.pack $ show err)}
-      Right parsed -> pure parsed
+  validateImplementation JL4 program =  pure $ Jl4.createFunction (toDecl fn.declaration) program
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
@@ -584,19 +579,21 @@ instance ToJSON Parameters where
     Aeson.object
       [ "type" .= Aeson.String "object"
       , "properties" .= props
+      , "required" .= Map.keys props
       ]
 
 instance FromJSON Parameters where
   parseJSON = Aeson.withObject "Parameters" $ \o -> do
     _ :: Text <- o .: "type"
     props <- o .: "properties"
+    _ :: Text <- o .: "required"
     pure $ Parameters props
 
 instance ToJSON Parameter where
   toJSON p =
     Aeson.object
       [ "type" .= p.parameterType
-      , "alias" .= p.parameterAlias
+      , "alias" .= p.parameterAlias -- omitNothingFields?
       , "enum" .= p.parameterEnum
       , "description" .= p.parameterDescription
       ]
@@ -605,8 +602,8 @@ instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
     Parameter
       <$> p .: "type"
-      <*> p .: "alias"
-      <*> p .: "enum"
+      <*> p .:? "alias"
+      <*> p .:? "enum" .!= []
       <*> p .: "description"
 
 instance FromHttpApiData EvalBackend where

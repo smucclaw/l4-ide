@@ -24,164 +24,16 @@ common defaults
   build-depends:
     base
 
-library
-  import: defaults
-  hs-source-dirs: src
-  build-depends:
-    bytestring,
-    cassava,
-    containers,
-    data-default,
-    deepseq,
-    extra,
-    file-io,
-    filepath,
-    generics-sop,
-    hw-fingertree,
-    logict,
-    megaparsec,
-    mtl,
-    optics,
-    optics-core,
-    optparse-applicative,
-    pcre2,
-    pretty-simple,
-    prettyprinter,
-    safe-exceptions,
-    text >= 2 && < 2.1.2,
-    tree-diff,
-    vector,
-
-  exposed-modules:
-    Base
-    Base.Map
-    Base.Set
-    Base.Pretty
-    Base.Text
-    L4.Annotation
-    L4.Citations
-    L4.Evaluate
-    L4.Evaluate.Value
-    L4.ExactPrint
-    L4.FindDefinition
-    L4.HoverInfo
-    L4.Main
-    L4.Lexer
-    L4.Parser
-    L4.Parser.ResolveAnnotation
-    L4.Parser.SrcSpan
-    L4.ParserCombinators
-    L4.Print
-    L4.Syntax
-    L4.Transform
-    L4.TypeCheck
-    L4.TypeCheck.Environment
-    L4.TypeCheck.Types
-    L4.TypeCheck.With
-
 executable jl4-cli
   import: defaults
   hs-source-dirs: app
   build-depends:
-    jl4
-  main-is: Main.hs
-
-executable jl4-lsp
-  import: defaults
-  ghc-options:
-    -threaded
-    -rtsopts
-    -- disable idle GC
-    -- increase nursery size
-    -- Enable collection of heap statistics
-    "-with-rtsopts=-I0 -A128M -T"
-  hs-source-dirs: lsp
-  build-depends:
-    Diff,
-    Glob,
-    aeson,
-    async ^>=2.2.5,
-    autodocodec,
-    binary,
-    bytestring ^>=0.11.5.3,
-    co-log-core,
-    containers,
-    data-default ^>=0.8.0.0,
-    deepseq,
+    jl4-core,
+    jl4-lsp,
     directory,
-    enummapset ^>=0.7.3.0,
-    extra,
-    filepath,
-    focus ^>=1.0.3.2,
-    fuzzy,
-    generics-sop,
-    hashable >=1.4.0.0,
-    hls-graph ^>=2.9.0.0,
-    hw-fingertree,
-    jl4,
-    lens,
-    lens-aeson ^>=1.2.3,
-    list-t,
-    lsp ^>=2.7.0.0,
-    lsp-types ^>=2.3.0.0,
-    monoidal-containers,
-    mtl,
-    optics,
+    lsp-types,
     optparse-applicative,
-    prettyprinter,
-    prettyprinter-ansi-terminal ^>=1.1.3,
-    safe-exceptions,
-    sorted-list ^>=0.2.2.0,
-    stm,
-    stm-containers ^>=1.2.1,
-    -- NOTE: the reason why we have an upperbound on text is that
-    -- it introduces new definitions that conflicts with ours
-    text >= 2 && < 2.1.2,
-    text-rope >= 0.3,
-    time,
-    transformers,
-    unliftio,
-    unordered-containers ^>=0.2.20,
-    vector,
-    websockets,
-
-  if os(windows)
-    build-depends: Win32
-  else
-    build-depends: unix
-
-  main-is: Server.hs
-  other-modules:
-    Control.Concurrent.Strict
-    LSP.Logger
-    LSP.Core.Action
-    LSP.Core.Debouncer
-    LSP.Core.FileExists
-    LSP.Core.FileStore
-    LSP.Core.FileUtils
-    LSP.Core.PositionMapping
-    LSP.Core.IdeConfiguration
-    LSP.Core.OfInterest
-    LSP.Core.ProgressReporting
-    LSP.Core.RuleTypes
-    LSP.Core.Shake
-    LSP.Core.Service
-    LSP.Core.WorkerThread
-    LSP.Core.Types.Diagnostics
-    LSP.Core.Types.Location
-    LSP.Core.Types.Monitoring
-    LSP.Core.Types.Options
-    LSP.Core.Types.Shake
-
-    LSP.SemanticTokens
-    LSP.L4.Base
-    LSP.L4.Config
-    LSP.L4.Handlers
-    LSP.L4.Viz.VizExpr
-    LSP.L4.Viz.Ladder
-    LSP.L4.LanguageServer
-    LSP.L4.Rules
-    LSP.L4.SemanticTokens
+  main-is: Main.hs
 
 test-suite jl4-test
   import: defaults
@@ -197,6 +49,10 @@ test-suite jl4-test
     filepath,
     hspec,
     hspec-golden,
-    jl4,
+    jl4-core,
+    jl4-lsp,
+    parser-regex,
     optics,
     silently,
+    transformers,
+    lsp-types,

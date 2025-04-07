@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { defaultSFHandlesInfo } from '../types.svelte.js'
+  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   import type { NodeProps, Node } from '@xyflow/svelte'
   import { Handle } from '@xyflow/svelte'
 
@@ -26,7 +26,7 @@
     <path
       d="M0,0 L60,50 L0,100"
       fill="none"
-      stroke="var(--xy-node-color)"
+      stroke="var(--ladder-node-color)"
       stroke-width="3"
       stroke-linecap="round"
     />

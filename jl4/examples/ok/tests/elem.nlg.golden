@@ -1,0 +1,12 @@
+`elem` with 3 and list of 1, 2, 3 and 4
+`elem` with 5 and list of 1, 2, 3 and 4
+`elem` with Boromir and list of Frodo, Sam, Gandalf, Peregrin, Meriadoc, Aragorn, Boromir, Legolas and Gimli
+`elem` with `EMPTY` and list of `EMPTY`, list of 1, list of 1 and 2 and list of 1, 2 and 3
+`elem` with `FALSE` and list of `TRUE`, `TRUE` and `TRUE`
+`elem` with `Evening` and list of `Morning`, `Afternoon`, `Evening` and `Night`
+`Left` with 3 is equal to `Right` with 3
+`Left` with 3 is equal to `Left` with 4
+`Left` with 3 is equal to `Left` with 3
+`EMPTY` is equal to `EMPTY`
+`Left` is equal to `Left`
+`elem` is equal to `elem`

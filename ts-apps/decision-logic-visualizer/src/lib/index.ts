@@ -8,5 +8,5 @@ export * from './layout-ir/ladder-lir.svelte.js'
 
 /** Displayers; in particular, Ladder Flow */
 export { default as LadderFlow } from './displayers/flow/flow.svelte'
-export * from './displayers/flow/types.svelte.js'
+export * from './displayers/flow/svelteflow-types.js'
 export * from './displayers/flow/layout.js'

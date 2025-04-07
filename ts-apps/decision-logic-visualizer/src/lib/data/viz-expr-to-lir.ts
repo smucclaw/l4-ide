@@ -9,9 +9,11 @@ import {
   BoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
-  SourceLirNode,
+  SourceNoAnnoLirNode,
+  SourceWithOrAnnoLirNode,
   SinkLirNode,
   LadderGraphLirNode,
+  augmentEdgesWithExplanatoryLabel,
 } from '../layout-ir/ladder-lir.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -45,7 +47,8 @@ export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
 */
 export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
   toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
-    const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
+    // 1. Get structure of the graph
+    const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
     const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
     const middle = transform(nodeInfo, expr)
@@ -55,7 +58,12 @@ export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
 
-    return new LadderGraphLirNode(nodeInfo, dag)
+    const ladderGraph = new LadderGraphLirNode(nodeInfo, dag)
+
+    // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
+    augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
+
+    return ladderGraph
   },
 }
 
@@ -96,7 +104,7 @@ function transform(
     })
     .with({ $type: 'Not' }, (neg) => {
       const negand = transform(nodeInfo, neg.negand)
-      const notStart = vertex(new NotStartLirNode(nodeInfo).getId())
+      const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
       return notStart
         .connect(negand.getSource())
@@ -115,7 +123,12 @@ function transform(
     .with({ $type: 'Or' }, (orExpr) => {
       const children = orExpr.args.map((n) => transform(nodeInfo, n))
 
-      const overallSource = vertex(new SourceLirNode(nodeInfo).getId())
+      const overallSource = vertex(
+        new SourceWithOrAnnoLirNode(
+          nodeInfo,
+          nodeInfo.context.getOrBundlingNodeLabel()
+        ).getId()
+      )
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
       const leftEdges = children.map((child) =>

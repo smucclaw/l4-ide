@@ -52,6 +52,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/lodash": "^4.17.14",
     "autoprefixer": "^10.4.20",
+    "bits-ui": "^1.3.12",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.13.0",
@@ -76,12 +77,13 @@
     "@xyflow/svelte": "^1.0.0-next.4",
     "csstype": "^3.1.3",
     "effect": "^3.11.0",
-    "elkjs": "^0.9.3",
     "esbuild": "^0.24.2",
     "graphology": "^0.26.0",
     "graphology-dag": "^0.4.1",
     "lodash": "^4.17.21",
+    "lucide-svelte": "^0.477.0",
     "runed": "^0.23.3",
+    "tailwind-variants": "^1.0.0",
     "ts-pattern": "^5.6.1"
   }
 }

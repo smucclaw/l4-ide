@@ -54,12 +54,93 @@ DECIDE `is a qualifying territory` p IF
 
 DECLARE NaturalPerson
   HAS name         IS A   STRING
-      mother       IS A   NaturalPerson
-      father       IS A   NaturalPerson
+      mother       IS A   Maybe NaturalPerson
+      father       IS A   Maybe NaturalPerson
       birthPlace   ^  ^     Place
       birthDate    ^  ^     Date
       `settled in` IS A     Place
       `known to be British` IS A BOOLEAN
+
+GIVETH A NaturalPerson
+betty MEANS NaturalPerson WITH
+    name   IS "Betty"
+    mother IS Unknown
+    father IS Unknown
+    birthPlace   IS Place OF "UK"
+    birthDate    IS Date OF 1930, 1, 1
+    `settled in` IS Place OF "UK"
+    `known to be British` IS TRUE
+
+GIVETH A NaturalPerson
+charlie MEANS NaturalPerson WITH    name   IS "Charlie"
+                                    mother IS Unknown
+                                    father IS Unknown
+                                    birthPlace   IS Place OF "UK"
+                                    birthDate    IS Date OF 1920, 1, 1
+                                    `settled in` IS Place OF "UK"
+                                    `known to be British` IS TRUE
+
+GIVETH A NaturalPerson
+alice MEANS NaturalPerson WITH name                  IS "Alice"
+                               mother                IS Known betty
+                               father                IS Known charlie
+                               birthPlace            IS Place OF "UK"
+                               birthDate             IS Date OF 2000, 1, 1
+                               `settled in`          IS Place OF "UK"
+                               `known to be British` IS FALSE
+
+-- as a JSON object, alice looks like this
+-- {
+--   "name": "Alice",
+--   "mother": {
+--     "name": "Betty",
+--     "mother": null,
+--     "father": null,
+--     "birthPlace": {
+--       "English name": "UK"
+--     },
+--     "birthDate": {
+--       "year": 1930,
+--       "month": 1,
+--       "day": 1
+--     },
+--     "settled in": {
+--       "English name": "UK"
+--     },
+--     "known to be British": true
+--   },
+--   "father": {
+--     "name": "Charlie",
+--     "mother": null,
+--     "father": null,
+--     "birthPlace": {
+--       "English name": "UK"
+--     },
+--     "birthDate": {
+--       "year": 1930,
+--       "month": 1,
+--       "day": 1
+--     },
+--     "settled in": {
+--       "English name": "UK"
+--     },
+--     "known to be British": true
+--   },
+--   "birthPlace": {
+--     "English name": "UK"
+--   },
+--   "birthDate": {
+--     "year": 2000,
+--     "month": 1,
+--     "day": 1
+--   },
+--   "settled in": {
+--     "English name": "UK"
+--   },
+--   "known to be British": false
+-- }
+
+
 
 GIVEN d IS A Date -- date of birth
       c IS A Date -- commencement
@@ -119,8 +200,12 @@ DECIDE `is British citizen` p
 
   WHERE
     `father or mother` someProperty MEANS
-          someProperty OF p's father
-      OR  someProperty OF p's mother
+        CONSIDER p's father
+            WHEN Known f THEN someProperty OF f
+            WHEN Unknown THEN FALSE
+     OR CONSIDER p's mother
+            WHEN Known m THEN someProperty OF m
+            WHEN Unknown THEN FALSE
 
     `is settled in the qualifying territory in which the person is born` parent MEANS
                  `is born in a qualifying territory after the appointed day` p

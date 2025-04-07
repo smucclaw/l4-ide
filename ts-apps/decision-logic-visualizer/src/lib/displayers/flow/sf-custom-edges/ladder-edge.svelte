@@ -3,8 +3,7 @@
     BezierEdge,
     // EdgeLabel,
   } from '@xyflow/svelte'
-  import type { LadderEdgeProps } from '../types.svelte.js'
-  import { defaultLadderEdgeAttrs } from '../types.svelte.js'
+  import type { LadderEdgeProps } from '../svelteflow-types.js'
 
   let {
     sourceX,
@@ -13,11 +12,8 @@
     targetX,
     targetY,
     targetPosition,
-    attrs: data = defaultLadderEdgeAttrs,
+    data,
   }: LadderEdgeProps = $props()
-
-  const pathStyle = `stroke: var(${data.strokeColorCSSVar});`
-  // console.log(pathStyle)
 </script>
 
 <BezierEdge
@@ -27,9 +23,9 @@
   {targetX}
   {targetY}
   {targetPosition}
-  label={data.label}
+  label={data?.context.shouldEnableZenMode() ? undefined : data?.label}
   pathOptions={{ curvature: 1 }}
-  style={pathStyle}
+  style={data?.edgeStyles}
 />
 
 <!-- 
