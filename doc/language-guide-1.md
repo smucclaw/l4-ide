@@ -1,10 +1,7 @@
-# L4 Language Guide
+# L4 Basics
 
 ## Introduction
 
-L4 is a domain-specific language for law.
-
-L4's language design optimizes for editability and learnability. Most uses of L4 involve _tweaking_ existing text rather than drafting from scratch. Accordingly, L4 can be learned by looking at existing code. You don't need to read this entire guide to be productive as a legal engineer, but it will help you understand the language's syntax and semantics.
 
 ## Basic Syntax
 
@@ -330,6 +327,12 @@ johnsAge MEANS john's age
 This is analogous to the use of a dot (`.`) used in most other languages for record accessors: `john.age` becomes `john's age`
 
 ## Advanced Features
+
+### Regulative Rules
+
+This document has introduced decision logic.
+
+How does L4 deal with regulative rules, which govern parties, actions, and deadlines? See [./regulative-proposal.org](regulative-proposal).
 
 ### Ditto Syntax
 
