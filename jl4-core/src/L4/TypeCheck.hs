@@ -350,7 +350,15 @@ inferDeclare (MkDeclare ann tysig appForm t) = do
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
     inferTypeAppForm' rappForm rtysig
     (rt, extend) <- inferTypeDecl rappForm t
-    pure (MkDeclare ann rtysig rappForm rt, extend)
+    extend
+    -- See Note [Adding type information to all binders]
+    declare <-
+        MkDeclare ann
+          <$> traverse resolvedType rtysig
+          <*> traverse resolvedType rappForm
+          <*> pure rt
+        >>= nlgDeclare
+    pure (declare, extend)
   extend
   pure rd
 
@@ -384,7 +392,13 @@ inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
             (view appFormArgs rappForm)
             (EnumDecl emptyAnno [])
           )
-    pure (MkAssume ann rtysig rappForm (Just (Type tann)), extend)
+    extend
+    -- See Note [Adding type information to all binders]
+    assume <-
+      traverse resolvedType (MkAssume ann rtysig rappForm (Just (Type tann)))
+        >>= nlgAssume
+
+    pure (assume, extend)
   extend
   pure rd
 inferAssume (MkAssume ann tysig appForm mt) = do
@@ -400,7 +414,16 @@ inferAssume (MkAssume ann tysig appForm mt) = do
         rt' <- inferType t
         expect (ExpectAssumeSignatureContext (rangeOf result)) result rt'
         pure (Just rt')
-    let rd = setAnnResolvedType rt (MkAssume ann rtysig rappForm rmt)
+
+    -- See Note [Adding type information to all binders]
+    assume <-
+      MkAssume ann
+        <$> traverse resolvedType rtysig
+        <*> traverse resolvedType rappForm
+        <*> pure rmt
+        >>= nlgAssume
+    let rd = setAnnResolvedType rt assume
+
     pure (rd, makeKnownMany (appFormHeads rappForm) ce)
   extend
   pure rd
@@ -482,12 +505,19 @@ inferDecide (MkDecide ann tysig appForm expr) = do
     (rappForm, rtysig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, rt, result) <- inferTermAppForm rappForm rtysig
     rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
-    let ann' = set annInfo (Just (TypeInfo rt)) ann
-    decide <- nlgDecide $ MkDecide ann' rtysig rappForm rexpr
+    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+
+    -- See Note [Adding type information to all binders]
+    decide <-
+      MkDecide ann'
+        <$> traverse resolvedType rtysig
+        <*> traverse resolvedType rappForm
+        <*> pure rexpr
+      >>= nlgDecide
+
     pure (decide, makeKnownMany (appFormHeads rappForm) ce)
   extend
   pure rd
-
 
 -- | We allow the following cases:
 --
@@ -600,17 +630,17 @@ ensureNameConsistency ns (MkOptionallyTypedName ann n (Just (Type tann)) : otns)
   pure (rns, MkOptionallyTypedName ann rn (Just (Type tann)) : rotns)
 ensureNameConsistency (n : ns) (otn : otns)
   | rawName n == rawName (getName otn) = do
-  rn <- def n
-  rotn <- mkref rn otn
-  (rns, rotns) <- ensureNameConsistency ns otns
-  pure (rn : rns, rotn : rotns)
+      rn <- def n
+      rotn <- mkref rn otn
+      (rns, rotns) <- ensureNameConsistency ns otns
+      pure (rn : rns, rotn : rotns)
   | otherwise = do
-  addError (InconsistentNameInAppForm n (Just (getName otn)))
-  addError (InconsistentNameInSignature (getName otn) (Just n))
-  rn <- def n
-  rotn <- mkref rn otn -- questionable, will point to wrong name!
-  (rns, rotns) <- ensureNameConsistency ns otns
-  pure (rn : rns, rotn : rotns)
+      addError (InconsistentNameInAppForm n (Just (getName otn)))
+      addError (InconsistentNameInSignature (getName otn) (Just n))
+      rn <- def n
+      rotn <- mkref rn otn -- questionable, will point to wrong name!
+      (rns, rotns) <- ensureNameConsistency ns otns
+      pure (rn : rns, rotn : rotns)
 ensureNameConsistency (n : ns) [] = do
   addError (InconsistentNameInAppForm n Nothing)
   rn <- def n
@@ -709,17 +739,25 @@ inferTypeDecl rappForm (SynonymDecl ann t) = do
   pure (td, makeKnownMany rs (kt td))
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, Check ())
-inferConDecl rappForm (MkConDecl ann n tns) = do
-  ensureDistinct NonDistinctSelectors (getName <$> tns)
-  dn <- def n
-  (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
-  let
-    conType = forall' (view appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
-    conInfo = KnownTerm conType Constructor
-  -- instantiated <- instantiate conType
-  -- trace (Text.unpack $ simpleprint conType) (pure ())
-  -- trace (Text.unpack $ simpleprint instantiated) (pure ())
-  pure (MkConDecl ann dn rtns, makeKnown dn conInfo >> sequence_ extends)
+inferConDecl rappForm (MkConDecl ann n tns) =
+  scope do
+    ensureDistinct NonDistinctSelectors (getName <$> tns)
+    dn <- def n
+    (rtns, extends) <- unzip <$> traverse (inferSelector rappForm) tns
+    let
+      conType = forall' (view appFormArgs rappForm) (fun (typedNameOptionallyNamedType <$> rtns) (appFormType rappForm))
+      conInfo = KnownTerm conType Constructor
+    makeKnown dn conInfo
+      >> sequence_ extends
+    -- instantiated <- instantiate conType
+    -- trace (Text.unpack $ simpleprint conType) (pure ())
+    -- trace (Text.unpack $ simpleprint instantiated) (pure ())
+    -- See Note [Adding type information to all binders]
+    condecl <-
+      MkConDecl ann
+        <$> resolvedType dn
+        <*> traverse (traverse resolvedType) rtns
+    pure (condecl, makeKnown dn conInfo >> sequence_ extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
 typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
@@ -752,10 +790,13 @@ inferType g = softprune $ scope $ do
     Forall ann ns t -> do
       ensureDistinct NonDistinctQuantifiers ns
       dns <- traverse def ns
-      rt <- scope $ do
+      (rdns, rt) <- scope $ do
         traverse_ (flip makeKnown KnownTypeVariable) dns
-        inferType t
-      pure (Forall ann dns rt)
+        rt <- inferType t
+        -- See Note [Adding type information to all binders]
+        rdns <- traverse resolvedType dns
+        pure (rdns, rt)
+      pure (Forall ann rdns rt)
     InfVar ann prefix i -> pure (InfVar ann prefix i)
 --    ParenType ann t -> do
 --      rt <- inferType t
@@ -1063,11 +1104,15 @@ inferExpr' g =
       t <- instantiate pt
       pure (Var ann r, t)
     Lam ann givens e -> do
-      (rgivens, rargts) <- inferLamGivens givens
+      (rgivens', rargts) <- inferLamGivens givens
       (re, te) <- inferExpr e
       -- We have to resolve NLG annotations now, as the 'Lam' brings new
       -- variables into scope.
       re2 <- nlgExpr re
+      -- See Note [Adding type information to all binders]
+      rgivens <-
+        traverse resolvedType rgivens'
+          >>= nlgGivenSig
       pure (Lam ann rgivens re2, fun_ rargts te)
     App ann n es -> do
       -- We want good type error messages. Therefore, we pursue the
@@ -1164,10 +1209,11 @@ checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = scope $ do
   (rpat, extend) <- checkPattern (ExpectPatternScrutineeContext scrutinee) pat tscrutinee
   extend
   re <- checkExpr ec e tresult
+  -- See Note [Adding type information to all binders]
   When ann
     -- We have to resolve NLG annotations now because
     -- bound variables are brought into scope.
-    <$> nlgPattern rpat
+    <$> (traverse resolvedType =<< nlgPattern rpat)
     <*> nlgExpr re
 checkBranch ec _scrutinee _tscrutinee tresult (Otherwise ann e) = do
   re <- checkExpr ec e tresult
@@ -1203,7 +1249,12 @@ inferPattern g@(PatCons ann p1 p2) = scope $ do
   (rp1, rt1, extend1) <- inferPattern p1
   let listType = list rt1
   (rp2, extend2) <- checkPattern ExpectConsArgument2Context p2 listType
-  pure (PatCons ann rp1 rp2, listType, extend1 >> extend2)
+
+  -- Allows us to hover over the 'FOLLOWED BY',
+  -- giving us a type signature.
+  let patCons = setAnnResolvedType listType $ PatCons ann rp1 rp2
+
+  pure (patCons, listType, extend1 >> extend2)
 
 inferPatternVar :: Anno -> Name -> Check (Pattern Resolved, Type' Resolved, Check ())
 inferPatternVar ann n = do
@@ -1791,3 +1842,33 @@ instance ApplySubst EntityInfo where
 
 instance ApplySubst CheckEntity where
   applySubst = traverseOf (gplate @(Type' Resolved)) applySubst
+
+-- Note [Adding type information to all binders]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- After typechecking, we add type information to the AST after
+-- type checking.
+--
+-- Similarly to the NLG annotations, we need to be careful to add the
+-- additional type information when the respective type information is
+-- actually available.
+-- For example, when new variables are brought into scope, consider:
+--
+-- @
+--   ...
+--   CONSIDER x
+--   WHEN y FOLLOWED BY ys THEN y
+--   OTHERWISE 0
+-- @
+--
+-- then the 'Resolved' @y@ is only in scope within the 'checkBranch' code,
+-- i.e. @THEN y@ part. Thus, we need to make sure to add type information
+-- to @y@ after we have typechecked the body of branch.
+--
+-- The same logic is applied to anything that brings a new binder into
+-- scope.
+-- As a rule of thumb, whenever we use 'scope' within the typechecker,
+-- some extra logic will need to be added.
+--
+-- Adding the type to the 'Resolved' will allow it to be collected into
+-- the 'InfoTree' during 'toInfoTree'.
