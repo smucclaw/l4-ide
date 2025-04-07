@@ -37,10 +37,7 @@ data TermKind =
 
 data CheckState =
   MkCheckState
-    { environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , errorContext :: !CheckErrorContext
-    , substitution :: !Substitution
+    { substitution :: !Substitution
     , supply       :: !Int
     }
   deriving stock (Eq, Generic, Show)
@@ -131,7 +128,15 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
-newtype CheckEnv = MkCheckEnv { moduleUri :: NormalizedUri }
+data CheckEnv =
+  MkCheckEnv
+    { moduleUri    :: !NormalizedUri
+    , environment  :: !Environment
+    , entityInfo   :: !EntityInfo
+    , errorContext :: !CheckErrorContext
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
 
 newtype Check a =
   MkCheck (CheckEnv -> CheckState -> [(With CheckErrorWithContext a, CheckState)])
@@ -162,11 +167,11 @@ runCheck' e s (MkCheck f) = f e s
 
 data CheckResult =
   MkCheckResult
-    { program      :: Module  Resolved
-    , errors       :: [CheckErrorWithContext]
-    , substitution :: Substitution
-    , environment  :: Environment
-    , entityInfo   :: EntityInfo
+    { program      :: !(Module  Resolved)
+    , errors       :: ![CheckErrorWithContext]
+    , substitution :: !Substitution
+    , environment  :: !Environment
+    , entityInfo   :: !EntityInfo
     }
   deriving stock (Eq, Show)
 
@@ -232,7 +237,7 @@ newUnique = do
 
 addError :: CheckError -> Check ()
 addError e = do
-  ctx <- use #errorContext
+  ctx <- asks (.errorContext)
   with (MkCheckErrorWithContext e ctx)
 
 choose :: [Check a] -> Check a
@@ -274,7 +279,7 @@ ambiguousType n xs = do
 
 resolvedType :: Resolved -> Check Resolved
 resolvedType n = do
-  ei <- use #entityInfo
+  ei <- asks (.entityInfo)
   case Map.lookup (getUnique n) ei of
     Nothing -> do
       -- TODO: there are cases where this situation is a clear bug.
@@ -290,8 +295,8 @@ resolvedType n = do
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment n = do
-  env <- use #environment
-  ei  <- use #entityInfo
+  env <- asks (.environment)
+  ei  <- asks (.entityInfo)
   let
     proc :: Unique -> Maybe (Unique, Name, CheckEntity)
     proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei

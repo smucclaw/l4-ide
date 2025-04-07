@@ -292,18 +292,23 @@ jl4Rules rootDirectory recorder = do
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
-          -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
-          { environment = Map.unionWith List.union cState.environment tcRes.environment
-          -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
-          -- same module. That means that the rhs of it should be identical.
-          , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.entityInfo tcRes.entityInfo
-          , substitution = tcRes.substitution
-          , errorContext = cState.errorContext
+          { substitution = tcRes.substitution
           , supply = cState.supply
           }
+        unionCheckEnv cEnv tcRes =
+          TypeCheck.MkCheckEnv
+            -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
+            { environment = Map.unionWith List.union cEnv.environment tcRes.environment
+            -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
+            -- same module. That means that the rhs of it should be identical.
+            , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cEnv.entityInfo tcRes.entityInfo
+            , errorContext = cEnv.errorContext
+            , moduleUri = cEnv.moduleUri
+            }
         -- NOTE: we don't want to leak the inference variables from the substitution
-        initial = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
-        result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
+        initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
+        initCheckEnv = foldl' unionCheckEnv (TypeCheck.initialCheckEnv uri) dependencies
+        result = TypeCheck.doCheckProgramWithDependencies initCheckState initCheckEnv parsed
         (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
