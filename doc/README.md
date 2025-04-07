@@ -1,9 +1,7 @@
 # L4 Language Reference
 
-
-## Semantics
-
-L4 is designed for isomorphic formalization of the better part of most legal documents.
+L4 is designed for isomorphic formalization of the better part of most
+legal documents. This guide springboards from common legal idioms.
 
 ## Basic data types: true/false, numbers, strings, and records
 
@@ -11,13 +9,12 @@ Laws and contracts frequently must reduce shades of grey to a black
 and white decision. Think "bright line" tests. In L4, **Boolean
 logic** is used to work with those black-and-white, Yes/No, True/False
 values. These values are combined using the operators `AND`, `OR`,
-`NOT`, `ANY`, `ALL`. (See: Boolean logic)
+`NOT`, `ANY`, `ALL`. (See: [Boolean logic](./10-boolean-logic.md))
 
 Besides "yes" or "no" values, one often has to deal with numbers,
 strings, enums, or a combination of these basic **types**. L4's
 **data modelling** syntax offers familiar record and OOP-class syntax for
-representing reality, backed by static type inference. (See: data
-types)
+representing reality, backed by static type inference. (See: [Basic Data Types](./10-data-types.md))
 
 Sometimes the "yes" or "no" is not known, or does not apply. L4's
 **ternary logic** extends Boolean logic with "unknown" or "null"
@@ -26,7 +23,7 @@ mode of evaluation which treats "unknown" values as "false". This is
 useful to represent ideas like "innocent until proven guilty". *Is
 someone guilty? So far, "unknown"; then for now, we'll take that as a
 "no".* (The general mechanism for representing unknown values works
-for Boolean types and other types too. See: algebraic data types)
+for Boolean types and other types too. See: [algebraic data types](./30-algebraic-types.md))
 
 L4 also offers **libraries** for notions of person, place, time,
 currency, and so on. (See: modules and libraries)
@@ -36,23 +33,24 @@ about natural persons, over the age of majority, with mental capacity.
 L4 allows optional **default values** on terms to reflect such
 assumptions. L4 can make these assumptions explicit, but also save
 end-users the trouble of clicking those checkboxes by hand each time;
-the boxes will be pre-filled. (See: default values)
+the boxes will be pre-filled. (See: [default values](./default-values.md))
 
 **Default logic** allows the concise expression of special cases and
 default values. Most of the time, weekday rules apply, but weekends
-could be a special case. (See: default logic)
+could be a special case. (See: [default logic](./default-logic.md))
 
 Building on the above foundation, L4 supports **constitutive rules**
 by way of **predicate logic**, or **first-order logic**: you can
-express **institutional facts** as a **decision** as to whether an "X"
-counts as a "Y" for purposes "Z". To assist in comprension, L4 offers
-a visualizer for decision logic. (See: decision logic)
+express **institutional facts** as a **decision function** as to
+whether an "X" counts as a "Y" for purposes "Z". To assist in
+comprension, L4 offers a visualizer for decision logic. (See:
+[functions](./25-functions.md))
 
 As many decisions involve time, L4 offers syntactic sugar to express
 ideas like, "according to the version of the **legislation in effect
 at time L**, as **the facts were known at time F** and as **the law
 was understood at time U**, would a baby **born at time B** have been
-considered a British citizen?" (See: temporals)
+considered a British citizen?" (See: [temporals](./multitemporals.md))
 
 Contracts involve multiple parties who perform certain actions, like
 making payment and delivering goods, by certain deadlines. For every
@@ -61,22 +59,22 @@ contracts describe both the desired scenarios and the mechanisms of
 reparation. L4 uses **labeled transition systems** to represent these
 moving parts. Conversion to Petri Nets, Non-deterministic Finite
 Automata, finite state machines, BPMN diagrams, and the like are
-supported by the L4 toolchain. (See: regulative rules)
+supported by the L4 toolchain. (See: [./regulative-proposal.org](regulative-proposal))
 
 Legislation and regulation can be thought of a special kind of rule
-where every qualifying person is a party to the rules. (See: the `WHO` keyword)
+where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
 
 Legal texts are structured into act, chapter, part, section,
 paragraph, sub-paragraph, and so on. **Defined terms** are **scoped**
 according to those structures. L4 offers mechanisms for representing
-writing like, "for the purposes of sections 1 and 3, a tomato means
-..." (See: scope)
+writing like, "for the purposes of **sections** 1 and 3, a tomato means
+..." (See: [scope](./scope.md))
 
 Scopes often interact according to notions of priority and
 transformation. "**Notwithstanding**" and "**despite**" are used in legal
 writing, and in L4, to establish priorities between sections. One
 section can also be "**subject to**" another. This relation is
-surprisingly complex to unpack. (See: meta-rules)
+surprisingly complex to unpack. (See: [meta-rules](./modifiers.md))
 
 Legal writing frequently uses modals like "must" and "may", in deontic
 and non-deontic senses (typically, alethic, but also qualifying).
@@ -94,21 +92,25 @@ standard to complement the more frequently seen **decision tree**.
 legal drafters quickly gain confidence that drafting and negotiation
 activity have not inadvertently broken anything. (See: tests)
 
-## Constitutive Rules using Decision Logic
+Roadmap: see the Github Issues and the [Future Features](./future-features.md) document.
 
-## Regulative Rules using a Labeled State Transition System
+## IDE support
 
-## Deontics as Assertions
+Legal drafters may also appreciate VS Code's native "jump to definition" and "jump to references" features, available with a right-click on an expression of interest.
 
-## Temporal Logic
+## See Also
 
-## Metaprogramming
+- [Design Principles](./principles.md)
 
-## Design Principles
-
-
-
-## Related Languages
-
+- Related Languages
+  - Catala
+  - FormaLex
+  - CSL
+  - SCL
+  - Symboleo
+  - Stipula
+  - Logical English
+  - AustLii / DataLex
+  
 
 
