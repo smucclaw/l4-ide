@@ -330,7 +330,7 @@ will go through the LadderGraphLirNode.
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
   #originalExpr: IRExpr
-  #vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>
+  #vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
@@ -342,24 +342,25 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
-    vizExprToLirEnv: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
-    this.#vizExprToLirEnv = vizExprToLirEnv
+    this.#vizExprToLir = vizExprToLir
 
     // Make the initial args / assignment
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       isBoolVarLirNode
     )
-    const initialAssignment: Array<BoolVal> = []
-    varNodes.forEach((varN) => {
-      const uniq = varN.getUnique(nodeInfo.context)
-      initialAssignment[uniq] = varN.getValue(nodeInfo.context)
-    })
-    this.#bindings = new Assignment(initialAssignment)
+    const initialAssignmentAssocList: Array<[Unique, Value]> = varNodes.map(
+      (varN) => [
+        varN.getUnique(nodeInfo.context),
+        varN.getValue(nodeInfo.context),
+      ]
+    )
+    this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
 
     // Make the initial corefs
     const initialCoreferents: Array<Set<LirId>> = []
@@ -376,8 +377,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.doEvalLadderExprWithVarBindings(nodeInfo.context)
   }
 
-  getvizExprToLirEnv() {
-    return this.#vizExprToLirEnv
+  getVizExprToLir() {
+    return this.#vizExprToLir
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
@@ -522,7 +523,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     console.log('whatif eval result: ', result)
   }
 
-  /** This sets off the 'compound logic' */
+  /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
   submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: Value }
