@@ -10,7 +10,7 @@ import type {
 } from '$lib/layout-ir/core.js'
 import type {
   DeclLirNode,
-  PathsListLirNode,
+  ValidPathsListLirNode,
 } from '$lib/layout-ir/ladder-lir.svelte.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import * as SF from '@xyflow/svelte'
@@ -49,7 +49,7 @@ export interface BaseLadderFlowDisplayerProps extends DisplayerProps {
 }
 
 export interface PathListDisplayerProps extends DisplayerProps {
-  node: PathsListLirNode
+  node: ValidPathsListLirNode
 }
 
 /************************************************
