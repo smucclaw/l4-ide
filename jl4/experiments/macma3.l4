@@ -82,6 +82,47 @@ ASSUME `is a foreign confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
 ASSUME `is instrumentality forfeiture order` IS A FUNCTION FROM Order TO BOOLEAN
 ASSUME `is a Singapore confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
 
+-- “foreign confiscation order” —
+-- (a)	means an order made by a court or other competent authority of a foreign country, on or after the appointed date for that country, for the recovery, forfeiture or confiscation of —
+-- (i)	any property obtained or received in connection with an offence against the law of that country, or the value of that property; or
+-- (ii)	any property derived or realised, directly or indirectly, from any property mentioned in sub‑paragraph (i), or the value of the derived or realised property; and
+-- (b)	includes an instrumentality forfeiture order;
+ASSUME `made by court or competent authority of foreign country` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `on appointed date for that country` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `after appointed date` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `for recovery` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `forfeiture` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `confiscation` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `any property obtained in connection with an offence against the law of that country` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `received in connection with such an offence` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `the value of that property` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `any property derived from any property` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `realised from any property mentioned` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `derived directly` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `derived indirectly` IS A FUNCTION FROM Order TO BOOLEAN
+ASSUME `instrumentality forfeiture order` IS A FUNCTION FROM Order TO BOOLEAN
+-- this is very tedious to do: should I be doing it as a WHERE instead?
+-- also, as you can see below, many intra-provision references, how do I model this?
+-- Given the number of condition branches in this particular definition provision, I'm glad for the visualizer.
+
+GIVEN o IS A Order
+GIVETH A BOOLEAN
+DECIDE `is a foreign confiscation order` IS
+        `made by court or competent authority of foreign country` o
+        AND `on appointed date for that country` o
+            OR `after appointed date` o
+        AND `for recovery` o
+            OR `forfeiture` o
+            OR `confiscation` o
+        AND `any property obtained in connection with an offence against the law of that country` o
+            OR `received in connection with such an offence` o
+            OR `the value of that property` o
+            OR `any property derived from any property` o
+                OR `realised from any property mentioned` o -- how do I model sub-paragraph references?
+            AND `derived directly` o
+                OR `derived indirectly` o
+        OR `instrumentality forfeiture order` o
+
 ASSUME Country IS A TYPE
 ASSUME Certificate IS A TYPE
 ASSUME `is a foreign law immunity certificate` IS A FUNCTION FROM Certificate TO BOOLEAN
@@ -107,6 +148,7 @@ ASSUME Client IS A TYPE
 ASSUME Lawyer IS A TYPE
 ASSUME JudicialPerson IS A TYPE
 ASSUME Court IS A TYPE
+ASSUME Property IS A TYPE
 
 ASSUME LegalDefinition IS A TYPE
 
@@ -302,3 +344,61 @@ DECIDE `is a reference to the law of a foreign country` IS
 -- Very lengthy definition of "item subject to legal privilege"
 -- Object of the Act - how should I model this?
 -- Clarificatory provisions vis-a-vis cooperation with international organisations and extradition
+
+-- March 2025 updates
+
+ -- define a separate type for Authority, which is distinct from Organisation or Person?
+ASSUME `authority of foreign country` IS A FUNCTION FROM Organisation TO BOOLEAN
+ASSUME `competent under laws of that country` IS A FUNCTION FROM Organisation TO BOOLEAN
+ASSUME `in relation to a foreign confiscation order` IS A FUNCTION FROM Order TO BOOLEAN
+
+-- “competent authority”, in relation to a foreign confiscation order, means an authority of a foreign country that is competent under the laws of that foreign country to make the foreign confiscation order;
+GIVEN compAuth IS AN Organisation
+      m IS AN Order
+GIVETH A BOOLEAN
+DECIDE `competent authority` IS
+      `authority of foreign country` compAuth
+      AND `competent under laws of that country` compAuth
+      AND `in relation to a foreign confiscation order` m
+
+-- “defendant” means a person against whom, or in relation to whose property, a foreign confiscation order is or may be made;
+
+ASSUME `person against whom` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `in relation to whose property` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `a foreign confiscation order has been made` IS A FUNCTION FROM Order TO BOOLEAN
+
+
+GIVEN d IS A Person
+      m IS AN Order
+      p IS A Property
+GIVETH A BOOLEAN
+DECIDE `defendant` IS
+      `person against whom` d
+      OR `in relation to whose property` d
+      AND `a foreign confiscation order has been made` m -- Should I model the 'active' element of this?
+
+-- “drug dealing offence” means —
+-- (a)	any offence (being an offence against the law of Singapore) specified in the First Schedule;
+-- (b)	conspiracy to commit any such offence;
+-- (c)	inciting another to commit any such offence;
+-- (d)	attempting to commit any such offence; or
+-- (e)	aiding, abetting, counselling or procuring the commission of any such offence;
+
+ASSUME `any Singapore offence specified in First Schedule` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `conspiracy to commit any such offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `inciting another to commit any such offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `attempting to commit any such offence` IS A FUNCTION FROM Offence TO BOOLEAN
+ASSUME `aiding, abetting, counselling or procuring the commission of any such offence` IS A FUNCTION FROM Offence TO BOOLEAN
+
+GIVEN d IS AN Offence
+GIVETH A BOOLEAN
+DECIDE `is drug dealing offence` IS
+      `any Singapore offence specified in First Schedule` d -- how to I model reference to a Schedule?
+      OR `conspiracy to commit any such offence` d -- how do I model something that derives from the offence above?
+      OR `inciting another to commit any such offence` d
+      OR `attempting to commit any such offence` d
+      OR `aiding, abetting, counselling or procuring the commission of any such offence` d
+
+-- https://sso.agc.gov.sg/Act/MACMA2000?WholeDoc=1#Sc1-
+-- FIRST SCHEDULE -> HOW DO I MODEL THIS?
+
