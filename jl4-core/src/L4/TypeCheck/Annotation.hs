@@ -32,8 +32,11 @@ resolveNlgAnnotationInResolved :: Resolved -> Check Resolved
 resolveNlgAnnotationInResolved = \case
   Def uniq name -> do
     Def uniq <$> resolveNlgAnnotation name
-  Ref refName uniq origName -> do
-    Ref refName uniq <$> resolveNlgAnnotation origName
+  Ref refName uniq origName ->
+    Ref
+      <$> resolveNlgAnnotation refName
+      <*> pure uniq
+      <*> pure origName
   OutOfScope uniq origName -> do
     OutOfScope uniq <$> resolveNlgAnnotation origName
 
@@ -237,3 +240,35 @@ nlgOptionallyTypedName (MkOptionallyTypedName ann n mty) =
   MkOptionallyTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> traverse nlgType mty
+
+nlgDeclare :: Declare Resolved -> Check (Declare Resolved)
+nlgDeclare (MkDeclare ann tysig appForm tydecl) =
+  MkDeclare ann
+    <$> nlgTypeSig tysig
+    <*> nlgAppForm appForm
+    <*> nlgTypeDecl tydecl
+
+nlgTypeDecl :: TypeDecl Resolved -> Check (TypeDecl Resolved)
+nlgTypeDecl = \case
+  RecordDecl ann mName typedNames ->
+    RecordDecl ann
+      <$> traverse resolveNlgAnnotationInResolved mName
+      <*> traverse nlgTypedName typedNames
+  EnumDecl ann condecls->
+    EnumDecl ann
+      <$> traverse nlgConDecl condecls
+  SynonymDecl ann ty->
+    SynonymDecl ann
+      <$> nlgType ty
+
+nlgConDecl :: ConDecl Resolved -> Check (ConDecl Resolved)
+nlgConDecl (MkConDecl ann n typedName) =
+  MkConDecl ann
+    <$> resolveNlgAnnotationInResolved n
+    <*> traverse nlgTypedName typedName
+
+nlgTypedName :: TypedName Resolved -> Check (TypedName Resolved)
+nlgTypedName (MkTypedName ann n ty) =
+  MkTypedName ann
+    <$> resolveNlgAnnotationInResolved n
+    <*> nlgType ty

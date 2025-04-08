@@ -181,7 +181,14 @@ nlgAnnotationP = do
 
 nameRefP :: Parser (NlgFragment Name)
 nameRefP = do
-  (open, n, close) <- P.between (hidden $ spacedToken_ TPercent) (spacedToken_ TPercent) name
+  (open, n, close) <- P.between
+    (hidden $ spacedToken_ TPercent)
+    -- We don't want to consume trailing whitespace, because we would need to "reproduce"
+    -- the whitespace during natural language generation. Otherwise, the text looks scuffed.
+    -- Thus, only parse the 'TPercent' here, and let the 'textFragment' parser
+    -- take care of any leading whitespace.
+    (plainToken_ TPercent)
+    name
   attachAnno $
     MkNlgRef emptyAnno
       <$  annoLexeme (pure open)
@@ -269,6 +276,10 @@ plainToken tt = do
   token
     (\ t -> if computedPayload t == tt then Just t else Nothing)
     (Set.singleton (Tokens (L.trivialToken uri tt :| [])))
+
+plainToken_ :: TokenType -> Parser (Lexeme PosToken)
+plainToken_ tt =
+  mkLexeme [] <$> plainToken tt
 
 spacedToken_ :: TokenType -> Parser (Lexeme PosToken)
 spacedToken_ tt =
