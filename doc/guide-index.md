@@ -1,6 +1,5 @@
 # L4
 
-
 ### Natural Language Generation (NLG)
 
 NLG annotations can be added to sections and other constructs.
@@ -20,7 +19,6 @@ ASSUME foo IS A STRING
 ```
 
 ## Examples
-
 
 ### Example 2: Type Declarations
 
@@ -57,7 +55,6 @@ DECIDE fibNaive n IS
 
 ## IDE Affordances
 
-
 ### Jump To Definition and References
 
 Legal drafters may also appreciate VS Code's native "jump to definition" and "jump to references" features, available with a right-click on an expression of interest.
@@ -83,7 +80,6 @@ Transpilation to automatic web app generation.
 Set-theoretic syntax for UNION and INTERSECT. Sometimes set-and means logical-or.
 
 WHEN should not be needed at each line in a CONSIDER.
-
 
 ## Conclusion
 

@@ -8,8 +8,8 @@ PARTY  p IS A Person
    DO  Action
 HENCE  alpha
  LEST  beta
- ```
- 
+```
+
 The `WHO` keyword quantifies over the actors:
 
 ```
@@ -18,6 +18,4 @@ EVERY  Person p
    DO  Action
 HENCE  alpha
  LEST  beta
- ```
- 
- 
+```

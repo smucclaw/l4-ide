@@ -6,7 +6,7 @@ regulations.
 
 L4 is intended to be largely written by machine, but reviewed and revised by humans.
 
-LLM AIs are used to *ingest* existing legal documents into L4. The
+LLM AIs are used to _ingest_ existing legal documents into L4. The
 logical constructs used in L4 are familiar from the world of
 programming, and experiments have shown that LLM AIs (trained for
 "instruct" mode operation) are capable of writing L4 code.

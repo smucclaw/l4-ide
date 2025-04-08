@@ -1,13 +1,11 @@
 # Basic Data Types
 
 L4's basic data types are
+
 - Booleans
 - strings
 - numbers
 - records
-
-
-
 
 ## Booleans
 
@@ -17,14 +15,11 @@ L4's Boolean values are `TRUE` and `FALSE`.
 
 Strings are quoted using double-quotes: `"Alice Avocado"` is a string.
 
-
 ## Numbers
 
 L4 does not currently distinguish between integers and floats.
 
 # User-Defined Types
-
-
 
 ## Enumerations, or Enums
 
@@ -37,7 +32,6 @@ DECLARE Colour IS ONE OF red
 ```
 
 If you try to use `purple` as a `Colour`, it will be rejected.
-
 
 ### Destructuring with CONSIDER
 
@@ -72,7 +66,6 @@ This creates aliases from a user-defined type to a native type.
 Complex types like Dates, Entities, Money, and Places are provided in the standard library.
 
 L4 also supports algebraic types, of which more later.
-
 
 ### Records
 
@@ -128,7 +121,6 @@ johnsAge MEANS john's age
 
 This is analogous to the use of a dot (`.`) used in most other languages for record accessors: `john.age` becomes `john's age`
 
-
 ## Advanced Concepts
 
 More on these later.
@@ -142,5 +134,3 @@ ASSUME foo IS A NUMBER
 ASSUME foo IS A BOOLEAN
 ASSUME foo IS A STRING
 ```
-
-

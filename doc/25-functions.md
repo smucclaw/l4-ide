@@ -16,7 +16,6 @@ functions that take no arguments. They are "defined terms".
 
 Usually, functions do take arguments...
 
-
 ## Decision Function Example with GIVEN, GIVETH, DECIDE/IS, MEANS
 
 Perhaps we have three kinds of fruit in our grocery bag, and some more already in a bowl on the table.
@@ -95,7 +94,6 @@ We can relegate it to a coda at the end of the function definition:
 
 This is a common pattern.
 
-
 ## Conditional Expressions
 
 Conditionals are written using the `IF`, `THEN`, and `ELSE` keywords.
@@ -161,7 +159,6 @@ DECIDE fibNaive n IS
 
 #EVAL fibNaive 20
 ```
-
 
 ### #EVAL and #CHECK
 

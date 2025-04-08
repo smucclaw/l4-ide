@@ -23,6 +23,3 @@ primes MEANS LIST 2
                   7
                   11
 ```
-
-
-

@@ -1,6 +1,5 @@
 # Basic Syntax
 
-
 ## Identifiers
 
 Identifiers, such as function names and record attributes, are quoted using backticks. Where other programming languages might use `camelCase` or `snake_case`, L4 allows the use of `` `space separated words` `` to form a single identifier.
@@ -28,7 +27,6 @@ Annotations can be added to sections and other constructs.
 § `Section Head` [NLG annotation to section names are valid.]
 ```
 
-
 ## References
 
 References can be added to various constructs using the `@`
@@ -39,15 +37,11 @@ symbol. Typically they are used to cite original sources.
 @ref url https://...
 ```
 
-
-
-
 ## Indentation in Expressions
 
 Like most languages, L4 supports the use of `( parentheses )` for grouping, and `,` commas as a list separator.
 
 Unlike most languages, L4 encourages the use of indentation for grouping, and newlines as a list separator.
-
 
 In a conventional language, parentheses are used to group boolean and arithmetic expressions:
 
@@ -79,7 +73,6 @@ DECIDE `numbers are big`
 
 This method of grouping was inspired by legal sub-paragraphs and sub-lists. The main difference is in where the "OR" and "AND" words appear.
 
-
 ## Ditto Syntax
 
 Strunk & White said: "Omit needless words". Edward Tufte talked about "data-ink".
@@ -91,8 +84,6 @@ expressions that would otherwise be over-noised with boilerplate.
 Linguistically, this reads as an example of "conjunction reduction",
 or "ellipsis". We use a caret instead of a literal ellipsis ("...").
 
-
 ## AKA
 
 Aliases can be created inline by inserting an `AKA xxx` after an expression.
-

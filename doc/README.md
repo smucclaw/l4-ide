@@ -20,9 +20,9 @@ Sometimes the "yes" or "no" is not known, or does not apply. L4's
 **ternary logic** extends Boolean logic with "unknown" or "null"
 values to handle those situations. L4 supports a "negation as failure"
 mode of evaluation which treats "unknown" values as "false". This is
-useful to represent ideas like "innocent until proven guilty". *Is
+useful to represent ideas like "innocent until proven guilty". _Is
 someone guilty? So far, "unknown"; then for now, we'll take that as a
-"no".* (The general mechanism for representing unknown values works
+"no"._ (The general mechanism for representing unknown values works
 for Boolean types and other types too. See: [algebraic data types](./30-algebraic-types.md))
 
 L4 also offers **libraries** for notions of person, place, time,
@@ -111,6 +111,3 @@ Legal drafters may also appreciate VS Code's native "jump to definition" and "ju
   - Stipula
   - Logical English
   - AustLii / DataLex
-  
-
-

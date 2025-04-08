@@ -15,5 +15,3 @@ Transpilation to automatic web app generation.
 Set-theoretic syntax for UNION and INTERSECT. Sometimes set-and means logical-or.
 
 WHEN should not be needed at each line in a CONSIDER.
-
-
