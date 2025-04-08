@@ -109,7 +109,6 @@ export interface BundlingNodeDisplayerProps {
 
 // Node data
 
-// TODO: Not sure we need this after all
 export interface LadderSFNodeData {
   context: LirContext
   originalLirId: LirId
