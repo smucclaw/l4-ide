@@ -7,7 +7,7 @@ import {
   isFalseVal,
   isBoolVal,
 } from './type.js'
-import { Assignment } from './environment.js'
+import { Assignment } from './assignment.js'
 import { match } from 'ts-pattern'
 
 /**********************************************************

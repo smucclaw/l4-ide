@@ -8,7 +8,7 @@ import {
   veExprToEvExpr,
 } from '../eval/type.js'
 import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
-import { Assignment, Corefs } from '../eval/environment.js'
+import { Assignment, Corefs } from '../eval/assignment.js'
 import { Evaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
