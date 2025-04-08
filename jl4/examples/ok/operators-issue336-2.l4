@@ -1,0 +1,32 @@
+example1 MEANS
+      TRUE
+  AND FALSE
+  AND    FALSE
+      OR TRUE
+
+example2 MEANS
+      TRUE
+  AND FALSE
+  AND FALSE OR TRUE
+
+-- this was a previous incorrect parsing of example2
+example2a MEANS
+  TRUE AND (FALSE AND FALSE OR TRUE)
+
+#EVAL example1  -- should yield FALSE
+#EVAL example2  -- should yield FALSE TRUE (incorrectly)
+#EVAL example2a -- should yield TRUE
+
+example3 MEANS
+    1
+  * 0
+  *   0
+    + 1
+
+example4 MEANS
+    1
+  * 0
+  * 0 + 1
+
+#EVAL example3 -- yields 0
+#EVAL example4 -- yields 0
