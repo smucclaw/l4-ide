@@ -5,8 +5,8 @@ import {
   emptyEdgeLabel,
   DefaultEdgeAttributes,
   DirectedEdge,
-  EdgeStyles,
-  HighlightedEdgeStyleElement,
+  EdgeStylesContainer,
+  HighlightedEdgeStyle,
 } from '../lib/algebraic-graphs/edge.js'
 import { NumberWrapper } from './number-wrapper.js'
 
@@ -14,7 +14,7 @@ describe('Edge Attributes - DefaultEdgeAttributes', () => {
   test('DefaultEdgeAttributes have fallback / default styles and empty label', () => {
     const attrs = new DefaultEdgeAttributes()
     expect(attrs.getStyles().getCombinedStyleString()).toBe(
-      EdgeStyles.make().getCombinedStyleString()
+      new EdgeStylesContainer().getCombinedStyleString()
     )
     expect(attrs.getLabel()).toBe(emptyEdgeLabel)
   })
@@ -28,7 +28,7 @@ describe('Edge Attributes - Setting and Getting', () => {
 
     // Create some attributes
     const edgeAttrs = new DefaultEdgeAttributes(
-      EdgeStyles.make(new HighlightedEdgeStyleElement()),
+      new EdgeStylesContainer(HighlightedEdgeStyle),
       'Test Edge'
     )
 
@@ -40,7 +40,7 @@ describe('Edge Attributes - Setting and Getting', () => {
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
     expect(retrievedAttrs.getStyles().getCombinedStyleString()).toBe(
-      new HighlightedEdgeStyleElement().getStyleString()
+      new EdgeStylesContainer(HighlightedEdgeStyle).getCombinedStyleString()
     )
   })
 
@@ -63,8 +63,8 @@ describe('Edge Attributes - Setting and Getting', () => {
 
 describe('Edge Attributes - Merging', () => {
   test('Merging edge attributes', () => {
-    const styles1 = EdgeStyles.make()
-    const styles2 = EdgeStyles.make(new HighlightedEdgeStyleElement())
+    const styles1 = new EdgeStylesContainer()
+    const styles2 = new EdgeStylesContainer(HighlightedEdgeStyle)
 
     const attrs1 = new DefaultEdgeAttributes(styles1, 'Label1')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -78,8 +78,8 @@ describe('Edge Attributes - Merging', () => {
   })
 
   test('Merging edge attributes when one is empty', () => {
-    const styles1 = EdgeStyles.make()
-    const styles2 = EdgeStyles.make(new HighlightedEdgeStyleElement())
+    const styles1 = new EdgeStylesContainer()
+    const styles2 = new EdgeStylesContainer(HighlightedEdgeStyle)
 
     const attrs1 = new DefaultEdgeAttributes(styles1, '')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -107,7 +107,7 @@ describe('Edge Attributes - Graph Operations', () => {
 
     const g2 = vertex(nw1).connect(vertex(nw2))
     const attr2 = new DefaultEdgeAttributes(
-      EdgeStyles.make(new HighlightedEdgeStyleElement()),
+      new EdgeStylesContainer(HighlightedEdgeStyle),
       'Label2'
     )
     g2.setEdgeAttributes(edge, attr2)
@@ -158,13 +158,13 @@ describe('Edge Attributes - Graph Operations', () => {
     const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
-    const attr1 = new DefaultEdgeAttributes(EdgeStyles.make(), 'Label1')
+    const attr1 = new DefaultEdgeAttributes(new EdgeStylesContainer(), 'Label1')
     g1.setEdgeAttributes(edge, attr1)
 
     // Create g2 with edge nw1 -> nw2, set attribute attr2
     const g2 = vertex(nw1).connect(vertex(nw2))
     const attr2 = new DefaultEdgeAttributes(
-      EdgeStyles.make(new HighlightedEdgeStyleElement())
+      new EdgeStylesContainer(HighlightedEdgeStyle)
     )
     g2.setEdgeAttributes(edge, attr2)
 

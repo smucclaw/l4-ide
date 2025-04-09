@@ -29,9 +29,7 @@ import {
 import {
   type Edge,
   DirectedEdge,
-  type EdgeStyleElement,
-  HighlightedEdgeStyleElement,
-  type EdgeStyles,
+  type EdgeStylesContainer,
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
 import type {
@@ -447,7 +445,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   getEdgeStyles<T extends Edge<LirId>>(
     _context: LirContext,
     edge: T
-  ): EdgeStyles {
+  ): EdgeStylesContainer {
     return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
