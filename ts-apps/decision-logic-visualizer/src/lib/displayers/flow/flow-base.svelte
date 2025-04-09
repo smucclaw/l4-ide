@@ -318,7 +318,10 @@ Misc SF UI TODOs:
 <div class="overall-container">
   <h1>{declLirNode.getFunName(context)}</h1>
   <h2>{resultMessage}</h2>
-  <div class="flow-container transition-opacity" style={`opacity: ${flowOpacity}`}>
+  <div
+    class="flow-container transition-opacity"
+    style={`opacity: ${flowOpacity}`}
+  >
     <SvelteFlow
       bind:nodes={NODES}
       bind:edges={EDGES}
