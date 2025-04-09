@@ -98,6 +98,7 @@ export function ladderLirNodeToSfNode(
   const defaultData = {
     context,
     originalLirId: node.getId(),
+    classes: [],
   }
 
   return match(node)
@@ -126,21 +127,21 @@ export function ladderLirNodeToSfNode(
       return {
         ...defaults,
         type: sourceNoAnnoNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.when(isSourceWithOrAnnoLirNode), (n: SourceWithOrAnnoLirNode) => {
       return {
         ...defaults,
         type: sourceWithOrAnnoNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .exhaustive()
