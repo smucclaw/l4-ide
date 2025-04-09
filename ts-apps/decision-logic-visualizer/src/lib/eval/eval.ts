@@ -1,11 +1,19 @@
-import type { Value, BoolVal, Expr, EVBoolVar, Not, Or, And } from './type.js'
+import type {
+  Value,
+  UBoolValue,
+  Expr,
+  EVBoolVar,
+  Not,
+  Or,
+  And,
+} from './type.js'
 import {
   TrueVal,
   FalseVal,
   UnknownVal,
   isTrueVal,
   isFalseVal,
-  isBoolVal,
+  isUBoolValue,
 } from './type.js'
 import { Assignment } from './assignment.js'
 import { match } from 'ts-pattern'
@@ -53,11 +61,11 @@ function eval_(ladder: Expr, assignment: Assignment): Value {
   return match(ladder)
     .with(
       { $type: 'BoolVar' },
-      (expr: EVBoolVar) => assignment.get(expr.name.unique) as BoolVal
+      (expr: EVBoolVar) => assignment.get(expr.name.unique) as UBoolValue
     )
     .with({ $type: 'Not' }, (expr: Not) => {
       const negandV = eval_(expr.negand, assignment)
-      if (!isBoolVal(negandV)) {
+      if (!isUBoolValue(negandV)) {
         throw new Error('Expected the negajnd to eval to a BoolVal')
       }
       return match(negandV)
@@ -81,7 +89,7 @@ function eval_(ladder: Expr, assignment: Assignment): Value {
       AndChain, OrChain
 ****************************/
 
-function evalAndChain(bools: BoolVal[]) {
+function evalAndChain(bools: UBoolValue[]) {
   if (bools.some(isFalseVal)) {
     return new FalseVal()
   }
@@ -91,7 +99,7 @@ function evalAndChain(bools: BoolVal[]) {
   return new UnknownVal()
 }
 
-function evalOrChain(bools: BoolVal[]) {
+function evalOrChain(bools: UBoolValue[]) {
   if (bools.some(isTrueVal)) {
     return new TrueVal()
   }

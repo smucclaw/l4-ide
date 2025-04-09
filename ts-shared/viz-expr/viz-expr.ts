@@ -156,6 +156,7 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
+/** For the original Viz / IRExpr */
 export type BoolValue = 'False' | 'True' | 'Unknown'
 
 export interface BoolVar extends IRNode {

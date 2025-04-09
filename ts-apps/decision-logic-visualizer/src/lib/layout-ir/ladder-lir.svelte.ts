@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   type Value,
-  type BoolVal,
+  type UBoolValue,
   TrueVal,
   FalseVal,
   UnknownVal,
@@ -646,7 +646,7 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   /** The value here is used only for UI purposes
    * The actual evaluation uses a different data structure (that is nevertheless kept
    * in sync with what values are stored on the VarLirNodes) */
-  #value: BoolVal
+  #value: UBoolValue
   #name: Name
 
   constructor(
@@ -675,11 +675,11 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return { name: this.#name, value: this.#value }
   }
 
-  getValue(_context: LirContext): BoolVal {
+  getValue(_context: LirContext): UBoolValue {
     return this.#value
   }
 
-  _setValue(_context: LirContext, value: BoolVal) {
+  _setValue(_context: LirContext, value: UBoolValue) {
     this.#value = value
   }
 

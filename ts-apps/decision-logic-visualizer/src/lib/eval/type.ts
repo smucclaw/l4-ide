@@ -6,11 +6,10 @@ import * as VE from '@repo/viz-expr'
           Value
 *********************************/
 
-export type Value = BoolVal
+export type Value = UBoolValue
 
-export type BoolVal = TrueVal | FalseVal | UnknownVal
-
-export function isBoolVal(val: Value): val is BoolVal {
+export type UBoolValue = TrueVal | FalseVal | UnknownVal
+export function isUBoolValue(val: Value): val is UBoolValue {
   return (
     val.$type === 'TrueVal' ||
     val.$type === 'FalseVal' ||
@@ -18,21 +17,21 @@ export function isBoolVal(val: Value): val is BoolVal {
   )
 }
 
-interface BoolV {
+interface UBoolV {
   $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
   getClasses(): string[]
   toPretty(): string
 }
 
-export function isTrueVal(val: BoolVal): val is TrueVal {
+export function isTrueVal(val: UBoolValue): val is TrueVal {
   return val.$type === 'TrueVal'
 }
 
-export function isFalseVal(val: BoolVal): val is FalseVal {
+export function isFalseVal(val: UBoolValue): val is FalseVal {
   return val.$type === 'FalseVal'
 }
 
-export class TrueVal implements BoolV {
+export class TrueVal implements UBoolV {
   $type: 'TrueVal' = 'TrueVal' as const
   constructor() {}
 
@@ -45,7 +44,7 @@ export class TrueVal implements BoolV {
   }
 }
 
-export class FalseVal implements BoolV {
+export class FalseVal implements UBoolV {
   $type: 'FalseVal' = 'FalseVal' as const
   constructor() {}
 
@@ -58,11 +57,11 @@ export class FalseVal implements BoolV {
   }
 }
 
-export function isUnknownVal(val: BoolVal): val is UnknownVal {
+export function isUnknownVal(val: UBoolValue): val is UnknownVal {
   return val.$type === 'UnknownVal'
 }
 
-export class UnknownVal implements BoolV {
+export class UnknownVal implements UBoolV {
   $type: 'UnknownVal' = 'UnknownVal' as const
   constructor() {}
 
@@ -75,7 +74,7 @@ export class UnknownVal implements BoolV {
   }
 }
 
-export function cycle(val: BoolVal): BoolVal {
+export function cycle(val: UBoolValue): UBoolValue {
   return match(val)
     .with({ $type: 'TrueVal' }, () => new FalseVal())
     .with({ $type: 'FalseVal' }, () => new UnknownVal())
@@ -87,7 +86,7 @@ export function cycle(val: BoolVal): BoolVal {
             Expr
 **********************************************************/
 
-/** IRExpr, but where the BoolVar doesn't have the `value` field,
+/** This is basically IRExpr, but where the BoolVar doesn't have the `value` field,
  * since we want to use values from the user,
  * as opposed to the initial values.
  */
