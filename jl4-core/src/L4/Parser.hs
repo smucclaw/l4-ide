@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -307,8 +308,26 @@ simpleName :: Parser (Epa Name)
 simpleName =
   (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
+qualifiedName :: Parser (Epa Name)
+qualifiedName = do
+  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  (fmap Base.unsnoc . unzip -> (toks, Just (q : qs, n))) <- do
+    x <- tokOf #_TIdentifier
+    (x :) <$> some (tokOf #_TDot *> tokOf #_TIdentifier)
+
+  wsOrAnnotation <- spaceOrAnnotations
+  let l = Lexeme
+        { trailingTokens = wsOrAnnotation.trailingTokens
+        , payload = (toks, QualifiedName n (q :| qs))
+        , hiddenClusters = wsOrAnnotation.hiddenClusters
+        }
+  pure $ MkName emptyAnno <$> lexesToEpa' l
+
+ where
+ tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
+
 name :: Parser Name
-name = attachEpa (quotedName <|> simpleName) <?> "identifier"
+name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
@@ -328,11 +347,7 @@ module' uri = do
   attachAnno $
     MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
-      <*> annoHole
-          ((:)
-            <$> anonymousSection
-            <*> many section
-          )
+      <*> annoHole anonymousSection
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -366,26 +381,28 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno 0
+    MkSection emptyAnno
       <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+      <*> annoHole (lsepBy (topdeclWithRecovery 0) (spacedToken_ TSemicolon))
 
-section :: Parser (Section Name)
-section =
-  attachAnno $
-    MkSection emptyAnno
-      <$> sectionSymbols
-      <*> annoHole (optional name)
-      <*> annoHole (optional aka)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+section :: Int -> Parser (Section Name)
+section n = attachAnno do
+  MkSection emptyAnno
+    <$> (Compose (try do
+           wa@WithAnno {payload = syms} <- getCompose sectionSymbols
+           guard (syms >= n)
+           pure wa) *> annoHole (optional name)
+        )
+    <*> annoHole (optional aka)
+    <*> annoHole (lsepBy (topdeclWithRecovery n) (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
   length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
-topdeclWithRecovery :: Parser (TopDecl Name)
-topdeclWithRecovery = do
+topdeclWithRecovery :: Int -> Parser (TopDecl Name)
+topdeclWithRecovery n = do
   start <- lookAhead anySingle
   withRecovery
     (\e -> do
@@ -396,11 +413,12 @@ topdeclWithRecovery = do
       -- If we didn't make any progress whatsoever,
       -- end parsing to avoid endless loops.
       if start == current
-        then
-          parseError e
-        else do
-          topdeclWithRecovery)
+        then parseError e
+        else topdeclWithRecovery n
+
+    )
     topdecl
+      <|> attachAnno (Section   emptyAnno <$> annoHole (section (n + 1)))
 
 topdecl :: Parser (TopDecl Name)
 topdecl =

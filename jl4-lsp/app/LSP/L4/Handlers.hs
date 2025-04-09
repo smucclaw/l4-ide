@@ -404,7 +404,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                       -- based on the old AST and the new one.
                       -- However, currently we are missing a lot of infrastructure
                       -- to make this possible.
-                      Text.strip (prettyLayout assumeExpr) <> "\n\n"
+                      Text.strip (prettyLayout (0 :: Int, assumeExpr)) <> "\n\n"
                   }
 
             Just $ CodeAction

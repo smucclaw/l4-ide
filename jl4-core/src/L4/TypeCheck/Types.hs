@@ -10,6 +10,7 @@ import L4.TypeCheck.With
 import Control.Applicative
 import L4.Lexer (PosToken)
 import qualified Data.Map.Strict as Map
+import qualified Data.List.NonEmpty as NE
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
@@ -22,6 +23,7 @@ type Substitution = Map Int (Type' Resolved)
 data CheckEntity =
     KnownType Kind [Resolved] (TypeDecl Resolved)
   | KnownTerm (Type' Resolved) TermKind
+  | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
@@ -194,7 +196,13 @@ instance Monad Check where
       let
         results = runCheck m e s
       in
-        concatMap (\ (wea, s') -> distributeWith (fmap (runCheck' e s' . f) wea)) results
+        concatMap (\ ~(wea, s') -> distributeWith (fmap (runCheck' e s' . f) wea)) results
+
+{-
+instance MonadFix Check where
+  mfix k = MkCheck \r s -> mfix \ ~(w, _s') -> distributeWith (fmap (runCheck' r s . k) w)
+-}
+
 
 instance MonadState CheckState Check where
   get :: Check CheckState
@@ -292,19 +300,53 @@ resolvedType n = do
         KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
+        KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
-lookupRawNameInEnvironment n = do
+lookupRawNameInEnvironment rn = do
+  let (tn, qs)  = case rn of
+        QualifiedName n' qs' -> (NormalName n', NE.toList qs')
+        n -> (n, [])
+  -- TODO:
+  -- - get the sections that have already been checked
+  -- - find the section that belongs to a certain qualified name
   env <- asks (.environment)
   ei  <- asks (.entityInfo)
+
+  let ss = case qs of
+        [q] | Just us <- Map.lookup (NormalName q) env
+            , secs <- mapMaybe
+              (\u -> Map.lookup u ei >>= \(n, ce) -> case ce of KnownSection s -> Just (n, s); _ -> Nothing)
+              us
+            -> secs
+        -- TODO: nested sections
+        _ -> []
+
   let
     proc :: Unique -> Maybe (Unique, Name, CheckEntity)
-    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
+    proc u = do
+      (o, ce) <- Map.lookup u ei
+
+      guard $ null qs || any (isTopLevelBindingInSection u . snd) ss
+
+      pure (u, o, ce)
 
     candidates :: [(Unique, Name, CheckEntity)]
-    candidates = mapMaybe proc (Map.findWithDefault [] n env)
+    candidates = mapMaybe proc (Map.findWithDefault [] tn env)
 
   pure candidates
+
+isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
+isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . matchesUnq) decls
+  where
+  matchesUnq = \case
+    Declare _ (MkDeclare _ _ af _) -> afUnq af
+    Decide _ (MkDecide _ _ af _) -> afUnq af
+    Assume _ (MkAssume _ _ af _) -> afUnq af
+    Directive _ _ -> []
+    Import _ _ -> []
+    Section _ (MkSection _ _ _ decls') -> foldMap matchesUnq decls'
+  afUnq = map getUnique . appFormHeads
 
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
