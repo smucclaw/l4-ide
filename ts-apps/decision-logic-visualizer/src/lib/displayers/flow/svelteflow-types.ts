@@ -3,7 +3,10 @@
 import type { Name } from '@repo/viz-expr'
 import type { UBoolValue } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
-import { emptyEdgeLabel, EdgeStyles } from '../../algebraic-graphs/edge.js'
+import {
+  emptyEdgeLabel,
+  EdgeStylesContainer,
+} from '../../algebraic-graphs/edge.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
@@ -168,7 +171,7 @@ export interface LadderEdgeAttrs extends Record<string, unknown> {
 
 export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
-  edgeStyles: EdgeStyles.make().getCombinedStyleString(),
+  edgeStyles: new EdgeStylesContainer().getCombinedStyleString(),
 }
 
 export interface LadderEdgeData extends LadderEdgeAttrs {
