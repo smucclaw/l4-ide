@@ -103,11 +103,12 @@ Legal drafters may also appreciate VS Code's native "jump to definition" and "ju
 - [Design Principles](./principles.md)
 
 - Related Languages
+  - AustLii / DataLex
+  - Blawx
+  - CSL
   - Catala
   - FormaLex
-  - CSL
-  - SCL
-  - Symboleo
-  - Stipula
   - Logical English
-  - AustLii / DataLex
+  - SCL
+  - Stipula
+  - Symboleo
