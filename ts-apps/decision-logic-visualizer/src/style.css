@@ -149,11 +149,13 @@
   --ladder-stroke-color-default: var(--color-primary);
   --color-highlighted-path-in-flow: var(--color-sky-600);
 
-  /***************************************
-      Compatible vs incompatible paths 
-  ****************************************/
+  /***********************************************
+      Compatible vs incompatible nodes and edges 
+  ************************************************/
 
+  /* TODO: Experiment with changing opacity vs changing color */
   --color-incompatible-path: var(--color-zinc-300);
+  --opacity-ladder-incompatible: 0.4;
 
   /***************************************
          BoolValue: True vs False 
@@ -228,6 +230,10 @@
   @apply uppercase;
   @apply text-base leading-none;
   @apply text-(--ladder-color-node-annotation);
+}
+
+@utility incompatible-ladder-element {
+  opacity: var(--opacity-ladder-incompatible);
 }
 
 /*************************************

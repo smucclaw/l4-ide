@@ -123,7 +123,7 @@ export interface EdgeAttributes extends Eq<EdgeAttributes> {
 
 export class DefaultEdgeAttributes implements EdgeAttributes {
   constructor(
-    protected styles: EdgeStyles = new EmptyEdgeStyles(),
+    protected styles: EdgeStyles = EdgeStyles.make(),
     protected label: string = ''
   ) {}
 
@@ -174,18 +174,8 @@ export function mergeEdgeAttributes(
     return l2
   }
 
-  function mergeEdgeStyles(s1: EdgeStyles, s2: EdgeStyles) {
-    if (isEmptyEdgeStyles(s1)) {
-      return s2
-    }
-    if (isEmptyEdgeStyles(s2)) {
-      return s1
-    }
-    return s2
-  }
-
   return new DefaultEdgeAttributes(
-    mergeEdgeStyles(a1.getStyles(), a2.getStyles()),
+    a1.getStyles().mergeWith(a2.getStyles()),
     mergeEdgeLabels(a1.getLabel(), a2.getLabel())
   )
 }
@@ -194,55 +184,189 @@ export function mergeEdgeAttributes(
     Edge Label and Styles
 ****************************/
 
-export interface EdgeStyles extends Eq<EdgeStyles> {
-  $type: 'EmptyEdgeStyles' | 'HighlightedEdgeStyles'
-
-  getStyleString(): string
-
-  isEqualTo(other: EdgeStyles): boolean
-}
-
-export function isEmptyEdgeStyles(
-  styles: EdgeStyles
-): styles is EmptyEdgeStyles {
-  return styles.$type === 'EmptyEdgeStyles'
-}
-
-export function isHighlightedEdgeStyles(
-  styles: EdgeStyles
-): styles is HighlightedEdgeStyles {
-  return styles.$type === 'HighlightedEdgeStyles'
-}
-
-/** 'mempty' for EdgeStyles */
-export class EmptyEdgeStyles implements EdgeStyles {
-  $type = 'EmptyEdgeStyles' as const
-  constructor() {}
-
-  isEqualTo(other: EdgeStyles): boolean {
-    return isEmptyEdgeStyles(other)
-  }
-
-  getStyleString(): EdgeStyleString {
-    return 'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);' as const
-  }
-}
-
-export class HighlightedEdgeStyles implements EdgeStyles {
-  $type = 'HighlightedEdgeStyles' as const
-  constructor() {}
-
-  isEqualTo(other: EdgeStyles): boolean {
-    return isHighlightedEdgeStyles(other)
-  }
-
-  getStyleString(): EdgeStyleString {
-    return 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);' as const
-  }
-}
-
 export const emptyEdgeLabel = ''
 
-export type EdgeStyleString =
-  | 'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);'
-  | 'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);'
+/***************************
+    Edge Style Container
+****************************/
+
+/** Container for the edge style strings */
+export class EdgeStyles implements Eq<EdgeStyles> {
+  static make(
+    base: BaseEdgeStyleElement = new NonHighlightedEdgeStyleElement(),
+    modifiers: Array<ModifierStyleElement> = []
+  ) {
+    return new EdgeStyles(
+      base.getStyleString() as BaseEdgeStyleString,
+      new Set(
+        modifiers.map((elt) =>
+          elt.getStyleString()
+        ) as (typeof FadedEdgeStyleString)[]
+      )
+    )
+  }
+
+  private constructor(
+    private readonly base: BaseEdgeStyleString = NonHighlightedEdgeStyleString,
+    private readonly modifiers: Set<typeof FadedEdgeStyleString> = new Set()
+  ) {}
+
+  isHighlighted() {
+    return this.base === HighlightedEdgeStyleString
+  }
+
+  isFaded() {
+    return this.modifiers.has(FadedEdgeStyleString)
+  }
+
+  /********************************************************
+                Getters
+  *********************************************************/
+
+  getBase() {
+    return this.base
+  }
+
+  getModifiers() {
+    return this.modifiers
+  }
+
+  getUnderlyingStyleStrings(): Array<EdgeStyleString> {
+    return [this.base, ...this.modifiers]
+  }
+
+  getCombinedStyleString() {
+    return [this.base, ...this.modifiers].join(' ')
+  }
+
+  /********************************************************
+            Edge Style Counterparts
+  *********************************************************/
+
+  /** Get a version of the edge styles that's the same, except highlighted */
+  getHighlightedCounterpart() {
+    return new EdgeStyles(HighlightedEdgeStyleString, this.modifiers)
+  }
+
+  /** Get a version of the edge styles that's the same, except that it's *not* highlighted */
+  getNonHighlightedCounterpart() {
+    return new EdgeStyles(NonHighlightedEdgeStyleString, this.modifiers)
+  }
+
+  /** Get a version of the edge styles that's the same, except faded */
+  getFadedCounterpart() {
+    return new EdgeStyles(
+      this.base,
+      new Set([...this.modifiers, FadedEdgeStyleString])
+    )
+  }
+
+  getNonFadedCounterpart() {
+    return new EdgeStyles(
+      this.base,
+      new Set([...this.modifiers].filter((elt) => elt !== FadedEdgeStyleString))
+    )
+  }
+
+  mergeWith(other: EdgeStyles) {
+    const newBase =
+      this.base === NonHighlightedEdgeStyleString ? other.base : this.base
+    const newModifiers = new Set(this.modifiers).union(other.getModifiers())
+    return new EdgeStyles(newBase, newModifiers)
+  }
+
+  isEqualTo(other: EdgeStyles): boolean {
+    const sameBase = this.base === other.getBase()
+    const sameModifiers =
+      this.getModifiers().isSubsetOf(other.getModifiers()) &&
+      other.getModifiers().isSubsetOf(this.getModifiers())
+    return sameBase && sameModifiers
+  }
+}
+
+/***************************
+    Edge Style String
+****************************/
+
+export type EdgeStyleString = BaseEdgeStyleString | ModifierEdgeStyleString
+export type BaseEdgeStyleString =
+  | typeof HighlightedEdgeStyleString
+  | typeof NonHighlightedEdgeStyleString
+export type ModifierEdgeStyleString = typeof FadedEdgeStyleString
+
+const HighlightedEdgeStyleString =
+  'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);' as const
+/** This is in effect an 'mempty' for base edge style strings */
+const NonHighlightedEdgeStyleString =
+  'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);' as const
+
+const FadedEdgeStyleString =
+  'opacity: var(--opacity-ladder-incompatible);' as const
+
+/***************************
+    Edge Style Element
+****************************/
+
+export type BaseEdgeStyleElement =
+  | HighlightedEdgeStyleElement
+  | NonHighlightedEdgeStyleElement
+export type ModifierStyleElement = FadedEdgeStyleElement
+
+export interface EdgeStyleElement extends Eq<EdgeStyleElement> {
+  isEqualTo(other: EdgeStyleElement): boolean
+  getStyleString(): EdgeStyleString
+}
+
+export function isNonHighlightedEdgeStyleElement(
+  elt: EdgeStyleElement
+): elt is NonHighlightedEdgeStyleElement {
+  return elt.getStyleString() === NonHighlightedEdgeStyleString
+}
+
+export class NonHighlightedEdgeStyleElement implements EdgeStyleElement {
+  constructor() {}
+
+  isEqualTo(other: EdgeStyleElement): boolean {
+    return isNonHighlightedEdgeStyleElement(other)
+  }
+
+  getStyleString(): EdgeStyleString {
+    return NonHighlightedEdgeStyleString
+  }
+}
+
+export function isHighlightedEdgeStyleElement(
+  elt: EdgeStyleElement
+): elt is HighlightedEdgeStyleElement {
+  return elt.getStyleString() === HighlightedEdgeStyleString
+}
+
+export class HighlightedEdgeStyleElement implements EdgeStyleElement {
+  constructor() {}
+
+  isEqualTo(other: EdgeStyleElement): boolean {
+    return isHighlightedEdgeStyleElement(other)
+  }
+
+  getStyleString(): EdgeStyleString {
+    return HighlightedEdgeStyleString
+  }
+}
+
+export function isFadedEdgeStyleElement(
+  elt: EdgeStyleElement
+): elt is FadedEdgeStyleElement {
+  return elt.getStyleString() === FadedEdgeStyleString
+}
+
+export class FadedEdgeStyleElement implements EdgeStyleElement {
+  constructor() {}
+
+  isEqualTo(other: EdgeStyleElement): boolean {
+    return isFadedEdgeStyleElement(other)
+  }
+
+  getStyleString(): EdgeStyleString {
+    return FadedEdgeStyleString
+  }
+}

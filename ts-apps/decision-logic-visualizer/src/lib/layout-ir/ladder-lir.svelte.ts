@@ -29,8 +29,8 @@ import {
 import {
   type Edge,
   DirectedEdge,
-  EmptyEdgeStyles,
-  HighlightedEdgeStyles,
+  type EdgeStyleElement,
+  HighlightedEdgeStyleElement,
   type EdgeStyles,
   type EdgeAttributes,
 } from '../algebraic-graphs/edge.js'
@@ -168,24 +168,9 @@ export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
       .map((p) => p._getRawPath())
       .reduceRight(overlay, empty())
 
-    // 2. Reset all edge styles on ladder graph, then highlight the subgraph
-    this.ladderGraph.clearAllEdgeStyles(context)
-    this.setStylesOnLadderSubgraph(
-      context,
-      new HighlightedEdgeStyles(),
-      graphToHighlight
-    )
-  }
-
-  protected setStylesOnLadderSubgraph(
-    context: LirContext,
-    styles: EdgeStyles,
-    subgraph: DirectedAcyclicGraph<LirId>
-  ) {
-    const pathEdges = subgraph.getEdges()
-    pathEdges.forEach((edge) => {
-      this.ladderGraph.setEdgeStyles(context, edge, styles)
-    })
+    // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
+    this.ladderGraph.clearHighlightEdgeStyles(context)
+    this.ladderGraph.highlightSubgraph(context, graphToHighlight)
   }
 
   getChildren(context: LirContext) {
@@ -466,25 +451,25 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
-  setEdgeStyles<T extends Edge<LirId>>(
-    context: LirContext,
-    edge: T,
-    styles: EdgeStyles
-  ) {
-    const attrs = this.#dag.getAttributesForEdge(edge)
-    // Ok to mutate because getAttributesForEdge returns a cloned object
-    attrs.setStyles(styles)
-    this.#dag.setEdgeAttributes(edge, attrs)
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  clearAllEdgeStyles(context: LirContext) {
+  clearHighlightEdgeStyles(context: LirContext) {
     const edges = this.#dag.getEdges()
     edges.forEach((edge) => {
       const attrs = this.#dag.getAttributesForEdge(edge)
       // Ok to mutate because getAttributesForEdge returns a cloned object
-      attrs.setStyles(new EmptyEdgeStyles())
+      attrs.setStyles(attrs.getStyles().getNonHighlightedCounterpart())
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  highlightSubgraph(
+    context: LirContext,
+    subgraph: DirectedAcyclicGraph<LirId>
+  ) {
+    subgraph.getEdges().forEach((edge) => {
+      const attrs = this.getEdgeAttributes(context, edge)
+      attrs.setStyles(attrs.getStyles().getHighlightedCounterpart())
       this.#dag.setEdgeAttributes(edge, attrs)
     })
 

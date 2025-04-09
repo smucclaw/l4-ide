@@ -163,7 +163,7 @@ export function ladderLirEdgeToSfEdge(
     data: {
       context,
       label,
-      edgeStyles: graph.getEdgeStyles(context, edge).getStyleString(),
+      edgeStyles: graph.getEdgeStyles(context, edge).getCombinedStyleString(),
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),
