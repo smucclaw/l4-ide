@@ -27,6 +27,10 @@ import {
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
 import type { EdgeStylesContainer, EdgeAttributes } from './edge-attributes.js'
 import type {
+  LadderNodeCSSClass,
+  NodeStyleModifierCSSClass,
+} from './node-styles.js'
+import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
@@ -162,6 +166,7 @@ type Position = { x: number; y: number }
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
+// TODO: Should this be renamed to LadderFlowLirNode or something like that?
 export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   getDimensions(context: LirContext): Dimensions | undefined
   setDimensions(context: LirContext, dimensions: Dimensions): void
@@ -169,12 +174,17 @@ export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   getPosition(context: LirContext): Position
   setPosition(context: LirContext, position: Position): void
 
+  getAllClasses(context: LirContext): LadderNodeCSSClass[]
+  /** To be invoked only by LadderGraphLirNode */
+  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]): void
+
   toPretty(context: LirContext): string
 }
 
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
+  protected modifierCSSClasses: NodeStyleModifierCSSClass[] = []
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -209,6 +219,13 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   }
 
   abstract toPretty(context: LirContext): string
+
+  getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
+    return this.modifierCSSClasses
+  }
+  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]) {
+    this.modifierCSSClasses = classes
+  }
 }
 
 /**********************************************
@@ -548,6 +565,7 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
    * in sync with what values are stored on the VarLirNodes) */
   #value: UBoolValue
   #name: Name
+  #modifierCSSClasses: NodeStyleModifierCSSClass[] = []
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -571,8 +589,20 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return this.#name.unique
   }
 
-  getData(_context: LirContext) {
-    return { name: this.#name, value: this.#value }
+  getData(context: LirContext) {
+    return {
+      name: this.#name,
+      value: this.#value,
+      classes: this.getAllClasses(context),
+    }
+  }
+
+  override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
+    return [...this.#value.getClasses(), ...this.#modifierCSSClasses]
+  }
+
+  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]) {
+    this.#modifierCSSClasses = classes
   }
 
   getValue(_context: LirContext): UBoolValue {
@@ -583,8 +613,8 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     this.#value = value
   }
 
-  toPretty(_context: LirContext) {
-    return this.getLabel(_context)
+  toPretty(context: LirContext) {
+    return this.getLabel(context)
   }
 
   toString(): string {
@@ -675,8 +705,8 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
     super(nodeInfo, position)
   }
 
-  getData() {
-    return { annotation: this.annotation }
+  getData(context: LirContext) {
+    return { annotation: this.annotation, classes: this.getAllClasses(context) }
   }
 }
 
