@@ -109,18 +109,18 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotStartLirNode), () => {
+    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
       return {
         ...defaults,
         type: notStartNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotEndLirNode), () => {
+    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
       return {
         ...defaults,
         type: notEndNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
