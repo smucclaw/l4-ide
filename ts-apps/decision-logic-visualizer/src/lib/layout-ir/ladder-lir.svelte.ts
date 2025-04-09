@@ -329,15 +329,18 @@ will go through the LadderGraphLirNode.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+
   #originalExpr: IRExpr
   #vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
-  #pathsList?: PathsListLirNode
   #corefs: Corefs
+  /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
   #result: Value = new UnknownVal()
+
+  #pathsList?: PathsListLirNode
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -350,10 +353,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#originalExpr = originalExpr
     this.#vizExprToLir = vizExprToLir
 
-    // Make the initial args / assignment
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       isBoolVarLirNode
     )
+
+    // Make the initial args / assignment
     const initialAssignmentAssocList: Array<[Unique, Value]> = varNodes.map(
       (varN) => [
         varN.getUnique(nodeInfo.context),
@@ -363,16 +367,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
 
     // Make the initial corefs
-    const initialCoreferents: Array<Set<LirId>> = []
-    varNodes.forEach((n) => {
-      const unique = n.getUnique(nodeInfo.context)
-      if (!initialCoreferents[unique]) {
-        initialCoreferents[unique] = new Set<LirId>([n.getId()])
-      } else {
-        initialCoreferents[unique].add(n.getId())
-      }
-    })
-    this.#corefs = new Corefs(initialCoreferents)
+    const uniqLirIdPairs: Array<[Unique, LirId]> = varNodes.map((n) => [
+      n.getUnique(nodeInfo.context),
+      n.getId(),
+    ])
+    this.#corefs = Corefs.fromEntries(uniqLirIdPairs)
 
     this.doEvalLadderExprWithVarBindings(nodeInfo.context)
   }
@@ -618,7 +617,7 @@ function getVerticesFromAlgaDag(
           Ladder Lir Node
 ***********************************************/
 
-/** LirNodes that can appear in the Ladder graph */
+/** All the LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
   | BoolVarLirNode
   | NotStartLirNode

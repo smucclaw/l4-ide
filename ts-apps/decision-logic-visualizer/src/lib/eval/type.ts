@@ -102,10 +102,6 @@ export type And = VE.And
 
 export function veExprToEvExpr(expr: IRExpr): Expr {
   return match(expr)
-    .with({ $type: 'BoolVar' }, (expr) => veBoolVarToEVBoolVar(expr))
+    .with({ $type: 'BoolVar' }, (expr) => expr as EVBoolVar)
     .otherwise(() => expr)
-}
-
-function veBoolVarToEVBoolVar(expr: VE.BoolVar) {
-  return expr as EVBoolVar
 }

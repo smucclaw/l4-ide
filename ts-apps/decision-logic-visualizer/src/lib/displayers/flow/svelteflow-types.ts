@@ -1,7 +1,7 @@
 // Types and util functions for the Svelte Flow graph
 
 import type { Name } from '@repo/viz-expr'
-import type { BoolVal } from '$lib/layout-ir/value.js'
+import type { BoolVal } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import { emptyEdgeLabel, EmptyEdgeStyles } from '../../algebraic-graphs/edge.js'
 import * as SF from '@xyflow/svelte'

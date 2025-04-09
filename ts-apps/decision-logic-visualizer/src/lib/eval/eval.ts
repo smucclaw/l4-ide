@@ -15,17 +15,16 @@ import { match } from 'ts-pattern'
 **********************************************************/
 
 /*
----------------------------------
+------------------------------------------
        UI vs. evaln
-----------------------------------
-The Evaluator should be using the Subst and NOT the get/setValue methods on LirNodes,
-since the LirNode values are meant to be for UI purposes
+------------------------------------------
+The Evaluator should be using the Assignment and NOT the get/setValue methods on LirNodes,
+since the LirNode values are meant to be for the UI
 (and hence fall under the purview of the LadderGraphLirNode).
 
-*/
-
-/*
-At least two approaches:
+-------------------------------------------
+  Implementation: At least two approaches
+-------------------------------------------
 
 1. Do eval on the original IRExpr. 
    Apply whatever UI stuff is needed on the Dag<LirId> using the 
@@ -36,7 +35,7 @@ At least two approaches:
 2. Do eval on the Dag<LirId> directly
 
 Ended up going with 2, since the postprocessing of the Dag<LirId> gets a bit involved,
-and since 2 might align more with synchronizing with the backend in the future.
+and since 2 might align better with synchronizing with the backend in the future.
 */
 
 /** Boolean operator evaluator */
@@ -101,58 +100,3 @@ function evalOrChain(bools: BoolVal[]) {
   }
   return new UnknownVal()
 }
-
-// function evalLadderGraph(
-//   context: LirContext,
-//   assignment: Assignment,
-//   ladder: DirectedAcyclicGraph<LirId>
-// ): Value {
-//   // TODO: Implement: for each NotStartNode, merge the < NotStart, ...negand, NotEnd> into one compact MergedNotNode.
-//   // ---------
-
-//   /* Assume we have an NNF.
-
-//   * If there's any path where where all the non-bundling-node vertices
-//   (which at this point would either be a MergedNot node or a bool var node) evaluate to true, then result is True
-//   * If no path satisfies the formula, then result is False
-//   * Otherwise, indeterminate / unknown result
-//   */
-//   const pathVals = ladder
-//     .getAllPaths()
-//     .map((p) => evalPath(context, assignment, p))
-//   return evalOrChain(pathVals)
-// }
-
-// /***************************
-//       evalPath
-// ****************************/
-
-// function evalPath(
-//   context: LirContext,
-//   args: Assignment,
-//   /** A path graph that is a subgraph of the Ladder graph
-//    * (and where the Ladder graph is an NNF and
-//    * the Nots have been merged into a MergedNotLirNode)
-//    * TODO: Add more type safety here
-//    */
-//   pathGraph: DirectedAcyclicGraph<LirId>
-// ) {
-//   const substantiveVertices = pathGraph
-//     .getVertices()
-//     .map((v) => context.get(v) as LadderLirNode)
-//     .filter((n) => !isBundlingFlowLirNode(n))
-
-//   if (!substantiveVertices.every(isSemanticLadderLirNode)) {
-//     throw new Error(
-//       'Not all vertices are SemanticLadderLirNodes -- the Nots have not been merged!'
-//     )
-//     // TODO: replace this with more type-level stuff
-//   }
-
-//   const evalResults = substantiveVertices.map((node) =>
-//     evalSemanticLadderNode(context, args, node)
-//   )
-
-//   // Remember that a 'path' here is basically an AndChain
-//   return evalAndChain(evalResults)
-// }

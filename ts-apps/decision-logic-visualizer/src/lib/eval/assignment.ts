@@ -55,7 +55,19 @@ export class Corefs {
   // A Unique is a non-negative integer
   #coreferents: Array<Set<LirId>>
 
-  constructor(initialCoreferents: Array<Set<LirId>>) {
+  static fromEntries(entries: Array<[Unique, LirId]>): Corefs {
+    const initialCoreferents: Array<Set<LirId>> = []
+    entries.forEach(([unique, lirId]) => {
+      if (!initialCoreferents[unique]) {
+        initialCoreferents[unique] = new Set([lirId])
+      } else {
+        initialCoreferents[unique].add(lirId)
+      }
+    })
+    return new Corefs(initialCoreferents)
+  }
+
+  private constructor(initialCoreferents: Array<Set<LirId>>) {
     this.#coreferents = initialCoreferents
   }
 
