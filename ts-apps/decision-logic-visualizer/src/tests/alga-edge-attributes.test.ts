@@ -1,13 +1,13 @@
 import { describe, test, expect } from 'vitest'
 
 import { vertex } from '../lib/algebraic-graphs/adjacency-map-directed-graph.js'
+import { DirectedEdge } from '../lib/algebraic-graphs/edge.js'
 import {
   emptyEdgeLabel,
   DefaultEdgeAttributes,
-  DirectedEdge,
   EdgeStylesContainer,
   HighlightedEdgeStyle,
-} from '../lib/algebraic-graphs/edge.js'
+} from '$lib/layout-ir/ladder-graph/edge-attributes.js'
 import { NumberWrapper } from './number-wrapper.js'
 
 describe('Edge Attributes - DefaultEdgeAttributes', () => {

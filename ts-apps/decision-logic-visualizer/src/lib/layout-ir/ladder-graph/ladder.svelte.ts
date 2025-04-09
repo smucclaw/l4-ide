@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import {
   type Value,
   type UBoolValue,
@@ -7,7 +8,6 @@ import {
   UnknownVal,
   veExprToEvExpr,
 } from '../../eval/type.js'
-import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import { Assignment, Corefs } from '../../eval/assignment.js'
 import { Evaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from '../core.js'
@@ -24,12 +24,8 @@ import {
   type Vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
-import {
-  type Edge,
-  DirectedEdge,
-  type EdgeStylesContainer,
-  type EdgeAttributes,
-} from '../../algebraic-graphs/edge.js'
+import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
+import type { EdgeStylesContainer, EdgeAttributes } from './edge-attributes.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
