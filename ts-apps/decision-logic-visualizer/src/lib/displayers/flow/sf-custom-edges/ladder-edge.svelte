@@ -25,7 +25,7 @@
   {targetPosition}
   label={data?.context.shouldEnableZenMode() ? undefined : data?.label}
   pathOptions={{ curvature: 1 }}
-  style={data?.edgeStyles}
+  style={"transition-property: opacity; transition-duration: 300ms;" + data?.edgeStyles}
 />
 
 <!-- 
