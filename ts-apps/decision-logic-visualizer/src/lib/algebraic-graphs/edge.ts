@@ -108,8 +108,8 @@ export class DirectedEdge<A extends Ord<A>> extends AbsEdgeWithOrd<A> {
 // it's just that we will prob use LirNode methods for node data
 
 export interface EdgeAttributes extends Eq<EdgeAttributes> {
-  getStyles(): EdgeStyles
-  setStyles(styles: EdgeStyles): void
+  getStyles(): EdgeStylesContainer
+  setStyles(styles: EdgeStylesContainer): void
 
   getLabel(): string
   setLabel(label: string): void
@@ -123,7 +123,7 @@ export interface EdgeAttributes extends Eq<EdgeAttributes> {
 
 export class DefaultEdgeAttributes implements EdgeAttributes {
   constructor(
-    protected styles: EdgeStyles = EdgeStyles.make(),
+    protected styles: EdgeStylesContainer = new EdgeStylesContainer(),
     protected label: string = ''
   ) {}
 
@@ -138,11 +138,11 @@ export class DefaultEdgeAttributes implements EdgeAttributes {
     return new DefaultEdgeAttributes(this.styles, this.label)
   }
 
-  getStyles(): EdgeStyles {
+  getStyles(): EdgeStylesContainer {
     return this.styles
   }
 
-  setStyles(styles: EdgeStyles) {
+  setStyles(styles: EdgeStylesContainer) {
     this.styles = styles
   }
 
@@ -191,32 +191,18 @@ export const emptyEdgeLabel = ''
 ****************************/
 
 /** Container for the edge style strings */
-export class EdgeStyles implements Eq<EdgeStyles> {
-  static make(
-    base: BaseEdgeStyleElement = new NonHighlightedEdgeStyleElement(),
-    modifiers: Array<ModifierStyleElement> = []
-  ) {
-    return new EdgeStyles(
-      base.getStyleString() as BaseEdgeStyleString,
-      new Set(
-        modifiers.map((elt) =>
-          elt.getStyleString()
-        ) as (typeof FadedEdgeStyleString)[]
-      )
-    )
-  }
-
-  private constructor(
-    private readonly base: BaseEdgeStyleString = NonHighlightedEdgeStyleString,
-    private readonly modifiers: Set<typeof FadedEdgeStyleString> = new Set()
+export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
+  constructor(
+    private readonly base: BaseEdgeStyle = NonHighlightedEdgeStyle,
+    private readonly modifiers: Set<typeof FadedEdgeStyle> = new Set()
   ) {}
 
   isHighlighted() {
-    return this.base === HighlightedEdgeStyleString
+    return this.base === HighlightedEdgeStyle
   }
 
   isFaded() {
-    return this.modifiers.has(FadedEdgeStyleString)
+    return this.modifiers.has(FadedEdgeStyle)
   }
 
   /********************************************************
@@ -231,7 +217,7 @@ export class EdgeStyles implements Eq<EdgeStyles> {
     return this.modifiers
   }
 
-  getUnderlyingStyleStrings(): Array<EdgeStyleString> {
+  getStyleStrings(): Array<EdgeStyle> {
     return [this.base, ...this.modifiers]
   }
 
@@ -245,37 +231,37 @@ export class EdgeStyles implements Eq<EdgeStyles> {
 
   /** Get a version of the edge styles that's the same, except highlighted */
   getHighlightedCounterpart() {
-    return new EdgeStyles(HighlightedEdgeStyleString, this.modifiers)
+    return new EdgeStylesContainer(HighlightedEdgeStyle, this.modifiers)
   }
 
   /** Get a version of the edge styles that's the same, except that it's *not* highlighted */
   getNonHighlightedCounterpart() {
-    return new EdgeStyles(NonHighlightedEdgeStyleString, this.modifiers)
+    return new EdgeStylesContainer(NonHighlightedEdgeStyle, this.modifiers)
   }
 
   /** Get a version of the edge styles that's the same, except faded */
   getFadedCounterpart() {
-    return new EdgeStyles(
+    return new EdgeStylesContainer(
       this.base,
-      new Set([...this.modifiers, FadedEdgeStyleString])
+      new Set([...this.modifiers, FadedEdgeStyle])
     )
   }
 
   getNonFadedCounterpart() {
-    return new EdgeStyles(
+    return new EdgeStylesContainer(
       this.base,
-      new Set([...this.modifiers].filter((elt) => elt !== FadedEdgeStyleString))
+      new Set([...this.modifiers].filter((elt) => elt !== FadedEdgeStyle))
     )
   }
 
-  mergeWith(other: EdgeStyles) {
+  mergeWith(other: EdgeStylesContainer) {
     const newBase =
-      this.base === NonHighlightedEdgeStyleString ? other.base : this.base
+      this.base === NonHighlightedEdgeStyle ? other.base : this.base
     const newModifiers = new Set(this.modifiers).union(other.getModifiers())
-    return new EdgeStyles(newBase, newModifiers)
+    return new EdgeStylesContainer(newBase, newModifiers)
   }
 
-  isEqualTo(other: EdgeStyles): boolean {
+  isEqualTo(other: EdgeStylesContainer): boolean {
     const sameBase = this.base === other.getBase()
     const sameModifiers =
       this.getModifiers().isSubsetOf(other.getModifiers()) &&
@@ -288,85 +274,17 @@ export class EdgeStyles implements Eq<EdgeStyles> {
     Edge Style String
 ****************************/
 
-export type EdgeStyleString = BaseEdgeStyleString | ModifierEdgeStyleString
-export type BaseEdgeStyleString =
-  | typeof HighlightedEdgeStyleString
-  | typeof NonHighlightedEdgeStyleString
-export type ModifierEdgeStyleString = typeof FadedEdgeStyleString
+export type EdgeStyle = BaseEdgeStyle | ModifierEdgeStyle
+export type BaseEdgeStyle =
+  | typeof HighlightedEdgeStyle
+  | typeof NonHighlightedEdgeStyle
+export type ModifierEdgeStyle = typeof FadedEdgeStyle
 
-const HighlightedEdgeStyleString =
+export const HighlightedEdgeStyle =
   'stroke: var(--color-highlighted-path-in-flow); stroke-width: var(--highlighted-stroke-width);' as const
 /** This is in effect an 'mempty' for base edge style strings */
-const NonHighlightedEdgeStyleString =
+export const NonHighlightedEdgeStyle =
   'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);' as const
 
-const FadedEdgeStyleString =
+export const FadedEdgeStyle =
   'opacity: var(--opacity-ladder-incompatible);' as const
-
-/***************************
-    Edge Style Element
-****************************/
-
-export type BaseEdgeStyleElement =
-  | HighlightedEdgeStyleElement
-  | NonHighlightedEdgeStyleElement
-export type ModifierStyleElement = FadedEdgeStyleElement
-
-export interface EdgeStyleElement extends Eq<EdgeStyleElement> {
-  isEqualTo(other: EdgeStyleElement): boolean
-  getStyleString(): EdgeStyleString
-}
-
-export function isNonHighlightedEdgeStyleElement(
-  elt: EdgeStyleElement
-): elt is NonHighlightedEdgeStyleElement {
-  return elt.getStyleString() === NonHighlightedEdgeStyleString
-}
-
-export class NonHighlightedEdgeStyleElement implements EdgeStyleElement {
-  constructor() {}
-
-  isEqualTo(other: EdgeStyleElement): boolean {
-    return isNonHighlightedEdgeStyleElement(other)
-  }
-
-  getStyleString(): EdgeStyleString {
-    return NonHighlightedEdgeStyleString
-  }
-}
-
-export function isHighlightedEdgeStyleElement(
-  elt: EdgeStyleElement
-): elt is HighlightedEdgeStyleElement {
-  return elt.getStyleString() === HighlightedEdgeStyleString
-}
-
-export class HighlightedEdgeStyleElement implements EdgeStyleElement {
-  constructor() {}
-
-  isEqualTo(other: EdgeStyleElement): boolean {
-    return isHighlightedEdgeStyleElement(other)
-  }
-
-  getStyleString(): EdgeStyleString {
-    return HighlightedEdgeStyleString
-  }
-}
-
-export function isFadedEdgeStyleElement(
-  elt: EdgeStyleElement
-): elt is FadedEdgeStyleElement {
-  return elt.getStyleString() === FadedEdgeStyleString
-}
-
-export class FadedEdgeStyleElement implements EdgeStyleElement {
-  constructor() {}
-
-  isEqualTo(other: EdgeStyleElement): boolean {
-    return isFadedEdgeStyleElement(other)
-  }
-
-  getStyleString(): EdgeStyleString {
-    return FadedEdgeStyleString
-  }
-}
