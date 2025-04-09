@@ -40,11 +40,11 @@ and since 2 might align more with synchronizing with the backend in the future.
 */
 
 /** Boolean operator evaluator */
-export interface Evaluator {
+export interface LadderEvaluator {
   eval(ladder: Expr, assignment: Assignment): Value
 }
 
-export const Evaluator: Evaluator = {
+export const Evaluator: LadderEvaluator = {
   eval(ladder: Expr, assignment: Assignment): Value {
     return eval_(ladder, assignment)
   },
