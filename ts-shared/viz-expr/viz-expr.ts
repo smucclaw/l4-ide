@@ -78,7 +78,7 @@ export interface Name {
 export type Unique = number
 
 /*******************************
-    IRId (not currently used)
+           IRId
 ********************************/
 
 /** Stable IDs useful for things like bidirectional synchronization down the road */
@@ -87,7 +87,7 @@ export const IRId = Schema.Struct({
 })
 
 /** Stable IDs useful for things like bidirectional synchronization down the road */
-interface IRId {
+export interface IRId {
   readonly id: number
 }
 
@@ -156,6 +156,7 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
+/** For the original Viz / IRExpr */
 export type BoolValue = 'False' | 'True' | 'Unknown'
 
 export interface BoolVar extends IRNode {

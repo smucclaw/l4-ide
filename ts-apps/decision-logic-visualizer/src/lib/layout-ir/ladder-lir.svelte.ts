@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   type Value,
-  type BoolVal,
+  type UBoolValue,
   TrueVal,
   FalseVal,
   UnknownVal,
-} from './value.js'
-import type { BoolVar, Unique, Name } from '@repo/viz-expr'
-import { Environment } from './environment.js'
+  veExprToEvExpr,
+} from '../eval/type.js'
+import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
+import { Assignment, Corefs } from '../eval/assignment.js'
+import { Evaluator } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import type { Ord } from '$lib/utils.js'
@@ -327,31 +329,55 @@ will go through the LadderGraphLirNode.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
+
+  #originalExpr: IRExpr
+  #vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
-  #pathsList?: PathsListLirNode
-  #environment: Environment
+  #corefs: Corefs
+  /** Keeps track of what values the user has assigned to the various var ladder nodes */
+  #bindings: Assignment
+  #result: Value = new UnknownVal()
 
-  constructor(nodeInfo: LirNodeInfo, dag: DirectedAcyclicGraph<LirId>) {
+  #pathsList?: PathsListLirNode
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr
+  ) {
     super(nodeInfo)
     this.#dag = dag
+    this.#originalExpr = originalExpr
+    this.#vizExprToLir = vizExprToLir
 
-    // Make the initial environment
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
-      (n) => n instanceof BoolVarLirNode
+      isBoolVarLirNode
     )
-    const initialEnv = varNodes.map((n) => n.getValue(nodeInfo.context))
-    const initialCoreferents: Array<Set<LirId>> = []
-    varNodes.forEach((n) => {
-      const unique = n.getUnique(nodeInfo.context)
-      if (!initialCoreferents[unique]) {
-        initialCoreferents[unique] = new Set<LirId>([n.getId()])
-      } else {
-        initialCoreferents[unique].add(n.getId())
-      }
-    })
-    this.#environment = new Environment(initialEnv, initialCoreferents)
+
+    // Make the initial args / assignment
+    const initialAssignmentAssocList: Array<[Unique, Value]> = varNodes.map(
+      (varN) => [
+        varN.getUnique(nodeInfo.context),
+        varN.getValue(nodeInfo.context),
+      ]
+    )
+    this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
+
+    // Make the initial corefs
+    const uniqLirIdPairs: Array<[Unique, LirId]> = varNodes.map((n) => [
+      n.getUnique(nodeInfo.context),
+      n.getId(),
+    ])
+    this.#corefs = Corefs.fromEntries(uniqLirIdPairs)
+
+    this.doEvalLadderExprWithVarBindings(nodeInfo.context)
+  }
+
+  getVizExprToLir() {
+    return this.#vizExprToLir
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
@@ -482,26 +508,61 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /*****************************
-          Bindings
+        Eval, Bindings
   ******************************/
 
-  /** This sets off the 'compound logic' */
+  private doEvalLadderExprWithVarBindings(context: LirContext) {
+    const result = Evaluator.eval(
+      veExprToEvExpr(this.#originalExpr),
+      this.#bindings
+    )
+    this.setResult(context, result)
+
+    console.log('evaluating ', this.#bindings)
+    console.log('whatif eval result: ', result)
+  }
+
+  /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
   submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: Value }
   ) {
-    // Set the new binding
-    this.#environment.set(binding)
+    // Update the args with the new binding
+    this.#bindings.set(binding.unique, binding.value)
 
-    // The key step: Update all VarLirNodes with this Unique with the new Value
-    const corefs = Array.from(this.#environment.getCoreferents(binding.unique))
+    // Update all VarLirNodes with this Unique with the new Value
+    const corefs = Array.from(this.#corefs.getCoreferents(binding.unique))
     // console.log('corefs: ', corefs)
     corefs.forEach((coref) => {
       const node = context.get(coref) as VarLirNode
       node._setValue(context, binding.value)
     })
 
+    /*
+    Try #WhatIf-style evaluation.
+    ---------
+    Note that
+    * the `bindings` map will have a Unique key for every Var node,
+      including Var nodes that the user hasn't specified a value for
+    * the default value for a VarNode is UnknownV
+    */
+    this.doEvalLadderExprWithVarBindings(context)
+
+    // TODO for v2: Grey out incompatible subgraphs
+
     this.getRegistry().publish(context, this.getId())
+  }
+
+  /*************************************
+         Result
+  **************************************/
+
+  getResult(_context: LirContext) {
+    return this.#result
+  }
+
+  setResult(_context: LirContext, result: Value) {
+    this.#result = result
   }
 
   /**************************************
@@ -536,7 +597,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   dispose(context: LirContext) {
     this.getVertices(context).map((n) => n.dispose(context))
-    this.#environment.dispose()
+    this.#corefs.dispose()
     this.#dag.dispose()
     context.clear(this.getId())
   }
@@ -556,6 +617,7 @@ function getVerticesFromAlgaDag(
           Ladder Lir Node
 ***********************************************/
 
+/** All the LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
   | BoolVarLirNode
   | NotStartLirNode
@@ -565,6 +627,7 @@ export type LadderLirNode =
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
 
+  /** This should be used only for UI purposes (and not, e.g., for evaluation) */
   getValue(context: LirContext): Value
   /** For displayers.
    *
@@ -580,7 +643,10 @@ export function isBoolVarLirNode(node: LadderLirNode): node is BoolVarLirNode {
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
 export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
-  #value: BoolVal
+  /** The value here is used only for UI purposes
+   * The actual evaluation uses a different data structure (that is nevertheless kept
+   * in sync with what values are stored on the VarLirNodes) */
+  #value: UBoolValue
   #name: Name
 
   constructor(
@@ -609,12 +675,11 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return { name: this.#name, value: this.#value }
   }
 
-  getValue(_context: LirContext): BoolVal {
+  getValue(_context: LirContext): UBoolValue {
     return this.#value
   }
 
-  /** This will only be invoked by LadderGraphLirNode */
-  _setValue(_context: LirContext, value: BoolVal) {
+  _setValue(_context: LirContext, value: UBoolValue) {
     this.#value = value
   }
 
@@ -683,7 +748,7 @@ export const emptyBundlingNodeAnno: BundlingNodeAnno = { annotation: '' }
 export function isBundlingFlowLirNode(
   node: LadderLirNode
 ): node is BundlingFlowLirNode {
-  return isSourceLirNode(node) || node instanceof SinkLirNode
+  return isSourceLirNode(node) || isSinkLirNode(node)
 }
 
 /** A Flow Lir Node that's used solely to visually group or 'bundle' other nodes.
@@ -695,6 +760,9 @@ export type SourceLirNode = SourceWithOrAnnoLirNode | SourceNoAnnoLirNode
 
 export function isSourceLirNode(node: LadderLirNode): node is SourceLirNode {
   return isSourceNoAnnoLirNode(node) || isSourceWithOrAnnoLirNode(node)
+}
+export function isSinkLirNode(node: LadderLirNode): node is SinkLirNode {
+  return node instanceof SinkLirNode
 }
 
 abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
@@ -840,21 +908,22 @@ export function augmentEdgesWithExplanatoryLabel(
     const edgeU = context.get(edge.getU()) as LadderLirNode
     const edgeV = context.get(edge.getV()) as LadderLirNode
 
-    const edgeSourceIsNotOverallSource =
+    const targetIsEligible =
+      isBoolVarLirNode(edgeV) ||
+      isNotStartLirNode(edgeV) ||
+      isSourceWithOrAnnoLirNode(edgeV)
+
+    const sourceIsNotOverallSource =
       ladderGraph.getOverallSource(context) &&
       !edge
         .getU()
         .isEqualTo(ladderGraph.getOverallSource(context)?.getId() as LirId)
+    const sourceIsEligible =
+      !isSourceWithOrAnnoLirNode(edgeU) &&
+      sourceIsNotOverallSource &&
+      !isNotStartLirNode(edgeU)
 
-    const edgeSourceIsAnyOfAnnoSource = isSourceWithOrAnnoLirNode(edgeU)
-    return (
-      !edgeSourceIsAnyOfAnnoSource &&
-      edgeSourceIsNotOverallSource &&
-      !isNotStartLirNode(edgeU) &&
-      (isBoolVarLirNode(edgeV) ||
-        isNotStartLirNode(edgeV) ||
-        isSourceWithOrAnnoLirNode(edgeV))
-    )
+    return sourceIsEligible && targetIsEligible
   }
 
   const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
@@ -898,7 +967,7 @@ function pprintPathGraph(
   context: LirContext,
   initialGraph: DirectedAcyclicGraph<LirId>
 ): string {
-  // Each node should only be pprinted once in the linearization of the dag
+  /** Each node should only be pprinted once in the linearization of the dag */
   const processed = new Set<LirId>()
 
   function pprintHelper(
@@ -909,15 +978,12 @@ function pprintPathGraph(
       .with(P.when(isEmpty<LirId>), () => '')
       .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
         if (processed.has(v.getValue())) return ''
+
         processed.add(v.getValue())
         return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
       })
       .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
-        return (
-          pprintHelper(context, o.getLeft()) +
-          ' ' +
-          pprintHelper(context, o.getRight())
-        )
+        return `${pprintHelper(context, o.getLeft())} ${pprintHelper(context, o.getRight())}`
       })
       .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
         const from = pprintHelper(context, c.getFrom())
@@ -930,8 +996,8 @@ function pprintPathGraph(
               (c.getTo() as Vertex<LirId>).getValue()
             )
           )
-          const label = edgeAttrs.getLabel()
-          return `${from} ${label} ${to}`
+          const edgeLabel = edgeAttrs.getLabel()
+          return `${from} ${edgeLabel} ${to}`
         } else {
           return `${from} ${to}`
         }
