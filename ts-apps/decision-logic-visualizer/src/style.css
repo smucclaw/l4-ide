@@ -154,8 +154,8 @@
   ************************************************/
 
   /* TODO: Experiment with changing opacity vs changing color */
-  --color-incompatible-path: var(--color-zinc-300);
-  --opacity-ladder-incompatible: 0.4;
+  /* --color-incompatible-path: var(--color-zinc-300); */
+  --opacity-ladder-incompatible: 0.6;
 
   /***************************************
          BoolValue: True vs False 

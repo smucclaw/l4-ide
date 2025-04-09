@@ -10,7 +10,12 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 </script>
 
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` -->
-<div class={['svelte-flow__node-basic bool-var-node-border transition-opacity duration-300', ...data.classes]}>
+<div
+  class={[
+    'svelte-flow__node-basic bool-var-node-border transition-opacity duration-300',
+    ...data.classes,
+  ]}
+>
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
   <div class="label-wrapper-for-content-bearing-sf-node">
     {data.name.label}
