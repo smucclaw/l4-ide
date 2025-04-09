@@ -16,6 +16,8 @@ strings, enums, or a combination of these basic **types**. L4's
 **data modelling** syntax offers familiar record and OOP-class syntax for
 representing reality, backed by static type inference. (See: [Basic Data Types](./10-data-types.md))
 
+## Unknown values; treating unknowns as false
+
 Sometimes the "yes" or "no" is not known, or does not apply. L4's
 **ternary logic** extends Boolean logic with "unknown" or "null"
 values to handle those situations. L4 supports a "negation as failure"
@@ -25,8 +27,12 @@ someone guilty? So far, "unknown"; then for now, we'll take that as a
 "no"._ (The general mechanism for representing unknown values works
 for Boolean types and other types too. See: [algebraic data types](./30-algebraic-types.md))
 
+## Standard Libraries and the Prelude
+
 L4 also offers **libraries** for notions of person, place, time,
 currency, and so on. (See: modules and libraries)
+
+## Default Values: convenient assumptions
 
 When we talk about "persons", we typically assume that we're talking
 about natural persons, over the age of majority, with mental capacity.
@@ -35,9 +41,13 @@ assumptions. L4 can make these assumptions explicit, but also save
 end-users the trouble of clicking those checkboxes by hand each time;
 the boxes will be pre-filled. (See: [default values](./default-values.md))
 
+## Default Logic: General Cases and Special-Case Exceptions
+
 **Default logic** allows the concise expression of special cases and
 default values. Most of the time, weekday rules apply, but weekends
 could be a special case. (See: [default logic](./default-logic.md))
+
+## Constitutive Rules as First-Order Predicate Logic
 
 Building on the above foundation, L4 supports **constitutive rules**
 by way of **predicate logic**, or **first-order logic**: you can
@@ -46,11 +56,17 @@ whether an "X" counts as a "Y" for purposes "Z". To assist in
 comprension, L4 offers a visualizer for decision logic. (See:
 [functions](./25-functions.md))
 
+Implication.
+
+## Temporal Database Logic
+
 As many decisions involve time, L4 offers syntactic sugar to express
 ideas like, "according to the version of the **legislation in effect
 at time L**, as **the facts were known at time F** and as **the law
 was understood at time U**, would a baby **born at time B** have been
 considered a British citizen?" (See: [temporals](./multitemporals.md))
+
+## Regulative Rules as a Labeled State Transition System
 
 Contracts involve multiple parties who perform certain actions, like
 making payment and delivering goods, by certain deadlines. For every
@@ -64,17 +80,23 @@ supported by the L4 toolchain. (See: [regulative rules](./regulative-proposal.or
 Legislation and regulation can be thought of a special kind of rule
 where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
 
+## Sections and Scopes
+
 Legal texts are structured into act, chapter, part, section,
 paragraph, sub-paragraph, and so on. **Defined terms** are **scoped**
 according to those structures. L4 offers mechanisms for representing
 writing like, "for the purposes of **sections** 1 and 3, a tomato means
 ..." (See: [scope](./scope.md))
 
+## Meta-Rules Establish a Partial Priority Ordering
+
 Scopes often interact according to notions of priority and
 transformation. "**Notwithstanding**" and "**despite**" are used in legal
 writing, and in L4, to establish priorities between sections. One
 section can also be "**subject to**" another. This relation is
 surprisingly complex to unpack. (See: [meta-rules](./modifiers.md))
+
+## Deontics as Property Assertions About An LTS
 
 Legal writing frequently uses modals like "must" and "may", in deontic
 and non-deontic senses (typically, alethic, but also qualifying).
@@ -84,13 +106,19 @@ resolves these difficulties by introducing the notion of
 and temporal logic, and the notion of "bounded deontics" which makes
 explicit the idea of "or else what?" (See: deontics over regulatives)
 
+## Syntax for Decision Tables
+
 **Decision tables** are a syntactic form borrowed from the DMN
 standard to complement the more frequently seen **decision tree**.
 (See: decision table syntax)
 
+## Automated Tests
+
 **Tests** are a mechanism from the world of programming which help
 legal drafters quickly gain confidence that drafting and negotiation
 activity have not inadvertently broken anything. (See: tests)
+
+## Roadmap for future development
 
 Roadmap: see the Github Issues and the [Future Features](./future-features.md) document.
 
@@ -100,15 +128,18 @@ Legal drafters may also appreciate VS Code's native "jump to definition" and "ju
 
 ## See Also
 
+### Design Principles
+
 - [Design Principles](./principles.md)
 
-- Related Languages
-  - AustLii / DataLex
-  - Blawx
-  - CSL
-  - Catala
-  - FormaLex
-  - Logical English
-  - SCL
-  - Stipula
-  - Symboleo
+### Related Languages
+
+- AustLii / DataLex
+- Blawx
+- CSL
+- Catala
+- FormaLex
+- Logical English
+- SCL
+- Stipula
+- Symboleo
