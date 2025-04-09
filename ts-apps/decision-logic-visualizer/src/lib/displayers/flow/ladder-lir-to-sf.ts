@@ -4,12 +4,12 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
@@ -18,7 +18,7 @@ import {
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   type LadderSFGraph,
   type LadderSFNode,

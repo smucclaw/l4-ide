@@ -39,8 +39,8 @@
   import type {
     BoolVarLirNode,
     LadderLirNode,
-  } from '$lib/layout-ir/ladder-lir.svelte.js'
-  import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
   import PathsList from '../paths-list.svelte'
