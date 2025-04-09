@@ -58,7 +58,7 @@ comprension, L4 offers a visualizer for decision logic. (See:
 
 Implication.
 
-## Temporal Database Logic
+## Temporal Logic of Databases
 
 As many decisions involve time, L4 offers syntactic sugar to express
 ideas like, "according to the version of the **legislation in effect
@@ -105,6 +105,9 @@ resolves these difficulties by introducing the notion of
 **property-level specification**, from the world of formal verification
 and temporal logic, and the notion of "bounded deontics" which makes
 explicit the idea of "or else what?" (See: deontics over regulatives)
+
+The temporal logics involved in model checking are different from the
+version-oriented temporal logics of databases introduced above.
 
 ## Syntax for Decision Tables
 
