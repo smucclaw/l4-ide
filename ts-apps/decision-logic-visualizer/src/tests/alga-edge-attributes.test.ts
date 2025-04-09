@@ -5,16 +5,16 @@ import {
   emptyEdgeLabel,
   DefaultEdgeAttributes,
   DirectedEdge,
-  EmptyEdgeStyles,
-  HighlightedEdgeStyles,
+  EdgeStyles,
+  HighlightedEdgeStyleElement,
 } from '../lib/algebraic-graphs/edge.js'
 import { NumberWrapper } from './number-wrapper.js'
 
 describe('Edge Attributes - DefaultEdgeAttributes', () => {
   test('DefaultEdgeAttributes have fallback / default styles and empty label', () => {
     const attrs = new DefaultEdgeAttributes()
-    expect(attrs.getStyles().getStyleString()).toBe(
-      new EmptyEdgeStyles().getStyleString()
+    expect(attrs.getStyles().getCombinedStyleString()).toBe(
+      EdgeStyles.make().getCombinedStyleString()
     )
     expect(attrs.getLabel()).toBe(emptyEdgeLabel)
   })
@@ -28,7 +28,7 @@ describe('Edge Attributes - Setting and Getting', () => {
 
     // Create some attributes
     const edgeAttrs = new DefaultEdgeAttributes(
-      new HighlightedEdgeStyles(),
+      EdgeStyles.make(new HighlightedEdgeStyleElement()),
       'Test Edge'
     )
 
@@ -39,8 +39,8 @@ describe('Edge Attributes - Setting and Getting', () => {
     // Get the attributes
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
-    expect(retrievedAttrs.getStyles().getStyleString()).toBe(
-      new HighlightedEdgeStyles().getStyleString()
+    expect(retrievedAttrs.getStyles().getCombinedStyleString()).toBe(
+      new HighlightedEdgeStyleElement().getStyleString()
     )
   })
 
@@ -63,8 +63,8 @@ describe('Edge Attributes - Setting and Getting', () => {
 
 describe('Edge Attributes - Merging', () => {
   test('Merging edge attributes', () => {
-    const styles1 = new EmptyEdgeStyles()
-    const styles2 = new HighlightedEdgeStyles()
+    const styles1 = EdgeStyles.make()
+    const styles2 = EdgeStyles.make(new HighlightedEdgeStyleElement())
 
     const attrs1 = new DefaultEdgeAttributes(styles1, 'Label1')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -72,14 +72,14 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStyleString()).toBe(
-      styles2.getStyleString()
+    expect(mergedAttrs.getStyles().getCombinedStyleString()).toBe(
+      styles2.getCombinedStyleString()
     )
   })
 
   test('Merging edge attributes when one is empty', () => {
-    const styles1 = new EmptyEdgeStyles()
-    const styles2 = new HighlightedEdgeStyles()
+    const styles1 = EdgeStyles.make()
+    const styles2 = EdgeStyles.make(new HighlightedEdgeStyleElement())
 
     const attrs1 = new DefaultEdgeAttributes(styles1, '')
     const attrs2 = new DefaultEdgeAttributes(styles2, 'Label2')
@@ -87,8 +87,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getStyleString()).toBe(
-      styles2.getStyleString()
+    expect(mergedAttrs.getStyles().getCombinedStyleString()).toBe(
+      styles2.getCombinedStyleString()
     )
   })
 })
@@ -107,7 +107,7 @@ describe('Edge Attributes - Graph Operations', () => {
 
     const g2 = vertex(nw1).connect(vertex(nw2))
     const attr2 = new DefaultEdgeAttributes(
-      new HighlightedEdgeStyles(),
+      EdgeStyles.make(new HighlightedEdgeStyleElement()),
       'Label2'
     )
     g2.setEdgeAttributes(edge, attr2)
@@ -117,8 +117,8 @@ describe('Edge Attributes - Graph Operations', () => {
     // Get edge attributes from overlaid graph
     const resultAttr = overlaid.getAttributesForEdge(edge)
     expect(resultAttr.getLabel()).toBe('Label2')
-    expect(resultAttr.getStyles().getStyleString()).toBe(
-      attr2.getStyles().getStyleString()
+    expect(resultAttr.getStyles().getCombinedStyleString()).toBe(
+      attr2.getStyles().getCombinedStyleString()
     )
   })
 
@@ -158,12 +158,14 @@ describe('Edge Attributes - Graph Operations', () => {
     const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
-    const attr1 = new DefaultEdgeAttributes(new EmptyEdgeStyles(), 'Label1')
+    const attr1 = new DefaultEdgeAttributes(EdgeStyles.make(), 'Label1')
     g1.setEdgeAttributes(edge, attr1)
 
     // Create g2 with edge nw1 -> nw2, set attribute attr2
     const g2 = vertex(nw1).connect(vertex(nw2))
-    const attr2 = new DefaultEdgeAttributes(new HighlightedEdgeStyles())
+    const attr2 = new DefaultEdgeAttributes(
+      EdgeStyles.make(new HighlightedEdgeStyleElement())
+    )
     g2.setEdgeAttributes(edge, attr2)
 
     const overlaid = g1.overlay(g2)
@@ -171,7 +173,9 @@ describe('Edge Attributes - Graph Operations', () => {
     const resultingAttr = overlaid.getAttributesForEdge(edge)
     expect(resultingAttr.getLabel()).toBe('Label1')
     // attr2's label is empty, so use attr1's label
-    expect(resultingAttr.getStyles()).toBe(attr2.getStyles())
+    expect(resultingAttr.getStyles().getCombinedStyleString()).toBe(
+      attr2.getStyles().getCombinedStyleString()
+    )
     // Styles should be from attr2
   })
 })
