@@ -130,6 +130,10 @@ export interface BundlingNodeDisplayerData extends LadderSFNodeData {
   annotation: string
 }
 
+export interface NotDisplayerProps {
+  data: LadderSFNodeData
+}
+
 /************************************************
         SF Node handles
 *************************************************/
