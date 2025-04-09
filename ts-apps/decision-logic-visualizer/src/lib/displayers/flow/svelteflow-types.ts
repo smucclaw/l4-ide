@@ -6,7 +6,7 @@ import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import {
   emptyEdgeLabel,
   EdgeStylesContainer,
-} from '../../algebraic-graphs/edge.js'
+} from '$lib/layout-ir/ladder-graph/edge-attributes.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
