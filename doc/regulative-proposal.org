@@ -19,10 +19,11 @@ What are the basic "moving parts" of a contract?
 The general form of a regulative clause says who is supposed to do what, under certain conditions, by when:
 
 #+begin_src
+  GIVEN     <input parameters>
   UPON      <trigger event expression>
   PROVIDED  <preconditions> -- a guard
   IF        <preconditions> -- any arguments given are merged with PROVIDED, but the arguments can be empty
-  PARTY     <entity>
+  PARTY     <entity> <entity type>
   DO        <action> <action_parameters>
   BEFORE    <temporal expression> -- sets an upper bound, may be absolute or relative to other events in trace
   AFTER     <temporal expression> -- sets a lower bound, may be absolute or relative to other events in trace
@@ -48,6 +49,39 @@ which acts similar to a ~PUT~ in a State monad -- we write a value to
 a variable recorded in a symbol table. This allows us to express
 notions like "an offence is committed" or "the borrower repays $Int of
 the loan." ~UPDATE~ contracts are epsilon transitions.
+
+*** EVERY / WHO
+
+We support an alternative form of the above ~PARTY / IF~ expression:
+
+#+begin_src
+  EVERY    <entity type> <entity>
+  WHO      <entity preconditions>
+#+end_src
+
+The ~EVERY~ keyword reverses the usual argument order: instead of ~GIVEN p IS A Person, PARTY p ...~ we say ~EVERY Person p~.
+
+The ~entity preconditions~ are the same as the usual ~IF~ preconditions, except they automatically take the entity as an argument.
+
+Example:
+
+#+begin_example
+  EVERY  Person p
+  WHO    `has green hair`
+  MUST   `wash hair`
+  BEFORE 7 days
+#+end_example
+
+This desugars to:
+
+#+begin_example
+  GIVEN  p IS A Person
+  PARTY  p
+     IF  `has green hair` p
+  MUST   `wash hair`
+  BEFORE 7 days
+#+end_example
+
 
 ** Running example: Borrowing a Book from a Library
 
