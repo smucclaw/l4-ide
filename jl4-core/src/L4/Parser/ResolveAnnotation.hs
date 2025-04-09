@@ -76,7 +76,7 @@ addNlgCommentsToAst nlgs p = do
 
   runNlg initState act =
     runState
-      (((.computation.runNlgM) act) locRange)
+      (act.computation.runNlgM locRange)
       initState
 
 leftoversToWarnings :: NlgA ()
@@ -116,17 +116,15 @@ class HasNlg a where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Module n) where
   addNlg a = extendNlgA a $ case a of
-    MkModule uri ann sects -> do
-      sects' <- traverse addNlg sects
-      pure (MkModule uri ann sects')
+    MkModule uri ann sect -> MkModule uri ann <$> addNlg sect
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Section n) where
   addNlg a = extendNlgA a $ case a of
-    MkSection ann lvl lbl maka topDecls -> do
+    MkSection ann lbl maka topDecls -> do
       lbl' <- traverse addNlg lbl
       maka' <- traverse addNlg maka
       topDecls' <- traverse addNlg topDecls
-      pure (MkSection ann lvl lbl' maka' topDecls')
+      pure (MkSection ann lbl' maka' topDecls')
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
   addNlg a = extendNlgA a $ case a of
@@ -145,6 +143,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (TopDecl n) where
     Import ann import_ -> do
       import_' <- addNlg import_
       pure $ Import ann import_'
+    Section ann s -> do
+      section <- addNlg s
+      pure $ Section ann section
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Declare n) where
   addNlg a = extendNlgA a $ case a of

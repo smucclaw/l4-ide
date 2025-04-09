@@ -12,6 +12,8 @@ import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
+import qualified Base.Text as Text
+import qualified Data.List.NonEmpty as NE
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -19,6 +21,9 @@ data Name = MkName Anno RawName
 
 data RawName =
     NormalName Text
+  | QualifiedName Text (NonEmpty Text)
+  -- ^ contains the actual name and a list of qualifiers, e.g.
+  -- foo.bar becomes @'QualifiedName' bar [foo]@
   | PreDef Text
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -63,8 +68,9 @@ getActual (OutOfScope _ n) = n
 
 -- | Get the actual textual form of a raw name.
 rawNameToText :: RawName -> Text
-rawNameToText (NormalName n) = n
-rawNameToText (PreDef n)     = n
+rawNameToText (NormalName n)       = n
+rawNameToText (PreDef n)           = n
+rawNameToText (QualifiedName n qs) = Text.intercalate "." (NE.toList qs <> [n])
 
 nameToText :: Name -> Text
 nameToText = rawNameToText . rawName
@@ -226,16 +232,15 @@ data Program n
   = MkProgram (Module n) [Module n]
 
 data Module n =
-  MkModule Anno NormalizedUri [Section n]
+  MkModule Anno NormalizedUri (Section n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Section n =
-  MkSection Anno SectionLevel (Maybe n) (Maybe (Aka n)) [TopDecl n]
+  MkSection Anno (Maybe n) (Maybe (Aka n)) [TopDecl n]
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-type SectionLevel = Int
 
 data TopDecl n =
     Declare   Anno (Declare n)
@@ -243,6 +248,7 @@ data TopDecl n =
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
   | Import    Anno (Import n)
+  | Section   Anno (Section n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -388,7 +394,7 @@ deriving via L4Syntax (LocalDecl n)
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Name) where
-  toNodes (MkSection ann _lvl name maka decls) =
+  toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
@@ -419,7 +425,7 @@ instance ToConcreteNodes PosToken (Module Name) where
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where
-  toNodes (MkSection ann _lvl name maka decls) =
+  toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)

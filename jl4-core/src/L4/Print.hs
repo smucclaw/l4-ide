@@ -9,6 +9,7 @@ import L4.Syntax
 import Data.Char
 import Prettyprinter
 import Prettyprinter.Render.Text
+import qualified Data.List.NonEmpty as NE
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -38,6 +39,7 @@ instance LayoutPrinter a => LayoutPrinter (Maybe a) where
 instance LayoutPrinter RawName where
   printWithLayout = \case
     NormalName t -> pretty $ quoteIfNeeded t
+    QualifiedName t qs -> pretty t <+> parens ("qualified at module" <+> pretty (Text.intercalate "." $ NE.toList qs))
     PreDef t -> pretty $ quoteIfNeeded t
 
 instance LayoutPrinter a => LayoutPrinter (Type' a) where
@@ -176,33 +178,36 @@ instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
     MkImport _ n -> "IMPORT" <+> printWithLayout n
 
-instance LayoutPrinter a => LayoutPrinter (Section a) where
+instance LayoutPrinter a => LayoutPrinter (Int, Section a) where
   printWithLayout = \case
-    MkSection _ _ Nothing _ ds    ->
-      vcat (fmap printWithLayout ds)
-    MkSection _ ps name maka ds ->
+    (i, MkSection _ Nothing _ ds)    ->
+      vcat (map (printWithLayout . (i + 1 ,)) ds)
+    (i, MkSection _ name maka ds) ->
       vcat $
-        [ pretty (replicate ps '§') <+>
+        [ pretty (replicate i '§') <+>
           case maka of
             Nothing  -> printWithLayout name
             Just aka -> printWithLayout name <+> printWithLayout aka
         ]
         <> case ds of
           [] -> mempty
-          _ -> fmap printWithLayout ds
+          _ -> map (printWithLayout . (i + 1 ,)) ds
 
 instance LayoutPrinter a => LayoutPrinter (Module  a) where
   printWithLayout = \case
-    MkModule _ _ sects ->
-      vcat (fmap printWithLayout sects)
+    MkModule _ _ sect -> printWithLayout (0 :: Int, sect)
 
 instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
+  printWithLayout t = printWithLayout (1 :: Int, t)
+
+instance LayoutPrinter a => LayoutPrinter (Int, TopDecl a) where
   printWithLayout = \case
-    Declare   _ t -> printWithLayout t
-    Decide    _ t -> printWithLayout t
-    Assume    _ t -> printWithLayout t
-    Directive _ t -> printWithLayout t
-    Import    _ t -> printWithLayout t
+    (_, Declare   _ t) -> printWithLayout t
+    (_, Decide    _ t) -> printWithLayout t
+    (_, Assume    _ t) -> printWithLayout t
+    (_, Directive _ t) -> printWithLayout t
+    (_, Import    _ t) -> printWithLayout t
+    (i, Section   _ t) -> printWithLayout (i, t)
 
 instance LayoutPrinter a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann

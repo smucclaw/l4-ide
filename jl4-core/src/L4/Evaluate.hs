@@ -257,11 +257,11 @@ initialEnvironment =
     ]
 
 evalModule :: Module Resolved -> Eval ()
-evalModule (MkModule _ann _uri sections) =
-  traverse_ evalSection sections
+evalModule (MkModule _ann _uri sec) =
+  evalSection sec
 
 evalSection :: Section Resolved -> Eval ()
-evalSection (MkSection _ann _lvl _mn _maka topdecls) =
+evalSection (MkSection _ann _mn _maka topdecls) =
   traverse_ evalTopDecl topdecls
 
 evalTopDecl :: TopDecl Resolved -> Eval ()
@@ -275,6 +275,8 @@ evalTopDecl (Directive _ann directive) =
   evalDirective directive
 evalTopDecl (Import _ann _import_) =
   pure ()
+evalTopDecl (Section _ann sec) =
+  evalSection sec
 
 evalLocalDecl :: LocalDecl Resolved -> Eval ()
 evalLocalDecl (LocalDecide _ann decide) =
