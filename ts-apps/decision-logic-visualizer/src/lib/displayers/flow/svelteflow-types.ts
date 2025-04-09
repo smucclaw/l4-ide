@@ -3,10 +3,6 @@
 import type { Name } from '@repo/viz-expr'
 import type { UBoolValue } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
-import {
-  emptyEdgeLabel,
-  EdgeStylesContainer,
-} from '$lib/layout-ir/ladder-graph/edge-attributes.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
 import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
@@ -15,6 +11,12 @@ import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
+
+import {
+  emptyEdgeLabel,
+  EdgeStylesContainer,
+} from '$lib/layout-ir/ladder-graph/edge-attributes.js'
+import type { LadderNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
 
 /**
  * The result type of the ladder lir graph to SF graph conversion.
@@ -34,7 +36,7 @@ export interface LadderSFGraph {
           SF Nodes
 *************************************************/
 
-export type LadderSFNode = SF.Node
+export type LadderSFNode = SF.Node & { data: LadderSFNodeData }
 
 export function getSFNodeId(node: LadderSFNode): string {
   return node.id
@@ -115,6 +117,7 @@ export interface BundlingNodeDisplayerProps {
 export interface LadderSFNodeData {
   context: LirContext
   originalLirId: LirId
+  classes: LadderNodeCSSClass[]
 }
 
 export interface BoolVarDisplayerData extends LadderSFNodeData {

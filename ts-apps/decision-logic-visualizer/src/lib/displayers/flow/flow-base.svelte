@@ -24,11 +24,11 @@
   import {
     type LadderSFNodeWithDims,
     type LadderSFGraph,
+    type LadderSFNode,
     sfNodeTypes,
     sfEdgeTypes,
     isBoolVarSFNode,
     getSFNodeId,
-    type LadderSFNode,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { cycle } from '$lib/eval/type.js'
@@ -169,7 +169,7 @@
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
-    const lirId = sfNodeToLirId(event.node)
+    const lirId = sfNodeToLirId(event.node as LadderSFNode)
     const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
 
     const newValue = cycle(lirBoolVarNode.getValue(context))
@@ -184,7 +184,7 @@
   > = (event) => {
     if (event.targetNode) {
       const lirNode = context.get(
-        sfNodeToLirId(event.targetNode)
+        sfNodeToLirId(event.targetNode as LadderSFNode)
       ) as LadderLirNode
       lirNode.setPosition(context, event.targetNode.position)
     }
