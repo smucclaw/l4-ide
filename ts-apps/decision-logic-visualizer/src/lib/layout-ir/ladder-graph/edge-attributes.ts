@@ -80,14 +80,14 @@ export function mergeEdgeAttributes(
 }
 
 /***************************
-      Edge Label and Styles
-  ****************************/
+    Edge Label and Styles
+****************************/
 
 export const emptyEdgeLabel = ''
 
 /***************************
-      Edge Style Container
-  ****************************/
+    Edge Style Container
+****************************/
 
 /** Container for the edge style strings */
 export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
@@ -106,7 +106,7 @@ export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
 
   /********************************************************
                   Getters
-    *********************************************************/
+  *********************************************************/
 
   getBase() {
     return this.base
@@ -126,7 +126,7 @@ export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
 
   /********************************************************
               Edge Style Counterparts
-    *********************************************************/
+  *********************************************************/
 
   /** Get a version of the edge styles that's the same, except highlighted */
   getHighlightedCounterpart() {
@@ -171,7 +171,7 @@ export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
 
 /***************************
       Edge Style String
-  ****************************/
+****************************/
 
 export type EdgeStyle = BaseEdgeStyle | ModifierEdgeStyle
 export type BaseEdgeStyle =
