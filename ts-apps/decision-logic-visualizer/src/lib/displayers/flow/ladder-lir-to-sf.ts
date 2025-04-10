@@ -157,6 +157,7 @@ export function ladderLirEdgeToSfEdge(
   edge: LadderLirEdge
 ): SF.Edge {
   const label = graph.getEdgeLabel(context, edge)
+  const styles = graph.getEdgeStyles(context, edge)
 
   return {
     id: edge.getId(),
@@ -164,7 +165,8 @@ export function ladderLirEdgeToSfEdge(
     data: {
       context,
       label,
-      edgeStyles: graph.getEdgeStyles(context, edge).getCombinedStyleString(),
+      edgeStyles: styles.getCombinedEdgeStyleString(),
+      labelStyles: styles.getLabelStyleString(),
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),

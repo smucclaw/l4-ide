@@ -27,8 +27,9 @@
   pathOptions={{ curvature: 1 }}
   style={'transition-property: opacity; transition-duration: 300ms;' +
     data?.edgeStyles}
+  labelStyle={data?.labelStyles}
 />
-
+<!-- TODO: Not sure that the lower opacity look is great for labels -->
 <!-- 
 Relevant docs / examples
 * Their repo: xyflow/examples/svelte/src/routes/examples/edges/CustomBezierEdge.svelte
