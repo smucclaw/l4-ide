@@ -4,13 +4,19 @@ For background, please see [[regulative.md]]
 
 This aspect of the L4 language seeks to formalize regulative rules, as defined by Searle and elaborated in LegalRuleML.
 
-* Fundamental Paradigm
+* Fundamental Paradigm for Regulative Rules
 
 L4 interprets regulative rules into a verification paradigm.
 
 In a verification paradigm, the object-level rules are given as a labeled transition system.
 The semantics of L4's LTS lie roughly at the intersection of CSP, Petri Nets, and NFA/DFAs.
 
+Deontic assertions about a contract can be captured as properties of
+the system expressed in an LTL/CTL style language.
+
+* Socratic Development of L4
+
+See this conversation: https://claude.ai/share/fc02bdd1-06cd-4546-bc1f-56eca3a9f3f8
 
 * The Object/Model Level: Regulative Rule Syntax
 
@@ -27,8 +33,8 @@ The general form of a regulative clause says who is supposed to do what, under c
   DO        <action> <action_parameters>
   BEFORE    <temporal expression> -- sets an upper bound, may be absolute or relative to other events in trace
   AFTER     <temporal expression> -- sets a lower bound, may be absolute or relative to other events in trace
-  THEN      <transition>
-  ELSE      <transition>
+  THEN/HENCE   <transition>
+  ELSE/LEST    <transition>
 #+end_src
 
 Note that ~THEN/ELSE~ replaces previous usages of ~HENCE/LEST~. Let's parse ~HENCE~ and ~THEN~ as equivalent, and ~LEST~ and ~ELSE~ as equivalent, and we can run usability experiments.
