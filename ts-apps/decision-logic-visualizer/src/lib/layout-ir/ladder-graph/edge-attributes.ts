@@ -120,8 +120,13 @@ export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
     return [this.base, ...this.modifiers]
   }
 
-  getCombinedStyleString() {
+  getCombinedEdgeStyleString() {
     return [this.base, ...this.modifiers].join(' ')
+  }
+
+  getLabelStyleString() {
+    // TODO: This is a bit of a hack
+    return this.isFaded() ? FadedEdgeStyle : ''
   }
 
   /********************************************************
