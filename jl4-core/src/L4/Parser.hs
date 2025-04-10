@@ -51,6 +51,7 @@ import Generics.SOP.NS
 import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
+import qualified Data.List.Extra as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -311,7 +312,7 @@ simpleName =
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
   -- TODO: in future we may also want to allow `tokOf #_TQuoted`
-  (fmap Base.unsnoc . unzip -> (toks, Just (q : qs, n))) <- do
+  (fmap List.unsnoc . unzip -> (toks, Just (q : qs, n))) <- do
     x <- tokOf #_TIdentifier
     (x :) <$> some (tokOf #_TDot *> tokOf #_TIdentifier)
 
