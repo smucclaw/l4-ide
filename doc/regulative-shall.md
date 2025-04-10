@@ -52,3 +52,13 @@ the party to do this thing right away."
 But when read after execution, the party could read it as "yeah, we
 shall do this thing. Tomorrow. Or maybe the day after. Or in a month
 or year, really, because the contract doesn't give a deadline!"
+
+## Why Programming Doesn't Have This Problem
+
+Programmers are conscious that the code they write is going to run.
+
+So the tense, if any, of a program, is the present perfect.
+
+Even though programmers have to worry that they screwed up in some way
+that will be caught at compile time, the actual thrust of the program
+takes effect at run time. And so everything is written for run time.
