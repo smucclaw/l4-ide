@@ -174,11 +174,13 @@ with their EdgeData */
 export interface LadderEdgeAttrs extends Record<string, unknown> {
   label: string
   edgeStyles: string
+  labelStyles: string
 }
 
 export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
-  edgeStyles: new EdgeStylesContainer().getCombinedStyleString(),
+  edgeStyles: new EdgeStylesContainer().getCombinedEdgeStyleString(),
+  labelStyles: new EdgeStylesContainer().getLabelStyleString(),
 }
 
 export interface LadderEdgeData extends LadderEdgeAttrs {

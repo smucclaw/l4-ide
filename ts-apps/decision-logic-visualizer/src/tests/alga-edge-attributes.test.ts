@@ -13,8 +13,8 @@ import { NumberWrapper } from './number-wrapper.js'
 describe('Edge Attributes - DefaultEdgeAttributes', () => {
   test('DefaultEdgeAttributes have fallback / default styles and empty label', () => {
     const attrs = new DefaultEdgeAttributes()
-    expect(attrs.getStyles().getCombinedStyleString()).toBe(
-      new EdgeStylesContainer().getCombinedStyleString()
+    expect(attrs.getStyles().getCombinedEdgeStyleString()).toBe(
+      new EdgeStylesContainer().getCombinedEdgeStyleString()
     )
     expect(attrs.getLabel()).toBe(emptyEdgeLabel)
   })
@@ -39,8 +39,8 @@ describe('Edge Attributes - Setting and Getting', () => {
     // Get the attributes
     const retrievedAttrs = g.getAttributesForEdge(edge)
     expect(retrievedAttrs.getLabel()).toBe('Test Edge')
-    expect(retrievedAttrs.getStyles().getCombinedStyleString()).toBe(
-      new EdgeStylesContainer(HighlightedEdgeStyle).getCombinedStyleString()
+    expect(retrievedAttrs.getStyles().getCombinedEdgeStyleString()).toBe(
+      new EdgeStylesContainer(HighlightedEdgeStyle).getCombinedEdgeStyleString()
     )
   })
 
@@ -72,8 +72,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getCombinedStyleString()).toBe(
-      styles2.getCombinedStyleString()
+    expect(mergedAttrs.getStyles().getCombinedEdgeStyleString()).toBe(
+      styles2.getCombinedEdgeStyleString()
     )
   })
 
@@ -87,8 +87,8 @@ describe('Edge Attributes - Merging', () => {
     const mergedAttrs = attrs1.merge(attrs2)
 
     expect(mergedAttrs.getLabel()).toBe('Label2')
-    expect(mergedAttrs.getStyles().getCombinedStyleString()).toBe(
-      styles2.getCombinedStyleString()
+    expect(mergedAttrs.getStyles().getCombinedEdgeStyleString()).toBe(
+      styles2.getCombinedEdgeStyleString()
     )
   })
 })
@@ -117,8 +117,8 @@ describe('Edge Attributes - Graph Operations', () => {
     // Get edge attributes from overlaid graph
     const resultAttr = overlaid.getAttributesForEdge(edge)
     expect(resultAttr.getLabel()).toBe('Label2')
-    expect(resultAttr.getStyles().getCombinedStyleString()).toBe(
-      attr2.getStyles().getCombinedStyleString()
+    expect(resultAttr.getStyles().getCombinedEdgeStyleString()).toBe(
+      attr2.getStyles().getCombinedEdgeStyleString()
     )
   })
 
@@ -173,8 +173,8 @@ describe('Edge Attributes - Graph Operations', () => {
     const resultingAttr = overlaid.getAttributesForEdge(edge)
     expect(resultingAttr.getLabel()).toBe('Label1')
     // attr2's label is empty, so use attr1's label
-    expect(resultingAttr.getStyles().getCombinedStyleString()).toBe(
-      attr2.getStyles().getCombinedStyleString()
+    expect(resultingAttr.getStyles().getCombinedEdgeStyleString()).toBe(
+      attr2.getStyles().getCombinedEdgeStyleString()
     )
     // Styles should be from attr2
   })
