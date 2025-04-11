@@ -39,7 +39,7 @@ instance LayoutPrinter a => LayoutPrinter (Maybe a) where
 instance LayoutPrinter RawName where
   printWithLayout = \case
     NormalName t -> pretty $ quoteIfNeeded t
-    QualifiedName t qs -> pretty t <+> parens ("qualified at module" <+> pretty (Text.intercalate "." $ NE.toList qs))
+    QualifiedName t qs -> pretty t <+> parens ("qualified at section" <+> pretty (Text.intercalate "." $ NE.toList qs))
     PreDef t -> pretty $ quoteIfNeeded t
 
 instance LayoutPrinter a => LayoutPrinter (Type' a) where

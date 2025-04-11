@@ -579,3 +579,7 @@ deriving anyclass instance HasSrcRange Ref
 
 instance HasSrcRange Resolved where
   rangeOf = rangeOf . getActual
+
+-- | this can be used to get rid of annotations to clean up printing
+clearAnno :: GPlate Anno a => a -> a
+clearAnno = set (gplate @Anno) emptyAnno
