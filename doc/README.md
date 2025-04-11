@@ -1,20 +1,29 @@
 # L4 Language Reference
 
 L4 is designed for isomorphic formalization of the better part of most
-legal documents. This guide springboards from common legal idioms.
+legal documents. This includes legislation, regulations, and
+contracts. Contract genres to which L4 is suited include insurance
+policies, rental leasing, employment agreements, financial agreements
+(e.g. loans).
+
+This guide explains both what L4 is and how to use it, using legal
+examples and legal idioms as a point of reference. Along the way we
+show how L4 borrows ideas from software engineering to improve
+drafting and help end-users make sense of legal situations.
 
 ## Basic data types: true/false, numbers, strings, and records
 
-Laws and contracts frequently must reduce shades of grey to a black
+Laws and contracts must reduce shades of grey to a black
 and white decision. Think "bright line" tests. In L4, **Boolean
 logic** is used to work with those black-and-white, Yes/No, True/False
 values. These values are combined using the operators `AND`, `OR`,
 `NOT`, `ANY`, `ALL`. (See: [Boolean logic](./10-boolean-logic.md))
 
 Besides "yes" or "no" values, one often has to deal with numbers,
-strings, enums, or a combination of these basic **types**. L4's
-**data modelling** syntax offers familiar record and OOP-class syntax for
-representing reality, backed by static type inference. (See: [Basic Data Types](./10-data-types.md))
+strings, enums, or a combination of these basic **types**. L4's **data
+modelling** syntax offers familiar record and OOP-class syntax for
+representing the real world, backed by static type inference. (See:
+[Basic Data Types](./10-data-types.md))
 
 ## Unknown values; treating unknowns as false
 
