@@ -138,15 +138,19 @@ For every `THEN`, there's an `ELSE`. What's `ELSE` in L4?
 
 ### About `LEST`
 
+`LEST` also connects two regulative stanzas.
+
 If the first stanza is not fulfilled -- if the preconditions are met,
 but the party does *not* perform the action properly by the deadline
--- then the plot of the story turns to the `LEST` branch. This is the
-structure of many stories: some original sin occurs, and the story
-concerns itself not with what should have happened ideally, but how
-the hero strives to repair the damage and restore the world to its
-original Edenic state. This gives us the *Odyssey*, not to mention the
-*Avengers: Infinity War and Endgame* couplet, *and *Spider-Man: Into
-the Multiverse*. It also gives the `except` branch of every
+-- then the plot of the story turns to the `LEST` branch. Penalties
+and redemption.
+
+This is the structure of many stories: some original sin occurs, and
+the story concerns itself not with what should have happened ideally,
+but how the hero strives to repair the damage and restore the world to
+its original Edenic state. This gives us the *Odyssey*, not to mention
+the *Avengers: Infinity War and Endgame* couplet, *and *Spider-Man:
+Into the Multiverse*. It also gives the `except` branch of every
 `try/except` exception handler. And it gives us that part of contracts
 which deal with reparations.
 
@@ -167,7 +171,7 @@ formalize these speech acts as messages passed between actors:
 requests, notices, authorisations, demands, apologies, and so on are
 types of such communications.
 
-### Constitutive Within Regulative
+### Constitutives Within Regulatives
 
 The two top-level actions -- by the foreign appropriate authority, and
 by the Attorney-General, are themselves qualified with constitutive
