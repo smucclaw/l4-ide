@@ -354,7 +354,7 @@ GIVEN  fc    IS A Country
 
    IF  sg EQUALS Singapore
 PARTY  aa    IS A Person
-  WHO  `is an appropriate authority of` fc
+  WHO  `is an appropriate authority`
   MAY  `make a request` -- this will become a action datatype
          that: `evidence` e
          be:   `taken in` sg
@@ -405,7 +405,7 @@ We know from CSL that the idea is to have an `action` with `action_parameters`.
 ```
    IF  sg EQUALS Singapore
 PARTY  aa    IS A Person
-  WHO  `is an appropriate authority of` fc
+  WHO  `is an appropriate authority`
   MAY  `make a request` -- this will become a action datatype
          that: `evidence` e
          be:   `taken in` sg
