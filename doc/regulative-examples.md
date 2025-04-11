@@ -70,7 +70,11 @@ How might the AG teach their team to handle these faxes?
 
 ### Constitutive Elements: Black And White Decision Logic
 
-She might rearrange the sentence on a whiteboard:
+The "where" part
+of the sentence is phrased as a *constitutive rule* that determines if a
+request is **valid**, or **qualifying**.
+
+The AG might rearrange the sentence on a whiteboard:
 
 - [ ] the appropriate authority of a foreign country
 - [ ] makes a request
@@ -80,20 +84,12 @@ She might rearrange the sentence on a whiteboard:
 - [ ] pending in a court
 - [ ] in the foreign country
 
-*Comment:* Already we detect a lexical ambiguity: "... for the purposes
-of criminal proceedings" makes sense. But is it the *request* that is
-made for the purposes of criminal proceedings? Or is it the *evidence*
-that is to be taken for the purposes of criminal proceedings? Maybe it
-doesn't matter. We soldier on.
-
 The AG might draw a checkbox at the left of each line above, and say
 to her staff, "every fax that comes in, file it into the Go pile if
 all the boxes get checked; file it into the Review pile if any of the
 boxes isn't checked."
 
-That deals with the *decision logic* of the request. The "where" part
-of the sentence is phrased as a *constitutive rule* that determines if a
-request is **valid**, or **qualifying**.
+That deals with the *decision logic* of the request.
 
 ### Regulative Elements: The Moving Parts
 
@@ -105,38 +101,79 @@ If the request is valid, the AG moves on to the next step:
 - to some magistrate
 - instructing them to take the evidence specified in the request
 
-At the top level, there are two events: the foreign authority makes a
-(valid) request; then the local Attorney-General authorises a Magistrate.
+At the top level, there are two connected events: the foreign
+authority makes a (valid) request; then the local Attorney-General
+authorises a Magistrate.
 
-Let's follow that two-event pattern as we start sketching our encoding
-into L4's regulative syntax.
+How does L4 connect those two events? With `HENCE`.
 
 ```l4
 GIVEN  fc    IS A Country
        ag    IS A Person -- the attorney general
 PARTY  auth  IS A Person
   WHO  `is an appropriate authority of` fc
-  MAY  `make a request` -- details to be fleshed out later  
+  MAY  `make a request` -- details to be fleshed out later
 
 HENCE  PARTY  ag
          MAY  `authorise a Magistrate` -- details later
 ```
 
+### About `HENCE`
+
+`HENCE` connects two regulative stanzas.
+
+If the first stanza is fulfilled -- if the preconditions are met and
+the party does the action properly by the deadline -- then the plot of
+the story proceeds to the stanza under `HENCE`.
+
+Indeed, you can think of `HENCE` as a special kind of `THEN`.
+
+You can trace the "happy path" of a contract by following the `HENCE`
+connections: everybody does what they should, and before you know it,
+the game is over and everyone is happy.
+
+For every `THEN`, there's an `ELSE`. What's `ELSE` in L4?
+
+`LEST`.
+
+### About `LEST`
+
+If the first stanza is not fulfilled -- if the preconditions are met,
+but the party does *not* perform the action properly by the deadline
+-- then the plot of the story turns to the `LEST` branch. This is the
+structure of many stories: some original sin occurs, and the story
+concerns itself not with what should have happened ideally, but how
+the hero strives to repair the damage and restore the world to its
+original Edenic state. This gives us the *Odyssey*, not to mention the
+*Avengers: Infinity War and Endgame* couplet, *and *Spider-Man: Into
+the Multiverse*. It also gives the `except` branch of every
+`try/except` exception handler. And it gives us that part of contracts
+which deal with reparations.
+
+Most `MAY` stanzas don't have an explicit `LEST`, because if an actor
+chooses not to do something that was optional in the first place,
+that's fine. Technically speaking, an implicit default `LEST
+Fulfilled` is automatically inserted to fill the gap.
+
+Many `MAY` stanzas follow the pattern "Party A MAY do X, hence Party B
+MUST do Y" -- because an optional action is only interesting if it
+eventually creates a new obligation. This MACMA example breaks that
+pattern, but that's sovereignty for you.
+
 *Theory note:* This is a good illustration of the special nature of
-communication. Searle identified *speech acts* as utterances that
+official communication. Searle identified *speech acts* as utterances that
 constitute institutional events. Many labeled transition systems
 formalize these speech acts as messages passed between actors:
 requests, notices, authorisations, demands, apologies, and so on are
 types of such communications.
 
+### Constitutive Within Regulative
+
 The two top-level actions -- by the foreign appropriate authority, and
 by the Attorney-General, are themselves qualified with constitutive
-elements. For the incoming request to be valid, it needs to have a
-particular purpose, etc, etc. And the action taken by the AG is
-narrowly defined to authorise a Magistrate, in writing, to take the
-evidence.
-
-### Constitutive Within Regulative
+elements. For the incoming request to be valid, it must meet certain
+criteria, as seen above. And the action taken by the AG is narrowly
+specified: to authorise a Magistrate, in writing, to take the evidence.
 
 So that twines us back to the *decision logic* of validity and
 qualification. In other words, within Searle's regulative rules, we
@@ -149,7 +186,7 @@ GIVEN  fc    IS A Country
        ag    IS A Person -- the attorney general
 
 PARTY  aa    IS A Person
-  WHO  `is an appropriate authority of` fc
+  WHO  `is an appropriate authority`
   MAY  `make a request`
          that: `evidence be taken in Singapore`
          for:  `the purposes of`
@@ -190,7 +227,7 @@ GIVEN  fc    IS A Country
        dir   IS A Direction
        `to make request`     IS A BOOLEAN
        `to receive request`  IS A BOOLEAN
-DECIDE `is an appropriate authority of` IF
+DECIDE `is an appropriate authority` IF
           `is a person`     aa
        OR `is an authority` aa
   AND `is satisfied is authorised under the law of` ag aa fc
