@@ -114,7 +114,7 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
  *************************************************/
 
 /** The simplest version of the LinPathLirNode -- no distinguishing between
- * compatible and incompatible linearized paths
+ * viable and non-viable linearized paths
  */
 export class LinPathLirNode extends DefaultLirNode implements LirNode {
   constructor(
@@ -150,7 +150,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-// TODO: Differentiate between compatible and incompatible linearized paths
+// TODO: Differentiate between viable and non-viable linearized paths
 
 /******************************************************
                   Flow Lir Nodes
@@ -303,12 +303,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag = dag
     this.#originalExpr = originalExpr
     this.#vizExprToLirDag = vizExprToLirGraph
-    console.log(
-      'vizExprToLirGraph',
-      vizExprToLirGraph.entries().forEach(([_, dag]) => {
-        console.log(dag.toString())
-      })
-    )
+    // console.log(
+    //   'vizExprToLirGraph',
+    //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
+    //     console.log(dag.toString())
+    //   })
+    // )
 
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       isBoolVarLirNode
@@ -364,7 +364,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
     if (!this.#pathsList) {
@@ -550,20 +549,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     */
     this.doEvalLadderExprWithVarBindings(context)
 
-    // Grey out incompatible subgraphs
-    const incompatibleIRIds = Array.from(
-      this.#evalResult.intermediate.entries()
-    )
+    // Fade out subgraphs that are no longer viable in light of user's choices
+    const nonviableIRIds = Array.from(this.#evalResult.intermediate.entries())
       .filter(([_id, val]) => isFalseVal(val))
       .map(([irId, _val]) => irId)
-    const incompatibleSubgraph = incompatibleIRIds
+    const nonviableSubgraph = nonviableIRIds
       .map((irId) => this.#vizExprToLirDag.get(irId))
       .filter((dag) => !!dag)
       .reduceRight((acc, curr) => acc.overlay(curr), empty())
-    console.log('incompatible subgraph: ', incompatibleSubgraph)
+    // console.log('nonviableSubgraph: ', nonviableSubgraph)
 
     this.clearFadeOutStyles(context)
-    this.fadeOutSubgraph(context, incompatibleSubgraph)
+    this.fadeOutSubgraph(context, nonviableSubgraph)
 
     this.getRegistry().publish(context, this.getId())
   }
