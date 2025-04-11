@@ -3,7 +3,7 @@ import type { IRDecl, IRExpr, IRId } from '@repo/viz-expr'
 Do not use $lib for the layout-ir imports
 */
 import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
-import type { DeclLirNode } from '../layout-ir/ladder-lir.svelte.js'
+import type { DeclLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import {
   FunDeclLirNode,
   BoolVarLirNode,
@@ -14,7 +14,7 @@ import {
   SinkLirNode,
   LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
-} from '../layout-ir/ladder-lir.svelte.js'
+} from '../layout-ir/ladder-graph/ladder.svelte.js'
 import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
@@ -51,17 +51,22 @@ export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
     const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
     const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
-    const { graph: middle, vizExprToLir } = transform(nodeInfo, new Map(), expr)
+    const { graph: middle, vizExprToLirGraph } = transform(
+      nodeInfo,
+      new Map(),
+      expr
+    )
 
     const dag = overallSource
       .connect(middle.getSource())
       .overlay(middle)
       .overlay(middle.getSink().connect(overallSink))
+    vizExprToLirGraph.set(expr.id, dag)
 
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
-      vizExprToLir,
+      vizExprToLirGraph,
       expr
     )
 
@@ -77,7 +82,8 @@ export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
 
 export interface ToLirResult {
   graph: DirectedAcyclicGraph<LirId>
-  vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>
+  /** TODO: Would be better to use a branded type over the underlying number for IRId, instead of the IRId wrapper */
+  vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>
 }
 
 /** Internal helper */
@@ -114,10 +120,10 @@ function transform(
       const boolvar = new BoolVarLirNode(nodeInfo, originalVar)
       const graph = vertex(boolvar.getId())
       const newEnv = new Map(env).set(originalVar.id, graph)
-      return { graph, vizExprToLir: newEnv }
+      return { graph, vizExprToLirGraph: newEnv }
     })
     .with({ $type: 'Not' }, (neg) => {
-      const { graph: negand, vizExprToLir: negandEnv } = transform(
+      const { graph: negand, vizExprToLirGraph: negandEnv } = transform(
         nodeInfo,
         env,
         neg.negand
@@ -129,9 +135,9 @@ function transform(
         .connect(negand.getSource())
         .overlay(negand)
         .overlay(negand.getSink().connect(notEnd))
-      const newEnv = new Map([...env, ...negandEnv])
+      const newEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
 
-      return { graph: notGraph, vizExprToLir: newEnv }
+      return { graph: notGraph, vizExprToLirGraph: newEnv }
     })
     .with({ $type: 'And' }, (andExpr) => {
       const childResults = andExpr.args.map((arg) =>
@@ -147,16 +153,16 @@ function transform(
 
       const allEnvs = [
         env,
-        ...childResults.map((result) => result.vizExprToLir),
+        ...childResults.map((result) => result.vizExprToLirGraph),
       ]
       const combinedEnv = new Map(
         allEnvs.reduceRight(
           (accEntries, env) => [...env, ...accEntries],
           [] as [IRId, DirectedAcyclicGraph<LirId>][]
         )
-      )
+      ).set(andExpr.id, combinedGraph)
 
-      return { graph: combinedGraph, vizExprToLir: combinedEnv }
+      return { graph: combinedGraph, vizExprToLirGraph: combinedEnv }
     })
     .with({ $type: 'Or' }, (orExpr) => {
       const childResults = orExpr.args.map((n) => transform(nodeInfo, env, n))
@@ -185,15 +191,15 @@ function transform(
       ].reduce(overlay)
 
       // Envs
-      const childEnvs = childResults.map((result) => result.vizExprToLir)
+      const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
       const newEnv = new Map(
         childEnvs.reduceRight(
           (entries, env) => [...env, ...entries],
           [] as [IRId, DirectedAcyclicGraph<LirId>][]
         )
-      )
+      ).set(orExpr.id, orGraph)
 
-      return { graph: orGraph, vizExprToLir: newEnv }
+      return { graph: orGraph, vizExprToLirGraph: newEnv }
     })
     .exhaustive()
 }

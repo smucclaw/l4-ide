@@ -1,6 +1,13 @@
-import { match } from 'ts-pattern'
 import { IRExpr } from '@repo/viz-expr'
 import * as VE from '@repo/viz-expr'
+
+import {
+  TrueValCSSClass,
+  FalseValCSSClass,
+} from '$lib/layout-ir/ladder-graph/node-styles.js'
+import type { BoolValCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
+
+import { match } from 'ts-pattern'
 
 /********************************
           Value
@@ -19,7 +26,7 @@ export function isUBoolValue(val: Value): val is UBoolValue {
 
 interface UBoolV {
   $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
-  getClasses(): string[]
+  getClasses(): BoolValCSSClass[]
   toPretty(): string
 }
 
@@ -36,7 +43,7 @@ export class TrueVal implements UBoolV {
   constructor() {}
 
   getClasses() {
-    return ['true-val']
+    return [TrueValCSSClass]
   }
 
   toPretty() {
@@ -49,7 +56,7 @@ export class FalseVal implements UBoolV {
   constructor() {}
 
   getClasses() {
-    return ['false-val']
+    return [FalseValCSSClass]
   }
 
   toPretty() {

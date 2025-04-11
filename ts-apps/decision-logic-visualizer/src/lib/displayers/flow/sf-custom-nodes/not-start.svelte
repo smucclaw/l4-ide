@@ -1,21 +1,27 @@
 <script lang="ts">
-  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
-  import type { NodeProps, Node } from '@xyflow/svelte'
+  import {
+    defaultSFHandlesInfo,
+    type NotDisplayerProps,
+  } from '../svelteflow-types.js'
+  // import type { NodeProps, Node } from '@xyflow/svelte'
   import { Handle } from '@xyflow/svelte'
 
-  // eslint-disable-next-line no-empty-pattern
-  let {}: NodeProps<Node> = $props()
+  let { data }: NotDisplayerProps = $props()
 
   const graphicSize = 100
 </script>
 
-<div class="svelte-flow__node-basic content-bearing-sf-node-border m-0 p-0">
+<div
+  class={[
+    'svelte-flow__node-basic content-bearing-sf-node-border m-0 p-0',
+    ...data.classes,
+  ]}
+>
   <Handle
     type="target"
     position={defaultSFHandlesInfo.targetPosition}
     style="opacity: 0.4"
   />
-  <!-- <div>{'<NOT|'}</div> -->
   <svg
     width="92%"
     height={graphicSize * 0.5}

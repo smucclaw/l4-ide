@@ -9,11 +9,11 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   let { data }: BoolVarDisplayerProps = $props()
 </script>
 
-<!-- Need to use data.value instead of value to maintain reactivity -->
+<!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` -->
 <div
   class={[
-    'svelte-flow__node-basic bool-var-node-border',
-    ...data.value.getClasses(),
+    'svelte-flow__node-basic bool-var-node-border transition-opacity duration-300',
+    ...data.classes,
   ]}
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
