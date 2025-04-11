@@ -4,7 +4,7 @@ module L4.TypeCheck.Types where
 import Base
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Parser.SrcSpan (SrcRange(..))
-import L4.Syntax
+import L4.Syntax hiding (Cons)
 import L4.TypeCheck.With
 
 import Control.Applicative
@@ -307,32 +307,42 @@ lookupRawNameInEnvironment rn = do
   let (tn, qs)  = case rn of
         QualifiedName n' qs' -> (NormalName n', NE.toList qs')
         n -> (n, [])
-  -- TODO:
-  -- - get the sections that have already been checked
-  -- - find the section that belongs to a certain qualified name
   env <- asks (.environment)
   ei  <- asks (.entityInfo)
 
-  let ss = case qs of
-        [q] | Just us <- Map.lookup (NormalName q) env
+  let mkSections :: [Text] -> [[(Name, Section Resolved)]]
+      mkSections = \case
+        (q : qs') | Just us <- Map.lookup (NormalName q) env
             , secs <- mapMaybe
               (\u -> Map.lookup u ei >>= \(n, ce) -> case ce of KnownSection s -> Just (n, s); _ -> Nothing)
               us
-            -> secs
-        -- TODO: nested sections
+            -> secs : mkSections qs'
+        (_ : _) -> [[]]
         _ -> []
 
-  let
-    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
-    proc u = do
-      (o, ce) <- Map.lookup u ei
+      sectionInSection :: [[(Name, Section Resolved)]] -> [(Name, Section Resolved)]
+      -- NOTE: we have to treat this specially otherwise the recursive call will always
+      -- bottom out at an empty list of sections which makes the entire algorithm fail
+      sectionInSection [secs] = secs
+      sectionInSection (secs : secss) = do
+        u <- foldMap (\(n, _) -> fromMaybe [] (Map.lookup (rawName n) env)) secs
+        (_n', sr) <- sectionInSection secss
+        guard $ isTopLevelBindingInSection u sr
+        secs
+      sectionInSection [] = []
 
-      guard $ null qs || any (isTopLevelBindingInSection u . snd) ss
+      reversedSections = sectionInSection $ reverse $ mkSections qs
 
-      pure (u, o, ce)
+      proc :: Unique -> Maybe (Unique, Name, CheckEntity)
+      proc u = do
+        (o, ce) <- Map.lookup u ei
 
-    candidates :: [(Unique, Name, CheckEntity)]
-    candidates = mapMaybe proc (Map.findWithDefault [] tn env)
+        guard $ null qs || any (isTopLevelBindingInSection u . snd) reversedSections
+
+        pure (u, o, ce)
+
+      candidates :: [(Unique, Name, CheckEntity)]
+      candidates = mapMaybe proc (Map.findWithDefault [] tn env)
 
   pure candidates
 
@@ -345,7 +355,8 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . mat
     Assume _ (MkAssume _ _ af _) -> afUnq af
     Directive _ _ -> []
     Import _ _ -> []
-    Section _ (MkSection _ _ _ decls') -> foldMap matchesUnq decls'
+    Section _ (MkSection _ mr _ decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap matchesUnq decls'
+
   afUnq = map getUnique . appFormHeads
 
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
