@@ -111,7 +111,7 @@ How does L4 connect those two events? With `HENCE`.
 GIVEN  fc    IS A Country
        ag    IS A Person -- the attorney general
 PARTY  auth  IS A Person
-  WHO  `is an appropriate authority of` fc
+  WHO  `is an appropriate authority`
   MAY  `make a request` -- details to be fleshed out later
 
 HENCE  PARTY  ag
@@ -174,7 +174,7 @@ types of such communications.
 ### Constitutives Within Regulatives
 
 The two top-level actions -- by the foreign appropriate authority, and
-by the Attorney-General, are themselves qualified with constitutive
+by the Attorney-General -- are themselves qualified with constitutive
 elements. For the incoming request to be valid, it must meet certain
 criteria, as seen above. And the action taken by the AG is narrowly
 specified: to authorise a Magistrate, in writing, to take the evidence.
@@ -268,22 +268,20 @@ Let's look at what happens if the request originates from:
 
 3. Jonah Jameson, attorney for the defense
 
-In the first case, a quick Google reveals that the Department of
-International Crimes is an authority authorised under the law of the
-foreign country to interface with other governments to request
-evidence. The fax contains, in Annex A, an excerpt from the law in
-question establishing that department jointly under the Ministry of
-Law and the Ministry of Foreign Affairs. So the AG is satisfied that
-the department is an appropriate authority, authorised under the law
-of the foreign country to make such requests.
+In the first case, the fax contains, in Annex A, an excerpt from some
+law of the foreign country establishing the department jointly under
+the Ministry of Law and the Ministry of Foreign Affairs, and
+empowering it to make requests of foreign governments. So the AG is
+satisfied that the department is an appropriate authority, authorised
+under the law of the foreign country to make such requests.
 
 In the second case, some research reveals that the criminal case in
 the foreign country has multiple international elements; the fax
 includes, in Annex A, a court order from the relevant judge appointing
-Lex Luthor as a special representative of the court
-instructed to liaise with foreign governments to gather relevant
-evidence. So the AG is satisfied that Lex is a person authorised
-under the law of the foreign country to make the request.
+Lex Luthor as a special representative of the court instructed to
+liaise with foreign governments to gather relevant evidence. So the AG
+is satisfied that Lex is a person authorised under the law of the
+foreign country to make the request.
 
 ### Any Person!?
 
@@ -293,7 +291,7 @@ international sources. So Lex Luthor is just a person, and he is
 looking like an unauthorised person at that. The AG gets ready to
 write back, saying, sorry, you don't seem to be an appropriate
 authority. But Lex Luthor, having anticipated this, has attached, in
-Annex A, some text from our statute:
+Annex A, text from our statute:
 
 > “appropriate authority”, in relation to a foreign country, means
 
@@ -305,29 +303,34 @@ Annex A, some text from our statute:
 
 >   (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
 
-Lex has circled "a person", and separately, "or authority ..."
+Lex has made a small circle, in pen, around "a person"; and a large
+circle around "or authority ..." through to the end of the paragraph.
 
-In this reading, an authority such as a department under the Ministry
-of Law would need to be explicitly authorised under the law of the
-foreign country ... but an individual person doesn't need to be so
-authorized; indeed, any natural person could be the source of a
-request.
+In this admittedly preposterous reading, an authority such as a
+department under the Ministry of Law would need to be explicitly
+authorised under the law of the foreign country ... but an individual
+person doesn't need to be so authorized; indeed, any natural person
+could be the source of a request.
 
-The Attorney-General's staffer handling this case does not speak
-English as a first language; if they did, they would formulate an
-argument that if Lex's interpretation were what Parliament had
-intended, the text of the definition would have said "a person or
-**an** authority whom..." ... but this distinction is too subtle, and
-eludes them.
+Preposterous as this may be, the Attorney-General's staffer handling
+this case does not speak English as a first language; if they did,
+they would formulate an argument that if Lex's interpretation were
+what Parliament had intended, the text of the definition would have
+said "a person or **an** authority whom..." ... but this distinction
+is too subtle, and eludes them.
 
-So Lex Luthor wins the right to collect their evidence.
+Instead what happens is the staffer just goes along with Lex's
+interpretation.
+
+And Lex Luthor wins the right to collect their evidence.
+
+It might be obvious to the average native speaker of English that this
+can't possibly be what Parliament intended; but Lex got to be the
+richest man on the planet precisely by outsmarting the average native
+speaker of English!
 
 If this law had been drafted in L4 in the first place, it would have
 been clear which interpretation was intended.
-
-It might be obvious to you and me that this can't possibly be what
-Parliament intended; but Lex got to be the richest man on the planet
-precisely by outsmarting people like you and me!
 
 ## Discretion to Proceed
 
