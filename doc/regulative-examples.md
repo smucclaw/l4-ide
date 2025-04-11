@@ -244,7 +244,7 @@ DECIDE `is an appropriate authority` IF
 
 ### Ambiguity in Appropriate Authority
 
-The process of formalization lays bare another lexical ambiguity in
+The process of formalization lays bare a possible lexical ambiguity in
 the original statute.
 
 There is another possible reading of the same text:
@@ -316,11 +316,11 @@ Preposterous as this may be, the Attorney-General's staffer handling
 this case does not speak English as a first language; if they did,
 they would formulate an argument that if Lex's interpretation were
 what Parliament had intended, the text of the definition would have
-said "a person or **an** authority whom..." ... but this distinction
-is too subtle, and eludes them.
+said "**any** person or **an** authority **which**..." ... but this
+distinction is too subtle, and eludes them.
 
 Instead what happens is the staffer just goes along with Lex's
-interpretation.
+interpretation, bamboozled by his impressiveness.
 
 And Lex Luthor wins the right to collect their evidence.
 
@@ -330,7 +330,8 @@ richest man on the planet precisely by outsmarting the average native
 speaker of English!
 
 If this law had been drafted in L4 in the first place, it would have
-been clear which interpretation was intended.
+been clear which interpretation was intended. L4 eliminates these
+ambiguities.
 
 ## Discretion to Proceed
 
