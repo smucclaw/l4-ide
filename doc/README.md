@@ -80,6 +80,10 @@ supported by the L4 toolchain. (See: [regulative rules](./regulative-proposal.or
 Legislation and regulation can be thought of a special kind of rule
 where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
 
+## Example translations of regulative rules
+
+See [Regulative Examples](./regulative-examples.md)
+
 ## Sections and Scopes
 
 Legal texts are structured into act, chapter, part, section,
