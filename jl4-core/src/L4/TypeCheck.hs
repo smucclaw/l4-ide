@@ -197,6 +197,7 @@ data CheckInfo = MkCheckInfo
   { names :: [Resolved]
   , checkEntity :: CheckEntity
   }
+  deriving stock (Eq, Show)
 
 -- | Make the given 'CheckInfo' known in the given scope.
 extendKnown :: CheckInfo -> Check a -> Check a
@@ -511,14 +512,37 @@ inferImport (MkImport ann n) = do
   pure (MkImport ann rn)
 
 inferSection :: Section Name -> Check (Section Resolved, [CheckInfo])
-inferSection (MkSection ann lvl mn maka topdecls) = do
+inferSection (MkSection ann mn maka topdecls) = do
   rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
   rmaka <-
     case rmn of
       Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
       Just rn -> traverse (inferAka rn) maka
-  (rtopdecls, extends) <- unzip <$> sequentialTraverse inferTopDecl topdecls
-  pure (MkSection ann lvl rmn rmaka rtopdecls, concat extends)
+  -- NOTE: sequentialTraverse doesn't quite cut it due to needing to remove the old current section from the environment
+  (rtopdecls, es1) <- first reverse . unzip . snd
+    <$> foldl'
+        (\xy z -> do (x, y) <- xy
+                     inferTopDeclWithPartialSection x y z
+        )
+        (pure (MkSection ann rmn rmaka [], []))
+        topdecls
+
+  let sec = MkSection ann rmn rmaka rtopdecls
+  let es2 = foldMap (\r -> [makeKnown r (KnownSection sec)]) rmn
+  pure (sec, concat es1 <> es2)
+
+  where
+
+    inferTopDeclWithPartialSection :: Section Resolved -> [(TopDecl Resolved, [CheckInfo])] -> TopDecl Name -> Check (Section Resolved, [(TopDecl Resolved, [CheckInfo])])
+    inferTopDeclWithPartialSection oldSection@(MkSection ann' rmn rmaka tdecls) acc tdecl = do
+
+      let acc'dEnv = foldMap snd acc
+          -- NOTE: if we don't have a result, we extend with an empty list, i.e. no extension
+          extension = flip makeKnown (KnownSection oldSection) <$> maybeToList rmn
+
+      inf'dtdecl <- extendKnownMany (extension <> acc'dEnv) do
+        inferTopDecl tdecl
+      pure (MkSection ann' rmn rmaka (fst inf'dtdecl : tdecls), inf'dtdecl : acc)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -544,6 +568,9 @@ inferTopDecl (Directive ann directive) = do
 inferTopDecl (Import ann import_) = do
   rimport_ <- inferImport import_
   pure (Import ann rimport_, [])
+inferTopDecl (Section ann sec) = do
+  (sec', extends) <- inferSection sec
+  pure (Section ann sec', extends)
 
 -- TODO: Somewhere near the top we should do dependency analysis. Note that
 -- there is a potential problem. If we use type-directed name resolution but
@@ -551,9 +578,9 @@ inferTopDecl (Import ann import_) = do
 -- recursion? Optimistically, pessimistically, something in between?
 --
 inferProgram :: Module  Name -> Check (Module  Resolved, [CheckInfo])
-inferProgram (MkModule ann uri sections) = do
-  (rsections, extends) <- unzip <$> sequentialTraverse inferSection sections
-  pure (MkModule ann uri rsections, concat extends)
+inferProgram (MkModule ann uri section) = do
+  (rsections, extends) <- inferSection section
+  pure (MkModule ann uri rsections, extends)
 
 -- | Similar to a 'traverse', but subsequent operations have access to the extended environment.
 -- This is necessary when checking multiple definitions where subsequent operations depend on the

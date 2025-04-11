@@ -56,6 +56,11 @@ topDeclToCompletionItem name = \case
           EnumDecl {} -> CompletionItemKind_Enum
           SynonymDecl {} -> CompletionItemKind_Reference
       }
+  KnownSection (MkSection _ (Just n) _ _) ->
+    Just (defaultCompletionItem $  nameToText $ getOriginal n)
+      { CompletionItem._kind = Just CompletionItemKind_Module
+      }
+  KnownSection (MkSection _ Nothing _ _) -> Nothing
   KnownTypeVariable {} -> Nothing
   where
     -- a function (but also a constant, in theory) can be polymorphic, so we have to strip
