@@ -93,7 +93,7 @@ import Data.Either (partitionEithers)
 import Optics.Core hiding (anyOf, re)
 import Data.Tuple.Extra (firstM)
 import Control.Monad.Extra (mapMaybeM)
-import GHC.Stack.Types
+
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -152,10 +152,6 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , entityInfo = env.entityInfo
               }
 
-type DecideCache = (Anno, TypeSig Resolved, AppForm Resolved, Type' Resolved, CheckInfo, [CheckInfo])
-type DeclareHeadCache = (Anno, TypeSig Resolved, AppForm Resolved, CheckInfo)
-type DeclareCache = (Declare Resolved, [CheckInfo])
-
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
 checkProgram module' = do
   (rdecides, rdeclares) <- scanTopEnvironment module'
@@ -176,36 +172,37 @@ scanTopEnvironment module' = do
 
   let declareAppForms = fmap (\rd -> rd ^. _4) rdeclares
 
-  local (addToTopEnv rdeclares) $ extendKnownMany declareAppForms do
+  local (addToTopEnv rdeclares) $ extendKnownMany (concat declareAppForms) do
     alldeclares <- mapMaybeM inferDeclareFull declares
 
     extendKnownMany (foldMap (\d -> d ^. _2) alldeclares) do
       let decides = toListOf (gplate @(Decide Name)) module'
-      rdecides <- mapMaybeM decideToCheckEntity decides
+      rdecides <- traverse inferDecideHead decides
       pure (rdecides, alldeclares)
   where
-    decideToCheckEntity (MkDecide ann tysig appForm _) =
-      errorContext (WhileCheckingDecide (getName appForm)) do
-        (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
-        (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
-          inferTermAppForm rappForm rtysig
-        let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
-        pure $ Just (ann', rtysig, rappForm, result, makeKnownMany (appFormHeads rappForm) ce, extendsTySig <> extendsAppForm)
-
     addToTopEnv rdeclares s = s
       { scannedDeclareHeads = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf (getAnno (d^._1))) rdeclares
       }
 
+inferDecideHead :: Decide Name -> Check DecideCache
+inferDecideHead (MkDecide ann tysig appForm _) =
+  errorContext (WhileCheckingDecide (getName appForm)) do
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
+      inferTermAppForm rappForm rtysig
+    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    pure (ann', rtysig, rappForm, result, makeKnownMany (appFormHeads rappForm) ce, extendsTySig <> extendsAppForm)
+
 inferDeclareHead :: Declare Name -> Check DeclareHeadCache
-inferDeclareHead (MkDeclare ann tysig appForm _decl) =
+inferDeclareHead (MkDeclare ann tysig appForm decl) = softprune $
   errorContext (WhileCheckingDeclare (getName appForm)) do
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
     extendsTyApp <- inferTypeAppForm' rappForm rtysig
-    traceShowM extendsTyApp
-    pure (ann, rtysig, rappForm, extendsTyApp)
+    typeName <- inferTypeDeclHead rappForm decl
+    pure (ann, rtysig, rappForm, extendsTyApp : typeName)
 
 inferDeclareFull :: Declare Name -> Check (Maybe DeclareCache)
-inferDeclareFull (MkDeclare ann _tysig appForm t) =
+inferDeclareFull (MkDeclare ann _tysig appForm t) = prune $
   errorContext (WhileCheckingDeclare (getName appForm)) do
     lookupDeclareHeadByAnno ann >>= \case
       Nothing -> pure Nothing
@@ -221,7 +218,7 @@ inferDeclareFull (MkDeclare ann _tysig appForm t) =
             <*> pure rt
             >>= nlgDeclare
           pure $ Just $
-            (declare, [extendsTyApp] <> extendsTyDecl)
+            (declare, extendsTyApp <> extendsTyDecl)
 
 lookupInferDecideByAnno :: Anno -> Check (Maybe DecideCache)
 lookupInferDecideByAnno ann = case rangeOf ann of
@@ -271,7 +268,7 @@ combineEnvironmentEntityInfo env ei =
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
 --
-applyFinalSubstitution :: ApplySubst a => Substitution -> NormalizedUri -> a -> a
+applyFinalSubstitution :: Show a => ApplySubst a => Substitution -> NormalizedUri -> a -> a
 applyFinalSubstitution subst moduleUri t =
   let
     cs = mkInitialCheckState subst
@@ -285,12 +282,12 @@ applyFinalSubstitution subst moduleUri t =
           r
 
 -- | Helper function to run the check monad an expect a unique result.
-runCheckUnique :: HasCallStack => Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
+runCheckUnique :: Show a => Check a -> CheckEnv -> CheckState  -> (With CheckErrorWithContext a, CheckState)
 runCheckUnique c e s =
   case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
-    _ -> error "internal error: expected unique result, got several"
+    xs -> error $ "internal error: expected unique result, got several: " <> show xs
 
 -- ------------------------------------
 -- Scope Manipulation
@@ -527,8 +524,9 @@ inferDeclare (MkDeclare ann tysig appForm t) =
     lookupDeclareByAnno ann >>= \case
       Nothing -> do
         (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
-        extendsTyApp <- inferTypeAppForm' rappForm rtysig
-        (declare, extends) <- extendKnown extendsTyApp do
+        extendsTyAppForm <- inferTypeAppForm' rappForm rtysig
+        extendsTypApp <- inferTypeDeclHead rappForm t
+        (declare, extends) <- extendKnownMany (extendsTyAppForm : extendsTypApp) do
           (rt, extendsTyDecl) <- inferTypeDecl rappForm t
           -- See Note [Adding type information to all binders]
           declare <- MkDeclare ann
@@ -537,7 +535,7 @@ inferDeclare (MkDeclare ann tysig appForm t) =
             <*> pure rt
             >>= nlgDeclare
           pure (declare, extendsTyDecl)
-        pure (declare, [extendsTyApp] <> extends)
+        pure (declare, [extendsTyAppForm] <> extendsTypApp <> extends)
       Just (decl, _extends) -> do
         -- We don't want to return the '_extends' here,
         -- as it has already been added to the top environment
@@ -571,7 +569,7 @@ inferAssume (MkAssume ann tysig appForm (Just (Type tann))) = do
           (appFormHeads rappForm)
           (KnownType (kindOfAppForm rappForm)
             (view appFormArgs rappForm)
-            (EnumDecl emptyAnno [])
+            Nothing
           )
     -- See Note [Adding type information to all binders]
     assume <- extendKnownMany [extendTyApp, extend] do
@@ -700,8 +698,8 @@ inferDecide (MkDecide ann tysig appForm expr) = do
             <*> pure rexpr
             >>= nlgDecide
         pure (decide, [makeKnownMany (appFormHeads rappForm) ce])
-      Just (ann', rtysig, rappForm, result, extendsFun, extendsArgs) -> do
-        decide <- extendKnownMany ([extendsFun] <> extendsArgs) $ do
+      Just (ann', rtysig, rappForm, result, _extendsFun, extendsArgs) -> do
+        decide <- extendKnownMany extendsArgs $ do
           rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf result)) expr result
           -- See Note [Adding type information to all binders]
           MkDecide ann'
@@ -905,32 +903,40 @@ inferAka r (MkAka ann ns) = do
 inferTypeDecl :: AppForm Resolved -> TypeDecl Name -> Check (TypeDecl Resolved, [CheckInfo])
 inferTypeDecl rappForm (EnumDecl ann conDecls) = do
   let
-    rs     = appFormHeads rappForm
     td rcs = EnumDecl ann rcs
-    kt     = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  extendKnown (makeKnownMany rs (kt (td []))) $ do
-    ensureDistinct NonDistinctConstructors (getName <$> conDecls)
-    (rconDecls, extends) <- unzip <$> sequentialTraverse (inferConDecl rappForm) conDecls
-    pure (td rconDecls, makeKnownMany rs (kt (td rconDecls)) : concat extends)
+  ensureDistinct NonDistinctConstructors (getName <$> conDecls)
+  (rconDecls, extends) <- unzip <$> sequentialTraverse (inferConDecl rappForm) conDecls
+  pure (td rconDecls, concat extends)
 inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
+  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
   let
-    rs = appFormHeads rappForm
-    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
-  extendKnown (makeKnownMany rs (kt (EnumDecl emptyAnno []))) do
-    (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
-    let
-      td = RecordDecl ann (Just mrcon) rtns
-    pure (td, makeKnownMany rs (kt td) : extend)
-inferTypeDecl rappForm (SynonymDecl ann t) = do
-  let
-    rs = appFormHeads rappForm
-    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm)
+    td = RecordDecl ann (Just mrcon) rtns
+  pure (td, extend)
+inferTypeDecl _rappForm (SynonymDecl ann t) = do
   rt <- inferType t
   let
     td = SynonymDecl ann rt
-  pure (td, [makeKnownMany rs (kt td)])
+  pure (td, [])
+
+inferTypeDeclHead :: AppForm Resolved -> TypeDecl Name -> Check [CheckInfo]
+inferTypeDeclHead rappForm (EnumDecl _ann _conDecls) = do
+  let
+    rs     = appFormHeads rappForm
+    kt     = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure [makeKnownMany rs kt]
+inferTypeDeclHead rappForm (RecordDecl _ann _mcon _tns) = do
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) Nothing
+  pure [makeKnownMany rs kt]
+inferTypeDeclHead rappForm (SynonymDecl _ann t) = do
+  rt <- inferType t
+  let
+    rs = appFormHeads rappForm
+    kt = KnownType (kindOfAppForm rappForm) (view appFormArgs rappForm) (Just rt)
+  pure [makeKnownMany rs kt]
 
 inferConDecl :: AppForm Resolved -> ConDecl Name -> Check (ConDecl Resolved, [CheckInfo])
 inferConDecl rappForm (MkConDecl ann n tns) = do
@@ -1066,7 +1072,7 @@ inferTermAppForm rappForm tysig = do
   ensureDistinct NonDistinctTermAppForm (getName <$> (rs <> args)) -- should we do this earlier?
   (rt, result, extend) <- typeSigType tysig
   let termInfo = KnownTerm rt Computable
-  pure (termInfo, rt, result, makeKnownMany rs termInfo : extend)
+  pure (termInfo, rt, result, extend)
 
 inferLamGivens :: GivenSig Name -> Check (GivenSig Resolved, [Type' Resolved], [CheckInfo])
 inferLamGivens (MkGivenSig ann otns) = do
@@ -1543,7 +1549,7 @@ tryExpandTypeSynonym :: Resolved -> [Type' Resolved] -> Check (Maybe (Type' Reso
 tryExpandTypeSynonym r args = do
   ce <- getEntityInfo r
   case ce of
-    Just (KnownType _kind params (SynonymDecl _ t)) -> do
+    Just (KnownType _kind params (Just t)) -> do
       let substitution = Map.fromList (zipWith (\ n t' -> (getUnique n, t')) params args)
       pure (Just (substituteType substitution t))
     _ -> pure Nothing

@@ -20,7 +20,7 @@ type Substitution = Map Int (Type' Resolved)
 -- the arguments, so that we can properly substitute when instantiated.
 --
 data CheckEntity =
-    KnownType Kind [Resolved]
+    KnownType Kind [Resolved] (Maybe (Type' Resolved))
   | KnownTerm (Type' Resolved) TermKind
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
@@ -128,17 +128,23 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
+
+type DecideCache = (Anno, TypeSig Resolved, AppForm Resolved, Type' Resolved, CheckInfo, [CheckInfo])
+type DeclareHeadCache = (Anno, TypeSig Resolved, AppForm Resolved, [CheckInfo])
+type DeclareCache = (Declare Resolved, [CheckInfo])
+
+
 data CheckEnv =
   MkCheckEnv
     { moduleUri    :: !NormalizedUri
     , environment  :: !Environment
     , entityInfo   :: !EntityInfo
     , scannedDecides ::
-        !(Map SrcRange (Anno, TypeSig Resolved, AppForm Resolved, Type' Resolved, CheckInfo, [CheckInfo]))
+        !(Map SrcRange DecideCache)
     , scannedDeclareHeads ::
-        !(Map SrcRange (Anno, TypeSig Resolved, AppForm Resolved, CheckInfo))
+        !(Map SrcRange DeclareHeadCache)
     , scannedDeclares ::
-        !(Map SrcRange (Declare Resolved, [CheckInfo]))
+        !(Map SrcRange DeclareCache)
     , errorContext :: !CheckErrorContext
     }
   deriving stock (Eq, Generic, Show)
@@ -302,7 +308,7 @@ resolvedType n = do
       pure n
     Just (_, checkEntity) ->
       pure case checkEntity of
-        KnownType kind _resolved -> setAnnResolvedKindOfResolved kind n
+        KnownType kind _resolved _ -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
 

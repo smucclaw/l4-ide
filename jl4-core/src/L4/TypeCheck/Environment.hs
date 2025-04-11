@@ -143,7 +143,7 @@ aRef = Ref aName aUnique aName
 
 booleanInfo :: CheckEntity
 booleanInfo =
-  KnownType 0 []
+  KnownType 0 [] Nothing
 
 falseInfo :: CheckEntity
 falseInfo =
@@ -155,15 +155,15 @@ trueInfo =
 
 numberInfo :: CheckEntity
 numberInfo =
-  KnownType 0 []
+  KnownType 0 [] Nothing
 
 stringInfo :: CheckEntity
 stringInfo =
-  KnownType 0 []
+  KnownType 0 [] Nothing
 
 listInfo :: CheckEntity
 listInfo =
-  KnownType 1 [aDef]
+  KnownType 1 [aDef] Nothing
 
 emptyInfo :: CheckEntity
 emptyInfo =
