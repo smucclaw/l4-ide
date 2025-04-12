@@ -312,17 +312,17 @@ simpleName =
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
   -- TODO: in future we may also want to allow `tokOf #_TQuoted`
-  (fmap List.unsnoc . unzip -> (toks, Just (q : qs, n))) <- do
+  res@(List.unsnoc . mapMaybe (either (const Nothing) (Just . snd)) -> Just (q : qs, n)) <- do
     x <- tokOf #_TIdentifier
-    (x :) <$> some (tokOf #_TDot *> tokOf #_TIdentifier)
-
+    (Right x :) . mconcat <$> some (((\d i -> [d, i]) . Left . fst <$> tokOf #_TDot) <*> (Right <$> tokOf #_TIdentifier))
   wsOrAnnotation <- spaceOrAnnotations
-  let l = Lexeme
-        { trailingTokens = wsOrAnnotation.trailingTokens
-        , payload = (toks, QualifiedName n (q :| qs))
+  let e = Epa
+        { original = map (either id fst) res
+        , trailingTokens = wsOrAnnotation.trailingTokens
+        , payload = QualifiedName n (q :| qs)
         , hiddenClusters = wsOrAnnotation.hiddenClusters
         }
-  pure $ MkName emptyAnno <$> lexesToEpa' l
+  pure $ MkName emptyAnno <$> e
 
  where
  tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty

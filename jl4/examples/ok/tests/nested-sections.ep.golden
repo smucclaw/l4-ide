@@ -6,7 +6,7 @@ ASSUME a2 IS A BOOLEAN
 ASSUME a3 IS A BOOLEAN
 #CHECK a2
 #CHECK a3
-#CHECK aaaa3
+#CHECK aaa.a3
 -- this does not currently work: 
 -- #CHECK a.aa.aaa.a3
 
@@ -19,12 +19,12 @@ ASSUME a1 IS A BOOLEAN
 ASSUME a2 IS A BOOLEAN
 § c
 
-#CHECK ba1
-#CHECK ba2
-#CHECK bbaa2
-#CHECK aa1
-#CHECK aaaa2
-#CHECK aaaa3
-#CHECK aaaaaaa3
-#CHECK aaba4
-#CHECK aa4
+#CHECK b.a1
+#CHECK b.a2
+#CHECK b.ba.a2
+#CHECK a.a1
+#CHECK a.aa.a2
+#CHECK a.aa.a3
+#CHECK a.aa.aaa.a3
+#CHECK a.ab.a4
+#CHECK a.a4
