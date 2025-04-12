@@ -312,9 +312,14 @@ simpleName =
 qualifiedName :: Parser (Epa Name)
 qualifiedName = do
   -- TODO: in future we may also want to allow `tokOf #_TQuoted`
-  res@(List.unsnoc . mapMaybe (either (const Nothing) (Just . snd)) -> Just (q : qs, n)) <- do
+  let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+  res@(nameAndQualifiers -> Just (q : qs, n)) <- do
     x <- tokOf #_TIdentifier
-    (Right x :) . mconcat <$> some (((\d i -> [d, i]) . Left . fst <$> tokOf #_TDot) <*> (Right <$> tokOf #_TIdentifier))
+    dotOrIdentifier <- some do
+      d <- tokOf #_TDot
+      i <- tokOf #_TIdentifier
+      pure [Left $ fst d, Right i]
+    pure $ (Right x :) $ mconcat dotOrIdentifier
   wsOrAnnotation <- spaceOrAnnotations
   let e = Epa
         { original = map (either id fst) res

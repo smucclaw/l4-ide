@@ -4,7 +4,7 @@ module L4.TypeCheck.Types where
 import Base
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Parser.SrcSpan (SrcRange(..))
-import L4.Syntax hiding (Cons)
+import L4.Syntax
 import L4.TypeCheck.With
 
 import Control.Applicative
@@ -196,13 +196,7 @@ instance Monad Check where
       let
         results = runCheck m e s
       in
-        concatMap (\ ~(wea, s') -> distributeWith (fmap (runCheck' e s' . f) wea)) results
-
-{-
-instance MonadFix Check where
-  mfix k = MkCheck \r s -> mfix \ ~(w, _s') -> distributeWith (fmap (runCheck' r s . k) w)
--}
-
+        concatMap (\ (wea, s') -> distributeWith (fmap (runCheck' e s' . f) wea)) results
 
 instance MonadState CheckState Check where
   get :: Check CheckState
@@ -304,22 +298,35 @@ resolvedType n = do
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment rn = do
+  -- NOTE: split in a list of qualifiers and the actual name
   let (tn, qs)  = case rn of
         QualifiedName n' qs' -> (NormalName n', NE.toList qs')
         n -> (n, [])
+
   env <- asks (.environment)
   ei  <- asks (.entityInfo)
 
-  let mkSections :: [Text] -> [[(Name, Section Resolved)]]
-      mkSections = \case
-        (q : qs') | Just us <- Map.lookup (NormalName q) env
-            , secs <- mapMaybe
-              (\u -> Map.lookup u ei >>= \(n, ce) -> case ce of KnownSection s -> Just (n, s); _ -> Nothing)
-              us
-            -> secs : mkSections qs'
-        (_ : _) -> [[]]
-        _ -> []
+  let -- NOTE: from a list of qualifiers, try to build all paths through sections that may be
+      -- meant with the qualified name
+      -- The outer list describes the path, the inner list describes all possibilities at a
+      -- section level.
+      mkSections :: [Text] -> [[(Name, Section Resolved)]]
+      mkSections =
+        foldl
+          (\acc q -> case Map.lookup (NormalName q) env of
+            Just us ->  mapMaybe isKnownSection us : acc
 
+            -- NOTE: this case is important because it cuts off options as soon as we run into unknown sections,
+            -- i.e. Foo.Bar.baz where Foo does exist (and contains baz) but Bar doesn't
+            Nothing -> [[]]
+          )
+          []
+      isKnownSection u = do
+        (n, KnownSection s) <- Map.lookup u ei
+        pure (n, s)
+
+      -- NOTE: this is used to filter the paths through sections down to the ones that are valid.
+      -- We return the sections that are contained in existing sections
       sectionInSection :: [[(Name, Section Resolved)]] -> [(Name, Section Resolved)]
       -- NOTE: we have to treat this specially otherwise the recursive call will always
       -- bottom out at an empty list of sections which makes the entire algorithm fail
@@ -331,12 +338,14 @@ lookupRawNameInEnvironment rn = do
         secs
       sectionInSection [] = []
 
-      reversedSections = sectionInSection $ reverse $ mkSections qs
+      reversedSections = sectionInSection $ mkSections qs
 
       proc :: Unique -> Maybe (Unique, Name, CheckEntity)
       proc u = do
         (o, ce) <- Map.lookup u ei
 
+        -- NOTE: if there are no qualifiers, we don't have to even try to sort out
+        -- by qualifiers (i.e. nothing changes if no qualifiers are used)
         guard $ null qs || any (isTopLevelBindingInSection u . snd) reversedSections
 
         pure (u, o, ce)
@@ -355,6 +364,8 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . mat
     Assume _ (MkAssume _ _ af _) -> afUnq af
     Directive _ _ -> []
     Import _ _ -> []
+    -- NOTE: Sections are a toplevel binding in the current section but can also contain further
+    -- toplevel bindings
     Section _ (MkSection _ mr _ decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap matchesUnq decls'
 
   afUnq = map getUnique . appFormHeads

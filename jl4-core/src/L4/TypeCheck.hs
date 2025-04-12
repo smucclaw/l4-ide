@@ -516,36 +516,42 @@ inferImport (MkImport ann n) = do
 
 inferSection :: Section Name -> Check (Section Resolved, [CheckInfo])
 inferSection (MkSection ann mn maka topdecls) = do
-  rmn <- traverse def mn -- we currently treat section names as defining occurrences, but they play no further role
+  -- NOTE: we currently treat section names as defining occurrences, but they play no further role
+  rmn <- traverse def mn
   rmaka <-
     case rmn of
       Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
       Just rn -> traverse (inferAka rn) maka
-  -- NOTE: sequentialTraverse doesn't quite cut it due to needing to remove the old current section from the environment
-  (rtopdecls, es1) <- first reverse . unzip . snd
-    <$> foldl'
-        (\xy z -> do (x, y) <- xy
-                     inferTopDeclWithPartialSection x y z
-        )
-        (pure (MkSection ann rmn rmaka [], []))
-        topdecls
+  -- NOTE: sequentialTraverse doesn't quite cut it due to needing to remove the old
+  -- current section from the environment which it doesn't do
+  (rtopdecls, topDeclExtends) <-
+    unzip . snd <$> foldM
+      (uncurry inferTopDeclWithPartialSection)
+      (MkSection ann rmn rmaka [], [])
+      topdecls
 
-  let sec = MkSection ann rmn rmaka rtopdecls
-  let es2 = foldMap (\r -> [makeKnown r (KnownSection sec)]) rmn
-  pure (sec, concat es1 <> es2)
+  let sec = MkSection ann rmn rmaka $ reverse rtopdecls
+      sectionExtends = foldMap (\r -> [makeKnown r (KnownSection sec)]) rmn
 
-  where
+  pure (sec, concat topDeclExtends <> sectionExtends)
+ where
+  inferTopDeclWithPartialSection
+    :: Section Resolved
+    -> [(TopDecl Resolved, [CheckInfo])]
+    -> TopDecl Name
+    -> Check (Section Resolved, [(TopDecl Resolved, [CheckInfo])])
+  inferTopDeclWithPartialSection oldSection@(MkSection ann' rmn rmaka tdecls) acc tdecl = do
 
-    inferTopDeclWithPartialSection :: Section Resolved -> [(TopDecl Resolved, [CheckInfo])] -> TopDecl Name -> Check (Section Resolved, [(TopDecl Resolved, [CheckInfo])])
-    inferTopDeclWithPartialSection oldSection@(MkSection ann' rmn rmaka tdecls) acc tdecl = do
+    let acc'dEnv = foldMap snd acc
+        -- NOTE: if we don't have a result, we extend with an empty list, i.e. no extension
+        extension = flip makeKnown (KnownSection oldSection) <$> maybeToList rmn
 
-      let acc'dEnv = foldMap snd acc
-          -- NOTE: if we don't have a result, we extend with an empty list, i.e. no extension
-          extension = flip makeKnown (KnownSection oldSection) <$> maybeToList rmn
-
-      inf'dtdecl <- extendKnownMany (extension <> acc'dEnv) do
-        inferTopDecl tdecl
-      pure (MkSection ann' rmn rmaka (fst inf'dtdecl : tdecls), inf'dtdecl : acc)
+    -- NOTE: extend the topdecl with the names we learnt in previous top decls (acc'dEnv)
+    -- but also with the currently known part of the section the topdecl that is currently
+    -- being checked is in
+    inf'dtdecl <- extendKnownMany (extension <> acc'dEnv) do
+      inferTopDecl tdecl
+    pure (MkSection ann' rmn rmaka (fst inf'dtdecl : tdecls), inf'dtdecl : acc)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
