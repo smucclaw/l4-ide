@@ -1,15 +1,35 @@
 # Examples of Regulative Rules
 
-## By Contrast with Constitutive Rules
+This document illustrates regulative rules by example.
+
+## How do Regulative Rules Differ from Constitutive Rules?
 
 Constitutive rules talk about what things must **be** -- usually to
 qualify, or be valid, in some way. For example, "for the purposes of a
-certain contract, for a day of the week to be considered a weekend
-day, it must be a Saturday or a Sunday."
+certain contract, a day of the week counts as a weekend day if is a
+Saturday or a Sunday." Sometimes also phrased "must *have*".
 
-Regulative rules talk about what people must **do**, mustn't do, or may do
--- and what happens to them if they do, and if they don't. Sometimes
-there are deadlines associated.
+Regulative rules talk about what people must **do**, mustn't do, or
+may do -- and what happens to them if they do, and if they don't.
+Sometimes there are deadlines associated. The subject of a regulative
+rule is always a person, an entity, some sort of actor in the system.
+
+If the subject of a rule is some inanimate object, we attempt to
+rephrase it so it is obviously either constitutive or regulative.
+
+This is a constitutive rule, even if it is phrased in the active
+voice: "court filings must show the case number on the first page" is
+a constitutive rule. If the court filing doesn't show the case number
+on the front page, it is a defective, invalid, non-qualifying court
+filing.
+
+This is a regulative rule: "court filings must be made no later than
+two weeks before the next hearing date." Some person -- some lawyer --
+is on the hook for making that filing, and the consequence for not
+making that filing might be summary dismissal.
+
+"Drivers must show a driver's license on demand by a police officer"
+is a regulative rule, because the subject is a person.
 
 As a special case, some rules talk about what persons must **have
 done**, to qualify for some future action. These hybrid rules blend both
@@ -19,7 +39,8 @@ certain way as having a special status, which is a constitutive.
 
 ## Borrowing a book from the library
 
-## Picking up kids from school
+## [TODO] Picking up kids from school
+
 
 A Fine is a Price.
 
@@ -54,10 +75,11 @@ requirements."
 ### Reasons To Say No
 
 Maybe it's a civil proceeding. Maybe the fax didn't show any proof
-that the criminal proceeding is pending in a court. Maybe the
-authority who sent the fax is a president whose impeachment is very
-likely to conclude successfully within the next week. Any one of these
-facts could give the AG grounds to reject the request.
+that the criminal proceeding is pending in a court -- maybe it's still
+being investigated by the police. Maybe the authority who sent the fax
+is a president whose impeachment is very likely to conclude
+successfully within the week. Any one of these facts could give the AG
+grounds to reject the request.
 
 Suppose the volume of faxes grows from a trickle to a flood. The AG
 doesn't want to have to think through all these questions each time.
@@ -443,6 +465,6 @@ DECLARE Actions
 ```
 
 
-
+Continue: [Regulative Deontics](regulative-deontics.md)
 
 

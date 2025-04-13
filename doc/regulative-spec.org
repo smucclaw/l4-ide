@@ -1,4 +1,4 @@
-#+TITLE: This document proposes a syntax and semantics for regulative rules in JL4.
+#+TITLE: This document specifies a syntax and semantics for regulative rules in JL4.
 
 For background, please see [[regulative.md]]
 
@@ -27,7 +27,7 @@ The general form of a regulative clause says who is supposed to do what, under c
 #+begin_src
   GIVEN     <input parameters>
   UPON      <trigger event expression>
-  PROVIDED  <preconditions> -- a guard
+  PROVIDED  <preconditions> -- a guard condition
   IF        <preconditions> -- any arguments given are merged with PROVIDED, but the arguments can be empty
   PARTY     <entity> <entity type>
   DO        <action> <action_parameters>
@@ -91,7 +91,7 @@ This desugars to:
 
 ** Running example: Borrowing a Book from a Library
 
-[TODO] We give the L4 text of a book-borrowing rule.
+Please see the [[./regulative-examples.md][Regulative Examples]] document.
 
 * Object-Level translational semantics
 
@@ -133,7 +133,7 @@ This treatment is consistent with Hvitved's CSL.
 
 [TODO] we give the CSL form of the above rule.
 
-* The Specification Level: Deontics Squeezed Out
+* Specification Level Property Assertions: Deontics Squeezed Out
 
 Normative statements are represented as *specification-level*
 assertions /about/ the object level. User queries can also be
@@ -145,7 +145,6 @@ assertions which represent a "unit testing" paradigm over
 modifications to the text. In other words, during negotiations, the
 draft is edited, and we use computers to help check that the letter of
 the law continues to match the spirit of the law.
-
 
 We can verify properties of contracts by translating certain
 assertions to a model checking language.
