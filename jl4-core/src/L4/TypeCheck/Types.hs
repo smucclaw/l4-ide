@@ -310,8 +310,8 @@ lookupRawNameInEnvironment rn = do
       -- meant with the qualified name
       -- The outer list describes the path, the inner list describes all possibilities at a
       -- section level.
-      mkSections :: [Text] -> [[(Name, Section Resolved)]]
-      mkSections =
+      mkCandidateSections :: [Text] -> [[Section Resolved]]
+      mkCandidateSections =
         foldl
           (\acc q -> case Map.lookup (NormalName q) env of
             Just us ->  mapMaybe isKnownSection us : acc
@@ -321,32 +321,31 @@ lookupRawNameInEnvironment rn = do
             Nothing -> [[]]
           )
           []
+
+      isKnownSection :: Unique -> Maybe (Section Resolved)
       isKnownSection u = do
-        (n, KnownSection s) <- Map.lookup u ei
-        pure (n, s)
+        (_n, KnownSection s) <- Map.lookup u ei
+        pure s
 
       -- NOTE: this is used to filter the paths through sections down to the ones that are valid.
       -- We return the sections that are contained in existing sections
-      sectionInSection :: [[(Name, Section Resolved)]] -> [(Name, Section Resolved)]
+      sectionInSection :: [[Section Resolved]] -> [Section Resolved]
       -- NOTE: we have to treat this specially otherwise the recursive call will always
       -- bottom out at an empty list of sections which makes the entire algorithm fail
       sectionInSection [secs] = secs
       sectionInSection (secs : secss) = do
-        u <- foldMap (\(n, _) -> fromMaybe [] (Map.lookup (rawName n) env)) secs
-        (_n', sr) <- sectionInSection secss
-        guard $ isTopLevelBindingInSection u sr
-        secs
+        u <- mapMaybe (\(MkSection _ mn _ _) -> getUnique <$> mn) secs
+        filter (isTopLevelBindingInSection u) $ sectionInSection secss
       sectionInSection [] = []
 
-      reversedSections = sectionInSection $ mkSections qs
+      reversedSections = sectionInSection $ mkCandidateSections qs
 
       proc :: Unique -> Maybe (Unique, Name, CheckEntity)
       proc u = do
         (o, ce) <- Map.lookup u ei
-
         -- NOTE: if there are no qualifiers, we don't have to even try to sort out
         -- by qualifiers (i.e. nothing changes if no qualifiers are used)
-        guard $ null qs || any (isTopLevelBindingInSection u . snd) reversedSections
+        guard $ null qs || any (isTopLevelBindingInSection u) reversedSections
 
         pure (u, o, ce)
 
