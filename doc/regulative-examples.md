@@ -262,98 +262,6 @@ DECIDE `is an appropriate authority` IF
               WHEN Outbound THEN `to receive request`
 ```
 
-... Or does it?
-
-### Ambiguity in Appropriate Authority
-
-The process of formalization lays bare a possible lexical ambiguity in
-the original statute.
-
-There is another possible reading of the same text:
-```
-DECIDE `is an appropriate authority of` IF
-       `is a person`
-    OR `is an authority` aa
-        AND `is satisfied is authorised under the law of` ag aa fc
-            ..  CONSIDER dir
-                   WHEN Inbound  THEN `to make request`
-                   WHEN Outbound THEN `to receive request`
-```
-
-In other words, authorities need to be authorised, but persons are enough.
-
-Let's look at what happens if the request originates from:
-
-1. the Department of International Crimes
-
-2. Lex Luthor, Special Master appointed by some judge in a criminal case
-
-3. Jonah Jameson, attorney for the defense
-
-In the first case, the fax contains, in Annex A, an excerpt from some
-law of the foreign country establishing the department jointly under
-the Ministry of Law and the Ministry of Foreign Affairs, and
-empowering it to make requests of foreign governments. So the AG is
-satisfied that the department is an appropriate authority, authorised
-under the law of the foreign country to make such requests.
-
-In the second case, some research reveals that the criminal case in
-the foreign country has multiple international elements; the fax
-includes, in Annex A, a court order from the relevant judge appointing
-Lex Luthor as a special representative of the court instructed to
-liaise with foreign governments to gather relevant evidence. So the AG
-is satisfied that Lex is a person authorised under the law of the
-foreign country to make the request.
-
-### Any Person!?
-
-In the third case, the AG can't find any law in the foreign country
-that authorizes attorneys for the defense to request evidence from
-international sources. So Lex Luthor is just a person, and he is
-looking like an unauthorised person at that. The AG gets ready to
-write back, saying, sorry, you don't seem to be an appropriate
-authority. But Lex Luthor, having anticipated this, has attached, in
-Annex A, text from our statute:
-
-> “appropriate authority”, in relation to a foreign country, means
-
-> **a person**
-
-> **or authority** whom the Attorney‑General is satisfied is authorised under the law of that country —
-
->   (a) in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
-
->   (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
-
-Lex has made a small circle, in pen, around "a person"; and a large
-circle around "or authority ..." through to the end of the paragraph.
-
-In this admittedly preposterous reading, an authority such as a
-department under the Ministry of Law would need to be explicitly
-authorised under the law of the foreign country ... but an individual
-person doesn't need to be so authorized; indeed, any natural person
-could be the source of a request.
-
-Preposterous as this may be, the Attorney-General's staffer handling
-this case does not speak English as a first language; if they did,
-they would formulate an argument that if Lex's interpretation were
-what Parliament had intended, the text of the definition would have
-said "**any** person or **an** authority **which**..." ... but this
-distinction is too subtle, and eludes them.
-
-Instead what happens is the staffer just goes along with Lex's
-interpretation, bamboozled by his impressiveness.
-
-And Lex Luthor wins the right to collect their evidence.
-
-It might be obvious to the average native speaker of English that this
-can't possibly be what Parliament intended; but Lex got to be the
-richest man on the planet precisely by outsmarting the average native
-speaker of English!
-
-If this law had been drafted in L4 in the first place, it would have
-been clear which interpretation was intended. L4 eliminates these
-ambiguities.
 
 ## Discretion to Proceed
 
@@ -466,5 +374,104 @@ DECLARE Actions
 
 
 Continue: [Regulative Deontics](regulative-deontics.md)
+
+
+
+### Appendix A: Ambiguity in Appropriate Authority
+
+The process of formalization reveals a possible lexical ambiguity in
+the original statute. We bring this up mainly for the sake of the tutorial.
+
+There is another, somewhat contrived, but still possible reading of the same text:
+```
+DECIDE `is an appropriate authority of` IF
+       `is a person`
+    OR `is an authority` aa
+        AND `is satisfied is authorised under the law of` ag aa fc
+            ..  CONSIDER dir
+                   WHEN Inbound  THEN `to make request`
+                   WHEN Outbound THEN `to receive request`
+```
+
+In other words, authorities need to be authorised, but persons are enough.
+
+*Illustration*. Let's look at what happens if the request originates from:
+
+1. the International Crimes Authority of Sokovia
+
+2. Lex Luthor, Special Master appointed by some judge in a criminal case
+
+3. Jonah Jameson, attorney for the defense
+
+In the first case, the fax contains, in Annex A, an excerpt from some
+law of the foreign country establishing the International Crimes
+Authority jointly under the Sokovian Ministry of Law and the Sokovian
+Ministry of Foreign Affairs, and empowering it to make requests of
+foreign governments. So the AG is satisfied that the department is an
+appropriate authority, authorised under the law of the foreign country
+to make such requests.
+
+In the second case, some research reveals that the criminal case in
+the foreign country has multiple international elements; the fax
+includes, in Annex A, a court order from the relevant judge appointing
+Lex Luthor as a special representative of the court instructed to
+liaise with foreign governments to gather relevant evidence. So the AG
+is satisfied that Lex is a person authorised under the law of the
+foreign country to make the request.
+
+### Any Person!?
+
+In the third case, the AG can't find any law in the foreign country
+that authorizes attorneys for the defense to request evidence from
+international sources. So Lex Luthor is just a person, and he is
+looking like an unauthorised person at that. The AG gets ready to
+write back, saying, sorry, you don't seem to be an appropriate
+authority. But Lex Luthor, having anticipated this, has attached, in
+Annex A, text from our statute:
+
+> “appropriate authority”, in relation to a foreign country, means
+
+> **a person**
+
+> **or authority** whom the Attorney‑General is satisfied is authorised under the law of that country —
+
+>   (a) in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
+
+>   (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
+
+Lex has made a small circle, in pen, around "a person"; and a large
+circle around "or authority ..." through to the end of the paragraph.
+
+There's a handwritten note that says "a plain reading shows that an
+appropriate authority can be either a person or an authority" --
+creating some doubt about just why a "person" was shoehorned into the
+definition, which otherwise uses "authority" lingo.
+
+In this admittedly preposterous reading, an authority such as a
+department under the Ministry of Law would need to be explicitly
+authorised under the law of the foreign country ... but an individual
+person doesn't need to be so authorized; indeed, any natural person
+could be the source of a request.
+
+Preposterous as this may be, the Attorney-General's staffer handling
+this case does not speak English as a first language; if they did,
+they would formulate an argument that if Lex's interpretation were
+what Parliament had intended, the text of the definition would have
+said "**any** person; or **an** authority **which**..." ... but this
+distinction is too subtle, and eludes them.
+
+Instead what happens is the staffer just goes along with Lex's
+interpretation, bamboozled by his impressiveness.
+
+And Lex Luthor wins the right to collect their evidence.
+
+It might be obvious to the average native speaker of English that this
+can't possibly be what Parliament intended; but Lex got to be the
+richest man on the planet precisely by outsmarting the average native
+speaker of English!
+
+If this law had been drafted in L4 in the first place, it would have
+been clear which interpretation was intended. L4 eliminates these
+ambiguities.
 
 
