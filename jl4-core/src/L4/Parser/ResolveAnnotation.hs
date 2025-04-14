@@ -174,6 +174,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Eval ann e -> do
       e' <- addNlg e
       pure $ Eval ann e'
+    LazyEval ann e -> do
+      e' <- addNlg e
+      pure $ LazyEval ann e'
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'

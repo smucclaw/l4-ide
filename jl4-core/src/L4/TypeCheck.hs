@@ -499,6 +499,9 @@ inferDirective :: Directive Name -> Check (Directive Resolved)
 inferDirective (Eval ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (Eval ann re)
+inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
+  (re, _) <- prune $ inferExpr e
+  pure (LazyEval ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)

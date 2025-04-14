@@ -16,6 +16,7 @@ import qualified Base.Text as Text
 import Optics ((%))
 import qualified Base.Map as Map
 import L4.Annotation
+import L4.Evaluate.Operators
 import L4.Evaluate.Value
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
@@ -224,20 +225,6 @@ addEvalDirectiveResult a val = do
   maybe (pure ()) (modifying #directiveResults . (:)) res
 
 
-data BinOp =
-    BinOpPlus
-  | BinOpMinus
-  | BinOpTimes
-  | BinOpDividedBy
-  | BinOpModulo
-  | BinOpCons
-  | BinOpEquals
-  | BinOpLeq
-  | BinOpGeq
-  | BinOpLt
-  | BinOpGt
-  deriving stock Show
-
 data Stack =
     BinOp1 BinOp {- -} (Expr Resolved) Environment Stack
   | BinOp2 BinOp Value {- -} Stack
@@ -364,6 +351,7 @@ evalDirective :: Directive Resolved -> Eval ()
 evalDirective (Eval _ann expr) = do
   v <- evalExpr expr
   addEvalDirectiveResult expr v
+evalDirective (LazyEval _ann _expr) = pure ()
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int

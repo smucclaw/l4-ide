@@ -431,6 +431,8 @@ directive =
     choice
       [ Eval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TEvalDirective))
+      , LazyEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TLazyEvalDirective))
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
       ]

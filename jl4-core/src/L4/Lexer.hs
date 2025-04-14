@@ -50,6 +50,7 @@ data AnnoType
 
 data DirectiveType
   = TEvalDirective
+  | TLazyEvalDirective
   | TCheckDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
@@ -250,7 +251,11 @@ directiveLiteral = do
   getAlt $ foldMap (\(d, t) -> Alt $ d <$ chunk t) directives
 
 directives :: [(DirectiveType, Text)]
-directives = [(TEvalDirective, "EVAL"), (TCheckDirective, "CHECK")]
+directives =
+  [ (TEvalDirective,     "SEVAL")
+  , (TLazyEvalDirective, "EVAL")
+  , (TCheckDirective,    "CHECK")
+  ]
 
 integerLiteral :: Lexer (Text, Int)
 integerLiteral =
@@ -896,7 +901,8 @@ displayTokenType tt =
 
 showDirective :: DirectiveType -> Text
 showDirective = \case
-  TEvalDirective -> "#EVAL"
+  TEvalDirective -> "#SEVAL"
+  TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
 
 data TokenCategory
