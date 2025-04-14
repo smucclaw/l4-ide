@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import type { PathListDisplayerProps } from './svelteflow-types.js'
+  import type { PathListDisplayerProps } from './non-flow-props.js'
   import {
     ToggleGroup,
     ToggleGroupItem,

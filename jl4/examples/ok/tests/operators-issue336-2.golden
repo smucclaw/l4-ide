@@ -1,0 +1,13 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+operators-issue336-2.l4:16:7-15:
+  FALSE
+operators-issue336-2.l4:17:7-15:
+  FALSE
+operators-issue336-2.l4:18:7-16:
+  TRUE
+operators-issue336-2.l4:31:7-15:
+  0
+operators-issue336-2.l4:32:7-15:
+  0

@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+operators-issue336-1.l4:34:7-55:
+  FALSE
+operators-issue336-1.l4:35:7-55:
+  FALSE
+operators-issue336-1.l4:70:7-30:
+  0
+operators-issue336-1.l4:71:7-30:
+  0

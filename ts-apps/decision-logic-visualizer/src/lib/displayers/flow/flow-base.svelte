@@ -20,8 +20,8 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import * as SF from '@xyflow/svelte'
+  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
   import {
-    type BaseLadderFlowDisplayerProps,
     type LadderSFNodeWithDims,
     type LadderSFGraph,
     sfNodeTypes,
@@ -43,7 +43,7 @@
   import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
-  import PathsList from './paths-list.svelte'
+  import PathsList from '../paths-list.svelte'
 
   /************************
        Lir

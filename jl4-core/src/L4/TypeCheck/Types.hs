@@ -37,10 +37,7 @@ data TermKind =
 
 data CheckState =
   MkCheckState
-    { environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , errorContext :: !CheckErrorContext
-    , substitution :: !Substitution
+    { substitution :: !Substitution
     , supply       :: !Int
     }
   deriving stock (Eq, Generic, Show)
@@ -131,7 +128,15 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
-newtype CheckEnv = MkCheckEnv { moduleUri :: NormalizedUri }
+data CheckEnv =
+  MkCheckEnv
+    { moduleUri    :: !NormalizedUri
+    , environment  :: !Environment
+    , entityInfo   :: !EntityInfo
+    , errorContext :: !CheckErrorContext
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
 
 newtype Check a =
   MkCheck (CheckEnv -> CheckState -> [(With CheckErrorWithContext a, CheckState)])
@@ -162,11 +167,11 @@ runCheck' e s (MkCheck f) = f e s
 
 data CheckResult =
   MkCheckResult
-    { program      :: Module  Resolved
-    , errors       :: [CheckErrorWithContext]
-    , substitution :: Substitution
-    , environment  :: Environment
-    , entityInfo   :: EntityInfo
+    { program      :: !(Module  Resolved)
+    , errors       :: ![CheckErrorWithContext]
+    , substitution :: !Substitution
+    , environment  :: !Environment
+    , entityInfo   :: !EntityInfo
     }
   deriving stock (Eq, Show)
 
@@ -232,7 +237,7 @@ newUnique = do
 
 addError :: CheckError -> Check ()
 addError e = do
-  ctx <- use #errorContext
+  ctx <- asks (.errorContext)
   with (MkCheckErrorWithContext e ctx)
 
 choose :: [Check a] -> Check a
@@ -272,10 +277,26 @@ ambiguousType n xs = do
 -- JL4 specific primitives for resolving names
 -- ----------------------------------------------------------------------------
 
+resolvedType :: Resolved -> Check Resolved
+resolvedType n = do
+  ei <- asks (.entityInfo)
+  case Map.lookup (getUnique n) ei of
+    Nothing -> do
+      -- TODO: there are cases where this situation is a clear bug.
+      -- Sometimes, it is fine, e.g. when the 'Resolved' is 'OutOfScope'.
+      -- Tricky what to do here.
+      -- addError $ MissingEntityInfo n
+      pure n
+    Just (_, checkEntity) ->
+      pure case checkEntity of
+        KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
+        KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
+        KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
+
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment n = do
-  env <- use #environment
-  ei  <- use #entityInfo
+  env <- asks (.environment)
+  ei  <- asks (.entityInfo)
   let
     proc :: Unique -> Maybe (Unique, Name, CheckEntity)
     proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
@@ -316,10 +337,22 @@ setAnnResolvedType ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
   => Type' Resolved -> a -> a
 setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t)) (getAnno x)) x
+  setAnno (set annInfo (Just (TypeInfo t Nothing)) (getAnno x)) x
 
 setAnnResolvedKind ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
   => Kind -> a -> a
 setAnnResolvedKind k x =
   setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
+
+setAnnResolvedTypeOfResolved :: Type' Resolved -> Resolved -> Resolved
+setAnnResolvedTypeOfResolved t = \case
+  Def u n -> Def u (setAnnResolvedType t n)
+  Ref r u o -> Ref (setAnnResolvedType t r) u o
+  OutOfScope u n -> OutOfScope u (setAnnResolvedType t n)
+
+setAnnResolvedKindOfResolved :: Kind -> Resolved -> Resolved
+setAnnResolvedKindOfResolved k = \case
+  Def u n -> Def u (setAnnResolvedKind k n)
+  Ref r u o -> Ref (setAnnResolvedKind k r) u o
+  OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
