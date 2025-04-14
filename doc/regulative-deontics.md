@@ -34,26 +34,24 @@ standing outside the basic rules themselves.
 2. Twice a year, Daylight Savings requires a manual reset.
 
 3. Even under ideal conditions, the clock may drift by up to a minute
-a day.
+   a day.
 
 None of these ideas are built into the metal of the clock itself: they
-are statements *about* the clock.
+are statements _about_ the clock.
 
 1. If payments are not made for six months in a row, the penalties
-could begin to exceed the regular payment amount.
+   could begin to exceed the regular payment amount.
 
 2. This contract needs to be amended or redrafted because it
-references LIBOR, which is deprecated in favour of SOFR.
+   references LIBOR, which is deprecated in favour of SOFR.
 
-These are assertions *about* the contract
+These are assertions _about_ the contract
 
 ### Background: Labeled Transition Systems
 
 ### Background: LTL and CTL Temporal Logic Assertions
 
 ### Background: Answering Queries by way of Model Checking
-
-
 
 ### In L4, Deontics Are Squeezed Out from the Object Level
 
@@ -80,6 +78,3 @@ Well, at compile-time, we can statically analyze that every MUST is associated w
 ## Fighting International Crime
 
 ## Other Legal Idioms, reinterpreted into L4
-
-
-

@@ -7,7 +7,7 @@ This document illustrates regulative rules by example.
 Constitutive rules talk about what things must **be** -- usually to
 qualify, or be valid, in some way. For example, "for the purposes of a
 certain contract, a day of the week counts as a weekend day if is a
-Saturday or a Sunday." Sometimes also phrased "must *have*".
+Saturday or a Sunday." Sometimes also phrased "must _have_".
 
 Regulative rules talk about what people must **do**, mustn't do, or
 may do -- and what happens to them if they do, and if they don't.
@@ -40,7 +40,6 @@ certain way as having a special status, which is a constitutive.
 ## Borrowing a book from the library
 
 ## [TODO] Picking up kids from school
-
 
 A Fine is a Price.
 
@@ -93,7 +92,7 @@ How might the AG teach their team to handle these faxes?
 ### Constitutive Elements: Black And White Decision Logic
 
 The "where" part
-of the sentence is phrased as a *constitutive rule* that determines if a
+of the sentence is phrased as a _constitutive rule_ that determines if a
 request is **valid**, or **qualifying**.
 
 The AG might rearrange the sentence on a whiteboard:
@@ -111,14 +110,15 @@ to her staff, "every fax that comes in, file it into the Go pile if
 all the boxes get checked; file it into the Review pile if any of the
 boxes isn't checked."
 
-That deals with the *decision logic* of the request.
+That deals with the _decision logic_ of the request.
 
 ### Regulative Elements: The Moving Parts
 
-Next we deal with the *regulative* aspect of the sentence:
+Next we deal with the _regulative_ aspect of the sentence:
 the behaviours of actors, the moving parts, events happening in time.
 
 If the request is valid, the AG moves on to the next step:
+
 - write a letter
 - to some magistrate
 - instructing them to take the evidence specified in the request
@@ -163,16 +163,16 @@ For every `THEN`, there's an `ELSE`. What's `ELSE` in L4?
 `LEST` also connects two regulative stanzas.
 
 If the first stanza is not fulfilled -- if the preconditions are met,
-but the party does *not* perform the action properly by the deadline
+but the party does _not_ perform the action properly by the deadline
 -- then the plot of the story turns to the `LEST` branch. Penalties
 and redemption.
 
 This is the structure of many stories: some original sin occurs, and
 the story concerns itself not with what should have happened ideally,
 but how the hero strives to repair the damage and restore the world to
-its original Edenic state. This gives us the *Odyssey*, not to mention
-the *Avengers: Infinity War and Endgame* couplet, *and *Spider-Man:
-Into the Multiverse*. It also gives the `except` branch of every
+its original Edenic state. This gives us the _Odyssey_, not to mention
+the _Avengers: Infinity War and Endgame_ couplet, *and *Spider-Man:
+Into the Multiverse\*. It also gives the `except` branch of every
 `try/except` exception handler. And it gives us that part of contracts
 which deal with reparations.
 
@@ -186,8 +186,8 @@ MUST do Y" -- because an optional action is only interesting if it
 eventually creates a new obligation. This MACMA example breaks that
 pattern, but that's sovereignty for you.
 
-*Theory note:* This is a good illustration of the special nature of
-official communication. Searle identified *speech acts* as utterances that
+_Theory note:_ This is a good illustration of the special nature of
+official communication. Searle identified _speech acts_ as utterances that
 constitute institutional events. Many labeled transition systems
 formalize these speech acts as messages passed between actors:
 requests, notices, authorisations, demands, apologies, and so on are
@@ -201,7 +201,7 @@ elements. For the incoming request to be valid, it must meet certain
 criteria, as seen above. And the action taken by the AG is narrowly
 specified: to authorise a Magistrate, in writing, to take the evidence.
 
-So that twines us back to the *decision logic* of validity and
+So that twines us back to the _decision logic_ of validity and
 qualification. In other words, within Searle's regulative rules, we
 find embedded constitutive rules.
 
@@ -240,8 +240,8 @@ to qualify.
 Some of these questions may expand further. From MACMA:
 
 > “appropriate authority”, in relation to a foreign country, means a person or authority whom the Attorney‑General is satisfied is authorised under the law of that country —
-> (a)	in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
-> (b)	in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
+> (a) in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
+> (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
 
 That turns into the following L4:
 
@@ -262,12 +262,11 @@ DECIDE `is an appropriate authority` IF
               WHEN Outbound THEN `to receive request`
 ```
 
-
 ## Discretion to Proceed
 
 Note that the AG isn't forced to do proceed to instruct the
-Magistrate: the law says that they *may*. It doesn't say that they
-*must*. Maybe the request comes from some pariah state which the
+Magistrate: the law says that they _may_. It doesn't say that they
+_must_. Maybe the request comes from some pariah state which the
 international community proscribes? Then the AG could ignore the fax
 without consequence: that's why the `LEST` of a `MAY` is `Fulfilled`.
 
@@ -362,7 +361,7 @@ DECLARE Actions
   IS ONE OF
     `make a request` HAS params  IS A requestParams
     `authorise`      HAS params  IS A authoriseParams
-    
+
 ... MAY `make a request`
         that IS `evidence e`
         be   IS `taken in` sg
@@ -372,10 +371,7 @@ DECLARE Actions
                 `in` fc
 ```
 
-
 Continue: [Regulative Deontics](regulative-deontics.md)
-
-
 
 ### Appendix A: Ambiguity in Appropriate Authority
 
@@ -383,6 +379,7 @@ The process of formalization reveals a possible lexical ambiguity in
 the original statute. We bring this up mainly for the sake of the tutorial.
 
 There is another, somewhat contrived, but still possible reading of the same text:
+
 ```
 DECIDE `is an appropriate authority of` IF
        `is a person`
@@ -395,7 +392,7 @@ DECIDE `is an appropriate authority of` IF
 
 In other words, authorities need to be authorised, but persons are enough.
 
-*Illustration*. Let's look at what happens if the request originates from:
+_Illustration_. Let's look at what happens if the request originates from:
 
 1. the International Crimes Authority of Sokovia
 
@@ -435,9 +432,9 @@ Annex A, text from our statute:
 
 > **or authority** whom the Attorney‑General is satisfied is authorised under the law of that country —
 
->   (a) in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
+> (a) in the case of a request by that country to Singapore for assistance in a criminal matter, to make the request; or
 
->   (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
+> (b) in the case of a request by Singapore to that country for assistance in a criminal matter, to receive the request;
 
 Lex has made a small circle, in pen, around "a person"; and a large
 circle around "or authority ..." through to the end of the paragraph.
@@ -473,5 +470,3 @@ speaker of English!
 If this law had been drafted in L4 in the first place, it would have
 been clear which interpretation was intended. L4 eliminates these
 ambiguities.
-
-
