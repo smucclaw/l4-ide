@@ -49,7 +49,7 @@ data AnnoType
   deriving anyclass (ToExpr, NFData)
 
 data DirectiveType
-  = TEvalDirective
+  = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
   deriving stock (Eq, Generic, Ord, Show)
@@ -252,9 +252,9 @@ directiveLiteral = do
 
 directives :: [(DirectiveType, Text)]
 directives =
-  [ (TEvalDirective,     "SEVAL")
-  , (TLazyEvalDirective, "EVAL")
-  , (TCheckDirective,    "CHECK")
+  [ (TStrictEvalDirective, "SEVAL")
+  , (TLazyEvalDirective,   "EVAL")
+  , (TCheckDirective,      "CHECK")
   ]
 
 integerLiteral :: Lexer (Text, Int)
@@ -901,7 +901,7 @@ displayTokenType tt =
 
 showDirective :: DirectiveType -> Text
 showDirective = \case
-  TEvalDirective -> "#SEVAL"
+  TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
 

@@ -348,7 +348,7 @@ evalExpr expr =
     )
 
 evalDirective :: Directive Resolved -> Eval ()
-evalDirective (Eval _ann expr) = do
+evalDirective (StrictEval _ann expr) = do
   v <- evalExpr expr
   addEvalDirectiveResult expr v
 evalDirective (LazyEval _ann _expr) = pure ()

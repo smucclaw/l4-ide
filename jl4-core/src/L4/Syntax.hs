@@ -141,7 +141,7 @@ data Assume n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
-    Eval Anno (Expr n)
+    StrictEval Anno (Expr n)
   | LazyEval Anno (Expr n)
   | Check Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)

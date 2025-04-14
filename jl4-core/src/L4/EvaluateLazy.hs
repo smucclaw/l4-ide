@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 module L4.EvaluateLazy
   ( EvalDirectiveResult(..)
@@ -8,7 +9,6 @@ module L4.EvaluateLazy
 
 import Base
 import qualified Base.Text as Text
--- import Optics ((%))
 import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Operators
@@ -17,7 +17,6 @@ import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
--- import L4.Utils.RevList
 
 import Data.Either
 
@@ -33,69 +32,76 @@ data EvalState =
     }
 
 data EvalException =
+    InternalEvalException InternalEvalException
+  | UserEvalException UserEvalException
+  deriving stock (Generic, Show)
+  deriving anyclass NFData
+
+data InternalEvalException =
     RuntimeScopeError Resolved -- internal
   | RuntimeTypeError Text -- internal
-  | InvariantViolated Text -- internal
   | PrematureGC -- internal
   | DanglingPointer -- internal
   | UnhandledPatternMatch -- internal
-  | BlackholeForced
+  deriving stock (Generic, Show)
+  deriving anyclass NFData
+
+data UserEvalException =
+    BlackholeForced
   | EqualityOnUnsupportedType
   | NonExhaustivePatterns Reference -- we could try to warn statically
   | StackOverflow
-  | Stuck
-    -- (Expr Resolved)
-    -- ^ the expression we were evaluating when getting stuck
-    Resolved
-    -- ^ the term we got stuck on
+  | Stuck Resolved -- ^ stores the term we got stuck on
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
 prettyEvalException :: EvalException -> [Text]
-prettyEvalException = \case
+prettyEvalException (InternalEvalException exc) = wrapInternal (prettyInternalEvalException exc)
+  where
+    wrapInternal :: [Text] -> [Text]
+    wrapInternal msgs = [ "Internal error:" ] <> msgs <> [ "Please report this as a bug." ]
+prettyEvalException (UserEvalException exc)     = prettyUserEvalException exc
+
+prettyInternalEvalException :: InternalEvalException -> [Text]
+prettyInternalEvalException = \case
   RuntimeScopeError r ->
-    [ "Internal error:" ]
-    <> prepare r
-    <> [ "is not in scope."
-    , "Please report this as a bug." ]
+    indentMany r
+    <> [ "is not in scope." ]
   RuntimeTypeError err ->
-    [ "Internal error:"
-    , ind err
-    , "is not in scope."
-    , "Please report this as a bug." ]
-  InvariantViolated inv ->
-    [ "Invariant violated:"
-    , ind inv
-    , "Please report this as a bug." ]
+    [ "I encountered a type error during evaluation:" ]
+    <> [ indentSingle err ]
   PrematureGC ->
-    [ "Trying to access an address that has already been garbage-collected."
-    , "Please report this as a bug." ]
+    [ "Trying to access an address that has already been garbage-collected." ]
   DanglingPointer ->
-    [ "Trying to access an address that is not on the abstract machine heap."
-    , "Please report this as a bug." ]
+    [ "Trying to access an address that is not on the abstract machine heap." ]
   UnhandledPatternMatch ->
-    [ "Unhandled pattern match failure."
-    , "Please report this as a bug." ]
+    [ "Unhandled pattern match failure." ]
+
+indentSingle :: Text -> Text
+indentSingle = ("  " <>)
+
+indentMany :: LayoutPrinter a => a -> [Text]
+indentMany = map ind . Text.lines .  prettyLayout
+  where
+    ind = ("  " <>)
+
+prettyUserEvalException :: UserEvalException -> [Text]
+prettyUserEvalException = \case
   BlackholeForced ->
     [ "Infinite loop detected." ]
   EqualityOnUnsupportedType -> ["Trying to check equality on types that do not support it."]
   NonExhaustivePatterns val ->
     [ "Value" ]
-    <> prepare val
+    <> indentMany val
     <> [ "has no corresponding pattern." ]
   StackOverflow ->
     [ "Stack overflow: "
     , "Recursion depth of " <> Text.show maximumStackSize
     , "exceeded." ]
-  Stuck {- expr -} r ->
+  Stuck r ->
     [ "I could not continue evaluating, because I needed to know the value of" ]
-    <> prepare r
+    <> indentMany r
     <> [ "but it is an assumed term." ]
-  where
-    ind = ("  " <>)
-
-    prepare :: LayoutPrinter a => a -> [Text]
-    prepare = map ind . Text.lines .  prettyLayout
 
 emptyEnvironment :: Environment
 emptyEnvironment = Map.empty
@@ -162,11 +168,12 @@ pushFrame :: Frame -> Eval ()
 pushFrame frame = do
   s <- readRef (.stack)
   if s.size == maximumStackSize
-    then exception StackOverflow
+    then userException StackOverflow
     else writeRef (.stack) (over #frames (frame :) s)
 
-matchStack :: (Maybe Frame -> Eval a) -> Eval a
-matchStack k = do
+-- | Pops a stack frame (if any are left) and calls the continuation on it.
+withPoppedFrame :: (Maybe Frame -> Eval a) -> Eval a
+withPoppedFrame k = do
   stack <- readRef (.stack)
   case stack.frames of
     []       -> k Nothing
@@ -174,11 +181,19 @@ matchStack k = do
       writeRef (.stack) (MkStack { size = stack.size - 1, frames = fs })
       k (Just f)
 
+internalException :: InternalEvalException -> Eval a
+internalException =
+  exception . InternalEvalException
+
+userException :: UserEvalException -> Eval a
+userException =
+  exception . UserEvalException
+
 -- | For the time being, exceptions are always fatal. But we could
 -- in principle have exception we can recover from ...
 exception :: EvalException -> Eval a
 exception exc =
-  matchStack $ \ case
+  withPoppedFrame $ \ case
     Nothing -> throwError exc
     Just _f -> exception exc
 
@@ -188,15 +203,7 @@ tryEval m =
 
 stuckOnAssumed :: Resolved -> Eval b
 stuckOnAssumed assumedResolved =
-  exception (Stuck assumedResolved)
-{-
-  do
-  exprs <- use (#evalActions % to unRevList)
-  case exprs of
-    Enter expr : _ -> exception (Stuck expr assumedResolved) stack
-    _ -> exception (InvariantViolated "no corresponding Enter stackframe for expression") stack
--}
-
+  userException (Stuck assumedResolved)
 
 maximumStackSize :: Int
 maximumStackSize = 200
@@ -205,35 +212,34 @@ lookupTerm :: Environment -> Resolved -> Maybe Reference
 lookupTerm env r =
   Map.lookup (getUnique r) env
 
-lookupRef :: Reference -> Eval Thunk
-lookupRef rf =
-  liftIO (readIORef rf.pointer)
+expectTerm :: Environment -> Resolved -> Eval Reference
+expectTerm env r =
+  case lookupTerm env r of
+    Nothing -> internalException (RuntimeScopeError r)
+    Just rf -> pure rf
+
+-- NOTE: Modifications of thunks should probably be atomic,
+-- because they could be updated concurrently from different
+-- modules.
+lookupAndUpdateRef :: Reference -> (Thunk -> (Thunk, a)) -> Eval a
+lookupAndUpdateRef rf f =
+  liftIO $
+    atomicModifyIORef' rf.pointer f
 
 updateThunk :: Reference -> Thunk -> Eval ()
 updateThunk rf thunk = do
-  -- NOTE: Modifications of thunks should probably be atomic,
-  -- because they could be updated concurrently from different
-  -- modules.
   liftIO (atomicWriteIORef rf.pointer $! thunk)
 
 updateThunkToWHNF :: Reference -> WHNF -> Eval ()
 updateThunkToWHNF rf v =
   updateThunk rf (WHNF v)
 
-makeBlackhole :: Reference -> Eval ()
-makeBlackhole rf =
-  updateThunk rf Blackhole
-
 evalRef :: Reference -> Eval WHNF
-evalRef rf = do
-  thunk <- lookupRef rf
-  case thunk of
-    WHNF val -> backward val
-    Blackhole -> exception BlackholeForced
-    Unevaluated e env -> do
-      makeBlackhole rf
-      pushFrame (UpdateThunk rf)
-      forwardExpr env e
+evalRef rf =
+  join $ lookupAndUpdateRef rf $ \ case
+    thunk@(WHNF val) -> (thunk, backward val)
+    thunk@Blackhole -> (thunk, userException BlackholeForced)
+    Unevaluated e env -> (Blackhole, pushFrame (UpdateThunk rf) >> forwardExpr env e)
 
 newAddress :: Eval Address
 newAddress = do
@@ -275,9 +281,7 @@ allocate expr env = do
 allocate_ :: Expr Resolved -> Environment -> Eval Reference
 allocate_ (Var _ann n) env = do
   -- special case where we do not actually need to allocate
-  case lookupTerm env n of
-    Nothing -> exception (RuntimeScopeError n)
-    Just rf -> pure rf
+  expectTerm env n
 allocate_ expr env =
   fst <$> allocate expr (const env)
 
@@ -323,9 +327,7 @@ forwardExpr env (Gt _ann e1 e2) = do
 forwardExpr env (Proj _ann e l) =
   forwardExpr env (App emptyAnno l [e]) -- we desugar projection to plain function application
 forwardExpr env (Var _ann n) = -- still problematic: similarity / overlap between this and App with no args
-  case lookupTerm env n of
-    Nothing -> exception (RuntimeScopeError n)
-    Just rf -> evalRef rf
+  expectTerm env n >>= evalRef
 forwardExpr env (Cons _ann e1 e2) = do
   rf1 <- allocate_ e1 env
   rf2 <- allocate_ e2 env
@@ -333,16 +335,14 @@ forwardExpr env (Cons _ann e1 e2) = do
 forwardExpr env (Lam _ann givens e) =
   backward (ValClosure givens e env)
 forwardExpr env (App _ann n []) =
-  case lookupTerm env n of
-    Nothing -> exception (RuntimeScopeError n)
-    Just rf -> evalRef rf
+  expectTerm env n >>= evalRef
 forwardExpr env (App _ann n es@(_ : _)) = do
   pushFrame (App1 es env)
   forwardExpr env (Var emptyAnno n)
 forwardExpr env (AppNamed ann n [] _) =
   forwardExpr env (App ann n [])
 forwardExpr _env (AppNamed _ann _n _nes Nothing) =
-  exception (RuntimeTypeError "named application where the order of arguments is not resolved")
+  internalException (RuntimeTypeError "named application where the order of arguments is not resolved")
 forwardExpr env (AppNamed ann n nes (Just order)) =
   let
     -- move expressions into order, drop names
@@ -368,7 +368,7 @@ forwardExpr env (Where _ann e ds) = do
   forwardExpr combinedEnv e
 
 backward :: WHNF -> Eval WHNF
-backward val = matchStack $ \ case
+backward val = withPoppedFrame $ \ case
   Nothing -> pure val
   Just (BinOp1 binOp e2 env) -> do
     pushFrame (BinOp2 binOp val)
@@ -385,7 +385,7 @@ backward val = matchStack $ \ case
         backward (ValConstructor r refs)
       ValAssumed r ->
         stuckOnAssumed r -- TODO: we can do better here
-      res -> exception (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
+      res -> internalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
   Just (IfThenElse1 e2 e3 env) ->
     case boolView val of
       Just True ->
@@ -395,13 +395,13 @@ backward val = matchStack $ \ case
       Nothing | ValAssumed r <- val ->
         stuckOnAssumed r
       Nothing ->
-        exception (RuntimeTypeError $ "expected a Boolean but found: " <> prettyLayout val <> " when evaluating if-then-else")
+        internalException (RuntimeTypeError $ "expected a BOOLEAN but found: " <> prettyLayout val <> " when evaluating IF-THEN-ELSE")
   Just (ConsiderWhen1 _scrutinee e _branches env) -> do
     case val of
       ValEnvironment env' ->
         forwardExpr (Map.union env' env) e
       _ ->
-        exception (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when evaluating when")
+        internalException (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when evaluating WHEN")
   Just PatNil0 -> do
     case val of
       ValNil ->
@@ -421,13 +421,13 @@ backward val = matchStack $ \ case
         pushFrame (PatCons2 env1)
         matchPattern rf2 p2
       _ ->
-        exception (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching cons-pattern")
+        internalException (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY")
   Just (PatCons2 env1) ->
     case val of
       ValEnvironment env2 ->
         backward (ValEnvironment (Map.union env2 env1))
       _ ->
-        exception (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching cons-pattern")
+        internalException (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY")
   Just (PatApp0 n ps) ->
     case val of
       ValConstructor n' rfs
@@ -442,7 +442,7 @@ backward val = matchStack $ \ case
                   ((r, p) : rps) -> do
                     pushFrame (PatApp1 [] rps)
                     matchPattern r p
-            else exception (RuntimeTypeError $ "pattern for constructor has the wrong number of arguments")
+            else internalException (RuntimeTypeError $ "pattern for constructor has the wrong number of arguments")
       _ ->
         patternMatchFailure
   Just (PatApp1 envs rps) ->
@@ -453,7 +453,7 @@ backward val = matchStack $ \ case
           ((r, p) : rps') -> do
             pushFrame (PatApp1 (env : envs) rps')
             matchPattern r p
-      _ -> exception (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching constructor")
+      _ -> internalException (RuntimeTypeError $ "expected an environment but found: " <> prettyLayout val <> " when matching constructor")
   Just (EqConstructor1 rf rfs) -> do
     pushFrame (EqConstructor2 val rfs)
     evalRef rf
@@ -469,7 +469,7 @@ backward val = matchStack $ \ case
           ((r1, r2) : rfs') -> do
             pushFrame (EqConstructor1 r2 rfs')
             evalRef r1
-      Nothing -> exception (RuntimeTypeError $ "expected a Boolean but found: " <> prettyLayout val <> " when testing equality")
+      Nothing -> internalException (RuntimeTypeError $ "expected a BOOLEAN but found: " <> prettyLayout val <> " when testing equality")
   Just (UpdateThunk rf) -> do
     updateThunkToWHNF rf val
     backward val
@@ -484,11 +484,11 @@ matchGivens (MkGivenSig _ann otns) f env es = do
       pure $ Map.fromList (zipWith (\ (r, _) v -> (getUnique r, v)) others refs)
     else do
       pushFrame f -- provides better error context
-      exception (RuntimeTypeError "given signatures' values' lengths do not match")
+      internalException (RuntimeTypeError "given signatures' values' lengths do not match")
 
 matchBranches :: Reference -> Environment -> [Branch Resolved] -> Eval WHNF
 matchBranches scrutinee _env [] =
-  exception (NonExhaustivePatterns scrutinee)
+  userException (NonExhaustivePatterns scrutinee)
 matchBranches _scrutinee env (Otherwise _ann e : _) =
   forwardExpr env e
 matchBranches scrutinee env (When _ann pat e : branches) = do
@@ -511,9 +511,9 @@ matchPattern scrutinee (PatApp _ann n ps) = do
 
 -- | This unwinds the stack until it finds the enclosing pattern match and then resumes.
 patternMatchFailure :: Eval WHNF
-patternMatchFailure = matchStack $ \ case
+patternMatchFailure = withPoppedFrame $ \ case
   Nothing ->
-    exception UnhandledPatternMatch
+    internalException UnhandledPatternMatch
   Just (ConsiderWhen1 scrutinee _ branches env) ->
     matchBranches scrutinee env branches
   Just _ ->
@@ -530,21 +530,21 @@ runBinOp BinOpTimes  (ValNumber num1) (ValNumber num2)           = backward $ Va
 runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2)        = backward $ ValNumber (num1 `div` num2)
 runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)        = backward $ ValNumber (num1 `mod` num2)
 runBinOp BinOpEquals val1             val2                       = runBinOpEquals val1 val2
-runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = backward $ valBool (num1 <= num2)
-runBinOp BinOpLeq    (ValString str1) (ValString str2)           = backward $ valBool (str1 <= str2)
-runBinOp BinOpLeq    (boolView -> Just b1) (boolView -> Just b2) = backward $ valBool (b1 <= b2)
-runBinOp BinOpGeq    (ValNumber num1) (ValNumber num2)           = backward $ valBool (num1 >= num2)
-runBinOp BinOpGeq    (ValString str1) (ValString str2)           = backward $ valBool (str1 >= str2)
-runBinOp BinOpGeq    (boolView -> Just b1) (boolView -> Just b2) = backward $ valBool (b1 >= b2)
-runBinOp BinOpLt     (ValNumber num1) (ValNumber num2)           = backward $ valBool (num1 < num2)
-runBinOp BinOpLt     (ValString str1) (ValString str2)           = backward $ valBool (str1 < str2)
-runBinOp BinOpLt     (boolView -> Just b1) (boolView -> Just b2) = backward $ valBool (b1 < b2)
-runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = backward $ valBool (num1 > num2)
-runBinOp BinOpGt     (ValString str1) (ValString str2)           = backward $ valBool (str1 > str2)
-runBinOp BinOpGt     (boolView -> Just b1) (boolView -> Just b2) = backward $ valBool (b1 > b2)
+runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = backward $ ValBool (num1 <= num2)
+runBinOp BinOpLeq    (ValString str1) (ValString str2)           = backward $ ValBool (str1 <= str2)
+runBinOp BinOpLeq    (ValBool b1)     (ValBool b2)               = backward $ ValBool (b1 <= b2)
+runBinOp BinOpGeq    (ValNumber num1) (ValNumber num2)           = backward $ ValBool (num1 >= num2)
+runBinOp BinOpGeq    (ValString str1) (ValString str2)           = backward $ ValBool (str1 >= str2)
+runBinOp BinOpGeq    (ValBool b1)     (ValBool b2)               = backward $ ValBool (b1 >= b2)
+runBinOp BinOpLt     (ValNumber num1) (ValNumber num2)           = backward $ ValBool (num1 < num2)
+runBinOp BinOpLt     (ValString str1) (ValString str2)           = backward $ ValBool (str1 < str2)
+runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = backward $ ValBool (b1 < b2)
+runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = backward $ ValBool (num1 > num2)
+runBinOp BinOpGt     (ValString str1) (ValString str2)           = backward $ ValBool (str1 > str2)
+runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = backward $ ValBool (b1 > b2)
 runBinOp _op         (ValAssumed r) _e2                          = stuckOnAssumed r
 runBinOp _op         _e1 (ValAssumed r)                          = stuckOnAssumed r
-runBinOp _           _                _                          = exception (RuntimeTypeError "running bin op with invalid operation / value combination")
+runBinOp _           _                _                          = internalException (RuntimeTypeError "running bin op with invalid operation / value combination")
 
 runBinOpEquals :: WHNF -> WHNF -> Eval WHNF
 runBinOpEquals (ValNumber num1)        (ValNumber num2) = backward $ valBool $ num1 == num2
@@ -559,12 +559,17 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
       pairs = zip rs1 rs2
     in
       case pairs of
-        [] -> backward $ valBool True
+        [] -> backward $ ValBool True
         ((r1, r2) : rss) -> do
           pushFrame (EqConstructor1 r2 rss)
           evalRef r1
-  | otherwise                                           = backward $ valBool False
-runBinOpEquals _                       _                = exception EqualityOnUnsupportedType
+  | otherwise                                           = backward $ ValBool False
+runBinOpEquals _                       _                = userException EqualityOnUnsupportedType
+
+pattern ValBool :: Bool -> WHNF
+pattern ValBool b <- (boolView -> Just b)
+  where
+    ValBool b = valBool b
 
 valBool :: Bool -> WHNF
 valBool False = falseVal
@@ -601,12 +606,12 @@ evalRecLocalDecls env decls = do
   traverse_ (evalLocalDecl combinedEnv) decls
   pure env'
 
--- | Just collect all defined names; could plausible be done generically.
+-- | Just collect all defined names; could plausibly be done generically.
 scanSection :: Section Resolved -> Eval [Resolved]
 scanSection (MkSection _ann _lvl _mn _maka topdecls) =
   concat <$> traverse scanTopDecl topdecls
 
--- | Just collect all defined names; could plausible be done generically.
+-- | Just collect all defined names; could plausibly be done generically.
 scanTopDecl :: TopDecl Resolved -> Eval [Resolved]
 scanTopDecl (Declare _ann declare) =
   scanDeclare declare
@@ -667,7 +672,7 @@ evalTopDecl _env (Import _ann _import_) =
 evalDirective :: Environment -> Directive Resolved -> Eval [EvalDirective]
 evalDirective env (LazyEval _ann expr) =
   pure ((\ r -> MkEvalDirective r expr env) <$> toList (rangeOf expr))
-evalDirective _env (Eval _ann _expr) =
+evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
   pure []
@@ -688,10 +693,9 @@ evalAssume env (MkAssume _ann _tysig (MkAppForm _ n _args _maka) _) = do
   updateTerm env n (WHNF (ValAssumed n))
 
 updateTerm :: Environment -> Resolved -> Thunk -> Eval ()
-updateTerm env n thunk =
-  case lookupTerm env n of
-    Nothing -> exception (RuntimeScopeError n)
-    Just rf -> updateThunk rf thunk
+updateTerm env n thunk = do
+  rf <- expectTerm env n
+  updateThunk rf thunk
 
 -- We are assuming that the environment already contains an entry with an address for us.
 evalDecide :: Environment -> Decide Resolved -> Eval ()

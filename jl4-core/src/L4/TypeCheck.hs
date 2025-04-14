@@ -496,9 +496,9 @@ inferAssume (MkAssume ann tysig appForm mt) = do
       pure (rd, [makeKnownMany (appFormHeads rappForm) ce])
 
 inferDirective :: Directive Name -> Check (Directive Resolved)
-inferDirective (Eval ann e) = errorContext (WhileCheckingExpression e) do
+inferDirective (StrictEval ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
-  pure (Eval ann re)
+  pure (StrictEval ann re)
 inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (LazyEval ann re)

@@ -165,10 +165,10 @@ instance LayoutPrinter a => LayoutPrinter (Decide a) where
 
 instance LayoutPrinter a => LayoutPrinter (Directive a) where
   printWithLayout = \case
-    Eval _ e ->
-      "#EVAL" <+> printWithLayout e
+    StrictEval _ e ->
+      "#SEVAL" <+> printWithLayout e
     LazyEval _ e ->
-      "#LEVAL" <+> printWithLayout e
+      "#EVAL" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
 
