@@ -782,7 +782,7 @@ data Stack a =
 -- where the subsequent expression continues.
 --
 -- Operators are considered to be "on the same line" if both operands
--- are on the same line, meaning that both the top stack fram and the
+-- are on the same line, meaning that both the top stack frame and the
 -- top continuation frame have to have the same line number to make
 -- a real same-line choice.
 --
