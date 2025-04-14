@@ -65,7 +65,7 @@ examplecons MEANS 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
 examplew1 MEANS   3 * (4 + 2
                 + 3) * 4 + 2
 
--- This is currently parsed as, the reason being
+-- This is currently parsed as follows, the reason being
 -- that + and * on line 66 are now (since issue 336)
 -- not considered "same line operators"
 examplew2 MEANS 3 * (4 + 2 + 3) * (4 + 2)
