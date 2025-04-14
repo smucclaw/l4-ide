@@ -21,7 +21,7 @@ data Name = MkName Anno RawName
 
 data RawName =
     NormalName Text
-  | QualifiedName Text (NonEmpty Text)
+  | QualifiedName (NonEmpty Text) Text
   -- ^ contains the actual name and a list of qualifiers, e.g.
   -- foo.bar becomes @'QualifiedName' bar [foo]@
   | PreDef Text
@@ -70,7 +70,7 @@ getActual (OutOfScope _ n) = n
 rawNameToText :: RawName -> Text
 rawNameToText (NormalName n)       = n
 rawNameToText (PreDef n)           = n
-rawNameToText (QualifiedName n qs) = Text.intercalate "." (NE.toList qs <> [n])
+rawNameToText (QualifiedName qs n) = Text.intercalate "." (NE.toList qs <> [n])
 
 nameToText :: Name -> Text
 nameToText = rawNameToText . rawName

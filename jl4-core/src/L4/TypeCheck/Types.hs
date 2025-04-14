@@ -300,7 +300,7 @@ lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment rn = do
   -- NOTE: split in a list of qualifiers and the actual name
   let (tn, qs)  = case rn of
-        QualifiedName n' qs' -> (NormalName n', NE.toList qs')
+        QualifiedName qs' n' -> (NormalName n', NE.toList qs')
         n -> (n, [])
 
   env <- asks (.environment)

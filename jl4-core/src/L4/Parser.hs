@@ -324,7 +324,7 @@ qualifiedName = do
   let e = Epa
         { original = map (either id fst) res
         , trailingTokens = wsOrAnnotation.trailingTokens
-        , payload = QualifiedName n (q :| qs)
+        , payload = QualifiedName (q :| qs) n
         , hiddenClusters = wsOrAnnotation.hiddenClusters
         }
   pure $ MkName emptyAnno <$> e

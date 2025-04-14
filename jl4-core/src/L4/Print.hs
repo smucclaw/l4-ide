@@ -39,7 +39,7 @@ instance LayoutPrinter a => LayoutPrinter (Maybe a) where
 instance LayoutPrinter RawName where
   printWithLayout = \case
     NormalName t -> pretty $ quoteIfNeeded t
-    QualifiedName t qs -> pretty t <+> parens ("qualified at section" <+> pretty (Text.intercalate "." $ NE.toList qs))
+    QualifiedName qs t -> pretty t <+> parens ("qualified at section" <+> pretty (Text.intercalate "." $ NE.toList qs))
     PreDef t -> pretty $ quoteIfNeeded t
 
 instance LayoutPrinter a => LayoutPrinter (Type' a) where
@@ -178,7 +178,7 @@ instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
     MkImport _ n -> "IMPORT" <+> printWithLayout n
 
-instance LayoutPrinter a => LayoutPrinter (Int, Section a) where
+instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
   printWithLayout = \case
     (i, MkSection _ Nothing _ ds)    ->
       vcat (map (printWithLayout . (i + 1 ,)) ds)
@@ -195,12 +195,12 @@ instance LayoutPrinter a => LayoutPrinter (Int, Section a) where
 
 instance LayoutPrinter a => LayoutPrinter (Module  a) where
   printWithLayout = \case
-    MkModule _ _ sect -> printWithLayout (0 :: Int, sect)
+    MkModule _ _ sect -> printWithLayout (1, sect)
 
 instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
-  printWithLayout t = printWithLayout (1 :: Int, t)
+  printWithLayout t = printWithLayout (1, t)
 
-instance LayoutPrinter a => LayoutPrinter (Int, TopDecl a) where
+instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
   printWithLayout = \case
     (_, Declare   _ t) -> printWithLayout t
     (_, Decide    _ t) -> printWithLayout t
