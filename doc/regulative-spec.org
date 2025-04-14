@@ -1,6 +1,6 @@
 #+TITLE: This document specifies a syntax and semantics for regulative rules in JL4.
 
-For background, please see [[regulative.md]]
+For background, please see [[./regulative.md]]
 
 This aspect of the L4 language seeks to formalize regulative rules, as defined by Searle and elaborated in LegalRuleML.
 
@@ -25,30 +25,46 @@ What are the basic "moving parts" of a contract?
 The general form of a regulative clause says who is supposed to do what, under certain conditions, by when:
 
 #+begin_src
-  GIVEN     <input parameters>
-  UPON      <trigger event expression>
-  PROVIDED  <preconditions> -- a guard condition
-  IF        <preconditions> -- any arguments given are merged with PROVIDED, but the arguments can be empty
-  PARTY     <entity> <entity type>
-  DO        <action> <action_parameters>
-  BEFORE    <temporal expression> -- sets an upper bound, may be absolute or relative to other events in trace
-  AFTER     <temporal expression> -- sets a lower bound, may be absolute or relative to other events in trace
-  THEN/HENCE   <transition>
-  ELSE/LEST    <transition>
+  § <Stanza Title> -- a rule name unique within the module scope
+  GIVEN        <input parameters>
+  UPON         <trigger event>
+  PROVIDED/IF  <preconditions> -- a guard condition
+  PARTY        <entity> <entity type>
+  DO           <action> <action_parameters>
+  BEFORE       <temporal expression> -- upper bound
+  AFTER        <temporal expression> -- lower bound
+  THEN/HENCE   <regulative rule group>
+  ELSE/LEST    <regulative rule group>
 #+end_src
-
-Note that ~THEN/ELSE~ replaces previous usages of ~HENCE/LEST~. Let's parse ~HENCE~ and ~THEN~ as equivalent, and ~LEST~ and ~ELSE~ as equivalent, and we can run usability experiments.
 
 We introduce sugared forms of the ~DO~ expression above by introducing
 ~MUST~, ~MAY~, and ~MUSTNT~ operators, which are specified to give
 default values to any omitted ~THEN~ and ~ELSE~ arguments. These
 operators can also be introspected at the specification level.
 
+| action label | THEN/HENCE | ELSE/LEST  |
+|              | default    | default    |
+|--------------+------------+------------|
+| DO           | /required/ | /required/ |
+| MUST         | Fulfilled  | Breach     |
+| MUSTNT       | Fulfilled  | Breach     |
+| MAY          | Fulfilled  | Fulfilled  |
+
+Note that ~THEN/ELSE~ are alternative to ~HENCE/LEST~. Let's parse
+~HENCE~ and ~THEN~ as equivalent, and ~LEST~ and ~ELSE~ as equivalent,
+and we can run usability experiments.
+
+A regulative rule group can be:
+- (in the simple case) an inline rule tree, indented accordingly
+- the labels of one or more rule names, composed with `AND` / `OR` / `XOR` / `THEN`.
+
 ~IF~ and ~PROVIDED~ are equivalent alternatives. By convention, we
 pair ~IF~ with ~DO~ and we pair ~PROVIDED~ with ~MUST~, ~MAY~, and
 ~MUSTNT~.
 
 A ~transition~ expression can be a collection of subcontracts composed using ~AND~, ~OR~, ~THEN~ operators from CSL. (What about NOT and XOR?).
+
+The temporal bounds may be absolute or relative to other events in the prior trace.
 
 We augment CSL's notion of a subcontract with an ~UPDATE~ operator
 which acts similar to a ~PUT~ in a State monad -- we write a value to
