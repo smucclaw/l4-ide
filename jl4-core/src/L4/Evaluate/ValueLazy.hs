@@ -1,6 +1,7 @@
 module L4.Evaluate.ValueLazy where
 
 import Base
+import Control.Concurrent (ThreadId)
 import L4.Syntax
 
 -- | Public addresses. These must be globally unique, therefore
@@ -24,8 +25,7 @@ instance Show Reference where
   show reference = show reference.address
 
 data Thunk =
-    Unevaluated (Expr Resolved) Environment
-  | Blackhole
+    Unevaluated !(Set ThreadId) (Expr Resolved) !Environment
   | WHNF WHNF
   deriving stock Show
 

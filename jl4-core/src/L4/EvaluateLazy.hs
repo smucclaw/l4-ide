@@ -10,6 +10,8 @@ module L4.EvaluateLazy
 import Base
 import qualified Base.Text as Text
 import qualified Base.Map as Map
+import qualified Base.Set as Set
+import Control.Concurrent
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
@@ -234,12 +236,22 @@ updateThunkToWHNF :: Reference -> WHNF -> Eval ()
 updateThunkToWHNF rf v =
   updateThunk rf (WHNF v)
 
+-- NOTE: Once we start evaluating a thunk, we store the (Haskell) thread
+-- that does so. If we encounter a thunk with such an entry created by
+-- ourselves, we treat it as a blackhole: we tried to evaluate the thunk
+-- again recursively, which means we're in a loop. If the evaluation was
+-- triggered by a different thread though (in our case, this basically
+-- means from a different module, then it's not necessarily a loop. We could
+-- just wait (which is what GHC does), but we just try to evaluate it as
+-- well, which should be benign.
 evalRef :: Reference -> Eval WHNF
-evalRef rf =
+evalRef rf = do
+  tid <- liftIO myThreadId
   join $ lookupAndUpdateRef rf $ \ case
     thunk@(WHNF val) -> (thunk, backward val)
-    thunk@Blackhole -> (thunk, userException BlackholeForced)
-    Unevaluated e env -> (Blackhole, pushFrame (UpdateThunk rf) >> forwardExpr env e)
+    thunk@(Unevaluated tids e env)
+      | tid `Set.member` tids -> (thunk, userException BlackholeForced)
+      | otherwise             -> (Unevaluated (Set.insert tid tids) e env, pushFrame (UpdateThunk rf) >> forwardExpr env e)
 
 newAddress :: Eval Address
 newAddress = do
@@ -247,10 +259,14 @@ newAddress = do
   u <- asks (.moduleUri)
   pure (MkAddress u i)
 
+blackhole :: ThreadId -> Thunk
+blackhole tid =
+  Unevaluated (Set.singleton tid) (error "blackhole") Map.empty
+
 newReference :: Eval Reference
 newReference = do
   address <- newAddress
-  reference <- liftIO (newIORef Blackhole)
+  reference <- liftIO (myThreadId >>= newIORef . blackhole)
   pure (MkReference address reference)
 
 -- | Recursive pre-allocation, used for mutually recursive let-bindings / declarations.
@@ -275,7 +291,7 @@ allocate expr env = do
   rf <- newReference
   let
     env' = env rf
-  updateThunk rf (Unevaluated expr env')
+  updateThunk rf (Unevaluated Set.empty expr env')
   pure (rf, env')
 
 allocate_ :: Expr Resolved -> Environment -> Eval Reference
@@ -700,7 +716,7 @@ updateTerm env n thunk = do
 -- We are assuming that the environment already contains an entry with an address for us.
 evalDecide :: Environment -> Decide Resolved -> Eval ()
 evalDecide env (MkDecide _ann _tysig (MkAppForm _ n []   _maka) expr) =
-  updateTerm env n (Unevaluated expr env)
+  updateTerm env n (Unevaluated Set.empty expr env)
 evalDecide env (MkDecide _ann _tysig (MkAppForm _ n args _maka) expr) = do
   let
     v = ValClosure (MkGivenSig emptyAnno ((\ r -> MkOptionallyTypedName emptyAnno r Nothing) <$> args)) expr env
