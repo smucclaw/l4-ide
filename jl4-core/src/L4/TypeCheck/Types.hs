@@ -333,9 +333,14 @@ lookupRawNameInEnvironment rn = do
       -- NOTE: we have to treat this specially otherwise the recursive call will always
       -- bottom out at an empty list of sections which makes the entire algorithm fail
       sectionInSection [secs] = secs
-      sectionInSection (secs : secss) = do
-        u <- mapMaybe (\(MkSection _ mn _ _) -> getUnique <$> mn) secs
-        filter (isTopLevelBindingInSection u) $ sectionInSection secss
+      sectionInSection (secs : secss) =
+        mapMaybe
+          (\sec@(MkSection _ mn _ _) -> do
+             u <- getUnique <$> mn
+             guard $ any (isTopLevelBindingInSection u) $ sectionInSection secss
+             pure sec
+          )
+          secs
       sectionInSection [] = []
 
       reversedSections = sectionInSection $ mkCandidateSections qs
