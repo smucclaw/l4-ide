@@ -1,0 +1,83 @@
+§ a
+§§ aa
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+
+§ a
+§§ aa
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+
+§ a
+§§ aa
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+
+§ a
+§§ aa
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+
+§ a
+§§ aa
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+
+§ a
+§§ aa
+§§§ aaa
+§§§§ aaaa
+ASSUME a3 IS A BOOLEAN
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+
+ASSUME a3 IS A NUMBER
+ASSUME a4 IS A NUMBER
+
+§ b
+§§ aa
+§§§ aaa
+§§§§ aaaa
+§§§§§ aa
+
+ASSUME a4 IS A NUMBER
+
+§ c
+
+#CHECK a.aa.aaa.aaaa.a3
+#CHECK b.aa.aaa.aaaa.a3
+#CHECK b.aa.aaa.aaaa.a3
+#CHECK b.aa.aaa.aaaa.aa.a4

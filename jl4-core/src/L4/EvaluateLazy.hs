@@ -605,11 +605,11 @@ sameResolved r1 r2 =
   getUnique r1 == getUnique r2
 
 evalModule :: Environment -> Module Resolved -> Eval (Environment, [EvalDirective])
-evalModule env (MkModule _ann _uri sections) = do
-  names <- concat <$> traverse scanSection sections
+evalModule env (MkModule _ann _uri section) = do
+  names <- scanSection section
   env' <- preAllocate names
   let combinedEnv = Map.union env' env
-  directives <- concat <$> traverse (evalSection combinedEnv) sections
+  directives <- evalSection combinedEnv section
   pure (env', directives)
 
 -- | Doesn't do any actual evaluation, just performs allocations
@@ -624,7 +624,7 @@ evalRecLocalDecls env decls = do
 
 -- | Just collect all defined names; could plausibly be done generically.
 scanSection :: Section Resolved -> Eval [Resolved]
-scanSection (MkSection _ann _lvl _mn _maka topdecls) =
+scanSection (MkSection _ann _mn _maka topdecls) =
   concat <$> traverse scanTopDecl topdecls
 
 -- | Just collect all defined names; could plausibly be done generically.
@@ -635,6 +635,8 @@ scanTopDecl (Decide _ann decide) =
   scanDecide decide
 scanTopDecl (Assume _ann assume) =
   scanAssume assume
+scanTopDecl (Section _ann section) =
+  scanSection section
 scanTopDecl (Directive _ann _directive) =
   pure []
 scanTopDecl (Import _ann _import_) =
@@ -670,7 +672,7 @@ scanConDecl (MkConDecl _ann n [])  = pure [n]
 scanConDecl (MkConDecl _ann n tns) = pure (n : ((\ (MkTypedName _ n' _) -> n') <$> tns))
 
 evalSection :: Environment -> Section Resolved -> Eval [EvalDirective]
-evalSection env (MkSection _ann _lvl _mn _maka topdecls) =
+evalSection env (MkSection _ann _mn _maka topdecls) =
   concat <$> traverse (evalTopDecl env) topdecls
 
 evalTopDecl :: Environment -> TopDecl Resolved -> Eval [EvalDirective]
@@ -682,6 +684,8 @@ evalTopDecl env (Assume _ann assume) =
   [] <$ evalAssume env assume
 evalTopDecl env (Directive _ann directive) =
   evalDirective env directive
+evalTopDecl env (Section _ann section) =
+  evalSection env section
 evalTopDecl _env (Import _ann _import_) =
   pure []
 
