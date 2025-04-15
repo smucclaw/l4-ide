@@ -62,11 +62,13 @@ examplecons MEANS 1 FOLLOWED BY 2 FOLLOWED BY 3 FOLLOWED BY EMPTY
 
 -- weird things happen here:
 --
--- I think this is parsed as 3 * ((4 + 2 + 3) * 3 + 2),
--- because the + is indented more and on a different line
--- from the * ...
 examplew1 MEANS   3 * (4 + 2
                 + 3) * 4 + 2
+
+-- This is currently parsed as follows, the reason being
+-- that + and * on line 66 are now (since issue 336)
+-- not considered "same line operators"
+examplew2 MEANS 3 * (4 + 2 + 3) * (4 + 2)
 
 #EVAL examplel1 = 14
 #EVAL examplel2 = 20
@@ -91,4 +93,6 @@ examplew1 MEANS   3 * (4 + 2
 #EVAL examplem3 = 0
 #EVAL examplem4 = -12
 
-#EVAL examplew1 = 114  -- would rather have 110, I think
+#EVAL examplew1 = 162  -- would rather have 110, I think
+#EVAL examplew2 = 162
+

@@ -10,6 +10,7 @@ import L4.TypeCheck.With
 import Control.Applicative
 import L4.Lexer (PosToken)
 import qualified Data.Map.Strict as Map
+import qualified Data.List.NonEmpty as NE
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
@@ -22,6 +23,7 @@ type Substitution = Map Int (Type' Resolved)
 data CheckEntity =
     KnownType Kind [Resolved] (TypeDecl Resolved)
   | KnownTerm (Type' Resolved) TermKind
+  | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
@@ -292,19 +294,85 @@ resolvedType n = do
         KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
+        KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
-lookupRawNameInEnvironment n = do
+lookupRawNameInEnvironment rn = do
+  -- NOTE: split in a list of qualifiers and the actual name
+  let (tn, qs)  = case rn of
+        QualifiedName qs' n' -> (NormalName n', NE.toList qs')
+        n -> (n, [])
+
   env <- asks (.environment)
   ei  <- asks (.entityInfo)
-  let
-    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
-    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
 
-    candidates :: [(Unique, Name, CheckEntity)]
-    candidates = mapMaybe proc (Map.findWithDefault [] n env)
+  let -- NOTE: from a list of qualifiers, try to build all paths through sections that may be
+      -- meant with the qualified name
+      -- The outer list describes the path, the inner list describes all possibilities at a
+      -- section level.
+      mkCandidateSections :: [Text] -> [[Section Resolved]]
+      mkCandidateSections =
+        foldl
+          (\acc q -> case Map.lookup (NormalName q) env of
+            Just us ->  mapMaybe isKnownSection us : acc
+
+            -- NOTE: this case is important because it cuts off options as soon as we run into unknown sections,
+            -- i.e. Foo.Bar.baz where Foo does exist (and contains baz) but Bar doesn't
+            Nothing -> [[]]
+          )
+          []
+
+      isKnownSection :: Unique -> Maybe (Section Resolved)
+      isKnownSection u = do
+        (_n, KnownSection s) <- Map.lookup u ei
+        pure s
+
+      -- NOTE: this is used to filter the paths through sections down to the ones that are valid.
+      -- We return the sections that are contained in existing sections
+      sectionInSection :: [[Section Resolved]] -> [Section Resolved]
+      -- NOTE: we have to treat this specially otherwise the recursive call will always
+      -- bottom out at an empty list of sections which makes the entire algorithm fail
+      sectionInSection [secs] = secs
+      sectionInSection (secs : secss) =
+        mapMaybe
+          (\sec@(MkSection _ mn _ _) -> do
+             u <- getUnique <$> mn
+             guard $ any (isTopLevelBindingInSection u) $ sectionInSection secss
+             pure sec
+          )
+          secs
+      sectionInSection [] = []
+
+      reversedSections = sectionInSection $ mkCandidateSections qs
+
+      proc :: Unique -> Maybe (Unique, Name, CheckEntity)
+      proc u = do
+        (o, ce) <- Map.lookup u ei
+        -- NOTE: if there are no qualifiers, we don't have to even try to sort out
+        -- by qualifiers (i.e. nothing changes if no qualifiers are used)
+        guard $ null qs || any (isTopLevelBindingInSection u) reversedSections
+
+        pure (u, o, ce)
+
+      candidates :: [(Unique, Name, CheckEntity)]
+      candidates = mapMaybe proc (Map.findWithDefault [] tn env)
 
   pure candidates
+
+isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
+isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . matchesUnq) decls
+  where
+  matchesUnq = \case
+    Declare _ (MkDeclare _ _ af _) -> afUnq af
+    Decide _ (MkDecide _ _ af _) -> afUnq af
+    Assume _ (MkAssume _ _ af _) -> afUnq af
+    Directive _ _ -> []
+    Import _ _ -> []
+    -- NOTE: Sections are a toplevel binding in the current section but can also contain further
+    -- toplevel bindings
+    Section _ (MkSection _ mr _ decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap matchesUnq decls'
+
+  afUnq = map getUnique . appFormHeads
 
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do

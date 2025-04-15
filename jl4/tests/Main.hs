@@ -5,6 +5,7 @@ import Base
 import Control.Monad.Trans.Maybe
 import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
+import qualified L4.EvaluateLazy as JL4Lazy
 import qualified L4.Nlg as Nlg
 import qualified L4.Parser as Parser
 import qualified L4.Parser.SrcSpan as JL4
@@ -106,7 +107,8 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
             mod' = checkResult.module'
             directives = toListOf (gplate @(Directive Resolved)) mod'
             directiveExprs = fmap (\case
-              Eval _ e -> e
+              StrictEval _ e -> e
+              LazyEval _ e -> e
               Check _ e -> e
               ) directives
           in
@@ -145,11 +147,16 @@ checkFile :: Bool -> FilePath -> IO ()
 checkFile isOk file = do
   (errs, isJust ->  success) <- oneshotL4ActionAndErrors file \nfp -> runMaybeT do
       let uri = normalizedFilePathToUri nfp
-      _       <- lift   $ Shake.addVirtualFileFromFS nfp
-      _       <- MaybeT $ Shake.use GetParsedAst uri        <* liftIO (Text.putStrLn "Parsing successful")
-      checked <- MaybeT $ Shake.use SuccessfulTypeCheck uri <* liftIO (Text.putStrLn "Typechecking successful")
-      results <- MaybeT $ Shake.use Evaluate uri            <* liftIO (Text.putStrLn "Evaluation successful")
-      let msgs = map typeErrorToMessage checked.infos <> map evalDirectiveResultToMessage results
+      _        <- lift   $ Shake.addVirtualFileFromFS nfp
+      _        <- MaybeT $ Shake.use GetParsedAst uri        <* liftIO (Text.putStrLn "Parsing successful")
+      checked  <- MaybeT $ Shake.use SuccessfulTypeCheck uri <* liftIO (Text.putStrLn "Typechecking successful")
+      results  <- MaybeT $ Shake.use Evaluate uri
+      when (not (null results)) $ liftIO $ Text.putStrLn "Eager evaluation successful"
+      results' <- MaybeT $ Shake.use EvaluateLazy uri
+      when (not (null results')) $ liftIO $ Text.putStrLn "Evaluation successful"
+      let msgs  =    map typeErrorToMessage checked.infos
+                  <> map evalDirectiveResultToMessage results
+                  <> map evalLazyDirectiveResultToMessage results'
           formatted = foldMap (sanitizeFilePaths . renderMessage) $ sortOn fst msgs
       liftIO $ Text.putStr formatted
   -- NOTE: if we're okay, we don't expect any errors, if we are not, we do expect them
@@ -160,6 +167,7 @@ checkFile isOk file = do
  where
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
+  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (Just r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
   renderMessage (r, txt) = cliErrorMessage r txt
 
 data CliError

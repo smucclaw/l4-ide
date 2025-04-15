@@ -1,6 +1,5 @@
 Parsing successful
 Typechecking successful
-Evaluation successful
 signatures.l4:21:8-9:
   FUNCTION FROM BOOLEAN TO BOOLEAN
 signatures.l4:22:8-9:

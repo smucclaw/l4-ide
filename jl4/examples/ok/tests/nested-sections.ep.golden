@@ -1,0 +1,30 @@
+§ a
+ASSUME a1 IS A BOOLEAN
+§§ aa
+ASSUME a2 IS A BOOLEAN
+§§§ aaa
+ASSUME a3 IS A BOOLEAN
+#CHECK a2
+#CHECK a3
+#CHECK aaa.a3
+-- this does not currently work: 
+-- #CHECK a.aa.aaa.a3
+
+§§ ab
+ASSUME a4 IS A BOOLEAN
+§§ ac
+§ b
+ASSUME a1 IS A BOOLEAN
+§§ ba
+ASSUME a2 IS A BOOLEAN
+§ c
+
+#CHECK b.a1
+#CHECK b.a2
+#CHECK b.ba.a2
+#CHECK a.a1
+#CHECK a.aa.a2
+#CHECK a.aa.a3
+#CHECK a.aa.aaa.a3
+#CHECK a.ab.a4
+#CHECK a.a4

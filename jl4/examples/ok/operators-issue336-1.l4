@@ -1,0 +1,72 @@
+GIVEN alpha  IS A BOOLEAN
+      beta   IS A BOOLEAN
+      gamma  IS A BOOLEAN
+      donkey IS A BOOLEAN
+      durian IS A BOOLEAN
+      dodo   IS A BOOLEAN
+      dove   IS A BOOLEAN
+
+issue336a MEANS
+      alpha
+  AND beta
+  AND gamma
+  AND       donkey
+       OR   durian
+       OR   dodo
+       OR   dove
+
+GIVEN alpha  IS A BOOLEAN
+      beta   IS A BOOLEAN
+      gamma  IS A BOOLEAN
+      donkey IS A BOOLEAN
+      durian IS A BOOLEAN
+      dodo   IS A BOOLEAN
+      dove   IS A BOOLEAN
+
+issue336b MEANS
+      alpha
+  AND beta
+  AND gamma
+  AND       donkey  OR   durian
+       OR   dodo
+       OR   dove
+
+#EVAL issue336a TRUE TRUE FALSE FALSE FALSE FALSE TRUE
+#EVAL issue336b TRUE TRUE FALSE FALSE FALSE FALSE TRUE
+
+GIVEN alpha  IS A NUMBER
+      beta   IS A NUMBER
+      gamma  IS A NUMBER
+      donkey IS A NUMBER
+      durian IS A NUMBER
+      dodo   IS A NUMBER
+      dove   IS A NUMBER
+
+issue336c MEANS
+    alpha
+  * beta
+  * gamma
+  *      donkey
+     +   durian
+     +   dodo
+     +   dove
+
+GIVEN alpha  IS A NUMBER
+      beta   IS A NUMBER
+      gamma  IS A NUMBER
+      donkey IS A NUMBER
+      durian IS A NUMBER
+      dodo   IS A NUMBER
+      dove   IS A NUMBER
+
+issue336d MEANS
+    alpha
+  * beta
+  * gamma
+  *      donkey  +   durian
+     +   dodo
+     +   dove
+
+#EVAL issue336c 1 1 0 0 0 0 1
+#EVAL issue336d 1 1 0 0 0 0 1
+
