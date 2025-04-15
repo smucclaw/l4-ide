@@ -191,4 +191,4 @@ export const NonHighlightedEdgeStyle =
   'stroke: var(--ladder-stroke-color-default); stroke-width: var(--ladder-stroke-width-default);' as const
 
 export const FadedEdgeStyle =
-  'opacity: var(--opacity-ladder-incompatible);' as const
+  'opacity: var(--opacity-ladder-nonviable);' as const

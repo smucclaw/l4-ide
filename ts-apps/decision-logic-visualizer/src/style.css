@@ -150,12 +150,12 @@
   --color-highlighted-path-in-flow: var(--color-sky-600);
 
   /***********************************************
-      Compatible vs incompatible nodes and edges 
+      Viable vs non-viable nodes and edges 
   ************************************************/
 
   /* TODO: Experiment with changing opacity vs changing color */
-  /* --color-incompatible-path: var(--color-zinc-300); */
-  --opacity-ladder-incompatible: 0.6;
+  /* --color-nonviable-path: var(--color-zinc-300); */
+  --opacity-ladder-nonviable: 0.6;
 
   /***************************************
          BoolValue: True vs False 
@@ -232,8 +232,8 @@
   @apply text-(--ladder-color-node-annotation);
 }
 
-@utility incompatible-ladder-element {
-  opacity: var(--opacity-ladder-incompatible);
+@utility nonviable-ladder-element {
+  opacity: var(--opacity-ladder-nonviable);
 }
 
 /*************************************
