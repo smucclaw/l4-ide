@@ -1,0 +1,4 @@
+`issue336a` with `TRUE`, `TRUE`, `FALSE`, `FALSE`, `FALSE`, `FALSE` and `TRUE`
+`issue336b` with `TRUE`, `TRUE`, `FALSE`, `FALSE`, `FALSE`, `FALSE` and `TRUE`
+`issue336c` with 1, 1, 0, 0, 0, 0 and 1
+`issue336d` with 1, 1, 0, 0, 0, 0 and 1

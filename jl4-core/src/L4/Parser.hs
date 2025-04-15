@@ -785,6 +785,18 @@ data Stack a =
 -- The exceptions are if either the whole expression is on the same line,
 -- or if all operators are on the same column.
 --
+-- NOTE: The line which is the second argument of combine is the line
+-- of the operand (not operator) currently under consideration.
+--
+-- The line stored on top of the stack is the line where the previous
+-- expression starts, the line on top of the continuations is the line
+-- where the subsequent expression continues.
+--
+-- Operators are considered to be "on the same line" if both operands
+-- are on the same line, meaning that both the top stack frame and the
+-- top continuation frame have to have the same line number to make
+-- a real same-line choice.
+--
 combine :: Stack a -> Pos -> a Name -> [Cont a] -> a Name
 
 -- If we have a single expression and nothing on the stack, then we
@@ -805,11 +817,10 @@ combine End l1 e1 (MkCont op1 prio1 assoc1 l2 p2 e2 : efs) =
 -- continuation. We have to compare the two operators. If the operator
 -- on the continuation side is stronger, we push. Otherwise, we pop.
 --
--- TODO: we currently do not track associativity.
---
-combine s1@(Frame s e1 op1 prio1 assoc1 l1 p1) _l e2 (MkCont op2 prio2 assoc2 l2 p2 e3 : efs)
+combine s1@(Frame s e1 op1 prio1 assoc1 l1 p1) l e2 (MkCont op2 prio2 assoc2 l2 p2 e3 : efs)
   | (l2, p2, prio2, assoc2) `stronger` (l1, p1, prio1, assoc1) =
-  combine (Frame s1 e2 op2 prio2 assoc2 l2 p2) l2 e3 efs -- push
+  combine (Frame s1 e2 op2 prio2 assoc2 l p2) l2 e3 efs -- push
+  -- NOTE: the topmost frame now starts with e2, thus at line l
   | otherwise =
   combine s l1 (e1 `op1` e2) (MkCont op2 prio2 assoc2 l2 p2 e3 : efs) -- pop
   where
@@ -888,11 +899,11 @@ data Cont a =
 cont :: Parser (Prio, Assoc, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
   withIndent GT p $ \ pos -> do
-    l <- currentLine
     (prio, assoc, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
+    l <- currentLine
     arg <- pbase
-    pure (MkCont op prio assoc l pos arg)
+    pure (MkCont op prio assoc l pos arg) -- the line we store is the line of the argument, not the operator
 
 -- TODO: We should think whether we can obtain this more cheaply.
 currentLine :: Parser Pos

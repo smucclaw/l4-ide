@@ -15,8 +15,8 @@ File: error-directive-ambiguity.l4
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      foo (defined at error-directive-ambiguity.l4:6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
       foo (defined at error-directive-ambiguity.l4:3:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+      foo (defined at error-directive-ambiguity.l4:6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
 
 File: error-directive-ambiguity.l4
   Hidden:   no
@@ -32,8 +32,8 @@ File: error-directive-ambiguity.l4
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      foo (defined at error-directive-ambiguity.l4:6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
       foo (defined at error-directive-ambiguity.l4:3:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
+      foo (defined at error-directive-ambiguity.l4:6:8-11) of type FUNCTION FROM BOOLEAN TO BOOLEAN
 
 File: error-directive-ambiguity.l4
   Hidden:   no
