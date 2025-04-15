@@ -1,6 +1,5 @@
 Parsing successful
 Typechecking successful
-Evaluation successful
 inference.l4:24:8-11:
   FUNCTION FROM NUMBER TO NUMBER
 inference.l4:25:8-17:
