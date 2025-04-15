@@ -1,4 +1,5 @@
 import type { Eq } from '$lib/utils.js'
+import 'core-js/actual/set'
 
 /********************************
       Attributes
