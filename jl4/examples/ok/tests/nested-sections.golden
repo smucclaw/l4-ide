@@ -1,0 +1,26 @@
+Parsing successful
+Typechecking successful
+nested-sections.l4:7:8-10:
+  BOOLEAN
+nested-sections.l4:8:8-10:
+  BOOLEAN
+nested-sections.l4:9:8-14:
+  BOOLEAN
+nested-sections.l4:22:8-12:
+  BOOLEAN
+nested-sections.l4:23:8-12:
+  BOOLEAN
+nested-sections.l4:24:8-15:
+  BOOLEAN
+nested-sections.l4:25:8-12:
+  BOOLEAN
+nested-sections.l4:26:8-15:
+  BOOLEAN
+nested-sections.l4:27:8-15:
+  BOOLEAN
+nested-sections.l4:28:8-19:
+  BOOLEAN
+nested-sections.l4:29:8-15:
+  BOOLEAN
+nested-sections.l4:30:8-12:
+  BOOLEAN

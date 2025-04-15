@@ -347,6 +347,7 @@ kick = do
         <* uses GetParsedAst files
         <* uses TypeCheck files
         <* uses Evaluate files
+        <* uses EvaluateLazy files
     liftIO $ progressUpdate progress ProgressCompleted
 
     GarbageCollectVar var <- getIdeGlobalAction
