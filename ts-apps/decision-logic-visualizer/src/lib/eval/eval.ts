@@ -91,10 +91,12 @@ function eval_(
         .with({ $type: 'FalseVal' }, () => new TrueVal())
         .with({ $type: 'UnknownVal' }, () => new UnknownVal())
         .exhaustive()
-      intermediate2.set(expr.id, result)
+
+      const finalIntermediate = new Map(intermediate2).set(expr.id, result)
+
       return {
         result,
-        intermediate: new Map(intermediate2),
+        intermediate: finalIntermediate,
       }
     })
     .with({ $type: 'And' }, (expr: And) => {
