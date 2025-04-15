@@ -107,8 +107,8 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
             mod' = checkResult.module'
             directives = toListOf (gplate @(Directive Resolved)) mod'
             directiveExprs = fmap (\case
-              StrictEval _ e -> e
-              LazyEval _ e -> e
+              StrictEval _ _ e -> e
+              LazyEval _ _ e -> e
               Check _ e -> e
               ) directives
           in

@@ -686,9 +686,9 @@ evalTopDecl _env (Import _ann _import_) =
   pure []
 
 evalDirective :: Environment -> Directive Resolved -> Eval [EvalDirective]
-evalDirective env (LazyEval _ann expr) =
+evalDirective env (LazyEval _ann _tr expr) =
   pure ((\ r -> MkEvalDirective r expr env) <$> toList (rangeOf expr))
-evalDirective _env (StrictEval _ann _expr) =
+evalDirective _env (StrictEval _ann _tr _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
   pure []

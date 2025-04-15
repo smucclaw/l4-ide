@@ -95,6 +95,10 @@ instance ToInfoTree Int where
   toInfoTree _ =
     [InfoNode Nothing Nothing []]
 
+instance ToInfoTree Bool where
+  toInfoTree _ =
+    [InfoNode Nothing Nothing []]
+
 instance ToInfoTree Name where
   toInfoTree n =
     [mkInfoLeaf n]

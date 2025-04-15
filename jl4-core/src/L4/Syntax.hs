@@ -141,8 +141,8 @@ data Assume n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
-    StrictEval Anno (Expr n)
-  | LazyEval Anno (Expr n)
+    StrictEval Anno Bool (Expr n)
+  | LazyEval Anno Bool (Expr n)
   | Check Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -446,6 +446,9 @@ deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
 instance ToConcreteNodes PosToken (Module Resolved) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
+
+instance ToConcreteNodes PosToken Bool where
+  toNodes _ = pure []
 
 
 data Comment = MkComment Anno [Text]

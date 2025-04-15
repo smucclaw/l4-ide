@@ -194,6 +194,9 @@ deriving anyclass instance ToSemTokens Context PosToken (Import Name)
 instance ToSemTokens Context PosToken Int where
   toSemTokens _ = pure []
 
+instance ToSemTokens Context PosToken Bool where
+  toSemTokens _ = pure []
+
 instance ToSemTokens Context PosToken Name where
   toSemTokens (MkName ann _) =
     traverseCsnWithHoles ann []

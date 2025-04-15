@@ -112,8 +112,10 @@ valueToFnLiteral = \case
   Eval.ValAssumed var ->
     throwE $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
 
-buildReasoningTree :: EvalTrace -> Reasoning
-buildReasoningTree xs =
+buildReasoningTree :: Maybe EvalTrace -> Reasoning
+buildReasoningTree Nothing =
+  Reasoning { payload = ReasoningTree { payload = ReasonNode { exampleCode = [], explanation = [] }, children = [] } }
+buildReasoningTree (Just xs) =
   Reasoning
     { payload = toReasoningTree xs
     }
@@ -142,7 +144,7 @@ mkTopDeclDirective :: Directive n -> TopDecl n
 mkTopDeclDirective = Directive emptyAnno
 
 mkEval :: Expr n -> Directive n
-mkEval = StrictEval emptyAnno
+mkEval = StrictEval emptyAnno True -- include trace
 
 mkFunApp :: n -> [Expr n] -> Expr n
 mkFunApp =

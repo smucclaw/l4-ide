@@ -34,7 +34,7 @@ data EvalDirectiveResult =
   MkEvalDirectiveResult
     { range  :: !SrcRange -- ^ of the EVAL directive
     , result :: Either EvalException Value -- ^ of the EVAL directive
-    , trace  :: EvalTrace
+    , trace  :: Maybe EvalTrace
     }
   deriving stock Generic
   deriving anyclass NFData
@@ -214,13 +214,13 @@ makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
 
-addEvalDirectiveResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
-addEvalDirectiveResult a val = do
-  evalTrace <- use #evalActions
+addEvalDirectiveResult :: HasSrcRange a => a -> Bool -> Either EvalException Value -> Eval ()
+addEvalDirectiveResult a tr val = do
+  mevalTrace <- if tr then pure Nothing else Just <$> use #evalActions
   assign' #evalActions emptyRevList
   let
-    esTrace = buildEvalTrace $ unRevList evalTrace
-    res = (\r -> MkEvalDirectiveResult r val esTrace) <$> rangeOf a
+    mesTrace = buildEvalTrace . unRevList <$> mevalTrace
+    res = (\r -> MkEvalDirectiveResult r val mesTrace) <$> rangeOf a
 
   maybe (pure ()) (modifying #directiveResults . (:)) res
 
@@ -348,10 +348,10 @@ evalExpr expr =
     )
 
 evalDirective :: Directive Resolved -> Eval ()
-evalDirective (StrictEval _ann expr) = do
+evalDirective (StrictEval _ann tr expr) = do
   v <- evalExpr expr
-  addEvalDirectiveResult expr v
-evalDirective (LazyEval _ann _expr) = pure ()
+  addEvalDirectiveResult expr tr v
+evalDirective (LazyEval _ann _tr _expr) = pure ()
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int

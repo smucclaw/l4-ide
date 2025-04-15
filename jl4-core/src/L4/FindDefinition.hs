@@ -56,6 +56,9 @@ instance ToResolved Lit where
 instance ToResolved Int where
   toResolved = const []
 
+instance ToResolved Bool where
+  toResolved = const []
+
 instance ToResolved RawName where
   toResolved = const []
 

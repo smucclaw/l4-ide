@@ -52,6 +52,8 @@ data DirectiveType
   = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
+  | TStrictTraceDirective
+  | TLazyTraceDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -255,6 +257,8 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
+  , (TStrictTraceDirective,"STRACE")
+  , (TLazyTraceDirective,  "TRACE")
   ]
 
 integerLiteral :: Lexer (Text, Int)
@@ -904,6 +908,8 @@ showDirective = \case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
+  TStrictTraceDirective -> "#STRACE"
+  TLazyTraceDirective -> "#TRACE"
 
 data TokenCategory
   = CIdentifier
