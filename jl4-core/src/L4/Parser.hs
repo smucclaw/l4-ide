@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -50,6 +51,7 @@ import Generics.SOP.NS
 import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
+import qualified Data.List.Extra as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -307,8 +309,31 @@ simpleName :: Parser (Epa Name)
 simpleName =
   (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
+qualifiedName :: Parser (Epa Name)
+qualifiedName = do
+  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+  res@(nameAndQualifiers -> Just (q : qs, n)) <- do
+    x <- tokOf #_TIdentifier
+    dotOrIdentifier <- some do
+      d <- tokOf #_TDot
+      i <- tokOf #_TIdentifier
+      pure [Left $ fst d, Right i]
+    pure $ (Right x :) $ mconcat dotOrIdentifier
+  wsOrAnnotation <- spaceOrAnnotations
+  let e = Epa
+        { original = map (either id fst) res
+        , trailingTokens = wsOrAnnotation.trailingTokens
+        , payload = QualifiedName (q :| qs) n
+        , hiddenClusters = wsOrAnnotation.hiddenClusters
+        }
+  pure $ MkName emptyAnno <$> e
+
+ where
+ tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
+
 name :: Parser Name
-name = attachEpa (quotedName <|> simpleName) <?> "identifier"
+name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
@@ -328,11 +353,7 @@ module' uri = do
   attachAnno $
     MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
-      <*> annoHole
-          ((:)
-            <$> anonymousSection
-            <*> many section
-          )
+      <*> annoHole anonymousSection
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -366,26 +387,28 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno 0
+    MkSection emptyAnno
       <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+      <*> annoHole (lsepBy (topdeclWithRecovery 0) (spacedToken_ TSemicolon))
 
-section :: Parser (Section Name)
-section =
-  attachAnno $
-    MkSection emptyAnno
-      <$> sectionSymbols
-      <*> annoHole (optional name)
-      <*> annoHole (optional aka)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+section :: Int -> Parser (Section Name)
+section n = attachAnno do
+  MkSection emptyAnno
+    <$> (Compose (try do
+           wa@WithAnno {payload = syms} <- getCompose sectionSymbols
+           guard (syms >= n)
+           pure wa) *> annoHole (optional name)
+        )
+    <*> annoHole (optional aka)
+    <*> annoHole (lsepBy (topdeclWithRecovery n) (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
   length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
-topdeclWithRecovery :: Parser (TopDecl Name)
-topdeclWithRecovery = do
+topdeclWithRecovery :: Int -> Parser (TopDecl Name)
+topdeclWithRecovery n = do
   start <- lookAhead anySingle
   withRecovery
     (\e -> do
@@ -396,11 +419,12 @@ topdeclWithRecovery = do
       -- If we didn't make any progress whatsoever,
       -- end parsing to avoid endless loops.
       if start == current
-        then
-          parseError e
-        else do
-          topdeclWithRecovery)
+        then parseError e
+        else topdeclWithRecovery n
+
+    )
     topdecl
+      <|> attachAnno (Section   emptyAnno <$> annoHole (section (n + 1)))
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
@@ -429,8 +453,10 @@ directive :: Parser (Directive Name)
 directive =
   attachAnno $
     choice
-      [ Eval emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective TEvalDirective))
+      [ StrictEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TStrictEvalDirective))
+      , LazyEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TLazyEvalDirective))
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
       ]

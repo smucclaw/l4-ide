@@ -31,7 +31,7 @@
     type LadderSFNode,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/layout-ir/value.js'
+  import { cycle } from '$lib/eval/type.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
@@ -131,6 +131,7 @@
         if (debouncedSfNodes$Initialized.current) {
           doLayoutAndFitView()
         }
+        updateResultDisplay()
       }
     )
 
@@ -189,6 +190,15 @@
     }
   }
 
+  /***********************************
+            Result UI
+  ************************************/
+
+  let resultMessage: string = $state('')
+  function updateResultDisplay() {
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
+  }
+
   /*********************************************
         LadderGraph event listener
   **********************************************/
@@ -211,6 +221,8 @@
       sfIdToLirId = newSfGraph.sfIdToLirId
       lirIdToSfId = newSfGraph.lirIdToSFId
       // console.log('newSfGraph NODES', NODES)
+
+      updateResultDisplay()
     }
   }
 
@@ -305,6 +317,7 @@ Misc SF UI TODOs:
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
   <h1>{declLirNode.getFunName(context)}</h1>
+  <h2>{resultMessage}</h2>
   <div class="flow-container" style={`opacity: ${flowOpacity}`}>
     <SvelteFlow
       bind:nodes={NODES}
@@ -365,6 +378,10 @@ Misc SF UI TODOs:
 
   h1 {
     @apply text-2xl font-semibold text-center mt-1;
+  }
+
+  h2 {
+    @apply text-lg text-center -mt-2;
   }
 
   .overall-container {

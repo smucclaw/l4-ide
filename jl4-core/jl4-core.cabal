@@ -61,7 +61,10 @@ library
     L4.Annotation
     L4.Citations
     L4.Evaluate
+    L4.Evaluate.Operators
     L4.Evaluate.Value
+    L4.Evaluate.ValueLazy
+    L4.EvaluateLazy
     L4.ExactPrint
     L4.FindDefinition
     L4.HoverInfo

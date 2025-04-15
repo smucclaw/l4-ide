@@ -142,7 +142,7 @@ mkTopDeclDirective :: Directive n -> TopDecl n
 mkTopDeclDirective = Directive emptyAnno
 
 mkEval :: Expr n -> Directive n
-mkEval = Eval emptyAnno
+mkEval = StrictEval emptyAnno
 
 mkFunApp :: n -> [Expr n] -> Expr n
 mkFunApp =

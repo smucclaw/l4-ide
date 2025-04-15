@@ -2,22 +2,14 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 assumes.l4:2:7-12:
-  Expression stuck while evaluating:
-    foo OF 2
-  This happened because
+  I could not continue evaluating, because I needed to know the value of
     foo
-  is assumed
+  but it is an assumed term.
 assumes.l4:6:7-14:
-  Expression stuck while evaluating:
-    baz OF bar
-  This happened because
+  I could not continue evaluating, because I needed to know the value of
     bar
-  is assumed
+  but it is an assumed term.
 assumes.l4:7:7-27:
-  Expression stuck while evaluating:
-    IF bar
-    THEN 2
-    ELSE 3
-  This happened because
+  I could not continue evaluating, because I needed to know the value of
     bar
-  is assumed
+  but it is an assumed term.
