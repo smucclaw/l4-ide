@@ -292,6 +292,11 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
+updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
+updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
+  (u' : _) -> MkImport ann n (Just u')
+  [] -> i
+
 -- ----------------------------------------------------------------------------
 -- Source Annotations
 -- ----------------------------------------------------------------------------

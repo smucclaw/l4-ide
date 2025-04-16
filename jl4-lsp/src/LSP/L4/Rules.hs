@@ -313,10 +313,7 @@ jl4Rules rootDirectory recorder = do
     -- traceShowM parsed
     (imported, dependencies) <- unzip <$> use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
 
-    let updateImport i@(MkImport ann n _) = case mapMaybe (\res -> if res.importName == n then Just res.moduleUri else Nothing) imported of
-           (u' : _) -> MkImport ann n (Just u')
-           [] -> i
-        parsedAndAnnotated = overImports updateImport parsed
+    let parsedAndAnnotated = overImports (updateImport $ map (\res -> (res.importName, res.moduleUri)) imported) parsed
 
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
