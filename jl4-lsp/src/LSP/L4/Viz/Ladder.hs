@@ -92,7 +92,7 @@ vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simp
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Bool -> Decide Resolved -> Viz V.IRDecl
+translateDecide :: Bool -> Decide Resolved -> Viz V.FunDecl
 translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
     uid <- getFresh
