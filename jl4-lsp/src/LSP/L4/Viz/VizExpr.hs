@@ -11,7 +11,7 @@ import GHC.Generics (Generic)
 import Optics
 
 newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
-  { program :: FunDecl -- TODO: change the fieldname once this becomes more stable
+  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
@@ -122,7 +122,7 @@ instance HasCodec VisualizeDecisionLogicIRInfo where
     named "VisualizeDecisionLogicIRInfo" $
       object "VisualizeDecisionLogicIRInfo" $
         MkVisualizeDecisionLogicIRInfo
-          <$> requiredField' "program" .= view #program
+          <$> requiredField' "funDecl" .= view #funDecl
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec
