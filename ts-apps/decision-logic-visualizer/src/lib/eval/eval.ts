@@ -1,21 +1,6 @@
 import { IRId } from '@repo/viz-expr'
-import type {
-  Value,
-  UBoolValue,
-  Expr,
-  EVBoolVar,
-  Not,
-  Or,
-  And,
-} from './type.js'
-import {
-  TrueVal,
-  FalseVal,
-  UnknownVal,
-  isTrueVal,
-  isFalseVal,
-  isUBoolValue,
-} from './type.js'
+import type { UBoolValue, Expr, EVBoolVar, Not, Or, And } from './type.js'
+import { TrueVal, FalseVal, UnknownVal, isTrueVal, isFalseVal } from './type.js'
 import { Assignment } from './assignment.js'
 import { match } from 'ts-pattern'
 
@@ -48,8 +33,8 @@ and since 2 might align better with synchronizing with the backend in the future
 */
 
 export interface EvalResult {
-  result: Value
-  intermediate: Map<IRId, Value>
+  result: UBoolValue
+  intermediate: Map<IRId, UBoolValue>
 }
 
 /** Boolean operator evaluator */
@@ -59,14 +44,14 @@ export interface LadderEvaluator {
 
 export const Evaluator: LadderEvaluator = {
   eval(ladder: Expr, assignment: Assignment): EvalResult {
-    return eval_(ladder, assignment, new Map<IRId, Value>())
+    return eval_(ladder, assignment, new Map<IRId, UBoolValue>())
   },
 }
 
 function eval_(
   ladder: Expr,
   assignment: Assignment,
-  intermediate: Map<IRId, Value>
+  intermediate: Map<IRId, UBoolValue>
 ): EvalResult {
   return match(ladder)
     .with({ $type: 'BoolVar' }, (expr: EVBoolVar) => {
@@ -83,9 +68,6 @@ function eval_(
         assignment,
         intermediate
       )
-      if (!isUBoolValue(negandV)) {
-        throw new Error('Expected the negand to eval to a BoolVal')
-      }
       const result = match(negandV)
         .with({ $type: 'TrueVal' }, () => new FalseVal())
         .with({ $type: 'FalseVal' }, () => new TrueVal())
