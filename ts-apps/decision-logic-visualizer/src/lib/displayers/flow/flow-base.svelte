@@ -24,11 +24,11 @@
   import {
     type LadderSFNodeWithDims,
     type LadderSFGraph,
+    type LadderSFNode,
     sfNodeTypes,
     sfEdgeTypes,
     isBoolVarSFNode,
     getSFNodeId,
-    type LadderSFNode,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import { cycle } from '$lib/eval/type.js'
@@ -39,8 +39,8 @@
   import type {
     BoolVarLirNode,
     LadderLirNode,
-  } from '$lib/layout-ir/ladder-lir.svelte.js'
-  import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
   import PathsList from '../paths-list.svelte'
@@ -169,7 +169,7 @@
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
-    const lirId = sfNodeToLirId(event.node)
+    const lirId = sfNodeToLirId(event.node as LadderSFNode)
     const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
 
     const newValue = cycle(lirBoolVarNode.getValue(context))
@@ -184,7 +184,7 @@
   > = (event) => {
     if (event.targetNode) {
       const lirNode = context.get(
-        sfNodeToLirId(event.targetNode)
+        sfNodeToLirId(event.targetNode as LadderSFNode)
       ) as LadderLirNode
       lirNode.setPosition(context, event.targetNode.position)
     }
@@ -318,7 +318,10 @@ Misc SF UI TODOs:
 <div class="overall-container">
   <h1>{declLirNode.getFunName(context)}</h1>
   <h2>{resultMessage}</h2>
-  <div class="flow-container" style={`opacity: ${flowOpacity}`}>
+  <div
+    class="flow-container transition-opacity"
+    style={`opacity: ${flowOpacity}`}
+  >
     <SvelteFlow
       bind:nodes={NODES}
       bind:edges={EDGES}

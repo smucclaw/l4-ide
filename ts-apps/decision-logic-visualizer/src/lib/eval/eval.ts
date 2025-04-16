@@ -1,3 +1,4 @@
+import { IRId } from '@repo/viz-expr'
 import type {
   Value,
   UBoolValue,
@@ -46,41 +47,96 @@ Ended up going with 2, since the postprocessing of the Dag<LirId> gets a bit inv
 and since 2 might align better with synchronizing with the backend in the future.
 */
 
+export interface EvalResult {
+  result: Value
+  intermediate: Map<IRId, Value>
+}
+
 /** Boolean operator evaluator */
 export interface LadderEvaluator {
-  eval(ladder: Expr, assignment: Assignment): Value
+  eval(ladder: Expr, assignment: Assignment): EvalResult
 }
 
 export const Evaluator: LadderEvaluator = {
-  eval(ladder: Expr, assignment: Assignment): Value {
-    return eval_(ladder, assignment)
+  eval(ladder: Expr, assignment: Assignment): EvalResult {
+    return eval_(ladder, assignment, new Map<IRId, Value>())
   },
 }
 
-function eval_(ladder: Expr, assignment: Assignment): Value {
+function eval_(
+  ladder: Expr,
+  assignment: Assignment,
+  intermediate: Map<IRId, Value>
+): EvalResult {
   return match(ladder)
-    .with(
-      { $type: 'BoolVar' },
-      (expr: EVBoolVar) => assignment.get(expr.name.unique) as UBoolValue
-    )
-    .with({ $type: 'Not' }, (expr: Not) => {
-      const negandV = eval_(expr.negand, assignment)
-      if (!isUBoolValue(negandV)) {
-        throw new Error('Expected the negajnd to eval to a BoolVal')
+    .with({ $type: 'BoolVar' }, (expr: EVBoolVar) => {
+      const result = assignment.get(expr.name.unique) as UBoolValue
+      const newIntermediate = intermediate.set(expr.id, result)
+      return {
+        result,
+        intermediate: newIntermediate,
       }
-      return match(negandV)
+    })
+    .with({ $type: 'Not' }, (expr: Not) => {
+      const { result: negandV, intermediate: intermediate2 } = eval_(
+        expr.negand,
+        assignment,
+        intermediate
+      )
+      if (!isUBoolValue(negandV)) {
+        throw new Error('Expected the negand to eval to a BoolVal')
+      }
+      const result = match(negandV)
         .with({ $type: 'TrueVal' }, () => new FalseVal())
         .with({ $type: 'FalseVal' }, () => new TrueVal())
         .with({ $type: 'UnknownVal' }, () => new UnknownVal())
         .exhaustive()
+
+      const finalIntermediate = new Map(intermediate2).set(expr.id, result)
+
+      return {
+        result,
+        intermediate: finalIntermediate,
+      }
     })
     .with({ $type: 'And' }, (expr: And) => {
-      const andVals = expr.args.map((arg) => eval_(arg, assignment))
-      return evalAndChain(andVals)
+      const andResults = expr.args.map((arg) =>
+        eval_(arg, assignment, intermediate)
+      )
+      const result = evalAndChain(andResults.map((res) => res.result))
+
+      const combinedIntermeds = andResults
+        .map((res) => res.intermediate)
+        .reduceRight((acc, res) => {
+          return new Map([...acc, ...res])
+        })
+      const finalIntermediate = new Map(combinedIntermeds).set(expr.id, result)
+
+      return {
+        result,
+        intermediate: finalIntermediate,
+      }
     })
     .with({ $type: 'Or' }, (expr: Or) => {
-      const orVals = expr.args.map((arg) => eval_(arg, assignment))
-      return evalOrChain(orVals)
+      const orResults = expr.args.map((arg) =>
+        eval_(arg, assignment, intermediate)
+      )
+      const result = evalOrChain(orResults.map((res) => res.result))
+
+      const combinedIntermediates = orResults
+        .map((res) => res.intermediate)
+        .reduceRight((acc, res) => {
+          return new Map([...acc, ...res])
+        })
+      const finalIntermediate = new Map(combinedIntermediates).set(
+        expr.id,
+        result
+      )
+
+      return {
+        result,
+        intermediate: finalIntermediate,
+      }
     })
     .exhaustive()
 }

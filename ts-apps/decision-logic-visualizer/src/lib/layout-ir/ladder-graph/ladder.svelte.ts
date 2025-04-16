@@ -1,43 +1,47 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import {
   type Value,
   type UBoolValue,
   TrueVal,
   FalseVal,
+  isFalseVal,
   UnknownVal,
   veExprToEvExpr,
-} from '../eval/type.js'
-import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
-import { Assignment, Corefs } from '../eval/assignment.js'
-import { Evaluator } from '$lib/eval/eval.js'
-import type { LirId, LirNode, LirNodeInfo } from './core.js'
-import { LirContext, DefaultLirNode } from './core.js'
+} from '../../eval/type.js'
+import { Assignment, Corefs } from '../../eval/assignment.js'
+import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
+import type { LirId, LirNode, LirNodeInfo } from '../core.js'
+import { LirContext, DefaultLirNode } from '../core.js'
 import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import {
+  empty,
   isEmpty,
   isVertex,
   isOverlay,
   isConnect,
-  overlay,
-  empty,
   type Overlay,
   type Connect,
   type Vertex,
   type DirectedAcyclicGraph,
-} from '../algebraic-graphs/dag.js'
-import {
-  type Edge,
-  DirectedEdge,
-  EmptyEdgeStyles,
-  HighlightedEdgeStyles,
-  type EdgeStyles,
-  type EdgeAttributes,
-} from '../algebraic-graphs/edge.js'
+} from '../../algebraic-graphs/dag.js'
+import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
+import type { EdgeStylesContainer, EdgeAttributes } from './edge-attributes.js'
+import type {
+  LadderNodeCSSClass,
+  NodeStyleModifierCSSClass,
+} from './node-styles.js'
+import { FadedNodeCSSClass } from './node-styles.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
+import {
+  ValidPathsListLirNode,
+  InvalidPathsListLirNode,
+  type PathsListLirNode,
+} from '../paths-list.js'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
@@ -106,108 +110,11 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
 }
 
 /*************************************************
-          Paths List, Lin Path
+          Lin Path
  *************************************************/
 
-export type PathsListLirNode = InvalidPathsListLirNode | ValidPathsListLirNode
-
-export function isInvalidPathsListLirNode(
-  node: PathsListLirNode
-): node is InvalidPathsListLirNode {
-  return node instanceof InvalidPathsListLirNode
-}
-
-export class InvalidPathsListLirNode extends DefaultLirNode implements LirNode {
-  constructor(nodeInfo: LirNodeInfo) {
-    super(nodeInfo)
-  }
-
-  toString(): string {
-    return 'INVALID_PATHS_LIST_LIR_NODE'
-  }
-
-  getChildren(_context: LirContext) {
-    return []
-  }
-
-  dispose(context: LirContext) {
-    context.clear(this.getId())
-  }
-}
-
-export function isValidPathsListLirNode(
-  node: PathsListLirNode
-): node is ValidPathsListLirNode {
-  return node instanceof ValidPathsListLirNode
-}
-
-export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
-  private paths: Array<LirId>
-
-  constructor(
-    nodeInfo: LirNodeInfo,
-    protected ladderGraph: LadderGraphLirNode,
-    paths: Array<LinPathLirNode>
-  ) {
-    super(nodeInfo)
-    this.paths = paths.map((n) => n.getId())
-  }
-
-  getPaths(context: LirContext) {
-    return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
-  }
-
-  highlightPaths(context: LirContext, paths: LirId[]) {
-    const pathLirNodes = paths.map((id) =>
-      context.get(id)
-    ) as Array<LinPathLirNode>
-
-    // 1. Get the subgraph to be highlighted
-    // Exploits the property that (G, +, ε) is an idempotent monoid
-    const graphToHighlight = pathLirNodes
-      .map((p) => p._getRawPath())
-      .reduceRight(overlay, empty())
-
-    // 2. Reset all edge styles on ladder graph, then highlight the subgraph
-    this.ladderGraph.clearAllEdgeStyles(context)
-    this.setStylesOnLadderSubgraph(
-      context,
-      new HighlightedEdgeStyles(),
-      graphToHighlight
-    )
-  }
-
-  protected setStylesOnLadderSubgraph(
-    context: LirContext,
-    styles: EdgeStyles,
-    subgraph: DirectedAcyclicGraph<LirId>
-  ) {
-    const pathEdges = subgraph.getEdges()
-    pathEdges.forEach((edge) => {
-      this.ladderGraph.setEdgeStyles(context, edge, styles)
-    })
-  }
-
-  getChildren(context: LirContext) {
-    return this.getPaths(context)
-  }
-
-  dispose(context: LirContext) {
-    // Dispose members
-    this.getChildren(context).map((n) => n.dispose(context))
-    this.paths = []
-
-    // Dispose self
-    context.clear(this.getId())
-  }
-
-  toString(): string {
-    return 'VALID_PATHS_LIST_LIR_NODE'
-  }
-}
-
 /** The simplest version of the LinPathLirNode -- no distinguishing between
- * compatible and incompatible linearized paths
+ * viable and non-viable linearized paths
  */
 export class LinPathLirNode extends DefaultLirNode implements LirNode {
   constructor(
@@ -243,7 +150,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-// TODO: Differentiate between compatible and incompatible linearized paths
+// TODO: Differentiate between viable and non-viable linearized paths
 
 /******************************************************
                   Flow Lir Nodes
@@ -262,6 +169,7 @@ type Position = { x: number; y: number }
 
 const DEFAULT_INITIAL_POSITION = { x: 0, y: 0 }
 
+// TODO: Should this be renamed to LadderFlowLirNode or something like that?
 export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   getDimensions(context: LirContext): Dimensions | undefined
   setDimensions(context: LirContext, dimensions: Dimensions): void
@@ -269,12 +177,18 @@ export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   getPosition(context: LirContext): Position
   setPosition(context: LirContext, position: Position): void
 
+  getAllClasses(context: LirContext): LadderNodeCSSClass[]
+  getModifierCSSClasses(context: LirContext): NodeStyleModifierCSSClass[]
+  /** To be invoked only by LadderGraphLirNode */
+  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]): void
+
   toPretty(context: LirContext): string
 }
 
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
+  protected modifierCSSClasses: Set<NodeStyleModifierCSSClass> = new Set()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -283,6 +197,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
     super(nodeInfo)
     this.position = position
   }
+
+  /***********************************************
+         Position, Dimensions
+  ***********************************************/
 
   getDimensions(_context: LirContext) {
     return this.dimensions
@@ -299,6 +217,36 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   setPosition(_context: LirContext, position: Position): void {
     this.position = position
   }
+
+  /***********************************************
+         CSS Classes
+  ***********************************************/
+
+  getAllClasses(context: LirContext): LadderNodeCSSClass[] {
+    return this.getModifierCSSClasses(context)
+  }
+
+  getModifierCSSClasses(_context: LirContext): NodeStyleModifierCSSClass[] {
+    return Array.from(this.modifierCSSClasses)
+  }
+
+  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]) {
+    this.modifierCSSClasses = new Set(classes)
+  }
+
+  /***********************************************
+         getData
+  ***********************************************/
+
+  getData(context: LirContext) {
+    return {
+      classes: this.getAllClasses(context),
+    }
+  }
+
+  /***********************************************
+         isEqualTo, dispose, toPretty
+  ***********************************************/
 
   isEqualTo<T extends LirNode>(other: T) {
     return this.getId().isEqualTo(other.getId())
@@ -331,27 +279,36 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #dag: DirectedAcyclicGraph<LirId>
 
   #originalExpr: IRExpr
-  #vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>
+  #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
   /** This will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
   #corefs: Corefs
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
-  #result: Value = new UnknownVal()
+  #evalResult: EvalResult = {
+    result: new UnknownVal(),
+    intermediate: new Map(),
+  }
 
   #pathsList?: PathsListLirNode
 
   constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
-    vizExprToLir: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
-    this.#vizExprToLir = vizExprToLir
+    this.#vizExprToLirDag = vizExprToLirGraph
+    // console.log(
+    //   'vizExprToLirGraph',
+    //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
+    //     console.log(dag.toString())
+    //   })
+    // )
 
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
       isBoolVarLirNode
@@ -376,8 +333,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.doEvalLadderExprWithVarBindings(nodeInfo.context)
   }
 
-  getVizExprToLir() {
-    return this.#vizExprToLir
+  getVizExprToLirGraph() {
+    return this.#vizExprToLirDag
   }
 
   setDag(_context: LirContext, dag: DirectedAcyclicGraph<LirId>) {
@@ -407,7 +364,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  // TODO: differentiate between subgraph that is compatible with the updated env and subgraph that isn't
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
     if (!this.#pathsList) {
@@ -459,38 +415,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag.setEdgeAttributes(edge, attrs)
   }
 
-  getEdgeStyles<T extends Edge<LirId>>(
-    _context: LirContext,
-    edge: T
-  ): EdgeStyles {
-    return this.#dag.getAttributesForEdge(edge).getStyles()
-  }
-
-  setEdgeStyles<T extends Edge<LirId>>(
-    context: LirContext,
-    edge: T,
-    styles: EdgeStyles
-  ) {
-    const attrs = this.#dag.getAttributesForEdge(edge)
-    // Ok to mutate because getAttributesForEdge returns a cloned object
-    attrs.setStyles(styles)
-    this.#dag.setEdgeAttributes(edge, attrs)
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  clearAllEdgeStyles(context: LirContext) {
-    const edges = this.#dag.getEdges()
-    edges.forEach((edge) => {
-      const attrs = this.#dag.getAttributesForEdge(edge)
-      // Ok to mutate because getAttributesForEdge returns a cloned object
-      attrs.setStyles(new EmptyEdgeStyles())
-      this.#dag.setEdgeAttributes(edge, attrs)
-    })
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
   getEdgeLabel<T extends Edge<LirId>>(_context: LirContext, edge: T): string {
     return this.#dag.getAttributesForEdge(edge).getLabel()
   }
@@ -507,6 +431,83 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.getRegistry().publish(context, this.getId())
   }
 
+  getEdgeStyles<T extends Edge<LirId>>(
+    _context: LirContext,
+    edge: T
+  ): EdgeStylesContainer {
+    return this.#dag.getAttributesForEdge(edge).getStyles()
+  }
+
+  /*****************************
+        Highlight
+  ******************************/
+
+  clearHighlightEdgeStyles(context: LirContext) {
+    const edges = this.#dag.getEdges()
+    edges.forEach((edge) => {
+      const attrs = this.#dag.getAttributesForEdge(edge)
+      // Ok to mutate because getAttributesForEdge returns a cloned object
+      attrs.setStyles(attrs.getStyles().getNonHighlightedCounterpart())
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  highlightSubgraph(
+    context: LirContext,
+    subgraph: DirectedAcyclicGraph<LirId>
+  ) {
+    subgraph.getEdges().forEach((edge) => {
+      const attrs = this.getEdgeAttributes(context, edge)
+      attrs.setStyles(attrs.getStyles().getHighlightedCounterpart())
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  /*****************************
+        Fade / grey out
+  ******************************/
+
+  clearFadeOutStyles(context: LirContext) {
+    this.#dag.getEdges().forEach((edge) => {
+      const attrs = this.#dag.getAttributesForEdge(edge)
+      attrs.setStyles(attrs.getStyles().getNonFadedCounterpart())
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
+    this.getVertices(context).forEach((node) => {
+      node._setModifierCSSClasses(
+        node
+          .getModifierCSSClasses(context)
+          .filter((cls) => cls !== FadedNodeCSSClass)
+      )
+    })
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  fadeOutSubgraph(context: LirContext, subgraph: DirectedAcyclicGraph<LirId>) {
+    console.log('fadeOutSubgraph', subgraph.toString())
+    subgraph.getEdges().forEach((edge) => {
+      const attrs = this.getEdgeAttributes(context, edge)
+      attrs.setStyles(attrs.getStyles().getFadedCounterpart())
+
+      this.#dag.setEdgeAttributes(edge, attrs)
+    })
+
+    subgraph.getVertices().forEach((vertex) => {
+      const node = context.get(vertex) as LadderLirNode
+      node._setModifierCSSClasses([
+        ...node.getModifierCSSClasses(context),
+        FadedNodeCSSClass,
+      ])
+    })
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
   /*****************************
         Eval, Bindings
   ******************************/
@@ -516,7 +517,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       veExprToEvExpr(this.#originalExpr),
       this.#bindings
     )
-    this.setResult(context, result)
+    this.setEvalResult(context, result)
 
     console.log('evaluating ', this.#bindings)
     console.log('whatif eval result: ', result)
@@ -548,7 +549,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     */
     this.doEvalLadderExprWithVarBindings(context)
 
-    // TODO for v2: Grey out incompatible subgraphs
+    // Fade out subgraphs that are no longer viable in light of user's choices
+    const nonviableIRIds = Array.from(this.#evalResult.intermediate.entries())
+      .filter(([_id, val]) => isFalseVal(val))
+      .map(([irId, _val]) => irId)
+    const nonviableSubgraph = nonviableIRIds
+      .map((irId) => this.#vizExprToLirDag.get(irId))
+      .filter((dag) => !!dag)
+      .reduceRight((acc, curr) => acc.overlay(curr), empty())
+    // console.log('nonviableSubgraph: ', nonviableSubgraph)
+
+    this.clearFadeOutStyles(context)
+    this.fadeOutSubgraph(context, nonviableSubgraph)
 
     this.getRegistry().publish(context, this.getId())
   }
@@ -558,11 +570,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   **************************************/
 
   getResult(_context: LirContext) {
-    return this.#result
+    return this.#evalResult.result
   }
 
-  setResult(_context: LirContext, result: Value) {
-    this.#result = result
+  private setEvalResult(_context: LirContext, result: EvalResult) {
+    this.#evalResult = result
   }
 
   /**************************************
@@ -671,8 +683,17 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return this.#name.unique
   }
 
-  getData(_context: LirContext) {
-    return { name: this.#name, value: this.#value }
+  getData(context: LirContext) {
+    return {
+      name: this.#name,
+      value: this.#value,
+      classes: this.getAllClasses(context),
+    }
+  }
+
+  override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
+    console.log('modifierCSSClasses', this.modifierCSSClasses)
+    return [...this.#value.getClasses(), ...this.modifierCSSClasses]
   }
 
   getValue(_context: LirContext): UBoolValue {
@@ -683,8 +704,8 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     this.#value = value
   }
 
-  toPretty(_context: LirContext) {
-    return this.getLabel(_context)
+  toPretty(context: LirContext) {
+    return this.getLabel(context)
   }
 
   toString(): string {
@@ -775,8 +796,8 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
     super(nodeInfo, position)
   }
 
-  getData() {
-    return { annotation: this.annotation }
+  getData(context: LirContext) {
+    return { annotation: this.annotation, classes: this.getAllClasses(context) }
   }
 }
 

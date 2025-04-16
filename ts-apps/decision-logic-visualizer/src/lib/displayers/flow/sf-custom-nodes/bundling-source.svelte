@@ -14,13 +14,11 @@
     style="opacity:0;"
     position={defaultSFHandlesInfo.sourcePosition}
   />
-  <div class="node-annotation">
-    {#if !data.context.shouldEnableZenMode()}
-      <div class="node-annotation">
-        {data.annotation}
-      </div>
-    {/if}
-  </div>
+  {#if !data.context.shouldEnableZenMode()}
+    <div class={['node-annotation', ...data.classes]}>
+      {data.annotation}
+    </div>
+  {/if}
   <!-- The bit of text is there to improve the layouting -->
   <div style="opacity:0;">-</div>
   <Handle

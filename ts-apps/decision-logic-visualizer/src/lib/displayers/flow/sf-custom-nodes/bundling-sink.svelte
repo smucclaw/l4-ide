@@ -18,12 +18,12 @@ TODO: reduce code duplication between this and SourceSFNode
     position={defaultSFHandlesInfo.sourcePosition}
   />
   {#if !data.context.shouldEnableZenMode()}
-    <div class="node-annotation">
+    <div class={['node-annotation', ...data.classes]}>
       {data.annotation}
     </div>
   {/if}
   <!-- The bit of text is there to improve the layouting -->
-  <div style="opacity:0">-</div>
+  <div style="opacity:0;">-</div>
   <Handle
     type="target"
     style="opacity:0.3;"
