@@ -1,9 +1,8 @@
-import type { IRDecl, IRExpr, IRId } from '@repo/viz-expr'
+import type { FunDecl, IRExpr, IRId } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
 import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
-import type { DeclLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import {
   FunDeclLirNode,
   BoolVarLirNode,
@@ -26,8 +25,8 @@ import { match } from 'ts-pattern'
         Lir Data Sources
 ************************************/
 
-export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, decl: IRDecl): DeclLirNode {
+export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, decl: FunDecl): FunDeclLirNode {
     return new FunDeclLirNode(
       nodeInfo,
       decl.name,

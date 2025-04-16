@@ -5,7 +5,7 @@
     LirContext,
     LirRegistry,
     VizDeclLirSource,
-    type DeclLirNode,
+    type FunDeclLirNode,
     type LirRootType,
   } from '@repo/decision-logic-visualizer'
   import {
@@ -46,7 +46,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let declLirNode: DeclLirNode | undefined = $state(undefined)
+  let declLirNode: FunDeclLirNode | undefined = $state(undefined)
 
   /******************************
       VizInfo Payload Decoder
@@ -266,7 +266,7 @@
                 )
                 logger.debug(
                   'New declLirNode ',
-                  (declLirNode as DeclLirNode).getId().toString()
+                  (declLirNode as FunDeclLirNode).getId().toString()
                 )
               }
               break

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Schema } from 'effect'
-  import { IRDecl } from '@repo/viz-expr'
+  import { FunDecl } from '@repo/viz-expr'
   import { VizDeclLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
     LirContext,
@@ -58,7 +58,7 @@
     },
   }
 
-  const decode = Schema.decodeSync(IRDecl)
+  const decode = Schema.decodeSync(FunDecl)
   const decl = decode(example1)
   // Set up Lir
   const lirRegistry = new LirRegistry()
