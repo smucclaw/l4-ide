@@ -79,7 +79,7 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Annotation
-import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM)
+import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM, SrcRange (..), zeroSrcPos)
 import L4.Print (prettyLayout, quotedName,)
 import L4.Syntax
 import L4.TypeCheck.Annotation
@@ -510,9 +510,11 @@ inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
-inferImport (MkImport ann n) = do
-  rn <- def n
-  pure (MkImport ann rn)
+inferImport (MkImport ann n mr) = do
+  let otherModule = fmap (MkSrcRange zeroSrcPos zeroSrcPos 0) mr
+  m <- def (overAnno (\(Anno extra _mrange _csns) -> Anno extra otherModule [mkHoleWithSrcRangeHint otherModule]) n)
+  rn <- ref n m
+  pure (MkImport ann rn mr)
 
 inferSection :: Section Name -> Check (Section Resolved, [CheckInfo])
 inferSection (MkSection ann mn maka topdecls) = do

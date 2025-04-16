@@ -468,6 +468,7 @@ import' =
     MkImport emptyAnno
       <$  annoLexeme (spacedToken_ TKImport)
       <*> annoHole name
+      <*> pure Nothing
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do
