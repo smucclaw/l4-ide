@@ -257,7 +257,7 @@
                   decoded.right
                 declLirNode = VizDeclLirSource.toLir(
                   nodeInfo,
-                  vizProgramInfo.program
+                  vizProgramInfo.funDecl
                 )
                 lirRegistry.setRoot(
                   context,
