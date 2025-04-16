@@ -191,6 +191,9 @@ deriving anyclass instance ToSemTokens Context PosToken (GivenSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (Directive Name)
 deriving anyclass instance ToSemTokens Context PosToken (Import Name)
 
+instance ToSemTokens Context PosToken NormalizedUri where
+  toSemTokens _ = pure []
+
 instance ToSemTokens Context PosToken Int where
   toSemTokens _ = pure []
 
