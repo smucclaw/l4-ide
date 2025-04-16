@@ -149,6 +149,10 @@ data FunTypeSig = MkFunTypeSig
   deriving (Show, Eq, Generic)
   deriving anyclass (SOP.Generic, NFData)
 
+-- | A checked declaration signature.
+--
+-- Contains in particular kind info for the type-level declaration.
+--
 data DeclTypeSig = MkDeclTypeSig
   { anno :: Anno
   , rtysig :: TypeSig Resolved

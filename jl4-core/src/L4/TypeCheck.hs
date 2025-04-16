@@ -2201,3 +2201,53 @@ instance ApplySubst CheckEntity where
 --
 -- Adding the type to the 'Resolved' will allow it to be collected into
 -- the 'InfoTree' during 'toInfoTree'.
+
+
+-- Note [passes]
+-- ~~~~~~~~~~~~~
+--
+-- We need to perform the following passes / traversals:
+--
+-- 1. Scan for type-level definitions.
+--
+--    The goal of this pass is to bring names into scope for mutually recursive types. We need this
+--    before we can scope- and kind-check type-level definitions.
+--
+--    Functions in this pass are called 'typeScan*'.
+--
+--    Kinds are currently *always* explicit. We can observe the kind of any type-level
+--    declaration by looking at the declaration: For datatypes, this is obvious (the number of
+--    explicit arguments is the kind). For type synonyms, this is less obvious, but we require
+--    every type to be fully applied, so for type synonyms, all arguments also have to be
+--    explicit.
+--
+--    Perhaps most interesting are type-level assumes. But once again, we can require that
+--    type arguments are explicit, either in the type signature via a GIVEN, or in the appform.
+--
+--    So this means that we can build a kind environment of all known type-level entities by
+--    performing one scan of the entire module. For sections, we build signatures mapping the
+--    known names to their kinds and potentially containing sub-signatures.
+--
+-- 2. Scope and kind-check type-level definitions.
+--
+--    The goal of this pass is to fully resolve everything that lives on the type level. This is
+--    a prerequisite for doing anything on the term-level.
+--
+--    Functions in this pass are called `kindInfer*` and `kindCheck*`.
+--
+-- 3. Scan for term-level definitions.
+--
+--    The goal of this pass is to bring names into scope for mutually recursive bindings. We need this
+--    before we can scope- and type-check term-level definitions.
+--
+--    Functions in this pass are called `scan*`.
+--
+-- 4. Scope and type-check term-level definitions.
+--
+--    This also involves expanding type synonyms.
+--    Functions in this pass are called `infer*`, `check*` and `match*`.
+--
+--    The typical types are:
+--
+--    inferX :: X Name -> Check (X Resolved, Type' Resolved)
+--    checkX :: X Name -> Type' Resolved -> Check (X Resolved)
