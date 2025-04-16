@@ -111,8 +111,6 @@ export const IRNode = Schema.Struct({
   Decision Logic (ish) IR node
 ********************************/
 
-export type IRDecl = FunDecl
-
 export interface FunDecl extends IRNode {
   readonly $type: 'FunDecl'
   readonly name: Name
@@ -186,8 +184,6 @@ export const FunDecl = Schema.Struct({
   body: IRExpr,
 }).annotations({ identifier: 'FunDecl' })
 
-export const IRDecl = FunDecl
-
 export const And = Schema.Struct({
   $type: Schema.tag('And'),
   id: IRId,
@@ -229,7 +225,7 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 >
 
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
-  program: IRDecl,
+  program: FunDecl,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
 
 /*************************
