@@ -57,8 +57,6 @@ is to make it easy to experiment with different displayers/renderers.
                 Decl Lir Node
  *************************************************/
 
-export type DeclLirNode = FunDeclLirNode
-
 export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   readonly #name: Name
   readonly #params: readonly Name[]
