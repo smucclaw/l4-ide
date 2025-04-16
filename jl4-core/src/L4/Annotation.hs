@@ -119,6 +119,9 @@ fixAnnoSrcRange ann = set #range (computeAnnoSrcRange ann) ann
 
 type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 
+overAnno :: HasAnno t => (Anno' t -> Anno' t) -> t -> t
+overAnno f t = let a = getAnno t in setAnno (f a) t
+
 class (Default (AnnoExtra t)) => HasAnno t where
   type AnnoToken t :: Type
   type AnnoExtra t :: Type

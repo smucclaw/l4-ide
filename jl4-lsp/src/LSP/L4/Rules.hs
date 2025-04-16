@@ -81,12 +81,21 @@ data ListOwnDirectory = ListOwnDirectory
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetImports = [(Maybe SrcRange, NormalizedUri)]
+data ImportResult
+  = MkImportResult
+  { importName :: Name
+  , importRange :: Maybe SrcRange
+  , moduleUri :: NormalizedUri
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass NFData
+
+type instance RuleResult GetImports = [ImportResult]
 data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetTypeCheckDependencies = [TypeCheckResult]
+type instance RuleResult GetTypeCheckDependencies = [(ImportResult, TypeCheckResult)]
 data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -261,7 +270,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
-        mkImportPath (MkImport a n) = do
+        mkImportPath (MkImport a n _mr) = do
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
           -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
           mFileDirectory <- runMaybeT do
@@ -283,9 +292,9 @@ jl4Rules rootDirectory recorder = do
           pure (diag, range, u)
 
         mkDiagsAndImports = \case
-          Import _a i -> Ap do
+          Import _a i@(MkImport _ n _) -> Ap do
             (diag, r, u) <- liftIO . uncurry mkImportUri =<< mkImportPath i
-            pure [(diag, (r, u))]
+            pure [(diag, MkImportResult n r u)]
           _ -> pure []
 
 
@@ -295,14 +304,17 @@ jl4Rules rootDirectory recorder = do
 
   defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
     imports <- use_  GetImports uri
-    ress    <- fmap catMaybes $ uses (AttachCallStack cs TypeCheckNoCallstack) $ map snd imports
+    ress    <- fmap catMaybes $ zipWith (\res mres -> (res,) <$> mres) imports <$> uses (AttachCallStack cs TypeCheckNoCallstack) (map (.moduleUri) imports)
     pure ([], Just ress)
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
     parsed       <- use_ GetParsedAst uri
     -- traceM $ Text.unpack $ Print.prettyLayout parsed
     -- traceShowM parsed
-    dependencies <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+    (imported, dependencies) <- unzip <$> use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+
+    let parsedAndAnnotated = overImports (updateImport $ map (\res -> (res.importName, res.moduleUri)) imported) parsed
+
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
@@ -322,7 +334,7 @@ jl4Rules rootDirectory recorder = do
         -- NOTE: we don't want to leak the inference variables from the substitution
         initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
         initCheckEnv = foldl' unionCheckEnv (TypeCheck.initialCheckEnv uri) dependencies
-        result = TypeCheck.doCheckProgramWithDependencies initCheckState initCheckEnv parsed
+        result = TypeCheck.doCheckProgramWithDependencies initCheckState initCheckEnv parsedAndAnnotated
         (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
@@ -356,7 +368,7 @@ jl4Rules rootDirectory recorder = do
         <*> use_ ListOwnDirectory uri
     importers <-
       mapMaybe
-        (\(importerUri, imports) -> if uri `elem` map snd imports then Just importerUri else Nothing)
+        (\(importerUri, imports) -> if uri `elem` map (.moduleUri) imports then Just importerUri else Nothing)
        . zip potentialDependencies
        <$> uses_ GetImports potentialDependencies
     transitiveImporters <- concat <$> uses_ (AttachCallStack (uri : cs) GetReverseDependenciesNoCallStack) importers
@@ -375,7 +387,7 @@ jl4Rules rootDirectory recorder = do
     -- first element in the cycle that is, i.e. which IMPORT, then scan
     -- for the IMPORT again and
     -- put the diagnostic on that IMPORT
-    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map snd imports
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map (.moduleUri) imports
     let environment = Evaluate.unionEnvironments $ map (.environment) deps
         own = execEvalModuleWithEnv environment tcRes.module'
     pure ([], Just own)
@@ -387,7 +399,7 @@ jl4Rules rootDirectory recorder = do
     -- first element in the cycle that is, i.e. which IMPORT, then scan
     -- for the IMPORT again and
     -- put the diagnostic on that IMPORT
-    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map snd imports
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map (.moduleUri) imports
     let environment = mconcat (fst <$> deps)
     (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv environment tcRes.module')
     pure ([], Just (ownEnv <> environment, ownDirectives))
