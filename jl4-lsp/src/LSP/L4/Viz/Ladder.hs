@@ -13,7 +13,7 @@ import Optics.State.Operators ((<%=))
 import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
-    VisualizeDecisionLogicIRInfo (..),
+    RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
@@ -65,13 +65,13 @@ prettyPrintVizError = \case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> Bool -> Either VizError VisualizeDecisionLogicIRInfo
+doVisualize :: Decide Resolved -> Bool -> Either VizError RenderAsLadderInfo
 doVisualize decide simplify =
   case  (vizProgram simplify decide).getVizE initialVizState of
     (result, _) -> result
 
-vizProgram :: Bool -> Decide Resolved -> Viz VisualizeDecisionLogicIRInfo
-vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simplify
+vizProgram :: Bool -> Decide Resolved -> Viz RenderAsLadderInfo
+vizProgram simplify = fmap MkRenderAsLadderInfo . translateDecide simplify
 
 ------------------------------------------------------
 -- translateDecide, translateExpr

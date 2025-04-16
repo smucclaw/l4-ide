@@ -10,7 +10,7 @@ import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
 
-newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
+newtype RenderAsLadderInfo = MkRenderAsLadderInfo
   { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
@@ -117,11 +117,11 @@ instance HasCodec IRExpr where
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
 
-instance HasCodec VisualizeDecisionLogicIRInfo where
+instance HasCodec RenderAsLadderInfo where
   codec =
-    named "VisualizeDecisionLogicIRInfo" $
-      object "VisualizeDecisionLogicIRInfo" $
-        MkVisualizeDecisionLogicIRInfo
+    named "RenderAsLadderInfo" $
+      object "RenderAsLadderInfo" $
+        MkRenderAsLadderInfo
           <$> requiredField' "funDecl" .= view #funDecl
 
 -------------------------------------------------------------
@@ -137,8 +137,8 @@ deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance ToJSON RenderAsLadderInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance FromJSON RenderAsLadderInfo
 
 {-
 Am trying out autodocodec because I wanted to see if

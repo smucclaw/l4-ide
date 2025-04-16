@@ -8,10 +8,7 @@
     type FunDeclLirNode,
     type LirRootType,
   } from '@repo/decision-logic-visualizer'
-  import {
-    makeVizInfoDecoder,
-    type VisualizeDecisionLogicIRInfo,
-  } from '@repo/viz-expr'
+  import { makeVizInfoDecoder, type RenderAsLadderInfo } from '@repo/viz-expr'
   import {
     type MessageTransports,
     type Middleware,
@@ -46,7 +43,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let declLirNode: FunDeclLirNode | undefined = $state(undefined)
+  let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
 
   /******************************
       VizInfo Payload Decoder
@@ -253,20 +250,19 @@
           switch (decoded._tag) {
             case 'Right':
               if (decoded.right) {
-                const vizProgramInfo: VisualizeDecisionLogicIRInfo =
-                  decoded.right
-                declLirNode = VizDeclLirSource.toLir(
+                const ladderInfo: RenderAsLadderInfo = decoded.right
+                funDeclLirNode = VizDeclLirSource.toLir(
                   nodeInfo,
-                  vizProgramInfo.funDecl
+                  ladderInfo.funDecl
                 )
                 lirRegistry.setRoot(
                   context,
-                  'VizDecl' as LirRootType,
-                  declLirNode
+                  'VizFunDecl' as LirRootType,
+                  funDeclLirNode
                 )
                 logger.debug(
                   'New declLirNode ',
-                  (declLirNode as FunDeclLirNode).getId().toString()
+                  (funDeclLirNode as FunDeclLirNode).getId().toString()
                 )
               }
               break
@@ -338,11 +334,11 @@ DECIDE \`is a British citizen (variant)\` IS
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#if declLirNode}
+      {#if funDeclLirNode}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
-        {#key declLirNode}
+        {#key funDeclLirNode}
           <div class="slightly-shorter-than-full-viewport-height pb-1">
-            <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
+            <LadderFlow {context} node={funDeclLirNode} lir={lirRegistry} />
           </div>
         {/key}
       {/if}
