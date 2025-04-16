@@ -17,7 +17,7 @@ newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
   deriving stock (Show, Generic)
 
 type Unique = Int
--- | Analogous to, but much simpler than, L4.Syntax's Name
+-- | TODO: Consider renaming this to something other than `Name`
 data Name = MkName
   { unique :: Unique   -- ^ for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
   , label  :: Text     -- ^ Label to be displayed in the visualizer.
