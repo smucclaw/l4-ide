@@ -9,7 +9,7 @@
   },
   "files": [
     "dist",
-    "message-types.ts",
+    "vscode-and-webview-messages.ts",
     "viz-expr.ts"
   ],
   "scripts": {
