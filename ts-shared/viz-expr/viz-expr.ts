@@ -217,21 +217,19 @@ export const BoolVar = Schema.Struct({
   Wrapper / Protocol interfaces
 ************************************/
 
-/** The payload for VisualizeDecisionLogicNotification */
-export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
-  typeof VisualizeDecisionLogicIRInfo
->
+/** The payload for RenderAsLadder */
+export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
-export const VisualizeDecisionLogicIRInfo = Schema.Struct({
+export const RenderAsLadderInfo = Schema.Struct({
   funDecl: FunDecl,
-}).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
+}).annotations({ identifier: 'RenderAsLadderInfo' })
 
 /*************************
     Decode
 **************************/
 
 export function makeVizInfoDecoder() {
-  return Schema.decodeUnknownEither(VisualizeDecisionLogicIRInfo)
+  return Schema.decodeUnknownEither(RenderAsLadderInfo)
 }
 
 /***********************************
@@ -258,15 +256,15 @@ export function makeVizInfoDecoder() {
 **************************/
 
 /** See https://effect.website/docs/schema/pretty/ */
-export function getDecisionLogicIRPrettyPrinter() {
-  return Pretty.make(VisualizeDecisionLogicIRInfo)
+export function getLadderIRPrettyPrinter() {
+  return Pretty.make(RenderAsLadderInfo)
 }
 
-/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
-export function exportDecisionLogicIRInfoToJSONSchema() {
-  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
+/** Get a JSON Schema version of the RenderAsLadderInfo */
+export function exportRenderAsLadderInfoToJSONSchema() {
+  return JSON.stringify(JSONSchema.make(RenderAsLadderInfo))
 }
-// console.log(exportDecisionLogicIRInfoToJSONSchema())
+// console.log(exportRenderAsLadderInfoToJSONSchema())
 
 /*************************
     JSON Schema version

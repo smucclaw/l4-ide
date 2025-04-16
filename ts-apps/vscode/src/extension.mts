@@ -9,9 +9,9 @@ import {
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
 import {
-  VisualizeDecisionLogicIRInfo,
+  RenderAsLadderInfo,
   WebviewFrontendIsReadyNotification,
-  VisualizeDecisionLogicRequest,
+  RenderAsLadder,
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
 // import { cmdViz } from './commands.js'
@@ -19,11 +19,11 @@ import type { PanelConfig } from './viz.js'
 import { PanelManager } from './viz.js'
 
 /***********************************************
-     decode for VisualizeDecisionLogicIRInfo
+     decode for RenderAsLadderInfo
      (aka the payload from lang server)
 ***********************************************/
 
-const decode = Schema.decodeUnknownSync(VisualizeDecisionLogicIRInfo)
+const decode = Schema.decodeUnknownSync(RenderAsLadderInfo)
 
 /***************************************
       Language Client
@@ -107,11 +107,9 @@ export async function activate(context: ExtensionContext) {
             `Received command response ${JSON.stringify(responseFromLangServer)}`
           )
 
-          const vizProgramInfo: VisualizeDecisionLogicIRInfo = decode(
-            responseFromLangServer
-          )
+          const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
 
-          outputChannel.appendLine(JSON.stringify(vizProgramInfo))
+          outputChannel.appendLine(JSON.stringify(ladderInfo))
 
           panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
@@ -127,9 +125,9 @@ export async function activate(context: ExtensionContext) {
           await panelManager.getWebviewFrontendIsReadyPromise()
 
           const response = await webviewMessenger.sendRequest(
-            VisualizeDecisionLogicRequest,
+            RenderAsLadder,
             vizWebviewFrontend,
-            vizProgramInfo
+            ladderInfo
           )
           if (response.$type === 'error') {
             outputChannel.appendLine(`Error in visualisation request`)
