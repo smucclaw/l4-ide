@@ -52,6 +52,7 @@ import qualified L4.Evaluate as Evaluate
 import qualified L4.EvaluateLazy as EvaluateLazy
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import System.Directory
+import qualified Paths_jl4_core
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -270,30 +271,54 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
+        mkImportPath :: Import Name -> Action (Maybe SrcRange, String, [FilePath], Maybe FilePath)
         mkImportPath (MkImport a n _mr) = do
+
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-          -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-          mFileDirectory <- runMaybeT do
-            -- TODO: idk if this is the best way of doing it, maybe trying the entire rule that uses the import and then
-            -- failing there if the rule fails would be morally better? Seems like it is more incremental than doing it
-            -- like this
-            dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-            guard =<< liftIO (doesFileExist (dir </> modName <.> "l4"))
-            pure dir
+          paths <- fold <$> runMaybeT do
+            -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
+            relPath <- do
+              dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+              pure $ dir </> modName <.> "l4"
 
-          pure (rangeOf a, fromMaybe rootDirectory mFileDirectory </> modName <.> "l4")
+            let rootPath = rootDirectory </> modName <.> "l4"
 
-        mkImportUri range fp = do
-          e <- doesFileExist fp
-          let u = toNormalizedUri $ filePathToUri fp
-              diag = do
-                guard $ not e
-                [mkSimpleFileDiagnostic u $ mkSimpleDiagnostic (fromNormalizedUri uri).getUri ("File does not exist: " <> Text.pack fp) (fromSrcRange <$> range)]
-          pure (diag, range, u)
+            builtinPath <- do
+              dataDir <- liftIO Paths_jl4_core.getDataDir
+              pure $ dataDir </> "libraries" </> modName <.> "l4"
+            pure [rootPath, relPath, builtinPath]
 
+
+          existingPaths <- runMaybeT do
+
+            let guardExists pth = do
+                  guard =<< liftIO (doesFileExist pth)
+                  pure pth
+
+            asum $ guardExists <$> paths
+
+          pure (rangeOf a, modName, paths, existingPaths)
+
+        mkImportUri (range, modName, pths, mfp) = case mfp of
+          Just fp -> do
+            let u = toNormalizedUri $ filePathToUri fp
+            pure ([], range, u)
+          Nothing ->
+            let diag = mkSimpleFileDiagnostic uri
+                  $ mkSimpleDiagnostic
+                    (fromNormalizedUri uri).getUri
+                    (Text.unlines
+                      [ "I could not find a module with this name: " <> Text.pack modName
+                      , "I have tried the following paths:"
+                      , Text.intercalate ",\n" (map Text.pack pths)
+                      ])
+                    (fromSrcRange <$> range)
+             in pure ([diag], range, uri)
+
+        mkDiagsAndImports :: TopDecl Name -> Ap Action [([FileDiagnostic], ImportResult)]
         mkDiagsAndImports = \case
           Import _a i@(MkImport _ n _) -> Ap do
-            (diag, r, u) <- liftIO . uncurry mkImportUri =<< mkImportPath i
+            (diag, r, u) <- liftIO . mkImportUri =<< mkImportPath i
             pure [(diag, MkImportResult n r u)]
           _ -> pure []
 
