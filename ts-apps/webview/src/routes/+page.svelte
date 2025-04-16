@@ -51,7 +51,7 @@
     messenger.onRequest(
       VisualizeDecisionLogicRequest,
       (payload: VisualizeDecisionLogicIRInfo) => {
-        declLirNode = VizDeclLirSource.toLir(nodeInfo, payload.program)
+        declLirNode = VizDeclLirSource.toLir(nodeInfo, payload.funDecl)
         lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
         return makeSuccessVisualizeResponse()
       }

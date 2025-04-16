@@ -225,7 +225,7 @@ export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
 >
 
 export const VisualizeDecisionLogicIRInfo = Schema.Struct({
-  program: FunDecl,
+  funDecl: FunDecl,
 }).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
 
 /*************************
