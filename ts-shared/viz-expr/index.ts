@@ -2,4 +2,4 @@
 export * from './viz-expr.js'
 
 /* Message types for communication between VSCode extension and webview */
-export * from './message-types.js'
+export * from './vscode-and-webview-messages.js'
