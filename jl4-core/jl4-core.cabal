@@ -4,6 +4,8 @@ version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
 
+data-files: libraries/*.l4
+
 common defaults
   default-language: GHC2021
   ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
@@ -52,12 +54,16 @@ library
     tree-diff,
     vector,
 
+  autogen-modules:
+    Paths_jl4_core
+
   exposed-modules:
     Base
     Base.Map
     Base.Set
     Base.Pretty
     Base.Text
+    Paths_jl4_core
     L4.Annotation
     L4.Citations
     L4.Evaluate

@@ -14,7 +14,8 @@ import L4.Syntax
 import L4.TypeCheck (CheckResult(..))
 import qualified L4.TypeCheck as JL4
 
-import Paths_jl4
+import qualified Paths_jl4
+import qualified Paths_jl4_core
 
 import qualified Base.Text as Text
 import qualified Data.List as List
@@ -35,10 +36,11 @@ import LSP.L4.Rules
 
 main :: IO ()
 main = do
-  dataDir <- getDataDir
+  dataDir <- Paths_jl4.getDataDir
+  dataDirCore <- Paths_jl4_core.getDataDir
   let examplesRoot = dataDir </> "examples"
   okFiles <- sort <$> globDir1 (compile "ok/**/*.l4") examplesRoot
-  librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDir </> "libraries")
+  librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDirCore </> "libraries")
   legalFiles <- sort <$> globDir1 (compile "legal/**/*.l4") examplesRoot
   tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
