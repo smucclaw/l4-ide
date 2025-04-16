@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import {
-    VisualizeDecisionLogicIRInfo,
-    VisualizeDecisionLogicRequest,
-    makeSuccessVisualizeResponse,
+    RenderAsLadderInfo,
+    RenderAsLadder,
+    makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
   } from '@repo/viz-expr'
@@ -27,7 +27,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let declLirNode: FunDeclLirNode | undefined = $state(undefined)
+  let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
 
   /**************************
         VSCode
@@ -48,24 +48,21 @@
       { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
     )
 
-    messenger.onRequest(
-      VisualizeDecisionLogicRequest,
-      (payload: VisualizeDecisionLogicIRInfo) => {
-        declLirNode = VizDeclLirSource.toLir(nodeInfo, payload.funDecl)
-        lirRegistry.setRoot(context, 'VizDecl' as LirRootType, declLirNode)
-        return makeSuccessVisualizeResponse()
-      }
-    )
+    messenger.onRequest(RenderAsLadder, (payload: RenderAsLadderInfo) => {
+      funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, payload.funDecl)
+      lirRegistry.setRoot(context, 'VizFunDecl' as LirRootType, funDeclLirNode)
+      return makeRenderAsLadderSuccessResponse()
+    })
 
     messenger.start()
   })
 </script>
 
-{#if declLirNode}
+{#if funDeclLirNode}
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
-  {#key declLirNode}
+  {#key funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
-      <LadderFlow {context} node={declLirNode} lir={lirRegistry} />
+      <LadderFlow {context} node={funDeclLirNode} lir={lirRegistry} />
     </div>
   {/key}
 {/if}
