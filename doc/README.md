@@ -189,6 +189,8 @@ The above feature set is sufficient to deliver the following classes of function
 
 - automated detection of lexical and scope ambiguities
 
+- user-reviewable and editable isomorphic program text representation of input rules
+
 ## Roadmap for future development
 
 Roadmap: see the Github Issues and the [Future Features](./future-features.md) document.
