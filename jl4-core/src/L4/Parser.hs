@@ -67,7 +67,7 @@ import L4.Annotation
 import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
-import L4.Syntax
+import L4.Syntax hiding (app, forall', fun)
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 

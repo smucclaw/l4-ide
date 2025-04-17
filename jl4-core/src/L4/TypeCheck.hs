@@ -85,12 +85,11 @@ import L4.Syntax
 import L4.TypeCheck.Annotation
 import L4.TypeCheck.Environment as X
 import L4.TypeCheck.Types as X
+import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 
 import Control.Applicative
-import Data.Bifunctor
 import Data.Either (partitionEithers)
-import Optics.Core hiding (anyOf, re)
 import Data.Tuple.Extra (firstM)
 import Control.Monad.Extra (mapMaybeM)
 import qualified Data.List as List
@@ -110,7 +109,8 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , errorContext = None
     , functionTypeSigs = Map.empty
     , declTypeSigs = Map.empty
-    , datatypeDeclarations = Map.empty
+    , declareDeclarations = Map.empty
+    , assumeDeclarations = Map.empty
     , moduleUri
     }
 
@@ -166,13 +166,21 @@ withDecides rdecides =
   where
     topDecides = fmap (.name) rdecides
 
-withDeclares :: [DeclChecked] -> Check a -> Check a
-withDeclares rdeclares =
-  extendKnownMany topDeclares . local \s -> s
-    { datatypeDeclarations = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.payload) rdeclares
-    }
-  where
-    topDeclares = foldMap (.publicNames) rdeclares
+withDeclares :: [DeclChecked DeclareOrAssume] -> Check a -> Check a
+withDeclares rdecls =
+  let
+    (rdeclares, rassumes) = partitionEithers (mapMaybe go rdecls)
+    go :: DeclChecked DeclareOrAssume
+          -> Maybe (Either (SrcRange, DeclChecked (Declare Resolved)) (SrcRange, DeclChecked (Assume Resolved)))
+    go (MkDeclChecked (Left  a) cis) = Left  . (, MkDeclChecked a cis) <$> rangeOf a
+    go (MkDeclChecked (Right a) cis) = Right . (, MkDeclChecked a cis) <$> rangeOf a
+  in
+    extendKnownMany topDeclares . local \s -> s
+      { declareDeclarations = Map.fromList rdeclares
+      , assumeDeclarations = Map.fromList rassumes
+      }
+    where
+      topDeclares = foldMap (.publicNames) rdecls
 
 withDeclareTypeSigs :: [DeclTypeSig] -> Check a -> Check a
 withDeclareTypeSigs rdeclares =
@@ -182,33 +190,28 @@ withDeclareTypeSigs rdeclares =
   where
     topDeclares = fmap (.name) rdeclares
 
-lookupFunTypeSigByAnno :: Anno -> Check (Maybe FunTypeSig)
-lookupFunTypeSigByAnno ann = case rangeOf ann of
+lookupFromCheckEnv :: (CheckEnv -> Map SrcRange a) -> Anno -> Check a
+lookupFromCheckEnv sel ann = case rangeOf ann of
   Nothing ->
-    -- TODO: should never happen, 'addError'
-    pure Nothing
+    fatalInternalError (MissingSrcRangeForDeclaration ann)
   Just r -> do
-    topEnv <- asks (.functionTypeSigs)
-    pure $ Map.lookup r topEnv
+    topEnv <- asks sel
+    case Map.lookup r topEnv of
+      Nothing ->
+        fatalInternalError (MissingDeclForSrcRange ann)
+      Just x -> pure x
 
-lookupDeclTypeSigByAnno :: Anno -> Check (Maybe DeclTypeSig)
-lookupDeclTypeSigByAnno ann = case rangeOf ann of
-  Nothing ->
-    -- TODO: should never happen, 'addError'
-    pure Nothing
-  Just r -> do
-    topEnv <- asks (.declTypeSigs)
-    pure $ Map.lookup r topEnv
+lookupFunTypeSigByAnno :: Anno -> Check FunTypeSig
+lookupFunTypeSigByAnno = lookupFromCheckEnv (.functionTypeSigs)
 
-lookupDeclCheckedByAnno :: Anno -> Check (Maybe DeclChecked)
-lookupDeclCheckedByAnno ann = case rangeOf ann of
-  Nothing ->
-    -- TODO: should never happen, 'addError'
-    pure Nothing
-  Just r -> do
-    topEnv <- asks (.datatypeDeclarations)
-    pure $ Map.lookup r topEnv
+lookupDeclTypeSigByAnno :: Anno -> Check DeclTypeSig
+lookupDeclTypeSigByAnno = lookupFromCheckEnv (.declTypeSigs)
 
+lookupDeclareCheckedByAnno :: Anno -> Check (DeclChecked (Declare Resolved))
+lookupDeclareCheckedByAnno = lookupFromCheckEnv (.declareDeclarations)
+
+lookupAssumeCheckedByAnno :: Anno -> Check (DeclChecked (Assume Resolved))
+lookupAssumeCheckedByAnno = lookupFromCheckEnv (.assumeDeclarations)
 
 -- | Combines environment and entityInfo into one single list
 --
@@ -252,189 +255,14 @@ runCheckUnique c e s =
     _ -> error $ "internal error: expected unique result, got several"
 
 -- ------------------------------------
--- Scope Manipulation
--- ------------------------------------
-
--- | Make the given 'CheckInfo' known in the given scope.
-extendKnown :: CheckInfo -> Check a -> Check a
-extendKnown ci =
-  extendKnownMany [ci]
-
--- | Make many 'CheckInfo's known for the given scope.
-extendKnownMany :: [CheckInfo] -> Check a -> Check a
-extendKnownMany cis = do
-  local (extendEnv cis)
-
--- | Extend the scope of the 'CheckEnv' with all '[CheckInfo]'.
-extendEnv :: [CheckInfo] -> CheckEnv -> CheckEnv
-extendEnv cis env =
-  foldl' goCheckInfo env cis
- where
-  goCheckInfo :: CheckEnv -> CheckInfo -> CheckEnv
-  goCheckInfo e ci =
-    foldl' (goResolved ci.checkEntity) e ci.names
-
-  goResolved :: CheckEntity -> CheckEnv -> Resolved -> CheckEnv
-  goResolved ce e a = MkCheckEnv
-    { environment = Map.alter proc (rawName n) e.environment
-    , entityInfo = Map.insert u (n, ce) e.entityInfo
-    , moduleUri = e.moduleUri
-    , errorContext = e.errorContext
-    , functionTypeSigs = e.functionTypeSigs
-    , declTypeSigs = e.declTypeSigs
-    , datatypeDeclarations = e.datatypeDeclarations
-    }
-    where
-      u :: Unique
-      n :: Name
-      (u, n) = getUniqueName a
-
-      proc :: Maybe [Unique] -> Maybe [Unique]
-      proc Nothing   = Just [u]
-      proc (Just xs) = Just (u : xs)
-
-makeKnown :: Resolved -> CheckEntity -> CheckInfo
-makeKnown a =
-  makeKnownMany [a]
-
-makeKnownMany :: [Resolved] -> CheckEntity -> CheckInfo
-makeKnownMany rs ce =
-  MkCheckInfo
-    { names = rs
-    , checkEntity = ce
-    }
-
--- | Set the 'CheckErrorContext' for the given scope.
-errorContext :: (CheckErrorContext -> CheckErrorContext) -> Check a -> Check a
-errorContext errorCtx =
-  local (\env -> env { errorContext = errorCtx env.errorContext })
-
--- ------------------------------------
 -- Check Primitives
 -- ------------------------------------
-
--- | Biased choice. Only takes the second option if the first fails.
---
-orElse :: Check a -> Check a -> Check a
-orElse m1 m2 = do
-  MkCheck $ \ e s ->
-    let
-      candidates = runCheck m1 e s
-
-      isSuccess (Plain _, _)  = True
-      isSuccess (With _ _, _) = False
-    in
-      case filter isSuccess candidates of
-        [] -> runCheck m2 e s
-        xs -> xs
-
--- | Allow the subcomputation to have at most one result.
---
-prune :: forall a. Check a -> Check a
-prune m = do
-  ctx <- asks (.errorContext)
-  MkCheck $ \ s env ->
-    let
-      candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s env
-
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
-
-      -- We have a success, we don't want a second one
-      procPlain a []                   = [a]
-      procPlain a ((Plain _, _)  : []) = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
-      procPlain _ ((Plain _, _)  : cs) = [last cs]
-      procPlain a ((With _ _, _) : cs) = procPlain a cs
-
-      -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
-
-    in
-      proc candidates
-
--- | Prune to one result if there's a clearly best one at this point,
--- but don't force it.
---
-softprune :: forall a. Check a -> Check a
-softprune m = do
-  MkCheck $ \ s env ->
-    let
-      candidates :: [(With CheckErrorWithContext a, CheckState)]
-      candidates = runCheck m s env
-
-      proc []                    = [] -- should never occur
-      proc [a]                   = [a]
-      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
-      proc ((With e x, s') : cs) = procWith (With e x, s') cs
-
-      -- We have a success, we don't want a second one
-      procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : [])  = candidates
-      procPlain _ ((Plain _, _)  : _cs) = candidates
-      procPlain a ((With _ _, _) :  cs) = procPlain a cs
-
-      -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
-
-    in
-      proc candidates
-
--- | Should never return 'Nothing' if our system is OK.
-getEntityInfo :: Resolved -> Check (Maybe CheckEntity)
-getEntityInfo r = do
-  ei <- asks (.entityInfo)
-  case Map.lookup (getUnique r) ei of
-    Nothing       -> do
-      addError (MissingEntityInfo r)
-      pure Nothing
-    Just (_n, ce) -> pure (Just ce)
 
 instantiate :: Type' Resolved -> Check (Type' Resolved)
 instantiate (Forall _ann ns t) = do
   substitution <- Map.fromList <$> traverse (\ n -> let (u, o) = getUniqueName n; r = rawName o in fresh r >>= \ v -> pure (u, v)) ns
   pure (substituteType substitution t)
 instantiate t             = pure t
-
-substituteType :: Map Unique (Type' Resolved) -> Type' Resolved -> Type' Resolved
-substituteType _ (Type ann)               = Type ann
-substituteType s t@(TyApp _ r []) =
-  case Map.lookup (getUnique r) s of
-    Nothing -> t
-    Just t' -> t'
-substituteType s (TyApp ann n ts)         =
-  TyApp ann n (substituteType s <$> ts)
-substituteType s (Fun ann onts t)         =
-  Fun ann (substituteOptionallyNamedType s <$> onts) (substituteType s t)
-substituteType _ (Forall ann ns t)        =
-  Forall ann ns t -- TODO!! Inner Forall needs some form of alpha renaming.
-substituteType _ (InfVar ann prefix i)    = InfVar ann prefix i
--- substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
-
-substituteOptionallyNamedType :: Map Unique (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
-substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
-  MkOptionallyNamedType ann mn (substituteType s t)
-
-forall' :: [Resolved] -> Type' Resolved -> Type' Resolved
-forall' [] t = t
-forall' ns t = Forall emptyAnno ns t
-
-fun_ :: [Type' Resolved] -> Type' Resolved -> Type' Resolved
-fun_ [] t = t
-fun_ ts t = fun (MkOptionallyNamedType emptyAnno Nothing <$> ts) t
-
-fun :: [OptionallyNamedType Resolved] -> Type' Resolved -> Type' Resolved
-fun [] t = t
-fun ts t = Fun emptyAnno ts t
-
-app :: n -> [Type' n] -> Type' n
-app = TyApp emptyAnno
 
 -- | Make a type application from a type variable. Also change defining
 -- occurrences into references.
@@ -462,37 +290,11 @@ checkBinOp t1 t2 tr opname op ann e1 e2 = do
   e2' <- checkExpr (ExpectBinOpArgContext opname 2) e2 t2
   pure (op ann e1' e2', tr)
 
-def :: Name -> Check Resolved
-def n = do
-  u <- newUnique
-  pure (Def u n)
-
--- | Introduce the new name as a defining occurrence of an alias of an already existing name.
-defAka :: Resolved -> Name -> Check Resolved
-defAka r n = do
-  let u = getUnique r
-  pure (Def u n)
-
-ref :: Name -> Resolved -> Check Resolved
-ref n a =
-  let
-    (u, o) = getUniqueName a
-  in
-    pure (Ref n u o)
-
+-- Phase 4.
 inferDeclare :: Declare Name -> Check (Declare Resolved, [CheckInfo])
 inferDeclare (MkDeclare ann _tysig appForm _t) =
   errorContext (WhileCheckingDeclare (getName appForm)) do
-    lookupDeclCheckedByAnno ann >>= \case
-      Nothing -> do
-        error "Should not happen"
-      Just d ->
-        case d.payload of
-          CompleteDeclare decl ->
-            pure (decl, d.publicNames)
-          CompleteAssume _ ->
-            error "This should never happen. inferDeclare"
-
+    lookupDeclareCheckedByAnno ann >>= \ d -> pure (d.payload, d.publicNames)
 
 -- | We allow assumptions for types, but we could potentially be more
 -- sophisticated here.
@@ -514,19 +316,11 @@ inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
 inferAssume (MkAssume ann _tysig appForm (Just (Type _tann))) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
-    lookupDeclCheckedByAnno ann >>= \case
-      Nothing -> error "This should not happen any more"
-      Just decl -> do
-        case decl.payload of
-          CompleteDeclare _ -> error "This should not happen"
-          CompleteAssume assume -> do
-            pure (assume, decl.publicNames)
+    lookupAssumeCheckedByAnno ann >>= \ d -> pure (d.payload, d.publicNames)
 inferAssume (MkAssume ann _tysig appForm mt) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
-    lookupFunTypeSigByAnno ann >>= \case
-      Nothing -> error "This should not happen any more"
-      Just dHead -> do
+    lookupFunTypeSigByAnno ann >>= \ dHead -> do
         -- check that the given result type matches the result type in the type signature
         extendKnownMany dHead.arguments do
           rmt <- case mt of
@@ -627,10 +421,7 @@ inferProgram (MkModule ann uri section) = do
 inferDecide :: Decide Name -> Check (Decide Resolved, [CheckInfo])
 inferDecide (MkDecide ann _tysig appForm expr) = do
   errorContext (WhileCheckingDecide (getName appForm)) do
-    lookupFunTypeSigByAnno ann >>= \case
-      Nothing -> do
-        error "This should not happen any more"
-      Just dHead -> do
+    lookupFunTypeSigByAnno ann >>= \ dHead -> do
         decide <- extendKnownMany dHead.arguments $ do
           rexpr <- checkExpr (ExpectDecideSignatureContext (rangeOf dHead.resultType)) expr dHead.resultType
           -- See Note [Adding type information to all binders]
@@ -904,9 +695,6 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
 typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
 
-optionallyNamedTypeType :: OptionallyNamedType n -> Type' n
-optionallyNamedTypeType (MkOptionallyNamedType _ _ t) = t
-
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
 inferSelector rappForm (MkTypedName ann n t) = do
   rt <- inferType t
@@ -1020,22 +808,23 @@ inferTermAppForm rappForm tysig = do
   let termInfo = KnownTerm rt Computable
   pure (termInfo, rt, result, extend)
 
+-- | Infer a GIVEN that occurs as part of a lambda expression.
 inferLamGivens :: GivenSig Name -> Check (GivenSig Resolved, [Type' Resolved], [CheckInfo])
 inferLamGivens (MkGivenSig ann otns) = do
   (rotns, rargts, extends) <- unzip3 <$> traverse inferOptionallyTypedName otns
   pure (MkGivenSig ann rotns, rargts, concat extends)
-
--- TODO: there is unfortunate overlap between this and optionallyTypedNameType,
--- but perhaps it's ok ...
-inferOptionallyTypedName :: OptionallyTypedName Name -> Check (OptionallyTypedName Resolved, Type' Resolved, [CheckInfo])
-inferOptionallyTypedName (MkOptionallyTypedName ann n Nothing) = do
-  rn <- def n
-  v <- fresh (rawName n)
-  pure (MkOptionallyTypedName ann rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
-inferOptionallyTypedName (MkOptionallyTypedName ann n (Just t)) = do
-  rn <- def n
-  rt <- inferType t
-  pure (MkOptionallyTypedName ann rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
+  where
+    -- TODO: there is unfortunate overlap between this and optionallyTypedNameType,
+    -- but perhaps it's ok ...
+    inferOptionallyTypedName :: OptionallyTypedName Name -> Check (OptionallyTypedName Resolved, Type' Resolved, [CheckInfo])
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing) = do
+      rn <- def n
+      v <- fresh (rawName n)
+      pure (MkOptionallyTypedName ann' rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t)) = do
+      rn <- def n
+      rt <- inferType t
+      pure (MkOptionallyTypedName ann' rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -1282,6 +1071,11 @@ inferExpr' g =
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
 
+-- | The goal here is to not just infer the type of the named application,
+-- but also to determine the order in which the arguments are actually being
+-- supplied. This ordering is returned as well (and then stored in the
+-- AST after type-checking, to be used by the evaluator).
+--
 inferAppNamed :: Resolved -> Type' Resolved -> [NamedExpr Name] -> Check ([(Int, NamedExpr Resolved)], Type' Resolved)
 inferAppNamed r (Fun _ onts t) nes = do
   ornes <- supplyAppNamed r (zip [0 ..] onts) nes
@@ -1384,10 +1178,6 @@ inferLit (NumericLit _ _) =
   pure number
 inferLit (StringLit _ _) =
   pure string
-
-ensureSameRef :: Resolved -> Resolved -> Check Bool
-ensureSameRef r1 r2 =
-  pure (getUnique r1 == getUnique r2)
 
 -- | A special case of unification where we know the given type must
 -- be a function and we know its arguments. We special-case it because
@@ -1501,9 +1291,9 @@ matchPatFunTy  r t args =
 
 scanDeclares ::
   (a -> Check [DeclTypeSig]) ->
-  (a -> Check [DeclChecked]) ->
+  (a -> Check [DeclChecked DeclareOrAssume]) ->
   a ->
-  Check [DeclChecked]
+  Check [DeclChecked DeclareOrAssume]
 scanDeclares preScanDecl scanDecl a = do
   rdeclareTypeSigs <- preScanDecl a
   withDeclareTypeSigs rdeclareTypeSigs do
@@ -1511,7 +1301,7 @@ scanDeclares preScanDecl scanDecl a = do
 
 withScanTypeAndSigEnvironment ::
   (a -> Check [DeclTypeSig]) ->
-  (a -> Check [DeclChecked]) ->
+  (a -> Check [DeclChecked DeclareOrAssume]) ->
   (a -> Check [FunTypeSig]) ->
   a ->
   Check b ->
@@ -1527,34 +1317,32 @@ withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
 -- Phase 1: Scan & Check Type Declarations (DECLARE & ASSUME)
 -- ----------------------------------------------------------------------------
 
-inferTyDeclModule :: Module Name -> Check [DeclChecked]
+inferTyDeclModule :: Module Name -> Check [DeclChecked DeclareOrAssume]
 inferTyDeclModule (MkModule _ _ sects) =
   inferTyDeclSection sects
 
-inferTyDeclSection :: Section Name -> Check [DeclChecked]
+inferTyDeclSection :: Section Name -> Check [DeclChecked DeclareOrAssume]
 inferTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse inferTyDeclTopLevel topDecls
 
-inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked]
+inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe (DeclChecked DeclareOrAssume))
+inferTyDeclLocalDecl = \case
+  LocalDecide _ _ -> pure Nothing
+  LocalAssume _ p -> ((Right <$>) <$>) <$> inferTyDeclAssume p
+
+inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked DeclareOrAssume]
 inferTyDeclTopLevel = \case
-  Declare   _ p -> maybeToList <$> inferTyDeclDeclare p
+  Declare   _ p -> maybeToList <$> ((Left <$>) <$>) <$> inferTyDeclDeclare p
   Decide    _ _ -> pure []
-  Assume    _ p -> maybeToList <$> inferTyDeclAssume p
+  Assume    _ p -> maybeToList <$> ((Right <$>) <$>) <$> inferTyDeclAssume p
   Directive _ _ -> pure []
   Import    _ _ -> pure []
   Section   _ s -> inferTyDeclSection s
 
-inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclChecked)
-inferTyDeclLocalDecl = \case
-  LocalDecide _ _ -> pure Nothing
-  LocalAssume _ p -> inferTyDeclAssume p
-
-inferTyDeclDeclare :: Declare Name -> Check (Maybe DeclChecked)
+inferTyDeclDeclare :: Declare Name -> Check (Maybe (DeclChecked (Declare Resolved)))
 inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
   errorContext (WhileCheckingDeclare (getName appForm)) do
-    lookupDeclTypeSigByAnno ann >>= \case
-      Nothing -> pure Nothing
-      Just declHead -> do
+    lookupDeclTypeSigByAnno ann >>= \ declHead -> do
         extendKnownMany declHead.tyVars do
           extendTySynonym <- inferTypeNameAndSynonym declHead.rappForm declHead.typeSynonym
           (rt, extendsTyDecl) <- inferTypeDecl declHead.rappForm t
@@ -1567,22 +1355,20 @@ inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
             <*> pure rt
             >>= nlgDeclare
           pure $ Just MkDeclChecked
-            { payload = CompleteDeclare declare
+            { payload = declare
             , publicNames = extendTySynonym : extendsTyDecl
             }
 
-inferTyDeclAssume :: Assume Name -> Check (Maybe DeclChecked)
+inferTyDeclAssume :: Assume Name -> Check (Maybe (DeclChecked (Assume Resolved)))
 inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann))) =
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
-    lookupDeclTypeSigByAnno ann >>= \case
-      Nothing -> pure Nothing
-      Just declHead -> do
+    lookupDeclTypeSigByAnno ann >>= \ declHead -> do
         assume <- extendKnownMany (declHead.name:declHead.tyVars) do
           traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)))
             >>= nlgAssume
         pure $ Just $ MkDeclChecked
-          { payload = CompleteAssume assume
+          { payload = assume
           , publicNames = [declHead.name]
           }
 inferTyDeclAssume (MkAssume _   _      _        _) = pure Nothing
@@ -1719,121 +1505,6 @@ scanFunSigAssume (MkAssume ann tysig appForm _mt) = do
 -- ----------------------------------------------------------------------------
 -- Typecheck Utils
 -- ----------------------------------------------------------------------------
-
--- Wrapper for unify that fails at this point.
--- First argument is the expected type (pushed in), the second argument is the
--- given type (pulled out).
-expect :: ExpectationContext -> Type' Resolved -> Type' Resolved -> Check ()
-expect ec expected given = do
-  b <- unify expected given
-  unless b $ addError (TypeMismatch ec expected given)
-
-tryExpandTypeSynonym :: Resolved -> [Type' Resolved] -> Check (Maybe (Type' Resolved))
-tryExpandTypeSynonym r args = do
-  ce <- getEntityInfo r
-  case ce of
-    Just (KnownType _kind params (Just t)) -> do
-      let substitution = Map.fromList (zipWith (\ n t' -> (getUnique n, t')) params args)
-      pure (Just (substituteType substitution t))
-    _ -> pure Nothing
-
--- We leave it somewhat vague how unify treats forall-types and TYPE.
--- In general, types should be instantiated prior to unification, and
--- kind-checking should not involve unification.
---
--- Unify proceeds in multiple layers.
---
--- First, we have to substitute. (TODO: We should probably just apply
--- the substitution eagerly all the time. There is a reason other
--- implementations do this as well.) Why? Because we have to prevent
--- infinite types from arising (which are usually unwanted, but more
--- importantly even, can make the system loop very easily). And in
--- order to detect cycles, we need to know the full set of inference
--- variables that occur in the target type once we try to bind an
--- inference variable. The easiest way to achieve this is to
--- substitute first.
---
--- Next, we have to expand type synonyms.
--- When do we want to expand a type synonym?
---
--- Basically whenever we have ruled out the inference variable cases,
--- because if we have one inference variable against a type synonym,
--- we can just bind directly.
---
--- So we check the inference variable cases first, and then try to
--- expand in 'expandAndUnify', and once we've established we cannot
--- expand, we handle the remaining cases in 'unifyBase'.
---
-unify :: Type' Resolved -> Type' Resolved -> Check Bool
-unify t1 t2 = do
-  t1' <- applySubst t1
-  t2' <- applySubst t2
-  unify' t1' t2'
-
--- | Unify cases for inference variables, after substitution. Prevent
--- infinite types by performing the so-called "occurs check".
---
-unify' :: Type' Resolved -> Type' Resolved -> Check Bool
-unify' (InfVar _ann1 _pre1 i1) t2@(InfVar _ann2 _pre2 i2)
-  | i1 == i2             = pure True
-  | otherwise            = bind i1 t2
-unify' (InfVar _ann1 _pre1 i1) t2
-  | i1 `elem` infVars t2 = pure False -- addError (OccursCheck t1 t2)
-  | otherwise            = bind i1 t2
-unify' t1 (InfVar _ann2 _pre2 i2)
-  | i2 `elem` infVars t1 = pure False -- addError (OccursCheck t1 t2)
-  | otherwise            = bind i2 t1
-unify' t1 t2             = expandAndUnify t1 t2
-
--- | Handles the cases where we've established we have no top-level
--- inference variables.
---
-expandAndUnify :: Type' Resolved -> Type' Resolved -> Check Bool
-expandAndUnify t1 t2 =
-  tryExpand t1 (\ t1' -> unify' t1' t2) $
-  tryExpand t2 (\ t2' -> unify' t1 t2') $
-  unifyBase t1 t2
-  where
-    -- Tries to expand the given type synonym. If expansion succeeds,
-    -- applies the success continuation, otherwise the failure
-    -- continuation.
-    --
-    tryExpand :: Type' Resolved -> (Type' Resolved -> Check r) -> Check r -> Check r
-    tryExpand (TyApp _ann n ts)  kSuccess kFail = do
-      mt' <- tryExpandTypeSynonym n ts
-      maybe kFail kSuccess mt'
-    tryExpand _                 _kSuccess kFail = kFail
-
--- | Handles the cases where we've established we have no top-level
--- type synonym application and no inference variables.
---
-unifyBase :: Type' Resolved -> Type' Resolved -> Check Bool
-unifyBase (TyApp _ann1 n1 ts1) (TyApp _ann2 n2 ts2) = do
-  -- both are type constructors or type variables
-  r <- ensureSameRef n1 n2
-  -- We should not need to check the same length because we've done kind checking.
-  rs <- traverse (uncurry unify') (zip ts1 ts2)
-  pure (and (r : rs))
-unifyBase (Fun _ann1 onts1 t1) (Fun _ann2 onts2 t2)
-  | length onts1 == length onts2 = do
-    rs <- traverse (uncurry unify') (zip (optionallyNamedTypeType <$> onts1) (optionallyNamedTypeType <$> onts2))
-    r <- unify' t1 t2
-    pure (and (r : rs))
-unifyBase (Type _ann1) (Type _ann2) = pure True
-unifyBase _t1 _t2 = pure False -- addError (UnificationError t1 t2)
-
-infVars :: Type' Resolved -> [Int]
-infVars (Type _)        = []
-infVars (TyApp _ _ ts)  = concatMap infVars ts
-infVars (Fun _ onts t)  = concatMap (infVars . optionallyNamedTypeType) onts ++ infVars t
-infVars (Forall _ _ t)  = infVars t
-infVars (InfVar _ _ i)  = [i]
--- infVars (ParenType _ t) = infVars t
-
-bind :: Int -> Type' Resolved -> Check Bool
-bind i t = do
-  modifying' #substitution (Map.insert i t)
-  pure True
 
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
@@ -2129,48 +1800,6 @@ prettyResolvedWithRange r =
 prettyNameWithRange :: Name -> Text
 prettyNameWithRange n =
   prettyLayout n <> " (at " <> prettySrcRangeM (rangeOf n) <> ")"
-
--- | A class for applying the subsitution on inference variables exhaustively.
---
--- Note that we currently are applying the substitution late, which means we have
--- to recursively apply it.
---
-class ApplySubst a where
-  applySubst :: a -> Check a
-
-instance ApplySubst (Type' Resolved) where
-  applySubst (Type  ann)       = pure (Type ann)
-  applySubst (TyApp ann n ts)  = TyApp ann n <$> traverse applySubst ts
-  applySubst (Fun ann onts t)  = Fun ann <$> traverse applySubst onts <*> applySubst t
-  applySubst (Forall ann ns t) = Forall ann ns <$> applySubst t
-  applySubst (InfVar ann rn i) = do
-    s <- use #substitution
-    case Map.lookup i s of
-      Nothing -> pure (InfVar ann rn i)
-      Just t  -> do
-        -- we actually modify the substitution so that we don't do the same work many times if the same variable occurs often
-        -- we are still traversing every time though; we could do better
-        t' <- applySubst t
-        modifying #substitution (Map.insert i t')
-        pure t'
-
-instance ApplySubst (OptionallyNamedType Resolved) where
-  applySubst (MkOptionallyNamedType ann mn t) = MkOptionallyNamedType ann mn <$> applySubst t
-
-instance ApplySubst CheckError where
-  applySubst = traverseOf (gplate @(Type' Resolved) @CheckError) applySubst
-
-instance ApplySubst CheckErrorContext where
-  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorContext) applySubst
-
-instance ApplySubst CheckErrorWithContext where
-  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
-
-instance ApplySubst EntityInfo where
-  applySubst = traverse (\(n, entity) -> (n, ) <$> applySubst entity)
-
-instance ApplySubst CheckEntity where
-  applySubst = traverseOf (gplate @(Type' Resolved)) applySubst
 
 -- Note [Adding type information to all binders]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

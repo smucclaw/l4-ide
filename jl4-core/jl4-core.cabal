@@ -87,5 +87,6 @@ library
     L4.TypeCheck.Annotation
     L4.TypeCheck.Environment
     L4.TypeCheck.Types
+    L4.TypeCheck.Unify
     L4.TypeCheck.With
     L4.Utils.RevList
