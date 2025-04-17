@@ -76,16 +76,18 @@ The above feature set is sufficient to deliver the following classes of function
 
 - automated generation of user-facing decision applications
   - typically, a web wizard form which engages end-user for input
-  
 - automated generation of reasoner backend
+
   - typically exposed as an API endpoint
   - given inputs and a ruleset, returns a decision verdict
   - with an explanation trace necesary for audit trails
 
 - a chatbot UI which wraps the decision engine in an oral user interface
+
   - uses the explanation trace to answer user questions
 
 - SAT/SMT optimization and counterfactual synthesis
+
   - calling a back-end solver/reasoner powered by a SAT/SMT solver e.g. Z3, PySAT
   - answers queries like "what inputs would have to change for the answer to be Yes instead of No"?
 
@@ -135,10 +137,12 @@ See [Regulative Examples](./regulative-examples.md)
 The above feature set is sufficient to deliver the following classes of functionality:
 
 - planning problems
+
   - "given my current situation and a desired outcome, how do I get there from here?"
   - e.g. OptaPlanner / Timefold, OR-Tools, gurobi
 
 - bounded deontic property queries
+
   - if I want to avoid paying a fine, must I file paper P before deadline D?
   - must I do Obligation O1?
     - Only if you want to avoid consequence P1.
