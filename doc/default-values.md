@@ -1,4 +1,4 @@
-# User Input Pattern: the Defaultable Bool
+# Default Values
 
 How many ways can we architect a Boolean any/all tree?
 

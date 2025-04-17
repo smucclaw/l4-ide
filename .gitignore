@@ -64,3 +64,5 @@ yarn-error.log*
 .direnv
 .envrc
 result*
+
+*.code-workspace
