@@ -334,9 +334,9 @@ lookupRawNameInEnvironment rn = do
       -- bottom out at an empty list of sections which makes the entire algorithm fail
       sectionInSection [secs] = secs
       sectionInSection (secs : secss) =
-        mapMaybe
-          (\sec@(MkSection _ mn _ _) -> do
-             u <- getUnique <$> mn
+        foldMap
+          (\sec@(MkSection _ mn maka _) -> do
+             u <- getUnique <$> maybeToList mn <> foldMap (\(MkAka _ rs) -> rs) maka
              guard $ any (isTopLevelBindingInSection u) $ sectionInSection secss
              pure sec
           )
@@ -370,7 +370,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . mat
     Import _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
     -- toplevel bindings
-    Section _ (MkSection _ mr _ decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap matchesUnq decls'
+    Section _ (MkSection _ mr maka decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap (\(MkAka _ rs) -> map getUnique rs) maka <> foldMap matchesUnq decls'
 
   afUnq = map getUnique . appFormHeads
 

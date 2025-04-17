@@ -14,6 +14,9 @@ import qualified Data.List.NonEmpty as NE
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
 
+prettyLayout' :: LayoutPrinter a => a -> String
+prettyLayout' = Text.unpack . prettyLayout
+
 quotedName :: Name -> Text
 quotedName n =
     renderStrict
