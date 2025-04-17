@@ -533,7 +533,7 @@ inferSection (MkSection ann mn maka topdecls) = do
       topdecls
 
   let sec = MkSection ann rmn rmaka $ reverse rtopdecls
-      sectionExtends = foldMap (\r -> [makeKnown r (KnownSection sec)]) $ maybeToList rmn <> foldMap (\(MkAka _ rs) -> rs) rmaka
+      sectionExtends = foldMap (\r -> [makeKnown r (KnownSection sec)]) $ toResolved rmn <> toResolved rmaka
 
   pure (sec, concat topDeclExtends <> sectionExtends)
  where
