@@ -10,9 +10,10 @@ ASSUME a3 IS A BOOLEAN
 -- this does not currently work: 
 -- #CHECK a.aa.aaa.a3
 
-§§ ab
+§§ ab AKA foo, bar
 ASSUME a4 IS A BOOLEAN
-§§ ac
+§§ ac AKA baz
+ASSUME a4 IS A NUMBER
 § b
 ASSUME a1 IS A BOOLEAN
 §§ ba
@@ -27,4 +28,6 @@ ASSUME a2 IS A BOOLEAN
 #CHECK a.aa.a3
 #CHECK a.aa.aaa.a3
 #CHECK a.ab.a4
-#CHECK a.a4
+#CHECK a.foo.a4
+#CHECK a.bar.a4
+#CHECK a.baz.a4

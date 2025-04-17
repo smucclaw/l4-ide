@@ -9,4 +9,6 @@
 `a.aa.a3`
 `a.aa.aaa.a3`
 `a.ab.a4`
-`a.a4`
+`a.foo.a4`
+`a.bar.a4`
+`a.baz.a4`
