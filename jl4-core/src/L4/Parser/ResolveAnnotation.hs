@@ -184,9 +184,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
   addNlg a = extendNlgA a $ case a of
-    MkImport ann n -> do
+    MkImport ann n mr -> do
       n' <- addNlg n
-      pure $ MkImport ann n'
+      pure $ MkImport ann n' mr
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (TypeDecl n) where
   addNlg a = extendNlgA a $ case a of

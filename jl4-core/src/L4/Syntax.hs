@@ -154,7 +154,7 @@ data Directive n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Import n =
-  MkImport Anno n
+  MkImport Anno n (Maybe NormalizedUri)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -276,6 +276,8 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
+overImports :: forall nodeType n. (Optics.GPlate (Import n) (nodeType n)) => (Import n -> Import n) -> nodeType n -> nodeType n
+overImports = Optics.over Optics.gplate
 
 appFormHead :: Lens' (AppForm n) n
 appFormHead = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wn -> MkAppForm ann wn ns maka) <$> wrap n)
@@ -289,6 +291,11 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
+
+updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
+updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
+  (u' : _) -> MkImport ann n (Just u')
+  [] -> i
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
@@ -422,6 +429,9 @@ deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 
 instance ToConcreteNodes PosToken (Module Name) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
+
+instance ToConcreteNodes PosToken NormalizedUri where
+  toNodes _ = pure []
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where

@@ -1,12 +1,15 @@
+import { BaseAMGraph } from './base-adjacency-map.js'
 import type { Eq, Ord } from '$lib/utils.js'
 import {
   DirectedEdge,
   stringifyEdge as makeEdgeKey,
   type Edge,
-  type EdgeAttributes,
-  DefaultEdgeAttributes,
 } from './edge.js'
-import { BaseAMGraph } from './base-adjacency-map.js'
+import * as LadderEA from '$lib/layout-ir/ladder-graph/edge-attributes.js'
+
+// TODO: Separate the ladder edge attrs more cleanly from the generic alga stuff when time permits
+type EdgeAttributes = LadderEA.EdgeAttributes
+const DefaultEdgeAttributes = LadderEA.DefaultEdgeAttributes
 
 /****************************************************************************
   Internal Adjacency Map implementation / representation for Directed Graphs
