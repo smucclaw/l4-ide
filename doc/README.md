@@ -25,6 +25,9 @@ modelling** syntax offers familiar record and OOP-class syntax for
 representing the real world, backed by static type inference. (See:
 [Basic Data Types](./10-data-types.md))
 
+As an enhancement, operators for `XOR`, `AT LEAST N OF`, `EXACTLY N
+OF`, and `IMPLICATION` augment the core operator set.
+
 ## Unknown values; treating unknowns as false
 
 Sometimes the "yes" or "no" is not known, or does not apply. L4's
@@ -65,7 +68,28 @@ whether an "X" counts as a "Y" for purposes "Z". To assist in
 comprension, L4 offers a visualizer for decision logic. (See:
 [functions](./25-functions.md))
 
-Implication.
+## Level 10 Unlocked! Basic Web Wizards, SAT/SMT Verification
+
+The above feature set is sufficient to deliver the following classes of functionality:
+
+- automated generation of interactive visualizations of the decision logic
+
+- automated generation of user-facing decision applications
+  - typically, a web wizard form which engages end-user for input
+  
+- automated generation of reasoner backend
+  - typically exposed as an API endpoint
+  - given inputs and a ruleset, returns a decision verdict
+  - with an explanation trace necesary for audit trails
+
+- a chatbot UI which wraps the decision engine in an oral user interface
+  - uses the explanation trace to answer user questions
+
+- SAT/SMT optimization and counterfactual synthesis
+  - calling a back-end solver/reasoner powered by a SAT/SMT solver e.g. Z3, PySAT
+  - answers queries like "what inputs would have to change for the answer to be Yes instead of No"?
+
+- automated detection/prevention of syntactic and referential ambiguities
 
 ## Temporal Logic of Databases
 
@@ -89,9 +113,40 @@ supported by the L4 toolchain. (See: [regulative rules](./regulative-proposal.or
 Legislation and regulation can be thought of a special kind of rule
 where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
 
+## Deontics as Property Assertions About An LTS
+
+Legal writing frequently uses modals like "must" and "may", in deontic
+and non-deontic senses (typically, alethic, but also qualifying).
+Legal writers frequently disagree about the use of "shall". L4
+resolves these difficulties by introducing the notion of
+**property-level specification**, from the world of formal verification
+and temporal logic, and the notion of "bounded deontics" which makes
+explicit the idea of "or else what?" (See: deontics over regulatives)
+
+The temporal logics involved in model checking are different from the
+version-oriented temporal logics of databases introduced above.
+
 ## Example translations of regulative rules
 
 See [Regulative Examples](./regulative-examples.md)
+
+## Level 20 Unlocked! Planning and Abductive Reasoning
+
+The above feature set is sufficient to deliver the following classes of functionality:
+
+- planning problems
+  - "given my current situation and a desired outcome, how do I get there from here?"
+  - e.g. OptaPlanner / Timefold, OR-Tools, gurobi
+
+- bounded deontic property queries
+  - if I want to avoid paying a fine, must I file paper P before deadline D?
+  - must I do Obligation O1?
+    - Only if you want to avoid consequence P1.
+    - No, you can achieve avoidance of consequence P1 by performing Alternative O2.
+
+- Recognizing and Designing Unwinnable States
+  - if the meta-goal is to design a policy set which gives the appearance of satisfiability but is in practice "unwinnable", applications can be developed to assist with such constructions.
+  - dually, L4 allows the automated detection of such unwinnable policies
 
 ## Sections and Scopes
 
@@ -109,30 +164,26 @@ writing, and in L4, to establish priorities between sections. One
 section can also be "**subject to**" another. This relation is
 surprisingly complex to unpack. (See: [meta-rules](./modifiers.md))
 
-## Deontics as Property Assertions About An LTS
-
-Legal writing frequently uses modals like "must" and "may", in deontic
-and non-deontic senses (typically, alethic, but also qualifying).
-Legal writers frequently disagree about the use of "shall". L4
-resolves these difficulties by introducing the notion of
-**property-level specification**, from the world of formal verification
-and temporal logic, and the notion of "bounded deontics" which makes
-explicit the idea of "or else what?" (See: deontics over regulatives)
-
-The temporal logics involved in model checking are different from the
-version-oriented temporal logics of databases introduced above.
-
 ## Syntax for Decision Tables
 
 **Decision tables** are a syntactic form borrowed from the DMN
 standard to complement the more frequently seen **decision tree**.
-(See: decision table syntax)
 
 ## Automated Tests
 
 **Tests** are a mechanism from the world of programming which help
 legal drafters quickly gain confidence that drafting and negotiation
 activity have not inadvertently broken anything. (See: tests)
+
+## Level 30 Unlocked! Integration With Legacy Enterprise Systems
+
+The above feature set is sufficient to deliver the following classes of functionality:
+
+- backward compatibility with the majority of existing natural
+  language legal texts, including contracts, legislations, and
+  regulations
+
+- automated detection of lexical and scope ambiguities
 
 ## Roadmap for future development
 
@@ -155,7 +206,7 @@ Legal drafters may also appreciate VS Code's native "jump to definition" and "ju
 - CSL
 - Catala
 - FormaLex
-- Logical English
+- Logical English / Logical Contracts
 - SCL
 - Stipula
 - Symboleo
