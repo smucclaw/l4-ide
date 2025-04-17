@@ -1,0 +1,33 @@
+
+-- Persons have freedom of movement, which is a "Right".
+GIVEN l IS A Location
+EVERY Person p
+   IF person p is at l
+  MAY depart l
+
+-- A Police Officer has the right to modify your right to depart;
+-- this is a “Power”
+GIVEN  popo  IS A PoliceOfficer
+       p     IS A Person
+       l     IS A Location
+PARTY  popo
+  MAY  changeRights -- this is a special action -- a "Power"
+       SUCHTHAT   PARTY   p
+                  MUSTNT  depart l
+
+
+-- How do police officers come to be?
+-- They are invested with that power by the President
+-- who is themselves invested with that power by the constitution.
+-- So it's all the good old higher-order machinery at work.
+GIVEN  president  IS A HeadOfState
+       popo       IS A Person
+       p          IS A Person
+PARTY  president
+  MAY  changeRights  -- this is also a Power of the 2nd degree
+       SUCHTHAT   PARTY  popo
+                    MAY  changeRights
+                         SUCHTHAT  PARTY   p
+                                   MUSTNT  depart l
+
+

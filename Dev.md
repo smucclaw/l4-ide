@@ -22,6 +22,9 @@ cabal install exe:jl4-lsp --overwrite-policy=always
   - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+- on your system
+  - pkgconfig
+  - xz (or liblzma dev libraries)
 
 After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.6.6`; press `i` to install and then `s` to set that as the default.
 
