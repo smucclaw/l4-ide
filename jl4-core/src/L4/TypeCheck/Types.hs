@@ -2,6 +2,7 @@
 module L4.TypeCheck.Types where
 
 import Base
+import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Parser.SrcSpan (SrcRange(..))
 import L4.Syntax
@@ -336,7 +337,7 @@ lookupRawNameInEnvironment rn = do
       sectionInSection (secs : secss) =
         foldMap
           (\sec@(MkSection _ mn maka _) -> do
-             u <- getUnique <$> maybeToList mn <> foldMap (\(MkAka _ rs) -> rs) maka
+             u <- getUnique <$> toResolved mn <> toResolved maka
              guard $ any (isTopLevelBindingInSection u) $ sectionInSection secss
              pure sec
           )
@@ -360,19 +361,17 @@ lookupRawNameInEnvironment rn = do
   pure candidates
 
 isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
-isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . matchesUnq) decls
+isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map getUnique . relevantResolveds) decls
   where
-  matchesUnq = \case
-    Declare _ (MkDeclare _ _ af _) -> afUnq af
-    Decide _ (MkDecide _ _ af _) -> afUnq af
-    Assume _ (MkAssume _ _ af _) -> afUnq af
+  relevantResolveds = \case
+    Declare _ (MkDeclare _ _ af _) -> appFormHeads af
+    Decide _ (MkDecide _ _ af _) -> appFormHeads af
+    Assume _ (MkAssume _ _ af _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further
     -- toplevel bindings
-    Section _ (MkSection _ mr maka decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap (\(MkAka _ rs) -> map getUnique rs) maka <> foldMap matchesUnq decls'
-
-  afUnq = map getUnique . appFormHeads
+    Section _ (MkSection _ mr maka decls') -> toResolved mr <> toResolved maka <> foldMap relevantResolveds decls'
 
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
@@ -424,3 +423,8 @@ setAnnResolvedKindOfResolved k = \case
   Def u n -> Def u (setAnnResolvedKind k n)
   Ref r u o -> Ref (setAnnResolvedKind k r) u o
   OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
+
+type ToResolved = Optics.GPlate Resolved
+
+toResolved :: ToResolved a => a -> [Resolved]
+toResolved = Optics.toListOf Optics.gplate
