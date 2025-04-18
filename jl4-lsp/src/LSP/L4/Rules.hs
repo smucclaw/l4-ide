@@ -359,6 +359,7 @@ jl4Rules rootDirectory recorder = do
             , declTypeSigs = Map.empty
             , declareDeclarations = Map.empty
             , assumeDeclarations = Map.empty
+            , sectionStack = []
             }
         -- NOTE: we don't want to leak the inference variables from the substitution
         initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies

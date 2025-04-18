@@ -12,7 +12,6 @@ import L4.TypeCheck.With
 import Control.Applicative
 import Data.Bifunctor
 import qualified Data.Map.Strict as Map
-import qualified Data.List.NonEmpty as NE
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf)
 import Control.Exception (throw, Exception)
@@ -199,6 +198,14 @@ data CheckEnv =
     , declareDeclarations  :: !(Map SrcRange (DeclChecked (Declare Resolved)))
     , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
     , errorContext         :: !CheckErrorContext
+    , sectionStack         :: ![NonEmpty Text]
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
+
+newtype SectionNames =
+  MkSectionNames
+    { sectionNames :: [Text]
     }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
@@ -371,64 +378,16 @@ resolvedType n = do
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment rn = do
-  -- NOTE: split in a list of qualifiers and the actual name
-  let (tn, qs)  = case rn of
-        QualifiedName qs' n' -> (NormalName n', NE.toList qs')
-        n -> (n, [])
-
   env <- asks (.environment)
   ei  <- asks (.entityInfo)
-
-  let -- NOTE: from a list of qualifiers, try to build all paths through sections that may be
-      -- meant with the qualified name
-      -- The outer list describes the path, the inner list describes all possibilities at a
-      -- section level.
-      mkCandidateSections :: [Text] -> [[Section Resolved]]
-      mkCandidateSections =
-        foldl
-          (\acc q -> case Map.lookup (NormalName q) env of
-            Just us ->  mapMaybe isKnownSection us : acc
-
-            -- NOTE: this case is important because it cuts off options as soon as we run into unknown sections,
-            -- i.e. Foo.Bar.baz where Foo does exist (and contains baz) but Bar doesn't
-            Nothing -> [[]]
-          )
-          []
-
-      isKnownSection :: Unique -> Maybe (Section Resolved)
-      isKnownSection u = do
-        (_n, KnownSection s) <- Map.lookup u ei
-        pure s
-
-      -- NOTE: this is used to filter the paths through sections down to the ones that are valid.
-      -- We return the sections that are contained in existing sections
-      sectionInSection :: [[Section Resolved]] -> [Section Resolved]
-      -- NOTE: we have to treat this specially otherwise the recursive call will always
-      -- bottom out at an empty list of sections which makes the entire algorithm fail
-      sectionInSection [secs] = secs
-      sectionInSection (secs : secss) =
-        foldMap
-          (\sec@(MkSection _ mn maka _) -> do
-             u <- getUnique <$> maybeToList mn <> foldMap (\(MkAka _ rs) -> rs) maka
-             guard $ any (isTopLevelBindingInSection u) $ sectionInSection secss
-             pure sec
-          )
-          secs
-      sectionInSection [] = []
-
-      reversedSections = sectionInSection $ mkCandidateSections qs
-
+  let
       proc :: Unique -> Maybe (Unique, Name, CheckEntity)
       proc u = do
         (o, ce) <- Map.lookup u ei
-        -- NOTE: if there are no qualifiers, we don't have to even try to sort out
-        -- by qualifiers (i.e. nothing changes if no qualifiers are used)
-        guard $ null qs || any (isTopLevelBindingInSection u) reversedSections
-
         pure (u, o, ce)
 
       candidates :: [(Unique, Name, CheckEntity)]
-      candidates = mapMaybe proc (Map.findWithDefault [] tn env)
+      candidates = mapMaybe proc (Map.findWithDefault [] rn env)
 
   pure candidates
 
@@ -659,6 +618,12 @@ errorContext :: (CheckErrorContext -> CheckErrorContext) -> Check a -> Check a
 errorContext errorCtx =
   local (\env -> env { errorContext = errorCtx env.errorContext })
 
+-- | Push a new 'Section' Name onto the stack.
+-- This is used for exposing qualified names during type checking.
+pushSection :: NonEmpty Text -> Check a -> Check a
+pushSection rawSectionName =
+  local (\env -> env { sectionStack = env.sectionStack <> [rawSectionName] })
+
 -- ------------------------------------
 -- Scope Manipulation
 -- ------------------------------------
@@ -692,6 +657,7 @@ extendEnv cis env =
     , declTypeSigs = e.declTypeSigs
     , declareDeclarations = e.declareDeclarations
     , assumeDeclarations = e.assumeDeclarations
+    , sectionStack = e.sectionStack
     }
     where
       u :: Unique

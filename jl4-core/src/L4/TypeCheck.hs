@@ -89,10 +89,11 @@ import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 
 import Control.Applicative
-import Data.Either (partitionEithers)
-import Data.Tuple.Extra (firstM)
 import Control.Monad.Extra (mapMaybeM)
+import qualified Control.Monad.Extra as Extra
+import Data.Either (partitionEithers)
 import qualified Data.List as List
+import Data.Tuple.Extra (firstM)
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -112,6 +113,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
     , moduleUri
+    , sectionStack = []
     }
 
 -- | Main entry point for scope- and type-checking.
@@ -1313,6 +1315,51 @@ withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
     withDecides rdecides $ do
       act
 
+-- | @'withQualified' rs ce@ takes a list of 'Resolved' names and creates
+-- a 'CheckInfo' of @rs@ pointing to the @ce@ 'CheckInfo'.
+-- Additionally, we generate qualified names for each @rs@ based on the
+-- current stack of 'Section Name's in which the idenfier is defined.
+--
+-- For example, if we define a function like this:
+--
+-- @
+--   § `Section A` AKA a
+--   DEFINE foo ...
+-- @
+--
+-- then @foo@ is defined within the section @`Section A`@ aka @a@.
+-- This function would then generate the following names:
+--
+-- @
+-- ["foo", "`Section A`.foo", "a.foo"]
+-- @
+--
+-- All of these can be used to refer to @foo@.
+withQualified :: [Resolved] -> CheckEntity -> Check CheckInfo
+withQualified rs ce = do
+  sects <- asks (.sectionStack)
+  case nonEmpty sects of
+    Nothing -> pure $ makeKnownMany rs ce
+    Just (neSects :: NonEmpty (NonEmpty Text)) -> do
+      let
+        go :: Resolved -> Check [Resolved]
+        go r = do
+          let
+            n = getName r
+          case rawName n of
+            NormalName t -> do
+              let
+                newNames =
+                  [ MkName (getAnno n) (QualifiedName qual t)
+                  | qual <- toList $ sequence neSects
+                  ]
+              traverse def newNames
+            PreDef _ -> pure []
+            QualifiedName _ _ -> pure []
+
+      qualRs <- Extra.concatMapM go rs
+      pure $ makeKnownMany (rs <> qualRs) ce
+
 -- ----------------------------------------------------------------------------
 -- Phase 1: Scan & Check Type Declarations (DECLARE & ASSUME)
 -- ----------------------------------------------------------------------------
@@ -1401,13 +1448,14 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
     extendTyVars <- inferTypeAppForm' rappForm rtysig
     extendTyName <- inferTypeName rappForm decl
+    name <- withQualified extendTyName.names extendTyName.checkEntity
     pure $ MkDeclTypeSig
       { anno = ann
       , rtysig
       , typeSynonym = isTypeSynonym decl
       , rappForm
       , tyVars = [extendTyVars]
-      , name = extendTyName
+      , name
       }
   where
     isTypeSynonym = \case
@@ -1430,13 +1478,14 @@ scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
             Nothing
           )
 
+    name <- withQualified extendTyName.names extendTyName.checkEntity
     pure $ Just $ MkDeclTypeSig
       { anno = ann
       , rtysig
       , typeSynonym = Nothing
       , rappForm = rappForm
       , tyVars = [extendTyVars]
-      , name = extendTyName
+      , name = name
       }
 scanTyDeclAssume _ = do
   pure Nothing
@@ -1450,8 +1499,15 @@ scanFunSigModule (MkModule _ _ sects) =
   scanFunSigSection sects
 
 scanFunSigSection :: Section Name -> Check [FunTypeSig]
-scanFunSigSection (MkSection _ _ _ topDecls) =
-  concat <$> traverse scanFunSigTopLevel topDecls
+scanFunSigSection (MkSection _ name maka topDecls) =
+  concat <$> traverse (extendSectionStack . scanFunSigTopLevel) topDecls
+  where
+    extendSectionStack = case name of
+      Nothing -> id
+      Just n -> pushSection (fmap rawNameToText $ (rawName n) :| maybe [] akaToRawNames maka )
+
+    akaToRawNames :: Aka Name -> [RawName]
+    akaToRawNames (MkAka _ ns) = fmap rawName ns
 
 scanFunSigTopLevel :: TopDecl Name -> Check [FunTypeSig]
 scanFunSigTopLevel = \case
@@ -1474,12 +1530,13 @@ scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
     (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
       inferTermAppForm rappForm rtysig
     let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    name <- withQualified (appFormHeads rappForm) ce
     pure $ MkFunTypeSig
       { anno = ann'
       , rtysig
       , rappForm
       , resultType = result
-      , name = makeKnownMany (appFormHeads rappForm) ce
+      , name = name
       , arguments = extendsTySig <> extendsAppForm
       }
 
@@ -1493,12 +1550,13 @@ scanFunSigAssume (MkAssume ann tysig appForm _mt) = do
     -- check that the given result type matches the result type in the type signature
 
     let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    name <- withQualified (appFormHeads rappForm) ce
     pure $ Just $ MkFunTypeSig
       { anno = ann'
       , rtysig
       , rappForm = rappForm
       , resultType = result
-      , name = makeKnownMany (appFormHeads rappForm) ce
+      , name
       , arguments = extendsTySig <> extendsAppForm
       }
 
