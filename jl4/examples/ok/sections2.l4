@@ -1,0 +1,16 @@
+#CHECK foo
+#CHECK foobar
+#CHECK bar.foobar
+#CHECK foobaz
+#CHECK baz.foobaz
+
+-- Anonymous section
+foo MEANS 5 PLUS 7
+
+-- Section bar
+§ bar
+foobar MEANS foo - 20
+
+-- Section baz
+§ baz
+foobaz MEANS bar.foobar * 20

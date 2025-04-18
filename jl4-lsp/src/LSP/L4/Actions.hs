@@ -49,12 +49,9 @@ topDeclToCompletionItem name = \case
          (_, unrollForall -> Fun {}) -> CompletionItemKind_Function
          _ -> CompletionItemKind_Constant
       }
-  KnownType kind _args tydec ->
+  KnownType kind _args _tydec ->
     Just (defaultTopDeclCompletionItem (typeFunction kind))
-      { CompletionItem._kind = Just $ case tydec of
-          RecordDecl {} -> CompletionItemKind_Struct
-          EnumDecl {} -> CompletionItemKind_Enum
-          SynonymDecl {} -> CompletionItemKind_Reference
+      { CompletionItem._kind = Just CompletionItemKind_Class
       }
   KnownSection (MkSection _ (Just n) _ _) ->
     Just (defaultCompletionItem $  nameToText $ getOriginal n)

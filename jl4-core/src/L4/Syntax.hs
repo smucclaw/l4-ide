@@ -593,3 +593,23 @@ instance HasSrcRange Resolved where
 -- | this can be used to get rid of annotations to clean up printing
 clearAnno :: GPlate Anno a => a -> a
 clearAnno = set (gplate @Anno) emptyAnno
+
+-- ------------------------------------
+-- Syntax manipulation
+-- ------------------------------------
+
+forall' :: [n] -> Type' n -> Type' n
+forall' [] t = t
+forall' ns t = Forall emptyAnno ns t
+
+fun_ :: [Type' n] -> Type' n -> Type' n
+fun_ [] t = t
+fun_ ts t = fun (MkOptionallyNamedType emptyAnno Nothing <$> ts) t
+
+fun :: [OptionallyNamedType n] -> Type' n -> Type' n
+fun [] t = t
+fun ts t = Fun emptyAnno ts t
+
+app :: n -> [Type' n] -> Type' n
+app = TyApp emptyAnno
+

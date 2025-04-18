@@ -17,6 +17,7 @@ import Data.Bifunctor
 data With e a =
     With e (With e a)
   | Plain a
+  deriving (Show, Generic)
 
 instance Functor (With e) where
   fmap = liftM
