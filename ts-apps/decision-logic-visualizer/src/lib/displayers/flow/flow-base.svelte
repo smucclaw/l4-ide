@@ -37,7 +37,7 @@
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
-    BoolVarLirNode,
+    UBoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
@@ -170,7 +170,7 @@
     event
   ) => {
     const lirId = sfNodeToLirId(event.node as LadderSFNode)
-    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
+    const lirBoolVarNode = context.get(lirId) as UBoolVarLirNode
 
     const newValue = cycle(lirBoolVarNode.getValue(context))
     ladderGraph.submitNewBinding(context, {

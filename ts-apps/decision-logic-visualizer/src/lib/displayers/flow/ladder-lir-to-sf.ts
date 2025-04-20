@@ -13,8 +13,8 @@ import {
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
-  isBoolVarLirNode,
-  BoolVarLirNode,
+  isUBoolVarLirNode,
+  UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
@@ -102,7 +102,7 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
-    .with(P.when(isBoolVarLirNode), (n: BoolVarLirNode) => {
+    .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
       return {
         ...defaults,
         type: boolVarNodeType,
