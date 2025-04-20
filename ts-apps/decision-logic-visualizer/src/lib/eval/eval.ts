@@ -1,5 +1,5 @@
 import { IRId } from '@repo/viz-expr'
-import type { UBoolValue, Expr, EVBoolVar, Not, Or, And } from './type.js'
+import type { UBoolVal, Expr, EvUBoolVar, Not, Or, And } from './type.js'
 import { TrueVal, FalseVal, UnknownVal, isTrueVal, isFalseVal } from './type.js'
 import { Assignment } from './assignment.js'
 import { match } from 'ts-pattern'
@@ -33,8 +33,8 @@ and since 2 might align better with synchronizing with the backend in the future
 */
 
 export interface EvalResult {
-  result: UBoolValue
-  intermediate: Map<IRId, UBoolValue>
+  result: UBoolVal
+  intermediate: Map<IRId, UBoolVal>
 }
 
 /** Boolean operator evaluator */
@@ -44,18 +44,18 @@ export interface LadderEvaluator {
 
 export const Evaluator: LadderEvaluator = {
   eval(ladder: Expr, assignment: Assignment): EvalResult {
-    return eval_(ladder, assignment, new Map<IRId, UBoolValue>())
+    return eval_(ladder, assignment, new Map<IRId, UBoolVal>())
   },
 }
 
 function eval_(
   ladder: Expr,
   assignment: Assignment,
-  intermediate: Map<IRId, UBoolValue>
+  intermediate: Map<IRId, UBoolVal>
 ): EvalResult {
   return match(ladder)
-    .with({ $type: 'BoolVar' }, (expr: EVBoolVar) => {
-      const result = assignment.get(expr.name.unique) as UBoolValue
+    .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
+      const result = assignment.get(expr.name.unique) as UBoolVal
       const newIntermediate = intermediate.set(expr.id, result)
       return {
         result,
@@ -127,7 +127,7 @@ function eval_(
       AndChain, OrChain
 ****************************/
 
-function evalAndChain(bools: UBoolValue[]) {
+function evalAndChain(bools: UBoolVal[]) {
   if (bools.some(isFalseVal)) {
     return new FalseVal()
   }
@@ -137,7 +137,7 @@ function evalAndChain(bools: UBoolValue[]) {
   return new UnknownVal()
 }
 
-function evalOrChain(bools: UBoolValue[]) {
+function evalOrChain(bools: UBoolVal[]) {
   if (bools.some(isTrueVal)) {
     return new TrueVal()
   }

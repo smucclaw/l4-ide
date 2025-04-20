@@ -60,9 +60,9 @@ See https://effect.website/docs/schema/advanced-usage/#recursive-schemas
 *************************************************************/
 
 export const Name = Schema.Struct({
-  /** Uniques for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+  /** Uniques for checking whether, e.g., two UBoolVar IRNodes actually refer to the same proposition.
    *
-   * BoolVar IRNodes that refer to the same proposition can nevertheless differ
+   * UBoolVar IRNodes that refer to the same proposition can nevertheless differ
    * in virtue of eg having different nlg annotations.  */
   unique: Schema.Number,
   label: Schema.String,
@@ -119,7 +119,7 @@ export interface FunDecl extends IRNode {
 }
 
 /** The Ladder graph visualizer focuses on boolean formulas. */
-export type IRExpr = And | Or | BoolVar | Not
+export type IRExpr = And | Or | UBoolVar | Not
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -153,15 +153,12 @@ export interface Not extends IRNode {
 }
 
 /** For the original Viz / IRExpr */
-export type BoolValue = 'False' | 'True' | 'Unknown'
+export type UBoolValue = Schema.Schema.Type<typeof UBoolValue>
+export type BoolValue = Schema.Schema.Type<typeof BoolValue>
 
-export interface BoolVar extends IRNode {
-  readonly $type: 'BoolVar'
-  readonly name: Name
-  readonly value: BoolValue
-}
+export type UBoolVar = Schema.Schema.Type<typeof UBoolVar>
 
-export type Value = BoolValue
+export type Value = UBoolValue
 
 /***********************************
   The corresponding Effect Schemas
@@ -171,7 +168,7 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<And> => And),
   Schema.suspend((): Schema.Schema<Or> => Or),
   Schema.suspend((): Schema.Schema<Not> => Not),
-  Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
+  Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
 export const FunDecl = Schema.Struct({
@@ -202,16 +199,16 @@ export const Not = Schema.Struct({
 
 export const BoolValue = Schema.Union(
   Schema.Literal('False'),
-  Schema.Literal('True'),
-  Schema.Literal('Unknown')
+  Schema.Literal('True')
 )
+export const UBoolValue = Schema.Union(BoolValue, Schema.Literal('Unknown'))
 
-export const BoolVar = Schema.Struct({
-  $type: Schema.tag('BoolVar'),
-  value: BoolValue,
+export const UBoolVar = Schema.Struct({
+  $type: Schema.tag('UBoolVar'),
+  value: UBoolValue,
   id: IRId,
   name: Name,
-}).annotations({ identifier: 'BoolVar' })
+}).annotations({ identifier: 'UBoolVar' })
 
 /***********************************
   Wrapper / Protocol interfaces
@@ -242,7 +239,7 @@ export function makeVizInfoDecoder() {
 
 /** Example of an unknown input */
 // const egAtomicPropWalks = {
-//   $type: 'BoolVar',
+//   $type: 'UBoolVar',
 //   value: 'True',
 //   id: { id: 1 },
 //   name: { label: 'walks', unique: 2 }

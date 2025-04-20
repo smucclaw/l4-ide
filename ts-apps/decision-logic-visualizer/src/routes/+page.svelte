@@ -30,13 +30,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'True' as const,
               id: { id: 1 },
               name: { label: 'eats', unique: 2 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'Unknown' as const,
               id: { id: 2 },
               name: {
@@ -48,7 +48,7 @@
           id: { id: 3 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 4 },
           name: { label: 'swims', unique: 4 },
@@ -84,13 +84,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'False' as const,
               id: { id: 1 },
               name: { label: 'flies', unique: 6 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'True' as const,
               id: { id: 2 },
               name: { label: 'runs', unique: 7 },
@@ -99,13 +99,13 @@
               $type: 'And' as const,
               args: [
                 {
-                  $type: 'BoolVar' as const,
+                  $type: 'UBoolVar' as const,
                   value: 'Unknown' as const,
                   id: { id: 3 },
                   name: { label: 'swims', unique: 8 },
                 },
                 {
-                  $type: 'BoolVar' as const,
+                  $type: 'UBoolVar' as const,
                   value: 'True' as const,
                   id: { id: 4 },
                   name: { label: 'dives', unique: 9 },
@@ -117,25 +117,25 @@
           id: { id: 6 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 7 },
           name: { label: 'jumps', unique: 10 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 8 },
           name: { label: 'jogs', unique: 11 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 9 },
           name: { label: 'reads', unique: 12 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 10 },
           name: { label: 'writes', unique: 13 },
@@ -144,13 +144,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'Unknown' as const,
               id: { id: 11 },
               name: { label: 'sketches', unique: 14 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'False' as const,
               id: { id: 12 },
               name: { label: 'paints', unique: 15 },
@@ -159,7 +159,7 @@
           id: { id: 13 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 14 },
           name: { label: 'codes', unique: 16 },
