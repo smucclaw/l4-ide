@@ -90,12 +90,12 @@ export const isSFBundlingNode = (
 
 /** This is where we declare all the custom nodes for Svelte Flow */
 export const sfNodeTypes: SF.NodeTypes = {
-  uBoolVarNode: UBoolVarSFNode,
-  notStartNode: NotStartSFNode,
-  notEndNode: NotEndSFNode,
-  sourceNoAnnoNode: SourceSFNode,
-  sourceWithOrAnnoNode: SourceSFNode,
-  sinkNode: SinkSFNode,
+  [uBoolVarNodeType]: UBoolVarSFNode,
+  [notStartNodeType]: NotStartSFNode,
+  [notEndNodeType]: NotEndSFNode,
+  [sourceNoAnnoNodeType]: SourceSFNode,
+  [sourceWithOrAnnoNodeType]: SourceSFNode,
+  [sinkNodeType]: SinkSFNode,
 }
 
 /************************************************
