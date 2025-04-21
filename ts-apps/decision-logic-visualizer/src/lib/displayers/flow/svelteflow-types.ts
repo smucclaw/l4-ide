@@ -5,7 +5,7 @@ import type { UBoolVal } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
-import BoolVarSFNode from './sf-custom-nodes/bool-var.svelte'
+import UBoolVarSFNode from './sf-custom-nodes/ubool-var.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
 import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
@@ -55,7 +55,7 @@ export interface Dimensions {
     Custom node types and type guards
 *************************************************/
 
-export const boolVarNodeType = 'boolVarNode' as const
+export const uBoolVarNodeType = 'uBoolVarNode' as const
 export const notStartNodeType = 'notStartNode' as const
 export const notEndNodeType = 'notEndNode' as const
 export const sourceNoAnnoNodeType = 'sourceNoAnnoNode' as const
@@ -69,7 +69,7 @@ function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
 
 export const isBoolVarSFNode = (
   node: SF.Node
-): node is SFNode<typeof boolVarNodeType> => isSFNode(node, boolVarNodeType)
+): node is SFNode<typeof uBoolVarNodeType> => isSFNode(node, uBoolVarNodeType)
 
 export type SFSourceNoAnnoNode = SFNode<typeof sourceNoAnnoNodeType>
 export type SFSinkNode = SFNode<typeof sinkNodeType>
@@ -90,7 +90,7 @@ export const isSFBundlingNode = (
 
 /** This is where we declare all the custom nodes for Svelte Flow */
 export const sfNodeTypes: SF.NodeTypes = {
-  boolVarNode: BoolVarSFNode,
+  uBoolVarNode: UBoolVarSFNode,
   notStartNode: NotStartSFNode,
   notEndNode: NotEndSFNode,
   sourceNoAnnoNode: SourceSFNode,
@@ -104,8 +104,8 @@ export const sfNodeTypes: SF.NodeTypes = {
 
 // Displayer props
 
-export interface BoolVarDisplayerProps {
-  data: BoolVarDisplayerData
+export interface UBoolVarDisplayerProps {
+  data: UBoolVarDisplayerData
 }
 
 export interface BundlingNodeDisplayerProps {
@@ -120,7 +120,7 @@ export interface LadderSFNodeData {
   classes: LadderNodeCSSClass[]
 }
 
-export interface BoolVarDisplayerData extends LadderSFNodeData {
+export interface UBoolVarDisplayerData extends LadderSFNodeData {
   name: Name
   value: UBoolVal
 }

@@ -2,11 +2,11 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
-  import type { BoolVarDisplayerProps } from '../svelteflow-types.js'
+  import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
   import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   import { Handle } from '@xyflow/svelte'
 
-  let { data }: BoolVarDisplayerProps = $props()
+  let { data }: UBoolVarDisplayerProps = $props()
 </script>
 
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` -->

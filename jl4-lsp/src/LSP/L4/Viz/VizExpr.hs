@@ -19,7 +19,7 @@ newtype RenderAsLadderInfo = MkRenderAsLadderInfo
 type Unique = Int
 -- | TODO: Consider renaming this to something other than `Name`
 data Name = MkName
-  { unique :: Unique   -- ^ for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+  { unique :: Unique   -- ^ for checking whether, e.g., two UBoolVar IRNodes actually refer to the same proposition.
   , label  :: Text     -- ^ Label to be displayed in the visualizer.
   }
   deriving (Show, Eq, Generic)

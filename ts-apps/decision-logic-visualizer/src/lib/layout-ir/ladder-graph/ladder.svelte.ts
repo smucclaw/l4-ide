@@ -708,7 +708,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   }
 
   toString(): string {
-    return 'BOOL_VAR_LIR_NODE'
+    return 'UBOOL_VAR_LIR_NODE'
   }
 }
 

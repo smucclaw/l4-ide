@@ -22,7 +22,7 @@ import {
 import {
   type LadderSFGraph,
   type LadderSFNode,
-  boolVarNodeType,
+  uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
   sourceNoAnnoNodeType,
@@ -105,7 +105,7 @@ export function ladderLirNodeToSfNode(
     .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
       return {
         ...defaults,
-        type: boolVarNodeType,
+        type: uBoolVarNodeType,
         data: { ...defaultData, ...n.getData(context) },
       }
     })
