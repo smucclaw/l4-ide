@@ -119,7 +119,7 @@ export interface FunDecl extends IRNode {
 }
 
 /** The Ladder graph visualizer focuses on boolean formulas. */
-export type IRExpr = And | Or | UBoolVar | Not
+export type IRExpr = And | Or | UBoolVar | Not | App
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -152,6 +152,12 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
+export interface App extends IRNode {
+  readonly $type: 'App'
+  readonly fnName: Name
+  readonly args: readonly IRExpr[]
+}
+
 /** For the original Viz / IRExpr */
 export type UBoolValue = Schema.Schema.Type<typeof UBoolValue>
 export type BoolValue = Schema.Schema.Type<typeof BoolValue>
@@ -168,8 +174,31 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<And> => And),
   Schema.suspend((): Schema.Schema<Or> => Or),
   Schema.suspend((): Schema.Schema<Not> => Not),
-  Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar)
+  Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar),
+  Schema.suspend((): Schema.Schema<App> => App)
 ).annotations({ identifier: 'IRExpr' })
+
+export const App = Schema.Struct({
+  $type: Schema.tag('App'),
+  id: IRId,
+  fnName: Name,
+  args: Schema.Array(IRExpr),
+}).annotations({ identifier: 'App' })
+
+// // TODO: Need to look more carefully at L4's NamedExpr
+// export const NamedExpr = Schema.Struct({
+//   $type: Schema.tag('NamedExpr'),
+//   id: IRId,
+//   name: Name,
+//   expr: IRExpr,
+// }).annotations({ identifier: 'NamedExpr' })
+
+// export const AppNamed = Schema.Struct({
+//   $type: Schema.tag('AppNamed'),
+//   id: IRId,
+//   fnName: Name,
+//   args: Schema.Array(NamedExpr),
+// }).annotations({ identifier: 'AppNamed' })
 
 export const FunDecl = Schema.Struct({
   $type: Schema.tag('FunDecl'),
