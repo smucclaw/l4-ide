@@ -1,10 +1,6 @@
 import { Schema } from 'effect'
 import { Integer } from './effect-utils.js'
 
-/******************************************
-            VersionId
-*******************************************/
-
 /** This is just the VersionedTextDocumentIdentifier as an Effect schema.
  * https://github.com/microsoft/vscode-languageserver-node/blob/df05883f34b39255d40d68cef55caf2e93cff35f/types/src/main.ts#L1797
  */
