@@ -36,7 +36,7 @@ data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | BoolVar ID Name BoolValue
+  | UBoolVar ID Name UBoolValue
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID
@@ -45,7 +45,7 @@ newtype ID = MkID
   deriving newtype (Eq, Ord)
   deriving stock (Show, Generic)
 
-data BoolValue = FalseV | TrueV | UnknownV
+data UBoolValue = FalseV | TrueV | UnknownV
   deriving (Show, Eq, Generic)
 
 --------------------------------------------------------------------------------
@@ -65,7 +65,7 @@ instance HasCodec ID where
         <$> requiredField "id" "Unique, stable identifier" .= view #id
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
-instance HasCodec BoolValue where
+instance HasCodec UBoolValue where
   codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
 
 -- Related examples
@@ -88,7 +88,7 @@ instance HasCodec IRExpr where
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
-        BoolVar uid name value -> ("BoolVar", mapToEncoder (uid, name, value) boolVarCodec)
+        UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
       dec =
@@ -96,9 +96,9 @@ instance HasCodec IRExpr where
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
-            ("BoolVar", ("BoolVar", mapToDecoder mkBoolVar boolVarCodec))
+            ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec))
           ]
-      mkBoolVar (uid, name, value) = BoolVar uid name value
+      mkUBoolVar (uid, name, value) = UBoolVar uid name value
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
@@ -111,7 +111,7 @@ instance HasCodec IRExpr where
           <$> requiredField' "id" .= fst
           <*> requiredField' "negand" .= snd
 
-      boolVarCodec =
+      uBoolVarCodec =
         (,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
@@ -131,8 +131,8 @@ instance HasCodec RenderAsLadderInfo where
 deriving via (Autodocodec ID) instance ToJSON ID
 deriving via (Autodocodec ID) instance FromJSON ID
 
-deriving via (Autodocodec BoolValue) instance ToJSON BoolValue
-deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
+deriving via (Autodocodec UBoolValue) instance ToJSON UBoolValue
+deriving via (Autodocodec UBoolValue) instance FromJSON UBoolValue
 
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
