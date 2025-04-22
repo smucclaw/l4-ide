@@ -13,8 +13,8 @@ import {
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
-  isBoolVarLirNode,
-  BoolVarLirNode,
+  isUBoolVarLirNode,
+  UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
@@ -22,7 +22,7 @@ import {
 import {
   type LadderSFGraph,
   type LadderSFNode,
-  boolVarNodeType,
+  uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
   sourceNoAnnoNodeType,
@@ -102,10 +102,10 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
-    .with(P.when(isBoolVarLirNode), (n: BoolVarLirNode) => {
+    .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
       return {
         ...defaults,
-        type: boolVarNodeType,
+        type: uBoolVarNodeType,
         data: { ...defaultData, ...n.getData(context) },
       }
     })

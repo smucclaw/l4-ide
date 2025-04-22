@@ -5,7 +5,7 @@ Do not use $lib for the layout-ir imports
 import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
 import {
   FunDeclLirNode,
-  BoolVarLirNode,
+  UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SourceNoAnnoLirNode,
@@ -115,9 +115,9 @@ function transform(
   */
 
   return match(expr)
-    .with({ $type: 'BoolVar' }, (originalVar) => {
-      const boolvar = new BoolVarLirNode(nodeInfo, originalVar)
-      const graph = vertex(boolvar.getId())
+    .with({ $type: 'UBoolVar' }, (originalVar) => {
+      const uboolvar = new UBoolVarLirNode(nodeInfo, originalVar)
+      const graph = vertex(uboolvar.getId())
       const newEnv = new Map(env).set(originalVar.id, graph)
       return { graph, vizExprToLirGraph: newEnv }
     })
