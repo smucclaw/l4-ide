@@ -108,7 +108,7 @@ export const IRNode = Schema.Struct({
 })
 
 /*******************************
-  Decision Logic (ish) IR node
+     IR node for Ladder viz
 ********************************/
 
 export interface FunDecl extends IRNode {
@@ -118,9 +118,7 @@ export interface FunDecl extends IRNode {
   readonly body: IRExpr
 }
 
-/** Think of this as the Expr for the decision logic.
- * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
- */
+/** The Ladder graph visualizer focuses on boolean formulas. */
 export type IRExpr = And | Or | BoolVar | Not
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
@@ -219,21 +217,19 @@ export const BoolVar = Schema.Struct({
   Wrapper / Protocol interfaces
 ************************************/
 
-/** The payload for VisualizeDecisionLogicNotification */
-export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
-  typeof VisualizeDecisionLogicIRInfo
->
+/** The payload for RenderAsLadder */
+export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
-export const VisualizeDecisionLogicIRInfo = Schema.Struct({
+export const RenderAsLadderInfo = Schema.Struct({
   funDecl: FunDecl,
-}).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
+}).annotations({ identifier: 'RenderAsLadderInfo' })
 
 /*************************
     Decode
 **************************/
 
 export function makeVizInfoDecoder() {
-  return Schema.decodeUnknownEither(VisualizeDecisionLogicIRInfo)
+  return Schema.decodeUnknownEither(RenderAsLadderInfo)
 }
 
 /***********************************
@@ -260,15 +256,15 @@ export function makeVizInfoDecoder() {
 **************************/
 
 /** See https://effect.website/docs/schema/pretty/ */
-export function getDecisionLogicIRPrettyPrinter() {
-  return Pretty.make(VisualizeDecisionLogicIRInfo)
+export function getLadderIRPrettyPrinter() {
+  return Pretty.make(RenderAsLadderInfo)
 }
 
-/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
-export function exportDecisionLogicIRInfoToJSONSchema() {
-  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
+/** Get a JSON Schema version of the RenderAsLadderInfo */
+export function exportRenderAsLadderInfoToJSONSchema() {
+  return JSON.stringify(JSONSchema.make(RenderAsLadderInfo))
 }
-// console.log(exportDecisionLogicIRInfoToJSONSchema())
+// console.log(exportRenderAsLadderInfoToJSONSchema())
 
 /*************************
     JSON Schema version
