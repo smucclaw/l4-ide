@@ -37,6 +37,7 @@ data IRExpr
   | Or ID [IRExpr]
   | Not ID IRExpr
   | UBoolVar ID Name UBoolValue
+  | App ID Name [IRExpr]
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID
@@ -89,16 +90,20 @@ instance HasCodec IRExpr where
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
-
+        App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
+        
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
-            ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec))
+            ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec)),
+            ("App", ("App", mapToDecoder mkAppExpr appExprCodec))
           ]
+          
       mkUBoolVar (uid, name, value) = UBoolVar uid name value
+      mkAppExpr (uid, name, args) = App uid name args
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
@@ -116,6 +121,12 @@ instance HasCodec IRExpr where
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
+
+      appExprCodec =
+        (,,)
+          <$> requiredField' "id" .= view _1
+          <*> requiredField' "fnName" .= view _2
+          <*> requiredField' "args" .= view _3
 
 instance HasCodec RenderAsLadderInfo where
   codec =

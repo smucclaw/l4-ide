@@ -138,16 +138,17 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
 
   case mdecide of
     Nothing -> pure (InR Null)
-    Just (decide, simp, substitution) -> case Ladder.doVisualize decide simp of
-      Right vizProgramInfo -> do
-        traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
-        pure $ InL $ Aeson.toJSON vizProgramInfo
-      Left vizError ->
-        defaultResponseError $ Text.unlines
-          [ "Could not visualize:"
-          , getUri uri
-          , Ladder.prettyPrintVizError vizError
-          ]
+    Just (decide, simp, substitution) ->
+      case Ladder.doVisualize decide (Ladder.MkVizEnv (toNormalizedUri uri) substitution simp) of
+        Right vizProgramInfo -> do
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
+          pure $ InL $ Aeson.toJSON vizProgramInfo
+        Left vizError ->
+          defaultResponseError $ Text.unlines
+            [ "Could not visualize:"
+            , getUri uri
+            , Ladder.prettyPrintVizError vizError
+            ]
   where
 
     -- TODO: in the future we want to be a bit more clever wrt. which

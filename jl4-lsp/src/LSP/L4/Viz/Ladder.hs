@@ -3,13 +3,12 @@ module LSP.L4.Viz.Ladder where
 
 import Control.DeepSeq
 import Control.Monad.Except
-import Control.Monad.Identity (Identity (Identity))
-import Control.Monad.State (MonadState, StateT (StateT))
-import Data.Text (Text)
-import qualified Data.Text as Text
-import GHC.Generics (Generic)
+import Base
+import qualified Base.Text as Text
 import Optics.State.Operators ((<%=))
 
+import qualified L4.TypeCheck as TC
+-- import qualified L4.TypeCheck.Environment as TC (boolean)
 import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
@@ -19,26 +18,45 @@ import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
 import qualified L4.Transform as Transform (simplify)
 
+-- import Debug.Trace
+
 ------------------------------------------------------
 -- Monad
 ------------------------------------------------------
 
--- TODO: Would be better not to stop at the first error
 newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
   deriving
     (Functor, Applicative, Monad, MonadState VizState, MonadError VizError)
-    via ExceptT VizError (StateT VizState Identity)
+    via ExceptT VizError (State VizState)
 
-newtype VizState = MkVizState {maxId :: ID}
-  deriving stock (Show, Generic)
-  deriving newtype (Eq, Ord)
+data VizEnv = MkVizEnv
+  { moduleUri :: !NormalizedUri
+  , substitution :: TC.Substitution
+  -- | Whether to simplify the expression
+  , shouldSimplify :: Bool
+  }
+  deriving stock (Show, Generic, Eq)
+
+data VizState =
+  MkVizState
+    { env :: !VizEnv
+    , maxId :: !ID
+    }
+  deriving stock (Show, Generic, Eq)
+
+getVizEnv :: Viz VizEnv
+getVizEnv = use #env
 
 getFresh :: Viz ID
 getFresh = do
-    #maxId <%= \(MkID n) -> MkID (n + 1)
+  #maxId <%= \(MkID n) -> MkID (n + 1)
 
-initialVizState :: VizState
-initialVizState = MkVizState { maxId = MkID 0 }
+mkInitialVizState :: VizEnv -> VizState
+mkInitialVizState env =
+  MkVizState
+    { env = env
+    , maxId = MkID 0
+    }
 
 ------------------------------------------------------
 -- VizError
@@ -65,13 +83,13 @@ prettyPrintVizError = \case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> Bool -> Either VizError RenderAsLadderInfo
-doVisualize decide simplify =
-  case  (vizProgram simplify decide).getVizE initialVizState of
+doVisualize :: Decide Resolved -> VizEnv -> Either VizError RenderAsLadderInfo
+doVisualize decide env =
+  case  (vizProgram decide).getVizE (mkInitialVizState env) of
     (result, _) -> result
 
-vizProgram :: Bool -> Decide Resolved -> Viz RenderAsLadderInfo
-vizProgram simplify = fmap MkRenderAsLadderInfo . translateDecide simplify
+vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
+vizProgram = fmap MkRenderAsLadderInfo . translateDecide
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -92,11 +110,13 @@ vizProgram simplify = fmap MkRenderAsLadderInfo . translateDecide simplify
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Bool -> Decide Resolved -> Viz V.FunDecl
-translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
+translateDecide :: Decide Resolved -> Viz V.FunDecl
+translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
+  -- traceShow ("decide AST" :: Text, clearAnno dec) $
   do
-    uid <- getFresh
-    vizBody <- translateExpr simplify body
+    vizEnv <- getVizEnv
+    uid    <- getFresh
+    vizBody <- translateExpr vizEnv.shouldSimplify body
     pure $ V.MkFunDecl
       uid
       -- didn't want a backtick'd name in the header
@@ -133,6 +153,7 @@ translateExpr False = go
           V.Or uid <$> traverse go (scanOr e)
         Where _ e' _ds -> go e' -- TODO: lossy
 
+        -- TODO: Should handle BoolLits differently too
         -- 'var'
         App _ resolved [] ->
           leafFromVizName (mkVizNameWith prettyLayout resolved)
