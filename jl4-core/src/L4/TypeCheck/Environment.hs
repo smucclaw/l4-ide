@@ -188,7 +188,7 @@ emptyInfo =
 
 contractInfo :: CheckEntity
 contractInfo =
-  KnownType 2 [] (EnumDecl emptyAnno [])
+  KnownType 2 [] Nothing
 
 initialEnvironment :: Environment
 initialEnvironment =

@@ -382,6 +382,7 @@ forwardExpr env (Where _ann e ds) = do
   env' <- evalRecLocalDecls env ds
   let combinedEnv = Map.union env' env
   forwardExpr combinedEnv e
+forwardExpr env (Regulative {}) = do undefined -- TODO:
 
 backward :: WHNF -> Eval WHNF
 backward val = withPoppedFrame $ \ case
@@ -832,6 +833,7 @@ nfAux  d (ValConstructor n rs)       = do
   pure (MkNF (ValConstructor n vs))
 nfAux _d (ValAssumed n)              = pure (MkNF (ValAssumed n))
 nfAux _d (ValEnvironment env)        = pure (MkNF (ValEnvironment env))
+nfAux _d (ValRegulative)             = pure (MkNF ValRegulative)
 
 -- | Main entry point.
 --

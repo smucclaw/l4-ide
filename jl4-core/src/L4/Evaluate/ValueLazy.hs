@@ -47,6 +47,7 @@ data Value a =
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
   | ValEnvironment Environment
+  | ValRegulative -- TODO
   deriving stock Show
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -57,6 +58,7 @@ instance NFData a => NFData (Value a) where
   rnf (ValNumber i)               = rnf i
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
+  rnf ValRegulative               = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
   rnf (ValUnappliedConstructor r) = rnf r

@@ -347,7 +347,8 @@ instance LayoutPrinter Eager.Value where
     Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Eager.ValList vs                ->
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
-    Eager.ValClosure _ _ _          -> "<function>"
+    Eager.ValClosure{}              -> "<function>"
+    Eager.ValRegulative             -> "<contract>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
