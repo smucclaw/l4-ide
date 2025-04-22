@@ -10,14 +10,14 @@ import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
 
-newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
-  { program :: FunDecl -- TODO: change the fieldname once this becomes more stable
+newtype RenderAsLadderInfo = MkRenderAsLadderInfo
+  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
 
 type Unique = Int
--- | Analogous to, but much simpler than, L4.Syntax's Name
+-- | TODO: Consider renaming this to something other than `Name`
 data Name = MkName
   { unique :: Unique   -- ^ for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
   , label  :: Text     -- ^ Label to be displayed in the visualizer.
@@ -117,12 +117,12 @@ instance HasCodec IRExpr where
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
 
-instance HasCodec VisualizeDecisionLogicIRInfo where
+instance HasCodec RenderAsLadderInfo where
   codec =
-    named "VisualizeDecisionLogicIRInfo" $
-      object "VisualizeDecisionLogicIRInfo" $
-        MkVisualizeDecisionLogicIRInfo
-          <$> requiredField' "program" .= view #program
+    named "RenderAsLadderInfo" $
+      object "RenderAsLadderInfo" $
+        MkRenderAsLadderInfo
+          <$> requiredField' "funDecl" .= view #funDecl
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec
@@ -137,8 +137,8 @@ deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance ToJSON RenderAsLadderInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance FromJSON RenderAsLadderInfo
 
 {-
 Am trying out autodocodec because I wanted to see if
