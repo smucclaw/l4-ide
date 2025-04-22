@@ -12,7 +12,7 @@
     LirRegistry,
     type LirRootType,
     LadderFlow,
-    type DeclLirNode,
+    type FunDeclLirNode,
     VizDeclLirSource,
   } from '@repo/decision-logic-visualizer'
   import type { WebviewApi } from 'vscode-webview'
@@ -27,7 +27,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let declLirNode: DeclLirNode | undefined = $state(undefined)
+  let declLirNode: FunDeclLirNode | undefined = $state(undefined)
 
   /**************************
         VSCode

@@ -11,7 +11,7 @@ import GHC.Generics (Generic)
 import Optics
 
 newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
-  { program :: IRDecl -- TODO: change the fieldname once this becomes more stable
+  { program :: FunDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
@@ -23,8 +23,6 @@ data Name = MkName
   , label  :: Text     -- ^ Label to be displayed in the visualizer.
   }
   deriving (Show, Eq, Generic)
-
-type IRDecl = FunDecl
 
 -- TODO: Will worry about adding param type info later
 data FunDecl = MkFunDecl
@@ -74,21 +72,13 @@ instance HasCodec BoolValue where
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L740
 
-instance HasCodec IRDecl where
-  codec = object "IRDecl" $ discriminatedUnionCodec "$type" enc dec
-    where
-      enc (MkFunDecl uid name params body) = ("FunDecl", mapToEncoder (uid, name, params, body) funDeclCodec)
-      dec = HashMap.fromList
-        [ ("FunDecl", ("FunDecl", mapToDecoder mkFunDecl funDeclCodec))
-        ]
-      funDeclCodec =
-        (,,,)
-          <$> requiredField' "id" .= view _1
-          <*> requiredField' "name" .= view _2
-          <*> requiredField' "params" .= view _3
-          <*> requiredField' "body" .= view _4
-
-      mkFunDecl (uid, name, params, body) = MkFunDecl uid name params body
+instance HasCodec FunDecl where
+  codec = object "FunDecl" $
+    typeField "FunDecl" MkFunDecl
+      <*> requiredField' "id"     .= view #id
+      <*> requiredField' "name"   .= view #fnName
+      <*> requiredField' "params" .= view #params
+      <*> requiredField' "body"   .= view #body
 
 instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
@@ -160,3 +150,13 @@ I haven't actually tried setting up such a automated test though.
 
 If that doesn't end up panning out, I will switch back to aeson.
 -}
+
+-------------------------------------------------------------
+-- Utils
+-------------------------------------------------------------
+{- | Adapted from
+https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L827
+-}
+typeField :: Text -> a -> ObjectCodec b a
+typeField typeName a =
+  a <$ requiredFieldWith' "$type" (literalTextCodec typeName) .= const typeName
