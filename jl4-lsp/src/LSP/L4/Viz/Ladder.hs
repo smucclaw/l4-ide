@@ -1,4 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
+
 module LSP.L4.Viz.Ladder where
 
 import Control.DeepSeq
@@ -8,7 +9,7 @@ import qualified Base.Text as Text
 import Optics.State.Operators ((<%=))
 
 import qualified L4.TypeCheck as TC
--- import qualified L4.TypeCheck.Environment as TC (boolean)
+import L4.Annotation
 import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
@@ -164,9 +165,20 @@ translateExpr False = go
         -- 'var'
         App _ resolved [] ->
           leafFromVizName (mkVizNameWith prettyLayout resolved)
-        -- TODO: Will be replacing this temporary version with a variant for App on the frontend
-        App _ (getOriginal -> MkName _ fnName) args ->
-          leaf "" $ Text.unwords (rawNameToText fnName : (prettyLayout <$> args))
+
+        fnApp@(App _ fnResolved@(getOriginal -> fnName) args) -> do
+          fnOfAppisFnFromBooleanToBooleans <- and <$> traverse exprHasBooleanType (fnApp : args)
+          -- for now, only translating App of boolean functions to V.App
+          if fnOfAppisFnFromBooleanToBooleans
+            then
+              -- traceShow ("bf app: \n" :: Text, clearAnno e) $
+              V.App
+                <$> getFresh
+                <*> pure (mkVizNameWith nameToText fnResolved)
+                <*> traverse go args
+            else
+              -- traceShow ("app not bool: \n" :: Text, clearAnno appType, "\n\nexpr:\n" :: Text, clearAnno e) $
+              leaf "" $ Text.unwords (nameToText fnName : (prettyLayout <$> args))
 
         _ -> do
           leaf "" (prettyLayout e)
@@ -213,3 +225,21 @@ mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
 mkVizNameWith printer (getUniqueName -> (uniq, name)) =
   case uniq of
     MkUnique {unique} -> V.MkName unique (printer name)
+
+------------------------------------------------------
+-- Other helpers
+------------------------------------------------------
+
+exprHasBooleanType :: Expr Resolved -> Viz Bool
+exprHasBooleanType (getAnno -> Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}}) =
+  isBooleanType ty
+exprHasBooleanType _ = pure False
+
+-- | Returns True iff the Type Resolved is that of a L4 BOOLEAN
+isBooleanType :: Type' Resolved -> Viz Bool
+isBooleanType ty = do
+  type' <- getExpandedType ty
+  pure $ case type' of
+    TyApp _ (Ref _ uniq _) [] ->
+      uniq == TC.booleanUnique
+    _ -> False
