@@ -19,8 +19,6 @@ import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
 import qualified L4.Transform as Transform (simplify)
 
--- import Debug.Trace
-
 ------------------------------------------------------
 -- Monad
 ------------------------------------------------------
@@ -120,7 +118,6 @@ vizProgram = fmap MkRenderAsLadderInfo . translateDecide
 -- Simple implementation: Translate Decide iff <= 1 Given
 translateDecide :: Decide Resolved -> Viz V.FunDecl
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
-  -- traceShow ("decide AST" :: Text, clearAnno dec) $
   do
     vizEnv <- getVizEnv
     uid    <- getFresh
@@ -171,13 +168,11 @@ translateExpr False = go
           -- for now, only translating App of boolean functions to V.App
           if fnOfAppisFnFromBooleanToBooleans
             then
-              -- traceShow ("bf app: \n" :: Text, clearAnno e) $
               V.App
                 <$> getFresh
                 <*> pure (mkVizNameWith nameToText fnResolved)
                 <*> traverse go args
             else
-              -- traceShow ("app not bool: \n" :: Text, clearAnno appType, "\n\nexpr:\n" :: Text, clearAnno e) $
               leaf "" $ Text.unwords (nameToText fnName : (prettyLayout <$> args))
 
         _ -> do
