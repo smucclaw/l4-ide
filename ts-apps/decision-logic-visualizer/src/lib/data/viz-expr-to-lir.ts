@@ -202,7 +202,9 @@ function transform(
     })
     .with({ $type: 'App' }, (app) => {
       console.log('app: \n', app)
-      throw new Error('viz-expr-to-lir: App translation not yet implemented')
+      throw new Error(
+        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      )
     })
     .exhaustive()
 }
