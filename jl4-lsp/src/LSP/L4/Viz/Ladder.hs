@@ -44,19 +44,26 @@ data VizState =
     }
   deriving stock (Show, Generic, Eq)
 
-getVizEnv :: Viz VizEnv
-getVizEnv = use #env
-
-getFresh :: Viz ID
-getFresh = do
-  #maxId <%= \(MkID n) -> MkID (n + 1)
-
 mkInitialVizState :: VizEnv -> VizState
 mkInitialVizState env =
   MkVizState
     { env = env
     , maxId = MkID 0
     }
+
+-- Monad ops
+
+getVizEnv :: Viz VizEnv
+getVizEnv = use #env
+
+getExpandedType :: Type' Resolved -> Viz (Type' Resolved)
+getExpandedType ty = do
+  env <- getVizEnv
+  pure $ TC.applyFinalSubstitution env.substitution env.moduleUri ty
+
+getFresh :: Viz ID
+getFresh = do
+  #maxId <%= \(MkID n) -> MkID (n + 1)
 
 ------------------------------------------------------
 -- VizError
