@@ -1,10 +1,28 @@
 -- Charities (Jersey) Law 2014
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014
+
+IMPORT prelude -- provides "all"
+
+-- would likely be interested in Parts 3 and 4. Specifically, sections 5, 6, 7, 8, 11, 12, 13, 15, 16, 17
 
 -- Basic types
-ASSUME Entity IS A TYPE
-ASSUME Purpose IS A TYPE
+DECLARE Purpose IS A STRING
+
+DECLARE Entity
+    HAS name IS A STRING
+        purposes IS A LIST OF Purpose
+
 ASSUME Constitution IS A TYPE
-ASSUME Person IS A TYPE
+-- ASSUME Person IS A TYPE
+-- upgraded to something with more deets
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+
+`Billy` MEANS Person WITH name IS "William", address IS "home"
+
+
+
 ASSUME Property IS A TYPE
 ASSUME Place IS A TYPE
 ASSUME Name IS A TYPE
@@ -14,7 +32,19 @@ ASSUME Statement IS A TYPE
 ASSUME Return IS A TYPE
 ASSUME Section IS A TYPE
 ASSUME Information IS A TYPE
-ASSUME `Governor` IS A TYPE
+
+-- do we have extension support? https://github.com/smucclaw/l4-ide/issues/238
+-- until we do, let's just manually reproduce, i think that should work
+DECLARE Governor
+    HAS name               IS A STRING
+        `symbol of office` IS A STRING
+
+
+
+`William Farquhar` MEANS
+    Governor WITH name               IS "William Farquhar"
+                  `symbol of office` IS "large hat"
+
 
 -- Register sections enumeration
 DECLARE RegisterSection
@@ -186,6 +216,138 @@ DECIDE `qualifying territory` p IF
     isBOT p
     AND NOT p's `English name` = "Sovereign Base Areas of Akrotiri and Dhekelia"
 
+-- Register sections enumeration
+DECLARE RegisterSection
+  IS ONE OF
+    GeneralSection
+    RestrictedSection
+    HistoricSection
+
+-- The charity test
+§§ `section 5, charity test`
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797832
+
+-- 5        The charity test
+--  (1)     An entity meets the charity test if –
+--    (a)     all of its purposes are –
+--      (i)      charitable purposes, or
+--      (ii)      purposes that are purely ancillary or incidental to any of its charitable purposes; and
+--    (b)     in giving effect to those purposes, it provides (or, in the case of an applicant, provides or intends to provide) public benefit in Jersey or elsewhere to a reasonable degree.
+--  (2)     An entity that otherwise meets the charity test, nevertheless does not meet that test, despite paragraph (1), if its constitution expressly permits its activities to be directed or otherwise controlled by, or any of its governors to be –
+--    (a)     a Minister;
+--    (b)     a member of the States Assembly; or
+--    (c)     any equivalent of such a person in another jurisdiction,
+--  acting in that capacity.
+--  (3)     The Minister may by Order disapply paragraph (2) in relation to any entity or description of entity specified in the Order.
+--  (4)     The Commissioner must publish and maintain guidance on the determination of whether an entity meets the charity test.
+--  (5)     Any person, in determining whether an entity meets the charity test, must have regard to the guidance, and the Commissioner, the tribunal, a registered charity and a governor of a registered charity must have regard to the guidance when performing any other of their functions under this Law to which the guidance is relevant.
+--  (6)     Before issuing or amending guidance the Commissioner must –
+--    (a)     consult –
+--      (i)      any persons appearing to the Commissioner to be representative of charities or bodies with charitable purposes,
+--      (ii)      the Minister, and
+--      (iii)     such other persons as the Commissioner considers appropriate; and
+--    (b)     publish a report on the Commissioner’s views on the results of the consultation, and the reasons for the Commissioner’s decision on the guidance in the light of those results.
+--  (7)     Within a reasonable time after issuing or amending guidance the Commissioner must provide to the Minister a copy of the issued or amended guidance and the report published under paragraph (6)(b).
+--  (8)     The Minister must lay a copy of the guidance and report so provided before the States as soon as practicable after the Minister receives the guidance and report.
+
+
+-- reindenting
+--  (5)     Any person, in determining whether an entity meets the charity test,
+--                      must have regard to the guidance,
+--          and the Commissioner, the tribunal, a registered charity and a governor of a registered charity
+--                      must have regard to the guidance
+--                      when performing any other of their functions under this Law to which the guidance is relevant.
+
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `meets the charity test` IF
+    -- All purposes are charitable or ancillary to charitable purposes
+    (`charitable purpose` OF purposes OF entity
+     OR `ancillary or incidental to charitable purpose` OF purposes OF entity)
+    -- And provides public benefit to a reasonable degree
+    AND `provides public benefit in Jersey or elsewhere` entity
+    -- Unless controlled by government officials
+    AND NOT (
+        `directed by Minister` entity
+        OR `directed by States Assembly member` entity
+        OR `directed by equivalent in another jurisdiction` entity
+    ) -- unless the Minister has an Order
+
+
+GIVEN testPurpose     IS A Purpose
+      primaryPurpose  IS A Purpose
+DECIDE `is analogous` IF
+     primaryPurpose EQUALS "feeding dogs" AND testPurpose EQUALS "feeding puppies"
+  OR ^              ^      "feeding cats" AND testPurpose EQUALS "feeding kittens"
+#EVAL `is analogous` "feeding dogs" "feeding puppies"
+
+GIVETH A LIST OF Purpose
+knownPurposes MEANS
+  LIST "the prevention or relief of poverty"
+       "the advancement of education"
+       "the advancement of religion"
+       "the advancement of health"
+       "the saving of lives"
+       "the advancement of citizenship or community development"
+       "the advancement of the arts, heritage, culture or science"
+       "the advancement of public participation in sport"
+       "the provision of recreational facilities, or the organisation of recreational activities, with the object of improving the conditions of life for the persons for whom the facilities or activities are primarily intended"
+       "the advancement of human rights, conflict resolution or reconciliation"
+       "the promotion of religious or racial harmony"
+       "the promotion of equality and diversity"
+       "the advancement of environmental protection or improvement"
+       "the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage"
+       "the advancement of animal welfare"
+
+-- Haskell's ($)
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a TO b
+      x IS A a
+apply MEANS f x
+
+-- Haskell's ($) but b is a function type
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a AND b TO BOOLEAN
+      x IS A a
+      y IS A b
+apply2 MEANS f x y
+
+GIVEN x IS A Purpose
+mySection MEANS apply2 `is analogous` "feeding dogs" x
+
+#EVAL mySection "feeding puppies"
+
+#EVAL any mySection (LIST "feeding puppies")
+#EVAL any (apply2 `is analogous` "feeding dogs") (LIST "feeding puppies")
+
+§ `6.1` -- Charitable purposes
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797834
+GIVEN p IS A Purpose
+DECIDE `is charitable` IF primary -- OR `purpose is analogous` p
+  WHERE
+    primary MEANS elem p knownPurposes
+
+
+
+-- (a)     the prevention or relief of poverty;
+-- (b)     the advancement of education;
+-- (c)     the advancement of religion;
+-- (d)     the advancement of health;
+-- (e)     the saving of lives;
+-- (f)      the advancement of citizenship or community development;
+-- (g)     the advancement of the arts, heritage, culture or science;
+-- (h)     the advancement of public participation in sport;
+-- (i)      the provision of recreational facilities, or the organisation of recreational activities, with the object of improving the conditions of life for the persons for whom the facilities or activities are primarily intended;
+-- (j)      the advancement of human rights, conflict resolution or reconciliation;
+-- (k)     the promotion of religious or racial harmony;
+-- (l)      the promotion of equality and diversity;
+-- (m)    the advancement of environmental protection or improvement;
+-- (n)     the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage;
+-- (o)     the advancement of animal welfare;
+-- (p)     any other purpose that may reasonably be regarded as analogous to any of the purposes listed in sub-paragraphs (a) to (o).
+
 -- Charitable purposes enumeration
 DECLARE CharitablePurpose
   IS ONE OF
@@ -200,28 +362,28 @@ DECLARE CharitablePurpose
     ProvisionOfRecreation
     AdvancementOfHumanRights
 
--- Register sections enumeration
-DECLARE RegisterSection
-  IS ONE OF
-    GeneralSection
-    RestrictedSection
-    HistoricSection
 
--- The charity test
+#EVAL `is charitable` "feeding cats"
+#EVAL `is charitable` "feeding dogs"
+#EVAL `is charitable` "feeding birds"
+
+§ `5.1.a.i` -- All purposes are charitable
 GIVEN entity IS AN Entity
 GIVETH A BOOLEAN
-DECIDE `meets the charity test` IF
-    -- All purposes are charitable or ancillary to charitable purposes
-    (`charitable purpose` OF purposes OF entity
-     OR `ancillary or incidental to charitable purpose` OF purposes OF entity)
-    -- And provides public benefit to a reasonable degree
-    AND `provides public benefit in Jersey or elsewhere` entity
-    -- Unless controlled by government officials
-    AND NOT (
-        `directed by Minister` entity
-        OR `directed by States Assembly member` entity
-        OR `directed by equivalent in another jurisdiction` entity
-    )
+DECIDE `all purposes are charitable` IF
+    -- All purposes are charitable
+    all `is charitable` (entity's purposes)
+
+`Pet Lovers Singapore` MEANS Entity WITH name IS "Pet Lovers Singapore"
+                                         purposes IS LIST "feeding cats"
+                                                          "feeding dogs"
+                                                          "feeding puppies"
+
+-- we will allow human discretion to decide that grooming puppies is considered analogous to feeding puppies which is analogous to feeding dogs.
+
+#EVAL `all purposes are charitable` OF `Pet Lovers Singapore`
+
+
 
 -- Requirements for registration
 GIVEN entity IS AN Entity
