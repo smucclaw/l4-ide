@@ -19,6 +19,11 @@ import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
 import qualified L4.Transform as Transform (simplify)
 
+{- | Temporary hack to disable the translation to IRExpr App
+while the frontend doesn't have proper UI for it -}
+isDevMode :: Bool
+isDevMode = False
+
 ------------------------------------------------------
 -- Monad
 ------------------------------------------------------
@@ -166,7 +171,7 @@ translateExpr False = go
         fnApp@(App _ fnResolved@(getOriginal -> fnName) args) -> do
           fnOfAppisFnFromBooleanToBooleans <- and <$> traverse exprHasBooleanType (fnApp : args)
           -- for now, only translating App of boolean functions to V.App
-          if fnOfAppisFnFromBooleanToBooleans
+          if isDevMode && fnOfAppisFnFromBooleanToBooleans
             then
               V.App
                 <$> getFresh
