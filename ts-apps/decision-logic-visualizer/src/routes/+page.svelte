@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Schema } from 'effect'
-  import { IRDecl } from '@repo/viz-expr'
+  import { FunDecl } from '@repo/viz-expr'
   import { VizDeclLirSource } from '$lib/data/viz-expr-to-lir.js'
   import {
     LirContext,
@@ -30,13 +30,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'True' as const,
               id: { id: 1 },
               name: { label: 'eats', unique: 2 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'Unknown' as const,
               id: { id: 2 },
               name: {
@@ -48,7 +48,7 @@
           id: { id: 3 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 4 },
           name: { label: 'swims', unique: 4 },
@@ -58,7 +58,7 @@
     },
   }
 
-  const decode = Schema.decodeSync(IRDecl)
+  const decode = Schema.decodeSync(FunDecl)
   const decl = decode(example1)
   // Set up Lir
   const lirRegistry = new LirRegistry()
@@ -84,13 +84,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'False' as const,
               id: { id: 1 },
               name: { label: 'flies', unique: 6 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'True' as const,
               id: { id: 2 },
               name: { label: 'runs', unique: 7 },
@@ -99,13 +99,13 @@
               $type: 'And' as const,
               args: [
                 {
-                  $type: 'BoolVar' as const,
+                  $type: 'UBoolVar' as const,
                   value: 'Unknown' as const,
                   id: { id: 3 },
                   name: { label: 'swims', unique: 8 },
                 },
                 {
-                  $type: 'BoolVar' as const,
+                  $type: 'UBoolVar' as const,
                   value: 'True' as const,
                   id: { id: 4 },
                   name: { label: 'dives', unique: 9 },
@@ -117,25 +117,25 @@
           id: { id: 6 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 7 },
           name: { label: 'jumps', unique: 10 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 8 },
           name: { label: 'jogs', unique: 11 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 9 },
           name: { label: 'reads', unique: 12 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 10 },
           name: { label: 'writes', unique: 13 },
@@ -144,13 +144,13 @@
           $type: 'Or' as const,
           args: [
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'Unknown' as const,
               id: { id: 11 },
               name: { label: 'sketches', unique: 14 },
             },
             {
-              $type: 'BoolVar' as const,
+              $type: 'UBoolVar' as const,
               value: 'False' as const,
               id: { id: 12 },
               name: { label: 'paints', unique: 15 },
@@ -159,7 +159,7 @@
           id: { id: 13 },
         },
         {
-          $type: 'BoolVar' as const,
+          $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 14 },
           name: { label: 'codes', unique: 16 },
@@ -174,11 +174,12 @@
   lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
 </script>
 
-<h1 class="text-4xl font-bold text-center">Decision Logic Visualizer Draft</h1>
+<h1 class="text-4xl font-bold text-center">Ladder Visualizer demo page</h1>
 <section class="flex items-center justify-center my-8">
   <h2 class="text-2xl italic text-center text-gray-700 w-3/4">
-    Examples of decision logic visualizations, starting from a 'json' of the
-    IRExpr that eventually gets transformed into a SvelteFlow graph
+    Examples of visualizing Boolean formulas as ladder diagrams, starting from a
+    'json' of the IRExpr that eventually gets transformed into a SvelteFlow
+    graph
   </h2>
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">

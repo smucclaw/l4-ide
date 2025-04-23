@@ -33,7 +33,7 @@
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-lsp ws \
           --host localhost \
           --port ${toString config.services.jl4-lsp.port} \
-          --cwd ${../../jl4/libraries}
+          --cwd ${../../jl4-core/libraries}
       '';
       Restart = "always";
 

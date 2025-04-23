@@ -2,6 +2,15 @@
 
 These instructions are intended for L4 internal developers with experience in Typescript and/or Haskell.
 
+## Quick build and install
+
+```sh
+npm install && npm run build
+cabal update
+cabal install exe:jl4-lsp --overwrite-policy=always
+# Make sure the installation directory (usually `~/.cabal/bin/`) is on the `$PATH`
+```
+
 ## Requirements
 
 - Haskell
@@ -13,6 +22,9 @@ These instructions are intended for L4 internal developers with experience in Ty
   - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+- on your system
+  - pkgconfig
+  - xz (or liblzma dev libraries)
 
 After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.6.6`; press `i` to install and then `s` to set that as the default.
 
@@ -28,14 +40,13 @@ And if this is your first time doing any kind of development on your system, on 
 xcode-select --install
 ```
 
-## Quick build and install
+Other prerequisites which pkgconfig needs to know about:
 
-```sh
-npm install && npm run build
-cabal update
-cabal install exe:jl4-lsp --overwrite-policy=always
-# Make sure the installation directory (usually `~/.cabal/bin/`) is on the `$PATH`
 ```
+sudo apt install pkg-config liblzma-dev libgmp-dev
+```
+
+Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages.
 
 ## Tests
 

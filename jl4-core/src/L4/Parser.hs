@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 module L4.Parser (
   -- * Public API
   parseFile,
@@ -50,6 +51,7 @@ import Generics.SOP.NS
 import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
+import qualified Data.List.Extra as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -65,7 +67,7 @@ import L4.Annotation
 import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
-import L4.Syntax
+import L4.Syntax hiding (app, forall', fun)
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 
@@ -307,8 +309,31 @@ simpleName :: Parser (Epa Name)
 simpleName =
   (MkName emptyAnno . NormalName) <<$>> spacedToken (preview #_TIdentifier) "identifier"
 
+qualifiedName :: Parser (Epa Name)
+qualifiedName = do
+  -- TODO: in future we may also want to allow `tokOf #_TQuoted`
+  let nameAndQualifiers = List.unsnoc . mapMaybe (either (const Nothing) (Just . snd))
+  res@(nameAndQualifiers -> Just (q : qs, n)) <- do
+    x <- tokOf #_TIdentifier
+    dotOrIdentifier <- some do
+      d <- tokOf #_TDot
+      i <- tokOf #_TIdentifier
+      pure [Left $ fst d, Right i]
+    pure $ (Right x :) $ mconcat dotOrIdentifier
+  wsOrAnnotation <- spaceOrAnnotations
+  let e = Epa
+        { original = map (either id fst) res
+        , trailingTokens = wsOrAnnotation.trailingTokens
+        , payload = QualifiedName (q :| qs) n
+        , hiddenClusters = wsOrAnnotation.hiddenClusters
+        }
+  pure $ MkName emptyAnno <$> e
+
+ where
+ tokOf p = token (\t -> (t,) <$> preview p (computedPayload t)) Set.empty
+
 name :: Parser Name
-name = attachEpa (quotedName <|> simpleName) <?> "identifier"
+name = attachEpa (quotedName <|> try qualifiedName <|> simpleName) <?> "identifier"
 
 tokenAsName :: TokenType -> Parser Name
 tokenAsName tt =
@@ -328,11 +353,7 @@ module' uri = do
   attachAnno $
     MkModule emptyAnno uri
       <$  annoLexeme_ spaceOrAnnotations
-      <*> annoHole
-          ((:)
-            <$> anonymousSection
-            <*> many section
-          )
+      <*> annoHole anonymousSection
 
 manyLines :: Parser a -> Parser [a]
 manyLines p = do
@@ -366,26 +387,28 @@ withIndent ordering current p = do
 anonymousSection :: Parser (Section Name)
 anonymousSection =
   attachAnno $
-    MkSection emptyAnno 0
+    MkSection emptyAnno
       <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+      <*> annoHole (lsepBy (topdeclWithRecovery 0) (spacedToken_ TSemicolon))
 
-section :: Parser (Section Name)
-section =
-  attachAnno $
-    MkSection emptyAnno
-      <$> sectionSymbols
-      <*> annoHole (optional name)
-      <*> annoHole (optional aka)
-      <*> annoHole (lsepBy topdeclWithRecovery (spacedToken_ TSemicolon))
+section :: Int -> Parser (Section Name)
+section n = attachAnno do
+  MkSection emptyAnno
+    <$> (Compose (try do
+           wa@WithAnno {payload = syms} <- getCompose sectionSymbols
+           guard (syms >= n)
+           pure wa) *> annoHole (optional name)
+        )
+    <*> annoHole (optional aka)
+    <*> annoHole (lsepBy (topdeclWithRecovery n) (spacedToken_ TSemicolon))
 
 sectionSymbols :: Compose Parser WithAnno Int
 sectionSymbols =
   length <$> Applicative.some (annoLexeme (spacedToken_ TParagraph))
 
-topdeclWithRecovery :: Parser (TopDecl Name)
-topdeclWithRecovery = do
+topdeclWithRecovery :: Int -> Parser (TopDecl Name)
+topdeclWithRecovery n = do
   start <- lookAhead anySingle
   withRecovery
     (\e -> do
@@ -396,11 +419,12 @@ topdeclWithRecovery = do
       -- If we didn't make any progress whatsoever,
       -- end parsing to avoid endless loops.
       if start == current
-        then
-          parseError e
-        else do
-          topdeclWithRecovery)
+        then parseError e
+        else topdeclWithRecovery n
+
+    )
     topdecl
+      <|> attachAnno (Section   emptyAnno <$> annoHole (section (n + 1)))
 
 topdecl :: Parser (TopDecl Name)
 topdecl =
@@ -429,8 +453,10 @@ directive :: Parser (Directive Name)
 directive =
   attachAnno $
     choice
-      [ Eval emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective TEvalDirective))
+      [ StrictEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TStrictEvalDirective))
+      , LazyEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TLazyEvalDirective))
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
       ]
@@ -442,6 +468,7 @@ import' =
     MkImport emptyAnno
       <$  annoLexeme (spacedToken_ TKImport)
       <*> annoHole name
+      <*> pure Nothing
 
 assume :: TypeSig Name -> Parser (Assume Name)
 assume sig = do
@@ -785,6 +812,18 @@ data Stack a =
 -- The exceptions are if either the whole expression is on the same line,
 -- or if all operators are on the same column.
 --
+-- NOTE: The line which is the second argument of combine is the line
+-- of the operand (not operator) currently under consideration.
+--
+-- The line stored on top of the stack is the line where the previous
+-- expression starts, the line on top of the continuations is the line
+-- where the subsequent expression continues.
+--
+-- Operators are considered to be "on the same line" if both operands
+-- are on the same line, meaning that both the top stack frame and the
+-- top continuation frame have to have the same line number to make
+-- a real same-line choice.
+--
 combine :: Stack a -> Pos -> a Name -> [Cont a] -> a Name
 
 -- If we have a single expression and nothing on the stack, then we
@@ -805,11 +844,10 @@ combine End l1 e1 (MkCont op1 prio1 assoc1 l2 p2 e2 : efs) =
 -- continuation. We have to compare the two operators. If the operator
 -- on the continuation side is stronger, we push. Otherwise, we pop.
 --
--- TODO: we currently do not track associativity.
---
-combine s1@(Frame s e1 op1 prio1 assoc1 l1 p1) _l e2 (MkCont op2 prio2 assoc2 l2 p2 e3 : efs)
+combine s1@(Frame s e1 op1 prio1 assoc1 l1 p1) l e2 (MkCont op2 prio2 assoc2 l2 p2 e3 : efs)
   | (l2, p2, prio2, assoc2) `stronger` (l1, p1, prio1, assoc1) =
-  combine (Frame s1 e2 op2 prio2 assoc2 l2 p2) l2 e3 efs -- push
+  combine (Frame s1 e2 op2 prio2 assoc2 l p2) l2 e3 efs -- push
+  -- NOTE: the topmost frame now starts with e2, thus at line l
   | otherwise =
   combine s l1 (e1 `op1` e2) (MkCont op2 prio2 assoc2 l2 p2 e3 : efs) -- pop
   where
@@ -888,11 +926,11 @@ data Cont a =
 cont :: Parser (Prio, Assoc, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
   withIndent GT p $ \ pos -> do
-    l <- currentLine
     (prio, assoc, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
+    l <- currentLine
     arg <- pbase
-    pure (MkCont op prio assoc l pos arg)
+    pure (MkCont op prio assoc l pos arg) -- the line we store is the line of the argument, not the operator
 
 -- TODO: We should think whether we can obtain this more cheaply.
 currentLine :: Parser Pos

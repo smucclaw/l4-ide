@@ -131,7 +131,7 @@ instance ToSemToken PosToken where
 -- Generic instance does not apply because we exclude the level and override
 -- the token type for the name.
 instance ToSemTokens Context PosToken (Section Name) where
-  toSemTokens (MkSection ann _lvl name maka decls) =
+  toSemTokens (MkSection ann name maka decls) =
     traverseCsnWithHoles ann
       [ withTokenType nameIsDirective $ toSemTokens name
       , withTokenType nameIsDirective $ toSemTokens maka
@@ -190,6 +190,9 @@ deriving anyclass instance ToSemTokens Context PosToken (GivethSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (GivenSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (Directive Name)
 deriving anyclass instance ToSemTokens Context PosToken (Import Name)
+
+instance ToSemTokens Context PosToken NormalizedUri where
+  toSemTokens _ = pure []
 
 instance ToSemTokens Context PosToken Int where
   toSemTokens _ = pure []

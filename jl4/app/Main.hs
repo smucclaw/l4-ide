@@ -36,7 +36,9 @@ main = do
       let nfp = toNormalizedFilePath fp
           uri = normalizedFilePathToUri nfp
       _ <- Shake.addVirtualFileFromFS nfp
-      mtc <- Shake.use Rules.TypeCheck  uri
+      mtc <- Shake.use Rules.SuccessfulTypeCheck  uri
+      _ <- Shake.use Rules.Evaluate uri
+      _ <- Shake.use Rules.EvaluateLazy uri
       mep <- Shake.use Rules.ExactPrint uri
       case (mtc, mep) of
         (Just tcRes, Just ep) | tcRes.success -> logWith recorder Info $ ExactPrint ep

@@ -13,7 +13,7 @@ import Optics.State.Operators ((<%=))
 import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
-    VisualizeDecisionLogicIRInfo (..),
+    RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
@@ -65,13 +65,13 @@ prettyPrintVizError = \case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> Bool -> Either VizError VisualizeDecisionLogicIRInfo
+doVisualize :: Decide Resolved -> Bool -> Either VizError RenderAsLadderInfo
 doVisualize decide simplify =
   case  (vizProgram simplify decide).getVizE initialVizState of
     (result, _) -> result
 
-vizProgram :: Bool -> Decide Resolved -> Viz VisualizeDecisionLogicIRInfo
-vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simplify
+vizProgram :: Bool -> Decide Resolved -> Viz RenderAsLadderInfo
+vizProgram simplify = fmap MkRenderAsLadderInfo . translateDecide simplify
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -92,7 +92,7 @@ vizProgram simplify = fmap MkVisualizeDecisionLogicIRInfo . translateDecide simp
 -- than being complete. So, feel free to lift these limitations at your convenience :)
 --
 -- Simple implementation: Translate Decide iff <= 1 Given
-translateDecide :: Bool -> Decide Resolved -> Viz V.IRDecl
+translateDecide :: Bool -> Decide Resolved -> Viz V.FunDecl
 translateDecide simplify (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
     uid <- getFresh
@@ -157,13 +157,13 @@ scanOr e = [e]
 -- Leaf makers
 ------------------------------------------------------
 
-defaultBoolVarValue :: V.BoolValue
-defaultBoolVarValue = V.UnknownV
+defaultUBoolVarValue :: V.UBoolValue
+defaultUBoolVarValue = V.UnknownV
 
 leafFromVizName :: V.Name -> Viz IRExpr
 leafFromVizName vname = do
   uid <- getFresh
-  pure $ V.BoolVar uid vname defaultBoolVarValue
+  pure $ V.UBoolVar uid vname defaultUBoolVarValue
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
@@ -172,7 +172,7 @@ leaf subject complement = do
   -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
   -- I'll return to this when we explicitly/properly handle more cases in translateExpr
   -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
-  pure $ V.BoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultBoolVarValue
+  pure $ V.UBoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers

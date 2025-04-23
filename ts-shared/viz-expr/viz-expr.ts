@@ -60,9 +60,9 @@ See https://effect.website/docs/schema/advanced-usage/#recursive-schemas
 *************************************************************/
 
 export const Name = Schema.Struct({
-  /** Uniques for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+  /** Uniques for checking whether, e.g., two UBoolVar IRNodes actually refer to the same proposition.
    *
-   * BoolVar IRNodes that refer to the same proposition can nevertheless differ
+   * UBoolVar IRNodes that refer to the same proposition can nevertheless differ
    * in virtue of eg having different nlg annotations.  */
   unique: Schema.Number,
   label: Schema.String,
@@ -78,7 +78,7 @@ export interface Name {
 export type Unique = number
 
 /*******************************
-    IRId (not currently used)
+           IRId
 ********************************/
 
 /** Stable IDs useful for things like bidirectional synchronization down the road */
@@ -87,7 +87,7 @@ export const IRId = Schema.Struct({
 })
 
 /** Stable IDs useful for things like bidirectional synchronization down the road */
-interface IRId {
+export interface IRId {
   readonly id: number
 }
 
@@ -108,10 +108,8 @@ export const IRNode = Schema.Struct({
 })
 
 /*******************************
-  Decision Logic (ish) IR node
+     IR node for Ladder viz
 ********************************/
-
-export type IRDecl = FunDecl
 
 export interface FunDecl extends IRNode {
   readonly $type: 'FunDecl'
@@ -120,10 +118,8 @@ export interface FunDecl extends IRNode {
   readonly body: IRExpr
 }
 
-/** Think of this as the Expr for the decision logic.
- * I.e., the Expr type here will likely be a proper subset of the source language's Expr type.
- */
-export type IRExpr = And | Or | BoolVar | Not
+/** The Ladder graph visualizer focuses on boolean formulas. */
+export type IRExpr = And | Or | UBoolVar | Not
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -156,15 +152,13 @@ export interface Not extends IRNode {
   readonly negand: IRExpr
 }
 
-export type BoolValue = 'False' | 'True' | 'Unknown'
+/** For the original Viz / IRExpr */
+export type UBoolValue = Schema.Schema.Type<typeof UBoolValue>
+export type BoolValue = Schema.Schema.Type<typeof BoolValue>
 
-export interface BoolVar extends IRNode {
-  readonly $type: 'BoolVar'
-  readonly name: Name
-  readonly value: BoolValue
-}
+export type UBoolVar = Schema.Schema.Type<typeof UBoolVar>
 
-export type Value = BoolValue
+export type Value = UBoolValue
 
 /***********************************
   The corresponding Effect Schemas
@@ -174,7 +168,7 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<And> => And),
   Schema.suspend((): Schema.Schema<Or> => Or),
   Schema.suspend((): Schema.Schema<Not> => Not),
-  Schema.suspend((): Schema.Schema<BoolVar> => BoolVar)
+  Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar)
 ).annotations({ identifier: 'IRExpr' })
 
 export const FunDecl = Schema.Struct({
@@ -184,8 +178,6 @@ export const FunDecl = Schema.Struct({
   params: Schema.Array(Name),
   body: IRExpr,
 }).annotations({ identifier: 'FunDecl' })
-
-export const IRDecl = FunDecl
 
 export const And = Schema.Struct({
   $type: Schema.tag('And'),
@@ -207,36 +199,34 @@ export const Not = Schema.Struct({
 
 export const BoolValue = Schema.Union(
   Schema.Literal('False'),
-  Schema.Literal('True'),
-  Schema.Literal('Unknown')
+  Schema.Literal('True')
 )
+export const UBoolValue = Schema.Union(BoolValue, Schema.Literal('Unknown'))
 
-export const BoolVar = Schema.Struct({
-  $type: Schema.tag('BoolVar'),
-  value: BoolValue,
+export const UBoolVar = Schema.Struct({
+  $type: Schema.tag('UBoolVar'),
+  value: UBoolValue,
   id: IRId,
   name: Name,
-}).annotations({ identifier: 'BoolVar' })
+}).annotations({ identifier: 'UBoolVar' })
 
 /***********************************
   Wrapper / Protocol interfaces
 ************************************/
 
-/** The payload for VisualizeDecisionLogicNotification */
-export type VisualizeDecisionLogicIRInfo = Schema.Schema.Type<
-  typeof VisualizeDecisionLogicIRInfo
->
+/** The payload for RenderAsLadder */
+export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
-export const VisualizeDecisionLogicIRInfo = Schema.Struct({
-  program: IRDecl,
-}).annotations({ identifier: 'VisualizeDecisionLogicIRInfo' })
+export const RenderAsLadderInfo = Schema.Struct({
+  funDecl: FunDecl,
+}).annotations({ identifier: 'RenderAsLadderInfo' })
 
 /*************************
     Decode
 **************************/
 
 export function makeVizInfoDecoder() {
-  return Schema.decodeUnknownEither(VisualizeDecisionLogicIRInfo)
+  return Schema.decodeUnknownEither(RenderAsLadderInfo)
 }
 
 /***********************************
@@ -249,7 +239,7 @@ export function makeVizInfoDecoder() {
 
 /** Example of an unknown input */
 // const egAtomicPropWalks = {
-//   $type: 'BoolVar',
+//   $type: 'UBoolVar',
 //   value: 'True',
 //   id: { id: 1 },
 //   name: { label: 'walks', unique: 2 }
@@ -263,15 +253,15 @@ export function makeVizInfoDecoder() {
 **************************/
 
 /** See https://effect.website/docs/schema/pretty/ */
-export function getDecisionLogicIRPrettyPrinter() {
-  return Pretty.make(VisualizeDecisionLogicIRInfo)
+export function getLadderIRPrettyPrinter() {
+  return Pretty.make(RenderAsLadderInfo)
 }
 
-/** Get a JSON Schema version of the VisualizeDecisionLogicIRInfo */
-export function exportDecisionLogicIRInfoToJSONSchema() {
-  return JSON.stringify(JSONSchema.make(VisualizeDecisionLogicIRInfo))
+/** Get a JSON Schema version of the RenderAsLadderInfo */
+export function exportRenderAsLadderInfoToJSONSchema() {
+  return JSON.stringify(JSONSchema.make(RenderAsLadderInfo))
 }
-// console.log(exportDecisionLogicIRInfoToJSONSchema())
+// console.log(exportRenderAsLadderInfoToJSONSchema())
 
 /*************************
     JSON Schema version

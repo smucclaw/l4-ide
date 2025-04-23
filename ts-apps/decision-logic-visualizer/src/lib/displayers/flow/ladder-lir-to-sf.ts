@@ -4,25 +4,25 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import {
-  isBoolVarLirNode,
-  BoolVarLirNode,
+  isUBoolVarLirNode,
+  UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
-} from '$lib/layout-ir/ladder-lir.svelte.js'
+} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   type LadderSFGraph,
   type LadderSFNode,
-  boolVarNodeType,
+  uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
   sourceNoAnnoNodeType,
@@ -98,49 +98,50 @@ export function ladderLirNodeToSfNode(
   const defaultData = {
     context,
     originalLirId: node.getId(),
+    classes: [],
   }
 
   return match(node)
-    .with(P.when(isBoolVarLirNode), (n: BoolVarLirNode) => {
+    .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
       return {
         ...defaults,
-        type: boolVarNodeType,
+        type: uBoolVarNodeType,
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotStartLirNode), () => {
+    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
       return {
         ...defaults,
         type: notStartNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotEndLirNode), () => {
+    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
       return {
         ...defaults,
         type: notEndNodeType,
-        data: defaultData,
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,
         type: sourceNoAnnoNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.when(isSourceWithOrAnnoLirNode), (n: SourceWithOrAnnoLirNode) => {
       return {
         ...defaults,
         type: sourceWithOrAnnoNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
-        data: { ...defaultData, ...n.getData() },
+        data: { ...defaultData, ...n.getData(context) },
       }
     })
     .exhaustive()
@@ -156,6 +157,7 @@ export function ladderLirEdgeToSfEdge(
   edge: LadderLirEdge
 ): SF.Edge {
   const label = graph.getEdgeLabel(context, edge)
+  const styles = graph.getEdgeStyles(context, edge)
 
   return {
     id: edge.getId(),
@@ -163,7 +165,8 @@ export function ladderLirEdgeToSfEdge(
     data: {
       context,
       label,
-      edgeStyles: graph.getEdgeStyles(context, edge).getStyleString(),
+      edgeStyles: styles.getCombinedEdgeStyleString(),
+      labelStyles: styles.getLabelStyleString(),
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),

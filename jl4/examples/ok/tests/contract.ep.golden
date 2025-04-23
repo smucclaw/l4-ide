@@ -33,8 +33,6 @@ No expansion of terms.
 ~~[1] `the amount` is `1000`.~~
 -}
 
-ASSUME `wants to buy car` IS FUNCTION FROM Person TO BOOLEAN
-
 GIVEN
   `the seller` IS A Person
   `the buyer` IS A Person
@@ -48,6 +46,9 @@ DECIDE `can transfer car ownership`
     IF
      `owns car` OF `the seller`
  AND `wants to buy car` OF `the buyer`
+
+ASSUME `wants to buy car` IS FUNCTION FROM Person TO BOOLEAN
+
 
 {-
 `The seller` `can transfer car ownership` to `the buyer` if `the seller` `owns car` and `the buyer` `wants to buy car`

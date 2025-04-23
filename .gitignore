@@ -63,5 +63,11 @@ yarn-error.log*
 # Nix
 .direnv
 .envrc
+
 flake.nix
 flake.lock
+
+result*
+
+*.code-workspace
+

@@ -1,0 +1,46 @@
+-- some lazy evaluation tests
+
+ASSUME unknown IS A BOOLEAN
+
+DECLARE PAIR
+  HAS
+    fst IS A BOOLEAN
+    snd IS A BOOLEAN
+
+f y MEANS
+  IF y THEN TRUE ELSE FALSE
+
+pair1 MEANS PAIR TRUE FALSE
+pair2 y MEANS PAIR (f unknown) FALSE
+
+#EVAL snd OF pair2 0
+
+ones MEANS 1 FOLLOWED BY ones
+
+zipWith op list1 list2 MEANS
+  CONSIDER list1
+  WHEN EMPTY THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER list2
+    WHEN EMPTY THEN EMPTY
+    WHEN y FOLLOWED BY ys THEN op x y FOLLOWED BY zipWith op xs ys
+
+tail list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY xs THEN xs
+
+nats MEANS 0 FOLLOWED BY zipWith (GIVEN x, y YIELD x + y) ones nats
+
+take n xs MEANS
+  CONSIDER xs
+  WHEN EMPTY THEN EMPTY
+  WHEN y FOLLOWED BY ys THEN
+    IF n <= 0 THEN EMPTY ELSE y FOLLOWED BY take (n - 1) ys
+
+fibs MEANS 0 FOLLOWED BY 1 FOLLOWED BY zipWith (GIVEN x, y YIELD x + y) fibs (tail fibs)
+
+#CHECK nats
+#EVAL LIST
+#EVAL LIST 1, 2, 3
+#EVAL nats
+#EVAL (take 50 fibs)

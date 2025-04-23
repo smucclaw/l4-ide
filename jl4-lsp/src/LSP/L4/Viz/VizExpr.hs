@@ -10,21 +10,19 @@ import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
 
-newtype VisualizeDecisionLogicIRInfo = MkVisualizeDecisionLogicIRInfo
-  { program :: IRDecl -- TODO: change the fieldname once this becomes more stable
+newtype RenderAsLadderInfo = MkRenderAsLadderInfo
+  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
   }
   deriving newtype (Eq)
   deriving stock (Show, Generic)
 
 type Unique = Int
--- | Analogous to, but much simpler than, L4.Syntax's Name
+-- | TODO: Consider renaming this to something other than `Name`
 data Name = MkName
-  { unique :: Unique   -- ^ for checking whether, e.g., two BoolVar IRNodes actually refer to the same proposition.
+  { unique :: Unique   -- ^ for checking whether, e.g., two UBoolVar IRNodes actually refer to the same proposition.
   , label  :: Text     -- ^ Label to be displayed in the visualizer.
   }
   deriving (Show, Eq, Generic)
-
-type IRDecl = FunDecl
 
 -- TODO: Will worry about adding param type info later
 data FunDecl = MkFunDecl
@@ -38,7 +36,7 @@ data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | BoolVar ID Name BoolValue
+  | UBoolVar ID Name UBoolValue
   deriving (Show, Eq, Generic)
 
 newtype ID = MkID
@@ -47,7 +45,7 @@ newtype ID = MkID
   deriving newtype (Eq, Ord)
   deriving stock (Show, Generic)
 
-data BoolValue = FalseV | TrueV | UnknownV
+data UBoolValue = FalseV | TrueV | UnknownV
   deriving (Show, Eq, Generic)
 
 --------------------------------------------------------------------------------
@@ -67,28 +65,20 @@ instance HasCodec ID where
         <$> requiredField "id" "Unique, stable identifier" .= view #id
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
-instance HasCodec BoolValue where
+instance HasCodec UBoolValue where
   codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
 
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L740
 
-instance HasCodec IRDecl where
-  codec = object "IRDecl" $ discriminatedUnionCodec "$type" enc dec
-    where
-      enc (MkFunDecl uid name params body) = ("FunDecl", mapToEncoder (uid, name, params, body) funDeclCodec)
-      dec = HashMap.fromList
-        [ ("FunDecl", ("FunDecl", mapToDecoder mkFunDecl funDeclCodec))
-        ]
-      funDeclCodec =
-        (,,,)
-          <$> requiredField' "id" .= view _1
-          <*> requiredField' "name" .= view _2
-          <*> requiredField' "params" .= view _3
-          <*> requiredField' "body" .= view _4
-
-      mkFunDecl (uid, name, params, body) = MkFunDecl uid name params body
+instance HasCodec FunDecl where
+  codec = object "FunDecl" $
+    typeField "FunDecl" MkFunDecl
+      <*> requiredField' "id"     .= view #id
+      <*> requiredField' "name"   .= view #fnName
+      <*> requiredField' "params" .= view #params
+      <*> requiredField' "body"   .= view #body
 
 instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
@@ -98,7 +88,7 @@ instance HasCodec IRExpr where
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
-        BoolVar uid name value -> ("BoolVar", mapToEncoder (uid, name, value) boolVarCodec)
+        UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
       dec =
@@ -106,9 +96,9 @@ instance HasCodec IRExpr where
           [ ("And", ("And", mapToDecoder (uncurry And) naryExprCodec)),
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
-            ("BoolVar", ("BoolVar", mapToDecoder mkBoolVar boolVarCodec))
+            ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec))
           ]
-      mkBoolVar (uid, name, value) = BoolVar uid name value
+      mkUBoolVar (uid, name, value) = UBoolVar uid name value
 
       -- Codec for 'And' and 'Or' expressions.
       naryExprCodec =
@@ -121,18 +111,18 @@ instance HasCodec IRExpr where
           <$> requiredField' "id" .= fst
           <*> requiredField' "negand" .= snd
 
-      boolVarCodec =
+      uBoolVarCodec =
         (,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
 
-instance HasCodec VisualizeDecisionLogicIRInfo where
+instance HasCodec RenderAsLadderInfo where
   codec =
-    named "VisualizeDecisionLogicIRInfo" $
-      object "VisualizeDecisionLogicIRInfo" $
-        MkVisualizeDecisionLogicIRInfo
-          <$> requiredField' "program" .= view #program
+    named "RenderAsLadderInfo" $
+      object "RenderAsLadderInfo" $
+        MkRenderAsLadderInfo
+          <$> requiredField' "funDecl" .= view #funDecl
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec
@@ -141,14 +131,14 @@ instance HasCodec VisualizeDecisionLogicIRInfo where
 deriving via (Autodocodec ID) instance ToJSON ID
 deriving via (Autodocodec ID) instance FromJSON ID
 
-deriving via (Autodocodec BoolValue) instance ToJSON BoolValue
-deriving via (Autodocodec BoolValue) instance FromJSON BoolValue
+deriving via (Autodocodec UBoolValue) instance ToJSON UBoolValue
+deriving via (Autodocodec UBoolValue) instance FromJSON UBoolValue
 
 deriving via (Autodocodec IRExpr) instance ToJSON IRExpr
 deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance ToJSON VisualizeDecisionLogicIRInfo
-deriving via (Autodocodec VisualizeDecisionLogicIRInfo) instance FromJSON VisualizeDecisionLogicIRInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance ToJSON RenderAsLadderInfo
+deriving via (Autodocodec RenderAsLadderInfo) instance FromJSON RenderAsLadderInfo
 
 {-
 Am trying out autodocodec because I wanted to see if
@@ -160,3 +150,13 @@ I haven't actually tried setting up such a automated test though.
 
 If that doesn't end up panning out, I will switch back to aeson.
 -}
+
+-------------------------------------------------------------
+-- Utils
+-------------------------------------------------------------
+{- | Adapted from
+https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L827
+-}
+typeField :: Text -> a -> ObjectCodec b a
+typeField typeName a =
+  a <$ requiredFieldWith' "$type" (literalTextCodec typeName) .= const typeName

@@ -12,6 +12,8 @@ import Data.Default
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import Optics
+import qualified Base.Text as Text
+import qualified Data.List.NonEmpty as NE
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -19,6 +21,9 @@ data Name = MkName Anno RawName
 
 data RawName =
     NormalName Text
+  | QualifiedName (NonEmpty Text) Text
+  -- ^ contains the actual name and a list of qualifiers, e.g.
+  -- foo.bar becomes @'QualifiedName' bar [foo]@
   | PreDef Text
   deriving stock (GHC.Generic, Eq, Ord, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -63,8 +68,9 @@ getActual (OutOfScope _ n) = n
 
 -- | Get the actual textual form of a raw name.
 rawNameToText :: RawName -> Text
-rawNameToText (NormalName n) = n
-rawNameToText (PreDef n)     = n
+rawNameToText (NormalName n)       = n
+rawNameToText (PreDef n)           = n
+rawNameToText (QualifiedName qs n) = Text.intercalate "." (NE.toList qs <> [n])
 
 nameToText :: Name -> Text
 nameToText = rawNameToText . rawName
@@ -141,13 +147,14 @@ data Assume n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
-    Eval Anno (Expr n)
+    StrictEval Anno (Expr n)
+  | LazyEval Anno (Expr n)
   | Check Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Import n =
-  MkImport Anno n
+  MkImport Anno n (Maybe NormalizedUri)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -225,16 +232,15 @@ data Program n
   = MkProgram (Module n) [Module n]
 
 data Module n =
-  MkModule Anno NormalizedUri [Section n]
+  MkModule Anno NormalizedUri (Section n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Section n =
-  MkSection Anno SectionLevel (Maybe n) (Maybe (Aka n)) [TopDecl n]
+  MkSection Anno (Maybe n) (Maybe (Aka n)) [TopDecl n]
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
-type SectionLevel = Int
 
 data TopDecl n =
     Declare   Anno (Declare n)
@@ -242,6 +248,7 @@ data TopDecl n =
   | Assume    Anno (Assume n)
   | Directive Anno (Directive n)
   | Import    Anno (Import n)
+  | Section   Anno (Section n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -269,6 +276,8 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
+overImports :: forall nodeType n. (Optics.GPlate (Import n) (nodeType n)) => (Import n -> Import n) -> nodeType n -> nodeType n
+overImports = Optics.over Optics.gplate
 
 appFormHead :: Lens' (AppForm n) n
 appFormHead = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wn -> MkAppForm ann wn ns maka) <$> wrap n)
@@ -282,6 +291,11 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
+
+updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
+updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
+  (u' : _) -> MkImport ann n (Just u')
+  [] -> i
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
@@ -387,7 +401,7 @@ deriving via L4Syntax (LocalDecl n)
 
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Name) where
-  toNodes (MkSection ann _lvl name maka decls) =
+  toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
@@ -416,9 +430,12 @@ deriving anyclass instance ToConcreteNodes PosToken (Import Name)
 instance ToConcreteNodes PosToken (Module Name) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
+instance ToConcreteNodes PosToken NormalizedUri where
+  toNodes _ = pure []
+
 -- Generic instance does not apply because we exclude the level.
 instance ToConcreteNodes PosToken (Section Resolved) where
-  toNodes (MkSection ann _lvl name maka decls) =
+  toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Resolved)
@@ -572,3 +589,27 @@ deriving anyclass instance HasSrcRange Ref
 
 instance HasSrcRange Resolved where
   rangeOf = rangeOf . getActual
+
+-- | this can be used to get rid of annotations to clean up printing
+clearAnno :: GPlate Anno a => a -> a
+clearAnno = set (gplate @Anno) emptyAnno
+
+-- ------------------------------------
+-- Syntax manipulation
+-- ------------------------------------
+
+forall' :: [n] -> Type' n -> Type' n
+forall' [] t = t
+forall' ns t = Forall emptyAnno ns t
+
+fun_ :: [Type' n] -> Type' n -> Type' n
+fun_ [] t = t
+fun_ ts t = fun (MkOptionallyNamedType emptyAnno Nothing <$> ts) t
+
+fun :: [OptionallyNamedType n] -> Type' n -> Type' n
+fun [] t = t
+fun ts t = Fun emptyAnno ts t
+
+app :: n -> [Type' n] -> Type' n
+app = TyApp emptyAnno
+

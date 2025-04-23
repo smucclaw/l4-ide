@@ -49,7 +49,10 @@ import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
 import qualified L4.Evaluate as Evaluate
+import qualified L4.EvaluateLazy as EvaluateLazy
+import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import System.Directory
+import qualified Paths_jl4_core
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -79,12 +82,21 @@ data ListOwnDirectory = ListOwnDirectory
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetImports = [(Maybe SrcRange, NormalizedUri)]
+data ImportResult
+  = MkImportResult
+  { importName :: Name
+  , importRange :: Maybe SrcRange
+  , moduleUri :: NormalizedUri
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass NFData
+
+type instance RuleResult GetImports = [ImportResult]
 data GetImports = GetImports
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
-type instance RuleResult GetTypeCheckDependencies = [TypeCheckResult]
+type instance RuleResult GetTypeCheckDependencies = [(ImportResult, TypeCheckResult)]
 data GetTypeCheckDependencies = GetTypeCheckDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
@@ -114,13 +126,23 @@ data TypeCheckResult = TypeCheckResult
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData)
 
-type instance RuleResult Evaluate = [EvalDirectiveResult]
+type instance RuleResult Evaluate = [Evaluate.EvalDirectiveResult]
 data Evaluate = Evaluate
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult EvaluateLazy = [EvaluateLazy.EvalDirectiveResult]
+data EvaluateLazy = EvaluateLazy
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
 type instance RuleResult GetEvaluationDependencies = Evaluate.EvalState
 data GetEvaluationDependencies = GetEvaluationDependencies
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult GetLazyEvaluationDependencies = (EvaluateLazy.Environment, [EvaluateLazy.EvalDirectiveResult])
+data GetLazyEvaluationDependencies = GetLazyEvaluationDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -249,31 +271,55 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
-        mkImportPath (MkImport a n) = do
+        mkImportPath :: Import Name -> Action (Maybe SrcRange, String, [FilePath], Maybe FilePath)
+        mkImportPath (MkImport a n _mr) = do
+
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-          -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-          mFileDirectory <- runMaybeT do
-            -- TODO: idk if this is the best way of doing it, maybe trying the entire rule that uses the import and then
-            -- failing there if the rule fails would be morally better? Seems like it is more incremental than doing it
-            -- like this
-            dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-            guard =<< liftIO (doesFileExist (dir </> modName <.> "l4"))
-            pure dir
+          paths <- fold <$> runMaybeT do
+            -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
+            relPath <- do
+              dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+              pure $ dir </> modName <.> "l4"
 
-          pure (rangeOf a, fromMaybe rootDirectory mFileDirectory </> modName <.> "l4")
+            let rootPath = rootDirectory </> modName <.> "l4"
 
-        mkImportUri range fp = do
-          e <- doesFileExist fp
-          let u = toNormalizedUri $ filePathToUri fp
-              diag = do
-                guard $ not e
-                [mkSimpleFileDiagnostic u $ mkSimpleDiagnostic (fromNormalizedUri uri).getUri ("File does not exist: " <> Text.pack fp) (fromSrcRange <$> range)]
-          pure (diag, range, u)
+            builtinPath <- do
+              dataDir <- liftIO Paths_jl4_core.getDataDir
+              pure $ dataDir </> "libraries" </> modName <.> "l4"
+            pure [rootPath, relPath, builtinPath]
 
+
+          existingPaths <- runMaybeT do
+
+            let guardExists pth = do
+                  guard =<< liftIO (doesFileExist pth)
+                  pure pth
+
+            asum $ guardExists <$> paths
+
+          pure (rangeOf a, modName, paths, existingPaths)
+
+        mkImportUri (range, modName, pths, mfp) = case mfp of
+          Just fp -> do
+            let u = toNormalizedUri $ filePathToUri fp
+            pure ([], range, u)
+          Nothing ->
+            let diag = mkSimpleFileDiagnostic uri
+                  $ mkSimpleDiagnostic
+                    (fromNormalizedUri uri).getUri
+                    (Text.unlines
+                      [ "I could not find a module with this name: " <> Text.pack modName
+                      , "I have tried the following paths:"
+                      , Text.intercalate ",\n" (map Text.pack pths)
+                      ])
+                    (fromSrcRange <$> range)
+             in pure ([diag], range, uri)
+
+        mkDiagsAndImports :: TopDecl Name -> Ap Action [([FileDiagnostic], ImportResult)]
         mkDiagsAndImports = \case
-          Import _a i -> Ap do
-            (diag, r, u) <- liftIO . uncurry mkImportUri =<< mkImportPath i
-            pure [(diag, (r, u))]
+          Import _a i@(MkImport _ n _) -> Ap do
+            (diag, r, u) <- liftIO . mkImportUri =<< mkImportPath i
+            pure [(diag, MkImportResult n r u)]
           _ -> pure []
 
 
@@ -283,27 +329,42 @@ jl4Rules rootDirectory recorder = do
 
   defineWithCallStack shakeRecorder $ \GetTypeCheckDependencies cs uri -> do
     imports <- use_  GetImports uri
-    ress    <- fmap catMaybes $ uses (AttachCallStack cs TypeCheckNoCallstack) $ map snd imports
+    ress    <- fmap catMaybes $ zipWith (\res mres -> (res,) <$> mres) imports <$> uses (AttachCallStack cs TypeCheckNoCallstack) (map (.moduleUri) imports)
     pure ([], Just ress)
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
     parsed       <- use_ GetParsedAst uri
-    dependencies <- use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+    -- traceM $ Text.unpack $ Print.prettyLayout parsed
+    -- traceShowM parsed
+    (imported, dependencies) <- unzip <$> use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
+
+    let parsedAndAnnotated = overImports (updateImport $ map (\res -> (res.importName, res.moduleUri)) imported) parsed
+
     let unionCheckStates :: TypeCheck.CheckState -> TypeCheckResult -> TypeCheck.CheckState
         unionCheckStates cState tcRes =
           TypeCheck.MkCheckState
-          -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
-          { environment = Map.unionWith List.union cState.environment tcRes.environment
-          -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
-          -- same module. That means that the rhs of it should be identical.
-          , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cState.entityInfo tcRes.entityInfo
-          , substitution = tcRes.substitution
-          , errorContext = cState.errorContext
+          { substitution = tcRes.substitution
           , supply = cState.supply
           }
+        unionCheckEnv cEnv tcRes =
+          TypeCheck.MkCheckEnv
+            -- NOTE: the environments behave more like sets than like lists, that's why we need to union them
+            { environment = Map.unionWith List.union cEnv.environment tcRes.environment
+            -- NOTE: we assume that if we have a mapping from a specific unique then it must have come from the
+            -- same module. That means that the rhs of it should be identical.
+            , entityInfo = Map.unionWith (\t1 t2 -> assert (t1 == t2) t1) cEnv.entityInfo tcRes.entityInfo
+            , errorContext = cEnv.errorContext
+            , moduleUri = cEnv.moduleUri
+            , functionTypeSigs = Map.empty -- we can omit environments that are only used internally
+            , declTypeSigs = Map.empty
+            , declareDeclarations = Map.empty
+            , assumeDeclarations = Map.empty
+            , sectionStack = []
+            }
         -- NOTE: we don't want to leak the inference variables from the substitution
-        initial = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
-        result = TypeCheck.doCheckProgramWithDependencies initial uri parsed
+        initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
+        initCheckEnv = foldl' unionCheckEnv (TypeCheck.initialCheckEnv uri) dependencies
+        result = TypeCheck.doCheckProgramWithDependencies initCheckState initCheckEnv parsedAndAnnotated
         (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
@@ -337,7 +398,7 @@ jl4Rules rootDirectory recorder = do
         <*> use_ ListOwnDirectory uri
     importers <-
       mapMaybe
-        (\(importerUri, imports) -> if uri `elem` map snd imports then Just importerUri else Nothing)
+        (\(importerUri, imports) -> if uri `elem` map (.moduleUri) imports then Just importerUri else Nothing)
        . zip potentialDependencies
        <$> uses_ GetImports potentialDependencies
     transitiveImporters <- concat <$> uses_ (AttachCallStack (uri : cs) GetReverseDependenciesNoCallStack) importers
@@ -356,15 +417,32 @@ jl4Rules rootDirectory recorder = do
     -- first element in the cycle that is, i.e. which IMPORT, then scan
     -- for the IMPORT again and
     -- put the diagnostic on that IMPORT
-    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map snd imports
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map (.moduleUri) imports
     let environment = Evaluate.unionEnvironments $ map (.environment) deps
         own = execEvalModuleWithEnv environment tcRes.module'
     pure ([], Just own)
+
+  defineWithCallStack shakeRecorder $ \GetLazyEvaluationDependencies cs f -> do
+    imports <- use_  GetImports f
+    tcRes   <- use_  SuccessfulTypeCheck f
+    -- TODO: when checking for cycles, we should check which one is the
+    -- first element in the cycle that is, i.e. which IMPORT, then scan
+    -- for the IMPORT again and
+    -- put the diagnostic on that IMPORT
+    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map (.moduleUri) imports
+    let environment = mconcat (fst <$> deps)
+    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv environment tcRes.module')
+    pure ([], Just (ownEnv <> environment, ownDirectives))
 
   define shakeRecorder $ \Evaluate uri -> do
     res  <- use_ (AttachCallStack [uri] GetEvaluationDependencies) uri
     let results = res.directiveResults
     pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just results)
+
+  define shakeRecorder $ \EvaluateLazy uri -> do
+    res  <- use_ (AttachCallStack [uri] GetLazyEvaluationDependencies) uri
+    let results = snd res
+    pure (mkSimpleFileDiagnostic uri . evalLazyResultToDiagnostic <$> results, Just results)
 
   define shakeRecorder $ \LexerSemanticTokens f -> do
     (tokens, _) <- use_ GetLexTokens f
@@ -571,6 +649,20 @@ jl4Rules rootDirectory recorder = do
         , _codeDescription = Nothing
         , _source = Just "eval"
         , _message = either (Text.unlines . prettyEvalException) Print.prettyLayout res
+        , _tags = Nothing
+        , _relatedInformation = Nothing
+        , _data_ = Nothing
+        }
+
+    evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
+    evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
+      Diagnostic
+        { _range = srcRangeToLspRange (Just range)
+        , _severity = Just LSP.DiagnosticSeverity_Information
+        , _code = Nothing
+        , _codeDescription = Nothing
+        , _source = Just "eval"
+        , _message = either (Text.unlines . EvaluateLazy.prettyEvalException) Print.prettyLayout res
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

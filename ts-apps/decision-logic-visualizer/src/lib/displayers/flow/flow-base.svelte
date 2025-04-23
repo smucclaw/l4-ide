@@ -20,30 +20,30 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import * as SF from '@xyflow/svelte'
+  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
   import {
-    type BaseLadderFlowDisplayerProps,
     type LadderSFNodeWithDims,
     type LadderSFGraph,
+    type LadderSFNode,
     sfNodeTypes,
     sfEdgeTypes,
     isBoolVarSFNode,
     getSFNodeId,
-    type LadderSFNode,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/layout-ir/value.js'
+  import { cycle } from '$lib/eval/type.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
-    BoolVarLirNode,
+    UBoolVarLirNode,
     LadderLirNode,
-  } from '$lib/layout-ir/ladder-lir.svelte.js'
-  import { isValidPathsListLirNode } from '$lib/layout-ir/ladder-lir.svelte.js'
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
-  import PathsList from './paths-list.svelte'
+  import PathsList from '../paths-list.svelte'
 
   /************************
        Lir
@@ -131,6 +131,7 @@
         if (debouncedSfNodes$Initialized.current) {
           doLayoutAndFitView()
         }
+        updateResultDisplay()
       }
     )
 
@@ -164,16 +165,16 @@
       Other SvelteFlow event listeners
   ***************************************/
 
-  // TODO: prob better to put this in bool-var.svelte.ts
+  // TODO: prob better to put this in ubool-var.svelte.ts
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
-    const lirId = sfNodeToLirId(event.node)
-    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
+    const lirId = sfNodeToLirId(event.node as LadderSFNode)
+    const varNode = context.get(lirId) as UBoolVarLirNode
 
-    const newValue = cycle(lirBoolVarNode.getValue(context))
+    const newValue = cycle(varNode.getValue(context))
     ladderGraph.submitNewBinding(context, {
-      unique: lirBoolVarNode.getUnique(context),
+      unique: varNode.getUnique(context),
       value: newValue,
     })
   }
@@ -183,10 +184,19 @@
   > = (event) => {
     if (event.targetNode) {
       const lirNode = context.get(
-        sfNodeToLirId(event.targetNode)
+        sfNodeToLirId(event.targetNode as LadderSFNode)
       ) as LadderLirNode
       lirNode.setPosition(context, event.targetNode.position)
     }
+  }
+
+  /***********************************
+            Result UI
+  ************************************/
+
+  let resultMessage: string = $state('')
+  function updateResultDisplay() {
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
   }
 
   /*********************************************
@@ -211,6 +221,8 @@
       sfIdToLirId = newSfGraph.sfIdToLirId
       lirIdToSfId = newSfGraph.lirIdToSFId
       // console.log('newSfGraph NODES', NODES)
+
+      updateResultDisplay()
     }
   }
 
@@ -305,7 +317,11 @@ Misc SF UI TODOs:
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
   <h1>{declLirNode.getFunName(context)}</h1>
-  <div class="flow-container" style={`opacity: ${flowOpacity}`}>
+  <h2>{resultMessage}</h2>
+  <div
+    class="flow-container transition-opacity"
+    style={`opacity: ${flowOpacity}`}
+  >
     <SvelteFlow
       bind:nodes={NODES}
       bind:edges={EDGES}
@@ -365,6 +381,10 @@ Misc SF UI TODOs:
 
   h1 {
     @apply text-2xl font-semibold text-center mt-1;
+  }
+
+  h2 {
+    @apply text-lg text-center -mt-2;
   }
 
   .overall-container {

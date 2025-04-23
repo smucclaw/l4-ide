@@ -16,6 +16,7 @@ import qualified Base.Text as Text
 import Optics ((%))
 import qualified Base.Map as Map
 import L4.Annotation
+import L4.Evaluate.Operators
 import L4.Evaluate.Value
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
@@ -224,20 +225,6 @@ addEvalDirectiveResult a val = do
   maybe (pure ()) (modifying #directiveResults . (:)) res
 
 
-data BinOp =
-    BinOpPlus
-  | BinOpMinus
-  | BinOpTimes
-  | BinOpDividedBy
-  | BinOpModulo
-  | BinOpCons
-  | BinOpEquals
-  | BinOpLeq
-  | BinOpGeq
-  | BinOpLt
-  | BinOpGt
-  deriving stock Show
-
 data Stack =
     BinOp1 BinOp {- -} (Expr Resolved) Environment Stack
   | BinOp2 BinOp Value {- -} Stack
@@ -270,11 +257,11 @@ initialEnvironment =
     ]
 
 evalModule :: Module Resolved -> Eval ()
-evalModule (MkModule _ann _uri sections) =
-  traverse_ evalSection sections
+evalModule (MkModule _ann _uri sec) =
+  evalSection sec
 
 evalSection :: Section Resolved -> Eval ()
-evalSection (MkSection _ann _lvl _mn _maka topdecls) =
+evalSection (MkSection _ann _mn _maka topdecls) =
   traverse_ evalTopDecl topdecls
 
 evalTopDecl :: TopDecl Resolved -> Eval ()
@@ -288,6 +275,8 @@ evalTopDecl (Directive _ann directive) =
   evalDirective directive
 evalTopDecl (Import _ann _import_) =
   pure ()
+evalTopDecl (Section _ann sec) =
+  evalSection sec
 
 evalLocalDecl :: LocalDecl Resolved -> Eval ()
 evalLocalDecl (LocalDecide _ann decide) =
@@ -361,9 +350,10 @@ evalExpr expr =
     )
 
 evalDirective :: Directive Resolved -> Eval ()
-evalDirective (Eval _ann expr) = do
+evalDirective (StrictEval _ann expr) = do
   v <- evalExpr expr
   addEvalDirectiveResult expr v
+evalDirective (LazyEval _ann _expr) = pure ()
 evalDirective (Check _ _) = pure ()
 
 maximumStackSize :: Int

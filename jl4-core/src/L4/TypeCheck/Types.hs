@@ -1,15 +1,20 @@
 -- | Types needed during the scope and type checking phase.
+{-# LANGUAGE UndecidableInstances #-}
 module L4.TypeCheck.Types where
 
 import Base
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
+import L4.Lexer (PosToken)
 import L4.Parser.SrcSpan (SrcRange(..))
 import L4.Syntax
 import L4.TypeCheck.With
 
 import Control.Applicative
-import L4.Lexer (PosToken)
+import Data.Bifunctor
 import qualified Data.Map.Strict as Map
+import qualified Generics.SOP as SOP
+import Optics.Core (gplate, traverseOf)
+import Control.Exception (throw, Exception)
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
@@ -20,8 +25,9 @@ type Substitution = Map Int (Type' Resolved)
 -- the arguments, so that we can properly substitute when instantiated.
 --
 data CheckEntity =
-    KnownType Kind [Resolved] (TypeDecl Resolved)
+    KnownType Kind [Resolved] (Maybe (Type' Resolved))
   | KnownTerm (Type' Resolved) TermKind
+  | KnownSection (Section Resolved)
   | KnownTypeVariable
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
@@ -37,10 +43,7 @@ data TermKind =
 
 data CheckState =
   MkCheckState
-    { environment  :: !Environment
-    , entityInfo   :: !EntityInfo
-    , errorContext :: !CheckErrorContext
-    , substitution :: !Substitution
+    { substitution :: !Substitution
     , supply       :: !Int
     }
   deriving stock (Eq, Generic, Show)
@@ -72,6 +75,12 @@ data CheckError =
   | MissingEntityInfo Resolved
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
+
+data InternalCheckError =
+    MissingSrcRangeForDeclaration Anno
+  | MissingDeclForSrcRange Anno
+  deriving stock Show
+  deriving anyclass Exception
 
 data ExpectationContext =
     ExpectAssumeSignatureContext (Maybe SrcRange) -- actual result range from the signature, if it exists
@@ -131,7 +140,82 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
-newtype CheckEnv = MkCheckEnv { moduleUri :: NormalizedUri }
+-- | A checked function signature.
+data FunTypeSig = MkFunTypeSig
+  { anno :: Anno
+  , rtysig :: TypeSig Resolved
+  -- ^ Already checked 'TypeSig'
+  , rappForm :: AppForm Resolved
+  -- ^ Already checked 'AppForm'
+  , resultType :: Type' Resolved
+  -- ^ Result type of the function
+  , name :: CheckInfo
+  -- ^ Name of this function
+  , arguments :: [CheckInfo]
+  -- ^ Arguments to the function.
+  -- Includes type variables.
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic, NFData)
+
+-- | A checked declaration signature.
+--
+-- Contains in particular kind info for the type-level declaration.
+--
+data DeclTypeSig = MkDeclTypeSig
+  { anno :: Anno
+  , rtysig :: TypeSig Resolved
+  -- ^ Already checked 'TypeSig'
+  , rappForm :: AppForm Resolved
+  -- ^ Already checked 'AppForm'
+  , typeSynonym :: Maybe (Type' Name)
+  -- ^ Whether this 'DeclaredHeadCache' is a type synonym.
+  -- If yes, what is its *unchecked* type?
+  , name :: CheckInfo
+  -- ^ Name of this data type.
+  , tyVars :: [CheckInfo]
+  -- ^ Type variable arguments of this data type.
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic, NFData)
+
+data DeclChecked a = MkDeclChecked
+  { payload :: a
+  , publicNames :: [CheckInfo]
+  }
+  deriving stock (Eq, Functor, Generic, Show)
+  deriving anyclass (SOP.Generic, NFData)
+
+type DeclareOrAssume = Either (Declare Resolved) (Assume Resolved)
+
+data CheckEnv =
+  MkCheckEnv
+    { moduleUri            :: !NormalizedUri
+    , environment          :: !Environment
+    , entityInfo           :: !EntityInfo
+    , functionTypeSigs     :: !(Map SrcRange FunTypeSig)
+    , declTypeSigs         :: !(Map SrcRange DeclTypeSig)
+    , declareDeclarations  :: !(Map SrcRange (DeclChecked (Declare Resolved)))
+    , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
+    , errorContext         :: !CheckErrorContext
+    , sectionStack         :: ![NonEmpty Text]
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
+
+newtype SectionNames =
+  MkSectionNames
+    { sectionNames :: [Text]
+    }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
+
+data CheckInfo = MkCheckInfo
+  { names :: [Resolved]
+  , checkEntity :: CheckEntity
+  }
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (NFData)
 
 newtype Check a =
   MkCheck (CheckEnv -> CheckState -> [(With CheckErrorWithContext a, CheckState)])
@@ -162,11 +246,11 @@ runCheck' e s (MkCheck f) = f e s
 
 data CheckResult =
   MkCheckResult
-    { program      :: Module  Resolved
-    , errors       :: [CheckErrorWithContext]
-    , substitution :: Substitution
-    , environment  :: Environment
-    , entityInfo   :: EntityInfo
+    { program      :: !(Module  Resolved)
+    , errors       :: ![CheckErrorWithContext]
+    , substitution :: !Substitution
+    , environment  :: !Environment
+    , entityInfo   :: !EntityInfo
     }
   deriving stock (Eq, Show)
 
@@ -232,8 +316,11 @@ newUnique = do
 
 addError :: CheckError -> Check ()
 addError e = do
-  ctx <- use #errorContext
+  ctx <- asks (.errorContext)
   with (MkCheckErrorWithContext e ctx)
+
+fatalInternalError :: InternalCheckError -> Check a
+fatalInternalError e = throw e
 
 choose :: [Check a] -> Check a
 choose = asum
@@ -274,7 +361,7 @@ ambiguousType n xs = do
 
 resolvedType :: Resolved -> Check Resolved
 resolvedType n = do
-  ei <- use #entityInfo
+  ei <- asks (.entityInfo)
   case Map.lookup (getUnique n) ei of
     Nothing -> do
       -- TODO: there are cases where this situation is a clear bug.
@@ -284,22 +371,40 @@ resolvedType n = do
       pure n
     Just (_, checkEntity) ->
       pure case checkEntity of
-        KnownType kind _resolved _tyDecl -> setAnnResolvedKindOfResolved kind n
+        KnownType kind _resolved _ -> setAnnResolvedKindOfResolved kind n
         KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
         KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
+        KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
-lookupRawNameInEnvironment n = do
-  env <- use #environment
-  ei  <- use #entityInfo
+lookupRawNameInEnvironment rn = do
+  env <- asks (.environment)
+  ei  <- asks (.entityInfo)
   let
-    proc :: Unique -> Maybe (Unique, Name, CheckEntity)
-    proc u = (\ (o, ce) -> (u, o, ce)) <$> Map.lookup u ei
+      proc :: Unique -> Maybe (Unique, Name, CheckEntity)
+      proc u = do
+        (o, ce) <- Map.lookup u ei
+        pure (u, o, ce)
 
-    candidates :: [(Unique, Name, CheckEntity)]
-    candidates = mapMaybe proc (Map.findWithDefault [] n env)
+      candidates :: [(Unique, Name, CheckEntity)]
+      candidates = mapMaybe proc (Map.findWithDefault [] rn env)
 
   pure candidates
+
+isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
+isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . matchesUnq) decls
+  where
+  matchesUnq = \case
+    Declare _ (MkDeclare _ _ af _) -> afUnq af
+    Decide _ (MkDecide _ _ af _) -> afUnq af
+    Assume _ (MkAssume _ _ af _) -> afUnq af
+    Directive _ _ -> []
+    Import _ _ -> []
+    -- NOTE: Sections are a toplevel binding in the current section but can also contain further
+    -- toplevel bindings
+    Section _ (MkSection _ mr maka decls') -> foldMap (\r -> [getUnique r]) mr <> foldMap (\(MkAka _ rs) -> map getUnique rs) maka <> foldMap matchesUnq decls'
+
+  afUnq = map getUnique . appFormHeads
 
 resolveTerm' :: (TermKind -> Bool) -> Name -> Check (Resolved, Type' Resolved)
 resolveTerm' p n = do
@@ -351,3 +456,248 @@ setAnnResolvedKindOfResolved k = \case
   Def u n -> Def u (setAnnResolvedKind k n)
   Ref r u o -> Ref (setAnnResolvedKind k r) u o
   OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
+
+-- | Should never return 'Nothing' if our system is OK.
+getEntityInfo :: Resolved -> Check (Maybe CheckEntity)
+getEntityInfo r = do
+  ei <- asks (.entityInfo)
+  case Map.lookup (getUnique r) ei of
+    Nothing       -> do
+      addError (MissingEntityInfo r)
+      pure Nothing
+    Just (_n, ce) -> pure (Just ce)
+
+-- | Given a substitution from uniques to types, substitute
+-- all occurrences of the given uniques. There's no scoping
+-- going on in this, because uniques are unique!
+--
+substituteType :: Map Unique (Type' Resolved) -> Type' Resolved -> Type' Resolved
+substituteType _ (Type ann)               = Type ann
+substituteType s t@(TyApp _ r []) =
+  case Map.lookup (getUnique r) s of
+    Nothing -> t
+    Just t' -> t'
+substituteType s (TyApp ann n ts)         =
+  TyApp ann n (substituteType s <$> ts)
+substituteType s (Fun ann onts t)         =
+  Fun ann (substituteOptionallyNamedType s <$> onts) (substituteType s t)
+substituteType _ (Forall ann ns t)        =
+  Forall ann ns t -- TODO!! Inner Forall needs some form of alpha renaming.
+substituteType _ (InfVar ann prefix i)    = InfVar ann prefix i
+-- substituteType s (ParenType ann t)        = ParenType ann (substituteType s t)
+
+substituteOptionallyNamedType :: Map Unique (Type' Resolved) -> OptionallyNamedType Resolved -> OptionallyNamedType Resolved
+substituteOptionallyNamedType s (MkOptionallyNamedType ann mn t) =
+  MkOptionallyNamedType ann mn (substituteType s t)
+
+-- | A class for applying the subsitution on inference variables exhaustively.
+--
+-- Note that we currently are applying the substitution late, which means we have
+-- to recursively apply it.
+--
+class ApplySubst a where
+  applySubst :: a -> Check a
+
+instance ApplySubst (Type' Resolved) where
+  applySubst (Type  ann)       = pure (Type ann)
+  applySubst (TyApp ann n ts)  = TyApp ann n <$> traverse applySubst ts
+  applySubst (Fun ann onts t)  = Fun ann <$> traverse applySubst onts <*> applySubst t
+  applySubst (Forall ann ns t) = Forall ann ns <$> applySubst t
+  applySubst (InfVar ann rn i) = do
+    s <- use #substitution
+    case Map.lookup i s of
+      Nothing -> pure (InfVar ann rn i)
+      Just t  -> do
+        -- we actually modify the substitution so that we don't do the same work many times if the same variable occurs often
+        -- we are still traversing every time though; we could do better
+        t' <- applySubst t
+        modifying #substitution (Map.insert i t')
+        pure t'
+
+instance ApplySubst (OptionallyNamedType Resolved) where
+  applySubst (MkOptionallyNamedType ann mn t) = MkOptionallyNamedType ann mn <$> applySubst t
+
+instance ApplySubst CheckError where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckError) applySubst
+
+instance ApplySubst CheckErrorContext where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorContext) applySubst
+
+instance ApplySubst CheckErrorWithContext where
+  applySubst = traverseOf (gplate @(Type' Resolved) @CheckErrorWithContext) applySubst
+
+instance ApplySubst EntityInfo where
+  applySubst = traverse (\(n, entity) -> (n, ) <$> applySubst entity)
+
+instance ApplySubst CheckEntity where
+  applySubst = traverseOf (gplate @(Type' Resolved)) applySubst
+
+-- | Checks that two resolved names refer to the same unique.
+ensureSameRef :: Resolved -> Resolved -> Check Bool
+ensureSameRef r1 r2 =
+  pure (getUnique r1 == getUnique r2)
+
+optionallyNamedTypeType :: OptionallyNamedType n -> Type' n
+optionallyNamedTypeType (MkOptionallyNamedType _ _ t) = t
+
+-- | Biased choice. Only takes the second option if the first fails.
+--
+orElse :: Check a -> Check a -> Check a
+orElse m1 m2 = do
+  MkCheck $ \ e s ->
+    let
+      candidates = runCheck m1 e s
+
+      isSuccess (Plain _, _)  = True
+      isSuccess (With _ _, _) = False
+    in
+      case filter isSuccess candidates of
+        [] -> runCheck m2 e s
+        xs -> xs
+
+-- | Allow the subcomputation to have at most one result.
+--
+prune :: forall a. Check a -> Check a
+prune m = do
+  ctx <- asks (.errorContext)
+  MkCheck $ \ s env ->
+    let
+      candidates :: [(With CheckErrorWithContext a, CheckState)]
+      candidates = runCheck m s env
+
+      proc []                    = [] -- should never occur
+      proc [a]                   = [a]
+      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
+      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+
+      -- We have a success, we don't want a second one
+      procPlain a []                   = [a]
+      procPlain a ((Plain _, _)  : []) = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
+      procPlain _ ((Plain _, _)  : cs) = [last cs]
+      procPlain a ((With _ _, _) : cs) = procPlain a cs
+
+      -- We have a failure, we're still looking for a success, and prefer the last failure
+      procWith a []                     = [a]
+      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
+      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+
+    in
+      proc candidates
+
+-- | Prune to one result if there's a clearly best one at this point,
+-- but don't force it.
+--
+softprune :: forall a. Check a -> Check a
+softprune m = do
+  MkCheck $ \ s env ->
+    let
+      candidates :: [(With CheckErrorWithContext a, CheckState)]
+      candidates = runCheck m s env
+
+      proc []                    = [] -- should never occur
+      proc [a]                   = [a]
+      proc ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
+      proc ((With e x, s') : cs) = procWith (With e x, s') cs
+
+      -- We have a success, we don't want a second one
+      procPlain a []                    = [a]
+      procPlain _ ((Plain _, _)  : [])  = candidates
+      procPlain _ ((Plain _, _)  : _cs) = candidates
+      procPlain a ((With _ _, _) :  cs) = procPlain a cs
+
+      -- We have a failure, we're still looking for a success, and prefer the last failure
+      procWith a []                     = [a]
+      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
+      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+
+    in
+      proc candidates
+
+-- | Set the 'CheckErrorContext' for the given scope.
+errorContext :: (CheckErrorContext -> CheckErrorContext) -> Check a -> Check a
+errorContext errorCtx =
+  local (\env -> env { errorContext = errorCtx env.errorContext })
+
+-- | Push a new 'Section' Name onto the stack.
+-- This is used for exposing qualified names during type checking.
+pushSection :: NonEmpty Text -> Check a -> Check a
+pushSection rawSectionName =
+  local (\env -> env { sectionStack = env.sectionStack <> [rawSectionName] })
+
+-- ------------------------------------
+-- Scope Manipulation
+-- ------------------------------------
+
+-- | Make the given 'CheckInfo' known in the given scope.
+extendKnown :: CheckInfo -> Check a -> Check a
+extendKnown ci =
+  extendKnownMany [ci]
+
+-- | Make many 'CheckInfo's known for the given scope.
+extendKnownMany :: [CheckInfo] -> Check a -> Check a
+extendKnownMany cis = do
+  local (extendEnv cis)
+
+-- | Extend the scope of the 'CheckEnv' with all '[CheckInfo]'.
+extendEnv :: [CheckInfo] -> CheckEnv -> CheckEnv
+extendEnv cis env =
+  foldl' goCheckInfo env cis
+ where
+  goCheckInfo :: CheckEnv -> CheckInfo -> CheckEnv
+  goCheckInfo e ci =
+    foldl' (goResolved ci.checkEntity) e ci.names
+
+  goResolved :: CheckEntity -> CheckEnv -> Resolved -> CheckEnv
+  goResolved ce e a = MkCheckEnv
+    { environment = Map.alter proc (rawName n) e.environment
+    , entityInfo = Map.insert u (n, ce) e.entityInfo
+    , moduleUri = e.moduleUri
+    , errorContext = e.errorContext
+    , functionTypeSigs = e.functionTypeSigs
+    , declTypeSigs = e.declTypeSigs
+    , declareDeclarations = e.declareDeclarations
+    , assumeDeclarations = e.assumeDeclarations
+    , sectionStack = e.sectionStack
+    }
+    where
+      u :: Unique
+      n :: Name
+      (u, n) = getUniqueName a
+
+      proc :: Maybe [Unique] -> Maybe [Unique]
+      proc Nothing   = Just [u]
+      proc (Just xs) = Just (u : xs)
+
+makeKnown :: Resolved -> CheckEntity -> CheckInfo
+makeKnown a =
+  makeKnownMany [a]
+
+makeKnownMany :: [Resolved] -> CheckEntity -> CheckInfo
+makeKnownMany rs ce =
+  MkCheckInfo
+    { names = rs
+    , checkEntity = ce
+    }
+
+-- -------------------------------------
+-- Smart constructors for Resolved names
+-- -------------------------------------
+
+def :: Name -> Check Resolved
+def n = do
+  u <- newUnique
+  pure (Def u n)
+
+-- | Introduce the new name as a defining occurrence of an alias of an already existing name.
+defAka :: Resolved -> Name -> Check Resolved
+defAka r n = do
+  let u = getUnique r
+  pure (Def u n)
+
+ref :: Name -> Resolved -> Check Resolved
+ref n a =
+  let
+    (u, o) = getUniqueName a
+  in
+    pure (Ref n u o)
+

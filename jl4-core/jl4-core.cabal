@@ -4,6 +4,8 @@ version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
 
+data-files: libraries/*.l4
+
 common defaults
   default-language: GHC2021
   ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
@@ -52,16 +54,23 @@ library
     tree-diff,
     vector,
 
+  autogen-modules:
+    Paths_jl4_core
+
   exposed-modules:
     Base
     Base.Map
     Base.Set
     Base.Pretty
     Base.Text
+    Paths_jl4_core
     L4.Annotation
     L4.Citations
     L4.Evaluate
+    L4.Evaluate.Operators
     L4.Evaluate.Value
+    L4.Evaluate.ValueLazy
+    L4.EvaluateLazy
     L4.ExactPrint
     L4.FindDefinition
     L4.HoverInfo
@@ -78,5 +87,6 @@ library
     L4.TypeCheck.Annotation
     L4.TypeCheck.Environment
     L4.TypeCheck.Types
+    L4.TypeCheck.Unify
     L4.TypeCheck.With
     L4.Utils.RevList

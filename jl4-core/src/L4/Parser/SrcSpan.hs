@@ -86,6 +86,9 @@ data SrcPos =
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
+zeroSrcPos :: SrcPos
+zeroSrcPos = MkSrcPos 0 0
+
 -- | We ignore the file name, because we assume this has already been checked.
 inRange :: SrcPos -> SrcRange -> Bool
 inRange (MkSrcPos l c) (MkSrcRange (MkSrcPos l1 c1) (MkSrcPos l2 c2) _ _) =
