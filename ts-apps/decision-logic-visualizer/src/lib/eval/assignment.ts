@@ -1,30 +1,30 @@
 import type { Unique } from '@repo/viz-expr'
-import type { Value } from './type.js'
+import type { UBoolVal } from './type.js'
 import type { LirId } from '../layout-ir/core.js'
 
-/** A mapping from Unique to Value */
+/** A mapping from Unique to UBoolVal */
 export class Assignment {
-  #subst: Array<Value>
+  #subst: Array<UBoolVal>
 
-  static fromEntries(entries: Array<[Unique, Value]>) {
-    const initial: Array<Value> = []
+  static fromEntries(entries: Array<[Unique, UBoolVal]>) {
+    const initial: Array<UBoolVal> = []
     entries.forEach(([unique, value]) => {
       initial[unique] = value
     })
     return new Assignment(initial)
   }
 
-  constructor(initial: Array<Value>) {
+  constructor(initial: Array<UBoolVal>) {
     this.#subst = initial
   }
 
   /** Set binding */
-  set(unique: Unique, value: Value) {
+  set(unique: Unique, value: UBoolVal) {
     this.#subst[unique] = value
   }
 
   /** Get binding */
-  get(unique: Unique): Value | undefined {
+  get(unique: Unique): UBoolVal | undefined {
     return this.#subst[unique]
   }
 
@@ -32,14 +32,14 @@ export class Assignment {
     return this.#subst.map((_, i) => i)
   }
 
-  getEntries(): Array<[Unique, Value]> {
+  getEntries(): Array<[Unique, UBoolVal]> {
     // Need the filter because the underlying array can be sparse / have holes
     return Array.from(this.#subst.entries()).filter(
       ([, value]) => value !== undefined
     )
   }
 
-  asArray(): Array<Value> {
+  asArray(): Array<UBoolVal> {
     return this.#subst.slice()
   }
 

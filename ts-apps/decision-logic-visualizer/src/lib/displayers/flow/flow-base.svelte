@@ -37,7 +37,7 @@
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type {
-    BoolVarLirNode,
+    UBoolVarLirNode,
     LadderLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
@@ -165,16 +165,16 @@
       Other SvelteFlow event listeners
   ***************************************/
 
-  // TODO: prob better to put this in bool-var.svelte.ts
+  // TODO: prob better to put this in ubool-var.svelte.ts
   const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
     event
   ) => {
     const lirId = sfNodeToLirId(event.node as LadderSFNode)
-    const lirBoolVarNode = context.get(lirId) as BoolVarLirNode
+    const varNode = context.get(lirId) as UBoolVarLirNode
 
-    const newValue = cycle(lirBoolVarNode.getValue(context))
+    const newValue = cycle(varNode.getValue(context))
     ladderGraph.submitNewBinding(context, {
-      unique: lirBoolVarNode.getUnique(context),
+      unique: varNode.getUnique(context),
       value: newValue,
     })
   }

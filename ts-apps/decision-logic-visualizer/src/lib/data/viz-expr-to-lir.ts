@@ -1,12 +1,11 @@
-import type { IRDecl, IRExpr, IRId } from '@repo/viz-expr'
+import type { FunDecl, IRExpr, IRId } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
 import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
-import type { DeclLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import {
   FunDeclLirNode,
-  BoolVarLirNode,
+  UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SourceNoAnnoLirNode,
@@ -26,8 +25,8 @@ import { match } from 'ts-pattern'
         Lir Data Sources
 ************************************/
 
-export const VizDeclLirSource: LirSource<IRDecl, DeclLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, decl: IRDecl): DeclLirNode {
+export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, decl: FunDecl): FunDeclLirNode {
     return new FunDeclLirNode(
       nodeInfo,
       decl.name,
@@ -116,9 +115,9 @@ function transform(
   */
 
   return match(expr)
-    .with({ $type: 'BoolVar' }, (originalVar) => {
-      const boolvar = new BoolVarLirNode(nodeInfo, originalVar)
-      const graph = vertex(boolvar.getId())
+    .with({ $type: 'UBoolVar' }, (originalVar) => {
+      const uboolvar = new UBoolVarLirNode(nodeInfo, originalVar)
+      const graph = vertex(uboolvar.getId())
       const newEnv = new Map(env).set(originalVar.id, graph)
       return { graph, vizExprToLirGraph: newEnv }
     })
@@ -200,6 +199,12 @@ function transform(
       ).set(orExpr.id, orGraph)
 
       return { graph: orGraph, vizExprToLirGraph: newEnv }
+    })
+    .with({ $type: 'App' }, (app) => {
+      console.log('app: \n', app)
+      throw new Error(
+        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      )
     })
     .exhaustive()
 }

@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import type { IRExpr, BoolVar, Unique, Name, IRId } from '@repo/viz-expr'
+import type { IRExpr, UBoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import {
-  type Value,
-  type UBoolValue,
+  type UBoolVal,
   TrueVal,
   FalseVal,
   isFalseVal,
@@ -56,8 +55,6 @@ is to make it easy to experiment with different displayers/renderers.
 /*************************************************
                 Decl Lir Node
  *************************************************/
-
-export type DeclLirNode = FunDeclLirNode
 
 export class FunDeclLirNode extends DefaultLirNode implements LirNode {
   readonly #name: Name
@@ -311,11 +308,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     // )
 
     const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
-      isBoolVarLirNode
+      isUBoolVarLirNode
     )
 
     // Make the initial args / assignment
-    const initialAssignmentAssocList: Array<[Unique, Value]> = varNodes.map(
+    const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
       (varN) => [
         varN.getUnique(nodeInfo.context),
         varN.getValue(nodeInfo.context),
@@ -526,7 +523,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
   submitNewBinding(
     context: LirContext,
-    binding: { unique: Unique; value: Value }
+    binding: { unique: Unique; value: UBoolVal }
   ) {
     // Update the args with the new binding
     this.#bindings.set(binding.unique, binding.value)
@@ -631,7 +628,7 @@ function getVerticesFromAlgaDag(
 
 /** All the LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
-  | BoolVarLirNode
+  | UBoolVarLirNode
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
@@ -640,30 +637,32 @@ export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
 
   /** This should be used only for UI purposes (and not, e.g., for evaluation) */
-  getValue(context: LirContext): Value
+  getValue(context: LirContext): UBoolVal
   /** For displayers.
    *
    * This will only be invoked by LadderGraphLirNode. */
-  _setValue(context: LirContext, value: Value): void
+  _setValue(context: LirContext, value: UBoolVal): void
 }
 
-export function isBoolVarLirNode(node: LadderLirNode): node is BoolVarLirNode {
-  return node instanceof BoolVarLirNode
+export function isUBoolVarLirNode(
+  node: LadderLirNode
+): node is UBoolVarLirNode {
+  return node instanceof UBoolVarLirNode
 }
 
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
-export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   /** The value here is used only for UI purposes
    * The actual evaluation uses a different data structure (that is nevertheless kept
    * in sync with what values are stored on the VarLirNodes) */
-  #value: UBoolValue
+  #value: UBoolVal
   #name: Name
 
   constructor(
     nodeInfo: LirNodeInfo,
-    originalExpr: BoolVar,
+    originalExpr: UBoolVar,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
@@ -696,11 +695,11 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return [...this.#value.getClasses(), ...this.modifierCSSClasses]
   }
 
-  getValue(_context: LirContext): UBoolValue {
+  getValue(_context: LirContext): UBoolVal {
     return this.#value
   }
 
-  _setValue(_context: LirContext, value: UBoolValue) {
+  _setValue(_context: LirContext, value: UBoolVal) {
     this.#value = value
   }
 
@@ -709,7 +708,7 @@ export class BoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   }
 
   toString(): string {
-    return 'BOOL_VAR_LIR_NODE'
+    return 'UBOOL_VAR_LIR_NODE'
   }
 }
 
@@ -930,7 +929,7 @@ export function augmentEdgesWithExplanatoryLabel(
     const edgeV = context.get(edge.getV()) as LadderLirNode
 
     const targetIsEligible =
-      isBoolVarLirNode(edgeV) ||
+      isUBoolVarLirNode(edgeV) ||
       isNotStartLirNode(edgeV) ||
       isSourceWithOrAnnoLirNode(edgeV)
 
@@ -973,7 +972,7 @@ function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
     const negand = notStart.getNegand(context)
     return (
       isVertex(negand) &&
-      isBoolVarLirNode(context.get(negand.getValue()) as LadderLirNode)
+      isUBoolVarLirNode(context.get(negand.getValue()) as LadderLirNode)
     )
   }
 
