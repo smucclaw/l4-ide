@@ -169,9 +169,9 @@ translateExpr False = go
           leafFromVizName (mkVizNameWith prettyLayout resolved)
 
         App appAnno fnResolved args -> do
-          fnOfAppisFnFromBooleanToBooleans <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
+          fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
-          if isDevMode && fnOfAppisFnFromBooleanToBooleans
+          if isDevMode && fnOfAppIsFnFromBooleansToBoolean
             then
               V.App
                 <$> getFresh
