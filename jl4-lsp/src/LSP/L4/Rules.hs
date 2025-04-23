@@ -6,7 +6,6 @@ module LSP.L4.Rules where
 import Base hiding (use)
 import L4.Annotation
 import L4.Evaluate
-import L4.FindDefinition (toResolved)
 import L4.Lexer (PosToken, PError)
 import L4.Parser.SrcSpan
 import qualified L4.Lexer as Lexer
@@ -15,7 +14,7 @@ import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.Print as Print
 import L4.Citations
 import L4.Syntax
-import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution)
+import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution, applyFinalSubstitution, toResolved)
 import qualified L4.TypeCheck as TypeCheck
 
 import Control.Applicative
@@ -228,7 +227,7 @@ instance Pretty Log where
       where
         prettyToken :: SemanticToken -> Doc ann
         prettyToken s =
-          pretty (s.start._line) <> ":" <> pretty s.start._character <> "-"
+          pretty s.start._line <> ":" <> pretty s.start._character <> "-"
             <> pretty (s.start._character + s.length)
             <+> pretty s.category
 
@@ -580,9 +579,12 @@ jl4Rules rootDirectory recorder = do
               -- NOTE: the source range of the actual Name
               (rangeOf resolved)
 
-        resolveds = foldMap spanOf $ toResolved tcRes.module' <> foldMap (toResolved . (.module')) tcRes.dependencies
+        refMapping :: ReferenceMapping
+          = foldMap spanOf
+          $ toResolved tcRes.module'
+            <> foldMap (toResolved . (.module')) tcRes.dependencies
 
-    pure ([], Just resolveds)
+    pure ([], Just refMapping)
 
   define shakeRecorder $ \ExactPrint f -> do
     parsed <- use_ GetParsedAst f
