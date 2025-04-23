@@ -206,7 +206,7 @@ GIVEN
 GIVETH A BOOLEAN
 any f list MEANS
   CONSIDER list
-  WHEN EMPTY            THEN TRUE
+  WHEN EMPTY            THEN FALSE
   WHEN x FOLLOWED BY xs THEN f x OR any f xs
 
 GIVEN
