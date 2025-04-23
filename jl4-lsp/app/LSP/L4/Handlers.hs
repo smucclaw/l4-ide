@@ -295,6 +295,11 @@ handlers recorder =
               t False = "Visualize"
               t True  = "Simplify and visualize"
 
+          --  Check if can make viz with a given simplify flag
+          canVisualize decide simplify =
+            let env = Ladder.MkVizEnv (toNormalizedUri uri) typeCheck.substitution simplify
+            in isRight (Ladder.doVisualize decide env)
+
           decideToCodeLens decide =
             -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
             -- We try to not offer any code lenses for the visualizer if that's the case.
@@ -302,7 +307,8 @@ handlers recorder =
             -- make the visualizer work on as many examples as possible.
             case rangeOfNode decide of
               Just node ->
-                map (mkCodeLens node.start) (filter (isRight . Ladder.doVisualize decide) [False, True])
+                let simplifyFlags = [False, True]
+                in map (mkCodeLens node.start) (filter (canVisualize decide) simplifyFlags)
               Nothing -> []
 
           -- adds codelenses to visualize DECIDE or MEANS clauses

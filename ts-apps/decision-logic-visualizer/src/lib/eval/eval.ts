@@ -120,6 +120,9 @@ function eval_(
         intermediate: finalIntermediate,
       }
     })
+    .with({ $type: 'App' }, () => {
+      throw new Error('TODO: Pending integration with backend')
+    })
     .exhaustive()
 }
 
