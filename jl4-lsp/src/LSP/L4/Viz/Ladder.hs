@@ -168,8 +168,8 @@ translateExpr False = go
         App _ resolved [] ->
           leafFromVizName (mkVizNameWith prettyLayout resolved)
 
-        fnApp@(App _ fnResolved@(getOriginal -> fnName) args) -> do
-          fnOfAppisFnFromBooleanToBooleans <- and <$> traverse exprHasBooleanType (fnApp : args)
+        App appAnno fnResolved args -> do
+          fnOfAppisFnFromBooleanToBooleans <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
           if isDevMode && fnOfAppisFnFromBooleanToBooleans
             then
@@ -178,7 +178,7 @@ translateExpr False = go
                 <*> pure (mkVizNameWith nameToText fnResolved)
                 <*> traverse go args
             else
-              leaf "" $ Text.unwords (nameToText fnName : (prettyLayout <$> args))
+              leaf "" $ Text.unwords $ (nameToText . getOriginal $ fnResolved) : (prettyLayout <$> args)
 
         _ -> do
           leaf "" (prettyLayout e)
@@ -227,15 +227,15 @@ mkVizNameWith printer (getUniqueName -> (uniq, name)) =
     MkUnique {unique} -> V.MkName unique (printer name)
 
 ------------------------------------------------------
--- Other helpers
+-- Helpers for checking if an Expr has Boolean type
 ------------------------------------------------------
 
-exprHasBooleanType :: Expr Resolved -> Viz Bool
-exprHasBooleanType (getAnno -> Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}}) =
+hasBooleanType :: Anno_ t Extension -> Viz Bool
+hasBooleanType (Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}}) =
   isBooleanType ty
-exprHasBooleanType _ = pure False
+hasBooleanType _ = pure False
 
--- | Returns True iff the Type Resolved is that of a L4 BOOLEAN
+-- | Returns True iff the (expanded) Type Resolved is that of a L4 BOOLEAN
 isBooleanType :: Type' Resolved -> Viz Bool
 isBooleanType ty = do
   type' <- getExpandedType ty
