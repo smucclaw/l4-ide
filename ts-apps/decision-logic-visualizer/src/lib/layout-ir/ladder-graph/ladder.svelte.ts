@@ -731,7 +731,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.negand
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return 'NOT ('
   }
 
@@ -748,7 +748,7 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
     super(nodeInfo, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ')'
   }
 
@@ -817,7 +817,7 @@ export class SourceNoAnnoLirNode
     super(nodeInfo, emptyBundlingNodeAnno.annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
@@ -844,7 +844,7 @@ export class SourceWithOrAnnoLirNode
     super(nodeInfo, annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
@@ -865,7 +865,7 @@ export class SinkLirNode
     super(nodeInfo, annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
