@@ -24,7 +24,6 @@ DECLARE Person
 
 
 ASSUME Property IS A TYPE
-ASSUME Place IS A TYPE
 ASSUME Name IS A TYPE
 ASSUME Decision IS A TYPE
 ASSUME Notice IS A TYPE
@@ -216,12 +215,6 @@ DECIDE `qualifying territory` p IF
     isBOT p
     AND NOT p's `English name` = "Sovereign Base Areas of Akrotiri and Dhekelia"
 
--- Register sections enumeration
-DECLARE RegisterSection
-  IS ONE OF
-    GeneralSection
-    RestrictedSection
-    HistoricSection
 
 -- The charity test
 §§ `section 5, charity test`
@@ -274,13 +267,6 @@ DECIDE `meets the charity test` IF
     ) -- unless the Minister has an Order
 
 
-GIVEN testPurpose     IS A Purpose
-      primaryPurpose  IS A Purpose
-DECIDE `is analogous` IF
-     primaryPurpose EQUALS "feeding dogs" AND testPurpose EQUALS "feeding puppies"
-  OR ^              ^      "feeding cats" AND testPurpose EQUALS "feeding kittens"
-#EVAL `is analogous` "feeding dogs" "feeding puppies"
-
 GIVETH A LIST OF Purpose
 knownPurposes MEANS
   LIST "the prevention or relief of poverty"
@@ -306,21 +292,21 @@ GIVEN a IS A TYPE
       x IS A a
 apply MEANS f x
 
--- Haskell's ($) but b is a function type
-GIVEN a IS A TYPE
-      b IS A TYPE
-      f IS A FUNCTION FROM a AND b TO BOOLEAN
-      x IS A a
-      y IS A b
-apply2 MEANS f x y
+
+GIVEN testPurpose     IS A Purpose
+      primaryPurpose  IS A Purpose
+DECIDE `is analogous` IF
+     primaryPurpose EQUALS "feeding dogs" AND testPurpose EQUALS "feeding puppies"
+  OR ^              ^      "feeding cats" AND testPurpose EQUALS "feeding kittens"
+#EVAL `is analogous` "feeding dogs" "feeding puppies"
 
 GIVEN x IS A Purpose
-mySection MEANS apply2 `is analogous` "feeding dogs" x
+mySection MEANS `is analogous` "feeding dogs" x
 
 #EVAL mySection "feeding puppies"
 
 #EVAL any mySection (LIST "feeding puppies")
-#EVAL any (apply2 `is analogous` "feeding dogs") (LIST "feeding puppies")
+#EVAL any (GIVEN x YIELD `is analogous` "feeding dogs" x) (LIST "feeding puppies")
 
 § `6.1` -- Charitable purposes
 @ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797834
@@ -401,7 +387,7 @@ DECIDE `eligible for registration as charity` IF
     -- Has address in Jersey
     AND `has a principal address in Jersey` entity
     -- Name is not undesirable
-    AND NOT `is undesirable` OF name OF entity
+--    AND NOT `is undesirable` OF name OF entity
 
 -- Name undesirability
 GIVEN n IS A Name
@@ -508,7 +494,7 @@ DECIDE `may refer to as charity` IF
     -- Entity is a registered charity
     `is registered` entity
     -- OR is an excepted foreign charity
-    OR `excepted foreign charity` entity
+--     OR `excepted foreign charity` entity
     -- OR user doesn't know entity doesn't qualify
     OR NOT (
         `knows not registered` user entity
