@@ -202,7 +202,9 @@ function transform(
       return { graph: orGraph, vizExprToLirGraph: combinedEnv }
     })
     .with({ $type: 'App' }, (app) => {
-      // Transform only UBoolVar arguments
+      console.log(
+        'Note: the App Ladder node currently only supports UBoolVar arguments'
+      )
       const childResults = app.args
         .filter((arg) => arg.$type === 'UBoolVar')
         .map((arg) => transform(nodeInfo, env, arg))
