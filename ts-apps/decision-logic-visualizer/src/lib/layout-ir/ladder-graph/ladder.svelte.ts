@@ -266,7 +266,7 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 * It's basically the intermediate Lir representation of the 'ladder' visualization of a boolean expression.
 * I.e., it is somewhere between the abstract data (the boolean expr) and the concrete UI (the SvelteFlow nodes and edges).
 * 
-* Invariants
+* Invariants / Properties
 * ------------------------
 * Proposals to update (non-positional or non-dimensions) data associated with the nodes/edges
 will go through the LadderGraphLirNode.
