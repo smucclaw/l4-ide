@@ -693,7 +693,6 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   getData(context: LirContext) {
     return {
       name: this.#name,
-      value: this.#value,
       classes: this.getAllClasses(context),
     }
   }

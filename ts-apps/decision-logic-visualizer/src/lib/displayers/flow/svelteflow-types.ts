@@ -1,7 +1,6 @@
 // Types and util functions for the Svelte Flow graph
 
 import type { Name } from '@repo/viz-expr'
-import type { UBoolVal } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
@@ -122,7 +121,6 @@ export interface LadderSFNodeData {
 
 export interface UBoolVarDisplayerData extends LadderSFNodeData {
   name: Name
-  value: UBoolVal
 }
 
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {
