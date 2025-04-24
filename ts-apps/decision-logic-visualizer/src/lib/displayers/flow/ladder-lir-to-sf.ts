@@ -6,6 +6,8 @@ import type {
   SourceWithOrAnnoLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
+  isNotStartLirNode,
+  isSinkLirNode,
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
@@ -109,7 +111,7 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.when(isNotStartLirNode), (n: NotStartLirNode) => {
       return {
         ...defaults,
         type: notStartNodeType,
@@ -137,7 +139,7 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
+    .with(P.when(isSinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,
