@@ -200,5 +200,11 @@ function transform(
 
       return { graph: orGraph, vizExprToLirGraph: newEnv }
     })
+    .with({ $type: 'App' }, (app) => {
+      console.log('app: \n', app)
+      throw new Error(
+        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      )
+    })
     .exhaustive()
 }
