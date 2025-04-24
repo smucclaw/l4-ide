@@ -636,6 +636,7 @@ function getVerticesFromAlgaDag(
 /** All the LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
   | UBoolVarLirNode
+  | AppLirNode
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
@@ -761,6 +762,40 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
 
   toString(): string {
     return 'NOT_END_LIR_NODE'
+  }
+}
+
+/** Temporarily restricting args to something really simple. */
+export type AppArgLirNode = UBoolVarLirNode
+
+export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
+  return node instanceof AppLirNode
+}
+
+export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
+  #fnName: Name
+  #args: LirId[]
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    fnName: Name,
+    args: AppArgLirNode[],
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.#fnName = fnName
+    this.#args = args.map((arg) => arg.getId())
+  }
+
+  toPretty(context: LirContext): string {
+    return `${this.#fnName.label} (${this.#args
+      .map((arg) => context.get(arg) as LadderLirNode)
+      .map((arg) => arg.toPretty(context))
+      .join(', ')})`
+  }
+
+  toString() {
+    return 'APP_LIR_NODE'
   }
 }
 
