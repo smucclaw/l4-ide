@@ -6,16 +6,12 @@ import type {
   SourceWithOrAnnoLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
+  isUBoolVarLirNode,
   isNotStartLirNode,
   isSinkLirNode,
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
-} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-/* IMPT: Cannot currently use $lib for the following import,
-because of how the functions were defined */
-import {
-  isUBoolVarLirNode,
   UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
