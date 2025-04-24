@@ -13,8 +13,9 @@ import {
   SinkLirNode,
   LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
+  AppLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import { vertex, overlay } from '../algebraic-graphs/dag.js'
@@ -201,10 +202,34 @@ function transform(
       return { graph: orGraph, vizExprToLirGraph: newEnv }
     })
     .with({ $type: 'App' }, (app) => {
-      console.log('app: \n', app)
-      throw new Error(
-        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      const childResults = app.args
+        .filter((arg) => arg.$type === 'UBoolVar')
+        .map((arg) => transform(nodeInfo, env, arg))
+
+      // Get the arg lir nodes
+      const argNodes = childResults.map((result) =>
+        (result.graph as Vertex<LirId>).getValue()
       )
+
+      // Make the AppLirNode and appGraph
+      const appNode = new AppLirNode(
+        nodeInfo,
+        app.fnName,
+        argNodes.map((n) => nodeInfo.context.get(n) as UBoolVarLirNode)
+      )
+      // TODO: May not want it to just be a vertex in the future
+      const appGraph = vertex(appNode.getId())
+
+      // Combine the envs
+      const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
+      const combinedEnv = new Map(
+        childEnvs.reduceRight(
+          (accEntries, env) => [...env, ...accEntries],
+          [] as [IRId, DirectedAcyclicGraph<LirId>][]
+        )
+      ).set(app.id, appGraph)
+
+      return { graph: appGraph, vizExprToLirGraph: combinedEnv }
     })
     .exhaustive()
 }
