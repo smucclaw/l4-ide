@@ -113,6 +113,12 @@ export interface BundlingNodeDisplayerProps {
 
 // Node data
 
+// TODO: Might be better to just pass along the LirNode
+// and not bother with passing along specific pieces of info
+// that's alr on the LirNode.
+// But there may also be complications wrt reactivity;
+// need to look more into this
+
 export interface LadderSFNodeData {
   context: LirContext
   originalLirId: LirId
