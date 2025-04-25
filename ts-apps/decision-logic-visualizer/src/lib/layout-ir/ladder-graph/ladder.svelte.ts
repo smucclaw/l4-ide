@@ -314,9 +314,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     //   })
     // )
 
-    const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
-      isUBoolVarLirNode
-    )
+    const children = this.getChildren(nodeInfo.context)
+    const varNodes = children.filter(isUBoolVarLirNode)
 
     // Make the initial args / assignment
     const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
@@ -604,7 +603,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   ******************************/
 
   getChildren(context: LirContext) {
-    return this.getVertices(context)
+    const topVertices = this.getVertices(context)
+    return [
+      ...topVertices,
+      ...topVertices
+        .filter(isAppLirNode)
+        .flatMap((appNode) => appNode.getArgs(context)),
+    ]
   }
 
   toString(): string {
@@ -698,7 +703,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   }
 
   override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
-    console.log('modifierCSSClasses', this.modifierCSSClasses)
+    // console.log('modifierCSSClasses', this.modifierCSSClasses)
     return [...this.#value.getClasses(), ...this.modifierCSSClasses]
   }
 
@@ -786,6 +791,14 @@ export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#args = args.map((arg) => arg.getId())
   }
 
+  getArgs(context: LirContext) {
+    return this.#args.map((arg) => context.get(arg) as LadderLirNode)
+  }
+
+  getChildren(context: LirContext) {
+    return this.getArgs(context)
+  }
+
   toPretty(context: LirContext): string {
     return `${this.#fnName.label} (${this.#args
       .map((arg) => context.get(arg) as LadderLirNode)
@@ -795,6 +808,14 @@ export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
 
   toString() {
     return 'APP_LIR_NODE'
+  }
+
+  getData(context: LirContext) {
+    return {
+      fnName: this.#fnName,
+      args: this.#args.map((arg) => context.get(arg) as LadderLirNode),
+      classes: this.getAllClasses(context),
+    }
   }
 }
 
@@ -972,7 +993,8 @@ export function augmentEdgesWithExplanatoryLabel(
     const targetIsEligible =
       isUBoolVarLirNode(edgeV) ||
       isNotStartLirNode(edgeV) ||
-      isSourceWithOrAnnoLirNode(edgeV)
+      isSourceWithOrAnnoLirNode(edgeV) ||
+      isAppLirNode(edgeV)
 
     const sourceIsNotOverallSource =
       ladderGraph.getOverallSource(context) &&

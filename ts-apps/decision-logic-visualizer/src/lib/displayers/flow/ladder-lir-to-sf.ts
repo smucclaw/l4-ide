@@ -4,6 +4,7 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
+  AppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   isUBoolVarLirNode,
@@ -16,6 +17,7 @@ import {
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
+  isAppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   type LadderSFGraph,
@@ -27,6 +29,7 @@ import {
   sourceWithOrAnnoNodeType,
   sinkNodeType,
   ladderEdgeType,
+  appNodeType,
 } from './svelteflow-types.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
@@ -104,6 +107,13 @@ export function ladderLirNodeToSfNode(
       return {
         ...defaults,
         type: uBoolVarNodeType,
+        data: { ...defaultData, ...n.getData(context) },
+      }
+    })
+    .with(P.when(isAppLirNode), (n: AppLirNode) => {
+      return {
+        ...defaults,
+        type: appNodeType,
         data: { ...defaultData, ...n.getData(context) },
       }
     })
