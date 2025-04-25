@@ -4,10 +4,8 @@
  in a component that descends from a component that initializes SvelteFlowProvider -->
 <script lang="ts">
   import type { LirId } from '$lib/layout-ir/core.js'
-  import {
-    LirContext,
-    getLirRegistryFromSvelteContext,
-  } from '$lib/layout-ir/core.js'
+  import { LirContext } from '$lib/layout-ir/core.js'
+  import * as LadderEnv from '$lib/ladder-env.js'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -60,8 +58,8 @@
    * whenever `node` changes --- I'm not sure offhand which is better.
    * This was just the simpler route given what I already have.
    */
-  const declLirNode = node
-  const lir = getLirRegistryFromSvelteContext()
+  const funDeclLirNode = node
+  const lir = LadderEnv.getLirRegistry()
 
   /***********************************
       SvelteFlow config
@@ -80,7 +78,7 @@
   ************************************/
 
   // Initial nodes and edges
-  const ladderGraph = declLirNode.getBody(context)
+  const ladderGraph = funDeclLirNode.getBody(context)
   const initialSfGraph = ladderGraphToSFGraph(context, ladderGraph)
 
   // SvelteFlow nodes and edges variables
@@ -156,7 +154,7 @@
      * In particular, I might need to do more when it comes to the PathsList and PathLirNodes.
      */
     return () => {
-      declLirNode.dispose(context)
+      funDeclLirNode.dispose(context)
       unsub.unsubscribe()
     }
   })
@@ -316,7 +314,7 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <h1>{declLirNode.getFunName(context)}</h1>
+  <h1>{funDeclLirNode.getFunName(context)}</h1>
   <h2>{resultMessage}</h2>
   <div
     class="flow-container transition-opacity"
