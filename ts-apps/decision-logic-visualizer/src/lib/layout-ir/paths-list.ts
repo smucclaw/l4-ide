@@ -55,14 +55,10 @@ export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
     return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
   }
 
-  highlightPaths(context: LirContext, paths: LirId[]) {
-    const pathLirNodes = paths.map((id) =>
-      context.get(id)
-    ) as Array<LinPathLirNode>
-
+  highlightPaths(context: LirContext, paths: LinPathLirNode[]) {
     // 1. Get the subgraph to be highlighted
     // Exploits the property that (G, +, ε) is an idempotent monoid
-    const graphToHighlight = pathLirNodes
+    const graphToHighlight = paths
       .map((p) => p._getRawPath())
       .reduceRight(overlay, empty())
 
