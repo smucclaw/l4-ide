@@ -52,6 +52,12 @@ getUnique (Def u _)        = u
 getUnique (Ref _ u _)      = u
 getUnique (OutOfScope u _) = u
 
+traverseResolved :: Applicative f => (Name -> f Name) -> Resolved -> f Resolved
+traverseResolved f =  \ case
+  Def u n ->  Def u <$> f n
+  Ref r u o -> Ref <$> f r <*> pure u <*> pure o
+  OutOfScope u n -> OutOfScope u <$> f n
+
 -- | Extract the raw name from a name.
 rawName :: Name -> RawName
 rawName (MkName _ raw) = raw
@@ -341,9 +347,9 @@ data Extension = Extension
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Info =
-    TypeInfo (Type' Resolved) (Maybe Nlg)
+    TypeInfo (Type' Resolved) (Maybe TermKind)
   | KindInfo Kind
-  | KeywordInfo
+  | TypeVariable
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -363,6 +369,15 @@ annNlg = #extra % #nlg
 
 setNlg :: Nlg -> Anno -> Anno
 setNlg n a = a & annNlg ?~ n
+
+data TermKind =
+    Computable -- ^ a variable with known definition (let or global)
+  | Assumed
+  | Local -- ^ a local variable (introduced by a lambda or pattern)
+  | Constructor
+  | Selector
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 type Anno = Anno_ PosToken Extension
 type AnnoElement = AnnoElement_ PosToken
