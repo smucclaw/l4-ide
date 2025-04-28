@@ -10,10 +10,7 @@
  * - https://github.com/Dart-Code/Dart-Code/blob/master/src/shared/analysis/lsp/custom_protocol.ts
  */
 
-import {
-  // NotificationType,
-  RequestType,
-} from 'vscode-languageclient'
+import { RequestType } from 'vscode-languageclient'
 import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 
 export type LspResult<T> = T | null
@@ -25,4 +22,4 @@ export const EvalAppRequestType = new RequestType<
   EvalAppRequestParams,
   LspResult<EvalAppResult>,
   void
->('jl4/evalApp')
+>('l4/evalApp')
