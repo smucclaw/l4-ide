@@ -13,6 +13,7 @@
 
 import { RequestType } from 'vscode-languageclient'
 import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
+export { EvalAppRequestParams, EvalAppResult }
 
 export type LspResult<T> = T | null
 
