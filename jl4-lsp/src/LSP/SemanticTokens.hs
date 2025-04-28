@@ -45,7 +45,7 @@ class ToSemTokens c t a | a t -> c where
   toSemTokens = genericToSemTokens
 
 genericToSemTokens :: forall a t c .
-    (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+    (HasCallStack, SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
     SemanticTokensM c t [SemanticToken]
 genericToSemTokens =
