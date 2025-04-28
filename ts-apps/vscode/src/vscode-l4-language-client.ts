@@ -7,7 +7,7 @@ import {
 } from 'jl4-lsp-client'
 
 export class VSCodeL4LanguageClient implements L4LanguageClient {
-  /* TODO: Add a static `make` method that initializes the client and server options in the future, so that the initialization would just be
+  /* TODO: Add a static `make` method that initializes the client and server options in the future, so that the initialization would just
   ```
   const client = VSCodeL4LanguageClient.make()
   ```
@@ -29,17 +29,13 @@ export class VSCodeL4LanguageClient implements L4LanguageClient {
     return this.client.start()
   }
 
-  async stop(): Promise<void> {
-    return this.client.stop()
-  }
-
   async sendEvalAppRequest(
     params: EvalAppRequestParams
   ): Promise<EvalAppResult> {
     return this.client.sendRequest(EvalAppRequestType, params)
   }
 
-  dispose(): void {
-    this.client.dispose()
+  async dispose(): Promise<void> {
+    await this.client.dispose()
   }
 }
