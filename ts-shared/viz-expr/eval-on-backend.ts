@@ -3,11 +3,11 @@ import { BoolValue, IRId } from './viz-expr.js'
 import { VersionId } from './version-id.js'
 
 /**********************************************
-        Request payload: EvalAppInfo
+        Request payload: EvalAppParams
 ***********************************************/
 
-export const EvalAppInfo = Schema.Struct({
-  $type: Schema.tag('EvalAppInfo'),
+export const EvalAppParams = Schema.Struct({
+  $type: Schema.tag('EvalAppParams'),
   // We can think about batching requests in the future
   appExpr: IRId,
   arguments: Schema.Array(BoolValue).annotations({
@@ -19,12 +19,12 @@ export const EvalAppInfo = Schema.Struct({
       'To serve as an independent check that the backend and frontend are talking about the same version of the document / to avoid race conditions.',
   }),
 }).annotations({
-  identifier: 'EvalAppInfo',
+  identifier: 'EvalAppParams',
   description:
-    'EvalAppInfo is the payload for the request to evaluate an App expr with actual arguments on the backend.',
+    'EvalAppParams is the payload for the request to evaluate an App expr with actual arguments on the backend.',
 })
 
-export type EvalAppInfo = Schema.Schema.Type<typeof EvalAppInfo>
+export type EvalAppParams = Schema.Schema.Type<typeof EvalAppParams>
 
 /**********************************************
         Response payload: EvalAppResult        
