@@ -10,7 +10,7 @@ import {
   // NotificationType,
   RequestType,
 } from 'vscode-languageclient'
-import { EvalAppParams, EvalAppResult } from '@repo/viz-expr'
+import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 
 export type LspResult<T> = T | null
 
@@ -18,7 +18,7 @@ export type LspResult<T> = T | null
  * Request type for evaluating an App expr with actual arguments on the backend
  */
 export const EvalAppRequestType = new RequestType<
-  EvalAppParams,
+  EvalAppRequestParams,
   LspResult<EvalAppResult>,
   void
 >('jl4/evalApp')
