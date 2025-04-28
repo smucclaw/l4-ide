@@ -68,7 +68,6 @@ DECLARE Place
 -- Functions and predicates
 ASSUME `charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
 ASSUME `ancillary or incidental to charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
-ASSUME purposes IS A FUNCTION FROM Entity TO Purpose
 ASSUME `provides public benefit in Jersey or elsewhere` IS A FUNCTION FROM Entity TO BOOLEAN
 ASSUME `is a Jersey entity` IS A FUNCTION FROM Entity TO BOOLEAN
 ASSUME `carries out substantial activity in Jersey` IS A FUNCTION FROM Entity TO BOOLEAN
@@ -251,24 +250,11 @@ DECIDE `qualifying territory` p IF
 --                      must have regard to the guidance
 --                      when performing any other of their functions under this Law to which the guidance is relevant.
 
-GIVEN entity IS AN Entity
-GIVETH A BOOLEAN
-DECIDE `meets the charity test` IF
-    -- All purposes are charitable or ancillary to charitable purposes
-    (`charitable purpose` OF purposes OF entity
-     OR `ancillary or incidental to charitable purpose` OF purposes OF entity)
-    -- And provides public benefit to a reasonable degree
-    AND `provides public benefit in Jersey or elsewhere` entity
-    -- Unless controlled by government officials
-    AND NOT (
-        `directed by Minister` entity
-        OR `directed by States Assembly member` entity
-        OR `directed by equivalent in another jurisdiction` entity
-    ) -- unless the Minister has an Order
-
+ASSUME `is ancillary` IS A FUNCTION FROM Purpose TO BOOLEAN
+ASSUME `is analogous to charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
 
 GIVETH A LIST OF Purpose
-knownPurposes MEANS
+knownCharitablePurposes MEANS
   LIST "the prevention or relief of poverty"
        "the advancement of education"
        "the advancement of religion"
@@ -285,13 +271,33 @@ knownPurposes MEANS
        "the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage"
        "the advancement of animal welfare"
 
--- Haskell's ($)
-GIVEN a IS A TYPE
-      b IS A TYPE
-      f IS A FUNCTION FROM a TO b
-      x IS A a
-apply MEANS f x
 
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `meets the charity test` IF
+    -- All purposes are charitable or ancillary to charitable purposes
+    -- in a conventional programming language, we would say something like:
+    --    var meetsTest = true;
+    --    now we look for a reason to set it to false
+    --    for each purpose in entity.purposes
+    --      if (not (isCharitable(purpose) || isAncillaryToCharitablePurpose(purpose))) { meetsTest = false }
+    -- 
+    -- L4 offers a more compact style of saying the same thing:
+    `all purposes are qualifying`
+    -- And provides public benefit to a reasonable degree
+    AND `provides public benefit in Jersey or elsewhere` entity
+    -- Unless controlled by government officials
+    AND NOT (
+        `directed by Minister` entity
+        OR `directed by States Assembly member` entity
+        OR `directed by equivalent in another jurisdiction` entity
+    ) -- unless the Minister has an Order
+  WHERE
+  `is charitable` p MEANS elem p knownCharitablePurposes
+  `all purposes are qualifying` MEANS
+    all (GIVEN p YIELD   `is charitable` p
+                      OR `is analogous to charitable purpose` p
+                      OR `is ancillary`  p) (entity's purposes)
 
 GIVEN testPurpose     IS A Purpose
       primaryPurpose  IS A Purpose
@@ -313,7 +319,7 @@ mySection MEANS `is analogous` "feeding dogs" x
 GIVEN p IS A Purpose
 DECIDE `is charitable` IF primary -- OR `purpose is analogous` p
   WHERE
-    primary MEANS elem p knownPurposes
+    primary MEANS elem p knownCharitablePurposes
 
 
 
