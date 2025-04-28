@@ -1,0 +1,15 @@
+§ `Assumptions`
+-- An authorised person may issue a community protection notice to an
+-- individual aged 16 or over, or a body, if satisfied on reasonable grounds that—
+--
+--   a. the conduct of the individual or body is having a detrimental effect,
+--      of a persistent or continuing nature, on the quality of life of those
+--      in the locality, and
+--   b. the conduct is unreasonable.
+
+ASSUME Person IS A TYPE
+ASSUME `is authorised`  IS A FUNCTION FROM Person TO BOOLEAN
+
+ASSUME Receiver IS A TYPE
+ASSUME `is an individual aged 16 or over` IS A FUNCTION FROM Receiver TO BOOLEAN
+ASSUME `is a body` IS A FUNCTION FROM Receiver TO BOOLEAN

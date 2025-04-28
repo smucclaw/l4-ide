@@ -324,8 +324,8 @@ mkVizNameWith printer (getUniqueName -> (uniq, name)) =
 ------------------------------------------------------
 
 hasBooleanType :: Anno_ t Extension -> Viz Bool
-hasBooleanType (Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}}) =
-  isBooleanType ty
+-- hasBooleanType (Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}}) =
+--   isBooleanType ty
 hasBooleanType _ = pure False
 
 -- | Returns True iff the (expanded) Type Resolved is that of a L4 BOOLEAN
