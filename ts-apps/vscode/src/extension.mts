@@ -15,8 +15,8 @@ import {
 } from '@repo/viz-expr'
 import { Schema } from 'effect'
 // import { cmdViz } from './commands.js'
-import type { PanelConfig } from './viz.js'
-import { PanelManager } from './viz.js'
+import type { PanelConfig } from './webview-panel.js'
+import { PanelManager } from './webview-panel.js'
 
 /***********************************************
      decode for RenderAsLadderInfo

@@ -22,7 +22,7 @@ esbuild
     loader: {
       '.html': 'text',
       // Load .html files as text.
-      // Required for the html loading in the webview part of viz.ts
+      // Required for the html loading in the webview part of webview-panel.ts
     },
   })
   .then(() => {
