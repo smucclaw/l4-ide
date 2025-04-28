@@ -23,12 +23,12 @@
   <ToggleGroup
     type="multiple"
     onValueChange={(value: string[]) => {
-      const selectedPathLirIds = value
+      const selectedPaths = value
         .map((v) => parseInt(v)) // the `value` for this component must be a string
-        .map((pathIndex) => paths[pathIndex].getId())
+        .map((pathIndex) => paths[pathIndex])
       console.log('onvalueChange', value)
-      console.log('onValueChange', selectedPathLirIds)
-      pathsListLirNode.highlightPaths(context, selectedPathLirIds)
+      console.log('onValueChange', selectedPaths)
+      pathsListLirNode.highlightPaths(context, selectedPaths)
     }}
   >
     <ul class="space-y-1">
