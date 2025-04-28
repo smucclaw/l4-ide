@@ -10,7 +10,6 @@
   import {
     LirContext,
     LirRegistry,
-    type LirRootType,
     LadderFlow,
     type FunDeclLirNode,
     VizDeclLirSource,
@@ -50,7 +49,6 @@
 
     messenger.onRequest(RenderAsLadder, (payload: RenderAsLadderInfo) => {
       funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, payload.funDecl)
-      lirRegistry.setRoot(context, 'VizFunDecl' as LirRootType, funDeclLirNode)
       return makeRenderAsLadderSuccessResponse()
     })
 

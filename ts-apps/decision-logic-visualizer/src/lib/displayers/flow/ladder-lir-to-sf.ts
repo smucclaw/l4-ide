@@ -4,20 +4,20 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
+  AppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
+  isUBoolVarLirNode,
+  isNotStartLirNode,
+  isSinkLirNode,
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
-} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-/* IMPT: Cannot currently use $lib for the following import,
-because of how the functions were defined */
-import {
-  isUBoolVarLirNode,
   UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
+  isAppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   type LadderSFGraph,
@@ -29,6 +29,7 @@ import {
   sourceWithOrAnnoNodeType,
   sinkNodeType,
   ladderEdgeType,
+  appNodeType,
 } from './svelteflow-types.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
@@ -109,7 +110,14 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.when(isAppLirNode), (n: AppLirNode) => {
+      return {
+        ...defaults,
+        type: appNodeType,
+        data: { ...defaultData, ...n.getData(context) },
+      }
+    })
+    .with(P.when(isNotStartLirNode), (n: NotStartLirNode) => {
       return {
         ...defaults,
         type: notStartNodeType,
@@ -137,7 +145,7 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
+    .with(P.when(isSinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,

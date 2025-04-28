@@ -13,8 +13,9 @@ import {
   SinkLirNode,
   LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
+  AppLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
 import { vertex, overlay } from '../algebraic-graphs/dag.js'
@@ -127,6 +128,8 @@ function transform(
         env,
         neg.negand
       )
+
+      // Make the NOT subgraph
       const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
 
@@ -134,9 +137,11 @@ function transform(
         .connect(negand.getSource())
         .overlay(negand)
         .overlay(negand.getSink().connect(notEnd))
-      const newEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
 
-      return { graph: notGraph, vizExprToLirGraph: newEnv }
+      // Combine the envs
+      const combinedEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
+
+      return { graph: notGraph, vizExprToLirGraph: combinedEnv }
     })
     .with({ $type: 'And' }, (andExpr) => {
       const childResults = andExpr.args.map((arg) =>
@@ -144,22 +149,19 @@ function transform(
       )
       const childGraphs = childResults.map((result) => result.graph)
 
+      // Make the AND subgraph
       const combinedGraph = childGraphs.reduceRight((acc, left) => {
         const accSource = acc.getSource()
         const leftSink = left.getSink()
         return leftSink.connect(accSource).overlay(left).overlay(acc)
       })
 
+      // Combine envs from all child transformations
       const allEnvs = [
         env,
         ...childResults.map((result) => result.vizExprToLirGraph),
       ]
-      const combinedEnv = new Map(
-        allEnvs.reduceRight(
-          (accEntries, env) => [...env, ...accEntries],
-          [] as [IRId, DirectedAcyclicGraph<LirId>][]
-        )
-      ).set(andExpr.id, combinedGraph)
+      const combinedEnv = combineEnvs(allEnvs).set(andExpr.id, combinedGraph)
 
       return { graph: combinedGraph, vizExprToLirGraph: combinedEnv }
     })
@@ -167,6 +169,7 @@ function transform(
       const childResults = orExpr.args.map((n) => transform(nodeInfo, env, n))
       const childGraphs = childResults.map((result) => result.graph)
 
+      // Make the OR subgraph
       const overallSource = vertex(
         new SourceWithOrAnnoLirNode(
           nodeInfo,
@@ -189,22 +192,53 @@ function transform(
         ...rightEdges,
       ].reduce(overlay)
 
-      // Envs
+      // Combine envs from all child transformations
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
-      const newEnv = new Map(
-        childEnvs.reduceRight(
-          (entries, env) => [...env, ...entries],
-          [] as [IRId, DirectedAcyclicGraph<LirId>][]
-        )
-      ).set(orExpr.id, orGraph)
+      const combinedEnv = combineEnvs([env, ...childEnvs]).set(
+        orExpr.id,
+        orGraph
+      )
 
-      return { graph: orGraph, vizExprToLirGraph: newEnv }
+      return { graph: orGraph, vizExprToLirGraph: combinedEnv }
     })
     .with({ $type: 'App' }, (app) => {
-      console.log('app: \n', app)
-      throw new Error(
-        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      console.log(
+        'Note: the App Ladder node currently only supports UBoolVar arguments'
       )
+      const childResults = app.args
+        .filter((arg) => arg.$type === 'UBoolVar')
+        .map((arg) => transform(nodeInfo, env, arg))
+
+      // Get the transformed arg lir nodes
+      const argNodes = childResults
+        .map((result) => (result.graph as Vertex<LirId>).getValue())
+        .map((id) => nodeInfo.context.get(id) as UBoolVarLirNode)
+
+      // Make the App node and its graph
+      const appNode = new AppLirNode(nodeInfo, app.fnName, argNodes)
+      const appGraph = vertex(appNode.getId())
+
+      // Combine envs from all child transformations
+      const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
+      const combinedEnv = combineEnvs([env, ...childEnvs]).set(app.id, appGraph)
+
+      return { graph: appGraph, vizExprToLirGraph: combinedEnv }
     })
     .exhaustive()
+}
+
+/****************************
+     Helper functions
+ ****************************/
+
+/** Helper to combine multiple environments into one */
+function combineEnvs(
+  envs: Map<IRId, DirectedAcyclicGraph<LirId>>[]
+): Map<IRId, DirectedAcyclicGraph<LirId>> {
+  return new Map(
+    envs.reduceRight(
+      (accEntries, env) => [...env, ...accEntries],
+      [] as [IRId, DirectedAcyclicGraph<LirId>][]
+    )
+  )
 }

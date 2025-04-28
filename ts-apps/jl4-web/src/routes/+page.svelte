@@ -6,7 +6,6 @@
     LirRegistry,
     VizDeclLirSource,
     type FunDeclLirNode,
-    type LirRootType,
   } from '@repo/decision-logic-visualizer'
   import { makeVizInfoDecoder, type RenderAsLadderInfo } from '@repo/viz-expr'
   import {
@@ -254,11 +253,6 @@
                 funDeclLirNode = VizDeclLirSource.toLir(
                   nodeInfo,
                   ladderInfo.funDecl
-                )
-                lirRegistry.setRoot(
-                  context,
-                  'VizFunDecl' as LirRootType,
-                  funDeclLirNode
                 )
                 logger.debug(
                   'New declLirNode ',
