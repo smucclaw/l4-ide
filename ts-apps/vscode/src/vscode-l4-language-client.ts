@@ -8,7 +8,8 @@ import {
 } from 'jl4-lsp-client'
 
 export class VSCodeL4LanguageClient implements L4LanguageClient {
-  /* TODO: Add a static `make` method that initializes the client and server options in the future, so that the initialization would just
+  /* TODO: Add a static `make` method that initializes the client and server options in the future, 
+  so that the initialization would just be
   ```
   const client = VSCodeL4LanguageClient.make()
   ```
