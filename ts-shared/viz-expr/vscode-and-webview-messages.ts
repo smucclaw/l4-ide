@@ -1,3 +1,6 @@
+// It's not clear that the `viz-expr` pacakge is the best place for the vscode x webview message types.
+// But we can think about this again when there are more message types.
+
 import type { NotificationType, RequestType } from 'vscode-messenger-common'
 import { RenderAsLadderInfo } from './viz-expr.js'
 
