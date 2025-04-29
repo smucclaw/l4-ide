@@ -18,11 +18,13 @@ import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.Value
+import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
+import L4.Utils.Ratio
 
 import Data.Either
 
@@ -115,6 +117,8 @@ data EvalException =
   | EqualityOnUnsupportedType
   | NonExhaustivePatterns Value -- we could try to warn statically
   | StackOverflow
+  | DivisionByZero
+  | NotAnInteger Rational
   | Stuck
     (Expr Resolved)
     -- ^ the expression we were evaluating when getting stuck
@@ -148,6 +152,12 @@ prettyEvalException = \case
     [ "Stack overflow: "
     , "Recursion depth of " <> Text.show maximumStackSize
     , "exceeded." ]
+  DivisionByZero ->
+    [ "Division by zero"
+    ]
+  NotAnInteger num ->
+    [ "Expected an Integer but got the fractional number: " ]
+    <> [ prettyRatio num ]
   Stuck expr r ->
     [ "Expression stuck while evaluating:" ]
     <> prepare expr
@@ -254,6 +264,10 @@ initialEnvironment =
     [ (TypeCheck.falseUnique, falseVal)
     , (TypeCheck.trueUnique,  trueVal)
     , (TypeCheck.emptyUnique, ValList [])
+    , (TypeCheck.isIntegerUnique, ValUnaryBuiltinFun UnaryIsInteger)
+    , (TypeCheck.roundUnique, ValUnaryBuiltinFun UnaryRound)
+    , (TypeCheck.ceilingUnique, ValUnaryBuiltinFun UnaryCeiling)
+    , (TypeCheck.floorUnique, ValUnaryBuiltinFun UnaryFloor)
     ]
 
 evalModule :: Module Resolved -> Eval ()
@@ -484,6 +498,9 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
       popFrame val
       env'' <- matchGivens givens (reverse (val : vals)) stack0
       pushExprFrame (Map.union env'' env') (ss - 1) stack e
+    Just (ValUnaryBuiltinFun builtin) -> do
+      popFrame val
+      runBuiltin stack0 (reverse (val : vals)) builtin
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
@@ -575,11 +592,18 @@ exception exc _stack = do
   throwError exc
 
 runBinOp :: BinOp -> Value -> Value -> Stack -> Eval Value
-runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 + num2)
-runBinOp BinOpMinus  (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 - num2)
-runBinOp BinOpTimes  (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 * num2)
-runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `div` num2)
-runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `mod` num2)
+runBinOp BinOpPlus      (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 + num2)
+runBinOp BinOpMinus     (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 - num2)
+runBinOp BinOpTimes     (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 * num2)
+runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2)  stack
+  | num2 /= 0 = pure $ ValNumber (num1 / num2)
+  | otherwise = exception DivisionByZero stack
+runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) stack  = do
+  n1 <- expectInteger stack num1
+  n2 <- expectInteger stack num2
+  if n2 /= 0
+    then pure $ ValNumber (toRational $ n1 `mod` n2)
+    else exception DivisionByZero stack
 runBinOp BinOpCons   val1             (ValList val2)   _stack = pure $ ValList (val1 : val2)
 runBinOp BinOpEquals val1             val2             stack  = runBinOpEquals val1 val2 stack
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 <= num2)
@@ -634,6 +658,40 @@ valBool True  = trueVal
 runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
+
+runBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
+runBuiltin s vals op = do
+  val :: Rational <- expect1Number s vals
+  pure case op of
+    UnaryIsInteger -> valBool $ isJust $ isInteger val
+    UnaryRound -> valInt $ round val
+    UnaryCeiling -> valInt $ ceiling val
+    UnaryFloor -> valInt $ floor val
+  where
+    valInt :: Integer -> Value
+    valInt = ValNumber . toRational
+
+expect1 :: Stack -> [a] -> Eval a
+expect1 s = \case
+  [x] -> pure x
+  xs ->
+    exception (RuntimeTypeError $ "Expected 1 argument but got " <> Text.show (length xs)) s
+
+expectNumber :: Stack -> Value -> Eval Rational
+expectNumber s = \case
+  ValNumber f -> pure f
+  _ -> exception (RuntimeTypeError "Expected number.") s
+
+expect1Number :: Stack -> [Value] -> Eval Rational
+expect1Number s vs = do
+  v <- expect1 s vs
+  expectNumber s v
+
+expectInteger :: Stack -> Rational -> Eval Integer
+expectInteger stack n = do
+  case isInteger n of
+    Nothing -> exception (NotAnInteger n) stack
+    Just i -> pure i
 
 lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
