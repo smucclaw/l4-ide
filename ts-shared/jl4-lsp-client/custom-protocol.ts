@@ -2,8 +2,9 @@
  * Custom extensions to the LSP for JL4
  *
  * TODO:
- * - Add the other viz requests (will be done in another PR),
- *   since the intent is to have all the protocol extensions collected here.
+ * - Look into whether shld add the other viz requests here;
+ *   not sure if that'd make sense since the viz stuff is done through commands
+ *   (as opposed to custom methods).
  *
  * Examples of other languages that extend the LSP:
  * - https://github.com/rust-lang/rust-analyzer/blob/master/editors/code/src/lsp_ext.ts
