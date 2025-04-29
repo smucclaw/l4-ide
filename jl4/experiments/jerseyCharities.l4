@@ -1,0 +1,595 @@
+-- Charities (Jersey) Law 2014
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014
+
+IMPORT prelude -- provides "all"
+
+-- would likely be interested in Parts 3 and 4. Specifically, sections 5, 6, 7, 8, 11, 12, 13, 15, 16, 17
+
+-- Basic types
+DECLARE Purpose IS A STRING
+
+DECLARE Entity
+    HAS name IS A STRING
+        purposes IS A LIST OF Purpose
+
+ASSUME Constitution IS A TYPE
+-- ASSUME Person IS A TYPE
+-- upgraded to something with more deets
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+
+`Billy` MEANS Person WITH name IS "William", address IS "home"
+
+
+
+ASSUME Property IS A TYPE
+ASSUME Name IS A TYPE
+ASSUME Decision IS A TYPE
+ASSUME Notice IS A TYPE
+ASSUME Statement IS A TYPE
+ASSUME Return IS A TYPE
+ASSUME Section IS A TYPE
+ASSUME Information IS A TYPE
+
+-- do we have extension support? https://github.com/smucclaw/l4-ide/issues/238
+-- until we do, let's just manually reproduce, i think that should work
+DECLARE Governor
+    HAS name               IS A STRING
+        `symbol of office` IS A STRING
+
+
+
+`William Farquhar` MEANS
+    Governor WITH name               IS "William Farquhar"
+                  `symbol of office` IS "large hat"
+
+
+-- Register sections enumeration
+DECLARE RegisterSection
+  IS ONE OF
+    GeneralSection
+    RestrictedSection
+    HistoricSection
+
+-- Date structure
+DECLARE Date
+  HAS year    IS A NUMBER
+      month   IS A NUMBER
+      day     IS A NUMBER
+
+commencement    MEANS Date OF 1983, 1, 1
+`appointed day` MEANS Date OF 2002, 2, 21
+
+-- Place structure
+DECLARE Place
+  HAS `English name` IS A STRING
+
+-- Functions and predicates
+ASSUME `charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
+ASSUME `ancillary or incidental to charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
+ASSUME `provides public benefit in Jersey or elsewhere` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `is a Jersey entity` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `carries out substantial activity in Jersey` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `has a principal address in Jersey` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME constitution IS A FUNCTION FROM Entity TO Constitution
+ASSUME `is a written document` IS A FUNCTION FROM Constitution TO BOOLEAN
+ASSUME name IS A FUNCTION FROM Entity TO Name
+ASSUME `is undesirable` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `same as another charity` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `too similar to another charity` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `misleading` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `implies false connection` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `offensive` IS A FUNCTION FROM Name TO BOOLEAN
+ASSUME `is governor of` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `directed by Minister` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `directed by States Assembly member` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `directed by equivalent in another jurisdiction` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Registration related functions
+ASSUME `is registered` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `is deregistered` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `registration date` IS A FUNCTION FROM Entity TO Date
+ASSUME `deregistration date` IS A FUNCTION FROM Entity TO Date
+ASSUME `registration section` IS A FUNCTION FROM Entity TO RegisterSection
+ASSUME `applied for registration` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `applied for deregistration` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `registration refused` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `applied to change name` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `name change refused` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Restricted section functions
+ASSUME `meets funding condition` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `refrains from soliciting donations` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `requested restricted section` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Governor conduct functions
+ASSUME `acts with due diligence` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `acts as prudent person` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `acts to best ability` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `observes good faith` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `ensures consistency with purposes` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `ensures compliance with law` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `reportable matter exists` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `reported to charity` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `reported to Commissioner` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `declared no reportable matters` IS A FUNCTION FROM Person AND Entity TO BOOLEAN
+ASSUME `is fit and proper person` IS A FUNCTION FROM Person TO BOOLEAN
+
+-- Charity compliance functions
+ASSUME `provides annual return` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `reports changes` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `applies property per purposes` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `applies property per statement` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `amended to non-charitable purpose` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `changed name without permission` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `uses other than registered name` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `amended purposes without approval` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `amended statement without approval` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Notices and orders
+ASSUME `required steps notice served` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `notice served on governor` IS A FUNCTION FROM Person TO BOOLEAN
+ASSUME `complied with notice` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `disqualification order exists` IS A FUNCTION FROM Person TO BOOLEAN
+
+-- Term usage
+ASSUME `refers to as charity` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `refers to as Jersey charity` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `refers to as registered` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `knows not registered` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `intends to mislead` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `intends to gain advantage` IS A FUNCTION FROM Entity AND Entity TO BOOLEAN
+ASSUME `misconduct` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `governor misconduct` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `governor reportable matter` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `misled Commissioner` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `no longer exists` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `governor of registered charity` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Excepted foreign charity functions
+ASSUME `wholly managed in Jersey` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `excepted foreign charity` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `established under UK law` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `established under prescribed law` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `entitled to use charity term` IS A FUNCTION FROM Entity TO BOOLEAN
+ASSUME `managed from establishment jurisdiction` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Appeal functions
+ASSUME `may appeal to tribunal` IS A FUNCTION FROM Entity AND Decision TO BOOLEAN
+ASSUME `may appeal to court` IS A FUNCTION FROM Entity AND Decision TO BOOLEAN
+ASSUME `is required steps notice` IS A FUNCTION FROM Decision TO BOOLEAN
+ASSUME `is deregistration decision` IS A FUNCTION FROM Decision TO BOOLEAN
+ASSUME `is registration refusal` IS A FUNCTION FROM Decision TO BOOLEAN
+ASSUME `is name change refusal` IS A FUNCTION FROM Decision TO BOOLEAN
+
+-- Special charity types
+ASSUME `organized religious charity` IS A FUNCTION FROM Entity TO BOOLEAN
+
+-- Property functions
+ASSUME `acquired before deregistration` IS A FUNCTION FROM Property TO BOOLEAN
+ASSUME `preserved charitable purposes` IS A FUNCTION FROM Entity TO Purpose
+ASSUME `preserved public benefit statement` IS A FUNCTION FROM Entity TO Statement
+
+-- British Overseas Territories
+`British Overseas Territories` MEANS
+  LIST Place OF "Anguilla"
+       ^     ^  "Bermuda"
+       ^     ^  "British Antarctic Territory"
+       ^     ^  "British Indian Ocean Territory"
+       ^     ^  "Cayman Islands"
+       ^     ^  "Falkland Islands"
+       ^     ^  "Gibraltar"
+       ^     ^  "Hong Kong"
+       ^     ^  "Montserrat"
+       ^     ^  "Pitcairn, Henderson, Ducie and Oeno Islands"
+       ^     ^  "St Helena, Ascension and Tristan da Cunha"
+       ^     ^  "South Georgia and the South Sandwich Islands"
+       ^     ^  "The Sovereign Base Areas of Akrotiri and Dhekelia"
+       ^     ^  "Turks and Caicos Islands"
+       ^     ^  "Virgin Islands"
+
+GIVEN p IS A Place
+GIVETH A BOOLEAN
+DECIDE isBOT p IF 
+    p's `English name` = "Anguilla"
+    OR p's `English name` = "Bermuda"
+    OR p's `English name` = "British Antarctic Territory"
+    OR p's `English name` = "British Indian Ocean Territory"
+    OR p's `English name` = "Cayman Islands"
+    OR p's `English name` = "Falkland Islands"
+    OR p's `English name` = "Gibraltar"
+    OR p's `English name` = "Hong Kong"
+    OR p's `English name` = "Montserrat"
+    OR p's `English name` = "Pitcairn, Henderson, Ducie and Oeno Islands"
+    OR p's `English name` = "St Helena, Ascension and Tristan da Cunha"
+    OR p's `English name` = "Sovereign Base Areas of Akrotiri and Dhekelia"
+    OR p's `English name` = "South Georgia and the South Sandwich Islands"
+    OR p's `English name` = "Turks and Caicos Islands"
+    OR p's `English name` = "Virgin Islands"
+
+GIVEN p IS A Place
+GIVETH A BOOLEAN
+DECIDE `qualifying territory` p IF
+    isBOT p
+    AND NOT p's `English name` = "Sovereign Base Areas of Akrotiri and Dhekelia"
+
+
+-- The charity test
+§§ `section 5, charity test`
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797832
+
+-- 5        The charity test
+--  (1)     An entity meets the charity test if –
+--    (a)     all of its purposes are –
+--      (i)      charitable purposes, or
+--      (ii)      purposes that are purely ancillary or incidental to any of its charitable purposes; and
+
+--  what about transitive closure? i.e. a purpose that is ancillary to a purpose that is incidental to a charitable purpose. nope: we only allow the first degree.
+
+
+
+--    (b)     in giving effect to those purposes, it provides (or, in the case of an applicant, provides or intends to provide) public benefit in Jersey or elsewhere to a reasonable degree.
+--  (2)     An entity that otherwise meets the charity test, nevertheless does not meet that test, despite paragraph (1),
+--          if its constitution expressly permits its activities to be directed or otherwise controlled by, or any of its governors to be –
+--    (a)     a Minister;
+--    (b)     a member of the States Assembly; or
+--    (c)     any equivalent of such a person in another jurisdiction,
+--  acting in that capacity.
+--  (3)     The Minister may by Order disapply paragraph (2) in relation to any entity or description of entity specified in the Order.
+--  (4)     The Commissioner must publish and maintain guidance on the determination of whether an entity meets the charity test.
+--  (5)     Any person, in determining whether an entity meets the charity test, must have regard to the guidance, and the Commissioner, the tribunal, a registered charity and a governor of a registered charity must have regard to the guidance when performing any other of their functions under this Law to which the guidance is relevant.
+--  (6)     Before issuing or amending guidance the Commissioner must –
+--    (a)     consult –
+--      (i)      any persons appearing to the Commissioner to be representative of charities or bodies with charitable purposes,
+--      (ii)      the Minister, and
+--      (iii)     such other persons as the Commissioner considers appropriate; and
+--    (b)     publish a report on the Commissioner’s views on the results of the consultation, and the reasons for the Commissioner’s decision on the guidance in the light of those results.
+--  (7)     Within a reasonable time after issuing or amending guidance the Commissioner must provide to the Minister a copy of the issued or amended guidance and the report published under paragraph (6)(b).
+--  (8)     The Minister must lay a copy of the guidance and report so provided before the States as soon as practicable after the Minister receives the guidance and report.
+
+
+-- reindenting
+--  (5)     Any person, in determining whether an entity meets the charity test,
+--                      must have regard to the guidance,
+--          and the Commissioner, the tribunal, a registered charity and a governor of a registered charity
+--                      must have regard to the guidance
+--                      when performing any other of their functions under this Law to which the guidance is relevant.
+
+ASSUME `is ancillary` IS A FUNCTION FROM Purpose TO BOOLEAN
+ASSUME `is analogous to charitable purpose` IS A FUNCTION FROM Purpose TO BOOLEAN
+
+GIVETH A LIST OF Purpose
+knownCharitablePurposes MEANS
+  LIST "the prevention or relief of poverty"
+       "the advancement of education"
+       "the advancement of religion"
+       "the advancement of health"
+       "the saving of lives"
+       "the advancement of citizenship or community development"
+       "the advancement of the arts, heritage, culture or science"
+       "the advancement of public participation in sport"
+       "the provision of recreational facilities, or the organisation of recreational activities, with the object of improving the conditions of life for the persons for whom the facilities or activities are primarily intended"
+       "the advancement of human rights, conflict resolution or reconciliation"
+       "the promotion of religious or racial harmony"
+       "the promotion of equality and diversity"
+       "the advancement of environmental protection or improvement"
+       "the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage"
+       "the advancement of animal welfare"
+       "something analogous to one of the above"
+  -- something analogous to the above
+
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `meets the charity test` IF
+    -- All purposes are charitable or ancillary to charitable purposes
+    -- in a conventional programming language, we would say something like:
+    --    var meetsTest = true;
+    --    now we look for a reason to set it to false
+    --    for each purpose in entity.purposes
+    --      if (not (isCharitable(purpose) || isAncillaryToCharitablePurpose(purpose))) { meetsTest = false }
+    -- 
+        -- L4 offers a more compact style of saying the same thing:
+        `all purposes are qualifying`
+        -- And provides public benefit to a reasonable degree
+    AND `provides public benefit in Jersey or elsewhere` entity
+    -- Unless controlled by government officials
+    AND NOT (
+        `directed by Minister` entity
+        OR `directed by States Assembly member` entity
+        OR `directed by equivalent in another jurisdiction` entity
+    ) -- unless the Minister has an Order
+  WHERE
+  `is charitable` p MEANS elem p knownCharitablePurposes
+  `all purposes are qualifying` MEANS
+    all (GIVEN p YIELD   `is charitable` p
+                      OR `is analogous to charitable purpose` p
+                      OR `is ancillary`  p)
+        (entity's purposes)
+
+
+-- (a)     the prevention or relief of poverty;
+-- (b)     the advancement of education;
+-- (c)     the advancement of religion;
+-- (d)     the advancement of health;
+-- (e)     the saving of lives;
+-- (f)      the advancement of citizenship or community development;
+-- (g)     the advancement of the arts, heritage, culture or science;
+-- (h)     the advancement of public participation in sport;
+-- (i)      the provision of recreational facilities, or the organisation of recreational activities, with the object of improving the conditions of life for the persons for whom the facilities or activities are primarily intended;
+-- (j)      the advancement of human rights, conflict resolution or reconciliation;
+-- (k)     the promotion of religious or racial harmony;
+-- (l)      the promotion of equality and diversity;
+-- (m)    the advancement of environmental protection or improvement;
+-- (n)     the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage;
+-- (o)     the advancement of animal welfare;
+-- (p)     any other purpose that may reasonably be regarded as analogous to any of the purposes listed in sub-paragraphs (a) to (o).
+
+-- Charitable purposes enumeration
+-- Charitable purposes enumeration
+DECLARE CharitablePurpose
+  IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `saving of lives`
+    `advancement of citizenship`
+    `advancement of arts`
+    `advancement of sport`
+    `provision of recreation`
+    `advancement of human rights`
+
+
+-- Requirements for registration
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `eligible for registration as charity` IF
+    -- Entity meets the charity test
+    `meets the charity test` entity
+    -- Has written constitution
+    AND `is a written document` OF constitution OF entity
+    -- Has connection to Jersey
+    AND (
+        `is a Jersey entity` entity
+        OR `carries out substantial activity in Jersey` entity
+    )
+    -- Has address in Jersey
+    AND `has a principal address in Jersey` entity
+    -- Name is not undesirable
+--    AND NOT `is undesirable` OF name OF entity
+
+-- Name undesirability
+GIVEN n IS A Name
+GIVETH A BOOLEAN
+DECIDE `is undesirable` IF
+    `same as another charity` n
+    OR `too similar to another charity` n
+    OR `misleading` n
+    OR `implies false connection` n
+    OR `offensive` n
+
+-- Entry in restricted section
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `eligible for restricted section` IF
+    `eligible for registration as charity` entity
+    AND `requested restricted section` entity
+    AND (
+        `meets funding condition` entity
+        OR `refrains from soliciting donations` entity
+    )
+
+-- Effects of registration
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `complies with requirements` IF
+    `is registered` entity
+    AND (
+        -- Must report changes to Commissioner
+        `reports changes` entity
+        -- Must provide annual return
+        AND `provides annual return` entity
+        -- If in restricted section, must meet funding condition
+        AND (
+            NOT (`registration section` entity = RestrictedSection) 
+            OR (
+                `meets funding condition` entity
+                OR `refrains from soliciting donations` entity
+            )
+        )
+        -- Constitution cannot be amended to include non-charitable purposes
+        AND NOT `amended to non-charitable purpose` entity
+        -- Must not change name without permission
+        AND NOT `changed name without permission` entity
+        -- Must not use names other than registered name
+        AND NOT `uses other than registered name` entity
+        -- Must not amend charitable purposes without approval
+        AND NOT `amended purposes without approval` entity
+        -- Must not amend public benefit statement without approval
+        AND NOT `amended statement without approval` entity
+        -- Must apply property in accordance with registered charitable purposes
+        AND `applies property per purposes` entity
+        -- Must apply property in accordance with public benefit statement
+        AND `applies property per statement` entity
+    )
+
+-- Governor duties
+GIVEN person IS A Person
+      entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `fulfills governor duties` IF
+    `is governor of` person entity
+    AND `is registered` entity
+    -- Acts with due diligence as would a prudent person
+    AND `acts with due diligence` person entity
+    AND `acts as prudent person` person entity
+    AND `acts to best ability` person entity
+    AND `observes good faith` person entity
+    -- Ensures charity acts consistent with purposes
+    AND `ensures consistency with purposes` person entity
+    AND `ensures compliance with law` person entity
+    -- Reports reportable matters
+    AND (
+        (NOT `reportable matter exists` person
+         OR (`reported to charity` person entity AND `reported to Commissioner` person))
+        -- Or declares no reportable matters
+        OR `declared no reportable matters` person entity
+    )
+
+-- Permissible use of term "Jersey charity"
+GIVEN entity IS AN Entity
+      user IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `may refer to as Jersey charity` IF
+    (
+        -- Entity meets all requirements
+        `is registered` entity
+        AND `is a Jersey entity` entity
+        AND `wholly managed in Jersey` entity
+        -- User can refer to entity as Jersey charity
+    )
+    OR NOT (
+        -- OR user doesn't know entity doesn't qualify
+        `knows not registered` user entity
+        -- AND user intends to mislead or gain advantage
+        AND (`intends to mislead` user entity OR `intends to gain advantage` user entity)
+    )
+
+-- Permissible use of term "charity"
+GIVEN entity IS AN Entity
+      user IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `may refer to as charity` IF
+    -- Entity is a registered charity
+    `is registered` entity
+    -- OR is an excepted foreign charity
+--     OR `excepted foreign charity` entity
+    -- OR user doesn't know entity doesn't qualify
+    OR NOT (
+        `knows not registered` user entity
+        -- AND user intends to mislead or gain advantage
+        AND (`intends to mislead` user entity OR `intends to gain advantage` user entity)
+    )
+
+-- Excepted foreign charity
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `excepted foreign charity` IF
+    -- First condition - established under relevant law
+    (
+        `established under UK law` entity
+        OR `established under prescribed law` entity
+    )
+    -- Entitled to refer to itself as charity in that jurisdiction
+    AND `entitled to use charity term` entity
+    -- Second condition - managed from that jurisdiction and not registered
+    AND `managed from establishment jurisdiction` entity
+    AND NOT `is registered` entity
+
+-- Conditions for Commissioner to issue required steps notice
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `may issue required steps notice` IF
+    `is registered` entity
+    AND (
+        `misconduct` entity
+        OR NOT `meets the charity test` entity
+        OR `governor misconduct` entity
+        OR `governor reportable matter` entity
+        OR NOT (
+            `is a Jersey entity` entity
+            OR `carries out substantial activity in Jersey` entity
+        )
+        OR NOT `has a principal address in Jersey` entity
+    )
+
+-- Deregistration conditions
+GIVEN entity IS AN Entity
+GIVETH A BOOLEAN
+DECIDE `may deregister` IF
+    `is registered` entity
+    AND (
+        -- Entity requests deregistration
+        `applied for deregistration` entity
+        -- Or Commissioner has grounds
+        OR (
+            -- No longer meets charity test
+            NOT `meets the charity test` entity
+            -- Or Commissioner was misled
+            OR `misled Commissioner` entity
+            -- Or failed to comply with required steps notice
+            OR (
+                `required steps notice served` entity
+                AND NOT `complied with notice` entity
+            )
+            -- Or entity no longer exists
+            OR `no longer exists` entity
+        )
+    )
+
+-- Deregistration effects
+GIVEN entity IS AN Entity
+      property IS A Property
+GIVETH A BOOLEAN
+DECIDE `must apply property for preserved purposes` IF
+    `is deregistered` entity
+    AND `acquired before deregistration` property
+
+-- Appeal rights
+GIVEN entity IS AN Entity
+      decision IS A Decision
+GIVETH A BOOLEAN
+DECIDE `may appeal to tribunal` IF
+    (
+        -- Applicant appealing registration refusal
+        `applied for registration` entity
+        AND `is registration refusal` decision
+    )
+    OR (
+        -- Charity appealing deregistration
+        `is registered` entity
+        AND `is deregistration decision` decision
+    )
+    OR (
+        -- Charity appealing name change refusal
+        `is registered` entity
+        AND `applied to change name` entity
+        AND `is name change refusal` decision
+    )
+    OR (
+        -- Entity or person appealing required steps notice
+        (`is registered` entity OR `governor of registered charity` entity)
+        AND `is required steps notice` decision
+    )
+
+-- Information disclosure functions
+ASSUME `in public register` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `general section` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `restricted section public elements` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `historic section` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `disclosure to authorized person` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `for investigation of offense` IS A FUNCTION FROM Information TO BOOLEAN
+ASSUME `for legal proceedings` IS A FUNCTION FROM Information TO BOOLEAN
+
+-- Restricted information handling
+GIVEN person IS A Person
+      info IS Information
+GIVETH A BOOLEAN
+DECIDE `may disclose` IF
+    `in public register` info
+    OR `general section` info
+    OR `restricted section public elements` info
+    OR `historic section` info
+    OR `disclosure to authorized person` info
+    OR `for investigation of offense` info
+    OR `for legal proceedings` info
+
+-- Restricted notice for religious organized charities
+GIVEN entity IS AN Entity
+      notice IS A Notice
+GIVETH A BOOLEAN
+DECIDE `may require governor removal` IF
+    `may issue required steps notice` entity
+    AND NOT `organized religious charity` entity
+
