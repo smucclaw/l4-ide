@@ -1,6 +1,7 @@
-import { L4LanguageClient } from 'jl4-lsp-client'
 import { LanguageClient } from 'vscode-languageclient/node.js'
 import {
+  type LspResponse,
+  L4LanguageClient,
   EvalAppRequestType,
   EvalAppRequestParams,
   EvalAppResult,
@@ -31,7 +32,7 @@ export class VSCodeL4LanguageClient implements L4LanguageClient {
 
   async sendEvalAppRequest(
     params: EvalAppRequestParams
-  ): Promise<EvalAppResult> {
+  ): Promise<LspResponse<EvalAppResult>> {
     return this.client.sendRequest(EvalAppRequestType, params)
   }
 

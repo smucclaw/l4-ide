@@ -15,13 +15,13 @@ import { RequestType } from 'vscode-languageclient'
 import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 export { EvalAppRequestParams, EvalAppResult }
 
-export type LspResult<T> = T | null
+export type LspResponse<T> = T | null
 
 /**
  * Request type for evaluating an App expr with actual arguments on the backend
  */
 export const EvalAppRequestType = new RequestType<
   EvalAppRequestParams,
-  LspResult<EvalAppResult>,
+  LspResponse<EvalAppResult>,
   void
 >('l4/evalApp')
