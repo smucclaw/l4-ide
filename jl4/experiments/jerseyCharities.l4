@@ -224,8 +224,14 @@ DECIDE `qualifying territory` p IF
 --    (a)     all of its purposes are –
 --      (i)      charitable purposes, or
 --      (ii)      purposes that are purely ancillary or incidental to any of its charitable purposes; and
+
+--  what about transitive closure? i.e. a purpose that is ancillary to a purpose that is incidental to a charitable purpose. nope: we only allow the first degree.
+
+
+
 --    (b)     in giving effect to those purposes, it provides (or, in the case of an applicant, provides or intends to provide) public benefit in Jersey or elsewhere to a reasonable degree.
---  (2)     An entity that otherwise meets the charity test, nevertheless does not meet that test, despite paragraph (1), if its constitution expressly permits its activities to be directed or otherwise controlled by, or any of its governors to be –
+--  (2)     An entity that otherwise meets the charity test, nevertheless does not meet that test, despite paragraph (1),
+--          if its constitution expressly permits its activities to be directed or otherwise controlled by, or any of its governors to be –
 --    (a)     a Minister;
 --    (b)     a member of the States Assembly; or
 --    (c)     any equivalent of such a person in another jurisdiction,
@@ -270,7 +276,8 @@ knownCharitablePurposes MEANS
        "the advancement of environmental protection or improvement"
        "the relief of those in need by reason of age, ill-health, disability, financial hardship or other disadvantage"
        "the advancement of animal welfare"
-
+       "something analogous to one of the above"
+  -- something analogous to the above
 
 GIVEN entity IS AN Entity
 GIVETH A BOOLEAN
@@ -282,9 +289,9 @@ DECIDE `meets the charity test` IF
     --    for each purpose in entity.purposes
     --      if (not (isCharitable(purpose) || isAncillaryToCharitablePurpose(purpose))) { meetsTest = false }
     -- 
-    -- L4 offers a more compact style of saying the same thing:
-    `all purposes are qualifying`
-    -- And provides public benefit to a reasonable degree
+        -- L4 offers a more compact style of saying the same thing:
+        `all purposes are qualifying`
+        -- And provides public benefit to a reasonable degree
     AND `provides public benefit in Jersey or elsewhere` entity
     -- Unless controlled by government officials
     AND NOT (
@@ -297,30 +304,8 @@ DECIDE `meets the charity test` IF
   `all purposes are qualifying` MEANS
     all (GIVEN p YIELD   `is charitable` p
                       OR `is analogous to charitable purpose` p
-                      OR `is ancillary`  p) (entity's purposes)
-
-GIVEN testPurpose     IS A Purpose
-      primaryPurpose  IS A Purpose
-DECIDE `is analogous` IF
-     primaryPurpose EQUALS "feeding dogs" AND testPurpose EQUALS "feeding puppies"
-  OR ^              ^      "feeding cats" AND testPurpose EQUALS "feeding kittens"
-#EVAL `is analogous` "feeding dogs" "feeding puppies"
-
-GIVEN x IS A Purpose
-mySection MEANS `is analogous` "feeding dogs" x
-
-#EVAL mySection "feeding puppies"
-
-#EVAL any mySection (LIST "feeding puppies")
-#EVAL any (GIVEN x YIELD `is analogous` "feeding dogs" x) (LIST "feeding puppies")
-
-§ `6.1` -- Charitable purposes
-@ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797834
-GIVEN p IS A Purpose
-DECIDE `is charitable` IF primary -- OR `purpose is analogous` p
-  WHERE
-    primary MEANS elem p knownCharitablePurposes
-
+                      OR `is ancillary`  p)
+        (entity's purposes)
 
 
 -- (a)     the prevention or relief of poverty;
@@ -341,40 +326,19 @@ DECIDE `is charitable` IF primary -- OR `purpose is analogous` p
 -- (p)     any other purpose that may reasonably be regarded as analogous to any of the purposes listed in sub-paragraphs (a) to (o).
 
 -- Charitable purposes enumeration
+-- Charitable purposes enumeration
 DECLARE CharitablePurpose
   IS ONE OF
-    PreventionOrReliefOfPoverty
-    AdvancementOfEducation
-    AdvancementOfReligion
-    AdvancementOfHealth
-    SavingOfLives
-    AdvancementOfCitizenship
-    AdvancementOfArts
-    AdvancementOfSport
-    ProvisionOfRecreation
-    AdvancementOfHumanRights
-
-
-#EVAL `is charitable` "feeding cats"
-#EVAL `is charitable` "feeding dogs"
-#EVAL `is charitable` "feeding birds"
-
-§ `5.1.a.i` -- All purposes are charitable
-GIVEN entity IS AN Entity
-GIVETH A BOOLEAN
-DECIDE `all purposes are charitable` IF
-    -- All purposes are charitable
-    all `is charitable` (entity's purposes)
-
-`Pet Lovers Singapore` MEANS Entity WITH name IS "Pet Lovers Singapore"
-                                         purposes IS LIST "feeding cats"
-                                                          "feeding dogs"
-                                                          "feeding puppies"
-
--- we will allow human discretion to decide that grooming puppies is considered analogous to feeding puppies which is analogous to feeding dogs.
-
-#EVAL `all purposes are charitable` OF `Pet Lovers Singapore`
-
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `saving of lives`
+    `advancement of citizenship`
+    `advancement of arts`
+    `advancement of sport`
+    `provision of recreation`
+    `advancement of human rights`
 
 
 -- Requirements for registration
