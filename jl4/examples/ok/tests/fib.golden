@@ -3,7 +3,7 @@ Typechecking successful
 Evaluation successful
 fib.l4:17:1-18:
   610
-fib.l4:30:1-13:
+fib.l4:34:1-13:
   6765
-fib.l4:31:1-13:
+fib.l4:35:1-13:
   12586269025

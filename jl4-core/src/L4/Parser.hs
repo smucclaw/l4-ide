@@ -1026,7 +1026,7 @@ nameAsApp f =
 
 lit :: Parser (Expr Name)
 lit = attachAnno $
-  Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+  Lit emptyAnno <$> annoHole (try decimalLit <|> intLit <|> stringLit)
 
 list :: Parser (Expr Name)
 list = do
@@ -1036,11 +1036,17 @@ list = do
       <$  annoLexeme (spacedToken_ TKList)
       <*> annoHole (lsepBy (indentedExpr current) (spacedToken_ TComma))
 
-numericLit :: Parser Lit
-numericLit =
+intLit :: Parser Lit
+intLit =
   attachAnno $
     NumericLit emptyAnno
-      <$> annoEpa (spacedToken (fmap snd <$> preview #_TIntLit) "Numeric Literal")
+      <$> annoEpa (spacedToken (fmap (toRational . snd) <$> preview #_TIntLit) "Numeric Literal")
+
+decimalLit :: Parser Lit
+decimalLit =
+  attachAnno $
+    NumericLit emptyAnno
+      <$> annoEpa (spacedToken (fmap snd <$> preview #_TRationalLit) "Float Literal")
 
 stringLit :: Parser Lit
 stringLit =

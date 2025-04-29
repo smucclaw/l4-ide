@@ -10,6 +10,7 @@ import Data.Char
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
+import L4.Utils.Ratio (prettyRatio)
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -323,7 +324,7 @@ instance LayoutPrinter a => LayoutPrinter (LocalDecl a) where
 
 instance LayoutPrinter Lit where
   printWithLayout = \case
-    NumericLit _ t -> pretty t
+    NumericLit _ t -> pretty (prettyRatio t)
     StringLit _ t -> surround (pretty $ escapeStringLiteral t) "\"" "\""
 
 instance LayoutPrinter a => LayoutPrinter (Branch a) where
@@ -357,11 +358,12 @@ instance LayoutPrinter a => LayoutPrinter (NlgFragment a) where
 
 instance LayoutPrinter Eager.Value where
   printWithLayout = \case
-    Eager.ValNumber i               -> pretty i
+    Eager.ValNumber i               -> pretty (prettyRatio i)
     Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Eager.ValList vs                ->
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
     Eager.ValClosure{}              -> "<function>"
+    Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -380,11 +382,12 @@ instance LayoutPrinter Eager.Value where
 
 instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \case
-    Lazy.ValNumber i               -> pretty i
+    Lazy.ValNumber i               -> pretty (prettyRatio i)
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
+    Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -414,7 +417,7 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       [ "PARTY" <+> printWithLayout party
       , "WHO DID ACTION" <+> printWithLayout action
       , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
-      , "missed their deadline, which was" <+> pretty deadline
+      , "missed their deadline, which was" <+> pretty (prettyRatio deadline)
       ]
 
 instance LayoutPrinter MaybeEvaluated where
