@@ -1,6 +1,6 @@
 {
-  "name": "jl4-lsp-client",
-  "description": "Language Server for the jl4 language",
+  "name": "jl4-vscode",
+  "description": "VSCode extension for the JL4 language",
   "author": "Smucclaw",
   "license": "MIT",
   "version": "0.0.1",

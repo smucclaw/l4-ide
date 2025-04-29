@@ -8,5 +8,8 @@ export default defineConfig({
     rollupOptions: {
       external: ['vscode-webview'],
     },
+    // While we're still in alpha: Make it easier to debug
+    minify: false,
+    sourcemap: true,
   },
 })

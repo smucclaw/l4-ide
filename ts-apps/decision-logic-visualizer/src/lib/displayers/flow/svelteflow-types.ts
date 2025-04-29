@@ -1,11 +1,11 @@
 // Types and util functions for the Svelte Flow graph
 
 import type { Name } from '@repo/viz-expr'
-import type { UBoolVal } from '$lib/eval/type.js'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
 import UBoolVarSFNode from './sf-custom-nodes/ubool-var.svelte'
+import AppSFNode from './sf-custom-nodes/app.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
 import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
@@ -17,6 +17,7 @@ import {
   EdgeStylesContainer,
 } from '$lib/layout-ir/ladder-graph/edge-attributes.js'
 import type { LadderNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
+import type { AppArgLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte'
 
 /**
  * The result type of the ladder lir graph to SF graph conversion.
@@ -56,6 +57,7 @@ export interface Dimensions {
 *************************************************/
 
 export const uBoolVarNodeType = 'uBoolVarNode' as const
+export const appNodeType = 'appNode' as const
 export const notStartNodeType = 'notStartNode' as const
 export const notEndNodeType = 'notEndNode' as const
 export const sourceNoAnnoNodeType = 'sourceNoAnnoNode' as const
@@ -70,6 +72,10 @@ function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
 export const isBoolVarSFNode = (
   node: SF.Node
 ): node is SFNode<typeof uBoolVarNodeType> => isSFNode(node, uBoolVarNodeType)
+
+export const isSFAppNode = (node: SF.Node): node is SFAppNode =>
+  isSFNode(node, appNodeType)
+export type SFAppNode = SFNode<typeof appNodeType>
 
 export type SFSourceNoAnnoNode = SFNode<typeof sourceNoAnnoNodeType>
 export type SFSinkNode = SFNode<typeof sinkNodeType>
@@ -91,6 +97,7 @@ export const isSFBundlingNode = (
 /** This is where we declare all the custom nodes for Svelte Flow */
 export const sfNodeTypes: SF.NodeTypes = {
   [uBoolVarNodeType]: UBoolVarSFNode,
+  [appNodeType]: AppSFNode,
   [notStartNodeType]: NotStartSFNode,
   [notEndNodeType]: NotEndSFNode,
   [sourceNoAnnoNodeType]: SourceSFNode,
@@ -104,6 +111,10 @@ export const sfNodeTypes: SF.NodeTypes = {
 
 // Displayer props
 
+export interface AppDisplayerProps {
+  data: AppDisplayerData
+}
+
 export interface UBoolVarDisplayerProps {
   data: UBoolVarDisplayerData
 }
@@ -114,15 +125,25 @@ export interface BundlingNodeDisplayerProps {
 
 // Node data
 
+// TODO: Might be better to just pass along the LirNode
+// and not bother with passing along specific pieces of info
+// that's alr on the LirNode.
+// But there may also be complications wrt reactivity;
+// need to look more into this
+
 export interface LadderSFNodeData {
   context: LirContext
   originalLirId: LirId
   classes: LadderNodeCSSClass[]
 }
 
+export interface AppDisplayerData extends LadderSFNodeData {
+  fnName: Name
+  args: AppArgLirNode[]
+}
+
 export interface UBoolVarDisplayerData extends LadderSFNodeData {
   name: Name
-  value: UBoolVal
 }
 
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {

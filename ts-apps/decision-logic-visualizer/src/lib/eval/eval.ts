@@ -1,4 +1,4 @@
-import { IRId } from '@repo/viz-expr'
+import { App, IRId } from '@repo/viz-expr'
 import type { UBoolVal, Expr, EvUBoolVar, Not, Or, And } from './type.js'
 import { TrueVal, FalseVal, UnknownVal, isTrueVal, isFalseVal } from './type.js'
 import { Assignment } from './assignment.js'
@@ -120,8 +120,17 @@ function eval_(
         intermediate: finalIntermediate,
       }
     })
-    .with({ $type: 'App' }, () => {
-      throw new Error('TODO: Pending integration with backend')
+    .with({ $type: 'App' }, (expr: App) => {
+      // TODO: TEMPORARY placeholder code just to get the UI going -- will replace this with a query to the backend
+      const tempPlaceholderResult = new UnknownVal()
+      const newIntermediate = new Map(intermediate).set(
+        expr.id,
+        tempPlaceholderResult
+      )
+      return {
+        result: tempPlaceholderResult,
+        intermediate: newIntermediate,
+      }
     })
     .exhaustive()
 }

@@ -261,6 +261,13 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 ***********************************************/
 
 /*
+* What is a 'ladder graph' in this context, conceptually speaking?
+* ---------------------------------------------------
+* It's basically the intermediate Lir representation of the 'ladder' visualization of a boolean expression.
+* I.e., it is somewhere between the abstract data (the boolean expr) and the concrete UI (the SvelteFlow nodes and edges).
+* 
+* Invariants / Properties
+* ------------------------
 * Proposals to update (non-positional or non-dimensions) data associated with the nodes/edges
 will go through the LadderGraphLirNode.
 * Displayers should listen for updates to the LadderGraphLirNode,
@@ -307,9 +314,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     //   })
     // )
 
-    const varNodes = getVerticesFromAlgaDag(nodeInfo.context, this.#dag).filter(
-      isUBoolVarLirNode
-    )
+    const children = this.getChildren(nodeInfo.context)
+    const varNodes = children.filter(isUBoolVarLirNode)
 
     // Make the initial args / assignment
     const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
@@ -597,7 +603,13 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   ******************************/
 
   getChildren(context: LirContext) {
-    return this.getVertices(context)
+    const topVertices = this.getVertices(context)
+    return [
+      ...topVertices,
+      ...topVertices
+        .filter(isAppLirNode)
+        .flatMap((appNode) => appNode.getArgs(context)),
+    ]
   }
 
   toString(): string {
@@ -629,6 +641,7 @@ function getVerticesFromAlgaDag(
 /** All the LirNodes that can appear in the Ladder graph */
 export type LadderLirNode =
   | UBoolVarLirNode
+  | AppLirNode
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
@@ -685,13 +698,12 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   getData(context: LirContext) {
     return {
       name: this.#name,
-      value: this.#value,
       classes: this.getAllClasses(context),
     }
   }
 
   override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
-    console.log('modifierCSSClasses', this.modifierCSSClasses)
+    // console.log('modifierCSSClasses', this.modifierCSSClasses)
     return [...this.#value.getClasses(), ...this.modifierCSSClasses]
   }
 
@@ -731,7 +743,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.negand
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return 'NOT ('
   }
 
@@ -748,12 +760,62 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
     super(nodeInfo, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ')'
   }
 
   toString(): string {
     return 'NOT_END_LIR_NODE'
+  }
+}
+
+/** Temporarily restricting args to something really simple. */
+export type AppArgLirNode = UBoolVarLirNode
+
+export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
+  return node instanceof AppLirNode
+}
+
+export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
+  #fnName: Name
+  #args: LirId[]
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    fnName: Name,
+    args: AppArgLirNode[],
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.#fnName = fnName
+    this.#args = args.map((arg) => arg.getId())
+  }
+
+  getArgs(context: LirContext) {
+    return this.#args.map((arg) => context.get(arg) as LadderLirNode)
+  }
+
+  getChildren(context: LirContext) {
+    return this.getArgs(context)
+  }
+
+  toPretty(context: LirContext): string {
+    return `${this.#fnName.label} (${this.#args
+      .map((arg) => context.get(arg) as LadderLirNode)
+      .map((arg) => arg.toPretty(context))
+      .join(', ')})`
+  }
+
+  toString() {
+    return 'APP_LIR_NODE'
+  }
+
+  getData(context: LirContext) {
+    return {
+      fnName: this.#fnName,
+      args: this.#args.map((arg) => context.get(arg) as LadderLirNode),
+      classes: this.getAllClasses(context),
+    }
   }
 }
 
@@ -817,7 +879,7 @@ export class SourceNoAnnoLirNode
     super(nodeInfo, emptyBundlingNodeAnno.annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
@@ -844,7 +906,7 @@ export class SourceWithOrAnnoLirNode
     super(nodeInfo, annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
@@ -865,7 +927,7 @@ export class SinkLirNode
     super(nodeInfo, annotation, position)
   }
 
-  toPretty() {
+  toPretty(_context: LirContext) {
     return ''
   }
 
@@ -931,7 +993,8 @@ export function augmentEdgesWithExplanatoryLabel(
     const targetIsEligible =
       isUBoolVarLirNode(edgeV) ||
       isNotStartLirNode(edgeV) ||
-      isSourceWithOrAnnoLirNode(edgeV)
+      isSourceWithOrAnnoLirNode(edgeV) ||
+      isAppLirNode(edgeV)
 
     const sourceIsNotOverallSource =
       ladderGraph.getOverallSource(context) &&
@@ -956,7 +1019,7 @@ export function augmentEdgesWithExplanatoryLabel(
   })
 }
 
-/************************************************
+/*************************************************
  ******************* Utils ***********************
  *************************************************/
 

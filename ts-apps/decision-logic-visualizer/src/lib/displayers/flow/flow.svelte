@@ -7,11 +7,16 @@ This component only exists so that we can put SvelteFlowProvider
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import type { LadderFlowDisplayerProps } from './flow-props.js'
-  import { setLirRegistryInSvelteContext } from '$lib/layout-ir/core.js'
   import FlowBase from './flow-base.svelte'
+  import { initializeLadderEnv } from '$lib/ladder-env.js'
 
-  const { context, node: declLirNode, lir }: LadderFlowDisplayerProps = $props()
-  setLirRegistryInSvelteContext(lir)
+  const {
+    context,
+    node: funDeclLirNode,
+    lir,
+  }: LadderFlowDisplayerProps = $props()
+
+  initializeLadderEnv(context, lir, funDeclLirNode)
 
   let baseFlowComponent: ReturnType<typeof FlowBase>
 
@@ -20,6 +25,6 @@ This component only exists so that we can put SvelteFlowProvider
 
 <SvelteFlowProvider>
   <div style="height: 100%">
-    <FlowBase {context} node={declLirNode} bind:this={baseFlowComponent} />
+    <FlowBase {context} node={funDeclLirNode} bind:this={baseFlowComponent} />
   </div>
 </SvelteFlowProvider>
