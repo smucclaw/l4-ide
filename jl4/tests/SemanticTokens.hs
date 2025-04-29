@@ -62,10 +62,10 @@ semanticTokenGolden dir inputFile = do
  where
   prettyToken :: SemanticToken -> Text
   prettyToken s =
-    Text.show s.start._line
+    Text.show (s.start._line + 1)
       <> ":"
-      <> Text.show s.start._character
+      <> Text.show (s.start._character + 1)
       <> "-"
-      <> Text.show (s.start._character + s.length)
+      <> Text.show (s.start._character + 1 + s.length)
       <> " "
       <> Text.show s.category
