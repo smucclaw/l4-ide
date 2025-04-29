@@ -468,7 +468,7 @@ jl4Rules rootDirectory recorder = do
 
   define shakeRecorder $ \TypeCheckedSemanticTokens f -> do
     tcRes <- use_ SuccessfulTypeCheck f
-    case runSemanticTokensM (defaultSemanticTokenCtx CValue) tcRes.module' of
+    case runSemanticTokensM (defaultSemanticTokenCtx tcRes.entityInfo) tcRes.module' of
       Left err -> do
         logWith recorder Error $ LogTraverseAnnoError "TypeCheck" err
         pure ([], Nothing)
