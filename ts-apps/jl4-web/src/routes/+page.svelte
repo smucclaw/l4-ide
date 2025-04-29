@@ -17,6 +17,7 @@
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
+  import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
 
   /***********************************
     Persistent-session-related vars
@@ -194,7 +195,7 @@
       logger: ConsoleLogger
     ): WebSocket => {
       const webSocket = new WebSocket(url)
-      webSocket.onopen = () => {
+      webSocket.onopen = async () => {
         const socket = toSocket(webSocket)
         const reader = new WebSocketMessageReader(socket)
         const writer = new WebSocketMessageWriter(socket)
@@ -202,8 +203,10 @@
           reader,
           writer,
         })
-        languageClient.start()
-        reader.onClose(() => languageClient.stop())
+        await languageClient.start()
+        reader.onClose(() => {
+          languageClient.dispose()
+        })
       }
       return webSocket
     }
@@ -212,7 +215,7 @@
       logger: ConsoleLogger,
       messageTransports: MessageTransports
     ) => {
-      return new MonacoLanguageClient({
+      const internalMonacoClient = new MonacoLanguageClient({
         name: 'JL4 Language Client',
         clientOptions: {
           // use a language id as a document selector
@@ -227,6 +230,7 @@
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
       })
+      return new MonacoL4LanguageClient(internalMonacoClient)
     }
 
     function mkMiddleware(logger: ConsoleLogger): Middleware {
