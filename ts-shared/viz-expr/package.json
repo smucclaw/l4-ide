@@ -8,9 +8,7 @@
     ".": "./dist/index.js"
   },
   "files": [
-    "dist",
-    "vscode-and-webview-messages.ts",
-    "viz-expr.ts"
+    "dist"
   ],
   "scripts": {
     "clean": "rimraf dist",
