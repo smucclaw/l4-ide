@@ -1,8 +1,4 @@
-import type {
-  LspResponse,
-  EvalAppRequestParams,
-  EvalAppResult,
-} from './custom-protocol.js'
+import type { LspResponse, L4RpcRequestType } from './custom-protocol.js'
 import { IAmDisposable } from './utils.js'
 
 /**

@@ -1,5 +1,6 @@
 import { LanguageClient } from 'vscode-languageclient/node.js'
 import {
+  type L4RpcRequestType,
   type LspResponse,
   L4LanguageClient,
   EvalAppRequestType,
