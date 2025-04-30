@@ -2,6 +2,9 @@
  * Custom extensions to the LSP for JL4
  *
  * TODO:
+ * - It may be better to make our own RequestType,
+ *   instead of reusing the vscode-affiliated types,
+ *   especially since their types are weird in some places.
  * - Look into whether shld add the other viz requests here;
  *   not sure if that'd make sense since the viz stuff is done through commands
  *   (as opposed to custom methods).
@@ -11,11 +14,27 @@
  * - https://github.com/Dart-Code/Dart-Code/blob/master/src/shared/analysis/lsp/custom_protocol.ts
  */
 
-import { RequestType } from 'vscode-languageclient'
+import { RequestType } from 'vscode-jsonrpc'
 import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 export { EvalAppRequestParams, EvalAppResult }
 
+/****************************************
+          Protocol Types
+*****************************************/
+
+export type L4RpcRequestType<P extends Object, R> = RequestType<P, R, void>
+
+export function makeL4RpcRequestType<P extends Object, R>(
+  method: string
+): L4RpcRequestType<P, R> {
+  return new RequestType<P, R, void>(method)
+}
+
 export type LspResponse<T> = T | null
+
+/****************************************
+    Specific protocol extensions
+*****************************************/
 
 /**
  * Request type for evaluating an App expr with actual arguments on the backend
@@ -24,4 +43,4 @@ export const EvalAppRequestType = new RequestType<
   EvalAppRequestParams,
   LspResponse<EvalAppResult>,
   void
->('l4/evalApp')
+>('l4/evalApp') as L4RpcRequestType<EvalAppRequestParams, EvalAppResult>
