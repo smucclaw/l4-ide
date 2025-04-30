@@ -17,7 +17,7 @@ import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
-} from 'jl4-lsp-client'
+} from 'jl4-client-rpc'
 
 /***********************************************
      decode for RenderAsLadderInfo

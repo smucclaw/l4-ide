@@ -1,8 +1,8 @@
 {
-  "name": "jl4-lsp-client",
+  "name": "jl4-client-rpc",
   "version": "0.0.1",
   "private": true,
-  "description": "LSP client functionality for JL4 that can be used by the various language clients / IDE extensions (e.g. VSCode, Monaco).",
+  "description": "LSP client functionality for JL4 that can be used by the various language clients / IDE extensions (e.g. VSCode, Monaco), as well as RPC functionality and message types (e.g. between the VSCode extension and the VSCode webview).",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"

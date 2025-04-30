@@ -3,7 +3,7 @@ import type {
   L4LanguageClient,
   L4RpcRequestType,
   LspResponse,
-} from 'jl4-lsp-client'
+} from 'jl4-client-rpc'
 
 export class MonacoL4LanguageClient implements L4LanguageClient {
   // I don't like this ctor, for reasons outlined in the VSCode version; it's just the pragmatic thing to do right now.
