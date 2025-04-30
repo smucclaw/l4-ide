@@ -103,7 +103,6 @@
     "fs-extra": "^11.2.0",
     "globals": "^15.13.0",
     "prettier": "^3.4.1",
-    "rimraf": "^6.0.1",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1"
   },
@@ -119,6 +118,6 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
     "lint-fix": "eslint ./src --fix",
-    "clean": "rimraf out"
+    "clean": "git clean -fdx out"
   }
 }
