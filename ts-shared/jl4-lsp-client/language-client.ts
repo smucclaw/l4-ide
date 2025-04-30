@@ -13,7 +13,7 @@ import { IAmDisposable } from './utils.js'
  *
  * We use a lower-level `sendRequest` method here,
  * but wrap over it with higher-level methods in interfaces like {@link L4BackendConnection}, which the frontend will use.
- * I.e., in L4BackendConnection we won't have a `sendClientRequest` method; 
+ * I.e., in L4BackendConnection we won't have a `sendClientRequest` method;
  * we'll instead just have higher-level wrappers like `evalApp`.
  * These higher-level wrappers will ultimately end up calling
  * `L4LanguageClient.sendRequest`; but the lower-level primitive won't be exposed in L4BackendConnection, and hence won't be exposed to the frontend.
