@@ -2,11 +2,18 @@
   import { onMount } from 'svelte'
   import {
     RenderAsLadderInfo,
+  import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
+  import {
+    EvalAppRequestType,
     RenderAsLadder,
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
-  } from '@repo/viz-expr'
+  } from 'jl4-lsp-client'
+  import { Messenger } from 'vscode-messenger-webview'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
+  import type { WebviewApi } from 'vscode-webview'
+
   import {
     LirContext,
     LirRegistry,
@@ -14,9 +21,6 @@
     type FunDeclLirNode,
     VizDeclLirSource,
   } from '@repo/decision-logic-visualizer'
-  import type { WebviewApi } from 'vscode-webview'
-  import { Messenger } from 'vscode-messenger-webview'
-  import { HOST_EXTENSION } from 'vscode-messenger-common'
 
   /**************************
       Set up Lir

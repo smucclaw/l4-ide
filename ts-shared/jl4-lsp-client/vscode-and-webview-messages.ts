@@ -1,13 +1,33 @@
-// It's not clear that the `viz-expr` pacakge is the best place for the vscode x webview message types.
-// But we can think about this again when there are more message types.
-
+import type { L4RpcRequestType } from './custom-protocol.js'
+import { makeL4RpcRequestType } from './custom-protocol.js'
 import type { NotificationType, RequestType } from 'vscode-messenger-common'
-import { RenderAsLadderInfo } from './viz-expr.js'
+import { RenderAsLadderInfo } from '@repo/viz-expr'
+
+/*************************************************************
+     Conversion helpers
+**************************************************************/
+
+export function toWebviewMessengerRequestType<P extends Object, R>(
+  requestType: L4RpcRequestType<P, R>
+): RequestType<P, R> {
+  return {
+    method: requestType.method,
+  }
+}
+
+export function fromWebviewMessengerRequestType<P extends Object, R>(
+  requestType: RequestType<P, R>
+): L4RpcRequestType<P, R> {
+  return makeL4RpcRequestType(requestType.method)
+}
 
 /*************************************************************
    Render FunDecl in Ladder Visualizer Request and Response
                 for VSCode Webview
 **************************************************************/
+
+// TODO: The RenderAsLadder etc types should also use
+// our wrapper L4RpcRequestType type --- that we are using vscode-messenger for commn between webview and extension is an internal implementational detail
 
 /** This is the 'please visualize this fun decl' request for the VSCode webview.
  * Using a request so that the extension can know whether the webview received it.

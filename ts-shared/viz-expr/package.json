@@ -2,7 +2,7 @@
   "name": "@repo/viz-expr",
   "version": "1.0.0",
   "private": true,
-  "description": "Types/interfaces and util functions for the data for the ladder visualizer, as well as for related communication between the extension and webview",
+  "description": "Types/interfaces and util functions for the data for the ladder visualizer",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
