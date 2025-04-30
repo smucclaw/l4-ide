@@ -7,7 +7,7 @@ import { RenderAsLadderInfo } from '@repo/viz-expr'
      Conversion helpers
 **************************************************************/
 
-export function toWebviewMessengerRequestType<P extends Object, R>(
+export function toWebviewMessengerRequestType<P extends object, R>(
   requestType: L4RpcRequestType<P, R>
 ): RequestType<P, R> {
   return {
@@ -15,7 +15,7 @@ export function toWebviewMessengerRequestType<P extends Object, R>(
   }
 }
 
-export function fromWebviewMessengerRequestType<P extends Object, R>(
+export function fromWebviewMessengerRequestType<P extends object, R>(
   requestType: RequestType<P, R>
 ): L4RpcRequestType<P, R> {
   return makeL4RpcRequestType(requestType.method)

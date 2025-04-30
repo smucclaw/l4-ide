@@ -3,5 +3,3 @@ export * from './viz-expr.js'
 
 /** Types and Effect schemas for the payload for the request to evaluate an App expr with actual arguments on the backend */
 export * from './eval-on-backend.js'
-
-export * from './ladder-api.js'
