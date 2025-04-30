@@ -13,7 +13,8 @@
     "viz-expr.ts"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
     "lint-fix": "eslint . --fix"
@@ -38,6 +39,7 @@
     "@typescript-eslint/eslint-plugin": "^8.23.0",
     "effect": "^3.11.0",
     "ts-pattern": "^5.6.1",
+    "vscode-jsonrpc": "^8.2.1",
     "vscode-messenger": "^0.5.1",
     "vscode-messenger-common": "^0.5.1",
     "vscode-messenger-webview": "^0.5.1"
