@@ -9,7 +9,7 @@
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
-  } from 'jl4-lsp-client'
+  } from 'jl4-client-rpc'
   import { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
   import type { WebviewApi } from 'vscode-webview'

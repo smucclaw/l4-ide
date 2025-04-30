@@ -6,7 +6,7 @@ import {
   EvalAppRequestType,
   EvalAppRequestParams,
   EvalAppResult,
-} from 'jl4-lsp-client'
+} from 'jl4-client-rpc'
 
 export class VSCodeL4LanguageClient implements L4LanguageClient {
   /* TODO: Add a static `make` method that initializes the client and server options in the future, 
