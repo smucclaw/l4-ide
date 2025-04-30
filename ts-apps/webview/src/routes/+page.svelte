@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { RenderAsLadderInfo } from '@repo/viz-expr'
   import {
-    RenderAsLadderInfo,
     RenderAsLadder,
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
-  } from '@repo/viz-expr'
+  } from 'jl4-client-rpc'
+  import { Messenger } from 'vscode-messenger-webview'
+  import { HOST_EXTENSION } from 'vscode-messenger-common'
+  import type { WebviewApi } from 'vscode-webview'
+
   import {
     LirContext,
     LirRegistry,
@@ -14,9 +18,6 @@
     type FunDeclLirNode,
     VizDeclLirSource,
   } from '@repo/decision-logic-visualizer'
-  import type { WebviewApi } from 'vscode-webview'
-  import { Messenger } from 'vscode-messenger-webview'
-  import { HOST_EXTENSION } from 'vscode-messenger-common'
 
   /**************************
       Set up Lir

@@ -76,6 +76,7 @@
   "dependencies": {
     "@repo/viz-expr": "*",
     "@repo/webview": "*",
+    "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-messenger": "^0.5.1",

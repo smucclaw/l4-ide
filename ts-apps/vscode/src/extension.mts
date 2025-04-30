@@ -8,15 +8,16 @@ import {
 } from 'vscode-languageclient/node.js'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
-import {
-  RenderAsLadderInfo,
-  WebviewFrontendIsReadyNotification,
-  RenderAsLadder,
-} from '@repo/viz-expr'
+import { RenderAsLadderInfo } from '@repo/viz-expr'
 import { Schema } from 'effect'
 // import { cmdViz } from './commands.js'
 import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
+import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+import {
+  RenderAsLadder,
+  WebviewFrontendIsReadyNotification,
+} from 'jl4-client-rpc'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -29,7 +30,7 @@ const decode = Schema.decodeUnknownSync(RenderAsLadderInfo)
       Language Client
 ****************************************/
 
-let client: LanguageClient
+let client: VSCodeL4LanguageClient
 
 /***************************************
        Webview Panel
@@ -155,14 +156,17 @@ export async function activate(context: ExtensionContext) {
   )
 
   // Create the language client and start the client.
-  client = new LanguageClient(langId, langName, serverOptions, clientOptions)
+  client = new VSCodeL4LanguageClient(
+    new LanguageClient(langId, langName, serverOptions, clientOptions)
+  )
+
   // Start the client. This will also launch the server
   await client.start()
 }
 
-export function deactivate(): Thenable<void> | undefined {
+export async function deactivate(): Promise<void> {
   if (!client) {
     return undefined
   }
-  return client.stop()
+  await client.dispose()
 }
