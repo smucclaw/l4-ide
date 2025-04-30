@@ -455,12 +455,29 @@ directive =
     choice
       [ StrictEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TStrictEvalDirective))
+          <*> annoHole expr
       , LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TLazyEvalDirective))
+          <*> annoHole expr
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
+          <*> annoHole expr
+      , Contract emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TContractDirective))
+          <*> annoHole expr
+          <*> Compose contractEvents
       ]
-      <*> annoHole expr
+
+contractEvents :: Parser (WithAnno [Event Name])
+contractEvents = do
+  current <- Lexer.indentLevel
+  getCompose $ Applicative.many $ MkEvent emptyAnno
+    <$  annoLexeme (spacedToken_ TKParty)
+    <*> annoHole (indentedExpr current)
+    <*  annoLexeme (spacedToken_ TKDoes)
+    <*> annoHole (indentedExpr current)
+    <*  annoLexeme (spacedToken_ TKAt)
+    <*> annoHole (indentedExpr current) -- TODO: better timestamp parsing
 
 import' :: Parser (Import Name)
 import' =
@@ -1083,11 +1100,15 @@ ifthenelse = do
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
 
+
 regulative :: Parser (Expr Name)
-regulative = do
+regulative = Regulative emptyAnno <$> obligation
+
+obligation :: Parser (Obligation Name)
+obligation = do
   current <- Lexer.indentLevel
   attachAnno $
-    Regulative emptyAnno
+    MkObligation emptyAnno
       <$  annoLexeme (spacedToken_ TKParty)
       <*> annoHole (indentedExpr current)
       <*  annoLexeme (spacedToken_ TKDo <|> spacedToken_ TKMust)

@@ -352,6 +352,19 @@ inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
   pure (Check ann re)
+inferDirective (Contract ann e evs) = errorContext (WhileCheckingExpression e) do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  let contractT = contract partyT actionT
+  re <- checkExpr ExpectRegulativeContractContext e contractT
+  revs <- traverse (prune . inferEvent partyT actionT) evs
+  pure (Contract ann re revs)
+inferEvent :: Type' Resolved -> Type' Resolved -> Event Name -> Check (Event Resolved)
+inferEvent partyT actionT (MkEvent ann party action timestamp) = do
+  party' <- checkExpr ExpectRegulativePartyContext party partyT
+  action' <- checkExpr ExpectRegulativeActionContext action actionT
+  timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
+  pure (MkEvent ann party' action' timestamp')
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -910,14 +923,14 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
-checkRegulative :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Expr Resolved)
-checkRegulative ann e1 e2 me3 me4 t1 t2 = do
+checkObligation :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
+checkObligation ann e1 e2 me3 me4 t1 t2 = do
   e1' <- checkExpr ExpectRegulativePartyContext e1 t1
   e2' <- checkExpr ExpectRegulativeActionContext e2 t2
   let r = contract t1 t2
   me3' <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) me3
   me4' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me4
-  pure (Regulative ann e1' e2' me3' me4')
+  pure (MkObligation ann e1' e2' me3' me4')
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -1057,11 +1070,11 @@ inferExpr' g =
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
       pure (re, v)
-    Regulative ann e1 e2 me3 me4 -> do
+    Regulative ann (MkObligation ann'' e1 e2 me3 me4) -> do
       party <- fresh (NormalName "party")
       action <- fresh (NormalName "action")
-      re <- checkRegulative ann e1 e2 me3 me4 party action
-      pure (re, contract party action)
+      ob <- checkObligation ann'' e1 e2 me3 me4 party action
+      pure (Regulative ann ob, contract party action)
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
       re <- checkConsider ExpectConsiderBranchesContext ann e branches v
@@ -1841,6 +1854,10 @@ prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
   standardTypeMismatch [ "The WITHIN clause of a regulative rule is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
   standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeContractContext expected given =
+  standardTypeMismatch [ "The contract passed to a CONTRACT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
+  standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

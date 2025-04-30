@@ -181,6 +181,18 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
+    Contract ann e evs -> do
+      e' <- addNlg e
+      evs' <- traverse addNlg evs
+      pure $ Contract ann e' evs'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
+  addNlg a@(MkEvent ann party act timestamp) = extendNlgA a do
+    party' <- addNlg party
+    act' <- addNlg act
+    timestamp' <- addNlg timestamp
+    pure (MkEvent ann party' act' timestamp')
+
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
   addNlg a = extendNlgA a $ case a of
@@ -381,12 +393,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ IfThenElse ann b' e1' e2'
-    Regulative ann e1 e2 me3 me4 -> do
-      e1' <- addNlg e1
-      e2' <- addNlg e2
-      me3' <- traverse addNlg me3
-      me4' <- traverse addNlg me4
-      pure $ Regulative ann e1' e2' me3' me4'
+    Regulative ann r -> do
+      r' <- addNlg r
+      pure $ Regulative ann r'
     Consider ann e branches  -> do
       e' <- addNlg e
       branches' <- traverse addNlg branches
@@ -400,6 +409,15 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e' <- addNlg e
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
+
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
+  addNlg (MkObligation ann' party event deadline followup) = do
+    party' <- addNlg party
+    event' <- addNlg event
+    deadline' <- traverse addNlg deadline
+    followup' <- traverse addNlg followup
+    pure $  MkObligation ann' party' event' deadline' followup'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of

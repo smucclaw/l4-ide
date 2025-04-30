@@ -1,0 +1,30 @@
+
+
+DECLARE Person IS ONE OF B, S
+DECLARE Action IS ONE OF delivery, payment, return
+
+
+#EVAL EVALCONTRACT x (LIST EVENT S delivery 2, EVENT S payment 5)
+
+#CONTRACT x
+
+GIVETH CONTRACT Person Action
+x MEANS 
+  PARTY S  -- ^ what is the type of this
+  MUST delivery -- ^ what is the type of this
+  WITHIN 3
+  HENCE y
+
+z b MEANS IF b THEN y ELSE z
+
+GIVETH CONTRACT Person Action
+y MEANS 
+  PARTY B  -- ^ what is the type of this
+  MUST payment -- ^ what is the type of this
+-- [contractor; bar; fullfilled] 
+-- [contractor; not bar; breached]
+
+GIVETH CONTRACT Person Action
+z MEANS 
+  PARTY S  -- ^ what is the type of this
+  MUST return -- ^ what is the type of this

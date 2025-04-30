@@ -19,8 +19,7 @@ import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
-
-import Data.Either
+import L4.EvaluateLazy.ContractFrame
 
 newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadReader EvalState, MonadIO)
@@ -121,7 +120,7 @@ emptyStack = MkStack 0 []
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
   | BinOp2 BinOp WHNF {- -}
-  | App1 {- -} [Expr Resolved] Environment
+  | App1 {- -} [Reference]
   | IfThenElse1 {- -} (Expr Resolved) (Expr Resolved) Environment
   | ConsiderWhen1 Reference {- -} (Expr Resolved) [Branch Resolved] Environment
   | PatNil0
@@ -134,6 +133,7 @@ data Frame =
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
   | UpdateThunk Reference
+  | ContractFrame ContractFrame
   deriving stock Show
 
 step :: Eval Int
@@ -353,7 +353,8 @@ forwardExpr env (Lam _ann givens e) =
 forwardExpr env (App _ann n []) =
   expectTerm env n >>= evalRef
 forwardExpr env (App _ann n es@(_ : _)) = do
-  pushFrame (App1 es env)
+  rs <- traverse (`allocate_` env) es
+  pushFrame (App1 rs)
   forwardExpr env (Var emptyAnno n)
 forwardExpr env (AppNamed ann n [] _) =
   forwardExpr env (App ann n [])
@@ -382,7 +383,12 @@ forwardExpr env (Where _ann e ds) = do
   env' <- evalRecLocalDecls env ds
   let combinedEnv = Map.union env' env
   forwardExpr combinedEnv e
-forwardExpr env (Regulative {}) = do undefined -- TODO:
+forwardExpr env (Regulative _ann (MkObligation _ party action due followup)) = do
+  partyR <- allocate_ party env
+  actionR <- allocate_ action env
+  dueR <-  traverse (`allocate_` env) due
+  followupR <- allocate_ (fromMaybe fulfilExpr followup) env
+  backward (ValObligation partyR actionR dueR followupR)
 
 backward :: WHNF -> Eval WHNF
 backward val = withPoppedFrame $ \ case
@@ -392,14 +398,20 @@ backward val = withPoppedFrame $ \ case
     forwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
-  Just f@(App1 es env) -> do
+  Just f@(App1 rs) -> do
     case val of
       ValClosure givens e env' -> do
-        env'' <- matchGivens givens f env es
+        env'' <- matchGivens givens f rs
         forwardExpr (Map.union env'' env') e
       ValUnappliedConstructor r -> do
-        refs <- traverse (flip allocate_ env) es
-        backward (ValConstructor r refs)
+        backward (ValConstructor r rs)
+      ValObligation party act due followup -> do
+        (evs, time) <- case rs of
+          [r, t] -> pure (r, t)
+          rs' -> internalException $ RuntimeTypeError $ "expected a list of events, but found: " <> foldMap prettyLayout rs'
+        pushFrame (ContractFrame (Contract1 (C1Frame (Right party) (Right act) due followup time)))
+        evalRef evs
+      v@(ValConstructor r []) | r `sameResolved` TypeCheck.fulfilRef -> pure v
       ValAssumed r ->
         stuckOnAssumed r -- TODO: we can do better here
       res -> internalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
@@ -490,15 +502,97 @@ backward val = withPoppedFrame $ \ case
   Just (UpdateThunk rf) -> do
     updateThunkToWHNF rf val
     backward val
+  Just (ContractFrame cFrame) -> backwardConctractFrame val cFrame
 
-matchGivens :: GivenSig Resolved -> Frame -> Environment -> [Expr Resolved] -> Eval Environment
-matchGivens (MkGivenSig _ann otns) f env es = do
-  let
-    (_tyvars, others) = partitionEithers (TypeCheck.isQuantifier <$> otns)
-  if length others == length es
+backwardConctractFrame :: Value Reference -> ContractFrame -> Eval WHNF
+backwardConctractFrame val = \case
+  Contract1 (C1Frame party act due followup time) -> do
+    case val of
+      ValCons e es -> do
+        pushCFrame (Contract2 (C2Frame party act due followup es time))
+        evalRef e
+      ValNil -> do
+        party' <- evalRef' party
+        act' <- evalRef' act
+        due' <- traverse evalRef due
+        backward (ValBreached (NoProgress party' act' due'))
+      _ -> internalException (RuntimeTypeError $ "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events")
+  Contract2 (C2Frame party act due followup es time) -> do
+    (p, a, t) <- case val of
+      ValConstructor n [p, a, t]  | n `sameResolved` TypeCheck.eventRef -> pure (p, a, t)
+      _ -> internalException (RuntimeTypeError $ "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event")
+    pushCFrame (Contract3 (C3Frame act due followup p a t es time))
+    evalRef' party
+  Contract3 (C3Frame act due followup p a t es time) -> do
+    pushCFrame (Contract4 (C4Frame val act due followup a t es time))
+    evalRef p
+  Contract4 (C4Frame party act due followup a t es time) -> do
+    sameParty <- runBinOpEquals party val
+    case boolView sameParty of
+      Nothing -> internalException (RuntimeTypeError $ "expected BOOLEAN but found: " <> prettyLayout sameParty)
+      Just True -> do
+        pushCFrame (Contract5 (C5Frame party due followup val a t es time))
+        evalRef' act
+      Just False -> continueWithNextEvent (Left party) act due followup es time
+  Contract5 (C5Frame party due followup p a t es time) -> do
+    pushCFrame (Contract6 (C6Frame party val due followup p t es time))
+    evalRef a
+  Contract6 (C6Frame party act due followup p t es time) -> do
+    sameAct <- runBinOpEquals act val
+    case boolView sameAct of
+      Nothing -> internalException (RuntimeTypeError $ "expected BOOLEAN but found: " <> prettyLayout sameAct)
+      Just True -> case due of
+        Just due' -> do
+          pushCFrame (Contract7 (C7Frame followup p val t es time))
+          evalRef due'
+        Nothing -> continueWithFollowup followup es time
+      Just False -> continueWithNextEvent (Left party) (Left act) due followup es time
+  Contract7 (C7Frame followup p a t es time) -> do
+    pushCFrame (Contract8 (C8Frame val followup p a es time))
+    evalRef t
+  Contract8 (C8Frame due followup p a es time) -> do
+    pushCFrame (Contract9 (C9Frame due followup p a val es))
+    evalRef time
+  Contract9 (C9Frame due followup p a t es) -> do
+    let assertTime = \case
+          ValNumber i -> pure i
+          v -> internalException (RuntimeTypeError $ "expected a NUMBER but got: " <> prettyLayout v)
+    stamp <- assertTime t
+    due' <- assertTime due
+    time <- assertTime val
+    -- TODO: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
+    timeR <- allocateValue val
+    let deadline = time + due'
+    if stamp > deadline
+      then backward (ValBreached (DeadlineMissed p a t deadline))
+      else continueWithFollowup followup es timeR
+
+  where
+    continueWithNextEvent :: MaybeEvaluated -> MaybeEvaluated -> Maybe Reference -> Reference -> Reference -> Reference -> Eval WHNF
+    continueWithNextEvent party act due followup es time = do
+      pushCFrame (Contract1 (C1Frame party act due followup time))
+      evalRef es
+
+    pushCFrame = pushFrame . ContractFrame
+
+    continueWithFollowup :: Reference -> Reference -> Reference -> Eval WHNF
+    continueWithFollowup followup es time = do
+      pushFrame (App1 [es, time])
+      evalRef followup
+
+evalRef' :: MaybeEvaluated -> Eval WHNF
+evalRef' = either pure evalRef
+
+matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Eval Environment
+matchGivens (MkGivenSig _ann otns) f es = do
+  let others = foldMap (either (const []) (\x -> [fst x]) . TypeCheck.isQuantifier) otns
+  matchGivens' others f es
+
+matchGivens' :: [Resolved] -> Frame -> [Reference] -> Eval (Map Unique Reference)
+matchGivens' ns f rs = do
+  if length ns == length rs
     then do
-      refs <- traverse (flip allocate_ env) es
-      pure $ Map.fromList (zipWith (\ (r, _) v -> (getUnique r, v)) others refs)
+      pure $ Map.fromList (zipWith (\ r v -> (getUnique r, v)) ns rs)
     else do
       pushFrame f -- provides better error context
       internalException (RuntimeTypeError "given signatures' values' lengths do not match")
@@ -697,6 +791,14 @@ evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
   pure []
+evalDirective env (Contract ann expr evs) = do
+  evalDirective env (LazyEval ann (contractToEvalDirective expr evs))
+
+contractToEvalDirective :: Expr Resolved -> [Event Resolved] -> Expr Resolved
+contractToEvalDirective contract evs = App emptyAnno TypeCheck.evalContractRef [contract, evListExpr]
+  where
+  evListExpr = List emptyAnno $ map eventExpr evs
+  eventExpr (MkEvent ann party act timestamp) = App ann TypeCheck.eventRef [party, act, timestamp]
 
 evalLocalDecl :: Environment -> LocalDecl Resolved -> Eval ()
 evalLocalDecl env (LocalDecide _ann decide) =
@@ -778,17 +880,45 @@ trueExpr = App emptyAnno TypeCheck.trueRef []
 trueVal :: WHNF
 trueVal = ValConstructor TypeCheck.trueRef []
 
+fulfilExpr :: Expr Resolved
+fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
+
+fulfilVal :: Value a
+fulfilVal = ValConstructor TypeCheck.fulfilRef []
+
+-- \d e f. d e f
+evalContractVal :: Value a
+evalContractVal = ValClosure
+  (MkGivenSig emptyAnno
+    [ MkOptionallyTypedName emptyAnno TypeCheck.dDef Nothing
+    , MkOptionallyTypedName emptyAnno TypeCheck.eDef Nothing
+    , MkOptionallyTypedName emptyAnno TypeCheck.f'Def Nothing
+    ]
+  )
+  (App emptyAnno TypeCheck.dRef [App emptyAnno TypeCheck.eRef [], App emptyAnno TypeCheck.f'Ref []])
+  emptyEnvironment
+
+-- EVENT :: party -> act -> Number -> EVENT party act
+eventCVal :: Value a
+eventCVal = ValUnappliedConstructor TypeCheck.eventRef
+
 -- The initial environment has to be built by pre-allocation.
 initialEnvironment :: Eval Environment
 initialEnvironment = do
   falseRef <- allocateValue falseVal
   trueRef  <- allocateValue trueVal
   nilRef   <- allocateValue ValNil
+  evalContractRef <- allocateValue evalContractVal
+  eventCRef <- allocateValue eventCVal
+  fulfilRef <- allocateValue fulfilVal
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)
       , (TypeCheck.trueUnique,  trueRef)
       , (TypeCheck.emptyUnique, nilRef)
+      , (TypeCheck.evalContractUnique, evalContractRef)
+      , (TypeCheck.eventCUnique, eventCRef)
+      , (TypeCheck.fulfilUnique, fulfilRef)
       ]
 
 -- TODO: This currently allocates the initial environment once per module.
@@ -827,13 +957,32 @@ nfAux  d (ValCons r1 r2)             = do
   v2 <- evalRef r2 >>= nfAux (d - 1)
   pure (MkNF (ValCons v1 v2))
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
+nfAux d (ValObligation party act due followup) = do
+  party' <- (nfAux (d - 1) <=< evalRef) party
+  act' <- (nfAux (d - 1) <=< evalRef) act
+  due' <- traverse (nfAux (d - 1) <=< evalRef) due
+  followup' <- (nfAux (d - 1) <=< evalRef) followup
+  pure (MkNF (ValObligation party' act' due' followup'))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
   vs <- traverse (\ r -> evalRef r >>= nfAux (d - 1)) rs
   pure (MkNF (ValConstructor n vs))
 nfAux _d (ValAssumed n)              = pure (MkNF (ValAssumed n))
 nfAux _d (ValEnvironment env)        = pure (MkNF (ValEnvironment env))
-nfAux _d (ValRegulative)             = pure (MkNF ValRegulative)
+nfAux d (ValBreached r')            = do
+  let evalAndNF = traverse $ nfAux (d - 1) <=< evalRef
+  r <- case r' of
+    NoProgress party act timestamp -> do
+      party' <- evalAndNF party
+      act' <- evalAndNF act
+      timestamp' <- traverse evalAndNF timestamp
+      pure (NoProgress party' act' timestamp')
+    DeadlineMissed party act timestamp deadline -> do
+      party' <- evalAndNF party
+      act' <- evalAndNF act
+      timestamp' <- evalAndNF timestamp
+      pure (DeadlineMissed party' act' timestamp' deadline)
+  pure (MkNF (ValBreached r))
 
 -- | Main entry point.
 --
@@ -847,9 +996,9 @@ execEvalModuleWithEnv :: Environment -> Module Resolved -> IO (Environment, [Eva
 execEvalModuleWithEnv env m@(MkModule _ moduleUri _) = do
   case evalModuleAndDirectives env m of
     MkEval f -> do
-      initialStack  <- newIORef emptyStack
-      initialSupply <- newIORef 0
-      r <- f (MkEvalState moduleUri initialStack initialSupply)
+      stack       <- newIORef emptyStack
+      supply      <- newIORef 0
+      r <- f MkEvalState {moduleUri, stack, supply}
       case r of
         Left _exc -> do
           -- exceptions at the top-level are unusual; after all, we don't actually
@@ -868,7 +1017,7 @@ data EvalDirective =
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
-    { range  :: !SrcRange -- ^ of the (L)EVAL directive
+    { range  :: !SrcRange -- ^ of the (L)EVAL / CONTRACT directive
     , result :: Either EvalException NF
     }
   deriving stock (Generic, Show)

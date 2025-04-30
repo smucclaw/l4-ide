@@ -52,6 +52,7 @@ data DirectiveType
   = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
+  | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -124,6 +125,7 @@ data TokenType =
   | TKType
   | TKParty
   | TKDo
+  | TKDoes
   | TKMust
   | TKWithin
   | TKHence
@@ -260,6 +262,7 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
+  , (TContractDirective,   "CONTRACT")
   ]
 
 integerLiteral :: Lexer (Text, Int)
@@ -392,6 +395,7 @@ keywords =
     , ("TYPE"       , TKType       )
     , ("PARTY"      , TKParty      )
     , ("DO"         , TKDo         )
+    , ("DOES"       , TKDoes         )
     , ("MUST"       , TKMust       )
     , ("WITHIN"     , TKWithin     )
     , ("HENCE"      , TKHence      )
@@ -875,6 +879,7 @@ displayTokenType tt =
     TKType           -> "TYPE"
     TKParty          -> "PARTY"
     TKDo             -> "DO"
+    TKDoes           -> "DOES"
     TKMust           -> "MUST"
     TKWithin         -> "WITHIN"
     TKHence          -> "HENCE"
@@ -919,6 +924,7 @@ showDirective = \case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
+  TContractDirective -> "#CONTRACT"
 
 data TokenCategory
   = CIdentifier
@@ -1003,6 +1009,7 @@ posTokenCategory =
     TKType -> CKeyword
     TKParty -> CKeyword
     TKDo -> CKeyword
+    TKDoes -> CKeyword
     TKMust -> CKeyword
     TKWithin -> CKeyword
     TKHence -> CKeyword

@@ -99,7 +99,6 @@ getShouldSimplify = do
 data VizError
   = InvalidProgramNoDecidesFound
   | InvalidProgramDecidesMustNotHaveMoreThanOneGiven
-  | Unimplemented
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -110,7 +109,6 @@ prettyPrintVizError = \case
     "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
   InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
     "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
-  Unimplemented -> "Unimplemented"
 
 ------------------------------------------------------
 -- Entrypoint: Visualise

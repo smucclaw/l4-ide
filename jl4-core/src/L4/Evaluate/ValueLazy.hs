@@ -43,12 +43,19 @@ data Value a =
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
+  | ValObligation a a (Maybe a) a
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
   | ValEnvironment Environment
-  | ValRegulative -- TODO
-  deriving stock Show
+  | ValBreached (ReasonForBreach a)
+  deriving stock (Show, Functor, Foldable, Traversable)
+
+data ReasonForBreach a
+  = DeadlineMissed (Value a) (Value a) (Value a) Int
+  | NoProgress (Value a) (Value a) (Maybe (Value a))
+  deriving stock (Generic, Show, Functor, Foldable, Traversable)
+  deriving anyclass NFData
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
@@ -58,11 +65,11 @@ instance NFData a => NFData (Value a) where
   rnf (ValNumber i)               = rnf i
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
-  rnf ValRegulative               = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
   rnf (ValEnvironment env)        = env `seq` ()
-
+  rnf (ValBreached ev)            = rnf ev `seq` ()
+  rnf (ValObligation p a t f) = p `deepseq` a `deepseq` t `deepseq` f `deepseq` ()

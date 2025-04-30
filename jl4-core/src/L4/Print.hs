@@ -176,6 +176,14 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
       "#EVAL" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
+    Contract _ e stmts -> hsep $
+      "#CONTRACT" <+> printWithLayout e  :
+      foldMap (\MkEvent {timestamp, party, action} ->
+        [ "PARTY" <+> printWithLayout party
+        , "DOES" <+> printWithLayout action
+        , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
+        ]
+      ) stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
@@ -270,7 +278,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
-    Regulative _ party rule mdeadline mfollowup ->
+    Regulative _ (MkObligation _ party rule mdeadline mfollowup) ->
       vcat $
         [ "PARTY" <+> printWithLayout party
         , "DO" <+> printWithLayout rule
@@ -378,6 +386,11 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [] -> mempty
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
+    Lazy.ValBreached reason        -> hsep
+      [ "CONTRACT BREACHED"
+      , "(" <> printWithLayout reason <> ")"
+      ]
+    Lazy.ValObligation {} -> "<contract>"
 
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
@@ -389,6 +402,21 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
+  printWithLayout = \case
+    DeadlineMissed party action timestamp deadline -> hsep
+      [ "PARTY" <+> printWithLayout party
+      , "WHO DID ACTION" <+> printWithLayout action
+      , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
+      , "missed their deadline, which was" <+> pretty deadline
+      ]
+    NoProgress party action due -> hsep $
+      [ "I could not make any progress in a contract expression where"
+      , "PARTY" <+> printWithLayout party
+      , "SHOULD DO ACTION" <+> printWithLayout action ]
+      <> maybe [] (\d -> ["UNTIL" <+> printWithLayout d]) due
+      <> [ "because no event matches the required behaviour" ]
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \case
