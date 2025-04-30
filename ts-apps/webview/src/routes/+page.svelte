@@ -1,10 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { RenderAsLadderInfo } from '@repo/viz-expr'
   import {
-    RenderAsLadderInfo,
-  import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
-  import {
-    EvalAppRequestType,
     RenderAsLadder,
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
