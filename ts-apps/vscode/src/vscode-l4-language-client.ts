@@ -32,7 +32,7 @@ export class VSCodeL4LanguageClient implements L4LanguageClient {
     return this.client.start()
   }
 
-  async sendRequest<P extends Object, R>(
+  async sendRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
   ): Promise<LspResponse<R>> {

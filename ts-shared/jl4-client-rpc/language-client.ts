@@ -22,7 +22,7 @@ export interface L4LanguageClient extends IAmDisposable {
   start(): Promise<void>
 
   /** Make a request to the LSP server. */
-  sendRequest<P extends Object, R>(
+  sendRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
   ): Promise<LspResponse<R>>

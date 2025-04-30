@@ -22,9 +22,9 @@ export { EvalAppRequestParams, EvalAppResult }
           Protocol Types
 *****************************************/
 
-export type L4RpcRequestType<P extends Object, R> = RequestType<P, R, void>
+export type L4RpcRequestType<P extends object, R> = RequestType<P, R, void>
 
-export function makeL4RpcRequestType<P extends Object, R>(
+export function makeL4RpcRequestType<P extends object, R>(
   method: string
 ): L4RpcRequestType<P, R> {
   return new RequestType<P, R, void>(method)
