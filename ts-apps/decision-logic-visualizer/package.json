@@ -15,7 +15,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 .",
     "test": "vitest",
-    "clean": "git clean -fdx dist"
+    "clean": "git clean -fdx dist .sveltekit"
   },
   "sideEffects": [
     "**/*.css"

@@ -27,7 +27,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 .",
-    "clean": "git clean -fdx build dist"
+    "clean": "git clean -fdx build dist .sveltekit"
   },
   "prettier": "@repo/prettier-config",
   "devDependencies": {
