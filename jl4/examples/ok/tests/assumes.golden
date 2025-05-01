@@ -1,15 +1,15 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-assumes.l4:2:7-12:
+assumes.l4:2:1-12:
   I could not continue evaluating, because I needed to know the value of
     foo
   but it is an assumed term.
-assumes.l4:6:7-14:
+assumes.l4:6:1-14:
   I could not continue evaluating, because I needed to know the value of
     bar
   but it is an assumed term.
-assumes.l4:7:7-27:
+assumes.l4:7:1-27:
   I could not continue evaluating, because I needed to know the value of
     bar
   but it is an assumed term.

@@ -1,9 +1,9 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-aka.l4:3:7-8:
+aka.l4:3:1-8:
   TRUE
-aka.l4:4:7-8:
+aka.l4:4:1-8:
   TRUE
-aka.l4:5:7-8:
+aka.l4:5:1-8:
   TRUE

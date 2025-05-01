@@ -1,11 +1,11 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-misc.l4:53:7-14:
+misc.l4:53:1-14:
   Suc OF (Suc OF (Suc OF Zero))
-misc.l4:54:7-15:
+misc.l4:54:1-15:
   Suc OF (Suc OF (Suc OF Zero))
-misc.l4:55:7-15:
+misc.l4:55:1-15:
   Suc OF (Suc OF (Suc OF (Suc OF (Suc OF (Suc OF Zero)))))
-misc.l4:66:7-43:
+misc.l4:66:1-43:
   LIST 1, 2, 3, 4, 5, 6

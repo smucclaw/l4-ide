@@ -112,6 +112,7 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
               StrictEval _ e -> e
               LazyEval _ e -> e
               Check _ e -> e
+              Contract _ c t es -> JL4Lazy.contractToEvalDirective c t es
               ) directives
           in
             Text.unlines $ fmap Nlg.simpleLinearizer directiveExprs

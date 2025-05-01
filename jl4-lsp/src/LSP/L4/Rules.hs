@@ -333,8 +333,6 @@ jl4Rules rootDirectory recorder = do
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
     parsed       <- use_ GetParsedAst uri
-    -- traceM $ Text.unpack $ Print.prettyLayout parsed
-    -- traceShowM parsed
     (imported, dependencies) <- unzip <$> use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
 
     let parsedAndAnnotated = overImports (updateImport $ map (\res -> (res.importName, res.moduleUri)) imported) parsed

@@ -5,6 +5,7 @@ module L4.EvaluateLazy
   ( EvalDirectiveResult(..)
   , execEvalModuleWithEnv
   , prettyEvalException
+  , contractToEvalDirective
   )
   where
 
@@ -252,7 +253,7 @@ evalRef rf = do
     thunk@(WHNF val) -> (thunk, backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids -> (thunk, userException BlackholeForced)
-      | otherwise             -> (Unevaluated (Set.insert tid tids) e env, (traceM $ "updating thunk" <> prettyLayout' rf) *> pushFrame (UpdateThunk rf) >> forwardExpr env e)
+      | otherwise             -> (Unevaluated (Set.insert tid tids) e env, pushFrame (UpdateThunk rf) >> forwardExpr env e)
 
 newAddress :: Eval Address
 newAddress = do
@@ -508,11 +509,9 @@ backward val = withPoppedFrame $ \ case
 backwardConctractFrame :: Value Reference -> ContractFrame -> Eval WHNF
 backwardConctractFrame val = \case
   Contract1 C1Frame {..} -> do
-    traceM $ prettyLayout' val
     case val of
       ValCons e es -> do
         pushCFrame (Contract2 C2Frame {events = es, ..})
-        traceM $ "C1" <> prettyLayout' es
         evalRef e
       ValNil -> do
         party' <- evalRef' party
@@ -521,14 +520,12 @@ backwardConctractFrame val = \case
         backward (ValBreached (NoProgress party' act' due'))
       _ -> internalException (RuntimeTypeError $ "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events")
   Contract2 C2Frame {..} -> do
-    traceM $ "C2" <> prettyLayout' events
     (ev'party, ev'act, ev'time) <- case val of
       ValConstructor n [p, a, t]  | n `sameResolved` TypeCheck.eventCRef -> pure (p, a, t)
       _ -> internalException (RuntimeTypeError $ "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event")
     pushCFrame (Contract3 C3Frame {..})
     evalRef' party
   Contract3 C3Frame {..} -> do
-    traceM $ "C3" <> prettyLayout' events
     pushCFrame (Contract4 C4Frame {party = val, ..})
     evalRef ev'party
   Contract4 C4Frame {..} -> do
@@ -543,7 +540,6 @@ backwardConctractFrame val = \case
     pushCFrame (Contract6 C6Frame {act = val, ..})
     evalRef ev'act
   Contract6 C6Frame {..} -> do
-    traceM $ "C6" <> prettyLayout' events
     sameAct <- runBinOpEquals act val
     case boolView sameAct of
       Nothing -> internalException (RuntimeTypeError $ "expected BOOLEAN but found: " <> prettyLayout sameAct)
@@ -552,20 +548,14 @@ backwardConctractFrame val = \case
           pushCFrame (Contract7 C7Frame {ev'act = val, ..})
           evalRef due'
         Nothing -> continueWithFollowup followup events time
-      Just False -> do
-        traceM $ "C6(2)" <> prettyLayout' events
-        traceM "c6 continuing with next event "
-        continueWithNextEvent C1Frame {party = Left party, act = Left act, ..} events
+      Just False -> continueWithNextEvent C1Frame {party = Left party, act = Left act, ..} events
   Contract7 C7Frame {..} -> do
-    traceM $ "C7" <> prettyLayout' events
     pushCFrame (Contract8 C8Frame {due = val, ..})
     evalRef ev'time
   Contract8 C8Frame {..} -> do
-    traceM $ "C8" <> prettyLayout' events
     pushCFrame (Contract9 C9Frame {ev'time = val, ..})
     evalRef time
   Contract9 C9Frame {..} -> do
-    traceM $ "C9" <> prettyLayout' events
     let assertTime = \case
           ValNumber i -> pure i
           v -> internalException (RuntimeTypeError $ "expected a NUMBER but got: " <> prettyLayout v)
@@ -583,11 +573,7 @@ backwardConctractFrame val = \case
     continueWithNextEvent :: C1Frame -> Reference -> Eval WHNF
     continueWithNextEvent c1Frame events = do
       pushCFrame (Contract1 c1Frame)
-      traceM "==== in: continuing with next event"
-      traceM $ prettyLayout' events
-      eval'd <- evalRef events
-      traceM $ Text.unpack $ prettyLayout eval'd
-      pure eval'd
+      evalRef events
 
     pushCFrame = pushFrame . ContractFrame
 

@@ -205,7 +205,6 @@ instance Linearize (Expr Resolved) where
       ]
       <> maybe [] (\ deadline -> [ text "within", lin deadline ]) mdeadline
       <> maybe [] (\ followup -> [ text "hence",  lin followup ]) mfollowup
-    Regulative _ _ -> todo
     Consider _ e br -> hcat
       [ text "consider"
       , text "the"

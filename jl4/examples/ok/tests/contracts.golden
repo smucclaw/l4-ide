@@ -1,0 +1,7 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+contracts.l4:7:1-69:
+  CONTRACT BREACHED (PARTY B WHO DID ACTION payment AT 42 missed their deadline, which was 10)
+contracts.l4:9:1-11:28:
+  FULFILLED
