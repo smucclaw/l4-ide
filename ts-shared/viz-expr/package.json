@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "git clean -fdx dist",
     "build": "npm run clean && tsc",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
