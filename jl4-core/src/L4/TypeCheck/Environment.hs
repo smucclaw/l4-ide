@@ -335,8 +335,8 @@ eventInfo, eventCInfo :: CheckEntity
 eventInfo = KnownType 2 [] Nothing
 eventCInfo = KnownTerm (Forall emptyAnno [fDef, gDef] (Fun emptyAnno [mkOnt partyTy, mkOnt actTy, mkOnt number] (TyApp emptyAnno eventRef [partyTy, actTy]))) Constructor
   where
-  actTy = mkTyVar fRef
-  partyTy = mkTyVar gRef
+  actTy = mkTyVar gRef
+  partyTy = mkTyVar fRef
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 

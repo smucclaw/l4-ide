@@ -352,13 +352,14 @@ inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
   pure (Check ann re)
-inferDirective (Contract ann e evs) = errorContext (WhileCheckingExpression e) do
+inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e) do
   partyT <- fresh (NormalName "party")
   actionT <- fresh (NormalName "action")
   let contractT = contract partyT actionT
   re <- checkExpr ExpectRegulativeContractContext e contractT
+  rt <- checkExpr ExpectRegulativeTimestampContext t number
   revs <- traverse (prune . inferEvent partyT actionT) evs
-  pure (Contract ann re revs)
+  pure (Contract ann re rt revs)
 inferEvent :: Type' Resolved -> Type' Resolved -> Event Name -> Check (Event Resolved)
 inferEvent partyT actionT (MkEvent ann party action timestamp) = do
   party' <- checkExpr ExpectRegulativePartyContext party partyT

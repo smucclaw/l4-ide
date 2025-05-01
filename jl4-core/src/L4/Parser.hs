@@ -465,6 +465,10 @@ directive =
       , Contract emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TContractDirective))
           <*> annoHole expr
+          <* optional (annoLexeme (spacedToken_ TKStarting))
+          <* annoLexeme (spacedToken_ TKAt)
+          <*> annoHole expr
+          <* annoLexeme (spacedToken_ TKWith)
           <*> Compose contractEvents
       ]
 
@@ -1111,7 +1115,8 @@ obligation = do
     MkObligation emptyAnno
       <$  annoLexeme (spacedToken_ TKParty)
       <*> annoHole (indentedExpr current)
-      <*  annoLexeme (spacedToken_ TKDo <|> spacedToken_ TKMust)
+      <*  annoLexeme (spacedToken_ TKMust)
+      <*  optional (annoLexeme (spacedToken_ TKDo))
       <*> annoHole (indentedExpr current)
       <*> optional (deadline current)
       <*> optional (hence current)

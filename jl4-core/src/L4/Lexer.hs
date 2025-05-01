@@ -146,6 +146,7 @@ data TokenType =
   | TKAbove
   | TKBelow
   | TKAt
+  | TKStarting
   | TKLeast
   | TKMost
   | TKFollowed
@@ -416,6 +417,7 @@ keywords =
     , ("ABOVE"      , TKAbove      )
     , ("BELOW"      , TKBelow      )
     , ("AT"         , TKAt         )
+    , ("STARTING"   , TKStarting   )
     , ("LEAST"      , TKLeast      )
     , ("MOST"       , TKMost       )
     , ("FOLLOWED"   , TKFollowed   )
@@ -900,6 +902,7 @@ displayTokenType tt =
     TKAbove          -> "ABOVE"
     TKBelow          -> "BELOW"
     TKAt             -> "AT"
+    TKStarting       -> "STARTING"
     TKLeast          -> "LEAST"
     TKMost           -> "MOST"
     TKFollowed       -> "FOLLOWED"
@@ -1030,6 +1033,7 @@ posTokenCategory =
     TKAbove -> CKeyword
     TKBelow -> CKeyword
     TKAt -> CKeyword
+    TKStarting -> CKeyword
     TKLeast -> CKeyword
     TKMost -> CKeyword
     TKFollowed -> CKeyword

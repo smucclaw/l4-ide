@@ -176,8 +176,8 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
       "#EVAL" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
-    Contract _ e stmts -> hsep $
-      "#CONTRACT" <+> printWithLayout e  :
+    Contract _ e t stmts -> hsep $
+      "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
       foldMap (\MkEvent {timestamp, party, action} ->
         [ "PARTY" <+> printWithLayout party
         , "DOES" <+> printWithLayout action
