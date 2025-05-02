@@ -54,6 +54,7 @@ library
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
+    template-haskell,
 
   autogen-modules:
     Paths_jl4_core
@@ -88,6 +89,7 @@ library
     L4.TypeCheck
     L4.TypeCheck.Annotation
     L4.TypeCheck.Environment
+    L4.TypeCheck.Environment.TH
     L4.TypeCheck.Types
     L4.TypeCheck.Unify
     L4.TypeCheck.With
