@@ -14,7 +14,7 @@
  * - https://github.com/Dart-Code/Dart-Code/blob/master/src/shared/analysis/lsp/custom_protocol.ts
  */
 
-import { RequestType } from 'vscode-jsonrpc'
+import { NotificationType, RequestType } from 'vscode-jsonrpc'
 import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 export { EvalAppRequestParams, EvalAppResult }
 
@@ -22,6 +22,7 @@ export { EvalAppRequestParams, EvalAppResult }
           Protocol Types
 *****************************************/
 
+// Request type
 export type L4RpcRequestType<P extends object, R> = RequestType<P, R, void>
 
 export function makeL4RpcRequestType<P extends object, R>(
@@ -30,7 +31,17 @@ export function makeL4RpcRequestType<P extends object, R>(
   return new RequestType<P, R, void>(method)
 }
 
+// LspResponse
 export type LspResponse<T> = T | null
+
+// Notification type
+export type L4RpcNotificationType<P extends object> = NotificationType<P>
+
+export function makeL4RpcNotificationType<P extends object>(
+  method: string
+): L4RpcNotificationType<P> {
+  return new NotificationType<P>(method)
+}
 
 /****************************************
     Specific protocol extensions
