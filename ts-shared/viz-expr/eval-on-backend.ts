@@ -1,6 +1,6 @@
 import { Schema } from 'effect'
 import { BoolValue, IRId } from './viz-expr.js'
-import { VersionId } from './version-id.js'
+import { VersionedDocId } from './versioned-doc-id.js'
 
 /**********************************************
       Request payload: EvalAppRequestParams
@@ -14,7 +14,7 @@ export const EvalAppRequestParams = Schema.Struct({
     description:
       'The actual arguments for the App. Would be nice to be able to handle different kinds of values in the future.',
   }),
-  versionId: VersionId.annotations({
+  verTxtDocId: VersionedDocId.annotations({
     description:
       'To serve as an independent check that the backend and frontend are talking about the same version of the document / to avoid race conditions.',
   }),
