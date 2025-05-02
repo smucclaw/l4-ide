@@ -40,13 +40,11 @@ export function fromWebviewMessengerNotificationType<P extends object>(
 ): L4RpcNotificationType<P> {
   return makeL4RpcNotificationType(notificationType.method)
 }
+
 /*************************************************************
    Render FunDecl in Ladder Visualizer Request and Response
                 for VSCode Webview
 **************************************************************/
-
-// TODO: The RenderAsLadder etc types should also use
-// our wrapper L4RpcRequestType type --- that we are using vscode-messenger for commn between webview and extension is an internal implementational detail
 
 /** This is the 'please visualize this fun decl' request for the VSCode webview.
  * Using a request so that the extension can know whether the webview received it.
