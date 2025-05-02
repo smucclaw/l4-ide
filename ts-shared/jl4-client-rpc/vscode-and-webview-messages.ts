@@ -1,11 +1,17 @@
-import type { L4RpcRequestType } from './custom-protocol.js'
-import { makeL4RpcRequestType } from './custom-protocol.js'
-import type { NotificationType, RequestType } from 'vscode-messenger-common'
+import type {
+  L4RpcRequestType,
+  L4RpcNotificationType,
+} from './custom-protocol.js'
+import {
+  makeL4RpcRequestType,
+  makeL4RpcNotificationType,
+} from './custom-protocol.js'
 import { RenderAsLadderInfo } from '@repo/viz-expr'
+import type { NotificationType, RequestType } from 'vscode-messenger-common'
 
-/*************************************************************
-     Conversion helpers
-**************************************************************/
+/*******************************************************************************
+ Convert between L4 RPC types and vscode-messenger's Request/Notification types
+********************************************************************************/
 
 export function toWebviewMessengerRequestType<P extends object, R>(
   requestType: L4RpcRequestType<P, R>
@@ -21,6 +27,19 @@ export function fromWebviewMessengerRequestType<P extends object, R>(
   return makeL4RpcRequestType(requestType.method)
 }
 
+export function toWebviewMessengerNotificationType<P extends object>(
+  notificationType: L4RpcNotificationType<P>
+): NotificationType<P> {
+  return {
+    method: notificationType.method,
+  }
+}
+
+export function fromWebviewMessengerNotificationType<P extends object>(
+  notificationType: NotificationType<P>
+): L4RpcNotificationType<P> {
+  return makeL4RpcNotificationType(notificationType.method)
+}
 /*************************************************************
    Render FunDecl in Ladder Visualizer Request and Response
                 for VSCode Webview
