@@ -19,6 +19,8 @@ export class LadderEnv {
     // Set the top fun decl lir node in Lir Registry
     lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
 
+    // Note: Do not store a reference to the LirContext
+
     return new LadderEnv(lirRegistry)
   }
 
