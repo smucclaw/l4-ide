@@ -8,7 +8,6 @@ but this framework is now getting quite different from what it used to be.
 */
 
 import { ComparisonResult } from '../utils.js'
-import { setContext, getContext } from 'svelte'
 
 /*********************************************
        Registry, Top-level Lir
@@ -256,19 +255,4 @@ export interface DisplayerProps {
 export interface RootDisplayerProps extends DisplayerProps {
   /** The root displayer will set the `lir` in the Svelte context so that children displayers can also access it */
   lir: LirRegistry
-}
-
-const lirRegistryKey = 'lirRegistry'
-
-export function setLirRegistryInSvelteContext(
-  lir: ReturnType<typeof getLirRegistryFromSvelteContext>
-) {
-  setContext(lirRegistryKey, lir)
-}
-
-/** This must be called during component initialization
- * since setContext / getContext must be called during component initialization.
- */
-export function getLirRegistryFromSvelteContext(): LirRegistry {
-  return getContext(lirRegistryKey)
 }
