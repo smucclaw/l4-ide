@@ -17,6 +17,7 @@ import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
+  // getSendLspClientRequestFromWebview,
 } from 'jl4-client-rpc'
 
 /***********************************************
@@ -48,6 +49,27 @@ const vizWebviewFrontend: WebviewTypeMessageParticipant = {
 }
 
 /***************************************
+      Set up webview messenger
+****************************************/
+
+function initializeWebviewMessenger(
+  outputChannel: vscode.OutputChannel,
+  panelManager: PanelManager
+) {
+  /** Messenger for VSCode extension to communicate with webview */
+  const webviewMessenger = new Messenger({ debugLog: true })
+
+  // Set up listeners
+  // -- Listen for whether webview frontend has initialized
+  webviewMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
+    panelManager.markFrontendAsReady()
+    outputChannel.appendLine(`Ext: got frontend is ready notification!`)
+  })
+
+  return webviewMessenger
+}
+
+/***************************************
       Activate
 ****************************************/
 
@@ -70,9 +92,12 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
+  // Initialize panelManager and webviewMessenger
   const panelManager = new PanelManager(PANEL_CONFIG)
-
-  const webviewMessenger = new Messenger({ debugLog: true })
+  const webviewMessenger = initializeWebviewMessenger(
+    outputChannel,
+    panelManager
+  )
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -114,15 +139,6 @@ export async function activate(context: ExtensionContext) {
 
           panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
-          webviewMessenger.onNotification(
-            WebviewFrontendIsReadyNotification,
-            () => {
-              panelManager.markFrontendAsReady()
-              outputChannel.appendLine(
-                `Ext: got frontend is ready notification!`
-              )
-            }
-          )
           await panelManager.getWebviewFrontendIsReadyPromise()
 
           const response = await webviewMessenger.sendRequest(
