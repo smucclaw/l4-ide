@@ -9,6 +9,68 @@ import {
 import { RenderAsLadderInfo } from '@repo/viz-expr'
 import type { NotificationType, RequestType } from 'vscode-messenger-common'
 
+/*************************************
+  On webview frontend initialization
+**************************************/
+
+export interface WebviewFrontendIsReadyMessage {
+  $type: 'webviewReady'
+}
+
+export const WebviewFrontendIsReadyNotification: NotificationType<WebviewFrontendIsReadyMessage> =
+  {
+    method: 'webviewFrontendIsReady',
+  }
+
+/*************************************************************
+            Render FunDecl in Ladder Visualizer 
+                Request and Response
+                  for VSCode Webview
+**************************************************************/
+
+/** This is the 'please visualize this fun decl' request for the VSCode webview.
+ * Using a request so that the extension can know whether the webview received it.
+ * See also Wrapper / Protocol interfaces in viz-expr.ts
+ */
+export const RenderAsLadder: RequestType<
+  RenderAsLadderInfo,
+  RenderAsLadderResponse
+> = {
+  method: 'renderAsLadder',
+}
+
+export type RenderAsLadderResponse = { $type: 'ok' } | { $type: 'error' }
+
+export function makeRenderAsLadderSuccessResponse(): RenderAsLadderResponse {
+  return { $type: 'ok' }
+}
+
+export function makeRenderAsLadderFailureResponse(): RenderAsLadderResponse {
+  return { $type: 'error' }
+}
+
+/*************************************************************
+            For the vscode Webview to
+            get, via the Ladder Backend API,
+            the VSCode Extension to
+            forward a LSP client request
+**************************************************************/
+
+/** Returns the (vscode-webview-messenger) Request type for webview to get extension to forward a request to the language server. */
+export const makeLspRelayRequestType = <P extends object, R>(): RequestType<
+  ClientRequestParams<P, R>,
+  R
+> => ({
+  method: 'sendClientRequest',
+})
+
+/** Payload for {@link makeLspRelayRequestType}:
+ * contains all the info needed for the extension to send a request to the language server. */
+export interface ClientRequestParams<P extends object, R> {
+  requestType: L4RpcRequestType<P, R>
+  params: P
+}
+
 /*******************************************************************************
  Convert between L4 RPC types and vscode-messenger's Request/Notification types
 ********************************************************************************/
@@ -40,42 +102,3 @@ export function fromWebviewMessengerNotificationType<P extends object>(
 ): L4RpcNotificationType<P> {
   return makeL4RpcNotificationType(notificationType.method)
 }
-
-/*************************************************************
-   Render FunDecl in Ladder Visualizer Request and Response
-                for VSCode Webview
-**************************************************************/
-
-/** This is the 'please visualize this fun decl' request for the VSCode webview.
- * Using a request so that the extension can know whether the webview received it.
- * See also Wrapper / Protocol interfaces in viz-expr.ts
- */
-export const RenderAsLadder: RequestType<
-  RenderAsLadderInfo,
-  RenderAsLadderResponse
-> = {
-  method: 'renderAsLadder',
-}
-
-export type RenderAsLadderResponse = { $type: 'ok' } | { $type: 'error' }
-
-export function makeRenderAsLadderSuccessResponse(): RenderAsLadderResponse {
-  return { $type: 'ok' }
-}
-
-export function makeRenderAsLadderFailureResponse(): RenderAsLadderResponse {
-  return { $type: 'error' }
-}
-
-/*************************************
-  On webview frontend initialization
-**************************************/
-
-export interface WebviewFrontendIsReadyMessage {
-  $type: 'webviewReady'
-}
-
-export const WebviewFrontendIsReadyNotification: NotificationType<WebviewFrontendIsReadyMessage> =
-  {
-    method: 'webviewFrontendIsReady',
-  }
