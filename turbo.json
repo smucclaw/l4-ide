@@ -15,10 +15,10 @@
       ]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": ["^build", "^lint"]
     },
     "check": {
-      "dependsOn": ["^check"]
+      "dependsOn": ["^build", "^check"]
     },
     "test": {
       "dependsOn": ["^check"],
