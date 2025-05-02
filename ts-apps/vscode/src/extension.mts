@@ -17,6 +17,7 @@ import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
+  makeLspRelayRequestType,
 } from 'jl4-client-rpc'
 
 /***********************************************
@@ -64,6 +65,25 @@ function initializeWebviewMessenger(
     panelManager.markFrontendAsReady()
     outputChannel.appendLine(`Ext: got frontend is ready notification!`)
   })
+
+  // -- Listen for LSP client relay requests from webview
+  webviewMessenger.onRequest(
+    makeLspRelayRequestType<object, unknown>(),
+    async (clientReqParams) => {
+      outputChannel.appendLine(
+        `Ext: Received request from webview: ${JSON.stringify(clientReqParams)}`
+      )
+
+      const response = await client.sendRequest(
+        clientReqParams.requestType,
+        clientReqParams.params
+      )
+      outputChannel.appendLine(
+        `Response from server: ${JSON.stringify(response)}`
+      )
+      return response
+    }
+  )
 
   return webviewMessenger
 }
