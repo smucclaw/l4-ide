@@ -9,9 +9,10 @@ when trying to make ladder diagrams. -->
 
   const {
     context,
-    node: funDeclLirNode,
+    node,
     lir,
     backendApi,
+    versionedDocId,
   }: LadderFlowDisplayerProps = $props()
 
   let baseFlowComponent: ReturnType<typeof FlowBase>
@@ -21,9 +22,9 @@ when trying to make ladder diagrams. -->
 
 <!-- SvelteFlowProvider supplies SF hooks used by FlowBase -->
 <SvelteFlowProvider>
-  <LadderEnvProvider {context} {lir} node={funDeclLirNode} {backendApi}>
+  <LadderEnvProvider {context} {lir} {node} {backendApi} {versionedDocId}>
     <div style="height: 100%">
-      <FlowBase {context} node={funDeclLirNode} bind:this={baseFlowComponent} />
+      <FlowBase {context} {node} bind:this={baseFlowComponent} />
     </div>
   </LadderEnvProvider>
 </SvelteFlowProvider>

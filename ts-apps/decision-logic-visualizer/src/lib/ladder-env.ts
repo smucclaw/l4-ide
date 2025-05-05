@@ -10,13 +10,19 @@ import type { LadderBackendApi } from 'jl4-client-rpc'
 import type { LirContext, LirRegistry, LirRootType } from './layout-ir/core.js'
 import type { FunDeclLirNode } from './layout-ir/ladder-graph/ladder.svelte.js'
 import { setContext, getContext } from 'svelte'
+import type { VersionedDocId } from '@repo/viz-expr'
 
 export class LadderEnv {
   /** Initialize the Ladder Env -- which includes setting the fun decl lir node in the Lir Registry */
   static make(
+    // lir stuff
     context: LirContext,
     lirRegistry: LirRegistry,
+
+    // info about the program
+    versionedDocId: VersionedDocId,
     funDeclLirNode: FunDeclLirNode,
+
     backendApi: LadderBackendApi
   ) {
     // Set the top fun decl lir node in Lir Registry
@@ -25,12 +31,13 @@ export class LadderEnv {
     // Note: Do not store a reference to the LirContext
 
     const l4Connection = new L4Connection(backendApi)
-    return new LadderEnv(lirRegistry, l4Connection)
+    return new LadderEnv(lirRegistry, l4Connection, versionedDocId)
   }
 
   private constructor(
     private readonly lirRegistry: LirRegistry,
-    private readonly l4Connection: L4Connection
+    private readonly l4Connection: L4Connection,
+    private readonly versionedDocId: VersionedDocId
   ) {}
 
   getLirRegistry(): LirRegistry {
@@ -49,6 +56,10 @@ export class LadderEnv {
       context,
       LADDER_VIZ_ROOT_TYPE
     ) as FunDeclLirNode
+  }
+
+  getVersionedTextDocIdentifier(): VersionedDocId {
+    return this.versionedDocId
   }
 
   setInSvelteContext() {

@@ -15,11 +15,18 @@
     lir,
     node: funDeclLirNode,
     backendApi,
+    versionedDocId,
     children,
   }: LadderEnvProviderProps = $props()
 
   // Initialize the LadderEnv and make it available to children components
-  const ladderEnv = LadderEnv.make(context, lir, funDeclLirNode, backendApi)
+  const ladderEnv = LadderEnv.make(
+    context,
+    lir,
+    versionedDocId,
+    funDeclLirNode,
+    backendApi
+  )
   ladderEnv.setInSvelteContext()
 </script>
 
