@@ -1,14 +1,11 @@
 <!--
 This is the component that consumers of the DLV lib will import,
-when trying to make ladder diagrams.
-
-This component only exists so that we can put SvelteFlowProvider
- above FlowBase (which uses SF hooks) in the component hierarchy -->
+when trying to make ladder diagrams. -->
 <script lang="ts">
   import { SvelteFlowProvider } from '@xyflow/svelte'
   import type { LadderFlowDisplayerProps } from './flow-props.js'
   import FlowBase from './flow-base.svelte'
-  import { initializeLadderEnv } from '$lib/ladder-env.js'
+  import LadderEnvProvider from '$lib/displayers/ladder-env-provider.svelte'
 
   const {
     context,
@@ -16,15 +13,16 @@ This component only exists so that we can put SvelteFlowProvider
     lir,
   }: LadderFlowDisplayerProps = $props()
 
-  initializeLadderEnv(context, lir, funDeclLirNode)
-
   let baseFlowComponent: ReturnType<typeof FlowBase>
 
   // TODO: Expose a wrapped version of SF's fitView, etc
 </script>
 
+<!-- SvelteFlowProvider supplies SF hooks used by FlowBase -->
 <SvelteFlowProvider>
-  <div style="height: 100%">
-    <FlowBase {context} node={funDeclLirNode} bind:this={baseFlowComponent} />
-  </div>
+  <LadderEnvProvider {context} {lir} node={funDeclLirNode}>
+    <div style="height: 100%">
+      <FlowBase {context} node={funDeclLirNode} bind:this={baseFlowComponent} />
+    </div>
+  </LadderEnvProvider>
 </SvelteFlowProvider>
