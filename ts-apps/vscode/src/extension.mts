@@ -8,7 +8,7 @@ import {
 } from 'vscode-languageclient/node.js'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
-import { RenderAsLadderInfo } from '@repo/viz-expr'
+import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
 // import { cmdViz } from './commands.js'
 import type { PanelConfig } from './webview-panel.js'
@@ -178,10 +178,12 @@ export async function activate(context: ExtensionContext) {
         // we do this after invoking the callback to avoid blocking the editor
         // on the command invokation
         await next(event)
-        await vscode.commands.executeCommand(
-          'l4.visualize',
-          event.document.uri.toString()
-        )
+
+        const verDocId: VersionedDocId = {
+          uri: event.document.uri.toString(),
+          version: event.document.version,
+        }
+        await vscode.commands.executeCommand('l4.visualize', verDocId)
       },
     },
   }
