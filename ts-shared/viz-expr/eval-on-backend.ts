@@ -10,7 +10,7 @@ export const EvalAppRequestParams = Schema.Struct({
   $type: Schema.tag('EvalAppRequestParams'),
   // We can think about batching requests in the future
   appExpr: IRId,
-  arguments: Schema.Array(BoolValue).annotations({
+  args: Schema.Array(BoolValue).annotations({
     description:
       'The actual arguments for the App. Would be nice to be able to handle different kinds of values in the future.',
   }),
