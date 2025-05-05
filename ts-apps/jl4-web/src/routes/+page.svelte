@@ -275,10 +275,13 @@
         },
         didChange: async (event, next) => {
           await next(event)
-          // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
-          // the rest of the didChange callback does not run, at least not when testing on localhost.
+
           if (persistSession) {
-            await persistSession()
+            try {
+              await persistSession()
+            } catch (e) {
+              console.error('Error persisting session', e)
+            }
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
