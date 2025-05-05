@@ -2,11 +2,10 @@
 import type { IRExpr, UBoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import {
   type UBoolVal,
-  TrueVal,
-  FalseVal,
   isFalseVal,
   UnknownVal,
   veExprToEvExpr,
+  toUBoolVal,
 } from '../../eval/type.js'
 import { Assignment, Corefs } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
@@ -679,11 +678,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
-    this.#value = match(originalExpr.value)
-      .with('True', () => new TrueVal())
-      .with('False', () => new FalseVal())
-      .with('Unknown', () => new UnknownVal())
-      .exhaustive()
+    this.#value = toUBoolVal(originalExpr.value)
     this.#name = originalExpr.name
   }
 
