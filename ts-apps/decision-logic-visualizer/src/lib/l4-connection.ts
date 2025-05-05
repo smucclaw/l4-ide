@@ -1,6 +1,5 @@
-import type { LadderBackendApi } from 'jl4-client-rpc'
-import { EvalAppRequestType } from 'jl4-client-rpc'
-import { EvalAppRequestParams } from '@repo/viz-expr'
+import type { EvalAppResult, LadderBackendApi } from 'jl4-client-rpc'
+import { EvalAppRequestType, EvalAppRequestParams } from 'jl4-client-rpc'
 
 /** Higher-level wrapper around functionality provided by the Ladder backend.
  * The software design here was inspired by VSCode-Lean's 'EditorConnection' and 'EditorApi'.
@@ -13,7 +12,7 @@ export class L4Connection {
     appExpr: EvalAppRequestParams['appExpr'],
     args: EvalAppRequestParams['args'],
     verTxtDocId: EvalAppRequestParams['verTxtDocId']
-  ) {
+  ): Promise<EvalAppResult | null> {
     const params: EvalAppRequestParams = {
       $type: 'EvalAppRequestParams',
       appExpr,
