@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { RenderAsLadderInfo } from '@repo/viz-expr'
+  import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
   import { type LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
   import {
@@ -37,7 +37,8 @@
 
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
-  let ladderApi: LadderBackendApi
+  let backendApi: LadderBackendApi
+  let versionedDocId: VersionedDocId
 
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
@@ -52,14 +53,19 @@
     )
 
     messenger.onRequest(RenderAsLadder, (payload: RenderAsLadderInfo) => {
-      funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, payload.funDecl)
+      versionedDocId = payload.verTextDocId
+      funDeclLirNode = VizDeclLirSource.toLir(
+        nodeInfo,
+        payload.funDecl,
+        versionedDocId
+      )
       return makeRenderAsLadderSuccessResponse()
     })
 
     messenger.start()
 
     // Initialize LadderBackendApi
-    ladderApi = new LadderApiForWebview(messenger)
+    backendApi = new LadderApiForWebview(messenger)
   })
 </script>
 
@@ -71,7 +77,8 @@
         {context}
         node={funDeclLirNode}
         lir={lirRegistry}
-        backendApi={ladderApi}
+        {backendApi}
+        {versionedDocId}
       />
     </div>
   {/key}
