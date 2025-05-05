@@ -16,7 +16,6 @@ import L4.Syntax
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     RenderAsLadderInfo (..),
-    VersionedDocId (..)
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import L4.Print (prettyLayout)
@@ -37,18 +36,18 @@ newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
     via ExceptT VizError (State VizState)
 
 mkVizEnv :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizEnv
-mkVizEnv lspVerTxtDocId substitution shouldSimplify =
-  let moduleUri = toNormalizedUri lspVerTxtDocId._uri
+mkVizEnv verTxtDocId substitution shouldSimplify =
+  let moduleUri = toNormalizedUri verTxtDocId._uri
   in MkVizEnv
     { moduleUri
-    , verTxtDocId = MkVersionedDocId lspVerTxtDocId
+    , verTxtDocId
     , substitution
     , shouldSimplify
     }
 
 data VizEnv = MkVizEnv
   { moduleUri      :: !NormalizedUri
-  , verTxtDocId    :: !VersionedDocId
+  , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
   , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
   , shouldSimplify :: !Bool             -- ^ whether to simplify the expression
   }
@@ -74,7 +73,7 @@ mkInitialVizState env =
 getVizEnv :: Viz VizEnv
 getVizEnv = use #env
 
-getVerTxtDocId :: Viz VersionedDocId
+getVerTxtDocId :: Viz LSP.VersionedTextDocumentIdentifier
 getVerTxtDocId = do
   env <- getVizEnv
   pure env.verTxtDocId

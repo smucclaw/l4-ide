@@ -13,7 +13,7 @@ import Optics
 import qualified Language.LSP.Protocol.Types as LSP
 
 data RenderAsLadderInfo = MkRenderAsLadderInfo
-  { verTextDocId :: VersionedDocId
+  { verTextDocId :: LSP.VersionedTextDocumentIdentifier
   , funDecl      :: FunDecl
   }
   deriving stock (Show, Generic, Eq)
@@ -47,12 +47,6 @@ newtype ID = MkID
   }
   deriving newtype (Eq, Ord)
   deriving stock (Show, Generic)
-
-newtype VersionedDocId = MkVersionedDocId
-  { toLSPVerTextDocId :: LSP.VersionedTextDocumentIdentifier
-  }
-  deriving stock (Show, Generic)
-  deriving newtype (Eq)
 
 data UBoolValue = FalseV | TrueV | UnknownV
   deriving (Show, Eq, Generic)
@@ -145,18 +139,7 @@ instance HasCodec RenderAsLadderInfo where
           <*> requiredField' "funDecl"      .= view #funDecl
 
 instance HasCodec LSP.VersionedTextDocumentIdentifier where
-  codec =
-    named "VersionedDocId" $
-      object "VersionedDocId" $
-        LSP.VersionedTextDocumentIdentifier
-          <$> requiredField' "uri"     .= view #_uri
-          <*> requiredField' "version" .= view #_version
-
-instance HasCodec VersionedDocId where
-  codec = dimapCodec MkVersionedDocId (view #toLSPVerTextDocId) codec
-
-instance HasCodec LSP.Uri where
-  codec = dimapCodec LSP.Uri LSP.getUri codec
+  codec = codecViaAeson "VersionedTextDocumentIdentifier"
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec
@@ -173,9 +156,6 @@ deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
 deriving via (Autodocodec RenderAsLadderInfo) instance ToJSON RenderAsLadderInfo
 deriving via (Autodocodec RenderAsLadderInfo) instance FromJSON RenderAsLadderInfo
-
-deriving via (Autodocodec VersionedDocId) instance ToJSON VersionedDocId
-deriving via (Autodocodec VersionedDocId) instance FromJSON VersionedDocId
 
 {-
 Am trying out autodocodec because I wanted to see if
