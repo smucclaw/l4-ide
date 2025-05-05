@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { RenderAsLadderInfo } from '@repo/viz-expr'
+  import { type LadderBackendApi } from 'jl4-client-rpc'
+  import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
   import {
     RenderAsLadder,
     makeRenderAsLadderSuccessResponse,
@@ -35,6 +37,7 @@
 
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
+  let ladderApi: LadderBackendApi
 
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
@@ -54,6 +57,9 @@
     })
 
     messenger.start()
+
+    // Initialize LadderBackendApi
+    ladderApi = new LadderApiForWebview(messenger)
   })
 </script>
 
@@ -61,7 +67,12 @@
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
-      <LadderFlow {context} node={funDeclLirNode} lir={lirRegistry} />
+      <LadderFlow
+        {context}
+        node={funDeclLirNode}
+        lir={lirRegistry}
+        backendApi={ladderApi}
+      />
     </div>
   {/key}
 {/if}

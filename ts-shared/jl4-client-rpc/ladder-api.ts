@@ -21,3 +21,11 @@ interface L4BackendApi {
 
   /* Send a notification to the LSP server. [TODO] */
 }
+
+/** A mock implementation of the LadderBackendApi for testing / dev-ing */
+export const mockLadderBackendApi: LadderBackendApi = {
+  sendClientRequest: async (type, params) => {
+    console.log('[mockLadderBackendApi] sendClientRequest: ', type, params)
+    return Promise.resolve(null)
+  },
+}

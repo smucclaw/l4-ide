@@ -7,7 +7,7 @@
     LirRegistry,
     type LirRootType,
   } from '$lib/layout-ir/core.js'
-
+  import { mockLadderBackendApi } from 'jl4-client-rpc'
   import Flow from '$lib/displayers/flow/flow.svelte'
 
   // TODO: This stuff should just be replaced with the tailwind on hovered classes
@@ -184,13 +184,23 @@
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={funDeclLirNode} lir={lirRegistry} />
+    <Flow
+      {context}
+      node={funDeclLirNode}
+      lir={lirRegistry}
+      backendApi={mockLadderBackendApi}
+    />
   </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={declLirNode2} lir={lirRegistry} />
+    <Flow
+      {context}
+      node={declLirNode2}
+      lir={lirRegistry}
+      backendApi={mockLadderBackendApi}
+    />
   </div>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />

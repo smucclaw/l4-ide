@@ -11,6 +11,7 @@ when trying to make ladder diagrams. -->
     context,
     node: funDeclLirNode,
     lir,
+    backendApi,
   }: LadderFlowDisplayerProps = $props()
 
   let baseFlowComponent: ReturnType<typeof FlowBase>
@@ -20,7 +21,7 @@ when trying to make ladder diagrams. -->
 
 <!-- SvelteFlowProvider supplies SF hooks used by FlowBase -->
 <SvelteFlowProvider>
-  <LadderEnvProvider {context} {lir} node={funDeclLirNode}>
+  <LadderEnvProvider {context} {lir} node={funDeclLirNode} {backendApi}>
     <div style="height: 100%">
       <FlowBase {context} node={funDeclLirNode} bind:this={baseFlowComponent} />
     </div>
