@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module LSP.L4.Viz.VizExpr where
 
 import Autodocodec
@@ -9,12 +10,13 @@ import Data.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
+import qualified Language.LSP.Protocol.Types as LSP
 
-newtype RenderAsLadderInfo = MkRenderAsLadderInfo
-  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
+data RenderAsLadderInfo = MkRenderAsLadderInfo
+  { verTextDocId :: VersionedDocId
+  , funDecl      :: FunDecl
   }
-  deriving newtype (Eq)
-  deriving stock (Show, Generic)
+  deriving stock (Show, Generic, Eq)
 
 type Unique = Int
 -- | TODO: Consider renaming this to something other than `Name`
@@ -45,6 +47,12 @@ newtype ID = MkID
   }
   deriving newtype (Eq, Ord)
   deriving stock (Show, Generic)
+
+newtype VersionedDocId = MkVersionedDocId
+  { toLSPVerTextDocId :: LSP.VersionedTextDocumentIdentifier
+  }
+  deriving stock (Show, Generic)
+  deriving newtype (Eq)
 
 data UBoolValue = FalseV | TrueV | UnknownV
   deriving (Show, Eq, Generic)
@@ -91,7 +99,7 @@ instance HasCodec IRExpr where
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
-        
+
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
@@ -133,7 +141,22 @@ instance HasCodec RenderAsLadderInfo where
     named "RenderAsLadderInfo" $
       object "RenderAsLadderInfo" $
         MkRenderAsLadderInfo
-          <$> requiredField' "funDecl" .= view #funDecl
+          <$> requiredField' "verTextDocId" .= view #verTextDocId
+          <*> requiredField' "funDecl"      .= view #funDecl
+
+instance HasCodec LSP.VersionedTextDocumentIdentifier where
+  codec =
+    named "VersionedDocId" $
+      object "VersionedDocId" $
+        LSP.VersionedTextDocumentIdentifier
+          <$> requiredField' "uri"     .= view #_uri
+          <*> requiredField' "version" .= view #_version
+
+instance HasCodec VersionedDocId where
+  codec = dimapCodec MkVersionedDocId (view #toLSPVerTextDocId) codec
+
+instance HasCodec LSP.Uri where
+  codec = dimapCodec LSP.Uri LSP.getUri codec
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec
@@ -150,6 +173,9 @@ deriving via (Autodocodec IRExpr) instance FromJSON IRExpr
 
 deriving via (Autodocodec RenderAsLadderInfo) instance ToJSON RenderAsLadderInfo
 deriving via (Autodocodec RenderAsLadderInfo) instance FromJSON RenderAsLadderInfo
+
+deriving via (Autodocodec VersionedDocId) instance ToJSON VersionedDocId
+deriving via (Autodocodec VersionedDocId) instance FromJSON VersionedDocId
 
 {-
 Am trying out autodocodec because I wanted to see if
