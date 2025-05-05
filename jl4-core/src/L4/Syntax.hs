@@ -150,7 +150,7 @@ data Directive n =
     StrictEval Anno (Expr n)
   | LazyEval Anno (Expr n)
   | Check Anno (Expr n)
-  | Contract Anno (Expr n) (Expr n) [Event n]
+  | Contract Anno (Expr n) (Expr n) [Expr n]
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -211,6 +211,7 @@ data Expr n =
   | Lit        Anno Lit
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
+  | Event      Anno (Event n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

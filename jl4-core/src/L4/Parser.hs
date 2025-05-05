@@ -469,19 +469,13 @@ directive =
           <* annoLexeme (spacedToken_ TKAt)
           <*> annoHole expr
           <* annoLexeme (spacedToken_ TKWith)
-          <*> Compose contractEvents
+          <*> contractEvents
       ]
 
-contractEvents :: Parser (WithAnno [Event Name])
-contractEvents = do
+contractEvents :: Compose Parser WithAnno [Expr Name]
+contractEvents = Compose do
   current <- Lexer.indentLevel
-  getCompose $ Applicative.many $ MkEvent emptyAnno
-    <$  annoLexeme (spacedToken_ TKParty)
-    <*> annoHole (indentedExpr current)
-    <*  annoLexeme (spacedToken_ TKDoes)
-    <*> annoHole (indentedExpr current)
-    <*  annoLexeme (spacedToken_ TKAt)
-    <*> annoHole (indentedExpr current) -- TODO: better timestamp parsing
+  getCompose $ Applicative.many $ annoHole $ expr -- current
 
 import' :: Parser (Import Name)
 import' =
@@ -997,6 +991,7 @@ baseExpr =
       try projection
   <|> negation
   <|> ifthenelse
+  <|> try event
   <|> regulative
   <|> lam
   <|> consider
@@ -1005,6 +1000,18 @@ baseExpr =
   <|> lit
   <|> list
   <|> paren expr
+
+event :: Parser (Expr Name)
+event = attachAnno $ Event emptyAnno <$> parseEvent
+
+parseEvent :: Compose Parser WithAnno (Event Name)
+parseEvent = MkEvent emptyAnno
+  <$  annoLexeme (spacedToken_ TKParty)
+  <*> annoHole expr
+  <*  annoLexeme (spacedToken_ TKDoes)
+  <*> annoHole expr
+  <*  annoLexeme (spacedToken_ TKAt)
+  <*> annoHole expr -- TODO: better timestamp parsing
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr =

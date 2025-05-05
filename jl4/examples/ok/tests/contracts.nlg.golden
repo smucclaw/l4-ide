@@ -1,2 +1,2 @@
 `EVALCONTRACT` with `x`, list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` and 42 and 5
-`EVALCONTRACT` with `x`, list of `EVENT` with `S`, `delivery` and 4 and `EVENT` with `B`, `payment` and 2 and 4
+executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 2

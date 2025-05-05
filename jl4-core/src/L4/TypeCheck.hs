@@ -356,16 +356,11 @@ inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e)
   partyT <- fresh (NormalName "party")
   actionT <- fresh (NormalName "action")
   let contractT = contract partyT actionT
+      eventT = event partyT actionT
   re <- checkExpr ExpectRegulativeContractContext e contractT
   rt <- checkExpr ExpectRegulativeTimestampContext t number
-  revs <- traverse (prune . inferEvent partyT actionT) evs
+  revs <- traverse (prune . flip (checkExpr ExpectRegulativeEventContext) eventT) evs
   pure (Contract ann re rt revs)
-inferEvent :: Type' Resolved -> Type' Resolved -> Event Name -> Check (Event Resolved)
-inferEvent partyT actionT (MkEvent ann party action timestamp) = do
-  party' <- checkExpr ExpectRegulativePartyContext party partyT
-  action' <- checkExpr ExpectRegulativeActionContext action actionT
-  timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
-  pure (MkEvent ann party' action' timestamp')
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -1100,6 +1095,18 @@ inferExpr' g =
         unzip <$> traverse inferLocalDecl ds
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
+    Event ann ev -> do
+      (ev', ty) <- inferEvent ev
+      pure (Event ann ev', ty)
+
+inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
+inferEvent (MkEvent ann party action timestamp) = do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  party' <- checkExpr ExpectRegulativePartyContext party partyT
+  action' <- checkExpr ExpectRegulativeActionContext action actionT
+  timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
+  pure (MkEvent ann party' action' timestamp', event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being
@@ -1859,6 +1866,8 @@ prettyTypeMismatch ExpectRegulativeContractContext expected given =
   standardTypeMismatch [ "The contract passed to a CONTRACT directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
   standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeEventContext expected given =
+  standardTypeMismatch [ "The event expr passed to a CONTRACT directive is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

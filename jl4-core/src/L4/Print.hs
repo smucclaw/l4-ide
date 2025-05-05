@@ -178,12 +178,7 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
       "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
-      foldMap (\MkEvent {timestamp, party, action} ->
-        [ "PARTY" <+> printWithLayout party
-        , "DOES" <+> printWithLayout action
-        , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
-        ]
-      ) stmts
+      map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
@@ -296,6 +291,12 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         [ indent 2 (printWithLayout e1)
         , "WHERE"
         , indent 2 (vsep $ fmap printWithLayout decls)
+        ]
+    Event _ MkEvent {timestamp, party, action} ->
+      vcat
+        [ "PARTY" <+> printWithLayout party
+        , "DOES" <+> printWithLayout action
+        , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
         ]
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann

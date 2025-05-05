@@ -391,6 +391,7 @@ forwardExpr env (Regulative _ann (MkObligation _ party action due followup)) = d
   dueR <-  traverse (`allocate_` env) due
   followupR <- allocate_ (fromMaybe fulfilExpr followup) env
   backward (ValObligation partyR actionR dueR followupR)
+forwardExpr env (Event _ann ev) = forwardExpr env (desugarEvent ev)
 
 backward :: WHNF -> Eval WHNF
 backward val = withPoppedFrame $ \ case
@@ -793,14 +794,23 @@ evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
   pure []
-evalDirective env (Contract ann expr t evs) = do
-  evalDirective env (LazyEval ann (contractToEvalDirective expr t evs))
+evalDirective env (Contract ann expr t evs) =
+  evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
 
-contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Event Resolved] -> Expr Resolved
-contractToEvalDirective contract t evs = App emptyAnno TypeCheck.evalContractRef [contract, evListExpr, t]
+contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Eval (Expr Resolved)
+contractToEvalDirective contract t evs = do
+  evs' <- evListExpr
+  pure $ App emptyAnno TypeCheck.evalContractRef [contract, evs', t]
   where
-  evListExpr = List emptyAnno $ map eventExpr evs
-  eventExpr (MkEvent ann party act timestamp) = App ann TypeCheck.eventCRef [party, act, timestamp]
+  evListExpr = List emptyAnno <$> traverse eventExpr evs
+
+desugarEvent :: Event Resolved -> Expr Resolved
+desugarEvent (MkEvent ann party act timestamp) = App ann TypeCheck.eventCRef [party, act, timestamp]
+
+
+eventExpr :: Expr Resolved -> Eval (Expr Resolved)
+eventExpr (Event _ann ev) = pure $ desugarEvent ev
+eventExpr o = internalException $ RuntimeTypeError $ "expected an EVENT, but got " <> prettyLayout o
 
 evalLocalDecl :: Environment -> LocalDecl Resolved -> Eval ()
 evalLocalDecl env (LocalDecide _ann decide) =

@@ -103,6 +103,7 @@ data ExpectationContext =
   | ExpectRegulativeTimestampContext -- timestamp of a regulative event
   | ExpectRegulativeFollowupContext -- hence clause of regulative rule
   | ExpectRegulativeContractContext -- when invoking a contract directive
+  | ExpectRegulativeEventContext -- check an event expr
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

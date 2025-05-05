@@ -7,7 +7,6 @@ module L4.Nlg (
 import Base
 import qualified Base.Text as Text
 
-import GHC.Generics (Generically (..))
 import L4.Annotation
 import L4.Lexer (PosToken)
 import L4.Syntax
@@ -31,11 +30,14 @@ data LinType
   | LinPunctuation
   deriving stock (Show, Eq, Ord, Generic)
 
-data LinTree = MkLinTree
+newtype LinTree = MkLinTree
   { tokens :: [LinToken]
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (Semigroup, Monoid) via Generically LinTree
+  deriving newtype (Semigroup, Monoid)
+
+instance IsString LinTree where
+  fromString = text . Text.pack
 
 -- | Linearize an expression into plain text.
 -- This linearizer does not attempt to do any smart operations, such as capitalization.
@@ -226,6 +228,21 @@ instance Linearize (Expr Resolved) where
       , text "where"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
       ]
+    Event _ ev -> lin ev
+
+instance Linearize (Event Resolved) where
+  linearize (MkEvent _ p a t) = hcat
+    [ "party", lin p, "did", lin a, "at", lin t]
+
+instance Linearize (Directive Resolved) where
+  linearize = \case
+    StrictEval _ e -> linearize e
+    LazyEval _ e -> linearize e
+    Check _ e -> linearize e
+    Contract _ e t es -> hcat $
+      [ "executing contract", lin e, "at", lin t, "with the following events: " ]
+      <> map lin es
+
 
 instance Linearize (NamedExpr Resolved) where
   linearize = \case

@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -ddump-splices #-}
 {-# LANGUAGE TemplateHaskell #-}
 -- | Build the initial environment used during scope and type checking.
 module L4.TypeCheck.Environment where
@@ -94,6 +93,9 @@ contractInfo =
 -- forall a b. CONTRACT a b
 fulfilInfo :: CheckEntity
 fulfilInfo = KnownTerm (Forall emptyAnno [hDef, iDef] (TyApp emptyAnno contractRef [TyApp emptyAnno hRef [], TyApp emptyAnno iRef []])) Constructor
+
+event :: Type' Resolved -> Type' Resolved -> Type' Resolved
+event party action = TyApp emptyAnno eventRef [party, action]
 
 eventInfo, eventCInfo :: CheckEntity
 eventInfo = KnownType 2 [] Nothing

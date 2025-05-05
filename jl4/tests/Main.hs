@@ -108,14 +108,8 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
           let
             mod' = checkResult.module'
             directives = toListOf (gplate @(Directive Resolved)) mod'
-            directiveExprs = fmap (\case
-              StrictEval _ e -> e
-              LazyEval _ e -> e
-              Check _ e -> e
-              Contract _ c t es -> JL4Lazy.contractToEvalDirective c t es
-              ) directives
           in
-            Text.unlines $ fmap Nlg.simpleLinearizer directiveExprs
+            Text.unlines $ fmap Nlg.simpleLinearizer directives
   let output =
         if isOk
           then output_
