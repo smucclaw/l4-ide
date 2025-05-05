@@ -6,14 +6,16 @@ import {
   RevealOutputChannelOn,
   ServerOptions,
 } from 'vscode-languageclient/node.js'
-import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
-import { Messenger } from 'vscode-messenger'
-import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
-import { Schema } from 'effect'
-// import { cmdViz } from './commands.js'
+import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
 import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
+
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+
+import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
+import { Schema } from 'effect'
+import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
+import { Messenger } from 'vscode-messenger'
 import {
   RenderAsLadder,
   WebviewFrontendIsReadyNotification,
@@ -32,6 +34,7 @@ const decode = Schema.decodeUnknownSync(RenderAsLadderInfo)
 ****************************************/
 
 let client: VSCodeL4LanguageClient
+const code2ProtocolConverter = createCodeConverter()
 
 /***************************************
        Webview Panel
@@ -179,10 +182,10 @@ export async function activate(context: ExtensionContext) {
         // on the command invokation
         await next(event)
 
-        const verDocId: VersionedDocId = {
-          uri: event.document.uri.toString(),
-          version: event.document.version,
-        }
+        const verDocId: VersionedDocId =
+          code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+            event.document
+          )
         await vscode.commands.executeCommand('l4.visualize', verDocId)
       },
     },

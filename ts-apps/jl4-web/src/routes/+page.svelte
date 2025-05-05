@@ -18,6 +18,7 @@
   } from 'vscode-languageclient'
   import { type ConsoleLogger } from 'monaco-languageclient/tools'
   import * as vscode from 'vscode'
+  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
@@ -72,6 +73,7 @@
   // ****************************/
 
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
+  const code2ProtocolConverter = createCodeConverter()
 
   onMount(async () => {
     const { initServices } = await import(
@@ -287,10 +289,10 @@
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
           // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
-          const verDocId: VersionedDocId = {
-            uri: event.document.uri.toString(),
-            version: event.document.version,
-          }
+          const verDocId: VersionedDocId =
+            code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+              event.document
+            )
           debouncedVisualize(verDocId)
         },
       }
