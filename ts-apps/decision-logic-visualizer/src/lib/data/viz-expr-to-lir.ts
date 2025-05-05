@@ -2,7 +2,9 @@ import type { FunDecl, IRExpr, IRId } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
-import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
+import type { LirId, LirNodeInfo } from '../layout-ir/core.js'
+import type { LadderLirSource } from '../layout-ir/ladder-lir-source.js'
+import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   FunDeclLirNode,
   UBoolVarLirNode,
@@ -26,13 +28,13 @@ import { match } from 'ts-pattern'
         Lir Data Sources
 ************************************/
 
-export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, decl: FunDecl): FunDeclLirNode {
+export const VizDeclLirSource: LadderLirSource<FunDecl, FunDeclLirNode> = {
+  toLir(nodeInfo: LirNodeInfo, env: LadderEnv, decl: FunDecl): FunDeclLirNode {
     return new FunDeclLirNode(
       nodeInfo,
       decl.name,
       decl.params,
-      LadderGraphLirSource.toLir(nodeInfo, decl.body)
+      LadderGraphLirSource.toLir(nodeInfo, env, decl.body)
     )
   },
 }
@@ -45,37 +47,43 @@ export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
     nested exprs like (AND [a (AND [b])]) should have already been flattened to (AND [a b]).
 *
 */
-export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
-    // 1. Get structure of the graph
-    const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
-    const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
+export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
+  {
+    toLir(
+      nodeInfo: LirNodeInfo,
+      env: LadderEnv,
+      expr: IRExpr
+    ): LadderGraphLirNode {
+      // 1. Get structure of the graph
+      const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
+      const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
 
-    const { graph: middle, vizExprToLirGraph } = transform(
-      nodeInfo,
-      new Map(),
-      expr
-    )
+      const { graph: middle, vizExprToLirGraph } = transform(
+        nodeInfo,
+        new Map(),
+        expr
+      )
 
-    const dag = overallSource
-      .connect(middle.getSource())
-      .overlay(middle)
-      .overlay(middle.getSink().connect(overallSink))
-    vizExprToLirGraph.set(expr.id, dag)
+      const dag = overallSource
+        .connect(middle.getSource())
+        .overlay(middle)
+        .overlay(middle.getSink().connect(overallSink))
+      vizExprToLirGraph.set(expr.id, dag)
 
-    const ladderGraph = new LadderGraphLirNode(
-      nodeInfo,
-      dag,
-      vizExprToLirGraph,
-      expr
-    )
+      const ladderGraph = new LadderGraphLirNode(
+        nodeInfo,
+        dag,
+        vizExprToLirGraph,
+        expr,
+        env
+      )
 
-    // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
-    augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
+      // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
+      augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
 
-    return ladderGraph
-  },
-}
+      return ladderGraph
+    },
+  }
 
 // TODO2: Attach a group id to the label for the flownode to make it easier to debug
 // TODO3: Return the number of groups as metadata in the FlowGraph

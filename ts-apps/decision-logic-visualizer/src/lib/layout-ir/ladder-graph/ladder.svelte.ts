@@ -42,6 +42,7 @@ import {
 } from '../paths-list.js'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
+import type { LadderEnv } from '$lib/ladder-env.js'
 
 /*
 Design principles:
@@ -279,6 +280,8 @@ will go through the LadderGraphLirNode.
     is owned by SvelteFlow.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
+  #ladderEnv: LadderEnv
+
   #dag: DirectedAcyclicGraph<LirId>
 
   #originalExpr: IRExpr
@@ -300,12 +303,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    originalExpr: IRExpr
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
     this.#vizExprToLirDag = vizExprToLirGraph
+    this.#ladderEnv = ladderEnv
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -514,8 +519,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         Eval, Bindings
   ******************************/
 
-  private doEvalLadderExprWithVarBindings(context: LirContext) {
-    const result = Evaluator.eval(
+  private async doEvalLadderExprWithVarBindings(context: LirContext) {
+    const result = await Evaluator.eval(
+      this.#ladderEnv.getL4Connection(),
+      this.#ladderEnv.getVersionedTextDocIdentifier(),
       veExprToEvExpr(this.#originalExpr),
       this.#bindings
     )
