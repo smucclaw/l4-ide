@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { LirId } from '$lib/layout-ir/core.js'
   import { LirContext } from '$lib/layout-ir/core.js'
-  import * as LadderEnv from '$lib/ladder-env.js'
+  import { useLadderEnv } from '$lib/ladder-env.js'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -59,7 +59,8 @@
    * This was just the simpler route given what I already have.
    */
   const funDeclLirNode = node
-  const lir = LadderEnv.getLirRegistry()
+  const ladderEnv = useLadderEnv()
+  const lir = ladderEnv.getLirRegistry()
 
   /***********************************
       SvelteFlow config

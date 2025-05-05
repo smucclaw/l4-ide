@@ -1,50 +1,64 @@
-/******************************************************************
+/********************************************************************
                 Ladder Env
--------------------------------------------------------------------
-* Stuff for Ladder operations
-  that can be used by components that are children of the component where `initializeLadderEnv` is called.
-* Conceptually similar to an Env for a Reader monad in Haskell.
-*******************************************************************/
+---------------------------------------------------------------------
+Stuff for Ladder operations
+that can be used by components that are children of LadderEnvProvider
+*********************************************************************/
 
 import type { LirContext, LirRegistry, LirRootType } from './layout-ir/core.js'
-import {
-  getLirRegistryFromSvelteContext,
-  setLirRegistryInSvelteContext,
-} from './layout-ir/core.js'
 import type { FunDeclLirNode } from './layout-ir/ladder-graph/ladder.svelte.js'
+import { setContext, getContext } from 'svelte'
+
+export class LadderEnv {
+  /** Initialize the Ladder Env -- which includes setting the fun decl lir node in the Lir Registry */
+  static make(
+    context: LirContext,
+    lirRegistry: LirRegistry,
+    funDeclLirNode: FunDeclLirNode
+  ) {
+    // Set the top fun decl lir node in Lir Registry
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+
+    // Note: Do not store a reference to the LirContext
+
+    return new LadderEnv(lirRegistry)
+  }
+
+  private constructor(private readonly lirRegistry: LirRegistry) {}
+
+  getLirRegistry(): LirRegistry {
+    return this.lirRegistry
+  }
+
+  /** Aka: 'get the topmost Decide',
+   * or 'get the root / overall source of the Ladder Lir structure'.
+   */
+  getTopFunDeclLirNode(context: LirContext): FunDeclLirNode {
+    return this.lirRegistry.getRoot(
+      context,
+      LADDER_VIZ_ROOT_TYPE
+    ) as FunDeclLirNode
+  }
+
+  setInSvelteContext() {
+    setContext(ladderEnvKeyForSvelteContext, this)
+  }
+}
+
+/*********************************
+  Ladder Env in Svelte Context
+**********************************/
+
+/** Internal */
+const ladderEnvKeyForSvelteContext = 'ladderEnv'
+
+export function useLadderEnv(): LadderEnv {
+  return getContext(ladderEnvKeyForSvelteContext) as LadderEnv
+}
+
+/*********************************
+      Ladder Viz Root Type
+**********************************/
 
 /** Internal */
 const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'
-
-/** This is conceptually similar to initializing an Env for a Reader monad,
- * though there isn't an explicit Env type here.
- */
-export function initializeLadderEnv(
-  context: LirContext,
-  lirRegistry: LirRegistry,
-  funDeclLirNode: FunDeclLirNode
-) {
-  /*---- An 'env' of sorts for Lir operations -------*/
-  // Make the Lir Registry available to children components
-  setLirRegistryInSvelteContext(lirRegistry)
-
-  // Similarly with the funDeclLirNode, which is the overall source / root of our Lir structure.
-  lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
-
-  // Will add an 'env' for non-Lir stuff in the future (e.g. a logger)
-}
-
-export function getLirRegistry(): LirRegistry {
-  return getLirRegistryFromSvelteContext()
-}
-
-/** Aka: 'get the topmost Decide',
- * or 'get the root / overall source of the Ladder Lir structure'.
- *
- * This assumes that `initializeLadderLirEnv` has already been invoked
- * in a parent component.
- */
-export function getTopFunDeclLirNode(context: LirContext): FunDeclLirNode {
-  const lirRegistry = getLirRegistry()
-  return lirRegistry.getRoot(context, LADDER_VIZ_ROOT_TYPE) as FunDeclLirNode
-}
