@@ -2,7 +2,9 @@ import type { LadderBackendApi } from 'jl4-client-rpc'
 import { EvalAppRequestType } from 'jl4-client-rpc'
 import { EvalAppRequestParams } from '@repo/viz-expr'
 
-/** Higher-level wrapper around functionality provided by the Ladder backend. */
+/** Higher-level wrapper around functionality provided by the Ladder backend.
+ * The software design here was inspired by VSCode-Lean's 'EditorConnection' and 'EditorApi'.
+ */
 export class L4Connection {
   constructor(private readonly api: LadderBackendApi) {}
 
