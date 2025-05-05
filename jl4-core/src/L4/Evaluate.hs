@@ -450,6 +450,7 @@ forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
 forwardExpr env !ss stack (IfThenElse _ann e1 e2 e3) = do
   pushEvalFrame env ss (IfThenElse1 e2 e3 env stack) e1
 forwardExpr _env !_ss stack Regulative {} = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
+forwardExpr _env !_ss stack Event {} = exception (RuntimeTypeError "strict evaluation of events is currently not supported") stack
 forwardExpr env !ss stack (Consider _ann e branches) = do
   pushEvalFrame env ss (Consider1 branches env stack) e
 forwardExpr _env !ss stack (Lit _ann lit) = do

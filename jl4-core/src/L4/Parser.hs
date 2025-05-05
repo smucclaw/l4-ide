@@ -473,9 +473,7 @@ directive =
       ]
 
 contractEvents :: Compose Parser WithAnno [Expr Name]
-contractEvents = Compose do
-  current <- Lexer.indentLevel
-  getCompose $ Applicative.many $ annoHole $ expr -- current
+contractEvents = annoHole $ lmany expr
 
 import' :: Parser (Import Name)
 import' =
@@ -1530,8 +1528,7 @@ data WithAnno_ t e a = WithAnno
   { anno :: Anno_ t e
   , payload :: a
   }
-  deriving stock Show
-  deriving (Functor)
+  deriving stock (Functor, Show)
 
 withHoleAnno :: (HasSrcRange a, Default e) => a -> WithAnno_ t e a
 withHoleAnno a = WithAnno (mkHoleAnnoFor a) a

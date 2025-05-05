@@ -156,6 +156,11 @@ nlgExpr = \case
       -- scope, we have to resolve the annotations when checking the 'Where'
       -- case. Thus, we don't need to traverse it here again.
       pure $ Where ann e lcl
+    Event ann (MkEvent ann' e e1 e2) -> do
+      e' <- nlgExpr e
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Event ann (MkEvent ann' e' e1' e2')
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \case
