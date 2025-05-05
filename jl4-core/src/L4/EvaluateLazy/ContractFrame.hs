@@ -3,72 +3,96 @@ module L4.EvaluateLazy.ContractFrame where
 import L4.Evaluate.ValueLazy
 
 data ContractFrame
-  = Contract1 C1Frame -- event list to whnf
-  | Contract2 C2Frame -- event to whnf
-  | Contract3 C3Frame -- party to whnf
-  | Contract4 C4Frame -- party from event to whnf
-  | Contract5 C5Frame -- action to whnf
-  | Contract6 C6Frame -- action to whnf
-  | Contract7 C7Frame -- due to whnf
-  | Contract8 C8Frame -- due to whnf
-  | Contract9 C9Frame -- due to whnf
+  = Contract1 ScrutEvents
+  -- ^ if elements are left in the list of the events
+  -- - continue by evaluating that event else
+  -- - abort with a contract breach
+  | Contract2 ScrutEvent
+  -- ^ scrutinizes the event to extract references for
+  -- party, action and time stamp of the event, continue
+  -- by evaluting the party of the obligation statement
+  | Contract3 PartyWHNF
+  -- ^ evaluates the party of the event
+  | Contract4 ScrutParty
+  -- ^ checks if the party of the event matches
+  -- - if yes, continue by evaluating the action of the contract
+  -- - if no, continue with the next event
+  | Contract5 ActWHNF
+  -- ^ evaluates the act of the event
+  | Contract6 ScrutAct
+  -- ^ checks if the act of the event matches
+  -- - if yes, and
+  --   - there's a due date: continue by evluating the due of the contract
+  --   - there's no due date: continue with the followup contract
+  -- - if no, continue with the next event
+  | Contract7 StampWHNF
+  -- ^ evaluates the stamp of the event
+  | Contract8 CurTimeWHNF
+  -- ^ evaluates the current time of the evaluation
+  | Contract9 ScrutTime
+  -- ^ scrutinizes the current time, the timestamp of the event and the contract
+  -- - if the timestamp of the contract is after the current time plus the time
+  --   the event duration time, the contract is breached
+  -- - if the timestamp is within the due time
+  --   - advance time
+  --   - continue with followup event
   deriving stock Show
 
-data C1Frame = C1Frame
+data ScrutEvents = ScrutEvents
   { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe Reference, followup :: Reference
   , time :: Reference
   }
   deriving stock Show
 
-data C2Frame = C2Frame
+data ScrutEvent = ScrutEvent
   { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe Reference, followup :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C3Frame = C3Frame
+data PartyWHNF = PartyWHNF
   { act :: MaybeEvaluated, due :: Maybe Reference, followup :: Reference
   , ev'party :: Reference, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C4Frame = C4Frame
+data ScrutParty = ScrutParty
   { party :: WHNF, act :: MaybeEvaluated, due :: Maybe Reference, followup :: Reference
   , ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C5Frame = C5Frame
+data ActWHNF = ActWHNF
   { party :: WHNF, due :: Maybe Reference, followup :: Reference
   , ev'party :: WHNF, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C6Frame = C6Frame
+data ScrutAct = ScrutAct
   { party :: WHNF, act :: WHNF, due :: Maybe Reference, followup :: Reference
   , ev'party :: WHNF, ev'time :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C7Frame = C7Frame
+data StampWHNF = StampWHNF
   { followup :: Reference
   , ev'party :: WHNF, ev'act :: WHNF, ev'time :: Reference
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C8Frame = C8Frame
+data CurTimeWHNF = CurTimeWHNF
   { due :: WHNF, followup :: Reference
   , ev'party :: WHNF, ev'act :: WHNF
   , events :: Reference, time :: Reference
   }
   deriving stock Show
 
-data C9Frame = C9Frame
+data ScrutTime = ScrutTime
   { due :: WHNF, followup :: Reference
   , ev'party :: WHNF, ev'act :: WHNF, ev'time :: WHNF
   , events :: Reference

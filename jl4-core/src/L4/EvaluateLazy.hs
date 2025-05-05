@@ -411,7 +411,7 @@ backward val = withPoppedFrame $ \ case
         (events, time) <- case rs of
           [r, t] -> pure (r, t)
           rs' -> internalException $ RuntimeTypeError $ "expected a list of events, but found: " <> foldMap prettyLayout rs'
-        pushFrame (ContractFrame (Contract1 C1Frame {..}))
+        pushFrame (ContractFrame (Contract1 ScrutEvents {..}))
         evalRef events
       v@(ValConstructor r []) | r `sameResolved` TypeCheck.fulfilRef -> pure v
       ValAssumed r ->
@@ -508,10 +508,10 @@ backward val = withPoppedFrame $ \ case
 
 backwardConctractFrame :: Value Reference -> ContractFrame -> Eval WHNF
 backwardConctractFrame val = \case
-  Contract1 C1Frame {..} -> do
+  Contract1 ScrutEvents {..} -> do
     case val of
       ValCons e es -> do
-        pushCFrame (Contract2 C2Frame {events = es, ..})
+        pushCFrame (Contract2 ScrutEvent {events = es, ..})
         evalRef e
       ValNil -> do
         party' <- evalRef' party
@@ -519,43 +519,43 @@ backwardConctractFrame val = \case
         due' <- traverse evalRef due
         backward (ValBreached (NoProgress party' act' due'))
       _ -> internalException (RuntimeTypeError $ "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events")
-  Contract2 C2Frame {..} -> do
+  Contract2 ScrutEvent {..} -> do
     (ev'party, ev'act, ev'time) <- case val of
       ValConstructor n [p, a, t]  | n `sameResolved` TypeCheck.eventCRef -> pure (p, a, t)
       _ -> internalException (RuntimeTypeError $ "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event")
-    pushCFrame (Contract3 C3Frame {..})
+    pushCFrame (Contract3 PartyWHNF {..})
     evalRef' party
-  Contract3 C3Frame {..} -> do
-    pushCFrame (Contract4 C4Frame {party = val, ..})
+  Contract3 PartyWHNF {..} -> do
+    pushCFrame (Contract4 ScrutParty {party = val, ..})
     evalRef ev'party
-  Contract4 C4Frame {..} -> do
+  Contract4 ScrutParty {..} -> do
     sameParty <- runBinOpEquals party val
     case boolView sameParty of
       Nothing -> internalException (RuntimeTypeError $ "expected BOOLEAN but found: " <> prettyLayout sameParty)
       Just True -> do
-        pushCFrame (Contract5 C5Frame {ev'party = val, ..})
+        pushCFrame (Contract5 ActWHNF {ev'party = val, ..})
         evalRef' act
-      Just False -> continueWithNextEvent C1Frame {party = Left party, ..} events
-  Contract5 C5Frame {..} -> do
-    pushCFrame (Contract6 C6Frame {act = val, ..})
+      Just False -> continueWithNextEvent ScrutEvents {party = Left party, ..} events
+  Contract5 ActWHNF {..} -> do
+    pushCFrame (Contract6 ScrutAct {act = val, ..})
     evalRef ev'act
-  Contract6 C6Frame {..} -> do
+  Contract6 ScrutAct {..} -> do
     sameAct <- runBinOpEquals act val
     case boolView sameAct of
       Nothing -> internalException (RuntimeTypeError $ "expected BOOLEAN but found: " <> prettyLayout sameAct)
       Just True -> case due of
         Just due' -> do
-          pushCFrame (Contract7 C7Frame {ev'act = val, ..})
+          pushCFrame (Contract7 StampWHNF {ev'act = val, ..})
           evalRef due'
-        Nothing -> continueWithFollowup followup events time
-      Just False -> continueWithNextEvent C1Frame {party = Left party, act = Left act, ..} events
-  Contract7 C7Frame {..} -> do
-    pushCFrame (Contract8 C8Frame {due = val, ..})
+        Nothing -> continueWithFollowup followup events ev'time
+      Just False -> continueWithNextEvent ScrutEvents {party = Left party, act = Left act, ..} events
+  Contract7 StampWHNF {..} -> do
+    pushCFrame (Contract8 CurTimeWHNF {due = val, ..})
     evalRef ev'time
-  Contract8 C8Frame {..} -> do
-    pushCFrame (Contract9 C9Frame {ev'time = val, ..})
+  Contract8 CurTimeWHNF {..} -> do
+    pushCFrame (Contract9 ScrutTime {ev'time = val, ..})
     evalRef time
-  Contract9 C9Frame {..} -> do
+  Contract9 ScrutTime {..} -> do
     let assertTime = \case
           ValNumber i -> pure i
           v -> internalException (RuntimeTypeError $ "expected a NUMBER but got: " <> prettyLayout v)
@@ -563,16 +563,16 @@ backwardConctractFrame val = \case
     due' <- assertTime due
     time <- assertTime val
     -- TODO: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
-    timeR <- allocateValue val
     let deadline = time + due'
     if stamp > deadline
       then backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
-      else continueWithFollowup followup events timeR
-
+      else do
+        timeR <- allocateValue due
+        continueWithFollowup followup events timeR
   where
-    continueWithNextEvent :: C1Frame -> Reference -> Eval WHNF
-    continueWithNextEvent c1Frame events = do
-      pushCFrame (Contract1 c1Frame)
+    continueWithNextEvent :: ScrutEvents -> Reference -> Eval WHNF
+    continueWithNextEvent frame events = do
+      pushCFrame (Contract1 frame)
       evalRef events
 
     pushCFrame = pushFrame . ContractFrame
