@@ -19,7 +19,7 @@ import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 export { EvalAppRequestParams, EvalAppResult }
 
 /****************************************
-          Protocol Types
+        L4 RPC Protocol Types
 *****************************************/
 
 // Request type
