@@ -5,7 +5,6 @@ import { Schema } from 'effect'
  * https://github.com/microsoft/vscode-languageserver-node/blob/df05883f34b39255d40d68cef55caf2e93cff35f/types/src/main.ts#L1797
  */
 export const VersionedDocId = Schema.Struct({
-  $type: Schema.tag('VersionedDocId'),
   uri: Schema.String,
   version: Schema.Number,
 }).annotations({
