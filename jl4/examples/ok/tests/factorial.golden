@@ -1,5 +1,5 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-factorial.l4:13:7-19:
+factorial.l4:13:1-19:
   3628800

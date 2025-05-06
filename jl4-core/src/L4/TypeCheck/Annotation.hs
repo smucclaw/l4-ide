@@ -134,6 +134,12 @@ nlgExpr = \case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ IfThenElse ann b' e1' e2'
+    Regulative ann (MkObligation ann'' party act deadline followup) -> do
+      party' <- nlgExpr party
+      act' <- nlgExpr act
+      deadline' <- traverse nlgExpr deadline
+      followup' <- traverse nlgExpr followup
+      pure $ Regulative ann (MkObligation ann'' party' act' deadline' followup')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into
@@ -150,6 +156,11 @@ nlgExpr = \case
       -- scope, we have to resolve the annotations when checking the 'Where'
       -- case. Thus, we don't need to traverse it here again.
       pure $ Where ann e lcl
+    Event ann (MkEvent ann' e e1 e2) -> do
+      e' <- nlgExpr e
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Event ann (MkEvent ann' e' e1' e2')
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \case

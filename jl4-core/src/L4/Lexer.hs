@@ -52,6 +52,7 @@ data DirectiveType
   = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
+  | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -122,6 +123,12 @@ data TokenType =
   | TKAssume
   | TKWhen
   | TKType
+  | TKParty
+  | TKDo
+  | TKDoes
+  | TKMust
+  | TKWithin
+  | TKHence
   | TKFunction
   | TKFrom
   | TKTo
@@ -139,6 +146,7 @@ data TokenType =
   | TKAbove
   | TKBelow
   | TKAt
+  | TKStarting
   | TKLeast
   | TKMost
   | TKFollowed
@@ -255,6 +263,7 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
+  , (TContractDirective,   "CONTRACT")
   ]
 
 integerLiteral :: Lexer (Text, Int)
@@ -385,6 +394,12 @@ keywords =
     , ("ASSUME"     , TKAssume     )
     , ("WHEN"       , TKWhen       )
     , ("TYPE"       , TKType       )
+    , ("PARTY"      , TKParty      )
+    , ("DO"         , TKDo         )
+    , ("DOES"       , TKDoes         )
+    , ("MUST"       , TKMust       )
+    , ("WITHIN"     , TKWithin     )
+    , ("HENCE"      , TKHence      )
     , ("FUNCTION"   , TKFunction   )
     , ("FROM"       , TKFrom       )
     , ("TO"         , TKTo         )
@@ -402,6 +417,7 @@ keywords =
     , ("ABOVE"      , TKAbove      )
     , ("BELOW"      , TKBelow      )
     , ("AT"         , TKAt         )
+    , ("STARTING"   , TKStarting   )
     , ("LEAST"      , TKLeast      )
     , ("MOST"       , TKMost       )
     , ("FOLLOWED"   , TKFollowed   )
@@ -863,6 +879,12 @@ displayTokenType tt =
     TKAssume         -> "ASSUME"
     TKWhen           -> "WHEN"
     TKType           -> "TYPE"
+    TKParty          -> "PARTY"
+    TKDo             -> "DO"
+    TKDoes           -> "DOES"
+    TKMust           -> "MUST"
+    TKWithin         -> "WITHIN"
+    TKHence          -> "HENCE"
     TKFunction       -> "FUNCTION"
     TKFrom           -> "FROM"
     TKTo             -> "TO"
@@ -880,6 +902,7 @@ displayTokenType tt =
     TKAbove          -> "ABOVE"
     TKBelow          -> "BELOW"
     TKAt             -> "AT"
+    TKStarting       -> "STARTING"
     TKLeast          -> "LEAST"
     TKMost           -> "MOST"
     TKFollowed       -> "FOLLOWED"
@@ -904,6 +927,7 @@ showDirective = \case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
+  TContractDirective -> "#CONTRACT"
 
 data TokenCategory
   = CIdentifier
@@ -986,6 +1010,12 @@ posTokenCategory =
     TKAssume -> CKeyword
     TKWhen -> CKeyword
     TKType -> CKeyword
+    TKParty -> CKeyword
+    TKDo -> CKeyword
+    TKDoes -> CKeyword
+    TKMust -> CKeyword
+    TKWithin -> CKeyword
+    TKHence -> CKeyword
     TKFunction -> CKeyword
     TKFrom -> CKeyword
     TKTo -> CKeyword
@@ -1003,6 +1033,7 @@ posTokenCategory =
     TKAbove -> CKeyword
     TKBelow -> CKeyword
     TKAt -> CKeyword
+    TKStarting -> CKeyword
     TKLeast -> CKeyword
     TKMost -> CKeyword
     TKFollowed -> CKeyword

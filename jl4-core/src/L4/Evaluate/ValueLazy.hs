@@ -43,15 +43,20 @@ data Value a =
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
+  | ValObligation Environment MaybeEvaluated MaybeEvaluated (Maybe (Expr Resolved)) (Expr Resolved)
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
   | ValEnvironment Environment
-  deriving stock Show
+  | ValBreached (ReasonForBreach a)
+  deriving stock (Show, Functor, Foldable, Traversable)
+
+data ReasonForBreach a = DeadlineMissed (Value a) (Value a) (Value a) Int
+  deriving stock (Generic, Show, Functor, Foldable, Traversable)
+  deriving anyclass NFData
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
---
 instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
@@ -63,4 +68,9 @@ instance NFData a => NFData (Value a) where
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
   rnf (ValEnvironment env)        = env `seq` ()
+  rnf (ValBreached ev)            = rnf ev `seq` ()
+  rnf (ValObligation env p a t f) = env `deepseq` p `deepseq` a `deepseq` t `deepseq` f `deepseq` ()
 
+type MaybeEvaluated = Either WHNF RExpr
+
+type RExpr = Expr Resolved

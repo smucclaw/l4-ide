@@ -31,6 +31,7 @@ library
   hs-source-dirs: src
   build-depends:
     bytestring,
+    placeholder,
     cassava,
     containers,
     data-default,
@@ -53,6 +54,7 @@ library
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
+    template-haskell,
 
   autogen-modules:
     Paths_jl4_core
@@ -71,6 +73,7 @@ library
     L4.Evaluate.Value
     L4.Evaluate.ValueLazy
     L4.EvaluateLazy
+    L4.EvaluateLazy.ContractFrame
     L4.ExactPrint
     L4.FindDefinition
     L4.HoverInfo
@@ -86,6 +89,7 @@ library
     L4.TypeCheck
     L4.TypeCheck.Annotation
     L4.TypeCheck.Environment
+    L4.TypeCheck.Environment.TH
     L4.TypeCheck.Types
     L4.TypeCheck.Unify
     L4.TypeCheck.With

@@ -3,6 +3,8 @@
 module Base (module X) where
 
 import Control.DeepSeq as X
+import Debug.Trace as X
+import Control.Placeholder as X
 import Control.Monad as X
 import Control.Monad.Except as X
 import Control.Monad.Identity as X

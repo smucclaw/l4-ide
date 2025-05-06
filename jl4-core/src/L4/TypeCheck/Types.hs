@@ -97,6 +97,13 @@ data ExpectationContext =
   | ExpectAppArgContext Bool Resolved Int -- projection?, function, number of arg
   | ExpectBinOpArgContext Text Int -- opname, number of arg (TODO: it would be better to have the token and its range here!)
   | ExpectDecideSignatureContext (Maybe SrcRange) -- actual result type range from the signature, if it exists
+  | ExpectRegulativePartyContext -- party clause of obligation
+  | ExpectRegulativeActionContext -- action clause of obligation
+  | ExpectRegulativeDeadlineContext -- within clause of obligation
+  | ExpectRegulativeTimestampContext -- timestamp of a regulative event
+  | ExpectRegulativeFollowupContext -- hence clause of regulative rule
+  | ExpectRegulativeContractContext -- when invoking a contract directive
+  | ExpectRegulativeEventContext -- check an event expr
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

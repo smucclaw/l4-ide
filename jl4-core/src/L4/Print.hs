@@ -176,6 +176,9 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
       "#EVAL" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
+    Contract _ e t stmts -> hsep $
+      "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
+      map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
   printWithLayout = \case
@@ -270,6 +273,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
+    Regulative _ (MkObligation _ p a t f) -> prettyObligation p a t f
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -282,6 +286,12 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "WHERE"
         , indent 2 (vsep $ fmap printWithLayout decls)
         ]
+    Event _ MkEvent {timestamp, party, action} ->
+      vcat
+        [ "PARTY" <+> printWithLayout party
+        , "DOES" <+> printWithLayout action
+        , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
+        ]
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -289,6 +299,17 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
     App _ _ [] -> printWithLayout e
     Var{} -> printWithLayout e
     _ -> surround (printWithLayout e) "(" ")"
+
+prettyObligation
+  :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f)
+  => p -> a -> Maybe t -> Maybe f -> Doc ann
+prettyObligation p a t f  =
+  vcat $
+    [ "PARTY" <+> printWithLayout p
+    , "DO" <+> printWithLayout a
+    ]
+    <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
+    <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \case
@@ -340,7 +361,7 @@ instance LayoutPrinter Eager.Value where
     Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Eager.ValList vs                ->
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
-    Eager.ValClosure _ _ _          -> "<function>"
+    Eager.ValClosure{}              -> "<function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -363,13 +384,18 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
-    Lazy.ValClosure _ _ _          -> "<function>"
+    Lazy.ValClosure{}              -> "<function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
       [] -> mempty
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
+    Lazy.ValBreached reason        -> hsep
+      [ "CONTRACT BREACHED"
+      , "(" <> printWithLayout reason <> ")"
+      ]
+    Lazy.ValObligation _env p a t f -> prettyObligation p a t (Just f)
 
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
@@ -381,6 +407,18 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
+  printWithLayout = \case
+    DeadlineMissed party action timestamp deadline -> hsep
+      [ "PARTY" <+> printWithLayout party
+      , "WHO DID ACTION" <+> printWithLayout action
+      , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
+      , "missed their deadline, which was" <+> pretty deadline
+      ]
+
+instance LayoutPrinter MaybeEvaluated where
+  printWithLayout = either printWithLayout printWithLayout
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \case
