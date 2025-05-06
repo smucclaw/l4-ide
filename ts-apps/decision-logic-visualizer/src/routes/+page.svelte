@@ -1,3 +1,6 @@
+<!-- DEMO page for Ladder Visualizer,
+ mostly for local development / manual testing -->
+
 <script lang="ts">
   import { Schema } from 'effect'
   import { FunDecl } from '@repo/viz-expr'
@@ -7,11 +10,17 @@
     LirRegistry,
     type LirRootType,
   } from '$lib/layout-ir/core.js'
-  import { mockLadderBackendApi } from 'jl4-client-rpc'
+  import { LadderEnv } from '$lib/ladder-env.js'
   import Flow from '$lib/displayers/flow/flow.svelte'
+  import { mockLadderBackendApi } from 'jl4-client-rpc'
 
   // TODO: This stuff should just be replaced with the tailwind on hovered classes
   let isHovered = $state(false)
+
+  const mockVersionedDocId = {
+    uri: 'file://local.ladder',
+    version: 1,
+  }
 
   /***************************
       Example 1
@@ -65,7 +74,12 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  const funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, decl)
+  const mockEnv = LadderEnv.make(
+    lirRegistry,
+    mockVersionedDocId,
+    mockLadderBackendApi
+  )
+  const funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl)
   lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
 
   /***************************
@@ -170,7 +184,7 @@
   }
 
   const decl2 = decode(example2)
-  const declLirNode2 = VizDeclLirSource.toLir(nodeInfo, decl2)
+  const declLirNode2 = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl2)
   lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
 </script>
 
@@ -184,23 +198,13 @@
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <div class="viz-container-with-height">
-    <Flow
-      {context}
-      node={funDeclLirNode}
-      lir={lirRegistry}
-      backendApi={mockLadderBackendApi}
-    />
+    <Flow {context} node={funDeclLirNode} env={mockEnv} />
   </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
   <div class="viz-container-with-height">
-    <Flow
-      {context}
-      node={declLirNode2}
-      lir={lirRegistry}
-      backendApi={mockLadderBackendApi}
-    />
+    <Flow {context} node={declLirNode2} env={mockEnv} />
   </div>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />

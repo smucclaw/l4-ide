@@ -223,8 +223,7 @@ export class LirContext {
   }
 
   // Constants
-  // (The rough thought for now is, if we want to change these,
-  // we'd make and pass in a different Context. But not sure.)
+  // TODO: Move constants to LadderEnv
 
   getExplanatoryAndEdgeLabel() {
     return this.config.constants.EXPLANATORY_AND_EDGE_LABEL
@@ -242,9 +241,4 @@ export class LirContext {
 export interface DisplayerProps {
   context: LirContext
   node: LirNode
-}
-
-export interface RootDisplayerProps extends DisplayerProps {
-  /** The root displayer will set the `lir` in the Svelte context so that children displayers can also access it */
-  lir: LirRegistry
 }

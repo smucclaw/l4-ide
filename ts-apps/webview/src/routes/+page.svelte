@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
-  import { type LadderBackendApi } from 'jl4-client-rpc'
+  import { RenderAsLadderInfo } from '@repo/viz-expr'
   import { LadderApiForWebview } from '$lib/ladder-api-for-webview'
   import {
     RenderAsLadder,
@@ -16,9 +15,11 @@
   import {
     LirContext,
     LirRegistry,
+    LadderEnv,
     LadderFlow,
     type FunDeclLirNode,
     VizDeclLirSource,
+    LADDER_VIZ_ROOT_TYPE,
   } from '@repo/decision-logic-visualizer'
 
   /**************************
@@ -37,8 +38,7 @@
 
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
-  let backendApi: LadderBackendApi
-  let versionedDocId: VersionedDocId
+  let ladderEnv: LadderEnv
 
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
@@ -46,6 +46,7 @@
     vsCodeApi = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
 
+    // Set up handlers for webview x vscode extension messenger
     messenger.sendNotification(
       WebviewFrontendIsReadyNotification,
       HOST_EXTENSION,
@@ -53,19 +54,20 @@
     )
 
     messenger.onRequest(RenderAsLadder, (payload: RenderAsLadderInfo) => {
-      versionedDocId = payload.verTextDocId
+      const backendApi = new LadderApiForWebview(messenger)
+      ladderEnv = LadderEnv.make(lirRegistry, payload.verTextDocId, backendApi)
       funDeclLirNode = VizDeclLirSource.toLir(
         nodeInfo,
-        payload.funDecl,
-        versionedDocId
+        ladderEnv,
+        payload.funDecl
       )
+      // Set the top fun decl lir node in Lir Registry
+      lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+
       return makeRenderAsLadderSuccessResponse()
     })
 
     messenger.start()
-
-    // Initialize LadderBackendApi
-    backendApi = new LadderApiForWebview(messenger)
   })
 </script>
 
@@ -73,13 +75,7 @@
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
-      <LadderFlow
-        {context}
-        node={funDeclLirNode}
-        lir={lirRegistry}
-        {backendApi}
-        {versionedDocId}
-      />
+      <LadderFlow {context} node={funDeclLirNode} env={ladderEnv} />
     </div>
   {/key}
 {/if}

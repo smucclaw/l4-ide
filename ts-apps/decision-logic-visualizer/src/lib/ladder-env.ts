@@ -15,21 +15,10 @@ import type { VersionedDocId } from '@repo/viz-expr'
 export class LadderEnv {
   /** Initialize the Ladder Env -- which includes setting the fun decl lir node in the Lir Registry */
   static make(
-    // lir stuff
-    context: LirContext,
     lirRegistry: LirRegistry,
-
-    // info about the program
     versionedDocId: VersionedDocId,
-    funDeclLirNode: FunDeclLirNode,
-
     backendApi: LadderBackendApi
   ) {
-    // Set the top fun decl lir node in Lir Registry
-    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
-
-    // Note: Do not store a reference to the LirContext
-
     const l4Connection = new L4Connection(backendApi)
     return new LadderEnv(lirRegistry, l4Connection, versionedDocId)
   }
@@ -82,5 +71,5 @@ export function useLadderEnv(): LadderEnv {
       Ladder Viz Root Type
 **********************************/
 
-/** Internal */
-const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'
+/** Lir registry key for the topmost FunDecl Lir Node */
+export const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'
