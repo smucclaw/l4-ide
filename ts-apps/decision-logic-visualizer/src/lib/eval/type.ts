@@ -28,7 +28,7 @@ export function toVEBoolValue(val: UBoolVal): VE.UBoolValue {
 }
 
 interface UBoolV {
-  $type: 'True' | 'False' | 'Unknown'
+  $type: TrueVal['$type'] | FalseVal['$type'] | UnknownVal['$type']
   getClasses(): BoolValCSSClass[]
   toPretty(): string
 }
