@@ -51,9 +51,7 @@ data Value a =
   | ValBreached (ReasonForBreach a)
   deriving stock (Show, Functor, Foldable, Traversable)
 
-data ReasonForBreach a
-  = DeadlineMissed (Value a) (Value a) (Value a) Int
-  | NoProgress (Value a) (Value a) (Maybe (Value a))
+data ReasonForBreach a = DeadlineMissed (Value a) (Value a) (Value a) Int
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
 

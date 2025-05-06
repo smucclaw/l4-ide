@@ -515,10 +515,9 @@ backwardConctractFrame val = \case
         pushCFrame (Contract2 ScrutEvent {events = es, ..})
         evalRef e
       ValNil -> do
-        party' <- evalRef' party
-        act' <- evalRef' act
-        due' <- traverse evalRef due
-        backward (ValBreached (NoProgress party' act' due'))
+        party' <- reallocateMaybe party
+        act' <- reallocateMaybe act
+        backward (ValObligation party' act' due followup)
       _ -> internalException (RuntimeTypeError $ "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events")
   Contract2 ScrutEvent {..} -> do
     (ev'party, ev'act, ev'time) <- case val of
@@ -565,10 +564,14 @@ backwardConctractFrame val = \case
     time <- assertTime val
     -- TODO: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
     let deadline = time + due'
+    traceM "deadline:"
+    traceShowM deadline
     if stamp > deadline
       then backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
       else do
-        timeR <- allocateValue due
+        timeR <- allocateValue ev'time
+        traceM "timestamp that becomes new current time"
+        traceShowM stamp
         continueWithFollowup followup events timeR
   where
     continueWithNextEvent :: ScrutEvents -> Reference -> Eval WHNF
@@ -585,6 +588,9 @@ backwardConctractFrame val = \case
 
 evalRef' :: MaybeEvaluated -> Eval WHNF
 evalRef' = either backward evalRef
+
+reallocateMaybe :: MaybeEvaluated -> Eval Reference
+reallocateMaybe = either allocateValue pure
 
 matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Eval Environment
 matchGivens (MkGivenSig _ann otns) f es = do
@@ -984,11 +990,6 @@ nfAux _d (ValEnvironment env)        = pure (MkNF (ValEnvironment env))
 nfAux d (ValBreached r')            = do
   let evalAndNF = traverse $ nfAux (d - 1) <=< evalRef
   r <- case r' of
-    NoProgress party act timestamp -> do
-      party' <- evalAndNF party
-      act' <- evalAndNF act
-      timestamp' <- traverse evalAndNF timestamp
-      pure (NoProgress party' act' timestamp')
     DeadlineMissed party act timestamp deadline -> do
       party' <- evalAndNF party
       act' <- evalAndNF act

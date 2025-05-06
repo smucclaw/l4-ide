@@ -273,13 +273,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
-    Regulative _ (MkObligation _ party rule mdeadline mfollowup) ->
-      vcat $
-        [ "PARTY" <+> printWithLayout party
-        , "DO" <+> printWithLayout rule
-        ]
-        <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) mdeadline
-        <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) mfollowup
+    Regulative _ (MkObligation _ p a t f) -> prettyObligation p a t f
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -305,6 +299,17 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
     App _ _ [] -> printWithLayout e
     Var{} -> printWithLayout e
     _ -> surround (printWithLayout e) "(" ")"
+
+prettyObligation
+  :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f)
+  => p -> a -> Maybe t -> Maybe f -> Doc ann
+prettyObligation p a t f  =
+  vcat $
+    [ "PARTY" <+> printWithLayout p
+    , "DO" <+> printWithLayout a
+    ]
+    <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
+    <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \case
@@ -390,7 +395,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [ "CONTRACT BREACHED"
       , "(" <> printWithLayout reason <> ")"
       ]
-    Lazy.ValObligation {} -> "<contract>"
+    Lazy.ValObligation p a t f -> prettyObligation p a t (Just f)
 
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
@@ -411,12 +416,6 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
       , "missed their deadline, which was" <+> pretty deadline
       ]
-    NoProgress party action due -> hsep $
-      [ "I could not make any progress in a contract expression where"
-      , "PARTY" <+> printWithLayout party
-      , "SHOULD DO ACTION" <+> printWithLayout action ]
-      <> maybe [] (\d -> ["UNTIL" <+> printWithLayout d]) due
-      <> [ "because no event matches the required behaviour" ]
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \case
