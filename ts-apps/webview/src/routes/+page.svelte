@@ -30,6 +30,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
+  let ladderEnv: LadderEnv | undefined = $state(undefined)
   let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
 
   /**************************
@@ -38,7 +39,6 @@
 
   let vsCodeApi: WebviewApi<null>
   let messenger: Messenger
-  let ladderEnv: LadderEnv
 
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
@@ -53,25 +53,33 @@
       { $type: 'webviewReady' } as WebviewFrontendIsReadyMessage
     )
 
-    messenger.onRequest(RenderAsLadder, (payload: RenderAsLadderInfo) => {
-      const backendApi = new LadderApiForWebview(messenger)
-      ladderEnv = LadderEnv.make(lirRegistry, payload.verTextDocId, backendApi)
-      funDeclLirNode = VizDeclLirSource.toLir(
-        nodeInfo,
-        ladderEnv,
-        payload.funDecl
-      )
-      // Set the top fun decl lir node in Lir Registry
-      lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+    messenger.onRequest(
+      RenderAsLadder,
+      (renderLadderInfo: RenderAsLadderInfo) => {
+        const backendApi = new LadderApiForWebview(messenger)
+        ladderEnv = LadderEnv.make(
+          lirRegistry,
+          renderLadderInfo.verTextDocId,
+          backendApi
+        )
 
-      return makeRenderAsLadderSuccessResponse()
-    })
+        funDeclLirNode = VizDeclLirSource.toLir(
+          nodeInfo,
+          ladderEnv,
+          renderLadderInfo.funDecl
+        )
+        // Set the top fun decl lir node in Lir Registry
+        lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+
+        return makeRenderAsLadderSuccessResponse()
+      }
+    )
 
     messenger.start()
   })
 </script>
 
-{#if funDeclLirNode}
+{#if funDeclLirNode && ladderEnv}
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
   {#key funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
