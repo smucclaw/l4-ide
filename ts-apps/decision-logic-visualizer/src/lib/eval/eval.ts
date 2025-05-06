@@ -102,15 +102,9 @@ export const Evaluator: LadderEvaluator = {
           )
           const result = evalAndChain(andResults.map((res) => res.result))
 
-          const combinedIntermeds = andResults
-            .map((res) => res.intermediate)
-            .reduceRight((acc, res) => {
-              return new Map([...acc, ...res])
-            })
-          const finalIntermediate = new Map(combinedIntermeds).set(
-            expr.id,
-            result
-          )
+          const finalIntermediate = combineIntermediates(
+            andResults.map((res) => res.intermediate)
+          ).set(expr.id, result)
 
           return {
             result,
@@ -123,15 +117,9 @@ export const Evaluator: LadderEvaluator = {
           )
           const result = evalOrChain(orResults.map((res) => res.result))
 
-          const combinedIntermediates = orResults
-            .map((res) => res.intermediate)
-            .reduceRight((acc, res) => {
-              return new Map([...acc, ...res])
-            })
-          const finalIntermediate = new Map(combinedIntermediates).set(
-            expr.id,
-            result
-          )
+          const finalIntermediate = combineIntermediates(
+            orResults.map((res) => res.intermediate)
+          ).set(expr.id, result)
 
           return {
             result,
@@ -139,17 +127,22 @@ export const Evaluator: LadderEvaluator = {
           }
         })
         .with({ $type: 'App' }, async (expr: App) => {
-          const args = (
-            await Promise.all(expr.args.map((arg) => eval_(arg, intermediate)))
-          ).map((res) => res.result)
+          const argResults = await Promise.all(
+            expr.args.map((arg) => eval_(arg, intermediate))
+          )
+          const args = argResults.map((res) => res.result)
 
           if (args.some(isUnknownVal)) {
             console.log(
               "Currently don't support eval-ing an App with Unknown args: will just return UnknownVal"
             )
+            const res = new UnknownVal()
+            const finalIntermediate = combineIntermediates(
+              argResults.map((res) => res.intermediate)
+            ).set(expr.id, res)
             return {
-              result: new UnknownVal(),
-              intermediate: intermediate,
+              result: res,
+              intermediate: finalIntermediate,
             }
           }
           const argsForApp = args
@@ -165,10 +158,13 @@ export const Evaluator: LadderEvaluator = {
             throw new Error(`Problem evaluating App ${expr}`)
           }
           const res = toUBoolVal(lspResponse.value)
-          const newIntermediate = new Map(intermediate).set(expr.id, res)
+          const finalIntermediate = combineIntermediates(
+            argResults.map((res) => res.intermediate)
+          ).set(expr.id, res)
+
           return {
             result: res,
-            intermediate: newIntermediate,
+            intermediate: finalIntermediate,
           }
         })
         .exhaustive()
@@ -200,4 +196,20 @@ function evalOrChain(bools: UBoolVal[]) {
     return new FalseVal()
   }
   return new UnknownVal()
+}
+
+/***************************
+      Misc helpers
+****************************/
+
+/** Helper to combine multiple intermediate result maps into one */
+function combineIntermediates(
+  intermediates: Map<IRId, UBoolVal>[]
+): Map<IRId, UBoolVal> {
+  return new Map(
+    intermediates.reduceRight(
+      (accEntries, intermediate) => [...intermediate, ...accEntries],
+      [] as [IRId, UBoolVal][]
+    )
+  )
 }
