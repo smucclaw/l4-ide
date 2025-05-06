@@ -115,9 +115,6 @@
 {/await}
 
 <style>
-  /** So there's space for the fn name
-  TODO: Use calc or smtg like that to make the intent clearer
-  */
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
   }
