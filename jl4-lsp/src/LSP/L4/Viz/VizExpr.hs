@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module LSP.L4.Viz.VizExpr where
 
 import Autodocodec
@@ -9,12 +10,13 @@ import Data.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
+import qualified Language.LSP.Protocol.Types as LSP
 
-newtype RenderAsLadderInfo = MkRenderAsLadderInfo
-  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
+data RenderAsLadderInfo = MkRenderAsLadderInfo
+  { verTextDocId :: LSP.VersionedTextDocumentIdentifier
+  , funDecl      :: FunDecl
   }
-  deriving newtype (Eq)
-  deriving stock (Show, Generic)
+  deriving stock (Show, Generic, Eq)
 
 type Unique = Int
 -- | TODO: Consider renaming this to something other than `Name`
@@ -91,7 +93,7 @@ instance HasCodec IRExpr where
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
-        
+
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
@@ -133,7 +135,11 @@ instance HasCodec RenderAsLadderInfo where
     named "RenderAsLadderInfo" $
       object "RenderAsLadderInfo" $
         MkRenderAsLadderInfo
-          <$> requiredField' "funDecl" .= view #funDecl
+          <$> requiredField' "verTextDocId" .= view #verTextDocId
+          <*> requiredField' "funDecl"      .= view #funDecl
+
+instance HasCodec LSP.VersionedTextDocumentIdentifier where
+  codec = codecViaAeson "VersionedTextDocumentIdentifier"
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec

@@ -8,6 +8,8 @@ import Base
 import qualified Base.Text as Text
 import Optics.State.Operators ((<%=))
 
+import qualified Language.LSP.Protocol.Types as LSP
+
 import qualified L4.TypeCheck as TC
 import L4.Annotation
 import L4.Syntax
@@ -33,11 +35,21 @@ newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
     (Functor, Applicative, Monad, MonadState VizState, MonadError VizError)
     via ExceptT VizError (State VizState)
 
+mkVizEnv :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizEnv
+mkVizEnv verTxtDocId substitution shouldSimplify =
+  let moduleUri = toNormalizedUri verTxtDocId._uri
+  in MkVizEnv
+    { moduleUri
+    , verTxtDocId
+    , substitution
+    , shouldSimplify
+    }
+
 data VizEnv = MkVizEnv
-  { moduleUri :: !NormalizedUri
-  , substitution :: TC.Substitution
-  -- | Whether to simplify the expression
-  , shouldSimplify :: Bool
+  { moduleUri      :: !NormalizedUri
+  , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
+  , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
+  , shouldSimplify :: !Bool             -- ^ whether to simplify the expression
   }
   deriving stock (Show, Generic, Eq)
 
@@ -57,8 +69,14 @@ mkInitialVizState env =
 
 -- Monad ops
 
+-- | 'Internal' helper: This should only be used by other Viz monad ops
 getVizEnv :: Viz VizEnv
 getVizEnv = use #env
+
+getVerTxtDocId :: Viz LSP.VersionedTextDocumentIdentifier
+getVerTxtDocId = do
+  env <- getVizEnv
+  pure env.verTxtDocId
 
 getExpandedType :: Type' Resolved -> Viz (Type' Resolved)
 getExpandedType ty = do
@@ -68,6 +86,11 @@ getExpandedType ty = do
 getFresh :: Viz ID
 getFresh = do
   #maxId <%= \(MkID n) -> MkID (n + 1)
+
+getShouldSimplify :: Viz Bool
+getShouldSimplify = do
+  env <- getVizEnv
+  pure env.shouldSimplify
 
 ------------------------------------------------------
 -- VizError
@@ -100,7 +123,7 @@ doVisualize decide env =
     (result, _) -> result
 
 vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
-vizProgram = fmap MkRenderAsLadderInfo . translateDecide
+vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide decide
 
 ------------------------------------------------------
 -- translateDecide, translateExpr
@@ -124,9 +147,9 @@ vizProgram = fmap MkRenderAsLadderInfo . translateDecide
 translateDecide :: Decide Resolved -> Viz V.FunDecl
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
-    vizEnv <- getVizEnv
-    uid    <- getFresh
-    vizBody <- translateExpr vizEnv.shouldSimplify body
+    shouldSimplify <- getShouldSimplify
+    uid            <- getFresh
+    vizBody        <- translateExpr shouldSimplify body
     pure $ V.MkFunDecl
       uid
       -- didn't want a backtick'd name in the header

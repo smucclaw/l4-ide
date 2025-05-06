@@ -104,12 +104,13 @@ visualise
   :: Monad m
   => Maybe TypeCheckResult
   -> (m (Maybe RecentlyVisualised), RecentlyVisualised -> m ())
-  -> Uri
-  -- ^ The document uri whose decides should be visualised
+  -> VersionedTextDocumentIdentifier
+  -- ^ The VersionedTextDocumentIdentifier of the document whose Decides should be visualised
   -> Maybe (SrcPos, Bool)
   -- ^ The location of the `Decide` to visualize and whether or not to simplify it
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
-visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
+visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
+  let uri = verTextDocId._uri
   mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
     -- the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
@@ -139,7 +140,7 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
   case mdecide of
     Nothing -> pure (InR Null)
     Just (decide, simp, substitution) ->
-      case Ladder.doVisualize decide (Ladder.MkVizEnv (toNormalizedUri uri) substitution simp) of
+      case Ladder.doVisualize decide (Ladder.mkVizEnv verTextDocId substitution simp) of
         Right vizProgramInfo -> do
           traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
           pure $ InL $ Aeson.toJSON vizProgramInfo

@@ -215,13 +215,13 @@ handlers recorder =
         runExceptT case lookup cid (map swap l4CmdNames) of
           Just CmdVisualize -> do
             let decodeXdata
-                  | Just ((Aeson.fromJSON -> Aeson.Success uri) :  args) <- xdata
+                  | Just ((Aeson.fromJSON -> Aeson.Success verTextDocId) :  args) <- xdata
                   , msrcPos <- case args of
                      [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
                      _ -> Nothing
                   = do
-                    mtcRes <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck $ toNormalizedUri uri
-                    visualise mtcRes (atomically $ getMostRecentVisualisation ide, atomically . setMostRecentVisualisation ide) uri msrcPos
+                    mtcRes <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck $ toNormalizedUri verTextDocId._uri
+                    visualise mtcRes (atomically $ getMostRecentVisualisation ide, atomically . setMostRecentVisualisation ide) verTextDocId msrcPos
                   | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
             decodeXdata
 
@@ -276,17 +276,18 @@ handlers recorder =
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
-        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDoc" ide $
+          FileStore.getVersionedTextDoc $ params ^. J.textDocument
 
         typeCheck <- liftIO $ runAction "typecheck" ide $
-          use_ TypeCheck (toNormalizedUri uri)
+          use_ TypeCheck (toNormalizedUri verTextDocId._uri)
 
         let
           mkCodeLens srcPos simplify = CodeLens
             { _command = Just Command
               { _title = t simplify
               , _command = "l4.visualize"
-              , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
               }
             , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
@@ -297,7 +298,7 @@ handlers recorder =
 
           --  Check if can make viz with a given simplify flag
           canVisualize decide simplify =
-            let env = Ladder.MkVizEnv (toNormalizedUri uri) typeCheck.substitution simplify
+            let env = Ladder.mkVizEnv verTextDocId typeCheck.substitution simplify
             in isRight (Ladder.doVisualize decide env)
 
           decideToCodeLens decide =

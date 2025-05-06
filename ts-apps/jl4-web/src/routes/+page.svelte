@@ -7,13 +7,18 @@
     VizDeclLirSource,
     type FunDeclLirNode,
   } from '@repo/decision-logic-visualizer'
-  import { makeVizInfoDecoder, type RenderAsLadderInfo } from '@repo/viz-expr'
+  import {
+    makeVizInfoDecoder,
+    type RenderAsLadderInfo,
+    type VersionedDocId,
+  } from '@repo/viz-expr'
   import {
     type MessageTransports,
     type Middleware,
   } from 'vscode-languageclient'
   import { type ConsoleLogger } from 'monaco-languageclient/tools'
   import * as vscode from 'vscode'
+  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
@@ -55,11 +60,11 @@
       Debounced run visualize cmd
   ***********************************/
 
-  const debouncedVisualize = debounce(async (uri: string) => {
+  const debouncedVisualize = debounce(async (verDocId: VersionedDocId) => {
     await vscode.commands.executeCommand(
       // TODO: Should probably put the command in the viz-expr package
       'l4.visualize',
-      uri
+      verDocId
     )
   }, 150)
 
@@ -68,6 +73,7 @@
   // ****************************/
 
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
+  const code2ProtocolConverter = createCodeConverter()
 
   onMount(async () => {
     const { initServices } = await import(
@@ -271,16 +277,23 @@
         },
         didChange: async (event, next) => {
           await next(event)
-          // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
-          // the rest of the didChange callback does not run, at least not when testing on localhost.
+
           if (persistSession) {
-            await persistSession()
+            try {
+              await persistSession()
+            } catch (e) {
+              console.error('Error persisting session', e)
+            }
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
           // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
-          debouncedVisualize(event.document.uri.toString())
+          const verDocId: VersionedDocId =
+            code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+              event.document
+            )
+          debouncedVisualize(verDocId)
         },
       }
     }
