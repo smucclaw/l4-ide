@@ -16,9 +16,9 @@
     LadderFlow,
     LirContext,
     LirRegistry,
-    VizDeclLirSource,
     type FunDeclLirNode,
     LadderEnv,
+    VizDeclLirSource,
     LADDER_VIZ_ROOT_TYPE,
   } from '@repo/decision-logic-visualizer'
   import {
@@ -274,7 +274,7 @@
                   backendApi
                 )
 
-                funDeclLirNode = VizDeclLirSource.toLir(
+                funDeclLirNode = await VizDeclLirSource.toLir(
                   nodeInfo,
                   ladderEnv,
                   renderLadderInfo.funDecl

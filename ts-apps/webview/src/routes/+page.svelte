@@ -30,8 +30,34 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let ladderEnv: LadderEnv | undefined = $state(undefined)
-  let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
+  /**************************
+      Make FunDeclLirNode
+      and set Lir Root
+  ****************************/
+
+  // To get around how calling onMount with an async function is not ideal
+  // (There are also other benefits to using an #await block)
+  const placeholderAlwaysPendingPromise = new Promise<{
+    funDeclLirNode: FunDeclLirNode
+    env: LadderEnv
+  }>(() => {})
+  let renderLadderPromise: Promise<{
+    funDeclLirNode: FunDeclLirNode
+    env: LadderEnv
+  }> = $state(placeholderAlwaysPendingPromise)
+
+  async function makeFunDeclLirNodeAndSetLirRoot(
+    renderLadderInfo: RenderAsLadderInfo,
+    ladderEnv: LadderEnv
+  ) {
+    const funDeclLirNode = await VizDeclLirSource.toLir(
+      nodeInfo,
+      ladderEnv,
+      renderLadderInfo.funDecl
+    )
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+    return { funDeclLirNode, env: ladderEnv }
+  }
 
   /**************************
         VSCode
@@ -57,20 +83,15 @@
       RenderAsLadder,
       (renderLadderInfo: RenderAsLadderInfo) => {
         const backendApi = new LadderApiForWebview(messenger)
-        ladderEnv = LadderEnv.make(
+        const ladderEnv = LadderEnv.make(
           lirRegistry,
           renderLadderInfo.verTextDocId,
           backendApi
         )
-
-        funDeclLirNode = VizDeclLirSource.toLir(
-          nodeInfo,
-          ladderEnv,
-          renderLadderInfo.funDecl
+        renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(
+          renderLadderInfo,
+          ladderEnv
         )
-        // Set the top fun decl lir node in Lir Registry
-        lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
-
         return makeRenderAsLadderSuccessResponse()
       }
     )
@@ -79,14 +100,19 @@
   })
 </script>
 
-{#if funDeclLirNode && ladderEnv}
-  <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
-  {#key funDeclLirNode}
+{#await renderLadderPromise}
+  <p>Loading Ladder Diagram...</p>
+{:then ladder}
+  <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have 
+  flow-base work with the reactive node prop -->
+  {#key ladder.funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
-      <LadderFlow {context} node={funDeclLirNode} env={ladderEnv} />
+      <LadderFlow {context} node={ladder.funDeclLirNode} env={ladder.env} />
     </div>
   {/key}
-{/if}
+{:catch error}
+  <p>Error loading Ladder Diagram: {error.message}</p>
+{/await}
 
 <style>
   /** So there's space for the fn name

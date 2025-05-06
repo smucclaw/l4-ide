@@ -29,13 +29,17 @@ import { match } from 'ts-pattern'
 ************************************/
 
 export const VizDeclLirSource: LadderLirSource<FunDecl, FunDeclLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, env: LadderEnv, decl: FunDecl): FunDeclLirNode {
-    return new FunDeclLirNode(
+  async toLir(
+    nodeInfo: LirNodeInfo,
+    env: LadderEnv,
+    decl: FunDecl
+  ): Promise<FunDeclLirNode> {
+    const ladderGraph = await LadderGraphLirSource.toLir(
       nodeInfo,
-      decl.name,
-      decl.params,
-      LadderGraphLirSource.toLir(nodeInfo, env, decl.body)
+      env,
+      decl.body
     )
+    return new FunDeclLirNode(nodeInfo, decl.name, decl.params, ladderGraph)
   },
 }
 
@@ -49,11 +53,11 @@ export const VizDeclLirSource: LadderLirSource<FunDecl, FunDeclLirNode> = {
 */
 export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
   {
-    toLir(
+    async toLir(
       nodeInfo: LirNodeInfo,
       env: LadderEnv,
       expr: IRExpr
-    ): LadderGraphLirNode {
+    ): Promise<LadderGraphLirNode> {
       // 1. Get structure of the graph
       const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
@@ -70,7 +74,7 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
         .overlay(middle.getSink().connect(overallSink))
       vizExprToLirGraph.set(expr.id, dag)
 
-      const ladderGraph = new LadderGraphLirNode(
+      const ladderGraph = await LadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,

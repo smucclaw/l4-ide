@@ -299,7 +299,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   #pathsList?: PathsListLirNode
 
-  constructor(
+  private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
@@ -336,8 +336,24 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       n.getId(),
     ])
     this.#corefs = Corefs.fromEntries(uniqLirIdPairs)
+  }
 
-    this.doEvalLadderExprWithVarBindings(nodeInfo.context)
+  static async make(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
+  ): Promise<LadderGraphLirNode> {
+    const ladderGraph = new LadderGraphLirNode(
+      nodeInfo,
+      dag,
+      vizExprToLirGraph,
+      originalExpr,
+      ladderEnv
+    )
+    await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
+    return ladderGraph
   }
 
   getVizExprToLirGraph() {
@@ -533,7 +549,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
-  submitNewBinding(
+  async submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: UBoolVal }
   ) {
@@ -556,7 +572,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       including Var nodes that the user hasn't specified a value for
     * the default value for a VarNode is UnknownV
     */
-    this.doEvalLadderExprWithVarBindings(context)
+    await this.doEvalLadderExprWithVarBindings(context)
 
     // Fade out subgraphs that are no longer viable in light of user's choices
     const nonviableIRIds = Array.from(this.#evalResult.intermediate.entries())

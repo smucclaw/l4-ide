@@ -79,8 +79,10 @@
     mockVersionedDocId,
     mockLadderBackendApi
   )
-  const funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl)
-  lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl)
+  funDeclLirNodePromise.then((funDeclLirNode) => {
+    lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+  })
 
   /***************************
       Example 2
@@ -183,9 +185,15 @@
     },
   }
 
-  const decl2 = decode(example2)
-  const declLirNode2 = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl2)
-  lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
+  const funDecl2 = decode(example2)
+  const funDeclLirNode2Promise = VizDeclLirSource.toLir(
+    nodeInfo,
+    mockEnv,
+    funDecl2
+  )
+  funDeclLirNode2Promise.then((funDeclLirNode2) => {
+    lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, funDeclLirNode2)
+  })
 </script>
 
 <h1 class="text-4xl font-bold text-center">Ladder Visualizer demo page</h1>
@@ -198,13 +206,25 @@
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={funDeclLirNode} env={mockEnv} />
+    {#await funDeclLirNodePromise}
+      <p>Loading Example 1...</p>
+    {:then funDeclLirNode}
+      <Flow {context} node={funDeclLirNode} env={mockEnv} />
+    {:catch error}
+      <p>Error loading Example 1: {error.message}</p>
+    {/await}
   </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={declLirNode2} env={mockEnv} />
+    {#await funDeclLirNode2Promise}
+      <p>Loading Example 2...</p>
+    {:then funDeclLirNode2}
+      <Flow {context} node={funDeclLirNode2} env={mockEnv} />
+    {:catch error}
+      <p>Error loading Example 2: {error.message}</p>
+    {/await}
   </div>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />
