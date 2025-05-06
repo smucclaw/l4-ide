@@ -1,4 +1,17 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte'
+  import { debounce } from '$lib/utils'
+  import * as Resizable from '$lib/components/ui/resizable/index.js'
+
+  import type { MessageTransports, Middleware } from 'vscode-languageclient'
+  import { type ConsoleLogger } from 'monaco-languageclient/tools'
+  import * as vscode from 'vscode'
+  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
+  import * as monaco from '@codingame/monaco-vscode-editor-api'
+
+  import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
+  import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
+
   import {
     LadderFlow,
     LirContext,
@@ -13,17 +26,6 @@
     type RenderAsLadderInfo,
     type VersionedDocId,
   } from '@repo/viz-expr'
-  import type { MessageTransports, Middleware } from 'vscode-languageclient'
-  import { type ConsoleLogger } from 'monaco-languageclient/tools'
-  import * as vscode from 'vscode'
-  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
-  import * as monaco from '@codingame/monaco-vscode-editor-api'
-  import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
-  import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
-
-  import { onMount, onDestroy } from 'svelte'
-  import { debounce } from '$lib/utils'
-  import * as Resizable from '$lib/components/ui/resizable/index.js'
 
   /***********************************
     Persistent-session-related vars
