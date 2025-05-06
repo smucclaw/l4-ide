@@ -894,7 +894,7 @@ fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
 fulfilVal :: Value a
 fulfilVal = ValConstructor TypeCheck.fulfilRef []
 
--- \d e f. d e f
+-- \a b c. a b c
 evalContractVal :: Eval (Value a)
 evalContractVal = do
   let mn = MkName emptyAnno . NormalName

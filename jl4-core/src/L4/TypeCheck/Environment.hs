@@ -29,7 +29,7 @@ mkBuiltins
   , "evalContract"
   , "event"
   , "eventC" `rename` "EVENT"
-  , "a", "b", "c", "d", "e", "f", "g", "h", "i", "f'"
+  , "a", "b", "c", "d", "g", "h", "i"
   ]
 
 boolean :: Type' Resolved
@@ -99,10 +99,10 @@ event party action = TyApp emptyAnno eventRef [party, action]
 
 eventInfo, eventCInfo :: CheckEntity
 eventInfo = KnownType 2 [] Nothing
-eventCInfo = KnownTerm (Forall emptyAnno [fDef, gDef] (Fun emptyAnno [mkOnt partyTy, mkOnt actTy, mkOnt number] (TyApp emptyAnno eventRef [partyTy, actTy]))) Constructor
+eventCInfo = KnownTerm (Forall emptyAnno [dDef, gDef] (Fun emptyAnno [mkOnt partyTy, mkOnt actTy, mkOnt number] (TyApp emptyAnno eventRef [partyTy, actTy]))) Constructor
   where
   actTy = mkTyVar gRef
-  partyTy = mkTyVar fRef
+  partyTy = mkTyVar dRef
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 

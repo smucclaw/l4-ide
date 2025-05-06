@@ -1,10 +1,24 @@
-Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
-File: contracts.l4
-  Hidden:   no
-  Range:    1:1-1:1
-  Source: contracts.l4
-  Severity: DiagnosticSeverity_Error
-  Code:     <none>
-  Message: 
-    HoleFit requested but not enough given at: CallStack (from HasCallStack):
-      flattenConcreteNodes, called at src/L4/Annotation.hs:176:57 in jl4-core-0.1-inplace:L4.Annotation
+
+
+DECLARE Person IS ONE OF B, S
+DECLARE Action IS ONE OF delivery, payment, return
+
+
+#EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B payment 42) 5
+
+#CONTRACT x AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 2
+
+GIVETH CONTRACT Person Action
+x MEANS 
+  GIVETH CONTRACT Person Action
+y MEANS 
+  #CONTRACT x AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 2
+  PARTY S DOES payment AT 5
+
+z MEANS FULFILLED
+#CONTRACT z AT 3 WITH
+#CONTRACT z AT 4 WITH
