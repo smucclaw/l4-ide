@@ -1000,10 +1000,10 @@ baseExpr =
   <|> paren expr
 
 event :: Parser (Expr Name)
-event = attachAnno $ Event emptyAnno <$> parseEvent
+event = attachAnno $ Event emptyAnno <$> annoHole parseEvent
 
-parseEvent :: Compose Parser WithAnno (Event Name)
-parseEvent = MkEvent emptyAnno
+parseEvent :: Parser (Event Name)
+parseEvent = attachAnno $ MkEvent emptyAnno
   <$  annoLexeme (spacedToken_ TKParty)
   <*> annoHole expr
   <*  annoLexeme (spacedToken_ TKDoes)

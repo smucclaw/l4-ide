@@ -395,7 +395,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [ "CONTRACT BREACHED"
       , "(" <> printWithLayout reason <> ")"
       ]
-    Lazy.ValObligation p a t f -> prettyObligation p a t (Just f)
+    Lazy.ValObligation _env p a t f -> prettyObligation p a t (Just f)
 
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
@@ -416,6 +416,9 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
       , "missed their deadline, which was" <+> pretty deadline
       ]
+
+instance LayoutPrinter MaybeEvaluated where
+  printWithLayout = either printWithLayout printWithLayout
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \case

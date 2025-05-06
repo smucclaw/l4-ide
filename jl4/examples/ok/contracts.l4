@@ -23,3 +23,12 @@ y MEANS
   MUST payment -- ^ what is the type of this
   WITHIN 5
   HENCE FULFILLED
+
+#CONTRACT x AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 2
+  PARTY S DOES payment AT 5
+
+z MEANS FULFILLED
+#CONTRACT z AT 3 WITH
+#CONTRACT z AT 4 WITH
