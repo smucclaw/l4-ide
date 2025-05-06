@@ -34,6 +34,8 @@ import qualified Data.CharSet as CharSet
 import qualified System.OsPath as OsPath
 import LSP.L4.Rules
 
+import qualified SemanticTokens
+
 main :: IO ()
 main = do
   dataDir <- Paths_jl4.getDataDir
@@ -44,10 +46,12 @@ main = do
   legalFiles <- sort <$> globDir1 (compile "legal/**/*.l4") examplesRoot
   tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
+  semanticTokenFiles <- sort <$> globDir1 (compile "lsp/semantic-tokens/**/*.l4") examplesRoot
   hspec do
     describe "ok files" $ tests (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
     describe "tc fails" $ tests (False, True) tcFailsFiles examplesRoot
     describe "nlg fails" $ tests (True, False) nlgFailsFiles examplesRoot
+    describe "lsp" $ SemanticTokens.semanticTokenTests semanticTokenFiles examplesRoot
   where
     tests (tcOk, nlgOk) files root =
       forM_ files $ \inputFile -> do

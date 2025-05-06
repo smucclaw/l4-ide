@@ -155,6 +155,11 @@ data ParserSemanticTokens = ParserSemanticTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
+type instance RuleResult TypeCheckedSemanticTokens = [SemanticToken]
+data TypeCheckedSemanticTokens = TypeCheckedSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
 type instance RuleResult GetSemanticTokens = [SemanticToken]
 data GetSemanticTokens = GetSemanticTokens
   deriving stock (Generic, Show, Eq)
@@ -223,7 +228,7 @@ instance Pretty Log where
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
     LogSemanticTokens herald toks ->
-      "Semantic Tokens of" <+> pretty herald <+> align (vcat (fmap prettyToken toks))
+      "Semantic Tokens of" <+> pretty herald <> line <> indent 2 (vcat (fmap prettyToken toks))
       where
         prettyToken :: SemanticToken -> Doc ann
         prettyToken s =
@@ -461,48 +466,25 @@ jl4Rules rootDirectory recorder = do
       Right tokenized -> do
         pure ([], Just tokenized)
 
+  define shakeRecorder $ \TypeCheckedSemanticTokens f -> do
+    tcRes <- use_ SuccessfulTypeCheck f
+    case runSemanticTokensM (defaultSemanticTokenCtx tcRes.entityInfo) tcRes.module' of
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "TypeCheck" err
+        pure ([], Nothing)
+      Right tokenized -> do
+        pure ([], Just tokenized)
+
   define shakeRecorder $ \GetSemanticTokens f -> do
-    mSemTokens <- useWithStale ParserSemanticTokens f
-    case mSemTokens of
-      Nothing -> do
-        -- If we don't even have any old result, just try to use lexer results
-        lexToks <- use LexerSemanticTokens f
-        pure ([], lexToks)
-      Just (progTokens, positionMapping) -> do
-
-        -- Throwing is ok, since if `ParserSemanticTokens` produces a result
-        -- so does `LexerSemanticTokens`.
-        (lexTokens, lexPositionMapping) <- useWithStale_ LexerSemanticTokens f
-        let
-          -- We assume that semantic tokens do *not* change its length, no matter whether they
-          -- have been lexed, parsed or typechecked.
-          -- A rather bold assumption, tbh. It will almost definitely not hold
-          -- up in practice, but let's do one step at a time.
-          mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
-          mergeSameLengthTokens [] bs = bs
-          mergeSameLengthTokens as [] = as
-          mergeSameLengthTokens (a:as) (b:bs) = case compare a.start b.start of
-            -- a.start == b.start
-            -- Same token, only print one
-            EQ -> a : mergeSameLengthTokens as bs
-            -- a.start < b.start
-            LT -> a : mergeSameLengthTokens as (b:bs)
-            -- a.start > b.start
-            GT -> b : mergeSameLengthTokens (a:as) bs
-
-          newPosAstTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition positionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) progTokens
-
-          newPosLexTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition lexPositionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) lexTokens
-
-        pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
+    toks <-
+      semanticTokensUsing
+        -- Order matters, 'SemanticTokens' earlier in the list are preferred over later ones.
+        [ useWithStale TypeCheckedSemanticTokens
+        , useWithStale ParserSemanticTokens
+        , useWithStale LexerSemanticTokens
+        ]
+        f
+    pure ([], Just toks)
 
   define shakeRecorder $ \GetRelSemanticTokens f -> do
     tokens <- use_ GetSemanticTokens f
@@ -741,3 +723,56 @@ rangeOfResolveWarning = \case
     srcSpanToLspRange Nothing
   Resolve.Ambiguous name _ ->
     srcRangeToLspRange $ rangeOf name
+
+-- ----------------------------------------------------------------------------
+-- Helpers for implementing syntax highlighting
+-- ----------------------------------------------------------------------------
+
+applyPositionMapping :: [SemanticToken] -> PositionMapping -> [SemanticToken]
+applyPositionMapping semTokens positionMapping =
+  Maybe.mapMaybe
+    ( \t ->
+        case toCurrentPosition positionMapping t.start of
+          Nothing -> Nothing
+          Just newPos -> Just (t & #start .~ newPos)
+    )
+    semTokens
+
+-- | @'semanticTokensUsing' phases@
+--
+-- Helper function for defining multi-phase semantic syntax highlighting.
+--
+-- Each phase can produce '[SemanticToken]'s and 'PositionMapping' if the result is outdated.
+-- Tokens obtained from earlier phases take precedence over tokens from later phases.
+--
+-- TODO: this function is inefficient, as all phases are always executed.
+-- It would be better if we could tell whether the result is actually stale and then
+-- we won't run later phases.
+-- E.g. @NormalizedUri -> Action (Maybe ([SemanticToken], Maybe PositionMapping))@
+semanticTokensUsing ::
+  [NormalizedUri -> Action (Maybe ([SemanticToken], PositionMapping))] ->
+  (NormalizedUri -> Action [SemanticToken])
+semanticTokensUsing phases uri = do
+  semTokens <- traverse ($ uri) phases
+  let
+    pmSemTokens = fmap (uncurry applyPositionMapping) $ catMaybes semTokens
+
+  case pmSemTokens of
+    [] -> pure []
+    x : xs -> pure $ foldl mergeSameLengthTokens x xs
+ where
+  -- We assume that semantic tokens do *not* change its length, no matter whether they
+  -- have been lexed, parsed or typechecked.
+  -- A rather bold assumption, tbh. It will almost definitely not hold
+  -- up in practice, but let's do one step at a time.
+  mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
+  mergeSameLengthTokens [] bs = bs
+  mergeSameLengthTokens as [] = as
+  mergeSameLengthTokens (a : as) (b : bs) = case compare a.start b.start of
+    -- a.start == b.start
+    -- Same token, only print one
+    EQ -> a : mergeSameLengthTokens as bs
+    -- a.start < b.start
+    LT -> a : mergeSameLengthTokens as (b : bs)
+    -- a.start > b.start
+    GT -> b : mergeSameLengthTokens (a : as) bs

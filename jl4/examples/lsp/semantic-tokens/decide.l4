@@ -1,0 +1,19 @@
+§ `Function definitions and signatures`
+
+DECIDE foo1 IS 5
+
+foo2 MEANS 5
+
+GIVEN x IS A TYPE
+      y IS A FUNCTION FROM x TO x
+foo3 MEANS y
+
+GIVEN x IS A TYPE
+      y IS A FUNCTION FROM x TO x
+GIVETH A FUNCTION FROM x TO x
+DECIDE foo4 IF y
+
+GIVEN x IS A TYPE
+      y IS A FUNCTION FROM x TO x
+GIVETH A FUNCTION FROM x TO x
+DECIDE foo5 y IF foo5 y

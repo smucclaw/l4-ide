@@ -6,6 +6,7 @@
 module LSP.L4.SemanticTokens where
 
 import Base
+import qualified Data.Map.Strict as Map
 
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types hiding (Pattern)
@@ -13,6 +14,7 @@ import Language.LSP.Protocol.Types hiding (Pattern)
 import L4.Lexer
 import L4.Parser.SrcSpan
 import L4.Syntax
+import L4.TypeCheck.Types
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific implementation
@@ -43,13 +45,13 @@ standardTokenType = \case
 simpleTokenType :: PosToken -> Maybe SemanticTokenTypes
 simpleTokenType t = standardTokenType (posTokenCategory t.payload)
 
-parameterType :: PosToken -> Maybe SemanticTokenTypes
-parameterType t = case posTokenCategory t.payload of
+identIsParameter :: PosToken -> Maybe SemanticTokenTypes
+identIsParameter t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Parameter
   _ -> Nothing
 
-nameIsDirective :: PosToken -> Maybe SemanticTokenTypes
-nameIsDirective t = case posTokenCategory t.payload of
+identIsDirective :: PosToken -> Maybe SemanticTokenTypes
+identIsDirective t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Interface
   _ -> Nothing
 
@@ -81,6 +83,21 @@ identIsCon t = case posTokenCategory t.payload of
 identIsFunction :: PosToken -> Maybe SemanticTokenTypes
 identIsFunction t = case posTokenCategory t.payload of
   CIdentifier -> Just SemanticTokenTypes_Function
+  _ -> Nothing
+
+identIsSelector :: PosToken -> Maybe SemanticTokenTypes
+identIsSelector t = case posTokenCategory t.payload of
+  CIdentifier -> Just SemanticTokenTypes_Method
+  _ -> Nothing
+
+identIsAssume :: PosToken -> Maybe SemanticTokenTypes
+identIsAssume t = case posTokenCategory t.payload of
+  CIdentifier -> Just SemanticTokenTypes_Event
+  _ -> Nothing
+
+identIsSynonym :: PosToken -> Maybe SemanticTokenTypes
+identIsSynonym t = case posTokenCategory t.payload of
+  CIdentifier -> Just SemanticTokenTypes_Type
   _ -> Nothing
 
 srcPosToPosition :: SrcPos -> Position
@@ -128,13 +145,20 @@ instance ToSemToken PosToken where
       , modifiers = modifiers
       }
 
--- Generic instance does not apply because we exclude the level and override
--- the token type for the name.
+-- ----------------------------------------------------------------------------
+-- Semantic Tokens for Parsed AST
+-- ----------------------------------------------------------------------------
+
+instance ToSemTokens Context PosToken (Module  Name) where
+  toSemTokens (MkModule ann _uri sects) =
+    traverseCsnWithHoles ann [toSemTokens sects]
+deriving anyclass instance ToSemTokens Context PosToken (TopDecl Name)
+
 instance ToSemTokens Context PosToken (Section Name) where
   toSemTokens (MkSection ann name maka decls) =
     traverseCsnWithHoles ann
-      [ withTokenType nameIsDirective $ toSemTokens name
-      , withTokenType nameIsDirective $ toSemTokens maka
+      [ withTokenType identIsDirective $ toSemTokens name
+      , withTokenType identIsDirective $ toSemTokens maka
       , toSemTokens decls
       ]
 
@@ -170,10 +194,6 @@ instance ToSemTokens Context PosToken (AppForm Name) where
       CValue -> genericToSemTokens a
 
 deriving anyclass instance ToSemTokens Context PosToken (Expr Name)
-instance ToSemTokens Context PosToken (Module  Name) where
-  toSemTokens (MkModule ann _uri sects) =
-    traverseCsnWithHoles ann [toSemTokens sects]
-deriving anyclass instance ToSemTokens Context PosToken (TopDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (LocalDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (Assume Name)
 deriving anyclass instance ToSemTokens Context PosToken (TypedName Name)
@@ -183,8 +203,10 @@ deriving anyclass instance ToSemTokens Context PosToken (Decide Name)
 deriving anyclass instance ToSemTokens Context PosToken (Aka Name)
 deriving anyclass instance ToSemTokens Context PosToken (TypeDecl Name)
 deriving anyclass instance ToSemTokens Context PosToken (NamedExpr Name)
-deriving anyclass instance ToSemTokens Context PosToken (Branch Name)
-deriving anyclass instance ToSemTokens Context PosToken (Pattern Name)
+instance ToSemTokens Context PosToken (Branch Name) where
+  toSemTokens = genericToSemTokens
+instance ToSemTokens Context PosToken (Pattern Name) where
+  toSemTokens = genericToSemTokens
 deriving anyclass instance ToSemTokens Context PosToken (TypeSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (GivethSig Name)
 deriving anyclass instance ToSemTokens Context PosToken (GivenSig Name)
@@ -214,3 +236,98 @@ instance ToSemTokens () PosToken PosToken where
   toSemTokens t = do
     ctx <- ask
     pure $ maybe [] toList (fromSemanticTokenContext ctx t)
+
+--- ---------------------------------------------------------------------------
+-- Semantic Tokens for typechecked AST
+--- ---------------------------------------------------------------------------
+
+instance ToSemTokens EntityInfo PosToken Resolved where
+  toSemTokens r = do
+    entityInfo <- asks (.semanticTokenContext)
+    case r of
+      Def _ n -> modifier entityInfo $ withModifier defVar $ toSemTokens n
+      Ref orig _ _ -> modifier entityInfo $ toSemTokens orig
+      OutOfScope _ n -> modifier entityInfo $ toSemTokens n
+    where
+      uniq = getUnique r
+      modifier entityInfo =
+        case Map.lookup uniq entityInfo of
+          -- Strictly speaking, this is an internal invariant violation.
+          -- However, we likely shouldn't care during syntax highlighting.
+          Nothing -> id
+          Just (_, entity) -> case entity of
+            KnownType _kind _names synonym -> case synonym of
+              Nothing -> withTokenType identIsType
+              Just _ty -> withTokenType identIsSynonym
+            KnownTerm ty termKind ->
+                case termKind of
+                  Computable -> basedOnType ty
+                  Assumed ->
+                    withTokenType identIsAssume
+                  Local -> basedOnType ty
+                  Constructor -> withTokenType identIsCon
+                  Selector -> withTokenType identIsSelector
+            KnownSection _section -> withTokenType identIsDirective
+            KnownTypeVariable ->
+              withTokenType identIsTypeVar
+
+      basedOnType = \case
+        Type{} -> withTokenType identIsType
+        Fun{} -> withTokenType identIsFunction
+        TyApp{} -> withTokenType identIsType
+        Forall _ _ ty -> basedOnType ty
+        InfVar{} -> id
+
+instance ToSemTokens EntityInfo PosToken (Module  Resolved) where
+  toSemTokens (MkModule ann _uri sects) =
+    traverseCsnWithHoles ann [toSemTokens sects]
+deriving anyclass instance ToSemTokens EntityInfo PosToken (TopDecl Resolved)
+
+instance ToSemTokens EntityInfo PosToken (Section Resolved) where
+  toSemTokens (MkSection ann name maka decls) =
+    traverseCsnWithHoles ann
+      [ withTokenType identIsDirective $ toSemTokens name
+      , withTokenType identIsDirective $ toSemTokens maka
+      , toSemTokens decls
+      ]
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Declare Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (ConDecl Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Type' Resolved)
+
+deriving anyclass instance ToSemTokens EntityInfo PosToken (AppForm Resolved)
+
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Expr Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (LocalDecl Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Assume Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (TypedName Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (OptionallyTypedName Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (OptionallyNamedType Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Decide Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Aka Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (TypeDecl Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (NamedExpr Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Branch Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Pattern Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (TypeSig Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (GivethSig Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (GivenSig Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Directive Resolved)
+deriving anyclass instance ToSemTokens EntityInfo PosToken (Import Resolved)
+instance ToSemTokens EntityInfo PosToken NormalizedUri where
+  toSemTokens _ = pure []
+
+instance ToSemTokens EntityInfo PosToken Int where
+  toSemTokens _ = pure []
+
+instance ToSemTokens EntityInfo PosToken Name where
+  toSemTokens (MkName ann _) =
+    traverseCsnWithHoles ann []
+
+instance ToSemTokens EntityInfo PosToken RawName where
+  toSemTokens _ = pure []
+
+instance ToSemTokens EntityInfo PosToken Lit where
+  toSemTokens (NumericLit ann _) =
+    traverseCsnWithHoles ann []
+  toSemTokens (StringLit ann _) =
+    traverseCsnWithHoles ann []

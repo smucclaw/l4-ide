@@ -36,7 +36,7 @@ runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemT
 --
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
-class ToSemTokens c t a | a t -> c where
+class ToSemTokens c t a | a c -> t where
   toSemTokens :: a -> SemanticTokensM c t [SemanticToken]
   default toSemTokens ::
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
@@ -45,7 +45,7 @@ class ToSemTokens c t a | a t -> c where
   toSemTokens = genericToSemTokens
 
 genericToSemTokens :: forall a t c .
-    (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
+    (HasCallStack, SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
     a ->
     SemanticTokensM c t [SemanticToken]
 genericToSemTokens =
