@@ -118,6 +118,6 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
     "lint-fix": "eslint ./src --fix",
-    "clean": "git clean -fdx out"
+    "clean": "git clean -fdx out || echo 'git not available'"
   }
 }

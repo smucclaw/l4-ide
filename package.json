@@ -12,7 +12,7 @@
     "lint": "turbo lint",
     "test": "turbo run test",
     "check": "turbo run check",
-    "format": "prettier --write \"**/*.{js,ts,mts,jsx,tsx,json,css,scss,md,html,yaml,svelte}\"",
+    "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {

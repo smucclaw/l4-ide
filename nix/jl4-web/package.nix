@@ -27,9 +27,19 @@ buildNpmPackage rec {
     set -x
     export VITE_SOCKET_URL=${if secure then "wss" else "ws"}://${socket-url};
     export VITE_SESSION_URL=${if secure then "https" else "http"}://${session-url};
-    pushd ./ts-shared/viz-expr
+
+    pushd ./ts-shared
+
+    pushd ./viz-expr
     npm run build
     popd
+
+    pushd ./jl4-client-rpc
+    npm run build
+    popd
+
+    popd
+
     pushd ./ts-apps
     pushd ./decision-logic-visualizer
     npm run build

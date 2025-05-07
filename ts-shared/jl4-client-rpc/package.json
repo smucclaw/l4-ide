@@ -11,7 +11,7 @@
     "dist"
   ],
   "scripts": {
-    "clean": "git clean -fdx dist",
+    "clean": "git clean -fdx dist || echo 'git not available'",
     "build": "npm run clean && tsc",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
