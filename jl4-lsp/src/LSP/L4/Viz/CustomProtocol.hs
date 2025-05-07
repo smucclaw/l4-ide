@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 
--- | Custom extensions to the LSP and payload types for JL4
+{-| Custom extensions to the LSP and payload types for JL4
+    See also @ts-shared/jl4-client-rpc/custom-protocol.ts@
+-}
 module LSP.L4.Viz.CustomProtocol where
 
 import qualified Base.Text as T
