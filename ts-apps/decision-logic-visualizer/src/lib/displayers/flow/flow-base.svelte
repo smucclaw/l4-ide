@@ -165,14 +165,14 @@
   ***************************************/
 
   // TODO: prob better to put this in ubool-var.svelte.ts
-  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
-    event
-  ) => {
+  const onBoolVarNodeClick: SF.NodeEventWithPointer<
+    MouseEvent | TouchEvent
+  > = async (event) => {
     const lirId = sfNodeToLirId(event.node as LadderSFNode)
     const varNode = context.get(lirId) as UBoolVarLirNode
 
     const newValue = cycle(varNode.getValue(context))
-    ladderGraph.submitNewBinding(context, {
+    await ladderGraph.submitNewBinding(context, {
       unique: varNode.getUnique(context),
       value: newValue,
     })
