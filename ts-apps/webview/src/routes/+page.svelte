@@ -85,7 +85,7 @@
         const backendApi = new LadderApiForWebview(messenger)
         const ladderEnv = LadderEnv.make(
           lirRegistry,
-          renderLadderInfo.verTextDocId,
+          renderLadderInfo.verDocId,
           backendApi
         )
         renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(

@@ -43,11 +43,11 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
             'rounded-lg',
             ...arg.getAllClasses(data.context),
           ]}
-          onclick={() => {
+          onclick={async () => {
             console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
             const newValue = cycle(arg.getValue(data.context))
-            ladderGraph.submitNewBinding(data.context, {
+            await ladderGraph.submitNewBinding(data.context, {
               unique: arg.getUnique(data.context),
               value: newValue,
             })
