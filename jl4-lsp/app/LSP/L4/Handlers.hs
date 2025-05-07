@@ -276,7 +276,7 @@ handlers recorder =
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
-        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDoc" ide $
+        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDocId" ide $
           FileStore.getVersionedTextDoc $ params ^. J.textDocument
 
         typeCheck <- liftIO $ runAction "typecheck" ide $
