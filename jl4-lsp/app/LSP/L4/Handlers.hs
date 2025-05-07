@@ -30,6 +30,7 @@ import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
 import GHC.Generics
+import Data.Proxy (Proxy (..))
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))
@@ -44,6 +45,7 @@ import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
+import LSP.L4.Viz.CustomProtocol as Ladder
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -84,6 +86,7 @@ data Log
   | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri
+  | LogReceivedCustomRequest !Uri !Text          -- ^ Uri CustomMethodName
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
   | LogShake Shake.Log
@@ -101,6 +104,7 @@ instance Pretty Log where
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
+    LogReceivedCustomRequest uri method -> "Received custom request:" <+> pretty (getUri uri) <+> pretty method
 
 -- ----------------------------------------------------------------------------
 -- Reactor
@@ -276,7 +280,7 @@ handlers recorder =
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
-        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDoc" ide $
+        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDocId" ide $
           FileStore.getVersionedTextDoc $ params ^. J.textDocument
 
         typeCheck <- liftIO $ runAction "typecheck" ide $
@@ -327,6 +331,21 @@ handlers recorder =
 
         let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
         pure (Right (InL locs))
+
+    -- custom requests
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \_ide params -> do
+        let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
+        case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
+          Aeson.Success evalParams -> do
+            logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
+            -- Haven't implemented the actual call to eval yet; just returning null for now
+            pure $ Right Aeson.Null
+          Aeson.Error err -> do
+            pure $ Left $ TResponseError
+              { _code = InR ErrorCodes_InvalidRequest
+              , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
+              , _xdata = Nothing
+              }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
