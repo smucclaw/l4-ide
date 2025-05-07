@@ -74,15 +74,17 @@ function initializeWebviewMessenger(
     makeLspRelayRequestType<object, unknown>(),
     async (clientReqParams) => {
       outputChannel.appendLine(
-        `Ext: Received request from webview: ${JSON.stringify(clientReqParams)}`
+        `Ext: Received LSP relay request from webview:\n${JSON.stringify(clientReqParams)}`
       )
-
       const response = await client.sendRequest(
         clientReqParams.requestType,
         clientReqParams.params
       )
       outputChannel.appendLine(
-        `Response from server: ${JSON.stringify(response)}`
+        `Response from server:\n${JSON.stringify(response)}`
+      )
+      outputChannel.appendLine(
+        '--------------------------------------------------'
       )
       return response
     }
@@ -139,8 +141,12 @@ export async function activate(context: ExtensionContext) {
             args.push(editor.document.uri.toString())
           }
 
-          outputChannel.appendLine('in executeCommand...')
-          outputChannel.appendLine(`args are ${args.toString()}`)
+          outputChannel.appendLine('')
+          outputChannel.appendLine(
+            '<executeCommand>--------------------------------------------------'
+          )
+          outputChannel.appendLine(`called with args\n${JSON.stringify(args)}`)
+          outputChannel.appendLine('')
 
           const responseFromLangServer: unknown = await next(command, args)
 
@@ -151,13 +157,13 @@ export async function activate(context: ExtensionContext) {
             return
           }
 
+          outputChannel.appendLine('')
           outputChannel.appendLine(
-            `Received command response ${JSON.stringify(responseFromLangServer)}`
+            `Received command response\n${JSON.stringify(responseFromLangServer)}`
           )
+          outputChannel.appendLine('')
 
           const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
-
-          outputChannel.appendLine(JSON.stringify(ladderInfo))
 
           panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
@@ -169,11 +175,17 @@ export async function activate(context: ExtensionContext) {
             ladderInfo
           )
           if (response.$type === 'error') {
-            outputChannel.appendLine(`Error in visualisation request`)
+            outputChannel.appendLine(`Error in render viz in webview request`)
           } else if (response.$type === 'ok') {
-            outputChannel.appendLine(`Visualisation request success`)
+            outputChannel.appendLine(
+              `Request to render viz in webview succeeded`
+            )
           }
         }
+
+        outputChannel.appendLine(
+          '--------------------------------------------------</executeCommand>'
+        )
         // TODO: else show pop up to client
       },
       didChange: async (event, next) => {
