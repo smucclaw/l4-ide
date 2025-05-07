@@ -73,6 +73,7 @@ library
     L4.Evaluate.Value
     L4.Evaluate.ValueLazy
     L4.EvaluateLazy
+    L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
     L4.ExactPrint
     L4.FindDefinition
