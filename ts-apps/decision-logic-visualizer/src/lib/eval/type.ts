@@ -14,30 +14,35 @@ import { match } from 'ts-pattern'
 *********************************/
 
 export type UBoolVal = TrueVal | FalseVal | UnknownVal
-// export function isUBoolValue(val: Value): val is UBoolVal {
-//   return (
-//     val.$type === 'TrueVal' ||
-//     val.$type === 'FalseVal' ||
-//     val.$type === 'UnknownVal'
-//   )
-// }
+
+export function toUBoolVal(value: VE.UBoolValue): UBoolVal {
+  return match(value)
+    .with('True', () => new TrueVal())
+    .with('False', () => new FalseVal())
+    .with('Unknown', () => new UnknownVal())
+    .exhaustive()
+}
+
+export function toVEBoolValue(val: UBoolVal): VE.UBoolValue {
+  return val.$type
+}
 
 interface UBoolV {
-  $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
+  $type: TrueVal['$type'] | FalseVal['$type'] | UnknownVal['$type']
   getClasses(): BoolValCSSClass[]
   toPretty(): string
 }
 
 export function isTrueVal(val: UBoolVal): val is TrueVal {
-  return val.$type === 'TrueVal'
+  return val.$type === 'True'
 }
 
 export function isFalseVal(val: UBoolVal): val is FalseVal {
-  return val.$type === 'FalseVal'
+  return val.$type === 'False'
 }
 
 export class TrueVal implements UBoolV {
-  $type: 'TrueVal' = 'TrueVal' as const
+  $type: 'True' = 'True' as const
   constructor() {}
 
   getClasses() {
@@ -50,7 +55,7 @@ export class TrueVal implements UBoolV {
 }
 
 export class FalseVal implements UBoolV {
-  $type: 'FalseVal' = 'FalseVal' as const
+  $type: 'False' = 'False' as const
   constructor() {}
 
   getClasses() {
@@ -63,11 +68,11 @@ export class FalseVal implements UBoolV {
 }
 
 export function isUnknownVal(val: UBoolVal): val is UnknownVal {
-  return val.$type === 'UnknownVal'
+  return val.$type === 'Unknown'
 }
 
 export class UnknownVal implements UBoolV {
-  $type: 'UnknownVal' = 'UnknownVal' as const
+  $type: 'Unknown' = 'Unknown' as const
   constructor() {}
 
   getClasses() {
@@ -81,9 +86,9 @@ export class UnknownVal implements UBoolV {
 
 export function cycle(val: UBoolVal): UBoolVal {
   return match(val)
-    .with({ $type: 'TrueVal' }, () => new FalseVal())
-    .with({ $type: 'FalseVal' }, () => new UnknownVal())
-    .with({ $type: 'UnknownVal' }, () => new TrueVal())
+    .with({ $type: 'True' }, () => new FalseVal())
+    .with({ $type: 'False' }, () => new UnknownVal())
+    .with({ $type: 'Unknown' }, () => new TrueVal())
     .exhaustive()
 }
 

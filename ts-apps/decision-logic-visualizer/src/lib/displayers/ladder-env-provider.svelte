@@ -1,8 +1,8 @@
 <script lang="ts" module>
   import type { Snippet } from 'svelte'
-  import type { LadderFlowDisplayerProps } from './flow/flow-props.js'
 
-  interface LadderEnvProviderProps extends LadderFlowDisplayerProps {
+  export interface LadderEnvProviderProps {
+    env: LadderEnv
     children: Snippet
   }
 </script>
@@ -10,16 +10,10 @@
 <script lang="ts">
   import { LadderEnv } from '$lib/ladder-env.js'
 
-  const {
-    context,
-    lir,
-    node: funDeclLirNode,
-    children,
-  }: LadderEnvProviderProps = $props()
+  const { env, children }: LadderEnvProviderProps = $props()
 
-  // Initialize the LadderEnv and make it available to children components
-  const ladderEnv = LadderEnv.make(context, lir, funDeclLirNode)
-  ladderEnv.setInSvelteContext()
+  // Make the LadderEnv available to children components
+  env.setInSvelteContext()
 </script>
 
 {@render children()}

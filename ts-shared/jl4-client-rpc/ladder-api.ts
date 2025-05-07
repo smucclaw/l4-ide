@@ -1,4 +1,4 @@
-import type { L4RpcRequestType, LspResponse } from './custom-protocol.js'
+import type { L4RpcRequestType } from './custom-protocol.js'
 
 /** The interface that the Ladder frontend components
  * (most proximally, the webview, and the visualizer, indirectly)
@@ -17,7 +17,15 @@ interface L4BackendApi {
   sendClientRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>>
+  ): Promise<R | null>
 
   /* Send a notification to the LSP server. [TODO] */
+}
+
+/** A mock implementation of the LadderBackendApi for testing / dev-ing */
+export const mockLadderBackendApi: LadderBackendApi = {
+  sendClientRequest: async (type, params) => {
+    console.log('[mockLadderBackendApi] sendClientRequest: ', type, params)
+    return Promise.resolve(null)
+  },
 }

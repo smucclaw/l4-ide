@@ -5,29 +5,36 @@ Stuff for Ladder operations
 that can be used by components that are children of LadderEnvProvider
 *********************************************************************/
 
+import { L4Connection } from './l4-connection.js'
+import type { LadderBackendApi } from 'jl4-client-rpc'
 import type { LirContext, LirRegistry, LirRootType } from './layout-ir/core.js'
 import type { FunDeclLirNode } from './layout-ir/ladder-graph/ladder.svelte.js'
 import { setContext, getContext } from 'svelte'
+import type { VersionedDocId } from '@repo/viz-expr'
 
 export class LadderEnv {
   /** Initialize the Ladder Env -- which includes setting the fun decl lir node in the Lir Registry */
   static make(
-    context: LirContext,
     lirRegistry: LirRegistry,
-    funDeclLirNode: FunDeclLirNode
+    versionedDocId: VersionedDocId,
+    backendApi: LadderBackendApi
   ) {
-    // Set the top fun decl lir node in Lir Registry
-    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
-
-    // Note: Do not store a reference to the LirContext
-
-    return new LadderEnv(lirRegistry)
+    const l4Connection = new L4Connection(backendApi)
+    return new LadderEnv(lirRegistry, l4Connection, versionedDocId)
   }
 
-  private constructor(private readonly lirRegistry: LirRegistry) {}
+  private constructor(
+    private readonly lirRegistry: LirRegistry,
+    private readonly l4Connection: L4Connection,
+    private readonly versionedDocId: VersionedDocId
+  ) {}
 
   getLirRegistry(): LirRegistry {
     return this.lirRegistry
+  }
+
+  getL4Connection(): L4Connection {
+    return this.l4Connection
   }
 
   /** Aka: 'get the topmost Decide',
@@ -38,6 +45,10 @@ export class LadderEnv {
       context,
       LADDER_VIZ_ROOT_TYPE
     ) as FunDeclLirNode
+  }
+
+  getVersionedTextDocIdentifier(): VersionedDocId {
+    return this.versionedDocId
   }
 
   setInSvelteContext() {
@@ -60,5 +71,5 @@ export function useLadderEnv(): LadderEnv {
       Ladder Viz Root Type
 **********************************/
 
-/** Internal */
-const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'
+/** Lir registry key for the topmost FunDecl Lir Node */
+export const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'

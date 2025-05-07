@@ -2,11 +2,10 @@
 import type { IRExpr, UBoolVar, Unique, Name, IRId } from '@repo/viz-expr'
 import {
   type UBoolVal,
-  TrueVal,
-  FalseVal,
   isFalseVal,
   UnknownVal,
   veExprToEvExpr,
+  toUBoolVal,
 } from '../../eval/type.js'
 import { Assignment, Corefs } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
@@ -43,6 +42,7 @@ import {
 } from '../paths-list.js'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
+import type { LadderEnv } from '$lib/ladder-env.js'
 
 /*
 Design principles:
@@ -280,6 +280,8 @@ will go through the LadderGraphLirNode.
     is owned by SvelteFlow.
 */
 export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
+  #ladderEnv: LadderEnv
+
   #dag: DirectedAcyclicGraph<LirId>
 
   #originalExpr: IRExpr
@@ -297,16 +299,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   #pathsList?: PathsListLirNode
 
-  constructor(
+  private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    originalExpr: IRExpr
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
     this.#vizExprToLirDag = vizExprToLirGraph
+    this.#ladderEnv = ladderEnv
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -332,8 +336,24 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       n.getId(),
     ])
     this.#corefs = Corefs.fromEntries(uniqLirIdPairs)
+  }
 
-    this.doEvalLadderExprWithVarBindings(nodeInfo.context)
+  static async make(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
+  ): Promise<LadderGraphLirNode> {
+    const ladderGraph = new LadderGraphLirNode(
+      nodeInfo,
+      dag,
+      vizExprToLirGraph,
+      originalExpr,
+      ladderEnv
+    )
+    await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
+    return ladderGraph
   }
 
   getVizExprToLirGraph() {
@@ -515,8 +535,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         Eval, Bindings
   ******************************/
 
-  private doEvalLadderExprWithVarBindings(context: LirContext) {
-    const result = Evaluator.eval(
+  private async doEvalLadderExprWithVarBindings(context: LirContext) {
+    const result = await Evaluator.eval(
+      this.#ladderEnv.getL4Connection(),
+      this.#ladderEnv.getVersionedTextDocIdentifier(),
       veExprToEvExpr(this.#originalExpr),
       this.#bindings
     )
@@ -527,7 +549,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
-  submitNewBinding(
+  async submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: UBoolVal }
   ) {
@@ -550,7 +572,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       including Var nodes that the user hasn't specified a value for
     * the default value for a VarNode is UnknownV
     */
-    this.doEvalLadderExprWithVarBindings(context)
+    await this.doEvalLadderExprWithVarBindings(context)
 
     // Fade out subgraphs that are no longer viable in light of user's choices
     const nonviableIRIds = Array.from(this.#evalResult.intermediate.entries())
@@ -679,11 +701,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
-    this.#value = match(originalExpr.value)
-      .with('True', () => new TrueVal())
-      .with('False', () => new FalseVal())
-      .with('Unknown', () => new UnknownVal())
-      .exhaustive()
+    this.#value = toUBoolVal(originalExpr.value)
     this.#name = originalExpr.name
   }
 
