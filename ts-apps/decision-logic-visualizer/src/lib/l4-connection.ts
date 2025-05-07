@@ -11,13 +11,13 @@ export class L4Connection {
   async evalApp(
     appExpr: EvalAppRequestParams['appExpr'],
     args: EvalAppRequestParams['args'],
-    verTxtDocId: EvalAppRequestParams['verTxtDocId']
+    verDocId: EvalAppRequestParams['verDocId']
   ): Promise<EvalAppResult | null> {
     const params: EvalAppRequestParams = {
       $type: 'EvalAppRequestParams',
       appExpr,
       args,
-      verTxtDocId,
+      verDocId,
     }
     return this.api.sendClientRequest(EvalAppRequestType, params)
   }

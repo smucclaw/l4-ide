@@ -52,7 +52,7 @@ export interface EvalResult {
 export interface LadderEvaluator {
   eval(
     l4connection: L4Connection,
-    verTxtDocId: VersionedDocId,
+    verDocId: VersionedDocId,
     ladder: Expr,
     assignment: Assignment
   ): Promise<EvalResult>
