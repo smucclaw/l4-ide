@@ -19,7 +19,7 @@ import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
 export { EvalAppRequestParams, EvalAppResult }
 
 /****************************************
-          Protocol Types
+        L4 RPC Protocol Types
 *****************************************/
 
 // Request type
@@ -50,8 +50,7 @@ export function makeL4RpcNotificationType<P extends object>(
 /**
  * Request type for evaluating an App expr with actual arguments on the backend
  */
-export const EvalAppRequestType = new RequestType<
+export const EvalAppRequestType = makeL4RpcRequestType<
   EvalAppRequestParams,
-  LspResponse<EvalAppResult>,
-  void
->('l4/evalApp') as L4RpcRequestType<EvalAppRequestParams, EvalAppResult>
+  EvalAppResult
+>('l4/evalApp')
