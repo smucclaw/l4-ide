@@ -7,7 +7,6 @@ import { VersionedDocId } from './versioned-doc-id.js'
 ***********************************************/
 
 export const EvalAppRequestParams = Schema.Struct({
-  $type: Schema.tag('EvalAppRequestParams'),
   // We can think about batching requests in the future
   appExpr: IRId,
   args: Schema.Array(BoolValue).annotations({

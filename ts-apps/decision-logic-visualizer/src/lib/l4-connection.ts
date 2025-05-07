@@ -14,7 +14,6 @@ export class L4Connection {
     verDocId: EvalAppRequestParams['verDocId']
   ): Promise<EvalAppResult | null> {
     const params: EvalAppRequestParams = {
-      $type: 'EvalAppRequestParams',
       appExpr,
       args,
       verDocId,
