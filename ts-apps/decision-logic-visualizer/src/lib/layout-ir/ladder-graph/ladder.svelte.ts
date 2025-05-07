@@ -544,7 +544,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
     this.setEvalResult(context, result)
 
-    console.log('evaluating ', this.#bindings)
+    console.log('evaluating ', this.#bindings.getEntries())
     console.log('whatif eval result: ', result)
   }
 
