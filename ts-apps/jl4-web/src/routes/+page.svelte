@@ -270,7 +270,7 @@
                 const backendApi = new LadderApiForMonaco(monacoL4LangClient)
                 ladderEnv = LadderEnv.make(
                   lirRegistry,
-                  renderLadderInfo.verTextDocId,
+                  renderLadderInfo.verDocId,
                   backendApi
                 )
 

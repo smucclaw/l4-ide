@@ -13,7 +13,7 @@ import Optics
 import qualified Language.LSP.Protocol.Types as LSP
 
 data RenderAsLadderInfo = MkRenderAsLadderInfo
-  { verTextDocId :: LSP.VersionedTextDocumentIdentifier
+  { verDocId :: LSP.VersionedTextDocumentIdentifier
   , funDecl      :: FunDecl
   }
   deriving stock (Show, Generic, Eq)
@@ -135,8 +135,8 @@ instance HasCodec RenderAsLadderInfo where
     named "RenderAsLadderInfo" $
       object "RenderAsLadderInfo" $
         MkRenderAsLadderInfo
-          <$> requiredField' "verTextDocId" .= view #verTextDocId
-          <*> requiredField' "funDecl"      .= view #funDecl
+          <$> requiredField' "verDocId" .= view #verDocId
+          <*> requiredField' "funDecl"  .= view #funDecl
 
 instance HasCodec LSP.VersionedTextDocumentIdentifier where
   codec = codecViaAeson "VersionedTextDocumentIdentifier"

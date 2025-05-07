@@ -248,7 +248,7 @@ export const UBoolVar = Schema.Struct({
 export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
 export const RenderAsLadderInfo = Schema.Struct({
-  verTextDocId: VersionedDocId,
+  verDocId: VersionedDocId,
   funDecl: FunDecl,
 }).annotations({ identifier: 'RenderAsLadderInfo' })
 
