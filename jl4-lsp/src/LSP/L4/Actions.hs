@@ -139,7 +139,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  -- Makes a 'RecentlyVisualised' record iff the given 'Decide' has a valid range and a resolved type.
+  -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
   -- Assumes the given vizEnv is up-to-date.
   let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizEnv funDecl
         = Just RecentlyVisualised 
