@@ -298,7 +298,7 @@ data RecentlyVisualised = RecentlyVisualised
   , name    :: !RawName
   , type'   :: !(Type' Resolved)
   , funDecl :: !Ladder.FunDecl
-  , vizEnv  :: !Ladder.VizEnv
+  , vizState  :: !Ladder.VizState
   }
   deriving stock (Show, Eq)
 
