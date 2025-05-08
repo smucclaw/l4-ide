@@ -1,12 +1,24 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module LSP.L4.Viz.Ladder where
+module LSP.L4.Viz.Ladder (
+  -- * Entrypoint
+  doVisualize,
+
+  -- * VizEnv, VizState
+  VizEnv (..),
+  VizState (..),
+  mkVizEnv,
+
+  -- * Helpers
+  prettyPrintVizError
+  ) where
 
 import Control.DeepSeq
 import Control.Monad.Except
 import Base
+import qualified Base.Map as Map
 import qualified Base.Text as Text
-import Optics.State.Operators ((<%=))
+import Optics.State.Operators ((<%=), (%=))
 
 import qualified Language.LSP.Protocol.Types as LSP
 
@@ -53,11 +65,12 @@ data VizEnv = MkVizEnv
   }
   deriving stock (Show, Generic, Eq)
 
-data VizState =
-  MkVizState
-    { env :: !VizEnv
-    , maxId :: !ID
-    }
+data VizState = MkVizState
+  { env      :: !VizEnv
+  , maxId    :: !ID
+  , appExprs :: Map Int (Expr Resolved)
+  -- ^ Unique of V.ID => App exprs
+  }
   deriving stock (Show, Generic, Eq)
 
 mkInitialVizState :: VizEnv -> VizState
@@ -65,6 +78,7 @@ mkInitialVizState env =
   MkVizState
     { env = env
     , maxId = MkID 0
+    , appExprs = Map.empty
     }
 
 -- Monad ops
@@ -92,6 +106,15 @@ getShouldSimplify = do
   env <- getVizEnv
   pure env.shouldSimplify
 
+-- lookupApp :: V.ID -> Viz (Maybe (Expr Resolved))
+-- lookupApp id = do
+--   appExprs <- use #appExprs
+--   pure $ Map.lookup id.id appExprs
+
+storeApp :: V.ID -> Expr Resolved -> Viz ()
+storeApp vid expr = do
+  #appExprs %= Map.insert vid.id expr
+
 ------------------------------------------------------
 -- VizError
 ------------------------------------------------------
@@ -115,10 +138,12 @@ prettyPrintVizError = \ case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> VizEnv -> Either VizError RenderAsLadderInfo
-doVisualize decide env =
-  case  (vizProgram decide).getVizE (mkInitialVizState env) of
-    (result, _) -> result
+doVisualize :: Decide Resolved -> VizEnv -> Either VizError (RenderAsLadderInfo, VizState)
+doVisualize decide env = 
+  let (result, vizState) = (vizProgram decide).getVizE (mkInitialVizState env)
+  in case result of
+    Left err         -> Left err
+    Right ladderInfo -> Right (ladderInfo, vizState)
 
 vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
 vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide decide
@@ -186,18 +211,19 @@ translateExpr False = go
 
         -- TODO: Should handle BoolLits differently too
         -- 'var'
-        App _ resolved [] ->
-          leafFromVizName (mkVizNameWith prettyLayout resolved)
+        App _ resolved [] -> do
+          uid <- getFresh
+          storeApp uid e
+          leafFromVizName uid (mkVizNameWith prettyLayout resolved)
 
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
           if isDevMode && fnOfAppIsFnFromBooleansToBoolean
-            then
-              V.App
-                <$> getFresh
-                <*> pure (mkVizNameWith nameToText fnResolved)
-                <*> traverse go args
+            then do
+              uid <- getFresh
+              storeApp uid e
+              V.App uid (mkVizNameWith nameToText fnResolved) <$> traverse go args
             else
               leaf "" $ Text.unwords $ (nameToText . getOriginal $ fnResolved) : (prettyLayout <$> args)
 
@@ -221,9 +247,8 @@ scanOr e = [e]
 defaultUBoolVarValue :: V.UBoolValue
 defaultUBoolVarValue = V.UnknownV
 
-leafFromVizName :: V.Name -> Viz IRExpr
-leafFromVizName vname = do
-  uid <- getFresh
+leafFromVizName :: V.ID -> V.Name -> Viz IRExpr
+leafFromVizName uid vname = do
   pure $ V.UBoolVar uid vname defaultUBoolVarValue
 
 leaf :: Text -> Text -> Viz IRExpr
