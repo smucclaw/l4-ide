@@ -6,7 +6,7 @@ import Autodocodec.Aeson ()
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List.NonEmpty as NE
-import Data.Text (Text)
+import Base.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
