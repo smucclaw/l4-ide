@@ -335,18 +335,27 @@ handlers recorder =
     -- custom requests
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
         let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
+        
         case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
+          Aeson.Error err -> do
+            pure $ Left $ TResponseError
+              { _code = InR ErrorCodes_InvalidRequest
+              , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
+              , _xdata = Nothing
+              }
+          
           Aeson.Success evalParams -> do
             logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
 
             mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
             case mRecentViz of
-              Nothing ->
+              Nothing -> -- impossible
                 pure $ Left $ TResponseError
                   { _code = InR ErrorCodes_InvalidRequest
                   , _message = "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
                   , _xdata = Nothing
                   }
+                  
               Just recentViz -> do
                 let clientVersion = evalParams.verDocId._version
                     serverVersion = recentViz.vizEnv.verTxtDocId._version
@@ -361,12 +370,6 @@ handlers recorder =
                                               ", whereas server's version is: " <> Text.pack (show serverVersion)
                                   , _xdata = Nothing
                                   }
-          Aeson.Error err -> do
-            pure $ Left $ TResponseError
-              { _code = InR ErrorCodes_InvalidRequest
-              , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
-              , _xdata = Nothing
-              }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
