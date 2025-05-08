@@ -142,6 +142,10 @@ pattern UserException e = Exception (UserEvalException e)
 pattern Done :: WHNF -> Machine Config
 pattern Done whnf = Config (DoneMachine whnf)
 
+pattern StuckOnAssumed :: Resolved -> Machine b
+pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
+
+
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \case
   And _ann e1 e2 ->
@@ -253,25 +257,23 @@ backward val = WithPoppedFrame $ \ case
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
         PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
         EvalRef events
-      v@(ValConstructor r []) | r `sameResolved` TypeCheck.fulfilRef -> backward v
       ValUnaryBuiltinFun fn -> do
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
+      ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
-        stuckOnAssumed r -- TODO: we can do better here
+        StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
   Just (IfThenElse1 e2 e3 env) ->
-    case boolView val of
-      Just True ->
-        ForwardExpr env e2
-      Just False ->
-        ForwardExpr env e3
-      Nothing | ValAssumed r <- val ->
-        stuckOnAssumed r
-      Nothing ->
-        InternalException $ RuntimeTypeError $
-          "expected a BOOLEAN but found: " <> prettyLayout val <> " when evaluating IF-THEN-ELSE"
+    case val of
+      ValBool True -> ForwardExpr env e2
+      ValBool False -> ForwardExpr env e3
+
+      ValAssumed r -> StuckOnAssumed r
+
+      _ -> InternalException $ RuntimeTypeError $
+        "expected a BOOLEAN but found: " <> prettyLayout val <> " when evaluating IF-THEN-ELSE"
   Just (ConsiderWhen1 _scrutinee e _branches env) -> do
     case val of
       ValEnvironment env' ->
@@ -549,8 +551,8 @@ runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = Backward $ Va
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 > str2)
 runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 > b2)
-runBinOp _op         (ValAssumed r) _e2                          = stuckOnAssumed r
-runBinOp _op         _e1 (ValAssumed r)                          = stuckOnAssumed r
+runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
+runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
 
 runBinOpEquals :: WHNF -> WHNF -> Machine Config
@@ -573,6 +575,16 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
   | otherwise                                           = Backward $ ValBool False
 -- TODO: we probably also want to check ValObligations for equality
 runBinOpEquals _                       _                = UserException EqualityOnUnsupportedType
+
+pattern ValFulfilled :: Value a
+pattern ValFulfilled <- (fulfilView -> True)
+  where
+    ValFulfilled = ValConstructor TypeCheck.fulfilRef []
+
+fulfilView :: Value a -> Bool
+fulfilView v
+  | ValConstructor r [] <- v = r `sameResolved` TypeCheck.fulfilRef
+  | otherwise = False
 
 pattern ValBool :: Bool -> WHNF
 pattern ValBool b <- (boolView -> Just b)
@@ -608,9 +620,6 @@ ref n a =
   in
     pure (Ref n u o)
 
-
-stuckOnAssumed :: Resolved -> Machine b
-stuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 lookupTerm :: Environment -> Resolved -> Maybe Reference
 lookupTerm env r =
@@ -858,9 +867,6 @@ trueVal = ValConstructor TypeCheck.trueRef []
 fulfilExpr :: Expr Resolved
 fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
 
-fulfilVal :: Value a
-fulfilVal = ValConstructor TypeCheck.fulfilRef []
-
 -- \a b c. a b c
 evalContractVal :: Machine (Value a)
 evalContractVal = do
@@ -972,11 +978,11 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
-  fulfilRef <- AllocateValue fulfilVal
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
+  fulfilRef <- AllocateValue ValFulfilled
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)
