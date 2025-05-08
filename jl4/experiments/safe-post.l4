@@ -7,6 +7,56 @@ DECLARE Money
     HAS amount IS A NUMBER
         currency IS A STRING
 
+-- IMPORT Entity
+DECLARE Company
+    HAS `Name`                IS A STRING
+        `Address`             IS A STRING
+        `Jurisdiction`        IS A STRING
+        `Company Number`      IS A STRING
+        `Cap Table`           IS A LIST OF `Cap Table Entry`
+
+DECLARE NaturalPerson
+    HAS name           IS A STRING
+        title          IS A MAYBE STRING   
+        address        IS A MAYBE STRING
+        jurisdiction   IS A MAYBE STRING
+        id_number      IS A MAYBE STRING
+
+DECLARE Investor IS ONE OF
+   InvNP HAS np IS A NaturalPerson
+   InvCo HAS nc IS A Company
+
+-- IMPORT Notices
+GIVEN c IS A LIST OF Document
+      inv IS AN Investor
+executed MEANS all (GIVEN d IS A Document YIELD is_signed_by d inv) c
+  WHERE
+    GIVEN d IS A Document
+          i IS AN Investor
+    is_signed_by MEANS
+      any (GIVEN s IS AN Investor YIELD s EQUALS i) (d's signatures)
+
+DECLARE Notice IS A Document
+
+-- IMPORT ActionEventTraces
+DECLARE Event
+    HAS name        IS A  STRING
+        action      IS AN Action
+        description IS A  MAYBE STRING
+        date        IS A  Date
+
+DECLARE Action IS A STRING
+
+DECLARE Date
+    HAS year  IS A NUMBER
+        month IS A NUMBER
+        day   IS A NUMBER
+
+DECLARE Document
+    HAS contents   IS A STRING
+        signatures IS A LIST OF Investor
+        date       IS A Date
+
 § SAFE
 
 §§ Colophon
@@ -33,19 +83,7 @@ GIVETH A `Agreement Template`
 
 §§ Parties
 
-DECLARE Investor
-    HAS name           IS A STRING         -- name : String
-        title          IS A MAYBE STRING   
-        address        IS A MAYBE STRING
-        jurisdiction   IS A MAYBE STRING   -- jurisdiction ?: String
-        company_number IS A MAYBE STRING
 
-DECLARE Company
-    HAS `Name`                IS A STRING
-        `Address`             IS A STRING
-        `State`               IS A STRING
-        `Company Number`      IS A STRING
-        `Cap Table`           IS A LIST OF `Cap Table Entry`
 
 -- class methods, or maybe a $_
 GIVEN Company IS A Company
@@ -98,12 +136,16 @@ DECIDE acme IS
   Company WITH
     `Name`           IS "Acme Inc."
     `Address`        IS "123 Acme St, Singapore"
-    `State`          IS "Singapore"
+    `Jurisdiction`   IS "Singapore"
     `Company Number` IS "12345678"
-    `Cap Table`      IS (LIST investor1)
-  WHERE
-    investor1 MEANS `Cap Table Entry` WITH Holder   IS Investor OF "Meng", JUST "Mister", JUST "23 Sentosa Way", JUST "Singapore", JUST "SG12345678"
-                                           Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 100
+    `Cap Table`      IS LIST `Cap Table Entry` WITH Holder   IS InvNP OF NaturalPerson OF "Meng"
+                                                                                          JUST "Mister"
+                                                                                          JUST "23 Sentosa Way"
+                                                                                          JUST "Singapore"
+                                                                                          JUST "SG12345678"
+                                                    Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 123
+                             `Cap Table Entry` WITH Holder   IS InvNP OF NaturalPerson OF "Thomas", JUST "Meister", JUST "32 Eastville West", JUST "Singapore", JUST "DE12345678"
+                                                    Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 234
 
 
 §§ `Key Parameters`
@@ -121,8 +163,11 @@ DECLARE `Pre-Money Valuation`  IS A Money
 -- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
 --      on the initial closing of such Equity Financing,
 --      this Safe will automatically convert into the greater of:
---         (1) the number of Standard Preference Shares equal to the Purchase Amount divided by the lowest price per share of the Standard Preference Shares; or
---         (2) the number of Safe Preference Shares equal to the Purchase Amount divided by the Safe Price.
+--         (1) the number of Standard Preference Shares equal to
+--                 the Purchase Amount divided by
+--                 the lowest price per share of the Standard Preference Shares; or
+--         (2) the number of Safe Preference Shares equal to
+--                 the Purchase Amount divided by the Safe Price.
 -- In connection with the automatic conversion of this Safe into Standard Preference Shares or Safe Preference Shares,
 -- the Investor will execute and deliver to the Company all of the transaction documents related to the Equity Financing;
 --    provided, that such documents (i) are the same documents to be entered into with the purchasers of Standard Preference Shares,
@@ -134,37 +179,25 @@ DECLARE `Pre-Money Valuation`  IS A Money
 -- we rewrite the cap table
 -- and we generate some paperwork that the investor MUST sign
 -- and if the investor doesn't sign, the investor is not entitled to the shares
-
-DECLARE Notice
-    HAS contents IS A STRING
-
-DECLARE Event
-    HAS name IS A STRING
-        description IS A STRING
-
+        
 GIVEN trace IS A LIST OF Event
 DECIDE `Equity Financing Event` IF
    filter OF (GIVEN e YIELD e's name EQUALS "Equity Financing")
              trace
 
 -- GIVEN `startup` IS A Company
--- UPON `Equity Financing Event` -- some predicate run over the contract trace returns true
--- UPDATE   `rewrite cap table` -- is a State-like modifier
--- ALSO     PARTY startup
---           MUST NOTIFY `Investor`
---                  WITH Notice WITH
---                         contents IS "please sign this stack of documents"
---          HENCE PARTY Investor
+--       trace IS A LIST OF Event
+-- UPON `Equity Financing Event` trace
+-- THEN  `rewrite cap table`
+--  AND     PARTY  startup
+--          MUST   NOTIFY  `Investor`
+--                   WITH  Notice WITH
+--                           contents IS "please sign this stack of documents"
+--          HENCE PARTY investor
 --                 MUST NOTIFY startup
---                        WITH executed contents
+--                        WITH `executed by` contents investor
 --   WHERE
---     GIVEN c IS A LIST OF Document
---     executed MEANS
---       all is_signed_by Investor
--- 
---     GIVEN d IS A Document
---     is_signed_by MEANS
---       any (GIVEN s IS A Signature YIELD s EQUALS Investor) (d's signatures)
+
 
 §§§ `Liquidity Event`
 §§§ `Dissolution Event`
@@ -172,6 +205,10 @@ DECIDE `Equity Financing Event` IF
 
 §§ Definitions
 
+-- 	“Equity Financing” means a bona fide transaction or series of transactions
+--                             with the principal purpose of raising capital,
+--                           pursuant to which the Company issues and sells Preference Shares at a fixed valuation,
+--                             including but not limited to, a pre-money or post-money valuation.
 
 
 -- 	“Change of Control” means
