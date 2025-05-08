@@ -1,0 +1,182 @@
+-- metadata asdfasdfasdlkfj
+
+IMPORT Prelude
+
+-- IMPORT Money
+DECLARE Money
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+§ SAFE
+
+§§ Colophon
+
+DECLARE SafeType IS ONE OF
+    `SAFT`
+    `SAFE`
+    `SAFE+`
+    `SAFE+ (Post-Money)`
+    `SAFE (Post-Money)`
+    `SAFE (Post-Money) (with MFN)`
+
+DECLARE `Agreement Template`
+    HAS jurisdiction IS A STRING
+        version      IS A STRING
+        safeType     IS A SafeType
+
+GIVETH A `Agreement Template`
+`about this document` MEANS
+  `Agreement Template` WITH
+    jurisdiction IS "Singapore"
+    version      IS "1.2"
+    safeType     IS `SAFE (Post-Money)`
+
+§§ Parties
+
+DECLARE Investor
+    HAS name           IS A STRING         -- name : String
+        title          IS A MAYBE STRING   
+        address        IS A MAYBE STRING
+        jurisdiction   IS A MAYBE STRING   -- jurisdiction ?: String
+        company_number IS A MAYBE STRING
+
+DECLARE Company
+    HAS `Name`                IS A STRING
+        `Address`             IS A STRING
+        `State`               IS A STRING
+        `Company Number`      IS A STRING
+        `Cap Table`           IS A LIST OF `Cap Table Entry`
+
+DECLARE `Security Type` IS ONE OF
+    `Shares`
+    `Convertible Notes`
+    `Warrants`
+    `Options`
+    `SAFE`
+    `KISS`
+
+DECLARE `Number of Shares`
+    HAS n IS A NUMBER
+DECLARE `Dollar Amount`
+    HAS n IS A Money
+DECLARE `Security Quantity` IS ONE OF
+    `Number of Shares`
+    `Dollar Amount`
+
+ns MEANS `Number of Shares` WITH n IS 100
+nd MEANS `Dollar Amount` WITH n IS Money WITH amount IS 1000, currency IS "SGD"
+
+
+-- [TODO] help! how to do this?
+sq MEANS `Security Quantity` 
+    `Number of Shares` IS ns
+
+DECLARE Security
+    HAS `Instrument`     IS A `Security Type`
+        `Name`           IS A STRING -- e.g. "Class A", "Class B", "SAFE", "KISS"
+        `Quantity`       IS A `Security Quantity`
+
+DECLARE `Cap Table Entry`
+    HAS `Holder`       IS A Investor
+        `Sec`          IS A Security
+
+-- sample startup
+DECIDE acme IS
+  Company WITH
+    `Name`           IS "Acme Inc."
+    `Address`        IS "123 Acme St, Singapore"
+    `State`          IS "Singapore"
+    `Company Number` IS "12345678"
+    `Cap Table`      IS (LIST investor1)
+  WHERE
+    investor1 MEANS `Cap Table Entry` WITH Holder   IS Investor OF "Meng", JUST "Mister", JUST "23 Sentosa Way", JUST "Singapore", JUST "SG12345678"
+                                           Sec      IS Security OF `Shares`, "ordinary", `Security Quantity` OF (`Number of Shares` WITH n IS 100)
+
+
+§§ `Key Parameters`
+
+DECLARE `Valuation Cap`        IS A Money
+DECLARE `Discount Rate`        IS A NUMBER -- out of 100
+DECLARE `Investment Amount`    IS A Money
+DECLARE `Post-Money Valuation` IS A Money
+DECLARE `Pre-Money Valuation`  IS A Money
+
+§§ `Events`
+
+§§§ `Equity Financing`
+
+-- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
+--      on the initial closing of such Equity Financing,
+--      this Safe will automatically convert into the greater of:
+--         (1) the number of Standard Preference Shares equal to the Purchase Amount divided by the lowest price per share of the Standard Preference Shares; or
+--         (2) the number of Safe Preference Shares equal to the Purchase Amount divided by the Safe Price.
+-- In connection with the automatic conversion of this Safe into Standard Preference Shares or Safe Preference Shares,
+-- the Investor will execute and deliver to the Company all of the transaction documents related to the Equity Financing;
+--    provided, that such documents (i) are the same documents to be entered into with the purchasers of Standard Preference Shares,
+--                                      with appropriate variations for the Safe Preference Shares if applicable,
+--                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
+--                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
+
+-- what do we actually do here?
+-- we rewrite the cap table
+-- and we generate some paperwork that the investor MUST sign
+-- and if the investor doesn't sign, the investor is not entitled to the shares
+
+DECLARE Notice
+    HAS contents IS A STRING
+
+GIVEN `startup` IS A Company
+UPON `Equity Financing`
+UPDATE   `rewrite cap table`
+ALSO     PARTY startup
+          MUST NOTIFY `Investor`
+                 WITH Notice WITH
+                        contents IS "please sign this stack of documents"
+         HENCE PARTY Investor
+                MUST NOTIFY startup
+                       WITH executed contents
+  WHERE
+    GIVEN c IS A LIST OF Document
+    executed MEANS
+      all is_signed_by Investor
+
+    GIVEN d IS A Document
+    is_signed_by MEANS
+      any (GIVEN s IS A Signature YIELD s EQUALS Investor) (d's signatures)
+§§§ `Liquidity Event`
+§§§ `Dissolution Event`
+§§§ `Termination Event`
+
+§§ Definitions
+
+-- [TODO] need help with this please
+
+-- GIVEN startup IS A Company
+-- `Capital Shares` MEANS SUM OF MAP    (GIVEN cte YIELD cte's Security's Quantity)
+--                               FILTER (GIVEN cte YIELD cte's Security's Instrument EQUALS `Shares`)
+--                               (startup's `Cap Table`)
+-- 
+
+
+-- 	“Change of Control” means
+-- (i)   a transfer  (whether  by merger,  consolidation, exchange  or  otherwise),  in  one  transaction  or  a  series  of related transactions, to a person or group of affiliated persons (other than an underwriter of the Company’s securities), of the Company’s securities or Capital Shares
+--       if, after such closing, such person or group of affiliated persons would hold at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity,
+-- (ii)  any reorganization, scheme of arrangement, merger, amalgamation or other consolidation of the Company, other than a transaction or series of related transactions in which the holders of the voting securities of the Company outstanding immediately prior to such transaction or series of related transactions retain, immediately after such transaction or series of related transactions, at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity or
+-- (iii) a sale, lease or other disposition of all or substantially all of the assets of the Group Companies.
+
+-- a transfer is composed of one or more transactions that affect the cap table in some way
+
+
+--GIVEN `startup before`  IS A Company
+--      events            IS LIST OF Event
+--`Change of Control` MEANS
+--  NOT          `controller of` `startup before`
+--       EQUALS  `controller of` `startup after`
+--  WHERE
+
+§§ `Company Representations`
+
+§§ `Investor Representations`
+
+§§ `Miscellaneous`
+
