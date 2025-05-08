@@ -13,8 +13,8 @@ import Optics
 import qualified Language.LSP.Protocol.Types as LSP
 
 data RenderAsLadderInfo = MkRenderAsLadderInfo
-  { verDocId :: LSP.VersionedTextDocumentIdentifier
-  , funDecl      :: FunDecl
+  { verDocId  :: LSP.VersionedTextDocumentIdentifier
+  , funDecl   :: FunDecl
   }
   deriving stock (Show, Generic, Eq)
 
