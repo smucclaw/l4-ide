@@ -30,6 +30,7 @@ import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
 import qualified LSP.L4.Viz.Ladder as Ladder
+import qualified LSP.L4.Viz.VizExpr as Ladder
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -112,7 +113,7 @@ visualise
 visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
   let uri = verTextDocId._uri
 
-  -- Try to pinpoint a Decide based on how the command was issued (autorefresh vs code action/code lens)
+  -- Try to pinpoint a Decide (and VizEnv) based on how the command was issued (autorefresh vs code action/code lens)
   mdecide :: Maybe (Decide Resolved, Ladder.VizEnv) <- case msrcPos of
     -- a. the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
@@ -121,7 +122,8 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      pure (decide, Ladder.mkVizEnv verTextDocId tcRes.substitution recentlyVisualised.simplify)
+      let newVizEnv = updateVizEnv verTextDocId tcRes recentlyVisualised
+      pure (decide, newVizEnv)
 
     -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
@@ -137,17 +139,24 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  -- | Makes a 'RecentlyVisualised' record iff the given 'Decide' has a valid range and a resolved type.
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizEnv
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution vizEnv.substitution (toNormalizedUri uri) ty, simplify = vizEnv.shouldSimplify}
-      recentlyVisualisedDecide _ _ = Nothing
+  -- Makes a 'RecentlyVisualised' record iff the given 'Decide' has a valid range and a resolved type.
+  -- Assumes the given vizEnv is up-to-date.
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizEnv funDecl
+        = Just RecentlyVisualised 
+          { pos = range.start
+          , name = rawName $ getName appform
+          , type' = applyFinalSubstitution vizEnv.substitution vizEnv.moduleUri ty
+          , funDecl = funDecl
+          , vizEnv = vizEnv
+          }
+      recentlyVisualisedDecide _ _ _ = Nothing
 
   case mdecide of
     Nothing -> pure (InR Null)
     Just (decide, vizEnv) ->
       case Ladder.doVisualize decide vizEnv of
         Right vizProgramInfo -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizEnv
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizEnv vizProgramInfo.funDecl
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
@@ -156,6 +165,11 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
             , Ladder.prettyPrintVizError vizError
             ]
   where
+    {- | Make a new VizEnv by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizEnv) 
+    with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
+    updateVizEnv :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizEnv
+    updateVizEnv verTxtDocId tcRes recentlyVisualised =
+      Ladder.mkVizEnv verTxtDocId tcRes.substitution recentlyVisualised.vizEnv.shouldSimplify
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
