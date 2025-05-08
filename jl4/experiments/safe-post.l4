@@ -47,6 +47,19 @@ DECLARE Company
         `Company Number`      IS A STRING
         `Cap Table`           IS A LIST OF `Cap Table Entry`
 
+-- class methods, or maybe a $_
+GIVEN Company IS A Company
+`Capital Shares` MEANS
+    sum OF
+      map OF
+        GIVEN cte YIELD getNum OF cte's Sec's Quantity
+        filter OF
+           GIVEN cte YIELD cte's Sec's Instrument EQUALS `Shares`
+           Company's `Cap Table`
+-- we want to be able to say, later,
+GIVEN c IS A Company
+cs MEANS c's `Capital Shares`
+
 DECLARE `Security Type` IS ONE OF
     `Shares`
     `Convertible Notes`
@@ -55,21 +68,21 @@ DECLARE `Security Type` IS ONE OF
     `SAFE`
     `KISS`
 
-DECLARE `Number of Shares`
-    HAS n IS A NUMBER
-DECLARE `Dollar Amount`
-    HAS n IS A Money
 DECLARE `Security Quantity` IS ONE OF
-    `Number of Shares`
-    `Dollar Amount`
+    `Number of Shares` HAS n IS A NUMBER
+    `Dollar Amount`    HAS m IS A Money
+
+GIVEN sq IS A `Security Quantity`
+getNum MEANS
+  CONSIDER sq
+      WHEN `Number of Shares` n THEN n
+      WHEN `Dollar Amount`    m THEN m's amount
 
 ns MEANS `Number of Shares` WITH n IS 100
-nd MEANS `Dollar Amount` WITH n IS Money WITH amount IS 1000, currency IS "SGD"
+nd MEANS `Dollar Amount` WITH m IS Money WITH amount IS 1000, currency IS "SGD"
 
-
--- [TODO] help! how to do this?
-sq MEANS `Security Quantity` 
-    `Number of Shares` IS ns
+sq1 MEANS `Number of Shares` 102
+sq2 MEANS `Dollar Amount` OF Money WITH amount IS 1000, currency IS "SGD"
 
 DECLARE Security
     HAS `Instrument`     IS A `Security Type`
@@ -90,7 +103,7 @@ DECIDE acme IS
     `Cap Table`      IS (LIST investor1)
   WHERE
     investor1 MEANS `Cap Table Entry` WITH Holder   IS Investor OF "Meng", JUST "Mister", JUST "23 Sentosa Way", JUST "Singapore", JUST "SG12345678"
-                                           Sec      IS Security OF `Shares`, "ordinary", `Security Quantity` OF (`Number of Shares` WITH n IS 100)
+                                           Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 100
 
 
 §§ `Key Parameters`
@@ -125,38 +138,40 @@ DECLARE `Pre-Money Valuation`  IS A Money
 DECLARE Notice
     HAS contents IS A STRING
 
-GIVEN `startup` IS A Company
-UPON `Equity Financing`
-UPDATE   `rewrite cap table`
-ALSO     PARTY startup
-          MUST NOTIFY `Investor`
-                 WITH Notice WITH
-                        contents IS "please sign this stack of documents"
-         HENCE PARTY Investor
-                MUST NOTIFY startup
-                       WITH executed contents
-  WHERE
-    GIVEN c IS A LIST OF Document
-    executed MEANS
-      all is_signed_by Investor
+DECLARE Event
+    HAS name IS A STRING
+        description IS A STRING
 
-    GIVEN d IS A Document
-    is_signed_by MEANS
-      any (GIVEN s IS A Signature YIELD s EQUALS Investor) (d's signatures)
-      
+GIVEN trace IS A LIST OF Event
+DECIDE `Equity Financing Event` IF
+   filter OF (GIVEN e YIELD e's name EQUALS "Equity Financing")
+             trace
+
+-- GIVEN `startup` IS A Company
+-- UPON `Equity Financing Event` -- some predicate run over the contract trace returns true
+-- UPDATE   `rewrite cap table` -- is a State-like modifier
+-- ALSO     PARTY startup
+--           MUST NOTIFY `Investor`
+--                  WITH Notice WITH
+--                         contents IS "please sign this stack of documents"
+--          HENCE PARTY Investor
+--                 MUST NOTIFY startup
+--                        WITH executed contents
+--   WHERE
+--     GIVEN c IS A LIST OF Document
+--     executed MEANS
+--       all is_signed_by Investor
+-- 
+--     GIVEN d IS A Document
+--     is_signed_by MEANS
+--       any (GIVEN s IS A Signature YIELD s EQUALS Investor) (d's signatures)
+
 §§§ `Liquidity Event`
 §§§ `Dissolution Event`
 §§§ `Termination Event`
 
 §§ Definitions
 
--- [TODO] need help with this please
-
--- GIVEN startup IS A Company
--- `Capital Shares` MEANS SUM OF MAP    (GIVEN cte YIELD cte's Security's Quantity)
---                               FILTER (GIVEN cte YIELD cte's Security's Instrument EQUALS `Shares`)
---                               (startup's `Cap Table`)
--- 
 
 
 -- 	“Change of Control” means
