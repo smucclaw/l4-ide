@@ -143,92 +143,93 @@ pattern Done :: WHNF -> Machine Config
 pattern Done whnf = Config (DoneMachine whnf)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
-forwardExpr env (And _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-forwardExpr env (Or _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
-forwardExpr env (Implies _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
-forwardExpr env (Not _ann e) =
-  ForwardExpr env (IfThenElse emptyAnno e falseExpr trueExpr)
-forwardExpr env (Equals _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpEquals e2 env)
-  ForwardExpr env e1
-forwardExpr env (Plus _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpPlus e2 env)
-  ForwardExpr env e1
-forwardExpr env (Minus _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpMinus e2 env)
-  ForwardExpr env e1
-forwardExpr env (Times _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpTimes e2 env)
-  ForwardExpr env e1
-forwardExpr env (DividedBy _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpDividedBy e2 env)
-  ForwardExpr env e1
-forwardExpr env (Modulo _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpModulo e2 env)
-  ForwardExpr env e1
-forwardExpr env (Leq _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpLeq e2 env)
-  ForwardExpr env e1
-forwardExpr env (Geq _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpGeq e2 env)
-  ForwardExpr env e1
-forwardExpr env (Lt _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpLt e2 env)
-  ForwardExpr env e1
-forwardExpr env (Gt _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpGt e2 env)
-  ForwardExpr env e1
-forwardExpr env (Proj _ann e l) =
-  ForwardExpr env (App emptyAnno l [e]) -- we desugar projection to plain function application
-forwardExpr env (Var _ann n) = -- still problematic: similarity / overlap between this and App with no args
-  expectTerm env n >>= EvalRef
-forwardExpr env (Cons _ann e1 e2) = do
-  rf1 <- allocate_ e1 env
-  rf2 <- allocate_ e2 env
-  Backward (ValCons rf1 rf2)
-forwardExpr env (Lam _ann givens e) =
-  Backward (ValClosure givens e env)
-forwardExpr env (App _ann n []) =
-  expectTerm env n >>= EvalRef
-forwardExpr env (App _ann n es@(_ : _)) = do
-  rs <- traverse (`allocate_` env) es
-  PushFrame (App1 rs)
-  ForwardExpr env (Var emptyAnno n)
-forwardExpr env (AppNamed ann n [] _) =
-  ForwardExpr env (App ann n [])
-forwardExpr _env (AppNamed _ann _n _nes Nothing) =
-  InternalException $ RuntimeTypeError
-    "named application where the order of arguments is not resolved"
-forwardExpr env (AppNamed ann n nes (Just order)) =
-  let
-    -- move expressions into order, drop names
-    es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
-  in
-    ForwardExpr env (App ann n es)
-forwardExpr env (IfThenElse _ann e1 e2 e3) = do
-  PushFrame (IfThenElse1 e2 e3 env)
-  ForwardExpr env e1
-forwardExpr env (Consider _ann e branches) = do
-  rf <- allocate_ e env
-  matchBranches rf env branches
-forwardExpr _env (Lit _ann lit) = do
-  rval <- runLit lit
-  Backward rval
-forwardExpr _env (List _ann []) =
-  Backward ValNil
-forwardExpr env (List _ann (e : es)) =
-  ForwardExpr env (Cons emptyAnno e (List emptyAnno es))
-forwardExpr env (Where _ann e ds) = do
-  env' <- evalRecLocalDecls env ds
-  let combinedEnv = Map.union env' env
-  ForwardExpr combinedEnv e
-forwardExpr env (Regulative _ann (MkObligation _ party action due followup)) = do
-  Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup))
-forwardExpr env (Event _ann ev) =
-  ForwardExpr env (desugarEvent ev)
+forwardExpr env = \case
+  And _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
+  Implies _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
+  Not _ann e ->
+    ForwardExpr env (IfThenElse emptyAnno e falseExpr trueExpr)
+  Equals _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpEquals e2 env)
+    ForwardExpr env e1
+  Plus _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpPlus e2 env)
+    ForwardExpr env e1
+  Minus _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpMinus e2 env)
+    ForwardExpr env e1
+  Times _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpTimes e2 env)
+    ForwardExpr env e1
+  DividedBy _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpDividedBy e2 env)
+    ForwardExpr env e1
+  Modulo _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpModulo e2 env)
+    ForwardExpr env e1
+  Leq _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpLeq e2 env)
+    ForwardExpr env e1
+  Geq _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpGeq e2 env)
+    ForwardExpr env e1
+  Lt _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpLt e2 env)
+    ForwardExpr env e1
+  Gt _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpGt e2 env)
+    ForwardExpr env e1
+  Proj _ann e l ->
+    ForwardExpr env (App emptyAnno l [e]) -- we desugar projection to plain function application
+  Var _ann n -> -- still problematic: similarity / overlap between this and App with no args
+    expectTerm env n >>= EvalRef
+  Cons _ann e1 e2 -> do
+    rf1 <- allocate_ e1 env
+    rf2 <- allocate_ e2 env
+    Backward (ValCons rf1 rf2)
+  Lam _ann givens e ->
+    Backward (ValClosure givens e env)
+  App _ann n [] ->
+    expectTerm env n >>= EvalRef
+  App _ann n es@(_ : _) -> do
+    rs <- traverse (`allocate_` env) es
+    PushFrame (App1 rs)
+    ForwardExpr env (Var emptyAnno n)
+  AppNamed ann n [] _ ->
+    ForwardExpr env (App ann n [])
+  AppNamed _ann _n _nes Nothing ->
+    InternalException $ RuntimeTypeError
+      "named application where the order of arguments is not resolved"
+  AppNamed ann n nes (Just order) ->
+    let
+     -- move expressions into order, drop names
+      es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
+    in
+      ForwardExpr env (App ann n es)
+  IfThenElse _ann e1 e2 e3 -> do
+    PushFrame (IfThenElse1 e2 e3 env)
+    ForwardExpr env e1
+  Consider _ann e branches -> do
+    rf <- allocate_ e env
+    matchBranches rf env branches
+  Lit _ann lit -> do
+    rval <- runLit lit
+    Backward rval
+  List _ann [] ->
+    Backward ValNil
+  List _ann (e : es) ->
+    ForwardExpr env (Cons emptyAnno e (List emptyAnno es))
+  Where _ann e ds -> do
+    env' <- evalRecLocalDecls env ds
+    let combinedEnv = Map.union env' env
+    ForwardExpr combinedEnv e
+  Regulative _ann (MkObligation _ party action due followup) -> do
+    Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup))
+  Event _ann ev ->
+    ForwardExpr env (desugarEvent ev)
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -243,7 +244,7 @@ backward val = WithPoppedFrame $ \ case
       ValClosure givens e env' -> do
         env'' <- matchGivens givens f rs
         ForwardExpr (Map.union env'' env') e
-      ValUnappliedConstructor r -> do
+      ValUnappliedConstructor r ->
         Backward (ValConstructor r rs)
       ValObligation env party act due followup -> do
         (events, time) <- case rs of
@@ -315,7 +316,7 @@ backward val = WithPoppedFrame $ \ case
                 pairs = zip rfs ps
               in
                 case pairs of
-                  []             -> backward (ValEnvironment Map.empty)
+                  []             -> Backward (ValEnvironment Map.empty)
                   ((r, p) : rps) -> do
                     PushFrame (PatApp1 [] rps)
                     matchPattern r p
@@ -401,7 +402,7 @@ backwardContractFrame val = \case
       Just True -> case due of
         Just due' -> do
           pushCFrame (Contract7 StampWHNF {..})
-          forwardExpr env due'
+          ForwardExpr env due'
         Nothing -> continueWithFollowup env followup events ev'time
       Just False -> continueWithNextEvent ScrutEvents {party = Left party, act = Left act, ..} events
   Contract7 StampWHNF {..} -> do
@@ -420,7 +421,7 @@ backwardContractFrame val = \case
     time <- assertTime val
     let deadline = time + due'
     if stamp > deadline
-      then backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
+      then Backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
       else do
         -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
         timeR <- AllocateValue ev'time
@@ -565,7 +566,7 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
       pairs = zip rs1 rs2
     in
       case pairs of
-        [] -> backward $ ValBool True
+        [] -> Backward $ ValBool True
         ((r1, r2) : rss) -> do
           PushFrame (EqConstructor1 r2 rss)
           EvalRef r1
@@ -639,7 +640,7 @@ updateThunkToWHNF rf v =
 evalRef :: Reference -> Machine Config
 evalRef rf =
   join $ PokeThunk rf \tid -> \case
-    thunk@(WHNF val) -> (thunk, backward val)
+    thunk@(WHNF val) -> (thunk, Backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids ->  (thunk, UserException (BlackholeForced e))
       | otherwise -> (Unevaluated (Set.insert tid tids) e env, PushFrame (UpdateThunk rf) *> ForwardExpr env e)
