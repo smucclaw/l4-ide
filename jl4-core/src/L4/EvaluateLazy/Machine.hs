@@ -103,14 +103,7 @@ instance Applicative Machine where
   pure = Config
 
 instance Monad Machine where
-  Config a >>= k = k a
-  Exception e >>= _k = Exception e
-  WithPoppedFrame k' >>= k = WithPoppedFrame (k' >=> k)
-  PushFrame a >>= k = Bind (PushFrame a) (\_ -> k ())
-  Allocate' a >>= k = Bind (Allocate' a) k
-  PokeThunk rf k' >>= k = Bind (PokeThunk rf k') k
-  NewUnique >>= k = Bind NewUnique k
-  Bind m k' >>= k = Bind m (k' >=> k)
+  (>>=) = Bind
 
 pattern Allocate :: Expr Resolved -> (Reference -> Environment) -> Machine (Reference, Environment)
 pattern Allocate expr k = Allocate' (Recursive expr k)
@@ -531,6 +524,7 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
           PushFrame (EqConstructor1 r2 rss)
           EvalRef r1
   | otherwise                                           = Backward $ ValBool False
+-- TODO: we probably also want to check ValObligations for equality
 runBinOpEquals _                       _                = UserException EqualityOnUnsupportedType
 
 pattern ValBool :: Bool -> WHNF
