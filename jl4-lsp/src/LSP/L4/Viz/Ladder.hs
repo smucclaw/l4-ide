@@ -10,7 +10,8 @@ module LSP.L4.Viz.Ladder (
   mkVizEnv,
 
   -- * Helpers
-  prettyPrintVizError
+  prettyPrintVizError,
+  lookupApp
   ) where
 
 import Control.DeepSeq
@@ -106,14 +107,13 @@ getShouldSimplify = do
   env <- getVizEnv
   pure env.shouldSimplify
 
--- lookupApp :: V.ID -> Viz (Maybe (Expr Resolved))
--- lookupApp id = do
---   appExprs <- use #appExprs
---   pure $ Map.lookup id.id appExprs
-
 storeApp :: V.ID -> Expr Resolved -> Viz ()
 storeApp vid expr = do
   #appExprs %= Map.insert vid.id expr
+
+-- | Helper
+lookupApp :: V.ID -> VizState -> Maybe (Expr Resolved)
+lookupApp vid vs = Map.lookup vid.id vs.appExprs
 
 ------------------------------------------------------
 -- VizError
@@ -139,7 +139,7 @@ prettyPrintVizError = \ case
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
 doVisualize :: Decide Resolved -> VizEnv -> Either VizError (RenderAsLadderInfo, VizState)
-doVisualize decide env = 
+doVisualize decide env =
   let (result, vizState) = (vizProgram decide).getVizE (mkInitialVizState env)
   in case result of
     Left err         -> Left err
