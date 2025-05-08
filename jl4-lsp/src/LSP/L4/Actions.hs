@@ -111,8 +111,10 @@ visualise
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
 visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
   let uri = verTextDocId._uri
+
+  -- Try to pinpoint a Decide based on how the command was issued (autorefresh vs code action/code lens)
   mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
-    -- the command was issued by the button in vscode or autorefresh
+    -- a. the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
@@ -121,7 +123,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
       pure (decide, recentlyVisualised.simplify, tcRes.substitution)
 
-    -- the command was issued by a code action or codelens
+    -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
       tcRes <- do
         case mtcRes of
@@ -133,6 +135,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
+  -- | Makes a 'RecentlyVisualised' record iff the given 'Decide' has a valid range and a resolved type.
   let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
         = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
       recentlyVisualisedDecide _ _ _ = Nothing
