@@ -113,7 +113,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
   let uri = verTextDocId._uri
 
   -- Try to pinpoint a Decide based on how the command was issued (autorefresh vs code action/code lens)
-  mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
+  mdecide :: Maybe (Decide Resolved, Ladder.VizEnv) <- case msrcPos of
     -- a. the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
@@ -121,7 +121,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
+      pure (decide, Ladder.mkVizEnv verTextDocId tcRes.substitution recentlyVisualised.simplify)
 
     -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
@@ -130,22 +130,24 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
-        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
+        [decide] -> 
+          let vizEnv = Ladder.mkVizEnv verTextDocId tcRes.substitution simp
+          in pure $ Just (decide, vizEnv)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
   -- | Makes a 'RecentlyVisualised' record iff the given 'Decide' has a valid range and a resolved type.
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
-      recentlyVisualisedDecide _ _ _ = Nothing
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizEnv
+        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution vizEnv.substitution (toNormalizedUri uri) ty, simplify = vizEnv.shouldSimplify}
+      recentlyVisualisedDecide _ _ = Nothing
 
   case mdecide of
     Nothing -> pure (InR Null)
-    Just (decide, simp, substitution) ->
-      case Ladder.doVisualize decide (Ladder.mkVizEnv verTextDocId substitution simp) of
+    Just (decide, vizEnv) ->
+      case Ladder.doVisualize decide vizEnv of
         Right vizProgramInfo -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizEnv
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
