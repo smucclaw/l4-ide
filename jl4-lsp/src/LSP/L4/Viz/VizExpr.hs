@@ -42,6 +42,7 @@ data IRExpr
   | App ID Name [IRExpr]
   deriving (Show, Eq, Generic)
 
+{- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
 newtype ID = MkID
   { id :: Int
   }
