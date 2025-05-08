@@ -219,7 +219,7 @@ DECIDE `Equity Financing Event` IF
 
 -- a transfer is composed of one or more transactions that affect the cap table in some way
 
-
+-- we need list-splitOn semantics
 --GIVEN `startup before`  IS A Company
 --      events            IS LIST OF Event
 --`Change of Control` MEANS
