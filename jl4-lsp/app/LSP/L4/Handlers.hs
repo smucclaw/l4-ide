@@ -333,13 +333,34 @@ handlers recorder =
         pure (Right (InL locs))
 
     -- custom requests
-    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \_ide params -> do
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
         let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
         case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
           Aeson.Success evalParams -> do
             logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
-            -- Haven't implemented the actual call to eval yet; just returning null for now
-            pure $ Right Aeson.Null
+
+            mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
+            case mRecentViz of
+              Nothing ->
+                pure $ Left $ TResponseError
+                  { _code = InR ErrorCodes_InvalidRequest
+                  , _message = "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
+                  , _xdata = Nothing
+                  }
+              Just recentViz -> do
+                let clientVersion = evalParams.verDocId._version
+                    serverVersion = recentViz.vizEnv.verTxtDocId._version
+
+                if clientVersion == serverVersion then
+                  -- Haven't implemented the actual call to eval yet; just returning null for now
+                  pure $ Right Aeson.Null
+                else 
+                  pure $ Left $ TResponseError
+                                  { _code = InL LSPErrorCodes_ContentModified
+                                  , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show clientVersion) <>
+                                              ", whereas server's version is: " <> Text.pack (show serverVersion)
+                                  , _xdata = Nothing
+                                  }
           Aeson.Error err -> do
             pure $ Left $ TResponseError
               { _code = InR ErrorCodes_InvalidRequest
