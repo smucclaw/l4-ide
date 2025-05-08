@@ -132,7 +132,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
-        [decide] -> 
+        [decide] ->
           let vizEnv = Ladder.mkVizEnv verTextDocId tcRes.substitution simp
           in pure $ Just (decide, vizEnv)
         -- NOTE: if this becomes a problem, we should use
@@ -141,13 +141,13 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
 
   -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
   -- Assumes the given vizEnv is up-to-date.
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizEnv funDecl
-        = Just RecentlyVisualised 
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState funDecl
+        = Just RecentlyVisualised
           { pos = range.start
           , name = rawName $ getName appform
-          , type' = applyFinalSubstitution vizEnv.substitution vizEnv.moduleUri ty
+          , type' = applyFinalSubstitution vizState.env.substitution vizState.env.moduleUri ty
           , funDecl = funDecl
-          , vizEnv = vizEnv
+          , vizState = vizState
           }
       recentlyVisualisedDecide _ _ _ = Nothing
 
@@ -155,8 +155,8 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
     Nothing -> pure (InR Null)
     Just (decide, vizEnv) ->
       case Ladder.doVisualize decide vizEnv of
-        Right vizProgramInfo -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizEnv vizProgramInfo.funDecl
+        Right (vizProgramInfo, vizState) -> do
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState vizProgramInfo.funDecl
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
@@ -165,11 +165,11 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
             , Ladder.prettyPrintVizError vizError
             ]
   where
-    {- | Make a new VizEnv by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizEnv) 
+    {- | Make a new VizEnv by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizEnv)
     with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
     updateVizEnv :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizEnv
     updateVizEnv verTxtDocId tcRes recentlyVisualised =
-      Ladder.mkVizEnv verTxtDocId tcRes.substitution recentlyVisualised.vizEnv.shouldSimplify
+      Ladder.mkVizEnv verTxtDocId tcRes.substitution recentlyVisualised.vizState.env.shouldSimplify
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here

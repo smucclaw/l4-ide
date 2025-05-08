@@ -350,14 +350,22 @@ handlers recorder =
             mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
             case mRecentViz of
               Just recentViz
-                | evalParams.verDocId._version == recentViz.vizEnv.verTxtDocId._version ->
-                    -- Haven't implemented the actual call to eval yet; just returning null for now
-                    pure $ Right Aeson.Null
+                | evalParams.verDocId == recentViz.vizState.env.verTxtDocId -> do
+                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use GetLazyEvaluationDependencies recentViz.vizState.env.moduleUri
+                    case mEvalDeps of
+                      Nothing -> pure $ Left $ TResponseError
+                        { _code = InR ErrorCodes_InvalidRequest
+                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri recentViz.vizState.env.moduleUri).getUri
+                        , _xdata = Nothing
+                        }
+                      Just (_evalEnv, _) -> 
+                        -- evalApp evalParams recentViz evalEnv
+                        pure $ Right Aeson.Null
                 | otherwise -> -- Version mismatch
                     pure $ Left $ TResponseError
                        { _code = InL LSPErrorCodes_ContentModified
                        , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
-                                    ", whereas server's version is: " <> Text.pack (show recentViz.vizEnv.verTxtDocId._version)
+                                    ", whereas server's version is: " <> Text.pack (show recentViz.vizState.env.verTxtDocId._version)
                        , _xdata = Nothing
                        }
               Nothing -> -- impossible
