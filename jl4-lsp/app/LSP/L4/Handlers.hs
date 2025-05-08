@@ -349,27 +349,23 @@ handlers recorder =
 
             mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
             case mRecentViz of
+              Just recentViz
+                | evalParams.verDocId._version == recentViz.vizEnv.verTxtDocId._version ->
+                    -- Haven't implemented the actual call to eval yet; just returning null for now
+                    pure $ Right Aeson.Null
+                | otherwise -> -- Version mismatch
+                    pure $ Left $ TResponseError
+                       { _code = InL LSPErrorCodes_ContentModified
+                       , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
+                                    ", whereas server's version is: " <> Text.pack (show recentViz.vizEnv.verTxtDocId._version)
+                       , _xdata = Nothing
+                       }
               Nothing -> -- impossible
                 pure $ Left $ TResponseError
                   { _code = InR ErrorCodes_InvalidRequest
                   , _message = "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
                   , _xdata = Nothing
                   }
-                  
-              Just recentViz -> do
-                let clientVersion = evalParams.verDocId._version
-                    serverVersion = recentViz.vizEnv.verTxtDocId._version
-
-                if clientVersion == serverVersion then
-                  -- Haven't implemented the actual call to eval yet; just returning null for now
-                  pure $ Right Aeson.Null
-                else 
-                  pure $ Left $ TResponseError
-                                  { _code = InL LSPErrorCodes_ContentModified
-                                  , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show clientVersion) <>
-                                              ", whereas server's version is: " <> Text.pack (show serverVersion)
-                                  , _xdata = Nothing
-                                  }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
