@@ -15,21 +15,17 @@ concurrency:
 jobs:
   build-haskell:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
-    runs-on: self-hosted
-    container:
-      image: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
         ghc-version: ["9.6"]
+    runs-on: ${{ matrix.os }}
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
 
     steps:
-      - name: Update repositories
-        run: apt update
       - name: Install deps
         run: >
           apt install -y
@@ -47,14 +43,6 @@ jobs:
           zlib1g-dev
           liblzma-dev
           xz-utils
-      - name: Update git config
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      # FIXME: this is a temporary fix, the docker container should never be dirty
-      # at the begin of a run
-      - name: Remove cabal store
-        run: |
-          rm -rf ~/.cabal
-
       - uses: actions/checkout@v4
 
       - name: Update git submodules
@@ -71,7 +59,6 @@ jobs:
 
       - name: Configure the build
         run: |
-          cabal update
           cabal configure --enable-tests --enable-benchmarks --disable-documentation
           cabal build all --dry-run
         # The last step generates dist-newstyle/cache/plan.json for the cache key.
@@ -111,21 +98,13 @@ jobs:
 
   build-ts-monorepo:
     name: TS Monorepo (including VSCode Extension) ${{ matrix.node-version }} on ${{ matrix.os }}
-    runs-on: self-hosted
-    container:
-      image: ubuntu:24.04
     strategy:
       matrix:
         node-version: ["20.x"]
         os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Update repositories
-        run: apt update
-      - name: Install deps
-        run: apt install -y git sudo software-properties-common curl xvfb
-      - name: Update git config
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
       - name: Use Node.js
         uses: actions/setup-node@v4
