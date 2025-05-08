@@ -143,6 +143,7 @@ ALSO     PARTY startup
     GIVEN d IS A Document
     is_signed_by MEANS
       any (GIVEN s IS A Signature YIELD s EQUALS Investor) (d's signatures)
+      
 §§§ `Liquidity Event`
 §§§ `Dissolution Event`
 §§§ `Termination Event`
