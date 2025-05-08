@@ -274,19 +274,20 @@ jl4Rules rootDirectory recorder = do
         mkImportPath (MkImport a n _mr) = do
 
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-          paths <- fold <$> runMaybeT do
+          paths <- catMaybes <$> do
             -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-            relPath <- do
-              dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-              pure $ dir </> modName <.> "l4"
+            --
+            let relPath = do
+                  dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+                  pure $ dir </> modName <.> "l4"
 
             let rootPath = rootDirectory </> modName <.> "l4"
 
             builtinPath <- do
               dataDir <- liftIO Paths_jl4_core.getDataDir
               pure $ dataDir </> "libraries" </> modName <.> "l4"
-            pure [rootPath, relPath, builtinPath]
 
+            pure [Just rootPath, relPath, Just builtinPath]
 
           existingPaths <- runMaybeT do
 
