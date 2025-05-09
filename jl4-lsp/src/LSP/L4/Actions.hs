@@ -109,8 +109,6 @@ gotoDefinition pos m positionMapping = do
 -- Ladder evalApp
 -- ----------------------------------------------------------------------------
 
--- Another approach would be to make a new virtual file with the existing module + our directive,
--- and use oneshotL4ActionAndErrors
 evalApp
   :: MonadIO m
   => TypeCheckResult
@@ -123,17 +121,19 @@ evalApp tcRes evalParams recentViz evalEnv =
   -- 1. Prep an expanded module: Prepend a LazyEval _ appOfUserArgs to the original module, where the actual args are from evalParams.args
   -- 2. Prep an initial environment, using the Environment from the result of the `EvaluateLazy` rule.
   -- 3. `execEvalModuleWithEnv` using the expanded module and initial environmnt
-  let evalAppDirective :: TopDecl Resolved =
+  let
+      evalAppDirective :: TopDecl Resolved =
         Directive emptyAnno $ LazyEval emptyAnno
                             $ mkAppOfUserArgs evalParams recentViz.vizState
       -- TODO: Check if there are any issues with not having a Resovled here
       -- prob not, since evalSection doesn't make use of anno or mn
+
       extendModuleWithEvalAppDirective :: Module Resolved -> Module Resolved
       extendModuleWithEvalAppDirective (MkModule ann nuri (MkSection sann sresolved maka decls)) =
         MkModule ann nuri (MkSection sann sresolved maka (evalAppDirective : decls))
   in do
     results <- liftIO $ EL.execEvalModuleWithEnv evalEnv (extendModuleWithEvalAppDirective tcRes.module')
-    encode $ snd results
+    Aeson.toJSON <$> getEvalResult (snd results)
   where
     mkAppOfUserArgs :: EvalAppRequestParams -> VizState -> Expr Resolved
     mkAppOfUserArgs EvalAppRequestParams{appExpr} vizSt =
@@ -144,9 +144,9 @@ evalApp tcRes evalParams recentViz evalEnv =
         _                                -> error "impossible"
 
     evalResultToLadderEvalAppResult :: Monad m => EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
-    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = trace ("eval result: " <> show res) $ case res of
+    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = trace ("\neval result: " <> show res) $ case res of
       Right (EL.MkNF val) -> case val of
-        EL.ValConstructor r [] -> traceShow r $ EvalAppResult <$> toUBoolValue r
+        EL.ValConstructor r [] -> trace ("\nValConstructor r is: " <> show r) $ EvalAppResult <$> toUBoolValue r
         _                      -> throwExpectBoolResultError
       Right EL.ToDeep -> throwExpectBoolResultError
       Left err -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
@@ -159,16 +159,17 @@ evalApp tcRes evalParams recentViz evalEnv =
       Ladder.FalseV -> App emptyAnno falseRef []
       Ladder.TrueV -> App emptyAnno trueRef []
       Ladder.UnknownV -> error "impossible for now"
-    
+
     toUBoolValue :: Monad m => Resolved -> ExceptT (TResponseError method) m Ladder.UBoolValue
     toUBoolValue resolved
       | getUnique resolved == falseUnique = pure Ladder.FalseV
       | getUnique resolved == trueUnique  = pure Ladder.TrueV
       | otherwise = throwExpectBoolResultError
 
-    encode :: Monad m => [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m Aeson.Value
-    encode = \case
-      (res : _xs) -> Aeson.toJSON <$> evalResultToLadderEvalAppResult res
+    -- | Assumes that the order of the eval results is the same as the order of the eval directives.
+    getEvalResult :: Monad m => [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m EvalAppResult
+    getEvalResult results = trace ("\nGetting eval result from: " <> show (length results) <> " results") $ case results of
+      (res : _xs) -> evalResultToLadderEvalAppResult res
       _           -> defaultResponseError "Internal error: No eval results found for some reason"
 
   -- TODO: Make `args` BoolLits instead of BoolValues?
