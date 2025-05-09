@@ -206,13 +206,13 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
           (_, srcLoc) : _ -> Just srcLoc
           _               -> Nothing
 
-      srcLocToText = \case
+      srcLocToText = \ case
           Nothing -> "<unknown>"
           Just SrcLoc{ srcLocModule, srcLocStartLine, srcLocStartCol } ->
             Text.pack srcLocModule <> "#" <> Text.show srcLocStartLine <> ":" <> Text.show srcLocStartCol
 
       loggingColumnToText :: LoggingColumn -> IO Text
-      loggingColumnToText = \case
+      loggingColumnToText = \ case
         TimeColumn -> do
           utcTime <- getCurrentTime
           pure (utcTimeToText utcTime)
@@ -275,7 +275,7 @@ lspClientLogRecorder env = Recorder $ \WithPriority {..} ->
 
 priorityToLsp :: Priority -> MessageType
 priorityToLsp =
-  \case
+  \ case
     Debug   -> MessageType_Log
     Info    -> MessageType_Info
     Warning -> MessageType_Warning

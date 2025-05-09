@@ -128,7 +128,7 @@ data EvalException =
   deriving anyclass NFData
 
 prettyEvalException :: EvalException -> [Text]
-prettyEvalException = \case
+prettyEvalException = \ case
   RuntimeScopeError r ->
     [ "Internal error:" ]
     <> prepare r
@@ -672,13 +672,13 @@ runBuiltin s vals op = do
     valInt = ValNumber . toRational
 
 expect1 :: Stack -> [a] -> Eval a
-expect1 s = \case
+expect1 s = \ case
   [x] -> pure x
   xs ->
     exception (RuntimeTypeError $ "Expected 1 argument but got " <> Text.show (length xs)) s
 
 expectNumber :: Stack -> Value -> Eval Rational
-expectNumber s = \case
+expectNumber s = \ case
   ValNumber f -> pure f
   _ -> exception (RuntimeTypeError "Expected number.") s
 

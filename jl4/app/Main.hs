@@ -21,7 +21,7 @@ data Log
   | ExactPrint !Text
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     IdeLog l -> "Ide:" <+> pretty l
     CheckFailed uri -> "Checking" <+> pretty uri <+> "failed."
     ExactPrint ep -> nest 2 $ vsep ["Checking succeeded.", pretty ep]

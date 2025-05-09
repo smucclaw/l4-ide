@@ -1408,12 +1408,12 @@ inferTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse inferTyDeclTopLevel topDecls
 
 inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe (DeclChecked DeclareOrAssume))
-inferTyDeclLocalDecl = \case
+inferTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> ((Right <$>) <$>) <$> inferTyDeclAssume p
 
 inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked DeclareOrAssume]
-inferTyDeclTopLevel = \case
+inferTyDeclTopLevel = \ case
   Declare   _ p -> maybeToList <$> ((Left <$>) <$>) <$> inferTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> ((Right <$>) <$>) <$> inferTyDeclAssume p
@@ -1464,7 +1464,7 @@ scanTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse scanTyDeclTopLevel topDecls
 
 scanTyDeclTopLevel :: TopDecl Name -> Check [DeclTypeSig]
-scanTyDeclTopLevel = \case
+scanTyDeclTopLevel = \ case
   Declare   _ p -> List.singleton <$> scanTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> scanTyDeclAssume p
@@ -1473,7 +1473,7 @@ scanTyDeclTopLevel = \case
   Section   _ s -> scanTyDeclSection s
 
 scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
-scanTyDeclLocalDecl = \case
+scanTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> scanTyDeclAssume p
 
@@ -1493,7 +1493,7 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
       , name
       }
   where
-    isTypeSynonym = \case
+    isTypeSynonym = \ case
       SynonymDecl _ ty -> Just ty
       _ -> Nothing
 
@@ -1545,7 +1545,7 @@ scanFunSigSection (MkSection _ name maka topDecls) =
     akaToRawNames (MkAka _ ns) = fmap rawName ns
 
 scanFunSigTopLevel :: TopDecl Name -> Check [FunTypeSig]
-scanFunSigTopLevel = \case
+scanFunSigTopLevel = \ case
   Declare   _ _ -> pure []
   Decide    _ p -> List.singleton <$> scanFunSigDecide p
   Assume    _ p -> maybeToList <$> scanFunSigAssume p
@@ -1554,7 +1554,7 @@ scanFunSigTopLevel = \case
   Section   _ s -> scanFunSigSection s
 
 scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
-scanFunSigLocalDecl = \case
+scanFunSigLocalDecl = \ case
   LocalDecide _ p -> Just <$> scanFunSigDecide p
   LocalAssume _ p -> scanFunSigAssume p
 

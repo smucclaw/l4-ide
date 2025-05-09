@@ -44,7 +44,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogShake msg      -> pretty msg
     LogOfInterest msg -> pretty msg
     LogFileExists msg -> pretty msg

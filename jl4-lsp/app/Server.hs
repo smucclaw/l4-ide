@@ -113,7 +113,7 @@ data WebsocketLog
   deriving stock Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogLspStart ->
       nest 2 $ vsep
         [ "Starting LSP server..."
@@ -132,7 +132,7 @@ instance Pretty Log where
     LogWorkingDirectory wd -> "Starting with working directory:" <+> pretty wd
 
 instance Pretty WebsocketLog where
-  pretty = \case
+  pretty = \ case
     WebsocketShutDown -> "shut down server"
     WebsocketNewConnection -> "new connection established"
     WebsocketConnectionClosed -> "closed connection to client"
