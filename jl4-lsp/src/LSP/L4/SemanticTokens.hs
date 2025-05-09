@@ -27,7 +27,7 @@ defaultSemanticTokenCtx c =
     }
 
 standardTokenType :: TokenCategory -> Maybe SemanticTokenTypes
-standardTokenType = \case
+standardTokenType = \ case
   CIdentifier -> Just SemanticTokenTypes_Variable
   CStringLit -> Just SemanticTokenTypes_String
   CNumberLit -> Just SemanticTokenTypes_Number

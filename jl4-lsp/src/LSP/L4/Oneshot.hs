@@ -19,7 +19,7 @@ data Log
   | StoreLog Store.Log
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     ShakeLog l -> pretty l
     RulesLog l -> pretty l
     StoreLog l -> pretty l

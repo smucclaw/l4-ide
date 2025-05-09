@@ -18,7 +18,7 @@ data BinOp =
   deriving anyclass (NFData)
 
 instance LayoutPrinter BinOp where
-  printWithLayout = \case
+  printWithLayout = \ case
     BinOpPlus -> "PLUS"
     BinOpMinus -> "MINUS"
     BinOpTimes -> "TIMES"

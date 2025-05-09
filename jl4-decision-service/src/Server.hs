@@ -345,7 +345,7 @@ batchFunctionHandler name' batchArgs = do
   outputFilter' =
     Set.fromList $
       Maybe.mapMaybe
-        ( \case
+        ( \ case
             OutcomeAttribute t -> Just t
             OutcomePropertyObject _ -> Nothing
         )
@@ -473,7 +473,7 @@ getFunctionHandler name = do
 
 timeoutAction :: IO b -> AppM b
 timeoutAction act =
-  liftIO (timeout (seconds 60) act) >>= \case
+  liftIO (timeout (seconds 60) act) >>= \ case
     Nothing -> throwError err500
     Just r -> pure r
  where
@@ -612,7 +612,7 @@ instance FromHttpApiData EvalBackend where
     _ -> Left $ "Invalid evaluation backend: " <> t
 
 instance ToJSON EvalBackend where
-  toJSON = \case
+  toJSON = \ case
     JL4 -> Aeson.String "jl4"
 
 instance FromJSON EvalBackend where
@@ -713,7 +713,7 @@ batchRequestDecoder =
 
 outcomeStyleDecoder :: Decoder OutcomeStyle
 outcomeStyleDecoder =
-  ACD.text >>= \case
+  ACD.text >>= \ case
     "value-only" -> pure ValueOnly
     "decision-report" -> pure DecisionReport
     "base-attributes" -> pure BaseAttributes
@@ -770,7 +770,7 @@ outcomesEncoder (OutcomePropertyObject o) =
     ]
 
 outcomeStyleEncoder :: OutcomeStyle -> Aeson.Value
-outcomeStyleEncoder = \case
+outcomeStyleEncoder = \ case
   ValueOnly -> Aeson.String "value-only"
   DecisionReport -> Aeson.String "decision-report"
   BaseAttributes -> Aeson.String "base-attributes"

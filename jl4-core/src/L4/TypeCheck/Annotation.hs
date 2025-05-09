@@ -23,13 +23,13 @@ resolveNlgAnnotation a = do
       pure $ a & annoOf % annNlg ?~ resolvedNlg
 
 resolveNlgFragment :: NlgFragment Name -> Check (NlgFragment Resolved)
-resolveNlgFragment = \case
+resolveNlgFragment = \ case
   MkNlgText ann t -> pure $ MkNlgText ann t
   MkNlgRef ann n ->
     MkNlgRef ann . fst <$> resolveTerm n
 
 resolveNlgAnnotationInResolved :: Resolved -> Check Resolved
-resolveNlgAnnotationInResolved = \case
+resolveNlgAnnotationInResolved = \ case
   Def uniq name -> do
     Def uniq <$> resolveNlgAnnotation name
   Ref refName uniq origName ->
@@ -49,7 +49,7 @@ nlgDecide (MkDecide ann tySig appForm body) =
     <*> nlgExpr body
 
 nlgExpr :: Expr Resolved -> Check (Expr Resolved)
-nlgExpr = \case
+nlgExpr = \ case
     And ann e1 e2 -> do
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
@@ -163,7 +163,7 @@ nlgExpr = \case
       pure $ Event ann (MkEvent ann' e' e1' e2')
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
-nlgPattern = \case
+nlgPattern = \ case
   PatVar ann n ->
     PatVar ann
       <$> resolveNlgAnnotationInResolved n
@@ -177,7 +177,7 @@ nlgPattern = \case
       <*> nlgPattern pats
 
 nlgLocalDecl :: LocalDecl Resolved -> Check (LocalDecl Resolved)
-nlgLocalDecl = \case
+nlgLocalDecl = \ case
   LocalDecide ann decide ->
     LocalDecide ann
       <$> nlgDecide decide
@@ -186,7 +186,7 @@ nlgLocalDecl = \case
       <$> nlgAssume assume
 
 nlgAssume :: Assume Resolved -> Check (Assume Resolved)
-nlgAssume = \case
+nlgAssume = \ case
   MkAssume ann tySig appForm mTy ->
     MkAssume ann
       <$> nlgTypeSig tySig
@@ -194,7 +194,7 @@ nlgAssume = \case
       <*> traverse nlgType mTy
 
 nlgNamedExpr :: NamedExpr Resolved -> Check (NamedExpr Resolved)
-nlgNamedExpr = \case
+nlgNamedExpr = \ case
   MkNamedExpr ann n expr ->
     MkNamedExpr ann
       <$> resolveNlgAnnotationInResolved n
@@ -219,7 +219,7 @@ nlgGivethSig (MkGivethSig ann ty) =
     <$> nlgType ty
 
 nlgType :: Type' Resolved -> Check (Type' Resolved)
-nlgType = \case
+nlgType = \ case
   Type   ann ->
     pure $ Type ann
   TyApp  ann n tys ->
@@ -260,7 +260,7 @@ nlgDeclare (MkDeclare ann tysig appForm tydecl) =
     <*> nlgTypeDecl tydecl
 
 nlgTypeDecl :: TypeDecl Resolved -> Check (TypeDecl Resolved)
-nlgTypeDecl = \case
+nlgTypeDecl = \ case
   RecordDecl ann mName typedNames ->
     RecordDecl ann
       <$> traverse resolveNlgAnnotationInResolved mName

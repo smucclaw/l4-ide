@@ -802,13 +802,13 @@ errorBundleToErrorMessages ParseErrorBundle{..} =
 
 -- | Get length of the “pointer” to display under a given 'ErrorItem'.
 errorItemLength :: (VisualStream s) => Proxy s -> ErrorItem (Token s) -> Int
-errorItemLength pxy = \case
+errorItemLength pxy = \ case
   Tokens ts -> tokensLength pxy ts
   _ -> 1
 
 -- | Get length of the “pointer” to display under a given 'ErrorFancy'.
 errorFancyLength :: (ShowErrorComponent e) => ErrorFancy e -> Int
-errorFancyLength = \case
+errorFancyLength = \ case
   ErrorCustom a -> errorComponentLen a
   _ -> 1
 
@@ -831,7 +831,7 @@ toAnno
   -> AnnoType
   -- ^ inline or line anno
   -> Text
-toAnno lh oh ch t = \case
+toAnno lh oh ch t = \ case
   InlineAnno -> oh <> t <> ch
   LineAnno -> lh <> t
 
@@ -955,7 +955,7 @@ displayTokenType tt =
     EOF               -> ""
 
 showDirective :: DirectiveType -> Text
-showDirective = \case
+showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
@@ -977,7 +977,7 @@ data TokenCategory
 
 posTokenCategory :: TokenType -> TokenCategory
 posTokenCategory =
-  \case
+  \ case
     TIdentifier _ -> CIdentifier
     TQuoted _ -> CIdentifier
     TIntLit{} -> CNumberLit

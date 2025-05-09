@@ -119,7 +119,7 @@ nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
   currentPosition <- getSourcePos
   moduleUri <- asks (.moduleUri)
-  rawText <- hidden $ spacedTokenWs (\case
+  rawText <- hidden $ spacedTokenWs (\ case
     TNlg t ty -> Just $ toNlgAnno t ty
     _ -> Nothing)
     "Natural Language Annotation"
@@ -216,7 +216,7 @@ textFragment isBlock = do
     replaceTokenType tt = TNlgString (displayTokenType tt)
 
 refAnnotationP :: Parser (Epa Text)
-refAnnotationP = hidden $ spacedTokenWs (\case
+refAnnotationP = hidden $ spacedTokenWs (\ case
   TRef t ty -> Just $ toRefAnno t ty
   _ -> Nothing)
   "Reference Annotation"
@@ -225,7 +225,7 @@ refAnnotationP = hidden $ spacedTokenWs (\case
 -- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
 -- (2) should we add it to the AST at all? Currently we don't need it
 refAdditionalP :: Parser (Epa ())
-refAdditionalP = hidden $ spacedTokenWs (\case
+refAdditionalP = hidden $ spacedTokenWs (\ case
   TRefSrc _t -> Just ()
   TRefMap _t -> Just ()
   _ -> Nothing
@@ -243,7 +243,7 @@ lexeme p = do
     }
 
 addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
-addNlgOrRef = \case
+addNlgOrRef = \ case
   S (Z nlg) -> modify' (addNlg nlg.payload)
   Z ref -> modify' (addRef ref.payload)
   _ -> pure ()

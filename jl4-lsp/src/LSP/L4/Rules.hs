@@ -218,7 +218,7 @@ data Log
   deriving (Show)
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     ShakeLog msg -> pretty msg
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
@@ -316,7 +316,7 @@ jl4Rules rootDirectory recorder = do
              in pure ([diag], range, uri)
 
         mkDiagsAndImports :: TopDecl Name -> Ap Action [([FileDiagnostic], ImportResult)]
-        mkDiagsAndImports = \case
+        mkDiagsAndImports = \ case
           Import _a i@(MkImport _ n _) -> Ap do
             (diag, r, u) <- liftIO . mkImportUri =<< mkImportPath i
             pure [(diag, MkImportResult n r u)]
@@ -711,7 +711,7 @@ lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
   MkSrcPos (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 prettyNlgResolveWarning :: Resolve.Warning -> Text
-prettyNlgResolveWarning = \case
+prettyNlgResolveWarning = \ case
   Resolve.NotAttached _ ->
     "Not attached to any valid syntax node."
   Resolve.UnknownLocation nlg -> Text.unlines
@@ -733,7 +733,7 @@ listL4Files dir = do
 
 
 rangeOfResolveWarning :: Resolve.Warning -> LSP.Range
-rangeOfResolveWarning = \case
+rangeOfResolveWarning = \ case
   Resolve.NotAttached nlg ->
     srcSpanToLspRange $ Just nlg.range
   Resolve.UnknownLocation _ ->

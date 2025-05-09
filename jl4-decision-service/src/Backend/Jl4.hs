@@ -79,7 +79,7 @@ createFunction fnDecl fnImpl =
 data WrapStyle = WrapInInputs | NoWrap
 
 literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
-literalToExpr = \case
+literalToExpr = \ case
   FnLitInt i -> pure . mkLit $ mkNumericLit i
   FnLitDouble d -> throwE $ CannotHandleParameterType $ FnLitDouble d
   FnLitBool b -> pure . mkVar $ mkBoolean b
@@ -92,7 +92,7 @@ literalToExpr = \case
   FnUnknown -> pure $ mkVar mkUnknown
 
 valueToFnLiteral :: (Monad m) => Eval.Value -> ExceptT EvaluatorError m FnLiteral
-valueToFnLiteral = \case
+valueToFnLiteral = \ case
   Eval.ValNumber i ->
     pure $ case isInteger i of
       Just int -> FnLitInt int

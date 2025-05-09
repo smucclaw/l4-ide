@@ -62,7 +62,7 @@ data AnnoElement_ t
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
-rangeOfAnnoElement = \case
+rangeOfAnnoElement = \ case
   AnnoHole srcRange -> srcRange
   AnnoCsn srcRange _ -> srcRange
 
@@ -293,7 +293,7 @@ isCsnClusterVisible :: CsnCluster_ t -> Bool
 isCsnClusterVisible csn = csn.payload.visibility == Visible
 
 debugShow :: AnnoElement_ t -> String
-debugShow = \case
+debugShow = \ case
   AnnoHole r -> "AnnoHole [" <> show r <> "]"
   AnnoCsn r p  -> "AnnoCsn [" <> show r <> "]: " <> show (p.payload.visibility, p.trailing.visibility, p.payload.range)
 

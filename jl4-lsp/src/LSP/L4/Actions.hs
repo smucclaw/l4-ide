@@ -40,7 +40,7 @@ import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
 -- ----------------------------------------------------------------------------
 
 topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
-topDeclToCompletionItem name = \case
+topDeclToCompletionItem name = \ case
   KnownTerm ty term ->
     Just (defaultTopDeclCompletionItem ty)
       { CompletionItem._kind = Just $ case (term, ty) of

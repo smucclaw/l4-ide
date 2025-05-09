@@ -147,7 +147,7 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
-forwardExpr env = \case
+forwardExpr env = \ case
   And _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
   Or _ann e1 e2 ->
@@ -361,7 +361,7 @@ backward val = WithPoppedFrame $ \ case
   Just (ContractFrame cFrame) -> backwardContractFrame val cFrame
 
 backwardContractFrame :: Value Reference -> ContractFrame -> Machine Config
-backwardContractFrame val = \case
+backwardContractFrame val = \ case
   Contract1 ScrutEvents {..} -> do
     case val of
       ValCons e es -> do
@@ -414,7 +414,7 @@ backwardContractFrame val = \case
     pushCFrame (Contract9 ScrutTime {ev'time = val, ..})
     EvalRef time
   Contract9 ScrutTime {..} -> do
-    let assertTime = \case
+    let assertTime = \ case
           ValNumber i -> pure i
           v -> InternalException $ RuntimeTypeError $
             "expected a NUMBER but got: " <> prettyLayout v
@@ -497,12 +497,12 @@ runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
 expect1 :: [a] -> Machine a
-expect1 = \case
+expect1 = \ case
   [x] -> pure x
   xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
-expectNumber = \case
+expectNumber = \ case
   ValNumber f -> pure f
   _ -> InternalException (RuntimeTypeError "Expected number.")
 
@@ -648,7 +648,7 @@ updateThunkToWHNF rf v =
 -- well, which should be benign.
 evalRef :: Reference -> Machine Config
 evalRef rf =
-  join $ PokeThunk rf \tid -> \case
+  join $ PokeThunk rf \tid -> \ case
     thunk@(WHNF val) -> (thunk, Backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids ->  (thunk, UserException (BlackholeForced e))
@@ -916,7 +916,7 @@ prettyEvalException (InternalEvalException exc) = wrapInternal (prettyInternalEv
 prettyEvalException (UserEvalException exc)     = prettyUserEvalException exc
 
 prettyInternalEvalException :: InternalEvalException -> [Text]
-prettyInternalEvalException = \case
+prettyInternalEvalException = \ case
   RuntimeScopeError r ->
     indentMany r
     <> [ "is not in scope." ]
@@ -939,7 +939,7 @@ indentMany = map ind . Text.lines .  prettyLayout
     ind = ("  " <>)
 
 prettyUserEvalException :: UserEvalException -> [Text]
-prettyUserEvalException = \case
+prettyUserEvalException = \ case
   BlackholeForced expr ->
     [ "Infinite loop detected while trying to evaluate:"
     , prettyLayout expr ]

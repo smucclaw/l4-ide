@@ -28,7 +28,7 @@ import qualified L4.Lexer as Lexer
 
 -- | obtain a valid relative file path from the ref-src annos
 withRefSrc :: Path.OsPath -> Lexer.PosToken -> ExceptT (Lexer.SrcRange, String) IO (Vector (Text, Text))
-withRefSrc ownPath = \case
+withRefSrc ownPath = \ case
   Lexer.MkPosToken {payload = Lexer.TRefSrc src, range}
     | Just osp <- Path.encodeUtf $ Text.unpack $ Text.strip src
     , Path.isRelative osp
@@ -42,7 +42,7 @@ withRefSrc ownPath = \case
 
 -- | parse a ref-map token into a pair of reference name and reference url
 withRefMap :: Lexer.PosToken -> Vector (Text, Text)
-withRefMap = \case
+withRefMap = \ case
   Lexer.MkPosToken {payload = Lexer.TRefMap refmp}
     -- NOTE: annotations like @ref-src foo bar baz https://example.com should work as well, so we break on
     -- end because we don't expect spaces in the url.
@@ -72,7 +72,7 @@ mkReferences
 mkReferences tokens decoded = do
   foldMap getReferences tokens
   where
-    getReferences = \case
+    getReferences = \ case
       Lexer.MkPosToken {payload = Lexer.TRef reference _, range} ->
         let mk v = IVMap.singleton (srcRangeToInterval range) (range.moduleUri, range.length, v)
             ref = normalizeRef reference
