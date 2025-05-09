@@ -155,7 +155,6 @@ import Base.Text (Text)
 import GHC.Generics
 import Data.Hashable (Hashable)
 import qualified LSP.L4.Viz.Ladder as Ladder
-import qualified LSP.L4.Viz.VizExpr as Ladder
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -297,7 +296,6 @@ data RecentlyVisualised = RecentlyVisualised
   { pos     :: !SrcPos
   , name    :: !RawName
   , type'   :: !(Type' Resolved)
-  , funDecl :: !Ladder.FunDecl
   , vizState  :: !Ladder.VizState
   }
   deriving stock (Show, Eq)

@@ -217,22 +217,21 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
 
   -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
   -- Assumes the given vizEnv is up-to-date.
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState funDecl
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
         = Just RecentlyVisualised
           { pos = range.start
           , name = rawName $ getName appform
           , type' = applyFinalSubstitution vizState.env.substitution vizState.env.moduleUri ty
-          , funDecl = funDecl
           , vizState = vizState
           }
-      recentlyVisualisedDecide _ _ _ = Nothing
+      recentlyVisualisedDecide _ _ = Nothing
 
   case mdecide of
     Nothing -> pure (InR Null)
     Just (decide, vizEnv) ->
       case Ladder.doVisualize decide vizEnv of
         Right (vizProgramInfo, vizState) -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState vizProgramInfo.funDecl
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
