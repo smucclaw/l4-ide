@@ -123,11 +123,8 @@ evalApp tcRes evalParams recentViz evalEnv =
   -- 3. `execEvalModuleWithEnv` using the expanded module and initial environmnt
   let
       evalAppDirective :: TopDecl Resolved =
-        Directive dummyAnno $ LazyEval dummyAnno
+        Directive emptyAnno $ LazyEval emptyAnno
                             $ mkAppOfUserArgs evalParams recentViz.vizState
-          where
-            dummyAnno = set #range (Just dummyRange) emptyAnno
-            dummyRange = MkSrcRange (MkSrcPos 1 1) (MkSrcPos 1 10) 10 recentViz.vizState.env.moduleUri
       -- TODO: Check if there are any issues with not having a Resovled here
       -- prob not, since evalSection doesn't make use of anno or mn
 
