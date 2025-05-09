@@ -551,7 +551,7 @@ instance ToConcreteNodes PosToken Comment where
 deriving anyclass instance ToConcreteNodes PosToken Nlg
 
 instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (NlgFragment n) where
-  toNodes = \case
+  toNodes = \ case
     MkNlgText ann _ -> flattenConcreteNodes ann []
     MkNlgRef ann n -> flattenConcreteNodes ann [toNodes n]
 

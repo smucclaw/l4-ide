@@ -93,7 +93,7 @@ data Log
   deriving (Show)
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogOpenedTextDocument uri ->  "Opened text document:" <+> pretty (getUri uri)
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
@@ -270,7 +270,7 @@ handlers recorder =
                     }
     , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
         let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
-        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \ case
           Nothing -> pure (Right (InL []))
           Just rope -> do
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
@@ -455,7 +455,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
     uri = fromNormalizedUri nuri
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
-hasTypeInferenceVars = \case
+hasTypeInferenceVars = \ case
   Type   _ -> False
   TyApp  _ _n ns -> any hasTypeInferenceVars ns
   Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
@@ -463,7 +463,7 @@ hasTypeInferenceVars = \case
   InfVar {} -> True
 
 hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
-hasNamedTypeInferenceVars = \case
+hasNamedTypeInferenceVars = \ case
   MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
 
 data L4Cmd

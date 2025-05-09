@@ -67,7 +67,7 @@ class Linearize a where
   linearize :: a -> LinTree
 
 instance Linearize (Expr Resolved) where
-  linearize = \case
+  linearize = \ case
     And _ e1 e2 -> hcat
       [ lin e1
       , text "and"
@@ -236,7 +236,7 @@ instance Linearize (Event Resolved) where
     [ "party", lin p, "did", lin a, "at", lin t]
 
 instance Linearize (Directive Resolved) where
-  linearize = \case
+  linearize = \ case
     StrictEval _ e -> linearize e
     LazyEval _ e -> linearize e
     Check _ e -> linearize e
@@ -246,7 +246,7 @@ instance Linearize (Directive Resolved) where
 
 
 instance Linearize (NamedExpr Resolved) where
-  linearize = \case
+  linearize = \ case
     MkNamedExpr _ n e -> hcat
       [ linearize n
       , text "is"
@@ -254,17 +254,17 @@ instance Linearize (NamedExpr Resolved) where
       ]
 
 instance Linearize (LocalDecl Resolved) where
-  linearize = \case
+  linearize = \ case
     LocalDecide _ _decide -> mempty
     LocalAssume _ _assume -> mempty
 
 instance Linearize Lit where
-  linearize = \case
+  linearize = \ case
     NumericLit _ num -> text (prettyRatio num)
     StringLit _ t -> text t
 
 instance Linearize (Branch Resolved) where
-  linearize = \case
+  linearize = \ case
     When _ pat e -> hcat
       [ text "when"
       , lin pat
@@ -280,7 +280,7 @@ instance Linearize (Branch Resolved) where
       ]
 
 instance Linearize (Pattern Resolved) where
-  linearize = \case
+  linearize = \ case
     PatVar _ v ->
       -- Resolved can't use 'lin', as it doesn't have an 'Anno'
       linearize v
@@ -299,14 +299,14 @@ instance Linearize (Pattern Resolved) where
       ]
 
 instance Linearize (GivenSig Resolved) where
-  linearize = \case
+  linearize = \ case
     MkGivenSig _ args -> hcat
       [ text "given"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin args)
       ]
 
 instance Linearize (OptionallyTypedName Resolved) where
-  linearize = \case
+  linearize = \ case
     MkOptionallyTypedName _ name _mty -> hcat
       [ linearize name
       ]
@@ -315,7 +315,7 @@ instance Linearize Name where
   linearize = var . nameToText
 
 instance Linearize Resolved where
-  linearize = \case
+  linearize = \ case
     Def _ name -> lin name
     Ref ref _ original
       | hasNlgAnnotation original && not (hasNlgAnnotation ref) ->
@@ -331,18 +331,18 @@ instance Linearize Resolved where
     hasNlgAnnotation name = isJust $ name ^. annoOf % annNlg
 
 instance Linearize Nlg where
-  linearize = \case
+  linearize = \ case
     MkInvalidNlg _ -> text "(internal error)"
     MkParsedNlg _ frags -> foldMap linParsedFragment frags
     MkResolvedNlg _ frags -> foldMap linResolvedFragment frags
    where
     linParsedFragment :: NlgFragment Name -> LinTree
-    linParsedFragment = \case
+    linParsedFragment = \ case
       MkNlgText _ t -> user t
       MkNlgRef  _ n -> linearize n
 
     linResolvedFragment :: NlgFragment Resolved -> LinTree
-    linResolvedFragment = \case
+    linResolvedFragment = \ case
       MkNlgText _ t -> user t
       MkNlgRef  _ n -> linearize n
 

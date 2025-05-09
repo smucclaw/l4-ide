@@ -69,7 +69,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogRegisteringIdeConfig ideConfig ->
       -- This log is also used to identify if HLS starts successfully in vscode-haskell,
       -- don't forget to update the corresponding test in vscode-haskell if the text in

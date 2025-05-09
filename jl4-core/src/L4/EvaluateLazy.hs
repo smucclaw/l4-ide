@@ -120,7 +120,7 @@ newAddress = do
   pure (MkAddress u i)
 
 interpMachine :: Machine a -> Eval a
-interpMachine = \case
+interpMachine = \ case
   Config a -> pure a
   Exception e -> exception e
   Allocate' alloc -> case alloc of
@@ -146,7 +146,7 @@ interpMachine = \case
   NewUnique -> newUnique
 
 runConfig :: Config -> Eval WHNF
-runConfig = \case
+runConfig = \ case
   ForwardMachine env expr ->  runConfig =<< interpMachine (forwardExpr env expr)
   BackwardMachine whnf -> runConfig =<< interpMachine (backward whnf)
   EvalRefMachine r -> runConfig =<< interpMachine (evalRef r)

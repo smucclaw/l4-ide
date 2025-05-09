@@ -607,12 +607,12 @@ instance Semigroup LowerBound where
   StartPos l <> StartPos r = StartPos (max l r) -- See the docs for 'UpperBound'.
 
 upperBoundToSrcSpan :: UpperBound -> SrcPos
-upperBoundToSrcSpan = \case
+upperBoundToSrcSpan = \ case
   EndOfFile -> MkSrcPos maxBound maxBound
   EndPos p -> p
 
 lowerBoundToSrcSpan :: LowerBound -> SrcPos
-lowerBoundToSrcSpan = \case
+lowerBoundToSrcSpan = \ case
   -- No position is lower than 1.
   -- Don't use 'minBound' because it is ugly during debugging.
   StartOfFile -> MkSrcPos 1 1

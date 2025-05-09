@@ -43,7 +43,7 @@ data Log = LogShake Shake.Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogShake msg -> pretty msg
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedUri FileOfInterestStatus))

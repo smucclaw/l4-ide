@@ -142,93 +142,98 @@ pattern UserException e = Exception (UserEvalException e)
 pattern Done :: WHNF -> Machine Config
 pattern Done whnf = Config (DoneMachine whnf)
 
+pattern StuckOnAssumed :: Resolved -> Machine b
+pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
+
+
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
-forwardExpr env (And _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-forwardExpr env (Or _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
-forwardExpr env (Implies _ann e1 e2) =
-  ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
-forwardExpr env (Not _ann e) =
-  ForwardExpr env (IfThenElse emptyAnno e falseExpr trueExpr)
-forwardExpr env (Equals _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpEquals e2 env)
-  ForwardExpr env e1
-forwardExpr env (Plus _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpPlus e2 env)
-  ForwardExpr env e1
-forwardExpr env (Minus _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpMinus e2 env)
-  ForwardExpr env e1
-forwardExpr env (Times _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpTimes e2 env)
-  ForwardExpr env e1
-forwardExpr env (DividedBy _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpDividedBy e2 env)
-  ForwardExpr env e1
-forwardExpr env (Modulo _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpModulo e2 env)
-  ForwardExpr env e1
-forwardExpr env (Leq _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpLeq e2 env)
-  ForwardExpr env e1
-forwardExpr env (Geq _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpGeq e2 env)
-  ForwardExpr env e1
-forwardExpr env (Lt _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpLt e2 env)
-  ForwardExpr env e1
-forwardExpr env (Gt _ann e1 e2) = do
-  PushFrame (BinOp1 BinOpGt e2 env)
-  ForwardExpr env e1
-forwardExpr env (Proj _ann e l) =
-  ForwardExpr env (App emptyAnno l [e]) -- we desugar projection to plain function application
-forwardExpr env (Var _ann n) = -- still problematic: similarity / overlap between this and App with no args
-  expectTerm env n >>= EvalRef
-forwardExpr env (Cons _ann e1 e2) = do
-  rf1 <- allocate_ e1 env
-  rf2 <- allocate_ e2 env
-  Backward (ValCons rf1 rf2)
-forwardExpr env (Lam _ann givens e) =
-  Backward (ValClosure givens e env)
-forwardExpr env (App _ann n []) =
-  expectTerm env n >>= EvalRef
-forwardExpr env (App _ann n es@(_ : _)) = do
-  rs <- traverse (`allocate_` env) es
-  PushFrame (App1 rs)
-  ForwardExpr env (Var emptyAnno n)
-forwardExpr env (AppNamed ann n [] _) =
-  ForwardExpr env (App ann n [])
-forwardExpr _env (AppNamed _ann _n _nes Nothing) =
-  InternalException $ RuntimeTypeError
-    "named application where the order of arguments is not resolved"
-forwardExpr env (AppNamed ann n nes (Just order)) =
-  let
-    -- move expressions into order, drop names
-    es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
-  in
-    ForwardExpr env (App ann n es)
-forwardExpr env (IfThenElse _ann e1 e2 e3) = do
-  PushFrame (IfThenElse1 e2 e3 env)
-  ForwardExpr env e1
-forwardExpr env (Consider _ann e branches) = do
-  rf <- allocate_ e env
-  matchBranches rf env branches
-forwardExpr _env (Lit _ann lit) = do
-  rval <- runLit lit
-  Backward rval
-forwardExpr _env (List _ann []) =
-  Backward ValNil
-forwardExpr env (List _ann (e : es)) =
-  ForwardExpr env (Cons emptyAnno e (List emptyAnno es))
-forwardExpr env (Where _ann e ds) = do
-  env' <- evalRecLocalDecls env ds
-  let combinedEnv = Map.union env' env
-  ForwardExpr combinedEnv e
-forwardExpr env (Regulative _ann (MkObligation _ party action due followup)) = do
-  Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup))
-forwardExpr env (Event _ann ev) =
-  ForwardExpr env (desugarEvent ev)
+forwardExpr env = \ case
+  And _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
+  Implies _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
+  Not _ann e ->
+    ForwardExpr env (IfThenElse emptyAnno e falseExpr trueExpr)
+  Equals _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpEquals e2 env)
+    ForwardExpr env e1
+  Plus _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpPlus e2 env)
+    ForwardExpr env e1
+  Minus _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpMinus e2 env)
+    ForwardExpr env e1
+  Times _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpTimes e2 env)
+    ForwardExpr env e1
+  DividedBy _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpDividedBy e2 env)
+    ForwardExpr env e1
+  Modulo _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpModulo e2 env)
+    ForwardExpr env e1
+  Leq _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpLeq e2 env)
+    ForwardExpr env e1
+  Geq _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpGeq e2 env)
+    ForwardExpr env e1
+  Lt _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpLt e2 env)
+    ForwardExpr env e1
+  Gt _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpGt e2 env)
+    ForwardExpr env e1
+  Proj _ann e l ->
+    ForwardExpr env (App emptyAnno l [e]) -- we desugar projection to plain function application
+  Var _ann n -> -- still problematic: similarity / overlap between this and App with no args
+    expectTerm env n >>= EvalRef
+  Cons _ann e1 e2 -> do
+    rf1 <- allocate_ e1 env
+    rf2 <- allocate_ e2 env
+    Backward (ValCons rf1 rf2)
+  Lam _ann givens e ->
+    Backward (ValClosure givens e env)
+  App _ann n [] ->
+    expectTerm env n >>= EvalRef
+  App _ann n es@(_ : _) -> do
+    rs <- traverse (`allocate_` env) es
+    PushFrame (App1 rs)
+    ForwardExpr env (Var emptyAnno n)
+  AppNamed ann n [] _ ->
+    ForwardExpr env (App ann n [])
+  AppNamed _ann _n _nes Nothing ->
+    InternalException $ RuntimeTypeError
+      "named application where the order of arguments is not resolved"
+  AppNamed ann n nes (Just order) ->
+    let
+     -- move expressions into order, drop names
+      es = (\ (MkNamedExpr _ _ e) -> e) . snd <$> sortOn fst (zip order nes)
+    in
+      ForwardExpr env (App ann n es)
+  IfThenElse _ann e1 e2 e3 -> do
+    PushFrame (IfThenElse1 e2 e3 env)
+    ForwardExpr env e1
+  Consider _ann e branches -> do
+    rf <- allocate_ e env
+    matchBranches rf env branches
+  Lit _ann lit -> do
+    rval <- runLit lit
+    Backward rval
+  List _ann [] ->
+    Backward ValNil
+  List _ann (e : es) ->
+    ForwardExpr env (Cons emptyAnno e (List emptyAnno es))
+  Where _ann e ds -> do
+    env' <- evalRecLocalDecls env ds
+    let combinedEnv = Map.union env' env
+    ForwardExpr combinedEnv e
+  Regulative _ann (MkObligation _ party action due followup) -> do
+    Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup))
+  Event _ann ev ->
+    ForwardExpr env (desugarEvent ev)
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -243,7 +248,7 @@ backward val = WithPoppedFrame $ \ case
       ValClosure givens e env' -> do
         env'' <- matchGivens givens f rs
         ForwardExpr (Map.union env'' env') e
-      ValUnappliedConstructor r -> do
+      ValUnappliedConstructor r ->
         Backward (ValConstructor r rs)
       ValObligation env party act due followup -> do
         (events, time) <- case rs of
@@ -252,25 +257,23 @@ backward val = WithPoppedFrame $ \ case
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
         PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
         EvalRef events
-      v@(ValConstructor r []) | r `sameResolved` TypeCheck.fulfilRef -> backward v
       ValUnaryBuiltinFun fn -> do
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
+      ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
-        stuckOnAssumed r -- TODO: we can do better here
+        StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
   Just (IfThenElse1 e2 e3 env) ->
-    case boolView val of
-      Just True ->
-        ForwardExpr env e2
-      Just False ->
-        ForwardExpr env e3
-      Nothing | ValAssumed r <- val ->
-        stuckOnAssumed r
-      Nothing ->
-        InternalException $ RuntimeTypeError $
-          "expected a BOOLEAN but found: " <> prettyLayout val <> " when evaluating IF-THEN-ELSE"
+    case val of
+      ValBool True -> ForwardExpr env e2
+      ValBool False -> ForwardExpr env e3
+
+      ValAssumed r -> StuckOnAssumed r
+
+      _ -> InternalException $ RuntimeTypeError $
+        "expected a BOOLEAN but found: " <> prettyLayout val <> " when evaluating IF-THEN-ELSE"
   Just (ConsiderWhen1 _scrutinee e _branches env) -> do
     case val of
       ValEnvironment env' ->
@@ -315,7 +318,7 @@ backward val = WithPoppedFrame $ \ case
                 pairs = zip rfs ps
               in
                 case pairs of
-                  []             -> backward (ValEnvironment Map.empty)
+                  []             -> Backward (ValEnvironment Map.empty)
                   ((r, p) : rps) -> do
                     PushFrame (PatApp1 [] rps)
                     matchPattern r p
@@ -358,7 +361,7 @@ backward val = WithPoppedFrame $ \ case
   Just (ContractFrame cFrame) -> backwardContractFrame val cFrame
 
 backwardContractFrame :: Value Reference -> ContractFrame -> Machine Config
-backwardContractFrame val = \case
+backwardContractFrame val = \ case
   Contract1 ScrutEvents {..} -> do
     case val of
       ValCons e es -> do
@@ -401,7 +404,7 @@ backwardContractFrame val = \case
       Just True -> case due of
         Just due' -> do
           pushCFrame (Contract7 StampWHNF {..})
-          forwardExpr env due'
+          ForwardExpr env due'
         Nothing -> continueWithFollowup env followup events ev'time
       Just False -> continueWithNextEvent ScrutEvents {party = Left party, act = Left act, ..} events
   Contract7 StampWHNF {..} -> do
@@ -411,7 +414,7 @@ backwardContractFrame val = \case
     pushCFrame (Contract9 ScrutTime {ev'time = val, ..})
     EvalRef time
   Contract9 ScrutTime {..} -> do
-    let assertTime = \case
+    let assertTime = \ case
           ValNumber i -> pure i
           v -> InternalException $ RuntimeTypeError $
             "expected a NUMBER but got: " <> prettyLayout v
@@ -420,7 +423,7 @@ backwardContractFrame val = \case
     time <- assertTime val
     let deadline = time + due'
     if stamp > deadline
-      then backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
+      then Backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
       else do
         -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
         timeR <- AllocateValue ev'time
@@ -494,12 +497,12 @@ runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
 expect1 :: [a] -> Machine a
-expect1 = \case
+expect1 = \ case
   [x] -> pure x
   xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
-expectNumber = \case
+expectNumber = \ case
   ValNumber f -> pure f
   _ -> InternalException (RuntimeTypeError "Expected number.")
 
@@ -548,8 +551,8 @@ runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = Backward $ Va
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 > str2)
 runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 > b2)
-runBinOp _op         (ValAssumed r) _e2                          = stuckOnAssumed r
-runBinOp _op         _e1 (ValAssumed r)                          = stuckOnAssumed r
+runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
+runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
 
 runBinOpEquals :: WHNF -> WHNF -> Machine Config
@@ -565,13 +568,23 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
       pairs = zip rs1 rs2
     in
       case pairs of
-        [] -> backward $ ValBool True
+        [] -> Backward $ ValBool True
         ((r1, r2) : rss) -> do
           PushFrame (EqConstructor1 r2 rss)
           EvalRef r1
   | otherwise                                           = Backward $ ValBool False
 -- TODO: we probably also want to check ValObligations for equality
 runBinOpEquals _                       _                = UserException EqualityOnUnsupportedType
+
+pattern ValFulfilled :: Value a
+pattern ValFulfilled <- (fulfilView -> True)
+  where
+    ValFulfilled = ValConstructor TypeCheck.fulfilRef []
+
+fulfilView :: Value a -> Bool
+fulfilView v
+  | ValConstructor r [] <- v = r `sameResolved` TypeCheck.fulfilRef
+  | otherwise = False
 
 pattern ValBool :: Bool -> WHNF
 pattern ValBool b <- (boolView -> Just b)
@@ -608,9 +621,6 @@ ref n a =
     pure (Ref n u o)
 
 
-stuckOnAssumed :: Resolved -> Machine b
-stuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
-
 lookupTerm :: Environment -> Resolved -> Maybe Reference
 lookupTerm env r =
   Map.lookup (getUnique r) env
@@ -638,8 +648,8 @@ updateThunkToWHNF rf v =
 -- well, which should be benign.
 evalRef :: Reference -> Machine Config
 evalRef rf =
-  join $ PokeThunk rf \tid -> \case
-    thunk@(WHNF val) -> (thunk, backward val)
+  join $ PokeThunk rf \tid -> \ case
+    thunk@(WHNF val) -> (thunk, Backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids ->  (thunk, UserException (BlackholeForced e))
       | otherwise -> (Unevaluated (Set.insert tid tids) e env, PushFrame (UpdateThunk rf) *> ForwardExpr env e)
@@ -857,9 +867,6 @@ trueVal = ValConstructor TypeCheck.trueRef []
 fulfilExpr :: Expr Resolved
 fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
 
-fulfilVal :: Value a
-fulfilVal = ValConstructor TypeCheck.fulfilRef []
-
 -- \a b c. a b c
 evalContractVal :: Machine (Value a)
 evalContractVal = do
@@ -909,7 +916,7 @@ prettyEvalException (InternalEvalException exc) = wrapInternal (prettyInternalEv
 prettyEvalException (UserEvalException exc)     = prettyUserEvalException exc
 
 prettyInternalEvalException :: InternalEvalException -> [Text]
-prettyInternalEvalException = \case
+prettyInternalEvalException = \ case
   RuntimeScopeError r ->
     indentMany r
     <> [ "is not in scope." ]
@@ -932,7 +939,7 @@ indentMany = map ind . Text.lines .  prettyLayout
     ind = ("  " <>)
 
 prettyUserEvalException :: UserEvalException -> [Text]
-prettyUserEvalException = \case
+prettyUserEvalException = \ case
   BlackholeForced expr ->
     [ "Infinite loop detected while trying to evaluate:"
     , prettyLayout expr ]
@@ -971,11 +978,11 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
-  fulfilRef <- AllocateValue fulfilVal
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
+  fulfilRef <- AllocateValue ValFulfilled
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)

@@ -104,7 +104,7 @@ data VizError
 
 -- TODO: Incorporate context like the specific erroring rule and the src range too
 prettyPrintVizError :: VizError -> Text
-prettyPrintVizError = \case
+prettyPrintVizError = \ case
   InvalidProgramNoDecidesFound ->
     "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
   InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
