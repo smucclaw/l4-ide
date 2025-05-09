@@ -6,15 +6,15 @@ import Autodocodec.Aeson ()
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List.NonEmpty as NE
-import Data.Text (Text)
+import Base.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
 import qualified Language.LSP.Protocol.Types as LSP
 
 data RenderAsLadderInfo = MkRenderAsLadderInfo
-  { verDocId :: LSP.VersionedTextDocumentIdentifier
-  , funDecl      :: FunDecl
+  { verDocId  :: LSP.VersionedTextDocumentIdentifier
+  , funDecl   :: FunDecl
   }
   deriving stock (Show, Generic, Eq)
 
@@ -42,6 +42,7 @@ data IRExpr
   | App ID Name [IRExpr]
   deriving (Show, Eq, Generic)
 
+{- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
 newtype ID = MkID
   { id :: Int
   }

@@ -758,7 +758,7 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure ((\ r -> MkEvalDirective r expr env) <$> toList (rangeOf ann))
+  pure [MkEvalDirective (rangeOf ann) expr env]
 evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
@@ -898,7 +898,7 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range :: !SrcRange -- ^ of the (L)EVAL directive
+    { range :: !(Maybe SrcRange) -- ^ of the (L)EVAL directive
     , expr  :: !(Expr Resolved) -- ^ expression to evaluate
     , env   :: !Environment -- ^ environment to evaluate the expression in
     }

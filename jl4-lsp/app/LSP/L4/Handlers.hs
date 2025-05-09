@@ -18,7 +18,7 @@ import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import qualified StmContainers.Map as STM
 import Control.Applicative
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (runExceptT, throwError)
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
@@ -333,19 +333,55 @@ handlers recorder =
         pure (Right (InL locs))
 
     -- custom requests
-    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \_ide params -> do
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
         let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
+        
         case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
-          Aeson.Success evalParams -> do
-            logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
-            -- Haven't implemented the actual call to eval yet; just returning null for now
-            pure $ Right Aeson.Null
           Aeson.Error err -> do
             pure $ Left $ TResponseError
               { _code = InR ErrorCodes_InvalidRequest
               , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
               , _xdata = Nothing
               }
+          
+          -- eval params valid
+          Aeson.Success evalParams -> do
+            logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
+            
+            mtcRes <- liftIO $ runAction "l4/evalApp" ide $ use TypeCheck $ toNormalizedUri evalParams.verDocId._uri
+            mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
+            
+            runExceptT $ case (mtcRes, mRecentViz) of
+              -- impossible
+              (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
+              (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
+              
+              -- Another approach would be to make a new virtual file with the existing module + our directive,
+              -- and use oneshotL4ActionAndErrors on that new file
+              
+              (Just tcRes, Just recentViz) 
+                | evalParams.verDocId == recentViz.vizState.env.verTxtDocId -> do
+                    logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri ("Evaluating with params: " <> Text.pack (show evalParams))
+                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [recentViz.vizState.env.moduleUri] GetLazyEvaluationDependencies) recentViz.vizState.env.moduleUri
+                    case mEvalDeps of
+                      Nothing -> throwError $ TResponseError
+                        { _code = InR ErrorCodes_InvalidRequest
+                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri recentViz.vizState.env.moduleUri).getUri
+                        , _xdata = Nothing
+                        }
+                      Just (evalEnv, _) -> do
+                        logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
+                          ("Got eval deps, env size: " <> Text.pack (show (length (show evalEnv))))
+                        result <- evalApp tcRes evalParams recentViz evalEnv
+                        logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
+                          ("Eval result: " <> Text.pack (show result))
+                        pure result
+                | otherwise -> throwError $ TResponseError
+                    { _code = InL LSPErrorCodes_ContentModified
+                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
+                                ", whereas server's version is: " <> Text.pack (show recentViz.vizState.env.verTxtDocId._version)
+                    , _xdata = Nothing
+                    }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
