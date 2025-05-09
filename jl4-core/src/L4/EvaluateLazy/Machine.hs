@@ -34,6 +34,7 @@ import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.EvaluateLazy.ContractFrame
+import L4.Utils.Ratio
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
@@ -50,6 +51,7 @@ data Frame =
   | EqConstructor1 {- -} Reference [(Reference, Reference)]
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
+  | UnaryBuiltin0 UnaryBuiltinFun
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   deriving stock Show
@@ -74,6 +76,8 @@ data UserEvalException =
   | EqualityOnUnsupportedType
   | NonExhaustivePatterns Reference -- we could try to warn statically
   | StackOverflow
+  | DivisionByZero BinOp
+  | NotAnInteger BinOp Rational
   | Stuck Resolved -- ^ stores the term we got stuck on
   deriving stock (Generic, Show)
   deriving anyclass NFData
@@ -249,6 +253,10 @@ backward val = WithPoppedFrame $ \ case
         PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
         EvalRef events
       v@(ValConstructor r []) | r `sameResolved` TypeCheck.fulfilRef -> backward v
+      ValUnaryBuiltinFun fn -> do
+        r <- expect1 rs
+        PushFrame (UnaryBuiltin0 fn)
+        EvalRef r
       ValAssumed r ->
         stuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
@@ -342,6 +350,8 @@ backward val = WithPoppedFrame $ \ case
             EvalRef r1
       Nothing -> InternalException $ RuntimeTypeError $
         "expected a BOOLEAN but found: " <> prettyLayout val <> " when testing equality"
+  Just (UnaryBuiltin0 fn) -> do
+    runBuiltin val fn
   Just (UpdateThunk rf) -> do
     updateThunkToWHNF rf val
     Backward val
@@ -483,12 +493,48 @@ runLit :: Lit -> Machine WHNF
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
+expect1 :: [a] -> Machine a
+expect1 = \case
+  [x] -> pure x
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+
+expectNumber :: WHNF -> Machine Rational
+expectNumber = \case
+  ValNumber f -> pure f
+  _ -> InternalException (RuntimeTypeError "Expected number.")
+
+expectInteger :: BinOp -> Rational -> Machine Integer
+expectInteger op n = do
+  case isInteger n of
+    Nothing -> UserException (NotAnInteger op n)
+    Just i -> pure i
+
+runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
+runBuiltin es op = do
+  val :: Rational <- expectNumber es
+  Backward case op of
+    UnaryIsInteger -> valBool $ isJust $ isInteger val
+    UnaryRound -> valInt $ round val
+    UnaryCeiling -> valInt $ ceiling val
+    UnaryFloor -> valInt $ floor val
+  where
+    valInt :: Integer -> WHNF
+    valInt = ValNumber . toRational
+
 runBinOp :: BinOp -> WHNF -> WHNF -> Machine Config
 runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 + num2)
 runBinOp BinOpMinus  (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 - num2)
 runBinOp BinOpTimes  (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 * num2)
-runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2)        = Backward $ ValNumber (num1 `div` num2)
-runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)        = Backward $ ValNumber (num1 `mod` num2)
+runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2)        = do
+  if num2 /= 0
+    then Backward $ ValNumber (num1 / num2)
+    else UserException (DivisionByZero BinOpDividedBy)
+runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)      = do
+  n1 <- expectInteger BinOpModulo num1
+  n2 <- expectInteger BinOpModulo num2
+  if n2 /= 0
+    then Backward $ ValNumber (toRational $ n1 `mod` n2)
+    else UserException (DivisionByZero BinOpModulo)
 runBinOp BinOpEquals val1             val2                       = runBinOpEquals val1 val2
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
@@ -899,6 +945,16 @@ prettyUserEvalException = \case
     [ "Stack overflow: "
     , "Recursion depth of " <> Text.show maximumStackSize
     , "exceeded." ]
+  DivisionByZero op ->
+    [ "Division by zero in the operation:"
+    , prettyLayout op
+    ]
+  NotAnInteger op num ->
+    [ "Expected an Integer but got the fractional number: " ]
+    <> [ prettyRatio num ]
+    <> [ "During the evaluation of the operation:"
+       , prettyLayout op
+       ]
   Stuck r ->
     [ "I could not continue evaluating, because I needed to know the value of" ]
     <> indentMany r
@@ -916,6 +972,10 @@ initialEnvironment = do
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
   fulfilRef <- AllocateValue fulfilVal
+  isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
+  roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
+  ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
+  floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)
@@ -924,4 +984,8 @@ initialEnvironment = do
       , (TypeCheck.evalContractUnique, evalContractRef)
       , (TypeCheck.eventCUnique, eventCRef)
       , (TypeCheck.fulfilUnique, fulfilRef)
+      , (TypeCheck.isIntegerUnique, isIntegerRef)
+      , (TypeCheck.roundUnique, roundRef)
+      , (TypeCheck.ceilingUnique, ceilingRef)
+      , (TypeCheck.floorUnique, floorRef)
       ]

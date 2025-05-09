@@ -234,7 +234,7 @@ data NamedExpr n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Lit =
-    NumericLit Anno Int
+    NumericLit Anno Rational
   | StringLit  Anno Text
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)

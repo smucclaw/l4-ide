@@ -16,13 +16,17 @@ DECIDE fibNaive n IS
 
 #EVAL fibNaive 15
 
+GIVEN m IS A NUMBER
+      n IS A NUMBER
+      o IS A NUMBER
+GIVETH A NUMBER
 DECIDE fibHelper m n o IS
   IF o EQUALS 0
     THEN m
     ELSE fibHelper OF
            n
            m PLUS n
-           o MINUS 1 
+           o MINUS 1
 
 DECIDE fib n IS
   fibHelper 0 1 n

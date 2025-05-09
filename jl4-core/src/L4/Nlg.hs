@@ -10,6 +10,7 @@ import qualified Base.Text as Text
 import L4.Annotation
 import L4.Lexer (PosToken)
 import L4.Syntax
+import L4.Utils.Ratio (prettyRatio)
 import Optics
 
 -- TODO: I would like to be able to attach meta information and
@@ -259,7 +260,7 @@ instance Linearize (LocalDecl Resolved) where
 
 instance Linearize Lit where
   linearize = \case
-    NumericLit _ num -> text (Text.show num)
+    NumericLit _ num -> text (prettyRatio num)
     StringLit _ t -> text t
 
 instance Linearize (Branch Resolved) where

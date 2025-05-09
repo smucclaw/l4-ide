@@ -38,12 +38,13 @@ data NF = MkNF (Value NF) | ToDeep
   deriving anyclass NFData
 
 data Value a =
-    ValNumber Int -- for now
+    ValNumber Rational
   | ValString Text
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
   | ValObligation Environment MaybeEvaluated MaybeEvaluated (Maybe (Expr Resolved)) (Expr Resolved)
+  | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
@@ -51,9 +52,16 @@ data Value a =
   | ValBreached (ReasonForBreach a)
   deriving stock (Show, Functor, Foldable, Traversable)
 
-data ReasonForBreach a = DeadlineMissed (Value a) (Value a) (Value a) Int
+data ReasonForBreach a = DeadlineMissed (Value a) (Value a) (Value a) Rational
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
+
+data UnaryBuiltinFun
+  = UnaryIsInteger
+  | UnaryRound
+  | UnaryCeiling
+  | UnaryFloor
+  deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
@@ -64,6 +72,7 @@ instance NFData a => NFData (Value a) where
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
+  rnf (ValUnaryBuiltinFun r)      = rnf r
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
@@ -74,3 +83,10 @@ instance NFData a => NFData (Value a) where
 type MaybeEvaluated = Either WHNF RExpr
 
 type RExpr = Expr Resolved
+
+instance NFData UnaryBuiltinFun where
+  rnf :: UnaryBuiltinFun -> ()
+  rnf UnaryIsInteger = ()
+  rnf UnaryRound = ()
+  rnf UnaryCeiling = ()
+  rnf UnaryFloor = ()
