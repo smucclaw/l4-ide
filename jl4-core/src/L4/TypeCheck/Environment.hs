@@ -29,16 +29,20 @@ mkBuiltins
   , "evalContract"
   , "event"
   , "eventC" `rename` "EVENT"
+  , "isInteger" `rename` "IS INTEGER"
+  , "floor" `rename` "FLOOR"
+  , "ceiling" `rename` "CEILING"
+  , "round" `rename` "ROUND"
   , "a", "b", "c", "d", "g", "h", "i"
   ]
 
 boolean :: Type' Resolved
-boolean = TyApp emptyAnno booleanRef []
+boolean = app booleanRef []
 
 -- NUMBER
 
 number :: Type' Resolved
-number = TyApp emptyAnno numberRef []
+number = app numberRef []
 
 -- STRING
 
@@ -48,7 +52,7 @@ string = TyApp emptyAnno stringRef []
 -- LIST
 
 list :: Type' Resolved -> Type' Resolved
-list a = TyApp emptyAnno listRef [a]
+list a = app listRef [a]
 
 -- CONTRACT
 
@@ -57,6 +61,22 @@ contract party action = TyApp emptyAnno contractRef [party, action]
 
 
 -- infos
+
+-- Number conversion
+
+isInteger :: Type' Resolved
+isInteger = fun_ [number] boolean
+
+roundBuiltin :: Type' Resolved
+roundBuiltin = fun_ [number] number
+
+ceilingBuiltin :: Type' Resolved
+ceilingBuiltin = fun_ [number] number
+
+floorBuiltin :: Type' Resolved
+floorBuiltin = fun_ [number] number
+
+-- Number conversion
 
 booleanInfo :: CheckEntity
 booleanInfo =
@@ -74,6 +94,10 @@ numberInfo :: CheckEntity
 numberInfo =
   KnownType 0 [] Nothing
 
+rationalInfo :: CheckEntity
+rationalInfo =
+  KnownType 0 [] Nothing
+
 stringInfo :: CheckEntity
 stringInfo =
   KnownType 0 [] Nothing
@@ -84,7 +108,25 @@ listInfo =
 
 emptyInfo :: CheckEntity
 emptyInfo =
-  KnownTerm (Forall emptyAnno [aDef] (list (TyApp emptyAnno aRef []))) Constructor
+  KnownTerm (forall' [aDef] (list (app aRef []))) Constructor
+
+-- Number conversion
+
+isIntegerInfo :: CheckEntity
+isIntegerInfo =
+  KnownTerm isInteger Computable
+
+roundInfo :: CheckEntity
+roundInfo =
+  KnownTerm roundBuiltin Computable
+
+ceilingInfo :: CheckEntity
+ceilingInfo =
+  KnownTerm ceilingBuiltin Computable
+
+floorInfo :: CheckEntity
+floorInfo =
+  KnownTerm floorBuiltin Computable
 
 contractInfo :: CheckEntity
 contractInfo =
@@ -131,6 +173,10 @@ initialEnvironment =
     , (NormalName "EVENT",        [eventCUnique      ])
     , (NormalName "EVALCONTRACT", [evalContractUnique])
     , (NormalName "FULFILLED",    [fulfilUnique      ])
+    , (NormalName "IS INTEGER",   [isIntegerUnique ])
+    , (NormalName "ROUND",        [roundUnique     ])
+    , (NormalName "CEILING",      [ceilingUnique   ])
+    , (NormalName "FLOOR",        [floorUnique     ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -149,4 +195,8 @@ initialEntityInfo =
     , (eventCUnique,       (eventCName,       eventCInfo      ))
     , (evalContractUnique, (evalContractName, evalContractInfo))
     , (fulfilUnique,       (fulfilName,       fulfilInfo      ))
+    , (isIntegerUnique,    (isIntegerName,    isIntegerInfo  ))
+    , (roundUnique,        (roundName,        roundInfo       ))
+    , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
+    , (floorUnique,        (floorName,        floorInfo       ))
     ]

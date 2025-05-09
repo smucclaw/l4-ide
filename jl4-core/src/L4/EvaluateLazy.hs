@@ -189,6 +189,7 @@ nfAux  d (ValCons r1 r2)             = do
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
 nfAux _d (ValObligation env party act due followup) = do
   pure (MkNF (ValObligation env party act due followup))
+nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
   vs <- traverse (\ r -> runConfigM (evalRef r) >>= nfAux (d - 1)) rs

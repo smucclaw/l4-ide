@@ -51,6 +51,7 @@ library
     pretty-simple,
     prettyprinter,
     safe-exceptions,
+    scientific,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
@@ -95,3 +96,4 @@ library
     L4.TypeCheck.Unify
     L4.TypeCheck.With
     L4.Utils.RevList
+    L4.Utils.Ratio
