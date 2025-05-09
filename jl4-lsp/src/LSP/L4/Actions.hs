@@ -130,7 +130,6 @@ evalApp tcRes evalParams recentViz evalEnv =
 
       extendModuleWithEvalAppDirective :: Module Resolved -> Module Resolved
       extendModuleWithEvalAppDirective (MkModule ann nuri (MkSection sann sresolved maka decls)) =
-        trace ("extendModuleWithEvalAppDirective called with evalAppDirective: " <> show evalAppDirective  <> "\n\nand decls:\n" <> show (clearAnno $ map clearAnno decls)) $
         MkModule ann nuri (MkSection sann sresolved maka (evalAppDirective : decls))
   in do
     results <- liftIO $ EL.execEvalModuleWithEnv evalEnv (extendModuleWithEvalAppDirective tcRes.module')
