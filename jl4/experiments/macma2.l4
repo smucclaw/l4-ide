@@ -23,6 +23,7 @@ ASSUME `any other person or class of persons appointed by the Minister as an aut
 ASSUME Action IS A TYPE
 ASSUME ActionTarget IS A TYPE
 
+{-
 ASSUME Offence IS A TYPE
 ASSUME `is a Singapore offence` IS A FUNCTION FROM Offence TO BOOLEAN
 ASSUME `is a foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
@@ -30,6 +31,74 @@ ASSUME `is drug dealing offence` IS A FUNCTION FROM Offence TO BOOLEAN
 ASSUME `is foreign offence` IS A FUNCTION FROM Offence TO BOOLEAN
 ASSUME `is foreign tax evasion offence` IS A FUNCTION FROM Offence TO BOOLEAN
 ASSUME `is a serious offence` IS A FUNCTION FROM Offence TO BOOLEAN
+-}
+
+-- Meng's snippet on Slack:
+
+DECLARE Offence
+  HAS
+    action      IS AN Action
+    perpetrator IS A Person
+
+ASSUME `offence against law of Singapore` IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME `specified in First Schedule` IS FUNCTION FROM Offence TO BOOLEAN
+{-
+ASSUME `conspiracy to commit` IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME `inciting another to commit` IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME `attempting to commit` IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME aiding IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME abetting IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME counselling IS FUNCTION FROM Offence TO BOOLEAN
+ASSUME `procuring the commission of` IS FUNCTION FROM Offence TO BOOLEAN
+
+GIVEN  offence IS AN Offence
+`drug dealing offence` MEANS
+           `offence against law of Singapore` `offence`
+       AND `specified in First Schedule`      ^
+  OR   `conspiracy to commit`                 ^
+  OR   `inciting another to commit`           ^
+  OR   `attempting to commit`                 ^
+  OR          aiding                          ^
+          OR  abetting                        ^
+          OR  counselling                     ^
+          OR  `procuring the commission of`   ^
+-}
+
+GIVEN offence IS AN Offence
+`scheduled` MEANS
+      `offence against law of Singapore` `offence`
+  AND `specified in First Schedule`      ^
+
+-- :: (Offence -> Bool) -> (Offence -> Bool)
+ASSUME `conspiracy to commit` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `inciting another to commit` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `attempting to commit` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `aiding` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `abetting` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `counselling` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+ASSUME `procuring the commission of` IS A FUNCTION FROM A FUNCTION FROM Offence TO BOOLEAN AND AN Offence TO BOOLEAN
+
+GIVEN  offence IS AN Offence
+`drug dealing offence` MEANS
+     `scheduled` offence
+  OR `conspiracy to commit`            `such` offence
+  OR `inciting another to commit`      ^      ^
+  OR `attempting to commit`            ^      ^
+  OR     aiding                        ^      ^
+     OR  abetting                      ^      ^
+     OR  counselling                   ^      ^
+     OR  `procuring the commission of` ^      ^
+  WHERE
+    such MEANS scheduled
+
+ASSUME `serious offence` IS FUNCTION FROM Action AND Person TO BOOLEAN
+
+GIVEN  act  IS AN Action
+       p    IS A Person
+`Singapore offence` MEANS
+     `drug dealing offence` act p
+  OR `serious offence` act p
+
 
 ASSUME Matter IS A TYPE
 ASSUME `is criminal matter` IS A FUNCTION FROM Matter TO BOOLEAN
