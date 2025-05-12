@@ -22,7 +22,7 @@ data EvalAppRequestParams = EvalAppRequestParams
   { appExpr :: ID,
     {- | I don't want to bother defining a BoolValue just for this;
         can be cleaned up in the future.
-        Also, prob better to make UBoolLit exprs or smtg
+        Also, prob better to make the @args@ UBoolLit exprs or smtg
     -}
     args :: [UBoolValue],
     verDocId :: LSP.VersionedTextDocumentIdentifier

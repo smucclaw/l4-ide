@@ -361,7 +361,6 @@ handlers recorder =
               
               (Just tcRes, Just recentViz) 
                 | evalParams.verDocId == recentViz.vizState.env.verTxtDocId -> do
-                    logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri ("Evaluating with params: " <> Text.pack (show evalParams))
                     mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [recentViz.vizState.env.moduleUri] GetLazyEvaluationDependencies) recentViz.vizState.env.moduleUri
                     case mEvalDeps of
                       Nothing -> throwError $ TResponseError
@@ -370,8 +369,6 @@ handlers recorder =
                         , _xdata = Nothing
                         }
                       Just (evalEnv, _) -> do
-                        logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
-                          ("Got eval deps, env size: " <> Text.pack (show (length (show evalEnv))))
                         result <- evalApp tcRes evalParams recentViz evalEnv
                         logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
                           ("Eval result: " <> Text.pack (show result))

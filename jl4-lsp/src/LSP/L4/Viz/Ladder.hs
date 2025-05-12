@@ -69,7 +69,7 @@ data VizEnv = MkVizEnv
 data VizState = MkVizState
   { env      :: !VizEnv
   , maxId    :: !ID
-  , appExprs :: Map Int (Expr Resolved)
+  , appExprs :: !(Map Int (Expr Resolved))
   -- ^ Unique of V.ID => App exprs
   }
   deriving stock (Show, Generic, Eq)
