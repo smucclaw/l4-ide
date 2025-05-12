@@ -1,6 +1,170 @@
--- metadata asdfasdfasdlkfj
+// this is a comment
+IMPORT prelude -- a core set of base libraries; in future this will be assumed
 
-IMPORT Prelude
+§ SAFE
+§§ Preamble
+`about this document` MEANS
+  `Agreement Template` WITH
+    jurisdiction IS "Singapore"
+    version      IS "1.2"
+    safeType     IS `SAFE (Post-Money)`
+
+§§ Parties
+// sample startup
+startup MEANS
+  Company WITH
+    `Name`           IS "My Deca Unicorn Inc."
+    `Address`        IS "123 Acme St, Singapore"
+    `Jurisdiction`   IS "Singapore"
+    `Company Number` IS "12345678"
+    `Cap Table`      IS `Pre Money Cap Table`
+    
+  WHERE
+    `Pre Money Cap Table` MEANS -- founder shares
+      LIST (`Cap Table Entry` OF 
+              Investor WITH Name         IS "Thomas Gorissen"
+                            Address      IS (LIST "23 Sentosa Way")
+                            Jurisdiction IS JUST "Singapore"
+                            `ID Number`  IS JUST "SG12345678"
+              Security WITH
+                Instrument IS "Shares"
+                Name       IS "ordinary"
+                Quantity   IS `Shares` 123
+             )
+
+`Lead Angel` MEANS
+  `Cap Table Entry` OF
+     Investor OF "Eduardo Saverin"
+                 (LIST "25 Sentosa Way")
+                 JUST "Singapore"
+                 TBD
+     Security OF "Shares", "ordinary", `Shares` 23
+
+§§ `Key Parameters`
+
+DECLARE `Valuation Cap`        IS A Money
+DECLARE `Discount Rate`        IS A NUMBER -- out of 100
+DECLARE `Investment Amount`    IS A Money
+DECLARE `Post-Money Valuation` IS A Money
+
+`Pre-Money Valuation` MEANS
+  Money WITH 
+    amount IS 10000000
+    currency IS "SGD"
+
+§§ `Events`
+
+§§§ `Equity Financing`
+
+-- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
+--      on the initial closing of such Equity Financing,
+--      this Safe will automatically convert into the greater of:
+--         (1) the number of Standard Preference Shares equal to
+--                 the Purchase Amount divided by
+--                 the lowest price per share of the Standard Preference Shares; or
+--         (2) the number of Safe Preference Shares equal to
+--                 the Purchase Amount divided by the Safe Price.
+-- In connection with the automatic conversion of this Safe into Standard Preference Shares or Safe Preference Shares,
+-- the Investor will execute and deliver to the Company all of the transaction documents related to the Equity Financing;
+--    provided, that such documents (i) are the same documents to be entered into with the purchasers of Standard Preference Shares,
+--                                      with appropriate variations for the Safe Preference Shares if applicable,
+--                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
+--                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
+
+GIVEN `SAFE Events` IS A LIST OF Event
+UPON  `Equity Financing Event` `SAFE Events`
+THEN  `rewrite cap table`
+ AND     PARTY  startup
+         MUST   NOTIFY  `Investor`
+                  WITH  Notice WITH
+                          contents IS "please sign this stack of documents"
+         HENCE PARTY investor
+                MUST NOTIFY startup
+                       WITH `executed by` contents investor
+WHERE `rewrite cap table` MEANS
+-- 	1.  convert the SAFE into shares
+-- 	2.  add the shares to the cap table
+-- 	3.  remove the SAFE from the cap table
+-- 	4.  update the cap table
+
+-- what do we actually do here?
+-- we rewrite the cap table
+-- and we generate some paperwork that the investor MUST sign
+-- and if the investor doesn't sign, the investor is not entitled to the shares
+        
+GIVEN `SAFE Events` IS A LIST OF Event
+DECIDE `Equity Financing Event` IF
+   any (GIVEN event YIELD event's name EQUALS "Equity Financing")
+       `SAFE Events`
+
+DECIDE `Equity Financing Conversion` IS
+  0000
+
+
+
+§§§ `Liquidity Event`
+§§§ `Dissolution Event`
+§§§ `Termination Event`
+
+§§ Definitions
+
+-- class methods, or maybe a $_
+GIVEN Company IS A Company
+`Capital Shares` MEANS
+  sum OF
+    map OF
+      GIVEN `Cap Table Entry` YIELD amount OF `Cap Table Entry`'s Security's Quantity
+      filter OF
+         GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s Security's Instrument EQUALS "Shares"
+         Company's `Cap Table`
+-- we want to be able to say, later,
+GIVEN c IS A Company
+cs MEANS c's `Capital Shares`
+
+-- 	“Equity Financing” means a bona fide transaction or series of transactions
+--                             with the principal purpose of raising capital,
+--                           pursuant to which the Company issues and sells Preference Shares at a fixed valuation,
+--                             including but not limited to, a pre-money or post-money valuation.
+
+
+-- 	“Change of Control” means
+-- (i)   a transfer  (whether  by merger,  consolidation, exchange  or  otherwise),  in  one  transaction  or  a  series  of related transactions, to a person or group of affiliated persons (other than an underwriter of the Company’s securities), of the Company’s securities or Capital Shares
+--       if, after such closing, such person or group of affiliated persons would hold at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity,
+-- (ii)  any reorganization, scheme of arrangement, merger, amalgamation or other consolidation of the Company, other than a transaction or series of related transactions in which the holders of the voting securities of the Company outstanding immediately prior to such transaction or series of related transactions retain, immediately after such transaction or series of related transactions, at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity or
+-- (iii) a sale, lease or other disposition of all or substantially all of the assets of the Group Companies.
+
+-- a transfer is composed of one or more transactions that affect the cap table in some way
+
+-- we need list-splitOn semantics
+--GIVEN `startup before`  IS A Company
+--      events            IS LIST OF Event
+--`Change of Control` MEANS
+--  NOT          `controller of` `startup before`
+--       EQUALS  `controller of` `startup after`
+--  WHERE
+
+§§ `Company Representations`
+
+§§ `Investor Representations`
+
+§§ `Miscellaneous`
+
+-- document versioning and variety
+
+DECLARE SafeType IS ONE OF
+    `SAFT`
+    `SAFE`
+    `SAFE+`
+    `SAFE+ (Post-Money)`
+    `SAFE (Post-Money)`
+    `SAFE (Post-Money) (with MFN)`
+
+DECLARE `Agreement Template`
+    HAS jurisdiction IS A STRING
+        version      IS A STRING
+        safeType     IS A SafeType
+
+-- These will live in libraries in future
 
 -- IMPORT Money
 DECLARE Money
@@ -22,9 +186,18 @@ DECLARE NaturalPerson
         jurisdiction   IS A MAYBE STRING
         id_number      IS A MAYBE STRING
 
-DECLARE Investor IS ONE OF
+DECLARE Inv IS ONE OF
    InvNP HAS np IS A NaturalPerson
    InvCo HAS nc IS A Company
+
+-- the above is more complete; the below is more relatable; it is simplified.
+DECLARE Investor
+    HAS `Name`         IS A STRING
+        `Address`      IS A LIST OF STRING
+        `Jurisdiction` IS A MAYBE STRING
+        `ID Number`    IS A MAYBE STRING
+
+DECLARE Founder IS AN Investor
 
 -- IMPORT Notices
 GIVEN c IS A LIST OF Document
@@ -57,179 +230,36 @@ DECLARE Document
         signatures IS A LIST OF Investor
         date       IS A Date
 
-§ SAFE
 
-§§ Colophon
+DECLARE `Security Type` IS A STRING
 
-DECLARE SafeType IS ONE OF
-    `SAFT`
-    `SAFE`
-    `SAFE+`
-    `SAFE+ (Post-Money)`
-    `SAFE (Post-Money)`
-    `SAFE (Post-Money) (with MFN)`
+-- [TODO]
+-- request constructor aliases, allowing singleton arguments to sum types
+-- allowing us to say something like
+-- DECLARE `Security Quantity` IS ONE OF
+--     `Number of Shares` IS A NUMBER
+--     `Dollar Amount`    IS A Money
 
-DECLARE `Agreement Template`
-    HAS jurisdiction IS A STRING
-        version      IS A STRING
-        safeType     IS A SafeType
-
-GIVETH A `Agreement Template`
-`about this document` MEANS
-  `Agreement Template` WITH
-    jurisdiction IS "Singapore"
-    version      IS "1.2"
-    safeType     IS `SAFE (Post-Money)`
-
-§§ Parties
-
-
-
--- class methods, or maybe a $_
-GIVEN Company IS A Company
-`Capital Shares` MEANS
-    sum OF
-      map OF
-        GIVEN cte YIELD getNum OF cte's Sec's Quantity
-        filter OF
-           GIVEN cte YIELD cte's Sec's Instrument EQUALS `Shares`
-           Company's `Cap Table`
--- we want to be able to say, later,
-GIVEN c IS A Company
-cs MEANS c's `Capital Shares`
-
-DECLARE `Security Type` IS ONE OF
-    `Shares`
-    `Convertible Notes`
-    `Warrants`
-    `Options`
-    `SAFE`
-    `KISS`
 
 DECLARE `Security Quantity` IS ONE OF
-    `Number of Shares` HAS n IS A NUMBER
-    `Dollar Amount`    HAS m IS A Money
+    Shares   HAS count IS A NUMBER
+    Dollars  HAS money IS A Money
 
-GIVEN sq IS A `Security Quantity`
-getNum MEANS
-  CONSIDER sq
-      WHEN `Number of Shares` n THEN n
-      WHEN `Dollar Amount`    m THEN m's amount
-
-ns MEANS `Number of Shares` WITH n IS 100
-nd MEANS `Dollar Amount` WITH m IS Money WITH amount IS 1000, currency IS "SGD"
-
-sq1 MEANS `Number of Shares` 102
-sq2 MEANS `Dollar Amount` OF Money WITH amount IS 1000, currency IS "SGD"
+GIVEN `some security quantity` IS A `Security Quantity`
+`amount` MEANS
+  CONSIDER `some security quantity`
+      WHEN Shares   count  THEN count
+      WHEN Dollars  money  THEN money's amount
 
 DECLARE Security
-    HAS `Instrument`     IS A `Security Type`
-        `Name`           IS A STRING -- e.g. "Class A", "Class B", "SAFE", "KISS"
-        `Quantity`       IS A `Security Quantity`
+    HAS Instrument     IS A `Security Type`
+        Name           IS A STRING -- e.g. "Class A", "Class B", "SAFE", "KISS"
+        Quantity       IS A `Security Quantity`
 
 DECLARE `Cap Table Entry`
-    HAS `Holder`       IS A Investor
-        `Sec`          IS A Security
+    HAS Holder       IS A Investor
+        Security     IS A Security
 
--- sample startup
-DECIDE acme IS
-  Company WITH
-    `Name`           IS "Acme Inc."
-    `Address`        IS "123 Acme St, Singapore"
-    `Jurisdiction`   IS "Singapore"
-    `Company Number` IS "12345678"
-    `Cap Table`      IS LIST `Cap Table Entry` WITH Holder   IS InvNP OF NaturalPerson OF "Meng"
-                                                                                          JUST "Mister"
-                                                                                          JUST "23 Sentosa Way"
-                                                                                          JUST "Singapore"
-                                                                                          JUST "SG12345678"
-                                                    Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 123
-                             `Cap Table Entry` WITH Holder   IS InvNP OF NaturalPerson OF "Thomas", JUST "Meister", JUST "32 Eastville West", JUST "Singapore", JUST "DE12345678"
-                                                    Sec      IS Security OF `Shares`, "ordinary", `Number of Shares` 234
+`TBD` MEANS NOTHING
 
-
-§§ `Key Parameters`
-
-DECLARE `Valuation Cap`        IS A Money
-DECLARE `Discount Rate`        IS A NUMBER -- out of 100
-DECLARE `Investment Amount`    IS A Money
-DECLARE `Post-Money Valuation` IS A Money
-DECLARE `Pre-Money Valuation`  IS A Money
-
-§§ `Events`
-
-§§§ `Equity Financing`
-
--- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
---      on the initial closing of such Equity Financing,
---      this Safe will automatically convert into the greater of:
---         (1) the number of Standard Preference Shares equal to
---                 the Purchase Amount divided by
---                 the lowest price per share of the Standard Preference Shares; or
---         (2) the number of Safe Preference Shares equal to
---                 the Purchase Amount divided by the Safe Price.
--- In connection with the automatic conversion of this Safe into Standard Preference Shares or Safe Preference Shares,
--- the Investor will execute and deliver to the Company all of the transaction documents related to the Equity Financing;
---    provided, that such documents (i) are the same documents to be entered into with the purchasers of Standard Preference Shares,
---                                      with appropriate variations for the Safe Preference Shares if applicable,
---                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
---                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
-
--- what do we actually do here?
--- we rewrite the cap table
--- and we generate some paperwork that the investor MUST sign
--- and if the investor doesn't sign, the investor is not entitled to the shares
-        
-GIVEN trace IS A LIST OF Event
-DECIDE `Equity Financing Event` IF
-   filter OF (GIVEN e YIELD e's name EQUALS "Equity Financing")
-             trace
-
--- GIVEN `startup` IS A Company
---       trace IS A LIST OF Event
--- UPON `Equity Financing Event` trace
--- THEN  `rewrite cap table`
---  AND     PARTY  startup
---          MUST   NOTIFY  `Investor`
---                   WITH  Notice WITH
---                           contents IS "please sign this stack of documents"
---          HENCE PARTY investor
---                 MUST NOTIFY startup
---                        WITH `executed by` contents investor
---   WHERE
-
-
-§§§ `Liquidity Event`
-§§§ `Dissolution Event`
-§§§ `Termination Event`
-
-§§ Definitions
-
--- 	“Equity Financing” means a bona fide transaction or series of transactions
---                             with the principal purpose of raising capital,
---                           pursuant to which the Company issues and sells Preference Shares at a fixed valuation,
---                             including but not limited to, a pre-money or post-money valuation.
-
-
--- 	“Change of Control” means
--- (i)   a transfer  (whether  by merger,  consolidation, exchange  or  otherwise),  in  one  transaction  or  a  series  of related transactions, to a person or group of affiliated persons (other than an underwriter of the Company’s securities), of the Company’s securities or Capital Shares
---       if, after such closing, such person or group of affiliated persons would hold at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity,
--- (ii)  any reorganization, scheme of arrangement, merger, amalgamation or other consolidation of the Company, other than a transaction or series of related transactions in which the holders of the voting securities of the Company outstanding immediately prior to such transaction or series of related transactions retain, immediately after such transaction or series of related transactions, at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity or
--- (iii) a sale, lease or other disposition of all or substantially all of the assets of the Group Companies.
-
--- a transfer is composed of one or more transactions that affect the cap table in some way
-
--- we need list-splitOn semantics
---GIVEN `startup before`  IS A Company
---      events            IS LIST OF Event
---`Change of Control` MEANS
---  NOT          `controller of` `startup before`
---       EQUALS  `controller of` `startup after`
---  WHERE
-
-§§ `Company Representations`
-
-§§ `Investor Representations`
-
-§§ `Miscellaneous`
-
+// traditionally null == nothing ... let's also do TBD == nothing
