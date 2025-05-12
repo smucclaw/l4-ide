@@ -1,4 +1,6 @@
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant lambda" #-}
 
 module LSP.L4.Viz.Ladder (
   -- * Entrypoint
@@ -11,7 +13,7 @@ module LSP.L4.Viz.Ladder (
 
   -- * Helpers
   prettyPrintVizError,
-  lookupApp
+  lookupEvalAppMaker,
   ) where
 
 import Control.DeepSeq
@@ -26,12 +28,13 @@ import qualified Language.LSP.Protocol.Types as LSP
 import qualified L4.TypeCheck as TC
 import L4.Annotation
 import L4.Syntax
+import L4.Print (prettyLayout)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
-import L4.Print (prettyLayout)
+import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
 import qualified L4.Transform as Transform (simplify)
 
 {- | Temporary hack to disable the translation to IRExpr App
@@ -66,20 +69,27 @@ data VizEnv = MkVizEnv
   }
   deriving stock (Show, Generic, Eq)
 
+
 data VizState = MkVizState
-  { env      :: !VizEnv
-  , maxId    :: !ID
-  , appExprs :: !(Map Int (Expr Resolved))
-  -- ^ Unique of V.ID => App exprs
+  { env           :: !VizEnv
+  , maxId         :: !ID
+  , evalAppMakers :: !(Map Int (V.EvalAppRequestParams -> TopDecl Resolved))
+  -- ^ Map from Unique of V.ID to eval-app-directive maker
   }
-  deriving stock (Show, Generic, Eq)
+  deriving stock (Generic)
+
+instance Show VizState where
+  show MkVizState{env, maxId, evalAppMakers} = 
+    "MkVizState { env = " <> show env <> 
+    ", maxId = " <> show maxId <> 
+    ", (keys of) evalAppMakers = " <> show (Map.keys evalAppMakers) <> " }"
 
 mkInitialVizState :: VizEnv -> VizState
 mkInitialVizState env =
   MkVizState
     { env = env
     , maxId = MkID 0
-    , appExprs = Map.empty
+    , evalAppMakers = Map.empty
     }
 
 -- Monad ops
@@ -107,13 +117,19 @@ getShouldSimplify = do
   env <- getVizEnv
   pure env.shouldSimplify
 
-storeApp :: V.ID -> Expr Resolved -> Viz ()
-storeApp vid expr = do
-  #appExprs %= Map.insert vid.id expr
+prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
+prepEvalAppMaker vid = \case
+  App appAnno appResolved _ ->
+    let maker = 
+         \V.EvalAppRequestParams{args} -> 
+                  Directive appAnno $ LazyEval appAnno $ 
+                    App appAnno appResolved $ map toBoolExpr args
+    in #evalAppMakers %= Map.insert vid.id maker
+  _ -> pure ()
 
 -- | Helper
-lookupApp :: V.ID -> VizState -> Maybe (Expr Resolved)
-lookupApp vid vs = Map.lookup vid.id vs.appExprs
+lookupEvalAppMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> TopDecl Resolved)
+lookupEvalAppMaker vs vid = Map.lookup vid.id vs.evalAppMakers
 
 ------------------------------------------------------
 -- VizError
@@ -199,31 +215,31 @@ translateExpr False = go
     go e =
       case e of
         Not _ negand -> do
-          uid <- getFresh
-          V.Not uid <$> go negand
+          vid <- getFresh
+          V.Not vid <$> go negand
         And {} -> do
-          uid <- getFresh
-          V.And uid <$> traverse go (scanAnd e)
+          vid <- getFresh
+          V.And vid <$> traverse go (scanAnd e)
         Or {} -> do
-          uid <- getFresh
-          V.Or uid <$> traverse go (scanOr e)
+          vid <- getFresh
+          V.Or vid <$> traverse go (scanOr e)
         Where _ e' _ds -> go e' -- TODO: lossy
 
         -- TODO: Should handle BoolLits differently too
         -- 'var'
         App _ resolved [] -> do
-          uid <- getFresh
-          storeApp uid e
-          leafFromVizName uid (mkVizNameWith prettyLayout resolved)
+          vid <- getFresh
+          prepEvalAppMaker vid e
+          leafFromVizName vid (mkVizNameWith prettyLayout resolved)
 
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
           if isDevMode && fnOfAppIsFnFromBooleansToBoolean
             then do
-              uid <- getFresh
-              storeApp uid e
-              V.App uid (mkVizNameWith nameToText fnResolved) <$> traverse go args
+              vid <- getFresh
+              prepEvalAppMaker vid e
+              V.App vid (mkVizNameWith nameToText fnResolved) <$> traverse go args
             else
               leaf "" $ Text.unwords $ (nameToText . getOriginal $ fnResolved) : (prettyLayout <$> args)
 
@@ -289,3 +305,13 @@ isBooleanType ty = do
     TyApp _ (Ref _ uniq _) [] ->
       uniq == TC.booleanUnique
     _ -> False
+
+------------------------------------------------------
+-- UBoolValue x L4 True/False conversion helpers
+------------------------------------------------------
+
+toBoolExpr :: V.UBoolValue -> Expr Resolved
+toBoolExpr = \case
+  V.FalseV   -> App emptyAnno TC.falseRef []
+  V.TrueV    -> App emptyAnno TC.trueRef []
+  V.UnknownV -> error "impossible for now"

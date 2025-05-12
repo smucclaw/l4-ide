@@ -293,12 +293,12 @@ data ShakeExtras = ShakeExtras
     }
 
 data RecentlyVisualised = RecentlyVisualised
-  { pos     :: !SrcPos
-  , name    :: !RawName
-  , type'   :: !(Type' Resolved)
+  { pos       :: !SrcPos
+  , name      :: !RawName
+  , type'     :: !(Type' Resolved)
   , vizState  :: !Ladder.VizState
   }
-  deriving stock (Show, Eq)
+  deriving stock (Show)
 
 type GetStalePersistent = NormalizedUri -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 

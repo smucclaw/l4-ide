@@ -117,29 +117,16 @@ evalApp
   -> EL.Environment
   -> ExceptT (TResponseError method) m Aeson.Value
 evalApp tcRes evalParams recentViz evalEnv =
-  -- TODO: Remove these comments in the final cleanup
-  -- 1. Prep an expanded module: Prepend a LazyEval _ appOfUserArgs to the original module, where the actual args are from evalParams.args
-  -- 2. Prep an initial environment, using the Environment from the result of the `EvaluateLazy` rule.
-  -- 3. `execEvalModuleWithEnv` using the expanded module and initial environmnt
-  let
-      evalAppDirective :: TopDecl Resolved =
-        Directive emptyAnno $ LazyEval emptyAnno
-                            $ mkAppOfUserArgs evalParams recentViz.vizState
-
-      extendModuleWithEvalAppDirective :: Module Resolved -> Module Resolved
-      extendModuleWithEvalAppDirective (MkModule ann nuri (MkSection sann sresolved maka decls)) =
-        MkModule ann nuri (MkSection sann sresolved maka (evalAppDirective : decls))
-  in do
-    results <- liftIO $ EL.execEvalModuleWithEnv evalEnv (extendModuleWithEvalAppDirective tcRes.module')
-    Aeson.toJSON <$> getEvalResult (snd results)
+  case Ladder.lookupEvalAppMaker recentViz.vizState evalParams.appExpr of
+    Nothing -> defaultResponseError "No eval app directive maker found" -- TODO: Improve error codehere
+    Just evalAppMaker -> do
+      let evalAppDirective = evalAppMaker evalParams
+      (_, results) <- liftIO $ EL.execEvalModuleWithEnv evalEnv (prependDirectiveToModule evalAppDirective tcRes.module')
+      Aeson.toJSON <$> getEvalResult results
   where
-    mkAppOfUserArgs :: EvalAppRequestParams -> VizState -> Expr Resolved
-    mkAppOfUserArgs EvalAppRequestParams{appExpr} vizSt =
-      case Ladder.lookupApp appExpr vizSt of
-        Just (App appAnno appResolved _) -> App appAnno appResolved $
-                                              map toBoolExpr evalParams.args
-        Just (AppNamed {})               -> error "not implemented yet"
-        _                                -> error "impossible"
+    prependDirectiveToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
+    prependDirectiveToModule newDecl (MkModule ann nuri (MkSection sann sresolved maka decls)) =
+      MkModule ann nuri (MkSection sann sresolved maka (newDecl : decls))
 
     evalResultToLadderEvalAppResult :: Monad m => EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
     evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
@@ -152,12 +139,6 @@ evalApp tcRes evalParams recentViz evalEnv =
 
     throwExpectBoolResultError :: Monad m => ExceptT (TResponseError method) m a
     throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"
-
-    toBoolExpr :: Ladder.UBoolValue -> Expr Resolved
-    toBoolExpr = \case
-      Ladder.FalseV   -> App emptyAnno falseRef []
-      Ladder.TrueV    -> App emptyAnno trueRef []
-      Ladder.UnknownV -> error "impossible for now"
 
     toUBoolValue :: Monad m => Resolved -> ExceptT (TResponseError method) m Ladder.UBoolValue
     toUBoolValue resolved = case getUnique resolved of
