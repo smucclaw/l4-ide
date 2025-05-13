@@ -302,8 +302,8 @@ handlers recorder =
 
           --  Check if can make viz with a given simplify flag
           canVisualize decide simplify =
-            let env = Ladder.mkVizEnv verTextDocId typeCheck.substitution simplify
-            in isRight (Ladder.doVisualize decide env)
+            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.substitution simplify
+            in isRight (Ladder.doVisualize decide cfg)
 
           decideToCodeLens decide =
             -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
@@ -359,13 +359,14 @@ handlers recorder =
               -- Another approach would be to make a new virtual file with the existing module + our directive,
               -- and use oneshotL4ActionAndErrors on that new file
               
-              (Just tcRes, Just recentViz) 
-                | evalParams.verDocId == recentViz.vizState.env.verTxtDocId -> do
-                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [recentViz.vizState.env.moduleUri] GetLazyEvaluationDependencies) recentViz.vizState.env.moduleUri
+              (Just tcRes, Just recentViz@(Ladder.getVizConfig . (.vizState) -> vizConfig)) 
+                | evalParams.verDocId == vizConfig.verTxtDocId -> do
+                    let nuri = vizConfig.moduleUri
+                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [nuri] GetLazyEvaluationDependencies) nuri
                     case mEvalDeps of
                       Nothing -> throwError $ TResponseError
                         { _code = InR ErrorCodes_InvalidRequest
-                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri recentViz.vizState.env.moduleUri).getUri
+                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri nuri).getUri
                         , _xdata = Nothing
                         }
                       Just (evalEnv, _) -> do
@@ -376,7 +377,7 @@ handlers recorder =
                 | otherwise -> throwError $ TResponseError
                     { _code = InL LSPErrorCodes_ContentModified
                     , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
-                                ", whereas server's version is: " <> Text.pack (show recentViz.vizState.env.verTxtDocId._version)
+                                ", whereas server's version is: " <> Text.pack (show vizConfig.verTxtDocId._version)
                     , _xdata = Nothing
                     }
     ]

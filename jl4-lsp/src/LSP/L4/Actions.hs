@@ -32,7 +32,6 @@ import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
 
-import LSP.L4.Viz.Ladder (VizEnv (..), VizState (..))
 import qualified LSP.L4.Viz.Ladder as Ladder
 import qualified LSP.L4.Viz.VizExpr as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
@@ -168,8 +167,8 @@ visualise
 visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
   let uri = verTextDocId._uri
 
-  -- Try to pinpoint a Decide (and VizEnv) based on how the command was issued (autorefresh vs code action/code lens)
-  mdecide :: Maybe (Decide Resolved, Ladder.VizEnv) <- case msrcPos of
+  -- Try to pinpoint a Decide (and VizConfig) based on how the command was issued (autorefresh vs code action/code lens)
+  mdecide :: Maybe (Decide Resolved, Ladder.VizConfig) <- case msrcPos of
     -- a. the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
@@ -177,7 +176,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      let newVizEnv = updateVizEnv verTextDocId tcRes recentlyVisualised
+      let newVizEnv = updateVizConfig verTextDocId tcRes recentlyVisualised
       pure (decide, newVizEnv)
 
     -- b. the command was issued by a code action or codelens
@@ -188,7 +187,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
         [decide] ->
-          let vizEnv = Ladder.mkVizEnv verTextDocId tcRes.substitution simp
+          let vizEnv = Ladder.mkVizConfig verTextDocId tcRes.substitution simp
           in pure $ Just (decide, vizEnv)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
@@ -200,7 +199,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
         = Just RecentlyVisualised
           { pos = range.start
           , name = rawName $ getName appform
-          , type' = applyFinalSubstitution vizState.env.substitution vizState.env.moduleUri ty
+          , type' = applyFinalSubstitution (Ladder.getVizConfig vizState).substitution (Ladder.getVizConfig vizState).moduleUri ty
           , vizState = vizState
           }
       recentlyVisualisedDecide _ _ = Nothing

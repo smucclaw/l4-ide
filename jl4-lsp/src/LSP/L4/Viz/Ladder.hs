@@ -7,15 +7,17 @@ module LSP.L4.Viz.Ladder (
   doVisualize,
 
   -- * VizEnv, VizState
-  VizEnv (..),
+  VizConfig (..),
+  mkVizConfig,
   VizState (..),
-  mkVizEnv,
 
-  -- * Helpers
-  prettyPrintVizError,
+  -- * Viz State helpers
   lookupEvalAppMaker,
+  getVizConfig,
+  -- * Other helpers
+  prettyPrintVizError,
   ) where
-
+    
 import Control.DeepSeq
 import Control.Monad.Except
 import Base
@@ -46,22 +48,22 @@ isDevMode = False
 -- Monad
 ------------------------------------------------------
 
-newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
+newtype Viz a = MkViz {getViz :: VizState -> (Either VizError a, VizState)}
   deriving
     (Functor, Applicative, Monad, MonadState VizState, MonadError VizError)
     via ExceptT VizError (State VizState)
 
-mkVizEnv :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizEnv
-mkVizEnv verTxtDocId substitution shouldSimplify =
+mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizConfig
+mkVizConfig verTxtDocId substitution shouldSimplify =
   let moduleUri = toNormalizedUri verTxtDocId._uri
-  in MkVizEnv
+  in MkVizConfig
     { moduleUri
     , verTxtDocId
     , substitution
     , shouldSimplify
     }
 
-data VizEnv = MkVizEnv
+data VizConfig = MkVizConfig
   { moduleUri      :: !NormalizedUri
   , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
   , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
@@ -71,7 +73,7 @@ data VizEnv = MkVizEnv
 
 
 data VizState = MkVizState
-  { env           :: !VizEnv
+  { cfg           :: !VizConfig
   , maxId         :: !ID
   , evalAppMakers :: !(Map Int (V.EvalAppRequestParams -> TopDecl Resolved))
   -- ^ Map from Unique of V.ID to eval-app-directive maker
@@ -79,15 +81,15 @@ data VizState = MkVizState
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{env, maxId, evalAppMakers} = 
-    "MkVizState { env = " <> show env <> 
+  show MkVizState{cfg, maxId, evalAppMakers} = 
+    "MkVizState { cfg = " <> show cfg <> 
     ", maxId = " <> show maxId <> 
     ", (keys of) evalAppMakers = " <> show (Map.keys evalAppMakers) <> " }"
 
-mkInitialVizState :: VizEnv -> VizState
-mkInitialVizState env =
+mkInitialVizState :: VizConfig -> VizState
+mkInitialVizState cfg =
   MkVizState
-    { env = env
+    { cfg = cfg
     , maxId = MkID 0
     , evalAppMakers = Map.empty
     }
@@ -95,18 +97,18 @@ mkInitialVizState env =
 -- Monad ops
 
 -- | 'Internal' helper: This should only be used by other Viz monad ops
-getVizEnv :: Viz VizEnv
-getVizEnv = use #env
+getVizCfg :: Viz VizConfig
+getVizCfg = use #cfg
 
 getVerTxtDocId :: Viz LSP.VersionedTextDocumentIdentifier
 getVerTxtDocId = do
-  env <- getVizEnv
-  pure env.verTxtDocId
+  cfg <- getVizCfg
+  pure cfg.verTxtDocId
 
 getExpandedType :: Type' Resolved -> Viz (Type' Resolved)
 getExpandedType ty = do
-  env <- getVizEnv
-  pure $ TC.applyFinalSubstitution env.substitution env.moduleUri ty
+  cfg <- getVizCfg
+  pure $ TC.applyFinalSubstitution cfg.substitution cfg.moduleUri ty
 
 getFresh :: Viz ID
 getFresh = do
@@ -114,8 +116,8 @@ getFresh = do
 
 getShouldSimplify :: Viz Bool
 getShouldSimplify = do
-  env <- getVizEnv
-  pure env.shouldSimplify
+  cfg <- getVizCfg
+  pure cfg.shouldSimplify
 
 prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
 prepEvalAppMaker vid = \case
@@ -131,6 +133,9 @@ prepEvalAppMaker vid = \case
 
 lookupEvalAppMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> TopDecl Resolved)
 lookupEvalAppMaker vs vid = Map.lookup vid.id vs.evalAppMakers
+
+getVizConfig :: VizState -> VizConfig
+getVizConfig vs = vs.cfg
 
 ------------------------------------------------------
 -- VizError
@@ -155,9 +160,9 @@ prettyPrintVizError = \ case
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> VizEnv -> Either VizError (RenderAsLadderInfo, VizState)
-doVisualize decide env =
-  let (result, vizState) = (vizProgram decide).getVizE (mkInitialVizState env)
+doVisualize :: Decide Resolved -> VizConfig -> Either VizError (RenderAsLadderInfo, VizState)
+doVisualize decide cfg =
+  let (result, vizState) = (vizProgram decide).getViz (mkInitialVizState cfg)
   in case result of
     Left err         -> Left err
     Right ladderInfo -> Right (ladderInfo, vizState)
