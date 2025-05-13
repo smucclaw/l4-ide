@@ -127,7 +127,8 @@ prepEvalAppMaker vid = \case
     in #evalAppMakers %= Map.insert vid.id maker
   _ -> pure ()
 
--- | Helper
+-- Viz state helpers
+
 lookupEvalAppMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> TopDecl Resolved)
 lookupEvalAppMaker vs vid = Map.lookup vid.id vs.evalAppMakers
 
@@ -187,10 +188,10 @@ translateDecide :: Decide Resolved -> Viz V.FunDecl
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
     shouldSimplify <- getShouldSimplify
-    uid            <- getFresh
+    vid            <- getFresh
     vizBody        <- translateExpr shouldSimplify body
     pure $ V.MkFunDecl
-      uid
+      vid
       -- didn't want a backtick'd name in the header
       (mkSimpleVizName funResolved)
       (paramNamesFromGivens givenSig)
@@ -264,17 +265,17 @@ defaultUBoolVarValue :: V.UBoolValue
 defaultUBoolVarValue = V.UnknownV
 
 leafFromVizName :: V.ID -> V.Name -> Viz IRExpr
-leafFromVizName uid vname = do
-  pure $ V.UBoolVar uid vname defaultUBoolVarValue
+leafFromVizName vid vname = do
+  pure $ V.UBoolVar vid vname defaultUBoolVarValue
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
-  uid <- getFresh
+  vid <- getFresh
   tempUniqueTODO <- getFresh
   -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
   -- I'll return to this when we explicitly/properly handle more cases in translateExpr
   -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
-  pure $ V.UBoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
+  pure $ V.UBoolVar vid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers
