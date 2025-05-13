@@ -31,12 +31,4 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
       var(--ladder-node-border-radius-default)
     );
   }
-
-  .true-val {
-    background-color: var(--color-true-value);
-  }
-
-  .false-val {
-    background-color: var(--color-false-value);
-  }
 </style>
