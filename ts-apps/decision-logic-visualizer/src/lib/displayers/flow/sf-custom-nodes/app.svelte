@@ -71,14 +71,4 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
       var(--ladder-node-border-radius-default)
     );
   }
-
-  .true-val::before {
-    content: '✓';
-    margin-right: 0.25rem;
-  }
-
-  .false-val::before {
-    content: '✗';
-    margin-right: 0.25rem;
-  }
 </style>
