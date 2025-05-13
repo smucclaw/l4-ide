@@ -219,11 +219,14 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
             , Ladder.prettyPrintVizError vizError
             ]
   where
-    {- | Make a new VizEnv by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizEnv)
+    {- | Make a new VizConfig by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizConfig)
     with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
-    updateVizEnv :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizEnv
-    updateVizEnv verTxtDocId tcRes recentlyVisualised =
-      Ladder.mkVizEnv verTxtDocId tcRes.substitution recentlyVisualised.vizState.env.shouldSimplify
+    updateVizConfig :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizConfig
+    updateVizConfig verTxtDocId tcRes recentlyVisualised = 
+      Ladder.getVizConfig recentlyVisualised.vizState
+        & set #verTxtDocId verTxtDocId
+        & set #moduleUri (toNormalizedUri verTxtDocId._uri)
+        & set #substitution tcRes.substitution
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
