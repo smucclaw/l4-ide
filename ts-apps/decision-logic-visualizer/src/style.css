@@ -169,6 +169,14 @@
   Utility SF styles
 *************************************/
 
+@utility true-val {
+  background-color: var(--color-true-value);
+}
+
+@utility false-val {
+  background-color: var(--color-false-value);
+}
+
 @utility svelte-flow__node-basic {
   font-size: 1rem;
   text-align: center;

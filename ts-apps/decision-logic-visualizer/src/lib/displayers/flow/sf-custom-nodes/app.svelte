@@ -72,17 +72,11 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     );
   }
 
-  .true-val {
-    background-color: var(--color-true-value);
-  }
   .true-val::before {
     content: '✓';
     margin-right: 0.25rem;
   }
 
-  .false-val {
-    background-color: var(--color-false-value);
-  }
   .false-val::before {
     content: '✗';
     margin-right: 0.25rem;
