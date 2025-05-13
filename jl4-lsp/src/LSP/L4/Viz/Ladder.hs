@@ -41,11 +41,6 @@ import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
 import qualified L4.Transform as Transform (simplify)
 
-{- | Temporary hack to disable the translation to IRExpr App
-while the frontend doesn't have proper UI for it -}
-isDevMode :: Bool
-isDevMode = False
-
 ------------------------------------------------------
 -- Monad
 ------------------------------------------------------
@@ -270,7 +265,7 @@ translateExpr False = go
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
-          if isDevMode && fnOfAppIsFnFromBooleansToBoolean
+          if fnOfAppIsFnFromBooleansToBoolean
             then do
               vid <- getFresh
               prepEvalAppMaker vid e
