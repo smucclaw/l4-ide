@@ -22,7 +22,9 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
 
-  <div class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node">
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
     <div class="font-bold text-[1.1rem]">
       {data.fnName.label}
     </div>
@@ -38,8 +40,9 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
         <button
           class={[
             'border',
-            'border-gray-400',
+            'border-black',
             'p-2',
+            'text-xs',
             'rounded-lg',
             ...arg.getAllClasses(data.context),
           ]}
@@ -66,9 +69,6 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   /* TODO: Consider making a util class if we are going to have the same border for all content-bearing nodes */
   .app-node-border {
     border: var(--ladder-node-border, var(--ladder-node-border-default));
-    border-radius: var(
-      --ladder-node-border-radius,
-      var(--ladder-node-border-radius-default)
-    );
+    border-radius: 20px;
   }
 </style>
