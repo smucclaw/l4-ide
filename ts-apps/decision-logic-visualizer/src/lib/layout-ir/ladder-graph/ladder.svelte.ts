@@ -500,7 +500,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       attrs.setStyles(attrs.getStyles().getNonFadedCounterpart())
       this.#dag.setEdgeAttributes(edge, attrs)
     })
-    this.getVertices(context).forEach((node) => {
+    /* Need to use getChildren instead of dag's getVertices,
+    because an App node's ArgLirNodes are not vertices in the dag 
+    (but instead children of the AppLirNode) */
+    this.getChildren(context).forEach((node) => {
       node._setModifierCSSClasses(
         node
           .getModifierCSSClasses(context)
