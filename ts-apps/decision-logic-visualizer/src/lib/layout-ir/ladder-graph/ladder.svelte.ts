@@ -821,10 +821,10 @@ export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 
   toPretty(context: LirContext): string {
-    return `${this.#fnName.label} (${this.#args
+    return `${this.#fnName.label} OF ${this.#args
       .map((arg) => context.get(arg) as LadderLirNode)
       .map((arg) => arg.toPretty(context))
-      .join(', ')})`
+      .join(', ')}`
   }
 
   toString() {
