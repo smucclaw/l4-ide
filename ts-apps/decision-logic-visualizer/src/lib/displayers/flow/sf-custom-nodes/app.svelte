@@ -44,6 +44,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
             'p-2',
             'text-xs',
             'rounded-lg',
+            'cursor-pointer',
             ...arg.getAllClasses(data.context),
           ]}
           onclick={async () => {
