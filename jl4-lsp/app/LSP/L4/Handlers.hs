@@ -359,7 +359,10 @@ handlers recorder =
               -- Another approach would be to make a new virtual file with the existing module + our directive,
               -- and use oneshotL4ActionAndErrors on that new file
               
-              (Just tcRes, Just recentViz@(Ladder.getVizConfig . (.vizState) -> vizConfig)) 
+              {- We require that the client's verTxtDocId matches the server's.
+                 Note that the client will have already received 
+                 the verTxtDocId in the original payload for the 'please render this VizExpr' request -}
+              (Just tcRes, Just recentViz@(Ladder.getVizConfig . (.vizState) -> vizConfig))
                 | evalParams.verDocId == vizConfig.verTxtDocId -> do
                     let nuri = vizConfig.moduleUri
                     mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [nuri] GetLazyEvaluationDependencies) nuri
@@ -374,7 +377,9 @@ handlers recorder =
                         logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
                           ("Eval result: " <> Text.pack (show result))
                         pure result
-                | otherwise -> throwError $ TResponseError
+                | otherwise -> throwError $ TResponseError 
+                    -- TODO: Have the client update accordingly when it gets this error code,
+                    -- if it doesn't alr do so automatically
                     { _code = InL LSPErrorCodes_ContentModified
                     , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
                                 ", whereas server's version is: " <> Text.pack (show vizConfig.verTxtDocId._version)

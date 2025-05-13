@@ -120,11 +120,11 @@ evalApp tcRes evalParams recentViz evalEnv =
     Nothing -> defaultResponseError "No eval app directive maker found" -- TODO: Improve error codehere
     Just evalAppMaker -> do
       let evalAppDirective = evalAppMaker evalParams
-      (_, results) <- liftIO $ EL.execEvalModuleWithEnv evalEnv (prependDirectiveToModule evalAppDirective tcRes.module')
+      (_, results) <- liftIO $ EL.execEvalModuleWithEnv evalEnv (evalAppDirective `prependToModule` tcRes.module')
       Aeson.toJSON <$> getEvalResult results
   where
-    prependDirectiveToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
-    prependDirectiveToModule newDecl (MkModule ann nuri (MkSection sann sresolved maka decls)) =
+    prependToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
+    prependToModule newDecl (MkModule ann nuri (MkSection sann sresolved maka decls)) =
       MkModule ann nuri (MkSection sann sresolved maka (newDecl : decls))
 
     evalResultToLadderEvalAppResult :: Monad m => EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
@@ -176,8 +176,8 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      let newVizEnv = updateVizConfig verTextDocId tcRes recentlyVisualised
-      pure (decide, newVizEnv)
+      let updatedVizConfig = updateVizConfig verTextDocId tcRes recentlyVisualised
+      pure (decide, updatedVizConfig)
 
     -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
@@ -187,14 +187,14 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
         [decide] ->
-          let vizEnv = Ladder.mkVizConfig verTextDocId tcRes.substitution simp
-          in pure $ Just (decide, vizEnv)
+          let vizConfig = Ladder.mkVizConfig verTextDocId tcRes.substitution simp
+          in pure $ Just (decide, vizConfig)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
   -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
-  -- Assumes the given vizEnv is up-to-date.
+  -- Assumes the vizConfig in the given vizState is up-to-date.
   let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
         = Just RecentlyVisualised
           { pos = range.start
@@ -206,8 +206,8 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
 
   case mdecide of
     Nothing -> pure (InR Null)
-    Just (decide, vizEnv) ->
-      case Ladder.doVisualize decide vizEnv of
+    Just (decide, vizConfig) ->
+      case Ladder.doVisualize decide vizConfig of
         Right (vizProgramInfo, vizState) -> do
           traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
           pure $ InL $ Aeson.toJSON vizProgramInfo

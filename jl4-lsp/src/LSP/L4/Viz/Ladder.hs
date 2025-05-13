@@ -14,6 +14,7 @@ module LSP.L4.Viz.Ladder (
   -- * Viz State helpers
   lookupEvalAppMaker,
   getVizConfig,
+  
   -- * Other helpers
   prettyPrintVizError,
   ) where
