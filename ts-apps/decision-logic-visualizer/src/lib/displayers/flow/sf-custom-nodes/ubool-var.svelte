@@ -17,7 +17,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   ]}
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="label-wrapper-for-content-bearing-sf-node">
+  <div class="label-wrapper-for-content-bearing-sf-node cursor-pointer">
     {data.name.label}
   </div>
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
