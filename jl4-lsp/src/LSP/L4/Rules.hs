@@ -43,7 +43,6 @@ import LSP.Logger
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
