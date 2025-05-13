@@ -17,7 +17,7 @@ module LSP.L4.Viz.Ladder (
   -- * Other helpers
   prettyPrintVizError,
   ) where
-    
+
 import Control.DeepSeq
 import Control.Monad.Except
 import Base
@@ -48,10 +48,13 @@ isDevMode = False
 -- Monad
 ------------------------------------------------------
 
-newtype Viz a = MkViz {getViz :: VizState -> (Either VizError a, VizState)}
+newtype Viz a = MkViz {getViz :: VizEnv -> VizState -> (Either VizError a, VizState)}
   deriving
-    (Functor, Applicative, Monad, MonadState VizState, MonadError VizError)
-    via ExceptT VizError (State VizState)
+    (Functor, Applicative, Monad, MonadState VizState, MonadError VizError, MonadReader VizEnv)
+    via ReaderT VizEnv (ExceptT VizError (State VizState))
+
+-- | A 'local' env
+newtype VizEnv = MkVizEnv { localDecls :: [LocalDecl Resolved]}
 
 mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizConfig
 mkVizConfig verTxtDocId substitution shouldSimplify =
@@ -81,9 +84,9 @@ data VizState = MkVizState
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, evalAppMakers} = 
-    "MkVizState { cfg = " <> show cfg <> 
-    ", maxId = " <> show maxId <> 
+  show MkVizState{cfg, maxId, evalAppMakers} =
+    "MkVizState { cfg = " <> show cfg <>
+    ", maxId = " <> show maxId <>
     ", (keys of) evalAppMakers = " <> show (Map.keys evalAppMakers) <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
@@ -119,15 +122,26 @@ getShouldSimplify = do
   cfg <- getVizCfg
   pure cfg.shouldSimplify
 
+{- | Assumes that the program is well-scoped and well-typed -}
 prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
 prepEvalAppMaker vid = \case
-  App appAnno appResolved _ ->
-    let maker = 
-         \V.EvalAppRequestParams{args} -> 
-                  Directive appAnno $ LazyEval appAnno $ 
-                    App appAnno appResolved $ map toBoolExpr args
-    in #evalAppMakers %= Map.insert vid.id maker
+  App appAnno appResolved _ -> do
+    localDecls <- getLocalDecls
+    let maker = \V.EvalAppRequestParams{args} ->
+          Directive emptyAnno $ LazyEval emptyAnno $
+            Where emptyAnno 
+              (App appAnno appResolved $ map toBoolExpr args)
+              localDecls
+    #evalAppMakers %= Map.insert vid.id maker
   _ -> pure ()
+
+getLocalDecls :: Viz [LocalDecl Resolved]
+getLocalDecls = do
+  env <- ask
+  pure env.localDecls
+
+withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
+withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
 
 -- Viz state helpers
 
@@ -162,10 +176,13 @@ prettyPrintVizError = \ case
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
 doVisualize :: Decide Resolved -> VizConfig -> Either VizError (RenderAsLadderInfo, VizState)
 doVisualize decide cfg =
-  let (result, vizState) = (vizProgram decide).getViz (mkInitialVizState cfg)
+  let (result, vizState) = (vizProgram decide).getViz initialEnv initialVizState
   in case result of
     Left err         -> Left err
     Right ladderInfo -> Right (ladderInfo, vizState)
+  where
+    initialEnv = MkVizEnv { localDecls = [] }
+    initialVizState = mkInitialVizState cfg
 
 vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
 vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide decide
@@ -229,7 +246,9 @@ translateExpr False = go
         Or {} -> do
           vid <- getFresh
           V.Or vid <$> traverse go (scanOr e)
-        Where _ e' _ds -> go e' -- TODO: lossy
+        Where _ e' ds ->
+          withLocalDecls ds $
+            go e' -- TODO: lossy
 
         -- TODO: Should handle BoolLits differently too
         -- 'var'
