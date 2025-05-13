@@ -1,0 +1,86 @@
+IMPORT prelude
+
+// We have produced an imaginary set of theft/related provisions as background to the point that came out in our
+// last meeting about Reg 3 (misleading price lists) in our imaginary Alcohol Regs (in our ILDE)
+// 3 Misleading price lists
+// (1) An enforcement officer may issue a warning to the proprietor of premises if —
+// (a) a price list for alcohol is displayed on the premises;
+// (b) the premises are registered as a hotel; and
+// (c) the enforcement officer believes that the price list is misleading to customers.
+
+§ `Alcohol Regulations`
+
+§§ `Misleading Price Lists`
+
+GIVEN prem       IS A Premises
+      officer    IS AN Enforcement Officer
+      proprietor IS A Proprietor
+      count      IS A NUMBER
+IF   `a price list for alcohol is displayed on` prem
+ AND `registered as a hotel` prem
+ AND `believes that the price list is misleading to customers` officer
+PARTY officer
+  MAY NOTIFY
+      TO    proprietor
+      WITH  contents IS "warning: price list is misleading to customers"
+HENCE    PARTY proprietor
+         MUST       `correct the price list` -- according to which source of truth? what if the proprietor just stubbornly lies?
+                                             -- can our reasoner detect that this is the Controversial Choice?
+                                             -- that would be the point of dispute in front of the court?
+                                             -- this is actually a sort of "skeptical" action -- the important thing, undisputed, is whether the notification went out, claiming it was fixed.
+
+         WITHIN 5 days
+         HENCE   PARTY proprietor
+                  MUST NOTIFY
+                       TO   officer
+                       WITH contents IS "hi we fixed it"
+                AND
+                 PARTY officer
+                   MAY `decide they didn't actually fix it`
+                       AND
+                               `cancel the registration of` prem
+                           OR  LET newCount = count + 1
+                               IN  EVAL `Misleading Price Lists` ... newCount
+
+         LEST   PARTY officer
+                MAY   `cancel the registration of` prem
+
+
+// now, to be fair, the original rule doesn't say the proprietor must notify the officer that they fixed it.
+// It just says the proprietor must correct the price list.
+// And the officer presumably will come back and check.
+// Indeed, the officer may not even come back and check; they could just cancel the registration, with extreme prejudice.
+// And not making that second visit would look quite bad in front of the judge.
+// this is the other way to encode.
+
+HENCE    PARTY proprietor
+         MUST       `correct the price list`
+         WITHIN 5 days
+         LEST    PARTY officer
+                   MAY `decide they didn't actually fix it`
+                       AND     `cancel the registration of` prem
+                               -- second chance
+                           OR  LET newState = state { anger_level = state.anger_level + 1 }
+                               IN  EVAL `Misleading Price Lists` 
+
+
+// (2) The enforcement officer may cancel the registration of the hotel if the proprietor fails to correct the price
+// list to the satisfaction of the enforcement officer within 5 days after the warning was issued.
+
+// In that case, you could see Reg 3 as imposing a prohibition against proprietors allowing misleading price lists,
+// but the legislation has not been structured in that way. Instead, it is structured as a power for the enforcement
+// officer to serve a notice, followed by a power for the enforcement officer to deregister (so you could see it as
+// a power to make the proprietor become liable to deregistration, but again that is not how it is expressed). This
+// is in fact a reasonably typical case where the legislature wants to set a standard which an expert needs to apply,
+// so the citizen can’t be expected to comply with the standard straight off, and instead you are not in trouble till
+// the expert has told you that you are below standard and you haven’t fixed it (or appealed successfully). If we
+// felt we could objectively identify everything that makes a price list misleading, then we would instead be able
+// to require you to comply without more – but then we would have a more rigid system which might not work
+// out the way we wanted in unanticipated cases. Those are discussions that legislative drafters are having with
+// policy officers every day in offices across the Commonwealth –
+// Policy officer “We need to be absolutely certain about how this rule is going to work – oh, and also
+// we need to have complete discretion to handle unanticipated cases.
+// ”
+// Drafter “Sorry, neither of those is possible even on their own, never mind the fact that they contradict
+// each other – can we have a chat about the pros & cons of some points where you might pitch this along
+// the spectrum between those two extremes?”
