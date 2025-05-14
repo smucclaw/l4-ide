@@ -9,7 +9,7 @@ module LSP.L4.Viz.Ladder (
   -- * VizConfig, VizState
   VizConfig (..),
   mkVizConfig,
-  VizState (..),
+  VizState,
 
   -- * Viz State helpers
   lookupEvalAppMaker,
@@ -22,8 +22,9 @@ module LSP.L4.Viz.Ladder (
 import Control.DeepSeq
 import Control.Monad.Except
 import Base
-import qualified Base.Map as Map
 import qualified Base.Text as Text
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as Map
 import Optics.State.Operators ((<%=), (%=))
 
 import qualified Language.LSP.Protocol.Types as LSP
@@ -79,7 +80,7 @@ data VizConfig = MkVizConfig
 data VizState = MkVizState
   { cfg           :: !VizConfig
   , maxId         :: !ID
-  , evalAppMakers :: !(Map Int (V.EvalAppRequestParams -> TopDecl Resolved))
+  , evalAppMakers :: IntMap (V.EvalAppRequestParams -> TopDecl Resolved)
   -- ^ Map from Unique of V.ID to eval-app-directive maker
   }
   deriving stock (Generic)
@@ -93,12 +94,14 @@ instance Show VizState where
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
   MkVizState
-    { cfg = cfg
+    { cfg
     , maxId = MkID 0
     , evalAppMakers = Map.empty
     }
 
+------------------------------------------------------
 -- Monad ops
+------------------------------------------------------
 
 -- | 'Internal' helper: This should only be used by other Viz monad ops
 getVizCfg :: Viz VizConfig
@@ -144,7 +147,13 @@ getLocalDecls = do
 withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
 withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
 
+------------------------------------------------------
 -- Viz state helpers
+------------------------------------------------------
+
+{- Consumers should use the following helpers to work with VizState.
+I.e., I'm trying to hide the implementational details of VizState
+(e.g. how VizConfig is related to VizState). -}
 
 lookupEvalAppMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> TopDecl Resolved)
 lookupEvalAppMaker vs vid = Map.lookup vid.id vs.evalAppMakers
@@ -256,7 +265,7 @@ translateExpr False = go
         App _ resolved [] -> do
           vid <- getFresh
           prepEvalAppMaker vid e
-          leafFromVizName vid (mkVizNameWith prettyLayout resolved)
+          pure $ leafFromVizName vid (mkVizNameWith prettyLayout resolved)
 
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
@@ -289,9 +298,8 @@ scanOr e = [e]
 defaultUBoolVarValue :: V.UBoolValue
 defaultUBoolVarValue = V.UnknownV
 
-leafFromVizName :: V.ID -> V.Name -> Viz IRExpr
-leafFromVizName vid vname = do
-  pure $ V.UBoolVar vid vname defaultUBoolVarValue
+leafFromVizName :: V.ID -> V.Name -> IRExpr
+leafFromVizName vid vname = V.UBoolVar vid vname defaultUBoolVarValue
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
