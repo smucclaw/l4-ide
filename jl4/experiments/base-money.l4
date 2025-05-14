@@ -1,0 +1,22 @@
+
+IMPORT prelude
+
+DECLARE Money
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+
+-- [TODO] infix operators! please!     -- ($/) MEANS `divide money`
+
+
+-- `divide money` is a function that takes two Money and returns a Maybe Money; nothing if the currencies are different
+GIVEN a IS A Money
+      b IS A Money
+GIVETH MAYBE Money
+`divide money` MEANS
+  IF a's currency EQUALS b's currency
+    THEN JUST OF Money
+      WITH
+        amount   IS a's amount DIVIDED BY b's amount
+        currency IS a's currency
+    ELSE NOTHING
