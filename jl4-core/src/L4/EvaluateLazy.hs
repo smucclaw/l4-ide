@@ -207,6 +207,7 @@ nfAux d (ValBreached r')            = do
       timestamp' <- evalAndNF timestamp
       pure (DeadlineMissed party' act' timestamp' deadline)
   pure (MkNF (ValBreached r))
+nfAux _d (ValROp env op l r) = pure (MkNF (ValROp env op l r))
 
 -- | Main entry point.
 --

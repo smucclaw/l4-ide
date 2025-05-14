@@ -149,10 +149,12 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
-  And _ann e1 e2 ->
-    ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-  Or _ann e1 e2 ->
-    ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
+  And ann e1 e2
+    | ann.extra.regulative -> Backward (ValROp env RAnd (Right e1) (Right e2))
+    | otherwise -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or ann e1 e2
+    | ann.extra.regulative -> Backward (ValROp env ROr (Right e1) (Right e2))
+    | otherwise -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
   Implies _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
   Not _ann e ->
@@ -258,6 +260,13 @@ backward val = WithPoppedFrame $ \ case
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
         PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
         EvalRef events
+      ValROp env op rexpr1 rexpr2 -> do
+        -- make sure to reassemble the operation after returning
+        PushFrame $ ContractFrame $ RBinOp1 MkRBinOp1 {args = rs, ..}
+        -- apply the arguments of the left hand expression to the
+        -- expression
+        PushFrame f
+        maybeEvaluate env rexpr1 -- TODO: build application
       ValUnaryBuiltinFun fn -> do
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
@@ -371,13 +380,12 @@ backwardContractFrame val = \ case
       ValNil -> Backward (ValObligation env party act due followup)
       _ -> InternalException $ RuntimeTypeError $
         "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events"
-  Contract2 ScrutEvent {..} -> do
-    (ev'party, ev'act, ev'time) <- case val of
-      ValConstructor n [p, a, t]  | n `sameResolved` TypeCheck.eventCRef -> pure (p, a, t)
-      _ -> InternalException $ RuntimeTypeError $
-        "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event"
-    pushCFrame (Contract3 PartyWHNF {..})
-    maybeEvaluate env party
+  Contract2 ScrutEvent {..} -> case val of
+    ValEvent ev'party ev'act ev'time -> do
+      pushCFrame (Contract3 PartyWHNF {..})
+      maybeEvaluate env party
+    _ -> InternalException $ RuntimeTypeError $
+      "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event"
   Contract3 PartyWHNF {..} -> do
     pushCFrame (Contract3' PartyEqual {party = val, ..})
     EvalRef ev'party
@@ -415,10 +423,6 @@ backwardContractFrame val = \ case
     pushCFrame (Contract9 ScrutTime {ev'time = val, ..})
     EvalRef time
   Contract9 ScrutTime {..} -> do
-    let assertTime = \ case
-          ValNumber i -> pure i
-          v -> InternalException $ RuntimeTypeError $
-            "expected a NUMBER but got: " <> prettyLayout v
     stamp <- assertTime ev'time
     due' <- assertTime due
     time <- assertTime val
@@ -429,6 +433,87 @@ backwardContractFrame val = \ case
         -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
         timeR <- AllocateValue ev'time
         continueWithFollowup env followup events timeR
+  RBinOp1 MkRBinOp1 {..}
+    -- NOTE: this is weirdly asymmetric because
+    -- in case of AND we can never abort earlier but have to instead
+    -- wait for the left hand side expression to run to observe
+    -- how we'll have to do the blame assignment
+    | ROr <- op
+    , ValFulfilled <- val -> Backward ValFulfilled
+
+  RBinOp1 MkRBinOp1 {..} -> do
+
+    -- push a frame for when the evaluation of the
+    -- second argument has completed
+    pushCFrame $ RBinOp2 MkRBinOp2 {rval1 = val, ..}
+    -- pass the arguments to the regulative expression
+    PushFrame $ App1 args
+    maybeEvaluate env rexpr2
+
+  RBinOp2 MkRBinOp2 {..}
+    -- if both obligations have been
+    -- breached, then we can return breached
+    | b1@(ValBreached (DeadlineMissed _ _ vt _)) <- rval1
+    , b2@(ValBreached (DeadlineMissed _ _ vt' _)) <- val -> do
+      t <- assertTime vt
+      t' <- assertTime vt'
+
+      -- NOTE: depending on the operation, we return
+      -- the first breach, if the operation was and,
+      -- because they're already the reason
+      -- the second breach, if the operation was or,
+      -- because they "missed their chance"
+      -- If both happen at the same time, we return
+      -- an arbitrary one (consistently with CSL)
+      Backward
+        if t <= t'
+        then case op of
+           RAnd -> b1
+           ROr -> b2
+        else case op of
+           ROr -> b1
+           RAnd -> b2
+
+  RBinOp2 MkRBinOp2 {..}
+    | ValFulfilled <- val
+    , ValFulfilled <- rval1
+    -> Backward ValFulfilled
+
+  -- NOTE: note that blame assignment in the case of AND
+  -- operators may be wrong if the events are passed out
+  -- of order wrt time
+
+  -- AND
+  RBinOp2 MkRBinOp2 {..}
+    | RAnd <- op
+    , ValBreached reason <- rval1
+    -- NOTE: we have a breach and we assume that all "previous"
+    -- events have been seen, thus this is the "actual" breach
+    -- more specifically, with this assumption, there's no
+    -- possibility for future events to advance a possible
+    -- remaining obligation while changing the blame assignment
+    -> Backward (ValBreached reason)
+  RBinOp2 MkRBinOp2 {..}
+    | RAnd <- op
+    , ValBreached reason <- val
+    -> Backward (ValBreached reason)
+
+  -- OR
+  RBinOp2 MkRBinOp2 {..}
+    | ROr <- op
+    , ValFulfilled <- val
+    -> Backward ValFulfilled
+  RBinOp2 MkRBinOp2 {..}
+    | ROr <- op
+    , ValFulfilled <- rval1
+    -> Backward ValFulfilled
+
+
+  -- NOTE: otherwise, we do not have enough information to do
+  -- any reduction of the contract clauses and thus have to return
+  -- a value that represents the operator applied to each operand
+  RBinOp2 MkRBinOp2 {..} ->
+    Backward (ValROp env op (Left rval1) (Left val))
   where
     continueWithNextEvent :: ScrutEvents -> Reference -> Machine Config
     continueWithNextEvent frame events = do
@@ -442,6 +527,11 @@ backwardContractFrame val = \ case
       PushFrame (App1 [events, time])
       ForwardExpr env followup
 
+    assertTime = \ case
+      ValNumber i -> pure i
+      v -> InternalException $ RuntimeTypeError $
+        "expected a NUMBER but got: " <> prettyLayout v
+
 maybeEvaluate :: Environment -> MaybeEvaluated -> Machine Config
 maybeEvaluate env = either Backward (ForwardExpr env)
 
@@ -450,7 +540,7 @@ matchGivens (MkGivenSig _ann otns) f es = do
   let others = foldMap (either (const []) (\x -> [fst x]) . TypeCheck.isQuantifier) otns
   matchGivens' others f es
 
-matchGivens' :: [Resolved] -> Frame -> [Reference] -> Machine (Map Unique Reference)
+matchGivens' :: [Resolved] -> Frame -> [Reference] -> Machine Environment
 matchGivens' ns f rs = do
   if length ns == length rs
     then do
@@ -581,6 +671,15 @@ pattern ValFulfilled :: Value a
 pattern ValFulfilled <- (fulfilView -> True)
   where
     ValFulfilled = ValConstructor TypeCheck.fulfilRef []
+
+pattern ValEvent :: a -> a -> a -> Value a
+pattern ValEvent p a t <- (eventCView -> Just (p, a, t))
+  where
+    ValEvent p a t = ValConstructor TypeCheck.eventCRef [p, a, t]
+
+eventCView :: Value a -> Maybe (a, a, a)
+eventCView (ValConstructor n [p, a, t]) | n `sameResolved` TypeCheck.eventCRef = pure (p, a, t)
+eventCView _ = Nothing
 
 fulfilView :: Value a -> Bool
 fulfilView v

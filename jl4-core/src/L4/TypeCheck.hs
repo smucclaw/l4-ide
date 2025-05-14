@@ -95,6 +95,7 @@ import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
+import Optics.Core ((%))
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -952,13 +953,28 @@ inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
   re' <- setAnnResolvedType te Nothing re
   pure (re', te)
 
+
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
     And ann e1 e2 ->
-      checkBinOp boolean boolean boolean "AND" And ann e1 e2
+      choose
+      [ checkBinOp boolean boolean boolean "AND"  And ann e1 e2
+      , do
+        partyT <- fresh (NormalName "party")
+        actT <- fresh (NormalName "action")
+        let contractT = contract partyT actT
+        checkBinOp contractT contractT contractT "AND" And (set (#extra % #regulative) True ann) e1 e2
+      ]
     Or ann e1 e2 ->
-      checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
+      choose
+      [ checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
+      , do
+        partyT <- fresh (NormalName "party")
+        actT <- fresh (NormalName "action")
+        let contractT = contract partyT actT
+        checkBinOp contractT contractT contractT "OR" Or (set (#extra % #regulative) True ann)  e1 e2
+      ]
     Implies ann e1 e2 ->
       checkBinOp boolean boolean boolean "IMPLIES" Implies ann e1 e2
     Equals ann e1 e2 -> do

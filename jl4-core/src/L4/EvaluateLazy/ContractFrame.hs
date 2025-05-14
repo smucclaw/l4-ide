@@ -40,6 +40,25 @@ data ContractFrame
   -- - if the timestamp is within the due time
   --   - advance time
   --   - continue with followup event
+  | RBinOp1 RBinOp1
+  -- ^ Regulative BinOp frame while evaluating a regulative expression
+  | RBinOp2 RBinOp2
+  -- ^ Regulative BinOp frame while evaluating the second expression of a bin op
+  deriving stock Show
+
+data RBinOp1 = MkRBinOp1
+  { op :: RBinOp
+  , rexpr2 :: MaybeEvaluated
+  , args :: [Reference] -- ^ the arguments to the remaining contract expr
+  , env :: Environment
+  }
+  deriving stock Show
+
+data RBinOp2 = MkRBinOp2
+  { op :: RBinOp
+  , rval1 :: WHNF
+  , env :: Environment
+  }
   deriving stock Show
 
 data ScrutEvents = ScrutEvents
