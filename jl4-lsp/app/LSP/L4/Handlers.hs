@@ -353,8 +353,9 @@ handlers recorder =
             
             runExceptT $ case (mtcRes, mRecentViz) of
               -- The following two cases should be impossible,
-              -- since the verTxtDocId that the client sends us in the l4/evalApp request
-              -- corresponds to the same one that it got when it was requested to render the VizExpr.
+              -- since the client can only send an l4/evalApp request for an App in a VizExpr that it had antecedently been requested to render.
+              -- (And once the server asks the client to render the VizExpr,
+              -- the server will store the associated RecentViz.)
               (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
               (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
               
@@ -362,11 +363,13 @@ handlers recorder =
               -- and use oneshotL4ActionAndErrors on that new file
               
               {- We require that the client's verTxtDocId matches the server's.
-                 Note, again, that the client will have already received 
-                 the verTxtDocId in the original 'please render this VizExpr' request -}
-              (Just tcRes, Just recentViz)
-                | let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz,
-                  evalParams.verDocId == vizConfig.verTxtDocId -> do
+                 Note that the verTxtDocId that the client sends us in the l4/evalApp request
+                 corresponds to the one that it got when it was requested to render the VizExpr.
+              -}
+              (Just tcRes, Just recentViz) ->
+                let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
+                in if evalParams.verDocId == vizConfig.verTxtDocId 
+                  then do
                     let nuri = vizConfig.moduleUri
                     mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [nuri] GetLazyEvaluationDependencies) nuri
                     case mEvalDeps of
@@ -380,11 +383,13 @@ handlers recorder =
                         logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
                           ("Eval result: " <> Text.pack (show result))
                         pure result
-                | otherwise -> throwError $ TResponseError 
-                    -- TODO: Have the client update accordingly when it gets this error code,
-                    -- if it doesn't alr do so automatically
+                  else
+                    throwError $ TResponseError 
+                      -- TODO: Have the client update accordingly when it gets this error code,
+                      -- if it doesn't alr do so automatically
                     { _code = InL LSPErrorCodes_ContentModified
-                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version)
+                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
+                    ", whereas server's version is: " <> Text.pack (show vizConfig.verTxtDocId._version)
                     , _xdata = Nothing
                     }
     ]
