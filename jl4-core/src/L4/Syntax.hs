@@ -336,6 +336,7 @@ moduleTopDecls = lens
 data Extension = Extension
   { resolvedInfo :: Maybe Info
   , nlg          :: Maybe Nlg
+  , regulative   :: Bool
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -348,7 +349,7 @@ data Info =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 instance Default Extension where
-  def = Extension Nothing Nothing
+  def = Extension Nothing Nothing False
 
 annoOf :: HasAnno a => Lens' a (Anno' a)
 annoOf = lens

@@ -44,6 +44,7 @@ data Value a =
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
   | ValObligation Environment MaybeEvaluated MaybeEvaluated (Maybe (Expr Resolved)) (Expr Resolved)
+  | ValROp Environment RBinOp MaybeEvaluated MaybeEvaluated
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
@@ -51,6 +52,10 @@ data Value a =
   | ValEnvironment Environment
   | ValBreached (ReasonForBreach a)
   deriving stock (Show, Functor, Foldable, Traversable)
+
+data RBinOp = ROr | RAnd
+  deriving stock Show
+
 
 data ReasonForBreach a = DeadlineMissed (Value a) (Value a) (Value a) Rational
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
@@ -68,6 +73,7 @@ data UnaryBuiltinFun
 instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
+  rnf (ValROp !_env !_op a b)     = a `deepseq` b `deepseq` ()
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
@@ -78,7 +84,7 @@ instance NFData a => NFData (Value a) where
   rnf (ValAssumed r)              = rnf r
   rnf (ValEnvironment env)        = env `seq` ()
   rnf (ValBreached ev)            = rnf ev `seq` ()
-  rnf (ValObligation env p a t f) = env `deepseq` p `deepseq` a `deepseq` t `deepseq` f `deepseq` ()
+  rnf (ValObligation env p a t f) = env `seq` p `deepseq` a `deepseq` t `deepseq` f `deepseq` ()
 
 type MaybeEvaluated = Either WHNF RExpr
 

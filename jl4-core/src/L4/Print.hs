@@ -399,7 +399,11 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       , "(" <> printWithLayout reason <> ")"
       ]
     Lazy.ValObligation _env p a t f -> prettyObligation p a t (Just f)
-
+    Lazy.ValROp _env op l r         -> hsep
+      [ printWithLayout l
+      , case op of ROr -> "OR"; RAnd -> "AND"
+      , printWithLayout r
+      ]
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
     Lazy.ValNumber{}               -> printWithLayout v
