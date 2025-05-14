@@ -38,6 +38,7 @@ import LSP.L4.Viz.VizExpr
 import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
 import qualified L4.Transform as Transform (simplify)
+import Control.Monad.Extra (unlessM)
 
 ------------------------------------------------------
 -- Monad
@@ -161,6 +162,7 @@ getVizConfig vs = vs.cfg
 
 data VizError
   = InvalidProgramNoDecidesFound
+  | InvalidDecideMustHaveBoolRetType
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -169,6 +171,8 @@ prettyPrintVizError :: VizError -> Text
 prettyPrintVizError = \ case
   InvalidProgramNoDecidesFound ->
     "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
+  InvalidDecideMustHaveBoolRetType ->
+    "Can only visualize, as a ladder diagram, a DECIDE that returns a boolean."
 
 ------------------------------------------------------
 -- Entrypoint: Visualise
@@ -210,6 +214,8 @@ vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide 
 translateDecide :: Decide Resolved -> Viz V.FunDecl
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
+    unlessM (hasBooleanType (getAnno body)) $
+      throwError InvalidDecideMustHaveBoolRetType
     shouldSimplify <- getShouldSimplify
     vid            <- getFresh
     vizBody        <- translateExpr shouldSimplify body
