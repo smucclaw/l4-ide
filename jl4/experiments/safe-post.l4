@@ -71,8 +71,35 @@ DECLARE `Post-Money Valuation` IS A Money
 --                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
 --                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
 
+DECLARE Person IS ONE OF B, S
+DECLARE Action IS ONE OF delivery, payment, return
+#EVAL EVALCONTRACT LIST EVENTS delivery 5 EVENT B Payment 42/5
+#CONTRACT X AT A WITH PARTYS DOES delivery ATA
+wir
+PARTY B DOES
+medyment Al. 2
+Visualize | Simplity and visualize
+GIVETH CONTRACT Person Action x MEANS
+PARTY S
+MUST DO delivery
+WITHIN 3
+HENCE Y
+Visualize | Simplity and visualize
+GIVETH CONTRACT Person Action y MEANS
+PARTY B
+MUST payment
+WITHIN 5
+HENCE Z
+#CONTRACT X AT A WITH
+PARTYS DOES delivery AnS
+PARTY B DOES Payment AT 10
+suall
+Z MEANS FULFILLED #CONTRACTZATIWITH
+#CONTRACT Z AT 4 WITH
+
+
 GIVEN `SAFE Events` IS A LIST OF Event
-UPON  `Equity Financing Event` `SAFE Events`
+UPON  `Equity Financing Event` OF `SAFE Events`
 THEN  `rewrite cap table`
  AND     PARTY  startup
          MUST   NOTIFY  `Investor`
