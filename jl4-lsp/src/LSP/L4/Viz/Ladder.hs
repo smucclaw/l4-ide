@@ -161,7 +161,6 @@ getVizConfig vs = vs.cfg
 
 data VizError
   = InvalidProgramNoDecidesFound
-  | InvalidProgramDecidesMustNotHaveMoreThanOneGiven
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -170,8 +169,6 @@ prettyPrintVizError :: VizError -> Text
 prettyPrintVizError = \ case
   InvalidProgramNoDecidesFound ->
     "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
-  InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
-    "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
 
 ------------------------------------------------------
 -- Entrypoint: Visualise
