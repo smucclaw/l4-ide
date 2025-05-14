@@ -135,7 +135,7 @@ evalApp tcRes evalParams recentViz evalEnv =
         case EL.boolView val of
           Just b  -> pure $ EvalAppResult (toUBoolValue b)
           Nothing -> throwExpectBoolResultError
-      Right EL.ToDeep    -> throwExpectBoolResultError
+      Right EL.ToDeep    -> defaultResponseError "Evaluation exceeded maximum depth limit"
       Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
 
     throwExpectBoolResultError :: ExceptT (TResponseError method) m a
