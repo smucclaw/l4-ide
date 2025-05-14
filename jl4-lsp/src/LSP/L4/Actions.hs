@@ -26,8 +26,9 @@ import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck
-import qualified L4.Evaluate.ValueLazy as EL
-import qualified L4.EvaluateLazy       as EL
+import qualified L4.Evaluate.ValueLazy   as EL
+import qualified L4.EvaluateLazy         as EL
+import qualified L4.EvaluateLazy.Machine as EL
 import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
@@ -130,21 +131,18 @@ evalApp tcRes evalParams recentViz evalEnv =
 
     evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
     evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
-      Right (EL.MkNF val) -> 
-        case val of
-          EL.ValConstructor r [] -> EvalAppResult <$> toUBoolValue r
-          _                      -> throwExpectBoolResultError
+      Right (EL.MkNF val) ->
+        case EL.boolView val of
+          Just b  -> pure $ EvalAppResult (toUBoolValue b)
+          Nothing -> throwExpectBoolResultError
       Right EL.ToDeep    -> throwExpectBoolResultError
       Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
 
     throwExpectBoolResultError :: ExceptT (TResponseError method) m a
     throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"
 
-    toUBoolValue :: Resolved -> ExceptT (TResponseError method) m Ladder.UBoolValue
-    toUBoolValue resolved = case getUnique resolved of
-      u | u == falseUnique -> pure Ladder.FalseV
-        | u == trueUnique  -> pure Ladder.TrueV
-        | otherwise        -> throwExpectBoolResultError
+    toUBoolValue :: Bool -> Ladder.UBoolValue
+    toUBoolValue b = if b then Ladder.TrueV else Ladder.FalseV
 
     -- | Assumes that the order of the eval results is the same as the order of the eval directives.
     getEvalResult :: [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m EvalAppResult
@@ -222,7 +220,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
     {- | Make a new VizConfig by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizConfig)
     with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
     updateVizConfig :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizConfig
-    updateVizConfig verTxtDocId tcRes recentlyVisualised = 
+    updateVizConfig verTxtDocId tcRes recentlyVisualised =
       Ladder.getVizConfig recentlyVisualised.vizState
         & set #verTxtDocId verTxtDocId
         & set #moduleUri (toNormalizedUri verTxtDocId._uri)

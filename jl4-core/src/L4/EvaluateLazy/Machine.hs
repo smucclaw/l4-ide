@@ -18,6 +18,7 @@ module L4.EvaluateLazy.Machine
 , evalRef
 , emptyEnvironment
 , prettyEvalException
+, boolView
 )
 where
 
@@ -596,7 +597,7 @@ valBool False = falseVal
 valBool True  = trueVal
 
 -- | Checks if a value is a Boolean constructor.
-boolView :: WHNF -> Maybe Bool
+boolView :: Value a -> Maybe Bool
 boolView val =
   case val of
     ValConstructor n []
