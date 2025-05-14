@@ -22,11 +22,8 @@ GIVETH CONTRACT Person Action
 z MEANS 
   x OR y
 
--- z MEANS FULFILLED
-
 a MEANS 
   z AND z 
-
 
 #CONTRACT ((PARTY B MUST payment) OR FULFILLED) AT 2 WITH
 
