@@ -358,8 +358,8 @@ inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e)
   actionT <- fresh (NormalName "action")
   let contractT = contract partyT actionT
       eventT = event partyT actionT
-  re <- checkExpr ExpectRegulativeContractContext e contractT
-  rt <- checkExpr ExpectRegulativeTimestampContext t number
+  re <- prune $ checkExpr ExpectRegulativeContractContext e contractT
+  rt <- prune $ checkExpr ExpectRegulativeTimestampContext t number
   revs <- traverse (prune . flip (checkExpr ExpectRegulativeEventContext) eventT) evs
   pure (Contract ann re rt revs)
 
