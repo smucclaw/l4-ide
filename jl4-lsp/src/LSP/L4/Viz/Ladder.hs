@@ -6,7 +6,7 @@ module LSP.L4.Viz.Ladder (
   -- * Entrypoint
   doVisualize,
 
-  -- * VizEnv, VizState
+  -- * VizConfig, VizState
   VizConfig (..),
   mkVizConfig,
   VizState (..),
@@ -125,12 +125,12 @@ getShouldSimplify = do
 
 {- | Assumes that the program is well-scoped and well-typed -}
 prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
-prepEvalAppMaker vid = \case
+prepEvalAppMaker vid = \ case
   App appAnno appResolved _ -> do
     localDecls <- getLocalDecls
     let maker = \V.EvalAppRequestParams{args} ->
           Directive emptyAnno $ LazyEval emptyAnno $
-            Where emptyAnno 
+            Where emptyAnno
               (App appAnno appResolved $ map toBoolExpr args)
               localDecls
     #evalAppMakers %= Map.insert vid.id maker
@@ -337,7 +337,7 @@ isBooleanType ty = do
 ------------------------------------------------------
 
 toBoolExpr :: V.UBoolValue -> Expr Resolved
-toBoolExpr = \case
+toBoolExpr = \ case
   V.FalseV   -> App emptyAnno TC.falseRef []
   V.TrueV    -> App emptyAnno TC.trueRef []
   V.UnknownV -> error "impossible for now"
