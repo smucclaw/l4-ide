@@ -109,7 +109,8 @@ gotoDefinition pos m positionMapping = do
 -- ----------------------------------------------------------------------------
 
 evalApp
-  :: MonadIO m
+  :: forall m method.
+  (MonadIO m)
   => TypeCheckResult
   -> Ladder.EvalAppRequestParams
   -> RecentlyVisualised
@@ -127,7 +128,7 @@ evalApp tcRes evalParams recentViz evalEnv =
     prependToModule newDecl (MkModule ann nuri (MkSection sann sresolved maka decls)) =
       MkModule ann nuri (MkSection sann sresolved maka (newDecl : decls))
 
-    evalResultToLadderEvalAppResult :: Monad m => EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
+    evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
     evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
       Right (EL.MkNF val) -> 
         case val of
@@ -136,17 +137,17 @@ evalApp tcRes evalParams recentViz evalEnv =
       Right EL.ToDeep    -> throwExpectBoolResultError
       Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
 
-    throwExpectBoolResultError :: Monad m => ExceptT (TResponseError method) m a
+    throwExpectBoolResultError :: ExceptT (TResponseError method) m a
     throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"
 
-    toUBoolValue :: Monad m => Resolved -> ExceptT (TResponseError method) m Ladder.UBoolValue
+    toUBoolValue :: Resolved -> ExceptT (TResponseError method) m Ladder.UBoolValue
     toUBoolValue resolved = case getUnique resolved of
       u | u == falseUnique -> pure Ladder.FalseV
         | u == trueUnique  -> pure Ladder.TrueV
         | otherwise        -> throwExpectBoolResultError
 
     -- | Assumes that the order of the eval results is the same as the order of the eval directives.
-    getEvalResult :: Monad m => [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m EvalAppResult
+    getEvalResult :: [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m EvalAppResult
     getEvalResult results = case results of
       (res : _xs) -> evalResultToLadderEvalAppResult res
       _           -> defaultResponseError "Internal error: No eval results found for some reason"
