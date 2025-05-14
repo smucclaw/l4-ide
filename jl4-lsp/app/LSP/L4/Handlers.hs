@@ -352,7 +352,9 @@ handlers recorder =
             mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
             
             runExceptT $ case (mtcRes, mRecentViz) of
-              -- impossible
+              -- The following two cases should be impossible,
+              -- since the verTxtDocId that the client sends us in the l4/evalApp request
+              -- corresponds to the same one that it got when it was requested to render the VizExpr.
               (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
               (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
               
@@ -360,10 +362,11 @@ handlers recorder =
               -- and use oneshotL4ActionAndErrors on that new file
               
               {- We require that the client's verTxtDocId matches the server's.
-                 Note that the client will have already received 
-                 the verTxtDocId in the original payload for the 'please render this VizExpr' request -}
-              (Just tcRes, Just recentViz@(Ladder.getVizConfig . (.vizState) -> vizConfig))
-                | evalParams.verDocId == vizConfig.verTxtDocId -> do
+                 Note, again, that the client will have already received 
+                 the verTxtDocId in the original 'please render this VizExpr' request -}
+              (Just tcRes, Just recentViz)
+                | let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz,
+                  evalParams.verDocId == vizConfig.verTxtDocId -> do
                     let nuri = vizConfig.moduleUri
                     mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [nuri] GetLazyEvaluationDependencies) nuri
                     case mEvalDeps of
@@ -381,8 +384,7 @@ handlers recorder =
                     -- TODO: Have the client update accordingly when it gets this error code,
                     -- if it doesn't alr do so automatically
                     { _code = InL LSPErrorCodes_ContentModified
-                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
-                                ", whereas server's version is: " <> Text.pack (show vizConfig.verTxtDocId._version)
+                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version)
                     , _xdata = Nothing
                     }
     ]
