@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns, DataKinds #-}
 module LSP.L4.Actions where
 
 import Base
@@ -110,13 +110,13 @@ gotoDefinition pos m positionMapping = do
 -- ----------------------------------------------------------------------------
 
 evalApp
-  :: forall m method.
+  :: forall m.
   (MonadIO m)
   => TypeCheckResult
   -> Ladder.EvalAppRequestParams
   -> RecentlyVisualised
   -> EL.Environment
-  -> ExceptT (TResponseError method) m Aeson.Value
+  -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
 evalApp tcRes evalParams recentViz evalEnv =
   case Ladder.lookupEvalAppMaker recentViz.vizState evalParams.appExpr of
     Nothing -> defaultResponseError "No eval app directive maker found" -- TODO: Improve error codehere
