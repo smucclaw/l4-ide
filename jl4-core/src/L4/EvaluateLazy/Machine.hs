@@ -898,7 +898,7 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range :: !(Maybe SrcRange) -- ^ of the (L)EVAL directive
+    { range :: Maybe SrcRange -- ^ of the (L)EVAL directive
     , expr  :: !(Expr Resolved) -- ^ expression to evaluate
     , env   :: !Environment -- ^ environment to evaluate the expression in
     }
