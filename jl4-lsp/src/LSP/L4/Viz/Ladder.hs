@@ -1,6 +1,4 @@
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant lambda" #-}
 
 module LSP.L4.Viz.Ladder (
   -- * Entrypoint
@@ -126,6 +124,7 @@ getShouldSimplify = do
   cfg <- getVizCfg
   pure cfg.shouldSimplify
 
+{-# ANN prepEvalAppMaker ("HLINT: ignore Redundant lambda" :: String) #-}
 {- | Assumes that the program is well-scoped and well-typed -}
 prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
 prepEvalAppMaker vid = \ case
