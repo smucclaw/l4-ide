@@ -14,9 +14,12 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     .getBody(data.context)
 </script>
 
+<!-- bg-gray
+ to evoke the idea of a fn being a 'black box'
+(but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
 <div
   class={[
-    'svelte-flow__node-basic app-node-border transition-opacity duration-300',
+    'svelte-flow__node-basic bg-gray-100 app-node-border transition-opacity duration-300',
     ...data.classes,
   ]}
 >
@@ -45,6 +48,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
             'text-xs',
             'rounded-lg',
             'cursor-pointer',
+            'bg-white',
             ...arg.getAllClasses(data.context),
           ]}
           onclick={async () => {

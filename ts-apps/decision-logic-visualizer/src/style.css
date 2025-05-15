@@ -170,11 +170,11 @@
 *************************************/
 
 @utility true-val {
-  background-color: var(--color-true-value);
+  background-color: var(--color-true-value) !important;
 }
 
 @utility false-val {
-  background-color: var(--color-false-value);
+  background-color: var(--color-false-value) !important;
 }
 
 @utility svelte-flow__node-basic {
