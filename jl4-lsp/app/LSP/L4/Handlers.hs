@@ -353,16 +353,14 @@ handlers recorder =
             
             runExceptT $ case (mtcRes, mRecentViz) of
               -- The following two cases should be impossible,
-              -- since the client can only send an l4/evalApp request for an App in a VizExpr that it had antecedently been requested to render.
-              -- (And once the server asks the client to render the VizExpr,
-              -- the server will store the associated RecentViz.)
+              -- since the verTxtDocId that the client sends us in the l4/evalApp request
+              -- corresponds to the one that it got when it was requested to render the VizExpr.
               (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
               (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
                             
               {- We require that the client's verTxtDocId matches the server's.
-                 Note that the verTxtDocId that the client sends us in the l4/evalApp request
-                 corresponds to the one that it got when it was requested to render the VizExpr.
-              -}
+                 Note, again, that the client will have already received 
+                 the verTxtDocId in the original 'please render this VizExpr' request -}
               (Just tcRes, Just recentViz) ->
                 let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
                 in if evalParams.verDocId == vizConfig.verTxtDocId 
