@@ -5,8 +5,8 @@
 IMPORT prelude
 
 DECLARE Actor IS ONE OF
-  NaturalPerson    HAS name IS A STRING
-  Company          ^   ^    ^  ^ ^
+  NaturalPerson          HAS name IS A STRING
+  Company                ^   ^    ^  ^ ^
 
 DECLARE Action IS ONE OF
   deliver  HAS itemName   IS A  STRING
@@ -18,42 +18,72 @@ DECLARE Instrument IS ONE OF
   shares  HAS amount IS A NUMBER
   debt    ^   ^      ^  ^ ^
 
+DECLARE `Symbol Table`
+    HAS fun       IS A NUMBER
+        beers     IS A NUMBER
+        potatoes  IS A NUMBER
+        log       IS A LIST OF STRING
+
 unicorn MEANS Company OF "Deca Unicorn, Inc."
 
 johnDoe MEANS NaturalPerson OF "John Doe"
 
 GIVEN investor IS A Actor
       company  IS A Actor
+      symtab   IS A `Symbol Table`
 GIVETH CONTRACT Actor Action
 `Series A Financing` MEANS
   PARTY   investor
   MUST    pay 200
   WITHIN  10
-  HENCE   PARTY   company
-          MUST    issue (shares 300)
-          WITHIN  5
-          HENCE   FULFILLED
+  HENCE   `Series A Issue` investor company newState
+  WHERE
+    newState MEANS `Symbol Table`
+      WITH
+        fun       IS symtab's fun + 200
+        beers     IS symtab's beers + 2
+        potatoes  IS symtab's potatoes + 1
+        log       IS "investor paid $200" FOLLOWED BY symtab's log
+
+GIVEN investor IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH CONTRACT Actor Action
+`Series A Issue` MEANS
+  PARTY   company
+  MUST    issue (shares 300)
+  WITHIN  5
+  HENCE   FULFILLED
+
+
+GIVETH A `Symbol Table`
+startState MEANS
+  `Symbol Table` WITH
+    fun       IS 0
+    beers     IS 0
+    potatoes  IS 0
+    log       IS (LIST "", "obasdf")
 
 -- mouseover the following to see that after johnDoe pays $200,
 -- the contract is not fulfilled yet, because the company has not issued
 -- the equity yet. So you will see the "residual" contract in the mouseover.
-#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
 
 
 -- Now the trace has one additional step: the company issues equity correctly.
 -- And you will see that the residual contract is simply fulfilled.
-#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 3
 
 
 -- If the company issued the equity, but late, the contract is breached.
-#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 13
 
 
 
-#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 0 AT 20
