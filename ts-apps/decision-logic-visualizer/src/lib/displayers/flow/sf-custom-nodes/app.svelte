@@ -71,9 +71,8 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 </div>
 
 <style>
-  /* TODO: Consider making a util class if we are going to have the same border for all content-bearing nodes */
   .app-node-border {
-    border: var(--ladder-node-border, var(--ladder-node-border-default));
+    border: 3px solid var(--color-primary); /* default for --ladder-node-border is 2px */
     border-radius: 20px;
   }
 </style>
