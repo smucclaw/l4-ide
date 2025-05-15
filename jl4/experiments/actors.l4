@@ -19,7 +19,7 @@ DECLARE Instrument IS ONE OF
   debt    ^   ^      ^  ^ ^
 
 DECLARE `Symbol Table`
-    HAS fun       IS A NUMBER
+    HAS bill      IS A NUMBER
         beers     IS A NUMBER
         potatoes  IS A NUMBER
         log       IS A LIST OF STRING
@@ -40,7 +40,7 @@ GIVETH CONTRACT Actor Action
   WHERE
     newState MEANS `Symbol Table`
       WITH
-        fun       IS symtab's fun + 200
+        bill      IS symtab's bill
         beers     IS symtab's beers + 2
         potatoes  IS symtab's potatoes + 1
         log       IS "investor paid $200" FOLLOWED BY symtab's log
@@ -53,13 +53,25 @@ GIVETH CONTRACT Actor Action
   PARTY   company
   MUST    issue (shares 300)
   WITHIN  5
-  HENCE   FULFILLED
+  HENCE   returnFulfilled OF
+            `Symbol Table`
+              WITH
+                bill      IS      symtab's beers * 20
+                             PLUS symtab's potatoes + 4
+                beers     IS 0
+                potatoes  IS 0
+                log       IS "calculated final bill" FOLLOWED BY symtab's log
+
+
+GIVEN symtab   IS A `Symbol Table`
+GIVETH CONTRACT Actor Action
+`returnFulfilled` MEANS FULFILLED
 
 
 GIVETH A `Symbol Table`
 startState MEANS
   `Symbol Table` WITH
-    fun       IS 0
+    bill      IS 0
     beers     IS 0
     potatoes  IS 0
     log       IS (LIST "", "obasdf")
