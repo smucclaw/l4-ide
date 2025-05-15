@@ -10,7 +10,7 @@ module LSP.L4.Viz.Ladder (
   VizState,
 
   -- * Viz State helpers
-  lookupEvalAppMaker,
+  lookupAppExprMaker,
   getVizConfig,
   
   -- * Other helpers
@@ -76,25 +76,25 @@ data VizConfig = MkVizConfig
 
 
 data VizState = MkVizState
-  { cfg           :: !VizConfig
-  , maxId         :: !ID
-  , evalAppMakers :: IntMap (V.EvalAppRequestParams -> TopDecl Resolved)
+  { cfg            :: !VizConfig
+  , maxId          :: !ID
+  , appExprMakers  :: IntMap (V.EvalAppRequestParams -> Expr Resolved)
   -- ^ Map from Unique of V.ID to eval-app-directive maker
   }
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, evalAppMakers} =
+  show MkVizState{cfg, maxId, appExprMakers} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
-    ", (keys of) evalAppMakers = " <> show (Map.keys evalAppMakers) <> " }"
+    ", (keys of) appExprMakers = " <> show (Map.keys appExprMakers) <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
   MkVizState
     { cfg
     , maxId = MkID 0
-    , evalAppMakers = Map.empty
+    , appExprMakers = Map.empty
     }
 
 ------------------------------------------------------
@@ -130,12 +130,12 @@ prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
 prepEvalAppMaker vid = \ case
   App appAnno appResolved _ -> do
     localDecls <- getLocalDecls
-    let maker = \V.EvalAppRequestParams{args} ->
-          Directive emptyAnno $ LazyEval emptyAnno $
+    let maker = 
+          \V.EvalAppRequestParams{args} ->
             Where emptyAnno
               (App appAnno appResolved $ map toBoolExpr args)
               localDecls
-    #evalAppMakers %= Map.insert vid.id maker
+    #appExprMakers %= Map.insert vid.id maker
   _ -> pure ()
 
 getLocalDecls :: Viz [LocalDecl Resolved]
@@ -154,8 +154,8 @@ withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <
 I.e., I'm trying to hide the implementational details of VizState
 (e.g. how VizConfig is related to VizState). -}
 
-lookupEvalAppMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> TopDecl Resolved)
-lookupEvalAppMaker vs vid = Map.lookup vid.id vs.evalAppMakers
+lookupAppExprMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> Expr Resolved)
+lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
 
 getVizConfig :: VizState -> VizConfig
 getVizConfig vs = vs.cfg

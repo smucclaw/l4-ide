@@ -112,23 +112,20 @@ gotoDefinition pos m positionMapping = do
 evalApp
   :: forall m.
   (MonadIO m)
-  => TypeCheckResult
+  => (EL.Environment, Module Resolved)
   -> Ladder.EvalAppRequestParams
   -> RecentlyVisualised
-  -> EL.Environment
   -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
-evalApp tcRes evalParams recentViz evalEnv =
-  case Ladder.lookupEvalAppMaker recentViz.vizState evalParams.appExpr of
-    Nothing -> defaultResponseError "No eval app directive maker found" -- TODO: Improve error codehere
+evalApp contextModule evalParams recentViz =
+  case Ladder.lookupAppExprMaker recentViz.vizState evalParams.appExpr of
+    Nothing -> defaultResponseError "No expr maker found" -- TODO: Improve error codehere
     Just evalAppMaker -> do
-      let evalAppDirective = evalAppMaker evalParams
-      (_, results) <- liftIO $ EL.execEvalModuleWithEnv evalEnv (evalAppDirective `prependToModule` tcRes.module')
-      Aeson.toJSON <$> getEvalResult results
+      let appExpr = evalAppMaker evalParams
+      res <- liftIO $ EL.execEvalExprInContextOfModule appExpr contextModule
+      case res of
+        Just evalRes -> Aeson.toJSON <$> evalResultToLadderEvalAppResult evalRes
+        Nothing -> defaultResponseError "No eval result found"
   where
-    prependToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
-    prependToModule newDecl (MkModule ann nuri (MkSection sann sresolved maka decls)) =
-      MkModule ann nuri (MkSection sann sresolved maka (newDecl : decls))
-
     evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
     evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
       Right (EL.MkNF val) ->
@@ -143,12 +140,6 @@ evalApp tcRes evalParams recentViz evalEnv =
 
     toUBoolValue :: Bool -> Ladder.UBoolValue
     toUBoolValue b = if b then Ladder.TrueV else Ladder.FalseV
-
-    -- | Assumes that the order of the eval results is the same as the order of the eval directives.
-    getEvalResult :: [EL.EvalDirectiveResult] -> ExceptT (TResponseError method) m EvalAppResult
-    getEvalResult results = case results of
-      (res : _xs) -> evalResultToLadderEvalAppResult res
-      _           -> defaultResponseError "Internal error: No eval results found for some reason"
 
 -- ----------------------------------------------------------------------------
 -- Ladder visualisation

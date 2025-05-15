@@ -358,10 +358,7 @@ handlers recorder =
               -- the server will store the associated RecentViz.)
               (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
               (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
-              
-              -- Another approach would be to make a new virtual file with the existing module + our directive,
-              -- and use oneshotL4ActionAndErrors on that new file
-              
+                            
               {- We require that the client's verTxtDocId matches the server's.
                  Note that the verTxtDocId that the client sends us in the l4/evalApp request
                  corresponds to the one that it got when it was requested to render the VizExpr.
@@ -370,26 +367,25 @@ handlers recorder =
                 let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
                 in if evalParams.verDocId == vizConfig.verTxtDocId 
                   then do
-                    let nuri = vizConfig.moduleUri
-                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [nuri] GetLazyEvaluationDependencies) nuri
+                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
                     case mEvalDeps of
                       Nothing -> throwError $ TResponseError
                         { _code = InR ErrorCodes_InvalidRequest
-                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri nuri).getUri
+                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
                         , _xdata = Nothing
                         }
                       Just (evalEnv, _) -> do
-                        result <- evalApp tcRes evalParams recentViz evalEnv
+                        result <- evalApp (evalEnv, tcRes.module') evalParams recentViz
                         logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
-                          ("Eval result: " <> Text.pack (show result))
+                          ("Eval result: " <> Text.show result)
                         pure result
                   else
                     throwError $ TResponseError 
                       -- TODO: Have the client update accordingly when it gets this error code,
                       -- if it doesn't alr do so automatically
                     { _code = InL LSPErrorCodes_ContentModified
-                    , _message = "Document version mismatch. Visualizer version: " <> Text.pack (show evalParams.verDocId._version) <>
-                    ", whereas server's version is: " <> Text.pack (show vizConfig.verTxtDocId._version)
+                    , _message = "Document version mismatch. Visualizer version: " <> Text.show evalParams.verDocId._version <>
+                    ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
                     , _xdata = Nothing
                     }
     ]
