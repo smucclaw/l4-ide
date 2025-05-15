@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns, DataKinds #-}
 module LSP.L4.Actions where
 
 import Base
@@ -26,10 +26,18 @@ import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck
+import qualified L4.Evaluate.ValueLazy   as EL
+import qualified L4.EvaluateLazy         as EL
+import qualified L4.EvaluateLazy.Machine as EL
 import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
+
 import qualified LSP.L4.Viz.Ladder as Ladder
+import qualified LSP.L4.Viz.VizExpr as Ladder
+import qualified LSP.L4.Viz.CustomProtocol as Ladder
+import           LSP.L4.Viz.CustomProtocol (EvalAppRequestParams (..),
+                                            EvalAppResult (..))
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
@@ -96,6 +104,43 @@ gotoDefinition pos m positionMapping = do
   newRange <- toCurrentRange positionMapping lspRange
   pure (Location (fromNormalizedUri range.moduleUri) newRange)
 
+
+-- ----------------------------------------------------------------------------
+-- Ladder evalApp
+-- ----------------------------------------------------------------------------
+
+evalApp
+  :: forall m.
+  (MonadIO m)
+  => (EL.Environment, Module Resolved)
+  -> Ladder.EvalAppRequestParams
+  -> RecentlyVisualised
+  -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
+evalApp contextModule evalParams recentViz =
+  case Ladder.lookupAppExprMaker recentViz.vizState evalParams.appExpr of
+    Nothing -> defaultResponseError "No expr maker found" -- TODO: Improve error codehere
+    Just evalAppMaker -> do
+      let appExpr = evalAppMaker evalParams
+      res <- liftIO $ EL.execEvalExprInContextOfModule appExpr contextModule
+      case res of
+        Just evalRes -> Aeson.toJSON <$> evalResultToLadderEvalAppResult evalRes
+        Nothing -> defaultResponseError "No eval result found"
+  where
+    evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
+    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
+      Right (EL.MkNF val) ->
+        case EL.boolView val of
+          Just b  -> pure $ EvalAppResult (toUBoolValue b)
+          Nothing -> throwExpectBoolResultError
+      Right EL.ToDeep    -> defaultResponseError "Evaluation exceeded maximum depth limit"
+      Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
+
+    throwExpectBoolResultError :: ExceptT (TResponseError method) m a
+    throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"
+
+    toUBoolValue :: Bool -> Ladder.UBoolValue
+    toUBoolValue b = if b then Ladder.TrueV else Ladder.FalseV
+
 -- ----------------------------------------------------------------------------
 -- Ladder visualisation
 -- ----------------------------------------------------------------------------
@@ -111,38 +156,50 @@ visualise
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
 visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
   let uri = verTextDocId._uri
-  mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
-    -- the command was issued by the button in vscode or autorefresh
+
+  -- Try to pinpoint a Decide (and VizConfig) based on how the command was issued (autorefresh vs code action/code lens)
+  mdecide :: Maybe (Decide Resolved, Ladder.VizConfig) <- case msrcPos of
+    -- a. the command was issued by the button in vscode or autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
+      let updatedVizConfig = updateVizConfig verTextDocId tcRes recentlyVisualised
+      pure (decide, updatedVizConfig)
 
-    -- the command was issued by a code action or codelens
+    -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
       tcRes <- do
         case mtcRes of
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
-        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
+        [decide] ->
+          let vizConfig = Ladder.mkVizConfig verTextDocId tcRes.substitution simp
+          in pure $ Just (decide, vizConfig)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
-      recentlyVisualisedDecide _ _ _ = Nothing
+  -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
+  -- Assumes the vizConfig in the given vizState is up-to-date.
+  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
+        = Just RecentlyVisualised
+          { pos = range.start
+          , name = rawName $ getName appform
+          , type' = applyFinalSubstitution (Ladder.getVizConfig vizState).substitution (Ladder.getVizConfig vizState).moduleUri ty
+          , vizState = vizState
+          }
+      recentlyVisualisedDecide _ _ = Nothing
 
   case mdecide of
     Nothing -> pure (InR Null)
-    Just (decide, simp, substitution) ->
-      case Ladder.doVisualize decide (Ladder.mkVizEnv verTextDocId substitution simp) of
-        Right vizProgramInfo -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
+    Just (decide, vizConfig) ->
+      case Ladder.doVisualize decide vizConfig of
+        Right (vizProgramInfo, vizState) -> do
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
@@ -151,6 +208,14 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
             , Ladder.prettyPrintVizError vizError
             ]
   where
+    {- | Make a new VizConfig by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizConfig)
+    with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
+    updateVizConfig :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizConfig
+    updateVizConfig verTxtDocId tcRes recentlyVisualised =
+      Ladder.getVizConfig recentlyVisualised.vizState
+        & set #verTxtDocId verTxtDocId
+        & set #moduleUri (toNormalizedUri verTxtDocId._uri)
+        & set #substitution tcRes.substitution
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here

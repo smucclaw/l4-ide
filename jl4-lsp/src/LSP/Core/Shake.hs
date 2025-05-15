@@ -154,6 +154,7 @@ import qualified Data.Text.Mixed.Rope as Rope
 import Base.Text (Text)
 import GHC.Generics
 import Data.Hashable (Hashable)
+import qualified LSP.L4.Viz.Ladder as Ladder
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -291,9 +292,13 @@ data ShakeExtras = ShakeExtras
     , mostRecentlyVisualized :: TMVar RecentlyVisualised
     }
 
-data RecentlyVisualised
-  = RecentlyVisualised {pos :: !SrcPos, name :: !RawName, type' :: !(Type' Resolved), simplify :: !Bool}
-  deriving stock (Show, Eq)
+data RecentlyVisualised = RecentlyVisualised
+  { pos       :: !SrcPos
+  , name      :: !RawName
+  , type'     :: !(Type' Resolved)
+  , vizState  :: !Ladder.VizState
+  }
+  deriving stock (Show)
 
 type GetStalePersistent = NormalizedUri -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 

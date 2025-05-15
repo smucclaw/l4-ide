@@ -323,6 +323,12 @@ updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, import
   (u' : _) -> MkImport ann n (Just u')
   [] -> i
 
+moduleTopDecls :: Lens' (Module n) [TopDecl n]
+moduleTopDecls = lens
+                 (\(MkModule _ _ (MkSection _ _ _ decls)) -> decls)
+                 (\(MkModule ann nuri (MkSection sann sresolved maka _oldDecls)) decls ->
+                     MkModule ann nuri (MkSection sann sresolved maka decls))
+
 -- ----------------------------------------------------------------------------
 -- Source Annotations
 -- ----------------------------------------------------------------------------

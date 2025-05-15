@@ -154,6 +154,7 @@ export const Evaluator: LadderEvaluator = {
             argsForApp,
             verDocId
           )
+          console.log('eval.ts: eval app lspResponse', lspResponse)
           if (!lspResponse) {
             throw new Error(`Problem evaluating App ${expr}`)
           }
