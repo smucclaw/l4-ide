@@ -52,3 +52,8 @@ GIVETH CONTRACT Actor Action
 #CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 13
+
+
+
+#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+  PARTY johnDoe DOES pay 0 AT 20
