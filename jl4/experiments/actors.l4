@@ -1,0 +1,54 @@
+
+// we illustrate the labeled transition system of multi-agent contracts,
+// where moving parties act in time.
+
+IMPORT prelude
+
+DECLARE Actor IS ONE OF
+  NaturalPerson    HAS name IS A STRING
+  Company          ^   ^    ^  ^ ^
+
+DECLARE Action IS ONE OF
+  deliver  HAS itemName   IS A  STRING
+               quantity   IS A  NUMBER
+  pay      HAS amount     IS A  NUMBER
+  issue    HAS instrument IS AN Instrument
+
+DECLARE Instrument IS ONE OF
+  shares  HAS amount IS A NUMBER
+  debt    ^   ^      ^  ^ ^
+
+unicorn MEANS Company OF "Deca Unicorn, Inc."
+
+johnDoe MEANS NaturalPerson OF "John Doe"
+
+GIVEN investor IS A Actor
+      company  IS A Actor
+GIVETH CONTRACT Actor Action
+`Series A Financing` MEANS
+  PARTY   investor
+  MUST    pay 200
+  WITHIN  10
+  HENCE   PARTY   company
+          MUST    issue (shares 300)
+          WITHIN  5
+          HENCE   FULFILLED
+
+-- mouseover the following to see that after johnDoe pays $200,
+-- the contract is not fulfilled yet, because the company has not issued
+-- the equity yet. So you will see the "residual" contract in the mouseover.
+#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+
+
+-- Now the trace has one additional step: the company issues equity correctly.
+-- And you will see that the residual contract is simply fulfilled.
+#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+  PARTY unicorn DOES issue (shares 300) AT 3
+
+
+-- If the company issued the equity, but late, the contract is breached.
+#CONTRACT `Series A Financing` johnDoe unicorn AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+  PARTY unicorn DOES issue (shares 300) AT 13
