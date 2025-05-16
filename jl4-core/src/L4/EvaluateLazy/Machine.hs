@@ -18,6 +18,7 @@ module L4.EvaluateLazy.Machine
 , evalRef
 , emptyEnvironment
 , prettyEvalException
+, boolView
 )
 where
 
@@ -701,7 +702,7 @@ valBool False = falseVal
 valBool True  = trueVal
 
 -- | Checks if a value is a Boolean constructor.
-boolView :: WHNF -> Maybe Bool
+boolView :: Value a -> Maybe Bool
 boolView val =
   case val of
     ValConstructor n []
@@ -863,7 +864,7 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure ((\ r -> MkEvalDirective r expr env) <$> toList (rangeOf ann))
+  pure [MkEvalDirective (rangeOf ann) expr env]
 evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
@@ -1003,7 +1004,7 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range :: !SrcRange -- ^ of the (L)EVAL directive
+    { range :: Maybe SrcRange -- ^ of the (L)EVAL directive
     , expr  :: !(Expr Resolved) -- ^ expression to evaluate
     , env   :: !Environment -- ^ environment to evaluate the expression in
     }

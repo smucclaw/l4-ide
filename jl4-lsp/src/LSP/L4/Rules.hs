@@ -43,7 +43,6 @@ import LSP.Logger
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
@@ -658,7 +657,7 @@ jl4Rules rootDirectory recorder = do
     evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
     evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
       Diagnostic
-        { _range = srcRangeToLspRange (Just range)
+        { _range = srcRangeToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing

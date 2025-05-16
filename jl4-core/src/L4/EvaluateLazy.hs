@@ -2,6 +2,7 @@
 module L4.EvaluateLazy
 ( EvalDirectiveResult (..)
 , execEvalModuleWithEnv
+, execEvalExprInContextOfModule
 , prettyEvalException
 )
 where
@@ -13,6 +14,7 @@ import L4.EvaluateLazy.Machine
 import Control.Concurrent
 import L4.Evaluate.ValueLazy
 import L4.Parser.SrcSpan (SrcRange)
+import L4.Annotation
 import L4.Syntax
 
 -----------------------------------------------------------------------------
@@ -166,7 +168,7 @@ nfDirective (MkEvalDirective r expr env) = do
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
-    { range  :: !SrcRange -- ^ of the (L)EVAL / CONTRACT directive
+    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / CONTRACT directive
     , result :: Either EvalException NF
     }
   deriving stock (Generic, Show)
@@ -243,3 +245,31 @@ evalModuleAndDirectives env m = do
   -- Depending on future export semantics, this may have to change.
   pure (env', results)
 
+
+{- | Evaluate an expression in the context of a module and initial environment.
+
+Didn't try to cache even more computation with rules, 
+because the current Rule type seems to
+be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
+Also, it's not clear how much caching can actually be done,
+given that we won't be re-using the result from this.
+ -}
+execEvalExprInContextOfModule :: Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
+execEvalExprInContextOfModule expr (env, m) = do
+  let
+    evalExprDirective =
+      Directive emptyAnno $ LazyEval emptyAnno expr
+    -- Didn't make a new module that imported the context module,
+    -- because making the import requires a Resolved.
+    moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
+  (_, res) <- execEvalModuleWithEnv env (evalExprDirective `prependToModule` moduleWithoutDirectives)
+  case res of
+    [result] -> pure (Just result)
+    _        -> pure Nothing
+  where
+    isDirective :: TopDecl Resolved -> Bool
+    isDirective (Directive _ _) = True
+    isDirective _ = False
+
+    prependToModule :: TopDecl Resolved -> Module Resolved -> Module Resolved
+    prependToModule newDecl = over moduleTopDecls (newDecl :)
