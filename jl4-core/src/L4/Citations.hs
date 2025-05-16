@@ -4,8 +4,6 @@ module L4.Citations
 , readContents
 , normalizeRef
 , mkReferences
-, srcRangeToInterval
-, intervalToSrcRange
 ) where
 
 import Base (Text, NormalizedUri)
@@ -20,10 +18,10 @@ import Data.ByteString.Lazy (LazyByteString)
 import qualified Text.Regex.Pcre2 as Pcre2
 import qualified System.OsPath as Path
 import qualified System.File.OsPath as Path
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Data.Csv as Csv
 
 import L4.Parser.SrcSpan  as Lexer
+import qualified L4.Utils.IntervalMap as IVMap
 import qualified L4.Lexer as Lexer
 
 -- | obtain a valid relative file path from the ref-src annos
@@ -74,7 +72,7 @@ mkReferences tokens decoded = do
   where
     getReferences = \ case
       Lexer.MkPosToken {payload = Lexer.TRef reference _, range} ->
-        let mk v = IVMap.singleton (srcRangeToInterval range) (range.moduleUri, range.length, v)
+        let mk v = IVMap.singleton (IVMap.srcRangeToInterval range) (range.moduleUri, range.length, v)
             ref = normalizeRef reference
 
             replaceVerbatim p r =
@@ -101,8 +99,3 @@ mkReferences tokens decoded = do
          in mk $ getAlt $ foldMap (uncurry doMatching) decoded
       _ ->  IVMap.empty
 
-srcRangeToInterval :: Lexer.SrcRange -> IVMap.Interval Lexer.SrcPos
-srcRangeToInterval range = IVMap.Interval range.start range.end
-
-intervalToSrcRange :: NormalizedUri -> Int -> IVMap.Interval Lexer.SrcPos -> Lexer.SrcRange
-intervalToSrcRange uri len iv = Lexer.MkSrcRange iv.low iv.high len uri

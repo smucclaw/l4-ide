@@ -117,7 +117,14 @@ defaultIdeOptions = IdeOptions
     ,optSkipProgress = defaultSkipProgress
     ,optMaxDirtyAge = 100
     ,optRunSubset = True
-    ,optPreservedKeys = \_ -> PreservedKeys HashSet.empty
+    ,optPreservedKeys = \_ -> PreservedKeys $ HashSet.fromList
+        -- always preserved
+        [ typeOf GetFileExists
+        , typeOf GetModificationTime
+        , typeOf IsFileOfInterest
+        , typeOf GetClientSettings
+        , typeOf AddWatchedFile
+        ]
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
