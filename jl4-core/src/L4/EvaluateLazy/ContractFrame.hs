@@ -40,24 +40,43 @@ data ContractFrame
   -- - if the timestamp is within the due time
   --   - advance time
   --   - continue with followup event
+  | RBinOp1 RBinOp1
+  -- ^ Regulative BinOp frame while evaluating a regulative expression
+  | RBinOp2 RBinOp2
+  -- ^ Regulative BinOp frame while evaluating the second expression of a bin op
+  deriving stock Show
+
+data RBinOp1 = MkRBinOp1
+  { op :: RBinOp
+  , rexpr2 :: MaybeEvaluated
+  , args :: [Reference] -- ^ the arguments to the remaining contract expr
+  , env :: Environment
+  }
+  deriving stock Show
+
+data RBinOp2 = MkRBinOp2
+  { op :: RBinOp
+  , rval1 :: WHNF
+  , env :: Environment
+  }
   deriving stock Show
 
 data ScrutEvents = ScrutEvents
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr
+  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , time :: Reference
   , env :: Environment
   }
   deriving stock Show
 
 data ScrutEvent = ScrutEvent
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr
+  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , events :: Reference, time :: Reference
   , env :: Environment
   }
   deriving stock Show
 
 data PartyWHNF = PartyWHNF
-  { act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr
+  { act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -65,7 +84,7 @@ data PartyWHNF = PartyWHNF
   deriving stock Show
 
 data PartyEqual = PartyEqual
-  { party :: WHNF, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr
+  { party :: WHNF, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -73,7 +92,7 @@ data PartyEqual = PartyEqual
   deriving stock Show
 
 data ScrutParty = ScrutParty
-  { party :: WHNF, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr
+  { party :: WHNF, act :: MaybeEvaluated, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -81,7 +100,7 @@ data ScrutParty = ScrutParty
   deriving stock Show
 
 data ActWHNF = ActWHNF
-  { party :: WHNF, due :: Maybe RExpr, followup :: RExpr
+  { party :: WHNF, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -89,7 +108,7 @@ data ActWHNF = ActWHNF
   deriving stock Show
 
 data ActEqual = ActEqual
-  { party :: WHNF, act :: WHNF, due :: Maybe RExpr, followup :: RExpr
+  { party :: WHNF, act :: WHNF, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -98,7 +117,7 @@ data ActEqual = ActEqual
 
 
 data ScrutAct = ScrutAct
-  { party :: WHNF, act :: WHNF, due :: Maybe RExpr, followup :: RExpr
+  { party :: WHNF, act :: WHNF, due :: Maybe RExpr, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: WHNF, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -106,7 +125,7 @@ data ScrutAct = ScrutAct
   deriving stock Show
 
 data StampWHNF = StampWHNF
-  { followup :: RExpr
+  { followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: WHNF, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -114,7 +133,7 @@ data StampWHNF = StampWHNF
   deriving stock Show
 
 data CurTimeWHNF = CurTimeWHNF
-  { due :: WHNF, followup :: RExpr
+  { due :: WHNF, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: WHNF
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -122,7 +141,7 @@ data CurTimeWHNF = CurTimeWHNF
   deriving stock Show
 
 data ScrutTime = ScrutTime
-  { due :: WHNF, followup :: RExpr
+  { due :: WHNF, followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: WHNF, ev'time :: WHNF
   , events :: Reference
   , env :: Environment

@@ -65,6 +65,7 @@ data CheckError =
   | InconsistentNameInAppForm Name (Maybe Name)
   | NonDistinctError NonDistinctContext [[Name]]
   | AmbiguousTermError Name [(Resolved, Type' Resolved)]
+  | AmbiguousOperatorError Text
   | AmbiguousTypeError Name [(Resolved, Kind)]
   | InternalAmbiguityError
   | IncorrectArgsNumberApp Resolved Int Int -- expected, given
@@ -583,17 +584,27 @@ prune m = do
 
       -- We have a success, we don't want a second one
       procPlain a []                   = [a]
-      procPlain a ((Plain _, _)  : []) = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
-      procPlain _ ((Plain _, _)  : cs) = [last cs]
       procPlain a ((With _ _, _) : cs) = procPlain a cs
+      procPlain a cs
+        | plain = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
+        -- NOTE: in the case of ambiguity errors, the ambiguity error will always occurs as
+        -- the last element in the list
+        | otherwise = [last cs]
+        where
+          plain = allPlain $ map fst cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
+      procWith a []                                     = [a]
       procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+      procWith _ ((With e x, s') : cs)                  = procWith (With e x, s') cs
 
     in
       proc candidates
+
+allPlain :: [With e a] -> Bool
+allPlain = all \case
+  Plain{} -> True
+  With {} -> False
 
 -- | Prune to one result if there's a clearly best one at this point,
 -- but don't force it.
@@ -612,8 +623,7 @@ softprune m = do
 
       -- We have a success, we don't want a second one
       procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : [])  = candidates
-      procPlain _ ((Plain _, _)  : _cs) = candidates
+      procPlain _ ((Plain _, _)  : _cs)  = candidates
       procPlain a ((With _ _, _) :  cs) = procPlain a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure

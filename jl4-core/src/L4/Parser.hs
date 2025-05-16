@@ -221,6 +221,7 @@ refAnnotationP = hidden $ spacedTokenWs (\ case
   _ -> Nothing)
   "Reference Annotation"
 
+
 -- TODO:
 -- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
 -- (2) should we add it to the AST at all? Currently we don't need it
@@ -960,6 +961,8 @@ operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
       (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
   <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+  <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedToken_ TKROr
+  <|> (\ op -> (3, AssocRight, infix2  RAnd      op)) <$> spacedToken_ TKRAnd
   <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
   <|> (\ op -> (4, AssocRight, infix2' Leq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKMost) <|> opToken TLessEquals)
   <|> (\ op -> (4, AssocRight, infix2' Geq       op)) <$> (try ((<>) <$> opToken TKAt <*> opToken TKLeast) <|> opToken TGreaterEquals)
@@ -1131,6 +1134,7 @@ obligation = do
       <*> annoHole (indentedExpr current)
       <*> optional (deadline current)
       <*> optional (hence current)
+      <*> optional (lest current)
 
 deadline :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
 deadline current =
@@ -1139,6 +1143,10 @@ deadline current =
 hence :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
 hence current =
   annoLexeme (spacedToken_ TKHence) *> annoHole (indentedExpr current)
+
+lest :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
+lest current =
+  annoLexeme (spacedToken_ TKLest) *> annoHole (indentedExpr current)
 
 consider :: Parser (Expr Name)
 consider = do

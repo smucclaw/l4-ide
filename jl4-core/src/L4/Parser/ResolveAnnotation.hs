@@ -319,6 +319,14 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ Or ann e1' e2'
+    RAnd ann e1 e2 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      pure $ RAnd ann e1' e2'
+    ROr ann e1 e2 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      pure $ ROr ann e1' e2'
     Implies ann e1 e2 -> do
       e1' <- addNlg e1
       e2' <- addNlg e2
@@ -413,12 +421,13 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
     Event ann e -> Event ann <$> addNlg e
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
-  addNlg (MkObligation ann' party event deadline followup) = do
+  addNlg (MkObligation ann' party event deadline followup lest) = do
     party' <- addNlg party
     event' <- addNlg event
     deadline' <- traverse addNlg deadline
     followup' <- traverse addNlg followup
-    pure $  MkObligation ann' party' event' deadline' followup'
+    lest' <- traverse addNlg lest
+    pure $  MkObligation ann' party' event' deadline' followup' lest'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of

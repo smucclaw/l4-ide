@@ -410,6 +410,8 @@ forwardExpr env !ss stack (And _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 e2 falseExpr)
 forwardExpr env !ss stack (Or _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 trueExpr e2)
+forwardExpr _env !_ss stack (RAnd {}) = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
+forwardExpr _env !_ss stack (ROr {}) = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
 forwardExpr env !ss stack (Implies _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 e2 trueExpr)
 forwardExpr env !ss stack (Not _ann e) = do
