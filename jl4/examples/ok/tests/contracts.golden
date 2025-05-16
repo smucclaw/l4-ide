@@ -2,12 +2,18 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 contracts.l4:7:1-69:
-  CONTRACT BREACHED (PARTY B WHO DID ACTION payment AT 42 missed their deadline, which was 10)
-contracts.l4:9:1-11:28:
   FULFILLED
-contracts.l4:27:1-30:28:
+contracts.l4:29:1-59:
   FULFILLED
-contracts.l4:33:1-22:
+contracts.l4:31:1-32:29:
   FULFILLED
-contracts.l4:34:1-22:
+contracts.l4:34:1-36:29:
+  PARTY B
+DOES payment
+WITHIN 5
+HENCE FULFILLED
+LEST FULFILLED
+contracts.l4:38:1-40:29:
+  FULFILLED
+contracts.l4:42:1-44:29:
   FULFILLED
