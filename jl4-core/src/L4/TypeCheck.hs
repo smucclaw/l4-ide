@@ -95,7 +95,6 @@ import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
-import Optics.Core ((%))
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -932,14 +931,15 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
-checkObligation :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
-checkObligation ann e1 e2 me3 me4 t1 t2 = do
+checkObligation :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
+checkObligation ann e1 e2 me3 me4 me5 t1 t2 = do
   e1' <- checkExpr ExpectRegulativePartyContext e1 t1
   e2' <- checkExpr ExpectRegulativeActionContext e2 t2
   let r = contract t1 t2
   me3' <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) me3
   me4' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me4
-  pure (MkObligation ann e1' e2' me3' me4')
+  me5' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me5
+  pure (MkObligation ann e1' e2' me3' me4' me5')
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -954,27 +954,29 @@ inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
   pure (re', te)
 
 
+ambiguousOperatorError :: Text ->  Expr Name -> Expr Name -> (Expr Resolved -> Expr Resolved -> Expr Resolved) -> Check (Expr Resolved, Type' Resolved)
+ambiguousOperatorError opName e1 e2 mkOp = do
+  addError $ AmbiguousOperatorError opName
+  (e1', _) <- inferExpr e1
+  (e2', _) <- inferExpr e2
+  t <- fresh (PreDef opName)
+  pure (mkOp e1' e2', t)
+
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
-    And ann e1 e2 ->
-      choose
-      [ checkBinOp boolean boolean boolean "AND"  And ann e1 e2
-      , do
-        partyT <- fresh (NormalName "party")
-        actT <- fresh (NormalName "action")
-        let contractT = contract partyT actT
-        checkBinOp contractT contractT contractT "AND" And (set (#extra % #regulative) True ann) e1 e2
-      ]
-    Or ann e1 e2 ->
-      choose
-      [ checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
-      , do
-        partyT <- fresh (NormalName "party")
-        actT <- fresh (NormalName "action")
-        let contractT = contract partyT actT
-        checkBinOp contractT contractT contractT "OR" Or (set (#extra % #regulative) True ann)  e1 e2
-      ]
+    And ann e1 e2 -> checkBinOp boolean boolean boolean "AND"  And ann e1 e2
+    Or ann e1 e2 -> checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
+    RAnd ann e1 e2 -> do
+      partyT <- fresh (NormalName "party")
+      actT <- fresh (NormalName "action")
+      let contractT = contract partyT actT
+      checkBinOp contractT contractT contractT "AND" RAnd ann e1 e2
+    ROr ann e1 e2 -> do
+      partyT <- fresh (NormalName "party")
+      actT <- fresh (NormalName "action")
+      let contractT = contract partyT actT
+      checkBinOp contractT contractT contractT "OR" ROr ann  e1 e2
     Implies ann e1 e2 ->
       checkBinOp boolean boolean boolean "IMPLIES" Implies ann e1 e2
     Equals ann e1 e2 -> do
@@ -986,24 +988,28 @@ inferExpr' g =
         [ checkBinOp boolean boolean boolean "AT MOST" Leq ann e1 e2
         , checkBinOp number  number  boolean "AT MOST" Leq ann e1 e2
         , checkBinOp string  string  boolean "AT MOST" Leq ann e1 e2
+        , ambiguousOperatorError "AT MOST" e1 e2 (Leq ann)
         ]
     Geq ann e1 e2 ->
       choose
         [ checkBinOp boolean boolean boolean "AT LEAST" Geq ann e1 e2
         , checkBinOp number  number  boolean "AT LEAST" Geq ann e1 e2
         , checkBinOp string  string  boolean "AT LEAST" Geq ann e1 e2
+        , ambiguousOperatorError "AT LEAST" e1 e2 (Geq ann)
         ]
     Lt ann e1 e2 ->
       choose
         [ checkBinOp boolean boolean boolean "LESS THAN" Lt ann e1 e2
         , checkBinOp number  number  boolean "LESS THAN" Lt ann e1 e2
         , checkBinOp string  string  boolean "LESS THAN" Lt ann e1 e2
+        , ambiguousOperatorError "LESS THAN" e1 e2 (Lt ann)
         ]
     Gt ann e1 e2 ->
       choose
         [ checkBinOp boolean boolean boolean "GREATER THAN" Gt ann e1 e2
         , checkBinOp number  number  boolean "GREATER THAN" Gt ann e1 e2
         , checkBinOp string  string  boolean "GREATER THAN" Gt ann e1 e2
+        , ambiguousOperatorError "GREATER THAN" e1 e2 (Gt ann)
         ]
     Not ann e -> do
       e' <- checkExpr ExpectNotArgumentContext e boolean
@@ -1094,10 +1100,10 @@ inferExpr' g =
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
       pure (re, v)
-    Regulative ann (MkObligation ann'' e1 e2 me3 me4) -> do
+    Regulative ann (MkObligation ann'' e1 e2 me3 me4 me5) -> do
       party <- fresh (NormalName "party")
       action <- fresh (NormalName "action")
-      ob <- checkObligation ann'' e1 e2 me3 me4 party action
+      ob <- checkObligation ann'' e1 e2 me3 me4 me5 party action
       pure (Regulative ann ob, contract party action)
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
@@ -1720,6 +1726,14 @@ prettyCheckError (AmbiguousTypeError n rs)                 =
   , "The options are:"
   , ""
   ] ++ map (\ (r, k) -> "  " <> prettyResolvedWithRange r <> " of arity " <> Text.pack (show k)) rs
+prettyCheckError (AmbiguousOperatorError opName)                 =
+  ["There are multiple valid types for the operator"
+  , ""
+  , "  " <> opName
+  , ""
+  , "in this context and I do not have sufficient information to make a choice between them."
+  ] -- TODO(mangoiv): maybe we can do better here by providing the types that are available?
+    -- I don't see how to make this not ad-hoc, though.
 prettyCheckError InternalAmbiguityError                    =
   [ "I've encountered an internal ambiguity error."
   , "This means I have encountered a name ambiguity at a position where"
