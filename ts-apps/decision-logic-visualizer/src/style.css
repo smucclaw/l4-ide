@@ -259,8 +259,10 @@ body {
 :root,
 .svelte-flow {
   --ladder-node-border-radius: var(--radius);
+  --ladder-node-border-width: 2px;
   --ladder-node-color: var(--color-node-text, var(--color-primary));
-  --ladder-node-border: 2px solid var(--color-primary);
+  --ladder-node-border: var(--ladder-node-border-width) solid
+    var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of
   --xy-* styles  */

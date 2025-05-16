@@ -72,7 +72,8 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
 <style>
   .app-node-border {
-    border: 3px solid var(--color-primary); /* default for --ladder-node-border is 2px */
+    border: calc(var(--ladder-node-border-width) + 1px) solid
+      var(--color-primary);
     border-radius: 20px;
   }
 </style>
