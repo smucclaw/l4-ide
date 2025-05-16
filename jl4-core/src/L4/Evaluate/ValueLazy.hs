@@ -43,7 +43,7 @@ data Value a =
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
-  | ValObligation Environment MaybeEvaluated MaybeEvaluated (Maybe (Expr Resolved)) (Expr Resolved)
+  | ValObligation Environment MaybeEvaluated MaybeEvaluated (Maybe RExpr) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp MaybeEvaluated MaybeEvaluated
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValUnappliedConstructor Resolved
@@ -53,7 +53,7 @@ data Value a =
   | ValBreached (ReasonForBreach a)
   deriving stock (Show, Functor, Foldable, Traversable)
 
-data RBinOp = ROr | RAnd
+data RBinOp = ValROr | ValRAnd
   deriving stock Show
 
 
@@ -84,7 +84,7 @@ instance NFData a => NFData (Value a) where
   rnf (ValAssumed r)              = rnf r
   rnf (ValEnvironment env)        = env `seq` ()
   rnf (ValBreached ev)            = rnf ev `seq` ()
-  rnf (ValObligation env p a t f) = env `seq` p `deepseq` a `deepseq` t `deepseq` f `deepseq` ()
+  rnf (ValObligation env p a t f l) = env `seq` p `deepseq` a `deepseq` t `deepseq` f `deepseq` l `deepseq` ()
 
 type MaybeEvaluated = Either WHNF RExpr
 
