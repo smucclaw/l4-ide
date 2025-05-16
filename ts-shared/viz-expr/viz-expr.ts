@@ -238,6 +238,7 @@ export const UBoolVar = Schema.Struct({
   value: UBoolValue,
   id: IRId,
   name: Name,
+  canInline: Schema.Boolean,
 }).annotations({ identifier: 'UBoolVar' })
 
 /***********************************
