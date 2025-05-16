@@ -149,12 +149,10 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
-  And ann e1 e2
-    | ann.extra.regulative -> Backward (ValROp env RAnd (Right e1) (Right e2))
-    | otherwise -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-  Or ann e1 e2
-    | ann.extra.regulative -> Backward (ValROp env ROr (Right e1) (Right e2))
-    | otherwise -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
+  And  _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or   _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
+  RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Right e1) (Right e2))
+  ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Right e1) (Right e2))
   Implies _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
   Not _ann e ->
@@ -233,8 +231,8 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
-  Regulative _ann (MkObligation _ party action due followup) -> do
-    Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup))
+  Regulative _ann (MkObligation _ party action due followup lest) ->
+    Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
 
@@ -253,7 +251,7 @@ backward val = WithPoppedFrame $ \ case
         ForwardExpr (Map.union env'' env') e
       ValUnappliedConstructor r ->
         Backward (ValConstructor r rs)
-      ValObligation env party act due followup -> do
+      ValObligation env party act due followup lest -> do
         (events, time) <- case rs of
           [r, t] -> pure (r, t)
           rs' -> InternalException $ RuntimeTypeError $
@@ -377,7 +375,7 @@ backwardContractFrame val = \ case
       ValCons e es -> do
         pushCFrame (Contract2 ScrutEvent {events = es, ..})
         EvalRef e
-      ValNil -> Backward (ValObligation env party act due followup)
+      ValNil -> Backward (ValObligation env party act due followup lest)
       _ -> InternalException $ RuntimeTypeError $
         "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events"
   Contract2 ScrutEvent {..} -> case val of
@@ -427,18 +425,26 @@ backwardContractFrame val = \ case
     due' <- assertTime due
     time <- assertTime val
     let deadline = time + due'
+
     if stamp > deadline
-      then Backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
-      else do
+      -- NOTE: the deadline has passed. there are now two options:
+      -- 1. there's no lest clause, i.e. this is an obligation. We return a breach.
+      -- 2. there's a lest clause, i.e. this is an external choice. We continue by reducing
+      --    the lest clause
+      then case lest of
+        Nothing -> Backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
         -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
-        timeR <- AllocateValue ev'time
-        continueWithFollowup env followup events timeR
+        Just lestFollowup -> AllocateValue ev'time
+          >>= continueWithFollowup env lestFollowup events
+     -- NOTE: see above NOTE
+      else AllocateValue ev'time
+          >>= continueWithFollowup env followup events
   RBinOp1 MkRBinOp1 {..}
     -- NOTE: this is weirdly asymmetric because
     -- in case of AND we can never abort earlier but have to instead
     -- wait for the left hand side expression to run to observe
     -- how we'll have to do the blame assignment
-    | ROr <- op
+    | ValROr <- op
     , ValFulfilled <- val -> Backward ValFulfilled
 
   RBinOp1 MkRBinOp1 {..} -> do
@@ -468,11 +474,11 @@ backwardContractFrame val = \ case
       Backward
         if t <= t'
         then case op of
-           RAnd -> b1
-           ROr -> b2
+           ValRAnd -> b1
+           ValROr -> b2
         else case op of
-           ROr -> b1
-           RAnd -> b2
+           ValROr -> b1
+           ValRAnd -> b2
 
   RBinOp2 MkRBinOp2 {..}
     | ValFulfilled <- val
@@ -485,7 +491,7 @@ backwardContractFrame val = \ case
 
   -- AND
   RBinOp2 MkRBinOp2 {..}
-    | RAnd <- op
+    | ValRAnd <- op
     , ValBreached reason <- rval1
     -- NOTE: we have a breach and we assume that all "previous"
     -- events have been seen, thus this is the "actual" breach
@@ -494,17 +500,17 @@ backwardContractFrame val = \ case
     -- remaining obligation while changing the blame assignment
     -> Backward (ValBreached reason)
   RBinOp2 MkRBinOp2 {..}
-    | RAnd <- op
+    | ValRAnd <- op
     , ValBreached reason <- val
     -> Backward (ValBreached reason)
 
   -- OR
   RBinOp2 MkRBinOp2 {..}
-    | ROr <- op
+    | ValROr <- op
     , ValFulfilled <- val
     -> Backward ValFulfilled
   RBinOp2 MkRBinOp2 {..}
-    | ROr <- op
+    | ValROr <- op
     , ValFulfilled <- rval1
     -> Backward ValFulfilled
 

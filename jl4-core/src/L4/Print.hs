@@ -229,6 +229,16 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         disjunction = scanOr e
       in
         prettyConj "OR" (fmap printWithLayout disjunction)
+    e@RAnd{} ->
+      let
+        conjunction = scanRAnd e
+      in
+        prettyConj "RAND" (fmap printWithLayout conjunction)
+    e@ROr{} ->
+      let
+        disjunction = scanROr e
+      in
+        prettyConj "ROR" (fmap printWithLayout disjunction)
     Implies    _ e1 e2 ->
       parensIfNeeded e1 <+> "IMPLIES" <+> parensIfNeeded e2
     Equals     _ e1 e2 ->
@@ -274,7 +284,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
-    Regulative _ (MkObligation _ p a t f) -> prettyObligation p a t f
+    Regulative _ (MkObligation _ p a t f l) -> prettyObligation p a t f l
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -302,15 +312,16 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
     _ -> surround (printWithLayout e) "(" ")"
 
 prettyObligation
-  :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f)
-  => p -> a -> Maybe t -> Maybe f -> Doc ann
-prettyObligation p a t f  =
+  :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f, LayoutPrinter l)
+  => p -> a -> Maybe t -> Maybe f -> Maybe l -> Doc ann
+prettyObligation p a t f l =
   vcat $
     [ "PARTY" <+> printWithLayout p
-    , "DO" <+> printWithLayout a
+    , "DOES" <+> printWithLayout a
     ]
     <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
     <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
+    <> maybe [] (\ lest -> [ "LEST" <+> printWithLayout lest  ]) l
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
@@ -398,10 +409,10 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [ "CONTRACT BREACHED"
       , "(" <> printWithLayout reason <> ")"
       ]
-    Lazy.ValObligation _env p a t f -> prettyObligation p a t (Just f)
+    Lazy.ValObligation _env p a t f l -> prettyObligation p a t (Just f) (Just l)
     Lazy.ValROp _env op l r         -> hsep
       [ printWithLayout l
-      , case op of ROr -> "OR"; RAnd -> "AND"
+      , case op of ValROr -> "OR"; ValRAnd -> "AND"
       , printWithLayout r
       ]
   parensIfNeeded :: Lazy.Value a -> Doc ann
@@ -466,15 +477,28 @@ quoteIfNeeded n = case Text.uncons n of
 quote :: Text.Text -> Text.Text
 quote n = "`" <> n <> "`"
 
-scanAnd :: Expr a -> [Expr a]
-scanAnd (And _ e1 e2) =
-  scanAnd e1 <> scanAnd e2
-scanAnd e = [e]
+scanOp :: (forall r. Expr a -> (r, Expr a -> Expr a -> r) -> r) -> Expr a -> [Expr a]
+scanOp match e = match e ([e], \e1 e2 -> scanOp match e1 <> scanOp match e2)
 
 scanOr :: Expr a -> [Expr a]
-scanOr (Or _ e1 e2) =
-  scanOr e1 <> scanOr e2
-scanOr e = [e]
+scanOr = scanOp \case
+  Or _ e1 e2 -> \t -> snd t e1 e2
+  _ -> fst
+
+scanAnd :: Expr a -> [Expr a]
+scanAnd = scanOp \case
+  And _ e1 e2 -> \t -> snd t e1 e2
+  _ -> fst
+
+scanROr :: Expr a -> [Expr a]
+scanROr = scanOp \case
+  ROr _ e1 e2 -> \t -> snd t e1 e2
+  _ -> fst
+
+scanRAnd :: Expr a -> [Expr a]
+scanRAnd = scanOp \case
+  RAnd _ e1 e2 -> \t -> snd t e1 e2
+  _ -> fst
 
 prettyConj :: Text -> [Doc ann] -> Doc ann
 prettyConj _ [] = mempty

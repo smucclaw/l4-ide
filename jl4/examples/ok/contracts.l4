@@ -17,21 +17,23 @@ y MEANS
   PARTY B
   MUST payment
   WITHIN 5
+  LEST FULFILLED
 
 GIVETH CONTRACT Person Action
 z MEANS 
-  x OR y
+  x ROR y
 
 a MEANS 
-  z AND z 
+  z RAND z 
 
-#CONTRACT ((PARTY B MUST payment) OR FULFILLED) AT 2 WITH
+#CONTRACT ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
 #CONTRACT x AT 4 WITH 
   PARTY S DOES delivery AT 4
 
 #CONTRACT y AT 4 WITH 
   PARTY S DOES delivery AT 4
+  PARTY S DOES delivery AT 9
 
 #CONTRACT z AT 4 WITH 
   PARTY S DOES delivery AT 4
