@@ -169,6 +169,8 @@
   Utility SF styles
 *************************************/
 
+/* Need !important in true-val and false-val to be able to override base / default background colors
+that a node might have (e.g., the darker background of (the 'function part' of) an App node). */
 @utility true-val {
   background-color: var(--color-true-value) !important;
 }
