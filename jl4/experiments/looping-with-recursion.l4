@@ -47,6 +47,6 @@ GIVEN symtab IS A  `Symbol Table`
    HENCE `Pay Until Zero` OF
            `Symbol Table`
              WITH
-              total IS symtab's total - 50
+              total IS symtab's total
               paid  IS symtab's total + 50
 
