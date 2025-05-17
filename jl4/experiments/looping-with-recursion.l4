@@ -38,11 +38,12 @@ GIVEN symtab IS A  `Symbol Table`
 
 GIVEN symtab IS A  `Symbol Table`
 `Pay Until Zero` MEANS
- IF symtab's total EQUALS 200
+ IF symtab's total EQUALS symtab's paid
  THEN FULFILLED
  ELSE
    PARTY Buyer
      MUST pay 50
+   WITHIN 30
    HENCE `Pay Until Zero` OF
            `Symbol Table`
              WITH
