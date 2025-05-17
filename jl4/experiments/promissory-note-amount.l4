@@ -1,0 +1,237 @@
+IMPORT prelude
+
+
+§ `Promissory Note`
+
+`Note Date` MEANS  "4 February 2024"
+
+`Principal Amount` MEANS Money WITH 
+                            Cents     IS 2500000
+                            Currency  IS "USD"
+
+`Interest Rate Basis Points Per Annum` MEANS 1500
+
+`Security Collateral` MEANS NOTHING
+
+`Monthly Installments` MEANS 12
+
+`Default After Days Not Paid Beyond Due` MEANS 30
+
+`Late Payment Penalty` MEANS Penalty WITH
+                                `Interest Rate Basis Points` IS 500
+                                `Grace Period Days`          IS 10
+
+`Governing Law` MEANS "Republic of Singapore"
+
+
+§§ `Parties`
+
+`Jane Dough` MEANS
+  `Commercial Borrower` OF
+    Company WITH
+      `Name`           IS "Jane Dough Pte Ltd"
+      `Address`        IS "42 Jane Doe Rd #04-20, Singapore 420000"
+      `Jurisdiction`   IS "Singapore"
+      `Company Number` IS "UEN 200424242N"
+      `Account`        IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "Jane Dough Pte Ltd"
+                              `Account Number` IS "242-242424-9"
+                              `SWIFT`          IS "DBSSSGSG"
+
+`John Doe` MEANS
+  `Individual Lender` OF
+    `Natural Person` WITH
+      `Name`          IS "John Doe"
+      `Address`       IS "42 John Doe Rd, Singapore 424242"
+      `Jurisdiction`  IS "Singapore"
+      `ID Number`     IS "G5301960D"
+      `Account`       IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "John Doe"
+                              `Account Number` IS "120-643240-1"
+                              `SWIFT`          IS "DBSSSGSG"
+
+
+
+§§ `Repayment of Principal & Interest Installments`
+
+`Total Interest Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Cents     IS `Apply Interest Rate on`
+                         (`Principal Amount`'s Cents)
+                         `Interest Rate Basis Points Per Annum` DIVIDED BY
+                              12 TIMES `Monthly Installments`
+
+`Total Repayment Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Cents     IS `Principal Amount`'s Cents PLUS `Total Interest Amount`'s Cents
+
+`Monthly Installment Amount` MEANS
+    Money WITH
+        Currency IS
+            `Total Repayment Amount`'s Currency
+        Cents IS
+            `Total Repayment Amount`'s Cents DIVIDED BY
+                `Monthly Installments`
+
+
+GIVEN `Outstanding Payment Amount` IS A Money
+`Outstanding Payments Due for` MEANS
+    IF `Outstanding Payment Amount`'s Cents GREATER THAN 0
+        THEN  PARTY   `Jane Dough`
+              MUST    `pay debts to`
+                          `John Doe`
+                          (`Next Payment Due`'s Amount)
+              WITHIN  `Next Payment Due`'s `Days Beyond Commencement` PLUS
+                          `Late Payment Penalty`'s `Grace Period Days`
+              HENCE   `Outstanding Payments Due for`
+                          (Money WITH
+                              Currency  IS `Monthly Installment Amount`'s Currency
+                              Cents     IS `Outstanding Payment Amount`'s Cents MINUS
+                                                `Next Payment Due`'s Amount's Cents)
+--              LEST     PARTY   `Jane Dough`
+--                       MUST    `pay debts to`
+--                                  `John Doe`
+--                                  `Next Payment Due Amount With Penalty`
+--                       WITHIN  `Penalty Grace Period`
+--                       LEST    PARTY  `Jane Dough`
+--                               MUST   `pay debts to`
+--                                          `John Doe`
+--                                          `All Outstanding Debts`
+        ELSE  FULFILLED
+
+    WHERE
+        `Installments Covered Since Commencement` MEANS
+            (`Total Repayment Amount`'s Cents MINUS
+                 `Outstanding Payment Amount`'s Cents) DIVIDED BY
+                    `Monthly Installment Amount`'s Cents
+
+        `Next Payment Due` MEANS
+            Payment WITH
+                Amount IS
+                    Money WITH
+                        Currency  IS `Monthly Installment Amount`'s Currency
+                        Cents     IS `The lesser of`
+                                        (`Monthly Installment Amount`'s Cents)
+                                        (`Outstanding Payment Amount`'s Cents)
+                `Days Beyond Commencement` IS
+                    `Installments Covered Since Commencement` PLUS 1 TIMES 30
+
+        `Next Payment Due Amount With Penalty` MEANS
+            Money WITH
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Cents     IS `Next Payment Due`'s Amount's Cents PLUS
+                                  `Apply Interest Rate on`
+                                      (`Next Payment Due`'s Amount's Cents)
+                                      (`Late Payment Penalty`'s `Interest Rate Basis Points`)
+
+        `Penalty Grace Period` MEANS
+            `Next Payment Due`'s `Days Beyond Commencement` PLUS
+                `Default After Days Not Paid Beyond Due`
+
+        `All Outstanding Debts` MEANS
+            Money WITH
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Cents     IS `Outstanding Payment Amount`'s Cents PLUS
+                                `Next Payment Due Amount With Penalty`'s Cents MINUS
+                                    `Next Payment Due`'s Amount's Cents
+
+
+
+§§ `Testing`
+
+#EVAL `Total Repayment Amount`
+
+
+#EVAL EVALCONTRACT (`Outstanding Payments Due for` `Total Repayment Amount`)
+                   (LIST  EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 25
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 29)
+                   5
+
+
+
+
+
+§§ `Definitions`
+
+DECLARE Money
+    HAS Currency            IS A STRING
+        Cents               IS A NUMBER
+
+DECLARE Company
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `Company Number`    IS A STRING
+        `Account`           IS A `Bank Account`
+
+DECLARE `Natural Person`
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `ID Number`         IS A STRING
+        `Account`           IS A `Bank Account`
+
+DECLARE Party IS ONE OF
+    Borrower
+    Lender
+
+DECLARE Borrower IS ONE OF
+   `Individual Borrower`
+        HAS Individual      IS A `Natural Person`
+   `Commercial Borrower`
+        HAS Business        IS A Company
+
+DECLARE Lender IS ONE OF
+   `Individual Lender`
+        HAS Individual      IS A `Natural Person`
+   `Commercial Lender`
+        HAS Business        IS A Company
+
+DECLARE `Bank Account`
+    HAS `Bank Name`         IS A STRING
+        `Account Name`      IS A STRING
+        `Account Number`    IS A STRING
+        `SWIFT`             IS A STRING
+
+DECLARE Payment
+    HAS Amount                       IS A Money
+        `Days Beyond Commencement`   IS A NUMBER
+
+DECLARE Penalty
+    HAS `Interest Rate Basis Points` IS A NUMBER
+        `Grace Period Days`          IS A NUMBER
+
+DECLARE `pay debts to`
+    HAS Recipient            IS A Lender
+        Amount               IS A Money
+
+GIVEN Cents                  IS A NUMBER
+      `Rate in Basis Points` IS A NUMBER
+GIVETH A NUMBER 
+`Apply Interest Rate on` MEANS
+    Cents TIMES `Rate in Basis Points` DIVIDED BY 10000
+
+GIVEN Payments IS A LIST OF Payment
+`Sum of Payments Amount Cents of` MEANS
+    sum OF 
+        map OF
+            GIVEN p IS A Payment YIELD p's Amount's Cents
+            Payments
+
+GIVEN Payments IS A LIST OF Payment
+`Last Payment Day of` MEANS
+    maximum OF
+        map OF
+            GIVEN p IS A Payment YIELD p's `Days Beyond Commencement`
+            Payments
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+`The lesser of` MEANS
+    IF a GREATER THAN b
+        THEN b
+        ELSE a
