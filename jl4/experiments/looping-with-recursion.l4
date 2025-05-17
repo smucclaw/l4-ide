@@ -1,0 +1,51 @@
+IMPORT prelude
+
+// in this example, we illustrate how to do with recursion what we would ordinarily do by looping through a list.
+
+// let's suppose we buy a very expensive apple and we click on the shopping site's option to make payment in four instalments.
+
+// we have a seller and a buyer
+
+DECLARE Actor IS ONE OF
+  Buyer    HAS name IS A STRING
+  Seller   ^   ^    ^  ^ ^
+
+// we keep track of things using some sort of wallet
+
+DECLARE `Symbol Table`
+    HAS total     IS A NUMBER
+        paid      IS A NUMBER
+
+// the seller delivers the goods
+
+DECLARE Action IS ONE OF
+  deliver  HAS itemName   IS A  STRING
+               quantity   IS A  NUMBER
+  pay      HAS amount     IS A  NUMBER
+
+// the buyer makes four payments
+
+GIVEN symtab IS A  `Symbol Table`
+`Initial Sale` MEANS
+  PARTY Seller
+   MUST deliver "apple" 1
+ WITHIN 10
+ HENCE `Pay Until Zero` OF
+         `Symbol Table`
+           WITH
+            total IS 200
+            paid  IS   0
+
+GIVEN symtab IS A  `Symbol Table`
+`Pay Until Zero` MEANS
+ IF symtab's total EQUALS 200
+ THEN FULFILLED
+ ELSE
+   PARTY Buyer
+     MUST pay 50
+   HENCE `Pay Until Zero` OF
+           `Symbol Table`
+             WITH
+              total IS symtab's total - 50
+              paid  IS symtab's total + 50
+
