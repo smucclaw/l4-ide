@@ -10,6 +10,8 @@ IMPORT `base-money`
     version      IS "1.2"
     safeType     IS `SAFE (Post-Money)`
 
+ASSUME TBD IS A STRING
+
 §§ Parties
 // sample startup
 startup MEANS
@@ -19,14 +21,14 @@ startup MEANS
     `Jurisdiction`   IS "Singapore"
     `Company Number` IS "12345678"
     `Cap Table`      IS `Pre Money Cap Table`
-    
+
   WHERE
     `Pre Money Cap Table` MEANS -- founder shares
-      LIST (`Cap Table Entry` OF 
+      LIST (`Cap Table Entry` OF
               Investor WITH Name         IS "Thomas Gorissen"
                             Address      IS (LIST "23 Sentosa Way")
                             Jurisdiction IS JUST "Singapore"
-                            `ID Number`  IS JUST "SG12345678"
+                            `ID Number`  IS "SG12345678"
               Security WITH
                 Instrument IS "Shares"
                 Name       IS "ordinary"
@@ -50,7 +52,7 @@ DECLARE `Post-Money Valuation` IS A Money
 
 
 `Pre-Money Valuation` MEANS
-  Money WITH 
+  Money WITH
     amount IS 10000000
     currency IS "SGD"
 
@@ -77,7 +79,7 @@ DECLARE `Post-Money Valuation` IS A Money
 --                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
 --                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
 
-DECLARE Person IS ONE OF Company, Founder, Investor, Buyer, Seller
+DECLARE Person IS ONE OF Company, Founder, Inv, Buyer, Seller
 DECLARE Action IS ONE OF delivery, payment, return
 
 -- We will model automatic conversion as just a function from Company to Company; the cap table will be updated
@@ -112,9 +114,9 @@ GIVEN      `Post-Money Valuation Cap`   IS A Money
 -- except that any price-based preferences (such as the per share liquidation amount, initial conversion price and per share dividend amount)
 -- will be based on the Safe Price.
 
--- 
--- 
--- 
+--
+--
+--
 -- GIVEN `SAFE Events` IS A LIST OF Event
 -- UPON  `Equity Financing Event` OF `SAFE Events`
 -- THEN  `rewrite cap table`
@@ -135,7 +137,7 @@ GIVEN      `Post-Money Valuation Cap`   IS A Money
 -- we rewrite the cap table
 -- and we generate some paperwork that the investor MUST sign
 -- and if the investor doesn't sign, the investor is not entitled to the shares
-        
+
 GIVEN `SAFE Events` IS A LIST OF Event
 DECIDE `Equity Financing Event` IF
    any (GIVEN event YIELD event's name EQUALS "Equity Financing")
@@ -165,14 +167,14 @@ DECIDE `Equity Financing Conversion` IS
 // If any of the Company’s securityholders are given a choice as to the form and amount of Proceeds to be received in a Liquidity Event,
 // the Investor will be given the same choice, provided that
 //           the Investor may not choose to receive a form of consideration
-//           that the Investor would be ineligible to receive as a result of
-//           the Investor’s failure to satisfy any requirement or limitation generally applicable to the Company’s securityholders,
-//                                                             or under any applicable laws.
-// Notwithstanding the foregoing, in connection with a Change of Control intended to qualify as a tax-free reorganization, the Company may reduce the cash portion of Proceeds payable to the Investor by the amount determined by its board of directors in good faith for such Change of Control to qualify as a tax-free reorganization, provided that such reduction (A) does not reduce the total Proceeds payable to such Investor and (B) is applied in the same manner and on a pro rata basis to all securityholders who have equal priority to the Investor under Section 1(d). 
+//             that the Investor would be ineligible to receive as a result of
+//               the Investor’s failure to satisfy any requirement or limitation generally applicable to the Company’s securityholders,
+//                                                                            or under any applicable laws.
+// Notwithstanding the foregoing, in connection with a Change of Control intended to qualify as a tax-free reorganization, the Company may reduce the cash portion of Proceeds payable to the Investor by the amount determined by its board of directors in good faith for such Change of Control to qualify as a tax-free reorganization, provided that such reduction (A) does not reduce the total Proceeds payable to such Investor and (B) is applied in the same manner and on a pro rata basis to all securityholders who have equal priority to the Investor under Section 1(d).
 
 §§§ `Dissolution Event`
 
-// (c)	Dissolution Event. If there is a Dissolution Event before the termination of this Safe, the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below) to receive a portion of Proceeds equal to the Cash-Out Amount, due and payable to the Investor immediately prior to the consummation of the Dissolution Event. 
+// (c)	Dissolution Event. If there is a Dissolution Event before the termination of this Safe, the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below) to receive a portion of Proceeds equal to the Cash-Out Amount, due and payable to the Investor immediately prior to the consummation of the Dissolution Event.
 
 §§§ `Termination Event`
 
@@ -254,7 +256,7 @@ DECLARE Company
 
 DECLARE NaturalPerson
     HAS name           IS A STRING
-        title          IS A MAYBE STRING   
+        title          IS A MAYBE STRING
         address        IS A MAYBE STRING
         jurisdiction   IS A MAYBE STRING
         id_number      IS A MAYBE STRING
@@ -268,7 +270,7 @@ DECLARE Investor
     HAS `Name`         IS A STRING
         `Address`      IS A LIST OF STRING
         `Jurisdiction` IS A MAYBE STRING
-        `ID Number`    IS A MAYBE STRING
+        `ID Number`    IS A STRING
 
 DECLARE Founder IS AN Investor
 
@@ -331,7 +333,9 @@ DECLARE `Cap Table Entry`
     HAS Holder       IS A Investor
         Security     IS A Security
 
-`TBD` MEANS NOTHING
+-- TBD = "To Be Determined"
+-- `TBD` MEANS NOTHING
+
+-- The ShouldBe Monad
 
 // traditionally null == nothing ... let's also do TBD == nothing
-
