@@ -1,51 +1,68 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module LSP.L4.Viz.Ladder where
+module LSP.L4.Viz.Ladder (
+  -- * Entrypoint
+  doVisualize,
+
+  -- * VizConfig, VizState
+  VizConfig (..),
+  mkVizConfig,
+  VizState,
+
+  -- * Viz State helpers
+  lookupAppExprMaker,
+  getVizConfig,
+  
+  -- * Other helpers
+  prettyPrintVizError,
+  ) where
 
 import Control.DeepSeq
 import Control.Monad.Except
 import Base
 import qualified Base.Text as Text
-import Optics.State.Operators ((<%=))
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as Map
+import Optics.State.Operators ((<%=), (%=))
 
 import qualified Language.LSP.Protocol.Types as LSP
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
 import L4.Syntax
+import L4.Print (prettyLayout)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
-import L4.Print (prettyLayout)
+import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
 import qualified L4.Transform as Transform (simplify)
-
-{- | Temporary hack to disable the translation to IRExpr App
-while the frontend doesn't have proper UI for it -}
-isDevMode :: Bool
-isDevMode = False
+import Control.Monad.Extra (unlessM)
 
 ------------------------------------------------------
 -- Monad
 ------------------------------------------------------
 
-newtype Viz a = MkViz {getVizE :: VizState -> (Either VizError a, VizState)}
+newtype Viz a = MkViz {getViz :: VizEnv -> VizState -> (Either VizError a, VizState)}
   deriving
-    (Functor, Applicative, Monad, MonadState VizState, MonadError VizError)
-    via ExceptT VizError (State VizState)
+    (Functor, Applicative, Monad, MonadState VizState, MonadError VizError, MonadReader VizEnv)
+    via ReaderT VizEnv (ExceptT VizError (State VizState))
 
-mkVizEnv :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizEnv
-mkVizEnv verTxtDocId substitution shouldSimplify =
+-- | A 'local' env
+newtype VizEnv = MkVizEnv { localDecls :: [LocalDecl Resolved]}
+
+mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizConfig
+mkVizConfig verTxtDocId substitution shouldSimplify =
   let moduleUri = toNormalizedUri verTxtDocId._uri
-  in MkVizEnv
+  in MkVizConfig
     { moduleUri
     , verTxtDocId
     , substitution
     , shouldSimplify
     }
 
-data VizEnv = MkVizEnv
+data VizConfig = MkVizConfig
   { moduleUri      :: !NormalizedUri
   , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
   , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
@@ -53,35 +70,46 @@ data VizEnv = MkVizEnv
   }
   deriving stock (Show, Generic, Eq)
 
-data VizState =
-  MkVizState
-    { env :: !VizEnv
-    , maxId :: !ID
-    }
-  deriving stock (Show, Generic, Eq)
 
-mkInitialVizState :: VizEnv -> VizState
-mkInitialVizState env =
+data VizState = MkVizState
+  { cfg            :: !VizConfig
+  , maxId          :: !ID
+  , appExprMakers  :: IntMap (V.EvalAppRequestParams -> Expr Resolved)
+  -- ^ Map from Unique of V.ID to eval-app-directive maker
+  }
+  deriving stock (Generic)
+
+instance Show VizState where
+  show MkVizState{cfg, maxId, appExprMakers} =
+    "MkVizState { cfg = " <> show cfg <>
+    ", maxId = " <> show maxId <>
+    ", (keys of) appExprMakers = " <> show (Map.keys appExprMakers) <> " }"
+
+mkInitialVizState :: VizConfig -> VizState
+mkInitialVizState cfg =
   MkVizState
-    { env = env
+    { cfg
     , maxId = MkID 0
+    , appExprMakers = Map.empty
     }
 
+------------------------------------------------------
 -- Monad ops
+------------------------------------------------------
 
 -- | 'Internal' helper: This should only be used by other Viz monad ops
-getVizEnv :: Viz VizEnv
-getVizEnv = use #env
+getVizCfg :: Viz VizConfig
+getVizCfg = use #cfg
 
 getVerTxtDocId :: Viz LSP.VersionedTextDocumentIdentifier
 getVerTxtDocId = do
-  env <- getVizEnv
-  pure env.verTxtDocId
+  cfg <- getVizCfg
+  pure cfg.verTxtDocId
 
 getExpandedType :: Type' Resolved -> Viz (Type' Resolved)
 getExpandedType ty = do
-  env <- getVizEnv
-  pure $ TC.applyFinalSubstitution env.substitution env.moduleUri ty
+  cfg <- getVizCfg
+  pure $ TC.applyFinalSubstitution cfg.substitution cfg.moduleUri ty
 
 getFresh :: Viz ID
 getFresh = do
@@ -89,8 +117,44 @@ getFresh = do
 
 getShouldSimplify :: Viz Bool
 getShouldSimplify = do
-  env <- getVizEnv
-  pure env.shouldSimplify
+  cfg <- getVizCfg
+  pure cfg.shouldSimplify
+
+{-# ANN prepEvalAppMaker ("HLINT: ignore Redundant lambda" :: String) #-}
+{- | Assumes that the program is well-scoped and well-typed -}
+prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
+prepEvalAppMaker vid = \ case
+  App appAnno appResolved _ -> do
+    localDecls <- getLocalDecls
+    let maker = 
+          \V.EvalAppRequestParams{args} ->
+            Where emptyAnno
+              (App appAnno appResolved $ map toBoolExpr args)
+              localDecls
+    #appExprMakers %= Map.insert vid.id maker
+  _ -> pure ()
+
+getLocalDecls :: Viz [LocalDecl Resolved]
+getLocalDecls = do
+  env <- ask
+  pure env.localDecls
+
+withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
+withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
+
+------------------------------------------------------
+-- Viz state helpers
+------------------------------------------------------
+
+{- Consumers should use the following helpers to work with VizState.
+I.e., I'm trying to hide the implementational details of VizState
+(e.g. how VizConfig is related to VizState). -}
+
+lookupAppExprMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> Expr Resolved)
+lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
+
+getVizConfig :: VizState -> VizConfig
+getVizConfig vs = vs.cfg
 
 ------------------------------------------------------
 -- VizError
@@ -98,7 +162,7 @@ getShouldSimplify = do
 
 data VizError
   = InvalidProgramNoDecidesFound
-  | InvalidProgramDecidesMustNotHaveMoreThanOneGiven
+  | InvalidDecideMustHaveBoolRetType
   deriving stock (Eq, Generic, Show)
   deriving anyclass (NFData)
 
@@ -107,18 +171,23 @@ prettyPrintVizError :: VizError -> Text
 prettyPrintVizError = \ case
   InvalidProgramNoDecidesFound ->
     "The program isn't the right sort for visualization: there are no DECIDE rules that can be visualized."
-  InvalidProgramDecidesMustNotHaveMoreThanOneGiven ->
-    "Visualization failed: DECIDE rules must reference no more than one GIVEN variable."
+  InvalidDecideMustHaveBoolRetType ->
+    "Can only visualize, as a ladder diagram, a DECIDE that returns a boolean."
 
 ------------------------------------------------------
 -- Entrypoint: Visualise
 ------------------------------------------------------
 
 -- | Entrypoint: Generate boolean circuits of the given 'Decide'.
-doVisualize :: Decide Resolved -> VizEnv -> Either VizError RenderAsLadderInfo
-doVisualize decide env =
-  case  (vizProgram decide).getVizE (mkInitialVizState env) of
-    (result, _) -> result
+doVisualize :: Decide Resolved -> VizConfig -> Either VizError (RenderAsLadderInfo, VizState)
+doVisualize decide cfg =
+  let (result, vizState) = (vizProgram decide).getViz initialEnv initialVizState
+  in case result of
+    Left err         -> Left err
+    Right ladderInfo -> Right (ladderInfo, vizState)
+  where
+    initialEnv = MkVizEnv { localDecls = [] }
+    initialVizState = mkInitialVizState cfg
 
 vizProgram :: Decide Resolved -> Viz RenderAsLadderInfo
 vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide decide
@@ -145,11 +214,13 @@ vizProgram decide = MkRenderAsLadderInfo <$> getVerTxtDocId <*> translateDecide 
 translateDecide :: Decide Resolved -> Viz V.FunDecl
 translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ _) body) =
   do
+    unlessM (hasBooleanType (getAnno body)) $
+      throwError InvalidDecideMustHaveBoolRetType
     shouldSimplify <- getShouldSimplify
-    uid            <- getFresh
+    vid            <- getFresh
     vizBody        <- translateExpr shouldSimplify body
     pure $ V.MkFunDecl
-      uid
+      vid
       -- didn't want a backtick'd name in the header
       (mkSimpleVizName funResolved)
       (paramNamesFromGivens givenSig)
@@ -174,30 +245,33 @@ translateExpr False = go
     go e =
       case e of
         Not _ negand -> do
-          uid <- getFresh
-          V.Not uid <$> go negand
+          vid <- getFresh
+          V.Not vid <$> go negand
         And {} -> do
-          uid <- getFresh
-          V.And uid <$> traverse go (scanAnd e)
+          vid <- getFresh
+          V.And vid <$> traverse go (scanAnd e)
         Or {} -> do
-          uid <- getFresh
-          V.Or uid <$> traverse go (scanOr e)
-        Where _ e' _ds -> go e' -- TODO: lossy
+          vid <- getFresh
+          V.Or vid <$> traverse go (scanOr e)
+        Where _ e' ds ->
+          withLocalDecls ds $
+            go e' -- TODO: lossy
 
         -- TODO: Should handle BoolLits differently too
         -- 'var'
-        App _ resolved [] ->
-          leafFromVizName (mkVizNameWith prettyLayout resolved)
+        App _ resolved [] -> do
+          vid <- getFresh
+          prepEvalAppMaker vid e
+          pure $ leafFromVizName vid (mkVizNameWith prettyLayout resolved)
 
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
-          if isDevMode && fnOfAppIsFnFromBooleansToBoolean
-            then
-              V.App
-                <$> getFresh
-                <*> pure (mkVizNameWith nameToText fnResolved)
-                <*> traverse go args
+          if fnOfAppIsFnFromBooleansToBoolean
+            then do
+              vid <- getFresh
+              prepEvalAppMaker vid e
+              V.App vid (mkVizNameWith nameToText fnResolved) <$> traverse go args
             else
               leaf "" $ Text.unwords $ (nameToText . getOriginal $ fnResolved) : (prettyLayout <$> args)
 
@@ -221,19 +295,17 @@ scanOr e = [e]
 defaultUBoolVarValue :: V.UBoolValue
 defaultUBoolVarValue = V.UnknownV
 
-leafFromVizName :: V.Name -> Viz IRExpr
-leafFromVizName vname = do
-  uid <- getFresh
-  pure $ V.UBoolVar uid vname defaultUBoolVarValue
+leafFromVizName :: V.ID -> V.Name -> IRExpr
+leafFromVizName vid vname = V.UBoolVar vid vname defaultUBoolVarValue
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
-  uid <- getFresh
+  vid <- getFresh
   tempUniqueTODO <- getFresh
   -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
   -- I'll return to this when we explicitly/properly handle more cases in translateExpr
   -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
-  pure $ V.UBoolVar uid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
+  pure $ V.UBoolVar vid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
 
 ------------------------------------------------------
 -- Name helpers
@@ -264,3 +336,13 @@ isBooleanType ty = do
     TyApp _ (Ref _ uniq _) [] ->
       uniq == TC.booleanUnique
     _ -> False
+
+------------------------------------------------------
+-- UBoolValue x L4 True/False conversion helpers
+------------------------------------------------------
+
+toBoolExpr :: V.UBoolValue -> Expr Resolved
+toBoolExpr = \ case
+  V.FalseV   -> App emptyAnno TC.falseRef []
+  V.TrueV    -> App emptyAnno TC.trueRef []
+  V.UnknownV -> error "impossible for now"
