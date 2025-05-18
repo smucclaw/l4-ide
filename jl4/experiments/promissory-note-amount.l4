@@ -26,7 +26,7 @@ IMPORT prelude
 
 §§ `Parties`
 
-`Jane Dough` MEANS
+`The Borrower` MEANS
   `Commercial Borrower` OF
     Company WITH
       `Name`           IS "Jane Dough Pte Ltd"
@@ -39,19 +39,18 @@ IMPORT prelude
                               `Account Number` IS "242-242424-9"
                               `SWIFT`          IS "DBSSSGSG"
 
-`John Doe` MEANS
+`The Lender` MEANS
   `Individual Lender` OF
     `Natural Person` WITH
       `Name`          IS "John Doe"
-      `Address`       IS "42 John Doe Rd, Singapore 424242"
+      `Address`       IS "42 The Lender Rd, Singapore 424242"
       `Jurisdiction`  IS "Singapore"
       `ID Number`     IS "G5301960D"
       `Account`       IS `Bank Account` WITH
                               `Bank Name`      IS "DBS Bank Ltd"
-                              `Account Name`   IS "John Doe"
+                              `Account Name`   IS "The Lender"
                               `Account Number` IS "120-643240-1"
                               `SWIFT`          IS "DBSSSGSG"
-
 
 
 §§ `Repayment of Principal & Interest Installments`
@@ -81,9 +80,9 @@ IMPORT prelude
 GIVEN `Outstanding Payment Amount` IS A Money
 `Outstanding Obligations for` MEANS
     IF `Outstanding Payment Amount`'s Cents GREATER THAN 0
-        THEN  PARTY   `Jane Dough`
+        THEN  PARTY   `The Borrower`
               MUST    `pay debts to`
-                          `John Doe`
+                          `The Lender`
                           (`Next Payment Due`'s Amount)
               WITHIN  `Next Payment Due`'s `Days Beyond Commencement` PLUS
                           `Late Payment Penalty`'s `Grace Period Days`
@@ -92,15 +91,17 @@ GIVEN `Outstanding Payment Amount` IS A Money
                               Currency  IS `Monthly Installment Amount`'s Currency
                               Cents     IS `Outstanding Payment Amount`'s Cents MINUS
                                                 `Next Payment Due`'s Amount's Cents)
---              LEST     PARTY   `Jane Dough`
+--              LEST     PARTY   `The Borrower`
 --                       MUST    `pay debts to`
---                                  `John Doe`
+--                                  `The Lender`
 --                                  `Next Payment Due Amount With Penalty`
 --                       WITHIN  `Penalty Grace Period`
---                       LEST    PARTY  `Jane Dough`
---                               MUST   `pay debts to`
---                                          `John Doe`
---                                          `All Outstanding Debts`
+--                       LEST    PARTY  `The Lender`
+--                               MAY    `declare default of` `The Borrower`
+--                               HENCE  PARTY   `The Borrower`
+--                                      MUST    `pay debts to`
+--                                                  `The Lender`
+--                                                  `All Outstanding Debts`
         ELSE  FULFILLED
 
     WHERE
@@ -150,34 +151,34 @@ GIVEN `Outstanding Payment Amount` IS A Money
 #EVAL `Monthly Installment Amount`
 
 #EVAL EVALCONTRACT (`Outstanding Obligations for` `Total Repayment Amount`)
-                   (LIST  EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 29
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 59
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 89
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 119
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 149
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 179
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 209
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 239
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 269
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 299
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 329
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 359)
+                   (LIST  EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 29
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 59
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 89
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 119
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 149
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 179
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 209
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 239
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 269
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 299
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 329
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 359)
                    360
 
 
 #CONTRACT `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 29
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 59
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 89
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 119
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 149
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 179
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 209
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 239
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 269
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 299
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 329
-    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 359
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 29
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 359
 
 
 §§ `Definitions`
@@ -199,10 +200,6 @@ DECLARE `Natural Person`
         `Jurisdiction`      IS A STRING
         `ID Number`         IS A STRING
         `Account`           IS A `Bank Account`
-
-DECLARE Party IS ONE OF
-    Borrower
-    Lender
 
 DECLARE Borrower IS ONE OF
    `Individual Borrower`
@@ -233,6 +230,9 @@ DECLARE Penalty
 DECLARE `pay debts to`
     HAS Recipient            IS A Lender
         Amount               IS A Money
+
+DECLARE `declare default of`
+    HAS Party                IS A Borrower
 
 GIVEN Cents                  IS A NUMBER
       `Rate in Basis Points` IS A NUMBER
