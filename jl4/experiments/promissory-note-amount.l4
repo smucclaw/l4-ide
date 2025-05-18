@@ -79,7 +79,7 @@ IMPORT prelude
 
 
 GIVEN `Outstanding Payment Amount` IS A Money
-`Outstanding Payments Due for` MEANS
+`Outstanding Obligations for` MEANS
     IF `Outstanding Payment Amount`'s Cents GREATER THAN 0
         THEN  PARTY   `Jane Dough`
               MUST    `pay debts to`
@@ -87,7 +87,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                           (`Next Payment Due`'s Amount)
               WITHIN  `Next Payment Due`'s `Days Beyond Commencement` PLUS
                           `Late Payment Penalty`'s `Grace Period Days`
-              HENCE   `Outstanding Payments Due for`
+              HENCE   `Outstanding Obligations for`
                           (Money WITH
                               Currency  IS `Monthly Installment Amount`'s Currency
                               Cents     IS `Outstanding Payment Amount`'s Cents MINUS
@@ -115,8 +115,8 @@ GIVEN `Outstanding Payment Amount` IS A Money
                     Money WITH
                         Currency  IS `Monthly Installment Amount`'s Currency
                         Cents     IS `The lesser of`
-                                        (`Monthly Installment Amount`'s Cents)
-                                        (`Outstanding Payment Amount`'s Cents)
+                                         (`Monthly Installment Amount`'s Cents)
+                                         (`Outstanding Payment Amount`'s Cents)
                 `Days Beyond Commencement` IS
                     `Installments Covered Since Commencement` PLUS 1 TIMES 30
 
@@ -143,16 +143,41 @@ GIVEN `Outstanding Payment Amount` IS A Money
 
 §§ `Testing`
 
+#EVAL `Total Interest Amount`
+
 #EVAL `Total Repayment Amount`
 
+#EVAL `Monthly Installment Amount`
 
-#EVAL EVALCONTRACT (`Outstanding Payments Due for` `Total Repayment Amount`)
-                   (LIST  EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 25
-                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 29)
-                   5
+#EVAL EVALCONTRACT (`Outstanding Obligations for` `Total Repayment Amount`)
+                   (LIST  EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 29
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 59
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 89
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 119
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 149
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 179
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 209
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 239
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 269
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 299
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 329
+                          EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 239583)) 359)
+                   360
 
 
-
+#CONTRACT `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 29
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 59
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 89
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 119
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 149
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 179
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 209
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 239
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 269
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 299
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 329
+    PARTY `Jane Dough` DOES `pay debts to` `John Doe` (Money "USD" 239583) AT 359
 
 
 §§ `Definitions`
@@ -214,20 +239,6 @@ GIVEN Cents                  IS A NUMBER
 GIVETH A NUMBER 
 `Apply Interest Rate on` MEANS
     Cents TIMES `Rate in Basis Points` DIVIDED BY 10000
-
-GIVEN Payments IS A LIST OF Payment
-`Sum of Payments Amount Cents of` MEANS
-    sum OF 
-        map OF
-            GIVEN p IS A Payment YIELD p's Amount's Cents
-            Payments
-
-GIVEN Payments IS A LIST OF Payment
-`Last Payment Day of` MEANS
-    maximum OF
-        map OF
-            GIVEN p IS A Payment YIELD p's `Days Beyond Commencement`
-            Payments
 
 GIVEN a IS A NUMBER
       b IS A NUMBER
