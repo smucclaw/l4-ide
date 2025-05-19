@@ -119,7 +119,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                                          (`Monthly Installment Amount`'s Cents)
                                          (`Outstanding Payment Amount`'s Cents)
                 `Days Beyond Commencement` IS
-                    `Installments Covered Since Commencement` PLUS 1 TIMES 30
+                    (`Installments Covered Since Commencement` PLUS 1) TIMES 30
 
         `Next Payment Due Amount With Penalty` MEANS
             Money WITH
