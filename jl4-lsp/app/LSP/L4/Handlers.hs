@@ -18,7 +18,7 @@ import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import qualified StmContainers.Map as STM
 import Control.Applicative
-import Control.Monad.Except (runExceptT, throwError)
+import Control.Monad.Except (runExceptT, throwError, MonadError(..), ExceptT(..))
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
@@ -30,6 +30,7 @@ import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
 import GHC.Generics
+import GHC.TypeLits (Symbol)
 import Data.Proxy (Proxy (..))
 import LSP.L4.Base
 import LSP.L4.Config
@@ -521,3 +522,102 @@ l4CmdNames =
 -- | Given an 'Aeson.Value', matches successfully, if decoding via @a@'s 'Generic' instance is successful
 pattern GFromJSON :: forall a. (Generic a, Aeson.GFromJSON Aeson.Zero (Rep a)) => forall. a -> Aeson.Value
 pattern GFromJSON a <- (Aeson.fromJSON -> Aeson.Success (Generically a))
+
+-------------------------------------------------------------------------
+-- VizHandler
+-------------------------------------------------------------------------
+
+-- TODO: Add logging service that wraps Handlers' logWith
+-- | Monad for handling custom viz requests
+newtype VizHandler (method :: Symbol) a = MkVizHandler 
+  (ExceptT 
+    (TResponseError (Method_CustomMethod @ClientToServer @Request method)) 
+    IO a)
+  deriving newtype (Functor, Applicative, Monad, MonadError (TResponseError (Method_CustomMethod @ClientToServer @Request method)), MonadIO)
+
+runVizHandlerM :: Ladder.IsCustomMethod method => VizHandler method a -> IO (Either (TResponseError (Method_CustomMethod @ClientToServer @Request method)) a)
+runVizHandlerM (MkVizHandler m) = runExceptT m
+
+-------------------------------------------------------------------------
+-- handleCustomVizRequest
+-------------------------------------------------------------------------
+
+handleCustomVizRequest 
+  :: forall (method :: Symbol) a params.
+      (Ladder.IsCustomMethod method,
+      Ladder.IsLadderRequestParams params)
+  => Recorder (WithPriority Log)  -- ^ For logging
+  -> Proxy method
+  -> MessageParams ('Method_CustomMethod method)
+  -> IdeState
+  -> (params -> TypeCheckResult -> Shake.RecentlyVisualised -> VizHandler method a)
+  -> VizHandler method a
+handleCustomVizRequest recorder method params ide handlerKont = do
+  decodedParams <- guardDecodeParams @method params
+  let verDocId = decodedParams.verDocId
+  logWith recorder Debug $ LogReceivedCustomRequest verDocId._uri (Ladder.getMethodName method)
+
+  mtcRes <- liftIO $ runAction (Text.unpack $ Ladder.getMethodName method) ide $ use TypeCheck $ toNormalizedUri verDocId._uri
+  mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
+
+  -- The following two cases should be impossible,
+  -- since the verTxtDocId that the client sends us in the custom request
+  -- corresponds to the one that it got when it was first requested to render the VizExpr.
+  case (mtcRes, mRecentViz) of
+    (Nothing, _) -> throwError $ TResponseError
+      { _code = InR ErrorCodes_InvalidRequest
+      , _message = "Failed to get type check for " <> Text.show verDocId._uri
+      , _xdata = Nothing
+      }
+    (_, Nothing) -> throwError $ TResponseError
+      { _code = InR ErrorCodes_InvalidRequest
+      , _message = "No recent visualisation found, when trying to handle " <> Ladder.getMethodName method <> ". This case should be impossible."
+      , _xdata = Nothing
+      }
+    (Just tcRes, Just recentViz) -> do
+      _ <- checkVizVersion decodedParams recentViz
+      handlerKont decodedParams tcRes recentViz
+
+-------------------------------------------------------------------------
+-- Helpers
+-------------------------------------------------------------------------
+
+{- | Helper: Check that the client's verTxtDocId matches the server's.
+  Note that the client will have already received 
+  the verTxtDocId in the original 'please render this VizExpr' request -}
+checkVizVersion
+  :: forall (method :: Symbol) params.
+     (Ladder.IsCustomMethod method,
+      Ladder.IsLadderRequestParams params)
+  => params
+  -> Shake.RecentlyVisualised
+  -> VizHandler method ()
+checkVizVersion reqParams recentViz = do
+  let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
+  if getVerDocId reqParams == vizConfig.verTxtDocId
+    then pure ()
+    else throwError $ TResponseError
+      { _code = InL LSPErrorCodes_ContentModified
+      , _message = "Document version mismatch. Visualizer version: " <> Text.show (getVerDocId reqParams)._version <>
+          ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
+      , _xdata = Nothing
+      }
+      -- TODO: Have the client update accordingly when it gets this error code,
+      -- if it doesn't alr do so automatically
+
+-- | Helper to handle JSON decoding errors when decoding params of custom requests
+guardDecodeParams
+  :: forall (method :: Symbol) a.
+     (Ladder.IsCustomMethod method, Ladder.IsLadderRequestParams a)
+  => MessageParams ('Method_CustomMethod method)
+  -> VizHandler method a
+guardDecodeParams params =
+  case Aeson.fromJSON params :: Aeson.Result a of
+    Aeson.Error err ->
+      throwError $ TResponseError
+        { _code = InR ErrorCodes_InvalidRequest
+        , _message = "Invalid params for " <> Ladder.getMethodName (Proxy @method) <> ": " <> Text.pack err
+        , _xdata = Nothing
+        }
+    Aeson.Success decodedParams ->
+      pure decodedParams
