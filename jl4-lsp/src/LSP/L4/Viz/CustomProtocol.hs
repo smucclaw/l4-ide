@@ -11,7 +11,7 @@ import GHC.Generics (Generic)
 import Data.Proxy (Proxy(..))
 import GHC.TypeLits  (Symbol, KnownSymbol, symbolVal)
 import Language.LSP.Protocol.Types as LSP
-import LSP.L4.Viz.VizExpr
+import LSP.L4.Viz.VizExpr as V
 
 ------------------------------------------------------
 -- l4/evalApp Request Params and Response Payload
@@ -19,20 +19,20 @@ import LSP.L4.Viz.VizExpr
 
 -- | Payload / params for EvalAppRequest
 data EvalAppRequestParams = EvalAppRequestParams
-  { appExpr :: ID,
+  { appExpr  :: V.ID
     {- | I don't want to bother defining a BoolValue just for this;
         can be cleaned up in the future.
         Also, prob better to make the @args@ UBoolLit exprs or smtg
     -}
-    args :: [UBoolValue],
-    verDocId :: LSP.VersionedTextDocumentIdentifier
+  , args     :: [V.UBoolValue]
+  , verDocId :: LSP.VersionedTextDocumentIdentifier
   }
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 -- | l4/evalApp response payload
 newtype EvalAppResult = EvalAppResult
-  { value :: UBoolValue }
+  { value :: V.UBoolValue }
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
