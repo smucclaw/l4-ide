@@ -304,7 +304,7 @@ handlers recorder =
 
           --  Check if can make viz with a given simplify flag
           canVisualize decide simplify =
-            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.substitution simplify
+            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.module' typeCheck.substitution simplify
             in isRight (Ladder.doVisualize decide cfg)
 
           decideToCodeLens decide =
