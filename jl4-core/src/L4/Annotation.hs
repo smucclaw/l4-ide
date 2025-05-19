@@ -42,7 +42,7 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   , range :: Maybe SrcRange
   , visibility :: NodeVisibility
   }
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode_' for tokens
@@ -52,13 +52,13 @@ data CsnCluster_ t = CsnCluster
   { payload :: ConcreteSyntaxNode_ t
   , trailing :: ConcreteSyntaxNode_ t
   }
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AnnoElement_ t
   = AnnoHole (Maybe SrcRange)
   | AnnoCsn  (Maybe SrcRange) (CsnCluster_ t)
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
@@ -140,6 +140,11 @@ genericSetAnno ann e = set (gposition @1) ann e
 
 genericGetAnno :: GPosition 1 s s a a => s -> a
 genericGetAnno e = e ^. gposition @1
+
+-- | Reset the source annotations.
+-- Does not reset 'extra'.
+clearSourceAnno :: HasAnno t => t -> t
+clearSourceAnno = overAnno (\ann -> ann { range = Nothing, payload = [] } )
 
 instance Default e => HasAnno (Anno_ t e) where
   type AnnoToken (Anno_ t e) = t

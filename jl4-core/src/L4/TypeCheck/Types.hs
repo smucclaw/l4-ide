@@ -6,20 +6,23 @@ import Base
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
-import L4.Parser.SrcSpan (SrcRange(..))
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos)
 import L4.Syntax
 import L4.TypeCheck.With
+import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
 import Data.Bifunctor
 import qualified Data.Map.Strict as Map
 import qualified Generics.SOP as SOP
-import Optics.Core (gplate, traverseOf)
+import Optics.Core (gplate, traverseOf, (%), (?~))
 import Control.Exception (throw, Exception)
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
 type Substitution = Map Int (Type' Resolved)
+type InfoMap      = IV.IntervalMap SrcPos Info
+type NlgMap       = IV.IntervalMap SrcPos Nlg
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -33,21 +36,14 @@ data CheckEntity =
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
-data TermKind =
-    Computable -- ^ a variable with known definition (let or global)
-  | Assumed
-  | Local -- ^ a local variable (introduced by a lambda or pattern)
-  | Constructor
-  | Selector
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
-
 data CheckState =
   MkCheckState
     { substitution :: !Substitution
     , supply       :: !Int
+    , infoMap      :: !InfoMap
+    , nlgMap       :: !NlgMap
     }
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Generic)
 
 data CheckErrorWithContext =
   MkCheckErrorWithContext
@@ -260,8 +256,9 @@ data CheckResult =
     , substitution :: !Substitution
     , environment  :: !Environment
     , entityInfo   :: !EntityInfo
+    , infoMap      :: !InfoMap
+    , nlgMap       :: !NlgMap
     }
-  deriving stock (Eq, Show)
 
 -- -------------------
 -- Instances for Check
@@ -365,6 +362,21 @@ ambiguousType n xs = do
   pure (OutOfScope u n)
 
 -- ----------------------------------------------------------------------------
+-- Info Map
+-- ----------------------------------------------------------------------------
+
+
+addInfoForSrcRange :: SrcRange -> Info -> Check ()
+addInfoForSrcRange srcRange i =
+  modifying' #infoMap $
+    IV.insert (IV.srcRangeToInterval srcRange) i
+
+addNlgForSrcRange :: SrcRange -> Nlg -> Check ()
+addNlgForSrcRange srcRange i =
+  modifying' #nlgMap $
+    IV.insert (IV.srcRangeToInterval srcRange) i
+
+-- ----------------------------------------------------------------------------
 -- JL4 specific primitives for resolving names
 -- ----------------------------------------------------------------------------
 
@@ -379,11 +391,14 @@ resolvedType n = do
       -- addError $ MissingEntityInfo n
       pure n
     Just (_, checkEntity) ->
-      pure case checkEntity of
-        KnownType kind _resolved _ -> setAnnResolvedKindOfResolved kind n
-        KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
-        KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
-        KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?
+      case checkEntity of
+        KnownType kind _resolved _ -> do
+          setAnnResolvedKindOfResolved kind n
+        KnownTerm ty term -> do
+          setAnnResolvedTypeOfResolved ty (Just term) n
+        KnownTypeVariable -> do
+          setAnnResolvedAsTypeVar n
+        KnownSection _ -> pure n -- TODO: this is probably not what we want, maybe some internal error?
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment rn = do
@@ -419,16 +434,21 @@ resolveTerm' p n = do
   case mapMaybe proc options of
     [] -> do
       v <- fresh (rawName n)
-      rn <- outOfScope (setAnnResolvedType v n) v
+      n' <- setAnnResolvedType v Nothing n
+      rn <- outOfScope n' v
       pure (rn, v)
-    [x] -> pure x
-    xs -> anyOf xs <|> do
+    [x] -> x
+    xs -> choose xs <|> do
       v <- fresh (rawName n)
-      rn <- ambiguousTerm (setAnnResolvedType v n) xs
+      n' <- setAnnResolvedType v Nothing n
+      xs' <- sequenceA xs
+      rn <- ambiguousTerm n' xs'
       pure (rn, v)
   where
-    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnnResolvedType t n) u o, t)
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Check (Resolved, Type' Resolved))
+    proc (u, o, KnownTerm t tk) | p tk = Just $ do
+      n' <-  setAnnResolvedType t (Just tk) n
+      pure (Ref n' u o, t)
     proc _                             = Nothing
 
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
@@ -440,29 +460,53 @@ _resolveSelector = resolveTerm' (== Selector)
 resolveConstructor :: Name -> Check (Resolved, Type' Resolved)
 resolveConstructor = resolveTerm' (== Constructor)
 
+setAnnNlg ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => Nlg -> a -> Check a
+setAnnNlg nlg a = withRange a $ \r -> do
+  addNlgForSrcRange r nlg
+  pure $ a & annoOf % annNlg ?~ nlg
+
 setAnnResolvedType ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Type' Resolved -> a -> a
-setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t Nothing)) (getAnno x)) x
+  => Type' Resolved -> Maybe TermKind -> a -> Check a
+setAnnResolvedType t k a = withRange a $ \r -> do
+  let info = TypeInfo t k
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
 setAnnResolvedKind ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Kind -> a -> a
-setAnnResolvedKind k x =
-  setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
+  => Kind -> a -> Check a
+setAnnResolvedKind k a = withRange a $ \r -> do
+  let info = KindInfo k
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
-setAnnResolvedTypeOfResolved :: Type' Resolved -> Resolved -> Resolved
-setAnnResolvedTypeOfResolved t = \ case
-  Def u n -> Def u (setAnnResolvedType t n)
-  Ref r u o -> Ref (setAnnResolvedType t r) u o
-  OutOfScope u n -> OutOfScope u (setAnnResolvedType t n)
+setAnnTypeVar ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => a -> Check a
+setAnnTypeVar a = withRange a $ \r -> do
+  let info = TypeVariable
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
-setAnnResolvedKindOfResolved :: Kind -> Resolved -> Resolved
-setAnnResolvedKindOfResolved k = \ case
-  Def u n -> Def u (setAnnResolvedKind k n)
-  Ref r u o -> Ref (setAnnResolvedKind k r) u o
-  OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
+withRange :: (HasAnno a, Applicative f) => a -> (SrcRange -> f a) -> f a
+withRange a f = case rangeOf (getAnno a) of
+  Nothing -> pure a
+  Just r -> f r
+
+setAnnNlgOfResolved :: Nlg -> Resolved -> Check Resolved
+setAnnNlgOfResolved nlg = traverseResolved (setAnnNlg nlg)
+
+setAnnResolvedTypeOfResolved :: Type' Resolved -> Maybe TermKind -> Resolved -> Check Resolved
+setAnnResolvedTypeOfResolved t k = traverseResolved (setAnnResolvedType t k)
+
+setAnnResolvedKindOfResolved :: Kind -> Resolved -> Check Resolved
+setAnnResolvedKindOfResolved k = traverseResolved (setAnnResolvedKind k)
+
+setAnnResolvedAsTypeVar :: Resolved -> Check Resolved
+setAnnResolvedAsTypeVar = traverseResolved setAnnTypeVar
 
 type ToResolved = Optics.GPlate Resolved
 
