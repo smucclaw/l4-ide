@@ -413,6 +413,7 @@ findHover ide fileUri pos = runMaybeT $ refHover <|> tyHover
   tyHover = do
     (m, positionMapping) <- MaybeT $ liftIO $ runAction "typeHover" ide $
       useWithStale TypeCheck fileUri
+
     hoistMaybe $ typeHover pos fileUri m positionMapping
 
 -- ----------------------------------------------------------------------------

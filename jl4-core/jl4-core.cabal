@@ -78,7 +78,6 @@ library
     L4.EvaluateLazy.ContractFrame
     L4.ExactPrint
     L4.FindDefinition
-    L4.HoverInfo
     L4.Lexer
     L4.Nlg
     L4.Parser
@@ -95,5 +94,6 @@ library
     L4.TypeCheck.Types
     L4.TypeCheck.Unify
     L4.TypeCheck.With
+    L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
