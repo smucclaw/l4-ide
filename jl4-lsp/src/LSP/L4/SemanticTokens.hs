@@ -240,10 +240,7 @@ instance ToSemTokens () PosToken PosToken where
 
 instance ToSemTokens () PosToken Resolved where
   toSemTokens r = do
-    case r of
-      Def _ n -> modifier (infoOf n) $ toSemTokens n
-      Ref n _ _ -> modifier (infoOf n) $ toSemTokens n
-      OutOfScope _ n -> modifier (infoOf n) $ toSemTokens n
+    let n = getActual r in modifier (infoOf n) $ toSemTokens n
     where
       infoOf n = n ^. annoOf % annInfo
       modifier = \ case
