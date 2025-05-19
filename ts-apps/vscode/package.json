@@ -76,6 +76,7 @@
   "dependencies": {
     "@repo/viz-expr": "*",
     "@repo/webview": "*",
+    "jl4-client-rpc": "*",
     "minimatch": "^10.0.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-messenger": "^0.5.1",
@@ -108,7 +109,7 @@
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
-    "build": "npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
+    "build": "npm run clean && npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
     "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
     "bundle-esbuild": "node scripts/build.mjs",
     "package": "npm run lint && npx vsce package",
@@ -116,6 +117,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,md,mdx,css,yaml}\" --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 ./src",
-    "lint-fix": "eslint ./src --fix"
+    "lint-fix": "eslint ./src --fix",
+    "clean": "git clean -fdx out || echo 'git not available'"
   }
 }

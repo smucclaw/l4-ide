@@ -119,7 +119,7 @@ data ShakeValue
 instance NFData ShakeValue
 
 encodeShakeValue :: ShakeValue -> BS.ByteString
-encodeShakeValue = \case
+encodeShakeValue = \ case
   ShakeNoCutoff -> BS.empty
   ShakeResult r -> BS.cons 'r' r
   ShakeStale r  -> BS.cons 's' r

@@ -7,10 +7,10 @@ module L4.Nlg (
 import Base
 import qualified Base.Text as Text
 
-import GHC.Generics (Generically (..))
 import L4.Annotation
 import L4.Lexer (PosToken)
 import L4.Syntax
+import L4.Utils.Ratio (prettyRatio)
 import Optics
 
 -- TODO: I would like to be able to attach meta information and
@@ -31,11 +31,14 @@ data LinType
   | LinPunctuation
   deriving stock (Show, Eq, Ord, Generic)
 
-data LinTree = MkLinTree
+newtype LinTree = MkLinTree
   { tokens :: [LinToken]
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (Semigroup, Monoid) via Generically LinTree
+  deriving newtype (Semigroup, Monoid)
+
+instance IsString LinTree where
+  fromString = text . Text.pack
 
 -- | Linearize an expression into plain text.
 -- This linearizer does not attempt to do any smart operations, such as capitalization.
@@ -64,7 +67,7 @@ class Linearize a where
   linearize :: a -> LinTree
 
 instance Linearize (Expr Resolved) where
-  linearize = \case
+  linearize = \ case
     And _ e1 e2 -> hcat
       [ lin e1
       , text "and"
@@ -197,6 +200,14 @@ instance Linearize (Expr Resolved) where
       , text "else"
       , lin else'
       ]
+    Regulative _ (MkObligation _ party rule mdeadline mfollowup) -> hcat $
+      [ text "party"
+      , lin party
+      , text "does"
+      , lin rule
+      ]
+      <> maybe [] (\ deadline -> [ text "within", lin deadline ]) mdeadline
+      <> maybe [] (\ followup -> [ text "hence",  lin followup ]) mfollowup
     Consider _ e br -> hcat
       [ text "consider"
       , text "the"
@@ -218,9 +229,24 @@ instance Linearize (Expr Resolved) where
       , text "where"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
       ]
+    Event _ ev -> lin ev
+
+instance Linearize (Event Resolved) where
+  linearize (MkEvent _ p a t) = hcat
+    [ "party", lin p, "did", lin a, "at", lin t]
+
+instance Linearize (Directive Resolved) where
+  linearize = \ case
+    StrictEval _ e -> linearize e
+    LazyEval _ e -> linearize e
+    Check _ e -> linearize e
+    Contract _ e t es -> hcat $
+      [ "executing contract", lin e, "at", lin t, "with the following events: " ]
+      <> map lin es
+
 
 instance Linearize (NamedExpr Resolved) where
-  linearize = \case
+  linearize = \ case
     MkNamedExpr _ n e -> hcat
       [ linearize n
       , text "is"
@@ -228,17 +254,17 @@ instance Linearize (NamedExpr Resolved) where
       ]
 
 instance Linearize (LocalDecl Resolved) where
-  linearize = \case
+  linearize = \ case
     LocalDecide _ _decide -> mempty
     LocalAssume _ _assume -> mempty
 
 instance Linearize Lit where
-  linearize = \case
-    NumericLit _ num -> text (Text.show num)
+  linearize = \ case
+    NumericLit _ num -> text (prettyRatio num)
     StringLit _ t -> text t
 
 instance Linearize (Branch Resolved) where
-  linearize = \case
+  linearize = \ case
     When _ pat e -> hcat
       [ text "when"
       , lin pat
@@ -254,7 +280,7 @@ instance Linearize (Branch Resolved) where
       ]
 
 instance Linearize (Pattern Resolved) where
-  linearize = \case
+  linearize = \ case
     PatVar _ v ->
       -- Resolved can't use 'lin', as it doesn't have an 'Anno'
       linearize v
@@ -273,14 +299,14 @@ instance Linearize (Pattern Resolved) where
       ]
 
 instance Linearize (GivenSig Resolved) where
-  linearize = \case
+  linearize = \ case
     MkGivenSig _ args -> hcat
       [ text "given"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin args)
       ]
 
 instance Linearize (OptionallyTypedName Resolved) where
-  linearize = \case
+  linearize = \ case
     MkOptionallyTypedName _ name _mty -> hcat
       [ linearize name
       ]
@@ -289,7 +315,7 @@ instance Linearize Name where
   linearize = var . nameToText
 
 instance Linearize Resolved where
-  linearize = \case
+  linearize = \ case
     Def _ name -> lin name
     Ref ref _ original
       | hasNlgAnnotation original && not (hasNlgAnnotation ref) ->
@@ -305,18 +331,18 @@ instance Linearize Resolved where
     hasNlgAnnotation name = isJust $ name ^. annoOf % annNlg
 
 instance Linearize Nlg where
-  linearize = \case
+  linearize = \ case
     MkInvalidNlg _ -> text "(internal error)"
     MkParsedNlg _ frags -> foldMap linParsedFragment frags
     MkResolvedNlg _ frags -> foldMap linResolvedFragment frags
    where
     linParsedFragment :: NlgFragment Name -> LinTree
-    linParsedFragment = \case
+    linParsedFragment = \ case
       MkNlgText _ t -> user t
       MkNlgRef  _ n -> linearize n
 
     linResolvedFragment :: NlgFragment Resolved -> LinTree
-    linResolvedFragment = \case
+    linResolvedFragment = \ case
       MkNlgText _ t -> user t
       MkNlgRef  _ n -> linearize n
 

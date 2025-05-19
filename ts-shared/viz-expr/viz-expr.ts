@@ -1,4 +1,5 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
+import { VersionedDocId } from './versioned-doc-id.js'
 
 /**********************
       VizExpr IR
@@ -247,6 +248,7 @@ export const UBoolVar = Schema.Struct({
 export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
 export const RenderAsLadderInfo = Schema.Struct({
+  verDocId: VersionedDocId,
   funDecl: FunDecl,
 }).annotations({ identifier: 'RenderAsLadderInfo' })
 

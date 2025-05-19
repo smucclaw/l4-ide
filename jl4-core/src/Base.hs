@@ -3,6 +3,8 @@
 module Base (module X) where
 
 import Control.DeepSeq as X
+import Debug.Trace as X
+import Control.Placeholder as X
 import Control.Monad as X
 import Control.Monad.Except as X
 import Control.Monad.Identity as X
@@ -25,6 +27,7 @@ import Data.Text as X (Text)
 import Data.TreeDiff.Class as X (ToExpr)
 import Data.Void as X
 import GHC.Generics as X (Generic)
+import Optics.Core as X ((&), (.~))
 import Optics.AffineFold as X
 import Optics.Getter as X
 import Optics.Lens as X

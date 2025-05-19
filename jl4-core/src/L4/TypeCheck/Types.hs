@@ -97,6 +97,13 @@ data ExpectationContext =
   | ExpectAppArgContext Bool Resolved Int -- projection?, function, number of arg
   | ExpectBinOpArgContext Text Int -- opname, number of arg (TODO: it would be better to have the token and its range here!)
   | ExpectDecideSignatureContext (Maybe SrcRange) -- actual result type range from the signature, if it exists
+  | ExpectRegulativePartyContext -- party clause of obligation
+  | ExpectRegulativeActionContext -- action clause of obligation
+  | ExpectRegulativeDeadlineContext -- within clause of obligation
+  | ExpectRegulativeTimestampContext -- timestamp of a regulative event
+  | ExpectRegulativeFollowupContext -- hence clause of regulative rule
+  | ExpectRegulativeContractContext -- when invoking a contract directive
+  | ExpectRegulativeEventContext -- check an event expr
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -395,7 +402,7 @@ lookupRawNameInEnvironment rn = do
 isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
 isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map getUnique . relevantResolveds) decls
   where
-  relevantResolveds = \case
+  relevantResolveds = \ case
     Declare _ (MkDeclare _ _ af _) -> appFormHeads af
     Decide _ (MkDecide _ _ af _) -> appFormHeads af
     Assume _ (MkAssume _ _ af _) -> appFormHeads af
@@ -445,13 +452,13 @@ setAnnResolvedKind k x =
   setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
 
 setAnnResolvedTypeOfResolved :: Type' Resolved -> Resolved -> Resolved
-setAnnResolvedTypeOfResolved t = \case
+setAnnResolvedTypeOfResolved t = \ case
   Def u n -> Def u (setAnnResolvedType t n)
   Ref r u o -> Ref (setAnnResolvedType t r) u o
   OutOfScope u n -> OutOfScope u (setAnnResolvedType t n)
 
 setAnnResolvedKindOfResolved :: Kind -> Resolved -> Resolved
-setAnnResolvedKindOfResolved k = \case
+setAnnResolvedKindOfResolved k = \ case
   Def u n -> Def u (setAnnResolvedKind k n)
   Ref r u o -> Ref (setAnnResolvedKind k r) u o
   OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)

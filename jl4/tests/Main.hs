@@ -108,13 +108,8 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
           let
             mod' = checkResult.module'
             directives = toListOf (gplate @(Directive Resolved)) mod'
-            directiveExprs = fmap (\case
-              StrictEval _ e -> e
-              LazyEval _ e -> e
-              Check _ e -> e
-              ) directives
           in
-            Text.unlines $ fmap Nlg.simpleLinearizer directiveExprs
+            Text.unlines $ fmap Nlg.simpleLinearizer directives
   let output =
         if isOk
           then output_
@@ -169,7 +164,7 @@ checkFile isOk file = do
  where
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
-  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (Just r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
+  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
   renderMessage (r, txt) = cliErrorMessage r txt
 
 data CliError

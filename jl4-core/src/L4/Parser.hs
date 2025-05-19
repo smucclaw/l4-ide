@@ -119,7 +119,7 @@ nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
   currentPosition <- getSourcePos
   moduleUri <- asks (.moduleUri)
-  rawText <- hidden $ spacedTokenWs (\case
+  rawText <- hidden $ spacedTokenWs (\ case
     TNlg t ty -> Just $ toNlgAnno t ty
     _ -> Nothing)
     "Natural Language Annotation"
@@ -216,7 +216,7 @@ textFragment isBlock = do
     replaceTokenType tt = TNlgString (displayTokenType tt)
 
 refAnnotationP :: Parser (Epa Text)
-refAnnotationP = hidden $ spacedTokenWs (\case
+refAnnotationP = hidden $ spacedTokenWs (\ case
   TRef t ty -> Just $ toRefAnno t ty
   _ -> Nothing)
   "Reference Annotation"
@@ -225,7 +225,7 @@ refAnnotationP = hidden $ spacedTokenWs (\case
 -- (1) should ref-src /ref-map be allowed anywhere else than at the toplevel
 -- (2) should we add it to the AST at all? Currently we don't need it
 refAdditionalP :: Parser (Epa ())
-refAdditionalP = hidden $ spacedTokenWs (\case
+refAdditionalP = hidden $ spacedTokenWs (\ case
   TRefSrc _t -> Just ()
   TRefMap _t -> Just ()
   _ -> Nothing
@@ -243,7 +243,7 @@ lexeme p = do
     }
 
 addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
-addNlgOrRef = \case
+addNlgOrRef = \ case
   S (Z nlg) -> modify' (addNlg nlg.payload)
   Z ref -> modify' (addRef ref.payload)
   _ -> pure ()
@@ -455,12 +455,25 @@ directive =
     choice
       [ StrictEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TStrictEvalDirective))
+          <*> annoHole expr
       , LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TLazyEvalDirective))
+          <*> annoHole expr
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirective TCheckDirective))
+          <*> annoHole expr
+      , Contract emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirective TContractDirective))
+          <*> annoHole expr
+          <* optional (annoLexeme (spacedToken_ TKStarting))
+          <* annoLexeme (spacedToken_ TKAt)
+          <*> annoHole expr
+          <* annoLexeme (spacedToken_ TKWith)
+          <*> contractEvents
       ]
-      <*> annoHole expr
+
+contractEvents :: Compose Parser WithAnno [Expr Name]
+contractEvents = annoHole $ lmany expr
 
 import' :: Parser (Import Name)
 import' =
@@ -976,6 +989,8 @@ baseExpr =
       try projection
   <|> negation
   <|> ifthenelse
+  <|> try event
+  <|> regulative
   <|> lam
   <|> consider
   <|> try namedApp -- This is not nice
@@ -983,6 +998,18 @@ baseExpr =
   <|> lit
   <|> list
   <|> paren expr
+
+event :: Parser (Expr Name)
+event = attachAnno $ Event emptyAnno <$> annoHole parseEvent
+
+parseEvent :: Parser (Event Name)
+parseEvent = attachAnno $ MkEvent emptyAnno
+  <$  annoLexeme (spacedToken_ TKParty)
+  <*> annoHole expr
+  <*  annoLexeme (spacedToken_ TKDoes)
+  <*> annoHole expr
+  <*  annoLexeme (spacedToken_ TKAt)
+  <*> annoHole expr -- TODO: better timestamp parsing
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr =
@@ -999,7 +1026,7 @@ nameAsApp f =
 
 lit :: Parser (Expr Name)
 lit = attachAnno $
-  Lit emptyAnno <$> annoHole (numericLit <|> stringLit)
+  Lit emptyAnno <$> annoHole (try decimalLit <|> intLit <|> stringLit)
 
 list :: Parser (Expr Name)
 list = do
@@ -1009,11 +1036,17 @@ list = do
       <$  annoLexeme (spacedToken_ TKList)
       <*> annoHole (lsepBy (indentedExpr current) (spacedToken_ TComma))
 
-numericLit :: Parser Lit
-numericLit =
+intLit :: Parser Lit
+intLit =
   attachAnno $
     NumericLit emptyAnno
-      <$> annoEpa (spacedToken (fmap snd <$> preview #_TIntLit) "Numeric Literal")
+      <$> annoEpa (spacedToken (fmap (toRational . snd) <$> preview #_TIntLit) "Numeric Literal")
+
+decimalLit :: Parser Lit
+decimalLit =
+  attachAnno $
+    NumericLit emptyAnno
+      <$> annoEpa (spacedToken (fmap snd <$> preview #_TRationalLit) "Float Literal")
 
 stringLit :: Parser Lit
 stringLit =
@@ -1081,6 +1114,31 @@ ifthenelse = do
       <*> annoHole (indentedExpr current)
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
+
+
+regulative :: Parser (Expr Name)
+regulative = Regulative emptyAnno <$> obligation
+
+obligation :: Parser (Obligation Name)
+obligation = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    MkObligation emptyAnno
+      <$  annoLexeme (spacedToken_ TKParty)
+      <*> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKMust)
+      <*  optional (annoLexeme (spacedToken_ TKDo))
+      <*> annoHole (indentedExpr current)
+      <*> optional (deadline current)
+      <*> optional (hence current)
+
+deadline :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
+deadline current =
+  annoLexeme (spacedToken_ TKWithin) *> annoHole (indentedExpr current)
+
+hence :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
+hence current =
+  annoLexeme (spacedToken_ TKHence) *> annoHole (indentedExpr current)
 
 consider :: Parser (Expr Name)
 consider = do
@@ -1476,8 +1534,7 @@ data WithAnno_ t e a = WithAnno
   { anno :: Anno_ t e
   , payload :: a
   }
-  deriving stock Show
-  deriving (Functor)
+  deriving stock (Functor, Show)
 
 withHoleAnno :: (HasSrcRange a, Default e) => a -> WithAnno_ t e a
 withHoleAnno a = WithAnno (mkHoleAnnoFor a) a

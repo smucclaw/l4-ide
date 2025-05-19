@@ -1,22 +1,31 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { debounce } from '$lib/utils'
+  import * as Resizable from '$lib/components/ui/resizable/index.js'
+
+  import type { MessageTransports, Middleware } from 'vscode-languageclient'
+  import { type ConsoleLogger } from 'monaco-languageclient/tools'
+  import * as vscode from 'vscode'
+  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
+  import * as monaco from '@codingame/monaco-vscode-editor-api'
+
+  import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
+  import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
+
   import {
     LadderFlow,
     LirContext,
     LirRegistry,
-    VizDeclLirSource,
     type FunDeclLirNode,
+    LadderEnv,
+    VizDeclLirSource,
+    LADDER_VIZ_ROOT_TYPE,
   } from '@repo/decision-logic-visualizer'
-  import { makeVizInfoDecoder, type RenderAsLadderInfo } from '@repo/viz-expr'
   import {
-    type MessageTransports,
-    type Middleware,
-  } from 'vscode-languageclient'
-  import { type ConsoleLogger } from 'monaco-languageclient/tools'
-  import * as vscode from 'vscode'
-  import * as monaco from '@codingame/monaco-vscode-editor-api'
-  import { debounce } from '$lib/utils'
-  import * as Resizable from '$lib/components/ui/resizable/index.js'
+    makeVizInfoDecoder,
+    type RenderAsLadderInfo,
+    type VersionedDocId,
+  } from '@repo/viz-expr'
 
   /***********************************
     Persistent-session-related vars
@@ -43,6 +52,7 @@
   const nodeInfo = { registry: lirRegistry, context }
 
   let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
+  let ladderEnv: LadderEnv | undefined = $state(undefined)
 
   /******************************
       VizInfo Payload Decoder
@@ -54,11 +64,11 @@
       Debounced run visualize cmd
   ***********************************/
 
-  const debouncedVisualize = debounce(async (uri: string) => {
+  const debouncedVisualize = debounce(async (verDocId: VersionedDocId) => {
     await vscode.commands.executeCommand(
       // TODO: Should probably put the command in the viz-expr package
       'l4.visualize',
-      uri
+      verDocId
     )
   }, 150)
 
@@ -66,7 +76,10 @@
   //       Monadco
   // ****************************/
 
+  const code2ProtocolConverter = createCodeConverter()
+
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
+  let monacoL4LangClient: MonacoL4LanguageClient | undefined
 
   onMount(async () => {
     const { initServices } = await import(
@@ -194,7 +207,7 @@
       logger: ConsoleLogger
     ): WebSocket => {
       const webSocket = new WebSocket(url)
-      webSocket.onopen = () => {
+      webSocket.onopen = async () => {
         const socket = toSocket(webSocket)
         const reader = new WebSocketMessageReader(socket)
         const writer = new WebSocketMessageWriter(socket)
@@ -202,8 +215,10 @@
           reader,
           writer,
         })
-        languageClient.start()
-        reader.onClose(() => languageClient.stop())
+        await languageClient.start()
+        reader.onClose(() => {
+          languageClient.dispose()
+        })
       }
       return webSocket
     }
@@ -212,7 +227,7 @@
       logger: ConsoleLogger,
       messageTransports: MessageTransports
     ) => {
-      return new MonacoLanguageClient({
+      const internalClient = new MonacoLanguageClient({
         name: 'JL4 Language Client',
         clientOptions: {
           // use a language id as a document selector
@@ -227,6 +242,8 @@
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
       })
+      monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
+      return monacoL4LangClient
     }
 
     function mkMiddleware(logger: ConsoleLogger): Middleware {
@@ -248,11 +265,25 @@
           // TODO: Can improve this later
           switch (decoded._tag) {
             case 'Right':
-              if (decoded.right) {
-                const ladderInfo: RenderAsLadderInfo = decoded.right
-                funDeclLirNode = VizDeclLirSource.toLir(
+              if (decoded.right && monacoL4LangClient) {
+                const renderLadderInfo: RenderAsLadderInfo = decoded.right
+                const backendApi = new LadderApiForMonaco(monacoL4LangClient)
+                ladderEnv = LadderEnv.make(
+                  lirRegistry,
+                  renderLadderInfo.verDocId,
+                  backendApi
+                )
+
+                funDeclLirNode = await VizDeclLirSource.toLir(
                   nodeInfo,
-                  ladderInfo.funDecl
+                  ladderEnv,
+                  renderLadderInfo.funDecl
+                )
+                // Set the top fun decl lir node in Lir Registry
+                lirRegistry.setRoot(
+                  context,
+                  LADDER_VIZ_ROOT_TYPE,
+                  funDeclLirNode
                 )
                 logger.debug(
                   'New declLirNode ',
@@ -267,16 +298,23 @@
         },
         didChange: async (event, next) => {
           await next(event)
-          // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
-          // the rest of the didChange callback does not run, at least not when testing on localhost.
+
           if (persistSession) {
-            await persistSession()
+            try {
+              await persistSession()
+            } catch (e) {
+              console.error('Error persisting session', e)
+            }
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
           // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
-          debouncedVisualize(event.document.uri.toString())
+          const verDocId: VersionedDocId =
+            code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+              event.document
+            )
+          debouncedVisualize(verDocId)
         },
       }
     }
@@ -328,11 +366,11 @@ DECIDE \`is a British citizen (variant)\` IS
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#if funDeclLirNode}
+      {#if funDeclLirNode && ladderEnv}
         <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
         {#key funDeclLirNode}
           <div class="slightly-shorter-than-full-viewport-height pb-1">
-            <LadderFlow {context} node={funDeclLirNode} lir={lirRegistry} />
+            <LadderFlow {context} node={funDeclLirNode} env={ladderEnv} />
           </div>
         {/key}
       {/if}

@@ -352,6 +352,15 @@ inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
   pure (Check ann re)
+inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e) do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  let contractT = contract partyT actionT
+      eventT = event partyT actionT
+  re <- checkExpr ExpectRegulativeContractContext e contractT
+  rt <- checkExpr ExpectRegulativeTimestampContext t number
+  revs <- traverse (prune . flip (checkExpr ExpectRegulativeEventContext) eventT) evs
+  pure (Contract ann re rt revs)
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -910,6 +919,15 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
+checkObligation :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
+checkObligation ann e1 e2 me3 me4 t1 t2 = do
+  e1' <- checkExpr ExpectRegulativePartyContext e1 t1
+  e2' <- checkExpr ExpectRegulativeActionContext e2 t2
+  let r = contract t1 t2
+  me3' <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) me3
+  me4' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me4
+  pure (MkObligation ann e1' e2' me3' me4')
+
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
@@ -1048,6 +1066,11 @@ inferExpr' g =
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
       pure (re, v)
+    Regulative ann (MkObligation ann'' e1 e2 me3 me4) -> do
+      party <- fresh (NormalName "party")
+      action <- fresh (NormalName "action")
+      ob <- checkObligation ann'' e1 e2 me3 me4 party action
+      pure (Regulative ann ob, contract party action)
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
       re <- checkConsider ExpectConsiderBranchesContext ann e branches v
@@ -1072,6 +1095,18 @@ inferExpr' g =
         unzip <$> traverse inferLocalDecl ds
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
+    Event ann ev -> do
+      (ev', ty) <- inferEvent ev
+      pure (Event ann ev', ty)
+
+inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
+inferEvent (MkEvent ann party action timestamp) = do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  party' <- checkExpr ExpectRegulativePartyContext party partyT
+  action' <- checkExpr ExpectRegulativeActionContext action actionT
+  timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
+  pure (MkEvent ann party' action' timestamp', event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being
@@ -1373,12 +1408,12 @@ inferTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse inferTyDeclTopLevel topDecls
 
 inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe (DeclChecked DeclareOrAssume))
-inferTyDeclLocalDecl = \case
+inferTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> ((Right <$>) <$>) <$> inferTyDeclAssume p
 
 inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked DeclareOrAssume]
-inferTyDeclTopLevel = \case
+inferTyDeclTopLevel = \ case
   Declare   _ p -> maybeToList <$> ((Left <$>) <$>) <$> inferTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> ((Right <$>) <$>) <$> inferTyDeclAssume p
@@ -1429,7 +1464,7 @@ scanTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse scanTyDeclTopLevel topDecls
 
 scanTyDeclTopLevel :: TopDecl Name -> Check [DeclTypeSig]
-scanTyDeclTopLevel = \case
+scanTyDeclTopLevel = \ case
   Declare   _ p -> List.singleton <$> scanTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> scanTyDeclAssume p
@@ -1438,7 +1473,7 @@ scanTyDeclTopLevel = \case
   Section   _ s -> scanTyDeclSection s
 
 scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
-scanTyDeclLocalDecl = \case
+scanTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> scanTyDeclAssume p
 
@@ -1458,7 +1493,7 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
       , name
       }
   where
-    isTypeSynonym = \case
+    isTypeSynonym = \ case
       SynonymDecl _ ty -> Just ty
       _ -> Nothing
 
@@ -1510,7 +1545,7 @@ scanFunSigSection (MkSection _ name maka topDecls) =
     akaToRawNames (MkAka _ ns) = fmap rawName ns
 
 scanFunSigTopLevel :: TopDecl Name -> Check [FunTypeSig]
-scanFunSigTopLevel = \case
+scanFunSigTopLevel = \ case
   Declare   _ _ -> pure []
   Decide    _ p -> List.singleton <$> scanFunSigDecide p
   Assume    _ p -> maybeToList <$> scanFunSigAssume p
@@ -1519,7 +1554,7 @@ scanFunSigTopLevel = \case
   Section   _ s -> scanFunSigSection s
 
 scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
-scanFunSigLocalDecl = \case
+scanFunSigLocalDecl = \ case
   LocalDecide _ p -> Just <$> scanFunSigDecide p
   LocalAssume _ p -> scanFunSigAssume p
 
@@ -1819,6 +1854,20 @@ prettyTypeMismatch (ExpectBinOpArgContext txt i) expected given =
   standardTypeMismatch
     [ "The " <> prettyOrdinal i <> " argument of the " <> txt <> " operator is expected to be" ]
     expected given
+prettyTypeMismatch ExpectRegulativePartyContext expected given =
+  standardTypeMismatch [ "The PARTY clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeActionContext expected given =
+  standardTypeMismatch [ "The DO clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
+  standardTypeMismatch [ "The WITHIN clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
+  standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeContractContext expected given =
+  standardTypeMismatch [ "The contract passed to a CONTRACT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
+  standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeEventContext expected given =
+  standardTypeMismatch [ "The event expr passed to a CONTRACT directive is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

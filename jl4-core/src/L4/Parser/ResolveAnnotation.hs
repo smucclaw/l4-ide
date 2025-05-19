@@ -181,6 +181,19 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
+    Contract ann e t evs -> do
+      e' <- addNlg e
+      t' <- addNlg t
+      evs' <- traverse addNlg evs
+      pure $ Contract ann e' t' evs'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
+  addNlg a@(MkEvent ann party act timestamp) = extendNlgA a do
+    party' <- addNlg party
+    act' <- addNlg act
+    timestamp' <- addNlg timestamp
+    pure (MkEvent ann party' act' timestamp')
+
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
   addNlg a = extendNlgA a $ case a of
@@ -381,6 +394,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ IfThenElse ann b' e1' e2'
+    Regulative ann r -> do
+      r' <- addNlg r
+      pure $ Regulative ann r'
     Consider ann e branches  -> do
       e' <- addNlg e
       branches' <- traverse addNlg branches
@@ -394,6 +410,15 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e' <- addNlg e
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
+    Event ann e -> Event ann <$> addNlg e
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
+  addNlg (MkObligation ann' party event deadline followup) = do
+    party' <- addNlg party
+    event' <- addNlg event
+    deadline' <- traverse addNlg deadline
+    followup' <- traverse addNlg followup
+    pure $  MkObligation ann' party' event' deadline' followup'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
@@ -582,12 +607,12 @@ instance Semigroup LowerBound where
   StartPos l <> StartPos r = StartPos (max l r) -- See the docs for 'UpperBound'.
 
 upperBoundToSrcSpan :: UpperBound -> SrcPos
-upperBoundToSrcSpan = \case
+upperBoundToSrcSpan = \ case
   EndOfFile -> MkSrcPos maxBound maxBound
   EndPos p -> p
 
 lowerBoundToSrcSpan :: LowerBound -> SrcPos
-lowerBoundToSrcSpan = \case
+lowerBoundToSrcSpan = \ case
   -- No position is lower than 1.
   -- Don't use 'minBound' because it is ugly during debugging.
   StartOfFile -> MkSrcPos 1 1

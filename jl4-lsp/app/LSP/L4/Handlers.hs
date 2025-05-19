@@ -18,7 +18,7 @@ import Data.Tuple (swap)
 import UnliftIO (MonadUnliftIO, atomically, STM, MonadIO(..))
 import qualified StmContainers.Map as STM
 import Control.Applicative
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (runExceptT, throwError)
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.Aeson as Aeson
@@ -30,6 +30,7 @@ import Data.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as LazyText
 import GHC.Generics
+import Data.Proxy (Proxy (..))
 import LSP.L4.Base
 import LSP.L4.Config
 import LSP.L4.Rules hiding (Log (..))
@@ -44,6 +45,7 @@ import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
+import LSP.L4.Viz.CustomProtocol as Ladder
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -84,13 +86,14 @@ data Log
   | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri
+  | LogReceivedCustomRequest !Uri !Text          -- ^ Uri CustomMethodName
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
   | LogShake Shake.Log
   deriving (Show)
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogOpenedTextDocument uri ->  "Opened text document:" <+> pretty (getUri uri)
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
@@ -101,6 +104,7 @@ instance Pretty Log where
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
+    LogReceivedCustomRequest uri method -> "Received custom request:" <+> pretty (getUri uri) <+> pretty method
 
 -- ----------------------------------------------------------------------------
 -- Reactor
@@ -215,13 +219,13 @@ handlers recorder =
         runExceptT case lookup cid (map swap l4CmdNames) of
           Just CmdVisualize -> do
             let decodeXdata
-                  | Just ((Aeson.fromJSON -> Aeson.Success uri) :  args) <- xdata
+                  | Just ((Aeson.fromJSON -> Aeson.Success verTextDocId) :  args) <- xdata
                   , msrcPos <- case args of
                      [GFromJSON srcPos, Aeson.fromJSON -> Aeson.Success simplify] -> Just (srcPos, simplify)
                      _ -> Nothing
                   = do
-                    mtcRes <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck $ toNormalizedUri uri
-                    visualise mtcRes (atomically $ getMostRecentVisualisation ide, atomically . setMostRecentVisualisation ide) uri msrcPos
+                    mtcRes <- liftIO $ runAction "l4.visualize" ide $ use TypeCheck $ toNormalizedUri verTextDocId._uri
+                    visualise mtcRes (atomically $ getMostRecentVisualisation ide, atomically . setMostRecentVisualisation ide) verTextDocId msrcPos
                   | otherwise = defaultResponseError $ "Failed to decode request data: " <> LazyText.toStrict (Aeson.encodeToLazyText xdata)
             decodeXdata
 
@@ -266,7 +270,7 @@ handlers recorder =
                     }
     , requestHandler SMethod_TextDocumentCompletion $ \ide params -> do
         let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
-        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \case
+        liftIO (runAction "completions" ide $ getUriContents $ toNormalizedUri uri) >>= \ case
           Nothing -> pure (Right (InL []))
           Just rope -> do
             (typeCheck, _positionMapping) <- liftIO $ runAction "typecheck" ide $
@@ -276,17 +280,18 @@ handlers recorder =
 
             pure (Right (InL items))
     , requestHandler SMethod_TextDocumentCodeLens $ \ide params -> do
-        let LSP.TextDocumentIdentifier uri = params ^. J.textDocument
+        verTextDocId <- liftIO $ runAction "codeLens.getVersionedTextDocId" ide $
+          FileStore.getVersionedTextDoc $ params ^. J.textDocument
 
         typeCheck <- liftIO $ runAction "typecheck" ide $
-          use_ TypeCheck (toNormalizedUri uri)
+          use_ TypeCheck (toNormalizedUri verTextDocId._uri)
 
         let
           mkCodeLens srcPos simplify = CodeLens
             { _command = Just Command
               { _title = t simplify
               , _command = "l4.visualize"
-              , _arguments = Just [Aeson.toJSON uri, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
+              , _arguments = Just [Aeson.toJSON verTextDocId, Aeson.toJSON (Generically srcPos), Aeson.toJSON simplify]
               }
             , _range = pointRange $ srcPosToPosition srcPos
             , _data_ = Nothing
@@ -297,8 +302,8 @@ handlers recorder =
 
           --  Check if can make viz with a given simplify flag
           canVisualize decide simplify =
-            let env = Ladder.MkVizEnv (toNormalizedUri uri) typeCheck.substitution simplify
-            in isRight (Ladder.doVisualize decide env)
+            let cfg = Ladder.mkVizConfig verTextDocId typeCheck.substitution simplify
+            in isRight (Ladder.doVisualize decide cfg)
 
           decideToCodeLens decide =
             -- NOTE: there's a lot of DECIDE/MEANS statements that the visualizer currently doesn't work on
@@ -326,6 +331,61 @@ handlers recorder =
 
         let locs = map (\range -> Location (fromNormalizedUri range.moduleUri) (srcRangeToLspRange (Just range))) $ lookupReference pos refs
         pure (Right (InL locs))
+
+    -- custom requests
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
+        let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
+        
+        case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
+          Aeson.Error err -> do
+            pure $ Left $ TResponseError
+              { _code = InR ErrorCodes_InvalidRequest
+              , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
+              , _xdata = Nothing
+              }
+          
+          -- eval params valid
+          Aeson.Success evalParams -> do
+            logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
+            
+            mtcRes <- liftIO $ runAction "l4/evalApp" ide $ use TypeCheck $ toNormalizedUri evalParams.verDocId._uri
+            mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
+            
+            runExceptT $ case (mtcRes, mRecentViz) of
+              -- The following two cases should be impossible,
+              -- since the verTxtDocId that the client sends us in the l4/evalApp request
+              -- corresponds to the one that it got when it was requested to render the VizExpr.
+              (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
+              (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
+                            
+              {- We require that the client's verTxtDocId matches the server's.
+                 Note, again, that the client will have already received 
+                 the verTxtDocId in the original 'please render this VizExpr' request -}
+              (Just tcRes, Just recentViz) ->
+                let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
+                in if evalParams.verDocId == vizConfig.verTxtDocId 
+                  then do
+                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
+                    case mEvalDeps of
+                      Nothing -> throwError $ TResponseError
+                        { _code = InR ErrorCodes_InvalidRequest
+                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
+                        , _xdata = Nothing
+                        }
+                      Just (evalEnv, _) -> do
+                        result <- evalApp (evalEnv, tcRes.module') evalParams recentViz
+                        logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
+                          ("Eval result: " <> Text.show result)
+                        pure result
+                  else
+                    throwError $ TResponseError 
+                      -- TODO: Have the client update accordingly when it gets this error code,
+                      -- if it doesn't alr do so automatically
+                    { _code = InL LSPErrorCodes_ContentModified
+                    , _message = "Document version mismatch. Visualizer version: " <> Text.show evalParams.verDocId._version <>
+                    ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
+                    , _xdata = Nothing
+                    }
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
@@ -435,7 +495,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
     uri = fromNormalizedUri nuri
 
 hasTypeInferenceVars :: Type' Resolved -> Bool
-hasTypeInferenceVars = \case
+hasTypeInferenceVars = \ case
   Type   _ -> False
   TyApp  _ _n ns -> any hasTypeInferenceVars ns
   Fun    _ opts ty -> any hasNamedTypeInferenceVars opts || hasTypeInferenceVars ty
@@ -443,7 +503,7 @@ hasTypeInferenceVars = \case
   InfVar {} -> True
 
 hasNamedTypeInferenceVars :: OptionallyNamedType Resolved -> Bool
-hasNamedTypeInferenceVars = \case
+hasNamedTypeInferenceVars = \ case
   MkOptionallyNamedType _ _ ty -> hasTypeInferenceVars ty
 
 data L4Cmd

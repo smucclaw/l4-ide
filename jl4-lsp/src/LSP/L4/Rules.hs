@@ -43,7 +43,6 @@ import LSP.Logger
 import LSP.SemanticTokens
 import Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types as LSP
-import Optics ((&), (.~))
 import Data.Either (partitionEithers)
 import qualified L4.ExactPrint as ExactPrint
 import qualified Data.List as List
@@ -218,7 +217,7 @@ data Log
   deriving (Show)
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     ShakeLog msg -> pretty msg
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
@@ -274,19 +273,20 @@ jl4Rules rootDirectory recorder = do
         mkImportPath (MkImport a n _mr) = do
 
           let modName = takeBaseName $ Text.unpack $ rawNameToText $ rawName n
-          paths <- fold <$> runMaybeT do
+          paths <- catMaybes <$> do
             -- NOTE: if the current URI is a file uri, we first check the directory relative to the current file
-            relPath <- do
-              dir <- hoistMaybe $ takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
-              pure $ dir </> modName <.> "l4"
+            --
+            let relPath = do
+                  dir <- takeDirectory . fromNormalizedFilePath <$> uriToNormalizedFilePath uri
+                  pure $ dir </> modName <.> "l4"
 
             let rootPath = rootDirectory </> modName <.> "l4"
 
             builtinPath <- do
               dataDir <- liftIO Paths_jl4_core.getDataDir
               pure $ dataDir </> "libraries" </> modName <.> "l4"
-            pure [rootPath, relPath, builtinPath]
 
+            pure [Just rootPath, relPath, Just builtinPath]
 
           existingPaths <- runMaybeT do
 
@@ -315,7 +315,7 @@ jl4Rules rootDirectory recorder = do
              in pure ([diag], range, uri)
 
         mkDiagsAndImports :: TopDecl Name -> Ap Action [([FileDiagnostic], ImportResult)]
-        mkDiagsAndImports = \case
+        mkDiagsAndImports = \ case
           Import _a i@(MkImport _ n _) -> Ap do
             (diag, r, u) <- liftIO . mkImportUri =<< mkImportPath i
             pure [(diag, MkImportResult n r u)]
@@ -333,8 +333,6 @@ jl4Rules rootDirectory recorder = do
 
   defineWithCallStack shakeRecorder $ \TypeCheckNoCallstack cs uri -> do
     parsed       <- use_ GetParsedAst uri
-    -- traceM $ Text.unpack $ Print.prettyLayout parsed
-    -- traceShowM parsed
     (imported, dependencies) <- unzip <$> use_ (AttachCallStack (uri : cs) GetTypeCheckDependencies) uri
 
     let parsedAndAnnotated = overImports (updateImport $ map (\res -> (res.importName, res.moduleUri)) imported) parsed
@@ -659,7 +657,7 @@ jl4Rules rootDirectory recorder = do
     evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
     evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
       Diagnostic
-        { _range = srcRangeToLspRange (Just range)
+        { _range = srcRangeToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing
@@ -712,7 +710,7 @@ lspPositionToSrcPos (LSP.Position { _character = c, _line = l }) =
   MkSrcPos (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 prettyNlgResolveWarning :: Resolve.Warning -> Text
-prettyNlgResolveWarning = \case
+prettyNlgResolveWarning = \ case
   Resolve.NotAttached _ ->
     "Not attached to any valid syntax node."
   Resolve.UnknownLocation nlg -> Text.unlines
@@ -734,7 +732,7 @@ listL4Files dir = do
 
 
 rangeOfResolveWarning :: Resolve.Warning -> LSP.Range
-rangeOfResolveWarning = \case
+rangeOfResolveWarning = \ case
   Resolve.NotAttached nlg ->
     srcSpanToLspRange $ Just nlg.range
   Resolve.UnknownLocation _ ->

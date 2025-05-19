@@ -2,18 +2,17 @@
   "name": "@repo/viz-expr",
   "version": "1.0.0",
   "private": true,
-  "description": "Types/interfaces and util functions for the data for the ladder visualizer, as well as for related communication between the extension and webview",
+  "description": "Types/interfaces and util functions for the data for the ladder visualizer",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
   },
   "files": [
-    "dist",
-    "vscode-and-webview-messages.ts",
-    "viz-expr.ts"
+    "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean": "git clean -fdx dist || echo 'git not available'",
+    "build": "npm run clean && tsc",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 .",
     "lint-fix": "eslint . --fix"
@@ -38,6 +37,7 @@
     "@typescript-eslint/eslint-plugin": "^8.23.0",
     "effect": "^3.11.0",
     "ts-pattern": "^5.6.1",
+    "vscode-jsonrpc": "^8.2.1",
     "vscode-messenger": "^0.5.1",
     "vscode-messenger-common": "^0.5.1",
     "vscode-messenger-webview": "^0.5.1"

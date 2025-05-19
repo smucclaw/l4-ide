@@ -10,6 +10,7 @@ import Data.Char
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
+import L4.Utils.Ratio (prettyRatio)
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -35,18 +36,18 @@ instance LayoutPrinter Resolved where
   printWithLayout r = printWithLayout (getActual r)
 
 instance LayoutPrinter a => LayoutPrinter (Maybe a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     Nothing -> mempty
     Just a -> printWithLayout a
 
 instance LayoutPrinter RawName where
-  printWithLayout = \case
+  printWithLayout = \ case
     NormalName t -> pretty $ quoteIfNeeded t
     QualifiedName qs t -> pretty t <+> parens ("qualified at section" <+> pretty (Text.intercalate "." $ NE.toList qs))
     PreDef t -> pretty $ quoteIfNeeded t
 
 instance LayoutPrinter a => LayoutPrinter (Type' a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     Type _ -> "TYPE"
     TyApp _ n ps -> printWithLayout n <> case ps of
       [] -> mempty
@@ -60,23 +61,23 @@ instance LayoutPrinter a => LayoutPrinter (Type' a) where
 
 -- We currently have no syntax for actual names occurring here
 instance LayoutPrinter a => LayoutPrinter (OptionallyNamedType a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkOptionallyNamedType _ _ ty ->
       printWithLayout ty
 
 instance LayoutPrinter a => LayoutPrinter (OptionallyTypedName a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkOptionallyTypedName _ a ty ->
       printWithLayout a <> case ty of
         Nothing -> mempty
         Just ty' -> space <> "IS" <+> printWithLayout ty'
 
 instance LayoutPrinter a => LayoutPrinter (TypedName a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkTypedName _ a ty -> printWithLayout a <+> "IS" <+> printWithLayout ty
 
 instance LayoutPrinter a => LayoutPrinter (TypeSig a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkTypeSig _ given mGiveth ->
       case given of
         MkGivenSig _ [] -> case mGiveth of
@@ -88,17 +89,17 @@ instance LayoutPrinter a => LayoutPrinter (TypeSig a) where
             Nothing -> mempty
 
 instance LayoutPrinter a => LayoutPrinter (GivenSig a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkGivenSig _ ns -> case ns of
       [] -> mempty
       names@(_:_) -> "GIVEN" <+> align (vsep (fmap printWithLayout names))
 
 instance LayoutPrinter a => LayoutPrinter (GivethSig a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkGivethSig _ ty -> "GIVETH" <+> printWithLayout ty
 
 instance LayoutPrinter a => LayoutPrinter (Declare a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkDeclare _ tySig appForm tyDecl  ->
       fillCat
         [ printWithLayout tySig
@@ -110,7 +111,7 @@ instance LayoutPrinter a => LayoutPrinter (Declare a) where
         ]
 
 instance LayoutPrinter a => LayoutPrinter (AppForm a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkAppForm _ n ns maka ->
       (printWithLayout n <> case ns of
         [] -> mempty
@@ -121,11 +122,11 @@ instance LayoutPrinter a => LayoutPrinter (AppForm a) where
         Just aka -> space <> printWithLayout aka
 
 instance LayoutPrinter a => LayoutPrinter (Aka a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkAka _ ns -> "AKA" <+> vsep (punctuate comma $ fmap printWithLayout ns)
 
 instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     RecordDecl _ _ fields  ->
       vcat
         [ "HAS"
@@ -143,14 +144,14 @@ instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
         ]
 
 instance LayoutPrinter a => LayoutPrinter (ConDecl a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkConDecl _ n fields  ->
       printWithLayout n <> case fields of
         [] -> mempty
         _:_ -> space <> "HAS" <+> vsep (punctuate comma $ fmap printWithLayout fields)
 
 instance LayoutPrinter a => LayoutPrinter (Assume a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkAssume _ tySig appForm ty ->
       fillCat
         [ printWithLayout tySig
@@ -160,7 +161,7 @@ instance LayoutPrinter a => LayoutPrinter (Assume a) where
         ]
 
 instance LayoutPrinter a => LayoutPrinter (Decide a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkDecide _ tySig appForm expr ->
       vcat
         [ printWithLayout tySig
@@ -169,20 +170,23 @@ instance LayoutPrinter a => LayoutPrinter (Decide a) where
         ]
 
 instance LayoutPrinter a => LayoutPrinter (Directive a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     StrictEval _ e ->
       "#SEVAL" <+> printWithLayout e
     LazyEval _ e ->
       "#EVAL" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
+    Contract _ e t stmts -> hsep $
+      "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
+      map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkImport _ n _mr -> "IMPORT" <+> printWithLayout n
 
 instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     (i, MkSection _ Nothing _ ds)    ->
       vcat (map (printWithLayout . (i + 1 ,)) ds)
     (i, MkSection _ name maka ds) ->
@@ -197,14 +201,14 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
           _ -> map (printWithLayout . (i + 1 ,)) ds
 
 instance LayoutPrinter a => LayoutPrinter (Module  a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkModule _ _ sect -> printWithLayout (1, sect)
 
 instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
   printWithLayout t = printWithLayout (1, t)
 
 instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     (_, Declare   _ t) -> printWithLayout t
     (_, Decide    _ t) -> printWithLayout t
     (_, Assume    _ t) -> printWithLayout t
@@ -214,7 +218,7 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
 
 instance LayoutPrinter a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
-  printWithLayout = \case
+  printWithLayout = \ case
     e@And{} ->
       let
         conjunction = scanAnd e
@@ -270,6 +274,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
+    Regulative _ (MkObligation _ p a t f) -> prettyObligation p a t f
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
@@ -282,6 +287,12 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
         , "WHERE"
         , indent 2 (vsep $ fmap printWithLayout decls)
         ]
+    Event _ MkEvent {timestamp, party, action} ->
+      vcat
+        [ "PARTY" <+> printWithLayout party
+        , "DOES" <+> printWithLayout action
+        , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
+        ]
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -290,28 +301,39 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
     Var{} -> printWithLayout e
     _ -> surround (printWithLayout e) "(" ")"
 
+prettyObligation
+  :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f)
+  => p -> a -> Maybe t -> Maybe f -> Doc ann
+prettyObligation p a t f  =
+  vcat $
+    [ "PARTY" <+> printWithLayout p
+    , "DO" <+> printWithLayout a
+    ]
+    <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
+    <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
+
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkNamedExpr _ name e ->
       printWithLayout name <+> "IS" <+> printWithLayout e
 
 instance LayoutPrinter a => LayoutPrinter (LocalDecl a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     LocalDecide _ t -> printWithLayout t
     LocalAssume _ t -> printWithLayout t
 
 instance LayoutPrinter Lit where
-  printWithLayout = \case
-    NumericLit _ t -> pretty t
+  printWithLayout = \ case
+    NumericLit _ t -> pretty (prettyRatio t)
     StringLit _ t -> surround (pretty $ escapeStringLiteral t) "\"" "\""
 
 instance LayoutPrinter a => LayoutPrinter (Branch a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     When _ pat e -> "WHEN" <+> printWithLayout pat <+> "THEN" <+> printWithLayout e
     Otherwise _ e -> "OTHERWISE" <+> printWithLayout e
 
 instance LayoutPrinter a => LayoutPrinter (Pattern a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     PatVar _ n -> printWithLayout n
     PatApp _ n pats -> printWithLayout n <> hang 2 case pats of
       [] -> mempty
@@ -319,7 +341,7 @@ instance LayoutPrinter a => LayoutPrinter (Pattern a) where
     PatCons _ patHead patTail -> printWithLayout patHead <+> "FOLLOWED BY" <+> printWithLayout patTail
 
 instance LayoutPrinter Nlg where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkInvalidNlg _ -> "Invalid Nlg"
     MkParsedNlg _ frags -> prettyNlgs frags
     MkResolvedNlg _ frags -> prettyNlgs frags
@@ -330,17 +352,18 @@ instance LayoutPrinter Nlg where
       prettyNlgs (x:xs) = printWithLayout x <> prettyNlgs xs
 
 instance LayoutPrinter a => LayoutPrinter (NlgFragment a) where
-  printWithLayout = \case
+  printWithLayout = \ case
     MkNlgText _ t -> pretty t
     MkNlgRef  _ n -> "%" <> printWithLayout n <> "%"
 
 instance LayoutPrinter Eager.Value where
-  printWithLayout = \case
-    Eager.ValNumber i               -> pretty i
+  printWithLayout = \ case
+    Eager.ValNumber i               -> pretty (prettyRatio i)
     Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Eager.ValList vs                ->
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
-    Eager.ValClosure _ _ _          -> "<function>"
+    Eager.ValClosure{}              -> "<function>"
+    Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -358,18 +381,24 @@ instance LayoutPrinter Eager.Value where
     _ -> surround (printWithLayout v) "(" ")"
 
 instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
-  printWithLayout = \case
-    Lazy.ValNumber i               -> pretty i
+  printWithLayout = \ case
+    Lazy.ValNumber i               -> pretty (prettyRatio i)
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
-    Lazy.ValClosure _ _ _          -> "<function>"
+    Lazy.ValClosure{}              -> "<function>"
+    Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
       [] -> mempty
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
+    Lazy.ValBreached reason        -> hsep
+      [ "CONTRACT BREACHED"
+      , "(" <> printWithLayout reason <> ")"
+      ]
+    Lazy.ValObligation _env p a t f -> prettyObligation p a t (Just f)
 
   parensIfNeeded :: Lazy.Value a -> Doc ann
   parensIfNeeded v = case v of
@@ -382,8 +411,20 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
 
+instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
+  printWithLayout = \ case
+    DeadlineMissed party action timestamp deadline -> hsep
+      [ "PARTY" <+> printWithLayout party
+      , "WHO DID ACTION" <+> printWithLayout action
+      , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
+      , "missed their deadline, which was" <+> pretty (prettyRatio deadline)
+      ]
+
+instance LayoutPrinter MaybeEvaluated where
+  printWithLayout = either printWithLayout printWithLayout
+
 instance LayoutPrinter Lazy.NF where
-  printWithLayout = \case
+  printWithLayout = \ case
     Lazy.ToDeep -> "..."
     Lazy.MkNF (ValCons v1 v2) -> "LIST" <+> printList v1 v2
     Lazy.MkNF v -> printWithLayout v
@@ -445,7 +486,7 @@ prettyConj cnj (d:ds) =
 
 
 escapeStringLiteral :: Text -> Text
-escapeStringLiteral = Text.concatMap (\case
+escapeStringLiteral = Text.concatMap (\ case
   '\"' -> "\\\""
   '\\' -> "\\\\"
   c -> Text.singleton c

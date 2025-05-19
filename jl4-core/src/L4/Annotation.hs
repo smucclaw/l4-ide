@@ -14,13 +14,14 @@ import qualified Control.Monad.Extra as Extra
 import Data.Default
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified GHC.Generics as GHC
-import GHC.Stack
+import GHC.Stack.CCS
 import Generics.SOP as SOP
 import Generics.SOP.Constraint
 import Generics.SOP.NP
 import Generics.SOP.NS
 import Optics.Generic
 import Optics.Operators
+import System.IO.Unsafe
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -61,7 +62,7 @@ data AnnoElement_ t
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
-rangeOfAnnoElement = \case
+rangeOfAnnoElement = \ case
   AnnoHole srcRange -> srcRange
   AnnoCsn srcRange _ -> srcRange
 
@@ -157,11 +158,13 @@ instance (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoF
 -- ----------------------------------------------------------------------------
 
 data TraverseAnnoError
-  = InsufficientHoleFit CallStack
-  deriving (Show)
+  = InsufficientHoleFit (Maybe SrcRange) String
+  deriving stock (Show)
 
 prettyTraverseAnnoError :: TraverseAnnoError -> Text
-prettyTraverseAnnoError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
+prettyTraverseAnnoError (InsufficientHoleFit mr cs) = Text.unlines
+  [ "HoleFit requested but not enough given at: " <> prettySrcRangeM mr
+  , Text.pack cs ]
 
 toNodesEither :: ToConcreteNodes t a => a -> Either TraverseAnnoError [CsnCluster_ t]
 toNodesEither = runExcept . toNodes
@@ -193,16 +196,20 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
   toNodes =
     maybe (pure []) toNodes
 
-flattenConcreteNodes :: (HasCallStack, MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
+flattenConcreteNodes :: (MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
 flattenConcreteNodes (Anno _ _ csns) = go csns
   where
     go []                 _        = pure []
-    go (AnnoHole _ : cs)  holeFits =
+    go (AnnoHole mr : cs)  holeFits =
       case holeFits of
-        [] -> throwError $ InsufficientHoleFit callStack
+        [] -> throwInsufficientHolefit mr
         (x : xs) -> (<>) <$> x <*> go cs xs
     go (AnnoCsn _ m : cs) holeFits =
       (m :) <$> go cs holeFits
+
+{-# NOINLINE throwInsufficientHolefit #-}
+throwInsufficientHolefit :: MonadError TraverseAnnoError m => Maybe SrcRange -> m a
+throwInsufficientHolefit mr = throwError $ InsufficientHoleFit mr $ renderStack $ unsafePerformIO currentCallStack
 
 -- ----------------------------------------------------------------------------
 -- Source Range manipulation
@@ -286,7 +293,7 @@ isCsnClusterVisible :: CsnCluster_ t -> Bool
 isCsnClusterVisible csn = csn.payload.visibility == Visible
 
 debugShow :: AnnoElement_ t -> String
-debugShow = \case
+debugShow = \ case
   AnnoHole r -> "AnnoHole [" <> show r <> "]"
   AnnoCsn r p  -> "AnnoCsn [" <> show r <> "]: " <> show (p.payload.visibility, p.trailing.visibility, p.payload.range)
 

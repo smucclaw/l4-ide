@@ -154,6 +154,7 @@ import qualified Data.Text.Mixed.Rope as Rope
 import Base.Text (Text)
 import GHC.Generics
 import Data.Hashable (Hashable)
+import qualified LSP.L4.Viz.Ladder as Ladder
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -174,7 +175,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogCreateHieDbExportsMapStart ->
       "Initializing exports map from hiedb"
     LogCreateHieDbExportsMapFinish exportsMapSize ->
@@ -291,9 +292,13 @@ data ShakeExtras = ShakeExtras
     , mostRecentlyVisualized :: TMVar RecentlyVisualised
     }
 
-data RecentlyVisualised
-  = RecentlyVisualised {pos :: !SrcPos, name :: !RawName, type' :: !(Type' Resolved), simplify :: !Bool}
-  deriving stock (Show, Eq)
+data RecentlyVisualised = RecentlyVisualised
+  { pos       :: !SrcPos
+  , name      :: !RawName
+  , type'     :: !(Type' Resolved)
+  , vizState  :: !Ladder.VizState
+  }
+  deriving stock (Show)
 
 type GetStalePersistent = NormalizedUri -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
@@ -425,7 +430,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k uri = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    atomicallyNamed "lastValueIO 4"  (STM.lookup (toKey k uri) state) >>= \case
+    atomicallyNamed "lastValueIO 4"  (STM.lookup (toKey k uri) state) >>= \ case
       Nothing -> readPersistent
       Just (ValueWithDiagnostics value _) -> case value of
         Succeeded ver (fromDynamic -> Just v) ->
@@ -553,7 +558,7 @@ getValues ::
   NormalizedUri ->
   STM (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
-    STM.lookup (toKey key file) state >>= \case
+    STM.lookup (toKey key file) state >>= \ case
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
             let !r = seqValue $ fmap (fromJust . fromDynamic @v) v
@@ -1208,7 +1213,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         case val of
             Just res -> return res
             Nothing -> do
-                staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
+                staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \ case
                     Nothing                   -> Failed False
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v

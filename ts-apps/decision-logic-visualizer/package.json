@@ -14,7 +14,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 .",
-    "test": "vitest"
+    "test": "vitest --run",
+    "clean": "git clean -fdx dist .sveltekit"
   },
   "sideEffects": [
     "**/*.css"

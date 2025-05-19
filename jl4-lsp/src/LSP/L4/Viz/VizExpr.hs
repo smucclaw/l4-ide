@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module LSP.L4.Viz.VizExpr where
 
 import Autodocodec
@@ -5,16 +6,17 @@ import Autodocodec.Aeson ()
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List.NonEmpty as NE
-import Data.Text (Text)
+import Base.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
+import qualified Language.LSP.Protocol.Types as LSP
 
-newtype RenderAsLadderInfo = MkRenderAsLadderInfo
-  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
+data RenderAsLadderInfo = MkRenderAsLadderInfo
+  { verDocId  :: LSP.VersionedTextDocumentIdentifier
+  , funDecl   :: FunDecl
   }
-  deriving newtype (Eq)
-  deriving stock (Show, Generic)
+  deriving stock (Show, Generic, Eq)
 
 type Unique = Int
 -- | TODO: Consider renaming this to something other than `Name`
@@ -40,6 +42,7 @@ data IRExpr
   | App ID Name [IRExpr]
   deriving (Show, Eq, Generic)
 
+{- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
 newtype ID = MkID
   { id :: Int
   }
@@ -85,13 +88,13 @@ instance HasCodec IRExpr where
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
     where
       -- Encoder: maps Haskell constructors to (tag, codec)
-      enc = \case
+      enc = \ case
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
-        
+
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
@@ -133,7 +136,11 @@ instance HasCodec RenderAsLadderInfo where
     named "RenderAsLadderInfo" $
       object "RenderAsLadderInfo" $
         MkRenderAsLadderInfo
-          <$> requiredField' "funDecl" .= view #funDecl
+          <$> requiredField' "verDocId" .= view #verDocId
+          <*> requiredField' "funDecl"  .= view #funDecl
+
+instance HasCodec LSP.VersionedTextDocumentIdentifier where
+  codec = codecViaAeson "VersionedTextDocumentIdentifier"
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec

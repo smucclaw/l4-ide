@@ -107,6 +107,7 @@ library
     LSP.L4.Oneshot
     LSP.L4.Viz.VizExpr
     LSP.L4.Viz.Ladder
+    LSP.L4.Viz.CustomProtocol
 
 executable jl4-lsp
   import: defaults
