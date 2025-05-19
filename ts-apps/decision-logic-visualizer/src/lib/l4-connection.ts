@@ -15,6 +15,9 @@ import {
 export class L4Connection {
   constructor(private readonly api: LadderBackendApi) {}
 
+  // TODO: Think about how we can remove the need for consumers of L4Connection to supply a `verDocId`
+  // it feels like something that L4Connection can just get by itself from LadderEnv; or perhaps it can be passed in when L4Connection is created
+
   /** Inline exprs with the given Uniques */
   async inlineExprs(
     uniques: InlineExprsRequestParams['uniques'],

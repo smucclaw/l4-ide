@@ -22,6 +22,7 @@ This militiated in favor of (i) trying to use lower-level primitives / methods i
 1. Make schemas / types for the request params and response payload
 2. Add a `L4RpcRequestType` request type for the custom request under "Specific protocol extensions" in `custom-protocol.ts`
 3. Add a high-level method to `L4Connection` class in `l4-connection.ts` that wraps over the LadderBackendApi instance's sendClientRequest method
+4. Call that method from the viz frontend
 
 ## License
 

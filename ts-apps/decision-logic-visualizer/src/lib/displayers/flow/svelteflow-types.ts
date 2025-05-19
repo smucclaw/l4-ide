@@ -144,6 +144,7 @@ export interface AppDisplayerData extends LadderSFNodeData {
 
 export interface UBoolVarDisplayerData extends LadderSFNodeData {
   name: Name
+  canInline: boolean
 }
 
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {
