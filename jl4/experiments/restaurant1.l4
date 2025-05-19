@@ -1,8 +1,10 @@
 
 // we illustrate the labeled transition system of multi-agent contracts,
 // where moving parties act in time.
-// in this example, a patron goes to a restaurant and orders a number of beers and potatoes.
-// when they've had enough, they check out, and pay.
+// in this example, a patron goes to a restaurant and orders a beer, then a potato, and then `patron asks for the bill.check out please`
+// the restaurant shows them the bill, and the patron pays.
+// this is a simplified example, with only a single linear sequential path of execution: one beer, one potato, done.
+// the next example restaurant2.l4 allows the patron to order multiple beers and potatoes, and to check out at any time.
 
 IMPORT prelude
 
