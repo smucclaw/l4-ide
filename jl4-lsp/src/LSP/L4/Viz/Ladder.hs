@@ -354,9 +354,8 @@ mkPrettyVizName = mkVizNameWith prettyLayout
 -- getOriginal (as getUniqueName does), instead of getActual,
 -- but I'm going with this for now since it's what was used to translate the function name.
 mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
-mkVizNameWith printer (getUniqueName -> (uniq, name)) =
-  case uniq of
-    MkUnique {unique} -> V.MkName unique (printer name)
+mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
+  V.MkName unique (printer name)
 
 ------------------------------------------------------
 -- Helpers for checking if an Expr has Boolean type
