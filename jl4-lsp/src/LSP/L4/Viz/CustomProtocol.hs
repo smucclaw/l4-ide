@@ -12,6 +12,7 @@ import Data.Proxy (Proxy(..))
 import GHC.TypeLits  (Symbol, KnownSymbol, symbolVal)
 import Language.LSP.Protocol.Types as LSP
 import LSP.L4.Viz.VizExpr as V
+import GHC.Records (HasField)
 
 ------------------------------------------------------
 -- l4/evalApp Request Params and Response Payload
@@ -51,4 +52,16 @@ class KnownSymbol a => IsCustomMethod (a :: Symbol) where
   getMethodName :: Proxy a -> T.Text
   getMethodName = T.pack . symbolVal
 
-instance IsCustomMethod EvalAppMethodName
+instance IsCustomMethod EvalAppMethodName------------------------------------------------------
+------------------------------------------------------
+--  IsLadderRequestParams typeclass
+------------------------------------------------------
+
+class (GHC.Records.HasField "verDocId" params VersionedTextDocumentIdentifier, 
+       FromJSON params) 
+      => IsLadderRequestParams params where
+  getVerDocId :: params -> VersionedTextDocumentIdentifier
+  getVerDocId = (.verDocId)
+  
+instance IsLadderRequestParams EvalAppRequestParams
+instance IsLadderRequestParams InlineExprsRequestParams
