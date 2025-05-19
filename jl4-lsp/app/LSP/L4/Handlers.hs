@@ -334,24 +334,25 @@ handlers recorder =
         pure (Right (InL locs))
 
     -- custom requests
-    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
-        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.EvalAppMethodName) params ide $ \evalParams tcRes recentViz -> do
-          let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
-          mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
-          case mEvalDeps of
-            Nothing -> throwError $ TResponseError
-              { _code = InR ErrorCodes_InvalidRequest
-              , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
-              , _xdata = Nothing
-              }
-            Just (evalEnv, _) -> do
-              result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
-              logWith recorder Debug $ 
-                LogReceivedCustomRequest evalParams.verDocId._uri
-                ("Eval result: " <> Text.show result)
-              pure result
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params ->
+        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.EvalAppMethodName) params ide $
+          \evalParams tcRes recentViz -> do
+            let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
+            mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
+            case mEvalDeps of
+              Nothing -> throwError $ TResponseError
+                { _code = InR ErrorCodes_InvalidRequest
+                , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
+                , _xdata = Nothing
+                }
+              Just (evalEnv, _) -> do
+                result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
+                logWith recorder Debug $ 
+                  LogReceivedCustomRequest evalParams.verDocId._uri
+                  ("Eval result: " <> Text.show result)
+                pure result
 
-    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params -> do
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
         liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $ 
           \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
     ]
@@ -511,8 +512,8 @@ runVizHandlerM (MkVizHandler m) = runExceptT m
 
 handleCustomVizRequest 
   :: forall (method :: Symbol) a params.
-      (Ladder.IsCustomMethod method,
-      Ladder.IsLadderRequestParams params)
+       ( Ladder.IsCustomMethod method
+       , Ladder.IsLadderRequestParams params )
   => Recorder (WithPriority Log)
   -> Proxy method
   -> MessageParams ('Method_CustomMethod method)
