@@ -405,12 +405,12 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [] -> mempty
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
-    Lazy.ValBreached reason        -> hsep
-      [ "CONTRACT BREACHED"
-      , "(" <> printWithLayout reason <> ")"
+    Lazy.ValBreached reason        -> vcat
+      [ "CONTRACT BREACHED:"
+      , indent 2 $ printWithLayout reason
       ]
-    Lazy.ValObligation _env p a t f l -> prettyObligation p a t (Just f) (Just l)
-    Lazy.ValROp _env op l r         -> hsep
+    Lazy.ValObligation _env p a t f l -> prettyObligation p a (Just t) (Just f) (Just l)
+    Lazy.ValROp _env op l r -> hsep
       [ printWithLayout l
       , case op of ValROr -> "OR"; ValRAnd -> "AND"
       , printWithLayout r
@@ -428,14 +428,21 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
-    DeadlineMissed party action timestamp deadline -> hsep
-      [ "PARTY" <+> printWithLayout party
-      , "WHO DID ACTION" <+> printWithLayout action
-      , "AT" <+> printWithLayout timestamp -- TODO: render timestamp appropriately
-      , "missed their deadline, which was" <+> pretty (prettyRatio deadline)
+    DeadlineMissed ev'party ev'action ev'time party action deadline -> vcat
+      [ i2 $ "party" <+> printWithLayout ev'party
+      , "who did"
+      , i2 $ "action" <+> printWithLayout ev'action
+      , i2 $ "at" <+> pretty (prettyRatio ev'time)
+      , "surpassed the deadline of"
+      , i2 $ "party" <+> printWithLayout party
+      , "who had to do obligatory"
+      , i2 $ "action" <+> printWithLayout action
+      , "before their deadline, which was"
+      , i2 $ "at" <+> pretty (prettyRatio deadline)
       ]
+      where i2 = indent 2
 
-instance LayoutPrinter MaybeEvaluated where
+instance LayoutPrinter a => LayoutPrinter (MaybeEvaluated' a) where
   printWithLayout = either printWithLayout printWithLayout
 
 instance LayoutPrinter Lazy.NF where
