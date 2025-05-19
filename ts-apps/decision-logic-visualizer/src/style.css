@@ -169,6 +169,16 @@
   Utility SF styles
 *************************************/
 
+/* Need !important in true-val and false-val to be able to override base / default background colors
+that a node might have (e.g., the darker background of (the 'function part' of) an App node). */
+@utility true-val {
+  background-color: var(--color-true-value) !important;
+}
+
+@utility false-val {
+  background-color: var(--color-false-value) !important;
+}
+
 @utility svelte-flow__node-basic {
   font-size: 1rem;
   text-align: center;
@@ -251,8 +261,10 @@ body {
 :root,
 .svelte-flow {
   --ladder-node-border-radius: var(--radius);
+  --ladder-node-border-width: 2px;
   --ladder-node-color: var(--color-node-text, var(--color-primary));
-  --ladder-node-border: 2px solid var(--color-primary);
+  --ladder-node-border: var(--ladder-node-border-width) solid
+    var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of
   --xy-* styles  */

@@ -14,15 +14,20 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     .getBody(data.context)
 </script>
 
+<!-- bg-gray
+ to evoke the idea of a fn being a 'black box'
+(but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
 <div
   class={[
-    'svelte-flow__node-basic app-node-border transition-opacity duration-300',
+    'svelte-flow__node-basic bg-gray-100 app-node-border transition-opacity duration-300',
     ...data.classes,
   ]}
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
 
-  <div class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node">
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
     <div class="font-bold text-[1.1rem]">
       {data.fnName.label}
     </div>
@@ -38,9 +43,12 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
         <button
           class={[
             'border',
-            'border-gray-400',
+            'border-black',
             'p-2',
+            'text-xs',
             'rounded-lg',
+            'cursor-pointer',
+            'bg-white',
             ...arg.getAllClasses(data.context),
           ]}
           onclick={async () => {
@@ -63,28 +71,9 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 </div>
 
 <style>
-  /* TODO: Consider making a util class if we are going to have the same border for all content-bearing nodes */
   .app-node-border {
-    border: var(--ladder-node-border, var(--ladder-node-border-default));
-    border-radius: var(
-      --ladder-node-border-radius,
-      var(--ladder-node-border-radius-default)
-    );
-  }
-
-  .true-val {
-    background-color: var(--color-true-value);
-  }
-  .true-val::before {
-    content: '✓';
-    margin-right: 0.25rem;
-  }
-
-  .false-val {
-    background-color: var(--color-false-value);
-  }
-  .false-val::before {
-    content: '✗';
-    margin-right: 0.25rem;
+    border: calc(var(--ladder-node-border-width) + 1px) solid
+      var(--color-primary);
+    border-radius: 20px;
   }
 </style>

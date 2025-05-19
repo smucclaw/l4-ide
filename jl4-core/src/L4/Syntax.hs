@@ -186,6 +186,9 @@ data Expr n =
     -- (var1 AND var3) AND {- Comment -}var2
     -- [AnnoHole, CSN "AND", CSN " ", CSN "{- Comment -}", AnnoHole]
   | Or         Anno (Expr n) (Expr n)
+  -- regulative and / or
+  | RAnd        Anno (Expr n) (Expr n)
+  | ROr         Anno (Expr n) (Expr n)
   | Implies    Anno (Expr n) (Expr n)
   | Equals     Anno (Expr n) (Expr n)
   | Not        Anno (Expr n)
@@ -224,6 +227,7 @@ data Obligation n
   , action :: Expr n
   , due :: Maybe (Expr n)
   , hence :: Maybe (Expr n)
+  , lest :: Maybe (Expr n)
   }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -322,6 +326,12 @@ updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
 updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
   (u' : _) -> MkImport ann n (Just u')
   [] -> i
+
+moduleTopDecls :: Lens' (Module n) [TopDecl n]
+moduleTopDecls = lens
+                 (\(MkModule _ _ (MkSection _ _ _ decls)) -> decls)
+                 (\(MkModule ann nuri (MkSection sann sresolved maka _oldDecls)) decls ->
+                     MkModule ann nuri (MkSection sann sresolved maka decls))
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
