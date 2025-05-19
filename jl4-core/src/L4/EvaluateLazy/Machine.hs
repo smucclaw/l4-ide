@@ -256,7 +256,7 @@ backward val = WithPoppedFrame $ \ case
           [r, t] -> pure (r, t)
           rs' -> InternalException $ RuntimeTypeError $
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
-        PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
+        PushFrame (ContractFrame (Contract1 ScrutinizeEvents {..}))
         EvalRef events
       ValROp env op rexpr1 rexpr2 -> do
         -- make sure to reassemble the operation after returning
@@ -370,35 +370,35 @@ backward val = WithPoppedFrame $ \ case
 
 backwardContractFrame :: Value Reference -> ContractFrame -> Machine Config
 backwardContractFrame val = \ case
-  Contract1 ScrutEvents {..} -> do
+  Contract1 ScrutinizeEvents {..} -> do
     case val of
       ValCons e es -> do
-        pushCFrame (Contract2 ScrutEvent {events = es, ..})
+        pushCFrame (Contract2 ScrutinizeEvent {events = es, ..})
         EvalRef e
       ValNil -> Backward (ValObligation env party act due followup lest)
       _ -> InternalException $ RuntimeTypeError $
         "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events"
-  Contract2 ScrutEvent {..} -> case val of
+  Contract2 ScrutinizeEvent {..} -> case val of
     ValEvent ev'party ev'act ev'time -> do
-      pushCFrame (Contract7 StampWHNF {..})
+      pushCFrame (Contract3 CurrentTimeWHNF {..})
       EvalRef ev'time
     _ -> InternalException $ RuntimeTypeError $
       "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event"
-  Contract7 StampWHNF {..} -> do
-    pushCFrame (Contract8 CurTimeWHNF {ev'time = val, ..})
+  Contract3 CurrentTimeWHNF {..} -> do
+    pushCFrame (Contract4 ScrutinizeDue {ev'time = val, ..})
     EvalRef time
-  Contract8 CurTimeWHNF {..} -> do
+  Contract4 ScrutinizeDue {..} -> do
     case due of
        Left due' -> do
-         pushCFrame (Contract9 ScrutTime {time = val, ..})
+         pushCFrame (Contract5 CheckTiming {time = val, ..})
          Backward due'
        Right (Just due') -> do
-         pushCFrame (Contract9 ScrutTime {time = val,..})
+         pushCFrame (Contract5 CheckTiming {time = val,..})
          ForwardExpr env due'
        Right Nothing -> do -- TODO: here we want to skip the time check step and go directly to party
-         pushCFrame (Contract3 PartyWHNF {time = val, ..})
+         pushCFrame (Contract6 PartyWHNF {time = val, ..})
          maybeEvaluate env party
-  Contract9 ScrutTime {..} -> do
+  Contract5 CheckTiming {..} -> do
     stamp <- assertTime ev'time
     due' <- assertTime val
     time' <- assertTime time
@@ -425,37 +425,37 @@ backwardContractFrame val = \ case
         -- NOTE: we have observed the event and do not branch, either, the
         -- only thing that may now happen is that we try a new event. Hence we
         -- drop the ev'time, set our time to ev'time and set our due to the new due
-        pushCFrame (Contract3 PartyWHNF {time = ev'time, due = Left $ ValNumber newDue, ..})
+        pushCFrame (Contract6 PartyWHNF {time = ev'time, due = Left $ ValNumber newDue, ..})
         maybeEvaluate env party
-  Contract3 PartyWHNF {..} -> do
-    pushCFrame (Contract3' PartyEqual {party = val, ..})
+  Contract6 PartyWHNF {..} -> do
+    pushCFrame (Contract7 PartyEqual {party = val, ..})
     EvalRef ev'party
-  Contract3' PartyEqual {..} -> do
-    pushCFrame (Contract4 ScrutParty {ev'party = val, ..})
+  Contract7 PartyEqual {..} -> do
+    pushCFrame (Contract8 ScrutinizeParty {ev'party = val, ..})
     runBinOpEquals party val
-  Contract4 ScrutParty {..} ->
+  Contract8 ScrutinizeParty {..} ->
     case val of
       ValBool True -> do
-        pushCFrame (Contract5 ActWHNF {..})
+        pushCFrame (Contract9 ActionWHNF {..})
         maybeEvaluate env act
       ValBool False -> do
         newTime <- AllocateValue time
-        tryNextEvent ScrutEvents {party = Left party, time = newTime, ..} events
+        tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
-  Contract5 ActWHNF {..} -> do
-    pushCFrame (Contract5' ActEqual {act = val, ..})
+  Contract9 ActionWHNF {..} -> do
+    pushCFrame (Contract10 ActionsEqual {act = val, ..})
     EvalRef ev'act
-  Contract5' ActEqual {..} -> do
-    pushCFrame (Contract6 ScrutAct {ev'act = val, ..})
+  Contract10 ActionsEqual {..} -> do
+    pushCFrame (Contract11 ScrutinizeActions {ev'act = val, ..})
     runBinOpEquals act val
-  Contract6 ScrutAct {..} ->
+  Contract11 ScrutinizeActions {..} ->
     case val of
       ValBool True -> AllocateValue time
         >>= continueWithFollowup env followup events
       ValBool False -> do
         newTime <- AllocateValue time
-        tryNextEvent ScrutEvents {party = Left party, act = Left act, time = newTime, ..} events
+        tryNextEvent ScrutinizeEvents {party = Left party, act = Left act, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
   RBinOp1 MkRBinOp1 {..}
@@ -538,7 +538,7 @@ backwardContractFrame val = \ case
   RBinOp2 MkRBinOp2 {..} ->
     Backward (ValROp env op (Left rval1) (Left val))
   where
-    tryNextEvent :: ScrutEvents -> Reference -> Machine Config
+    tryNextEvent :: ScrutinizeEvents -> Reference -> Machine Config
     tryNextEvent frame events = do
       pushCFrame (Contract1 frame)
       EvalRef events
