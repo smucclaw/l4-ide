@@ -1137,7 +1137,9 @@ uses_ key files = do
 -- | Plural version of 'use'
 uses :: (Traversable f, IdeRule k v)
     => k -> f NormalizedUri -> Action (f (Maybe v))
-uses key files = fmap (\(A value) -> currentValue value) <$> apply (fmap (Q . (key,)) files)
+uses key files = do
+    fa <- apply (fmap (Q . (key,)) files)
+    pure $ fmap (\(A value) -> currentValue value) fa
 
 -- | Return the last computed result which might be stale.
 usesWithStale :: (Traversable f, IdeRule k v)

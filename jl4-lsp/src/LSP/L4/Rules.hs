@@ -29,8 +29,8 @@ import qualified Data.Maybe as Maybe
 import qualified Base.Text as Text
 import qualified Data.Text.Mixed.Rope as Rope
 import System.FilePath
-import HaskellWorks.Data.IntervalMap.FingerTree (IntervalMap)
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
+import L4.Utils.IntervalMap (IntervalMap)
+import qualified L4.Utils.IntervalMap as IVMap
 import Development.IDE.Graph
 import GHC.Generics (Generically (..))
 import LSP.Core.PositionMapping
@@ -51,6 +51,7 @@ import qualified L4.EvaluateLazy as EvaluateLazy
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import System.Directory
 import qualified Paths_jl4_core
+import qualified L4.Utils.IntervalMap as IV
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -115,13 +116,15 @@ data SuccessfulTypeCheck = SuccessfulTypeCheck
 data TypeCheckResult = TypeCheckResult
   { module' :: Module  Resolved
   , substitution :: Substitution
+  , infoMap :: TypeCheck.InfoMap
+  , nlgMap :: TypeCheck.NlgMap
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
   , infos :: [TypeCheck.CheckErrorWithContext]
   , dependencies :: [TypeCheckResult]
   }
-  deriving stock (Generic, Show, Eq)
+  deriving stock (Generic)
   deriving anyclass (NFData)
 
 type instance RuleResult Evaluate = [Evaluate.EvalDirectiveResult]
@@ -151,6 +154,11 @@ data LexerSemanticTokens = LexerSemanticTokens
 
 type instance RuleResult ParserSemanticTokens = [SemanticToken]
 data ParserSemanticTokens = ParserSemanticTokens
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (NFData, Hashable)
+
+type instance RuleResult TypeCheckedSemanticTokens = [SemanticToken]
+data TypeCheckedSemanticTokens = TypeCheckedSemanticTokens
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -200,7 +208,7 @@ data ReferenceMapping =
 singletonReferenceMapping :: Unique -> SrcRange -> ReferenceMapping
 singletonReferenceMapping originalName actualRange
   = ReferenceMapping
-  { actualToOriginal = IVMap.singleton (srcRangeToInterval actualRange) originalName
+  { actualToOriginal = IV.singleton (IV.srcRangeToInterval actualRange) originalName
   , originalToActual = MonoidalMap.singleton originalName [actualRange]
   }
 
@@ -214,7 +222,6 @@ data Log
   | LogTraverseAnnoError !Text !TraverseAnnoError
   | LogRelSemanticTokenError !Text
   | LogSemanticTokens !Text [SemanticToken]
-  deriving (Show)
 
 instance Pretty Log where
   pretty = \ case
@@ -222,7 +229,7 @@ instance Pretty Log where
     LogTraverseAnnoError herald msg -> pretty herald <> ":" <+> pretty (prettyTraverseAnnoError msg)
     LogRelSemanticTokenError msg -> "Semantic Token " <+> pretty msg
     LogSemanticTokens herald toks ->
-      "Semantic Tokens of" <+> pretty herald <+> align (vcat (fmap prettyToken toks))
+      "Semantic Tokens of" <+> pretty herald <> line <> indent 2 (vcat (fmap prettyToken toks))
       where
         prettyToken :: SemanticToken -> Doc ann
         prettyToken s =
@@ -342,6 +349,8 @@ jl4Rules rootDirectory recorder = do
           TypeCheck.MkCheckState
           { substitution = tcRes.substitution
           , supply = cState.supply
+          , infoMap = IV.empty
+          , nlgMap = IV.empty
           }
         unionCheckEnv cEnv tcRes =
           TypeCheck.MkCheckEnv
@@ -372,6 +381,8 @@ jl4Rules rootDirectory recorder = do
         , entityInfo = applyFinalSubstitution result.substitution uri result.entityInfo
         , success = null errors
         , infos
+        , infoMap = result.infoMap
+        , nlgMap = result.nlgMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
         }
       )
@@ -459,48 +470,25 @@ jl4Rules rootDirectory recorder = do
       Right tokenized -> do
         pure ([], Just tokenized)
 
+  define shakeRecorder $ \TypeCheckedSemanticTokens f -> do
+    tcRes <- use_ SuccessfulTypeCheck f
+    case runSemanticTokensM (defaultSemanticTokenCtx ()) tcRes.module' of
+      Left err -> do
+        logWith recorder Error $ LogTraverseAnnoError "TypeCheck" err
+        pure ([], Nothing)
+      Right tokenized -> do
+        pure ([], Just tokenized)
+
   define shakeRecorder $ \GetSemanticTokens f -> do
-    mSemTokens <- useWithStale ParserSemanticTokens f
-    case mSemTokens of
-      Nothing -> do
-        -- If we don't even have any old result, just try to use lexer results
-        lexToks <- use LexerSemanticTokens f
-        pure ([], lexToks)
-      Just (progTokens, positionMapping) -> do
-
-        -- Throwing is ok, since if `ParserSemanticTokens` produces a result
-        -- so does `LexerSemanticTokens`.
-        (lexTokens, lexPositionMapping) <- useWithStale_ LexerSemanticTokens f
-        let
-          -- We assume that semantic tokens do *not* change its length, no matter whether they
-          -- have been lexed, parsed or typechecked.
-          -- A rather bold assumption, tbh. It will almost definitely not hold
-          -- up in practice, but let's do one step at a time.
-          mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
-          mergeSameLengthTokens [] bs = bs
-          mergeSameLengthTokens as [] = as
-          mergeSameLengthTokens (a:as) (b:bs) = case compare a.start b.start of
-            -- a.start == b.start
-            -- Same token, only print one
-            EQ -> a : mergeSameLengthTokens as bs
-            -- a.start < b.start
-            LT -> a : mergeSameLengthTokens as (b:bs)
-            -- a.start > b.start
-            GT -> b : mergeSameLengthTokens (a:as) bs
-
-          newPosAstTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition positionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) progTokens
-
-          newPosLexTokens = Maybe.mapMaybe (\t ->
-            case toCurrentPosition lexPositionMapping t.start of
-              Nothing -> Nothing
-              Just newPos -> Just (t & #start .~ newPos)
-            ) lexTokens
-
-        pure ([], Just $ mergeSameLengthTokens newPosAstTokens newPosLexTokens)
+    toks <-
+      semanticTokensUsing
+        -- Order matters, 'SemanticTokens' earlier in the list are preferred over later ones.
+        [ useWithOptionalStale TypeCheckedSemanticTokens
+        , useWithOptionalStale ParserSemanticTokens
+        , useWithOptionalStale LexerSemanticTokens
+        ]
+        f
+    pure ([], Just toks)
 
   define shakeRecorder $ \GetRelSemanticTokens f -> do
     tokens <- use_ GetSemanticTokens f
@@ -739,3 +727,74 @@ rangeOfResolveWarning = \ case
     srcSpanToLspRange Nothing
   Resolve.Ambiguous name _ ->
     srcRangeToLspRange $ rangeOf name
+
+-- ----------------------------------------------------------------------------
+-- Helpers for implementing syntax highlighting
+-- ----------------------------------------------------------------------------
+
+-- | Similar to 'useWithStale', but instead of returning a 'zeroMapping' for 'PositionMapping'
+-- when the rule is up-to-date, we return 'Nothing', to indicate that this rule is not stale.
+--
+-- We use this to implement short-circuting in semantic token generation.
+useWithOptionalStale :: IdeRule k v => k -> NormalizedUri ->  Action (Maybe (v, Maybe PositionMapping))
+useWithOptionalStale f nuri = do
+  r <- use f nuri
+  case r of
+    Nothing -> do
+      toks <- useWithStale f nuri
+      pure $ fmap (fmap Just) toks
+    Just toks ->
+      pure $ Just (toks, Nothing)
+
+applyPositionMapping :: [SemanticToken] -> PositionMapping -> [SemanticToken]
+applyPositionMapping semTokens positionMapping =
+  Maybe.mapMaybe
+    ( \t ->
+        case toCurrentPosition positionMapping t.start of
+          Nothing -> Nothing
+          Just newPos -> Just (t & #start .~ newPos)
+    )
+    semTokens
+
+-- | @'semanticTokensUsing' phases@
+--
+-- Helper function for defining multi-phase semantic syntax highlighting.
+--
+-- Each phase can produce '[SemanticToken]'s and 'PositionMapping' if the result is outdated.
+-- Tokens obtained from earlier phases take precedence over tokens from later phases.
+--
+-- If one of the phases is up-to-date, i.e. 'Maybe PositionMapping' is 'Nothing',
+-- then we don't run later phases.
+semanticTokensUsing ::
+  [NormalizedUri -> Action (Maybe ([SemanticToken], Maybe PositionMapping))] ->
+  (NormalizedUri -> Action [SemanticToken])
+semanticTokensUsing phases uri = do
+  (_, tokens) <- foldM go (False, []) phases
+  pure tokens
+ where
+  -- Just like a fold, but with short circuiting behaviour.
+  go (True, earlierTokens) _phase = pure (True, earlierTokens)
+  go (False, earlierTokens) phase = do
+    tokens <- phase uri
+    case tokens of
+      Nothing -> do
+        pure (False, earlierTokens)
+      Just (toks, mpm) -> case mpm of
+        Nothing -> pure (True, mergeSameLengthTokens earlierTokens toks)
+        Just pm -> pure (False, mergeSameLengthTokens earlierTokens (applyPositionMapping toks pm))
+
+  -- We assume that semantic tokens do *not* change its length, no matter whether they
+  -- have been lexed, parsed or typechecked.
+  -- A rather bold assumption, tbh. It will almost definitely not hold
+  -- up in practice, but let's do one step at a time.
+  mergeSameLengthTokens :: [SemanticToken] -> [SemanticToken] -> [SemanticToken]
+  mergeSameLengthTokens [] bs = bs
+  mergeSameLengthTokens as [] = as
+  mergeSameLengthTokens (a : as) (b : bs) = case compare a.start b.start of
+    -- a.start == b.start
+    -- Same token, only print one
+    EQ -> a : mergeSameLengthTokens as bs
+    -- a.start < b.start
+    LT -> a : mergeSameLengthTokens as (b : bs)
+    -- a.start > b.start
+    GT -> b : mergeSameLengthTokens (a : as) bs
