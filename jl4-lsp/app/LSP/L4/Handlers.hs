@@ -350,6 +350,10 @@ handlers recorder =
                 LogReceivedCustomRequest evalParams.verDocId._uri
                 ("Eval result: " <> Text.show result)
               pure result
+
+    , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params -> do
+        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $ 
+          \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
