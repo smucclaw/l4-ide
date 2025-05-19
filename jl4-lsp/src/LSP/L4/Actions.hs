@@ -175,7 +175,7 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
         [decide] ->
-          let vizConfig = Ladder.mkVizConfig verTextDocId tcRes.substitution simp
+          let vizConfig = Ladder.mkVizConfig verTextDocId tcRes.module' tcRes.substitution simp
           in pure $ Just (decide, vizConfig)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
