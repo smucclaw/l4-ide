@@ -931,15 +931,18 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
-checkObligation :: Anno -> Expr Name -> Expr Name -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name) -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
-checkObligation ann e1 e2 me3 me4 me5 t1 t2 = do
-  e1' <- checkExpr ExpectRegulativePartyContext e1 t1
-  e2' <- checkExpr ExpectRegulativeActionContext e2 t2
-  let r = contract t1 t2
-  me3' <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) me3
-  me4' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me4
-  me5' <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e r) me5
-  pure (MkObligation ann e1' e2' me3' me4' me5')
+checkObligation
+  :: Anno -> Expr Name -> Expr Name
+  -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
+  -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
+checkObligation ann party action due hence lest partyT actionT = do
+  partyR <- checkExpr ExpectRegulativePartyContext party partyT
+  actionR <- checkExpr ExpectRegulativeActionContext action actionT
+  let rTy = contract partyT actionT
+  dueR <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) due
+  henceR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) hence
+  lestR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
+  pure (MkObligation ann partyR actionR dueR henceR lestR)
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do

@@ -1118,9 +1118,9 @@ ifthenelse = do
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
 
-
 regulative :: Parser (Expr Name)
-regulative = Regulative emptyAnno <$> obligation
+regulative = attachAnno $
+  Regulative emptyAnno <$> annoHole obligation
 
 obligation :: Parser (Obligation Name)
 obligation = do
