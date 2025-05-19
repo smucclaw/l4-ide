@@ -9,9 +9,9 @@ import {
 import { RenderAsLadderInfo } from '@repo/viz-expr'
 import type { NotificationType, RequestType } from 'vscode-messenger-common'
 
-/*************************************
-  On webview frontend initialization
-**************************************/
+/*************************************************************
+              On webview frontend initialization
+**************************************************************/
 
 export interface WebviewFrontendIsReadyMessage {
   $type: 'webviewReady'
@@ -51,7 +51,7 @@ export function makeRenderAsLadderFailureResponse(): RenderAsLadderResponse {
 
 /*************************************************************
             For the vscode Webview to
-            get, via the Ladder Backend API,
+            tell, via the Ladder Backend API,
             the VSCode Extension to
             forward a LSP client request
 **************************************************************/

@@ -17,6 +17,12 @@ The key desiderata here are as follows (and I'm probably not remembering all of 
 
 This militiated in favor of (i) trying to use lower-level primitives / methods in the intermediate components in the above diagram --- e.g., the LadderBackendApi --- while (ii) adding some safety with higher-level interfaces at the source/sink parts of the architecture (e.g., L4Connection).
 
+## How to add support for a custom LSP request on the client side
+
+1. Make schemas / types for the request params and response payload
+2. Add a `L4RpcRequestType` request type for the custom request under "Specific protocol extensions" in `custom-protocol.ts`
+3. Add a high-level method to `L4Connection` class in `l4-connection.ts` that wraps over the LadderBackendApi instance's sendClientRequest method
+
 ## License
 
 Apache License 2.0
