@@ -335,58 +335,21 @@ handlers recorder =
 
     -- custom requests
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params -> do
-        let methodName = getMethodName (Proxy @Ladder.EvalAppMethodName)
-        
-        case Aeson.fromJSON params :: Aeson.Result EvalAppRequestParams of
-          Aeson.Error err -> do
-            pure $ Left $ TResponseError
+        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.EvalAppMethodName) params ide $ \evalParams tcRes recentViz -> do
+          let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
+          mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
+          case mEvalDeps of
+            Nothing -> throwError $ TResponseError
               { _code = InR ErrorCodes_InvalidRequest
-              , _message = "Invalid params for " <> methodName <> ": " <> Text.pack err
+              , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
               , _xdata = Nothing
               }
-          
-          -- eval params valid
-          Aeson.Success evalParams -> do
-            logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri methodName
-            
-            mtcRes <- liftIO $ runAction "l4/evalApp" ide $ use TypeCheck $ toNormalizedUri evalParams.verDocId._uri
-            mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
-            
-            runExceptT $ case (mtcRes, mRecentViz) of
-              -- The following two cases should be impossible,
-              -- since the verTxtDocId that the client sends us in the l4/evalApp request
-              -- corresponds to the one that it got when it was requested to render the VizExpr.
-              (Nothing, _) -> defaultResponseError $ "Failed to get type check for " <> Text.show evalParams.verDocId._uri
-              (_, Nothing) -> defaultResponseError $ "No recent visualisation found, when trying to handle " <> methodName <> ". This case should be impossible."
-                            
-              {- We require that the client's verTxtDocId matches the server's.
-                 Note, again, that the client will have already received 
-                 the verTxtDocId in the original 'please render this VizExpr' request -}
-              (Just tcRes, Just recentViz) ->
-                let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
-                in if evalParams.verDocId == vizConfig.verTxtDocId 
-                  then do
-                    mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
-                    case mEvalDeps of
-                      Nothing -> throwError $ TResponseError
-                        { _code = InR ErrorCodes_InvalidRequest
-                        , _message = "Failed to get evaluation dependencies for " <> (fromNormalizedUri vizConfig.moduleUri).getUri
-                        , _xdata = Nothing
-                        }
-                      Just (evalEnv, _) -> do
-                        result <- evalApp (evalEnv, tcRes.module') evalParams recentViz
-                        logWith recorder Debug $ LogReceivedCustomRequest evalParams.verDocId._uri 
-                          ("Eval result: " <> Text.show result)
-                        pure result
-                  else
-                    throwError $ TResponseError 
-                      -- TODO: Have the client update accordingly when it gets this error code,
-                      -- if it doesn't alr do so automatically
-                    { _code = InL LSPErrorCodes_ContentModified
-                    , _message = "Document version mismatch. Visualizer version: " <> Text.show evalParams.verDocId._version <>
-                    ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
-                    , _xdata = Nothing
-                    }
+            Just (evalEnv, _) -> do
+              result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
+              logWith recorder Debug $ 
+                LogReceivedCustomRequest evalParams.verDocId._uri
+                ("Eval result: " <> Text.show result)
+              pure result
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
@@ -546,11 +509,12 @@ handleCustomVizRequest
   :: forall (method :: Symbol) a params.
       (Ladder.IsCustomMethod method,
       Ladder.IsLadderRequestParams params)
-  => Recorder (WithPriority Log)  -- ^ For logging
+  => Recorder (WithPriority Log)
   -> Proxy method
   -> MessageParams ('Method_CustomMethod method)
   -> IdeState
-  -> (params -> TypeCheckResult -> Shake.RecentlyVisualised -> VizHandler method a)
+  -> (params -> TypeCheckResult -> Shake.RecentlyVisualised -> VizHandler method a) 
+  -- ^ the core handler
   -> VizHandler method a
 handleCustomVizRequest recorder method params ide handlerKont = do
   decodedParams <- guardDecodeParams @method params
