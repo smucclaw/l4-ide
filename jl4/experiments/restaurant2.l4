@@ -6,7 +6,7 @@
 // when they've had enough, they check out, review the bill, and pay.
 //
 // unlike the previous restaurant1.l4 example, this one involves "external choice", via the "ROR" operator.
-// this means that the patron can order either a beer or a potato, or call for the bill.
+// this means that the patron can order multiple beers and potatoes, or call for the bill.
 
 IMPORT prelude
 

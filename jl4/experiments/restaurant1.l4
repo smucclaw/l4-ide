@@ -36,11 +36,12 @@ GIVEN patron   IS A Actor
       symtab   IS A `Symbol Table`
 GIVETH CONTRACT Actor Action
 `order beer` MEANS
-  PARTY   patron
-  MUST    order "beer" 1
-  WITHIN  10
-  HENCE   `order potato` patron company newState
-        
+  IF      TRUE
+  THEN    PARTY   patron
+          MUST    order "beer" 1
+          WITHIN  10
+          HENCE   `order potato` patron company newState
+  ELSE    FULFILLED      
   WHERE
     newState MEANS `Symbol Table`
       WITH
