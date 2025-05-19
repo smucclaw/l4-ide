@@ -26,6 +26,8 @@
       Example 1
   ****************************/
 
+  const LADDER_VIZ_ROOT_TYPE_1: LirRootType = 'VizFunDecl_1'
+
   // Parse JSON object into IRExpr
   const example1 = {
     $type: 'FunDecl' as const,
@@ -72,24 +74,28 @@
 
   const decode = Schema.decodeSync(FunDecl)
   const decl = decode(example1)
+
   // Set up Lir
   const lirRegistry = new LirRegistry()
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  const mockEnv = LadderEnv.make(
+  const mockEnv1 = LadderEnv.make(
     lirRegistry,
     mockVersionedDocId,
-    mockLadderBackendApi
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_1
   )
-  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl)
+  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv1, decl)
   funDeclLirNodePromise.then((funDeclLirNode) => {
-    lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_1, funDeclLirNode)
   })
 
   /***************************
       Example 2
   ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE_2: LirRootType = 'VizFunDecl_2'
 
   const example2 = {
     $type: 'FunDecl' as const,
@@ -200,13 +206,19 @@
   }
 
   const funDecl2 = decode(example2)
+  const mockEnv2 = LadderEnv.make(
+    lirRegistry,
+    mockVersionedDocId,
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_2
+  )
   const funDeclLirNode2Promise = VizDeclLirSource.toLir(
     nodeInfo,
-    mockEnv,
+    mockEnv2,
     funDecl2
   )
   funDeclLirNode2Promise.then((funDeclLirNode2) => {
-    lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, funDeclLirNode2)
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_2, funDeclLirNode2)
   })
 </script>
 
@@ -223,7 +235,7 @@
     {#await funDeclLirNodePromise}
       <p>Loading Example 1...</p>
     {:then funDeclLirNode}
-      <Flow {context} node={funDeclLirNode} env={mockEnv} />
+      <Flow {context} node={funDeclLirNode} env={mockEnv1} />
     {:catch error}
       <p>Error loading Example 1: {error.message}</p>
     {/await}
@@ -235,7 +247,7 @@
     {#await funDeclLirNode2Promise}
       <p>Loading Example 2...</p>
     {:then funDeclLirNode2}
-      <Flow {context} node={funDeclLirNode2} env={mockEnv} />
+      <Flow {context} node={funDeclLirNode2} env={mockEnv2} />
     {:catch error}
       <p>Error loading Example 2: {error.message}</p>
     {/await}
