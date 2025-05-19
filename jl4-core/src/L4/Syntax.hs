@@ -314,6 +314,12 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
+-- | Given a @'Decide' n@, runs a 'foldMap' over *all* 'Decide' nodes
+-- within it (including itself *and* nested ones, e.g. in 'Where' clauses).
+foldDecides
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Decide n -> m
+foldDecides = Optics.foldMapOf $ Optics.cosmosOf (Optics.gplate @(Decide n))
+
 overImports :: forall nodeType n. (Optics.GPlate (Import n) (nodeType n)) => (Import n -> Import n) -> nodeType n -> nodeType n
 overImports = Optics.over Optics.gplate
 
