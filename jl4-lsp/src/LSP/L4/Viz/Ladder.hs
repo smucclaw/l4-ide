@@ -250,20 +250,18 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
     pure $ V.MkFunDecl
       vid
       -- didn't want a backtick'd name in the header
-      (mkSimpleVizName funResolved)
+      (mkPrettyVizName funResolved)
       (paramNamesFromGivens givenSig)
       vizBody
       where
         paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          mkSimpleVizName . getResolved <$> optionallyTypedNames
+          mkPrettyVizName . getResolved <$> optionallyTypedNames
 
         -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
         -- this can be replaced with that when that happens.
         getResolved :: OptionallyTypedName Resolved -> Resolved
         getResolved (MkOptionallyTypedName _ paramName _) = paramName
-
-        mkSimpleVizName = mkVizNameWith prettyLayout
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -328,7 +326,7 @@ defaultUBoolVarCanInline = False
 
 leafFromResolved :: V.ID -> Resolved -> Viz IRExpr
 leafFromResolved vid resolved = do
-  let vname = mkVizNameWith prettyLayout resolved
+  let vname = mkPrettyVizName resolved
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
@@ -346,6 +344,9 @@ leaf subject complement = do
 ------------------------------------------------------
 -- Name helpers
 ------------------------------------------------------
+
+mkPrettyVizName :: Resolved -> V.Name
+mkPrettyVizName = mkVizNameWith prettyLayout
 
 -- It's not obvious to me that we want to be using
 -- getOriginal (as getUniqueName does), instead of getActual,
@@ -394,6 +395,7 @@ pattern DefForInlining unique definiens <-
   MkDecide _ _ (MkAppForm _ (Def unique _) _ _) definiens
   where
     DefForInlining unique definiens =
-      MkDecide emptyAnno (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing) (MkAppForm emptyAnno (Def unique TC.emptyName) [] Nothing) definiens
-
-
+      MkDecide emptyAnno 
+      (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing) 
+      (MkAppForm emptyAnno (Def unique TC.emptyName) [] Nothing) 
+      definiens
