@@ -336,6 +336,11 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
+decideBody :: Lens' (Decide n) (Expr n)
+decideBody = lens 
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body) 
+             (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
+
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
 updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
   (u' : _) -> MkImport ann n (Just u')
