@@ -1,0 +1,36 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: overload-ambiguous.l4
+  Hidden:   no
+  Range:    14:16-14:24
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    There are multiple definitions for the identifier
+
+      `__PLUS__`
+
+    and I do not have sufficient information to make a choice between them.
+    The options are:
+
+      `__PLUS__` (defined at overload-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
+      `__PLUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+
+File: overload-ambiguous.l4
+  Hidden:   no
+  Range:    15:16-15:21
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    There are multiple definitions for the identifier
+
+      `__PLUS__`
+
+    and I do not have sufficient information to make a choice between them.
+    The options are:
+
+      `__PLUS__` (defined at overload-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
+      `__PLUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
