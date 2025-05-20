@@ -364,6 +364,8 @@ handlers recorder =
                   -- so that they can be used for further l4/inlineExprs requests.
                   -- (The usecase here: think of a Decide with multiple inline-able Uniques,
                   -- and where user does the inlining in stages.)
+                  -- IMPT: The state synchronization / managing of state (re the stuff in RecentlyVisualized etc) feels potentially complicated:
+                  -- I definitely have NOT thought through it carefully.
                   liftIO $ atomically $ setMostRecentVisualisation ide $ recentViz {vizState = vizState, decide = postInliningDecide}
                   pure $ Aeson.toJSON vizProgramInfo
                 Left vizError ->
