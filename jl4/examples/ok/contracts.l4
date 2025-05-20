@@ -6,29 +6,39 @@ DECLARE Action IS ONE OF delivery, payment, return
 
 #EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B payment 42) 5
 
-#CONTRACT x AT 4 WITH 
-  PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 2
-
 GIVETH CONTRACT Person Action
 x MEANS 
-  PARTY S  -- ^ what is the type of this
-  MUST delivery -- ^ what is the type of this
+  PARTY S
+  MUST delivery
   WITHIN 3
-  HENCE y
 
 GIVETH CONTRACT Person Action
 y MEANS 
-  PARTY B  -- ^ what is the type of this
-  MUST payment -- ^ what is the type of this
+  PARTY B
+  MUST payment
   WITHIN 5
-  HENCE FULFILLED
+  LEST FULFILLED
+
+GIVETH CONTRACT Person Action
+z MEANS 
+  x ROR y
+
+a MEANS 
+  z RAND z 
+
+#CONTRACT ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
 #CONTRACT x AT 4 WITH 
   PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 2
-  PARTY S DOES payment AT 5
 
-z MEANS FULFILLED
-#CONTRACT z AT 3 WITH
+#CONTRACT y AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY S DOES delivery AT 9
+
+#CONTRACT z AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 26
+
 #CONTRACT z AT 4 WITH
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 26
