@@ -157,12 +157,13 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
 
   -- Try to pinpoint a Decide (and VizConfig) based on how the command was issued (autorefresh vs code action/code lens)
   mdecide :: Maybe (Decide Resolved, Ladder.VizConfig) <- case msrcPos of
-    -- a. the command was issued by the button in vscode or autorefresh
+    -- a. the command was issued by autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
+      -- Since this is from autorefresh, we want to get the most up-to-date version of the Decide
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
       let updatedVizConfig = updateVizConfig verTextDocId tcRes recentlyVisualised
       pure (decide, updatedVizConfig)
