@@ -1,0 +1,21 @@
+the sum of `Vector` with 1 and 2 and `Vector` with 1 and 2
+the sum of `Vector` with 1 and 2 and `Vector` with 1 and 2
+the product of `Vector` with 1 and 2 and `Vector` with 1 and 2
+the product of `Vector` with 1 and 2 and `Vector` with 1 and 2
+the result of dividing `Vector` with 1 and 2 by `Vector` with 0.2 and 2
+the result of dividing `Vector` with 1 and 2 by `Vector` with 0.5 and 2
+the difference between `Vector` with 1 and 2 and `Vector` with 1 and 2
+the difference between `Vector` with 1 and 2 and `Vector` with 1 and 2
+the sum of `VectorP` with 50 and 50 and `VectorP` with 25 and 0
+`Vector` with 0 and 0 is less than `Vector` with 1 and 2
+`Vector` with 1 and 2 is less than `Vector` with 1 and 2
+`Vector` with 2 and 3 is less than `Vector` with 1 and 2
+`Vector` with 0 and 0 is at most `Vector` with 1 and 2
+`Vector` with 1 and 2 is at most `Vector` with 1 and 2
+`Vector` with 2 and 3 is at most `Vector` with 1 and 2
+`Vector` with 0 and 0 is greater than `Vector` with 1 and 2
+`Vector` with 1 and 2 is greater than `Vector` with 1 and 2
+`Vector` with 2 and 3 is greater than `Vector` with 1 and 2
+`Vector` with 0 and 0 is at least `Vector` with 1 and 2
+`Vector` with 1 and 2 is at least `Vector` with 1 and 2
+`Vector` with 2 and 3 is at least `Vector` with 1 and 2

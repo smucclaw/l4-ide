@@ -102,6 +102,7 @@ valueToFnLiteral = \ case
     lits <- traverse valueToFnLiteral vals
     pure $ FnArray lits
   Eval.ValClosure {} -> throwE $ InterpreterError "#EVAL produced function closure."
+  Eval.ValBinaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
