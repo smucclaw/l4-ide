@@ -5,11 +5,9 @@ IMPORT prelude
 
 `Note Date` MEANS  "4 February 2024"
 
-`Principal Amount` MEANS Money WITH 
-                            Cents     IS 2500000
-                            Currency  IS "USD"
+`Principal Amount` MEANS USD 25000
 
-`Interest Rate Basis Points Per Annum` MEANS 1500
+`Interest Rate Per Annum` MEANS `%` 15
 
 `Security Collateral` MEANS NOTHING
 
@@ -18,8 +16,8 @@ IMPORT prelude
 `Default After Days Not Paid Beyond Due` MEANS 30
 
 `Late Payment Penalty` MEANS Penalty WITH
-                                `Interest Rate Basis Points` IS 500
-                                `Grace Period Days`          IS 10
+                                `Interest Rate`     IS `%` 5
+                                `Grace Period Days` IS 10
 
 `Governing Law` MEANS "Republic of Singapore"
 
@@ -53,139 +51,104 @@ IMPORT prelude
                               `SWIFT`          IS "DBSSSGSG"
 
 
-§§ `Repayment of Principal & Interest Installments`
+§§ `Repayment Terms`
 
 `Total Interest Amount` MEANS
     Money WITH
         Currency  IS `Principal Amount`'s Currency
-        Cents     IS `Apply Interest Rate on`
-                         (`Principal Amount`'s Cents)
-                         `Interest Rate Basis Points Per Annum` DIVIDED BY
+        Value     IS `Principal Amount`'s Value TIMES
+                         `Interest Rate Per Annum` DIVIDED BY
                               12 TIMES `Monthly Installments`
 
 `Total Repayment Amount` MEANS
     Money WITH
         Currency  IS `Principal Amount`'s Currency
-        Cents     IS `Principal Amount`'s Cents PLUS `Total Interest Amount`'s Cents
+        Value     IS `Principal Amount`'s Value PLUS `Total Interest Amount`'s Value
 
 `Monthly Installment Amount` MEANS
     Money WITH
         Currency IS
             `Total Repayment Amount`'s Currency
-        Cents IS
-            `Total Repayment Amount`'s Cents DIVIDED BY
+        Value IS
+            `Total Repayment Amount`'s Value DIVIDED BY
                 `Monthly Installments`
 
 
 GIVEN `Outstanding Payment Amount` IS A Money
 `Payment Obligations` MEANS
-    IF `Outstanding Payment Amount`'s Cents GREATER THAN 0
+    IF `Outstanding Payment Amount`'s Value GREATER THAN 0
         THEN  PARTY   `The Borrower`
               MUST    `pay debts to`
                           `The Lender`
                           (`Next Payment Due`'s Amount)
-              WITHIN  `Next Payment Due`'s `Days Beyond Commencement` PLUS
-                          `Late Payment Penalty`'s `Grace Period Days`
+              WITHIN  `Next Payment Due Date`
               HENCE   `Payment Obligations`
                           (Money WITH
-                              Currency  IS `Next Payment Due`'s Amount's Currency
-                              Cents     IS `Outstanding Payment Amount`'s Cents MINUS
-                                                `Next Payment Due`'s Amount's Cents)
---              LEST     PARTY   `The Borrower`
---                       MUST    `pay debts to`
---                                  `The Lender`
---                                  `Next Payment Due Amount With Penalty`
---                       WITHIN  `Penalty Grace Period`
---                       LEST    PARTY  `The Lender`
---                               MAY    `declare default of` `The Borrower`
---                               HENCE  PARTY   `The Borrower`
---                                      MUST    `pay debts to`
---                                                  `The Lender`
---                                                  `All Outstanding Debts`
+                              Currency  IS `Monthly Installment Amount`'s Currency
+                              Value     IS `Outstanding Payment Amount`'s Value MINUS
+                                                `Next Payment Due`'s Amount's Value)
+              LEST     PARTY   `The Borrower`
+                       MUST    `pay debts to`
+                                  `The Lender`
+                                  `Next Payment Due Amount With Penalty`
+                       WITHIN  `Default After Days Beyond Commencement`
+                       LEST    PARTY  `The Borrower`
+                               MUST   `pay debts to`
+                                          `The Lender`
+                                          `All Outstanding Debts`
         ELSE  FULFILLED
 
     WHERE
         `Installments Covered Since Commencement` MEANS
-            (`Total Repayment Amount`'s Cents MINUS
-                 `Outstanding Payment Amount`'s Cents) DIVIDED BY
-                    `Monthly Installment Amount`'s Cents
+            (`Total Repayment Amount`'s Value MINUS
+                 `Outstanding Payment Amount`'s Value) DIVIDED BY
+                    `Monthly Installment Amount`'s Value
 
         `Next Payment Due` MEANS
             Payment WITH
                 Amount IS
                     Money WITH
                         Currency  IS `Monthly Installment Amount`'s Currency
-                        Cents     IS `The lesser of`
-                                         (`Monthly Installment Amount`'s Cents)
-                                         (`Outstanding Payment Amount`'s Cents)
+                        Value     IS `The lesser of`
+                                         (`Monthly Installment Amount`'s Value)
+                                         (`Outstanding Payment Amount`'s Value)
                 `Days Beyond Commencement` IS
                     (`Installments Covered Since Commencement` PLUS 1) TIMES 30
+
+        `Next Payment Due Date` MEANS
+            `Next Payment Due`'s `Days Beyond Commencement` PLUS
+               `Late Payment Penalty`'s `Grace Period Days`
 
         `Next Payment Due Amount With Penalty` MEANS
             Money WITH
                 Currency  IS `Next Payment Due`'s Amount's Currency
-                Cents     IS `Next Payment Due`'s Amount's Cents PLUS
-                                  `Apply Interest Rate on`
-                                      (`Next Payment Due`'s Amount's Cents)
-                                      (`Late Payment Penalty`'s `Interest Rate Basis Points`)
+                Value     IS `Next Payment Due`'s Amount's Value PLUS
+                                 `Next Payment Due`'s Amount's Value TIMES
+                                      `Late Payment Penalty`'s `Interest Rate`
 
-        `Penalty Grace Period` MEANS
+        `Default After Days Beyond Commencement` MEANS
             `Next Payment Due`'s `Days Beyond Commencement` PLUS
                 `Default After Days Not Paid Beyond Due`
 
         `All Outstanding Debts` MEANS
             Money WITH
                 Currency  IS `Next Payment Due`'s Amount's Currency
-                Cents     IS `Outstanding Payment Amount`'s Cents PLUS
-                                `Next Payment Due Amount With Penalty`'s Cents MINUS
-                                    `Next Payment Due`'s Amount's Cents
+                Value     IS `Outstanding Payment Amount`'s Value PLUS
+                                `Next Payment Due Amount With Penalty`'s Value MINUS
+                                    `Next Payment Due`'s Amount's Value
 
 
-
-§§ `Testing`
-
-#EVAL `Total Interest Amount`
-
-#EVAL `Total Repayment Amount`
-
-#EVAL `Monthly Installment Amount`
-
-#EVAL EVALCONTRACT (`Payment Obligations` `Total Repayment Amount`)
-                   (LIST  EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 29
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 59
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 89
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 119
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 149
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 179
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 209
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 239
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 269
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 299
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 329
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239587)) 359)
-                   360
-
-
-#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 360 WITH
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 29
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 59
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 89
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 119
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 149
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 179
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 209
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 239
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 269
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 299
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 329
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239587) AT 359
-
-
-§§ `Definitions`
+§§§ `Definitions`
 
 DECLARE Money
     HAS Currency            IS A STRING
-        Cents               IS A NUMBER
+        Value               IS A NUMBER
+
+GIVEN Value IS A NUMBER
+USD MEANS
+   Money WITH
+      Currency IS "USD"
+      Value    IS Value
 
 DECLARE Company
     HAS `Name`              IS A STRING
@@ -224,21 +187,12 @@ DECLARE Payment
         `Days Beyond Commencement`   IS A NUMBER
 
 DECLARE Penalty
-    HAS `Interest Rate Basis Points` IS A NUMBER
-        `Grace Period Days`          IS A NUMBER
+    HAS `Interest Rate`     IS A NUMBER
+        `Grace Period Days` IS A NUMBER
 
 DECLARE `pay debts to`
-    HAS Recipient            IS A Lender
-        Amount               IS A Money
-
-DECLARE `declare default of`
-    HAS Party                IS A Borrower
-
-GIVEN Cents                  IS A NUMBER
-      `Rate in Basis Points` IS A NUMBER
-GIVETH A NUMBER 
-`Apply Interest Rate on` MEANS
-    Cents TIMES `Rate in Basis Points` DIVIDED BY 10000
+    HAS Recipient           IS A Lender
+        Amount              IS A Money
 
 GIVEN a IS A NUMBER
       b IS A NUMBER
@@ -246,3 +200,31 @@ GIVEN a IS A NUMBER
     IF a GREATER THAN b
         THEN b
         ELSE a
+        
+GIVEN a IS A NUMBER
+GIVETH A NUMBER
+`%` MEANS
+   a DIVIDED BY 100
+
+
+§§§ `Testing`
+
+#EVAL `Total Interest Amount`
+
+#EVAL `Total Repayment Amount`
+
+#EVAL `Monthly Installment Amount`
+
+#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 360 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 29
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.87) AT 359
