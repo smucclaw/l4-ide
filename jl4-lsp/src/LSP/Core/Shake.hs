@@ -295,6 +295,11 @@ data ShakeExtras = ShakeExtras
 data RecentlyVisualised = RecentlyVisualised
   { pos       :: !SrcPos
   , name      :: !RawName
+  , decide    :: Decide Resolved     
+  {- ^ The top-lvl Decide that was viz'd.
+    This is used when, e.g., trying to inline exprs.
+    Need to be careful about when to re-use this, and when to instead try to get the most up-to-date version of the Decide.  
+  -}
   , type'     :: !(Type' Resolved)
   , vizState  :: !Ladder.VizState
   }
