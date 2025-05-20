@@ -354,8 +354,24 @@ handlers recorder =
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
-        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod Ladder.InlineExprsMethodName)) ide $
-          \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) params ide $
+          \(ieParams :: Ladder.InlineExprsRequestParams) _tcRes recentViz ->
+            let postInliningDecide = Ladder.inlineExprs recentViz.vizState recentViz.decide ieParams.uniques
+            in MkVizHandler $
+              case Ladder.doVisualize postInliningDecide (Ladder.getVizConfig recentViz.vizState) of
+                Right (vizProgramInfo, vizState) -> do
+                  -- Update RecentlyVisualized's decide with the latest vizState and postInliningDecide,
+                  -- so that they can be used for further l4/inlineExprs requests.
+                  -- (The usecase here: think of a Decide with multiple inline-able Uniques,
+                  -- and where user does the inlining in stages.)
+                  liftIO $ atomically $ setMostRecentVisualisation ide $ recentViz {vizState = vizState, decide = postInliningDecide}
+                  pure $ Aeson.toJSON vizProgramInfo
+                Left vizError ->
+                  defaultResponseError $ Text.unlines
+                    [ "Could not visualize:"
+                    , getUri ieParams.verDocId._uri
+                    , Ladder.prettyPrintVizError vizError
+                    ]
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
