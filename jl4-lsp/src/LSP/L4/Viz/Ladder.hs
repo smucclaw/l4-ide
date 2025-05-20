@@ -12,7 +12,7 @@ module LSP.L4.Viz.Ladder (
   -- * Viz State helpers
   lookupAppExprMaker,
   getVizConfig,
-  
+
   -- * Other helpers
   prettyPrintVizError,
   ) where
@@ -126,7 +126,7 @@ prepEvalAppMaker :: V.ID -> Expr Resolved -> Viz ()
 prepEvalAppMaker vid = \ case
   App appAnno appResolved _ -> do
     localDecls <- getLocalDecls
-    let maker = 
+    let maker =
           \V.EvalAppRequestParams{args} ->
             Where emptyAnno
               (App appAnno appResolved $ map toBoolExpr args)

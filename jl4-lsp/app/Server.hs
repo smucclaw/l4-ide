@@ -104,7 +104,6 @@ data Log
   | LogRules Rules.Log
   | LogWebsocket WebsocketLog
   | LogWorkingDirectory FilePath
-  deriving (Show)
 
 data WebsocketLog
   = WebsocketShutDown

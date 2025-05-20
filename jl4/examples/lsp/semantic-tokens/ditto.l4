@@ -1,0 +1,17 @@
+§ `Ditto highlighting`
+
+
+ASSUME x IS A BOOLEAN
+^      y ^  ^ ^
+^      n ^  ^ NUMBER
+
+-- we can even have whitespace and comments in between
+
+^      m ^  ^ ^
+
+test MEANS
+  IF n AT LEAST m
+  THEN    x
+       OR y
+       ^  x
+  ELSE TRUE

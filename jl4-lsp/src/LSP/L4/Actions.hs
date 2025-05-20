@@ -13,15 +13,11 @@ import qualified Data.List as List
 import Data.Ord (Down (..))
 import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
-import L4.Citations
 import L4.FindDefinition
-import L4.HoverInfo
 import L4.Lexer (annotations, directives, keywords)
-import L4.Nlg (simpleLinearizer)
 import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
@@ -29,6 +25,7 @@ import L4.TypeCheck
 import qualified L4.Evaluate.ValueLazy   as EL
 import qualified L4.EvaluateLazy         as EL
 import qualified L4.EvaluateLazy.Machine as EL
+import qualified L4.Utils.IntervalMap as IV
 import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
@@ -42,6 +39,7 @@ import           LSP.L4.Viz.CustomProtocol (EvalAppRequestParams (..),
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
+import L4.Nlg (simpleLinearizer)
 
 -- ----------------------------------------------------------------------------
 -- LSP Autocompletions
@@ -310,10 +308,10 @@ completions rope nuri typeCheck (Position ln col) = do
 -- LSP Hovers
 -- ----------------------------------------------------------------------------
 
-referenceHover :: Position -> IVMap.IntervalMap SrcPos (NormalizedUri, Int, Maybe Text) -> Maybe Hover
+referenceHover :: Position -> IV.IntervalMap SrcPos (NormalizedUri, Int, Maybe Text) -> Maybe Hover
 referenceHover pos refs = do
   -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
-  let ivToRange (iv, (uri, len, reference)) = (intervalToSrcRange uri len iv, reference)
+  let ivToRange (iv, (uri, len, reference)) = (IV.intervalToSrcRange uri len iv, reference)
   -- NOTE: this is subtle: if there are multiple results for a location, then we want to
   -- prefer Just's, so we reverse sort the references we get.
   -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would
@@ -322,7 +320,7 @@ referenceHover pos refs = do
   (range, mreference) <- listToMaybe
     $ List.sortOn (Down . snd)
     $ ivToRange
-    <$> IVMap.search (lspPositionToSrcPos pos) refs
+    <$> IV.search (lspPositionToSrcPos pos) refs
   let lspRange = srcRangeToLspRange (Just range)
   pure $ Hover
     (InL
@@ -337,24 +335,26 @@ referenceHover pos refs = do
 typeHover :: Position -> NormalizedUri -> TypeCheckResult -> PositionMapping -> Maybe Hover
 typeHover pos nuri tcRes positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  (range, i) <- findInfo (lspPositionToSrcPos oldPos) tcRes.module'
+  let oldLspPos = lspPositionToSrcPos oldPos
+  (range, i) <- IV.smallestContaining nuri oldLspPos tcRes.infoMap
+  let mNlg = IV.smallestContaining nuri oldLspPos tcRes.nlgMap
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
-  pure (infoToHover nuri tcRes.substitution newLspRange i)
+  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg))
 
-infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Hover
-infoToHover nuri subst r i =
+infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Hover
+infoToHover nuri subst r i mNlg =
   Hover (InL (mkMarkdown x)) (Just r)
   where
     x =
       case i of
-        TypeInfo t mNlg -> mdCodeBlock (prettyLayout (applyFinalSubstitution subst nuri t)) <>
-          case mNlg of
-            Nothing -> mempty
-            Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
-
-        KindInfo k      -> mdCodeBlock $ prettyLayout $ typeFunction k
-        KeywordInfo     -> mdCodeBlock "keyword"
+        TypeInfo t _ ->
+          mdCodeBlock (prettyLayout (applyFinalSubstitution subst nuri t)) <>
+            case mNlg of
+              Nothing -> mempty
+              Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
+        KindInfo k -> mdCodeBlock $ prettyLayout $ typeFunction k
+        TypeVariable -> "TYPE VAR"
 
 mdCodeBlock :: Text -> Text
 mdCodeBlock c =

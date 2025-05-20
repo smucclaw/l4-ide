@@ -1,0 +1,19 @@
+§ `Directives`
+
+#EVAL 3 < 2
+
+#EVAL 3 BELOW 2
+
+#EVAL "bar" < "car"
+
+#EVAL TRUE < FALSE
+
+#CHECK TRUE
+
+#CHECK 2 + 3
+
+#EVAL foo WHERE foo MEANS 5
+#CHECK foo WHERE foo MEANS 5
+
+#EVAL foo 4 WHERE foo x MEANS x PLUS x
+#CHECK foo "String" WHERE foo x MEANS x
