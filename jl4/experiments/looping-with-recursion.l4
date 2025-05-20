@@ -53,8 +53,32 @@ GIVEN symtab IS A  `Symbol Table`
 #CONTRACT `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
   PARTY Seller DOES deliver "apple" 1 AT 2
   PARTY Buyer  DOES pay 50 AT 13
-  PARTY Buyer  DOES pay 50 AT 13
-  PARTY Buyer  DOES pay 50 AT 13
-  PARTY Buyer  DOES pay 50 AT 13
+  PARTY Buyer  DOES pay 50 AT 23
+  PARTY Buyer  DOES pay 50 AT 33
+  PARTY Buyer  DOES pay 50 AT 43
+-- this leads to FULFILLED
 
+-- but we don't always want it to have to be 50 50 50 50.
+-- What if we want it to be just a one-shot payment of 200?
+-- Or two payments of 100?
+-- The arguments to `pay` shouldn't have to be an exact match;
+-- we want a predicate to allow multiple inputs to match the action params.
+-- see page 41 from Hvitved: we want a condition e that tests x.
 
+#CONTRACT `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+  PARTY Seller DOES deliver "apple" 1 AT 2
+  PARTY Buyer  DOES pay 100 AT 13
+  PARTY Buyer  DOES pay 100 AT 23
+
+-- Fully instantiated obligation clauses have the form:
+--   <p> k(x)  where e  due after n_1  within n_2  remaining z  then c
+-- 
+-- which should be read:
+-- Party p is responsible that (but need not be in charge of) an action of
+-- kind k satisfying condition e takes place. This action should happen
+-- after n_1 time units, but within n_2 time units thereafter. If these
+-- requirements are satisfied, then the continuation clause c determines any
+-- further obligations.
+-- 
+-- note from p.41: Value parameters are dynamic, that is they
+-- can be instantiated with values from earlier events
