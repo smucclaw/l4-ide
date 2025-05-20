@@ -88,7 +88,7 @@ instance Show VizState where
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
     ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
-    ", (keys of) defsForInlining = " <> show (Map.keys defsForInlining) <> " }"
+    ", defsForInlining =  " <> show defsForInlining <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
@@ -391,7 +391,7 @@ toBoolExpr = \ case
   V.UnknownV -> error "impossible for now"
 
 ------------------------------------------------------
--- Inlining Exprs
+-- Inline Exprs
 ------------------------------------------------------
 
 {- | We only really need a *uni*directional pattern synonym,
