@@ -46,7 +46,7 @@ import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
-import LSP.L4.Viz.CustomProtocol as Ladder
+import           LSP.L4.Viz.CustomProtocol as Ladder
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -335,7 +335,7 @@ handlers recorder =
 
     -- custom requests
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.EvalAppMethodName)) $ \ide params ->
-        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.EvalAppMethodName) params ide $
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.EvalAppMethodName) params ide $
           \evalParams tcRes recentViz -> do
             let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
             mEvalDeps <- liftIO $ runAction "l4/evalApp" ide $ use (AttachCallStack [vizConfig.moduleUri] GetLazyEvaluationDependencies) vizConfig.moduleUri
@@ -347,13 +347,13 @@ handlers recorder =
                 }
               Just (evalEnv, _) -> do
                 result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
-                logWith recorder Debug $ 
+                logWith recorder Debug $
                   LogReceivedCustomRequest evalParams.verDocId._uri
                   ("Eval result: " <> Text.show result)
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
-        liftIO $ runVizHandlerM $ handleCustomVizRequest recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $ 
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $
           \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
     ]
 
@@ -497,9 +497,9 @@ pattern GFromJSON a <- (Aeson.fromJSON -> Aeson.Success (Generically a))
 
 -- TODO: Add logging service that wraps Handlers' logWith
 -- | Monad for handling custom viz requests
-newtype VizHandler (method :: Symbol) a = MkVizHandler 
-  (ExceptT 
-    (TResponseError (Method_CustomMethod @ClientToServer @Request method)) 
+newtype VizHandler (method :: Symbol) a = MkVizHandler
+  (ExceptT
+    (TResponseError (Method_CustomMethod @ClientToServer @Request method))
     IO a)
   deriving newtype (Functor, Applicative, Monad, MonadError (TResponseError (Method_CustomMethod @ClientToServer @Request method)), MonadIO)
 
@@ -507,21 +507,21 @@ runVizHandlerM :: Ladder.IsCustomMethod method => VizHandler method a -> IO (Eit
 runVizHandlerM (MkVizHandler m) = runExceptT m
 
 -------------------------------------------------------------------------
--- handleCustomVizRequest
+-- withVizRequestContext
 -------------------------------------------------------------------------
 
-handleCustomVizRequest 
+withVizRequestContext
   :: forall (method :: Symbol) a params.
        ( Ladder.IsCustomMethod method
-       , Ladder.IsLadderRequestParams params )
+       , IsLadderRequestParams params )
   => Recorder (WithPriority Log)
   -> Proxy method
   -> MessageParams ('Method_CustomMethod method)
   -> IdeState
-  -> (params -> TypeCheckResult -> Shake.RecentlyVisualised -> VizHandler method a) 
+  -> (params -> TypeCheckResult -> Shake.RecentlyVisualised -> VizHandler method a)
   -- ^ the core handler
   -> VizHandler method a
-handleCustomVizRequest recorder method params ide handlerKont = do
+withVizRequestContext recorder method params ide handlerKont = do
   decodedParams <- guardDecodeParams @method params
   let verDocId = decodedParams.verDocId
   logWith recorder Debug $ LogReceivedCustomRequest verDocId._uri (Ladder.getMethodName method)
@@ -552,12 +552,12 @@ handleCustomVizRequest recorder method params ide handlerKont = do
 -------------------------------------------------------------------------
 
 {- | Helper: Check that the client's verTxtDocId matches the server's.
-  Note that the client will have already received 
+  Note that the client will have already received
   the verTxtDocId in the original 'please render this VizExpr' request -}
 checkVizVersion
   :: forall (method :: Symbol) params.
      (Ladder.IsCustomMethod method,
-      Ladder.IsLadderRequestParams params)
+      IsLadderRequestParams params)
   => params
   -> Shake.RecentlyVisualised
   -> VizHandler method ()
@@ -577,7 +577,7 @@ checkVizVersion reqParams recentViz = do
 -- | Helper to handle JSON decoding errors when decoding params of custom requests
 guardDecodeParams
   :: forall (method :: Symbol) a.
-     (Ladder.IsCustomMethod method, Ladder.IsLadderRequestParams a)
+     (Ladder.IsCustomMethod method, IsLadderRequestParams a)
   => MessageParams ('Method_CustomMethod method)
   -> VizHandler method a
 guardDecodeParams params =
