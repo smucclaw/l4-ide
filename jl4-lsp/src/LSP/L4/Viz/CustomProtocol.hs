@@ -63,21 +63,6 @@ data InlineExprsRequestParams = InlineExprsRequestParams
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
--- | l4/inlineExprs response payload
--- (Keeping it simple for now: just want to know whether the request was successful)
-data InlineExprsSuccess = InlineExprsSuccess
-  deriving stock (Eq, Show)
-
-instance ToJSON InlineExprsSuccess where
-  toJSON _ = object ["$type" .= ("InlineExprsSuccess" :: T.Text)]
-
-instance FromJSON InlineExprsSuccess where
-  parseJSON = withObject "InlineExprsSuccess" $ \obj -> do
-    typeTag <- obj .: "$type"
-    if typeTag == "InlineExprsSuccess"
-      then pure InlineExprsSuccess
-      else fail $ "Expected $type field to be 'InlineExprsSuccess' but got: " <> typeTag
-
 ------------------------------------------------------
 --  Custom methods for LSP
 ------------------------------------------------------
