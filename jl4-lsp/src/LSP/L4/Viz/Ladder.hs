@@ -1,8 +1,11 @@
 {-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 
 module LSP.L4.Viz.Ladder (
-  -- * Entrypoint
+  -- * Viz Decide entrypoint
   doVisualize,
+
+  -- * Inline Exprs (currently only inlines simple 'App of no args' exprs)
+  inlineExprs,
 
   -- * VizConfig, VizState
   VizConfig (..),
@@ -11,35 +14,32 @@ module LSP.L4.Viz.Ladder (
 
   -- * Viz State helpers
   lookupAppExprMaker,
-  lookupDefForInlining,
   getVizConfig,
-   
+
   -- * Other helpers
-  prettyPrintVizError,
+  prettyPrintVizError
   ) where
 
-import Control.DeepSeq
-import Control.Monad.Except
 import Base
 import qualified Base.Text as Text
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as Map
 import Optics.State.Operators ((<%=), (%=))
-
+import Optics
+import Control.Monad.Extra (unlessM)
 import qualified Language.LSP.Protocol.Types as LSP
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
 import L4.Syntax
 import L4.Print (prettyLayout)
+import qualified L4.Transform as Transform (simplify)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
-import qualified L4.Transform as Transform (simplify)
-import Control.Monad.Extra (unlessM)
 
 ------------------------------------------------------
 -- Monad
@@ -84,10 +84,11 @@ data VizState = MkVizState
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, appExprMakers} =
+  show MkVizState{cfg, maxId, appExprMakers, defsForInlining} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
-    ", (keys of) appExprMakers = " <> show (Map.keys appExprMakers) <> " }"
+    ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
+    ", (keys of) defsForInlining = " <> show (Map.keys defsForInlining) <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
@@ -176,8 +177,8 @@ I.e., I'm trying to hide the implementational details of VizState
 lookupAppExprMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> Expr Resolved)
 lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
 
-lookupDefForInlining :: VizState -> Unique -> Maybe (Expr Resolved)
-lookupDefForInlining vs (MkUnique _ uniq _) = Map.lookup uniq vs.defsForInlining
+lookupDefForInlining :: VizState -> Int -> Maybe (Expr Resolved)
+lookupDefForInlining vs uniq = Map.lookup uniq vs.defsForInlining
 
 getVizConfig :: VizState -> VizConfig
 getVizConfig vs = vs.cfg
@@ -330,6 +331,7 @@ leafFromResolved vid resolved = do
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
+  -- TODO: Prob need to do this `canInline` thing for things that aren't App of no args too?
   pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
 
 leaf :: Text -> Text -> Viz IRExpr
@@ -384,7 +386,7 @@ toBoolExpr = \ case
   V.UnknownV -> error "impossible for now"
 
 ------------------------------------------------------
--- Helpers for whether can inline
+-- Inlining Exprs
 ------------------------------------------------------
 
 {- | We only really need a *uni*directional pattern synonym,
@@ -394,7 +396,33 @@ pattern DefForInlining unique definiens <-
   MkDecide _ _ (MkAppForm _ (Def unique _) _ _) definiens
   where
     DefForInlining unique definiens =
-      MkDecide emptyAnno 
-      (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing) 
-      (MkAppForm emptyAnno (Def unique TC.emptyName) [] Nothing) 
+      MkDecide emptyAnno
+      (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
+      (MkAppForm emptyAnno (Def unique TC.emptyName) [] Nothing)
       definiens
+
+{- | Given a @VizState@, a top-level @Decide Resolved@, and a bunch of Uniques,
+inline refs to those Uniques in the Decide.-}
+inlineExprs :: VizState -> Decide Resolved -> [Int] -> Decide Resolved
+inlineExprs vs = foldr (inlineExpr vs)
+
+inlineExpr :: VizState -> Int -> Decide Resolved -> Decide Resolved
+inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resolved)) replace
+  where
+    replace :: Expr Resolved -> Expr Resolved
+    replace expr = 
+      if isRefOfTarget expr 
+      then 
+      case lookupDefForInlining vs target of
+        Just definiens -> definiens
+        Nothing -> error "Programmer error: either isRefOfTarget has false positives or we aren't recording all the definienda"
+      else expr
+
+    isRefOfTarget :: Expr Resolved -> Bool
+    isRefOfTarget = \ case
+      App _ resolved _args -> 
+        case resolved of
+          Ref _ uniq _ -> uniq.unique == target
+          _            -> False
+      -- TODO: Look into whether we should handle other cases too
+      _                    -> False
