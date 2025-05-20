@@ -14,6 +14,7 @@ import qualified Generics.SOP as SOP
 import Optics
 import qualified Base.Text as Text
 import qualified Data.List.NonEmpty as NE
+import Control.Applicative
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -349,6 +350,13 @@ data Extension = Extension
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+instance Semigroup Extension where
+  Extension i1 nlg1 <> Extension i2 nlg2 =
+    Extension (i1 <|> i2) (nlg1 <|> nlg2)
+
+instance Monoid Extension where
+  mempty = Extension Nothing Nothing
 
 data Info =
     TypeInfo (Type' Resolved) (Maybe TermKind)
