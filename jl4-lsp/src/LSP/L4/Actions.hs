@@ -183,12 +183,13 @@ visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
 
   -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
   -- Assumes the vizConfig in the given vizState is up-to-date.
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
+  let recentlyVisualisedDecide decide@(MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
         = Just RecentlyVisualised
           { pos = range.start
           , name = rawName $ getName appform
           , type' = applyFinalSubstitution (Ladder.getVizConfig vizState).substitution (Ladder.getVizConfig vizState).moduleUri ty
           , vizState = vizState
+          , decide
           }
       recentlyVisualisedDecide _ _ = Nothing
 
