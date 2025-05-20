@@ -9,7 +9,7 @@ import {
 
 const decodeInlineExprsResult = makeVizInfoDecoder()
 
-/** Higher-level wrapper around functionality provided by the Ladder backend.
+/** Higher-level wrapper around functionality provided by the LadderBackendApi (i.e., the Ladder backend and hosting webview).
  * The software design here was inspired by VSCode-Lean's 'EditorConnection' and 'EditorApi'.
  */
 export class L4Connection {
