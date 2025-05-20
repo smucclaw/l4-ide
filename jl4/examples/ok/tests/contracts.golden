@@ -1,19 +1,43 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-contracts.l4:7:1-69:
+contracts.l4:4:1-69:
   FULFILLED
-contracts.l4:29:1-59:
+contracts.l4:26:1-59:
   FULFILLED
-contracts.l4:31:1-32:29:
+contracts.l4:28:1-29:29:
   FULFILLED
-contracts.l4:34:1-36:29:
+contracts.l4:31:1-33:29:
   PARTY B
 DOES payment
-WITHIN 5
+WITHIN 0
 HENCE FULFILLED
 LEST FULFILLED
-contracts.l4:38:1-40:29:
+contracts.l4:35:1-37:29:
   FULFILLED
-contracts.l4:42:1-44:29:
+contracts.l4:39:1-41:29:
   FULFILLED
+contracts.l4:45:1-47:28:
+  CONTRACT BREACHED:
+    party B
+  who did
+    action payment
+    at 3
+  surpassed the deadline of
+    party S
+  who had to do obligatory
+    action payment
+  before their deadline, which was
+    at 2
+contracts.l4:49:1-51:28:
+  CONTRACT BREACHED:
+    party S
+  who did
+    action payment
+    at 3
+  surpassed the deadline of
+    party S
+  who had to do obligatory
+    action payment
+  before their deadline, which was
+    at 2

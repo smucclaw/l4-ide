@@ -594,9 +594,9 @@ prune m = do
           plain = allPlain $ map fst cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)                  = procWith (With e x, s') cs
+      procWith a []                    = [a]
+      procWith _ ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
+      procWith _ ((With e x, s') : cs) = procWith (With e x, s') cs
 
     in
       proc candidates
@@ -623,7 +623,7 @@ softprune m = do
 
       -- We have a success, we don't want a second one
       procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : _cs)  = candidates
+      procPlain _ ((Plain _, _)  : _cs) = candidates
       procPlain a ((With _ _, _) :  cs) = procPlain a cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure

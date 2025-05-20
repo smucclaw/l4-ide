@@ -1,23 +1,27 @@
-
-
 DECLARE Person IS ONE OF B, S
 DECLARE Action IS ONE OF delivery, payment, return
-
 
 #EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B payment 42) 5
 
 GIVETH CONTRACT Person Action
 x MEANS 
-  GIVETH CONTRACT Person Action
+  PARTY S
+  MUST delivery
+  WITHIN 3
+
+GIVETH CONTRACT Person Action
 y MEANS 
-  GIVETH CONTRACT Person Action
+  PARTY B
+  MUST payment
+  WITHIN 5
+  LEST GIVETH CONTRACT Person Action
 z MEANS 
   x ROR y
 
 a MEANS 
   z RAND z 
 
-#CONTRACT (() ROR FULFILLED) AT 2 WITH
+#CONTRACT ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
 #CONTRACT x AT 4 WITH 
   PARTY S DOES delivery AT 4
@@ -33,3 +37,13 @@ a MEANS
 #CONTRACT z AT 4 WITH
   PARTY S DOES delivery AT 4
   PARTY B DOES payment AT 26
+
+goesOn MEANS PARTY S MUST payment WITHIN 2
+
+#CONTRACT goesOn AT 0 WITH 
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment AT 3
+  
+#CONTRACT goesOn AT 0 WITH 
+  PARTY S DOES delivery AT 2
+  PARTY S DOES payment AT 3

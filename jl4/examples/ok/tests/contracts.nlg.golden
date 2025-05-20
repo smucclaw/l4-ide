@@ -4,3 +4,5 @@ executing contract `x` at 4 with the following events:  party `S` did `delivery`
 executing contract `y` at 4 with the following events:  party `S` did `delivery` at 4 party `S` did `delivery` at 9
 executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
 executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
+executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` at 3
+executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `S` did `payment` at 3

@@ -232,7 +232,7 @@ forwardExpr env = \ case
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
   Regulative _ann (MkObligation _ party action due followup lest) ->
-    Backward (ValObligation env (Right party) (Right action) due (fromMaybe fulfilExpr followup) lest)
+    Backward (ValObligation env (Right party) (Right action) (Right due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
 
@@ -256,7 +256,7 @@ backward val = WithPoppedFrame $ \ case
           [r, t] -> pure (r, t)
           rs' -> InternalException $ RuntimeTypeError $
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
-        PushFrame (ContractFrame (Contract1 ScrutEvents {..}))
+        PushFrame (ContractFrame (Contract1 ScrutinizeEvents {..}))
         EvalRef events
       ValROp env op rexpr1 rexpr2 -> do
         -- make sure to reassemble the operation after returning
@@ -370,75 +370,94 @@ backward val = WithPoppedFrame $ \ case
 
 backwardContractFrame :: Value Reference -> ContractFrame -> Machine Config
 backwardContractFrame val = \ case
-  Contract1 ScrutEvents {..} -> do
+  Contract1 ScrutinizeEvents {..} -> do
     case val of
       ValCons e es -> do
-        pushCFrame (Contract2 ScrutEvent {events = es, ..})
+        pushCFrame (Contract2 ScrutinizeEvent {events = es, ..})
         EvalRef e
       ValNil -> Backward (ValObligation env party act due followup lest)
       _ -> InternalException $ RuntimeTypeError $
         "expected LIST EVENT but found: " <> prettyLayout val <> " when scrutinizing regulative events"
-  Contract2 ScrutEvent {..} -> case val of
+  Contract2 ScrutinizeEvent {..} -> case val of
     ValEvent ev'party ev'act ev'time -> do
-      pushCFrame (Contract3 PartyWHNF {..})
-      maybeEvaluate env party
+      pushCFrame (Contract3 CurrentTimeWHNF {..})
+      EvalRef ev'time
     _ -> InternalException $ RuntimeTypeError $
       "expected an EVENT but found: " <> prettyLayout val <> " when scrutinizing a regulative event"
-  Contract3 PartyWHNF {..} -> do
-    pushCFrame (Contract3' PartyEqual {party = val, ..})
-    EvalRef ev'party
-  Contract3' PartyEqual {..} -> do
-    pushCFrame (Contract4 ScrutParty {ev'party = val, ..})
-    runBinOpEquals party val
-  Contract4 ScrutParty {..} -> do
-    case boolView val of
-      Nothing -> InternalException $ RuntimeTypeError $
-        "expected BOOLEAN but found: " <> prettyLayout val
-      Just True -> do
-        pushCFrame (Contract5 ActWHNF {..})
-        maybeEvaluate env act
-      Just False -> continueWithNextEvent ScrutEvents {party = Left party, ..} events
-  Contract5 ActWHNF {..} -> do
-    pushCFrame (Contract5' ActEqual {act = val, ..})
-    EvalRef ev'act
-  Contract5' ActEqual {..} -> do
-    pushCFrame (Contract6 ScrutAct {ev'act = val, ..})
-    runBinOpEquals act val
-  Contract6 ScrutAct {..} -> do
-    case boolView val of
-      Nothing -> InternalException $ RuntimeTypeError $
-        "expected BOOLEAN but found: " <> prettyLayout val
-      Just True -> case due of
-        Just due' -> do
-          pushCFrame (Contract7 StampWHNF {..})
-          ForwardExpr env due'
-        Nothing -> continueWithFollowup env followup events ev'time
-      Just False -> continueWithNextEvent ScrutEvents {party = Left party, act = Left act, ..} events
-  Contract7 StampWHNF {..} -> do
-    pushCFrame (Contract8 CurTimeWHNF {due = val, ..})
-    EvalRef ev'time
-  Contract8 CurTimeWHNF {..} -> do
-    pushCFrame (Contract9 ScrutTime {ev'time = val, ..})
+  Contract3 CurrentTimeWHNF {..} -> do
+    pushCFrame (Contract4 ScrutinizeDue {ev'time = val, ..})
     EvalRef time
-  Contract9 ScrutTime {..} -> do
+  Contract4 ScrutinizeDue {..} -> do
+    case due of
+       Left due' -> do
+         pushCFrame (Contract5 CheckTiming {time = val, ..})
+         Backward due'
+       Right (Just due') -> do
+         pushCFrame (Contract5 CheckTiming {time = val,..})
+         ForwardExpr env due'
+       Right Nothing -> do -- TODO: here we want to skip the time check step and go directly to party
+         pushCFrame (Contract6 PartyWHNF {time = val, ..})
+         maybeEvaluate env party
+  Contract5 CheckTiming {..} -> do
     stamp <- assertTime ev'time
-    due' <- assertTime due
-    time <- assertTime val
-    let deadline = time + due'
-
+    due' <- assertTime val
+    time' <- assertTime time
+    let
+      deadline = time' + due'
+      -- NOTE: the new due is the current due minus the time that has passed
+      -- by observing the current event e.g. if the thing
+      -- was due within 3, then if the last current time
+      -- is 2, and we are looking at an event at 3, then
+      -- the current time is advances to 3 but the due is
+      -- now earlier, it is  due within 2, i.e. 3 - (3 - 2)
+      newDue = due' - (stamp - time')
     if stamp > deadline
       -- NOTE: the deadline has passed. there are now two options:
       -- 1. there's no lest clause, i.e. this is an obligation. We return a breach.
       -- 2. there's a lest clause, i.e. this is an external choice. We continue by reducing
       --    the lest clause
       then case lest of
-        Nothing -> Backward (ValBreached (DeadlineMissed ev'party ev'act ev'time deadline))
+        Nothing -> Backward (ValBreached (DeadlineMissed ev'party ev'act stamp party act deadline))
         -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
         Just lestFollowup -> AllocateValue ev'time
           >>= continueWithFollowup env lestFollowup events
-     -- NOTE: see above NOTE
-      else AllocateValue ev'time
-          >>= continueWithFollowup env followup events
+      else do
+        -- NOTE: we have observed the event and do not branch, either, the
+        -- only thing that may now happen is that we try a new event. Hence we
+        -- drop the ev'time, set our time to ev'time and set our due to the new due
+        pushCFrame (Contract6 PartyWHNF {time = ev'time, due = Left $ ValNumber newDue, ..})
+        maybeEvaluate env party
+  Contract6 PartyWHNF {..} -> do
+    pushCFrame (Contract7 PartyEqual {party = val, ..})
+    EvalRef ev'party
+  Contract7 PartyEqual {..} -> do
+    pushCFrame (Contract8 ScrutinizeParty {ev'party = val, ..})
+    runBinOpEquals party val
+  Contract8 ScrutinizeParty {..} ->
+    case val of
+      ValBool True -> do
+        pushCFrame (Contract9 ActionWHNF {..})
+        maybeEvaluate env act
+      ValBool False -> do
+        newTime <- AllocateValue time
+        tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
+      _ -> InternalException $ RuntimeTypeError $
+        "expected BOOLEAN but found: " <> prettyLayout val
+  Contract9 ActionWHNF {..} -> do
+    pushCFrame (Contract10 ActionsEqual {act = val, ..})
+    EvalRef ev'act
+  Contract10 ActionsEqual {..} -> do
+    pushCFrame (Contract11 ScrutinizeActions {ev'act = val, ..})
+    runBinOpEquals act val
+  Contract11 ScrutinizeActions {..} ->
+    case val of
+      ValBool True -> AllocateValue time
+        >>= continueWithFollowup env followup events
+      ValBool False -> do
+        newTime <- AllocateValue time
+        tryNextEvent ScrutinizeEvents {party = Left party, act = Left act, time = newTime, ..} events
+      _ -> InternalException $ RuntimeTypeError $
+        "expected BOOLEAN but found: " <> prettyLayout val
   RBinOp1 MkRBinOp1 {..}
     -- NOTE: this is weirdly asymmetric because
     -- in case of AND we can never abort earlier but have to instead
@@ -459,11 +478,9 @@ backwardContractFrame val = \ case
   RBinOp2 MkRBinOp2 {..}
     -- if both obligations have been
     -- breached, then we can return breached
-    | b1@(ValBreached (DeadlineMissed _ _ vt _)) <- rval1
-    , b2@(ValBreached (DeadlineMissed _ _ vt' _)) <- val -> do
-      t <- assertTime vt
-      t' <- assertTime vt'
-
+    | b1@(ValBreached (DeadlineMissed _ _ vt _ _ _)) <- rval1
+    , b2@(ValBreached (DeadlineMissed _ _ vt' _ _ _)) <- val
+    -> do
       -- NOTE: depending on the operation, we return
       -- the first breach, if the operation was and,
       -- because they're already the reason
@@ -472,7 +489,7 @@ backwardContractFrame val = \ case
       -- If both happen at the same time, we return
       -- an arbitrary one (consistently with CSL)
       Backward
-        if t <= t'
+        if vt <= vt'
         then case op of
            ValRAnd -> b1
            ValROr -> b2
@@ -521,8 +538,8 @@ backwardContractFrame val = \ case
   RBinOp2 MkRBinOp2 {..} ->
     Backward (ValROp env op (Left rval1) (Left val))
   where
-    continueWithNextEvent :: ScrutEvents -> Reference -> Machine Config
-    continueWithNextEvent frame events = do
+    tryNextEvent :: ScrutinizeEvents -> Reference -> Machine Config
+    tryNextEvent frame events = do
       pushCFrame (Contract1 frame)
       EvalRef events
 
