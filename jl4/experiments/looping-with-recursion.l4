@@ -6,9 +6,7 @@ IMPORT prelude
 
 // we have a seller and a buyer
 
-DECLARE Actor IS ONE OF
-  Buyer    HAS name IS A STRING
-  Seller   ^   ^    ^  ^ ^
+DECLARE Actor IS ONE OF Buyer, Seller
 
 // we keep track of things using some sort of wallet
 
@@ -19,16 +17,17 @@ DECLARE `Symbol Table`
 // the seller delivers the goods
 
 DECLARE Action IS ONE OF
-  deliver  HAS itemName   IS A  STRING
-               quantity   IS A  NUMBER
-  pay      HAS amount     IS A  NUMBER
+  deliver  HAS itemName IS A STRING
+               quantity IS A NUMBER
+  pay      HAS amount IS A NUMBER
 
 // the buyer makes four payments
 
 GIVEN symtab IS A  `Symbol Table`
+GIVETH CONTRACT Actor Action
 `Initial Sale` MEANS
-  PARTY Seller
-   MUST deliver "apple" 1
+ PARTY Seller
+ MUST deliver "apple" 1
  WITHIN 10
  HENCE `Pay Until Zero` OF
          `Symbol Table`
@@ -48,5 +47,14 @@ GIVEN symtab IS A  `Symbol Table`
            `Symbol Table`
              WITH
               total IS symtab's total
-              paid  IS symtab's total + 50
+              paid  IS symtab's paid PLUS 50
+
+
+#CONTRACT `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+  PARTY Seller DOES deliver "apple" 1 AT 2
+  PARTY Buyer  DOES pay 50 AT 13
+  PARTY Buyer  DOES pay 50 AT 13
+  PARTY Buyer  DOES pay 50 AT 13
+  PARTY Buyer  DOES pay 50 AT 13
+
 
