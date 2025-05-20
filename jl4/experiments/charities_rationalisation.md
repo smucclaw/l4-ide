@@ -13,11 +13,7 @@
 
 ---
 
-## **2\.  What each**
-
-## **subordinate Order**
-
-##  **adds or changes**
+# **2\.  What each subordinate Order adds or changes**
 
 | Order (R\&O No. / year) | Purpose & main effect | How it meshes with the 2014 Law |
 | ----- | ----- | ----- |
