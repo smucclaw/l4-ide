@@ -87,7 +87,7 @@ data Log
   | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri
-  | LogReceivedCustomRequest !Uri !Text          -- ^ Uri CustomMethodName
+  | LogHandlingCustomRequest !Uri !Text          -- ^ Uri CustomMethodName
   | LogSuppliedTooManyArguments [Aeson.Value]
   | LogExecutingCommand !Text
   | LogShake Shake.Log
@@ -105,7 +105,7 @@ instance Pretty Log where
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
     LogFileStore msg -> pretty msg
     LogShake msg -> pretty msg
-    LogReceivedCustomRequest uri method -> "Received custom request:" <+> pretty (getUri uri) <+> pretty method
+    LogHandlingCustomRequest uri method -> "Handling custom request:" <+> pretty (getUri uri) <+> pretty method
 
 -- ----------------------------------------------------------------------------
 -- Reactor
@@ -348,7 +348,7 @@ handlers recorder =
               Just (evalEnv, _) -> do
                 result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
-                  LogReceivedCustomRequest evalParams.verDocId._uri
+                  LogHandlingCustomRequest evalParams.verDocId._uri
                   ("Eval result: " <> Text.show result)
                 pure result
 
@@ -524,7 +524,7 @@ withVizRequestContext
 withVizRequestContext recorder method params ide handlerKont = do
   decodedParams <- guardDecodeParams @method params
   let verDocId = decodedParams.verDocId
-  logWith recorder Debug $ LogReceivedCustomRequest verDocId._uri (Ladder.getMethodName method)
+  logWith recorder Debug $ LogHandlingCustomRequest verDocId._uri (Ladder.getMethodName method)
 
   mtcRes <- liftIO $ runAction (Text.unpack $ Ladder.getMethodName method) ide $ use TypeCheck $ toNormalizedUri verDocId._uri
   mRecentViz <- liftIO $ atomically $ getMostRecentVisualisation ide
