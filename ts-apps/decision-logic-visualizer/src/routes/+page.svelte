@@ -26,6 +26,8 @@
       Example 1
   ****************************/
 
+  const LADDER_VIZ_ROOT_TYPE_1: LirRootType = 'VizFunDecl_1'
+
   // Parse JSON object into IRExpr
   const example1 = {
     $type: 'FunDecl' as const,
@@ -43,6 +45,7 @@
               value: 'True' as const,
               id: { id: 1 },
               name: { label: 'eats', unique: 2 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
@@ -52,6 +55,7 @@
                 label: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
                 unique: 3,
               },
+              canInline: false,
             },
           ],
           id: { id: 3 },
@@ -61,6 +65,7 @@
           value: 'True' as const,
           id: { id: 4 },
           name: { label: 'swims', unique: 4 },
+          canInline: false,
         },
       ],
       id: { id: 5 },
@@ -69,24 +74,28 @@
 
   const decode = Schema.decodeSync(FunDecl)
   const decl = decode(example1)
+
   // Set up Lir
   const lirRegistry = new LirRegistry()
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  const mockEnv = LadderEnv.make(
+  const mockEnv1 = LadderEnv.make(
     lirRegistry,
     mockVersionedDocId,
-    mockLadderBackendApi
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_1
   )
-  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv, decl)
+  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv1, decl)
   funDeclLirNodePromise.then((funDeclLirNode) => {
-    lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_1, funDeclLirNode)
   })
 
   /***************************
       Example 2
   ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE_2: LirRootType = 'VizFunDecl_2'
 
   const example2 = {
     $type: 'FunDecl' as const,
@@ -104,12 +113,14 @@
               value: 'False' as const,
               id: { id: 1 },
               name: { label: 'flies', unique: 6 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
               value: 'True' as const,
               id: { id: 2 },
               name: { label: 'runs', unique: 7 },
+              canInline: false,
             },
             {
               $type: 'And' as const,
@@ -119,12 +130,14 @@
                   value: 'Unknown' as const,
                   id: { id: 3 },
                   name: { label: 'swims', unique: 8 },
+                  canInline: false,
                 },
                 {
                   $type: 'UBoolVar' as const,
                   value: 'True' as const,
                   id: { id: 4 },
                   name: { label: 'dives', unique: 9 },
+                  canInline: false,
                 },
               ],
               id: { id: 5 },
@@ -137,24 +150,28 @@
           value: 'True' as const,
           id: { id: 7 },
           name: { label: 'jumps', unique: 10 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 8 },
           name: { label: 'jogs', unique: 11 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
           value: 'False' as const,
           id: { id: 9 },
           name: { label: 'reads', unique: 12 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
           value: 'True' as const,
           id: { id: 10 },
           name: { label: 'writes', unique: 13 },
+          canInline: false,
         },
         {
           $type: 'Or' as const,
@@ -164,12 +181,14 @@
               value: 'Unknown' as const,
               id: { id: 11 },
               name: { label: 'sketches', unique: 14 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
               value: 'False' as const,
               id: { id: 12 },
               name: { label: 'paints', unique: 15 },
+              canInline: false,
             },
           ],
           id: { id: 13 },
@@ -179,6 +198,7 @@
           value: 'True' as const,
           id: { id: 14 },
           name: { label: 'codes', unique: 16 },
+          canInline: false,
         },
       ],
       id: { id: 15 },
@@ -186,13 +206,19 @@
   }
 
   const funDecl2 = decode(example2)
+  const mockEnv2 = LadderEnv.make(
+    lirRegistry,
+    mockVersionedDocId,
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_2
+  )
   const funDeclLirNode2Promise = VizDeclLirSource.toLir(
     nodeInfo,
-    mockEnv,
+    mockEnv2,
     funDecl2
   )
   funDeclLirNode2Promise.then((funDeclLirNode2) => {
-    lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, funDeclLirNode2)
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_2, funDeclLirNode2)
   })
 </script>
 
@@ -209,7 +235,7 @@
     {#await funDeclLirNodePromise}
       <p>Loading Example 1...</p>
     {:then funDeclLirNode}
-      <Flow {context} node={funDeclLirNode} env={mockEnv} />
+      <Flow {context} node={funDeclLirNode} env={mockEnv1} />
     {:catch error}
       <p>Error loading Example 1: {error.message}</p>
     {/await}
@@ -221,7 +247,7 @@
     {#await funDeclLirNode2Promise}
       <p>Loading Example 2...</p>
     {:then funDeclLirNode2}
-      <Flow {context} node={funDeclLirNode2} env={mockEnv} />
+      <Flow {context} node={funDeclLirNode2} env={mockEnv2} />
     {:catch error}
       <p>Error loading Example 2: {error.message}</p>
     {/await}

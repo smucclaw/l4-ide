@@ -295,8 +295,11 @@ scanOr e = [e]
 defaultUBoolVarValue :: V.UBoolValue
 defaultUBoolVarValue = V.UnknownV
 
+defaultUBoolVarCanInline :: Bool
+defaultUBoolVarCanInline = False
+
 leafFromVizName :: V.ID -> V.Name -> IRExpr
-leafFromVizName vid vname = V.UBoolVar vid vname defaultUBoolVarValue
+leafFromVizName vid vname = V.UBoolVar vid vname defaultUBoolVarValue defaultUBoolVarCanInline
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
@@ -304,8 +307,8 @@ leaf subject complement = do
   tempUniqueTODO <- getFresh
   -- tempUniqueTODO: I'd like to defer properly handling the V.Name for `leaf` and the kinds of cases it's used for.
   -- I'll return to this when we explicitly/properly handle more cases in translateExpr
-  -- (I'm currently focusing on state in the frontend in the simpler case of App with no args)
-  pure $ V.UBoolVar vid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue
+  -- TODO: Need to refactor this soon
+  pure $ V.UBoolVar vid (V.MkName tempUniqueTODO.id $ subject <> " " <> complement) defaultUBoolVarValue defaultUBoolVarCanInline
 
 ------------------------------------------------------
 -- Name helpers
