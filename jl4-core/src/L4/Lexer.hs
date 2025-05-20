@@ -109,6 +109,8 @@ data TokenType =
   -- | TKTrue
   | TKAnd
   | TKOr
+  | TKRAnd
+  | TKROr
   | TKNot
   | TKIs
   | TKHas
@@ -131,6 +133,7 @@ data TokenType =
   | TKMust
   | TKWithin
   | TKHence
+  | TKLest
   | TKFunction
   | TKFrom
   | TKTo
@@ -405,10 +408,10 @@ keywords =
     , ("THEN"       , TKThen       )
     , ("ELSE"       , TKElse       )
     , ("OTHERWISE"  , TKOtherwise  )
-    -- , ("FALSE"      , TKFalse      )
-    -- , ("TRUE"       , TKTrue       )
     , ("AND"        , TKAnd        )
     , ("OR"         , TKOr         )
+    , ("RAND"       , TKRAnd       )
+    , ("ROR"        , TKROr        )
     , ("NOT"        , TKNot        )
     , ("IS"         , TKIs         )
     , ("ONE"        , TKOne        )
@@ -427,10 +430,11 @@ keywords =
     , ("TYPE"       , TKType       )
     , ("PARTY"      , TKParty      )
     , ("DO"         , TKDo         )
-    , ("DOES"       , TKDoes         )
+    , ("DOES"       , TKDoes       )
     , ("MUST"       , TKMust       )
     , ("WITHIN"     , TKWithin     )
     , ("HENCE"      , TKHence      )
+    , ("LEST"       , TKLest       )
     , ("FUNCTION"   , TKFunction   )
     , ("FROM"       , TKFrom       )
     , ("TO"         , TKTo         )
@@ -895,6 +899,8 @@ displayTokenType tt =
     -- TKTrue            -> "TRUE"
     TKAnd             -> "AND"
     TKOr              -> "OR"
+    TKRAnd            -> "RAND"
+    TKROr             -> "ROR"
     TKNot             -> "NOT"
     TKIs              -> "IS"
     TKHas             -> "HAS"
@@ -917,6 +923,7 @@ displayTokenType tt =
     TKMust            -> "MUST"
     TKWithin          -> "WITHIN"
     TKHence           -> "HENCE"
+    TKLest            -> "LEST"
     TKFunction        -> "FUNCTION"
     TKFrom            -> "FROM"
     TKTo              -> "TO"
@@ -1027,6 +1034,8 @@ posTokenCategory =
     -- TKTrue -> CKeyword
     TKAnd -> CKeyword
     TKOr -> CKeyword
+    TKRAnd -> CKeyword
+    TKROr -> CKeyword
     TKNot -> CKeyword
     TKIs -> CKeyword
     TKHas -> CKeyword
@@ -1049,6 +1058,7 @@ posTokenCategory =
     TKMust -> CKeyword
     TKWithin -> CKeyword
     TKHence -> CKeyword
+    TKLest -> CKeyword
     TKFunction -> CKeyword
     TKFrom -> CKeyword
     TKTo -> CKeyword

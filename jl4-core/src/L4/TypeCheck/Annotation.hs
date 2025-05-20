@@ -48,6 +48,14 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ Or ann e1' e2'
+    RAnd ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ RAnd ann e1' e2'
+    ROr ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ ROr ann e1' e2'
     Implies ann e1 e2 -> do
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
@@ -124,12 +132,13 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ IfThenElse ann b' e1' e2'
-    Regulative ann (MkObligation ann'' party act deadline followup) -> do
+    Regulative ann (MkObligation ann'' party act deadline followup lest) -> do
       party' <- nlgExpr party
       act' <- nlgExpr act
       deadline' <- traverse nlgExpr deadline
       followup' <- traverse nlgExpr followup
-      pure $ Regulative ann (MkObligation ann'' party' act' deadline' followup')
+      lest' <- traverse nlgExpr lest
+      pure $ Regulative ann (MkObligation ann'' party' act' deadline' followup' lest')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into

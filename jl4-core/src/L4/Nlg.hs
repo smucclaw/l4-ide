@@ -78,6 +78,16 @@ instance Linearize (Expr Resolved) where
       , text "or"
       , lin e2
       ]
+    RAnd _ e1 e2 -> hcat
+      [ lin e1
+      , text "and"
+      , lin e2
+      ]
+    ROr _ e1 e2 -> hcat
+      [ lin e1
+      , text "or"
+      , lin e2
+      ]
     Implies _ e1 e2 -> hcat
       [ lin e1
       , text "implies"
@@ -200,7 +210,7 @@ instance Linearize (Expr Resolved) where
       , text "else"
       , lin else'
       ]
-    Regulative _ (MkObligation _ party rule mdeadline mfollowup) -> hcat $
+    Regulative _ (MkObligation _ party rule mdeadline mfollowup mlest) -> hcat $
       [ text "party"
       , lin party
       , text "does"
@@ -208,6 +218,7 @@ instance Linearize (Expr Resolved) where
       ]
       <> maybe [] (\ deadline -> [ text "within", lin deadline ]) mdeadline
       <> maybe [] (\ followup -> [ text "hence",  lin followup ]) mfollowup
+      <> maybe [] (\ lest -> [ text "lest",  lin lest ]) mlest
     Consider _ e br -> hcat
       [ text "consider"
       , text "the"

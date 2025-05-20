@@ -1,5 +1,6 @@
 `EVALCONTRACT` with `x`, list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` and 42 and 5
-executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 2
-executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 2 party `S` did `payment` at 5
-executing contract `z` at 3 with the following events: 
-executing contract `z` at 4 with the following events: 
+executing contract party `B` does `payment` or `FULFILLED` at 2 with the following events: 
+executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4
+executing contract `y` at 4 with the following events:  party `S` did `delivery` at 4 party `S` did `delivery` at 9
+executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
+executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
