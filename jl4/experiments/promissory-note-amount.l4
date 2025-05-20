@@ -78,7 +78,7 @@ IMPORT prelude
 
 
 GIVEN `Outstanding Payment Amount` IS A Money
-`Outstanding Obligations for` MEANS
+`Payment Obligations` MEANS
     IF `Outstanding Payment Amount`'s Cents GREATER THAN 0
         THEN  PARTY   `The Borrower`
               MUST    `pay debts to`
@@ -86,9 +86,9 @@ GIVEN `Outstanding Payment Amount` IS A Money
                           (`Next Payment Due`'s Amount)
               WITHIN  `Next Payment Due`'s `Days Beyond Commencement` PLUS
                           `Late Payment Penalty`'s `Grace Period Days`
-              HENCE   `Outstanding Obligations for`
+              HENCE   `Payment Obligations`
                           (Money WITH
-                              Currency  IS `Monthly Installment Amount`'s Currency
+                              Currency  IS `Next Payment Due`'s Amount's Currency
                               Cents     IS `Outstanding Payment Amount`'s Cents MINUS
                                                 `Next Payment Due`'s Amount's Cents)
 --              LEST     PARTY   `The Borrower`
@@ -119,7 +119,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                                          (`Monthly Installment Amount`'s Cents)
                                          (`Outstanding Payment Amount`'s Cents)
                 `Days Beyond Commencement` IS
-                    `Installments Covered Since Commencement` PLUS 1 TIMES 30
+                    (`Installments Covered Since Commencement` PLUS 1) TIMES 30
 
         `Next Payment Due Amount With Penalty` MEANS
             Money WITH
@@ -150,7 +150,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
 
 #EVAL `Monthly Installment Amount`
 
-#EVAL EVALCONTRACT (`Outstanding Obligations for` `Total Repayment Amount`)
+#EVAL EVALCONTRACT (`Payment Obligations` `Total Repayment Amount`)
                    (LIST  EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 29
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 59
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 89
@@ -162,11 +162,11 @@ GIVEN `Outstanding Payment Amount` IS A Money
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 269
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 299
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 329
-                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 359)
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239587)) 359)
                    360
 
 
-#CONTRACT `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
+#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 360 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 29
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 59
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 89
@@ -178,7 +178,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 269
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 299
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 329
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 359
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239587) AT 359
 
 
 §§ `Definitions`
@@ -205,13 +205,13 @@ DECLARE Borrower IS ONE OF
    `Individual Borrower`
         HAS Individual      IS A `Natural Person`
    `Commercial Borrower`
-        HAS Business        IS A Company
+        HAS Entity          IS A Company
 
 DECLARE Lender IS ONE OF
    `Individual Lender`
         HAS Individual      IS A `Natural Person`
    `Commercial Lender`
-        HAS Business        IS A Company
+        HAS Entity          IS A Company
 
 DECLARE `Bank Account`
     HAS `Bank Name`         IS A STRING
