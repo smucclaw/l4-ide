@@ -4,6 +4,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 module L4.Annotation where
 
 import Base
@@ -11,7 +13,6 @@ import qualified Base.Text as Text
 import L4.Parser.SrcSpan
 
 import qualified Control.Monad.Extra as Extra
-import Data.Default
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified GHC.Generics as GHC
 import GHC.Stack.CCS
@@ -89,17 +90,20 @@ annoExtra = #extra
 allClusterTokens :: CsnCluster_ t -> [t]
 allClusterTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
-mkAnno :: Default e => [AnnoElement_ t] -> Anno_ t e
-mkAnno es = fixAnnoSrcRange $ Anno def Nothing es
+mkAnno :: Monoid e => [AnnoElement_ t] -> Anno_ t e
+mkAnno es = fixAnnoSrcRange $ Anno mempty Nothing es
 
-emptyAnno :: Default e => Anno_ t e
+emptyAnno :: Monoid e => Anno_ t e
 emptyAnno = mkAnno []
 
-instance Default e => Default (Anno_ t e) where
-  def = emptyAnno
+isEmptyAnno :: (Monoid e, Eq e) => Anno_ t e -> Bool
+isEmptyAnno ann
+  | Anno e Nothing [] <- ann
+  , e == mempty = True
+  | otherwise = False
 
-isEmptyAnno :: Anno_ t e -> Bool
-isEmptyAnno m = null m.payload
+pattern EmptyAnno :: (Monoid e, Eq e) => Anno_ t e
+pattern EmptyAnno <- (isEmptyAnno -> True)
 
 -- | Calculate the actual 'Maybe SrcRange' of this source annotation.
 --
@@ -123,7 +127,7 @@ type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 overAnno :: HasAnno t => (Anno' t -> Anno' t) -> t -> t
 overAnno f t = let a = getAnno t in setAnno (f a) t
 
-class (Default (AnnoExtra t)) => HasAnno t where
+class (Monoid (AnnoExtra t), Eq (AnnoExtra t)) => HasAnno t where
   type AnnoToken t :: Type
   type AnnoExtra t :: Type
   getAnno :: t -> Anno' t
@@ -146,7 +150,7 @@ genericGetAnno e = e ^. gposition @1
 clearSourceAnno :: HasAnno t => t -> t
 clearSourceAnno = overAnno (\ann -> ann { range = Nothing, payload = [] } )
 
-instance Default e => HasAnno (Anno_ t e) where
+instance (Monoid e, Eq e) => HasAnno (Anno_ t e) where
   type AnnoToken (Anno_ t e) = t
   type AnnoExtra (Anno_ t e) = e
   getAnno = id
@@ -318,5 +322,11 @@ rangeOfNode a = case runExcept $ toNodes a of
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
-instance Default e => Semigroup (Anno_ t e) where
-  (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno def Nothing (m1 <> m2)
+instance (Monoid e, Eq e) => Semigroup (Anno_ t e) where
+  EmptyAnno <> ann = ann
+  ann <> EmptyAnno = ann
+  (Anno e1 r1 m1) <> (Anno e2 r2 m2)
+    | r1 == r2 = Anno (e1 <> e2) r1 (m1 <> m2)
+    -- NOTE: we do not know what to do when we're trying to merge
+    -- Anno's with different source ranges
+    | otherwise = Anno mempty Nothing (m1 <> m2)

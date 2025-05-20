@@ -189,8 +189,8 @@ nfAux  d (ValCons r1 r2)             = do
   v2 <- runConfigM (evalRef r2) >>= nfAux (d - 1)
   pure (MkNF (ValCons v1 v2))
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
-nfAux _d (ValObligation env party act due followup) = do
-  pure (MkNF (ValObligation env party act due followup))
+nfAux _d (ValObligation env party act due followup lest) = do
+  pure (MkNF (ValObligation env party act due followup lest))
 nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
@@ -199,14 +199,16 @@ nfAux  d (ValConstructor n rs)       = do
 nfAux _d (ValAssumed n)              = pure (MkNF (ValAssumed n))
 nfAux _d (ValEnvironment env)        = pure (MkNF (ValEnvironment env))
 nfAux d (ValBreached r')            = do
-  let evalAndNF = traverse $ nfAux (d - 1) <=< runConfigM . evalRef
+  let evalAndNF f = do
+        whnf <- runConfigM $ evalRef f
+        nfAux (d - 1) whnf
   r <- case r' of
-    DeadlineMissed party act timestamp deadline -> do
-      party' <- evalAndNF party
-      act' <- evalAndNF act
-      timestamp' <- evalAndNF timestamp
-      pure (DeadlineMissed party' act' timestamp' deadline)
+    DeadlineMissed ev'party ev'act ev'timestamp party act deadline -> do
+      party' <- evalAndNF ev'party
+      act' <- evalAndNF ev'act
+      pure (DeadlineMissed party' act' ev'timestamp party act deadline)
   pure (MkNF (ValBreached r))
+nfAux _d (ValROp env op l r) = pure (MkNF (ValROp env op l r))
 
 -- | Main entry point.
 --

@@ -14,6 +14,7 @@ import qualified Generics.SOP as SOP
 import Optics
 import qualified Base.Text as Text
 import qualified Data.List.NonEmpty as NE
+import Control.Applicative
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -192,6 +193,9 @@ data Expr n =
     -- (var1 AND var3) AND {- Comment -}var2
     -- [AnnoHole, CSN "AND", CSN " ", CSN "{- Comment -}", AnnoHole]
   | Or         Anno (Expr n) (Expr n)
+  -- regulative and / or
+  | RAnd        Anno (Expr n) (Expr n)
+  | ROr         Anno (Expr n) (Expr n)
   | Implies    Anno (Expr n) (Expr n)
   | Equals     Anno (Expr n) (Expr n)
   | Not        Anno (Expr n)
@@ -230,6 +234,7 @@ data Obligation n
   , action :: Expr n
   , due :: Maybe (Expr n)
   , hence :: Maybe (Expr n)
+  , lest :: Maybe (Expr n)
   }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -345,6 +350,13 @@ data Extension = Extension
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+instance Semigroup Extension where
+  Extension i1 nlg1 <> Extension i2 nlg2 =
+    Extension (i1 <|> i2) (nlg1 <|> nlg2)
+
+instance Monoid Extension where
+  mempty = Extension Nothing Nothing
 
 data Info =
     TypeInfo (Type' Resolved) (Maybe TermKind)
@@ -626,6 +638,7 @@ deriving anyclass instance HasSrcRange (Decide a)
 deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)
+deriving anyclass instance HasSrcRange (Obligation a)
 deriving anyclass instance HasSrcRange (LocalDecl a)
 deriving anyclass instance HasSrcRange (NamedExpr a)
 deriving anyclass instance HasSrcRange (Branch a)
