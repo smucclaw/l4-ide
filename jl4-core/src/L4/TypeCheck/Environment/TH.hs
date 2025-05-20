@@ -31,7 +31,7 @@ preDef t =
         )
       ]
     )
-    (PreDef t)
+    (NormalName t)
 
 mkBuiltins :: [Renamed] -> Q [Dec]
 mkBuiltins = fmap mconcat . traverse mkBuiltin . zip [1..]

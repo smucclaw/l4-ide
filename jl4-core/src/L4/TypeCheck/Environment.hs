@@ -33,6 +33,11 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "plus" `rename` "__PLUS__"
+  , "minus" `rename` "__MINUS__"
+  , "times" `rename` "__TIMES__"
+  , "divide" `rename` "__DIVIDE__"
+  , "modulo" `rename` "__MODULO__"
   , "a", "b", "c", "d", "g", "h", "i"
   ]
 
@@ -59,9 +64,6 @@ list a = app listRef [a]
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]
 
-
--- infos
-
 -- Number conversion
 
 isInteger :: Type' Resolved
@@ -75,6 +77,25 @@ ceilingBuiltin = fun_ [number] number
 
 floorBuiltin :: Type' Resolved
 floorBuiltin = fun_ [number] number
+
+-- Basic Arithmetic
+
+plusBuiltin :: Type' Resolved
+plusBuiltin = fun_ [number, number] number
+
+minusBuiltin :: Type' Resolved
+minusBuiltin = fun_ [number, number] number
+
+timesBuiltin :: Type' Resolved
+timesBuiltin = fun_ [number, number] number
+
+divideBuiltin :: Type' Resolved
+divideBuiltin = fun_ [number, number] number
+
+moduloBuiltin :: Type' Resolved
+moduloBuiltin = fun_ [number, number] number
+
+-- infos
 
 -- Number conversion
 
@@ -128,6 +149,30 @@ floorInfo :: CheckEntity
 floorInfo =
   KnownTerm floorBuiltin Computable
 
+-- Basic Arithmetic
+
+plusInfo :: CheckEntity
+plusInfo =
+  KnownTerm plusBuiltin Computable
+
+minusInfo :: CheckEntity
+minusInfo =
+  KnownTerm minusBuiltin Computable
+
+timesInfo :: CheckEntity
+timesInfo =
+  KnownTerm timesBuiltin Computable
+
+divideInfo :: CheckEntity
+divideInfo =
+  KnownTerm divideBuiltin Computable
+
+moduloInfo :: CheckEntity
+moduloInfo =
+  KnownTerm moduloBuiltin Computable
+
+-- Contract
+
 contractInfo :: CheckEntity
 contractInfo =
   KnownType 2 [] Nothing
@@ -161,22 +206,27 @@ evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOn
 initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN",      [booleanUnique     ])
-    , (NormalName "FALSE",        [falseUnique       ])
-    , (NormalName "TRUE",         [trueUnique        ])
-    , (NormalName "NUMBER",       [numberUnique      ])
-    , (NormalName "STRING",       [stringUnique      ])
-    , (NormalName "LIST",         [listUnique        ])
-    , (NormalName "EMPTY",        [emptyUnique       ])
-    , (NormalName "CONTRACT",     [contractUnique    ])
-    , (NormalName "EVENT",        [eventUnique       ])
-    , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALCONTRACT", [evalContractUnique])
-    , (NormalName "FULFILLED",    [fulfilUnique      ])
-    , (NormalName "IS INTEGER",   [isIntegerUnique ])
-    , (NormalName "ROUND",        [roundUnique     ])
-    , (NormalName "CEILING",      [ceilingUnique   ])
-    , (NormalName "FLOOR",        [floorUnique     ])
+    [ (rawName booleanName,      [booleanUnique     ])
+    , (rawName falseName,        [falseUnique       ])
+    , (rawName trueName,         [trueUnique        ])
+    , (rawName numberName,       [numberUnique      ])
+    , (rawName stringName,       [stringUnique      ])
+    , (rawName listName,         [listUnique        ])
+    , (rawName emptyName,        [emptyUnique       ])
+    , (rawName contractName,     [contractUnique    ])
+    , (rawName eventName,        [eventUnique       ])
+    , (rawName eventCName,       [eventCUnique      ])
+    , (rawName evalContractName, [evalContractUnique])
+    , (rawName fulfilName,       [fulfilUnique      ])
+    , (rawName isIntegerName,    [isIntegerUnique ])
+    , (rawName roundName,        [roundUnique     ])
+    , (rawName ceilingName,      [ceilingUnique   ])
+    , (rawName floorName,        [floorUnique     ])
+    , (rawName plusName,         [plusUnique      ])
+    , (rawName minusName,        [minusUnique     ])
+    , (rawName timesName,        [timesUnique     ])
+    , (rawName divideName,       [divideUnique    ])
+    , (rawName moduloName,       [moduloUnique    ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -199,4 +249,9 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (plusUnique,         (plusName,         plusInfo        ))
+    , (minusUnique,        (minusName,        minusInfo       ))
+    , (timesUnique,        (timesName,        timesInfo       ))
+    , (divideUnique,       (divideName,       divideInfo      ))
+    , (moduloUnique,       (moduloName,       moduloInfo      ))
     ]

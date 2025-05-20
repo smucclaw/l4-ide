@@ -53,6 +53,8 @@ data Frame =
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
   | UnaryBuiltin0 UnaryBuiltinFun
+  | BinBuiltin1 BuiltinFun Reference
+  | BinBuiltin2 BuiltinFun WHNF
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   deriving stock Show
@@ -244,6 +246,18 @@ backward val = WithPoppedFrame $ \ case
     ForwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
+  Just (BinBuiltin1 binOp r) -> do
+    PushFrame (BinBuiltin2 binOp val)
+    EvalRef r
+  Just (BinBuiltin2 binOp val1) -> do
+    let
+      op = case binOp of
+        PlusFn -> BinOpPlus
+        MinusFn -> BinOpMinus
+        TimesFn -> BinOpTimes
+        DivideFn -> BinOpDividedBy
+        ModuloFn -> BinOpModulo
+    runBinOp op val1 val
   Just f@(App1 rs) -> do
     case val of
       ValClosure givens e env' -> do
@@ -269,6 +283,10 @@ backward val = WithPoppedFrame $ \ case
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
+      ValBuiltinFun fn -> do
+        (x, y) <- expect2 rs
+        PushFrame (BinBuiltin1 fn y)
+        EvalRef x
       ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
@@ -613,6 +631,11 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+
+expect2 :: [a] -> Machine (a, a)
+expect2 = \ case
+  [x, y] -> pure (x, y)
   xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
@@ -990,6 +1013,25 @@ trueVal = ValConstructor TypeCheck.trueRef []
 fulfilExpr :: Expr Resolved
 fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
 
+-- plusExpr :: [Expr Resolved] -> Expr Resolved
+-- plusExpr args = App emptyAnno TypeCheck.plusRef args
+
+-- plusVal :: Machine (Value a)
+-- plusVal = do
+--   let mn = MkName emptyAnno . NormalName
+--       (na, nb) = (mn "a", mn "b")
+--   ad <- def na
+--   bd <- def nb
+--   ar <- ref na ad
+--   br <- ref nb bd
+--   pure $ ValClosure
+--     (MkGivenSig emptyAnno
+--       [ MkOptionallyTypedName emptyAnno ad Nothing
+--       , MkOptionallyTypedName emptyAnno bd Nothing
+--       ])
+--     (App emptyAnno TypeCheck.plusRef [App emptyAnno ar [], App emptyAnno br []])
+--     emptyEnvironment
+
 -- \a b c. a b c
 evalContractVal :: Machine (Value a)
 evalContractVal = do
@@ -1101,6 +1143,11 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
+  plusRef <- AllocateValue $ ValBuiltinFun PlusFn
+  minusRef <- AllocateValue $ ValBuiltinFun MinusFn
+  timesRef <- AllocateValue $ ValBuiltinFun TimesFn
+  divideRef <- AllocateValue $ ValBuiltinFun DivideFn
+  moduloRef <- AllocateValue $ ValBuiltinFun ModuloFn
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
@@ -1118,4 +1165,9 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
+      , (TypeCheck.plusUnique, plusRef)
+      , (TypeCheck.minusUnique, minusRef)
+      , (TypeCheck.timesUnique, timesRef)
+      , (TypeCheck.divideUnique, divideRef)
+      , (TypeCheck.moduloUnique, moduloRef)
       ]

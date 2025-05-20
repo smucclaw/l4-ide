@@ -27,7 +27,7 @@ instance NFData Value where
   rnf (ValString t)               = rnf t
   rnf (ValList vs)                = rnf vs
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
-  rnf (ValUnaryBuiltinFun r)      = rnf r
+  rnf (ValUnaryBuiltinFun r)      = r `seq` ()
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r

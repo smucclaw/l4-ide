@@ -1,0 +1,68 @@
+DECLARE Vector
+    HAS
+        x IS A NUMBER
+        y IS A NUMBER
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__PLUS__` a b MEANS
+    Vector WITH
+        x IS a's x PLUS b's x
+        y IS a's y PLUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__TIMES__` a b MEANS
+    Vector WITH
+        x IS a's x TIMES b's x
+        y IS a's y TIMES b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__MINUS__` a b MEANS
+    Vector WITH
+        x IS a's x MINUS b's x
+        y IS a's y MINUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__DIVIDE__` a b MEANS
+    Vector WITH
+        x IS a's x DIVIDED BY b's x
+        y IS a's y DIVIDED BY b's y
+
+-- `__MODULO__` is intentionally unused
+
+#EVAL Vector 1 2 PLUS Vector 1 2
+#CHECK Vector 1 2 PLUS Vector 1 2
+#EVAL Vector 1 2 TIMES Vector 1 2
+#CHECK Vector 1 2 TIMES Vector 1 2
+#EVAL Vector 1 2 DIVIDED BY Vector 0.2 2
+#CHECK Vector 1 2 DIVIDED BY Vector 0.5 2
+#EVAL Vector 1 2 MINUS Vector 1 2
+#CHECK Vector 1 2 MINUS Vector 1 2
+-- Fails as intended
+-- #CHECK Vector 1 2 MODULO Vector 1 2
+
+GIVEN a IS A TYPE
+DECLARE VectorP a
+    HAS
+        x IS A a
+        y IS A a
+
+-- Only works for concrete types, not proper subtyping
+GIVEN a IS A VectorP NUMBER
+      b IS A VectorP NUMBER
+GIVETH A Vector
+`__PLUS__` a b MEANS
+    Vector WITH
+        x IS a's x PLUS b's x
+        y IS a's y PLUS b's y
+
+#EVAL VectorP 50 50 PLUS VectorP 25 0
+
+-- Let's have some fun and implement plus for strings!

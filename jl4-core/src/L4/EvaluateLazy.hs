@@ -192,6 +192,7 @@ nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
 nfAux _d (ValObligation env party act due followup lest) = do
   pure (MkNF (ValObligation env party act due followup lest))
 nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
+nfAux _d (ValBuiltinFun b)      = pure (MkNF (ValBuiltinFun b))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
   vs <- traverse (\ r -> runConfigM (evalRef r) >>= nfAux (d - 1)) rs
@@ -249,7 +250,7 @@ evalModuleAndDirectives env m = do
 
 {- | Evaluate an expression in the context of a module and initial environment.
 
-Didn't try to cache even more computation with rules, 
+Didn't try to cache even more computation with rules,
 because the current Rule type seems to
 be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
 Also, it's not clear how much caching can actually be done,
