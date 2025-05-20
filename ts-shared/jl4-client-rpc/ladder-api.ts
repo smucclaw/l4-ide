@@ -1,4 +1,5 @@
 import type { L4RpcRequestType } from './custom-protocol.js'
+import type { RenderAsLadderInfo } from '@repo/viz-expr'
 
 /** The interface that the Ladder frontend components
  * (most proximally, the webview, and the visualizer, indirectly)
@@ -20,6 +21,9 @@ interface L4BackendApi {
   ): Promise<R | null>
 
   /* Send a notification to the LSP server. [TODO] */
+
+  /** Update / re-make the LadderFlow component */
+  updateViz(renderLadderInfo: RenderAsLadderInfo): Promise<void>
 }
 
 /** A mock implementation of the LadderBackendApi for testing / dev-ing */
@@ -27,5 +31,9 @@ export const mockLadderBackendApi: LadderBackendApi = {
   sendClientRequest: async (type, params) => {
     console.log('[mockLadderBackendApi] sendClientRequest: ', type, params)
     return Promise.resolve(null)
+  },
+
+  updateViz: async (renderLadderInfo) => {
+    console.log('[mockLadderBackendApi] updateViz: ', renderLadderInfo)
   },
 }
