@@ -30,7 +30,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   {#if data.canInline}
     <div class="absolute bottom-1 right-1">
       <button
-        class="px-1 text-xs rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+        class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
         onclick={() => {
           console.log('inline lir id', data.originalLirId.toString())
 
@@ -40,7 +40,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
           l4Conn.inlineExprs([uniq], ladderEnv.getVersionedTextDocIdentifier())
         }}
       >
-        jh todo
+        todo
       </button>
     </div>
   {/if}
