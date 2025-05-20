@@ -63,6 +63,10 @@ data InlineExprsRequestParams = InlineExprsRequestParams
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+newtype InlineExprsResult = MkInlineExprsResult RenderAsLadderInfo
+  deriving stock (Eq, Show, Generic)
+  deriving newtype (FromJSON, ToJSON)
+
 ------------------------------------------------------
 --  Custom methods for LSP
 ------------------------------------------------------
