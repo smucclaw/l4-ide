@@ -353,8 +353,14 @@ handlers recorder =
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
-        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $
-          \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) params ide $
+          \(ieParams :: Ladder.InlineExprsRequestParams) _tcRes recentViz ->
+            let _postInliningDecide = Ladder.inlineExprs recentViz.vizState recentViz.decide ieParams.uniques
+            in do
+              -- TODO:
+              -- Make a new FunDecl from the postInliningDecide
+              -- Ask the client to visualize this new FunDecl
+              undefined
     ]
 
 activeFileDiagnosticsInRange :: ShakeExtras -> NormalizedUri -> Range -> STM [FileDiagnostic]
