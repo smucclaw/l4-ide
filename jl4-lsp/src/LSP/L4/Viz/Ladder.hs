@@ -289,13 +289,17 @@ translateExpr False = go
           withLocalDecls ds $
             go e' -- TODO: lossy
 
-        -- TODO: Should handle BoolLits differently too
         -- 'var'
         App _ resolved [] -> do
           vid <- getFresh
-          prepEvalAppMaker vid e
-          leafFromResolved vid resolved
-
+          let vname = mkPrettyVizName resolved
+          case getUnique resolved of
+            u | u == TC.trueUnique  -> pure $ V.TrueE vid vname
+              | u == TC.falseUnique -> pure $ V.FalseE vid vname
+            _ -> varLeaf vid vname resolved
+            -- TODO: Check how exactly a function of no args, as opposed to a var, would be represented?
+            -- There was some discussion of this at a meeting, but can't remember exactly what was said
+            
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
@@ -330,9 +334,8 @@ defaultUBoolVarValue = V.UnknownV
 defaultUBoolVarCanInline :: Bool
 defaultUBoolVarCanInline = False
 
-leafFromResolved :: V.ID -> Resolved -> Viz IRExpr
-leafFromResolved vid resolved = do
-  let vname = mkPrettyVizName resolved
+varLeaf :: V.ID -> V.Name -> Resolved -> Viz IRExpr
+varLeaf vid vname resolved = do
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
@@ -415,9 +418,9 @@ inlineExpr :: VizState -> Int -> Decide Resolved -> Decide Resolved
 inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resolved)) replace
   where
     replace :: Expr Resolved -> Expr Resolved
-    replace expr = 
-      if isRefOfTarget expr 
-      then 
+    replace expr =
+      if isRefOfTarget expr
+      then
       case lookupDefForInlining vs target of
         Just definiens -> definiens
         Nothing -> error "Programmer error: either isRefOfTarget has false positives or we aren't recording all the definienda"
@@ -425,7 +428,7 @@ inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resol
 
     isRefOfTarget :: Expr Resolved -> Bool
     isRefOfTarget = \ case
-      App _ resolved _args -> 
+      App _ resolved _args ->
         case resolved of
           Ref _ uniq _ -> uniq.unique == target
           _            -> False

@@ -42,14 +42,14 @@
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'True' as const,
+              value: 'TrueV' as const,
               id: { id: 1 },
               name: { label: 'eats', unique: 2 },
               canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'Unknown' as const,
+              value: 'UnknownV' as const,
               id: { id: 2 },
               name: {
                 label: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
@@ -62,7 +62,7 @@
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 4 },
           name: { label: 'swims', unique: 4 },
           canInline: false,
@@ -110,14 +110,14 @@
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'False' as const,
+              value: 'FalseV' as const,
               id: { id: 1 },
               name: { label: 'flies', unique: 6 },
               canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'True' as const,
+              value: 'TrueV' as const,
               id: { id: 2 },
               name: { label: 'runs', unique: 7 },
               canInline: false,
@@ -127,14 +127,14 @@
               args: [
                 {
                   $type: 'UBoolVar' as const,
-                  value: 'Unknown' as const,
+                  value: 'UnknownV' as const,
                   id: { id: 3 },
                   name: { label: 'swims', unique: 8 },
                   canInline: false,
                 },
                 {
                   $type: 'UBoolVar' as const,
-                  value: 'True' as const,
+                  value: 'TrueV' as const,
                   id: { id: 4 },
                   name: { label: 'dives', unique: 9 },
                   canInline: false,
@@ -147,28 +147,28 @@
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 7 },
           name: { label: 'jumps', unique: 10 },
           canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'False' as const,
+          value: 'FalseV' as const,
           id: { id: 8 },
           name: { label: 'jogs', unique: 11 },
           canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'False' as const,
+          value: 'FalseV' as const,
           id: { id: 9 },
           name: { label: 'reads', unique: 12 },
           canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 10 },
           name: { label: 'writes', unique: 13 },
           canInline: false,
@@ -178,14 +178,14 @@
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'Unknown' as const,
+              value: 'UnknownV' as const,
               id: { id: 11 },
               name: { label: 'sketches', unique: 14 },
               canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'False' as const,
+              value: 'FalseV' as const,
               id: { id: 12 },
               name: { label: 'paints', unique: 15 },
               canInline: false,
@@ -195,7 +195,7 @@
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 14 },
           name: { label: 'codes', unique: 16 },
           canInline: false,

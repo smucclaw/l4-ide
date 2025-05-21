@@ -4,6 +4,8 @@ import type { Name } from '@repo/viz-expr'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
+import TrueExprSFNode from './sf-custom-nodes/true-expr.svelte'
+import FalseExprSFNode from './sf-custom-nodes/false-expr.svelte'
 import UBoolVarSFNode from './sf-custom-nodes/ubool-var.svelte'
 import AppSFNode from './sf-custom-nodes/app.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
@@ -63,6 +65,8 @@ export const notEndNodeType = 'notEndNode' as const
 export const sourceNoAnnoNodeType = 'sourceNoAnnoNode' as const
 export const sourceWithOrAnnoNodeType = 'sourceWithOrAnnoNode' as const
 export const sinkNodeType = 'sinkNode' as const
+export const trueExprNodeType = 'trueExprNode' as const
+export const falseExprNodeType = 'falseExprNode' as const
 
 export type SFNode<T extends string> = SF.Node & { type: T }
 function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
@@ -72,6 +76,13 @@ function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
 export const isBoolVarSFNode = (
   node: SF.Node
 ): node is SFNode<typeof uBoolVarNodeType> => isSFNode(node, uBoolVarNodeType)
+
+export const isTrueExprSFNode = (
+  node: SF.Node
+): node is SFNode<typeof trueExprNodeType> => isSFNode(node, trueExprNodeType)
+export const isFalseExprSFNode = (
+  node: SF.Node
+): node is SFNode<typeof falseExprNodeType> => isSFNode(node, falseExprNodeType)
 
 export const isSFAppNode = (node: SF.Node): node is SFAppNode =>
   isSFNode(node, appNodeType)
@@ -103,6 +114,8 @@ export const sfNodeTypes: SF.NodeTypes = {
   [sourceNoAnnoNodeType]: SourceSFNode,
   [sourceWithOrAnnoNodeType]: SourceSFNode,
   [sinkNodeType]: SinkSFNode,
+  [trueExprNodeType]: TrueExprSFNode,
+  [falseExprNodeType]: FalseExprSFNode,
 }
 
 /************************************************
@@ -117,6 +130,10 @@ export interface AppDisplayerProps {
 
 export interface UBoolVarDisplayerProps {
   data: UBoolVarDisplayerData
+}
+
+export interface BoolLitDisplayerProps {
+  data: BoolLitDisplayerData
 }
 
 export interface BundlingNodeDisplayerProps {
@@ -146,6 +163,8 @@ export interface UBoolVarDisplayerData extends LadderSFNodeData {
   name: Name
   canInline: boolean
 }
+
+export type BoolLitDisplayerData = LadderSFNodeData
 
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {
   /** Currently used for the explanatory labels */
