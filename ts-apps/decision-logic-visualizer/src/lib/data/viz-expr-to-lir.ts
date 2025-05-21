@@ -16,6 +16,8 @@ import {
   LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
   AppLirNode,
+  TrueExprLirNode,
+  FalseExprLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -235,6 +237,18 @@ function transform(
       const combinedEnv = combineEnvs([env, ...childEnvs]).set(app.id, appGraph)
 
       return { graph: appGraph, vizExprToLirGraph: combinedEnv }
+    })
+    .with({ $type: 'TrueE' }, (trueExpr) => {
+      const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
+      const vizExprToLirGraph = new Map(env).set(trueExpr.id, graph)
+      return { graph, vizExprToLirGraph }
+    })
+    .with({ $type: 'FalseE' }, (falseExpr) => {
+      const graph = vertex(
+        new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
+      )
+      const vizExprToLirGraph = new Map(env).set(falseExpr.id, graph)
+      return { graph, vizExprToLirGraph }
     })
     .exhaustive()
 }

@@ -17,9 +17,9 @@ export type UBoolVal = TrueVal | FalseVal | UnknownVal
 
 export function toUBoolVal(value: VE.UBoolValue): UBoolVal {
   return match(value)
-    .with('True', () => new TrueVal())
-    .with('False', () => new FalseVal())
-    .with('Unknown', () => new UnknownVal())
+    .with('TrueV', () => new TrueVal())
+    .with('FalseV', () => new FalseVal())
+    .with('UnknownV', () => new UnknownVal())
     .exhaustive()
 }
 
@@ -34,15 +34,15 @@ interface UBoolV {
 }
 
 export function isTrueVal(val: UBoolVal): val is TrueVal {
-  return val.$type === 'True'
+  return val.$type === 'TrueV'
 }
 
 export function isFalseVal(val: UBoolVal): val is FalseVal {
-  return val.$type === 'False'
+  return val.$type === 'FalseV'
 }
 
 export class TrueVal implements UBoolV {
-  $type: 'True' = 'True' as const
+  $type: 'TrueV' = 'TrueV' as const
   constructor() {}
 
   getClasses() {
@@ -55,7 +55,7 @@ export class TrueVal implements UBoolV {
 }
 
 export class FalseVal implements UBoolV {
-  $type: 'False' = 'False' as const
+  $type: 'FalseV' = 'FalseV' as const
   constructor() {}
 
   getClasses() {
@@ -68,11 +68,11 @@ export class FalseVal implements UBoolV {
 }
 
 export function isUnknownVal(val: UBoolVal): val is UnknownVal {
-  return val.$type === 'Unknown'
+  return val.$type === 'UnknownV'
 }
 
 export class UnknownVal implements UBoolV {
-  $type: 'Unknown' = 'Unknown' as const
+  $type: 'UnknownV' = 'UnknownV' as const
   constructor() {}
 
   getClasses() {
@@ -86,9 +86,9 @@ export class UnknownVal implements UBoolV {
 
 export function cycle(val: UBoolVal): UBoolVal {
   return match(val)
-    .with({ $type: 'True' }, () => new FalseVal())
-    .with({ $type: 'False' }, () => new UnknownVal())
-    .with({ $type: 'Unknown' }, () => new TrueVal())
+    .with({ $type: 'TrueV' }, () => new FalseVal())
+    .with({ $type: 'FalseV' }, () => new UnknownVal())
+    .with({ $type: 'UnknownV' }, () => new TrueVal())
     .exhaustive()
 }
 
@@ -108,6 +108,8 @@ export type EvUBoolVar = Omit<VE.UBoolVar, 'value'>
 export type Not = VE.Not
 export type Or = VE.Or
 export type And = VE.And
+export type TrueE = VE.TrueE
+export type FalseE = VE.FalseE
 
 export function veExprToEvExpr(expr: IRExpr): Expr {
   return match(expr)

@@ -246,6 +246,15 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   opacity: var(--opacity-ladder-nonviable);
 }
 
+@utility bool-lit-node-border {
+  /* dashed border to hint at how this is a constant */
+  border: var(--ladder-node-border-width) dashed var(--color-primary);
+  border-radius: var(
+    --ladder-node-border-radius,
+    var(--ladder-node-border-radius-default)
+  );
+}
+
 /*************************************
   Other styles
 *************************************/

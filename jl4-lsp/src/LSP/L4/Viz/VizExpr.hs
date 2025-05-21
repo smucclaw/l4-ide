@@ -70,7 +70,7 @@ instance HasCodec ID where
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
 instance HasCodec UBoolValue where
-  codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
+  codec = stringConstCodec $ NE.fromList [(FalseV, "FalseV"), (TrueV, "TrueV"), (UnknownV, "UnknownV")]
 
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688

@@ -670,6 +670,78 @@ export type LadderLirNode =
   | NotStartLirNode
   | NotEndLirNode
   | BundlingFlowLirNode
+  | TrueExprLirNode
+  | FalseExprLirNode
+
+/**********************************************
+        Bool Lit Lir Nodes
+***********************************************/
+
+export function isTrueExprLirNode(
+  node: LadderLirNode
+): node is TrueExprLirNode {
+  return node instanceof TrueExprLirNode
+}
+
+export function isFalseExprLirNode(
+  node: LadderLirNode
+): node is FalseExprLirNode {
+  return node instanceof FalseExprLirNode
+}
+
+export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  #name: Name
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    name: Name,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.#name = name
+  }
+
+  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
+    return [...super.getAllClasses(context), 'false-val']
+  }
+
+  toPretty(_context: LirContext) {
+    return this.#name.label
+  }
+
+  toString(): string {
+    return 'FALSE_EXPR_LIR_NODE'
+  }
+}
+
+export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+  #name: Name
+
+  constructor(
+    nodeInfo: LirNodeInfo,
+    name: Name,
+    position: Position = DEFAULT_INITIAL_POSITION
+  ) {
+    super(nodeInfo, position)
+    this.#name = name
+  }
+
+  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
+    return [...super.getAllClasses(context), 'true-val']
+  }
+
+  toPretty(_context: LirContext) {
+    return this.#name.label
+  }
+
+  toString(): string {
+    return 'TRUE_EXPR_LIR_NODE'
+  }
+}
+
+/**********************************************
+        UBoolVar Lir Node
+***********************************************/
 
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
@@ -748,6 +820,10 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   }
 }
 
+/**********************************************
+        Not related Lir Nodes
+***********************************************/
+
 export function isNotStartLirNode(
   node: LadderLirNode
 ): node is NotStartLirNode {
@@ -792,6 +868,10 @@ export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
     return 'NOT_END_LIR_NODE'
   }
 }
+
+/**********************************************
+        App Lir Node
+***********************************************/
 
 /** Temporarily restricting args to something really simple. */
 export type AppArgLirNode = UBoolVarLirNode

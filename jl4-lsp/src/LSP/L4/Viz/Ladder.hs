@@ -324,9 +324,8 @@ defaultUBoolVarValue = V.UnknownV
 defaultUBoolVarCanInline :: Bool
 defaultUBoolVarCanInline = False
 
-leafFromResolved :: V.ID -> Resolved -> Viz IRExpr
-leafFromResolved vid resolved = do
-  let vname = mkPrettyVizName resolved
+varLeaf :: V.ID -> V.Name -> Resolved -> Viz IRExpr
+varLeaf vid vname resolved = do
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
