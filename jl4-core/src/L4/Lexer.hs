@@ -15,7 +15,7 @@ import Data.Char hiding (Space)
 import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
-import Text.Megaparsec.State
+import Text.Megaparsec.State ( initialPosState )
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import L4.Parser.SrcSpan
 

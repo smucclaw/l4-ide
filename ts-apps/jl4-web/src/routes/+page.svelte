@@ -19,7 +19,6 @@
     type FunDeclLirNode,
     LadderEnv,
     VizDeclLirSource,
-    LADDER_VIZ_ROOT_TYPE,
   } from '@repo/decision-logic-visualizer'
   import {
     makeVizInfoDecoder,
@@ -51,6 +50,7 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
+  const LADDER_VIZ_ROOT_TYPE = 'VizFunDecl'
   let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
   let ladderEnv: LadderEnv | undefined = $state(undefined)
 
@@ -271,7 +271,8 @@
                 ladderEnv = LadderEnv.make(
                   lirRegistry,
                   renderLadderInfo.verDocId,
-                  backendApi
+                  backendApi,
+                  LADDER_VIZ_ROOT_TYPE
                 )
 
                 funDeclLirNode = await VizDeclLirSource.toLir(

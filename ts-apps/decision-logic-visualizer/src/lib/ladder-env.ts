@@ -13,20 +13,27 @@ import { setContext, getContext } from 'svelte'
 import type { VersionedDocId } from '@repo/viz-expr'
 
 export class LadderEnv {
-  /** Initialize the Ladder Env -- which includes setting the fun decl lir node in the Lir Registry */
+  /** Initialize the Ladder Env */
   static make(
     lirRegistry: LirRegistry,
     versionedDocId: VersionedDocId,
-    backendApi: LadderBackendApi
+    backendApi: LadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE: LirRootType
   ) {
     const l4Connection = new L4Connection(backendApi)
-    return new LadderEnv(lirRegistry, l4Connection, versionedDocId)
+    return new LadderEnv(
+      lirRegistry,
+      l4Connection,
+      versionedDocId,
+      LADDER_VIZ_ROOT_TYPE
+    )
   }
 
   private constructor(
     private readonly lirRegistry: LirRegistry,
     private readonly l4Connection: L4Connection,
-    private readonly versionedDocId: VersionedDocId
+    private readonly versionedDocId: VersionedDocId,
+    private readonly LADDER_VIZ_ROOT_TYPE: LirRootType
   ) {}
 
   getLirRegistry(): LirRegistry {
@@ -43,7 +50,7 @@ export class LadderEnv {
   getTopFunDeclLirNode(context: LirContext): FunDeclLirNode {
     return this.lirRegistry.getRoot(
       context,
-      LADDER_VIZ_ROOT_TYPE
+      this.LADDER_VIZ_ROOT_TYPE
     ) as FunDeclLirNode
   }
 
@@ -66,10 +73,3 @@ const ladderEnvKeyForSvelteContext = 'ladderEnv'
 export function useLadderEnv(): LadderEnv {
   return getContext(ladderEnvKeyForSvelteContext) as LadderEnv
 }
-
-/*********************************
-      Ladder Viz Root Type
-**********************************/
-
-/** Lir registry key for the topmost FunDecl Lir Node */
-export const LADDER_VIZ_ROOT_TYPE: LirRootType = 'VizFunDecl'

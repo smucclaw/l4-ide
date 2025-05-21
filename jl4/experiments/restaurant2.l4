@@ -17,17 +17,17 @@ GIVEN patron   IS AN Actor
 GIVETH CONTRACT Actor Action
 `entry point` MEANS
          -- [TODO] how do we allow the patron to order an arbitrary nonnegative number of beers?
-            PARTY     patron  MUST order "beer"   1              WITHIN 10 HENCE `entry point` patron bar (addToTab 1 "beer")
-      ROR   PARTY     patron  MUST order "potato" 1              WITHIN 10 HENCE `entry point` patron bar (addToTab 1 "potato")
-      ROR   PARTY     patron  MUST getBill                       WITHIN 10 HENCE
-             PARTY    bar     MUST showBill (`final tab`'s bill) WITHIN 10 HENCE
-              PARTY   patron  MUST pay      (`final tab`'s bill) WITHIN 10 HENCE FULFILLED
+            PARTY     patron  MUST order "beer"   1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "beer")
+      ROR   PARTY     patron  MUST order "potato" 1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "potato")
+      ROR   PARTY     patron  MUST getBill                       WITHIN 20 HENCE
+             PARTY    bar     MUST showBill (`final tab`'s bill) WITHIN 20 HENCE
+              PARTY   patron  MUST pay      (`final tab`'s bill) WITHIN 20 HENCE FULFILLED
 
   WHERE
     `final tab` MEANS `Symbol Table` WITH
         bill          IS      symtab's bill
-                         PLUS symtab's beers    * 10
-                         PLUS symtab's potatoes *  2
+                         PLUS (symtab's beers    * 10)
+                         PLUS (symtab's potatoes *  2)
         beers         IS symtab's beers
         potatoes      IS symtab's potatoes
         log           IS "bar printed the bill for review" FOLLOWED BY symtab's log
@@ -99,14 +99,15 @@ eatAtJoes MEANS Bar OF "EatAtJoes, Inc."
 hungryHippo MEANS NaturalPerson OF "John Doe"
 
 
--- mouseover the following to see that after hungryHippo orders a beer, the contract is not complete, because there's more to the story.
+-- mouseover the following to see that after hungryHippo orders a beer and a potato, and then pays, everything is done.
 
 #CONTRACT `entry point` hungryHippo eatAtJoes startState AT 1 WITH
-  PARTY hungryHippo DOES order "beer"   1 AT 2
-  PARTY hungryHippo DOES order "potato" 1 AT 12
-  PARTY hungryHippo DOES getBill          AT 20
-  PARTY eatAtJoes   DOES showBill 12      AT 30
-  PARTY hungryHippo DOES pay 12           AT 40
+  PARTY hungryHippo DOES order "potato"   1 AT 2
+  PARTY hungryHippo DOES order "beer"     1 AT 4
+  PARTY hungryHippo DOES order "potato"   1 AT 6
+  PARTY hungryHippo DOES getBill            AT 10
+  PARTY eatAtJoes   DOES showBill 12        AT 20 -- you get a comped potato!
+  PARTY hungryHippo DOES pay      12        AT 30
 
 -- if one of the steps is missing, the residual contract will not be FULFILLED;
 -- it will simply be the next step. Well, it will be all the steps, but the mouseover

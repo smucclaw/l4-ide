@@ -19,7 +19,6 @@
     LadderFlow,
     type FunDeclLirNode,
     VizDeclLirSource,
-    LADDER_VIZ_ROOT_TYPE,
   } from '@repo/decision-logic-visualizer'
 
   /**************************
@@ -34,6 +33,8 @@
       Make FunDeclLirNode
       and set Lir Root
   ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE = 'VizFunDecl'
 
   // To get around how calling onMount with an async function is not ideal
   // (There are also other benefits to using an #await block)
@@ -86,7 +87,8 @@
         const ladderEnv = LadderEnv.make(
           lirRegistry,
           renderLadderInfo.verDocId,
-          backendApi
+          backendApi,
+          LADDER_VIZ_ROOT_TYPE
         )
         renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(
           renderLadderInfo,

@@ -1,0 +1,9 @@
+§ `Annotations`
+@ref-src citations.csv
+@ref-map foo bar baz https://example.com
+GIVEN x [The other parameter is %y%] IS A BOOLEAN, y IS A BOOLEAN @ref foo bar baz
+GIVETH A BOOLEAN @ref 1981/61 sec. 2
+DECIDE xor x y IS  @ref SG-c-2025-sghcf-14
+     x AND NOT y <<SG-c-2025-sghcf-12>>
+  OR NOT x AND y @nlg Locally overwrite the annotation for %y%
+

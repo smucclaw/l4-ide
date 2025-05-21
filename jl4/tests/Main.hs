@@ -7,11 +7,9 @@ import qualified L4.Annotation as JL4
 import qualified L4.Evaluate as JL4
 import qualified L4.EvaluateLazy as JL4Lazy
 import qualified L4.Nlg as Nlg
-import qualified L4.Parser as Parser
 import qualified L4.Parser.SrcSpan as JL4
 import qualified L4.Print as Print
 import L4.Syntax
-import L4.TypeCheck (CheckResult(..))
 import qualified L4.TypeCheck as JL4
 
 import qualified Paths_jl4
@@ -34,6 +32,8 @@ import qualified Data.CharSet as CharSet
 import qualified System.OsPath as OsPath
 import LSP.L4.Rules
 
+import qualified SemanticTokens
+
 main :: IO ()
 main = do
   dataDir <- Paths_jl4.getDataDir
@@ -44,10 +44,12 @@ main = do
   legalFiles <- sort <$> globDir1 (compile "legal/**/*.l4") examplesRoot
   tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
+  semanticTokenFiles <- sort <$> globDir1 (compile "lsp/semantic-tokens/**/*.l4") examplesRoot
   hspec do
     describe "ok files" $ tests (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
     describe "tc fails" $ tests (False, True) tcFailsFiles examplesRoot
     describe "nlg fails" $ tests (True, False) nlgFailsFiles examplesRoot
+    describe "lsp" $ SemanticTokens.semanticTokenTests semanticTokenFiles examplesRoot
   where
     tests (tcOk, nlgOk) files root =
       forM_ files $ \inputFile -> do
@@ -166,11 +168,6 @@ checkFile isOk file = do
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
   evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
   renderMessage (r, txt) = cliErrorMessage r txt
-
-data CliError
-  = CliParserError FilePath (NonEmpty Parser.PError)
-  | CliCheckError FilePath CheckResult
-  deriving stock (Show, Eq)
 
 cliErrorMessage :: Maybe JL4.SrcRange -> [Text] -> Text
 cliErrorMessage mrange msg =

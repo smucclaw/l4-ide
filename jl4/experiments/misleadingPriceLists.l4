@@ -10,16 +10,19 @@ IMPORT prelude
 
 § `Alcohol Regulations`
 
+§§ `Situationism`
+
 §§ `Misleading Price Lists`
 
-GIVEN prem       IS A Premises
+// https://github.com/smucclaw/l4-ide/issues/439
+GIVEN prem       IS A  Premises
       officer    IS AN Enforcement Officer
-      proprietor IS A Proprietor
-      count      IS A NUMBER
-IF   `a price list for alcohol is displayed on` prem
- AND `registered as a hotel` prem
- AND `believes that the price list is misleading to customers` officer
-PARTY officer
+      proprietor IS A  Proprietor
+      count      IS A  NUMBER
+IF        `a price list for alcohol is displayed on` prem
+ AND      `registered as a hotel` prem
+PARTY     officer
+PROVIDED `believes that the price list is misleading to customers` officer
   MAY NOTIFY
       TO    proprietor
       WITH  contents IS "warning: price list is misleading to customers"

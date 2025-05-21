@@ -6,7 +6,6 @@ when trying to make ladder diagrams. -->
   import type { LadderFlowDisplayerProps } from './flow-props.js'
   import FlowBase from './flow-base.svelte'
   import LadderEnvProvider from '$lib/displayers/ladder-env-provider.svelte'
-  import { LADDER_VIZ_ROOT_TYPE } from '$lib/ladder-env.js'
 
   const { context, node, env }: LadderFlowDisplayerProps = $props()
 
@@ -15,9 +14,9 @@ when trying to make ladder diagrams. -->
   // Check preconditions
   // TODO: Think more about whether we should really require consumers to set the lir root in the future;
   // but for now, it's enough to just check that it's been done.
-  if (env.getLirRegistry().getRoot(context, LADDER_VIZ_ROOT_TYPE) !== node) {
+  if (env.getTopFunDeclLirNode(context) !== node) {
     throw new Error(
-      'Consumer of the visualizer lib must set LADDER_VIZ_ROOT_TYPE = funDeclLirNode in the LirRegistry'
+      'Consumer of the visualizer lib must set funDeclNode in the LirRegistry and pass the key in to LadderEnv'
     )
   }
 
