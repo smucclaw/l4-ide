@@ -418,9 +418,7 @@ DECIDE \`is a British citizen (variant)\` IS
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#await renderLadderPromise}
-        <p>Loading Ladder Diagram...</p>
-      {:then ladder}
+      {#await renderLadderPromise then ladder}
         {#key ladder.funDeclLirNode}
           <div class="slightly-shorter-than-full-viewport-height pb-1">
             <LadderFlow
