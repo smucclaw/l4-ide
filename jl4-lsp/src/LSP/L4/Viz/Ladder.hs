@@ -283,13 +283,17 @@ translateExpr False = go
           withLocalDecls ds $
             go e' -- TODO: lossy
 
-        -- TODO: Should handle BoolLits differently too
         -- 'var'
         App _ resolved [] -> do
           vid <- getFresh
-          prepEvalAppMaker vid e
-          leafFromResolved vid resolved
-
+          let vname = mkPrettyVizName resolved
+          case getUnique resolved of
+            u | u == TC.trueUnique  -> pure $ V.TrueE vid vname
+              | u == TC.falseUnique -> pure $ V.FalseE vid vname
+            _ -> varLeaf vid vname resolved
+            -- TODO: Check how exactly a function of no args, as opposed to a var, would be represented?
+            -- There was some discussion of this at a meeting, but can't remember exactly what was said
+            
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
