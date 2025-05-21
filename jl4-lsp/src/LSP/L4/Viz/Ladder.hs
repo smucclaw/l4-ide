@@ -330,9 +330,8 @@ defaultUBoolVarValue = V.UnknownV
 defaultUBoolVarCanInline :: Bool
 defaultUBoolVarCanInline = False
 
-leafFromResolved :: V.ID -> Resolved -> Viz IRExpr
-leafFromResolved vid resolved = do
-  let vname = mkPrettyVizName resolved
+varLeaf :: V.ID -> V.Name -> Resolved -> Viz IRExpr
+varLeaf vid vname resolved = do
   canInline <- case resolved of
     Ref _ uniq _ -> hasDefForInlining uniq
     _            -> pure False
@@ -415,9 +414,9 @@ inlineExpr :: VizState -> Int -> Decide Resolved -> Decide Resolved
 inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resolved)) replace
   where
     replace :: Expr Resolved -> Expr Resolved
-    replace expr = 
-      if isRefOfTarget expr 
-      then 
+    replace expr =
+      if isRefOfTarget expr
+      then
       case lookupDefForInlining vs target of
         Just definiens -> definiens
         Nothing -> error "Programmer error: either isRefOfTarget has false positives or we aren't recording all the definienda"
@@ -425,7 +424,7 @@ inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resol
 
     isRefOfTarget :: Expr Resolved -> Bool
     isRefOfTarget = \ case
-      App _ resolved _args -> 
+      App _ resolved _args ->
         case resolved of
           Ref _ uniq _ -> uniq.unique == target
           _            -> False
