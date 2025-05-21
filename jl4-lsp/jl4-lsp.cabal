@@ -49,7 +49,6 @@ library
     mtl,
     monoidal-containers,
     optics,
-    hw-fingertree,
     prettyprinter,
     safe-exceptions,
     stm,

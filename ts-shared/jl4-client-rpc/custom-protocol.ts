@@ -15,8 +15,18 @@
  */
 
 import { NotificationType, RequestType } from 'vscode-jsonrpc'
-import { EvalAppRequestParams, EvalAppResult } from '@repo/viz-expr'
-export { EvalAppRequestParams, EvalAppResult }
+import {
+  EvalAppRequestParams,
+  EvalAppResult,
+  InlineExprsRequestParams,
+  InlineExprsSuccess,
+} from '@repo/viz-expr'
+export {
+  EvalAppRequestParams,
+  EvalAppResult,
+  InlineExprsRequestParams,
+  InlineExprsSuccess,
+}
 
 /****************************************
         L4 RPC Protocol Types
@@ -54,3 +64,11 @@ export const EvalAppRequestType = makeL4RpcRequestType<
   EvalAppRequestParams,
   EvalAppResult
 >('l4/evalApp')
+
+/**
+ * Request type for inlining exprs
+ */
+export const InlineExprsRequestType = makeL4RpcRequestType<
+  InlineExprsRequestParams,
+  InlineExprsSuccess
+>('l4/inlineExprs')

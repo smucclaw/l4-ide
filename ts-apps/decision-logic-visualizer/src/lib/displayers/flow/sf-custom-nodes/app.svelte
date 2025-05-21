@@ -7,6 +7,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { Handle } from '@xyflow/svelte'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+
   let { data }: AppDisplayerProps = $props()
 
   const ladderGraph = useLadderEnv()

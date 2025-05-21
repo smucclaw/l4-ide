@@ -87,6 +87,7 @@ import L4.TypeCheck.Environment as X
 import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
+import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
 import Control.Monad.Extra (mapMaybeM)
@@ -100,6 +101,8 @@ mkInitialCheckState substitution =
   MkCheckState
     { substitution
     , supply       = 0
+    , infoMap      = IV.empty
+    , nlgMap       = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -153,6 +156,8 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , substitution = s'.substitution
               , environment = env.environment
               , entityInfo = env.entityInfo
+              , infoMap = s'.infoMap
+              , nlgMap = s'.nlgMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
@@ -470,7 +475,7 @@ checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann 
     (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing) <$> ns)) mgiveth)
 checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTermAppFormTypeSigConsistency'
-    (MkAppForm aann n (getName <$> filter isTerm otns) maka)
+    (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
     tysig
 checkTermAppFormTypeSigConsistency appForm tysig =
   checkTermAppFormTypeSigConsistency' appForm tysig
@@ -511,7 +516,7 @@ checkTypeAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann 
     (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno))) <$> ns)) mgiveth)
 checkTypeAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTypeAppFormTypeSigConsistency'
-    (MkAppForm aann n (getName <$> otns) maka)
+    (MkAppForm aann n (clearSourceAnno . getName <$> otns) maka)
     tysig
 checkTypeAppFormTypeSigConsistency appForm tysig =
   checkTypeAppFormTypeSigConsistency' appForm tysig
@@ -644,7 +649,7 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
 inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
-  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
+  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (clearSourceAnno $ getOriginal (view appFormHead rappForm)) tns)
   let
     td = RecordDecl ann (Just mrcon) rtns
   pure (td, extend)
@@ -758,17 +763,27 @@ resolveType n = do
   case mapMaybe proc options of
     [] -> do
       let kind = 0
-      rn <- outOfScope (setAnnResolvedKind kind n) (Type emptyAnno)
+      n' <- setAnnResolvedKind kind n
+      rn <- outOfScope n' (Type emptyAnno)
       pure (rn, kind)
-    [x] -> pure x
-    xs -> anyOf xs <|> do
+    [x] -> x
+    xs -> choose xs <|> do
       let kind = 0
-      rn <- ambiguousType (setAnnResolvedKind kind n) xs
+      n' <- setAnnResolvedKind kind n
+      xs' <- sequenceA xs
+      rn <- ambiguousType n' xs'
       pure (rn, kind)
   where
-    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Kind)
-    proc (u, o, KnownTypeVariable)       = let kind = 0 in Just (Ref (setAnnResolvedKind kind n) u o, kind)
-    proc (u, o, KnownType kind _ _)      = Just (Ref (setAnnResolvedKind kind n) u o, kind)
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Check (Resolved, Kind))
+    proc (u, o, KnownTypeVariable)       =
+      let
+        kind = 0
+      in Just do
+        n' <- setAnnResolvedKind kind n
+        pure (Ref n' u o, kind)
+    proc (u, o, KnownType kind _ _)      = Just do
+      n' <- setAnnResolvedKind kind n
+      pure (Ref n' u o, kind)
     proc _                               = Nothing
 
 class HasName a where
@@ -883,12 +898,10 @@ ensureDistinct ndc ns = do
 checkExpr :: ExpectationContext -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr ec (IfThenElse ann e1 e2 e3) t = softprune $ do
   re <- checkIfThenElse ec ann e1 e2 e3 t
-  let re' = setAnnResolvedType t re
-  pure re'
+  setAnnResolvedType t Nothing re
 checkExpr ec (Consider ann e branches) t = softprune $ do
   re <- checkConsider ec ann e branches t
-  let re' = setAnnResolvedType t re
-  pure re'
+  setAnnResolvedType t Nothing re
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
@@ -905,8 +918,7 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     -- We have to immediately resolve 'Nlg' annotations, as 'ds'
     -- brings new bindings into scope.
     nlgExpr re
-  let re' = setAnnResolvedType t (Where ann re rds)
-  pure re'
+  setAnnResolvedType t Nothing (Where ann re rds)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
@@ -941,7 +953,7 @@ checkConsider ec ann e branches t = do
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
   (re, te) <- inferExpr' g
-  let re' = setAnnResolvedType te re
+  re' <- setAnnResolvedType te Nothing re
   pure (re', te)
 
 
@@ -1200,10 +1212,10 @@ checkPattern ec p t = errorContext (WhileCheckingPattern p) do
 -- PatApps that are not in scope with PatVar applications here in the
 -- scope and type checker.
 inferPattern :: Pattern Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
-inferPattern g@(PatVar ann n)      = errorContext (WhileCheckingPattern g) do
-  inferPatternVar ann n
+inferPattern g@(PatVar _ann n)      = errorContext (WhileCheckingPattern g) do
+  inferPatternVar n
 inferPattern g@(PatApp ann n [])   = errorContext (WhileCheckingPattern g) do
-  inferPatternApp ann n [] `orElse` inferPatternVar ann n
+  inferPatternApp ann n [] `orElse` inferPatternVar n
 inferPattern g@(PatApp ann n ps)   = errorContext (WhileCheckingPattern g) do
   inferPatternApp ann n ps
 inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
@@ -1213,14 +1225,19 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
 
   -- Allows us to hover over the 'FOLLOWED BY',
   -- giving us a type signature.
-  let patCons = setAnnResolvedType listType $ PatCons ann rp1 rp2
+  patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
 
-inferPatternVar :: Anno -> Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
-inferPatternVar ann n = do
+inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
+inferPatternVar n = do
   rn <- def n
   rt <- fresh (NormalName "p")
-  pure (PatVar ann rn, rt, [makeKnown rn (KnownTerm rt Local)])
+  let
+    patVar =
+      PatVar
+        (mkAnno [mkHoleWithSrcRange rn])
+        rn
+  pure (patVar, rt, [makeKnown rn (KnownTerm rt Local)])
 
 inferPatternApp :: Anno -> Name -> [Pattern Name] -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternApp ann n ps = do
@@ -1461,6 +1478,7 @@ inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
             <*> traverse resolvedType declHead.rappForm
             <*> pure rt
             >>= nlgDeclare
+
           pure $ Just MkDeclChecked
             { payload = declare
             , publicNames = extendTySynonym : extendsTyDecl
@@ -1584,15 +1602,15 @@ scanFunSigLocalDecl = \ case
   LocalAssume _ p -> scanFunSigAssume p
 
 scanFunSigDecide :: Decide Name -> Check FunTypeSig
-scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
+scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
   errorContext (WhileCheckingDecide (getName appForm)) do
     (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
       inferTermAppForm rappForm rtysig
-    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    dty <- setAnnResolvedType rt (Just Computable) d
     name <- withQualified (appFormHeads rappForm) ce
     pure $ MkFunTypeSig
-      { anno = ann'
+      { anno = getAnno dty
       , rtysig
       , rappForm
       , resultType = result
@@ -1601,18 +1619,18 @@ scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
-scanFunSigAssume (MkAssume _   _     _       (Just (Type _tann))) = pure Nothing
-scanFunSigAssume (MkAssume ann tysig appForm _mt) = do
+scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
+scanFunSigAssume a@(MkAssume _ tysig appForm _mt) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
     (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
     -- check that the given result type matches the result type in the type signature
 
-    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
     pure $ Just $ MkFunTypeSig
-      { anno = ann'
+      { anno = getAnno aty
       , rtysig
       , rappForm = rappForm
       , resultType = result

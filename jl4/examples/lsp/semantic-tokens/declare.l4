@@ -1,0 +1,45 @@
+§ `Algebraic data types`
+
+DECLARE List OF a
+  IS ONE OF
+    Nil
+    Cons HAS
+      head IS AN a
+      tail IS A List OF a
+
+DECLARE Tree a
+  IS ONE OF
+    Leaf HAS value IS AN a
+    Node HAS left IS A Tree a
+             right IS A Tree a
+
+DECLARE Choice OF a, b
+  IS ONE OF
+    Left  HAS payload IS AN a
+    Right HAS payload IS A  b
+
+DECLARE PAIR OF a, b
+  HAS fst IS AN a
+      snd IS A  b
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+DECLARE PAIR2
+  HAS fst IS AN a
+      snd IS A  b
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+DECLARE PAIR3 a b
+  HAS fst IS AN a
+      snd IS A  b
+
+GIVEN a IS A TYPE, b IS A TYPE
+DECLARE PAIR4 a b HAS fst IS AN a, snd IS A  b
+
+DECLARE Bool IS BOOLEAN
+
+DECLARE MyList1 a IS LIST OF a
+
+GIVEN a IS A TYPE
+DECLARE MyList2 a IS LIST OF a

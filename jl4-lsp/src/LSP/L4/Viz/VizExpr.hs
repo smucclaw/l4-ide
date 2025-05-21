@@ -38,7 +38,7 @@ data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | UBoolVar ID Name UBoolValue
+  | UBoolVar ID Name UBoolValue Bool -- ^ id name ubvalue canInline
   | App ID Name [IRExpr]
   deriving (Show, Eq, Generic)
 
@@ -85,6 +85,7 @@ instance HasCodec FunDecl where
       <*> requiredField' "body"   .= view #body
 
 instance HasCodec IRExpr where
+  -- TODO: Look into whether discriminatedUnionCodec really is better than the typeField approach here
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
     where
       -- Encoder: maps Haskell constructors to (tag, codec)
@@ -92,7 +93,7 @@ instance HasCodec IRExpr where
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
-        UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
+        UBoolVar uid name value canInline -> ("UBoolVar", mapToEncoder (uid, name, value, canInline) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
@@ -104,8 +105,8 @@ instance HasCodec IRExpr where
             ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec)),
             ("App", ("App", mapToDecoder mkAppExpr appExprCodec))
           ]
-          
-      mkUBoolVar (uid, name, value) = UBoolVar uid name value
+
+      mkUBoolVar (uid, name, value, canInline) = UBoolVar uid name value canInline
       mkAppExpr (uid, name, args) = App uid name args
 
       -- Codec for 'And' and 'Or' expressions.
@@ -120,10 +121,11 @@ instance HasCodec IRExpr where
           <*> requiredField' "negand" .= snd
 
       uBoolVarCodec =
-        (,,)
+        (,,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
+          <*> requiredField' "canInline" .= view _4
 
       appExprCodec =
         (,,)

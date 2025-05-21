@@ -697,6 +697,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
    * in sync with what values are stored on the VarLirNodes) */
   #value: UBoolVal
   #name: Name
+  #canInline: boolean
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -706,6 +707,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     super(nodeInfo, position)
     this.#value = toUBoolVal(originalExpr.value)
     this.#name = originalExpr.name
+    this.#canInline = originalExpr.canInline
   }
 
   getLabel(_context: LirContext) {
@@ -720,6 +722,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return {
       name: this.#name,
       classes: this.getAllClasses(context),
+      canInline: this.#canInline,
     }
   }
 
