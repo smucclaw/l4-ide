@@ -567,7 +567,7 @@ withVizRequestContext recorder method params ide handlerKont = do
       handlerKont decodedParams tcRes recentViz
 
 -------------------------------------------------------------------------
--- Helpers
+-- Helpers for withVizRequestContext
 -------------------------------------------------------------------------
 
 {- | Helper: Check that the client's verTxtDocId matches the server's.
