@@ -248,11 +248,8 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 
 @utility bool-lit-node-border {
   /* dashed border to hint at how this is a constant */
-  border: var(--ladder-node-border-width) dashed var(--color-primary);
-  border-radius: var(
-    --ladder-node-border-radius,
-    var(--ladder-node-border-radius-default)
-  );
+  border: calc(var(--ladder-node-border-width) - 1px) solid var(--color-primary);
+  border-radius: 2px;
 }
 
 /*************************************
