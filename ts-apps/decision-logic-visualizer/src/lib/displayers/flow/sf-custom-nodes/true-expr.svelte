@@ -17,7 +17,7 @@
   ]}
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="label-wrapper-for-content-bearing-sf-node font-extralight">
+  <div class="label-wrapper-for-content-bearing-sf-node">
     {(data.context.get(data.originalLirId) as TrueExprLirNode).toPretty(
       data.context
     )}
