@@ -8,6 +8,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { Handle } from '@xyflow/svelte'
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
+  import { cycle } from '$lib/eval/type.js'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -25,9 +26,23 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   ]}
 >
   <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="label-wrapper-for-content-bearing-sf-node cursor-pointer">
+  <button
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    onclick={() => {
+      const ladderGraph = ladderEnv
+        .getTopFunDeclLirNode(data.context)
+        .getBody(data.context)
+      const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+
+      const newValue = cycle(node.getValue(data.context))
+      ladderGraph.submitNewBinding(data.context, {
+        unique: node.getUnique(data.context),
+        value: newValue,
+      })
+    }}
+  >
     {data.name.label}
-  </div>
+  </button>
   {#if data.canInline}
     <div class="absolute bottom-1 right-1">
       <Tooltip.Provider>

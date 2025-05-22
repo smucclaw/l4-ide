@@ -25,19 +25,15 @@
     type LadderSFNode,
     sfNodeTypes,
     sfEdgeTypes,
-    isBoolVarSFNode,
     getSFNodeId,
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/eval/type.js'
+
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
-  import type {
-    UBoolVarLirNode,
-    LadderLirNode,
-  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
@@ -163,20 +159,6 @@
   /*************************************
       Other SvelteFlow event listeners
   ***************************************/
-
-  // TODO: prob better to put this in ubool-var.svelte.ts
-  const onBoolVarNodeClick: SF.NodeEventWithPointer<
-    MouseEvent | TouchEvent
-  > = async (event) => {
-    const lirId = sfNodeToLirId(event.node as LadderSFNode)
-    const varNode = context.get(lirId) as UBoolVarLirNode
-
-    const newValue = cycle(varNode.getValue(context))
-    await ladderGraph.submitNewBinding(context, {
-      unique: varNode.getUnique(context),
-      value: newValue,
-    })
-  }
 
   const onNodeDragStop: SF.NodeTargetEventWithPointer<
     MouseEvent | TouchEvent
@@ -330,9 +312,6 @@ Misc SF UI TODOs:
       fitView
       connectionLineType={ConnectionLineType.Bezier}
       defaultEdgeOptions={{ type: 'bezier', animated: false }}
-      onnodeclick={(event) => {
-        if (isBoolVarSFNode(event.node)) onBoolVarNodeClick(event)
-      }}
       onnodedragstop={onNodeDragStop}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
