@@ -3,12 +3,11 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 -->
 <script lang="ts">
   import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
-  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import { Handle } from '@xyflow/svelte'
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
   import { cycle } from '$lib/eval/type.js'
+  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -25,14 +24,14 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ...data.classes,
   ]}
 >
-  <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <button
-    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-    onclick={() => {
-      const ladderGraph = ladderEnv
-        .getTopFunDeclLirNode(data.context)
-        .getBody(data.context)
-      const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+  <WithNormalHandles>
+    <button
+      class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+      onclick={() => {
+        const ladderGraph = ladderEnv
+          .getTopFunDeclLirNode(data.context)
+          .getBody(data.context)
+        const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
       const newValue = cycle(node.getValue(data.context))
       ladderGraph.submitNewBinding(data.context, {
@@ -73,7 +72,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
       </Tooltip.Provider>
     </div>
   {/if}
-  <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
+  </WithNormalHandles>
 </div>
 
 <style>
