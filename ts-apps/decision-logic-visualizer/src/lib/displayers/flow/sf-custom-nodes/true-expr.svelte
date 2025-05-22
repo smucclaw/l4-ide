@@ -1,8 +1,7 @@
 <script lang="ts">
   import { TrueExprLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import type { BoolLitDisplayerProps } from '../svelteflow-types.js'
-  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
-  import { Handle } from '@xyflow/svelte'
+  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
 
   let { data }: BoolLitDisplayerProps = $props()
 </script>
@@ -16,11 +15,11 @@
     ...data.classes,
   ]}
 >
-  <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-  <div class="label-wrapper-for-content-bearing-sf-node">
-    {(data.context.get(data.originalLirId) as TrueExprLirNode).toPretty(
-      data.context
-    )}
-  </div>
-  <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
+  <WithNormalHandles>
+    <div class="label-wrapper-for-content-bearing-sf-node">
+      {(data.context.get(data.originalLirId) as TrueExprLirNode).toPretty(
+        data.context
+      )}
+    </div>
+  </WithNormalHandles>
 </div>
