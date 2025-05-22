@@ -214,8 +214,8 @@ GIVEN a IS A NUMBER
 
 #EVAL `Monthly Installment Amount`
 
-#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 40
+#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 360 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 29
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 59
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 89
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 119
