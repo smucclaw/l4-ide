@@ -15,7 +15,25 @@ function:
 
       p_birthPlace:
         type: string
-        description: the birth-place of the person, such as "UK" or "US" or "Gibraltar" or "France". Convert "London", "England", and "United Kingdom" to "UK".
+        description: the birth-place of the person
+        enum:
+            - UK
+            - Anguilla
+            - Bermuda
+            - British Antarctic Territory
+            - British Indian Ocean Territory
+            - Cayman Islands
+            - Falkland Islands
+            - Gibraltar
+            - Hong Kong
+            - Montserrat
+            - Pitcairn, Henderson, Ducie and Oeno Islands
+            - St Helena, Ascension and Tristan da Cunha
+            - Sovereign Base Areas of Akrotiri and Dhekelia
+            - South Georgia and the South Sandwich Islands
+            - Turks and Caicos Islands
+            - Virgin Islands
+            - Other
 
       p_birthDate:
         type: string
@@ -23,7 +41,25 @@ function:
 
       f_settledIn:
             type: string
-            description: where the father was settled at the time of the birth of the person. Convert "London", "England", and "United Kingdom" to "UK".
+            description: where the father was settled at the time of the birth of the person.
+            enum:
+                - UK
+                - Anguilla
+                - Bermuda
+                - British Antarctic Territory
+                - British Indian Ocean Territory
+                - Cayman Islands
+                - Falkland Islands
+                - Gibraltar
+                - Hong Kong
+                - Montserrat
+                - Pitcairn, Henderson, Ducie and Oeno Islands
+                - St Helena, Ascension and Tristan da Cunha
+                - Sovereign Base Areas of Akrotiri and Dhekelia
+                - South Georgia and the South Sandwich Islands
+                - Turks and Caicos Islands
+                - Virgin Islands
+                - Other
 
       f_knownBritish:
             type: boolean
@@ -31,7 +67,25 @@ function:
 
       m_settledIn:
             type: string
-            description: where the mother was settled at the time of the birth of the person. Convert "London", "England", and "United Kingdom" to "UK".
+            description: where the mother was settled at the time of the birth of the person.
+            enum:
+                - UK
+                - Anguilla
+                - Bermuda
+                - British Antarctic Territory
+                - British Indian Ocean Territory
+                - Cayman Islands
+                - Falkland Islands
+                - Gibraltar
+                - Hong Kong
+                - Montserrat
+                - Pitcairn, Henderson, Ducie and Oeno Islands
+                - St Helena, Ascension and Tristan da Cunha
+                - Sovereign Base Areas of Akrotiri and Dhekelia
+                - South Georgia and the South Sandwich Islands
+                - Turks and Caicos Islands
+                - Virgin Islands
+                - Other
 
       m_knownBritish:
             type: boolean
