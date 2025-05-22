@@ -48,7 +48,6 @@ import Base
 import qualified Control.Applicative as Applicative
 import Generics.SOP.BasicFunctors
 import Generics.SOP.NS
-import Data.Default (Default())
 import qualified Data.Foldable as Foldable
 import Data.Functor.Compose
 import qualified Data.List.Extra as List
@@ -394,7 +393,7 @@ anonymousSection =
       <*> annoHole (lsepBy (topdeclWithRecovery 0) (spacedToken_ TSemicolon))
 
 section :: Int -> Parser (Section Name)
-section n = attachAnno do
+section n = attachAnno $
   MkSection emptyAnno
     <$> (Compose (try do
            wa@WithAnno {payload = syms} <- getCompose sectionSymbols
@@ -1122,6 +1121,9 @@ regulative :: Parser (Expr Name)
 regulative = attachAnno $
   Regulative emptyAnno <$> annoHole obligation
 
+optionalWithHole :: HasSrcRange a => Compose Parser WithAnno a -> Compose Parser WithAnno (Maybe a)
+optionalWithHole p = Just <$> p <|> annoHole (pure Nothing)
+
 obligation :: Parser (Obligation Name)
 obligation = do
   current <- Lexer.indentLevel
@@ -1132,9 +1134,9 @@ obligation = do
       <*  annoLexeme (spacedToken_ TKMust)
       <*  optional (annoLexeme (spacedToken_ TKDo))
       <*> annoHole (indentedExpr current)
-      <*> optional (deadline current)
-      <*> optional (hence current)
-      <*> optional (lest current)
+      <*> optionalWithHole (deadline current)
+      <*> optionalWithHole (hence current)
+      <*> optionalWithHole (lest current)
 
 deadline :: Pos -> Compose Parser (WithAnno_ PosToken Extension) (Expr Name)
 deadline current =
@@ -1544,10 +1546,10 @@ data WithAnno_ t e a = WithAnno
   }
   deriving stock (Functor, Show)
 
-withHoleAnno :: (HasSrcRange a, Default e) => a -> WithAnno_ t e a
+withHoleAnno :: (HasSrcRange a, Monoid e) => a -> WithAnno_ t e a
 withHoleAnno a = WithAnno (mkHoleAnnoFor a) a
 
-withEpaAnno :: (Default e, HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
+withEpaAnno :: (Monoid e, HasField "range" t SrcRange) => Epa_ t a -> WithAnno_ t e a
 withEpaAnno p = WithAnno (mkAnno $ fmap mkCluster $ epaToCluster p : p.hiddenClusters) p.payload
 
 epaToCluster :: (HasField "range" t SrcRange) => Epa_ t a -> CsnCluster_ t
@@ -1562,22 +1564,22 @@ epaToHiddenCluster p = CsnCluster
   , trailing = mkHiddenConcreteSyntaxNode p.trailingTokens
   }
 
-annoHole :: (HasSrcRange a, Default e) => Parser a -> Compose Parser (WithAnno_ t e) a
+annoHole :: (HasSrcRange a, Monoid e) => Parser a -> Compose Parser (WithAnno_ t e) a
 annoHole p = Compose $ fmap withHoleAnno p
 
-annoEpa :: (Default e, HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
+annoEpa :: (Monoid e, HasField "range" t SrcRange) => Parser (Epa_ t a) -> Compose Parser (WithAnno_ t e) a
 annoEpa p = Compose $ fmap withEpaAnno p
 
-annoLexeme :: (Default e, HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
+annoLexeme :: (Monoid e, HasField "range" t SrcRange) => Parser (Lexeme_ t t) -> Compose Parser (WithAnno_ t e) t
 annoLexeme = annoEpa . fmap lexToEpa
 
-annoLexeme_ :: (Default e, HasField "range" t SrcRange) => Parser (Lexeme_ t a) -> Compose Parser (WithAnno_ t e) ()
+annoLexeme_ :: (Monoid e, HasField "range" t SrcRange) => Parser (Lexeme_ t a) -> Compose Parser (WithAnno_ t e) ()
 annoLexeme_ = void . annoLexemes . fmap (fmap (const []))
 
-annoLexemes :: (Default e, HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
+annoLexemes :: (Monoid e, HasField "range" t SrcRange) => Parser (Lexeme_ t [t]) -> Compose Parser (WithAnno_ t e) [t]
 annoLexemes = annoEpa . fmap lexesToEpa
 
-instance Default e => Applicative (WithAnno_ t e) where
+instance (Monoid e, Eq e) => Applicative (WithAnno_ t e) where
   pure a = WithAnno emptyAnno a
   WithAnno ps f <*> WithAnno ps2 x = WithAnno (ps <> ps2) (f x)
 
@@ -1600,11 +1602,11 @@ inlineAnnoHole p = (\ (WithAnno ann e) -> setAnno (mkAnno (inlineFirstAnnoHole a
 -- | Create an annotation hole with a source range hint.
 -- This source range hint is used to compute the final source range
 -- of the produced 'Anno_'.
-mkHoleAnnoFor :: (HasSrcRange a, Default e) => a -> Anno_ t e
+mkHoleAnnoFor :: (HasSrcRange a, Monoid e) => a -> Anno_ t e
 mkHoleAnnoFor a =
   mkAnno [mkHoleWithSrcRange a]
 
-mkSimpleEpaAnno :: (Default e, HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
+mkSimpleEpaAnno :: (Monoid e, HasField "range" t SrcRange) => Epa_ t a -> Anno_ t e
 mkSimpleEpaAnno =
   (.anno) . withEpaAnno
 

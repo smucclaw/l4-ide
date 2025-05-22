@@ -20,7 +20,7 @@ resolveNlgAnnotation a = do
         MkParsedNlg ann frags -> do
           resolvedFrags <- traverse resolveNlgFragment frags
           pure $ MkResolvedNlg ann resolvedFrags
-      pure $ a & annoOf % annNlg ?~ resolvedNlg
+      setAnnNlg resolvedNlg a
 
 resolveNlgFragment :: NlgFragment Name -> Check (NlgFragment Resolved)
 resolveNlgFragment = \ case
@@ -29,17 +29,7 @@ resolveNlgFragment = \ case
     MkNlgRef ann . fst <$> resolveTerm n
 
 resolveNlgAnnotationInResolved :: Resolved -> Check Resolved
-resolveNlgAnnotationInResolved = \ case
-  Def uniq name -> do
-    Def uniq <$> resolveNlgAnnotation name
-  Ref refName uniq origName ->
-    Ref
-      <$> resolveNlgAnnotation refName
-      <*> pure uniq
-      <*> pure origName
-  OutOfScope uniq origName -> do
-    OutOfScope uniq <$> resolveNlgAnnotation origName
-
+resolveNlgAnnotationInResolved = traverseResolved resolveNlgAnnotation
 
 nlgDecide :: Decide Resolved -> Check (Decide Resolved)
 nlgDecide (MkDecide ann tySig appForm body) =

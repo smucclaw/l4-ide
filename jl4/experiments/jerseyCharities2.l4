@@ -1,0 +1,766 @@
+-- Charities (Jersey) Law 2014 with Subsidiary Legislation
+-- Based on the threefold split from charities_rationalisation.md
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014
+
+IMPORT prelude
+
+-- ======================================================================
+-- SECTION A – STRUCTURAL / INTERPRETIVE LAYER
+-- ======================================================================
+-- | Provision (instrument) | What it seeds (examples) | Why it is structural | Citations |
+-- | --------------------- | ------------------------ | -------------------- | --------- |
+-- | Arts 1-2 Law 2014     | Core terms              | Pure definitions     |           |
+-- | Arts 3-4 & Sched 1    | Charity Commissioner    | Institutional        |           |
+-- | Arts 38-43 & Sched 2  | Service rules           | Administrative       |           |
+-- | Arts 1-2 R&O 59/2018  | Financial definitions   | Extends glossary     |           |
+-- | Art 1 R&O 60/2018     | Restricted section terms| Supports funding     |           |
+
+-- The Charity Register itself (Art 8)
+DECLARE CharityRegister
+    HAS generalSection IS A LIST OF RegisterEntry
+        restrictedSection IS A LIST OF RegisterEntry
+        historicSection IS A LIST OF RegisterEntry
+        nextRegistrationNumber IS A NUMBER
+        lastUpdated IS A Date
+
+-- A register entry, containing all data recorded in the register
+DECLARE RegisterEntry
+    HAS registrationNumber IS A STRING
+        name IS A STRING
+        previousNames IS A LIST OF STRING
+        constitution IS A Constitution
+        purposes IS A LIST OF Purpose
+        address IS A STRING
+        registrationDate IS A Date
+        deregistrationDate IS A MAYBE Date
+        section IS A RegisterSection
+        governors IS A LIST OF Person
+        financials IS A LIST OF FinancialYearRecord
+        publicBenefitStatement IS A PublicBenefitStatement
+        notices IS A LIST OF Notice
+        fundingCondition IS A BOOLEAN
+        retrospectiveDeregistration IS A BOOLEAN
+        deregistrationReason IS A MAYBE STRING
+
+-- Record of a financial year's data
+DECLARE FinancialYearRecord
+    HAS financialYear IS A DateRange
+        annualIncome IS A Money
+        annualExpenditure IS A Money
+        assets IS A Money
+        governorPayments IS A Money
+        publicBenefit IS A STRING
+        lateFlag IS A BOOLEAN
+        submissionDate IS A Date
+
+DECLARE Constitution
+    HAS document IS A STRING
+        isWritten IS A BOOLEAN
+        lastUpdated IS A Date
+        allowsGovtControl IS A BOOLEAN
+
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+        role IS A Role
+        isGovernor IS A BOOLEAN
+        isDisqualified IS A BOOLEAN
+        convictions IS A LIST OF Conviction
+        position IS A MAYBE STRING
+        
+DECLARE Property
+    HAS description IS A STRING
+        value IS A Money
+        acquisitionDate IS A Date
+        purpose IS A Purpose
+        
+DECLARE Conviction
+    HAS offenseType IS A STRING
+        date IS A Date
+        isSpent IS A BOOLEAN
+        involvesVulnerablePerson IS A BOOLEAN
+
+DECLARE PublicBenefitStatement
+    HAS statement IS A STRING
+        lastUpdated IS A Date
+
+DECLARE DateRange
+    HAS startDate IS A Date
+        endDate IS A Date
+
+DECLARE Money 
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+DECLARE Role IS ONE OF
+    Commissioner
+    GovernorRole HAS charityName IS A STRING
+                     position IS A STRING
+    Minister
+    StatesAssemblyMember
+    TribunalMember
+
+-- Notice and Decision types
+DECLARE Notice IS ONE OF
+    RequiredStepsNotice HAS noticeId IS A STRING
+                            issueDate IS A Date
+                            steps IS A LIST OF STRING
+                            deadline IS A Date
+                            reasonCodes IS A LIST OF STRING
+                            complianceStatus IS A ComplianceStatus
+    DeregistrationNotice HAS noticeId IS A STRING
+                             date IS A Date
+                             reasons IS A LIST OF STRING
+                             isVoluntary IS A BOOLEAN
+
+DECLARE ComplianceStatus IS ONE OF
+    Pending
+    Complied
+    Failed
+
+DECLARE Decision IS ONE OF
+    RegistrationRefusal HAS reasons IS A LIST OF STRING
+                            date IS A Date
+    DeregistrationDecision HAS date IS A Date
+                              reasons IS A LIST OF STRING
+    NameChangeRefusal HAS reasons IS A LIST OF STRING
+                          date IS A Date
+    RequiredStepsNoticeDecision HAS notice IS A RequiredStepsNotice
+                                   date IS A Date
+
+-- Date structure
+DECLARE Date
+  HAS year IS A NUMBER
+      month IS A NUMBER
+      day IS A NUMBER
+
+-- Core timepoints from the law
+commencement MEANS Date OF 2014, 8, 14
+`appointed day` MEANS Date OF 2015, 5, 1
+
+-- Register sections enumeration
+DECLARE RegisterSection
+  IS ONE OF
+    GeneralSection
+    RestrictedSection
+    HistoricSection
+
+-- Charitable purposes enumeration (from Art 6 of the Law)
+DECLARE CharitablePurpose
+  IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `saving of lives`
+    `advancement of citizenship or community development`
+    `advancement of arts, heritage, culture or science`
+    `advancement of public participation in sport`
+    `provision of recreational facilities`
+    `advancement of human rights`
+    `promotion of religious or racial harmony`
+    `promotion of equality and diversity`
+    `advancement of environmental protection`
+    `relief of those in need`
+    `advancement of animal welfare`
+    `analogous purpose`
+
+-- Information and disclosure types
+DECLARE Information
+    HAS description IS A STRING
+        section IS A RegisterSection
+        isPublic IS A BOOLEAN
+        dataType IS A STRING
+
+-- Functions to determine temporal relationships
+GIVEN date1 IS A Date
+      date2 IS A Date
+GIVETH A NUMBER
+DECIDE `months between dates` IS
+    (date2's year - date1's year) * 12 + (date2's month - date1's month)
+
+GIVEN date1 IS A Date
+      date2 IS A Date
+GIVETH A NUMBER
+DECIDE `days between` IS
+    30 * `months between dates` date1 date2 + (date2's day - date1's day)
+
+-- ======================================================================
+-- SECTION B – DEONTIC RULES LAYER
+-- ======================================================================
+-- | ruleId       | ruleType | Modal  | Actor(s)  | Trigger/condition | Duty/Power/Prohibition | Default sanction | Citations |
+-- | ------------ | -------- | ------ | --------- | ----------------- | ---------------------- | ---------------- | --------- |
+-- | B-AR-01      | CONDUCT  | OBLIGES| Charity   | End of year       | File Annual Return     | RSN -> dereg     |           |
+-- | B-AR-02      | CONDUCT  | OBLIGES| Commiss.  | Receipt of AR     | Publish data           | Tribunal appeal  |           |
+-- | B-RS-01      | CONDUCT  | PROHIB.| Restricted| While in RS       | Solicit donations      | Removal from RS  |           |
+-- | B-FID-01     | CONDUCT  | OBLIGES| Governor  | Continuous        | Act in best interests  | Removal/offense  |           |
+-- | B-REP-01     | CONDUCT  | OBLIGES| Governor  | Conviction        | Report to Commissioner | Suspension/RSN   |           |
+-- | B-INF-01     | PROCEDURE| POWERS | Commiss.  | Reasonable cause  | Demand info/attendance | Non-compl offense|           |
+-- | B-RSN-01     | PROCEDURE| POWERS | Commiss.  | Art 27(1) grounds | Issue Required Steps   | Deregistration   |           |
+-- | B-APP-01     | PROCEDURE| OBLIGES| Commiss.  | Appeal decision   | Serve notice w/reasons | Decision vulnerab|           |
+-- | B-APP-02     | PROCEDURE| OBLIGES| Appellant | Decision notice   | Lodge appeal in 28 days| Appeal struck out|           |
+-- | B-APP-03     | PROCEDURE| OBLIGES| Third pty | Decision notice   | Lodge appeal in 56 days| Same as above    |           |
+
+§ `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+PARTY Commissioner
+MUST `require annual return from charity`
+WITHIN 14 months OF entry's lastFinancialRecord's financialYear's endDate
+HENCE `annual return requested`
+
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      financialData IS A FinancialYearRecord
+PARTY entry
+MUST `file annual return`
+WITHIN 2 months OF `annual return requested`
+HENCE `register updated with annual return` register entry financialData
+LEST  `Commissioner may issue Required Steps Notice`
+
+§ `Commissioner Publication Duty (Art 8(3), Law 2014 & Art 2, R&O 59/2018)`
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      financialData IS A FinancialYearRecord
+PARTY Commissioner
+MUST `publish annual return data`
+WITHIN 1 month OF `annual return filed`
+HENCE `transparency maintained`
+LEST  `entry may appeal to tribunal`
+
+§ `Restricted Section Solicitation Prohibition (Art 9, Law 2014 & Art 2, R&O 60/2018)`
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+IF entry's section EQUALS RestrictedSection
+PARTY entry
+SHANT `solicit donations from the public`
+HENCE `restricted status maintained`
+LEST  `Commissioner may remove restricted status`
+
+§ `Governor Fiduciary Duty (Art 30, Law 2014)`
+GIVEN person IS A Person
+      entry IS A RegisterEntry
+IF person's isGovernor EQUALS TRUE
+   AND elem person entry's governors
+PARTY person
+MUST `act in best interests of charity and beneficiaries`
+WITHIN continuous
+HENCE `proper governance maintained`
+LEST  `Commissioner may suspend or remove governor`
+
+§ `Governor Reporting Duty (Art 22, Law 2014)`
+GIVEN person IS A Person
+      entry IS A RegisterEntry
+IF `reportable matter exists` person
+   AND elem person entry's governors
+PARTY person
+MUST `report to Commissioner`
+WITHIN ASAP
+HENCE `transparency maintained`
+LEST  `Commissioner may suspend or issue Required Steps Notice`
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+DECIDE `reportable matter exists` IF
+    EXISTS c IN person's convictions SUCH THAT 
+        (c's involvesVulnerablePerson EQUALS TRUE OR NOT c's isSpent EQUALS TRUE)
+
+§ `Commissioner Information Power (Art 26, Law 2014)`
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+IF `reasonable cause exists` entry
+PARTY Commissioner
+MAY `demand information or attendance`
+HENCE `investigation progresses`
+LEST  `non-compliance offense`
+
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `reasonable cause exists` IF
+    -- Would be determined by evidence
+    TRUE
+
+§ `Required Steps Notice Power (Art 27, Law 2014)`
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+IF `grounds under Art 27(1) exist` entry
+PARTY Commissioner
+MAY `issue Required Steps Notice specifying action and deadline`
+HENCE `notice logged in register` register entry
+LEST  `may proceed to deregistration`
+
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `grounds under Art 27(1) exist` IF
+    (
+        `misconduct` entry
+        OR NOT `meets the charity test` entry
+        OR `governor misconduct` entry
+        OR NOT (
+            `is a Jersey entity` entry
+            OR `carries out substantial activity in Jersey` entry
+        )
+        OR NOT `has a principal address in Jersey` entry
+        OR NOT `complies with annual reporting` entry
+    )
+
+§ `Commissioner Appeal Notice Duty (Art 32, Law 2014 & Art 3, R&O 102/2020)`
+GIVEN decision IS A Decision
+      entry IS A RegisterEntry
+PARTY Commissioner
+MUST `serve notice with reasons and appeal deadline`
+WITHIN 14 days
+HENCE `entity informed of rights`
+LEST  `decision may be vulnerable`
+
+§ `Appellant Appeal Timeframe (Art 33, Law 2014 & Art 5, R&O 102/2020)`
+GIVEN entry IS A RegisterEntry
+      decision IS A Decision
+IF decision AFFECTS entry
+PARTY entry
+MUST `lodge appeal`
+WITHIN 28 days
+HENCE `appeal proceeds`
+LEST  `appeal struck out`
+
+§ `Third Party Appeal Timeframe (Art 33, Law 2014 & Art 5, R&O 102/2020)`
+GIVEN person IS A Person
+      decision IS A Decision
+      entry IS A RegisterEntry
+IF decision AFFECTS entry
+   AND NOT person EQUALS entry
+PARTY person
+MUST `lodge appeal`
+WITHIN 56 days
+HENCE `appeal proceeds`
+LEST  `appeal struck out`
+
+-- The charity test (Art 5)
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `meets the charity test` IF
+    -- All purposes are charitable or ancillary to charitable purposes
+    all (GIVEN p YIELD `is charitable purpose` p 
+                     OR `is ancillary or incidental to charitable purpose` p)
+        (entry's purposes)
+    -- And provides public benefit to a reasonable degree
+    AND `provides public benefit`
+    -- Unless constitution allows control by government officials
+    AND NOT entry's constitution's allowsGovtControl EQUALS TRUE
+
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `is charitable purpose` IF
+    p EQUALS "the prevention or relief of poverty"
+    OR p EQUALS "the advancement of education"
+    OR p EQUALS "the advancement of religion"
+    OR p EQUALS "the advancement of health"
+    OR p EQUALS "the saving of lives"
+    OR p EQUALS "the advancement of citizenship or community development"
+    OR p EQUALS "the advancement of arts, heritage, culture or science"
+    OR p EQUALS "the advancement of public participation in sport"
+    OR p EQUALS "the provision of recreational facilities"
+    OR p EQUALS "the advancement of human rights"
+    OR p EQUALS "the promotion of religious or racial harmony"
+    OR p EQUALS "the promotion of equality and diversity"
+    OR p EQUALS "the advancement of environmental protection"
+    OR p EQUALS "the relief of those in need"
+    OR p EQUALS "the advancement of animal welfare"
+    OR `is analogous to charitable purpose` p
+
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `is ancillary or incidental to charitable purpose` IF
+    p CONTAINS "ancillary to"
+    OR p CONTAINS "incidental to"
+    OR p CONTAINS "in support of"
+
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `is analogous to charitable purpose` IF
+    p CONTAINS "analogous to"
+
+GIVETH A BOOLEAN
+DECIDE `provides public benefit` IF
+    -- In reality this would be determined by Commissioner assessment
+    TRUE
+
+-- Requirements for registration (Art 11)
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `eligible for registration as charity` IF
+    -- Entity meets the charity test
+    `meets the charity test` entry
+    -- Has written constitution
+    AND entry's constitution's isWritten EQUALS TRUE
+    -- Has connection to Jersey
+    AND (
+        `is a Jersey entity` entry
+        OR `carries out substantial activity in Jersey` entry
+    )
+    -- Has address in Jersey
+    AND `has a principal address in Jersey` entry
+    -- Name is not undesirable
+    AND NOT `is undesirable name` entry's name
+
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `is a Jersey entity` IF
+    entry's address CONTAINS "Jersey"
+
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `carries out substantial activity in Jersey` IF
+    entry's address CONTAINS "Jersey"
+
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+DECIDE `has a principal address in Jersey` IF
+    entry's address CONTAINS "Jersey"
+
+GIVEN name IS A STRING
+GIVETH A BOOLEAN
+DECIDE `is undesirable name` IF
+    name CONTAINS "offensive"
+    OR name CONTAINS "misleading"
+    OR name CONTAINS "royal"
+    OR name EQUALS ""
+    OR name CONTAINS "Jersey" AND NOT `approved for Jersey name use` name
+
+GIVEN name IS A STRING
+GIVETH A BOOLEAN
+DECIDE `approved for Jersey name use` IF
+    -- Determined by Commissioner
+    FALSE
+
+-- ======================================================================
+-- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS
+-- ======================================================================
+-- | eventType           | Trigger provision | Who initiates | Core data fields | Effect on Register |
+-- | ------------------- | ----------------- | ------------- | ---------------- | ------------------ |
+-- | RegisterCharity     | Art 11            | Commissioner  | name, number     | New active entry   |
+-- | MoveToRestricted    | Art 9 + R&O 60    | Commissioner  | section=restricted| Entry relocated    |
+-- | ChangeName          | Art 12            | Charity/Comm. | newName, oldNames| Updates name       |
+-- | AnnualReturnLogged  | Art 13 + R&O 59   | Charity       | financials, late | Updates snapshot   |
+-- | RequiredStepsLogged | Art 27(4)         | Commissioner  | noticeId, steps  | Notice reference   |
+-- | VoluntaryDereg      | Art 15            | Charity       | deregDate, reason| Moved to historic  |
+-- | CompulsoryDereg     | Art 16            | Commissioner  | deregDate, reason| Same, may backdate |
+
+DECLARE RegisterAction IS ONE OF
+    RegisterCharity HAS entry IS A RegisterEntry
+                        date IS A Date
+    MoveToRestricted HAS entry IS A RegisterEntry
+                         date IS A Date
+                         fundingCondition IS A BOOLEAN
+    ChangeName HAS entry IS A RegisterEntry
+                  newName IS A STRING
+                  date IS A Date
+    AnnualReturnLogged HAS entry IS A RegisterEntry
+                           financials IS A FinancialYearRecord
+                           date IS A Date
+    RequiredStepsNoticeLogged HAS entry IS A RegisterEntry
+                                 notice IS A RequiredStepsNotice
+                                 date IS A Date
+    VoluntaryDeregistration HAS entry IS A RegisterEntry
+                                date IS A Date
+                                reason IS A STRING
+    CompulsoryDeregistration HAS entry IS A RegisterEntry
+                                date IS A Date
+                                reasons IS A LIST OF STRING
+                                isRetrospective IS A BOOLEAN
+
+-- RegisterCharity event
+-- Effect: New active entry created in general section
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      date IS A Date
+GIVETH A CharityRegister
+DECIDE `register charity` IS
+    CharityRegister WITH
+        generalSection IS register's generalSection PLUS entry
+        restrictedSection IS register's restrictedSection
+        historicSection IS register's historicSection
+        nextRegistrationNumber IS register's nextRegistrationNumber + 1
+        lastUpdated IS date
+
+-- MoveToRestricted event
+-- Effect: Entry relocated from general to restricted section
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      date IS A Date
+      fundingCondition IS A BOOLEAN
+GIVETH A CharityRegister
+DECIDE `move to restricted section` IS
+    CharityRegister WITH
+        generalSection IS filter (GIVEN e YIELD NOT e's registrationNumber EQUALS entry's registrationNumber) register's generalSection
+        restrictedSection IS register's restrictedSection PLUS (entry WITH section IS RestrictedSection, fundingCondition IS fundingCondition)
+        historicSection IS register's historicSection
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- ChangeName event
+-- Effect: Updates name column; historic name retained
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      newName IS A STRING
+      date IS A Date
+GIVETH A CharityRegister
+DECIDE `change name` IS
+    LET updatedEntry = entry WITH 
+                        name IS newName, 
+                        previousNames IS entry's previousNames PLUS entry's name
+    IN
+    LET updatedSection = 
+        IF entry's section EQUALS GeneralSection THEN
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's generalSection
+        ELSE IF entry's section EQUALS RestrictedSection THEN
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's restrictedSection
+        ELSE
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's historicSection
+    IN
+    CharityRegister WITH
+        generalSection IS IF entry's section EQUALS GeneralSection THEN updatedSection ELSE register's generalSection
+        restrictedSection IS IF entry's section EQUALS RestrictedSection THEN updatedSection ELSE register's restrictedSection
+        historicSection IS IF entry's section EQUALS HistoricSection THEN updatedSection ELSE register's historicSection
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- AnnualReturnLogged event
+-- Effect: Updates yearly snapshot; flips late if after deadline
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      financials IS A FinancialYearRecord
+      date IS A Date
+GIVETH A CharityRegister
+DECIDE `log annual return` IS
+    LET updatedEntry = entry WITH 
+                        financials IS entry's financials PLUS financials
+    IN
+    LET updatedSection = 
+        IF entry's section EQUALS GeneralSection THEN
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's generalSection
+        ELSE
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's restrictedSection
+    IN
+    CharityRegister WITH
+        generalSection IS IF entry's section EQUALS GeneralSection THEN updatedSection ELSE register's generalSection
+        restrictedSection IS IF entry's section EQUALS RestrictedSection THEN updatedSection ELSE register's restrictedSection
+        historicSection IS register's historicSection
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- RequiredStepsNoticeLogged event
+-- Effect: Notice reference stored under Art 8(3)(k)
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      notice IS A RequiredStepsNotice
+      date IS A Date
+GIVETH A CharityRegister
+DECIDE `log required steps notice` IS
+    LET updatedEntry = entry WITH 
+                        notices IS entry's notices PLUS notice
+    IN
+    LET updatedSection = 
+        IF entry's section EQUALS GeneralSection THEN
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's generalSection
+        ELSE
+            map (GIVEN e YIELD IF e's registrationNumber EQUALS entry's registrationNumber THEN updatedEntry ELSE e) register's restrictedSection
+    IN
+    CharityRegister WITH
+        generalSection IS IF entry's section EQUALS GeneralSection THEN updatedSection ELSE register's generalSection
+        restrictedSection IS IF entry's section EQUALS RestrictedSection THEN updatedSection ELSE register's restrictedSection
+        historicSection IS register's historicSection
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- VoluntaryDeregistration event
+-- Effect: Entry moved to historic; number retired
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      date IS A Date
+      reason IS A STRING
+GIVETH A CharityRegister
+DECIDE `voluntary deregistration` IS
+    LET updatedEntry = entry WITH 
+                        section IS HistoricSection,
+                        deregistrationDate IS JUST date,
+                        deregistrationReason IS JUST reason
+    IN
+    LET sourceSection = 
+        IF entry's section EQUALS GeneralSection THEN
+            filter (GIVEN e YIELD NOT e's registrationNumber EQUALS entry's registrationNumber) register's generalSection
+        ELSE
+            filter (GIVEN e YIELD NOT e's registrationNumber EQUALS entry's registrationNumber) register's restrictedSection
+    IN
+    CharityRegister WITH
+        generalSection IS IF entry's section EQUALS GeneralSection THEN sourceSection ELSE register's generalSection
+        restrictedSection IS IF entry's section EQUALS RestrictedSection THEN sourceSection ELSE register's restrictedSection
+        historicSection IS register's historicSection PLUS updatedEntry
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- CompulsoryDeregistration event
+-- Effect: Same as voluntary; may be back-dated
+GIVEN entry IS A RegisterEntry
+      register IS A CharityRegister
+      date IS A Date
+      reasons IS A LIST OF STRING
+      isRetrospective IS A BOOLEAN
+GIVETH A CharityRegister
+DECIDE `compulsory deregistration` IS
+    LET updatedEntry = entry WITH 
+                        section IS HistoricSection,
+                        deregistrationDate IS JUST date,
+                        deregistrationReason IS JUST (fold (GIVEN acc reason YIELD acc + "; " + reason) "" reasons),
+                        retrospectiveDeregistration IS isRetrospective
+    IN
+    LET sourceSection = 
+        IF entry's section EQUALS GeneralSection THEN
+            filter (GIVEN e YIELD NOT e's registrationNumber EQUALS entry's registrationNumber) register's generalSection
+        ELSE
+            filter (GIVEN e YIELD NOT e's registrationNumber EQUALS entry's registrationNumber) register's restrictedSection
+    IN
+    CharityRegister WITH
+        generalSection IS IF entry's section EQUALS GeneralSection THEN sourceSection ELSE register's generalSection
+        restrictedSection IS IF entry's section EQUALS RestrictedSection THEN sourceSection ELSE register's restrictedSection
+        historicSection IS register's historicSection PLUS updatedEntry
+        nextRegistrationNumber IS register's nextRegistrationNumber
+        lastUpdated IS date
+
+-- ======================================================================
+-- REGISTER STATE AND SIMULATION
+-- ======================================================================
+
+-- Initialize the charity register
+emptyRegister MEANS CharityRegister 
+    WITH generalSection IS EMPTY_LIST
+         restrictedSection IS EMPTY_LIST
+         historicSection IS EMPTY_LIST
+         nextRegistrationNumber IS 1
+         lastUpdated IS commencement
+
+-- Example entries for the register
+animalCharityEntry MEANS RegisterEntry
+    WITH registrationNumber IS "CH001"
+         name IS "Jersey Animal Charity"
+         previousNames IS EMPTY_LIST
+         constitution IS Constitution OF "Written bylaws for charity", TRUE, (Date OF 2015, 6, 1), FALSE
+         purposes IS LIST "the advancement of animal welfare" "education about animal welfare"
+         address IS "123 Royal Square, St. Helier, Jersey"
+         registrationDate IS Date OF 2015, 6, 1
+         deregistrationDate IS NOTHING
+         section IS GeneralSection
+         governors IS LIST Person OF "Jane Smith", "15 Green Street, Jersey", GovernorRole OF "Jersey Animal Charity", "Chair", TRUE, FALSE, EMPTY_LIST, JUST "Chair"
+         financials IS EMPTY_LIST
+         publicBenefitStatement IS PublicBenefitStatement OF "We provide care for animals in Jersey", (Date OF 2015, 6, 1)
+         notices IS EMPTY_LIST
+         fundingCondition IS FALSE
+         retrospectiveDeregistration IS FALSE
+         deregistrationReason IS NOTHING
+
+foundationEntry MEANS RegisterEntry
+    WITH registrationNumber IS "CH002"
+         name IS "Private Foundation"
+         previousNames IS EMPTY_LIST
+         constitution IS Constitution OF "Written foundation deed", TRUE, (Date OF 2018, 3, 15), FALSE
+         purposes IS LIST "the advancement of education" "the relief of those in need"
+         address IS "45 Esplanade, St. Helier, Jersey"
+         registrationDate IS Date OF 2018, 3, 15
+         deregistrationDate IS NOTHING
+         section IS GeneralSection
+         governors IS LIST Person OF "John Donor", "Overseas Address", GovernorRole OF "Private Foundation", "Trustee", TRUE, FALSE, EMPTY_LIST, JUST "Trustee"
+         financials IS EMPTY_LIST
+         publicBenefitStatement IS PublicBenefitStatement OF "We fund educational initiatives", (Date OF 2018, 3, 15)
+         notices IS EMPTY_LIST
+         fundingCondition IS TRUE
+         retrospectiveDeregistration IS FALSE
+         deregistrationReason IS NOTHING
+
+-- Example financial records
+year2022Financials MEANS FinancialYearRecord
+    WITH financialYear IS DateRange OF (Date OF 2022, 1, 1), (Date OF 2022, 12, 31)
+         annualIncome IS Money OF 50000, "GBP"
+         annualExpenditure IS Money OF 45000, "GBP"
+         assets IS Money OF 75000, "GBP"
+         governorPayments IS Money OF 0, "GBP"
+         publicBenefit IS "Provided care for 500 animals"
+         lateFlag IS FALSE
+         submissionDate IS Date OF 2023, 2, 15)
+
+-- Example required steps notice
+exampleNotice MEANS RequiredStepsNotice
+    WITH noticeId IS "RSN-001"
+         issueDate IS Date OF 2023, 5, 15
+         steps IS LIST "Update governing document" "Provide missing financial information"
+         deadline IS Date OF 2023, 6, 15
+         reasonCodes IS LIST "incomplete annual return" "outdated constitution"
+         complianceStatus IS Pending
+
+-- ======================================================================
+-- REGISTER TRANSACTION SIMULATIONS
+-- ======================================================================
+
+-- Simulation 1: Initial register population
+-- Two charities are registered
+#EVAL `register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)
+
+-- Simulation 2: Complete register lifecycle through multiple state transitions
+initialRegister MEANS emptyRegister
+
+-- First transaction: Register the animal charity
+#CONTRACT `Charity Register Lifecycle` Commissioner initialRegister AT 1 WITH
+  -- RegisterCharity event
+  PARTY Commissioner DOES `process registration application` animalCharityEntry AT 10
+  
+  -- AnnualReturnLogged event (first year)
+  PARTY animalCharityEntry DOES `submit annual return` year2022Financials AT 365
+  
+  -- RequiredStepsNoticeLogged event
+  PARTY Commissioner DOES `issue required steps notice` exampleNotice AT 400
+  PARTY animalCharityEntry DOES `comply with required steps` AT 430
+  
+  -- ChangeName event
+  PARTY animalCharityEntry DOES `request name change` "Jersey Animal Welfare Society" AT 500
+  PARTY Commissioner DOES `approve name change` AT 510
+  
+  -- RegisterCharity event for second charity
+  PARTY Commissioner DOES `process registration application` foundationEntry AT 600
+  
+  -- MoveToRestricted event
+  PARTY foundationEntry DOES `apply for restricted section` AT 700
+  PARTY Commissioner DOES `move charity to restricted section` AT 710
+  
+  -- AnnualReturnLogged for both charities (second year)
+  PARTY animalCharityEntry DOES `submit annual return` year2022Financials AT 730
+  PARTY foundationEntry DOES `submit annual return` year2022Financials AT 740
+  
+  -- VoluntaryDeregistration event
+  PARTY foundationEntry DOES `request voluntary deregistration` "Ceased operations" AT 900
+  PARTY Commissioner DOES `process voluntary deregistration` AT 910
+  
+  -- CompulsoryDeregistration event
+  PARTY Commissioner DOES `identify non-compliance` animalCharityEntry AT 1000
+  PARTY Commissioner DOES `issue required steps notice` exampleNotice AT 1010
+  PARTY Commissioner DOES `process compulsory deregistration` AT 1100
+
+-- Transaction simulation that matches exactly with Section C table
+-- RegisterCharity event
+#EVAL `register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)
+
+-- MoveToRestricted event
+#EVAL `move to restricted section` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry (Date OF 2015, 7, 1) TRUE
+
+-- ChangeName event
+#EVAL `change name` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry "Jersey Animal Welfare Society" (Date OF 2015, 8, 1)
+
+-- AnnualReturnLogged event
+#EVAL `log annual return` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry year2022Financials (Date OF 2023, 2, 15)
+
+-- RequiredStepsNoticeLogged event
+#EVAL `log required steps notice` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry exampleNotice (Date OF 2023, 5, 15)
+
+-- VoluntaryDeregistration event
+#EVAL `voluntary deregistration` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry (Date OF 2023, 10, 1) "Ceased operations"
+
+-- CompulsoryDeregistration event
+#EVAL `compulsory deregistration` (`register charity` emptyRegister animalCharityEntry (Date OF 2015, 6, 1)) animalCharityEntry (Date OF 2023, 12, 1) (LIST "Failed to meet charity test" "Failed to comply with required steps notice") FALSE
