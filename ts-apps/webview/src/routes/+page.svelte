@@ -7,6 +7,7 @@
     makeRenderAsLadderSuccessResponse,
     WebviewFrontendIsReadyNotification,
     type WebviewFrontendIsReadyMessage,
+    type LadderBackendApi,
   } from 'jl4-client-rpc'
   import { Messenger } from 'vscode-messenger-webview'
   import { HOST_EXTENSION } from 'vscode-messenger-common'
@@ -30,11 +31,13 @@
   const nodeInfo = { registry: lirRegistry, context }
 
   /**************************
-      Make FunDeclLirNode
-      and set Lir Root
+      FunDeclLirNode maker
   ****************************/
 
   const LADDER_VIZ_ROOT_TYPE = 'VizFunDecl'
+
+  let backendApi: LadderBackendApi
+  let ladderEnv: LadderEnv
 
   // To get around how calling onMount with an async function is not ideal
   // (There are also other benefits to using an #await block)
@@ -48,8 +51,8 @@
   }> = $state(placeholderAlwaysPendingPromise)
 
   async function makeFunDeclLirNodeAndSetLirRoot(
-    renderLadderInfo: RenderAsLadderInfo,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    renderLadderInfo: RenderAsLadderInfo
   ) {
     const funDeclLirNode = await VizDeclLirSource.toLir(
       nodeInfo,
@@ -57,7 +60,7 @@
       renderLadderInfo.funDecl
     )
     lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
-    return { funDeclLirNode, env: ladderEnv }
+    return { env: ladderEnv, funDeclLirNode }
   }
 
   /**************************
@@ -69,11 +72,43 @@
 
   // This needs to be inside onMount so that acquireVsCodeApi does not get looked up during SSR or pre-rendering
   onMount(() => {
+    /*************************************************************
+              Init VSCode API and Messenger
+    *************************************************************/
+
     // eslint-disable-next-line no-undef
     vsCodeApi = acquireVsCodeApi()
     messenger = new Messenger(vsCodeApi, { debugLog: true })
 
-    // Set up handlers for webview x vscode extension messenger
+    /*************************************************************
+                 Init LadderBackendApi
+    *************************************************************/
+
+    /** Helper: Make / update the LadderFlow component (also updates ladderEnv) */
+    const makeLadderFlow = async (
+      ladderInfo: RenderAsLadderInfo
+    ): Promise<void> => {
+      // Re-make / update ladderEnv using the verDocId from the new ladderInfo,
+      // just in case
+      ladderEnv = LadderEnv.make(
+        lirRegistry,
+        ladderInfo.verDocId,
+        backendApi,
+        LADDER_VIZ_ROOT_TYPE
+      )
+      renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(
+        ladderEnv,
+        ladderInfo
+      )
+      await renderLadderPromise
+    }
+    backendApi = new LadderApiForWebview(messenger, makeLadderFlow)
+
+    /*************************************************************
+           webview x vscode extension messenger
+        communication initialization and handler registration
+    *************************************************************/
+
     messenger.sendNotification(
       WebviewFrontendIsReadyNotification,
       HOST_EXTENSION,
@@ -82,18 +117,8 @@
 
     messenger.onRequest(
       RenderAsLadder,
-      (renderLadderInfo: RenderAsLadderInfo) => {
-        const backendApi = new LadderApiForWebview(messenger)
-        const ladderEnv = LadderEnv.make(
-          lirRegistry,
-          renderLadderInfo.verDocId,
-          backendApi,
-          LADDER_VIZ_ROOT_TYPE
-        )
-        renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(
-          renderLadderInfo,
-          ladderEnv
-        )
+      async (renderLadderInfo: RenderAsLadderInfo) => {
+        await makeLadderFlow(renderLadderInfo)
         return makeRenderAsLadderSuccessResponse()
       }
     )
@@ -102,11 +127,14 @@
   })
 </script>
 
+<!-- TODO: Make this a Svelte snippet or smtg like that so it can be shared between the vscode webview and jl4 webview pane -->
 {#await renderLadderPromise}
   <p>Loading Ladder Diagram...</p>
 {:then ladder}
   <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have 
-  flow-base work with the reactive node prop -->
+  flow-base work with the reactive node prop (i.e., have LadderFlow 
+  update the relevant internals without destroying and rebuilding the component).
+  Going with #key for now because it feels conceptually simpler -->
   {#key ladder.funDeclLirNode}
     <div class="slightly-shorter-than-full-viewport-height">
       <LadderFlow {context} node={ladder.funDeclLirNode} env={ladder.env} />

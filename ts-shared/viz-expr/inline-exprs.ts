@@ -2,6 +2,7 @@
 
 import { Schema } from 'effect'
 import { VersionedDocId } from './versioned-doc-id.js'
+import { RenderAsLadderInfo } from '@repo/viz-expr'
 
 /**********************************************
             Request payload: 
@@ -22,20 +23,11 @@ export type InlineExprsRequestParams = Schema.Schema.Type<
 >
 
 /**********************************************
-      Response payload: InlineExprsSuccess
-      (keeping it simple for now)
+            Response payload: 
+          basically RenderAsLadderInfo
 ***********************************************/
 
-/** We don't, e.g., have a FunDecl in the payload,
- * because we just want to know whether the request was successful.
- * If it is (e.g., if we were able to find the definienda for all the uniques in the request params),
- * then the server will respond with InlineExprsSuccess before updating the viz accordingly.
- */
-export const InlineExprsSuccess = Schema.Struct({
-  $type: Schema.tag('InlineExprsSuccess'),
-})
-
-export type InlineExprsSuccess = Schema.Schema.Type<typeof InlineExprsSuccess>
+export type InlineExprsResult = RenderAsLadderInfo
 
 // TODO: Look quickly into how other LSPs handle structured errors for custom methods
 // Most obvious structured error we might want: InlineExprsErrorDefiniensNotFound
