@@ -70,7 +70,7 @@ DECLARE Property
         value IS A Money
         acquisitionDate IS A Date
         purpose IS A Purpose
-        
+
 DECLARE Conviction
     HAS offenseType IS A STRING
         date IS A Date
@@ -119,11 +119,11 @@ DECLARE Decision IS ONE OF
     RegistrationRefusal HAS reasons IS A LIST OF STRING
                             date IS A Date
     DeregistrationDecision HAS date IS A Date
-                              reasons IS A LIST OF STRING
+                               reasons IS A LIST OF STRING
     NameChangeRefusal HAS reasons IS A LIST OF STRING
                           date IS A Date
     RequiredStepsNoticeDecision HAS notice IS A RequiredStepsNotice
-                                   date IS A Date
+                                    date IS A Date
 
 -- Date structure
 DECLARE Date
