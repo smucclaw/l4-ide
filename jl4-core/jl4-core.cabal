@@ -81,6 +81,7 @@ library
     L4.Lexer
     L4.Nlg
     L4.Parser
+    L4.Parser.Anno
     L4.Parser.ResolveAnnotation
     L4.Parser.SrcSpan
     L4.ParserCombinators
