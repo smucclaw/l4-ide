@@ -91,8 +91,6 @@ instance IsCustomMethod InlineExprsMethodName
 class (GHC.Records.HasField "verDocId" params VersionedTextDocumentIdentifier, 
        FromJSON params) 
       => IsLadderRequestParams params where
-  getVerDocId :: params -> VersionedTextDocumentIdentifier
-  getVerDocId = (.verDocId)
   
 instance IsLadderRequestParams EvalAppRequestParams
 instance IsLadderRequestParams InlineExprsRequestParams

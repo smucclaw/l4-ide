@@ -47,7 +47,7 @@ import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
-import LSP.L4.Viz.CustomProtocol (IsLadderRequestParams, getVerDocId)
+import LSP.L4.Viz.CustomProtocol (IsLadderRequestParams)
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -564,11 +564,11 @@ checkVizVersion
   -> VizHandler method ()
 checkVizVersion reqParams recentViz = do
   let vizConfig = Ladder.getVizConfig . (.vizState) $ recentViz
-  if getVerDocId reqParams == vizConfig.verTxtDocId
+  if reqParams.verDocId == vizConfig.verTxtDocId
     then pure ()
     else throwError $ TResponseError
       { _code = InL LSPErrorCodes_ContentModified
-      , _message = "Document version mismatch. Visualizer version: " <> Text.show (getVerDocId reqParams)._version <>
+      , _message = "Document version mismatch. Visualizer version: " <> Text.show (reqParams.verDocId)._version <>
           ", whereas server's version is: " <> Text.show vizConfig.verTxtDocId._version
       , _xdata = Nothing
       }
