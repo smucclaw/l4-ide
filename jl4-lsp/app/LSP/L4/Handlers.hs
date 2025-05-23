@@ -47,7 +47,7 @@ import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
 import qualified LSP.L4.Viz.CustomProtocol as Ladder
-import LSP.L4.Viz.CustomProtocol (IsLadderRequestParams)
+import LSP.L4.Viz.CustomProtocol (LadderRequestParams)
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -522,7 +522,7 @@ newtype VizHandler (method :: Symbol) a = MkVizHandler
     IO a)
   deriving newtype (Functor, Applicative, Monad, MonadError (TResponseError (Method_CustomMethod @ClientToServer @Request method)), MonadIO)
 
-runVizHandlerM :: Ladder.IsCustomMethod method => VizHandler method a -> IO (Either (TResponseError (Method_CustomMethod @ClientToServer @Request method)) a)
+runVizHandlerM :: Ladder.CustomMethod method => VizHandler method a -> IO (Either (TResponseError (Method_CustomMethod @ClientToServer @Request method)) a)
 runVizHandlerM (MkVizHandler m) = runExceptT m
 
 -------------------------------------------------------------------------
@@ -531,8 +531,8 @@ runVizHandlerM (MkVizHandler m) = runExceptT m
 
 withVizRequestContext
   :: forall (method :: Symbol) a params.
-       ( Ladder.IsCustomMethod method
-       , IsLadderRequestParams params )
+       ( Ladder.CustomMethod method
+       , LadderRequestParams params )
   => Recorder (WithPriority Log)
   -> Proxy method
   -> MessageParams ('Method_CustomMethod method)
@@ -575,8 +575,8 @@ withVizRequestContext recorder method params ide handlerKont = do
   the verTxtDocId in the original 'please render this VizExpr' request -}
 checkVizVersion
   :: forall (method :: Symbol) params.
-     (Ladder.IsCustomMethod method,
-      IsLadderRequestParams params)
+     (Ladder.CustomMethod method,
+      LadderRequestParams params)
   => params
   -> Shake.RecentlyVisualised
   -> VizHandler method ()
@@ -596,7 +596,7 @@ checkVizVersion reqParams recentViz = do
 -- | Helper to handle JSON decoding errors when decoding params of custom requests
 guardDecodeParams
   :: forall (method :: Symbol) a.
-     (Ladder.IsCustomMethod method, IsLadderRequestParams a)
+     (Ladder.CustomMethod method, LadderRequestParams a)
   => MessageParams ('Method_CustomMethod method)
   -> VizHandler method a
 guardDecodeParams params =
