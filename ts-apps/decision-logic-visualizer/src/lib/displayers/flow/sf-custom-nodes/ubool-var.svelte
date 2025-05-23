@@ -7,6 +7,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { Handle } from '@xyflow/svelte'
+  import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -29,19 +30,31 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   </div>
   {#if data.canInline}
     <div class="absolute bottom-1 right-1">
-      <button
-        class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
-        onclick={() => {
-          console.log('inline lir id', data.originalLirId.toString())
+      <Tooltip.Provider>
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <button
+              class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+              onclick={() => {
+                console.log('inline lir id', data.originalLirId.toString())
 
-          const uniq = (
-            data.context.get(data.originalLirId) as UBoolVarLirNode
-          ).getUnique(data.context)
-          l4Conn.inlineExprs([uniq], ladderEnv.getVersionedTextDocIdentifier())
-        }}
-      >
-        +
-      </button>
+                const uniq = (
+                  data.context.get(data.originalLirId) as UBoolVarLirNode
+                ).getUnique(data.context)
+                l4Conn.inlineExprs(
+                  [uniq],
+                  ladderEnv.getVersionedTextDocIdentifier()
+                )
+              }}
+            >
+              +
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>
+            <p>Unfold to definition</p>
+          </Tooltip.Content>
+        </Tooltip.Root>
+      </Tooltip.Provider>
     </div>
   {/if}
   <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
