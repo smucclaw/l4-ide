@@ -19,3 +19,27 @@ overloaded.l4:47:8-35:
   Vector
 overloaded.l4:66:1-38:
   Vector OF 75, 50
+overloaded.l4:94:1-38:
+  TRUE
+overloaded.l4:95:1-38:
+  FALSE
+overloaded.l4:96:1-38:
+  FALSE
+overloaded.l4:98:1-36:
+  TRUE
+overloaded.l4:99:1-36:
+  TRUE
+overloaded.l4:100:1-36:
+  FALSE
+overloaded.l4:102:1-41:
+  FALSE
+overloaded.l4:103:1-41:
+  FALSE
+overloaded.l4:104:1-41:
+  TRUE
+overloaded.l4:106:1-37:
+  FALSE
+overloaded.l4:107:1-37:
+  TRUE
+overloaded.l4:108:1-37:
+  TRUE
