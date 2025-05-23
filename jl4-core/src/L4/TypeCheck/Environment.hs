@@ -33,6 +33,15 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "plus" `rename` "__PLUS__"
+  , "minus" `rename` "__MINUS__"
+  , "times" `rename` "__TIMES__"
+  , "divide" `rename` "__DIVIDE__"
+  , "modulo" `rename` "__MODULO__"
+  , "lt" `rename` "__LT__" `variants` ["Number", "String", "Bool"]
+  , "leq" `rename` "__LEQ__" `variants` ["Number", "String", "Bool"]
+  , "gt" `rename` "__GT__" `variants` ["Number", "String", "Bool"]
+  , "geq" `rename` "__GEQ__" `variants` ["Number", "String", "Bool"]
   , "a", "b", "c", "d", "g", "h", "i"
   ]
 
@@ -59,9 +68,6 @@ list a = app listRef [a]
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]
 
-
--- infos
-
 -- Number conversion
 
 isInteger :: Type' Resolved
@@ -76,7 +82,59 @@ ceilingBuiltin = fun_ [number] number
 floorBuiltin :: Type' Resolved
 floorBuiltin = fun_ [number] number
 
--- Number conversion
+-- Basic Arithmetic
+
+plusBuiltin :: Type' Resolved
+plusBuiltin = binOpFun
+
+minusBuiltin :: Type' Resolved
+minusBuiltin = binOpFun
+
+timesBuiltin :: Type' Resolved
+timesBuiltin = binOpFun
+
+divideBuiltin :: Type' Resolved
+divideBuiltin = binOpFun
+
+moduloBuiltin :: Type' Resolved
+moduloBuiltin = binOpFun
+
+binOpFun :: Type' Resolved
+binOpFun = fun_ [number, number] number
+
+ltBuiltins :: [Type' Resolved]
+ltBuiltins = compBuiltins
+
+leqBuiltins :: [Type' Resolved]
+leqBuiltins = compBuiltins
+
+gtBuiltins :: [Type' Resolved]
+gtBuiltins = compBuiltins
+
+geqBuiltins :: [Type' Resolved]
+geqBuiltins = compBuiltins
+
+-- Order of types must match the order in the '*Builtins'
+ltUniques :: [Unique]
+ltUniques = [ltNumberUnique,  ltStringUnique,  ltBoolUnique]
+
+leqUniques :: [Unique]
+leqUniques = [leqNumberUnique, leqStringUnique, leqBoolUnique]
+
+gtUniques :: [Unique]
+gtUniques = [gtNumberUnique,  gtStringUnique,  gtBoolUnique]
+
+geqUniques :: [Unique]
+geqUniques = [geqNumberUnique, geqStringUnique, geqBoolUnique]
+
+allComparisonUniques :: [Unique]
+allComparisonUniques =
+  ltUniques <> leqUniques <> gtUniques <> geqUniques
+
+compBuiltins :: [Type' Resolved]
+compBuiltins = [fun_ [ty, ty] boolean | ty <- [number, string, boolean]]
+
+-- infos
 
 booleanInfo :: CheckEntity
 booleanInfo =
@@ -128,6 +186,44 @@ floorInfo :: CheckEntity
 floorInfo =
   KnownTerm floorBuiltin Computable
 
+-- Basic Arithmetic
+
+plusInfo :: CheckEntity
+plusInfo =
+  KnownTerm plusBuiltin Computable
+
+minusInfo :: CheckEntity
+minusInfo =
+  KnownTerm minusBuiltin Computable
+
+timesInfo :: CheckEntity
+timesInfo =
+  KnownTerm timesBuiltin Computable
+
+divideInfo :: CheckEntity
+divideInfo =
+  KnownTerm divideBuiltin Computable
+
+moduloInfo :: CheckEntity
+moduloInfo =
+  KnownTerm moduloBuiltin Computable
+
+-- Comparison
+
+ltInfos :: [CheckEntity]
+ltInfos = [KnownTerm ltBuiltin Computable | ltBuiltin <- ltBuiltins]
+
+leqInfos :: [CheckEntity]
+leqInfos = [KnownTerm leqBuiltin Computable | leqBuiltin <- leqBuiltins]
+
+gtInfos :: [CheckEntity]
+gtInfos = [KnownTerm gtBuiltin Computable | gtBuiltin <- gtBuiltins]
+
+geqInfos :: [CheckEntity]
+geqInfos = [KnownTerm gtBuiltin Computable | gtBuiltin <- geqBuiltins]
+
+-- Contract
+
 contractInfo :: CheckEntity
 contractInfo =
   KnownType 2 [] Nothing
@@ -161,28 +257,37 @@ evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOn
 initialEnvironment :: Environment
 initialEnvironment =
   Map.fromList
-    [ (NormalName "BOOLEAN",      [booleanUnique     ])
-    , (NormalName "FALSE",        [falseUnique       ])
-    , (NormalName "TRUE",         [trueUnique        ])
-    , (NormalName "NUMBER",       [numberUnique      ])
-    , (NormalName "STRING",       [stringUnique      ])
-    , (NormalName "LIST",         [listUnique        ])
-    , (NormalName "EMPTY",        [emptyUnique       ])
-    , (NormalName "CONTRACT",     [contractUnique    ])
-    , (NormalName "EVENT",        [eventUnique       ])
-    , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALCONTRACT", [evalContractUnique])
-    , (NormalName "FULFILLED",    [fulfilUnique      ])
-    , (NormalName "IS INTEGER",   [isIntegerUnique ])
-    , (NormalName "ROUND",        [roundUnique     ])
-    , (NormalName "CEILING",      [ceilingUnique   ])
-    , (NormalName "FLOOR",        [floorUnique     ])
+    [ (rawName booleanName,      [booleanUnique     ])
+    , (rawName falseName,        [falseUnique       ])
+    , (rawName trueName,         [trueUnique        ])
+    , (rawName numberName,       [numberUnique      ])
+    , (rawName stringName,       [stringUnique      ])
+    , (rawName listName,         [listUnique        ])
+    , (rawName emptyName,        [emptyUnique       ])
+    , (rawName contractName,     [contractUnique    ])
+    , (rawName eventName,        [eventUnique       ])
+    , (rawName eventCName,       [eventCUnique      ])
+    , (rawName evalContractName, [evalContractUnique])
+    , (rawName fulfilName,       [fulfilUnique      ])
+    , (rawName isIntegerName,    [isIntegerUnique ])
+    , (rawName roundName,        [roundUnique     ])
+    , (rawName ceilingName,      [ceilingUnique   ])
+    , (rawName floorName,        [floorUnique     ])
+    , (rawName plusName,         [plusUnique      ])
+    , (rawName minusName,        [minusUnique     ])
+    , (rawName timesName,        [timesUnique     ])
+    , (rawName divideName,       [divideUnique    ])
+    , (rawName moduloName,       [moduloUnique    ])
+    , (rawName ltName,           ltUniques)
+    , (rawName leqName,          leqUniques)
+    , (rawName gtName,           gtUniques)
+    , (rawName geqName,          geqUniques)
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
 initialEntityInfo :: EntityInfo
 initialEntityInfo =
-  Map.fromList
+  Map.fromList $
     [ (booleanUnique,      (booleanName,      booleanInfo     ))
     , (falseUnique,        (falseName,        falseInfo       ))
     , (trueUnique,         (trueName,         trueInfo        ))
@@ -199,4 +304,19 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (plusUnique,         (plusName,         plusInfo        ))
+    , (minusUnique,        (minusName,        minusInfo       ))
+    , (timesUnique,        (timesName,        timesInfo       ))
+    , (divideUnique,       (divideName,       divideInfo      ))
+    , (moduloUnique,       (moduloName,       moduloInfo      ))
     ]
+    <>
+      [ (uniq, (name, info))
+      | (name, uniqs, infos) <-
+        [ (ltName , ltUniques , ltInfos )
+        , (leqName, leqUniques, leqInfos)
+        , (gtName , gtUniques , gtInfos )
+        , (geqName, geqUniques, geqInfos)
+        ]
+      , (uniq, info) <- zip uniqs infos
+      ]

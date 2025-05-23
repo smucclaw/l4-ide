@@ -52,6 +52,7 @@ library
     prettyprinter,
     safe-exceptions,
     scientific,
+    split,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
@@ -78,6 +79,7 @@ library
     L4.EvaluateLazy.ContractFrame
     L4.ExactPrint
     L4.FindDefinition
+    L4.Desugar
     L4.Lexer
     L4.Nlg
     L4.Parser

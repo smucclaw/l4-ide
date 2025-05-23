@@ -46,6 +46,7 @@ data Value a =
   | ValObligation Environment MaybeEvaluated MaybeEvaluated (MaybeEvaluated' (Maybe RExpr)) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp MaybeEvaluated MaybeEvaluated
   | ValUnaryBuiltinFun UnaryBuiltinFun
+  | ValBuiltinFun BuiltinFun
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
@@ -68,6 +69,18 @@ data UnaryBuiltinFun
   | UnaryFloor
   deriving stock (Show)
 
+data BuiltinFun
+  = PlusFn
+  | MinusFn
+  | TimesFn
+  | DivideFn
+  | ModuloFn
+  | LtFun
+  | LeqFun
+  | GtFun
+  | GeqFun
+  deriving stock (Show)
+
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
 instance NFData a => NFData (Value a) where
@@ -78,7 +91,8 @@ instance NFData a => NFData (Value a) where
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
-  rnf (ValUnaryBuiltinFun r)      = rnf r
+  rnf (ValUnaryBuiltinFun r)      = r `seq` ()
+  rnf (ValBuiltinFun r)           = r `seq` ()
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
@@ -91,10 +105,3 @@ type MaybeEvaluated = MaybeEvaluated' RExpr
 type MaybeEvaluated' = Either WHNF
 
 type RExpr = Expr Resolved
-
-instance NFData UnaryBuiltinFun where
-  rnf :: UnaryBuiltinFun -> ()
-  rnf UnaryIsInteger = ()
-  rnf UnaryRound = ()
-  rnf UnaryCeiling = ()
-  rnf UnaryFloor = ()
