@@ -134,21 +134,17 @@ dsExpr expr = case expr of
     e2' <- dsExpr e2
     pure $ Cons ann e1' e2'
   Leq ann e1 e2 -> do
-    e1' <- dsExpr e1
-    e2' <- dsExpr e2
-    pure $ Leq ann e1' e2'
+    args <- rewriteBinOpAnno expr e1 e2
+    dsExpr $ App (annoNoFunName ann args) (MkName emptyAnno $ rawName TypeCheck.leqName) args
   Lt ann e1 e2 -> do
-    e1' <- dsExpr e1
-    e2' <- dsExpr e2
-    pure $ Lt ann e1' e2'
+    args <- rewriteBinOpAnno expr e1 e2
+    dsExpr $ App (annoNoFunName ann args) (MkName emptyAnno $ rawName TypeCheck.ltName) args
   Gt ann e1 e2 -> do
-    e1' <- dsExpr e1
-    e2' <- dsExpr e2
-    pure $ Gt ann e1' e2'
+    args <- rewriteBinOpAnno expr e1 e2
+    dsExpr $ App (annoNoFunName ann args) (MkName emptyAnno $ rawName TypeCheck.gtName) args
   Geq ann e1 e2 -> do
-    e1' <- dsExpr e1
-    e2' <- dsExpr e2
-    pure $ Geq ann e1' e2'
+    args <- rewriteBinOpAnno expr e1 e2
+    dsExpr $ App (annoNoFunName ann args) (MkName emptyAnno $ rawName TypeCheck.geqName) args
   Proj ann e1 n -> do
     e1' <- dsExpr e1
     pure $ Proj ann e1' n

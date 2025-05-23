@@ -75,6 +75,10 @@ data BuiltinFun
   | TimesFn
   | DivideFn
   | ModuloFn
+  | LtFun
+  | LeqFun
+  | GtFun
+  | GeqFun
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must

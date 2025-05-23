@@ -261,6 +261,10 @@ backward val = WithPoppedFrame $ \ case
         TimesFn -> BinOpTimes
         DivideFn -> BinOpDividedBy
         ModuloFn -> BinOpModulo
+        LtFun -> BinOpLt
+        LeqFun -> BinOpLeq
+        GtFun -> BinOpGt
+        GeqFun -> BinOpGeq
     runBinOp op val1 val
   Just f@(App1 rs) -> do
     case val of
@@ -1186,8 +1190,25 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fulfilRef <- AllocateValue ValFulfilled
+
+  comparisonRefs <-
+    traverse
+      (\(funVal, uniq) -> do
+        r <- AllocateValue funVal
+        pure (uniq, r)
+      )
+      [ (ValBuiltinFun val, unique)
+      | (val, uniques) <-
+          [ (LtFun, TypeCheck.ltUniques)
+          , (LeqFun, TypeCheck.leqUniques)
+          , (GtFun, TypeCheck.gtUniques)
+          , (GeqFun, TypeCheck.geqUniques)
+          ]
+      , unique <- uniques
+      ]
+
   pure $
-    Map.fromList
+    Map.fromList $
       [ (TypeCheck.falseUnique, falseRef)
       , (TypeCheck.trueUnique,  trueRef)
       , (TypeCheck.emptyUnique, nilRef)
@@ -1204,3 +1225,4 @@ initialEnvironment = do
       , (TypeCheck.divideUnique, divideRef)
       , (TypeCheck.moduloUnique, moduloRef)
       ]
+      <> comparisonRefs

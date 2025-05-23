@@ -38,6 +38,10 @@ mkBuiltins
   , "times" `rename` "__TIMES__"
   , "divide" `rename` "__DIVIDE__"
   , "modulo" `rename` "__MODULO__"
+  , "lt" `rename` "__LT__" `variants` ["Number", "String", "Bool"]
+  , "leq" `rename` "__LEQ__" `variants` ["Number", "String", "Bool"]
+  , "gt" `rename` "__GT__" `variants` ["Number", "String", "Bool"]
+  , "geq" `rename` "__GEQ__" `variants` ["Number", "String", "Bool"]
   , "a", "b", "c", "d", "g", "h", "i"
   ]
 
@@ -81,23 +85,56 @@ floorBuiltin = fun_ [number] number
 -- Basic Arithmetic
 
 plusBuiltin :: Type' Resolved
-plusBuiltin = fun_ [number, number] number
+plusBuiltin = binOpFun
 
 minusBuiltin :: Type' Resolved
-minusBuiltin = fun_ [number, number] number
+minusBuiltin = binOpFun
 
 timesBuiltin :: Type' Resolved
-timesBuiltin = fun_ [number, number] number
+timesBuiltin = binOpFun
 
 divideBuiltin :: Type' Resolved
-divideBuiltin = fun_ [number, number] number
+divideBuiltin = binOpFun
 
 moduloBuiltin :: Type' Resolved
-moduloBuiltin = fun_ [number, number] number
+moduloBuiltin = binOpFun
+
+binOpFun :: Type' Resolved
+binOpFun = fun_ [number, number] number
+
+ltBuiltins :: [Type' Resolved]
+ltBuiltins = compBuiltins
+
+leqBuiltins :: [Type' Resolved]
+leqBuiltins = compBuiltins
+
+gtBuiltins :: [Type' Resolved]
+gtBuiltins = compBuiltins
+
+geqBuiltins :: [Type' Resolved]
+geqBuiltins = compBuiltins
+
+-- Order of types must match the order in the '*Builtins'
+ltUniques :: [Unique]
+ltUniques = [ltNumberUnique,  ltStringUnique,  ltBoolUnique]
+
+leqUniques :: [Unique]
+leqUniques = [leqNumberUnique, leqStringUnique, leqBoolUnique]
+
+gtUniques :: [Unique]
+gtUniques = [gtNumberUnique,  gtStringUnique,  gtBoolUnique]
+
+geqUniques :: [Unique]
+geqUniques = [geqNumberUnique, geqStringUnique, geqBoolUnique]
+
+allComparisonUniques :: [Unique]
+allComparisonUniques =
+  ltUniques <> leqUniques <> gtUniques <> geqUniques
+
+compBuiltins :: [Type' Resolved]
+compBuiltins = [fun_ [ty, ty] boolean | ty <- [number, string, boolean]]
 
 -- infos
-
--- Number conversion
 
 booleanInfo :: CheckEntity
 booleanInfo =
@@ -171,6 +208,20 @@ moduloInfo :: CheckEntity
 moduloInfo =
   KnownTerm moduloBuiltin Computable
 
+-- Comparison
+
+ltInfos :: [CheckEntity]
+ltInfos = [KnownTerm ltBuiltin Computable | ltBuiltin <- ltBuiltins]
+
+leqInfos :: [CheckEntity]
+leqInfos = [KnownTerm leqBuiltin Computable | leqBuiltin <- leqBuiltins]
+
+gtInfos :: [CheckEntity]
+gtInfos = [KnownTerm gtBuiltin Computable | gtBuiltin <- gtBuiltins]
+
+geqInfos :: [CheckEntity]
+geqInfos = [KnownTerm gtBuiltin Computable | gtBuiltin <- geqBuiltins]
+
 -- Contract
 
 contractInfo :: CheckEntity
@@ -227,12 +278,16 @@ initialEnvironment =
     , (rawName timesName,        [timesUnique     ])
     , (rawName divideName,       [divideUnique    ])
     , (rawName moduloName,       [moduloUnique    ])
+    , (rawName ltName,           ltUniques)
+    , (rawName leqName,          leqUniques)
+    , (rawName gtName,           gtUniques)
+    , (rawName geqName,          geqUniques)
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
 initialEntityInfo :: EntityInfo
 initialEntityInfo =
-  Map.fromList
+  Map.fromList $
     [ (booleanUnique,      (booleanName,      booleanInfo     ))
     , (falseUnique,        (falseName,        falseInfo       ))
     , (trueUnique,         (trueName,         trueInfo        ))
@@ -255,3 +310,13 @@ initialEntityInfo =
     , (divideUnique,       (divideName,       divideInfo      ))
     , (moduloUnique,       (moduloName,       moduloInfo      ))
     ]
+    <>
+      [ (uniq, (name, info))
+      | (name, uniqs, infos) <-
+        [ (ltName , ltUniques , ltInfos )
+        , (leqName, leqUniques, leqInfos)
+        , (gtName , gtUniques , gtInfos )
+        , (geqName, geqUniques, geqInfos)
+        ]
+      , (uniq, info) <- zip uniqs infos
+      ]
