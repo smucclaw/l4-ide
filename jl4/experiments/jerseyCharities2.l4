@@ -38,19 +38,22 @@ DECIDE `days between` IS
 § `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
 GIVEN entry IS A RegisterEntry
       register IS A CharityRegister
-PARTY Commissioner
-MUST `require annual return from charity`
-WITHIN 14 months OF entry's lastFinancialRecord's financialYear's endDate
-HENCE `annual return requested`
+`annual return requested` MEANS
+  PARTY Commissioner
+  MUST `require annual return from charity` entry
+  WITHIN 14 months OF entry's lastFinancialRecord's financialYear's endDate
+  HENCE `file annual return` entry register
+
 
 GIVEN entry IS A RegisterEntry
       register IS A CharityRegister
       financialData IS A FinancialYearRecord
-PARTY entry
-MUST `file annual return`
-WITHIN 2 months OF `annual return requested`
-HENCE `register updated with annual return` register entry financialData
-LEST  `Commissioner may issue Required Steps Notice`
+`file annual return` MEANS
+  PARTY entry
+  MUST `file annual return`
+  WITHIN 2 months OF `annual return requested`
+  HENCE `register updated with annual return` register entry financialData
+  LEST  `Commissioner may issue Required Steps Notice`
 
 § `Commissioner Publication Duty (Art 8(3), Law 2014 & Art 2, R&O 59/2018)`
 GIVEN entry IS A RegisterEntry
