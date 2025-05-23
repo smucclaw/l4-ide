@@ -46,7 +46,8 @@ import qualified LSP.Core.Shake as Shake
 import LSP.Core.Types.Diagnostics
 import LSP.Core.Types.Location
 import qualified LSP.L4.Viz.Ladder as Ladder
-import           LSP.L4.Viz.CustomProtocol as Ladder
+import qualified LSP.L4.Viz.CustomProtocol as Ladder
+import LSP.L4.Viz.CustomProtocol (IsLadderRequestParams, getVerDocId)
 import LSP.Logger
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Message
@@ -353,7 +354,7 @@ handlers recorder =
                 pure result
 
     , requestHandler (SMethod_CustomMethod (Proxy @Ladder.InlineExprsMethodName)) $ \ide params ->
-        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod InlineExprsMethodName)) ide $
+        liftIO $ runVizHandlerM $ withVizRequestContext recorder (Proxy @Ladder.InlineExprsMethodName) (params :: MessageParams (Method_CustomMethod Ladder.InlineExprsMethodName)) ide $
           \(_inlineExprsParams :: Ladder.InlineExprsRequestParams) _tcRes _recentViz -> undefined
     ]
 
