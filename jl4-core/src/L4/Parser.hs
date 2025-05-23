@@ -524,6 +524,9 @@ enumOrSynonymDecl =
        annoLexeme (spacedToken_ TKIs)
     *> (enumDecl <|> synonymDecl)
 
+separator :: Parser (Lexeme PosToken)
+separator = spacedToken_ TKIs <|> hidden (spacedToken_ TColon)
+
 enumDecl :: Compose Parser WithAnno (TypeDecl Name)
 enumDecl =
   EnumDecl emptyAnno
@@ -735,7 +738,7 @@ reqParam =
   attachAnno $
     MkTypedName emptyAnno
       <$> annoHole name
-      <*  annoLexeme (spacedToken_ TKIs)
+      <*  annoLexeme separator
 --      <*  optional article
       <*> annoHole type'
 
@@ -744,7 +747,7 @@ param =
   attachAnno $
     MkOptionallyTypedName emptyAnno
       <$> annoHole name
-      <*> optional (annoLexeme (spacedToken_ TKIs) *> {- optional article *> -} annoHole type')
+      <*> optional (annoLexeme separator *> {- optional article *> -} annoHole type')
 
 -- |
 -- An expression is a base expression followed by
@@ -1083,7 +1086,7 @@ namedExpr current  =
   attachAnno $
     MkNamedExpr emptyAnno
       <$> annoHole   name
-      <*  annoLexeme (spacedToken_ TKIs)
+      <*  annoLexeme separator
       <*  optional article
       <*> annoHole   (indentedExpr current)
 
