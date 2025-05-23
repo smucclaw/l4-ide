@@ -133,6 +133,13 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
       .filter((n) => !!n) as LadderLirNode[]
   }
 
+  getNonBundlingNodeVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id) as LadderLirNode)
+      .filter((n) => !isBundlingFlowLirNode(n))
+  }
+
   dispose(context: LirContext) {
     this.rawPath.dispose()
     context.clear(this.getId())
@@ -286,9 +293,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   #originalExpr: IRExpr
   #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
-  /** This will have to be updated if (and only if) we change the structure of the graph.
-   * No need to update it, tho, if changing edge attributes.
-   */
   #corefs: Corefs
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
@@ -297,11 +301,17 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
+  #noBundlingNodeDag: DirectedAcyclicGraph<LirId>
+  #selectedForHighlightPaths: Set<LirId> = new Set()
+  /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
+   * No need to update it, tho, if changing edge attributes.
+   */
   #pathsList?: PathsListLirNode
 
   private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
+    noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
@@ -309,6 +319,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
+    this.#noBundlingNodeDag = noBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
     // console.log(
@@ -345,13 +356,38 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
+    // Make the noBundlingNodeDag by replacing source nodes with their immediate predecessors
+    // and sink nodes with their immediate successors
+    // (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
+    const dagNodes = dag
+      .getVertices()
+      .map((v) => nodeInfo.context.get(v) as LadderLirNode)
+    const sources = new Set(
+      dagNodes.filter(isSourceLirNode).map((n) => n.getId())
+    )
+    const sinks = new Set(dagNodes.filter(isSinkLirNode).map((n) => n.getId()))
+
+    const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
+    const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
+    const noSourceDag = toSourceEdges.reduceRight(
+      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
+      dag
+    )
+    const noBundlingNodeDag = fromSinkEdges.reduceRight(
+      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
+      noSourceDag
+    )
+
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
+      noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
       ladderEnv
     )
+
+    // doEval (may not want to start with this?)
     await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
     return ladderGraph
   }
@@ -418,6 +454,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return context.get(source.getValue()) as SourceLirNode
   }
 
+  getOverallSink(context: LirContext): undefined | SinkLirNode {
+    const sink = this.#dag.getSink()
+    if (!isVertex(sink)) return undefined
+    return context.get(sink.getValue()) as SinkLirNode
+  }
+
   /*****************************
         Edge attributes
   ******************************/
@@ -464,6 +506,30 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /*****************************
         Highlight
   ******************************/
+
+  // Selecting nodes in NonBundlingNode version of graph for highlighting
+
+  addNodeToSelection(context: LirContext, node: NonBundlingLadderLirNode) {
+    this.#selectedForHighlightPaths.add(node.getId())
+    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  deselectNode(context: LirContext, node: NonBundlingLadderLirNode) {
+    this.#selectedForHighlightPaths.delete(node.getId())
+    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  // TODO: Also, look into better names for this
+  private syncSelectedForHighlight(_context: LirContext, _selected: Set<LirId>) {
+    console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
+    // TODO
+  }
+
+  // Core highlight ops
 
   clearHighlightEdgeStyles(context: LirContext) {
     const edges = this.#dag.getEdges()
@@ -672,6 +738,11 @@ export type LadderLirNode =
   | BundlingFlowLirNode
   | TrueExprLirNode
   | FalseExprLirNode
+
+export type NonBundlingLadderLirNode = Omit<
+  LadderLirNode,
+  'BundlingFlowLirNode'
+>
 
 /**********************************************
         Bool Lit Lir Nodes
