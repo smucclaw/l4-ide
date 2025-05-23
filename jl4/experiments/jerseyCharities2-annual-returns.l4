@@ -6,6 +6,7 @@ DECLARE Actor IS ONE OF
    Charity HAS entry  IS A RegisterEntry
    Person  HAS person IS A Person
    Role    HAS role   IS A Role
+   OtherActor HAS other  IS A STRING
 
 DECLARE Action IS ONE OF
    Notify  HAS target  IS AN Actor
@@ -21,12 +22,15 @@ GIVETH A CONTRACT Actor Action
   MUST Notify OF Charity charity
                  message "require annual return from charity"
 
-  WITHIN relativeTime OF 14, Month OF charity's lastFinancialRecord's financialYear's endDate
-  HENCE FULFILLED //  `file annual return` entry register
-  WHERE
-    GIVEN n       IS A NUMBER
-          du      IS A DateRel
-    relativeTime MEANS 14
+  WITHIN relativeTime OF 14, Months OF charity's lastFinancialRecord's financialYear's endDate
+  HENCE `file annual return` charity register nextFY
+  WHERE nextFY MEANS relativeTime OF 1, Year OF charity's lastFinancialRecord's financialYear's endDate
+    
+GIVEN n       IS A NUMBER
+      du      IS A DateRel
+relativeTime MEANS n
+
+
 
 DECLARE DateRel IS ONE OF
    Day    HAS n IS A Date
@@ -38,13 +42,14 @@ DECLARE DateRel IS ONE OF
    Year   HAS n IS A Date
    Years  HAS n IS A Date
 
-
--- GIVEN entry IS A RegisterEntry
---       register IS A CharityRegister
---       financialData IS A FinancialYearRecord
--- `file annual return` MEANS
---   PARTY entry
---   MUST `file annual return`
---   WITHIN 2 months OF `annual return requested`
---   HENCE `register updated with annual return` register entry financialData
---   LEST  `Commissioner may issue Required Steps Notice`
+GIVEN charity  IS A RegisterEntry
+      register IS A CharityRegister
+      financialYear IS A NUMBER
+GIVETH A CONTRACT Actor Action
+`file annual return` MEANS
+  PARTY Charity charity
+  MUST Notify OF OtherActor OF "tax authority"
+                 annualReturn
+  WITHIN {- relativeTime OF -} 2 // , Months OF -- previous event
+  HENCE FULFILLED // `register updated with annual return` register entry financialData
+  // `Commissioner may issue Required Steps Notice`
