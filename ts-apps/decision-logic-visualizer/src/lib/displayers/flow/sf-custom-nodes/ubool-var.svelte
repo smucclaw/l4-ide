@@ -34,6 +34,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
         <Tooltip.Root>
           <Tooltip.Trigger>
             <button
+              aria-label="Unfold to definition"
               class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
               onclick={() => {
                 console.log('inline lir id', data.originalLirId.toString())
