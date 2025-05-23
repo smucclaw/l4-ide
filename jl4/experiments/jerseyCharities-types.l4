@@ -99,16 +99,21 @@ DECLARE Role IS ONE OF
 
 -- Notice and Decision types
 DECLARE Notice IS ONE OF
-    RequiredStepsNotice HAS noticeId IS A STRING
-                            issueDate IS A Date
-                            steps IS A LIST OF STRING
-                            deadline IS A Date
-                            reasonCodes IS A LIST OF STRING
-                            complianceStatus IS A ComplianceStatus
-    DeregistrationNotice HAS noticeId IS A STRING
-                             date IS A Date
-                             reasons IS A LIST OF STRING
-                             isVoluntary IS A BOOLEAN
+  required       HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A RequiredStepsNotice
+
+DECLARE RequiredStepsNotice HAS noticeId IS A STRING
+                                issueDate IS A Date
+                                steps IS A LIST OF STRING
+                                deadline IS A Date
+                                reasonCodes IS A LIST OF STRING
+                                complianceStatus IS A ComplianceStatus
+
+
+DECLARE DeregistrationNotice HAS noticeId IS A STRING
+                                 date IS A Date
+                                 reasons IS A LIST OF STRING
+                                 isVoluntary IS A BOOLEAN
 
 DECLARE ComplianceStatus IS ONE OF
     Pending
@@ -143,7 +148,8 @@ DECLARE RegisterSection
     HistoricSection
 
 -- Charitable purposes enumeration (from Art 6 of the Law)
-DECLARE CharitablePurpose
+// let's do this as a list of purposes which are known to be charitable, plus room for "other" purposes
+DECLARE Purpose
   IS ONE OF
     `prevention or relief of poverty`
     `advancement of education`
@@ -161,6 +167,7 @@ DECLARE CharitablePurpose
     `relief of those in need`
     `advancement of animal welfare`
     `analogous purpose`
+    otherPurpose HAS value IS A STRING
 
 -- Information and disclosure types
 DECLARE Information
