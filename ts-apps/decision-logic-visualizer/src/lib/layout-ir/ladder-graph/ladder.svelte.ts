@@ -133,6 +133,15 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
       .filter((n) => !!n) as LadderLirNode[]
   }
 
+  /** Get a sorted (by the pseudo Ord instance for LadderLirNode) array of the non-bundling node vertices */
+  getNonBundlingNodeVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id) as LadderLirNode)
+      .filter((n) => !isBundlingFlowLirNode(n))
+      .toSorted((a, b) => a.compare(b))
+  }
+
   dispose(context: LirContext) {
     this.rawPath.dispose()
     context.clear(this.getId())

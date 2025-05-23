@@ -19,6 +19,8 @@
   const paths = pathsListLirNode.getPaths(context)
 </script>
 
+<!-- TODO: Make this a 'controlled' component / make the selected vs non-selected state a view of that in a more centralized location -->
+
 <section class="paths-list-content-wrapper">
   <ToggleGroup
     type="multiple"
