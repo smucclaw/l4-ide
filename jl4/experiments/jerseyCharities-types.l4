@@ -39,6 +39,8 @@ DECLARE RegisterEntry
         retrospectiveDeregistration IS A BOOLEAN
         deregistrationReason IS A MAYBE STRING
 
+ASSUME lastFinancialRecord IS A FUNCTION FROM RegisterEntry TO FinancialYearRecord
+
 -- Record of a financial year's data
 DECLARE FinancialYearRecord
     HAS financialYear IS A DateRange
@@ -100,7 +102,8 @@ DECLARE Role IS ONE OF
 -- Notice and Decision types
 DECLARE Notice IS ONE OF
   required       HAS notice IS A RequiredStepsNotice
-  deregistration HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A DeregistrationNotice
+  message        HAS notice IS A STRING
 
 DECLARE RequiredStepsNotice HAS noticeId IS A STRING
                                 issueDate IS A Date

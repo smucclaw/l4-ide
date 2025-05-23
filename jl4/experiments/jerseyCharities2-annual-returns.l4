@@ -1,0 +1,50 @@
+IMPORT prelude
+
+IMPORT `jerseyCharities-types`
+
+DECLARE Actor IS ONE OF
+   Charity HAS entry  IS A RegisterEntry
+   Person  HAS person IS A Person
+   Role    HAS role   IS A Role
+
+DECLARE Action IS ONE OF
+   Notify  HAS target  IS AN Actor
+               content IS A Notice
+   Other   HAS act     IS A STRING
+
+§ `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
+GIVEN charity  IS A RegisterEntry
+      register IS A CharityRegister
+GIVETH A CONTRACT Actor Action
+`annual return requested` MEANS
+  PARTY Role OF Commissioner
+  MUST Notify OF Charity charity
+                 message "require annual return from charity"
+
+  WITHIN relativeTime OF 14, Month OF charity's lastFinancialRecord's financialYear's endDate
+  HENCE FULFILLED //  `file annual return` entry register
+  WHERE
+    GIVEN n       IS A NUMBER
+          du      IS A DateRel
+    relativeTime MEANS 14
+
+DECLARE DateRel IS ONE OF
+   Day    HAS n IS A Date
+   Days   HAS n IS A Date
+   Week   HAS n IS A Date
+   Weeks  HAS n IS A Date
+   Month  HAS n IS A Date
+   Months HAS n IS A Date
+   Year   HAS n IS A Date
+   Years  HAS n IS A Date
+
+
+-- GIVEN entry IS A RegisterEntry
+--       register IS A CharityRegister
+--       financialData IS A FinancialYearRecord
+-- `file annual return` MEANS
+--   PARTY entry
+--   MUST `file annual return`
+--   WITHIN 2 months OF `annual return requested`
+--   HENCE `register updated with annual return` register entry financialData
+--   LEST  `Commissioner may issue Required Steps Notice`
