@@ -204,9 +204,10 @@ nfAux d (ValBreached r')            = do
         nfAux (d - 1) whnf
   r <- case r' of
     DeadlineMissed ev'party ev'act ev'timestamp party act deadline -> do
-      party' <- evalAndNF ev'party
+      ev'party' <- evalAndNF ev'party
       act' <- evalAndNF ev'act
-      pure (DeadlineMissed party' act' ev'timestamp party act deadline)
+      party' <- evalAndNF party
+      pure (DeadlineMissed ev'party' act' ev'timestamp party' act deadline)
   pure (MkNF (ValBreached r))
 nfAux _d (ValROp env op l r) = pure (MkNF (ValROp env op l r))
 
@@ -249,7 +250,7 @@ evalModuleAndDirectives env m = do
 
 {- | Evaluate an expression in the context of a module and initial environment.
 
-Didn't try to cache even more computation with rules, 
+Didn't try to cache even more computation with rules,
 because the current Rule type seems to
 be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
 Also, it's not clear how much caching can actually be done,

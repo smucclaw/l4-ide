@@ -431,6 +431,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
     lest' <- traverse addNlg lest
     pure $  MkObligation ann' party' event' deadline' followup' lest'
 
+instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
+  addNlg (MkAction ann rule provided) = do
+    rule' <- addNlg rule
+    provided' <- traverse addNlg provided
+    pure $  MkAction ann rule' provided'
+
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
     When ann pat e -> do

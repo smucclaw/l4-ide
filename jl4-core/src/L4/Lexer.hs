@@ -106,8 +106,6 @@ data TokenType =
   | TKThen
   | TKElse
   | TKOtherwise
-  -- | TKFalse
-  -- | TKTrue
   | TKAnd
   | TKOr
   | TKRAnd
@@ -132,6 +130,7 @@ data TokenType =
   | TKDo
   | TKDoes
   | TKMust
+  | TKProvided
   | TKWithin
   | TKHence
   | TKLest
@@ -435,6 +434,7 @@ keywords =
     , ("DO"         , TKDo         )
     , ("DOES"       , TKDoes       )
     , ("MUST"       , TKMust       )
+    , ("PROVIDED"   , TKProvided   )
     , ("WITHIN"     , TKWithin     )
     , ("HENCE"      , TKHence      )
     , ("LEST"       , TKLest       )
@@ -925,6 +925,7 @@ displayTokenType tt =
     TKDo              -> "DO"
     TKDoes            -> "DOES"
     TKMust            -> "MUST"
+    TKProvided        -> "PROVIDED"
     TKWithin          -> "WITHIN"
     TKHence           -> "HENCE"
     TKLest            -> "LEST"
@@ -1061,6 +1062,7 @@ posTokenCategory =
     TKDo -> CKeyword
     TKDoes -> CKeyword
     TKMust -> CKeyword
+    TKProvided -> CKeyword
     TKWithin -> CKeyword
     TKHence -> CKeyword
     TKLest -> CKeyword

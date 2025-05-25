@@ -210,12 +210,13 @@ instance Linearize (Expr Resolved) where
       , text "else"
       , lin else'
       ]
-    Regulative _ (MkObligation _ party rule mdeadline mfollowup mlest) -> hcat $
+    Regulative _ (MkObligation _ party (MkAction _ rule mprovided) mdeadline mfollowup mlest) -> hcat $
       [ text "party"
       , lin party
-      , text "does"
+      , text "must"
       , lin rule
       ]
+      <> maybe [] (\ provided -> [ text "provided that", lin provided ]) mprovided
       <> maybe [] (\ deadline -> [ text "within", lin deadline ]) mdeadline
       <> maybe [] (\ followup -> [ text "hence",  lin followup ]) mfollowup
       <> maybe [] (\ lest -> [ text "lest",  lin lest ]) mlest

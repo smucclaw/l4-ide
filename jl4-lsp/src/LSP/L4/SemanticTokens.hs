@@ -190,6 +190,7 @@ instance ToSemTokens Context PosToken (AppForm Name) where
 
 instance ToSemTokens Context PosToken (Expr Name) where
 instance ToSemTokens Context PosToken (Obligation Name) where
+instance ToSemTokens Context PosToken (RAction Name) where
 instance ToSemTokens Context PosToken (LocalDecl Name) where
 instance ToSemTokens Context PosToken (Assume Name) where
 instance ToSemTokens Context PosToken (TypedName Name) where
@@ -281,6 +282,7 @@ instance ToSemTokens () PosToken (Type' Resolved) where
 instance ToSemTokens () PosToken (AppForm Resolved) where
 
 instance ToSemTokens () PosToken (Obligation Resolved) where
+instance ToSemTokens () PosToken (RAction Resolved) where
 instance ToSemTokens () PosToken (Event Resolved) where
 instance ToSemTokens () PosToken (Expr Resolved) where
 instance ToSemTokens () PosToken (LocalDecl Resolved) where
