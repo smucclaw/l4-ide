@@ -314,15 +314,23 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
 
 prettyObligation
   :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f, LayoutPrinter l)
-  => p -> a -> Maybe t -> Maybe f -> Maybe l -> Doc ann
+  => p -> a ->  Maybe t -> Maybe f -> Maybe l -> Doc ann
 prettyObligation p a t f l =
   vcat $
     [ "PARTY" <+> printWithLayout p
-    , "DOES" <+> printWithLayout a
+    , printWithLayout a
     ]
-    <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
-    <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
-    <> maybe [] (\ lest -> [ "LEST" <+> printWithLayout lest  ]) l
+    <> mprint "WITHIN" t
+    <> mprint "HENCE" f
+    <> mprint "LEST" l
+  where
+  mprint kw = foldMap \x -> [kw <+> printWithLayout x]
+
+instance LayoutPrinter n => LayoutPrinter (RAction n) where
+  printWithLayout MkAction {action, provided} = hsep
+    [ "MUST", printWithLayout action
+    , "PROVIDED", printWithLayout provided
+    ]
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
@@ -410,7 +418,8 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [ "CONTRACT BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
-    Lazy.ValObligation _env p a t f l -> prettyObligation p a (Just t) (Just f) (Just l)
+    -- FIXME: provided clause probaly has to come back, currently 'Nothing'
+    Lazy.ValObligation _env p a t f l -> prettyObligation p a (Just t) (Just f) l
     Lazy.ValROp _env op l r -> hsep
       [ printWithLayout l
       , case op of ValROr -> "OR"; ValRAnd -> "AND"
@@ -430,16 +439,18 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
     DeadlineMissed ev'party ev'action ev'time party action deadline -> vcat
-      [ i2 $ "party" <+> printWithLayout ev'party
-      , "who did"
-      , i2 $ "action" <+> printWithLayout ev'action
-      , i2 $ "at" <+> pretty (prettyRatio ev'time)
-      , "surpassed the deadline of"
-      , i2 $ "party" <+> printWithLayout party
-      , "who had to do obligatory"
-      , i2 $ "action" <+> printWithLayout action
-      , "before their deadline, which was"
-      , i2 $ "at" <+> pretty (prettyRatio deadline)
+      [ "party"
+      , i2 $ printWithLayout ev'party
+      , "who did action"
+      , i2 $ printWithLayout ev'action
+      , "at"
+      , i2 $ pretty (prettyRatio ev'time)
+      , "surpassed the deadline of party"
+      , i2 $ printWithLayout party
+      , "who had to do obligatory action"
+      , i2 $ printWithLayout action
+      , "before their deadline, which was at"
+      , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
 

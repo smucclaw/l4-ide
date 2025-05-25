@@ -1,7 +1,10 @@
 DECLARE Person IS ONE OF B, S
-DECLARE Action IS ONE OF delivery, payment, return
+DECLARE Action IS ONE OF 
+  delivery 
+  payment HAS amount IS A NUMBER
+  return
 
-#EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B payment 42) 5
+#EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B (payment 3) 42) 5
 
 GIVETH CONTRACT Person Action
 x MEANS 
@@ -12,9 +15,12 @@ x MEANS
 GIVETH CONTRACT Person Action
 y MEANS 
   PARTY B
-  MUST payment
+  MUST payment am PROVIDED am >= 2 && am <= 4
   WITHIN 5
-  LEST FULFILLED
+
+#CONTRACT y AT 0 WITH
+  PARTY B DOES payment 5 AT 5
+  PARTY S DOES delivery AT 20
 
 GIVETH CONTRACT Person Action
 z MEANS 
@@ -29,23 +35,25 @@ a MEANS
   PARTY S DOES delivery AT 4
 
 #CONTRACT y AT 4 WITH 
-  PARTY S DOES delivery AT 4
-  PARTY S DOES delivery AT 9
+  PARTY B DOES payment 4 AT 4
 
 #CONTRACT z AT 4 WITH 
   PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 26
+  PARTY B DOES payment 4 AT 26
 
 #CONTRACT z AT 4 WITH
   PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 26
+  PARTY B DOES payment 5 AT 26
 
-goesOn MEANS PARTY S MUST payment WITHIN 2
+goesOn MEANS 
+  PARTY S 
+  MUST payment n PROVIDED n = 7  
+  WITHIN 2
 
 #CONTRACT goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
-  PARTY B DOES payment AT 3
+  PARTY B DOES payment 6 AT 3
   
 #CONTRACT goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
-  PARTY S DOES payment AT 3
+  PARTY S DOES payment 7 AT 3

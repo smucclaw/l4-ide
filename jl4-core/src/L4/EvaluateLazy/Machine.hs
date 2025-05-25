@@ -234,8 +234,8 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
-  Regulative _ann (MkObligation _ party action due followup lest) ->
-    Backward (ValObligation env (Right party) (Right action) (Right due) (fromMaybe fulfilExpr followup) lest)
+  Regulative _ann (MkObligation _ party action due followup lest) -> do
+    Backward (ValObligation env (Right party) action (Right due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
 
@@ -420,8 +420,10 @@ backwardContractFrame val = \ case
       -- 2. there's a lest clause, i.e. this is an external choice. We continue by reducing
       --    the lest clause
       then case lest of
-        Nothing -> Backward (ValBreached (DeadlineMissed ev'party ev'act stamp party act deadline))
-        -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
+        Nothing -> do
+          -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
+          partyR <- either AllocateValue (`allocate_` env) party
+          Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
         Just lestFollowup -> AllocateValue ev'time
           >>= continueWithFollowup env lestFollowup events
       else do
@@ -439,26 +441,26 @@ backwardContractFrame val = \ case
   Contract8 ScrutinizeParty {..} ->
     case val of
       ValBool True -> do
-        pushCFrame (Contract9 ActionWHNF {..})
-        maybeEvaluate env act
+        -- NOTE: an action pattern and the provided clause is
+        -- just a WHEN branch - if there's no provided clause, then
+        -- the the constant true expression is assumed, i.e. the provided
+        -- branch always passes
+        let actionBranch  = When emptyAnno act.action (fromMaybe trueExpr act.provided)
+            noMatchBranch = Otherwise emptyAnno falseExpr
+        pushCFrame (Contract9 ScrutinizeActions {..})
+        matchBranches ev'act env [actionBranch, noMatchBranch]
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
-  Contract9 ActionWHNF {..} -> do
-    pushCFrame (Contract10 ActionsEqual {act = val, ..})
-    EvalRef ev'act
-  Contract10 ActionsEqual {..} -> do
-    pushCFrame (Contract11 ScrutinizeActions {ev'act = val, ..})
-    runBinOpEquals act val
-  Contract11 ScrutinizeActions {..} ->
+  Contract9 ScrutinizeActions {..} ->
     case val of
       ValBool True -> AllocateValue time
         >>= continueWithFollowup env followup events
       ValBool False -> do
         newTime <- AllocateValue time
-        tryNextEvent ScrutinizeEvents {party = Left party, act = Left act, time = newTime, ..} events
+        tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
   RBinOp1 MkRBinOp1 {..}

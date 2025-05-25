@@ -932,17 +932,27 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   pure (IfThenElse ann e1' e2' e3')
 
 checkObligation
-  :: Anno -> Expr Name -> Expr Name
+  :: Anno -> Expr Name -> RAction Name
   -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
   -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
 checkObligation ann party action due hence lest partyT actionT = do
   partyR <- checkExpr ExpectRegulativePartyContext party partyT
-  actionR <- checkExpr ExpectRegulativeActionContext action actionT
+  actionR <- checkAction action actionT
   let rTy = contract partyT actionT
   dueR <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) due
   henceR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) hence
   lestR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
   pure (MkObligation ann partyR actionR dueR henceR lestR)
+
+checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved)
+checkAction MkAction {anno, action, provided = mprovided} actionT = do
+  (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
+  -- NOTE: the provided clauses must evaluate to booleans
+  provided <- forM mprovided \provided ->
+    extendKnownMany bounds do
+      checkExpr ExpectRegulativeProvidedContext provided boolean
+  pure MkAction {anno, action = pat, provided}
+
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -1944,6 +1954,8 @@ prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
   standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeEventContext expected given =
   standardTypeMismatch [ "The event expr passed to a CONTRACT directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
+  standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

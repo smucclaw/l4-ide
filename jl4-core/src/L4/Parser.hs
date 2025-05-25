@@ -1127,12 +1127,21 @@ obligation = do
     MkObligation emptyAnno
       <$  annoLexeme (spacedToken_ TKParty)
       <*> annoHole (indentedExpr current)
-      <*  annoLexeme (spacedToken_ TKMust)
-      <*  optional (annoLexeme (spacedToken_ TKDo))
-      <*> annoHole (indentedExpr current)
+      <*> annoHole (must current)
       <*> optionalWithHole (deadline current)
       <*> optionalWithHole (hence current)
       <*> optionalWithHole (lest current)
+
+must :: Pos -> Parser (RAction Name)
+must current = attachAnno $
+   MkAction emptyAnno
+     <$> do
+      annoLexeme (spacedToken_ TKMust)
+        *> optional (annoLexeme (spacedToken_ TKDo))
+        *> annoHole (indentedPattern current)
+     <*> optionalWithHole do
+      annoLexeme (spacedToken_ TKProvided)
+        *> annoHole (indentedExpr current)
 
 deadline :: Pos -> AnnoParser (Expr Name)
 deadline current =
