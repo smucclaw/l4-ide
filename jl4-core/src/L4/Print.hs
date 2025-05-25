@@ -35,11 +35,6 @@ instance LayoutPrinter Name where
 instance LayoutPrinter Resolved where
   printWithLayout r = printWithLayout (getActual r)
 
-instance LayoutPrinter a => LayoutPrinter (Maybe a) where
-  printWithLayout = \ case
-    Nothing -> mempty
-    Just a -> printWithLayout a
-
 instance LayoutPrinter RawName where
   printWithLayout = \ case
     NormalName t -> pretty $ quoteIfNeeded t
@@ -193,8 +188,8 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
       vcat $
         [ pretty (replicate i '§') <+>
           case maka of
-            Nothing  -> printWithLayout name
-            Just aka -> printWithLayout name <+> printWithLayout aka
+            Nothing  -> maybe mempty printWithLayout name
+            Just aka -> maybe mempty printWithLayout name <+> printWithLayout aka
         ]
         <> case ds of
           [] -> mempty
@@ -323,14 +318,15 @@ prettyObligation p a t f l =
     <> mprint "WITHIN" t
     <> mprint "HENCE" f
     <> mprint "LEST" l
-  where
-  mprint kw = foldMap \x -> [kw <+> printWithLayout x]
+
+mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
+mprint kw = foldMap \x -> [kw <+> printWithLayout x]
 
 instance LayoutPrinter n => LayoutPrinter (RAction n) where
-  printWithLayout MkAction {action, provided} = hsep
+  printWithLayout MkAction {action, provided} = hsep $
     [ "MUST", printWithLayout action
-    , "PROVIDED", printWithLayout provided
     ]
+    <> mprint "PROVIDED" provided
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
@@ -419,7 +415,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       , indent 2 $ printWithLayout reason
       ]
     -- FIXME: provided clause probaly has to come back, currently 'Nothing'
-    Lazy.ValObligation _env p a t f l -> prettyObligation p a (Just t) (Just f) l
+    Lazy.ValObligation _env p a t f l -> prettyObligation p a (sequenceA t) (Just f) l
     Lazy.ValROp _env op l r -> hsep
       [ printWithLayout l
       , case op of ValROr -> "OR"; ValRAnd -> "AND"
