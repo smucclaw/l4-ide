@@ -182,34 +182,18 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 /* A non-color-based indicator of the value */
 .true-val::after {
   content: '✓';
-  position: absolute;
-  inset-inline: 0;
-  @apply -translate-y-1/2;
-  @apply mx-auto;
-  width: 1rem; /* Circle will be too wide otherwise */
-  font-size: 0.7rem;
-  @apply px-1;
-
-  @apply text-white;
-  @apply bg-cyan-800;
-
-  border-radius: 50%;
+  @apply absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2;
+  @apply w-4 text-[0.7rem] px-1;
+  @apply text-white bg-cyan-800;
+  @apply rounded-full;
 }
 
 .false-val::after {
   content: '✗';
-  position: absolute;
-  inset-inline: 0;
-  @apply -translate-y-1/2;
-  @apply mx-auto;
-  width: 1rem;
-  font-size: 0.7rem;
-  @apply px-1;
-
-  @apply text-white;
-  @apply bg-cyan-800;
-
-  border-radius: 50%;
+  @apply absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2;
+  @apply w-4 text-[0.7rem] px-1;
+  @apply text-white bg-cyan-800;
+  @apply rounded-full;
 }
 
 @utility base-sf-node-styles {
