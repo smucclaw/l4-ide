@@ -195,6 +195,8 @@ instance Linearize (Expr Resolved) where
     App _ n es
       | Just f <- isBuiltinBinary n, [e1, e2] <- es ->
           lin (f e1 e2)
+      | Just f <- isBuiltinUnary n, [e] <- es ->
+          lin (f e)
       | otherwise -> hcat $
       [ linearize n
       ]
@@ -450,6 +452,10 @@ isBuiltinBinary :: Resolved -> Maybe (Expr Resolved -> Expr Resolved -> Expr Res
 isBuiltinBinary r =
   Map.lookup (rawNameToText $ rawName $ getActual r) builtinBinFunctions
 
+isBuiltinUnary :: Resolved -> Maybe (Expr Resolved -> Expr Resolved)
+isBuiltinUnary r =
+  Map.lookup (rawNameToText $ rawName $ getActual r) builtinUnaryFunctions
+
 builtinBinFunctions :: Map Text (Expr Resolved -> Expr Resolved -> Expr Resolved)
 builtinBinFunctions = Map.fromList
   [ (rawNameToText $ rawName TypeCheck.plusName, Plus emptyAnno)
@@ -461,4 +467,14 @@ builtinBinFunctions = Map.fromList
   , (rawNameToText $ rawName TypeCheck.leqName, Leq emptyAnno)
   , (rawNameToText $ rawName TypeCheck.gtName, Gt emptyAnno)
   , (rawNameToText $ rawName TypeCheck.geqName, Geq emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.andName, And emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.orName, Or emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.impliesName, Implies emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.consName, Cons emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.equalsName, Equals emptyAnno)
+  ]
+
+builtinUnaryFunctions :: Map Text (Expr Resolved -> Expr Resolved)
+builtinUnaryFunctions = Map.fromList
+  [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
   ]

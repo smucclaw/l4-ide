@@ -286,8 +286,13 @@ backward val = WithPoppedFrame $ \ case
         EvalRef r
       ValBinaryBuiltinFun fn -> do
         (x, y) <- expect2 rs
-        PushFrame (BinBuiltin1 fn y)
-        EvalRef x
+        case fn of
+          -- 'BinOpCons' doesn't need to evaluate anything!
+          BinOpCons -> do
+            Backward $ ValCons x y
+          _ -> do
+            PushFrame (BinBuiltin1 fn y)
+            EvalRef x
       ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
@@ -802,8 +807,7 @@ lookupTerm env r =
   Map.lookup (getUnique r) env
 
 expectTerm :: Environment -> Resolved -> Machine Reference
-expectTerm env r = do
-  traceShowM ("expectTerm of", getUnique r, rawName $ getOriginal r, fmap fst $ Map.assocs env)
+expectTerm env r =
   case lookupTerm env r of
     Nothing -> InternalException (RuntimeScopeError r)
     Just rf -> pure rf
@@ -1160,10 +1164,10 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fulfilRef <- AllocateValue ValFulfilled
-  andRef <- AllocateValue =<< andValClosure
-  orRef <- AllocateValue orValClosure
-  impliesRef <- AllocateValue impliesValClosure
-  notRef <- AllocateValue notValClosure
+  andRef <- AllocateValue =<< andValClosure trueRef falseRef
+  orRef <- AllocateValue =<< orValClosure trueRef falseRef
+  impliesRef <- AllocateValue =<< impliesValClosure trueRef falseRef
+  notRef <- AllocateValue =<< notValClosure trueRef falseRef
 
   builtinBinOpRefs <-
     traverse
@@ -1211,11 +1215,12 @@ builtinBinOps =
   , unique <- uniques
   ]
 
-andValClosure :: Machine (Value a)
-andValClosure = do
+boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
+boolBinOpClosure true false buildExpr = do
   let
-    na = MkName emptyAnno $ NormalName "a"
-    nb = MkName emptyAnno $ NormalName "b"
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+    nb = mkName "b"
   aDef <- def na
   bDef <- def nb
   aRef <- ref na aDef
@@ -1225,43 +1230,67 @@ andValClosure = do
       [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
       , MkOptionallyTypedName emptyAnno bDef (Just TypeCheck.boolean)
       ])
-    (IfThenElse emptyAnno
-      (Var emptyAnno aRef)
-      (Var emptyAnno bRef)
-      falseExpr)
-    emptyEnvironment
+    (buildExpr aRef bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
 
-notValClosure :: Value a
-notValClosure = ValClosure
-  (MkGivenSig emptyAnno
-    [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
-    ])
-  (IfThenElse emptyAnno
-    (Var emptyAnno TypeCheck.aRef)
-    falseExpr
-    trueExpr)
-  emptyEnvironment
+boolUnaryOpClosure :: Reference -> Reference -> (Resolved -> Expr Resolved) -> Machine (Value a)
+boolUnaryOpClosure true false buildExpr = do
+  let
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+  aDef <- def na
+  aRef <- ref na aDef
+  pure $ ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
 
-orValClosure :: Value a
-orValClosure = ValClosure
-  (MkGivenSig emptyAnno
-    [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
-    , MkOptionallyTypedName emptyAnno TypeCheck.bDef (Just TypeCheck.boolean)
-    ])
-  (IfThenElse emptyAnno
-    (Var emptyAnno TypeCheck.aRef)
-    trueExpr
-    (Var emptyAnno TypeCheck.bRef))
-  emptyEnvironment
+andValClosure :: Reference -> Reference -> Machine (Value a)
+andValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
 
-impliesValClosure :: Value a
-impliesValClosure = ValClosure
-  (MkGivenSig emptyAnno
-    [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
-    , MkOptionallyTypedName emptyAnno TypeCheck.bDef (Just TypeCheck.boolean)
-    ])
-  (IfThenElse emptyAnno
-    (Var emptyAnno TypeCheck.aRef)
-    (Var emptyAnno TypeCheck.bRef)
-    trueExpr)
-  emptyEnvironment
+notValClosure :: Reference -> Reference -> Machine (Value a)
+notValClosure true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orValClosure :: Reference -> Reference -> Machine (Value a)
+orValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesValClosure :: Reference -> Reference -> Machine (Value a)
+impliesValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )

@@ -6,7 +6,6 @@ module LSP.L4.Rules where
 import Base hiding (use)
 import L4.Annotation
 import L4.Citations
-import qualified L4.Desugar as Desugar
 import L4.Evaluate
 import qualified L4.Evaluate as Evaluate
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
@@ -273,13 +272,7 @@ jl4Rules rootDirectory recorder = do
       Right (prog, warns) -> do
         let
           diags = fmap mkNlgWarning warns
-
-        case Desugar.doDesugarModule prog of
-          Left err -> do
-            let dsDiag = mkDesugarDiagnostic err
-            pure (fmap (mkSimpleFileDiagnostic uri) (dsDiag:diags), Nothing)
-          Right dsProg ->
-            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just dsProg)
+        pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names
@@ -634,21 +627,6 @@ jl4Rules rootDirectory recorder = do
         , _relatedInformation = Nothing
         , _data_ = Nothing
         }
-
-    mkDesugarDiagnostic :: Desugar.DesugarError -> Diagnostic
-    mkDesugarDiagnostic e = case e of
-      Desugar.InternalAnnoRewritingError context _ ->
-        Diagnostic
-          { _range = srcRangeToLspRange (rangeOf context)
-          , _severity = Just LSP.DiagnosticSeverity_Error
-          , _code = Nothing
-          , _codeDescription = Nothing
-          , _source = Just "desugar"
-          , _message = Desugar.prettyDesugarError e
-          , _tags = Nothing
-          , _relatedInformation = Nothing
-          , _data_ = Nothing
-          }
 
     evalResultToDiagnostic :: EvalDirectiveResult -> Diagnostic
     evalResultToDiagnostic (MkEvalDirectiveResult range res _trace) = do
