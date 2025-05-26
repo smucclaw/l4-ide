@@ -493,12 +493,27 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   // TODO: Also, look into better names for this
-  private syncSelectedForHighlight(
-    _context: LirContext,
-    _selected: Set<LirId>
-  ) {
+  private syncSelectedForHighlight(context: LirContext, selected: Set<LirId>) {
     console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
-    // TODO
+    // Get the paths through the selected subgraph of the noBundlingNode graph
+    const noBundlingNodePaths = this.#noBundlingNodeDag
+      .induce((nodeId: LirId) => {
+        const isOverallSource =
+          nodeId == (this.getOverallSource(context) as SourceLirNode).getId()
+        const isOverallSink =
+          nodeId == (this.getOverallSink(context) as SinkLirNode).getId()
+        return isOverallSource || isOverallSink || selected.has(nodeId)
+      })
+      .getAllPaths()
+      .filter(
+        (path) =>
+          path.getSource().isEqualTo(this.#dag.getSource()) &&
+          path.getSink().isEqualTo(this.#dag.getSink())
+      )
+
+    // TODO: Get the corresponding lin paths / subgraph of #dag
+    // TODO: Highlight the corresponding lin paths / subgraph of #dag
+    this.clearHighlightEdgeStyles(context)
   }
 
   // Core highlight ops
