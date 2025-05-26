@@ -11,6 +11,7 @@ import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
 import L4.Utils.Ratio (prettyRatio)
+import L4.Evaluate.Operators
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -438,6 +439,20 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+instance LayoutPrinter BinOp where
+  printWithLayout = \ case
+    BinOpPlus -> "PLUS"
+    BinOpMinus -> "MINUS"
+    BinOpTimes -> "TIMES"
+    BinOpDividedBy -> "DIVIDED"
+    BinOpModulo -> "MODULO"
+    BinOpCons -> "FOLLOWED BY"
+    BinOpEquals -> "EQUALS"
+    BinOpLeq -> "AT MOST"
+    BinOpGeq -> "AT LEAST"
+    BinOpLt -> "LESS THAN"
+    BinOpGt -> "GREATER THAN"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case

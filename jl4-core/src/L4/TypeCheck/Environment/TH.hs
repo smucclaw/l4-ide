@@ -90,7 +90,7 @@ mkBuiltin i (MkRenamed name o vars) = do
     ( [ SigD nameName (ConT ''L4.Name)
       , FunD nameName [Clause [] (NormalB nameExp) []]
       ] <> concat defs
-    , i + length nameSuffixes
+    , i + length nameSuffixes + 1
     )
   where
     nameSuffixes =

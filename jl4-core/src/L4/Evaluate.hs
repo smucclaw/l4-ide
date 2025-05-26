@@ -18,7 +18,8 @@ import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.Value
-import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..), BinaryBuiltinFun(..))
+import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
+import qualified L4.EvaluateLazy.Machine as Lazy
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -27,7 +28,6 @@ import L4.Utils.RevList
 import L4.Utils.Ratio
 
 import Data.Either
-import qualified L4.EvaluateLazy.Machine as Lazy
 
 newtype Eval a = MkEval (EvalState -> EvalEnv -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState, MonadReader EvalEnv)
@@ -665,42 +665,37 @@ computeEquals (ValConstructor r1 vs1) (ValConstructor r2 vs2)
   | otherwise                                   = Just False
 computeEquals _                _                = Nothing
 
-
 valBool :: Bool -> Value
 valBool False = falseVal
 valBool True  = trueVal
+
+valInt :: Integer -> Value
+valInt = ValNumber . toRational
 
 runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
 runUnaryBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
-runUnaryBuiltin s vals op = do
-  val :: Rational <- expect1Number s vals
-  pure case op of
-    UnaryIsInteger -> valBool $ isJust $ isInteger val
-    UnaryRound -> valInt $ round val
-    UnaryCeiling -> valInt $ ceiling val
-    UnaryFloor -> valInt $ floor val
-    UnaryPercent -> ValNumber $ val / 100
-  where
-    valInt :: Integer -> Value
-    valInt = ValNumber . toRational
+runUnaryBuiltin s vals op =
+  case op of
+    UnaryIsInteger -> do
+      val <- expect1Number s vals
+      pure $ valBool $ isJust $ isInteger val
+    UnaryRound -> do
+      val <- expect1Number s vals
+      pure $ valInt $ round val
+    UnaryCeiling -> do
+      val <- expect1Number s vals
+      pure $ valInt $ ceiling val
+    UnaryFloor -> do
+      val <- expect1Number s vals
+      pure $ valInt $ floor val
 
-runBinaryBuiltin :: Stack -> [Value] -> BinaryBuiltinFun -> Eval Value
+runBinaryBuiltin :: Stack -> [Value] -> BinOp -> Eval Value
 runBinaryBuiltin s vals op = do
-  let binop = case op of
-        PlusFn -> BinOpPlus
-        MinusFn -> BinOpMinus
-        TimesFn -> BinOpTimes
-        DivideFn -> BinOpDividedBy
-        ModuloFn -> BinOpModulo
-        LtFun -> BinOpLt
-        LeqFun -> BinOpLeq
-        GtFun -> BinOpGt
-        GeqFun -> BinOpGeq
   (a, b) <- expect2 s vals
-  runBinOp binop a b s
+  runBinOp op a b s
 
 expect1 :: Stack -> [a] -> Eval a
 expect1 s = \ case

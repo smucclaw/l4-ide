@@ -3,6 +3,7 @@ module L4.Evaluate.ValueLazy where
 import Base
 import Control.Concurrent (ThreadId)
 import L4.Syntax
+import L4.Evaluate.Operators (BinOp)
 
 -- | Public addresses. These must be globally unique, therefore
 -- we for now include the URI.
@@ -46,7 +47,7 @@ data Value a =
   | ValObligation Environment (Either RExpr (Value a)) (RAction Resolved) (Either (Maybe RExpr) (Value a)) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
   | ValUnaryBuiltinFun UnaryBuiltinFun
-  | ValBinaryBuiltinFun BinaryBuiltinFun
+  | ValBinaryBuiltinFun BinOp
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
@@ -71,18 +72,6 @@ data UnaryBuiltinFun
   | UnaryCeiling
   | UnaryFloor
   | UnaryPercent
-  deriving stock (Show)
-
-data BinaryBuiltinFun
-  = PlusFn
-  | MinusFn
-  | TimesFn
-  | DivideFn
-  | ModuloFn
-  | LtFun
-  | LeqFun
-  | GtFun
-  | GeqFun
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must

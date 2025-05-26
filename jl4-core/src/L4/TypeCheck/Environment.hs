@@ -42,6 +42,12 @@ mkBuiltins
   , "leq" `rename` "__LEQ__" `variants` ["Number", "String", "Bool"]
   , "gt" `rename` "__GT__" `variants` ["Number", "String", "Bool"]
   , "geq" `rename` "__GEQ__" `variants` ["Number", "String", "Bool"]
+  , "and" `rename` "__AND__"
+  , "or" `rename` "__OR__"
+  , "implies" `rename` "__IMPLIES__"
+  , "not" `rename` "__NOT__"
+  , "cons" `rename` "__CONS__"
+  , "equals" `rename` "__EQUALS__"
   , "a", "b", "c", "d", "g", "h", "i"
   ]
 
@@ -134,6 +140,28 @@ geqUniques = [geqNumberUnique, geqStringUnique, geqBoolUnique]
 compBuiltins :: [Type' Resolved]
 compBuiltins = [fun_ [ty, ty] boolean | ty <- [number, string, boolean]]
 
+andBuiltin :: Type' Resolved
+andBuiltin = fun_ [boolean, boolean] boolean
+
+orBuiltin :: Type' Resolved
+orBuiltin = fun_ [boolean, boolean] boolean
+
+impliesBuiltin :: Type' Resolved
+impliesBuiltin = fun_ [boolean, boolean] boolean
+
+notBuiltin :: Type' Resolved
+notBuiltin = fun_ [boolean] boolean
+
+consBuiltin :: Type' Resolved
+consBuiltin = forall' [aDef] $ fun_ [a, list a] (list a)
+  where
+    a = app aRef []
+
+equalsBuiltin :: Type' Resolved
+equalsBuiltin = forall' [aDef] $ fun_ [a, a] boolean
+  where
+    a = app aRef []
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -207,6 +235,26 @@ divideInfo =
 moduloInfo :: CheckEntity
 moduloInfo =
   KnownTerm moduloBuiltin Computable
+
+-- Boolean
+
+andInfo :: CheckEntity
+andInfo = KnownTerm andBuiltin Computable
+
+orInfo :: CheckEntity
+orInfo = KnownTerm orBuiltin Computable
+
+impliesInfo :: CheckEntity
+impliesInfo = KnownTerm impliesBuiltin Computable
+
+notInfo :: CheckEntity
+notInfo = KnownTerm notBuiltin Computable
+
+consInfo :: CheckEntity
+consInfo = KnownTerm consBuiltin Computable
+
+equalsInfo :: CheckEntity
+equalsInfo = KnownTerm equalsBuiltin Computable
 
 -- Comparison
 
@@ -282,6 +330,12 @@ initialEnvironment =
     , (rawName leqName,          leqUniques)
     , (rawName gtName,           gtUniques)
     , (rawName geqName,          geqUniques)
+    , (rawName andName,          [andUnique       ])
+    , (rawName orName,           [orUnique        ])
+    , (rawName impliesName,      [impliesUnique   ])
+    , (rawName notName,          [notUnique       ])
+    , (rawName consName,         [consUnique      ])
+    , (rawName equalsName,       [equalsUnique    ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -300,7 +354,7 @@ initialEntityInfo =
     , (eventCUnique,       (eventCName,       eventCInfo      ))
     , (evalContractUnique, (evalContractName, evalContractInfo))
     , (fulfilUnique,       (fulfilName,       fulfilInfo      ))
-    , (isIntegerUnique,    (isIntegerName,    isIntegerInfo  ))
+    , (isIntegerUnique,    (isIntegerName,    isIntegerInfo   ))
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
@@ -309,6 +363,12 @@ initialEntityInfo =
     , (timesUnique,        (timesName,        timesInfo       ))
     , (divideUnique,       (divideName,       divideInfo      ))
     , (moduloUnique,       (moduloName,       moduloInfo      ))
+    , (andUnique,          (andName,          andInfo         ))
+    , (orUnique,           (orName,           orInfo          ))
+    , (impliesUnique,      (impliesName,      impliesInfo     ))
+    , (notUnique,          (notName,          notInfo         ))
+    , (consUnique,         (consName,         consInfo        ))
+    , (equalsUnique,       (equalsName,       equalsInfo      ))
     ]
     <>
       [ (uniq, (name, info))

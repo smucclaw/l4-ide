@@ -2,7 +2,8 @@ module L4.Evaluate.Value where
 
 import Base
 import L4.Syntax
-import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..), BinaryBuiltinFun(..))
+import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
+import L4.Evaluate.Operators (BinOp)
 
 type Environment = Map Unique Value
 
@@ -12,7 +13,7 @@ data Value =
   | ValList [Value]
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
   | ValUnaryBuiltinFun UnaryBuiltinFun
-  | ValBinaryBuiltinFun BinaryBuiltinFun
+  | ValBinaryBuiltinFun BinOp
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [Value]
   | ValAssumed Resolved
