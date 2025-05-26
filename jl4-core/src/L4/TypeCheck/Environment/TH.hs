@@ -14,9 +14,6 @@ data Renamed = MkRenamed
   { orig :: String
   , chosen :: Maybe String
   , variants :: Maybe [String]
-  -- ^ There cannot be more than 10 variants for the same name
-  -- at the moment.
-  -- This is an arbitrary cut-off, that is easily fixed.
   }
   deriving stock (Eq, Show)
 
@@ -44,20 +41,33 @@ preDef t =
     (NormalName t)
 
 mkBuiltins :: [Renamed] -> Q [Dec]
-mkBuiltins = fmap mconcat . traverse mkBuiltin . zip [1..]
+mkBuiltins rs = fmap concat $ evalStateT (mapM go rs) 1
+  where
+    go :: Renamed -> StateT Int Q [Dec]
+    go renamed = do
+      ix <- get
+      (decs, newIx) <- Base.lift $ mkBuiltin ix renamed
+      put newIx
+      pure decs
 
 builtinUri :: NormalizedUri
 builtinUri = toNormalizedUri (Uri "jl4:builtin")
 
-mkBuiltin :: (Int, Renamed) -> Q [Dec]
-mkBuiltin (i, MkRenamed name o vars) = do
-
+-- | Generate names for builtins.
+--
+-- We receive an initial "unique" value ('Int') which we can use as the start for
+-- generating more than one name. This is used for built-ins with more than one
+-- implementation, for example 'LESS THAN' works for numbers, string, and bool
+-- values.
+-- We produce the next unique that hasn't been used by 'mkBuiltin' already.
+mkBuiltin :: Int -> Renamed -> Q ([Dec], Int)
+mkBuiltin i (MkRenamed name o vars) = do
   nameName <- newName (name <> "Name")
   nameExp <- [| preDef $(pure $ LitE $ StringL $ fromMaybe (map Char.toUpper name) o) |]
 
-  defs <- forM (zip [(0 :: Int) ..] $ fromMaybe [""] vars) \(j, v) -> do
+  defs <- forM (zip [(i :: Int) ..] nameSuffixes) \(j, v) -> do
     unqName <- newName (name <> v <> "Unique")
-    unqExp <- [| MkUnique 'b' (10 * i + j) builtinUri |]
+    unqExp <- [| MkUnique 'b' j builtinUri |]
 
     let unqVar = pure $ VarE unqName
         nameVar = pure $ VarE nameName
@@ -76,8 +86,15 @@ mkBuiltin (i, MkRenamed name o vars) = do
       , FunD refName [Clause [] (NormalB refExp) []]
       ]
 
-  pure $
-    [ SigD nameName (ConT ''L4.Name)
-    , FunD nameName [Clause [] (NormalB nameExp) []]
-    ] <> concat defs
+  pure
+    ( [ SigD nameName (ConT ''L4.Name)
+      , FunD nameName [Clause [] (NormalB nameExp) []]
+      ] <> concat defs
+    , i + length nameSuffixes
+    )
+  where
+    nameSuffixes =
+      case vars of
+        Nothing -> [""]
+        Just vs -> vs
 
