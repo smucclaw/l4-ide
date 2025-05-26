@@ -407,7 +407,13 @@ pattern DefForInlining unique definiens <-
       definiens
 
 {- | Given a @VizState@, a top-level @Decide Resolved@, and a bunch of Uniques,
-inline refs to those Uniques in the Decide.-}
+inline refs to those Uniques in the Decide.
+
+Note:
+- Currently only inlines 'App of no args' exprs
+- Currently requires that the definiens be in the same module as the ref.
+Lifting this restriction is not hard, but it's also not totally obvious that that'd be good UX.
+-}
 inlineExprs :: VizState -> Decide Resolved -> [Int] -> Decide Resolved
 inlineExprs vs = foldr (inlineExpr vs)
 
