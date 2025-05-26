@@ -18,7 +18,7 @@ import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.Value
-import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
+import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..), BinaryBuiltinFun(..))
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -27,6 +27,7 @@ import L4.Utils.RevList
 import L4.Utils.Ratio
 
 import Data.Either
+import qualified L4.EvaluateLazy.Machine as Lazy
 
 newtype Eval a = MkEval (EvalState -> EvalEnv -> (Either EvalException a, EvalState))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadState EvalState, MonadReader EvalEnv)
@@ -260,7 +261,13 @@ trueVal = ValConstructor TypeCheck.trueRef []
 
 initialEnvironment :: Environment
 initialEnvironment =
-  Map.fromList
+  let
+    binOps =
+      [ (unique, ValBinaryBuiltinFun binOp)
+      | (binOp, unique) <- Lazy.builtinBinOps
+      ]
+  in
+  Map.fromList $
     [ (TypeCheck.falseUnique, falseVal)
     , (TypeCheck.trueUnique,  trueVal)
     , (TypeCheck.emptyUnique, ValList [])
@@ -269,6 +276,7 @@ initialEnvironment =
     , (TypeCheck.ceilingUnique, ValUnaryBuiltinFun UnaryCeiling)
     , (TypeCheck.floorUnique, ValUnaryBuiltinFun UnaryFloor)
     ]
+    <> binOps
 
 evalModule :: Module Resolved -> Eval ()
 evalModule (MkModule _ann _uri sec) =
@@ -504,7 +512,10 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
       pushExprFrame (Map.union env'' env') (ss - 1) stack e
     Just (ValUnaryBuiltinFun builtin) -> do
       popFrame val
-      runBuiltin stack0 (reverse (val : vals)) builtin
+      runUnaryBuiltin stack0 (reverse (val : vals)) builtin
+    Just (ValBinaryBuiltinFun builtin) -> do
+      popFrame val
+      runBinaryBuiltin stack0 (reverse (val : vals)) builtin
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
@@ -663,8 +674,8 @@ runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
-runBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
-runBuiltin s vals op = do
+runUnaryBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
+runUnaryBuiltin s vals op = do
   val :: Rational <- expect1Number s vals
   pure case op of
     UnaryIsInteger -> valBool $ isJust $ isInteger val
@@ -676,11 +687,32 @@ runBuiltin s vals op = do
     valInt :: Integer -> Value
     valInt = ValNumber . toRational
 
+runBinaryBuiltin :: Stack -> [Value] -> BinaryBuiltinFun -> Eval Value
+runBinaryBuiltin s vals op = do
+  let binop = case op of
+        PlusFn -> BinOpPlus
+        MinusFn -> BinOpMinus
+        TimesFn -> BinOpTimes
+        DivideFn -> BinOpDividedBy
+        ModuloFn -> BinOpModulo
+        LtFun -> BinOpLt
+        LeqFun -> BinOpLeq
+        GtFun -> BinOpGt
+        GeqFun -> BinOpGeq
+  (a, b) <- expect2 s vals
+  runBinOp binop a b s
+
 expect1 :: Stack -> [a] -> Eval a
 expect1 s = \ case
   [x] -> pure x
   xs ->
     exception (RuntimeTypeError $ "Expected 1 argument but got " <> Text.show (length xs)) s
+
+expect2 :: Stack -> [a] -> Eval (a, a)
+expect2 s = \ case
+  [x, y] -> pure (x, y)
+  xs ->
+    exception (RuntimeTypeError $ "Expected 2 arguments but got " <> Text.show (length xs)) s
 
 expectNumber :: Stack -> Value -> Eval Rational
 expectNumber s = \ case

@@ -19,6 +19,8 @@ module L4.EvaluateLazy.Machine
 , emptyEnvironment
 , prettyEvalException
 , boolView
+-- * Constants exposed for the eager evaluator
+, builtinBinOps
 )
 where
 
@@ -1161,32 +1163,19 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
-  plusRef <- AllocateValue $ ValBinaryBuiltinFun PlusFn
-  minusRef <- AllocateValue $ ValBinaryBuiltinFun MinusFn
-  timesRef <- AllocateValue $ ValBinaryBuiltinFun TimesFn
-  divideRef <- AllocateValue $ ValBinaryBuiltinFun DivideFn
-  moduloRef <- AllocateValue $ ValBinaryBuiltinFun ModuloFn
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fulfilRef <- AllocateValue ValFulfilled
 
-  comparisonRefs <-
+  builtinBinOpRefs <-
     traverse
       (\(funVal, uniq) -> do
-        r <- AllocateValue funVal
+        r <- AllocateValue $ ValBinaryBuiltinFun funVal
         pure (uniq, r)
       )
-      [ (ValBinaryBuiltinFun val, unique)
-      | (val, uniques) <-
-          [ (LtFun , TypeCheck.ltUniques )
-          , (LeqFun, TypeCheck.leqUniques)
-          , (GtFun , TypeCheck.gtUniques )
-          , (GeqFun, TypeCheck.geqUniques)
-          ]
-      , unique <- uniques
-      ]
+      builtinBinOps
 
   pure $
     Map.fromList $
@@ -1200,10 +1189,22 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
-      , (TypeCheck.plusUnique, plusRef)
-      , (TypeCheck.minusUnique, minusRef)
-      , (TypeCheck.timesUnique, timesRef)
-      , (TypeCheck.divideUnique, divideRef)
-      , (TypeCheck.moduloUnique, moduloRef)
       ]
-      <> comparisonRefs
+      <> builtinBinOpRefs
+
+builtinBinOps :: [(BinaryBuiltinFun, Unique)]
+builtinBinOps =
+  [ (val, unique)
+  | (val, uniques) <-
+      [ (LtFun, TypeCheck.ltUniques)
+      , (LeqFun, TypeCheck.leqUniques)
+      , (GtFun, TypeCheck.gtUniques)
+      , (GeqFun, TypeCheck.geqUniques)
+      , (PlusFn, [TypeCheck.plusUnique])
+      , (MinusFn, [TypeCheck.minusUnique])
+      , (TimesFn, [TypeCheck.timesUnique])
+      , (DivideFn, [TypeCheck.divideUnique])
+      , (ModuloFn, [TypeCheck.moduloUnique])
+      ]
+  , unique <- uniques
+  ]

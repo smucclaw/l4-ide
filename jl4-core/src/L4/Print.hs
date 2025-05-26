@@ -381,6 +381,7 @@ instance LayoutPrinter Eager.Value where
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
     Eager.ValClosure{}              -> "<function>"
     Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
+    Eager.ValBinaryBuiltinFun{}     -> "<function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -408,7 +409,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
-    Lazy.ValBinaryBuiltinFun{}           -> "<builtin-function>"
+    Lazy.ValBinaryBuiltinFun{}     -> "<function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
