@@ -317,6 +317,134 @@ Apply to charities\_ra...
 
   `MAY depart location`
 
+### **3.7 Advanced Approaches for Legislation Translation**
+
+#### **3.7.1 The CONTRACT Approach**
+
+For complex legislative processes involving multiple parties and state transitions, the CONTRACT approach provides better structure than simple PARTY/MUST rules. This approach is particularly suited for regulations and administrative procedures.
+
+**Traditional Approach:**
+```l4
+§ `Annual Return Obligation`
+GIVEN charity IS A RegisterEntry
+PARTY Commissioner
+MUST `require annual return from charity` charity
+WITHIN 14 months
+HENCE `annual return requested`
+```
+
+**CONTRACT Approach:**
+```l4
+§ `Annual Return Obligation`
+GIVEN charity IS A RegisterEntry
+      register IS A CharityRegister
+GIVETH A CONTRACT Actor Action
+`annual return process` MEANS
+  PARTY Role OF Commissioner
+  MUST Notify OF Charity charity,
+              message "annual return required"
+  WITHIN 14 months
+  HENCE `charity must file return` charity register
+```
+
+**Benefits of CONTRACT Approach:**
+- **Structured Participants**: Clear typing of who can participate and how
+- **Compositional**: Contract steps can reference other contract processes
+- **State-Aware**: Better integration with register/database state transitions
+- **Simulation-Ready**: Natural fit for `#CONTRACT` simulation directives
+
+#### **3.7.2 Actor/Action Modeling**
+
+When translating legislation, model the participants and their possible actions as structured types rather than using generic strings or simple entities.
+
+**Actor Modeling:**
+```l4
+DECLARE Actor IS ONE OF
+   Charity HAS entry IS A RegisterEntry
+   Person HAS person IS A Person
+   Role HAS role IS A Role
+   OtherActor HAS other IS A STRING  -- For external parties
+```
+
+**Action Modeling:**
+```l4
+DECLARE Action IS ONE OF
+   Notify HAS target IS AN Actor
+              content IS A Notice
+   RegisterCharity HAS application IS A RegisterEntry
+   IssueNotice HAS notice IS A RequiredStepsNotice
+   FileReturn HAS financials IS A FinancialYearRecord
+   Other HAS description IS A STRING  -- Escape hatch
+```
+
+**Why This Approach Works for Legislation:**
+
+1. **Legal Precision**: Matches the way legislation defines specific roles and their permitted/required actions
+2. **Type Safety**: Prevents nonsensical combinations (e.g., a charity cannot issue regulatory notices)
+3. **Extensibility**: Easy to add new actors or actions as legislation evolves
+4. **Traceability**: Clear mapping between code and legal text
+
+#### **3.7.3 Notice and Communication Patterns**
+
+Legislative processes heavily involve formal notices and communications. Model these as structured types:
+
+```l4
+DECLARE Notice IS ONE OF
+  required HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A DeregistrationNotice
+  message HAS content IS A STRING
+  annualReturnRequest  -- Simple notice with no additional data
+```
+
+This allows for precise modeling of different notice types with their specific requirements and content.
+
+#### **3.7.4 Sum Types vs Strings for Legal Concepts**
+
+Replace string-based modeling with sum types for better legal accuracy:
+
+**Instead of:**
+```l4
+DECLARE Purpose IS A STRING
+```
+
+**Use:**
+```l4
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    -- ... other enumerated purposes
+    otherPurpose HAS description IS A STRING  -- For edge cases
+```
+
+**Benefits:**
+- **Enumerated Legal Categories**: Matches how legislation often provides explicit lists
+- **Type Safety**: Prevents typos and ensures consistency
+- **Pattern Matching**: Enables precise legal tests using `CONSIDER/WHEN`
+- **Evolution Path**: `otherPurpose` provides escape hatch for future amendments
+
+#### **3.7.5 Modular Legislation Structure**
+
+For complex legislation with subsidiary regulations, use modular imports:
+
+```l4
+-- Main legislation file
+IMPORT prelude
+IMPORT `charities-types`  -- Shared type definitions
+IMPORT `annual-returns`   -- Specific process modules
+
+-- Types file (charities-types.l4)
+DECLARE RegisterEntry HAS ...
+DECLARE Notice IS ONE OF ...
+
+-- Process file (annual-returns.l4)
+IMPORT `charities-types`
+§ `Annual Return Process (Art 13)`
+-- Contract definitions using shared types
+```
+
+This approach mirrors how real legislation is structured with primary laws and subsidiary regulations, making the code organization more intuitive for legal professionals.
+
 ## **4\. Document Structure & Advanced Concepts**
 
 ### **4.1 Document Organization**

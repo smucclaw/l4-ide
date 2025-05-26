@@ -17,6 +17,8 @@
 | Arts 38-43 & Sched 2 **Law 2014** | Service rules, order-making power, tribunal machinery | Administrative plumbing |  |
 | Arts 1-2 **R\&O 59/2018** | Adds definitions *connected person, core financial information, governor payment* | Extends glossary used by later rules |  |
 | Art 1 **R\&O 60/2018** | Adds definitions *donation, relevant professional, soliciting* | Supports restricted-section funding condition |  |
+| Art 6(2) (Law) | CharitablePurpose enum \= 13 statutory heads | Used by Art 5 charity-test & application form |  |
+| **Reg 1** (Core Financial Info Regs 2018\) | CoreFinancialField \= { income, expenditure, openingAssets, closingAssets, otherAssetsList } | Imported by Art 11(2)(e) & Annual Return rules |  |
 
 ---
 
@@ -34,8 +36,17 @@
 | **B-APP-01** | PROCEDURE | OBLIGES | Commissioner | When making appealable decision | Serve notice **with reasons \+ last appeal date** | Decision vulnerable if notice absent |  |
 | **B-APP-02** | PROCEDURE | OBLIGES | Appellant (charity / applicant) | Decision notice served | Lodge appeal **within 28 days** (charity) | Appeal struck out if late (tribunal may extend) |  |
 | **B-APP-03** | PROCEDURE | OBLIGES | Third party | Decision notice served | Lodge appeal **within 56 days** | Same |  |
+| B-APP-00 | CONDUCT | OBLIGES | *Applicant entity* | Making an application (Art 11(1)–(2)) | Provide: constitution \+ purposes \+ public-benefit stmt \+ core financial info | Application incomplete ⇒ Commissioner may REFUSE (B-REF-01) |  |
+| **B-REF-01** | PROCEDURE | EMPOWERS | Commissioner | Application fails charity-test **or** lacks required docs | **Refuse registration** and issue “reasons & deadline” notice (R\&O 102/2020 Art 2\) | Applicant may appeal ≤ 28 d |  |
+| **B-CT-01** | CONDUCT | OBLIGES | *Registered charity* | Continuous | Keep purposes exclusively charitable; deliver public-benefit | Breach ⇒ EMPOWERS Commissioner to deregister (Art 16\) |  |
+| **B-PB-01** | PROCEDURE | OBLIGES | Commissioner | Assessing charity-test (Art 7\) | Weigh factors in Art 7(2)-(5) | Decision vulnerable on appeal if factors ignored |  |
+| **B-NAME-01** | CONDUCT | PROHIBITS | Any person | Carrying on activities with word “charity”, “charitable” etc. so as to mislead (Arts 21-23) | Use of protected word without entitlement | Criminal offence (Level 3 fine); Commissioner may seek injunction |  |
+| **B-MIS-01** | CONDUCT | PROHIBITS | Any person | Statement / document to Commissioner (Art 31\) | Knowingly or recklessly false / misleading | Criminal offence |  |
+| **B-GOV-02** | CONDUCT | OBLIGES | Governor | Any *reportable matter* in Art 19(1)(a-h) **incl.** new Order 2025 | Report to Commissioner “as soon as practicable” | Failure signals unfitness; triggers suspension / disqualification powers |  |
+| **B-GOV-03** | PROCEDURE | EMPOWERS | Commissioner | Governor misconduct proved (Art 20\) | **Suspend / disqualify** governor (may impose conditions) | Acting while disqualified \= offence |  |
+| **B-AR-03** | CONDUCT | OBLIGES | Registered charity | Annual Return cycle (Art 13(7)-(10) **\+** Timing Order 2019 **\+** Core & Add. Info Orders) | Include: core financial info, most-recent accounts, governor-payment breakdowns, public-benefit narrative, *and* send **within 2 months** of year-end | Late or incomplete ⇒ lateFlag=True; enables Required Steps Notice |  |
+| **B-APP-03** | PROCEDURE | OBLIGES | Tribunal | Appeal received late but justice favours extension (R\&O 102/2020 Art 7\) | May extend 28/56-day limit | – |  |
 
-*(Table truncated to principal rules; further rules—misleading fundraising offences, name-change duties, etc.—follow the same pattern and can be appended as needed.)*
 
 ---
 
@@ -50,5 +61,6 @@
 | RequiredStepsNoticeLogged | Art 27(4) | Commissioner | noticeId, issueDate, steps\[\], deadline | Notice reference stored under Art 8(3)(k) |  |
 | VoluntaryDeregistration | Art 15 | Charity (Form D1) | deregistrationDate, reason | Entry moved to *historic*; number retired |  |
 | CompulsoryDeregistration | Art 16 | Commissioner | deregistrationDate, grounds, retrospective? | Same; may be back-dated |  |
-
+| RegistrationRefused | Commissioner decision (B-REF-01) | refusalReason, date, appealDeadline | Starts 28-day appeal timer; no Register entry created |  |
+| GovernorSuspended / GovernorDisqualified (already listed) now **cross-linked** to reportableMatterId when suspension follows unreported conviction | Art 20 decision | governorId, status, reason, period | Flags on charity & public list |  |
 ---
