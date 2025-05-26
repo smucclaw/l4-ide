@@ -8,6 +8,7 @@
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
+  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
 
   let { data }: AppDisplayerProps = $props()
 
@@ -16,54 +17,55 @@
     .getBody(data.context)
 </script>
 
-<!-- bg-gray
+<WithContentfulNodeStyles>
+  <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
-<div
-  class={[
-    'base-sf-node-styles bg-gray-100 app-node-border transition-opacity duration-300',
-    ...data.classes,
-  ]}
->
-  <WithNormalHandles>
-    <div
-      class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-    >
-      <!-- Function name -->
-      <div class="font-bold text-[1.1rem]">
-        {data.fnName.label}
-      </div>
-      <!-- Args (see also note above)-->
-      <div class="flex flex-wrap gap-1 justify-center">
-        {#each data.args as arg}
-          <button
-            class={[
-              'border',
-              'border-black',
-              'p-2',
-              'text-xs',
-              'rounded-lg',
-              'cursor-pointer',
-              'bg-white',
-              ...arg.getAllClasses(data.context),
-            ]}
-            onclick={async () => {
-              console.log('clicked: ', arg.getLabel(data.context), arg.getId())
+  <div class={['bg-gray-100 app-node-border', ...data.classes]}>
+    <WithNormalHandles>
+      <div
+        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+      >
+        <!-- Function name -->
+        <div class="font-bold text-[1.1rem]">
+          {data.fnName.label}
+        </div>
+        <!-- Args (see also note above)-->
+        <div class="flex flex-wrap gap-1 justify-center">
+          {#each data.args as arg}
+            <button
+              class={[
+                'border',
+                'border-black',
+                'p-2',
+                'text-xs',
+                'rounded-lg',
+                'cursor-pointer',
+                'bg-white',
+                ...arg.getAllClasses(data.context),
+              ]}
+              onclick={async () => {
+                console.log(
+                  'clicked: ',
+                  arg.getLabel(data.context),
+                  arg.getId()
+                )
 
-              const newValue = cycle(arg.getValue(data.context))
-              await ladderGraph.submitNewBinding(data.context, {
-                unique: arg.getUnique(data.context),
-                value: newValue,
-              })
-            }}
-          >
-            {arg.getLabel(data.context)}
-          </button>
-        {/each}
+                const newValue = cycle(arg.getValue(data.context))
+                await ladderGraph.submitNewBinding(data.context, {
+                  unique: arg.getUnique(data.context),
+                  value: newValue,
+                })
+              }}
+            >
+              {arg.getLabel(data.context)}
+            </button>
+          {/each}
+        </div>
       </div>
-    </div>
-  </WithNormalHandles>
-</div>
+    </WithNormalHandles>
+  </div>
+</WithContentfulNodeStyles>
 
 <style>
   .app-node-border {

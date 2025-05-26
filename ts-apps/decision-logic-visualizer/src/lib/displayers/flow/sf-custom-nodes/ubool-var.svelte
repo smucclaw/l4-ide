@@ -8,6 +8,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
+  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -47,35 +48,33 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` 
 TODO: Look into why this is the case --- are they not re-mounting the ubool-var component? 
 -->
-<div
-  class={[
-    'base-sf-node-styles bool-var-node-border transition-opacity duration-300',
-    ...data.classes,
-  ]}
->
-  <WithNormalHandles>
-    <button
-      class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-      onclick={() => {
-        const ladderGraph = ladderEnv
-          .getTopFunDeclLirNode(data.context)
-          .getBody(data.context)
-        const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
-        const newValue = cycle(node.getValue(data.context))
-        ladderGraph.submitNewBinding(data.context, {
-          unique: node.getUnique(data.context),
-          value: newValue,
-        })
-      }}
-    >
-      {data.name.label}
-    </button>
-    {#if data.canInline}
-      {@render inlineUI()}
-    {/if}
-  </WithNormalHandles>
-</div>
+<WithContentfulNodeStyles>
+  <div class={['bool-var-node-border', ...data.classes]}>
+    <WithNormalHandles>
+      <button
+        class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+        onclick={() => {
+          const ladderGraph = ladderEnv
+            .getTopFunDeclLirNode(data.context)
+            .getBody(data.context)
+          const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+
+          const newValue = cycle(node.getValue(data.context))
+          ladderGraph.submitNewBinding(data.context, {
+            unique: node.getUnique(data.context),
+            value: newValue,
+          })
+        }}
+      >
+        {data.name.label}
+      </button>
+      {#if data.canInline}
+        {@render inlineUI()}
+      {/if}
+    </WithNormalHandles>
+  </div>
+</WithContentfulNodeStyles>
 
 <style>
   .bool-var-node-border {
