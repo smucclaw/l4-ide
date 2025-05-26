@@ -21,7 +21,7 @@
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
 <div
   class={[
-    'svelte-flow__node-basic bg-gray-100 app-node-border transition-opacity duration-300',
+    'base-sf-node-styles bg-gray-100 app-node-border transition-opacity duration-300',
     ...data.classes,
   ]}
 >

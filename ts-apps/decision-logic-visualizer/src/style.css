@@ -179,7 +179,7 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   background-color: var(--color-false-value) !important;
 }
 
-@utility svelte-flow__node-basic {
+@utility base-sf-node-styles {
   font-size: 1rem;
   text-align: center;
 
@@ -225,7 +225,7 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 
 /** For the source and sink bundling nodes */
 @utility bundling-node {
-  @apply svelte-flow__node-basic;
+  @apply base-sf-node-styles;
   /* Will lose the bundling node if width is 0 px */
   width: 1px;
   height: 1px;

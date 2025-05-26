@@ -10,7 +10,7 @@
  Also no cursor-pointer -->
 <div
   class={[
-    'svelte-flow__node-basic bool-lit-node-border transition-opacity duration-300',
+    'base-sf-node-styles bool-lit-node-border transition-opacity duration-300',
     'select-none',
     ...data.classes,
   ]}

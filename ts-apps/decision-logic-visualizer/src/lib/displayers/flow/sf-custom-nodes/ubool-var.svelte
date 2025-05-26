@@ -49,7 +49,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 -->
 <div
   class={[
-    'svelte-flow__node-basic bool-var-node-border transition-opacity duration-300',
+    'base-sf-node-styles bool-var-node-border transition-opacity duration-300',
     ...data.classes,
   ]}
 >
