@@ -1,505 +1,737 @@
-# **L4: A Guide for Legal Professionals with Python Experience**
+# **L4: A Learning Guide for Legal Professionals**
 
 ## **Introduction**
 
-L4 is a specialized programming language designed for the precise, machine-readable formalization of legal documents including legislation, regulations, and contracts. It creates "computable documents" that a computer can analyze and execute while maintaining isomorphism with the original legal text.For Python programmers, think of L4 as a declarative, domain-specific language (DSL) focused on defining *what things are* (data structures, types) and *what rules apply* (decisions, relationships, processes), rather than step-by-step instructions. Its syntax is crafted for readability that aligns with common legal phrasings.
+L4 is a programming language designed specifically for translating legal documents into precise, executable code. This guide will take you step-by-step from writing your first legal rule to modeling complete regulatory schemes like the Jersey Charities Law.
 
-## **1\. L4 Fundamentals**
+**What You'll Learn:**
+- How to write legal rules that a computer can understand and execute
+- How to model complex legal relationships and processes
+- How to test and simulate legal scenarios
+- How to organize and maintain large bodies of legislation
 
-### **1.1 Core Syntax**
+**Prerequisites:** 
+- Basic familiarity with legal concepts
+- No programming experience required (we'll teach you what you need)
 
-| Feature | L4 | Python Equivalent | L4 Notes || \-------------------- | \------------------------------------- | \-------------------- | \------------------------------------------------- || Naming Things | \`\` `applicant's age` \`\` | `applicants_age` | Backticks allow spaces and legal-like phrases || Comments | `-- Comment` or `{- Block comment -}` | `# Comment` | Multiple styles for documenting code || Booleans | `TRUE`, `FALSE` | `True`, `False` | Case-sensitive keywords || Logical Operators| `AND`, `OR`, `NOT` | `and`, `or`, `not` | Plus `ANY`, `ALL` for list conditions || Grouping | Indentation; `( )` for override | `( )` for grouping | Indentation for expressions mimics legal structure || Sections | `§ Title`, `§§ Subtitle` | N/A | Mirrors legal document organization || References | `@ref url https://...` | Comments with links | Embeds citations or source references || Ditto Syntax | `^` (caret) | No direct equivalent | Repeats elements from the line above in columns |
+---
 
-### **1.2 Data Types**
+# **Part 1: Your First Legal Rule**
 
-#### **Basic Types**
+Let's start with something every lawyer understands: a simple legal obligation.
 
-* `BOOLEAN`: `TRUE` or `FALSE`
-* `STRING`: Text in double quotes, e.g., `"Contract Clause 3.a"`
-* `NUMBER`: Numerical values
-* Specialized types like `Date` and `Money` (often from libraries)
+## **1.1 A Single Legal Obligation**
 
-#### **User-Defined Types**
+**Example:** "A registered charity must file an annual return."
 
-1. Type Aliases
-2. l4
-3. Apply to charities\_ra...
-4.    ``DECLARE `Contract Deadline` IS A Date``
-5.    ``DECLARE `Monetary Penalty` IS A Money``
-1. Enumerations & Sum Types
-2. l4
-3. Apply to charities\_ra...
-4.    `DECLARE SecurityType IS ONE OF`
-5.       `CommonStock`
-6.       `PreferredStock`
-7.       `SAFE_Note`
-8.    `DECLARE PaymentMethod IS ONE OF`
-9.       `CreditCard  HAS cardNumber IS A STRING, expiryDate IS A Date`
-10.       `BankTransfer HAS accountNumber IS A STRING`
-11.       `Cheque       HAS chequeNumber IS A NUMBER`
-1. Records
-2. l4
-3. Apply to charities\_ra...
-4.    `DECLARE Company`
-5.       ``HAS `Name` IS A STRING``
-6.           `` `Incorporation Date` IS A Date ``
-7.           `` `Jurisdiction` IS A STRING ``
-8.           `` `Cap Table` IS A LIST OF `Cap Table Entry` ``
-
-Creating instances:
-
-l4
-
-Apply to charities\_ra...
-
-   `` `Acme Corp` MEANS ``
-
-     ``Company WITH `Name` IS "Acme Corporation"``
-
-                  `` `Incorporation Date` IS Date OF 2020, 1, 15 ``
-
-                  `` `Jurisdiction` IS "Delaware" ``
-
-Shorthand (values in declaration order):
-
-l4
-
-Apply to charities\_ra...
-
-   `` `Beta LLC` MEANS Company OF "Beta LLC", Date OF 2021, 6, 1, "Nevada", EMPTY_LIST ``
-
-1. Optional Types with `MAYBE`
-2. l4
-3. Apply to charities\_ra...
-4.    `DECLARE Person`
-5.       `HAS name IS A STRING`
-6.           `middleName IS A MAYBE STRING -- Can be absent/nothing`
-
-## **2\. Expressing Logic**
-
-### **2.1 Simple Definitions**
-
-l4
-
-Apply to charities\_ra...
-
-`` `Standard Interest Rate` MEANS 0.05 -- 5% ``
-
-`` `Governing Law` MEANS "State of New York" ``
-
-### **2.2 Decision Functions**
-
-The heart of L4 for legal rules:
-
-l4
-
-Apply to charities\_ra...
-
-`GIVEN applicant_age IS A NUMBER`
-
-      `years_of_residency IS A NUMBER`
-
-`GIVETH BOOLEAN`
-
-``DECIDE `is eligible for benefit X` IF``
-
-    `applicant_age GREATER THAN OR EQUAL TO 18`
-
-    `AND years_of_residency GREATER THAN OR EQUAL TO 5`
-
-### **2.3 Conditional Logic**
-
-l4
-
-Apply to charities\_ra...
-
-`GIVEN order_value IS A Money`
-
-`GIVETH Money`
-
-``DECIDE `shipping_cost` IS``
-
-    `IF order_value GREATER THAN Money OF 100, "USD"`
-
-    `THEN Money OF 0, "USD"  -- Free shipping`
-
-    `ELSE Money OF 10, "USD" -- Standard shipping`
-
-### **2.4 Local Definitions with `WHERE`**
-
-l4
-
-Apply to charities\_ra...
-
-`GIVEN principal IS A Money`
-
-      `term IS A NUMBER`
-
-`GIVETH Money`
-
-``DECIDE `total repayment` IS``
-
-    ``principal + (principal * `interest rate` * term)``
-
-    ``WHERE `base rate` IS 0.03``
-
-          `` `risk premium` IS 0.02 ``
-
-          `` `interest rate` IS `base rate` + `risk premium` ``
-
-### **2.5 Functional Patterns (from Prelude)**
-
-l4
-
-Apply to charities\_ra...
-
-`` GIVEN cap_table IS A LIST OF `Cap Table Entry` ``
-
-`` `Total Share Value` MEANS ``
-
-  `sum OF`
-
-    `map OF`
-
-      `GIVEN entry YIELD amount OF entry's Security's Quantity`
-
-      `filter OF`
-
-        `GIVEN entry YIELD entry's Security's Instrument EQUALS "Shares"`
-
-        `cap_table`
-
-## **3\. Regulative Rules & State Transitions**
-
-### **3.1 Core Regulative Syntax**
-
-l4
-
-Apply to charities\_ra...
-
-`` § `Rule_Name` ``
-
-`GIVEN <parties_and_parameters>`
-
-`PARTY <actor_identifier>          -- Who is responsible`
-
-`MUST  <action_with_parameters>    -- What they must do`
-
-`WITHIN <duration_expression>      -- By when`
-
-`HENCE <consequence_if_done>       -- What happens if they do it`
-
-`LEST  <consequence_if_not_done>   -- What happens if they don't`
-
-* Deontic Operators:
-* `MUST`: Obligation to perform an action
-* `MAY`: Permission to perform an action
-* `SHANT`/`MUSTNT`: Prohibition from performing an action
-* Temporal Constraint:
-* `WITHIN <duration>`: Specifies a deadline
-* `BEFORE <timepoint>`: Alternative syntax for deadlines
-* Outcome Paths:
-* `HENCE`: Transition that occurs if the obligation is fulfilled or permission exercised
-* `LEST`: Transition that occurs if the obligation is not fulfilled or prohibition violated
-
-### **3.2 External Choice**
-
-External choice is an important concept in L4's regulative rules modeling. It refers to decisions made by parties that affect which state transition path is taken.When a party has an obligation (`MUST`) or permission (`MAY`), there are typically two possible outcomes:
-
-1. The party performs the action by the deadline (leading to the `HENCE` path)
-1. The party does not perform the action or misses the deadline (leading to the `LEST` path)
-
-This is "external" to the contract system \- the choice is made by the party, not predetermined by the contract logic. It's similar to the concept of non-determinism in process algebras like CSP.
-
-l4
-
-Apply to charities\_ra...
-
-`-- Example of external choice:`
-
-`PARTY seller`
-
-`MUST  deliver goods`
-
-`WITHIN 10 days`
-
-`HENCE payment_step        -- If seller chooses to deliver on time`
-
-`LEST  contract_violation  -- If seller chooses not to deliver on time`
-
-In simulation or analysis, these external choices can be traced to see the resulting states.
-
-### **3.3 Contract Simulation with `#CONTRACT`**
-
-L4 provides a powerful directive for simulating contract execution:
-
-l4
-
-Apply to charities\_ra...
-
-`#CONTRACT <InitialContractStep> <Actor1> <Actor2> ... <InitialState> AT <StartTime> WITH`
-
-  `PARTY <Actor> DOES <Action> AT <ActionTime>`
-
-  `PARTY <Actor> DOES <Action> AT <ActionTime>`
-
-  `-- more events...`
-
-This allows you to:
-
-* Start from an initial contract state
-* Specify a sequence of actions by parties at specific times
-* See how the contract state evolves
-* Observe whether the contract reaches `FULFILLED` or `BREACH` states
-
-Example:
-
-l4
-
-Apply to charities\_ra...
-
-``#CONTRACT `Investment Agreement` investor company initialState AT 1 WITH``
-
-  `PARTY investor DOES pay 200 AT 2         -- Investor pays on day 2`
-
-  `PARTY company DOES issue (shares 300) AT 5   -- Company issues shares on day 5`
-
-This simulation demonstrates the external choices made by the investor and company, and shows the resulting contract state.
-
-### **3.4 Modeling Powers with `changeRights`**
-
-L4 can model the power to modify rights or obligations using the `changeRights` action with `SUCHTHAT`:
-
-l4
-
-Apply to charities\_ra...
-
-`PARTY authority`
-
-  `MAY changeRights`
-
-      `SUCHTHAT PARTY subject`
-
-               `MUSTNT perform_action`
-
-This represents a meta-level action that modifies the normative state of the contract.
-
-### **3.5 State Management Approaches**
-
-When working with state transitions, L4 offers three primary approaches for managing state:
-
-1. Immutable Record Updates: Create new state records based on old ones
-2. l4
-3. Apply to charities\_ra...
-4.    `newState MEANS oldState WITH`
-5.      `field1 IS newValue,`
-6.      `field2 IS oldState's field2 + increment`
-1. LET...IN with EVAL: For recursive state updates
-2. l4
-3. Apply to charities\_ra...
-4.    `LET newCount = count + 1`
-5.    ``IN EVAL `RuleName` actor newCount``
-1. Normative state updates via Powers: Using `changeRights` to modify applicable rules
-
-### **3.6 Universal Rules with `EVERY`**
-
-For rules that apply to all instances of a type:
-
-l4
-
-Apply to charities\_ra...
-
-`GIVEN location IS A Location`
-
-`EVERY Person p`
-
-  ``IF `is at` p location``
-
-  `MAY depart location`
-
-### **3.7 Advanced Approaches for Legislation Translation**
-
-#### **3.7.1 The CONTRACT Approach**
-
-For complex legislative processes involving multiple parties and state transitions, the CONTRACT approach provides better structure than simple PARTY/MUST rules. This approach is particularly suited for regulations and administrative procedures.
-
-**Traditional Approach:**
-```l4
-§ `Annual Return Obligation`
-GIVEN charity IS A RegisterEntry
-PARTY Commissioner
-MUST `require annual return from charity` charity
-WITHIN 14 months
-HENCE `annual return requested`
-```
-
-**CONTRACT Approach:**
-```l4
-§ `Annual Return Obligation`
-GIVEN charity IS A RegisterEntry
-      register IS A CharityRegister
-GIVETH A CONTRACT Actor Action
-`annual return process` MEANS
-  PARTY Role OF Commissioner
-  MUST Notify OF Charity charity,
-              message "annual return required"
-  WITHIN 14 months
-  HENCE `charity must file return` charity register
-```
-
-**Benefits of CONTRACT Approach:**
-- **Structured Participants**: Clear typing of who can participate and how
-- **Compositional**: Contract steps can reference other contract processes
-- **State-Aware**: Better integration with register/database state transitions
-- **Simulation-Ready**: Natural fit for `#CONTRACT` simulation directives
-
-#### **3.7.2 Actor/Action Modeling**
-
-When translating legislation, model the participants and their possible actions as structured types rather than using generic strings or simple entities.
-
-**Actor Modeling:**
-```l4
-DECLARE Actor IS ONE OF
-   Charity HAS entry IS A RegisterEntry
-   Person HAS person IS A Person
-   Role HAS role IS A Role
-   OtherActor HAS other IS A STRING  -- For external parties
-```
-
-**Action Modeling:**
-```l4
-DECLARE Action IS ONE OF
-   Notify HAS target IS AN Actor
-              content IS A Notice
-   RegisterCharity HAS application IS A RegisterEntry
-   IssueNotice HAS notice IS A RequiredStepsNotice
-   FileReturn HAS financials IS A FinancialYearRecord
-   Other HAS description IS A STRING  -- Escape hatch
-```
-
-**Why This Approach Works for Legislation:**
-
-1. **Legal Precision**: Matches the way legislation defines specific roles and their permitted/required actions
-2. **Type Safety**: Prevents nonsensical combinations (e.g., a charity cannot issue regulatory notices)
-3. **Extensibility**: Easy to add new actors or actions as legislation evolves
-4. **Traceability**: Clear mapping between code and legal text
-
-#### **3.7.3 Notice and Communication Patterns**
-
-Legislative processes heavily involve formal notices and communications. Model these as structured types:
+In L4, we write this as:
 
 ```l4
-DECLARE Notice IS ONE OF
-  required HAS notice IS A RequiredStepsNotice
-  deregistration HAS notice IS A DeregistrationNotice
-  message HAS content IS A STRING
-  annualReturnRequest  -- Simple notice with no additional data
+GIVEN charity IS A RegisteredCharity
+PARTY charity
+MUST `file annual return`
 ```
 
-This allows for precise modeling of different notice types with their specific requirements and content.
+Let's break this down:
+- `GIVEN charity IS A RegisteredCharity` - This rule applies to registered charities
+- `PARTY charity` - The charity is the one with the obligation  
+- `MUST` - This creates a legal obligation
+- `file annual return` - This is what they must do
 
-#### **3.7.4 Sum Types vs Strings for Legal Concepts**
+**Try it yourself:** Write a rule that says "A solicitor must maintain client confidentiality."
 
-Replace string-based modeling with sum types for better legal accuracy:
+<details>
+<summary>Answer</summary>
 
-**Instead of:**
 ```l4
-DECLARE Purpose IS A STRING
+GIVEN solicitor IS A Solicitor
+PARTY solicitor  
+MUST `maintain client confidentiality`
+```
+</details>
+
+## **1.2 Adding Conditions and Consequences**
+
+Real legal rules have conditions and consequences. Let's make our charity rule more realistic:
+
+```l4
+GIVEN charity IS A RegisteredCharity
+IF charity IS registered
+PARTY charity
+MUST `file annual return`
+WITHIN 2 months OF `end of financial year`
+HENCE `compliance maintained`
+LEST `Commissioner may issue Required Steps Notice`
 ```
 
-**Use:**
+New elements:
+- `IF charity IS registered` - Adds a condition
+- `WITHIN 2 months OF` - Sets a deadline
+- `HENCE` - What happens if they comply
+- `LEST` - What happens if they don't comply
+
+**The Legal Logic:** This captures the complete legal structure: who, what, when, and consequences.
+
+## **1.3 Your First Simulation**
+
+Let's test our rule with some data:
+
+```l4
+-- Create a test charity
+testCharity MEANS RegisteredCharity WITH
+    name IS "Animal Welfare Society"
+    registrationDate IS Date OF 2020, 1, 15
+    financialYearEnd IS Date OF 2023, 12, 31
+
+-- Test the rule
+#EVAL `must file annual return by` testCharity
+```
+
+**What This Does:** L4 can calculate that this charity must file by February 28, 2024 (2 months after December 31, 2023).
+
+**Success Check:** You can now write a basic legal obligation, add conditions and deadlines, and test it with data.
+
+---
+
+# **Part 2: Legal Entities and Relationships**
+
+## **2.1 From Strings to Structured Types**
+
+**Problem:** Using simple text leads to errors and ambiguity.
+
+**Bad approach:**
+```l4
+charity MEANS "Some Charity Name"  -- Just text, no structure
+```
+
+**Better approach - Structured Types:**
+```l4
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING  
+        registrationDate IS A Date
+        address IS A STRING
+        purposes IS A LIST OF Purpose
+```
+
+**Why This Matters:**
+- **Prevents errors:** Can't accidentally use a person where you need a charity
+- **Captures relationships:** Links charities to their purposes, addresses, etc.
+- **Enables validation:** L4 can check if all required information is present
+
+**Example:**
+```l4
+animalCharity MEANS RegisteredCharity WITH
+    name IS "Jersey Animal Welfare"
+    registrationNumber IS "CH001"
+    registrationDate IS Date OF 2020, 1, 15
+    address IS "St. Helier, Jersey"
+    purposes IS LIST `advancement of animal welfare`
+```
+
+## **2.2 Enumerating Legal Categories**
+
+**Legal Insight:** Law often provides specific lists and categories.
+
+Instead of treating charitable purposes as free text:
+```l4
+purposes IS A LIST OF STRING  -- Allows typos and inconsistencies
+```
+
+Use precise legal categories:
 ```l4
 DECLARE Purpose IS ONE OF
     `prevention or relief of poverty`
-    `advancement of education`
+    `advancement of education` 
     `advancement of religion`
-    -- ... other enumerated purposes
+    `advancement of health`
+    `advancement of animal welfare`
+    -- ... other statutory purposes
     otherPurpose HAS description IS A STRING  -- For edge cases
 ```
 
 **Benefits:**
-- **Enumerated Legal Categories**: Matches how legislation often provides explicit lists
-- **Type Safety**: Prevents typos and ensures consistency
-- **Pattern Matching**: Enables precise legal tests using `CONSIDER/WHEN`
-- **Evolution Path**: `otherPurpose` provides escape hatch for future amendments
+- **Matches legal structure:** Mirrors how legislation actually defines categories
+- **Prevents typos:** Can't accidentally write "education advancement" instead of "advancement of education"
+- **Enables legal tests:** Can easily check if all purposes are charitable
 
-#### **3.7.5 Modular Legislation Structure**
+**Pattern matching with legal categories:**
+```l4
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+DECIDE `is charitable purpose` IF
+    CONSIDER p
+    WHEN `advancement of education` THEN TRUE
+    WHEN `advancement of animal welfare` THEN TRUE
+    WHEN `prevention or relief of poverty` THEN TRUE
+    WHEN otherPurpose s THEN `is analogous to charitable purpose` p
+```
 
-For complex legislation with subsidiary regulations, use modular imports:
+## **2.3 Connecting Multiple Entities**
+
+Legal systems involve relationships between multiple entities:
 
 ```l4
--- Main legislation file
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+        isGovernor IS A BOOLEAN
+
+DECLARE RegisteredCharity  
+    HAS name IS A STRING
+        registrationNumber IS A STRING
+        governors IS A LIST OF Person  -- Relationship to people
+        address IS A STRING
+        purposes IS A LIST OF Purpose  -- Relationship to purposes
+```
+
+**Real legal rule using relationships:**
+```l4
+GIVEN governor IS A Person
+      charity IS A RegisteredCharity
+IF governor's isGovernor EQUALS TRUE
+   AND elem governor charity's governors  -- Check the relationship
+PARTY governor
+MUST `act in best interests of charity and beneficiaries`
+```
+
+**Success Check:** You can now model structured legal entities, use proper legal categories, and express relationships between entities.
+
+---
+
+# **Part 3: Multi-Step Legal Processes**
+
+## **3.1 Beyond Single Rules: The CONTRACT Approach**
+
+**Problem:** Real legal processes involve multiple connected steps, not isolated rules.
+
+**Example Process:** Charity registration involves application → assessment → decision → registration → ongoing compliance.
+
+**Traditional approach (limited):**
+```l4
+PARTY applicant MUST `submit application`
+PARTY Commissioner MUST `assess application`  
+PARTY Commissioner MUST `make decision`
+-- These are disconnected rules
+```
+
+**CONTRACT approach (powerful):**
+```l4
+§ `Charity Registration Process`
+GIVEN applicant IS A CharityApplication
+GIVETH A CONTRACT Actor Action
+`registration process` MEANS
+  PARTY Applicant OF applicant
+  MUST ProvideApplication OF applicationContents
+  WITHIN reasonable time
+  HENCE `Commissioner must assess` applicant
+  LEST `application incomplete`
+```
+
+**Key insight:** The `HENCE` creates a connection to the next step in the process.
+
+## **3.2 Actor/Action Patterns**
+
+**Structure who can do what:**
+
+```l4
+DECLARE Actor IS ONE OF
+   Charity HAS entry IS A RegisteredCharity
+   Person HAS person IS A Person
+   Commissioner  -- Regulatory authority
+   Applicant HAS application IS A CharityApplication
+
+DECLARE Action IS ONE OF
+   ProvideApplication HAS contents IS A ApplicationContents
+   AssessApplication HAS application IS A CharityApplication
+   RegisterCharity HAS charity IS A RegisteredCharity
+   IssueNotice HAS notice IS A Notice
+```
+
+**Why This Works:**
+- **Legal precision:** Matches how law defines roles and powers
+- **Prevents errors:** A charity can't issue regulatory notices
+- **Clear authority:** Shows who has power to do what
+
+**Example using structured actors/actions:**
+```l4
+GIVETH A CONTRACT Actor Action
+`registration assessment` MEANS
+  PARTY Commissioner
+  MUST AssessApplication OF application
+  WITHIN 28 days
+  HENCE RegisterCharity OF newCharity
+  LEST `refuse registration with reasons`
+```
+
+## **3.3 State Changes and Register Events**
+
+**Legal processes change official records.** We need to model how actions update the register:
+
+```l4
+DECLARE CharityRegister
+    HAS activeCharities IS A LIST OF RegisteredCharity
+        historicCharities IS A LIST OF RegisteredCharity
+        lastUpdated IS A Date
+
+-- Show how registration changes the register
+GIVEN newCharity IS A RegisteredCharity
+      register IS A CharityRegister
+      date IS A Date
+GIVETH A CharityRegister
+DECIDE `add charity to register` IS
+    CharityRegister WITH
+        activeCharities IS register's activeCharities PLUS newCharity
+        lastUpdated IS date
+```
+
+**Complete process with state changes:**
+```l4
+GIVETH A CONTRACT Actor Action  
+`complete registration` MEANS
+  PARTY Commissioner
+  MUST RegisterCharity OF newCharity
+  HENCE `update register` newRegister newCharity
+  WHERE newRegister MEANS `add charity to register` newCharity currentRegister today
+```
+
+**Success Check:** You can now model connected legal processes, structured authority relationships, and state changes to official records.
+
+---
+
+# **Part 4: Real Regulatory Scheme - Jersey Charities Law**
+
+Now we'll build a complete model of real legislation step by step.
+
+## **4.1 The Three Layers Architecture**
+
+**Real legislation has three types of provisions:**
+
+1. **Structural/Interpretive Layer:** Definitions, institutions, basic concepts
+2. **Deontic Rules Layer:** Obligations, powers, prohibitions  
+3. **Register/State-Transition Layer:** How actions change official records
+
+**Jersey Charities Example:**
+
+**Layer 1 - Structural:**
+```l4
+-- Basic definitions (Art 1-2)
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    -- ... 13 statutory purposes from Art 6(2)
+
+-- Institutions (Art 3-4)  
+Commissioner  -- Created by the Law
+CharityRegister  -- Official register maintained by Commissioner
+```
+
+**Layer 2 - Deontic Rules:**
+```l4
+-- Annual return obligation (Art 13)
+§ `Annual Return Obligation`
+GIVETH A CONTRACT Actor Action
+`annual return process` MEANS
+  PARTY RegisteredCharity  
+  MUST FileReturn OF financialData
+  WITHIN 2 months OF `financial year end`
+  HENCE `transparency maintained`
+  LEST `Commissioner may issue Required Steps Notice`
+```
+
+**Layer 3 - Register Events:**
+```l4
+-- How filing updates the register
+DECLARE RegisterAction IS ONE OF
+    AnnualReturnLogged HAS charity IS A RegisteredCharity
+                          financials IS A FinancialData
+                          date IS A Date
+```
+
+## **4.2 Building Your Register**
+
+**Start with an empty register:**
+```l4
+emptyRegister MEANS CharityRegister 
+    WITH activeCharities IS EMPTY_LIST
+         historicCharities IS EMPTY_LIST
+         nextRegistrationNumber IS 1
+         lastUpdated IS commencement
+```
+
+**Add registration process:**
+```l4
+§ `Charity Registration (Art 11)`
+GIVETH A CONTRACT Actor Action
+`registration process` MEANS
+  PARTY Applicant OF application
+  MUST ProvideApplication OF requiredDocuments
+  WITHIN reasonable time
+  HENCE `Commissioner assessment process` application
+```
+
+**Show the complete flow:**
+```l4
+#CONTRACT `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
+  -- Step 1: Application
+  PARTY applicant DOES ProvideApplication OF applicationDocs AT 10
+  
+  -- Step 2: Assessment  
+  PARTY Commissioner DOES AssessApplication OF application AT 20
+  
+  -- Step 3: Registration
+  PARTY Commissioner DOES RegisterCharity OF newCharity AT 30
+```
+
+## **4.3 Enforcement and Sanctions**
+
+**Real law includes enforcement mechanisms:**
+
+```l4
+-- Governor misconduct (Art 19-20)
+§ `Governor Misconduct Process`
+GIVETH A CONTRACT Actor Action
+`misconduct response` MEANS
+  IF `misconduct discovered`
+  THEN PARTY Commissioner
+       MAY SuspendGovernor OF governor, reason, period
+       HENCE `disciplinary action recorded`
+       LEST `misconduct unaddressed`
+
+-- Required Steps Notice (Art 27)
+§ `Required Steps Notice Power`  
+GIVETH A CONTRACT Actor Action
+`enforcement escalation` MEANS
+  IF `compliance failure detected`
+  THEN PARTY Commissioner
+       MAY IssueNotice OF requiredSteps, deadline
+       HENCE `charity must comply or face deregistration`
+```
+
+## **4.4 Bringing It All Together**
+
+**Complete charity lifecycle simulation:**
+
+```l4
+#CONTRACT `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
+  -- Registration
+  PARTY charity DOES ProvideApplication OF docs AT 10
+  PARTY Commissioner DOES RegisterCharity OF charity AT 20
+  
+  -- Ongoing compliance
+  PARTY charity DOES FileReturn OF year1Financials AT 365
+  PARTY charity DOES FileReturn OF year2Financials AT 730
+  
+  -- Enforcement
+  PARTY Commissioner DOES `discover non-compliance` AT 800
+  PARTY Commissioner DOES IssueNotice OF requiredSteps AT 810
+  PARTY charity DOES `comply with required steps` AT 830
+  
+  -- Voluntary deregistration
+  PARTY charity DOES `request deregistration` AT 1000
+  PARTY Commissioner DOES `move to historic register` AT 1010
+```
+
+**Success Check:** You have modeled a complete regulatory scheme with registration, ongoing compliance, enforcement, and deregistration.
+
+---
+
+# **Part 5: Understanding the Why**
+
+## **5.1 Why Type Safety Matters for Law**
+
+**The Problem:** Legal drafting often suffers from ambiguity and inconsistency.
+
+**Example ambiguity:**
+> "The charity must notify the person responsible within 30 days."
+
+**Questions arise:**
+- Which person? The governor? The secretary? The Commissioner?
+- 30 days from what event?
+- What form should the notification take?
+
+**L4's type safety prevents these problems:**
+
+```l4
+DECLARE NotificationTarget IS ONE OF
+    Governor HAS name IS A STRING
+    Commissioner
+    Secretary HAS name IS A STRING
+
+DECLARE NotificationEvent IS ONE OF  
+    GovernorAppointment HAS date IS A Date
+    ConvictionReported HAS convictionDate IS A Date
+    AddressChange HAS changeDate IS A Date
+
+PARTY charity
+MUST NotifyPerson OF Commissioner, notificationContent
+WITHIN 30 days OF event's date
+```
+
+**Benefits:**
+- **Eliminates ambiguity:** Exactly which person, exactly which event
+- **Prevents inconsistency:** Can't accidentally use wrong notification type
+- **Enables automation:** Computer can check compliance automatically
+
+## **5.2 Why CONTRACT Over Simple Rules**
+
+**Traditional legal drafting:** Each section states an isolated obligation.
+
+**Problem:** Real legal processes are interconnected workflows, not isolated duties.
+
+**Example - Annual Return Process:**
+- Art 13(7): Charity must file return
+- Art 13(8): Commissioner must publish data  
+- Art 27(1): Commissioner may issue Required Steps Notice for non-compliance
+- Art 16(1): Commissioner may deregister for continued non-compliance
+
+**These are connected steps in a process, not separate obligations.**
+
+**CONTRACT approach captures the connections:**
+
+```l4
+§ `Annual Return Workflow`
+GIVETH A CONTRACT Actor Action
+`annual return process` MEANS
+  PARTY RegisteredCharity
+  MUST FileReturn OF financials
+  WITHIN 2 months OF `year end`
+  HENCE `Commissioner publishes data` AND `compliance maintained`
+  LEST `Commissioner empowered to issue Required Steps Notice`
+       WHICH MAY LEAD TO `deregistration proceedings`
+```
+
+**Benefits:**
+- **Captures legal reality:** Shows how legal processes actually work
+- **Enables simulation:** Can test complete workflows, not just isolated rules
+- **Supports drafting:** Reveals gaps and inconsistencies in legal design
+
+## **5.3 Why Modular Architecture Works**
+
+**Legal reality:** Modern regulation involves primary law + multiple subsidiary instruments.
+
+**Jersey Charities Example:**
+- **Primary Law:** Charities (Jersey) Law 2014
+- **Core Financial Info Regs 2018:** Defines financial reporting requirements
+- **Additional Info Order 2018:** Adds governor payment reporting
+- **Timing Order 2019:** Sets annual return deadlines
+- **Reasons and Time Limits Order 2020:** Appeals procedures
+
+**L4 modular approach:**
+
+```l4
+-- Main legislation file  
 IMPORT prelude
-IMPORT `charities-types`  -- Shared type definitions
-IMPORT `annual-returns`   -- Specific process modules
+IMPORT `charities-types`     -- Shared definitions
+IMPORT `annual-returns`      -- Specific processes
 
 -- Types file (charities-types.l4)
-DECLARE RegisterEntry HAS ...
-DECLARE Notice IS ONE OF ...
+DECLARE RegisteredCharity HAS ...
+DECLARE FinancialData HAS ...
 
 -- Process file (annual-returns.l4)
 IMPORT `charities-types`
-§ `Annual Return Process (Art 13)`
--- Contract definitions using shared types
+§ `Annual Return Process (Art 13 + multiple orders)`
+-- Uses shared types, implements specific process
 ```
 
-This approach mirrors how real legislation is structured with primary laws and subsidiary regulations, making the code organization more intuitive for legal professionals.
+**Benefits:**
+- **Mirrors legal structure:** Matches how law is actually organized
+- **Supports collaboration:** Different teams can work on different modules
+- **Enables updates:** Can amend subsidiary regulations without changing primary law
+- **Reduces complexity:** Each file focuses on its specific domain
 
-## **4\. Document Structure & Advanced Concepts**
+## **5.4 Common Patterns in Regulatory Law**
 
-### **4.1 Document Organization**
+**Recognition Patterns** (registration, licensing):
+- Application → Assessment → Decision → Registration → Ongoing compliance
 
-* `§`, `§§`, `§§§`: Hierarchical sections
-* `@ref` annotations for source citations
+**Ongoing Compliance Patterns** (reporting, inspection):
+- Periodic obligations → Monitoring → Non-compliance → Enforcement → Resolution
 
-### **4.2 Common Idioms for Legal Domain Modeling**
+**Enforcement Patterns** (sanctions, appeals):
+- Detection → Investigation → Decision → Sanction → Appeal → Final resolution
 
-* Cap Tables & Financial Instruments:
-* l4
-* Apply to charities\_ra...
-*   `` DECLARE `Cap Table Entry` ``
-*       `HAS Holder IS A Investor`
-*           `Security IS A Security`
-* Logging State Changes:
-* l4
-* Apply to charities\_ra...
-*   `log IS "Action performed" FOLLOWED BY previous_log`
-* Formal Agreement Templates:
-* l4
-* Apply to charities\_ra...
-*   `` `about this document` MEANS ``
-*     `` `Agreement Template` WITH ``
-*       `jurisdiction IS "Singapore"`
-*       `version IS "1.2"`
-*       `` type IS `SAFE (Post-Money)` ``
+**These patterns appear across different regulatory domains** (charities, financial services, professional regulation, etc.)
 
-### **4.3 Handling "Unknowns" and Default Logic**
+**L4 captures these patterns consistently:**
 
-* Ternary Logic & "Unknowns" (`MAYBE` type): L4's design accommodates situations where information might be "unknown" rather than strictly TRUE/FALSE.
-* Default Values & Default Logic: L4 aims to allow defining default characteristics for types and to express general rules with specific exceptions concisely.
+```l4
+-- Generic enforcement pattern
+DECLARE EnforcementAction IS ONE OF
+    Warning HAS issueDate IS A Date
+    Fine HAS amount IS A Money
+    Suspension HAS period IS A Duration  
+    Revocation HAS effectiveDate IS A Date
+```
 
-### **4.4 Constitutive Rules: Defining "What Counts As What"**
+---
 
-These are fundamental L4 rules (typically `DECIDE` functions) that establish "institutional facts" — e.g., what conditions make an application "valid."
+# **Part 6: Advanced Techniques** 
 
-### **4.5 Temporal Logic: Rules Across Time**
+## **6.1 Cross-Cutting Concerns**
 
-Legal rules often depend on time. L4's design includes handling different versions of laws or facts at different points in time.
+**Problem:** Some legal concepts (like appeals) apply across multiple processes.
 
-### **4.6 Scopes and Meta-Rules (Rule Interactions)**
+**Example:** Appeals can be made against:
+- Registration refusal (Art 33)
+- Required Steps Notice (Art 33)  
+- Deregistration decision (Art 33)
+- Name change refusal (Art 33)
 
-* Scopes: Sections (`§`) create lexical scopes. Definitions are typically local to their section unless explicitly made more broadly available.
-* Meta-Rules: L4 aims to support keywords like `NOTWITHSTANDING` or `SUBJECT TO` to manage how different rules or sections interact and take precedence.
+**Solution - Generic appeal mechanism:**
 
-## **5\. L4 in Practice**
+```l4
+DECLARE AppealableDecision IS ONE OF
+    RegistrationRefusal HAS reasons IS A LIST OF STRING
+    RequiredStepsNotice HAS steps IS A LIST OF STRING
+    DeregistrationDecision HAS grounds IS A LIST OF STRING
+    NameChangeRefusal HAS reasons IS A LIST OF STRING
 
-### **5.1 IDE Support**
+§ `Universal Appeal Right (Art 33)`
+GIVEN decision IS AN AppealableDecision
+GIVETH A CONTRACT Actor Action  
+`appeal process` MEANS
+  PARTY AffectedParty
+  MAY AppealDecision OF decision
+  WITHIN 28 days OF `decision notice served`
+  HENCE `appeal proceeds to tribunal`
+  LEST `appeal time expired`
+```
 
-* Syntax highlighting and error checking
-* `#EVAL`: Inline evaluation of expressions
-* `#CHECK`: Type checking expressions
-* `#CONTRACT`: Simulating contract execution
+## **6.2 Multi-Instrument Integration**
 
-### **5.2 Terminology Mapping**
+**Real example - Annual Return Requirements:**
 
-| Legal Concept | L4 Expression || \---------------- | \---------------------------------------------- || Right | `EVERY Actor MAY Action` || Obligation | `PARTY Actor MUST Action WITHIN Time` || Prohibition | `PARTY Actor SHANT/MUSTNT Action` || Power | `PARTY Actor MAY changeRights SUCHTHAT ...` || Process/Protocol | Contract steps linked with `HENCE`/`LEST` || Definitions | `Term MEANS Expression` || Legal Tests | `DECIDE Test IF Conditions` || External Choice | Alternative paths from `HENCE`/`LEST` || Jurisdiction | Typically modeled as `STRING` or enum |
+Combines requirements from 4 different instruments:
+- **Art 13(7)-(10) Law 2014:** Basic obligation
+- **Core Info Regs 2018:** Financial data requirements  
+- **Additional Info Order 2018:** Governor payment details
+- **Timing Order 2019:** Deadline specifications
+
+**L4 integration:**
+
+```l4
+§ `Integrated Annual Return (4 instruments)`
+GIVETH A CONTRACT Actor Action
+`comprehensive annual return` MEANS
+  PARTY RegisteredCharity
+  MUST FileReturn OF IntegratedFinancialData WITH
+         coreFinancialInfo IS TRUE,      -- Core Info Regs 2018
+         governorPayments IS TRUE,       -- Additional Info Order 2018  
+         publicBenefitNarrative IS TRUE  -- Additional Info Order 2018
+  WITHIN 2 months OF `financial year end`  -- Timing Order 2019
+  HENCE `full transparency achieved`        -- Purpose of Art 13 Law 2014
+  LEST `lateFlag set + Required Steps Notice enabled`
+```
+
+## **6.3 Advanced Simulations**
+
+**Multi-party scenario with error handling:**
+
+```l4
+#CONTRACT `Complex Misconduct Scenario` charity Commissioner governor tribunal AT 1 WITH
+  -- Discovery phase
+  PARTY Commissioner DOES `discover potential misconduct` governor AT 10
+  PARTY Commissioner DOES `investigate allegations` AT 20
+  
+  -- Decision phase  
+  PARTY Commissioner DOES SuspendGovernor OF governor, "mismanagement", (Date OF 2024, 12, 31) AT 30
+  
+  -- Charity response (may fail)
+  PARTY charity DOES `attempt to ignore suspension` AT 40  -- Error condition
+  PARTY Commissioner DOES `detect non-compliance by charity` AT 50
+  
+  -- Escalation
+  PARTY Commissioner DOES IssueNotice OF requiredSteps AT 60
+  PARTY charity DOES `comply with required steps` AT 70
+  
+  -- Appeal
+  PARTY governor DOES AppealDecision OF suspensionOrder AT 80
+  PARTY tribunal DOES `hear appeal and vary order` AT 120
+  
+  -- Resolution
+  PARTY Commissioner DOES VaryOrder OF originalSuspension, newConditions AT 130
+```
+
+**Performance considerations for large schemes:**
+
+```l4
+-- Efficient register lookups
+ASSUME `charity by registration number` IS A FUNCTION FROM STRING TO MAYBE RegisteredCharity
+ASSUME `active governors for charity` IS A FUNCTION FROM STRING TO LIST OF Person
+
+-- Bulk operations for large datasets
+DECLARE BulkAction IS ONE OF
+    BulkAnnualReturnReminder HAS charities IS A LIST OF STRING
+    BulkComplianceCheck HAS cutoffDate IS A Date
+```
+
+**Success Check:** You can now handle cross-cutting legal concerns, integrate multiple legal instruments, and create sophisticated simulations with error handling and performance considerations.
+
+---
+
+# **Conclusion**
+
+You've learned to:
+
+1. **Write precise legal rules** that capture obligations, conditions, and consequences
+2. **Model complex legal entities** with proper types and relationships  
+3. **Handle multi-step legal processes** using the CONTRACT approach
+4. **Organize complete regulatory schemes** using the three-layer architecture
+5. **Understand the design principles** that make L4 effective for legal modeling
+6. **Apply advanced techniques** for real-world complexity
+
+**What's Next:**
+- Practice with your own legal domain (employment law, tax law, etc.)
+- Experiment with the Jersey Charities model in the examples
+- Explore integration with legal databases and case management systems
+- Consider how L4 could improve legal drafting in your practice
+
+**Key Insight:** L4 isn't just about automating existing legal processes—it's about thinking more clearly about how legal systems actually work, and designing better legal frameworks as a result.
+
+---
+
+# **Quick Reference**
+
+## **Basic Syntax**
+```l4
+-- Comments start with --
+GIVEN entity IS A Type        -- Input parameters
+PARTY actor                   -- Who has the obligation
+MUST action                   -- What they must do  
+WITHIN timeframe             -- Deadline
+HENCE consequence            -- If they comply
+LEST alternative             -- If they don't comply
+```
+
+## **Type Declarations**
+```l4
+DECLARE TypeName              -- Simple type
+DECLARE RecordType           -- Record with fields
+    HAS field1 IS A Type1
+        field2 IS A Type2
+
+DECLARE EnumType IS ONE OF   -- Enumeration
+    Option1
+    Option2 HAS data IS A Type
+```
+
+## **CONTRACT Syntax**
+```l4
+GIVETH A CONTRACT Actor Action
+`process name` MEANS
+  PARTY Actor
+  MUST Action
+  WITHIN timeframe
+  HENCE nextStep
+  LEST errorPath
+```
+
+## **Simulation**
+```l4
+#EVAL expression                                    -- Evaluate expression
+#CONTRACT `name` actor1 actor2 state AT time WITH  -- Simulate process
+  PARTY actor1 DOES action1 AT time1
+  PARTY actor2 DOES action2 AT time2
+```
