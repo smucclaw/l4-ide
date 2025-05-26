@@ -472,6 +472,8 @@ forwardExpr env !ss stack (Consider _ann e branches) = do
 forwardExpr _env !ss stack (Lit _ann lit) = do
   rval <- runLit lit
   backwardExpr ss stack rval
+forwardExpr env !ss stack (Percent _ann expr) = do
+  pushExprFrame env ss stack (DividedBy _ann expr (Lit emptyAnno (NumericLit emptyAnno 100)))
 forwardExpr _env !ss stack (List _ann []) = do
   backwardExpr ss stack (ValList [])
 forwardExpr env !ss stack (List _ann (e : es)) = do
@@ -669,6 +671,7 @@ runBuiltin s vals op = do
     UnaryRound -> valInt $ round val
     UnaryCeiling -> valInt $ ceiling val
     UnaryFloor -> valInt $ floor val
+    UnaryPercent -> ValNumber $ val / 100
   where
     valInt :: Integer -> Value
     valInt = ValNumber . toRational

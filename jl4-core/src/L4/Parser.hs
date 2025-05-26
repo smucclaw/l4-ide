@@ -926,6 +926,14 @@ currentLine = sourceLine <$> getSourcePos
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
 
+postfixP :: Parser (a -> a) -> Parser a -> Parser a
+postfixP ops p = do
+  a <- p
+  mf <- optional ops
+  case mf of
+    Nothing -> pure a
+    Just f -> pure $ f a
+
 type Prio = Int
 data Assoc = AssocLeft | AssocRight
 
@@ -948,6 +956,10 @@ operator =
   <|> (\ op -> (7, AssocLeft,  infix2' DividedBy op)) <$> (((<>) <$> opToken TKDivided <*> opToken TKBy) <|> opToken TDividedBy)
   <|> (\ op -> (7, AssocLeft,  infix2  Modulo    op)) <$> spacedToken_ TKModulo
 
+postfixOperator :: Parser (Expr Name -> Expr Name)
+postfixOperator =
+      (\ op -> (postfix Percent   op)) <$> (spacedToken_ TPercent)
+
 opToken :: TokenType -> Parser Anno
 opToken t =
   (mkSimpleEpaAnno . lexToEpa) <$> spacedToken_ t
@@ -960,8 +972,15 @@ infix2' :: HasSrcRange (a n) => (Anno -> a n -> a n -> a n) -> Anno -> a n -> a 
 infix2' f op l r =
   f (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) l r
 
+postfix :: HasSrcRange (a n) => (Anno -> a n -> a n) -> Lexeme PosToken -> a n -> a n
+postfix f op l =
+  f (fixAnnoSrcRange $ mkHoleAnnoFor l <> mkSimpleEpaAnno (lexToEpa op)) l
+
 baseExpr :: Parser (Expr Name)
-baseExpr =
+baseExpr = postfixP postfixOperator baseExpr'
+
+baseExpr' :: Parser (Expr Name)
+baseExpr' =
       try projection
   <|> negation
   <|> ifthenelse
@@ -988,7 +1007,10 @@ parseEvent = attachAnno $ MkEvent emptyAnno
   <*> annoHole expr -- TODO: better timestamp parsing
 
 atomicExpr :: Parser (Expr Name)
-atomicExpr =
+atomicExpr = postfixP postfixOperator atomicExpr'
+
+atomicExpr' :: Parser (Expr Name)
+atomicExpr' =
       lit
   <|> nameAsApp App
   <|> paren expr

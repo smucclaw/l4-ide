@@ -219,6 +219,7 @@ data Expr n =
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
+  | Percent    Anno (Expr n)
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
   | Event      Anno (Event n)

@@ -223,6 +223,9 @@ forwardExpr env = \ case
   Lit _ann lit -> do
     rval <- runLit lit
     Backward rval
+  Percent _ann e -> do
+    PushFrame (UnaryBuiltin0 UnaryPercent)
+    ForwardExpr env e
   List _ann [] ->
     Backward ValNil
   List _ann (e : es) ->
@@ -634,6 +637,7 @@ runBuiltin es op = do
     UnaryRound -> valInt $ round val
     UnaryCeiling -> valInt $ ceiling val
     UnaryFloor -> valInt $ floor val
+    UnaryPercent -> ValNumber (val / 100)
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
