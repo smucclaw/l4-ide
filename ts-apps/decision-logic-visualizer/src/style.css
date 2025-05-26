@@ -184,10 +184,6 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   text-align: center;
 
   color: var(--ladder-node-color, var(--ladder-node-color-default));
-  background-color: var(
-    --xy-node-background-color,
-    var(--xy-node-background-color-default)
-  );
 }
 
 /** Controls min/max widths of the labels,
