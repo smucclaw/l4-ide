@@ -46,7 +46,7 @@ data Value a =
   | ValObligation Environment (Either RExpr (Value a)) (RAction Resolved) (Either (Maybe RExpr) (Value a)) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
   | ValUnaryBuiltinFun UnaryBuiltinFun
-  | ValBuiltinFun BuiltinFun
+  | ValBinaryBuiltinFun BinaryBuiltinFun
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
@@ -57,7 +57,11 @@ data Value a =
 data RBinOp = ValROr | ValRAnd
   deriving stock Show
 
-data ReasonForBreach a = DeadlineMissed a a Rational a (RAction Resolved) Rational
+instance NFData RBinOp where
+  rnf ValROr = ()
+  rnf ValRAnd = ()
+
+data ReasonForBreach a = DeadlineMissed a a Rational MaybeEvaluated MaybeEvaluated Rational
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
 
@@ -69,7 +73,7 @@ data UnaryBuiltinFun
   | UnaryPercent
   deriving stock (Show)
 
-data BuiltinFun
+data BinaryBuiltinFun
   = PlusFn
   | MinusFn
   | TimesFn
@@ -86,13 +90,13 @@ data BuiltinFun
 instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
-  rnf (ValROp env op a b)     = env `seq` op `seq` a `deepseq` b `deepseq` ()
+  rnf (ValROp env op a b)     = env `seq` op `deepseq` a `deepseq` b `deepseq` ()
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
-  rnf (ValUnaryBuiltinFun r)      = r `seq` ()
-  rnf (ValBuiltinFun r)           = r `seq` ()
+  rnf (ValUnaryBuiltinFun r)      = rnf r `seq` ()
+  rnf (ValBinaryBuiltinFun r)     = rnf r `seq` ()
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
@@ -113,3 +117,15 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
+
+instance NFData BinaryBuiltinFun where
+  rnf :: BinaryBuiltinFun -> ()
+  rnf PlusFn = ()
+  rnf MinusFn = ()
+  rnf TimesFn = ()
+  rnf DivideFn = ()
+  rnf ModuloFn = ()
+  rnf LtFun = ()
+  rnf LeqFun = ()
+  rnf GtFun = ()
+  rnf GeqFun = ()

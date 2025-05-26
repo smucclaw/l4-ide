@@ -19,8 +19,15 @@ import Optics
 newtype Desugar a = MkDesugar (Either DesugarError a)
   deriving newtype (Functor, Applicative, Monad)
 
-data HoleInfo
-  = HoleInfo {expected :: !Int, got :: !Int}
+-- | When rewriting the 'Anno' of a syntax node, we encountered an internal error.
+-- We expected a certain number of 'AnnoHole's, e.g., in a binary operation we expect 2 'AnnoHole's,
+-- but we got a different number.
+--
+-- This is an internal error that shouldn't occur.
+data HoleInfo = HoleInfo
+  { expected :: !Int
+  , got :: !Int
+  }
 
 data DesugarError where
   InternalAnnoRewritingError :: Expr Name -> HoleInfo -> DesugarError
@@ -274,10 +281,8 @@ dsBranch = \ case
 --   [["(", _, " PLUS "], [_, ")"]]
 -- @
 rewriteBinOpAnno :: Expr Name -> Expr Name -> Expr Name -> Desugar [Expr Name]
-rewriteBinOpAnno expr e1 e2 = do
-  let
-
-  case csnSlices of
+rewriteBinOpAnno expr e1 e2 =
+    case csnSlices of
     [beforeFirst, beforeSecond, after] ->
       pure
         [ updateAnnoOf e1 (surroundWithCsn beforeFirst beforeSecond)

@@ -118,19 +118,19 @@ geqBuiltins = compBuiltins
 ltUniques :: [Unique]
 ltUniques = [ltNumberUnique,  ltStringUnique,  ltBoolUnique]
 
+-- Order of types must match the order in the '*Builtins'
 leqUniques :: [Unique]
 leqUniques = [leqNumberUnique, leqStringUnique, leqBoolUnique]
 
+-- Order of types must match the order in the '*Builtins'
 gtUniques :: [Unique]
 gtUniques = [gtNumberUnique,  gtStringUnique,  gtBoolUnique]
 
+-- Order of types must match the order in the '*Builtins'
 geqUniques :: [Unique]
 geqUniques = [geqNumberUnique, geqStringUnique, geqBoolUnique]
 
-allComparisonUniques :: [Unique]
-allComparisonUniques =
-  ltUniques <> leqUniques <> gtUniques <> geqUniques
-
+-- Order of types must match the order in the '*Builtins'
 compBuiltins :: [Type' Resolved]
 compBuiltins = [fun_ [ty, ty] boolean | ty <- [number, string, boolean]]
 

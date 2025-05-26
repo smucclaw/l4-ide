@@ -54,8 +54,8 @@ data Frame =
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
   | UnaryBuiltin0 UnaryBuiltinFun
-  | BinBuiltin1 BuiltinFun Reference
-  | BinBuiltin2 BuiltinFun WHNF
+  | BinBuiltin1 BinaryBuiltinFun Reference
+  | BinBuiltin2 BinaryBuiltinFun WHNF
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   deriving stock Show
@@ -291,7 +291,7 @@ backward val = WithPoppedFrame $ \ case
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
-      ValBuiltinFun fn -> do
+      ValBinaryBuiltinFun fn -> do
         (x, y) <- expect2 rs
         PushFrame (BinBuiltin1 fn y)
         EvalRef x
@@ -1050,25 +1050,6 @@ trueVal = ValConstructor TypeCheck.trueRef []
 fulfilExpr :: Expr Resolved
 fulfilExpr = App emptyAnno TypeCheck.fulfilRef []
 
--- plusExpr :: [Expr Resolved] -> Expr Resolved
--- plusExpr args = App emptyAnno TypeCheck.plusRef args
-
--- plusVal :: Machine (Value a)
--- plusVal = do
---   let mn = MkName emptyAnno . NormalName
---       (na, nb) = (mn "a", mn "b")
---   ad <- def na
---   bd <- def nb
---   ar <- ref na ad
---   br <- ref nb bd
---   pure $ ValClosure
---     (MkGivenSig emptyAnno
---       [ MkOptionallyTypedName emptyAnno ad Nothing
---       , MkOptionallyTypedName emptyAnno bd Nothing
---       ])
---     (App emptyAnno TypeCheck.plusRef [App emptyAnno ar [], App emptyAnno br []])
---     emptyEnvironment
-
 -- \a b c. a b c
 evalContractVal :: Machine (Value a)
 evalContractVal = do
@@ -1180,11 +1161,11 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
-  plusRef <- AllocateValue $ ValBuiltinFun PlusFn
-  minusRef <- AllocateValue $ ValBuiltinFun MinusFn
-  timesRef <- AllocateValue $ ValBuiltinFun TimesFn
-  divideRef <- AllocateValue $ ValBuiltinFun DivideFn
-  moduloRef <- AllocateValue $ ValBuiltinFun ModuloFn
+  plusRef <- AllocateValue $ ValBinaryBuiltinFun PlusFn
+  minusRef <- AllocateValue $ ValBinaryBuiltinFun MinusFn
+  timesRef <- AllocateValue $ ValBinaryBuiltinFun TimesFn
+  divideRef <- AllocateValue $ ValBinaryBuiltinFun DivideFn
+  moduloRef <- AllocateValue $ ValBinaryBuiltinFun ModuloFn
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
@@ -1197,11 +1178,11 @@ initialEnvironment = do
         r <- AllocateValue funVal
         pure (uniq, r)
       )
-      [ (ValBuiltinFun val, unique)
+      [ (ValBinaryBuiltinFun val, unique)
       | (val, uniques) <-
-          [ (LtFun, TypeCheck.ltUniques)
+          [ (LtFun , TypeCheck.ltUniques )
           , (LeqFun, TypeCheck.leqUniques)
-          , (GtFun, TypeCheck.gtUniques)
+          , (GtFun , TypeCheck.gtUniques )
           , (GeqFun, TypeCheck.geqUniques)
           ]
       , unique <- uniques
