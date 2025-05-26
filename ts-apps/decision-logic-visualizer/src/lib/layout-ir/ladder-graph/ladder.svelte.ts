@@ -15,13 +15,7 @@ import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import {
   empty,
-  isEmpty,
   isVertex,
-  isOverlay,
-  isConnect,
-  type Overlay,
-  type Connect,
-  type Vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
@@ -40,10 +34,9 @@ import {
   InvalidPathsListLirNode,
   type PathsListLirNode,
 } from '../paths-list.js'
-import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
-import { pprintPathGraph, isNnf, replaceVertex } from './ladder-dag-helpers.js'
+import { pprintPathGraph, isNnf } from './ladder-dag-helpers.js'
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -524,7 +517,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   // TODO: Also, look into better names for this
-  private syncSelectedForHighlight(_context: LirContext, _selected: Set<LirId>) {
+  private syncSelectedForHighlight(
+    _context: LirContext,
+    _selected: Set<LirId>
+  ) {
     console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
     // TODO
   }
