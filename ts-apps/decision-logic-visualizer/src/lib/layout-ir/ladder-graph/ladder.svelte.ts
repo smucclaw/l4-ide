@@ -43,7 +43,7 @@ import {
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
-
+import { pprintPathGraph, isNnf, replaceVertex } from './ladder-dag-helpers.js'
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -1192,76 +1192,4 @@ export function augmentEdgesWithExplanatoryLabel(
       context.getExplanatoryAndEdgeLabel()
     )
   })
-}
-
-/*************************************************
- ******************* Utils ***********************
- *************************************************/
-
-/************************************************
-          isNnf
-*************************************************/
-
-function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
-  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
-
-  const negandIsSimpleVar = (notStart: NotStartLirNode) => {
-    // TODO: Will have to update this when we add more complicated Lir Nodes
-    const negand = notStart.getNegand(context)
-    return (
-      isVertex(negand) &&
-      isUBoolVarLirNode(context.get(negand.getValue()) as LadderLirNode)
-    )
-  }
-
-  return notStartVertices.every(negandIsSimpleVar)
-}
-
-/************************************************
-          Pretty print path graph
-*************************************************/
-
-function pprintPathGraph(
-  context: LirContext,
-  initialGraph: DirectedAcyclicGraph<LirId>
-): string {
-  /** Each node should only be pprinted once in the linearization of the dag */
-  const processed = new Set<LirId>()
-
-  function pprintHelper(
-    context: LirContext,
-    g: DirectedAcyclicGraph<LirId>
-  ): string {
-    return match(g)
-      .with(P.when(isEmpty<LirId>), () => '')
-      .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
-        if (processed.has(v.getValue())) return ''
-
-        processed.add(v.getValue())
-        return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
-      })
-      .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
-        return `${pprintHelper(context, o.getLeft())} ${pprintHelper(context, o.getRight())}`
-      })
-      .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
-        const from = pprintHelper(context, c.getFrom())
-        const to = pprintHelper(context, c.getTo())
-
-        if (isVertex(c.getFrom()) && isVertex(c.getTo())) {
-          const edgeAttrs = initialGraph.getAttributesForEdge(
-            new DirectedEdge(
-              (c.getFrom() as Vertex<LirId>).getValue(),
-              (c.getTo() as Vertex<LirId>).getValue()
-            )
-          )
-          const edgeLabel = edgeAttrs.getLabel()
-          return `${from} ${edgeLabel} ${to}`
-        } else {
-          return `${from} ${to}`
-        }
-      })
-      .exhaustive()
-  }
-
-  return pprintHelper(context, initialGraph)
 }
