@@ -392,6 +392,13 @@ export function vertices<A extends Ord<A>>(
   return vertices.map((v) => vertex(v)).reduce(overlay, empty())
 }
 
+/** Overlay a given array of graphs. */
+export function overlays<A extends Ord<A>>(
+  graphs: DirectedAcyclicGraph<A>[]
+): DirectedAcyclicGraph<A> {
+  return graphs.reduce(overlay, empty())
+}
+
 /** Make path graph from an array of vertices */
 export function pathFromValues<A extends Ord<A>>(
   vertices: A[]
