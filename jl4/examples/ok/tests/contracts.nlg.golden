@@ -1,7 +1,7 @@
 executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 21 at 4
 executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 20 at 4
 executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 30 at 6 party `B` did `payment` with 10 at 9
-`EVALPROVISION` with `x`, list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` with 3 and 42 and 5
+`EVALPROVISION` with `x`, 5 and list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` with 3 and 42
 executing contract `y` at 0 with the following events:  party `B` did `payment` with 5 at 5 party `S` did `delivery` at 20
 executing contract party `B` must `payment` has  or `FULFILLED` at 2 with the following events: 
 executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4

@@ -31,7 +31,7 @@ aContract MEANS
   PARTY B DOES payment 30 AT 6
   PARTY B DOES payment 10 AT 9
 
-#EVAL EVALPROVISION x (LIST EVENT S delivery 5, EVENT B (payment 3) 42) 5
+#EVAL EVALPROVISION x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
 
 GIVETH PROVISION Person Action
 x MEANS 

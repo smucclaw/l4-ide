@@ -148,9 +148,9 @@ eventCInfo = KnownTerm (Forall emptyAnno [dDef, gDef] (Fun emptyAnno [mkOnt part
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 
--- forall a b. PROVISION a b -> [Event a b] -> PROVISION a b
+-- forall a b. PROVISION a b -> NUMBER -> [Event a b] -> PROVISION a b
 evalContractInfo :: CheckEntity
-evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt (list eventTy), mkOnt number] ctrct)) Computable
+evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt number, mkOnt (list eventTy)] ctrct)) Computable
   where
   ctrct = contract (mkTyVar bRef) (mkTyVar cRef)
   eventTy = TyApp emptyAnno eventRef [mkTyVar bRef, mkTyVar cRef]
@@ -168,10 +168,10 @@ initialEnvironment =
     , (NormalName "STRING",       [stringUnique      ])
     , (NormalName "LIST",         [listUnique        ])
     , (NormalName "EMPTY",        [emptyUnique       ])
-    , (NormalName "PROVISION",     [contractUnique    ])
+    , (NormalName "PROVISION",    [contractUnique    ])
     , (NormalName "EVENT",        [eventUnique       ])
     , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALPROVISION", [evalContractUnique])
+    , (NormalName "EVALPROVISION",[evalContractUnique])
     , (NormalName "FULFILLED",    [fulfilUnique      ])
     , (NormalName "IS INTEGER",   [isIntegerUnique ])
     , (NormalName "ROUND",        [roundUnique     ])
