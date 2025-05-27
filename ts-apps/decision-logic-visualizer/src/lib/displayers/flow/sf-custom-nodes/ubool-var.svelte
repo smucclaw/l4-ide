@@ -12,6 +12,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
+  import * as ContextMenu from '$lib/ui-primitives/context-menu/index.js'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -74,6 +75,8 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     additionalClasses={['ubool-var-node-border', ...data.classes]}
   >
     <WithNormalHandles>
+      <ContextMenu.Root>
+      <ContextMenu.Trigger>
       <!-- Yes, we need cursor-pointer here. -->
       <button
         class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
@@ -83,15 +86,20 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
             .getBody(data.context)
           const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
-          const newValue = cycle(node.getValue(data.context))
-          ladderGraph.submitNewBinding(data.context, {
-            unique: node.getUnique(data.context),
-            value: newValue,
-          })
-        }}
-      >
-        {data.name.label}
-      </button>
+              const newValue = cycle(node.getValue(data.context))
+              ladderGraph.submitNewBinding(data.context, {
+                unique: node.getUnique(data.context),
+                value: newValue,
+              })
+            }}
+          >
+            {data.name.label}
+          </button>
+        </ContextMenu.Trigger>
+        <ContextMenu.Content>
+          <ContextMenu.Item inset>Select</ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Root>
       {#if data.canInline}
         {@render inlineUI()}
       {/if}
