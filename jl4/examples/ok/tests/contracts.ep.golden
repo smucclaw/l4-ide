@@ -2,6 +2,7 @@ DECLARE Person IS ONE OF B, S
 DECLARE Action IS ONE OF 
   delivery 
   payment HAS amount IS A NUMBER
+  foo
 
 aContract MEANS 
   PARTY S

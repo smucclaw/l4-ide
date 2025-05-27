@@ -1,17 +1,17 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-contracts.l4:20:1-22:31:
+contracts.l4:21:1-23:31:
   PARTY B
 MUST return
 HENCE FULFILLED
-contracts.l4:24:1-26:31:
+contracts.l4:25:1-27:31:
   FULFILLED
-contracts.l4:28:1-31:31:
+contracts.l4:29:1-32:31:
   FULFILLED
-contracts.l4:33:1-73:
+contracts.l4:34:1-73:
   FULFILLED
-contracts.l4:47:1-49:30:
+contracts.l4:48:1-50:30:
   CONTRACT BREACHED:
   party
     S
@@ -26,21 +26,41 @@ contracts.l4:47:1-49:30:
     AND am AT MOST 4
   before their deadline, which was at
     5
-contracts.l4:58:1-59:
+contracts.l4:59:1-59:
   FULFILLED
-contracts.l4:60:1-61:29:
+contracts.l4:61:1-62:29:
   FULFILLED
-contracts.l4:63:1-64:30:
+contracts.l4:64:1-65:30:
   FULFILLED
-contracts.l4:66:1-68:31:
+contracts.l4:67:1-69:31:
   FULFILLED
-contracts.l4:70:1-72:31:
+contracts.l4:71:1-73:31:
   FULFILLED
-contracts.l4:79:1-81:30:
-  Internal error:
-  Unhandled pattern match failure.
-  Please report this as a bug.
-contracts.l4:83:1-85:30:
-  Internal error:
-  Unhandled pattern match failure.
-  Please report this as a bug.
+contracts.l4:80:1-82:30:
+  CONTRACT BREACHED:
+  party
+    B
+  who did action
+    payment OF 6
+  at
+    3
+  surpassed the deadline of party
+    S
+  who had to do obligatory action
+    MUST payment n PROVIDED n EQUALS 7
+  before their deadline, which was at
+    2
+contracts.l4:84:1-86:30:
+  CONTRACT BREACHED:
+  party
+    S
+  who did action
+    payment OF 7
+  at
+    3
+  surpassed the deadline of party
+    S
+  who had to do obligatory action
+    MUST payment n PROVIDED n EQUALS 7
+  before their deadline, which was at
+    2
