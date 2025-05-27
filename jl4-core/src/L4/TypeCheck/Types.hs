@@ -86,6 +86,7 @@ data ExpectationContext =
   | ExpectIfConditionContext -- condition of if-then-else
   | ExpectPatternScrutineeContext (Expr Resolved) -- pattern type must match type of scrutinee
   | ExpectNotArgumentContext -- arg of NOT
+  | ExpectPercentArgumentContext -- arg of '%'
   | ExpectConsArgument2Context -- second arg of cons
   | ExpectIfBranchesContext -- all branches of an if-then-else must have the same type
   | ExpectConsiderBranchesContext -- all branches of a consider must have the same type

@@ -77,6 +77,7 @@ Phase: Lexer
 27:38-39 SemanticTokenTypes_Variable
 27:40-41 SemanticTokenTypes_Operator
 27:42-43 SemanticTokenTypes_Number
+27:44-45 SemanticTokenTypes_Operator
 29:1-7 SemanticTokenTypes_Keyword
 29:8-15 SemanticTokenTypes_Variable
 29:16-18 SemanticTokenTypes_Keyword
@@ -166,6 +167,7 @@ Phase: Parse
 27:38-39 SemanticTokenTypes_Variable
 27:40-41 SemanticTokenTypes_Operator
 27:42-43 SemanticTokenTypes_Number
+27:44-45 SemanticTokenTypes_Operator
 29:1-7 SemanticTokenTypes_Keyword
 29:8-15 SemanticTokenTypes_Variable
 29:16-18 SemanticTokenTypes_Keyword
@@ -254,6 +256,7 @@ Phase: Check
 27:38-39 SemanticTokenTypes_Variable
 27:40-41 SemanticTokenTypes_Operator
 27:42-43 SemanticTokenTypes_Number
+27:44-45 SemanticTokenTypes_Operator
 29:1-7 SemanticTokenTypes_Keyword
 29:8-15 SemanticTokenTypes_Variable
 29:16-18 SemanticTokenTypes_Keyword

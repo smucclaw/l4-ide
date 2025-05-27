@@ -411,6 +411,8 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       pure $ Consider ann e' branches'
     Lit{} -> do
       pure expr
+    Percent{} -> do
+      pure expr
     List ann es -> do
       es' <- traverse addNlg es
       pure $ List ann es'

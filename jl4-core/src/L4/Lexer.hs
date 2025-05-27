@@ -337,6 +337,7 @@ tokenPayload =
   <|> TParagraph           <$  char '§'
   <|> TComma               <$  char ','
   <|> TSemicolon           <$  char ';'
+  <|> TPercent             <$  char '%'
   <|> TDot                 <$  char '.'
   <|> TCopy Nothing        <$  char '^'
   <|> symbolic

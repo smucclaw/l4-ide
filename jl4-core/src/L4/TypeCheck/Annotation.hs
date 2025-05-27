@@ -147,6 +147,8 @@ nlgExpr = \ case
       pure $ Consider ann e' branches
     expr@Lit{} -> do
       pure expr
+    Percent ann expr -> do
+      Percent ann <$> nlgExpr expr
     List ann es -> do
       es' <- traverse nlgExpr es
       pure $ List ann es'

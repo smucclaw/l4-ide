@@ -1135,6 +1135,9 @@ inferExpr' g =
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
       pure (Event ann ev', ty)
+    Percent ann e -> do
+      e' <- checkExpr ExpectPercentArgumentContext e number
+      pure (Percent ann e', number)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp) = do
@@ -1819,6 +1822,8 @@ prettyTypeMismatch ExpectIfConditionContext expected given =
   standardTypeMismatch [ "The condition in an IF-THEN-ELSE construct is expected to be of type" ] expected given
 prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPercentArgumentContext expected given =
+  standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =

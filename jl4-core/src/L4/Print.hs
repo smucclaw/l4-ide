@@ -289,6 +289,7 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))
 
     Lit        _ lit -> printWithLayout lit
+    Percent    _ expr -> parensIfNeeded expr <+> "%"
     List       _ exprs ->
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
     Where      _ e1 decls ->

@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+percent.l4:16:1-27:
+  5
+percent.l4:17:1-27:
+  5
+percent.l4:18:1-27:
+  5
+percent.l4:19:1-27:
+  5
+percent.l4:20:1-24:
+  5.5
+percent.l4:21:1-27:
+  5
