@@ -105,6 +105,7 @@ DECLARE Notice IS ONE OF
   deregistration HAS notice IS A DeregistrationNotice
   message        HAS notice IS A STRING
   annualReturn
+  application    HAS submission IS A Submission
 
 DECLARE RequiredStepsNotice HAS noticeId IS A STRING
                                 issueDate IS A Date
