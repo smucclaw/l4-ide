@@ -230,7 +230,7 @@ instance Linearize (Expr Resolved) where
       , enumerate (punctuate ".") (punctuate ".") (fmap lin br)
       ]
     Lit _ l -> lin l
-    Percent _ l -> hcat [lin l, text "percent"]
+    Percent _ l -> hcat [lin l, punctuate "%"]
     List _ es -> hcat
       [ text "list"
       , text "of"
