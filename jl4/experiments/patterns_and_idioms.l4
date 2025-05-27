@@ -1,6 +1,6 @@
 -- L4 Patterns and Idioms Reference
 -- Based on analysis of the L4 codebase and parser
--- FIXED VERSION: All syntax errors resolved, educational content preserved
+-- UPDATED VERSION: Aligned with current L4 implementation
 
 IMPORT prelude
 
@@ -12,6 +12,8 @@ IMPORT prelude
 ASSUME cat IS A FUNCTION FROM A STRING AND A STRING TO A STRING
 ASSUME contains IS A FUNCTION FROM A STRING AND A STRING TO A BOOLEAN
 ASSUME monthsBetween IS A FUNCTION FROM A Date AND A Date TO A NUMBER
+ASSUME addDays IS A FUNCTION FROM A Date AND A NUMBER TO A Date
+ASSUME addMonths IS A FUNCTION FROM A Date AND A NUMBER TO A Date
 
 -- ======================================================================
 -- SECTION 2: MISSING PRELUDE FUNCTIONS
@@ -33,7 +35,7 @@ length list MEANS
 -- Pattern: Simple enum types
 DECLARE Status IS ONE OF
   Active
-  Inactive  
+  Inactive
   Suspended HAS suspensionReason IS A STRING
 
 -- Pattern: Record types with fields (using unique field names)
@@ -49,9 +51,16 @@ DECLARE LegalEntity IS ONE OF
                   jurisdiction IS A STRING
   Partnership HAS partners IS A LIST OF Person
 
--- Pattern: Simple type aliases for clarity
-DECLARE Date IS A STRING
-DECLARE Money IS A NUMBER
+-- Pattern: Proper Date type (L4 standard)
+DECLARE Date
+  HAS year IS A NUMBER
+      month IS A NUMBER
+      day IS A NUMBER
+
+-- Pattern: Money type with currency
+DECLARE Money
+  HAS amount IS A NUMBER
+      currency IS A STRING
 
 -- ======================================================================
 -- SECTION 4: DOMAIN-SPECIFIC TYPES (For Educational Examples)
@@ -82,7 +91,27 @@ DECLARE FinancialYearRecord
       financialExpenses IS A Money
 
 -- ======================================================================
--- SECTION 5: SIMPLE FUNCTION DEFINITIONS
+-- SECTION 5: CONTRACT TYPES AND PATTERNS (NEW)
+-- ======================================================================
+
+-- Pattern: Actor types for contracts
+DECLARE Actor IS ONE OF
+   PersonActor HAS person IS A Person
+   CompanyActor HAS company IS A STRING
+   GovernmentActor
+
+-- Pattern: Action types for contracts
+DECLARE Action IS ONE OF
+   PayMoney HAS amount IS A Money
+                recipient IS AN Actor
+   DeliverGoods HAS description IS A STRING
+                    recipient IS AN Actor
+   ProvideService HAS serviceType IS A STRING
+                      duration IS A NUMBER
+   Other HAS description IS A STRING
+
+-- ======================================================================
+-- SECTION 6: SIMPLE FUNCTION DEFINITIONS
 -- ======================================================================
 
 -- Pattern: Simple function with GIVEN...GIVETH
@@ -116,7 +145,55 @@ entityType MEANS
   WHEN Partnership ps THEN cat "Partnership with " "multiple partners"
 
 -- ======================================================================
--- SECTION 6: STRING OPERATIONS (CORRECTED)
+-- SECTION 7: CONTRACT FUNCTION PATTERNS (NEW)
+-- ======================================================================
+
+-- Pattern: Simple contract obligation
+GIVEN debtor IS AN Actor
+      amount IS A Money
+GIVETH A CONTRACT Actor Action
+simplePayment MEANS
+  PARTY debtor
+  MUST PayMoney amount (PersonActor (Person "Creditor" 30 TRUE))
+  WITHIN 30  -- 30 days
+  HENCE FULFILLED
+
+-- Pattern: Conditional contract
+GIVEN buyer IS AN Actor
+      seller IS AN Actor
+      goods IS A STRING
+      condition IS A BOOLEAN
+GIVETH A CONTRACT Actor Action
+conditionalSale MEANS
+  IF condition
+  THEN PARTY seller
+       MUST DeliverGoods goods buyer
+       WITHIN 14
+       HENCE FULFILLED
+  ELSE FULFILLED
+
+-- Pattern: Sequential obligations
+GIVEN serviceProvider IS AN Actor
+      client IS AN Actor
+      serviceType IS A STRING
+GIVETH A CONTRACT Actor Action
+serviceContract MEANS
+  PARTY serviceProvider
+  MUST ProvideService serviceType 30
+  WITHIN 7  -- Start within 7 days
+  HENCE paymentDue serviceProvider client
+
+GIVEN provider IS AN Actor
+      client IS AN Actor
+GIVETH A CONTRACT Actor Action
+paymentDue MEANS
+  PARTY client
+  MUST PayMoney (Money 1000 "USD") provider
+  WITHIN 30  -- Pay within 30 days of service completion
+  HENCE FULFILLED
+
+-- ======================================================================
+-- SECTION 8: STRING OPERATIONS (CORRECTED)
 -- ======================================================================
 
 -- ✅ CORRECT: String concatenation using cat function
@@ -137,7 +214,7 @@ GIVETH A BOOLEAN
 hasContent MEANS NOT text EQUALS ""
 
 -- ======================================================================
--- SECTION 7: LIST OPERATIONS (CORRECTED)
+-- SECTION 9: LIST OPERATIONS (CORRECTED WITH CONSTRUCTOR SYNTAX)
 -- ======================================================================
 
 -- ✅ CORRECT: List length checking (using our length function)
@@ -160,8 +237,14 @@ GIVEN numbers IS A LIST OF NUMBER
 GIVETH A BOOLEAN
 anyNegative MEANS any (GIVEN n YIELD n < 0) numbers
 
+-- ✅ CORRECT: List construction in constructors (requires parentheses)
+DECIDE samplePerson IS Person "John Doe" 25 TRUE
+DECIDE sampleEntity IS Individual samplePerson
+DECIDE sampleCorporation IS Corporation "ACME Corp" "Delaware"
+DECIDE samplePartnership IS Partnership (LIST samplePerson)
+
 -- ======================================================================
--- SECTION 8: VALUE DEFINITIONS
+-- SECTION 10: VALUE DEFINITIONS
 -- ======================================================================
 
 -- Pattern: Simple constants
@@ -171,13 +254,21 @@ DECIDE companyName IS "ACME Corporation"
 -- Pattern: List definitions
 DECIDE weekdays IS LIST "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
 
+-- Pattern: Date construction (L4 standard)
+DECIDE sampleDate IS Date OF 2024, 6, 15
+DECIDE oldDate IS Date OF 2022, 12, 31
+
+-- Pattern: Money construction
+DECIDE salaryAmount IS Money 50000 "USD"
+DECIDE smallAmount IS Money 100 "GBP"
+
 -- Pattern: Computed values with MEANS
 GIVEN today IS A STRING
 GIVETH A STRING
 todayMessage MEANS cat "Today is " today
 
 -- ======================================================================
--- SECTION 9: CONDITIONAL EXPRESSIONS
+-- SECTION 11: CONDITIONAL EXPRESSIONS
 -- ======================================================================
 
 -- Pattern: Simple conditionals
@@ -195,13 +286,13 @@ grade MEANS
   IF score >= 90
   THEN "A"
   ELSE IF score >= 80
-       THEN "B"  
+       THEN "B"
        ELSE IF score >= 70
             THEN "C"
             ELSE "F"
 
 -- ======================================================================
--- SECTION 10: BOOLEAN LOGIC
+-- SECTION 12: BOOLEAN LOGIC
 -- ======================================================================
 
 -- Pattern: Complex boolean expressions with parentheses for clarity
@@ -219,7 +310,7 @@ isValidEmailAddress MEANS
   contains email "@" AND contains email "." AND NOT email EQUALS ""
 
 -- ======================================================================
--- SECTION 11: SAFE OPERATIONS WITH MAYBE TYPES (Using Prelude)
+-- SECTION 13: SAFE OPERATIONS WITH MAYBE TYPES (Using Prelude)
 -- ======================================================================
 
 -- Pattern: Safe operations that might fail (using prelude MAYBE)
@@ -239,7 +330,7 @@ getValueOrDefault MEANS
   WHEN JUST x THEN x
 
 -- ======================================================================
--- SECTION 12: PATTERN MATCHING WITH CONSIDER
+-- SECTION 14: PATTERN MATCHING WITH CONSIDER
 -- ======================================================================
 
 -- Pattern: Pattern matching on enum types
@@ -247,7 +338,7 @@ GIVEN status IS A Status
 GIVETH A STRING
 handleStatus MEANS
   CONSIDER status
-  WHEN Active THEN "Process normally" 
+  WHEN Active THEN "Process normally"
   WHEN Inactive THEN "Cannot process"
   WHEN Suspended reason THEN cat "Suspended: " reason
   OTHERWISE "Unknown status"
@@ -262,7 +353,7 @@ processItems MEANS
   OTHERWISE "Unexpected case"
 
 -- ======================================================================
--- SECTION 13: WORKING WITH RECORDS
+-- SECTION 15: WORKING WITH RECORDS
 -- ======================================================================
 
 -- Pattern: Record field access (using unique field names)
@@ -279,7 +370,7 @@ isValidEntry MEANS
   entry's entryIsActive EQUALS TRUE
 
 -- ======================================================================
--- SECTION 14: FUNCTIONAL PROGRAMMING PATTERNS
+-- SECTION 16: FUNCTIONAL PROGRAMMING PATTERNS
 -- ======================================================================
 
 -- ✅ CORRECT: Function application with proper parentheses
@@ -293,7 +384,7 @@ GIVETH A BOOLEAN
 allGovernorsAdult MEANS
   all (GIVEN gov YIELD gov's personAge >= 18) (entry's entryGovernors)
 
--- ✅ CORRECT: Using any with proper parentheses  
+-- ✅ CORRECT: Using any with proper parentheses
 GIVEN entry IS A RegisterEntry
 GIVETH A BOOLEAN
 hasYoungGovernor MEANS
@@ -305,27 +396,30 @@ GIVETH A BOOLEAN
 isActiveConviction MEANS conviction's isSpent EQUALS FALSE
 
 -- ======================================================================
--- SECTION 15: TEMPORAL AND NUMERIC OPERATIONS
+-- SECTION 17: TEMPORAL AND NUMERIC OPERATIONS
 -- ======================================================================
 
--- Pattern: Date comparisons (using string dates for simplicity)
+-- Pattern: Date comparisons (using proper Date type)
 GIVEN currentDate IS A Date
       deadline IS A Date
 GIVETH A BOOLEAN
-isPastDue MEANS currentDate > deadline
+isPastDue MEANS
+  (currentDate's year > deadline's year) OR
+  (currentDate's year EQUALS deadline's year AND currentDate's month > deadline's month) OR
+  (currentDate's year EQUALS deadline's year AND currentDate's month EQUALS deadline's month AND currentDate's day > deadline's day)
 
 -- Pattern: Money operations
 GIVEN income IS A Money
       expenses IS A Money
 GIVETH A Money
-profit MEANS income - expenses
+profit MEANS Money (income's amount - expenses's amount) (income's currency)
 
 GIVEN amount IS A Money
 GIVETH A BOOLEAN
-isSignificantAmount MEANS amount > 1000
+isSignificantAmount MEANS amount's amount > 1000
 
 -- ======================================================================
--- SECTION 16: HIGHER-ORDER FUNCTION PATTERNS
+-- SECTION 18: HIGHER-ORDER FUNCTION PATTERNS
 -- ======================================================================
 
 -- Pattern: Function composition equivalent
@@ -349,14 +443,14 @@ applyOperation MEANS
        ELSE numbers
 
 -- ======================================================================
--- SECTION 17: WHAT DOESN'T WORK (ANTI-PATTERNS)
+-- SECTION 19: WHAT DOESN'T WORK (ANTI-PATTERNS)
 -- ======================================================================
 
 -- ❌ DON'T USE: String arithmetic (+ operator is for numbers only)
 -- "hello" + " world"  -- WRONG! Use: cat "hello" " world"
 
--- ❌ DON'T USE: EVERY...MUSTNT syntax (not supported)
--- EVERY p IS A Person MUSTNT doSomething
+-- ❌ DON'T USE: LIST without parentheses in constructors
+-- SomeType LIST item1, item2  -- WRONG! Use: SomeType (LIST item1, item2)
 
 -- ❌ DON'T USE: Pattern matching on primitive values
 -- CONSIDER someString
@@ -367,8 +461,11 @@ applyOperation MEANS
 
 -- ❌ DON'T USE: Redefining prelude functions (elem, MAYBE, etc.)
 
+-- ❌ DON'T USE: Complex nested constructors in DECIDE statements
+-- DECIDE complex IS SomeType (OtherType (func arg1) arg2)  -- May fail! Break into steps
+
 -- ======================================================================
--- SECTION 18: CORRECT ALTERNATIVES FOR COMMON PATTERNS
+-- SECTION 20: CORRECT ALTERNATIVES FOR COMMON PATTERNS
 -- ======================================================================
 
 -- ✅ For string matching, use IF/THEN/ELSE:
@@ -404,15 +501,20 @@ findByName MEANS
       ELSE findByName rest targetName
     OTHERWISE NOTHING
 
+-- ✅ For complex constructors, break into steps:
+DECIDE step1 IS Money 1000 "USD"
+DECIDE step2 IS PersonActor samplePerson
+DECIDE complexAction IS PayMoney step1 step2
+
 -- ======================================================================
--- SECTION 19: DEBUGGING CHECKLIST
+-- SECTION 21: DEBUGGING CHECKLIST (UPDATED)
 -- ======================================================================
 
 -- When you see: "unexpected 's" error
 -- ✅ FIX: Add parentheses around field access in function calls
 -- length entity's purposes > 0  →  length (entity's purposes) > 0
 
--- When you see: "expecting BOOLEAN, got STRING"  
+-- When you see: "expecting BOOLEAN, got STRING"
 -- ✅ FIX: Use correct type operations
 -- length textField > 0  →  NOT textField EQUALS ""
 
@@ -426,8 +528,20 @@ findByName MEANS
 -- When you see: "could not find definition for [function]"
 -- ✅ FIX: Add ASSUME statement, define it yourself, or use prelude version
 
+-- When you see: "unexpected LIST expecting &&, *, +, -, /, ;"
+-- ✅ FIX: Add parentheses around LIST in constructors
+-- SomeType LIST items  →  SomeType (LIST items)
+
+-- When you see: "expects N arguments, but you are applying it to M arguments"
+-- ✅ FIX: Check type definition and match exact field count
+-- Count all fields in DECLARE statement and provide exact number of arguments
+
+-- When you see: "unexpected FinancialYearRecord expecting &&, *, +, -, /"
+-- ✅ FIX: Break complex constructors into simple steps
+-- Complex nested constructor  →  Multiple DECIDE statements
+
 -- ======================================================================
--- SECTION 20: COMPLETE WORKING EXAMPLES
+-- SECTION 22: COMPLETE WORKING EXAMPLES
 -- ======================================================================
 
 -- Example: Person eligibility checker
@@ -469,7 +583,81 @@ isReadyForApproval MEANS
   (length (entry's entryGovernors) > 0) AND
   entry's entryIsActive EQUALS TRUE
 
+-- Example: Contract with proper syntax
+GIVEN borrower IS AN Actor
+      lender IS AN Actor
+      loanAmount IS A Money
+GIVETH A CONTRACT Actor Action
+loanAgreement MEANS
+  PARTY borrower
+  MUST PayMoney loanAmount lender
+  WITHIN 365  -- One year to repay
+  HENCE FULFILLED
+
 #EVAL square 5
 #EVAL isOlderThan 25 18
 #EVAL fullName "John" "Doe"
-#EVAL createUsername "Alice" "Smith" 
+#EVAL createUsername "Alice" "Smith"
+
+-- ======================================================================
+-- SECTION 12: DEBUGGING PATTERNS
+-- ======================================================================
+
+-- Pattern: Missing Type Reference Resolution
+-- When you get errors like "The type 'TypeName' is not in scope"
+-- Always define the missing type before it's referenced
+
+-- Example: Missing Submission type causing Notice declaration to fail
+DECLARE RequiredStepsNotice
+    HAS noticeId IS A STRING
+        issueDate IS A Date
+        steps IS A LIST OF STRING
+        deadline IS A Date
+        reasonCodes IS A LIST OF STRING
+
+DECLARE DeregistrationNotice
+    HAS noticeId IS A STRING
+        date IS A Date
+        reasons IS A LIST OF STRING
+        isVoluntary IS A BOOLEAN
+
+DECLARE SubmissionStatus IS ONE OF
+    Received
+    UnderReview
+    Approved
+    Rejected
+    RequiresMoreInfo
+
+DECLARE Submission
+    HAS submissionId IS A STRING
+        submissionDate IS A Date
+        submissionType IS A STRING
+        applicantName IS A STRING
+        documents IS A LIST OF STRING
+        status IS A SubmissionStatus
+
+-- Now this Notice type can reference Submission without error
+DECLARE Notice IS ONE OF
+  required       HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A DeregistrationNotice
+  message        HAS notice IS A STRING
+  annualReturn
+  application    HAS submission IS A Submission
+
+-- Pattern: Indentation Debugging
+-- L4 is very strict about indentation in record field declarations
+-- All fields must align exactly (usually 6 spaces for HAS fields)
+
+-- WRONG (will cause "unexpected fieldName" errors):
+-- DECLARE BadRecord
+--   HAS field1 IS A STRING
+--         field2 IS A STRING    -- 8 spaces - wrong!
+--       field3 IS A STRING      -- 6 spaces but inconsistent
+
+-- CORRECT:
+DECLARE GoodRecord
+  HAS field1 IS A STRING
+      field2 IS A STRING          -- All fields consistently 6 spaces
+      field3 IS A STRING
+
+-- ======================================================================

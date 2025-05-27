@@ -35,7 +35,7 @@ DECLARE Appeal
   HAS appealId IS A STRING
       appellantType IS A AppellantType
       decisionDate IS A Date
-        submissionDate IS A Date
+      submissionDate IS A Date
       appealDeadline IS A Date
       extensionRequested IS A BOOLEAN
       extensionGranted IS A BOOLEAN

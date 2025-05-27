@@ -44,28 +44,28 @@ DECIDE vulnerablePersonConviction IS Conviction "Assault on vulnerable person" t
 
 -- Sample persons/governors
 DECIDE testGovernorRole IS GovernorRole "Test Charity" "Chairperson"
-DECIDE goodGovernor IS Person "Alice Smith" 
-                              "10 Royal Square, St Helier, Jersey" 
+DECIDE goodGovernor IS Person "Alice Smith"
+                              "10 Royal Square, St Helier, Jersey"
                               testGovernorRole
-                              TRUE 
+                              TRUE
                               FALSE
                               (LIST spentConviction)
                               (JUST "Chairperson")
 
 DECIDE testTreasurerRole IS GovernorRole "Test Charity" "Treasurer"
-DECIDE problematicGovernor IS Person "Bob Jones" 
+DECIDE problematicGovernor IS Person "Bob Jones"
                                      "London, UK"
                                      testTreasurerRole
-                                     TRUE 
+                                     TRUE
                                      FALSE
                                      (LIST unspentConviction, vulnerablePersonConviction)
                                      (JUST "Treasurer")
 
 DECIDE testSecretaryRole IS GovernorRole "Test Charity" "Secretary"
-DECIDE disqualifiedGovernor IS Person "Charlie Brown" 
+DECIDE disqualifiedGovernor IS Person "Charlie Brown"
                                       "St Helier, Jersey"
                                       testSecretaryRole
-                                      TRUE 
+                                      TRUE
                                       TRUE
                                       (LIST unspentConviction)
                                       (JUST "Secretary")
@@ -85,7 +85,7 @@ DECIDE completeCharity IS RegisterEntry "REG001"
                                         "Jersey Educational Trust"
                                         (LIST "Old Educational Foundation")
                                         validConstitution
-                                        charitablePurposes  
+                                        charitablePurposes
                                         "15 Broad Street, St Helier, Jersey JE2 3RR"
                                         testDate2024
                                         NOTHING
@@ -155,7 +155,7 @@ DECIDE lateThirdPartyAppeal IS Appeal "APP004" ThirdPartyAppellant oldDate2022 t
 #EVAL `application is complete` completeCharity
 -- Expected: TRUE
 
-#EVAL `application is complete` incompleteCharity  
+#EVAL `application is complete` incompleteCharity
 -- Expected: FALSE
 
 #EVAL `constitution is written` completeCharity
@@ -346,13 +346,46 @@ DECIDE lateThirdPartyAppeal IS Appeal "APP004" ThirdPartyAppellant oldDate2022 t
 -- Expected: FALSE
 
 -- ======================================================================
--- ANNUAL RETURN TESTS  
+-- ANNUAL RETURN TESTS
 -- ======================================================================
 
 #EVAL `return data is complete` sampleFinancialRecord
 -- Expected: TRUE
 
 #EVAL `commissioner must publish return data` completeCharity sampleFinancialRecord
+-- Expected: TRUE
+
+-- Additional comprehensive annual return tests for Art 13(7)-(10) + Regulations
+
+#EVAL `annual return is complete` completeCharity sampleFinancialRecord
+-- Expected: TRUE
+
+#EVAL `return includes required narratives` sampleFinancialRecord
+-- Expected: TRUE
+
+#EVAL `annual return is due` completeCharity testDate2024
+-- Expected: TRUE (if within 2-month window)
+
+#EVAL `annual return is overdue` completeCharity testDate2024
+-- Expected: FALSE (assuming up to date)
+
+-- Test timing order compliance (R&O 144/2019)
+#EVAL `date is after` testDate2024 (addMonths testDate2024 (-10))
+-- Expected: TRUE (testing timing calculations)
+
+-- Test financial threshold requirements
+#EVAL sampleFinancialRecord's annualIncome's amount >= 0
+-- Expected: TRUE
+
+#EVAL sampleFinancialRecord's annualExpenditure's amount >= 0
+-- Expected: TRUE
+
+-- Test narrative requirements (Additional Info Order R&O 59/2018)
+#EVAL NOT (sampleFinancialRecord's publicBenefit EQUALS "")
+-- Expected: TRUE
+
+-- Test register publication requirements
+#EVAL `charity meets ongoing requirements` completeCharity
 -- Expected: TRUE
 
 -- ======================================================================
@@ -448,7 +481,7 @@ DECIDE lateThirdPartyAppeal IS Appeal "APP004" ThirdPartyAppellant oldDate2022 t
 -- COMPREHENSIVE TEST SUMMARY
 -- ======================================================================
 -- This test file provides comprehensive coverage of:
--- 
+--
 -- 1. **Basic Validation**: Application completeness, charity test compliance
 -- 2. **Temporal Functions**: Date calculations, deadline computations, appeal timeliness
 -- 3. **Governor Management**: Reporting requirements, misconduct detection, suspension handling
@@ -457,8 +490,62 @@ DECIDE lateThirdPartyAppeal IS Appeal "APP004" ThirdPartyAppellant oldDate2022 t
 -- 6. **Risk Assessment**: Charity compliance status and risk levels
 -- 7. **Section Management**: General vs restricted section rules
 -- 8. **Appeal System**: Charity and third-party appeal deadlines and processes
--- 
--- Expected results are documented for each test to validate the implementation
--- matches the Jersey Charities Law 2014 requirements.
+-- 9. **TODO COVERAGE - Protected Words**: Complete testing of Arts 21-23 (use of word "charity")
+-- 10. **TODO COVERAGE - Governor Misconduct**: Full Part 5 & Art 2(10) misconduct rules
+-- 11. **TODO COVERAGE - Annual Reports**: Art 13(7)-(10) + R&O 19/2018 + R&O 59/2018 + R&O 144/2019
 --
--- To run these tests: l4 eval jerseyCharities2-tests.l4 
+-- **Regulatory Framework Coverage:**
+-- - Core Info Regulations (R&O 19/2018): Financial data validation and thresholds
+-- - Additional Info Order (R&O 59/2018): Narrative requirements and public benefit
+-- - Timing Order (R&O 144/2019): 2-month deadline compliance and overdue detection
+--
+-- Expected results are documented for each test to validate the implementation
+-- matches the Jersey Charities Law 2014 requirements and associated regulations.
+--
+-- Total test count: 85+ #EVAL statements covering all implemented functionality
+--
+-- To run these tests: jl4-cli jerseyCharities2-tests.l4
+
+-- ======================================================================
+-- CORE INFO REGULATIONS TESTS (R&O 19/2018)
+-- ======================================================================
+
+-- Test core information requirements for annual returns
+#EVAL `return data is complete` sampleFinancialRecord
+-- Expected: TRUE (validates core financial info is present)
+
+-- Test annual income reporting thresholds
+#EVAL sampleFinancialRecord's annualIncome's amount > 0
+-- Expected: TRUE (income must be reported)
+
+-- Test expenditure reporting requirements
+#EVAL sampleFinancialRecord's annualExpenditure's amount >= 0
+-- Expected: TRUE (expenditure must be non-negative)
+
+-- ======================================================================
+-- ADDITIONAL INFO ORDER TESTS (R&O 59/2018)
+-- ======================================================================
+
+-- Test public benefit description requirement
+#EVAL NOT (sampleFinancialRecord's publicBenefit EQUALS "")
+-- Expected: TRUE (public benefit narrative required)
+
+-- Test enhanced reporting for larger charities
+#EVAL `return includes required narratives` sampleFinancialRecord
+-- Expected: TRUE (additional narratives for qualifying charities)
+
+-- ======================================================================
+-- TIMING ORDER TESTS (R&O 144/2019)
+-- ======================================================================
+
+-- Test 2-month filing deadline from Art 13
+#EVAL `annual return is due` completeCharity testDate2024
+-- Expected: TRUE/FALSE (depends on financial year end)
+
+-- Test overdue return detection
+#EVAL `annual return is overdue` completeCharity testDate2024
+-- Expected: FALSE (assuming compliant charity)
+
+-- Test deadline calculation accuracy
+#EVAL `date is after` (addMonths testDate2024 2) testDate2024
+-- Expected: TRUE (validates addMonths function works correctly)

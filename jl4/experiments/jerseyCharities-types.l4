@@ -1,4 +1,3 @@
-
 IMPORT prelude
 
 -- ======================================================================
@@ -100,6 +99,21 @@ DECLARE Role IS ONE OF
     TribunalMember
 
 -- Notice and Decision types
+DECLARE Submission
+    HAS submissionId IS A STRING
+        submissionDate IS A Date
+        submissionType IS A STRING
+        applicantName IS A STRING
+        documents IS A LIST OF STRING
+        status IS A SubmissionStatus
+
+DECLARE SubmissionStatus IS ONE OF
+    Received
+    UnderReview
+    Approved
+    Rejected
+    RequiresMoreInfo
+
 DECLARE Notice IS ONE OF
   required       HAS notice IS A RequiredStepsNotice
   deregistration HAS notice IS A DeregistrationNotice
