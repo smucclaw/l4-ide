@@ -275,6 +275,10 @@ initialEnvironment =
     , (TypeCheck.roundUnique, ValUnaryBuiltinFun UnaryRound)
     , (TypeCheck.ceilingUnique, ValUnaryBuiltinFun UnaryCeiling)
     , (TypeCheck.floorUnique, ValUnaryBuiltinFun UnaryFloor)
+    , (TypeCheck.andUnique,     andClosureVal trueVal falseVal)
+    , (TypeCheck.orUnique,      orClosureVal trueVal falseVal)
+    , (TypeCheck.impliesUnique, impliesClosureVal trueVal falseVal)
+    , (TypeCheck.notUnique,     notClosureVal trueVal falseVal)
     ]
     <> binOps
 
@@ -747,3 +751,70 @@ buildModuleEnvironment initial m = (execEvalModuleWithEnv initial m).environment
 
 unionEnvironments :: Foldable f => f (Map Unique Value) -> Environment
 unionEnvironments m = if null m then initialEnvironment else Map.unions m
+
+boolBinOpClosure :: Value -> Value -> (Resolved -> Resolved -> Expr Resolved) -> Value
+boolBinOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno TypeCheck.bDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef TypeCheck.bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+boolUnaryOpClosure :: Value -> Value -> (Resolved -> Expr Resolved) -> Value
+boolUnaryOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+andClosureVal :: Value -> Value -> Value
+andClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
+
+notClosureVal :: Value -> Value -> Value
+notClosureVal true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orClosureVal :: Value -> Value -> Value
+orClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesClosureVal :: Value -> Value -> Value
+impliesClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )
