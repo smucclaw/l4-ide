@@ -47,7 +47,7 @@ y MEANS
 
 #PROVISION y AT 0 WITH
   PARTY B DOES payment 5 AT 5
-  PARTY S DOES delivery AT 20
+  AT 20 PARTY S DOES delivery
 
 GIVETH PROVISION Person Action
 z MEANS 

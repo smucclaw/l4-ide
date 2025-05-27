@@ -1,5 +1,7 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 module L4.Parser (
   -- * Public API
@@ -998,13 +1000,24 @@ event :: Parser (Expr Name)
 event = attachAnno $ Event emptyAnno <$> annoHole parseEvent
 
 parseEvent :: Parser (Event Name)
-parseEvent = attachAnno $ MkEvent emptyAnno
-  <$  annoLexeme (spacedToken_ TKParty)
-  <*> annoHole expr
-  <*  annoLexeme (spacedToken_ TKDoes)
-  <*> annoHole expr
-  <*  annoLexeme (spacedToken_ TKAt)
-  <*> annoHole expr -- TODO: better timestamp parsing
+parseEvent = attachAnno $
+  MkEvent emptyAnno <$> parseParty <*> parseDoes <*> parseAt
+  <|> do -- NOTE: allow to specify AT first, without breaking backwards
+         -- compatibility
+    timestamp <- parseAt
+    party <- parseParty
+    action <- parseDoes
+    pure MkEvent {anno = emptyAnno, ..}
+  where
+    parseParty =
+      annoLexeme (spacedToken_ TKParty)
+      *> annoHole expr
+    parseDoes =
+      annoLexeme (spacedToken_ TKDoes)
+      *> annoHole expr
+    parseAt =
+      annoLexeme (spacedToken_ TKAt)
+      *> annoHole expr
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr = postfixP postfixOperator atomicExpr'
