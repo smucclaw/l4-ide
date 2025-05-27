@@ -95,6 +95,7 @@ data TokenType =
   | TImplies
   | TDividedBy
   | TOtherSymbolic !Text
+  | TColon
     -- keywords
   | TKGiven
   | TKGiveth
@@ -394,6 +395,7 @@ symbols =
     , ("||", TOr           )
     , ("=>", TImplies      )
     , ("/" , TDividedBy    )
+    , (":" , TColon)
     ]
 
 keywords :: Map Text TokenType
@@ -886,6 +888,7 @@ displayTokenType tt =
     TImplies          -> "=>"
     TDividedBy        -> "/"
     TOtherSymbolic t  -> t
+    TColon           -> ":"
     TKGiven           -> "GIVEN"
     TKGiveth          -> "GIVETH"
     TKDecide          -> "DECIDE"
@@ -1021,6 +1024,7 @@ posTokenCategory =
     TImplies -> COperator
     TDividedBy -> COperator
     TOtherSymbolic _ -> CSymbol
+    TColon -> CSymbol
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
     TKDecide -> CKeyword
