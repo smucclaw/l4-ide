@@ -61,10 +61,10 @@ instance (Monad f) => Monad (AnnoParser_ f t) where
     pure $ wb{anno = wa.anno <> wb.anno}
 
 wrapAnnoParser :: f (WithAnno_ t a) -> AnnoParser_ f t a
-wrapAnnoParser = coerce -- AnnoParser . Compose
+wrapAnnoParser = coerce
 
 unwrapAnnoParser :: AnnoParser_ f t a -> f (WithAnno_ t a)
-unwrapAnnoParser = coerce -- getCompose . (.runAnnoParser)
+unwrapAnnoParser = coerce
 
 -- ----------------------------------------------------------------------------
 -- MegaParsec specific
@@ -87,14 +87,14 @@ mkConcreteSyntaxNode posTokens =
     { tokens = posTokens
     , range = do
         ne <- NonEmpty.nonEmpty posTokens
-        let l = NonEmpty.head ne
-            h = NonEmpty.last ne
+        let lo = NonEmpty.head ne
+            hi = NonEmpty.last ne
 
         pure MkSrcRange
-          { start = l.range.start
-          , end = h.range.end
+          { start = lo.range.start
+          , end = hi.range.end
           , length = sum $ fmap (.range.length) ne
-          , moduleUri = l.range.moduleUri
+          , moduleUri = lo.range.moduleUri
           }
     , visibility =
         if Foldable.null posTokens
