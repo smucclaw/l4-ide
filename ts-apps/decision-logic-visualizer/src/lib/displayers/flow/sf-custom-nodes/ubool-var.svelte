@@ -2,6 +2,8 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
+  import { onDestroy } from 'svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
   import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
@@ -9,11 +11,28 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithValueIndicator from '$lib/displayers/flow/helpers/with-value-indicator.svelte'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
   const ladderEnv = useLadderEnv()
   const l4Conn = ladderEnv.getL4Connection()
+
+  let uboolvarValue = $state(
+    (data.context.get(data.originalLirId) as UBoolVarLirNode).getValue(
+      data.context
+    )
+  )
+  const onValueChange = (context: LirContext, id: LirId) => {
+    if (id === data.originalLirId) {
+      uboolvarValue = (
+        context.get(data.originalLirId) as UBoolVarLirNode
+      ).getValue(context)
+    }
+  }
+  const unsub = ladderEnv.getLirRegistry().subscribe(onValueChange)
+
+  onDestroy(unsub.unsubscribe)
 </script>
 
 {#snippet inlineUI()}
@@ -48,38 +67,33 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 -->
 
 <WithContentfulNodeStyles>
-  <div class={['bool-var-node-border', ...data.classes]}>
-    <WithNormalHandles>
-      <button
-        class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-        onclick={() => {
-          const ladderGraph = ladderEnv
-            .getTopFunDeclLirNode(data.context)
-            .getBody(data.context)
-          const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+  <WithValueIndicator
+    value={uboolvarValue}
+    borderClasses={['ubool-var-node-border']}
+  >
+    <div class={data.classes}>
+      <WithNormalHandles>
+        <button
+          class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+          onclick={() => {
+            const ladderGraph = ladderEnv
+              .getTopFunDeclLirNode(data.context)
+              .getBody(data.context)
+            const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
-          const newValue = cycle(node.getValue(data.context))
-          ladderGraph.submitNewBinding(data.context, {
-            unique: node.getUnique(data.context),
-            value: newValue,
-          })
-        }}
-      >
-        {data.name.label}
-      </button>
-      {#if data.canInline}
-        {@render inlineUI()}
-      {/if}
-    </WithNormalHandles>
-  </div>
+            const newValue = cycle(node.getValue(data.context))
+            ladderGraph.submitNewBinding(data.context, {
+              unique: node.getUnique(data.context),
+              value: newValue,
+            })
+          }}
+        >
+          {data.name.label}
+        </button>
+        {#if data.canInline}
+          {@render inlineUI()}
+        {/if}
+      </WithNormalHandles>
+    </div>
+  </WithValueIndicator>
 </WithContentfulNodeStyles>
-
-<style>
-  .bool-var-node-border {
-    border: var(--ladder-node-border, var(--ladder-node-border-default));
-    border-radius: var(
-      --ladder-node-border-radius,
-      var(--ladder-node-border-radius-default)
-    );
-  }
-</style>

@@ -11,6 +11,6 @@
   let { children }: WithContentfulNodeStylesProps = $props()
 </script>
 
-<div class="base-sf-node-styles transition-opacity duration-300 relative">
+<div class="base-sf-node-styles transition-opacity duration-300">
   {@render children()}
 </div>

@@ -165,6 +165,18 @@
   --color-false-value: var(--color-rose-200);
 }
 
+/***************************************
+         UBoolVarNode border 
+****************************************/
+
+.ubool-var-node-border {
+  border: var(--ladder-node-border, var(--ladder-node-border-default));
+  border-radius: var(
+    --ladder-node-border-radius,
+    var(--ladder-node-border-radius-default)
+  );
+}
+
 /*************************************
   Utility SF styles
 *************************************/
@@ -177,23 +189,6 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 
 @utility false-val {
   background-color: var(--color-false-value) !important;
-}
-
-/* A non-color-based indicator of the value */
-.true-val::after {
-  content: '✓';
-  @apply absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2;
-  @apply w-4 text-[0.7rem] px-1;
-  @apply text-white bg-cyan-800;
-  @apply rounded-full;
-}
-
-.false-val::after {
-  content: '✗';
-  @apply absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2;
-  @apply w-4 text-[0.7rem] px-1;
-  @apply text-white bg-cyan-800;
-  @apply rounded-full;
 }
 
 @utility base-sf-node-styles {
