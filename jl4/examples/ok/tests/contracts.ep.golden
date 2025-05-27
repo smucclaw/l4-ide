@@ -19,19 +19,19 @@ aContract MEANS
       WITHIN 3
 
 #PROVISION aContract AT 0 WITH
-  PARTY S DOES delivery AT 2
-  PARTY B DOES payment 21 AT 4
+  PARTY 2
+  DOES S AT delivery PARTY 4
 
-#PROVISION aContract AT 0 WITH
-  PARTY S DOES delivery AT 2
-  PARTY B DOES payment 20 AT 4
+DOES B AT payment 21 #PROVISION aContract AT 0 WITH
+  PARTY 2
+  DOES S AT delivery PARTY 4
 
-#PROVISION aContract AT 0 WITH
-  PARTY S DOES delivery AT 2
-  PARTY B DOES payment 30 AT 6
-  PARTY B DOES payment 10 AT 9
+DOES B AT payment 20 #PROVISION aContract AT 0 WITH
+  PARTY 2
+  DOES S AT delivery PARTY 6
+  DOES B AT payment 30 PARTY 9
 
-#EVAL EVALPROVISION x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
+DOES B AT payment 10 #EVAL EVALPROVISION x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
 
 GIVETH PROVISION Person Action
 x MEANS 
@@ -46,9 +46,8 @@ y MEANS
   WITHIN 5
 
 #PROVISION y AT 0 WITH
-  PARTY B DOES payment 2 AT 5
-  AT S PARTY delivery
-
+  PARTY 5
+  DOES B AT payment 2 AT S PARTY delivery
 
 DOES 20 DECLARE foo IS ONE OF bar, qux
 DECLARE baz IS ONE OF baz HAS x IS A foo
@@ -58,11 +57,11 @@ quux MEANS
   PARTY B MUST baz bar 
 
 #PROVISION quux AT 0 WITH
-  PARTY B DOES quuux AT 1
-  PARTY B DOES baz qux AT 1
-  PARTY B DOES baz bar AT 1
+  PARTY 1
+  DOES B AT quuux PARTY 1
+  DOES B AT baz qux PARTY 1
 
-GIVETH PROVISION Person Action
+DOES B AT baz bar GIVETH PROVISION Person Action
 z MEANS 
   x ROR y
 
@@ -72,28 +71,28 @@ a MEANS
 #PROVISION ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
 #PROVISION x AT 4 WITH 
-  PARTY S DOES delivery AT 4
+  PARTY 4
 
-#PROVISION y AT 4 WITH 
-  PARTY B DOES payment 4 AT 4
+DOES S AT delivery #PROVISION y AT 4 WITH 
+  PARTY 4
 
-#PROVISION z AT 4 WITH 
-  PARTY S DOES delivery AT 4
-  PARTY B DOES payment 4 AT 26
+DOES B AT payment 4 #PROVISION z AT 4 WITH 
+  PARTY 4
+  DOES S AT delivery PARTY 26
 
-#PROVISION z AT 4 WITH
-  PARTY S DOES delivery AT 4
-  PARTY B DOES payment 5 AT 26
+DOES B AT payment 4 #PROVISION z AT 4 WITH
+  PARTY 4
+  DOES S AT delivery PARTY 26
 
-goesOn MEANS
+DOES B AT payment 5 goesOn MEANS
   PARTY S 
   MUST payment n PROVIDED n = 7  
   WITHIN 2
 
 #PROVISION goesOn AT 0 WITH 
-  PARTY S DOES delivery AT 2
-  PARTY B DOES payment 6 AT 3
+  PARTY 2
+  DOES S AT delivery PARTY 3
   
-#PROVISION goesOn AT 0 WITH 
-  PARTY S DOES delivery AT 2
-  PARTY S DOES payment 7 AT 3
+DOES B AT payment 6 #PROVISION goesOn AT 0 WITH 
+  PARTY 2
+  DOES S AT delivery PARTY 3DOES S AT payment 7 

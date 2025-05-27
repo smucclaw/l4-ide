@@ -1000,14 +1000,15 @@ event :: Parser (Expr Name)
 event = attachAnno $ Event emptyAnno <$> annoHole parseEvent
 
 parseEvent :: Parser (Event Name)
-parseEvent = attachAnno $
-  MkEvent emptyAnno <$> parseParty <*> parseDoes <*> parseAt
-  <|> do -- NOTE: allow to specify AT first, without breaking backwards
-         -- compatibility
+parseEvent =
+  attachAnno (MkEvent emptyAnno <$> parseParty <*> parseDoes <*> parseAt <*> pure False)
+  <|> attachAnno do
+    -- NOTE: allow to specify AT first, without breaking backwards
+    -- compatibility
     timestamp <- parseAt
     party <- parseParty
     action <- parseDoes
-    pure MkEvent {anno = emptyAnno, ..}
+    pure MkEvent {anno = emptyAnno, atFirst = True, ..}
   where
     parseParty =
       annoLexeme (spacedToken_ TKParty)

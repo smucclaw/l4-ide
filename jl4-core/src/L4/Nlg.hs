@@ -245,7 +245,7 @@ instance Linearize (Expr Resolved) where
     Event _ ev -> lin ev
 
 instance Linearize (Event Resolved) where
-  linearize (MkEvent _ p a t) = hcat
+  linearize (MkEvent _ p a t _) = hcat
     [ "party", lin p, "did", lin a, "at", lin t]
 
 instance Linearize (Directive Resolved) where

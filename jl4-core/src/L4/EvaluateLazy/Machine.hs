@@ -934,7 +934,7 @@ eventExpr (Event _ann ev) = pure $ desugarEvent ev
 eventExpr o = InternalException $ RuntimeTypeError $ "expected an EVENT, but got " <> prettyLayout o
 
 desugarEvent :: Event Resolved -> Expr Resolved
-desugarEvent (MkEvent ann party act timestamp) = App ann TypeCheck.eventCRef [party, act, timestamp]
+desugarEvent (MkEvent ann party act timestamp _atFirst) = App ann TypeCheck.eventCRef [party, act, timestamp]
 
 evalLocalDecl :: Environment -> LocalDecl Resolved -> Machine ()
 evalLocalDecl env (LocalDecide _ann decide) =
