@@ -9,12 +9,27 @@
   import { useLadderEnv } from '$lib/ladder-env.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithValueIndicator from '$lib/displayers/flow/helpers/with-value-indicator.svelte'
+  import { onDestroy } from 'svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
   let { data }: AppDisplayerProps = $props()
 
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
+
+  const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
+  const onArgValueChange = (context: LirContext, id: LirId) => {
+    data.args.forEach((arg, i) => {
+      if (id === arg.getId()) {
+        argValues[i] = arg.getValue(context)
+      }
+    })
+  }
+  const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
+
+  onDestroy(unsub.unsubscribe)
 </script>
 
 <WithContentfulNodeStyles>
@@ -32,34 +47,35 @@
         </div>
         <!-- Args (see also note above)-->
         <div class="flex flex-wrap gap-1 justify-center">
-          {#each data.args as arg}
-            <button
-              class={[
-                'border',
-                'border-black',
-                'p-2',
-                'text-xs',
-                'rounded-lg',
-                'cursor-pointer',
-                'bg-white',
-                ...arg.getAllClasses(data.context),
-              ]}
-              onclick={async () => {
-                console.log(
-                  'clicked: ',
-                  arg.getLabel(data.context),
-                  arg.getId()
-                )
-
-                const newValue = cycle(arg.getValue(data.context))
-                await ladderGraph.submitNewBinding(data.context, {
-                  unique: arg.getUnique(data.context),
-                  value: newValue,
-                })
-              }}
+          {#each data.args as arg, i}
+            <WithValueIndicator
+              value={argValues[i]}
+              borderClasses={['border', 'border-black', 'rounded-lg']}
             >
-              {arg.getLabel(data.context)}
-            </button>
+              <button
+                class={[
+                  'p-2',
+                  'text-xs',
+                  'cursor-pointer',
+                  ...arg.getAllClasses(data.context),
+                ]}
+                onclick={async () => {
+                  console.log(
+                    'clicked: ',
+                    arg.getLabel(data.context),
+                    arg.getId()
+                  )
+
+                  const newValue = cycle(arg.getValue(data.context))
+                  await ladderGraph.submitNewBinding(data.context, {
+                    unique: arg.getUnique(data.context),
+                    value: newValue,
+                  })
+                }}
+              >
+                {arg.getLabel(data.context)}
+              </button>
+            </WithValueIndicator>
           {/each}
         </div>
       </div>
