@@ -159,9 +159,15 @@
       if (sessionid) {
         const response = await fetch(`${sessionUrl}?id=${sessionid}`)
         logger.debug('sent GET for session')
-        const prog = await response.json()
-        if (prog) {
-          editor.setValue(prog)
+        if (response.ok) {
+          const prog = await response.json()
+          if (prog) {
+            editor.setValue(prog)
+          }
+        } else {
+          logger.debug('response was not okay - deleting search param')
+          ownUrl.searchParams.delete('id')
+          history.pushState(null, '', ownUrl)
         }
       }
 
