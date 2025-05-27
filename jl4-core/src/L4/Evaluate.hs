@@ -680,21 +680,17 @@ runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
-runUnaryBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
-runUnaryBuiltin s vals op =
-  case op of
-    UnaryIsInteger -> do
-      val <- expect1Number s vals
-      pure $ valBool $ isJust $ isInteger val
-    UnaryRound -> do
-      val <- expect1Number s vals
-      pure $ valInt $ round val
-    UnaryCeiling -> do
-      val <- expect1Number s vals
-      pure $ valInt $ ceiling val
-    UnaryFloor -> do
-      val <- expect1Number s vals
-      pure $ valInt $ floor val
+runBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
+runBuiltin s vals op = do
+  val :: Rational <- expect1Number s vals
+  pure case op of
+    UnaryIsInteger -> valBool $ isJust $ isInteger val
+    UnaryRound -> valInt $ round val
+    UnaryCeiling -> valInt $ ceiling val
+    UnaryFloor -> valInt $ floor val
+  where
+    valInt :: Integer -> Value
+    valInt = ValNumber . toRational
 
 runBinaryBuiltin :: Stack -> [Value] -> BinOp -> Eval Value
 runBinaryBuiltin s vals op = do
