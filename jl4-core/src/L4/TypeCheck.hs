@@ -1620,13 +1620,12 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
 scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
-scanFunSigAssume a@(MkAssume _ tysig appForm _mt) = do
+scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
   -- declaration of a term
+  let tysig' = mergeResultTypeInto tysig mt
   errorContext (WhileCheckingAssume (getName appForm)) do
-    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig'
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
-    -- check that the given result type matches the result type in the type signature
-
     aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
     pure $ Just $ MkFunTypeSig
@@ -1637,6 +1636,27 @@ scanFunSigAssume a@(MkAssume _ tysig appForm _mt) = do
       , name
       , arguments = extendsTySig <> extendsAppForm
       }
+  where
+    -- In the specific case where we have no GIVETH, but a type for the ASSUME itself,
+    -- we merge the GIVEN part with the ASSUME type to get a full type signature.
+    --
+    -- If we don't do that, something like
+    --
+    -- @
+    -- GIVEN a
+    -- ASSUME foo IS AN a
+    -- @
+    --
+    -- would go wrong, because the pre-scan would ignore the use of the type variable
+    -- and we could no longer get a polymorphic type.
+    --
+    mergeResultTypeInto :: TypeSig Name -> Maybe (Type' Name) -> TypeSig Name
+    mergeResultTypeInto typesig@(MkTypeSig _ (MkGivenSig _ []) Nothing) (Just _) =
+      typesig
+    mergeResultTypeInto (MkTypeSig ann given Nothing) (Just t) =
+      MkTypeSig ann given (Just (MkGivethSig emptyAnno t))
+    mergeResultTypeInto typesig _ =
+      typesig
 
 -- ----------------------------------------------------------------------------
 -- Typecheck Utils
