@@ -396,6 +396,9 @@ instance LayoutPrinter Eager.Value where
     Eager.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
 
+instance (LayoutPrinter a, LayoutPrinter b) => LayoutPrinter (Either a b) where
+  printWithLayout = either printWithLayout printWithLayout
+
 instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \ case
     Lazy.ValNumber i               -> pretty (prettyRatio i)
@@ -415,7 +418,9 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       , indent 2 $ printWithLayout reason
       ]
     -- FIXME: provided clause probaly has to come back, currently 'Nothing'
-    Lazy.ValObligation _env p a t f l -> prettyObligation p a (sequenceA t) (Just f) l
+    Lazy.ValObligation _env p a t f l -> case t of
+      Left te -> prettyObligation p a te (Just f) l
+      Right tv -> prettyObligation p a (Just tv) (Just f) l
     Lazy.ValROp _env op l r -> hsep
       [ printWithLayout l
       , case op of ValROr -> "OR"; ValRAnd -> "AND"
@@ -449,9 +454,6 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
       , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
-
-instance LayoutPrinter a => LayoutPrinter (MaybeEvaluated' a) where
-  printWithLayout = either printWithLayout printWithLayout
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case

@@ -34,9 +34,18 @@ data ContractFrame
   -- ^ checks if the party of the event matches
   -- - if yes, continue by evaluating the action of the contract
   -- - if no, continue with the next event
-  | Contract9 ScrutinizeActions
+  | Contract9 ScrutinizeEnvironment
+  -- ^ saves the environment introduced by the pattern match, extends
+  -- the env of the provided clause and then goes on to evaluate that
+  | Contract10 ScrutinizeActions
   -- ^ checks if the actions of the event matches the one of the obligation
   -- - if no, continue with the next event
+  | Contract11 ActionDoesn'tmatch
+  -- ^ if an action doesn't match, we unwind the stack via pattern match failure.
+  -- - if we encounter this frame upon normal evalation, we just return the value
+  --   that we are currently looking at
+  -- - if we encounter this frame while unwinding, we push a frame for continuing
+  --   with the next event and evaluate the remaining evnets
   | RBinOp1 RBinOp1
   -- ^ Regulative BinOp frame while evaluating a regulative expression
   | RBinOp2 RBinOp2
@@ -105,7 +114,23 @@ data ScrutinizeParty = ScrutinizeParty
   }
   deriving stock Show
 
+data ScrutinizeEnvironment = ScrutinizeEnvironment
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  , ev'party :: WHNF, ev'act :: Reference
+  , events :: Reference, time :: WHNF
+  , env :: Environment
+  }
+  deriving stock Show
+
 data ScrutinizeActions = ScrutinizeActions
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  , ev'party :: WHNF, ev'act :: Reference
+  , events :: Reference, time :: WHNF
+  , env :: Environment, henceEnv :: Environment -- ^ the environment to extend by when evaluating the hence clause
+  }
+  deriving stock Show
+
+data ActionDoesn'tmatch = ActionDoesn'tmatch
   { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference
   , events :: Reference, time :: WHNF

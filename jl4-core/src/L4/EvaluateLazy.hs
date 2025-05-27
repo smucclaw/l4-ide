@@ -185,31 +185,39 @@ nfAux _d (ValNumber i)               = pure (MkNF (ValNumber i))
 nfAux _d (ValString s)               = pure (MkNF (ValString s))
 nfAux _d ValNil                      = pure (MkNF ValNil)
 nfAux  d (ValCons r1 r2)             = do
-  v1 <- runConfigM (evalRef r1) >>= nfAux (d - 1)
-  v2 <- runConfigM (evalRef r2) >>= nfAux (d - 1)
+  v1 <- evalAndNF d r1
+  v2 <- evalAndNF d r2
   pure (MkNF (ValCons v1 v2))
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
-nfAux _d (ValObligation env party act due followup lest) = do
-  pure (MkNF (ValObligation env party act due followup lest))
+nfAux d (ValObligation env party act due followup lest) = do
+  party' <- traverseAndNF d party
+  due' <- traverseAndNF d due
+  pure (MkNF (ValObligation env party' act due' followup lest))
 nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
-  vs <- traverse (\ r -> runConfigM (evalRef r) >>= nfAux (d - 1)) rs
+  vs <- traverse (evalAndNF d) rs
   pure (MkNF (ValConstructor n vs))
 nfAux _d (ValAssumed n)              = pure (MkNF (ValAssumed n))
 nfAux _d (ValEnvironment env)        = pure (MkNF (ValEnvironment env))
-nfAux d (ValBreached r')            = do
-  let evalAndNF f = do
-        whnf <- runConfigM $ evalRef f
-        nfAux (d - 1) whnf
+nfAux d (ValBreached r')             = do
   r <- case r' of
     DeadlineMissed ev'party ev'act ev'timestamp party act deadline -> do
-      ev'party' <- evalAndNF ev'party
-      act' <- evalAndNF ev'act
-      party' <- evalAndNF party
+      ev'party' <- evalAndNF d ev'party
+      act' <- evalAndNF d ev'act
+      party' <- evalAndNF d party
       pure (DeadlineMissed ev'party' act' ev'timestamp party' act deadline)
   pure (MkNF (ValBreached r))
-nfAux _d (ValROp env op l r) = pure (MkNF (ValROp env op l r))
+nfAux d (ValROp env op l r) = do
+  l' <- traverseAndNF d l
+  r' <- traverseAndNF d r
+  pure (MkNF (ValROp env op l' r'))
+
+traverseAndNF :: Int -> Either a WHNF -> Eval (Either a (Value NF))
+traverseAndNF d = traverse (traverse (evalAndNF d))
+
+evalAndNF :: Int -> Reference -> Eval NF
+evalAndNF d = nfAux (d - 1) <=< runConfigM . evalRef
 
 -- | Main entry point.
 --

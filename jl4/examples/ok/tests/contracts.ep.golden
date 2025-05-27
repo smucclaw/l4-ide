@@ -2,7 +2,33 @@ DECLARE Person IS ONE OF B, S
 DECLARE Action IS ONE OF 
   delivery 
   payment HAS amount IS A NUMBER
-  return
+
+aContract MEANS 
+  PARTY S
+  MUST delivery 
+  WITHIN 3
+  HENCE 
+    PARTY B
+    MUST payment price PROVIDED price >= 20
+    WITHIN 3
+    HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return)
+    LEST
+      PARTY B
+      MUST payment fine PROVIDED fine = 10
+      WITHIN 3
+
+#CONTRACT aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 21 AT 4
+
+#CONTRACT aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 20 AT 4
+
+#CONTRACT aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 30 AT 6
+  PARTY B DOES payment 10 AT 9
 
 #EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B (payment 3) 42) 5
 

@@ -116,7 +116,7 @@ pattern Allocate expr k = Allocate' (Recursive expr k)
 pattern AllocateValue :: WHNF -> Machine Reference
 pattern AllocateValue whnf = Allocate' (Value whnf)
 
-pattern PreAllocate ::Resolved -> Machine (Unique, Reference)
+pattern PreAllocate :: Resolved -> Machine (Unique, Reference)
 pattern PreAllocate r = Allocate' (PreAllocation r)
 
 data Config
@@ -151,8 +151,8 @@ forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
   And  _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
   Or   _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
-  RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Right e1) (Right e2))
-  ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Right e1) (Right e2))
+  RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Left e1) (Left e2))
+  ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Left e1) (Left e2))
   Implies _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
   Not _ann e ->
@@ -235,7 +235,7 @@ forwardExpr env = \ case
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
   Regulative _ann (MkObligation _ party action due followup lest) -> do
-    Backward (ValObligation env (Right party) action (Right due) (fromMaybe fulfilExpr followup) lest)
+    Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
 
@@ -392,14 +392,16 @@ backwardContractFrame val = \ case
     EvalRef time
   Contract4 ScrutinizeDue {..} -> do
     case due of
-       Left due' -> do
+       Right due' -> do
          pushCFrame (Contract5 CheckTiming {time = val, ..})
          Backward due'
-       Right (Just due') -> do
+       Left (Just due') -> do
          pushCFrame (Contract5 CheckTiming {time = val,..})
          ForwardExpr env due'
-       Right Nothing -> do -- TODO: here we want to skip the time check step and go directly to party
-         pushCFrame (Contract6 PartyWHNF {time = val, ..})
+       Left Nothing -> do
+         -- NOTE: we skip the timing step, hence we need to immediately update the current time to the event time
+         -- because normally the timing check does that.
+         pushCFrame (Contract6 PartyWHNF {time = ev'time, ..})
          maybeEvaluate env party
   Contract5 CheckTiming {..} -> do
     stamp <- assertTime ev'time
@@ -422,7 +424,7 @@ backwardContractFrame val = \ case
       then case lest of
         Nothing -> do
           -- NOTE: this is not too nice, but not wanting this would require to change `App1` to take MaybeEvaluated's
-          partyR <- either AllocateValue (`allocate_` env) party
+          partyR <- either (`allocate_` env) AllocateValue party
           Backward (ValBreached (DeadlineMissed ev'party ev'act stamp partyR act deadline))
         Just lestFollowup -> AllocateValue ev'time
           >>= continueWithFollowup env lestFollowup events
@@ -430,7 +432,7 @@ backwardContractFrame val = \ case
         -- NOTE: we have observed the event and do not branch, either, the
         -- only thing that may now happen is that we try a new event. Hence we
         -- drop the ev'time, set our time to ev'time and set our due to the new due
-        pushCFrame (Contract6 PartyWHNF {time = ev'time, due = Left $ ValNumber newDue, ..})
+        pushCFrame (Contract6 PartyWHNF {time = ev'time, due = Right $ ValNumber newDue, ..})
         maybeEvaluate env party
   Contract6 PartyWHNF {..} -> do
     pushCFrame (Contract7 PartyEqual {party = val, ..})
@@ -441,26 +443,31 @@ backwardContractFrame val = \ case
   Contract8 ScrutinizeParty {..} ->
     case val of
       ValBool True -> do
-        -- NOTE: an action pattern and the provided clause is
-        -- just a WHEN branch - if there's no provided clause, then
-        -- the the constant true expression is assumed, i.e. the provided
-        -- branch always passes
-        let actionBranch  = When emptyAnno act.action (fromMaybe trueExpr act.provided)
-            noMatchBranch = Otherwise emptyAnno falseExpr
-        pushCFrame (Contract9 ScrutinizeActions {..})
-        matchBranches ev'act env [actionBranch, noMatchBranch]
+        pushCFrame (Contract11 (ActionDoesn'tmatch {..}))
+        pushCFrame (Contract9 ScrutinizeEnvironment {..})
+        matchPattern ev'act act.action
       ValBool False -> do
         newTime <- AllocateValue time
-        tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
+        tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
-  Contract9 ScrutinizeActions {..} ->
+  Contract11 ActionDoesn'tmatch {} ->
+    -- NOTE: this is a "guard frame" which only matters if we're unwinding the stack after a pattern match failure
+    Backward val
+  Contract9 ScrutinizeEnvironment {..} ->
+    case val of
+      ValEnvironment henceEnv -> do
+        pushCFrame $ Contract10 ScrutinizeActions {..}
+        ForwardExpr (env `Map.union` henceEnv) (fromMaybe trueExpr act.provided)
+      _ -> InternalException $ RuntimeTypeError $
+        "expected environment but found: " <> prettyLayout val
+  Contract10 ScrutinizeActions {..} ->
     case val of
       ValBool True -> AllocateValue time
-        >>= continueWithFollowup env followup events
+        >>= continueWithFollowup (env `Map.union` henceEnv) followup events
       ValBool False -> do
         newTime <- AllocateValue time
-        tryNextEvent ScrutinizeEvents {party = Left party, time = newTime, ..} events
+        tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
       _ -> InternalException $ RuntimeTypeError $
         "expected BOOLEAN but found: " <> prettyLayout val
   RBinOp1 MkRBinOp1 {..}
@@ -541,7 +548,7 @@ backwardContractFrame val = \ case
   -- any reduction of the contract clauses and thus have to return
   -- a value that represents the operator applied to each operand
   RBinOp2 MkRBinOp2 {..} ->
-    Backward (ValROp env op (Left rval1) (Left val))
+    Backward (ValROp env op (Right rval1) (Right val))
   where
     tryNextEvent :: ScrutinizeEvents -> Reference -> Machine Config
     tryNextEvent frame events = do
@@ -561,7 +568,7 @@ backwardContractFrame val = \ case
         "expected a NUMBER but got: " <> prettyLayout v
 
 maybeEvaluate :: Environment -> MaybeEvaluated -> Machine Config
-maybeEvaluate env = either Backward (ForwardExpr env)
+maybeEvaluate env = either (ForwardExpr env) Backward
 
 matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Machine Environment
 matchGivens (MkGivenSig _ann otns) f es = do
@@ -608,6 +615,11 @@ patternMatchFailure = WithPoppedFrame $ \ case
     InternalException UnhandledPatternMatch
   Just (ConsiderWhen1 scrutinee _ branches env) ->
     matchBranches scrutinee env branches
+  -- we have unwound the frame that would reenter when scrutinizing the event
+  Just (ContractFrame (Contract11 ActionDoesn'tmatch {..})) -> do
+    newTime <- AllocateValue time
+    PushFrame $ ContractFrame $ Contract1 ScrutinizeEvents {party = Right party, time = newTime, ..}
+    EvalRef events
   Just _ ->
     patternMatchFailure
 
