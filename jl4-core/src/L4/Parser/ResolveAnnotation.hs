@@ -188,11 +188,11 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
       pure $ Contract ann e' t' evs'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
-  addNlg a@(MkEvent ann party act timestamp) = extendNlgA a do
+  addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
     party' <- addNlg party
     act' <- addNlg act
     timestamp' <- addNlg timestamp
-    pure (MkEvent ann party' act' timestamp')
+    pure (MkEvent ann party' act' timestamp' atFirst)
 
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where

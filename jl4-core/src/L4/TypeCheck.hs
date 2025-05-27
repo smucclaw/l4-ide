@@ -1150,13 +1150,13 @@ inferExpr' g =
       pure (Percent ann e', number)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
-inferEvent (MkEvent ann party action timestamp) = do
+inferEvent (MkEvent ann party action timestamp atFirst) = do
   partyT <- fresh (NormalName "party")
   actionT <- fresh (NormalName "action")
   party' <- checkExpr ExpectRegulativePartyContext party partyT
   action' <- checkExpr ExpectRegulativeActionContext action actionT
   timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
-  pure (MkEvent ann party' action' timestamp', event partyT actionT)
+  pure (MkEvent ann party' action' timestamp' atFirst, event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being

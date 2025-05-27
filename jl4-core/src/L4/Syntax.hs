@@ -167,6 +167,7 @@ data Event n
   , party :: Expr n
   , action :: Expr n
   , timestamp :: Expr n
+  , atFirst :: Bool
   }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -514,8 +515,13 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
-deriving anyclass instance ToConcreteNodes PosToken (Event Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
+
+instance ToConcreteNodes PosToken (Event Name) where
+  toNodes (MkEvent ann party does ts atFirst) =
+    if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 instance ToConcreteNodes PosToken (Module Name) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
@@ -551,11 +557,14 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Event Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
 instance ToConcreteNodes PosToken (Module Resolved) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
+instance ToConcreteNodes PosToken (Event Resolved) where
+  toNodes (MkEvent ann party does ts atFirst) = if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)

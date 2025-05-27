@@ -418,7 +418,6 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       [ "PROVISION BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
-    -- FIXME: provided clause probaly has to come back, currently 'Nothing'
     Lazy.ValObligation _env p a t f l -> case t of
       Left te -> prettyObligation p a te (Just f) l
       Right tv -> prettyObligation p a (Just tv) (Just f) l

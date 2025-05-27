@@ -188,6 +188,12 @@ instance ToSemTokens Context PosToken (AppForm Name) where
       CType -> genericToSemTokens a
       CValue -> genericToSemTokens a
 
+instance ToSemTokens Context PosToken (Event Name) where
+  toSemTokens (MkEvent ann p a t atFirst) = traverseCsnWithHoles ann $ map toSemTokens
+    if atFirst then [p, a, t] else [t, p, a]
+
+
+
 instance ToSemTokens Context PosToken (Expr Name) where
 instance ToSemTokens Context PosToken (Obligation Name) where
 instance ToSemTokens Context PosToken (RAction Name) where
@@ -208,7 +214,6 @@ instance ToSemTokens Context PosToken (TypeSig Name) where
 instance ToSemTokens Context PosToken (GivethSig Name) where
 instance ToSemTokens Context PosToken (GivenSig Name) where
 instance ToSemTokens Context PosToken (Directive Name) where
-instance ToSemTokens Context PosToken (Event Name) where
 instance ToSemTokens Context PosToken (Import Name) where
 
 instance ToSemTokens Context PosToken NormalizedUri where
@@ -284,6 +289,8 @@ instance ToSemTokens () PosToken (AppForm Resolved) where
 instance ToSemTokens () PosToken (Obligation Resolved) where
 instance ToSemTokens () PosToken (RAction Resolved) where
 instance ToSemTokens () PosToken (Event Resolved) where
+  toSemTokens (MkEvent ann p a t atFirst) = traverseCsnWithHoles ann $ map toSemTokens
+    if atFirst then [t, p, a] else [p, a, t]
 instance ToSemTokens () PosToken (Expr Resolved) where
 instance ToSemTokens () PosToken (LocalDecl Resolved) where
 instance ToSemTokens () PosToken (Assume Resolved) where
