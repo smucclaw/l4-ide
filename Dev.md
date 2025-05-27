@@ -75,3 +75,13 @@ Open folder [./jl4/examples](./jl4/examples) to see the Language Server in actio
 ## Visualizer
 
 Click on "visualize" to see a rendering of the decision logic.
+
+## Running the web id locally
+
+- to set up the CRUD service for saving files:
+  `cabal run exe:jl4-websessions -- 5008 test.db`
+- to set up the language server to talk to the frontend via websocket:
+  `cabal run exe:jl4-lsp -- ws --port 5007`
+- to run the frontend that connects to both:
+  `cd ts-apps/jl4-web; npm i; npm run dev`
+- check out `--help` for `jl4-websessions` and `jl4-lsp`
