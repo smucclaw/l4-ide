@@ -1240,6 +1240,10 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
   -- giving us a type signature.
   patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
+inferPattern g@(PatLit ann lit) = errorContext (WhileCheckingPattern g) do
+  ty <- inferLit lit
+  resPatLit <- setAnnResolvedType ty Nothing (PatLit ann lit)
+  pure (resPatLit, ty, [])
 
 inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternVar n = do

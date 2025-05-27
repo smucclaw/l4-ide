@@ -1037,7 +1037,10 @@ nameAsApp f =
 
 lit :: Parser (Expr Name)
 lit = attachAnno $
-  Lit emptyAnno <$> annoHole (try decimalLit <|> intLit <|> stringLit)
+  Lit emptyAnno <$> annoHole rawLit
+
+rawLit :: Parser Lit
+rawLit = try decimalLit <|> intLit <|> stringLit
 
 list :: Parser (Expr Name)
 list = do
@@ -1224,9 +1227,12 @@ basePattern =
 
 atomicPattern :: Parser (Pattern Name)
 atomicPattern =
-  --    lit
-  nameAsPatApp
+  patLit
+  <|> nameAsPatApp
   <|> paren pattern'
+
+patLit :: Parser (Pattern Name)
+patLit = attachAnno $ PatLit emptyAnno <$> annoHole rawLit
 
 nameAsPatApp :: Parser (Pattern Name)
 nameAsPatApp =
