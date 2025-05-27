@@ -9,7 +9,7 @@
   import { useLadderEnv } from '$lib/ladder-env.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithValueIndicator from '$lib/displayers/flow/helpers/with-value-indicator.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import { onDestroy } from 'svelte'
   import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
@@ -48,7 +48,7 @@
         <!-- Args (see also note above)-->
         <div class="flex flex-wrap gap-1 justify-center">
           {#each data.args as arg, i}
-            <WithValueIndicator
+            <ValueIndicator
               value={argValues[i]}
               borderClasses={['border', 'border-black', 'rounded-lg']}
             >
@@ -75,7 +75,7 @@
               >
                 {arg.getLabel(data.context)}
               </button>
-            </WithValueIndicator>
+            </ValueIndicator>
           {/each}
         </div>
       </div>

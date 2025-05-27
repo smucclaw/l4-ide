@@ -11,7 +11,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithValueIndicator from '$lib/displayers/flow/helpers/with-value-indicator.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
@@ -67,7 +67,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 -->
 
 <WithContentfulNodeStyles>
-  <WithValueIndicator
+  <ValueIndicator
     value={uboolvarValue}
     borderClasses={['ubool-var-node-border']}
   >
@@ -95,5 +95,5 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
         {/if}
       </WithNormalHandles>
     </div>
-  </WithValueIndicator>
+  </ValueIndicator>
 </WithContentfulNodeStyles>

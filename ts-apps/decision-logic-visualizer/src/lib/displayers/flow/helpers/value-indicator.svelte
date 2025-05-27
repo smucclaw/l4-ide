@@ -6,7 +6,7 @@
   import type { Snippet } from 'svelte'
   import { match } from 'ts-pattern'
 
-  interface WithValueIndicatorProps {
+  interface ValueIndicatorProps {
     value: UBoolVal
     borderClasses: string[]
     children: Snippet
@@ -14,7 +14,7 @@
 </script>
 
 <script lang="ts">
-  let { value, borderClasses, children }: WithValueIndicatorProps = $props()
+  let { value, borderClasses, children }: ValueIndicatorProps = $props()
 </script>
 
 <!-- Need the parent to be relatively positioned,
