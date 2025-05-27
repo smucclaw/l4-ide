@@ -35,7 +35,7 @@ DECLARE Appeal
   HAS appealId IS A STRING
       appellantType IS A AppellantType
       decisionDate IS A Date
-      submissionDate IS A Date
+        submissionDate IS A Date
       appealDeadline IS A Date
       extensionRequested IS A BOOLEAN
       extensionGranted IS A BOOLEAN
@@ -59,7 +59,7 @@ DECLARE Action IS ONE OF
    ServeNotice HAS target IS AN Actor
                    notice IS A Notice
                    appealDeadline IS A Date
-   FileAppeal HAS appeal IS A Appeal
+   FileAppeal HAS appealData IS A Appeal
    FileAnnualReturn HAS charity IS A RegisterEntry
                         returnData IS A FinancialYearRecord
    IssueRequiredStepsNotice HAS charity IS A RegisterEntry
@@ -69,6 +69,13 @@ DECLARE Action IS ONE OF
    SuspendGovernor HAS governorPerson IS A Person
                        charity IS A RegisterEntry
                        grounds IS A STRING
+   -- OPTION 2: Specific action types that avoid RegisterEntry requirement
+   ProcessAppeal HAS appealData IS A Appeal
+                     decision IS A STRING
+   ProcessInvestigation HAS governorPerson IS A Person
+                            finding IS A STRING
+   ProcessTribunalDecision HAS caseId IS A STRING
+                               outcome IS A STRING
    Other HAS description IS A STRING
 
 -- Enhanced register actions using existing types
@@ -550,102 +557,42 @@ GIVETH A BOOLEAN
 -- These CONTRACT implementations provide better temporal modeling than
 -- boolean-based deontic rules for multi-step processes with deadlines
 
--- Application Processing Contract (Art 11-12, Law 2014)
-GIVEN applicant IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`application process` MEANS
-  PARTY Applicant applicant
-  MUST SubmitApplication applicant
-  WITHIN 0  -- immediate upon decision to apply
-  HENCE `commissioner must process application` applicant
+-- ALTERNATIVES TO DUMMY REGISTERENTRY OBJECTS:
+--
+-- PROBLEM: ProcessApplication requires RegisterEntry but appeals/investigations don't involve charity data
+--
+-- SOLUTION OPTIONS:
+--
+-- OPTION 1: Use "Other" Action Type
+-- - Other HAS description IS A STRING
+-- - Only requires string description, no RegisterEntry
+-- - Example: MUST Other "Process appeal decision for appeal ID: XYZ"
+-- - Pro: Simple, no type conflicts
+-- - Con: Less structured data
+--
+-- OPTION 2: Create Specific Action Types
+-- - ProcessAppeal HAS appeal IS A Appeal, decision IS A STRING
+-- - ProcessInvestigation HAS governor IS A Person, finding IS A STRING
+-- - ProcessTribunalDecision HAS caseId IS A STRING, outcome IS A STRING
+-- - Pro: Type-safe, semantically correct, structured data
+-- - Con: Requires extending Action type definition
+--
+-- OPTION 3: Make RegisterEntry Optional
+-- - ProcessApplication HAS application IS A MAYBE RegisterEntry, decision IS A STRING
+-- - Use NOTHING when no charity data needed
+-- - Pro: Backwards compatible
+-- - Con: May not be supported by L4's MAYBE type system for constructor fields
+--
+-- DEMONSTRATION: Examples below show Option 1 (Other) and Option 2 (specific types)
+-- to replace dummy RegisterEntry objects with cleaner alternatives.
 
-GIVEN applicant IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`commissioner must process application` MEANS
-  PARTY CommissionerActor
-  MUST ProcessApplication applicant
-                         (IF `application is complete` applicant AND NOT `registration should be refused` applicant
-                          THEN "APPROVE"
-                          ELSE "REFUSE")
-  WITHIN 60  -- 60 days to process (reasonable administrative time)
-  HENCE IF `registration should be refused` applicant
-        THEN `serve refusal notice` applicant
-        ELSE `registration approved` applicant
-
-GIVEN applicant IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`serve refusal notice` MEANS
-  PARTY CommissionerActor
-  MUST ServeNotice (Applicant applicant)
-                   (required (RequiredStepsNotice "REF001" commencement (LIST "Application fails charity test") (addDays commencement 28) (LIST "APPLICATION_INCOMPLETE") Failed))
-                   (addDays commencement 28)
-  WITHIN 7  -- 7 days to serve notice after decision
-  HENCE `applicant may appeal` applicant
-
-GIVEN applicant IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`applicant may appeal` MEANS
-  PARTY Applicant applicant
-  MUST FileAppeal (Appeal "APP001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
-  WITHIN 28  -- 28 days to appeal
-  HENCE `tribunal must consider appeal` (Appeal "APP001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
-
--- Annual Return Contract Process (Art 13, Law 2014 + R&O 144/2019)
-GIVEN charity IS A RegisterEntry
-      financialYearEnd IS A Date
-GIVETH A CONTRACT Actor Action
-`annual return obligation` MEANS
-  PARTY Charity charity
-  MUST FileAnnualReturn charity (FinancialYearRecord (DateRange financialYearEnd financialYearEnd)
-                                                    (Money 0 "GBP") (Money 0 "GBP") (Money 0 "GBP")
-                                                    (Money 0 "GBP") "" FALSE commencement)
-  WITHIN 60  -- 2 months after financial year end (Art 144/2019)
-  HENCE IF `days since return deadline` charity (addDays financialYearEnd 60) > 0
-        THEN `commissioner may issue required steps notice for late return` charity
-        ELSE `return processed successfully` charity
-
-GIVEN charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`commissioner may issue required steps notice for late return` MEANS
-  IF `days since return deadline` charity commencement > 30
-  THEN PARTY CommissionerActor
-       MUST IssueRequiredStepsNotice charity
-                                    (RequiredStepsNotice "RSN001" commencement
-                                                       (LIST "File overdue annual return within 28 days")
-                                                       (addDays commencement 28) (LIST "LATE_RETURN") Pending)
-       WITHIN 30  -- 30 days after return becomes overdue
-       HENCE `charity must comply with required steps` charity
-  ELSE FULFILLED
-
-GIVEN charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`charity must comply with required steps` MEANS
-  PARTY Charity charity
-  MUST ComplyWithNotice charity TRUE
-  WITHIN 28  -- deadline specified in notice
-  HENCE IF TRUE  -- assume compliance for now
-        THEN `compliance achieved` charity
-        ELSE `deregistration proceedings` charity
-
-GIVEN charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`deregistration proceedings` MEANS
-  PARTY CommissionerActor
-  MUST ProcessApplication charity "DEREGISTER"
-  WITHIN 30  -- 30 days to complete deregistration
-  HENCE `deregistration notice served` charity
-
--- Appeal Process Contract (Arts 35-37, Law 2014 + R&O 102/2020)
+-- Appeal Process Contract (Arts 35-37, Law 2014 + R&O 102/2020) - OPTION 2 IMPLEMENTATION
 GIVEN appeal IS A Appeal
 GIVETH A CONTRACT Actor Action
 `tribunal must consider appeal` MEANS
   PARTY Tribunal
-  MUST ProcessApplication (RegisterEntry "" "" EMPTY
-                                         (Constitution "" TRUE commencement FALSE)
-                                         EMPTY "" commencement NOTHING GeneralSection
-                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
-                                         EMPTY FALSE FALSE NOTHING)
-                         "APPEAL_DECISION"
+  -- OPTION 2: Using ProcessAppeal - no dummy RegisterEntry needed
+  MUST ProcessAppeal appeal "APPEAL_UNDER_CONSIDERATION"
   WITHIN 90  -- 90 days for tribunal decision
   HENCE `appeal decision served` appeal
 
@@ -653,15 +600,19 @@ GIVEN appeal IS A Appeal
 GIVETH A CONTRACT Actor Action
 `appeal decision served` MEANS
   PARTY Tribunal
-  MUST ServeNotice (Charity (RegisterEntry "" "" EMPTY
-                                           (Constitution "" TRUE commencement FALSE)
-                                           EMPTY "" commencement NOTHING GeneralSection
-                                           EMPTY EMPTY (PublicBenefitStatement "" commencement)
-                                           EMPTY FALSE FALSE NOTHING))
-                   (message "Appeal decision notification")
-                   commencement
+  -- OPTION 2: Using ProcessTribunalDecision for decision notification
+  MUST ProcessTribunalDecision (appeal's appealId) "DECISION_SERVED"
   WITHIN 7  -- 7 days to serve decision
   HENCE `appeal process concluded` appeal
+
+GIVEN appeal IS A Appeal
+GIVETH A CONTRACT Actor Action
+`appeal process concluded` MEANS
+  PARTY Tribunal
+  -- OPTION 2: Final appeal processing using ProcessAppeal
+  MUST ProcessAppeal appeal "APPEAL_CONCLUDED"
+  WITHIN 0  -- immediate
+  HENCE `appeal cycle complete` appeal
 
 -- Required Steps Notice Process (Art 27, Law 2014)
 GIVEN charity IS A RegisterEntry
@@ -770,19 +721,6 @@ GIVETH A CONTRACT Actor Action
   WITHIN 7  -- 7 days to confirm satisfaction
   HENCE `required steps process complete` charity
 
-GIVEN appeal IS A Appeal
-GIVETH A CONTRACT Actor Action
-`appeal process concluded` MEANS
-  PARTY Tribunal
-  MUST ProcessApplication (RegisterEntry "" "" EMPTY
-                                         (Constitution "" TRUE commencement FALSE)
-                                         EMPTY "" commencement NOTHING GeneralSection
-                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
-                                         EMPTY FALSE FALSE NOTHING)
-                         "APPEAL_CONCLUDED"
-  WITHIN 0  -- immediate
-  HENCE `appeal cycle complete` appeal
-
 GIVEN charity IS A RegisterEntry
 GIVETH A CONTRACT Actor Action
 `deregistration notice served` MEANS
@@ -797,12 +735,8 @@ GIVEN governor IS A Person
 GIVETH A CONTRACT Actor Action
 `investigation concluded no action` MEANS
   PARTY CommissionerActor
-  MUST ProcessApplication (RegisterEntry "" "" EMPTY
-                                         (Constitution "" TRUE commencement FALSE)
-                                         EMPTY "" commencement NOTHING GeneralSection
-                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
-                                         EMPTY FALSE FALSE NOTHING)
-                         "NO_ACTION"
+  -- OPTION 2: Using ProcessInvestigation - no dummy RegisterEntry needed
+  MUST ProcessInvestigation governor "NO_ACTION_REQUIRED"
   WITHIN 7  -- 7 days to conclude
   HENCE `misconduct investigation complete` governor
 
@@ -810,12 +744,8 @@ GIVEN governor IS A Person
 GIVETH A CONTRACT Actor Action
 `tribunal considers governor appeal` MEANS
   PARTY Tribunal
-  MUST ProcessApplication (RegisterEntry "" "" EMPTY
-                                         (Constitution "" TRUE commencement FALSE)
-                                         EMPTY "" commencement NOTHING GeneralSection
-                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
-                                         EMPTY FALSE FALSE NOTHING)
-                         "GOVERNOR_APPEAL"
+  -- OPTION 2: Using ProcessTribunalDecision for governor appeals (simplified string)
+  MUST ProcessTribunalDecision "GOVERNOR_APPEAL_CASE" "APPEAL_UNDER_REVIEW"
   WITHIN 90  -- 90 days for tribunal decision
   HENCE `governor appeal concluded` governor
 
@@ -893,7 +823,7 @@ GIVETH A CONTRACT Actor Action
   HENCE `suspension decision final` governor
 
 -- ======================================================================
--- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS
+-- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS (OPTION 2 IMPLEMENTATION)
 -- ======================================================================
 
 -- Complete application processing with proper branching
@@ -960,7 +890,7 @@ GIVETH A RegisterAction
 `process compulsory deregistration` MEANS
     CompulsoryDeregistration charityId deregistrationDate grounds retrospective
 
--- Governor misconduct processing
+-- Governor misconduct processing (using RegisterAction, not CONTRACT)
 GIVEN governorId IS A STRING
       charityId IS A STRING
       misconductType IS A STRING
