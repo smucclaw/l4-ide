@@ -3,7 +3,7 @@ module Main where
 import Base (NonEmpty, for_)
 import Base.Text (Text)
 import Data.List.NonEmpty (some1)
-import Options.Applicative (fullDesc, header, helper, info, metavar, strArgument, help, short, long, switch)
+import Options.Applicative (fullDesc, header, footer, helper, info, metavar, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
@@ -66,11 +66,15 @@ data Options = MkOptions
 
 optionsDescription :: Options.Parser Options
 optionsDescription = MkOptions
-  <$> some1 (strArgument (metavar "FILES..."))
-  <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output")
+  <$> some1 (strArgument (metavar "L4FILE"))
+  <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
 
 
 optionsConfig :: Options.ParserInfo Options
 optionsConfig = info
   (helper <*> optionsDescription)
-  (fullDesc <> header "jl4")
+  (fullDesc
+    <> progDesc "Parse the given FILES and reports warnings, errors, and eval outputs. Returns with exitcode 0 (success) if parse succeeds. Returns exitcode 1 if parse fails."
+    <> header "## jl4-cli"
+    <> footer "## Part of the L4 tool family from Legalese.com"
+  )
