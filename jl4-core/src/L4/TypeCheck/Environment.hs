@@ -54,7 +54,7 @@ string = TyApp emptyAnno stringRef []
 list :: Type' Resolved -> Type' Resolved
 list a = app listRef [a]
 
--- CONTRACT
+-- PROVISION
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]
@@ -132,7 +132,7 @@ contractInfo :: CheckEntity
 contractInfo =
   KnownType 2 [] Nothing
 
--- forall a b. CONTRACT a b
+-- forall a b. PROVISION a b
 fulfilInfo :: CheckEntity
 fulfilInfo = KnownTerm (Forall emptyAnno [hDef, iDef] (TyApp emptyAnno contractRef [TyApp emptyAnno hRef [], TyApp emptyAnno iRef []])) Constructor
 
@@ -148,7 +148,7 @@ eventCInfo = KnownTerm (Forall emptyAnno [dDef, gDef] (Fun emptyAnno [mkOnt part
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 
--- forall a b. CONTRACT a b -> [Event a b] -> CONTRACT a b
+-- forall a b. PROVISION a b -> [Event a b] -> PROVISION a b
 evalContractInfo :: CheckEntity
 evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt (list eventTy), mkOnt number] ctrct)) Computable
   where
@@ -168,10 +168,10 @@ initialEnvironment =
     , (NormalName "STRING",       [stringUnique      ])
     , (NormalName "LIST",         [listUnique        ])
     , (NormalName "EMPTY",        [emptyUnique       ])
-    , (NormalName "CONTRACT",     [contractUnique    ])
+    , (NormalName "PROVISION",     [contractUnique    ])
     , (NormalName "EVENT",        [eventUnique       ])
     , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALCONTRACT", [evalContractUnique])
+    , (NormalName "EVALPROVISION", [evalContractUnique])
     , (NormalName "FULFILLED",    [fulfilUnique      ])
     , (NormalName "IS INTEGER",   [isIntegerUnique ])
     , (NormalName "ROUND",        [roundUnique     ])

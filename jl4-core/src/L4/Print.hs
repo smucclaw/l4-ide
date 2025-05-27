@@ -173,7 +173,7 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
     Check _ e ->
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
-      "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
+      "#PROVISION" <+> printWithLayout e <+> printWithLayout t :
       map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
@@ -414,7 +414,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
     Lazy.ValBreached reason        -> vcat
-      [ "CONTRACT BREACHED:"
+      [ "PROVISION BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
     -- FIXME: provided clause probaly has to come back, currently 'Nothing'

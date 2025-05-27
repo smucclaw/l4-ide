@@ -168,7 +168,7 @@ nfDirective (MkEvalDirective r expr env) = do
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
-    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / CONTRACT directive
+    { range  :: Maybe SrcRange -- ^ of the (L)EVAL / PROVISION directive
     , result :: Either EvalException NF
     }
   deriving stock (Generic, Show)
