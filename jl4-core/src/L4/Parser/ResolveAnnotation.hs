@@ -460,6 +460,7 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Pattern n) where
       patHead' <- addNlg patHead
       patTail' <-addNlg patTail
       pure $ PatCons ann patHead' patTail'
+    PatLit ann lit -> pure $ PatLit ann lit
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (NamedExpr n) where
   addNlg a = extendNlgA a $ case a of

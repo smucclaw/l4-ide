@@ -271,6 +271,7 @@ data Pattern n =
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
+  | PatLit Anno Lit
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

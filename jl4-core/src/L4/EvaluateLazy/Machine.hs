@@ -47,6 +47,7 @@ data Frame =
   | PatCons0 (Pattern Resolved) (Pattern Resolved)
   | PatCons1 {- -} Reference (Pattern Resolved)
   | PatCons2 Environment {- -}
+  | PatLit0 Lit
   | PatApp0 Resolved [Pattern Resolved]
   | PatApp1 [Environment] {- -} [(Reference, Pattern Resolved)]
   | EqConstructor1 {- -} Reference [(Reference, Reference)]
@@ -347,6 +348,17 @@ backward val = WithPoppedFrame $ \ case
             matchPattern r p
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching constructor"
+  Just (PatLit0 lit)
+    | NumericLit _ n <- lit
+    , ValNumber n' <- val -> if  n == n'
+      then Backward $ ValEnvironment emptyEnvironment
+      else patternMatchFailure
+    | StringLit _ s <- lit
+    , ValString s' <- val  -> if s == s'
+      then Backward $ ValEnvironment emptyEnvironment
+      else patternMatchFailure
+    | otherwise -> InternalException $ RuntimeTypeError $
+      "expected a literal type but found: " <> prettyLayout val <> " when matching on a literal pattern"
   Just (EqConstructor1 rf rfs) -> do
     PushFrame (EqConstructor2 val rfs)
     EvalRef rf
@@ -606,6 +618,9 @@ matchPattern scrutinee (PatCons _ann p1 p2) = do
   EvalRef scrutinee
 matchPattern scrutinee (PatApp _ann n ps) = do
   PushFrame (PatApp0 n ps )
+  EvalRef scrutinee
+matchPattern scrutinee (PatLit _ann lit) = do
+  PushFrame (PatLit0 lit)
   EvalRef scrutinee
 
 -- | This unwinds the stack until it finds the enclosing pattern match and then resumes.

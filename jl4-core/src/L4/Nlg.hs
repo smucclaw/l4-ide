@@ -310,6 +310,7 @@ instance Linearize (Pattern Resolved) where
       , text "by"
       , lin rest
       ]
+    PatLit _ lit -> lin lit
 
 instance Linearize (GivenSig Resolved) where
   linearize = \ case
