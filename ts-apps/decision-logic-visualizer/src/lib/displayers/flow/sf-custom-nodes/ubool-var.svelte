@@ -18,30 +18,28 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
 {#snippet inlineUI()}
   <div class="absolute bottom-1 right-1">
-    <Tooltip.Provider>
-      <Tooltip.Root>
-        <Tooltip.Trigger>
-          <button
-            aria-label="Unfold to definition"
-            class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
-            onclick={() => {
-              console.log('inline lir id', data.originalLirId.toString())
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          aria-label="Unfold to definition"
+          class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+          onclick={() => {
+            console.log('inline lir id', data.originalLirId.toString())
 
-              const uniq = (
-                data.context.get(data.originalLirId) as UBoolVarLirNode
-              ).getUnique(data.context)
-              l4Conn.inlineExprs(
-                [uniq],
-                ladderEnv.getVersionedTextDocIdentifier()
-              )
-            }}
-          >
-            +
-          </button>
-        </Tooltip.Trigger>
-        <Tooltip.Content>Unfold to definition</Tooltip.Content>
-      </Tooltip.Root>
-    </Tooltip.Provider>
+            const uniq = (
+              data.context.get(data.originalLirId) as UBoolVarLirNode
+            ).getUnique(data.context)
+            l4Conn.inlineExprs(
+              [uniq],
+              ladderEnv.getVersionedTextDocIdentifier()
+            )
+          }}
+        >
+          +
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content>Unfold to definition</Tooltip.Content>
+    </Tooltip.Root>
   </div>
 {/snippet}
 
