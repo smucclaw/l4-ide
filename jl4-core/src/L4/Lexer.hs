@@ -268,7 +268,7 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
-  , (TContractDirective,   "CONTRACT")
+  , (TContractDirective,   "PROVISION")
   ]
 
 integerLiteral :: Lexer (Text, Integer)
@@ -971,7 +971,7 @@ showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
-  TContractDirective -> "#CONTRACT"
+  TContractDirective -> "#PROVISION"
 
 data TokenCategory
   = CIdentifier

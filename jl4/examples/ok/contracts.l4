@@ -18,57 +18,57 @@ aContract MEANS
       MUST payment fine PROVIDED fine = 10
       WITHIN 3
 
-#CONTRACT aContract AT 0 WITH
+#PROVISION aContract AT 0 WITH
   PARTY S DOES delivery AT 2
   PARTY B DOES payment 21 AT 4
 
-#CONTRACT aContract AT 0 WITH
+#PROVISION aContract AT 0 WITH
   PARTY S DOES delivery AT 2
   PARTY B DOES payment 20 AT 4
 
-#CONTRACT aContract AT 0 WITH
+#PROVISION aContract AT 0 WITH
   PARTY S DOES delivery AT 2
   PARTY B DOES payment 30 AT 6
   PARTY B DOES payment 10 AT 9
 
-#EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B (payment 3) 42) 5
+#EVAL EVALPROVISION x (LIST EVENT S delivery 5, EVENT B (payment 3) 42) 5
 
-GIVETH CONTRACT Person Action
+GIVETH PROVISION Person Action
 x MEANS 
   PARTY S
   MUST delivery
   WITHIN 3
 
-GIVETH CONTRACT Person Action
+GIVETH PROVISION Person Action
 y MEANS 
   PARTY B
   MUST payment am PROVIDED am >= 2 && am <= 4
   WITHIN 5
 
-#CONTRACT y AT 0 WITH
+#PROVISION y AT 0 WITH
   PARTY B DOES payment 5 AT 5
   PARTY S DOES delivery AT 20
 
-GIVETH CONTRACT Person Action
+GIVETH PROVISION Person Action
 z MEANS 
   x ROR y
 
 a MEANS 
   z RAND z 
 
-#CONTRACT ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
+#PROVISION ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
-#CONTRACT x AT 4 WITH 
+#PROVISION x AT 4 WITH 
   PARTY S DOES delivery AT 4
 
-#CONTRACT y AT 4 WITH 
+#PROVISION y AT 4 WITH 
   PARTY B DOES payment 4 AT 4
 
-#CONTRACT z AT 4 WITH 
+#PROVISION z AT 4 WITH 
   PARTY S DOES delivery AT 4
   PARTY B DOES payment 4 AT 26
 
-#CONTRACT z AT 4 WITH
+#PROVISION z AT 4 WITH
   PARTY S DOES delivery AT 4
   PARTY B DOES payment 5 AT 26
 
@@ -77,10 +77,10 @@ goesOn MEANS
   MUST payment n PROVIDED n = 7  
   WITHIN 2
 
-#CONTRACT goesOn AT 0 WITH 
+#PROVISION goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
   PARTY B DOES payment 6 AT 3
   
-#CONTRACT goesOn AT 0 WITH 
+#PROVISION goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
   PARTY S DOES payment 7 AT 3
