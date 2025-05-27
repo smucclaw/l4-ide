@@ -1,0 +1,28 @@
+
+-- Defining a polymorphic TBD, take 1
+GIVEN a IS A TYPE
+GIVETH a
+ASSUME TBD1
+
+x1 MEANS 2 + TBD1
+y1 MEANS TRUE || TBD1
+
+-- Defining a polymorphic TBD, take 2
+-- This used not to work
+GIVEN a IS A TYPE
+ASSUME TBD2 IS AN a
+
+x2 MEANS 2 + TBD2
+y2 MEANS TRUE || TBD2
+
+-- The combo should also work
+GIVEN a IS A TYPE
+GIVETH a
+ASSUME TBD3 IS AN a
+
+x3 MEANS 2 + TBD3
+y3 MEANS TRUE || TBD3
+
+#CHECK TBD1
+#CHECK TBD2
+#CHECK TBD3
