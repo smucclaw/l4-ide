@@ -1,0 +1,9 @@
+-- Can't use '%' on anything else than a NUMBER
+
+#CHECK "Foo" %
+#EVAL "Foo" %
+
+DECLARE MyType HAS
+  field: A BOOLEAN
+
+#CHECK (MyType OF TRUE %)

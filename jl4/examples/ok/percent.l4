@@ -1,0 +1,21 @@
+
+`five percent 1` a MEANS a * 5%
+-- whitespace doesn't affect the result
+`five percent 2` a MEANS a * 5 %
+-- Parenthesis apply as usual
+`five percent 3` a MEANS a * (5 %)
+`five percent 4` a MEANS a * ((2 + 3) %)
+
+`5.5 percent` a MEANS a * 5.5 %
+
+`five percent 6` a MEANS
+    a
+  * ( 2 + 3
+    ) %
+
+#EVAL `five percent 1` 100
+#EVAL `five percent 2` 100
+#EVAL `five percent 3` 100
+#EVAL `five percent 4` 100
+#EVAL `5.5 percent` 100
+#EVAL `five percent 6` 100
