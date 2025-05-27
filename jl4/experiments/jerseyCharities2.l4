@@ -3,20 +3,32 @@
 @ref url https://www.jerseylaw.je/laws/current/l_41_2014
 
 IMPORT prelude
-
 IMPORT `jerseyCharities-types`
+
+-- ======================================================================
+-- MISSING PRELUDE FUNCTIONS
+-- ======================================================================
+
+-- Define length function missing from prelude
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+length list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 + length xs
 
 -- ======================================================================
 -- SECTION A – STRUCTURAL / INTERPRETIVE LAYER (ENHANCED)
 -- ======================================================================
 
--- Art 2(10) Misconduct Type Definition
-DECLARE MisconductType IS ONE OF
-    MISMANAGEMENT
-    MISAPPLICATION
-    OTHER HAS description IS A STRING
+-- Art 2(10) Misconduct Type Definition (enhanced from types)
+DECLARE MisconductCategory IS ONE OF
+    MISMANAGEMENT_CASE HAS details IS A STRING
+    MISAPPLICATION_CASE HAS details IS A STRING
+    OTHER_CASE HAS description IS A STRING
 
--- Suspension Status Tracking
+-- Suspension Status Tracking (enhanced from types)
 DECLARE SuspensionStatus IS ONE OF
     Active HAS startDate IS A Date
                endDate IS A MAYBE Date
@@ -28,457 +40,82 @@ DECLARE SuspensionStatus IS ONE OF
                 reason IS A STRING
     Expired HAS expireDate IS A Date
 
--- Actor/Action Modeling for Legislation Translation
-DECLARE Actor IS ONE OF
-   Charity HAS entry IS A RegisterEntry
-   Person HAS person IS A Person
-   Role HAS role IS A Role
-   ApplicantEntity HAS application IS A RegisterEntry
-   ThirdParty HAS details IS A STRING
-   AnyPerson HAS identifier IS A STRING
-
-DECLARE Action IS ONE OF
-   Notify HAS target IS AN Actor
-              content IS A Notice
-   ProvideApplication HAS contents IS A ApplicationContents
-   RefuseRegistration HAS reasons IS A LIST OF STRING
-                          appealDeadline IS A Date
-   RegisterCharity HAS entry IS A RegisterEntry
-   IssueNotice HAS notice IS A RequiredStepsNotice
-   FileReturn HAS financials IS A FinancialYearRecord
-   SuspendGovernor HAS governorId IS A STRING
-                       reason IS A STRING
-                       period IS A MAYBE Date
-   DisqualifyGovernor HAS governorId IS A STRING
-                          reason IS A STRING
-                          conditions IS A LIST OF STRING
-   VaryGovernorOrder HAS orderId IS A STRING
-                         newStatus IS A SuspensionStatus
-                         notifyParties IS A BOOLEAN
-   ActWhileSuspended HAS governorId IS A STRING
-                         charityId IS A STRING
-                         actionTaken IS A STRING
-   AppealDecision HAS decision IS A Decision
-   ExtendAppealDeadline HAS extension IS A NUMBER
-   UseProtectedWord HAS context IS A STRING
-   MakeFalseStatement HAS statement IS A STRING
-   Other HAS description IS A STRING
-
--- Enhanced Application Contents (B-APP-00)
-DECLARE ApplicationContents
-    HAS constitution IS A Constitution
-        purposes IS A LIST OF Purpose
-        publicBenefitStatement IS A PublicBenefitStatement
-        coreFinancialInfo IS A CoreFinancialInfo
-
--- Core Financial Information (Reg 1, Core Financial Info Regs 2018)
-DECLARE CoreFinancialInfo
-    HAS income IS A Money
-        expenditure IS A Money
-        openingAssets IS A Money
-        closingAssets IS A Money
-        otherAssetsList IS A LIST OF STRING
-
--- Enhanced Notice types for additional rules
-DECLARE Notice IS ONE OF
-  required HAS notice IS A RequiredStepsNotice
-  deregistration HAS notice IS A DeregistrationNotice
-  refusal HAS reasons IS A LIST OF STRING
-              appealDeadline IS A Date
-  suspension HAS governorId IS A STRING
-                 reason IS A STRING
-                 period IS A MAYBE Date
-  orderVariation HAS orderId IS A STRING
-                     newStatus IS A SuspensionStatus
-                     effectiveDate IS A Date
-  misconductFound HAS governorId IS A STRING
-                      misconductType IS A MisconductType
-                      findingDate IS A Date
-  message HAS content IS A STRING
-  annualReturnRequest
-  charityTestAssessment HAS factors IS A LIST OF STRING
-
--- Functions to determine temporal relationships
-GIVEN date1 IS A Date
-      date2 IS A Date
-GIVETH A NUMBER
-DECIDE `months between dates` IS
-    (date2's year - date1's year) * 12 + (date2's month - date1's month)
-
-GIVEN date1 IS A Date
-      date2 IS A Date
-GIVETH A NUMBER
-DECIDE `days between` IS
-    30 * `months between dates` date1 date2 + (date2's day - date1's day)
+-- Enhanced Register Action Events
+DECLARE RegisterAction IS ONE OF
+    RegisterCharity HAS entry IS A RegisterEntry
+                        actionDate IS A Date
+    RefuseRegistration HAS applicant IS A RegisterEntry
+                           refusalReasons IS A LIST OF STRING
+                           appealDeadline IS A Date
+    SuspendGovernor HAS governorId IS A STRING
+                        charityId IS A STRING
+                        misconductType IS A MisconductCategory
+                        period IS A MAYBE Date
+    VaryGovernorOrder HAS orderId IS A STRING
+                          newStatus IS A SuspensionStatus
+                          effectiveDate IS A Date
 
 -- ======================================================================
--- SECTION B – DEONTIC RULES LAYER (ENHANCED WITH CONTRACT APPROACH)
+-- SECTION B – DEONTIC RULES LAYER (ENHANCED)
 -- ======================================================================
 
 -- B-APP-00: Application Requirements (Art 11(1)-(2))
-§ `Application Requirements (Art 11(1)-(2), Law 2014 & Core Financial Info Regs 2018)`
 GIVEN applicant IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`application process` MEANS
-  PARTY ApplicantEntity OF applicant
-  MUST ProvideApplication OF ApplicationContents WITH
-         constitution IS applicant's constitution,
-         purposes IS applicant's purposes,
-         publicBenefitStatement IS applicant's publicBenefitStatement,
-         coreFinancialInfo IS CoreFinancialInfo OF
-           Money OF 0 "GBP", Money OF 0 "GBP", Money OF 0 "GBP", Money OF 0 "GBP", EMPTY_LIST
-  WITHIN reasonable time
-  HENCE `application assessment` applicant
-  LEST `application incomplete - Commissioner may refuse`
+GIVETH A BOOLEAN
+`application is complete` MEANS
+    `constitution is written` applicant
+    AND `has at least one purpose` applicant
+    AND `has valid public benefit statement` applicant
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`constitution is written` MEANS
+    applicant's constitution's isWritten EQUALS TRUE
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has at least one purpose` MEANS
+    length (applicant's purposes) > 0
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has valid public benefit statement` MEANS
+    NOT (applicant's publicBenefitStatement's statement) EQUALS ""
 
 -- B-REF-01: Registration Refusal Power (R&O 102/2020 Art 2)
-§ `Registration Refusal Power (R&O 102/2020 Art 2)`
 GIVEN applicant IS A RegisterEntry
-      reasons IS A LIST OF STRING
-GIVETH A CONTRACT Actor Action
-`registration refusal` MEANS
-  IF NOT `meets the charity test` applicant OR `lacks required documents` applicant
-  THEN PARTY Role OF Commissioner
-       MAY RefuseRegistration OF reasons, (Date OF 2023, 12, 31)
-       HENCE `refusal notice served` applicant reasons
-       LEST `application proceeds to approval`
-  ELSE `application approved` applicant
+GIVETH A BOOLEAN
+`registration should be refused` MEANS
+    NOT `application is complete` applicant
+    OR NOT `meets the charity test` applicant
+    OR NOT `has Jersey connection` applicant
 
 -- B-CT-01: Continuous Charity Test Compliance (Art 5, Law 2014)
-§ `Continuous Charity Test Compliance (Art 5, Law 2014)`
 GIVEN charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`charity test compliance` MEANS
-  PARTY Charity OF charity
-  MUST `maintain charitable purposes exclusively`
-  AND `deliver public benefit`
-  WITHIN continuous
-  HENCE `charity remains compliant`
-  LEST PARTY Role OF Commissioner
-       MAY `proceed to deregistration under Art 16`
-
--- B-PB-01: Commissioner Public Benefit Assessment (Art 7, Law 2014)
-§ `Public Benefit Assessment Duty (Art 7, Law 2014)`
-GIVEN charity IS A RegisterEntry
-      factors IS A LIST OF STRING
-GIVETH A CONTRACT Actor Action
-`public benefit assessment` MEANS
-  PARTY Role OF Commissioner
-  MUST `weigh factors in Art 7(2)-(5)` factors
-  WHEN `assessing charity test`
-  HENCE `assessment properly conducted`
-  LEST `decision vulnerable on appeal`
-
--- B-NAME-01: Protected Word Prohibition (Arts 21-23, Law 2014)
-§ `Protected Word Prohibition (Arts 21-23, Law 2014)`
-GIVEN person IS A STRING
-      context IS A STRING
-GIVETH A CONTRACT Actor Action
-`protected word usage` MEANS
-  PARTY AnyPerson OF person
-  SHANT UseProtectedWord OF context
-  WHEN `using words "charity", "charitable" to mislead`
-  HENCE `compliant usage`
-  LEST `criminal offence (Level 3 fine) + Commissioner may seek injunction`
-
--- B-MIS-01: False Statement Prohibition (Art 31, Law 2014)
-§ `False Statement Prohibition (Art 31, Law 2014)`
-GIVEN person IS A STRING
-      statement IS A STRING
-GIVETH A CONTRACT Actor Action
-`false statement prohibition` MEANS
-  PARTY AnyPerson OF person
-  SHANT MakeFalseStatement OF statement
-  WHEN `providing statement or document to Commissioner`
-  HENCE `truthful communication maintained`
-  LEST `criminal offence`
-
--- B-GOV-02: Enhanced Governor Reporting (Art 19(1)(a-h) + Order 2025)
-§ `Enhanced Governor Reporting Duty (Art 19(1)(a-h), Law 2014 + Order 2025)`
-GIVEN governor IS A Person
-      charity IS A RegisterEntry
-      reportableMatter IS A STRING
-GIVETH A CONTRACT Actor Action
-`governor reporting enhanced` MEANS
-  PARTY Person OF governor
-  MUST Notify OF Role OF Commissioner,
-              message reportableMatter
-  WHEN `reportable matter exists including Order 2025 matters`
-  WITHIN `as soon as practicable`
-  HENCE `transparency maintained`
-  LEST `failure signals unfitness - triggers suspension/disqualification powers`
-
--- B-GOV-03: Governor Suspension/Disqualification (Art 20, Law 2014)
-§ `Governor Suspension and Disqualification Power (Art 20, Law 2014)`
-GIVEN governor IS A Person
-      misconduct IS A STRING
-      conditions IS A LIST OF STRING
-GIVETH A CONTRACT Actor Action
-`governor disciplinary action` MEANS
-  IF `governor misconduct proved`
-  THEN PARTY Role OF Commissioner
-       MAY SuspendGovernor OF governor's name, misconduct, NOTHING
-       OR DisqualifyGovernor OF governor's name, misconduct, conditions
-       HENCE `disciplinary action logged`
-       LEST `misconduct unaddressed`
-  ELSE `no action required`
-
--- B-GOV-04: Order Variation Power (Art 20(4), Law 2014)
-§ `Governor Order Variation Power (Art 20(4), Law 2014)`
-GIVEN orderId IS A STRING
-      newStatus IS A SuspensionStatus
-GIVETH A CONTRACT Actor Action
-`order variation` MEANS
-  IF `suspension or disqualification order in force` orderId
-  THEN PARTY Role OF Commissioner
-       MAY VaryGovernorOrder OF orderId, newStatus, TRUE
-       HENCE `order varied and parties notified`
-       LEST `order remains unchanged`
-  ELSE `no order to vary`
-
--- B-GOV-05: Prohibition While Suspended (Art 20(6), Law 2014)
-§ `Acting While Suspended Prohibition (Art 20(6), Law 2014)`
-GIVEN suspendedPerson IS A STRING
-      charity IS A RegisterEntry
-      action IS A STRING
-GIVETH A CONTRACT Actor Action
-`suspended person prohibition` MEANS
-  IF `person currently suspended or disqualified` suspendedPerson
-  THEN PARTY AnyPerson OF suspendedPerson
-       SHANT ActWhileSuspended OF suspendedPerson, charity's registrationNumber, action
-       HENCE `prohibition respected`
-       LEST `criminal offence committed + charity risks deregistration`
-  ELSE `person free to act`
-
--- B-GOV-06: Charity Response Obligations (Art 20, Law 2014)
-§ `Charity Response to Governor Suspension (Art 20, Law 2014)`
-GIVEN charity IS A RegisterEntry
-      suspendedGovernor IS A STRING
-GIVETH A CONTRACT Actor Action
-`charity suspension response` MEANS
-  IF `governor becomes suspended or disqualified` suspendedGovernor charity
-  THEN PARTY Charity OF charity
-       MUST `ensure suspended person does not act`
-       AND `update register particulars via change notice`
-       WITHIN reasonable time
-       HENCE `charity complies with suspension requirements`
-       LEST `failure evidences mismanagement + enables Required Steps Notice`
-  ELSE `no suspended governors`
-
--- B-AR-03: Enhanced Annual Return (Art 13(7)-(10) + multiple orders)
-§ `Enhanced Annual Return Obligation (Art 13(7)-(10) + Timing Order 2019 + Core & Additional Info Orders)`
-GIVEN charity IS A RegisterEntry
-      financials IS A FinancialYearRecord
-GIVETH A CONTRACT Actor Action
-`enhanced annual return` MEANS
-  PARTY Charity OF charity
-  MUST FileReturn OF financials
-  WITHIN 2 months OF `financial year end`
-  HENCE `annual return logged with all required information`
-  LEST `lateFlag set to TRUE + Commissioner empowered to issue Required Steps Notice`
-
--- B-APP-04: Tribunal Extension Power (R&O 102/2020 Art 7)
-§ `Tribunal Appeal Extension Power (R&O 102/2020 Art 7)`
-GIVEN appeal IS A Decision
-      justiceReason IS A STRING
-GIVETH A CONTRACT Actor Action
-`tribunal extension` MEANS
-  IF `appeal received late but justice favours extension`
-  THEN PARTY Role OF TribunalMember
-       MAY ExtendAppealDeadline OF 28
-       OR ExtendAppealDeadline OF 56
-       HENCE `extended deadline granted`
-       LEST `appeal time limit stands`
-  ELSE `standard deadlines apply`
-
--- Previous rules updated to CONTRACT approach
-§ `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
-GIVEN charity IS A RegisterEntry
-      register IS A CharityRegister
-GIVETH A CONTRACT Actor Action
-`annual return process` MEANS
-  PARTY Role OF Commissioner
-  MUST Notify OF Charity OF charity,
-              annualReturnRequest
-  WITHIN 14 months OF charity's lastFinancialRecord's financialYear's endDate
-  HENCE `charity must file return` charity register
-
-GIVEN charity IS A RegisterEntry
-      register IS A CharityRegister
-      financialData IS A FinancialYearRecord
-GIVETH A CONTRACT Actor Action
-`file annual return` MEANS
-  PARTY Charity OF charity
-  MUST FileReturn OF financialData
-WITHIN 2 months OF `annual return requested`
-  HENCE `register updated with annual return` register charity financialData
-  LEST PARTY Role OF Commissioner
-       MAY `issue Required Steps Notice`
-
-§ `Commissioner Publication Duty (Art 8(3), Law 2014 & Art 2, R&O 59/2018)`
-GIVEN charity IS A RegisterEntry
-      financialData IS A FinancialYearRecord
-GIVETH A CONTRACT Actor Action
-`publication duty` MEANS
-  PARTY Role OF Commissioner
-  MUST `publish annual return data` financialData
-WITHIN 1 month OF `annual return filed`
-HENCE `transparency maintained`
-  LEST PARTY Charity OF charity
-       MAY `appeal to tribunal`
-
-§ `Restricted Section Solicitation Prohibition (Art 9, Law 2014 & Art 2, R&O 60/2018)`
-GIVEN charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`restricted section prohibition` MEANS
-  IF charity's section EQUALS RestrictedSection
-  THEN PARTY Charity OF charity
-SHANT `solicit donations from the public`
-HENCE `restricted status maintained`
-       LEST PARTY Role OF Commissioner
-            MAY `remove restricted status`
-  ELSE `no restriction applies`
-
-§ `Governor Fiduciary Duty (Art 30, Law 2014)`
-GIVEN governor IS A Person
-      charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`governor fiduciary duty` MEANS
-  IF governor's isGovernor EQUALS TRUE
-     AND elem governor charity's governors
-  THEN PARTY Person OF governor
-MUST `act in best interests of charity and beneficiaries`
-WITHIN continuous
-HENCE `proper governance maintained`
-       LEST PARTY Role OF Commissioner
-            MAY SuspendGovernor OF governor's name, "breach of fiduciary duty", NOTHING
-  ELSE `duty does not apply`
-
-§ `Governor Reporting Duty (Art 22, Law 2014)`
-GIVEN governor IS A Person
-      charity IS A RegisterEntry
-      matter IS A STRING
-GIVETH A CONTRACT Actor Action
-`governor reporting duty` MEANS
-  IF `reportable matter exists` governor
-     AND elem governor charity's governors
-  THEN PARTY Person OF governor
-       MUST Notify OF Role OF Commissioner,
-                   message matter
-WITHIN ASAP
-HENCE `transparency maintained`
-       LEST PARTY Role OF Commissioner
-            MAY SuspendGovernor OF governor's name, "failure to report", NOTHING
-            OR IssueNotice OF RequiredStepsNotice OF "RSN-GOV", Date OF 2023 1 1, LIST "Report matters immediately", Date OF 2023 1 15, LIST "unreported matters", Pending
-  ELSE `no reportable matters`
-
-GIVEN person IS A Person
 GIVETH A BOOLEAN
-DECIDE `reportable matter exists` IF
-    EXISTS c IN person's convictions SUCH THAT
-        (c's involvesVulnerablePerson EQUALS TRUE OR NOT c's isSpent EQUALS TRUE)
-
-§ `Commissioner Information Power (Art 26, Law 2014)`
-GIVEN charity IS A RegisterEntry
-      information IS A STRING
-GIVETH A CONTRACT Actor Action
-`information demand` MEANS
-  IF `reasonable cause exists` charity
-  THEN PARTY Role OF Commissioner
-       MAY `demand information or attendance` information
-HENCE `investigation progresses`
-       LEST `non-compliance offense`
-  ELSE `no information required`
+`meets the charity test` MEANS
+    `all purposes are charitable` charity
+    AND `charity provides public benefit` charity
+    AND `constitution does not allow government control` charity
 
 GIVEN charity IS A RegisterEntry
 GIVETH A BOOLEAN
-DECIDE `reasonable cause exists` IF
-    -- Would be determined by evidence
-    TRUE
-
-§ `Required Steps Notice Power (Art 27, Law 2014)`
-GIVEN charity IS A RegisterEntry
-      steps IS A LIST OF STRING
-GIVETH A CONTRACT Actor Action
-`required steps notice` MEANS
-  IF `grounds under Art 27(1) exist` charity
-  THEN PARTY Role OF Commissioner
-       MAY IssueNotice OF RequiredStepsNotice OF "RSN-001", Date OF 2023 1 1, steps, Date OF 2023 2 1, LIST "various grounds", Pending
-       HENCE `notice logged in register` charity
-       LEST `may proceed to deregistration`
-  ELSE `no grounds for notice`
+`all purposes are charitable` MEANS
+    all (GIVEN p YIELD `is charitable purpose` p) (charity's purposes)
 
 GIVEN charity IS A RegisterEntry
 GIVETH A BOOLEAN
-DECIDE `grounds under Art 27(1) exist` IF
-    (
-        `misconduct` charity
-        OR NOT `meets the charity test` charity
-        OR `governor misconduct` charity
-        OR NOT (
-            `is a Jersey entity` charity
-            OR `carries out substantial activity in Jersey` charity
-        )
-        OR NOT `has a principal address in Jersey` charity
-        OR NOT `complies with annual reporting` charity
-    )
+`constitution does not allow government control` MEANS
+    NOT charity's constitution's allowsGovtControl EQUALS TRUE
 
-§ `Commissioner Appeal Notice Duty (Art 32, Law 2014 & Art 3, R&O 102/2020)`
-GIVEN decision IS A Decision
-      charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`appeal notice duty` MEANS
-  PARTY Role OF Commissioner
-  MUST Notify OF Charity OF charity,
-              message "appeal rights and deadline"
-  WITHIN 14 days OF decision
-HENCE `entity informed of rights`
-  LEST `decision may be vulnerable`
-
-§ `Appellant Appeal Timeframe (Art 33, Law 2014 & Art 5, R&O 102/2020)`
-GIVEN charity IS A RegisterEntry
-      decision IS A Decision
-GIVETH A CONTRACT Actor Action
-`appellant appeal` MEANS
-  IF decision AFFECTS charity
-  THEN PARTY Charity OF charity
-       MUST AppealDecision OF decision
-WITHIN 28 days
-HENCE `appeal proceeds`
-       LEST `appeal struck out`
-  ELSE `no appeal required`
-
-§ `Third Party Appeal Timeframe (Art 33, Law 2014 & Art 5, R&O 102/2020)`
-GIVEN person IS A Person
-      decision IS A Decision
-      charity IS A RegisterEntry
-GIVETH A CONTRACT Actor Action
-`third party appeal` MEANS
-  IF decision AFFECTS charity
-     AND NOT person EQUALS charity
-  THEN PARTY Person OF person
-       MUST AppealDecision OF decision
-WITHIN 56 days
-HENCE `appeal proceeds`
-       LEST `appeal struck out`
-  ELSE `no standing to appeal`
-
--- Enhanced charity test and supporting functions
 GIVEN charity IS A RegisterEntry
 GIVETH A BOOLEAN
-DECIDE `meets the charity test` IF
-    -- All purposes are charitable or ancillary to charitable purposes
-    all (GIVEN p YIELD `is charitable purpose` p
-                     OR `is ancillary or incidental to charitable purpose` p)
-        (charity's purposes)
-    -- And provides public benefit to a reasonable degree
-    AND `provides public benefit`
-    -- Unless constitution allows control by government officials
-    AND NOT charity's constitution's allowsGovtControl EQUALS TRUE
+`charity provides public benefit` MEANS
+    TRUE -- Determined by Commissioner assessment under Art 7
 
 GIVEN p IS A Purpose
 GIVETH A BOOLEAN
-DECIDE `is charitable purpose` IF
+`is charitable purpose` MEANS
     CONSIDER p
     WHEN `prevention or relief of poverty` THEN TRUE
     WHEN `advancement of education` THEN TRUE
@@ -496,398 +133,366 @@ DECIDE `is charitable purpose` IF
     WHEN `relief of those in need` THEN TRUE
     WHEN `advancement of animal welfare` THEN TRUE
     WHEN `analogous purpose` THEN TRUE
-    WHEN otherPurpose s THEN `is analogous to charitable purpose` p
+    OTHERWISE FALSE
 
-GIVEN p IS A Purpose
-GIVETH A BOOLEAN
-DECIDE `is ancillary or incidental to charitable purpose` IF
-    CONSIDER p
-    WHEN otherPurpose s THEN s CONTAINS "ancillary to" OR s CONTAINS "incidental to" OR s CONTAINS "in support of"
-    WHEN other THEN FALSE
-
-GIVEN p IS A Purpose
-GIVETH A BOOLEAN
-DECIDE `is analogous to charitable purpose` IF
-    CONSIDER p
-    WHEN otherPurpose s THEN s CONTAINS "analogous to"
-    WHEN other THEN FALSE
-
-GIVETH A BOOLEAN
-DECIDE `provides public benefit` IF
-    -- In reality this would be determined by Commissioner assessment under Art 7
-    TRUE
-
--- Supporting predicates for new rules
-GIVEN applicant IS A RegisterEntry
-GIVETH A BOOLEAN
-DECIDE `lacks required documents` IF
-    NOT applicant's constitution's isWritten EQUALS TRUE
-    OR length applicant's purposes EQUALS 0
-
+-- B-PB-01: Commissioner Public Benefit Assessment (Art 7, Law 2014)
 GIVEN charity IS A RegisterEntry
+      factors IS A LIST OF STRING
 GIVETH A BOOLEAN
-DECIDE `misconduct` IF
-    -- Would be determined by Commissioner based on evidence
+`commissioner must assess public benefit` MEANS
+    `meets the charity test` charity
+
+-- B-NAME-01: Protected Word Prohibition (Arts 21-23, Law 2014)
+GIVEN person IS A Person
+      contextText IS A STRING
+GIVETH A BOOLEAN
+`use of protected word is prohibited` MEANS
+    `context mentions charity words` contextText
+    AND NOT `person entitled to use protected word` person
+
+GIVEN contextText IS A STRING
+GIVETH A BOOLEAN
+`context mentions charity words` MEANS
+    `text is charity` contextText OR `text is charitable` contextText
+
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+`text is charity` MEANS
+    text EQUALS "charity"
+
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+`text is charitable` MEANS
+    text EQUALS "charitable"
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`person entitled to use protected word` MEANS
+    `person is registered charity` person
+    OR `person has Commissioner exemption` person
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`person is registered charity` MEANS
+    -- Would be determined by checking charity register
     FALSE
 
-GIVEN charity IS A RegisterEntry
+GIVEN person IS A Person
 GIVETH A BOOLEAN
-DECIDE `governor misconduct` IF
-    EXISTS p IN charity's governors SUCH THAT NOT `fulfills governor duties` p charity
+`person has Commissioner exemption` MEANS
+    -- Would be determined by checking exemption register
+    FALSE
+
+-- B-MIS-01: False Statement Prohibition (Art 31, Law 2014)
+GIVEN person IS A Person
+      statement IS A STRING
+      contextText IS A STRING
+GIVETH A BOOLEAN
+`false statement is prohibited` MEANS
+    `context is commissioner submission` contextText
+    AND `statement is false or misleading` statement
+
+GIVEN contextText IS A STRING
+GIVETH A BOOLEAN
+`context is commissioner submission` MEANS
+    contextText EQUALS "providing statement to Commissioner"
+
+GIVEN statement IS A STRING
+GIVETH A BOOLEAN
+`statement is false or misleading` MEANS
+    -- Would be determined by factual assessment
+    FALSE
+
+-- B-GOV-02: Enhanced Governor Reporting (Art 19(1)(a-h) + Order 2025)
+GIVEN governor IS A Person
+      charity IS A RegisterEntry
+GIVETH A BOOLEAN
+`governor must report` MEANS
+    `reportable matter exists` governor
+    AND `governor belongs to charity` governor charity
 
 GIVEN governor IS A Person
       charity IS A RegisterEntry
 GIVETH A BOOLEAN
-DECIDE `fulfills governor duties` IF
+`governor belongs to charity` MEANS
+    elem governor (charity's governors)
+
+GIVEN governor IS A Person
+GIVETH A BOOLEAN
+`reportable matter exists` MEANS
+    `governor has unspent convictions` governor
+    OR `governor has vulnerable person convictions` governor
+
+GIVEN governor IS A Person
+GIVETH A BOOLEAN
+`governor has unspent convictions` MEANS
+    any (GIVEN c YIELD isSpent c EQUALS FALSE) (governor's convictions)
+
+GIVEN governor IS A Person
+GIVETH A BOOLEAN
+`governor has vulnerable person convictions` MEANS
+    any (GIVEN c YIELD involvesVulnerablePerson c EQUALS TRUE) (governor's convictions)
+
+GIVEN governor IS A Person
+GIVETH A BOOLEAN
+`governor is properly qualified` MEANS
     governor's isGovernor EQUALS TRUE
-    AND NOT EXISTS c IN governor's convictions SUCH THAT
-        (c's involvesVulnerablePerson EQUALS TRUE AND NOT c's isSpent EQUALS TRUE)
 
-GIVEN charity IS A RegisterEntry
+-- B-GOV-03: Governor Suspension/Disqualification (Art 20, Law 2014)
+GIVEN governor IS A Person
+      misconduct IS A MisconductCategory
 GIVETH A BOOLEAN
-DECIDE `is a Jersey entity` IF
-    charity's address CONTAINS "Jersey"
+`governor misconduct proved` MEANS
+    CONSIDER misconduct
+    WHEN MISMANAGEMENT_CASE misconductDetails THEN `misconduct details proven` misconductDetails
+    WHEN MISAPPLICATION_CASE misconductDetails THEN `misconduct details proven` misconductDetails
+    WHEN OTHER_CASE misconductDescription THEN `misconduct description proven` misconductDescription
 
-GIVEN charity IS A RegisterEntry
+GIVEN misconductDetails IS A STRING
 GIVETH A BOOLEAN
-DECIDE `carries out substantial activity in Jersey` IF
-    charity's address CONTAINS "Jersey"
+`misconduct details proven` MEANS
+    `text indicates proven` misconductDetails
 
-GIVEN charity IS A RegisterEntry
+GIVEN misconductDescription IS A STRING
 GIVETH A BOOLEAN
-DECIDE `has a principal address in Jersey` IF
-    charity's address CONTAINS "Jersey"
+`misconduct description proven` MEANS
+    `text indicates proven` misconductDescription
 
-GIVEN charity IS A RegisterEntry
+GIVEN text IS A STRING
 GIVETH A BOOLEAN
-DECIDE `complies with annual reporting` IF
-    `months between dates` charity's lastFinancialRecord's financialYear's endDate (Date OF 2023, 1, 1) LESS THAN 14
+`text indicates proven` MEANS
+    text EQUALS "proven"
 
--- Supporting predicates for governor misconduct rules
+-- B-GOV-04: Order Variation Power (Art 20(4), Law 2014)
 GIVEN orderId IS A STRING
 GIVETH A BOOLEAN
-DECIDE `suspension or disqualification order in force` IF
+`suspension order is in force` MEANS
     -- Would be determined by checking active orders register
     TRUE
 
-GIVEN personId IS A STRING
+-- B-GOV-05: Acting While Suspended Prohibition (Art 20(6), Law 2014)
+GIVEN person IS A Person
+      actionText IS A STRING
 GIVETH A BOOLEAN
-DECIDE `person currently suspended or disqualified` IF
-    -- Would be determined by checking current suspension status
-    TRUE
+`acting while suspended is prohibited` MEANS
+    `person currently suspended or disqualified` person
+    AND `action involves governor duties` actionText
 
-GIVEN suspendedGovernor IS A STRING
+GIVEN actionText IS A STRING
+GIVETH A BOOLEAN
+`action involves governor duties` MEANS
+    `text mentions governor duties` actionText
+
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+`text mentions governor duties` MEANS
+    text EQUALS "governor duties"
+
+GIVEN person IS A Person
+GIVETH A BOOLEAN
+`person currently suspended or disqualified` MEANS
+    -- Would be determined by checking suspension register
+    FALSE
+
+-- B-GOV-06: Charity Response Obligations (Art 20, Law 2014)
+GIVEN charity IS A RegisterEntry
+      suspendedGovernorName IS A STRING
+GIVETH A BOOLEAN
+`charity must respond to suspension` MEANS
+    `governor becomes suspended` suspendedGovernorName charity
+
+GIVEN suspendedGovernorName IS A STRING
       charity IS A RegisterEntry
 GIVETH A BOOLEAN
-DECIDE `governor becomes suspended or disqualified` IF
-    `person currently suspended or disqualified` suspendedGovernor
-    AND elem suspendedGovernor (map (GIVEN p YIELD p's name) charity's governors)
+`governor becomes suspended` MEANS
+    `person name currently suspended or disqualified` suspendedGovernorName
+    AND `suspended governor belongs to charity` suspendedGovernorName charity
 
-GIVEN governorId IS A STRING
+GIVEN personName IS A STRING
 GIVETH A BOOLEAN
-DECIDE `governor misconduct proved` IF
-    -- Would be determined by Commissioner investigation/evidence
-    -- Could include specific misconduct types from Art 2(10)
+`person name currently suspended or disqualified` MEANS
+    -- Would be determined by checking suspension register by name
+    FALSE
+
+GIVEN suspendedGovernorName IS A STRING
+      charity IS A RegisterEntry
+GIVETH A BOOLEAN
+`suspended governor belongs to charity` MEANS
+    TRUE -- Would check if suspendedGovernorName in charity governors
+
+-- B-AR-03: Enhanced Annual Return (Art 13(7)-(10) + multiple orders)
+GIVEN charity IS A RegisterEntry
+      currentDate IS A Date
+GIVETH A BOOLEAN
+`annual return is due` MEANS
+    `months since last financial year end` charity currentDate >= 12
+
+GIVEN charity IS A RegisterEntry
+      currentDate IS A Date
+GIVETH A BOOLEAN
+`annual return is overdue` MEANS
+    `months since last financial year end` charity currentDate > 14
+
+GIVEN charity IS A RegisterEntry
+      currentDate IS A Date
+GIVETH A NUMBER
+`months since last financial year end` MEANS
+    `months between dates` (endDate (financialYear (lastFinancialRecord charity))) currentDate
+
+-- B-APP-03: Tribunal Extension Power (R&O 102/2020 Art 7)
+GIVEN appeal IS A Decision
+      submissionDate IS A Date
+      deadlineDate IS A Date
+GIVETH A BOOLEAN
+`appeal extension justified` MEANS
+    `submission after deadline` submissionDate deadlineDate
+    AND `justice favours extension` appeal
+
+GIVEN submissionDate IS A Date
+      deadlineDate IS A Date
+GIVETH A BOOLEAN
+`submission after deadline` MEANS
+    `date1 after date2` submissionDate deadlineDate
+
+GIVEN date1 IS A Date
+      date2 IS A Date
+GIVETH A BOOLEAN
+`date1 after date2` MEANS
+    `days between dates` date1 date2 > 0
+
+GIVEN appeal IS A Decision
+GIVETH A BOOLEAN
+`justice favours extension` MEANS
+    -- Would be determined by tribunal assessment
     TRUE
 
-GIVEN misconductType IS A MisconductType
-GIVETH A BOOLEAN
-DECIDE `is mismanagement type` IF
-    CONSIDER misconductType
-    WHEN MISMANAGEMENT THEN TRUE
-    WHEN MISAPPLICATION THEN FALSE
-    WHEN OTHER s THEN s CONTAINS "mismanagement"
-
-GIVEN misconductType IS A MisconductType
-GIVETH A BOOLEAN
-DECIDE `is misapplication type` IF
-    CONSIDER misconductType
-    WHEN MISMANAGEMENT THEN FALSE
-    WHEN MISAPPLICATION THEN TRUE
-    WHEN OTHER s THEN s CONTAINS "misapplication"
-
 -- ======================================================================
--- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS (ENHANCED)
+-- SECTION B2: OBLIGATION GENERATORS (When obligations are triggered)
 -- ======================================================================
 
-DECLARE RegisterAction IS ONE OF
-    RegisterCharity HAS entry IS A RegisterEntry
-                        date IS A Date
-    MoveToRestricted HAS entry IS A RegisterEntry
-                         date IS A Date
-                         fundingCondition IS A BOOLEAN
-    ChangeName HAS entry IS A RegisterEntry
-                  newName IS A STRING
-                  date IS A Date
-    AnnualReturnLogged HAS entry IS A RegisterEntry
-                           financials IS A FinancialYearRecord
-                           date IS A Date
-    RequiredStepsNoticeLogged HAS entry IS A RegisterEntry
-                                 notice IS A RequiredStepsNotice
-                                 date IS A Date
-    VoluntaryDeregistration HAS entry IS A RegisterEntry
-                                date IS A Date
-                                reason IS A STRING
-    CompulsoryDeregistration HAS entry IS A RegisterEntry
-                                date IS A Date
-                                reasons IS A LIST OF STRING
-                                isRetrospective IS A BOOLEAN
-    -- New events from Section C additions
-    RegistrationRefused HAS refusalReason IS A LIST OF STRING
-                            date IS A Date
-                            appealDeadline IS A Date
-    GovernorSuspended HAS governorId IS A STRING
-                         charityId IS A STRING
-                         reason IS A STRING
-                         period IS A MAYBE Date
-                         reportableMatterId IS A MAYBE STRING
-    GovernorDisqualified HAS governorId IS A STRING
-                            charityId IS A STRING
-                            reason IS A STRING
-                            period IS A MAYBE Date
-                            reportableMatterId IS A MAYBE STRING
-    -- Additional Part 5 events
-    GovernorMisconductFound HAS governorId IS A STRING
-                               misconductType IS A MisconductType
-                               findingDate IS A Date
-                               charityId IS A STRING
-    GovernorOrderVaried HAS orderId IS A STRING
-                           newStatus IS A SuspensionStatus
-                           varyDate IS A Date
-                           notifiedParties IS A LIST OF STRING
+-- Application Processing Obligation
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`commissioner must process application` MEANS
+    `application is complete` applicant
 
--- Enhanced register state transitions with all new events
--- (Previous state transition functions remain the same, adding new ones)
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`commissioner must refuse application` MEANS
+    `registration should be refused` applicant
 
--- RegistrationRefused event
--- Effect: Starts 28-day appeal timer; no Register entry created
-GIVEN refusalReasons IS A LIST OF STRING
-      date IS A Date
-      appealDeadline IS A Date
-GIVETH A RegistrationRefusal
-DECIDE `refuse registration` IS
-    RegistrationRefusal WITH
-        refusalReason IS refusalReasons,
-        date IS date,
-        appealDeadline IS appealDeadline
+-- Governor Reporting Obligation
+GIVEN governor IS A Person
+      charity IS A RegisterEntry
+GIVETH A BOOLEAN
+`governor must report to commissioner` MEANS
+    `governor must report` governor charity
 
--- GovernorSuspended event
--- Effect: Flags on charity & public list
+GIVEN governor IS A Person
+GIVETH A STRING
+`governor name` MEANS
+    "governor" -- Would return governor's name
+
+-- Governor Disciplinary Obligation
+GIVEN governor IS A Person
+      misconduct IS A MisconductCategory
+GIVETH A BOOLEAN
+`commissioner must take disciplinary action` MEANS
+    `governor misconduct proved` governor misconduct
+
+-- Annual Return Obligation
+GIVEN charity IS A RegisterEntry
+      currentDate IS A Date
+GIVETH A BOOLEAN
+`charity must file annual return` MEANS
+    `annual return is due` charity currentDate
+
+GIVEN charity IS A RegisterEntry
+      currentDate IS A Date
+GIVETH A BOOLEAN
+`charity annual return is overdue` MEANS
+    `annual return is overdue` charity currentDate
+
+GIVEN charity IS A RegisterEntry
+GIVETH A STRING
+`charity name` MEANS
+    "charity" -- Would return charity's name
+
+-- ======================================================================
+-- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS
+-- ======================================================================
+
+-- Process application helper that handles successful vs failed cases
+GIVEN applicant IS A RegisterEntry
+      actionDate IS A Date
+GIVETH A RegisterAction
+`process application` MEANS
+    IF `application is complete` applicant AND NOT `registration should be refused` applicant
+    THEN RegisterCharity applicant actionDate
+    ELSE RefuseRegistration applicant (LIST "Application incomplete or fails charity test") actionDate
+
+-- Governor suspension process helper
 GIVEN governorId IS A STRING
       charityId IS A STRING
-      reason IS A STRING
-      period IS A MAYBE Date
-      reportableMatterId IS A MAYBE STRING
-GIVETH A GovernorSuspension
-DECIDE `suspend governor` IS
-    GovernorSuspension WITH
-        governorId IS governorId,
-        charityId IS charityId,
-        reason IS reason,
-        period IS period,
-        reportableMatterId IS reportableMatterId
+      misconduct IS A MisconductCategory
+GIVETH A RegisterAction
+`process governor misconduct` MEANS
+    SuspendGovernor governorId charityId misconduct NOTHING
 
--- GovernorDisqualified event
--- Effect: Flags on charity & public list, cross-linked to reportable matter
-GIVEN governorId IS A STRING
-      charityId IS A STRING
-      reason IS A STRING
-      period IS A MAYBE Date
-      reportableMatterId IS A MAYBE STRING
-GIVETH A GovernorDisqualification
-DECIDE `disqualify governor` IS
-    GovernorDisqualification WITH
-        governorId IS governorId,
-        charityId IS charityId,
-        reason IS reason,
-        period IS period,
-        reportableMatterId IS reportableMatterId
-
--- GovernorMisconductFound event
--- Effect: Pivots analytics between fitness suspensions and substantive mismanagement
-GIVEN governorId IS A STRING
-      misconductType IS A MisconductType
-      findingDate IS A Date
-      charityId IS A STRING
-GIVETH A GovernorMisconductFound
-DECIDE `record governor misconduct` IS
-    GovernorMisconductFound WITH
-        governorId IS governorId,
-        misconductType IS misconductType,
-        findingDate IS findingDate,
-        charityId IS charityId
-
--- GovernorOrderVaried event
--- Effect: Updates ban timers and allows appeals to see modification history
+-- Order variation process helper
 GIVEN orderId IS A STRING
       newStatus IS A SuspensionStatus
-      varyDate IS A Date
-      notifiedParties IS A LIST OF STRING
-GIVETH A GovernorOrderVaried
-DECIDE `vary governor order` IS
-    GovernorOrderVaried WITH
-        orderId IS orderId,
-        newStatus IS newStatus,
-        varyDate IS varyDate,
-        notifiedParties IS notifiedParties
+      effectiveDate IS A Date
+GIVETH A RegisterAction
+`process order variation` MEANS
+    VaryGovernorOrder orderId newStatus effectiveDate
 
 -- ======================================================================
--- ENHANCED REGISTER STATE AND SIMULATION
+-- SECTION D – SUPPORTING FUNCTIONS
 -- ======================================================================
 
--- Initialize the charity register
-emptyRegister MEANS CharityRegister
-    WITH generalSection IS EMPTY_LIST
-         restrictedSection IS EMPTY_LIST
-         historicSection IS EMPTY_LIST
-         nextRegistrationNumber IS 1
-         lastUpdated IS commencement
+-- Jersey Connection Requirements
+GIVEN entity IS A RegisterEntry
+GIVETH A BOOLEAN
+`has Jersey connection` MEANS
+    `is Jersey entity` entity
+    OR `carries out substantial activity in Jersey` entity
+    OR `has principal address in Jersey` entity
 
--- Example application with enhanced structure
-exampleApplication MEANS ApplicationContents
-    WITH constitution IS Constitution OF "Written charitable constitution", TRUE, (Date OF 2023, 1, 1), FALSE
-         purposes IS LIST `advancement of education`, `relief of those in need`
-         publicBenefitStatement IS PublicBenefitStatement OF "We help disadvantaged children access education", (Date OF 2023, 1, 1)
-         coreFinancialInfo IS CoreFinancialInfo OF
-           Money OF 100000 "GBP",
-           Money OF 80000 "GBP",
-           Money OF 50000 "GBP",
-           Money OF 70000 "GBP",
-           LIST "Property assets", "Investment portfolio"
+GIVEN entity IS A RegisterEntry
+GIVETH A BOOLEAN
+`is Jersey entity` MEANS
+    `entity address contains Jersey` entity
 
--- ======================================================================
--- CONTRACT-BASED SIMULATION EXAMPLES
--- ======================================================================
+GIVEN entity IS A RegisterEntry
+GIVETH A BOOLEAN
+`carries out substantial activity in Jersey` MEANS
+    `entity address contains Jersey` entity
 
--- Simulation of complete application and registration process
-#CONTRACT `Complete Registration Process` applicant Commissioner emptyRegister AT 1 WITH
-  -- B-APP-00: Application submission
-  PARTY applicant DOES ProvideApplication OF exampleApplication AT 10
+GIVEN entity IS A RegisterEntry
+GIVETH A BOOLEAN
+`has principal address in Jersey` MEANS
+    `entity address contains Jersey` entity
 
-  -- B-PB-01: Commissioner assessment
-  PARTY Commissioner DOES `assess charity test with factors` (LIST "public benefit", "charitable purposes", "Jersey connection") AT 20
+GIVEN entity IS A RegisterEntry
+GIVETH A BOOLEAN
+`entity address contains Jersey` MEANS
+    `text contains Jersey` (entity's address)
 
-  -- B-REF-01: Decision (approval in this case)
-  PARTY Commissioner DOES RegisterCharity OF animalCharityEntry AT 30
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+`text contains Jersey` MEANS
+    text EQUALS "Jersey"
 
-  -- B-AR-03: Enhanced annual return
-  PARTY animalCharityEntry DOES FileReturn OF year2022Financials AT 395
+-- Temporal Functions
+GIVEN date1 IS A Date
+      date2 IS A Date
+GIVETH A NUMBER
+`months between dates` MEANS
+    (date2's year - date1's year) * 12 + (date2's month - date1's month)
 
-  -- B-GOV-02: Governor reporting
-  PARTY governorExample DOES Notify OF Commissioner, message "conviction reported" AT 400
-
-  -- B-GOV-03: Commissioner response
-  PARTY Commissioner DOES SuspendGovernor OF "GOV001", "unreported conviction", JUST (Date OF 2024, 1, 1) AT 410
-
--- Simulation of registration refusal and appeal
-#CONTRACT `Registration Refusal and Appeal` applicant Commissioner tribunal AT 1 WITH
-  -- Application with deficiencies
-  PARTY applicant DOES ProvideApplication OF deficientApplication AT 10
-
-  -- B-REF-01: Registration refused
-  PARTY Commissioner DOES RefuseRegistration OF (LIST "Fails charity test", "Incomplete documentation"), (Date OF 2023, 2, 28) AT 20
-
-  -- B-APP-02: Appeal lodged
-  PARTY applicant DOES AppealDecision OF refusalDecision AT 40
-
-  -- B-APP-04: Tribunal considers extension
-  PARTY tribunal DOES ExtendAppealDeadline OF 14 AT 45
-
--- Simulation of protected word misuse
-#CONTRACT `Protected Word Enforcement` publicEntity Commissioner AT 1 WITH
-  -- B-NAME-01: Misuse of protected word
-  PARTY publicEntity DOES UseProtectedWord OF "Operating charity shop without registration" AT 10
-
-  -- Commissioner enforcement action
-  PARTY Commissioner DOES `seek injunction and prosecute` AT 30
-
--- Example of the "tough" integration: Annual Return rule chain
-#CONTRACT `Annual Return Integration Example` charity Commissioner AT 1 WITH
-  -- Integration of Law + 3 subordinate instruments
-  PARTY charity DOES FileReturn OF enhancedFinancials AT 60
-  WHERE enhancedFinancials MEANS FinancialYearRecord WITH
-    coreFinancialInfo IS TRUE,
-    latestAccounts IS TRUE,
-    governorPaymentBreakdowns IS TRUE,
-    publicBenefitNarrative IS TRUE
-
--- ======================================================================
--- ENHANCED GOVERNOR MISCONDUCT SIMULATIONS
--- ======================================================================
-
--- Simulation 1: Complete Governor Misconduct Discovery and Response Process
-#CONTRACT `Governor Misconduct Lifecycle` charity Commissioner suspendedGovernor AT 1 WITH
-  -- Discovery of misconduct (Art 2(10) finding)
-  PARTY Commissioner DOES `investigate misconduct allegations` suspendedGovernor AT 10
-
-  -- B-GOV-03: Commissioner exercises disciplinary powers
-  PARTY Commissioner DOES SuspendGovernor OF "GOV001", "mismanagement of charity funds", JUST (Date OF 2024, 6, 1) AT 20
-
-  -- Register event: GovernorMisconductFound
-  PARTY Commissioner DOES `record misconduct finding` (GovernorMisconductFound OF "GOV001", MISMANAGEMENT, Date OF 2024, 1, 15, "CH001") AT 25
-
-  -- B-GOV-06: Charity response obligations
-  PARTY charity DOES `ensure suspended person does not act` AT 30
-  PARTY charity DOES `update register particulars via change notice` AT 35
-
-  -- B-GOV-04: Commissioner varies order after charity compliance
-  PARTY Commissioner DOES VaryGovernorOrder OF "ORD001", (Varied OF "ORD001", LIST "Must complete governance training", Date OF 2024, 2, 1), TRUE AT 60
-
-  -- Register event: GovernorOrderVaried
-  PARTY Commissioner DOES `log order variation` (GovernorOrderVaried OF "ORD001", (Varied OF "ORD001", LIST "Training completed", Date OF 2024, 3, 1), Date OF 2024, 3, 1, LIST "charity", "governor") AT 65
-
--- Simulation 2: Prohibited Acting While Suspended
-#CONTRACT `Suspended Governor Violation` suspendedGovernor charity publicAuthority AT 1 WITH
-  -- B-GOV-05: Suspended person attempts to act as governor
-  PARTY suspendedGovernor DOES ActWhileSuspended OF "GOV001", "CH001", "signing charity documents" AT 10
-
-  -- Criminal offense committed
-  PARTY publicAuthority DOES `prosecute criminal offense` suspendedGovernor AT 20
-
-  -- B-GOV-06: Charity at risk of deregistration for allowing suspended person to act
-  PARTY Commissioner DOES `consider deregistration for allowing suspended governor` charity AT 30
-
--- Simulation 3: Order Variation and Revocation Process
-#CONTRACT `Order Management Lifecycle` Commissioner governor charity AT 1 WITH
-  -- Initial suspension
-  PARTY Commissioner DOES SuspendGovernor OF "GOV002", "unreported conviction", JUST (Date OF 2024, 12, 31) AT 10
-
-  -- B-GOV-04: Order varied with new conditions
-  PARTY Commissioner DOES VaryGovernorOrder OF "ORD002", (Varied OF "ORD002", LIST "Must undergo fit and proper assessment", Date OF 2024, 2, 15), TRUE AT 30
-
-  -- Governor complies with new conditions
-  PARTY governor DOES `complete fit and proper assessment` AT 60
-
-  -- B-GOV-04: Order revoked after compliance
-  PARTY Commissioner DOES VaryGovernorOrder OF "ORD002", (Revoked OF Date OF 2024, 3, 1, "assessment completed satisfactorily"), TRUE AT 90
-
--- Simulation 4: Misconduct Type Classification Analytics
-#CONTRACT `Misconduct Analytics Example` Commissioner charity governors AT 1 WITH
-  -- Multiple misconduct findings of different types
-  PARTY Commissioner DOES `record misconduct finding` (GovernorMisconductFound OF "GOV003", MISMANAGEMENT, Date OF 2024, 1, 10, "CH002") AT 10
-
-  PARTY Commissioner DOES `record misconduct finding` (GovernorMisconductFound OF "GOV004", MISAPPLICATION, Date OF 2024, 1, 15, "CH002") AT 20
-
-  PARTY Commissioner DOES `record misconduct finding` (GovernorMisconductFound OF "GOV005", (OTHER OF "failure to maintain proper records"), Date OF 2024, 1, 20, "CH002") AT 30
-
-  -- Analytics can now distinguish between fitness issues vs substantive mismanagement
-  PARTY Commissioner DOES `generate misconduct analytics report` AT 100
-
--- Simulation 5: Complex Multi-Charity Governor Suspension
-#CONTRACT `Multi-Charity Governor Management` Commissioner governor charity1 charity2 AT 1 WITH
-  -- Governor serves on multiple charities
-  PARTY Commissioner DOES `identify cross-charity governor` governor AT 5
-
-  -- Misconduct discovered at one charity affects all
-  PARTY Commissioner DOES SuspendGovernor OF "GOV006", "conflict of interest violations", JUST (Date OF 2024, 12, 31) AT 10
-
-  -- B-GOV-05: Prohibition applies to all charities
-  PARTY governor DOES `attempt to act at second charity` AT 20
-  PARTY Commissioner DOES `detect violation at second charity` AT 25
-
-  -- B-GOV-06: Both charities must respond
-  PARTY charity1 DOES `ensure suspended person does not act` AT 30
-  PARTY charity2 DOES `ensure suspended person does not act` AT 35
-
-  -- B-GOV-04: Single order variation affects all relationships
-  PARTY Commissioner DOES VaryGovernorOrder OF "ORD003", (Revoked OF Date OF 2024, 6, 1, "served required period"), TRUE AT 180
+GIVEN date1 IS A Date
+      date2 IS A Date
+GIVETH A NUMBER
+`days between dates` MEANS
+    30 * `months between dates` date1 date2 + (date2's day - date1's day)
