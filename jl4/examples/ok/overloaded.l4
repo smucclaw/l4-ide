@@ -65,8 +65,6 @@ GIVETH A Vector
 
 #EVAL VectorP 50 50 PLUS VectorP 25 0
 
--- Let's have some fun and implement plus for strings!
-
 GIVEN a IS A Vector
       b IS A Vector
 GIVETH A BOOLEAN
