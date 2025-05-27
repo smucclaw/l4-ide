@@ -255,8 +255,8 @@ backward val = WithPoppedFrame $ \ case
       ValUnappliedConstructor r ->
         Backward (ValConstructor r rs)
       ValObligation env party act due followup lest -> do
-        (events, time) <- case rs of
-          [r, t] -> pure (r, t)
+        (time, events) <- case rs of
+          [t, r] -> pure (t, r)
           rs' -> InternalException $ RuntimeTypeError $
             "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
         PushFrame (ContractFrame (Contract1 ScrutinizeEvents {..}))
@@ -559,7 +559,7 @@ backwardContractFrame val = \ case
 
     continueWithFollowup :: Environment -> RExpr -> Reference -> Reference -> Machine Config
     continueWithFollowup env followup events time = do
-      PushFrame (App1 [events, time])
+      PushFrame (App1 [time, events])
       ForwardExpr env followup
 
     assertTime = \ case
@@ -910,7 +910,7 @@ evalDirective env (Contract ann expr t evs) =
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
   evs' <- evListExpr
-  pure $ App emptyAnno TypeCheck.evalContractRef [contract, evs', t]
+  pure $ App emptyAnno TypeCheck.evalContractRef [contract, t, evs']
   where
   evListExpr = List emptyAnno <$> traverse eventExpr evs
 
