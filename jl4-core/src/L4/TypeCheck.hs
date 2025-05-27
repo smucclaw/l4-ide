@@ -937,21 +937,21 @@ checkObligation
   -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
 checkObligation ann party action due hence lest partyT actionT = do
   partyR <- checkExpr ExpectRegulativePartyContext party partyT
-  actionR <- checkAction action actionT
+  (actionR, boundByPattern) <- checkAction action actionT
   let rTy = contract partyT actionT
-  dueR <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) due
-  henceR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) hence
-  lestR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
+  dueR <- traverse (\e -> checkExpr ExpectRegulativeDeadlineContext e number) due
+  henceR <- traverse (\e -> extendKnownMany boundByPattern $ checkExpr ExpectRegulativeFollowupContext e rTy) hence
+  lestR <- traverse (\e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
   pure (MkObligation ann partyR actionR dueR henceR lestR)
 
-checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved)
+checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
 checkAction MkAction {anno, action, provided = mprovided} actionT = do
   (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
   -- NOTE: the provided clauses must evaluate to booleans
   provided <- forM mprovided \provided ->
     extendKnownMany bounds do
       checkExpr ExpectRegulativeProvidedContext provided boolean
-  pure MkAction {anno, action = pat, provided}
+  pure (MkAction {anno, action = pat, provided}, bounds)
 
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
