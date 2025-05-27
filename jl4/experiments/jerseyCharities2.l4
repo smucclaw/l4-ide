@@ -1,6 +1,5 @@
 -- Charities (Jersey) Law 2014 with Subsidiary Legislation
 -- Based on the threefold split from charities_rationalisation.md
--- PHASES 1-3 IMPLEMENTATION: Using existing types from jerseyCharities-types.l4
 @ref url https://www.jerseylaw.je/laws/current/l_41_2014
 
 IMPORT prelude
@@ -28,7 +27,7 @@ ASSUME addDays IS A FUNCTION FROM A Date AND A NUMBER TO A Date
 ASSUME addMonths IS A FUNCTION FROM A Date AND A NUMBER TO A Date
 
 -- ======================================================================
--- SECTION A – ENHANCED STRUCTURAL / INTERPRETIVE LAYER
+-- SECTION A – STRUCTURAL / INTERPRETIVE LAYER
 -- ======================================================================
 
 -- Appeal tracking types (moved before RegisterAction)
@@ -44,6 +43,33 @@ DECLARE Appeal
 DECLARE AppellantType IS ONE OF
   CharityAppellant
   ThirdPartyAppellant
+
+-- Actor and Action types for CONTRACT syntax
+DECLARE Actor IS ONE OF
+   Charity HAS entry IS A RegisterEntry
+   CommissionerActor
+   Tribunal
+   Governor HAS person IS A Person
+   Applicant HAS entry IS A RegisterEntry
+
+DECLARE Action IS ONE OF
+   SubmitApplication HAS application IS A RegisterEntry
+   ProcessApplication HAS application IS A RegisterEntry
+                          decision IS A STRING
+   ServeNotice HAS target IS AN Actor
+                   notice IS A Notice
+                   appealDeadline IS A Date
+   FileAppeal HAS appeal IS A Appeal
+   FileAnnualReturn HAS charity IS A RegisterEntry
+                        returnData IS A FinancialYearRecord
+   IssueRequiredStepsNotice HAS charity IS A RegisterEntry
+                                notice IS A RequiredStepsNotice
+   ComplyWithNotice HAS charity IS A RegisterEntry
+                        compliance IS A BOOLEAN
+   SuspendGovernor HAS governorPerson IS A Person
+                       charity IS A RegisterEntry
+                       grounds IS A STRING
+   Other HAS description IS A STRING
 
 -- Enhanced register actions using existing types
 DECLARE RegisterAction IS ONE OF
@@ -84,7 +110,7 @@ DECLARE RegisterAction IS ONE OF
                             effectiveDate IS A Date
 
 -- ======================================================================
--- SECTION B – ENHANCED DEONTIC RULES LAYER
+-- SECTION B – DEONTIC RULES LAYER
 -- ======================================================================
 
 -- B-APP-00: Application Requirements (Art 11(1)-(2))
@@ -519,63 +545,355 @@ GIVETH A BOOLEAN
     `days between dates` (appeal's appealDeadline) (appeal's submissionDate) < 14
 
 -- ======================================================================
--- SECTION B2: ENHANCED OBLIGATION GENERATORS
+-- SECTION B3: CONTRACT-BASED TEMPORAL PROCESSES
 -- ======================================================================
+-- These CONTRACT implementations provide better temporal modeling than
+-- boolean-based deontic rules for multi-step processes with deadlines
 
--- Application Processing Obligations
+-- Application Processing Contract (Art 11-12, Law 2014)
 GIVEN applicant IS A RegisterEntry
-GIVETH A BOOLEAN
+GIVETH A CONTRACT Actor Action
+`application process` MEANS
+  PARTY Applicant applicant
+  MUST SubmitApplication applicant
+  WITHIN 0  -- immediate upon decision to apply
+  HENCE `commissioner must process application` applicant
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
 `commissioner must process application` MEANS
-    `application is complete` applicant
+  PARTY CommissionerActor
+  MUST ProcessApplication applicant
+                         (IF `application is complete` applicant AND NOT `registration should be refused` applicant
+                          THEN "APPROVE"
+                          ELSE "REFUSE")
+  WITHIN 60  -- 60 days to process (reasonable administrative time)
+  HENCE IF `registration should be refused` applicant
+        THEN `serve refusal notice` applicant
+        ELSE `registration approved` applicant
 
 GIVEN applicant IS A RegisterEntry
-GIVETH A BOOLEAN
-`commissioner must refuse application` MEANS
-    `registration should be refused` applicant
+GIVETH A CONTRACT Actor Action
+`serve refusal notice` MEANS
+  PARTY CommissionerActor
+  MUST ServeNotice (Applicant applicant)
+                   (required (RequiredStepsNotice "REF001" commencement (LIST "Application fails charity test") (addDays commencement 28) (LIST "APPLICATION_INCOMPLETE") Failed))
+                   (addDays commencement 28)
+  WITHIN 7  -- 7 days to serve notice after decision
+  HENCE `applicant may appeal` applicant
 
--- Annual Return Obligations
+GIVEN applicant IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`applicant may appeal` MEANS
+  PARTY Applicant applicant
+  MUST FileAppeal (Appeal "APP001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
+  WITHIN 28  -- 28 days to appeal
+  HENCE `tribunal must consider appeal` (Appeal "APP001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
+
+-- Annual Return Contract Process (Art 13, Law 2014 + R&O 144/2019)
 GIVEN charity IS A RegisterEntry
-      currentDate IS A Date
-GIVETH A BOOLEAN
-`charity must file annual return` MEANS
-    `annual return is due` charity currentDate
+      financialYearEnd IS A Date
+GIVETH A CONTRACT Actor Action
+`annual return obligation` MEANS
+  PARTY Charity charity
+  MUST FileAnnualReturn charity (FinancialYearRecord (DateRange financialYearEnd financialYearEnd)
+                                                    (Money 0 "GBP") (Money 0 "GBP") (Money 0 "GBP")
+                                                    (Money 0 "GBP") "" FALSE commencement)
+  WITHIN 60  -- 2 months after financial year end (Art 144/2019)
+  HENCE IF `days since return deadline` charity (addDays financialYearEnd 60) > 0
+        THEN `commissioner may issue required steps notice for late return` charity
+        ELSE `return processed successfully` charity
 
 GIVEN charity IS A RegisterEntry
-      currentDate IS A Date
-GIVETH A BOOLEAN
-`charity annual return is overdue` MEANS
-    `annual return is overdue` charity currentDate
+GIVETH A CONTRACT Actor Action
+`commissioner may issue required steps notice for late return` MEANS
+  IF `days since return deadline` charity commencement > 30
+  THEN PARTY CommissionerActor
+       MUST IssueRequiredStepsNotice charity
+                                    (RequiredStepsNotice "RSN001" commencement
+                                                       (LIST "File overdue annual return within 28 days")
+                                                       (addDays commencement 28) (LIST "LATE_RETURN") Pending)
+       WITHIN 30  -- 30 days after return becomes overdue
+       HENCE `charity must comply with required steps` charity
+  ELSE FULFILLED
 
--- Required Steps Notice Obligations
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`charity must comply with required steps` MEANS
+  PARTY Charity charity
+  MUST ComplyWithNotice charity TRUE
+  WITHIN 28  -- deadline specified in notice
+  HENCE IF TRUE  -- assume compliance for now
+        THEN `compliance achieved` charity
+        ELSE `deregistration proceedings` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`deregistration proceedings` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "DEREGISTER"
+  WITHIN 30  -- 30 days to complete deregistration
+  HENCE `deregistration notice served` charity
+
+-- Appeal Process Contract (Arts 35-37, Law 2014 + R&O 102/2020)
+GIVEN appeal IS A Appeal
+GIVETH A CONTRACT Actor Action
+`tribunal must consider appeal` MEANS
+  PARTY Tribunal
+  MUST ProcessApplication (RegisterEntry "" "" EMPTY
+                                         (Constitution "" TRUE commencement FALSE)
+                                         EMPTY "" commencement NOTHING GeneralSection
+                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
+                                         EMPTY FALSE FALSE NOTHING)
+                         "APPEAL_DECISION"
+  WITHIN 90  -- 90 days for tribunal decision
+  HENCE `appeal decision served` appeal
+
+GIVEN appeal IS A Appeal
+GIVETH A CONTRACT Actor Action
+`appeal decision served` MEANS
+  PARTY Tribunal
+  MUST ServeNotice (Charity (RegisterEntry "" "" EMPTY
+                                           (Constitution "" TRUE commencement FALSE)
+                                           EMPTY "" commencement NOTHING GeneralSection
+                                           EMPTY EMPTY (PublicBenefitStatement "" commencement)
+                                           EMPTY FALSE FALSE NOTHING))
+                   (message "Appeal decision notification")
+                   commencement
+  WITHIN 7  -- 7 days to serve decision
+  HENCE `appeal process concluded` appeal
+
+-- Required Steps Notice Process (Art 27, Law 2014)
 GIVEN charity IS A RegisterEntry
       grounds IS A LIST OF STRING
-GIVETH A BOOLEAN
-`commissioner must issue required steps notice` MEANS
-    `commissioner may issue required steps notice` charity grounds
-    AND `notice not already issued` charity
+GIVETH A CONTRACT Actor Action
+`required steps notice process` MEANS
+  PARTY CommissionerActor
+  MUST IssueRequiredStepsNotice charity
+                               (RequiredStepsNotice "RSN002" commencement grounds (addDays commencement 28) grounds Pending)
+  WITHIN 14  -- 14 days after grounds established
+  HENCE `charity must respond to required steps` charity grounds
 
 GIVEN charity IS A RegisterEntry
-GIVETH A BOOLEAN
-`notice not already issued` MEANS
-    TRUE
+      grounds IS A LIST OF STRING
+GIVETH A CONTRACT Actor Action
+`charity must respond to required steps` MEANS
+  PARTY Charity charity
+  MUST ComplyWithNotice charity TRUE
+  WITHIN 28  -- standard deadline for required steps
+  HENCE IF TRUE  -- assume compliance
+        THEN `required steps satisfied` charity
+        ELSE `commissioner may deregister` charity
 
--- Governor Disciplinary Obligations
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`commissioner may deregister` MEANS
+  IF TRUE  -- condition for deregistration
+  THEN PARTY CommissionerActor
+       MUST ProcessApplication charity "DEREGISTER"
+       WITHIN 30  -- 30 days after non-compliance
+       HENCE `deregistration notice served` charity
+  ELSE FULFILLED
+
+-- Governor Misconduct Process (Arts 18-20, Law 2014)
 GIVEN governor IS A Person
+      charity IS A RegisterEntry
       misconductType IS A STRING
-GIVETH A BOOLEAN
-`commissioner must take disciplinary action` MEANS
-    `governor misconduct proved` governor misconductType
+GIVETH A CONTRACT Actor Action
+`governor misconduct process` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "INVESTIGATE_MISCONDUCT"
+  WITHIN 21  -- 21 days to begin investigation
+  HENCE IF `governor misconduct proved` governor misconductType
+        THEN `suspend governor process` governor charity misconductType
+        ELSE `investigation concluded no action` governor
 
--- Appeal Processing Obligations
+GIVEN governor IS A Person
+      charity IS A RegisterEntry
+      misconductType IS A STRING
+GIVETH A CONTRACT Actor Action
+`suspend governor process` MEANS
+  PARTY CommissionerActor
+  MUST SuspendGovernor governor charity misconductType
+  WITHIN 14  -- 14 days after misconduct proved
+  HENCE `suspension notice served` governor charity
+
+GIVEN governor IS A Person
+      charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`suspension notice served` MEANS
+  PARTY CommissionerActor
+  MUST ServeNotice (Governor governor)
+                   (required (RequiredStepsNotice "SUSP001" commencement (LIST "Governor suspended") (addDays commencement 28) (LIST "GOVERNOR_SUSPENDED") Failed))
+                   (addDays commencement 28)
+  WITHIN 7  -- 7 days to serve suspension notice
+  HENCE `governor may appeal suspension` governor
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`governor may appeal suspension` MEANS
+  PARTY Governor governor
+  MUST FileAppeal (Appeal "GOV001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
+  WITHIN 28  -- 28 days to appeal suspension
+  HENCE `tribunal considers governor appeal` governor
+
+-- Supporting Contract Functions
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`registration approved` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "APPROVE"
+  WITHIN 0  -- immediate upon approval
+  HENCE `charity registered successfully` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`return processed successfully` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "RETURN_PROCESSED"
+  WITHIN 7  -- 7 days to process return
+  HENCE `annual return cycle complete` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`compliance achieved` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "COMPLIANCE_NOTED"
+  WITHIN 7  -- 7 days to note compliance
+  HENCE `compliance cycle complete` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`required steps satisfied` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication charity "STEPS_SATISFIED"
+  WITHIN 7  -- 7 days to confirm satisfaction
+  HENCE `required steps process complete` charity
+
 GIVEN appeal IS A Appeal
-GIVETH A BOOLEAN
-`tribunal must consider appeal` MEANS
-    `charity appeal is timely` appeal
-    OR `third party appeal is timely` appeal
-    OR appeal's extensionGranted EQUALS TRUE
+GIVETH A CONTRACT Actor Action
+`appeal process concluded` MEANS
+  PARTY Tribunal
+  MUST ProcessApplication (RegisterEntry "" "" EMPTY
+                                         (Constitution "" TRUE commencement FALSE)
+                                         EMPTY "" commencement NOTHING GeneralSection
+                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
+                                         EMPTY FALSE FALSE NOTHING)
+                         "APPEAL_CONCLUDED"
+  WITHIN 0  -- immediate
+  HENCE `appeal cycle complete` appeal
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`deregistration notice served` MEANS
+  PARTY CommissionerActor
+  MUST ServeNotice (Charity charity)
+                   (deregistration (DeregistrationNotice "DEREG001" commencement (LIST "Non-compliance with required steps") FALSE))
+                   commencement
+  WITHIN 7  -- 7 days to serve deregistration notice
+  HENCE `deregistration appeals period` charity
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`investigation concluded no action` MEANS
+  PARTY CommissionerActor
+  MUST ProcessApplication (RegisterEntry "" "" EMPTY
+                                         (Constitution "" TRUE commencement FALSE)
+                                         EMPTY "" commencement NOTHING GeneralSection
+                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
+                                         EMPTY FALSE FALSE NOTHING)
+                         "NO_ACTION"
+  WITHIN 7  -- 7 days to conclude
+  HENCE `misconduct investigation complete` governor
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`tribunal considers governor appeal` MEANS
+  PARTY Tribunal
+  MUST ProcessApplication (RegisterEntry "" "" EMPTY
+                                         (Constitution "" TRUE commencement FALSE)
+                                         EMPTY "" commencement NOTHING GeneralSection
+                                         EMPTY EMPTY (PublicBenefitStatement "" commencement)
+                                         EMPTY FALSE FALSE NOTHING)
+                         "GOVERNOR_APPEAL"
+  WITHIN 90  -- 90 days for tribunal decision
+  HENCE `governor appeal concluded` governor
+
+-- Terminal states (no further obligations)
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`charity registered successfully` MEANS
+  PARTY CommissionerActor
+  MUST Other "Registration complete - charity added to register"
+  WITHIN 0
+  HENCE `registration process complete` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`annual return cycle complete` MEANS
+  PARTY Charity charity
+  MUST Other "Annual return cycle completed successfully"
+  WITHIN 0
+  HENCE `next annual return due` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`compliance cycle complete` MEANS
+  PARTY Charity charity
+  MUST Other "Compliance requirements satisfied"
+  WITHIN 0
+  HENCE `compliance monitoring continues` charity
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`required steps process complete` MEANS
+  PARTY CommissionerActor
+  MUST Other "Required steps process completed"
+  WITHIN 0
+  HENCE `normal oversight resumes` charity
+
+GIVEN appeal IS A Appeal
+GIVETH A CONTRACT Actor Action
+`appeal cycle complete` MEANS
+  PARTY Tribunal
+  MUST Other "Appeal process concluded"
+  WITHIN 0
+  HENCE `decision final` appeal
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`deregistration appeals period` MEANS
+  PARTY Charity charity
+  MUST FileAppeal (Appeal "DEREG001" CharityAppellant commencement commencement (addDays commencement 28) FALSE FALSE)
+  WITHIN 28  -- 28 days to appeal deregistration
+  HENCE `deregistration final` charity
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`misconduct investigation complete` MEANS
+  PARTY CommissionerActor
+  MUST Other "Governor misconduct investigation concluded - no action"
+  WITHIN 0
+  HENCE `governor monitoring continues` governor
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`governor suspension active` MEANS
+  PARTY Governor governor
+  MUST Other "Governor suspension in effect - must not act as governor"
+  WITHIN 0
+  HENCE `suspension period monitoring` governor
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`governor appeal concluded` MEANS
+  PARTY Tribunal
+  MUST Other "Governor appeal decision rendered"
+  WITHIN 0
+  HENCE `suspension decision final` governor
 
 -- ======================================================================
--- SECTION C – ENHANCED REGISTER EVENTS / STATE-TRANSITIONS
+-- SECTION C – REGISTER EVENTS / STATE-TRANSITIONS
 -- ======================================================================
 
 -- Complete application processing with proper branching
@@ -687,7 +1005,7 @@ GIVETH A Appeal
            (appeal's submissionDate) (appeal's appealDeadline) extensionRequested extensionGranted
 
 -- ======================================================================
--- SECTION D – ENHANCED SUPPORTING FUNCTIONS
+-- SECTION D – SUPPORTING FUNCTIONS
 -- ======================================================================
 
 -- Jersey Connection Requirements (Enhanced)
@@ -766,3 +1084,40 @@ GIVEN charity IS A RegisterEntry
 GIVETH A BOOLEAN
 `charity has recent issues` MEANS
     `days since return deadline` charity currentDate > 30
+
+-- Terminal CONTRACT states
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`registration process complete` MEANS FULFILLED
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`next annual return due` MEANS FULFILLED
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`compliance monitoring continues` MEANS FULFILLED
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`normal oversight resumes` MEANS FULFILLED
+
+GIVEN appeal IS A Appeal
+GIVETH A CONTRACT Actor Action
+`decision final` MEANS FULFILLED
+
+GIVEN charity IS A RegisterEntry
+GIVETH A CONTRACT Actor Action
+`deregistration final` MEANS FULFILLED
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`governor monitoring continues` MEANS FULFILLED
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`suspension period monitoring` MEANS FULFILLED
+
+GIVEN governor IS A Person
+GIVETH A CONTRACT Actor Action
+`suspension decision final` MEANS FULFILLED
