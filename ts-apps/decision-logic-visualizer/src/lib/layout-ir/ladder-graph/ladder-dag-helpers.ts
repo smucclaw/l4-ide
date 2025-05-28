@@ -12,12 +12,9 @@ import {
 } from '../../algebraic-graphs/dag.js'
 import { DirectedEdge } from '../../algebraic-graphs/edge.js'
 import type { LadderLirNode, NotStartLirNode } from './ladder.svelte.js'
-import {
-  LinPathLirNode,
-  isNotStartLirNode,
-  isUBoolVarLirNode,
-} from './ladder.svelte.js'
+import { isNotStartLirNode, isUBoolVarLirNode } from './ladder.svelte.js'
 import { match, P } from 'ts-pattern'
+
 /************************************************
         Vertices from alga dag
 *************************************************/
@@ -38,10 +35,8 @@ export function getVerticesFromAlgaDag(
 
 export function isNnf(
   context: LirContext,
-  ladder: LadderGraphLirNode
+  dag: DirectedAcyclicGraph<LirId>
 ): boolean {
-  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
-
   const negandIsSimpleVar = (notStart: NotStartLirNode) => {
     // TODO: Will have to update this when we add more complicated Lir Nodes
     const negand = notStart.getNegand(context)
@@ -51,6 +46,9 @@ export function isNnf(
     )
   }
 
+  const notStartVertices = getVerticesFromAlgaDag(context, dag).filter(
+    isNotStartLirNode
+  )
   return notStartVertices.every(negandIsSimpleVar)
 }
 

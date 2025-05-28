@@ -300,7 +300,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    pathsList?: PathsListLirNode
   ) {
     super(nodeInfo)
     this.#dag = dag
@@ -308,6 +309,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#noBundlingNodeDag = noBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
+    this.#pathsList = pathsList
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -357,13 +359,25 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       noSourceDag
     )
 
+    // Make the PathsList if it's in NNF
+    const pathsList = isNnf(nodeInfo.context, dag)
+      ? new PathsListLirNode(
+          nodeInfo,
+          dag
+            .getAllPaths()
+            .map((rawPath) => new LinPathLirNode(nodeInfo, rawPath))
+        )
+      : undefined
+
+    // Make the LadderGraphLirNode
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
       noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
-      ladderEnv
+      ladderEnv,
+      pathsList
     )
 
     // doEval (may not want to start with this?)
@@ -403,21 +417,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /** Get list of all simple paths through the Dag */
-  getPathsList(context: LirContext) {
-    if (!this.#pathsList && isNnf(context, this)) {
-      // Don't show the lin paths for a non-NNF
-      const rawPaths = this.#dag.getAllPaths()
-      const paths = rawPaths.map(
-        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-      )
-
-      this.#pathsList = new PathsListLirNode(
-        this.makeNodeInfo(context),
-        this,
-        paths
-      )
-    }
-
+  getPathsList(_context: LirContext) {
     return this.#pathsList
   }
 
