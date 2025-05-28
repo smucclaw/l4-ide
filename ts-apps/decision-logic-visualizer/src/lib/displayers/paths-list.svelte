@@ -5,6 +5,7 @@
     ToggleGroup,
     ToggleGroupItem,
   } from '$lib/ui-primitives/toggle-group/index.js'
+  import { useLadderEnv } from '$lib/ladder-env.js'
 
   /************************
        Lir
@@ -30,7 +31,11 @@
         .map((pathIndex) => paths[pathIndex])
       console.log('onvalueChange', value)
       console.log('onValueChange', selectedPaths)
-      pathsListLirNode.highlightPaths(context, selectedPaths)
+
+      const ladderGraph = useLadderEnv()
+        .getTopFunDeclLirNode(context)
+        .getBody(context)
+      pathsListLirNode.highlightPaths(context, ladderGraph, selectedPaths)
     }}
   >
     <ul class="space-y-1">

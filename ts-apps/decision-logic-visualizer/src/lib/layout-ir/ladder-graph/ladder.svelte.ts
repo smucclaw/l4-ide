@@ -42,6 +42,7 @@ import {
   pprintPathGraph,
   isNnf,
   getVerticesFromAlgaDag,
+  makePathsList,
 } from './ladder-dag-helpers.js'
 /*
 Design principles:
@@ -305,7 +306,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
    */
-  #pathsList?: PathsListLirNode
+  #pathsList: PathsListLirNode
 
   private constructor(
     nodeInfo: LirNodeInfo,
@@ -313,7 +314,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    pathsList: PathsListLirNode
   ) {
     super(nodeInfo)
     this.#dag = dag
@@ -321,6 +323,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#noBundlingNodeDag = noBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
+    this.#pathsList = pathsList
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -377,13 +380,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       noSourceDag
     )
 
+    // Make the PathsList
+    const pathsList = makePathsList(nodeInfo, dag)
+
+    // Make the LadderGraphLirNode
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
       noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
-      ladderEnv
+      ladderEnv,
+      pathsList
     )
 
     // doEval (may not want to start with this?)
@@ -423,27 +431,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /** Get list of all simple paths through the Dag */
-  getPathsList(context: LirContext) {
-    if (!this.#pathsList) {
-      // Don't show the lin paths for a non-NNF
-      if (isNnf(context, this)) {
-        const rawPaths = this.#dag.getAllPaths()
-        const paths = rawPaths.map(
-          (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-        )
-
-        this.#pathsList = new ValidPathsListLirNode(
-          this.makeNodeInfo(context),
-          this,
-          paths
-        )
-      } else {
-        this.#pathsList = new InvalidPathsListLirNode(
-          this.makeNodeInfo(context)
-        )
-      }
-    }
-
+  getPathsList(_context: LirContext) {
     return this.#pathsList
   }
 
