@@ -173,7 +173,7 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
     Check _ e ->
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
-      "#PROVISION" <+> printWithLayout e <+> printWithLayout t :
+      "#TRACE" <+> printWithLayout e <+> printWithLayout t :
       map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where

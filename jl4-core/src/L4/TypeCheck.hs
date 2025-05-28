@@ -1953,11 +1953,11 @@ prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
 prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
   standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeContractContext expected given =
-  standardTypeMismatch [ "The contract passed to a PROVISION directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The contract passed to a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
-  standardTypeMismatch [ "The timestamp passed to an event in a PROVISION directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The timestamp passed to an event in a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeEventContext expected given =
-  standardTypeMismatch [ "The event expr passed to a PROVISION directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The event expr passed to a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 

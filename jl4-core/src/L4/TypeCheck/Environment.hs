@@ -171,7 +171,7 @@ initialEnvironment =
     , (NormalName "PROVISION",    [contractUnique    ])
     , (NormalName "EVENT",        [eventUnique       ])
     , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALPROVISION",[evalContractUnique])
+    , (NormalName "EVALTRACE",[evalContractUnique])
     , (NormalName "FULFILLED",    [fulfilUnique      ])
     , (NormalName "IS INTEGER",   [isIntegerUnique ])
     , (NormalName "ROUND",        [roundUnique     ])
