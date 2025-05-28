@@ -6,6 +6,8 @@ import {
   UnknownVal,
   veExprToEvExpr,
   toUBoolVal,
+  TrueVal,
+  FalseVal,
 } from '../../eval/type.js'
 import { Assignment, Corefs } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
@@ -758,6 +760,7 @@ export function isFalseExprLirNode(
 
 export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
+  #value = new FalseVal()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -768,8 +771,8 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#name = name
   }
 
-  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [...super.getAllClasses(context), 'false-val']
+  getValue(_context: LirContext) {
+    return this.#value
   }
 
   toPretty(_context: LirContext) {
@@ -783,6 +786,7 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
 
 export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
+  #value = new TrueVal()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -793,8 +797,8 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#name = name
   }
 
-  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [...super.getAllClasses(context), 'true-val']
+  getValue(_context: LirContext) {
+    return this.#value
   }
 
   toPretty(_context: LirContext) {
@@ -865,17 +869,13 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     }
   }
 
-  override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
-    // console.log('modifierCSSClasses', this.modifierCSSClasses)
-    return [...this.#value.getClasses(), ...this.modifierCSSClasses]
-  }
-
   getValue(_context: LirContext): UBoolVal {
     return this.#value
   }
 
-  _setValue(_context: LirContext, value: UBoolVal) {
+  _setValue(context: LirContext, value: UBoolVal) {
     this.#value = value
+    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(context: LirContext) {
