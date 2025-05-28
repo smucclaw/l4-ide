@@ -86,7 +86,7 @@ DECLARE Action IS ONE OF
 --      on the initial closing of such Equity Financing,
 --      this Safe will automatically convert
 
-`Equity Financing Handler` MEANS
+`Equity Financing Conversion` MEANS
   PARTY startup
   MUST  `Equity Financing Transaction` OF eft
         PROVIDED eft's security's Instrument EQUALS "Preference Shares"
@@ -99,6 +99,7 @@ DECLARE Action IS ONE OF
                 Instrument IS "Preference Shares"
                 Name       IS "Standard or SAFE Preference Shares -- [TODO]"
                 Quantity   IS Shares 0 (Money 0 "USD") -- computation [TODO]
+          WITHIN -1   // (👀)v
 
 --      into the greater of:
 --         (1) the number of Standard Preference Shares equal to
