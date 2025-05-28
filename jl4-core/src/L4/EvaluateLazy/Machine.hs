@@ -154,8 +154,8 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
-  RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Right e1) (Right e2))
-  ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Right e1) (Right e2))
+  RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Left e1) (Left e2))
+  ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Left e1) (Left e2))
   And  _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
   Or   _ann e1 e2 ->

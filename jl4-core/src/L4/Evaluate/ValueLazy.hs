@@ -62,7 +62,7 @@ instance NFData RBinOp where
   rnf ValROr = ()
   rnf ValRAnd = ()
 
-data ReasonForBreach a = DeadlineMissed a a Rational MaybeEvaluated MaybeEvaluated Rational
+data ReasonForBreach a = DeadlineMissed a a Rational a (RAction Resolved) Rational
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
 
