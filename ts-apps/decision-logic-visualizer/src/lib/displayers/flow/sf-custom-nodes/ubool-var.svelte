@@ -2,6 +2,8 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
+  import { onDestroy } from 'svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
   import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
@@ -9,39 +11,56 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: UBoolVarDisplayerProps = $props()
 
+  // Get LadderEnv, L4 Connection
   const ladderEnv = useLadderEnv()
   const l4Conn = ladderEnv.getL4Connection()
+
+  // The value of the UBoolVar
+  let uboolvarValue = $state(
+    (data.context.get(data.originalLirId) as UBoolVarLirNode).getValue(
+      data.context
+    )
+  )
+  const onValueChange = (context: LirContext, id: LirId) => {
+    if (id === data.originalLirId) {
+      uboolvarValue = (
+        context.get(data.originalLirId) as UBoolVarLirNode
+      ).getValue(context)
+    }
+  }
+  const unsub = ladderEnv.getLirRegistry().subscribe(onValueChange)
+
+  onDestroy(() => unsub.unsubscribe())
 </script>
 
 {#snippet inlineUI()}
   <div class="absolute bottom-1 right-1">
-    <Tooltip.Provider>
-      <Tooltip.Root>
-        <Tooltip.Trigger>
-          <button
-            aria-label="Unfold to definition"
-            class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
-            onclick={() => {
-              console.log('inline lir id', data.originalLirId.toString())
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <button
+          aria-label="Unfold to definition"
+          class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
+          onclick={() => {
+            console.log('inline lir id', data.originalLirId.toString())
 
-              const uniq = (
-                data.context.get(data.originalLirId) as UBoolVarLirNode
-              ).getUnique(data.context)
-              l4Conn.inlineExprs(
-                [uniq],
-                ladderEnv.getVersionedTextDocIdentifier()
-              )
-            }}
-          >
-            +
-          </button>
-        </Tooltip.Trigger>
-        <Tooltip.Content>Unfold to definition</Tooltip.Content>
-      </Tooltip.Root>
-    </Tooltip.Provider>
+            const uniq = (
+              data.context.get(data.originalLirId) as UBoolVarLirNode
+            ).getUnique(data.context)
+            l4Conn.inlineExprs(
+              [uniq],
+              ladderEnv.getVersionedTextDocIdentifier()
+            )
+          }}
+        >
+          +
+        </button>
+      </Tooltip.Trigger>
+      <Tooltip.Content>Unfold to definition</Tooltip.Content>
+    </Tooltip.Root>
   </div>
 {/snippet}
 
@@ -50,8 +69,12 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 -->
 
 <WithContentfulNodeStyles>
-  <div class={['bool-var-node-border', ...data.classes]}>
+  <ValueIndicator
+    value={uboolvarValue}
+    additionalClasses={['ubool-var-node-border', ...data.classes]}
+  >
     <WithNormalHandles>
+      <!-- Yes, we need cursor-pointer here. -->
       <button
         class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
         onclick={() => {
@@ -73,15 +96,5 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
         {@render inlineUI()}
       {/if}
     </WithNormalHandles>
-  </div>
+  </ValueIndicator>
 </WithContentfulNodeStyles>
-
-<style>
-  .bool-var-node-border {
-    border: var(--ladder-node-border, var(--ladder-node-border-default));
-    border-radius: var(
-      --ladder-node-border-radius,
-      var(--ladder-node-border-radius-default)
-    );
-  }
-</style>
