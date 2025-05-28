@@ -34,10 +34,34 @@
   onDestroy(unsub.unsubscribe)
 </script>
 
+<!-- App Arg UI -->
+{#snippet argUI(arg: (typeof data.args)[number], i: number)}
+  <ValueIndicator
+    value={argValues[i]}
+    borderClasses={['border', 'border-black', 'rounded-lg']}
+  >
+    <button
+      class={['p-2', 'text-xs', ...arg.getAllClasses(data.context)]}
+      onclick={async () => {
+        console.log('clicked: ', arg.getLabel(data.context), arg.getId())
+
+        const newValue = cycle(arg.getValue(data.context))
+        await ladderGraph.submitNewBinding(data.context, {
+          unique: arg.getUnique(data.context),
+          value: newValue,
+        })
+      }}
+    >
+      {arg.getLabel(data.context)}
+    </button>
+  </ValueIndicator>
+{/snippet}
+
 <WithContentfulNodeStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
+  <!-- TODO: Add a value indicator for the App itself -->
   <div class={['bg-gray-100 app-node-border', ...data.classes]}>
     <WithNormalHandles>
       <div
@@ -50,34 +74,7 @@
         <!-- Args (see also note above)-->
         <div class="flex flex-wrap gap-1 justify-center">
           {#each data.args as arg, i}
-            <ValueIndicator
-              value={argValues[i]}
-              borderClasses={['border', 'border-black', 'rounded-lg']}
-            >
-              <button
-                class={[
-                  'p-2',
-                  'text-xs',
-                  'cursor-pointer',
-                  ...arg.getAllClasses(data.context),
-                ]}
-                onclick={async () => {
-                  console.log(
-                    'clicked: ',
-                    arg.getLabel(data.context),
-                    arg.getId()
-                  )
-
-                  const newValue = cycle(arg.getValue(data.context))
-                  await ladderGraph.submitNewBinding(data.context, {
-                    unique: arg.getUnique(data.context),
-                    value: newValue,
-                  })
-                }}
-              >
-                {arg.getLabel(data.context)}
-              </button>
-            </ValueIndicator>
+            {@render argUI(arg, i)}
           {/each}
         </div>
       </div>
