@@ -148,10 +148,10 @@ getLocalDecls = do
 withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
 withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
 
-collectDefsForInlining :: Viz ()
+collectDefsForInlining :: Viz (IntMap (Expr Resolved))
 collectDefsForInlining = do
   cfg <- getVizCfg
-  assign #defsForInlining $ toMap (foldTopLevelDecides tryExtractDef cfg.module')
+  pure $ toMap (foldTopLevelDecides tryExtractDef cfg.module')
     where
       tryExtractDef :: Decide Resolved -> [(Unique, Expr Resolved)]
       tryExtractDef = foldDecides $ \ case
@@ -246,7 +246,7 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
     unlessM (hasBooleanType (getAnno body)) $
       throwError InvalidDecideMustHaveBoolRetType
 
-    _              <- collectDefsForInlining
+    assign #defsForInlining =<< collectDefsForInlining
     shouldSimplify <- getShouldSimplify
     vid            <- getFresh
     vizBody        <- translateExpr shouldSimplify body
