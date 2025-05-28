@@ -235,7 +235,7 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
-  Regulative _ann (MkObligation _ party action due followup lest) -> do
+  Regulative _ann (MkObligation _ party action due followup lest) ->
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
@@ -259,7 +259,7 @@ backward val = WithPoppedFrame $ \ case
         (time, events) <- case rs of
           [t, r] -> pure (t, r)
           rs' -> InternalException $ RuntimeTypeError $
-            "expected a list of events, and a time stamp but found: " <> foldMap prettyLayout rs'
+            "expected a time stamp, and a list of events but found: " <> foldMap prettyLayout rs'
         PushFrame (ContractFrame (Contract1 ScrutinizeEvents {..}))
         EvalRef events
       ValROp env op rexpr1 rexpr2 -> do
