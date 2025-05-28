@@ -5,13 +5,13 @@ IMPORT prelude
 
 `Note Date` MEANS  "4 February 2024"
 
-`Principal Amount` MEANS USD 55000
+`Principal Amount` MEANS USD 25000
 
 `Interest Rate Per Annum` MEANS 15%
 
 `Security Collateral` MEANS NOTHING
 
-`Monthly Installments` MEANS 24
+`Monthly Installments` MEANS 12
 
 `Default After Days Not Paid Beyond Due` MEANS 30
 
@@ -57,8 +57,9 @@ IMPORT prelude
     Money WITH
         Currency  IS `Principal Amount`'s Currency
         Value     IS `Principal Amount`'s Value TIMES
-                         `Interest Rate Per Annum` DIVIDED BY
-                              12 TIMES `Monthly Installments`
+                         (`Interest Rate Per Annum`
+                              DIVIDED BY 12)
+                                    TIMES `Monthly Installments`
 
 `Total Repayment Amount` MEANS
     Money WITH
@@ -70,8 +71,8 @@ IMPORT prelude
         Currency IS
             `Total Repayment Amount`'s Currency
         Value IS
-            `Total Repayment Amount`'s Value DIVIDED BY
-                `Monthly Installments`
+            `Total Repayment Amount`'s Value
+                DIVIDED BY `Monthly Installments`
 
 
 GIVEN `Outstanding Payment Amount` IS A Money
@@ -80,30 +81,39 @@ GIVEN `Outstanding Payment Amount` IS A Money
         THEN  PARTY   `The Borrower`
               MUST    `pay debts to`
                           `The Lender`
-                          (`Next Payment Due`'s Amount)
+                          `Amount Transferred` PROVIDED
+                              `Amount Transferred`'s Currency EQUALS `Next Payment Due`'s Amount's Currency
+                                  AND `Amount Transferred`'s Value AT LEAST (`Next Payment Due`'s Amount's Value
+                                                                                MINUS 0.05)
+                              
               WITHIN  `Next Payment Due Date`
               HENCE   `Payment Obligations`
                           (Money WITH
                               Currency  IS `Monthly Installment Amount`'s Currency
-                              Value     IS `Outstanding Payment Amount`'s Value MINUS
-                                                `Next Payment Due`'s Amount's Value)
+                              Value     IS `Outstanding Payment Amount`'s Value
+                                                MINUS `Amount Transferred`'s Value)
               LEST     PARTY   `The Borrower`
                        MUST    `pay debts to`
                                   `The Lender`
-                                  `Next Payment Due Amount With Penalty`
+                                  `Amount Transferred` PROVIDED
+                                      `Amount Transferred`'s Currency EQUALS `Next Payment Due Amount With Penalty`'s Currency
+                                          AND `Amount Transferred`'s Value AT LEAST (`Next Payment Due Amount With Penalty`'s Value
+                                                                                MINUS 0.05)
                        WITHIN  `Default After Days Beyond Commencement`
                        LEST    PARTY  `The Borrower`
                                MUST   `pay debts to`
                                           `The Lender`
-                                          `All Outstanding Debts`
+                                          `Amount Transferred` PROVIDED
+                                              `Amount Transferred`'s Currency EQUALS `All Outstanding Debts`'s Currency
+                                                   AND `Amount Transferred`'s Value AT LEAST `All Outstanding Debts`'s Value
         ELSE  FULFILLED
       
 
     WHERE
         `Installments Covered Since Commencement` MEANS
-            (`Total Repayment Amount`'s Value MINUS
-                 `Outstanding Payment Amount`'s Value) DIVIDED BY
-                    `Monthly Installment Amount`'s Value
+            (`Total Repayment Amount`'s Value
+                MINUS `Outstanding Payment Amount`'s Value)
+                    DIVIDED BY `Monthly Installment Amount`'s Value
 
         `Next Payment Due` MEANS
             Payment WITH
@@ -117,26 +127,26 @@ GIVEN `Outstanding Payment Amount` IS A Money
                     (`Installments Covered Since Commencement` PLUS 1) TIMES 30
 
         `Next Payment Due Date` MEANS
-            `Next Payment Due`'s `Days Beyond Commencement` PLUS
-               `Late Payment Penalty`'s `Grace Period Days`
+            `Next Payment Due`'s `Days Beyond Commencement`
+               PLUS `Late Payment Penalty`'s `Grace Period Days`
 
         `Next Payment Due Amount With Penalty` MEANS
             Money WITH
                 Currency  IS `Next Payment Due`'s Amount's Currency
-                Value     IS `Next Payment Due`'s Amount's Value PLUS
-                                 `Next Payment Due`'s Amount's Value TIMES
-                                      `Late Payment Penalty`'s `Interest Rate`
+                Value     IS `Next Payment Due`'s Amount's Value
+                                 PLUS `Next Payment Due`'s Amount's Value
+                                      TIMES `Late Payment Penalty`'s `Interest Rate`
 
         `Default After Days Beyond Commencement` MEANS
-            `Next Payment Due`'s `Days Beyond Commencement` PLUS
-                `Default After Days Not Paid Beyond Due`
+            `Next Payment Due`'s `Days Beyond Commencement`
+                PLUS `Default After Days Not Paid Beyond Due`
 
         `All Outstanding Debts` MEANS
             Money WITH
                 Currency  IS `Next Payment Due`'s Amount's Currency
-                Value     IS `Outstanding Payment Amount`'s Value PLUS
-                                `Next Payment Due Amount With Penalty`'s Value MINUS
-                                    `Next Payment Due`'s Amount's Value
+                Value     IS `Outstanding Payment Amount`'s Value 
+                                 PLUS `Next Payment Due Amount With Penalty`'s Value
+                                    MINUS `Next Payment Due`'s Amount's Value
 
 
 §§§ `Definitions`
@@ -211,16 +221,20 @@ GIVEN a IS A NUMBER
 
 #EVAL `Monthly Installment Amount`
 
-#PROVISION `Payment Obligations` `Total Repayment Amount` AT 360 WITH
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 29
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 59
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 89
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 119
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 149
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 179
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 209
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 239
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 269
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 299
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 329
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.87) AT 359
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 29
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2396.20) AT 359
+
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 59
+    
