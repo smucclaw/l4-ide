@@ -40,6 +40,8 @@ data IRExpr
   | Not ID IRExpr
   | UBoolVar ID Name UBoolValue Bool -- ^ id name ubvalue canInline
   | App ID Name [IRExpr]
+  | TrueE ID Name 
+  | FalseE ID Name
   deriving (Show, Eq, Generic)
 
 {- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
@@ -70,7 +72,7 @@ instance HasCodec ID where
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
 instance HasCodec UBoolValue where
-  codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
+  codec = stringConstCodec $ NE.fromList [(FalseV, "FalseV"), (TrueV, "TrueV"), (UnknownV, "UnknownV")]
 
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
@@ -95,6 +97,8 @@ instance HasCodec IRExpr where
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
         UBoolVar uid name value canInline -> ("UBoolVar", mapToEncoder (uid, name, value, canInline) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
+        TrueE uid name -> ("TrueE", mapToEncoder (uid, name) boolLitCodec)
+        FalseE uid name -> ("FalseE", mapToEncoder (uid, name) boolLitCodec)
 
       -- Decoder: maps tag to (constructor name, codec)
       dec =
@@ -103,7 +107,9 @@ instance HasCodec IRExpr where
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
             ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec)),
-            ("App", ("App", mapToDecoder mkAppExpr appExprCodec))
+            ("App", ("App", mapToDecoder mkAppExpr appExprCodec)),
+            ("TrueE", ("TrueE", mapToDecoder (uncurry TrueE) boolLitCodec)),
+            ("FalseE", ("FalseE", mapToDecoder (uncurry FalseE) boolLitCodec))
           ]
 
       mkUBoolVar (uid, name, value, canInline) = UBoolVar uid name value canInline
@@ -132,6 +138,11 @@ instance HasCodec IRExpr where
           <$> requiredField' "id" .= view _1
           <*> requiredField' "fnName" .= view _2
           <*> requiredField' "args" .= view _3
+
+      boolLitCodec =
+        (,)
+          <$> requiredField' "id"   .= fst
+          <*> requiredField' "name" .= snd
 
 instance HasCodec RenderAsLadderInfo where
   codec =

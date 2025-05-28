@@ -246,6 +246,11 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   opacity: var(--opacity-ladder-nonviable);
 }
 
+@utility bool-lit-node-border {
+  border: calc(var(--ladder-node-border-width) - 1px) solid var(--color-primary);
+  border-radius: 2px;
+}
+
 /*************************************
   Other styles
 *************************************/
