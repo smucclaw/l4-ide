@@ -165,6 +165,18 @@
   --color-false-value: var(--color-rose-200);
 }
 
+/***************************************
+         UBoolVarNode border 
+****************************************/
+
+.ubool-var-node-border {
+  border: var(--ladder-node-border, var(--ladder-node-border-default));
+  border-radius: var(
+    --ladder-node-border-radius,
+    var(--ladder-node-border-radius-default)
+  );
+}
+
 /*************************************
   Utility SF styles
 *************************************/

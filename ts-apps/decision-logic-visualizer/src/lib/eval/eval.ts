@@ -71,15 +71,19 @@ export const Evaluator: LadderEvaluator = {
     ): Promise<EvalResult> {
       return match(ladder)
         .with({ $type: 'TrueE' }, () => {
+          const result = new TrueVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
           return {
-            result: new TrueVal(),
-            intermediate: intermediate,
+            result,
+            intermediate: newIntermediate,
           }
         })
         .with({ $type: 'FalseE' }, () => {
+          const result = new FalseVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
           return {
-            result: new FalseVal(),
-            intermediate: intermediate,
+            result,
+            intermediate: newIntermediate,
           }
         })
         .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
