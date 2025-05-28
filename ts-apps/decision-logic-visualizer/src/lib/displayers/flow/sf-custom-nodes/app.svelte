@@ -67,7 +67,9 @@
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
-  <!-- TODO: Add a value indicator for the App itself -->
+  <!-- TODO: Add a value indicator for the App itself 
+       NOTE: We do NOT want cursor-pointer for the App UI itself.
+  -->
   <div class={['bg-gray-100 app-node-border', ...data.classes]}>
     <WithNormalHandles>
       <div
