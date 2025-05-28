@@ -92,8 +92,8 @@
   }
 
   // PathsList
-  // TODO: Would be better to compute this on demand
-  const pathsList = ladderGraph.getPathsList(context)
+  // TODO:
+  let pathsList = $state(ladderGraph.getPathsList(context))
 
   /***********************************
       SvelteFlow hooks
@@ -130,7 +130,10 @@
       }
     )
 
-    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+    const unsubs = [
+      lir.subscribe(onLadderGraphNonPositionalChange),
+      lir.subscribe(onPathsListChange),
+    ]
 
     /** Clean up when component is destroyed.
      *
@@ -152,7 +155,7 @@
      */
     return () => {
       funDeclLirNode.dispose(context)
-      unsub.unsubscribe()
+      unsubs.forEach((unsub) => unsub.unsubscribe())
     }
   })
 
@@ -204,6 +207,15 @@
       // console.log('newSfGraph NODES', NODES)
 
       updateResultDisplay()
+    }
+  }
+
+  /*********************************************
+        PathsList event listener
+  **********************************************/
+  const onPathsListChange = (context: LirContext, id: LirId) => {
+    if (id === pathsList.getId()) {
+      pathsList = ladderGraph.getPathsList(context)
     }
   }
 
