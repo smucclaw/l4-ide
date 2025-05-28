@@ -74,6 +74,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     additionalClasses={['ubool-var-node-border', ...data.classes]}
   >
     <WithNormalHandles>
+      <!-- Yes, we need cursor-pointer here. -->
       <button
         class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
         onclick={() => {

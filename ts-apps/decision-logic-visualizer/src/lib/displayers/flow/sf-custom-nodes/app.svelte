@@ -45,8 +45,9 @@
       ...arg.getAllClasses(data.context),
     ]}
   >
+    <!-- Yes, we need cursor-pointer here. -->
     <button
-      class={['p-2', 'text-xs']}
+      class={['p-2', 'text-xs', 'cursor-pointer']}
       onclick={async () => {
         console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
