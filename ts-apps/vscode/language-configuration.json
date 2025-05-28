@@ -20,5 +20,60 @@
     ["(", ")"],
     ["\"", "\""],
     ["`", "`"]
-  ]
-} 
+  ],
+  "folding": {
+    "markers": {
+      "start": "^§",
+      "end": "^§"
+    }
+  },
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*((WHERE|OR|AND|DECIDE|GIVEN|GIVETH|IF|DECLARE|OF|WITH|PARTY|THEN|ELSE|MUST|DO|HENCE|LEST|WITHIN)|([^#]*\\sdo\\b)|([^#]*=\\s*(MEANS|IS|OF|WITH)))\\b([^#\\{;]|(\"|'|\/).*\\4)*(#.*)?$",
+    "decreaseIndentPattern": "^\\s*([}\\]]([,)]?\\s*(#|$)|\\.[a-zA-Z_]\\w*\\b)|(WHERE|OR|AND|DECIDE|GIVEN|GIVETH|THEN|ELSE|MUST|DO|HENCE|LEST|WITHIN)\\b)"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*//\\s*(?:///)?\\s*(?:(?:(?:@?\\w*(?:\\s*\\([^)]*\\))?\\s*)|(?:[^@]\\w*\\s*))\\s*)(?:///)?\\s*$",
+      "action": {
+        "indent": "indentOutdent",
+        "appendText": "-- "
+      }
+    }
+  ],
+  "autoClosingQuotes": "always",
+  "autoClosingBrackets": "always",
+  "autoSurround": "brackets",
+  "formatOnType": true,
+  "formatOnPaste": true,
+  "suggestOnTriggerCharacters": true,
+  "acceptSuggestionOnEnter": "on",
+  "tabCompletion": "on",
+  "wordBasedSuggestions": true,
+  "suggestSelection": "first",
+  "suggest.showMethods": true,
+  "suggest.showFunctions": true,
+  "suggest.showConstructors": true,
+  "suggest.showFields": true,
+  "suggest.showVariables": true,
+  "suggest.showClasses": true,
+  "suggest.showStructs": true,
+  "suggest.showInterfaces": true,
+  "suggest.showModules": true,
+  "suggest.showProperties": true,
+  "suggest.showEvents": true,
+  "suggest.showOperators": true,
+  "suggest.showUnits": true,
+  "suggest.showValues": true,
+  "suggest.showConstants": true,
+  "suggest.showEnums": true,
+  "suggest.showEnumMembers": true,
+  "suggest.showKeywords": true,
+  "suggest.showWords": true,
+  "suggest.showColors": true,
+  "suggest.showFiles": true,
+  "suggest.showReferences": true,
+  "suggest.showCustomcolors": true,
+  "suggest.showFolders": true,
+  "suggest.showTypeParameters": true,
+  "suggest.showSnippets": true
+}

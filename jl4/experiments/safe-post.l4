@@ -1,4 +1,4 @@
-// this is a comment
+-- this is a comment
 IMPORT prelude -- a core set of base libraries; in future this will be assumed
 IMPORT `base-money`
 
@@ -10,10 +10,8 @@ IMPORT `base-money`
     version      IS "1.2"
     safeType     IS `SAFE (Post-Money)`
 
-ASSUME TBD IS A STRING
-
 §§ Parties
-// sample startup
+-- sample startup
 startup MEANS
   Company WITH
     `Name`           IS "My Deca Unicorn Inc."
@@ -82,6 +80,7 @@ DECLARE `Post-Money Valuation` IS A Money
 DECLARE Person IS ONE OF Company, Founder, Inv, Buyer, Seller
 DECLARE Action IS ONE OF delivery, payment, return
 
+
 -- We will model automatic conversion as just a function from Company to Company; the cap table will be updated
 -- the old SAFEs will be removed from the cap table
 -- the new shares will be added to the cap table
@@ -114,9 +113,9 @@ GIVEN      `Post-Money Valuation Cap`   IS A Money
 -- except that any price-based preferences (such as the per share liquidation amount, initial conversion price and per share dividend amount)
 -- will be based on the Safe Price.
 
---
---
---
+
+
+
 -- GIVEN `SAFE Events` IS A LIST OF Event
 -- UPON  `Equity Financing Event` OF `SAFE Events`
 -- THEN  `rewrite cap table`
@@ -158,31 +157,31 @@ DECIDE `Equity Financing Conversion` IS
 
 §§§ `Liquidity Event`
 
-// (b)	Liquidity Event.  If there is a Liquidity Event before the termination of this Safe,
-//  the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below)
-//  to receive a portion of Proceeds, due and payable to the Investor immediately prior to, or concurrent with,
-//  the consummation of such Liquidity Event, equal to the greater of
-//   (i) the Purchase Amount (the “Cash-Out Amount”) or
-//  (ii) the amount payable on the number of Ordinary Shares equal to the Purchase Amount divided by the Liquidity Price (the “Conversion Amount”).
-// If any of the Company’s securityholders are given a choice as to the form and amount of Proceeds to be received in a Liquidity Event,
-// the Investor will be given the same choice, provided that
-//           the Investor may not choose to receive a form of consideration
-//             that the Investor would be ineligible to receive as a result of
-//               the Investor’s failure to satisfy any requirement or limitation generally applicable to the Company’s securityholders,
-//                                                                            or under any applicable laws.
-// Notwithstanding the foregoing, in connection with a Change of Control intended to qualify as a tax-free reorganization, the Company may reduce the cash portion of Proceeds payable to the Investor by the amount determined by its board of directors in good faith for such Change of Control to qualify as a tax-free reorganization, provided that such reduction (A) does not reduce the total Proceeds payable to such Investor and (B) is applied in the same manner and on a pro rata basis to all securityholders who have equal priority to the Investor under Section 1(d).
+-- (b)	Liquidity Event.  If there is a Liquidity Event before the termination of this Safe,
+--  the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below)
+--  to receive a portion of Proceeds, due and payable to the Investor immediately prior to, or concurrent with,
+--  the consummation of such Liquidity Event, equal to the greater of
+--   (i) the Purchase Amount (the “Cash-Out Amount”) or
+--  (ii) the amount payable on the number of Ordinary Shares equal to the Purchase Amount divided by the Liquidity Price (the “Conversion Amount”).
+-- If any of the Company’s securityholders are given a choice as to the form and amount of Proceeds to be received in a Liquidity Event,
+-- the Investor will be given the same choice, provided that
+--           the Investor may not choose to receive a form of consideration
+--             that the Investor would be ineligible to receive as a result of
+--               the Investor’s failure to satisfy any requirement or limitation generally applicable to the Company’s securityholders,
+--                                                                            or under any applicable laws.
+-- Notwithstanding the foregoing, in connection with a Change of Control intended to qualify as a tax-free reorganization, the Company may reduce the cash portion of Proceeds payable to the Investor by the amount determined by its board of directors in good faith for such Change of Control to qualify as a tax-free reorganization, provided that such reduction (A) does not reduce the total Proceeds payable to such Investor and (B) is applied in the same manner and on a pro rata basis to all securityholders who have equal priority to the Investor under Section 1(d).
 
 §§§ `Dissolution Event`
 
-// (c)	Dissolution Event. If there is a Dissolution Event before the termination of this Safe, the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below) to receive a portion of Proceeds equal to the Cash-Out Amount, due and payable to the Investor immediately prior to the consummation of the Dissolution Event.
+-- (c)	Dissolution Event. If there is a Dissolution Event before the termination of this Safe, the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below) to receive a portion of Proceeds equal to the Cash-Out Amount, due and payable to the Investor immediately prior to the consummation of the Dissolution Event.
 
 §§§ `Termination Event`
 
-// (e)	Termination.
-// This Safe will automatically terminate (without relieving the Company of any obligations arising from a prior breach of or non-compliance with this Safe)
-// immediately following the earliest to occur of:
-// (i) the issuance of Capital Shares to the Investor pursuant to the automatic conversion of this Safe under Section 1(a); or
-// (ii) the payment, or setting aside for payment, of amounts due the Investor pursuant to Section 1(b) or Section 1(c).
+-- (e)	Termination.
+-- This Safe will automatically terminate (without relieving the Company of any obligations arising from a prior breach of or non-compliance with this Safe)
+-- immediately following the earliest to occur of:
+-- (i) the issuance of Capital Shares to the Investor pursuant to the automatic conversion of this Safe under Section 1(a); or
+-- (ii) the payment, or setting aside for payment, of amounts due the Investor pursuant to Section 1(b) or Section 1(c).
 
 
 §§ Definitions
@@ -332,10 +331,3 @@ DECLARE Security
 DECLARE `Cap Table Entry`
     HAS Holder       IS A Investor
         Security     IS A Security
-
--- TBD = "To Be Determined"
--- `TBD` MEANS NOTHING
-
--- The ShouldBe Monad
-
-// traditionally null == nothing ... let's also do TBD == nothing
