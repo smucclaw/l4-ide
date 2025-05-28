@@ -122,6 +122,7 @@ DECLARE Notice IS ONE OF
   annualReturn
   application    HAS submission IS A Submission
 
+
 DECLARE RequiredStepsNotice HAS noticeId IS A STRING
                                 issueDate IS A Date
                                 steps IS A LIST OF STRING

@@ -205,11 +205,10 @@ DECLARE Action IS ONE OF
 § `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
 GIVEN charity  IS A RegisterEntry
       register IS A CharityRegister
-GIVETH A CONTRACT Actor Action
 `annual return requested` MEANS
   PARTY Role OF Commissioner
-  MUST Notify OF Charity charity
-                 message "require annual return from charity"
+  MUST  Notify OF Charity charity
+                  OtherMessage OF "require annual return from charity"
 
   WITHIN relativeTime OF 14, Months OF charity's lastFinancialRecord's financialYear's endDate
   HENCE `file annual return` charity register nextFY
@@ -237,8 +236,8 @@ GIVEN charity  IS A RegisterEntry
 GIVETH A CONTRACT Actor Action
 `file annual return` MEANS
   PARTY Charity charity
-  MUST Notify OF OtherActor OF "tax authority"
+  MUST Notify OF Role OF Commissioner
                  annualReturn
   WITHIN {- relativeTime OF -} 2 // , Months OF -- previous event
   HENCE FULFILLED // `register updated with annual return` register entry financialData
-  // `Commissioner may issue Required Steps Notice`
+  LEST .... // `Commissioner may issue Required Steps Notice`
