@@ -182,9 +182,6 @@ I.e., I'm trying to hide the implementational details of VizState
 lookupAppExprMaker :: VizState -> V.ID -> Maybe (V.EvalAppRequestParams -> Expr Resolved)
 lookupAppExprMaker vs vid = Map.lookup vid.id vs.appExprMakers
 
-lookupDefForInlining :: VizState -> Int -> Maybe (Expr Resolved)
-lookupDefForInlining vs uniq = Map.lookup uniq vs.defsForInlining
-
 getVizConfig :: VizState -> VizConfig
 getVizConfig vs = vs.cfg
 
@@ -421,17 +418,17 @@ inlineExpr :: VizState -> Int -> Decide Resolved -> Decide Resolved
 inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resolved)) replace
   where
     replace :: Expr Resolved -> Expr Resolved
-    replace expr = 
-      if isRefOfTarget expr 
-      then 
-      case lookupDefForInlining vs target of
+    replace expr =
+      if isRefOfTarget expr
+      then
+      case Map.lookup target vs.defsForInlining of
         Just definiens -> definiens
         Nothing -> error "Programmer error: either isRefOfTarget has false positives or we aren't recording all the definienda"
       else expr
 
     isRefOfTarget :: Expr Resolved -> Bool
     isRefOfTarget = \ case
-      App _ resolved _args -> 
+      App _ resolved _args ->
         case resolved of
           Ref _ uniq _ -> uniq.unique == target
           _            -> False
