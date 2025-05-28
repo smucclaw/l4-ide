@@ -36,3 +36,13 @@ GIVETH MAYBE Money
         amount   IS a's amount DIVIDED BY b
         currency IS a's currency
 
+GIVEN a IS A Money
+      b IS A MAYBE NUMBER
+GIVETH MAYBE Money
+`divide money` MEANS
+  CONSIDER b
+    WHEN NOTHING  THEN NOTHING
+    WHEN JUST n   THEN JUST OF Money OF
+                                 a's amount DIVIDED BY n
+                                 a's currency
+
