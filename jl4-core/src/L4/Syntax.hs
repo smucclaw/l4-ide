@@ -167,6 +167,7 @@ data Event n
   , party :: Expr n
   , action :: Expr n
   , timestamp :: Expr n
+  , atFirst :: Bool
   }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -232,10 +233,19 @@ data Obligation n
   = MkObligation
   { anno :: Anno
   , party :: Expr n
-  , action :: Expr n
+  , action :: RAction n
   , due :: Maybe (Expr n)
   , hence :: Maybe (Expr n)
   , lest :: Maybe (Expr n)
+  }
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data RAction n
+  = MkAction
+  { anno :: Anno
+  , action :: Pattern n
+  , provided :: Maybe (Expr n)
   }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -262,6 +272,7 @@ data Pattern n =
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
+  | PatLit Anno Lit
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -454,6 +465,8 @@ deriving via L4Syntax (Expr n)
   instance HasAnno (Expr n)
 deriving via L4Syntax (Obligation n)
   instance HasAnno (Obligation n)
+deriving via L4Syntax (RAction n)
+  instance HasAnno (RAction n)
 deriving via L4Syntax (Event n)
   instance HasAnno (Event n)
 deriving via L4Syntax (NamedExpr n)
@@ -493,6 +506,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
+deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
@@ -501,8 +515,13 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
-deriving anyclass instance ToConcreteNodes PosToken (Event Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
+
+instance ToConcreteNodes PosToken (Event Name) where
+  toNodes (MkEvent ann party does ts atFirst) =
+    if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 instance ToConcreteNodes PosToken (Module Name) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
@@ -529,6 +548,7 @@ deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (RAction Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
@@ -537,11 +557,14 @@ deriving anyclass instance ToConcreteNodes PosToken (TypeSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivethSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Resolved)
-deriving anyclass instance ToConcreteNodes PosToken (Event Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
 instance ToConcreteNodes PosToken (Module Resolved) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
+instance ToConcreteNodes PosToken (Event Resolved) where
+  toNodes (MkEvent ann party does ts atFirst) = if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
@@ -659,6 +682,7 @@ deriving anyclass instance HasSrcRange (TypeSig a)
 deriving anyclass instance HasSrcRange (GivethSig a)
 deriving anyclass instance HasSrcRange (GivenSig a)
 deriving anyclass instance HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange (RAction a)
 deriving anyclass instance HasSrcRange (Event n)
 deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit

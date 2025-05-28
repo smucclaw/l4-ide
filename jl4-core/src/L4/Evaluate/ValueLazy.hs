@@ -43,8 +43,8 @@ data Value a =
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
-  | ValObligation Environment MaybeEvaluated MaybeEvaluated (MaybeEvaluated' (Maybe RExpr)) RExpr (Maybe RExpr)
-  | ValROp Environment RBinOp MaybeEvaluated MaybeEvaluated
+  | ValObligation Environment (Either RExpr (Value a)) (RAction Resolved) (Either (Maybe RExpr) (Value a)) RExpr (Maybe RExpr)
+  | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
@@ -56,8 +56,7 @@ data Value a =
 data RBinOp = ValROr | ValRAnd
   deriving stock Show
 
-
-data ReasonForBreach a = DeadlineMissed a a Rational MaybeEvaluated MaybeEvaluated Rational
+data ReasonForBreach a = DeadlineMissed a a Rational a (RAction Resolved) Rational
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
 
@@ -89,7 +88,7 @@ instance NFData a => NFData (Value a) where
 
 type MaybeEvaluated = MaybeEvaluated' RExpr
 
-type MaybeEvaluated' = Either WHNF
+type MaybeEvaluated' a = Either a WHNF
 
 type RExpr = Expr Resolved
 

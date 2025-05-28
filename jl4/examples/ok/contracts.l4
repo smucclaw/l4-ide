@@ -1,51 +1,98 @@
 DECLARE Person IS ONE OF B, S
-DECLARE Action IS ONE OF delivery, payment, return
+DECLARE Action IS ONE OF 
+  delivery 
+  payment HAS amount IS A NUMBER
+  foo
 
-#EVAL EVALCONTRACT x (LIST EVENT S delivery 5, EVENT B payment 42) 5
+aContract MEANS 
+  PARTY S
+  MUST delivery 
+  WITHIN 3
+  HENCE 
+    PARTY B
+    MUST payment price PROVIDED price >= 20
+    WITHIN 3
+    HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return)
+    LEST
+      PARTY B
+      MUST payment fine PROVIDED fine = 10
+      WITHIN 3
 
-GIVETH CONTRACT Person Action
+#TRACE aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 21 AT 4
+
+#TRACE aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 20 AT 4
+
+#TRACE aContract AT 0 WITH
+  PARTY S DOES delivery AT 2
+  PARTY B DOES payment 30 AT 6
+  PARTY B DOES payment 10 AT 9
+
+#EVAL EVALTRACE x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
+
+GIVETH PROVISION Person Action
 x MEANS 
   PARTY S
   MUST delivery
   WITHIN 3
 
-GIVETH CONTRACT Person Action
+GIVETH PROVISION Person Action
 y MEANS 
   PARTY B
-  MUST payment
+  MUST payment 2
   WITHIN 5
-  LEST FULFILLED
 
-GIVETH CONTRACT Person Action
+#TRACE y AT 0 WITH
+  PARTY B DOES payment 2 AT 5
+  AT 20 PARTY S DOES delivery
+
+DECLARE foo IS ONE OF bar, qux
+DECLARE baz IS ONE OF baz HAS x IS A foo
+                      quuux
+
+quux MEANS 
+  PARTY B MUST baz bar 
+
+#TRACE quux AT 0 WITH
+  PARTY B DOES quuux AT 1
+  PARTY B DOES baz qux AT 1
+  PARTY B DOES baz bar AT 1
+
+GIVETH PROVISION Person Action
 z MEANS 
   x ROR y
 
 a MEANS 
   z RAND z 
 
-#CONTRACT ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
+#TRACE ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
 
-#CONTRACT x AT 4 WITH 
+#TRACE x AT 4 WITH 
   PARTY S DOES delivery AT 4
 
-#CONTRACT y AT 4 WITH 
+#TRACE y AT 4 WITH 
+  PARTY B DOES payment 4 AT 4
+
+#TRACE z AT 4 WITH 
   PARTY S DOES delivery AT 4
-  PARTY S DOES delivery AT 9
+  PARTY B DOES payment 4 AT 26
 
-#CONTRACT z AT 4 WITH 
+#TRACE z AT 4 WITH
   PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 26
+  PARTY B DOES payment 5 AT 26
 
-#CONTRACT z AT 4 WITH
-  PARTY S DOES delivery AT 4
-  PARTY B DOES payment AT 26
+goesOn MEANS
+  PARTY S 
+  MUST payment n PROVIDED n = 7  
+  WITHIN 2
 
-goesOn MEANS PARTY S MUST payment WITHIN 2
-
-#CONTRACT goesOn AT 0 WITH 
+#TRACE goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
-  PARTY B DOES payment AT 3
+  PARTY B DOES payment 6 AT 3
   
-#CONTRACT goesOn AT 0 WITH 
+#TRACE goesOn AT 0 WITH 
   PARTY S DOES delivery AT 2
-  PARTY S DOES payment AT 3
+  PARTY S DOES payment 7 AT 3

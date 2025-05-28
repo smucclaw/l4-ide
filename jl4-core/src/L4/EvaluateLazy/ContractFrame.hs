@@ -1,6 +1,7 @@
 module L4.EvaluateLazy.ContractFrame where
 
 import L4.Evaluate.ValueLazy
+import L4.Syntax
 
 data ContractFrame
   = Contract1 ScrutinizeEvents
@@ -33,13 +34,18 @@ data ContractFrame
   -- ^ checks if the party of the event matches
   -- - if yes, continue by evaluating the action of the contract
   -- - if no, continue with the next event
-  | Contract9 ActionWHNF
-  -- ^ continue by evlauting the event's action
-  | Contract10 ActionsEqual
-  -- ^ continue by evaluating equality between the actions
-  | Contract11 ScrutinizeActions
+  | Contract9 ScrutinizeEnvironment
+  -- ^ saves the environment introduced by the pattern match, extends
+  -- the env of the provided clause and then goes on to evaluate that
+  | Contract10 ScrutinizeActions
   -- ^ checks if the actions of the event matches the one of the obligation
   -- - if no, continue with the next event
+  | Contract11 ActionDoesn'tmatch
+  -- ^ if an action doesn't match, we unwind the stack via pattern match failure.
+  -- - if we encounter this frame upon normal evalation, we just return the value
+  --   that we are currently looking at
+  -- - if we encounter this frame while unwinding, we push a frame for continuing
+  --   with the next event and evaluate the remaining evnets
   | RBinOp1 RBinOp1
   -- ^ Regulative BinOp frame while evaluating a regulative expression
   | RBinOp2 RBinOp2
@@ -47,21 +53,21 @@ data ContractFrame
   deriving stock Show
 
 data ScrutinizeEvents = ScrutinizeEvents
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: MaybeEvaluated'  (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: MaybeEvaluated, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , time :: Reference
   , env :: Environment
   }
   deriving stock Show
 
 data ScrutinizeEvent = ScrutinizeEvent
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: MaybeEvaluated, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , events :: Reference, time :: Reference
   , env :: Environment
   }
   deriving stock Show
 
 data CurrentTimeWHNF = CurrentTimeWHNF
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: MaybeEvaluated, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference, ev'time :: Reference
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -69,7 +75,7 @@ data CurrentTimeWHNF = CurrentTimeWHNF
   deriving stock Show
 
 data ScrutinizeDue = ScrutinizeDue
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: MaybeEvaluated, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference, ev'time :: WHNF
   , events :: Reference, time :: Reference
   , env :: Environment
@@ -77,7 +83,7 @@ data ScrutinizeDue = ScrutinizeDue
   deriving stock Show
 
 data CheckTiming = CheckTiming
-  { party :: MaybeEvaluated, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: MaybeEvaluated, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference, ev'time :: WHNF
   , events :: Reference, time :: WHNF
   , env :: Environment
@@ -85,7 +91,7 @@ data CheckTiming = CheckTiming
   deriving stock Show
 
 data PartyWHNF = PartyWHNF
-  { act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference
   , events :: Reference, time :: WHNF
   , env :: Environment
@@ -93,7 +99,7 @@ data PartyWHNF = PartyWHNF
   deriving stock Show
 
 data PartyEqual = PartyEqual
-  { party :: WHNF, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: Reference, ev'act :: Reference
   , events :: Reference, time :: WHNF
   , env :: Environment
@@ -101,23 +107,15 @@ data PartyEqual = PartyEqual
   deriving stock Show
 
 data ScrutinizeParty = ScrutinizeParty
-  { party :: WHNF, act :: MaybeEvaluated, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference
   , events :: Reference, time :: WHNF
   , env :: Environment
   }
   deriving stock Show
 
-data ActionWHNF = ActionWHNF
-  { party :: WHNF, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
-  , ev'party :: WHNF, ev'act :: Reference
-  , events :: Reference, time :: WHNF
-  , env :: Environment
-  }
-  deriving stock Show
-
-data ActionsEqual = ActionsEqual
-  { party :: WHNF, act :: WHNF, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+data ScrutinizeEnvironment = ScrutinizeEnvironment
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
   , ev'party :: WHNF, ev'act :: Reference
   , events :: Reference, time :: WHNF
   , env :: Environment
@@ -125,8 +123,16 @@ data ActionsEqual = ActionsEqual
   deriving stock Show
 
 data ScrutinizeActions = ScrutinizeActions
-  { party :: WHNF, act :: WHNF, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
-  , ev'party :: WHNF, ev'act :: WHNF
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  , ev'party :: WHNF, ev'act :: Reference
+  , events :: Reference, time :: WHNF
+  , env :: Environment, henceEnv :: Environment -- ^ the environment to extend by when evaluating the hence clause
+  }
+  deriving stock Show
+
+data ActionDoesn'tmatch = ActionDoesn'tmatch
+  { party :: WHNF, act :: RAction Resolved, due :: MaybeEvaluated' (Maybe RExpr), followup :: RExpr, lest :: Maybe RExpr
+  , ev'party :: WHNF, ev'act :: Reference
   , events :: Reference, time :: WHNF
   , env :: Environment
   }

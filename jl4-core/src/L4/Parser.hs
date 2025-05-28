@@ -1,5 +1,7 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 module L4.Parser (
   -- * Public API
@@ -998,13 +1000,25 @@ event :: Parser (Expr Name)
 event = attachAnno $ Event emptyAnno <$> annoHole parseEvent
 
 parseEvent :: Parser (Event Name)
-parseEvent = attachAnno $ MkEvent emptyAnno
-  <$  annoLexeme (spacedToken_ TKParty)
-  <*> annoHole expr
-  <*  annoLexeme (spacedToken_ TKDoes)
-  <*> annoHole expr
-  <*  annoLexeme (spacedToken_ TKAt)
-  <*> annoHole expr -- TODO: better timestamp parsing
+parseEvent =
+  attachAnno (MkEvent emptyAnno <$> parseParty <*> parseDoes <*> parseAt <*> pure False)
+  <|> attachAnno do
+    -- NOTE: allow to specify AT first, without breaking backwards
+    -- compatibility
+    timestamp <- parseAt
+    party <- parseParty
+    action <- parseDoes
+    pure MkEvent {anno = emptyAnno, atFirst = True, ..}
+  where
+    parseParty =
+      annoLexeme (spacedToken_ TKParty)
+      *> annoHole expr
+    parseDoes =
+      annoLexeme (spacedToken_ TKDoes)
+      *> annoHole expr
+    parseAt =
+      annoLexeme (spacedToken_ TKAt)
+      *> annoHole expr
 
 atomicExpr :: Parser (Expr Name)
 atomicExpr = postfixP postfixOperator atomicExpr'
@@ -1024,7 +1038,10 @@ nameAsApp f =
 
 lit :: Parser (Expr Name)
 lit = attachAnno $
-  Lit emptyAnno <$> annoHole (try decimalLit <|> intLit <|> stringLit)
+  Lit emptyAnno <$> annoHole rawLit
+
+rawLit :: Parser Lit
+rawLit = try decimalLit <|> intLit <|> stringLit
 
 list :: Parser (Expr Name)
 list = do
@@ -1127,12 +1144,21 @@ obligation = do
     MkObligation emptyAnno
       <$  annoLexeme (spacedToken_ TKParty)
       <*> annoHole (indentedExpr current)
-      <*  annoLexeme (spacedToken_ TKMust)
-      <*  optional (annoLexeme (spacedToken_ TKDo))
-      <*> annoHole (indentedExpr current)
+      <*> annoHole (must current)
       <*> optionalWithHole (deadline current)
       <*> optionalWithHole (hence current)
       <*> optionalWithHole (lest current)
+
+must :: Pos -> Parser (RAction Name)
+must current = attachAnno $
+   MkAction emptyAnno
+     <$> do
+      annoLexeme (spacedToken_ TKMust)
+        *> optional (annoLexeme (spacedToken_ TKDo))
+        *> annoHole (indentedPattern current)
+     <*> optionalWithHole do
+      annoLexeme (spacedToken_ TKProvided)
+        *> annoHole (indentedExpr current)
 
 deadline :: Pos -> AnnoParser (Expr Name)
 deadline current =
@@ -1202,9 +1228,12 @@ basePattern =
 
 atomicPattern :: Parser (Pattern Name)
 atomicPattern =
-  --    lit
-  nameAsPatApp
+  patLit
+  <|> nameAsPatApp
   <|> paren pattern'
+
+patLit :: Parser (Pattern Name)
+patLit = attachAnno $ PatLit emptyAnno <$> annoHole rawLit
 
 nameAsPatApp :: Parser (Pattern Name)
 nameAsPatApp =

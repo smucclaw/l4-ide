@@ -188,11 +188,11 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
       pure $ Contract ann e' t' evs'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
-  addNlg a@(MkEvent ann party act timestamp) = extendNlgA a do
+  addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
     party' <- addNlg party
     act' <- addNlg act
     timestamp' <- addNlg timestamp
-    pure (MkEvent ann party' act' timestamp')
+    pure (MkEvent ann party' act' timestamp' atFirst)
 
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
@@ -431,6 +431,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
     lest' <- traverse addNlg lest
     pure $  MkObligation ann' party' event' deadline' followup' lest'
 
+instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
+  addNlg (MkAction ann rule provided) = do
+    rule' <- addNlg rule
+    provided' <- traverse addNlg provided
+    pure $  MkAction ann rule' provided'
+
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
     When ann pat e -> do
@@ -454,6 +460,7 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Pattern n) where
       patHead' <- addNlg patHead
       patTail' <-addNlg patTail
       pure $ PatCons ann patHead' patTail'
+    PatLit ann lit -> pure $ PatLit ann lit
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (NamedExpr n) where
   addNlg a = extendNlgA a $ case a of

@@ -35,11 +35,6 @@ instance LayoutPrinter Name where
 instance LayoutPrinter Resolved where
   printWithLayout r = printWithLayout (getActual r)
 
-instance LayoutPrinter a => LayoutPrinter (Maybe a) where
-  printWithLayout = \ case
-    Nothing -> mempty
-    Just a -> printWithLayout a
-
 instance LayoutPrinter RawName where
   printWithLayout = \ case
     NormalName t -> pretty $ quoteIfNeeded t
@@ -178,7 +173,7 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
     Check _ e ->
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
-      "#CONTRACT" <+> printWithLayout e <+> printWithLayout t :
+      "#TRACE" <+> printWithLayout e <+> printWithLayout t :
       map printWithLayout stmts
 
 instance LayoutPrinter a => LayoutPrinter (Import a) where
@@ -193,8 +188,8 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
       vcat $
         [ pretty (replicate i '§') <+>
           case maka of
-            Nothing  -> printWithLayout name
-            Just aka -> printWithLayout name <+> printWithLayout aka
+            Nothing  -> maybe mempty printWithLayout name
+            Just aka -> maybe mempty printWithLayout name <+> printWithLayout aka
         ]
         <> case ds of
           [] -> mempty
@@ -314,15 +309,24 @@ instance LayoutPrinter a => LayoutPrinter (Expr a) where
 
 prettyObligation
   :: (LayoutPrinter p, LayoutPrinter a, LayoutPrinter t,  LayoutPrinter f, LayoutPrinter l)
-  => p -> a -> Maybe t -> Maybe f -> Maybe l -> Doc ann
+  => p -> a ->  Maybe t -> Maybe f -> Maybe l -> Doc ann
 prettyObligation p a t f l =
   vcat $
     [ "PARTY" <+> printWithLayout p
-    , "DOES" <+> printWithLayout a
+    , printWithLayout a
     ]
-    <> maybe [] (\ deadline -> [ "WITHIN" <+> printWithLayout deadline ]) t
-    <> maybe [] (\ followup -> [ "HENCE" <+> printWithLayout followup  ]) f
-    <> maybe [] (\ lest -> [ "LEST" <+> printWithLayout lest  ]) l
+    <> mprint "WITHIN" t
+    <> mprint "HENCE" f
+    <> mprint "LEST" l
+
+mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
+mprint kw = foldMap \x -> [kw <+> printWithLayout x]
+
+instance LayoutPrinter n => LayoutPrinter (RAction n) where
+  printWithLayout MkAction {action, provided} = hsep $
+    [ "MUST", printWithLayout action
+    ]
+    <> mprint "PROVIDED" provided
 
 instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
@@ -351,6 +355,7 @@ instance LayoutPrinter a => LayoutPrinter (Pattern a) where
       [] -> mempty
       pats'@(_:_) -> space <> vsep (fmap printWithLayout pats')
     PatCons _ patHead patTail -> printWithLayout patHead <+> "FOLLOWED BY" <+> printWithLayout patTail
+    PatLit _ lit -> printWithLayout lit
 
 instance LayoutPrinter Nlg where
   printWithLayout = \ case
@@ -392,6 +397,9 @@ instance LayoutPrinter Eager.Value where
     Eager.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
 
+instance (LayoutPrinter a, LayoutPrinter b) => LayoutPrinter (Either a b) where
+  printWithLayout = either printWithLayout printWithLayout
+
 instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \ case
     Lazy.ValNumber i               -> pretty (prettyRatio i)
@@ -407,10 +415,12 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
       vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
     Lazy.ValEnvironment _env       -> "<environment>"
     Lazy.ValBreached reason        -> vcat
-      [ "CONTRACT BREACHED:"
+      [ "PROVISION BREACHED:"
       , indent 2 $ printWithLayout reason
       ]
-    Lazy.ValObligation _env p a t f l -> prettyObligation p a (Just t) (Just f) (Just l)
+    Lazy.ValObligation _env p a t f l -> case t of
+      Left te -> prettyObligation p a te (Just f) l
+      Right tv -> prettyObligation p a (Just tv) (Just f) l
     Lazy.ValROp _env op l r -> hsep
       [ printWithLayout l
       , case op of ValROr -> "OR"; ValRAnd -> "AND"
@@ -430,21 +440,20 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
     DeadlineMissed ev'party ev'action ev'time party action deadline -> vcat
-      [ i2 $ "party" <+> printWithLayout ev'party
-      , "who did"
-      , i2 $ "action" <+> printWithLayout ev'action
-      , i2 $ "at" <+> pretty (prettyRatio ev'time)
-      , "surpassed the deadline of"
-      , i2 $ "party" <+> printWithLayout party
-      , "who had to do obligatory"
-      , i2 $ "action" <+> printWithLayout action
-      , "before their deadline, which was"
-      , i2 $ "at" <+> pretty (prettyRatio deadline)
+      [ "party"
+      , i2 $ printWithLayout ev'party
+      , "who did action"
+      , i2 $ printWithLayout ev'action
+      , "at"
+      , i2 $ pretty (prettyRatio ev'time)
+      , "surpassed the deadline of party"
+      , i2 $ printWithLayout party
+      , "who had to do obligatory action"
+      , i2 $ printWithLayout action
+      , "before their deadline, which was at"
+      , i2 $ pretty (prettyRatio deadline)
       ]
       where i2 = indent 2
-
-instance LayoutPrinter a => LayoutPrinter (MaybeEvaluated' a) where
-  printWithLayout = either printWithLayout printWithLayout
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case

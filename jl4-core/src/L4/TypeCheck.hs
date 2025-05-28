@@ -932,17 +932,27 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   pure (IfThenElse ann e1' e2' e3')
 
 checkObligation
-  :: Anno -> Expr Name -> Expr Name
+  :: Anno -> Expr Name -> RAction Name
   -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
   -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
 checkObligation ann party action due hence lest partyT actionT = do
   partyR <- checkExpr ExpectRegulativePartyContext party partyT
-  actionR <- checkExpr ExpectRegulativeActionContext action actionT
+  (actionR, boundByPattern) <- checkAction action actionT
   let rTy = contract partyT actionT
-  dueR <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) due
-  henceR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) hence
-  lestR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
+  dueR <- traverse (\e -> checkExpr ExpectRegulativeDeadlineContext e number) due
+  henceR <- traverse (\e -> extendKnownMany boundByPattern $ checkExpr ExpectRegulativeFollowupContext e rTy) hence
+  lestR <- traverse (\e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
   pure (MkObligation ann partyR actionR dueR henceR lestR)
+
+checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
+checkAction MkAction {anno, action, provided = mprovided} actionT = do
+  (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
+  -- NOTE: the provided clauses must evaluate to booleans
+  provided <- forM mprovided \provided ->
+    extendKnownMany bounds do
+      checkExpr ExpectRegulativeProvidedContext provided boolean
+  pure (MkAction {anno, action = pat, provided}, bounds)
+
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -1140,13 +1150,13 @@ inferExpr' g =
       pure (Percent ann e', number)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
-inferEvent (MkEvent ann party action timestamp) = do
+inferEvent (MkEvent ann party action timestamp atFirst) = do
   partyT <- fresh (NormalName "party")
   actionT <- fresh (NormalName "action")
   party' <- checkExpr ExpectRegulativePartyContext party partyT
   action' <- checkExpr ExpectRegulativeActionContext action actionT
   timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
-  pure (MkEvent ann party' action' timestamp', event partyT actionT)
+  pure (MkEvent ann party' action' timestamp' atFirst, event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being
@@ -1230,6 +1240,10 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
   -- giving us a type signature.
   patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
+inferPattern g@(PatLit ann lit) = errorContext (WhileCheckingPattern g) do
+  ty <- inferLit lit
+  resPatLit <- setAnnResolvedType ty Nothing (PatLit ann lit)
+  pure (resPatLit, ty, [])
 
 inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternVar n = do
@@ -1939,11 +1953,13 @@ prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
 prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
   standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeContractContext expected given =
-  standardTypeMismatch [ "The contract passed to a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The contract passed to a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
-  standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The timestamp passed to an event in a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeEventContext expected given =
-  standardTypeMismatch [ "The event expr passed to a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The event expr passed to a TRACE directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
+  standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

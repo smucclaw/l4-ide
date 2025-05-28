@@ -132,13 +132,14 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ IfThenElse ann b' e1' e2'
-    Regulative ann (MkObligation ann'' party act deadline followup lest) -> do
+    Regulative ann (MkObligation ann'' party (MkAction ann' rule provided) deadline followup lest) -> do
       party' <- nlgExpr party
-      act' <- nlgExpr act
+      rule' <- nlgPattern rule
+      provided' <- traverse nlgExpr provided
       deadline' <- traverse nlgExpr deadline
       followup' <- traverse nlgExpr followup
       lest' <- traverse nlgExpr lest
-      pure $ Regulative ann (MkObligation ann'' party' act' deadline' followup' lest')
+      pure $ Regulative ann (MkObligation ann'' party' (MkAction ann' rule' provided') deadline' followup' lest')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into
@@ -157,11 +158,11 @@ nlgExpr = \ case
       -- scope, we have to resolve the annotations when checking the 'Where'
       -- case. Thus, we don't need to traverse it here again.
       pure $ Where ann e lcl
-    Event ann (MkEvent ann' e e1 e2) -> do
+    Event ann (MkEvent ann' e e1 e2 atFirst) -> do
       e' <- nlgExpr e
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
-      pure $ Event ann (MkEvent ann' e' e1' e2')
+      pure $ Event ann (MkEvent ann' e' e1' e2' atFirst)
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case
@@ -176,7 +177,7 @@ nlgPattern = \ case
     PatCons ann
       <$> nlgPattern pat
       <*> nlgPattern pats
-
+  PatLit ann lit -> pure $ PatLit ann lit
 nlgLocalDecl :: LocalDecl Resolved -> Check (LocalDecl Resolved)
 nlgLocalDecl = \ case
   LocalDecide ann decide ->
