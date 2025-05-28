@@ -163,13 +163,10 @@ collectDefsForInlining = do
 
 hasDefForInlining :: Unique -> Viz Bool
 hasDefForInlining (MkUnique _ uniq uniqUri) = do
-  cfg <- getVizCfg
+  cfg             <- getVizCfg
+  defsForInlining <- use #defsForInlining
   -- We don't want, e.g., to pick up on builtin Uniques, which can have the same Int unique as a user-defined Unique
-  if uniqUri == cfg.moduleUri then do
-    defsForInlining <- use #defsForInlining
-    pure $ Map.member uniq defsForInlining
-  else
-    pure False
+  pure $ uniqUri == cfg.moduleUri && Map.member uniq defsForInlining
 
 ------------------------------------------------------
 -- Viz state helpers
