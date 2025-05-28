@@ -19,13 +19,15 @@ import {
   EvalAppRequestParams,
   EvalAppResult,
   InlineExprsRequestParams,
-  InlineExprsSuccess,
+  InlineExprsResult,
+  RenderAsLadderInfo,
 } from '@repo/viz-expr'
 export {
   EvalAppRequestParams,
   EvalAppResult,
   InlineExprsRequestParams,
-  InlineExprsSuccess,
+  InlineExprsResult,
+  RenderAsLadderInfo,
 }
 
 /****************************************
@@ -70,5 +72,5 @@ export const EvalAppRequestType = makeL4RpcRequestType<
  */
 export const InlineExprsRequestType = makeL4RpcRequestType<
   InlineExprsRequestParams,
-  InlineExprsSuccess
+  InlineExprsResult
 >('l4/inlineExprs')

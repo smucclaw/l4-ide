@@ -1,8 +1,11 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 
 module LSP.L4.Viz.Ladder (
-  -- * Entrypoint
+  -- * Viz Decide entrypoint
   doVisualize,
+
+  -- * Inline Exprs (currently only inlines simple 'App of no args' exprs)
+  inlineExprs,
 
   -- * VizConfig, VizState
   VizConfig (..),
@@ -14,31 +17,29 @@ module LSP.L4.Viz.Ladder (
   getVizConfig,
 
   -- * Other helpers
-  prettyPrintVizError,
+  prettyPrintVizError
   ) where
 
-import Control.DeepSeq
-import Control.Monad.Except
 import Base
 import qualified Base.Text as Text
 import Data.IntMap.Lazy (IntMap)
 import qualified Data.IntMap.Lazy as Map
 import Optics.State.Operators ((<%=), (%=))
-
+import Optics
+import Control.Monad.Extra (unlessM)
 import qualified Language.LSP.Protocol.Types as LSP
 
 import qualified L4.TypeCheck as TC
 import L4.Annotation
 import L4.Syntax
 import L4.Print (prettyLayout)
+import qualified L4.Transform as Transform (simplify)
 import LSP.L4.Viz.VizExpr
   ( ID (..), IRExpr,
     RenderAsLadderInfo (..),
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
-import qualified L4.Transform as Transform (simplify)
-import Control.Monad.Extra (unlessM)
 
 ------------------------------------------------------
 -- Monad
@@ -52,11 +53,12 @@ newtype Viz a = MkViz {getViz :: VizEnv -> VizState -> (Either VizError a, VizSt
 -- | A 'local' env
 newtype VizEnv = MkVizEnv { localDecls :: [LocalDecl Resolved]}
 
-mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> TC.Substitution -> Bool -> VizConfig
-mkVizConfig verTxtDocId substitution shouldSimplify =
+mkVizConfig :: LSP.VersionedTextDocumentIdentifier -> Module Resolved -> TC.Substitution -> Bool -> VizConfig
+mkVizConfig verTxtDocId module' substitution shouldSimplify =
   let moduleUri = toNormalizedUri verTxtDocId._uri
   in MkVizConfig
     { moduleUri
+    , module'
     , verTxtDocId
     , substitution
     , shouldSimplify
@@ -64,6 +66,7 @@ mkVizConfig verTxtDocId substitution shouldSimplify =
 
 data VizConfig = MkVizConfig
   { moduleUri      :: !NormalizedUri
+  , module'        :: Module Resolved
   , verTxtDocId    :: !LSP.VersionedTextDocumentIdentifier
   , substitution   :: !TC.Substitution  -- might be more futureproof to use TypeCheckResult
   , shouldSimplify :: !Bool             -- ^ whether to simplify the expression
@@ -76,14 +79,16 @@ data VizState = MkVizState
   , maxId          :: !ID
   , appExprMakers  :: IntMap (V.EvalAppRequestParams -> Expr Resolved)
   -- ^ Map from Unique of V.ID to eval-app-directive maker
+  , defsForInlining :: IntMap (Expr Resolved)
   }
   deriving stock (Generic)
 
 instance Show VizState where
-  show MkVizState{cfg, maxId, appExprMakers} =
+  show MkVizState{cfg, maxId, appExprMakers, defsForInlining} =
     "MkVizState { cfg = " <> show cfg <>
     ", maxId = " <> show maxId <>
-    ", (keys of) appExprMakers = " <> show (Map.keys appExprMakers) <> " }"
+    ", (keys of) appExprMakers =   " <> show (Map.keys appExprMakers) <>
+    ", defsForInlining =  " <> show defsForInlining <> " }"
 
 mkInitialVizState :: VizConfig -> VizState
 mkInitialVizState cfg =
@@ -91,6 +96,7 @@ mkInitialVizState cfg =
     { cfg
     , maxId = MkID 0
     , appExprMakers = Map.empty
+    , defsForInlining = Map.empty
     }
 
 ------------------------------------------------------
@@ -141,6 +147,26 @@ getLocalDecls = do
 
 withLocalDecls :: [LocalDecl Resolved] -> Viz a -> Viz a
 withLocalDecls newLocalDecls = local (\env -> env { localDecls = newLocalDecls <> env.localDecls })
+
+collectDefsForInlining :: Viz (IntMap (Expr Resolved))
+collectDefsForInlining = do
+  cfg <- getVizCfg
+  pure $ toMap (foldTopLevelDecides tryExtractDef cfg.module')
+    where
+      tryExtractDef :: Decide Resolved -> [(Unique, Expr Resolved)]
+      tryExtractDef = foldDecides $ \ case
+        DefForInlining uniq' definiens -> [(uniq', definiens)]
+        _ -> []
+
+      toMap :: [(Unique, Expr Resolved)] -> IntMap (Expr Resolved)
+      toMap = Map.fromList . map (\(MkUnique _ k _, v) -> (k, v))
+
+hasDefForInlining :: Unique -> Viz Bool
+hasDefForInlining (MkUnique _ uniq uniqUri) = do
+  cfg             <- getVizCfg
+  defsForInlining <- use #defsForInlining
+  -- We don't want, e.g., to pick up on builtin Uniques, which can have the same Int unique as a user-defined Unique
+  pure $ uniqUri == cfg.moduleUri && Map.member uniq defsForInlining
 
 ------------------------------------------------------
 -- Viz state helpers
@@ -216,26 +242,26 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
   do
     unlessM (hasBooleanType (getAnno body)) $
       throwError InvalidDecideMustHaveBoolRetType
+
+    assign #defsForInlining =<< collectDefsForInlining
     shouldSimplify <- getShouldSimplify
     vid            <- getFresh
     vizBody        <- translateExpr shouldSimplify body
     pure $ V.MkFunDecl
       vid
       -- didn't want a backtick'd name in the header
-      (mkSimpleVizName funResolved)
+      (mkPrettyVizName funResolved)
       (paramNamesFromGivens givenSig)
       vizBody
       where
         paramNamesFromGivens :: GivenSig Resolved -> [V.Name]
         paramNamesFromGivens (MkGivenSig _ optionallyTypedNames) =
-          mkSimpleVizName . getResolved <$> optionallyTypedNames
+          mkPrettyVizName . getResolved <$> optionallyTypedNames
 
         -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
         -- this can be replaced with that when that happens.
         getResolved :: OptionallyTypedName Resolved -> Resolved
         getResolved (MkOptionallyTypedName _ paramName _) = paramName
-
-        mkSimpleVizName = mkVizNameWith prettyLayout
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =
@@ -262,7 +288,7 @@ translateExpr False = go
         App _ resolved [] -> do
           vid <- getFresh
           prepEvalAppMaker vid e
-          pure $ leafFromVizName vid (mkVizNameWith prettyLayout resolved)
+          leafFromResolved vid resolved
 
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
@@ -298,8 +324,14 @@ defaultUBoolVarValue = V.UnknownV
 defaultUBoolVarCanInline :: Bool
 defaultUBoolVarCanInline = False
 
-leafFromVizName :: V.ID -> V.Name -> IRExpr
-leafFromVizName vid vname = V.UBoolVar vid vname defaultUBoolVarValue defaultUBoolVarCanInline
+leafFromResolved :: V.ID -> Resolved -> Viz IRExpr
+leafFromResolved vid resolved = do
+  let vname = mkPrettyVizName resolved
+  canInline <- case resolved of
+    Ref _ uniq _ -> hasDefForInlining uniq
+    _            -> pure False
+  -- TODO: Prob need to do this `canInline` thing for things that aren't App of no args too?
+  pure $ V.UBoolVar vid vname defaultUBoolVarValue canInline
 
 leaf :: Text -> Text -> Viz IRExpr
 leaf subject complement = do
@@ -314,13 +346,15 @@ leaf subject complement = do
 -- Name helpers
 ------------------------------------------------------
 
+mkPrettyVizName :: Resolved -> V.Name
+mkPrettyVizName = mkVizNameWith prettyLayout
+
 -- It's not obvious to me that we want to be using
 -- getOriginal (as getUniqueName does), instead of getActual,
 -- but I'm going with this for now since it's what was used to translate the function name.
 mkVizNameWith :: (Name -> Text) -> Resolved -> V.Name
-mkVizNameWith printer (getUniqueName -> (uniq, name)) =
-  case uniq of
-    MkUnique {unique} -> V.MkName unique (printer name)
+mkVizNameWith printer (getUniqueName -> (MkUnique {unique}, name)) =
+  V.MkName unique (printer name)
 
 ------------------------------------------------------
 -- Helpers for checking if an Expr has Boolean type
@@ -349,3 +383,51 @@ toBoolExpr = \ case
   V.FalseV   -> App emptyAnno TC.falseRef []
   V.TrueV    -> App emptyAnno TC.trueRef []
   V.UnknownV -> error "impossible for now"
+
+------------------------------------------------------
+-- Inline Exprs
+------------------------------------------------------
+
+{- | We only really need a *uni*directional pattern synonym,
+but the other direction might be useful for testing. -}
+pattern DefForInlining :: Unique -> Expr Resolved -> Decide Resolved
+pattern DefForInlining unique definiens <-
+  MkDecide _ _ (MkAppForm _ (Def unique _) _ _) definiens
+  where
+    DefForInlining unique definiens =
+      MkDecide emptyAnno
+      (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
+      (MkAppForm emptyAnno (Def unique TC.emptyName) [] Nothing)
+      definiens
+
+{- | Given a @VizState@, a top-level @Decide Resolved@, and a bunch of Uniques,
+inline refs to those Uniques in the Decide.
+
+Note:
+- Currently only inlines 'App of no args' exprs
+- Currently requires that the definiens be in the same module as the ref.
+Lifting this restriction is not hard, but it's also not totally obvious that that'd be good UX.
+-}
+inlineExprs :: VizState -> Decide Resolved -> [Int] -> Decide Resolved
+inlineExprs vs = foldr (inlineExpr vs)
+
+inlineExpr :: VizState -> Int -> Decide Resolved -> Decide Resolved
+inlineExpr vs target = over decideBody $ transformOf (Optics.gplate @(Expr Resolved)) replace
+  where
+    replace :: Expr Resolved -> Expr Resolved
+    replace expr =
+      if isRefOfTarget expr
+      then
+      case Map.lookup target vs.defsForInlining of
+        Just definiens -> definiens
+        Nothing -> error "Programmer error: either isRefOfTarget has false positives or we aren't recording all the definienda"
+      else expr
+
+    isRefOfTarget :: Expr Resolved -> Bool
+    isRefOfTarget = \ case
+      App _ resolved _args ->
+        case resolved of
+          Ref _ uniq _ -> uniq.unique == target
+          _            -> False
+      -- TODO: Look into whether we should handle other cases too
+      _                    -> False

@@ -314,6 +314,12 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
+-- | Given a @'Decide' n@, runs a 'foldMap' over *all* 'Decide' nodes
+-- within it (including itself *and* nested ones, e.g. in 'Where' clauses).
+foldDecides
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Decide n -> m
+foldDecides = Optics.foldMapOf $ Optics.cosmosOf (Optics.gplate @(Decide n))
+
 overImports :: forall nodeType n. (Optics.GPlate (Import n) (nodeType n)) => (Import n -> Import n) -> nodeType n -> nodeType n
 overImports = Optics.over Optics.gplate
 
@@ -329,6 +335,11 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
+
+decideBody :: Lens' (Decide n) (Expr n)
+decideBody = lens 
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body) 
+             (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
 
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
 updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of

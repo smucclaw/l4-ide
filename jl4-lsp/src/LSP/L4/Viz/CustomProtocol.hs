@@ -63,6 +63,10 @@ data InlineExprsRequestParams = InlineExprsRequestParams
   deriving stock (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+newtype InlineExprsResult = MkInlineExprsResult RenderAsLadderInfo
+  deriving stock (Eq, Show, Generic)
+  deriving newtype (FromJSON, ToJSON)
+
 ------------------------------------------------------
 --  Custom methods for LSP
 ------------------------------------------------------
@@ -74,23 +78,23 @@ type InlineExprsMethodName :: Symbol
 type InlineExprsMethodName = "l4/inlineExprs"
 
 ------------------------------------------------------
---  IsCustomMethod typeclass
+--  CustomMethod typeclass
 ------------------------------------------------------
 
-class KnownSymbol a => IsCustomMethod (a :: Symbol) where
+class KnownSymbol a => CustomMethod (a :: Symbol) where
   getMethodName :: Proxy a -> T.Text
   getMethodName = T.pack . symbolVal
 
-instance IsCustomMethod EvalAppMethodName
-instance IsCustomMethod InlineExprsMethodName
+instance CustomMethod EvalAppMethodName
+instance CustomMethod InlineExprsMethodName
 
 ------------------------------------------------------
---  IsLadderRequestParams typeclass
+--  LadderRequestParams typeclass
 ------------------------------------------------------
 
 class (GHC.Records.HasField "verDocId" params VersionedTextDocumentIdentifier, 
        FromJSON params) 
-      => IsLadderRequestParams params where
+      => LadderRequestParams params
   
-instance IsLadderRequestParams EvalAppRequestParams
-instance IsLadderRequestParams InlineExprsRequestParams
+instance LadderRequestParams EvalAppRequestParams
+instance LadderRequestParams InlineExprsRequestParams
