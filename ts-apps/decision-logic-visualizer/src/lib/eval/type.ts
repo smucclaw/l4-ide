@@ -4,8 +4,9 @@ import * as VE from '@repo/viz-expr'
 import {
   TrueValCSSClass,
   FalseValCSSClass,
+  UnknownValCSSClass,
 } from '$lib/layout-ir/ladder-graph/node-styles.js'
-import type { BoolValCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
+import type { UBoolValCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
 
 import { match } from 'ts-pattern'
 
@@ -29,7 +30,7 @@ export function toVEBoolValue(val: UBoolVal): VE.UBoolValue {
 
 interface UBoolV {
   $type: TrueVal['$type'] | FalseVal['$type'] | UnknownVal['$type']
-  getClasses(): BoolValCSSClass[]
+  getClasses(): UBoolValCSSClass[]
   toPretty(): string
 }
 
@@ -76,7 +77,7 @@ export class UnknownVal implements UBoolV {
   constructor() {}
 
   getClasses() {
-    return []
+    return [UnknownValCSSClass]
   }
 
   toPretty() {

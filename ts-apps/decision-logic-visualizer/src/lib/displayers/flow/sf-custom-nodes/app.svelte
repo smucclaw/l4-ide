@@ -1,75 +1,94 @@
-<!-- Adopted from the SF DefaultNode implementation
-https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
--->
+<!--    
+  How this could be extended in the future:
+  - Support more than just boolean arguments; have a form UI
+  - Allow for non-atomic expressions to be supplied as arguments (this would likely require subflows)
+ -->
 <script lang="ts">
   import type { AppDisplayerProps } from '../svelteflow-types.js'
-  import { defaultSFHandlesInfo } from '../svelteflow-types.js'
-  import { Handle } from '@xyflow/svelte'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
+  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
+  import { onDestroy } from 'svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
   let { data }: AppDisplayerProps = $props()
 
+  // Get LadderEnv, L4 Connection
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
+
+  // The values of the arguments of the App
+  const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
+  const onArgValueChange = (context: LirContext, id: LirId) => {
+    data.args.forEach((arg, i) => {
+      if (id === arg.getId()) {
+        argValues[i] = arg.getValue(context)
+      }
+    })
+  }
+  const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
+
+  onDestroy(() => unsub.unsubscribe())
 </script>
 
-<!-- bg-gray
+<!-- App Arg UI -->
+{#snippet argUI(arg: (typeof data.args)[number], i: number)}
+  <ValueIndicator
+    value={argValues[i]}
+    additionalClasses={[
+      'border',
+      'border-black',
+      'rounded-lg',
+      ...arg.getAllClasses(data.context),
+    ]}
+  >
+    <!-- Yes, we need cursor-pointer here. -->
+    <button
+      class={['p-2', 'text-xs', 'cursor-pointer']}
+      onclick={async () => {
+        console.log('clicked: ', arg.getLabel(data.context), arg.getId())
+
+        const newValue = cycle(arg.getValue(data.context))
+        await ladderGraph.submitNewBinding(data.context, {
+          unique: arg.getUnique(data.context),
+          value: newValue,
+        })
+      }}
+    >
+      {arg.getLabel(data.context)}
+    </button>
+  </ValueIndicator>
+{/snippet}
+
+<WithContentfulNodeStyles>
+  <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
-<div
-  class={[
-    'svelte-flow__node-basic bg-gray-100 app-node-border transition-opacity duration-300',
-    ...data.classes,
-  ]}
->
-  <Handle type="target" position={defaultSFHandlesInfo.targetPosition} />
-
-  <div
-    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-  >
-    <div class="font-bold text-[1.1rem]">
-      {data.fnName.label}
-    </div>
-
-    <!-- The code below isn't the cleanest -- this is a simple prototype that will likely be replaced down the road.
-
-    How this could be extended in the future:
-    - Support more than just boolean arguments; have a form UI
-    - Allow for non-atomic expressions to be supplied as arguments (this would likely require subflows)
-    -->
-    <div class="flex flex-wrap gap-1 justify-center">
-      {#each data.args as arg}
-        <button
-          class={[
-            'border',
-            'border-black',
-            'p-2',
-            'text-xs',
-            'rounded-lg',
-            'cursor-pointer',
-            'bg-white',
-            ...arg.getAllClasses(data.context),
-          ]}
-          onclick={async () => {
-            console.log('clicked: ', arg.getLabel(data.context), arg.getId())
-
-            const newValue = cycle(arg.getValue(data.context))
-            await ladderGraph.submitNewBinding(data.context, {
-              unique: arg.getUnique(data.context),
-              value: newValue,
-            })
-          }}
-        >
-          {arg.getLabel(data.context)}
-        </button>
-      {/each}
-    </div>
+  <!-- TODO: Add a value indicator for the App itself 
+       NOTE: We do NOT want cursor-pointer for the App UI itself.
+  -->
+  <div class={['bg-gray-100 app-node-border', ...data.classes]}>
+    <WithNormalHandles>
+      <div
+        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+      >
+        <!-- Function name -->
+        <div class="font-bold text-[1.1rem]">
+          {data.fnName.label}
+        </div>
+        <!-- Args (see also note above)-->
+        <div class="flex flex-wrap gap-1 justify-center">
+          {#each data.args as arg, i}
+            {@render argUI(arg, i)}
+          {/each}
+        </div>
+      </div>
+    </WithNormalHandles>
   </div>
-
-  <Handle type="source" position={defaultSFHandlesInfo.sourcePosition} />
-</div>
+</WithContentfulNodeStyles>
 
 <style>
   .app-node-border {

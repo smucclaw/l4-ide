@@ -6,6 +6,8 @@ import {
   UnknownVal,
   veExprToEvExpr,
   toUBoolVal,
+  TrueVal,
+  FalseVal,
 } from '../../eval/type.js'
 import { Assignment, Corefs } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
@@ -15,13 +17,7 @@ import type { Ord } from '$lib/utils.js'
 import { ComparisonResult } from '$lib/utils.js'
 import {
   empty,
-  isEmpty,
   isVertex,
-  isOverlay,
-  isConnect,
-  type Overlay,
-  type Connect,
-  type Vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
@@ -40,10 +36,9 @@ import {
   InvalidPathsListLirNode,
   type PathsListLirNode,
 } from '../paths-list.js'
-import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
-
+import { pprintPathGraph, isNnf } from './ladder-dag-helpers.js'
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -131,6 +126,13 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
       .getVertices()
       .map((id) => context.get(id))
       .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  getNonBundlingNodeVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id) as LadderLirNode)
+      .filter((n) => !isBundlingFlowLirNode(n))
   }
 
   dispose(context: LirContext) {
@@ -286,9 +288,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   #originalExpr: IRExpr
   #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
-  /** This will have to be updated if (and only if) we change the structure of the graph.
-   * No need to update it, tho, if changing edge attributes.
-   */
   #corefs: Corefs
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
@@ -297,11 +296,17 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
+  #noBundlingNodeDag: DirectedAcyclicGraph<LirId>
+  #selectedForHighlightPaths: Set<LirId> = new Set()
+  /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
+   * No need to update it, tho, if changing edge attributes.
+   */
   #pathsList?: PathsListLirNode
 
   private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
+    noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
@@ -309,6 +314,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
+    this.#noBundlingNodeDag = noBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
     // console.log(
@@ -345,13 +351,38 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
+    // Make the noBundlingNodeDag by replacing source nodes with their immediate predecessors
+    // and sink nodes with their immediate successors
+    // (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
+    const dagNodes = dag
+      .getVertices()
+      .map((v) => nodeInfo.context.get(v) as LadderLirNode)
+    const sources = new Set(
+      dagNodes.filter(isSourceLirNode).map((n) => n.getId())
+    )
+    const sinks = new Set(dagNodes.filter(isSinkLirNode).map((n) => n.getId()))
+
+    const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
+    const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
+    const noSourceDag = toSourceEdges.reduceRight(
+      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
+      dag
+    )
+    const noBundlingNodeDag = fromSinkEdges.reduceRight(
+      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
+      noSourceDag
+    )
+
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
+      noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
       ladderEnv
     )
+
+    // doEval (may not want to start with this?)
     await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
     return ladderGraph
   }
@@ -418,6 +449,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return context.get(source.getValue()) as SourceLirNode
   }
 
+  getOverallSink(context: LirContext): undefined | SinkLirNode {
+    const sink = this.#dag.getSink()
+    if (!isVertex(sink)) return undefined
+    return context.get(sink.getValue()) as SinkLirNode
+  }
+
   /*****************************
         Edge attributes
   ******************************/
@@ -464,6 +501,33 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /*****************************
         Highlight
   ******************************/
+
+  // Selecting nodes in NonBundlingNode version of graph for highlighting
+
+  addNodeToSelection(context: LirContext, node: NonBundlingLadderLirNode) {
+    this.#selectedForHighlightPaths.add(node.getId())
+    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  deselectNode(context: LirContext, node: NonBundlingLadderLirNode) {
+    this.#selectedForHighlightPaths.delete(node.getId())
+    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  // TODO: Also, look into better names for this
+  private syncSelectedForHighlight(
+    _context: LirContext,
+    _selected: Set<LirId>
+  ) {
+    console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
+    // TODO
+  }
+
+  // Core highlight ops
 
   clearHighlightEdgeStyles(context: LirContext) {
     const edges = this.#dag.getEdges()
@@ -673,6 +737,11 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
+export type NonBundlingLadderLirNode = Omit<
+  LadderLirNode,
+  'BundlingFlowLirNode'
+>
+
 /**********************************************
         Bool Lit Lir Nodes
 ***********************************************/
@@ -691,6 +760,7 @@ export function isFalseExprLirNode(
 
 export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
+  #value = new FalseVal()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -701,8 +771,8 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#name = name
   }
 
-  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [...super.getAllClasses(context), 'false-val']
+  getValue(_context: LirContext) {
+    return this.#value
   }
 
   toPretty(_context: LirContext) {
@@ -716,6 +786,7 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
 
 export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
+  #value = new TrueVal()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -726,8 +797,8 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#name = name
   }
 
-  override getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [...super.getAllClasses(context), 'true-val']
+  getValue(_context: LirContext) {
+    return this.#value
   }
 
   toPretty(_context: LirContext) {
@@ -798,17 +869,13 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     }
   }
 
-  override getAllClasses(_context: LirContext): LadderNodeCSSClass[] {
-    // console.log('modifierCSSClasses', this.modifierCSSClasses)
-    return [...this.#value.getClasses(), ...this.modifierCSSClasses]
-  }
-
   getValue(_context: LirContext): UBoolVal {
     return this.#value
   }
 
-  _setValue(_context: LirContext, value: UBoolVal) {
+  _setValue(context: LirContext, value: UBoolVal) {
     this.#value = value
+    this.getRegistry().publish(context, this.getId())
   }
 
   toPretty(context: LirContext) {
@@ -1121,76 +1188,4 @@ export function augmentEdgesWithExplanatoryLabel(
       context.getExplanatoryAndEdgeLabel()
     )
   })
-}
-
-/*************************************************
- ******************* Utils ***********************
- *************************************************/
-
-/************************************************
-          isNnf
-*************************************************/
-
-function isNnf(context: LirContext, ladder: LadderGraphLirNode): boolean {
-  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
-
-  const negandIsSimpleVar = (notStart: NotStartLirNode) => {
-    // TODO: Will have to update this when we add more complicated Lir Nodes
-    const negand = notStart.getNegand(context)
-    return (
-      isVertex(negand) &&
-      isUBoolVarLirNode(context.get(negand.getValue()) as LadderLirNode)
-    )
-  }
-
-  return notStartVertices.every(negandIsSimpleVar)
-}
-
-/************************************************
-          Pretty print path graph
-*************************************************/
-
-function pprintPathGraph(
-  context: LirContext,
-  initialGraph: DirectedAcyclicGraph<LirId>
-): string {
-  /** Each node should only be pprinted once in the linearization of the dag */
-  const processed = new Set<LirId>()
-
-  function pprintHelper(
-    context: LirContext,
-    g: DirectedAcyclicGraph<LirId>
-  ): string {
-    return match(g)
-      .with(P.when(isEmpty<LirId>), () => '')
-      .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
-        if (processed.has(v.getValue())) return ''
-
-        processed.add(v.getValue())
-        return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
-      })
-      .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
-        return `${pprintHelper(context, o.getLeft())} ${pprintHelper(context, o.getRight())}`
-      })
-      .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
-        const from = pprintHelper(context, c.getFrom())
-        const to = pprintHelper(context, c.getTo())
-
-        if (isVertex(c.getFrom()) && isVertex(c.getTo())) {
-          const edgeAttrs = initialGraph.getAttributesForEdge(
-            new DirectedEdge(
-              (c.getFrom() as Vertex<LirId>).getValue(),
-              (c.getTo() as Vertex<LirId>).getValue()
-            )
-          )
-          const edgeLabel = edgeAttrs.getLabel()
-          return `${from} ${edgeLabel} ${to}`
-        } else {
-          return `${from} ${to}`
-        }
-      })
-      .exhaustive()
-  }
-
-  return pprintHelper(context, initialGraph)
 }

@@ -165,6 +165,18 @@
   --color-false-value: var(--color-rose-200);
 }
 
+/***************************************
+         UBoolVarNode border 
+****************************************/
+
+.ubool-var-node-border {
+  border: var(--ladder-node-border, var(--ladder-node-border-default));
+  border-radius: var(
+    --ladder-node-border-radius,
+    var(--ladder-node-border-radius-default)
+  );
+}
+
 /*************************************
   Utility SF styles
 *************************************/
@@ -179,15 +191,11 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   background-color: var(--color-false-value) !important;
 }
 
-@utility svelte-flow__node-basic {
+@utility base-sf-node-styles {
   font-size: 1rem;
   text-align: center;
 
   color: var(--ladder-node-color, var(--ladder-node-color-default));
-  background-color: var(
-    --xy-node-background-color,
-    var(--xy-node-background-color-default)
-  );
 }
 
 /** Controls min/max widths of the labels,
@@ -225,7 +233,7 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 
 /** For the source and sink bundling nodes */
 @utility bundling-node {
-  @apply svelte-flow__node-basic;
+  @apply base-sf-node-styles;
   /* Will lose the bundling node if width is 0 px */
   width: 1px;
   height: 1px;
