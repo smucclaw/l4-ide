@@ -1,8 +1,13 @@
-`EVALCONTRACT` with `x`, list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` and 42 and 5
-executing contract party `B` does `payment` or `FULFILLED` at 2 with the following events: 
+executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 21 at 4
+executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 20 at 4
+executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 30 at 6 party `B` did `payment` with 10 at 9
+`EVALPROVISION` with `x`, 5 and list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` with 3 and 42
+executing contract `y` at 0 with the following events:  party `B` did `payment` with 2 at 5 party `S` did `delivery` at 20
+executing contract `quux` at 0 with the following events:  party `B` did `quuux` at 1 party `B` did `baz` with `qux` at 1 party `B` did `baz` with `bar` at 1
+executing contract party `B` must `payment` has  or `FULFILLED` at 2 with the following events: 
 executing contract `x` at 4 with the following events:  party `S` did `delivery` at 4
-executing contract `y` at 4 with the following events:  party `S` did `delivery` at 4 party `S` did `delivery` at 9
-executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
-executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` at 26
-executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` at 3
-executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `S` did `payment` at 3
+executing contract `y` at 4 with the following events:  party `B` did `payment` with 4 at 4
+executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` with 4 at 26
+executing contract `z` at 4 with the following events:  party `S` did `delivery` at 4 party `B` did `payment` with 5 at 26
+executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 6 at 3
+executing contract `goesOn` at 0 with the following events:  party `S` did `delivery` at 2 party `S` did `payment` with 7 at 3

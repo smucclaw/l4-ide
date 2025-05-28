@@ -106,8 +106,6 @@ data TokenType =
   | TKThen
   | TKElse
   | TKOtherwise
-  -- | TKFalse
-  -- | TKTrue
   | TKAnd
   | TKOr
   | TKRAnd
@@ -132,6 +130,7 @@ data TokenType =
   | TKDo
   | TKDoes
   | TKMust
+  | TKProvided
   | TKWithin
   | TKHence
   | TKLest
@@ -269,7 +268,7 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
-  , (TContractDirective,   "CONTRACT")
+  , (TContractDirective,   "PROVISION")
   ]
 
 integerLiteral :: Lexer (Text, Integer)
@@ -337,6 +336,7 @@ tokenPayload =
   <|> TParagraph           <$  char '§'
   <|> TComma               <$  char ','
   <|> TSemicolon           <$  char ';'
+  <|> TPercent             <$  char '%'
   <|> TDot                 <$  char '.'
   <|> TCopy Nothing        <$  char '^'
   <|> symbolic
@@ -434,6 +434,7 @@ keywords =
     , ("DO"         , TKDo         )
     , ("DOES"       , TKDoes       )
     , ("MUST"       , TKMust       )
+    , ("PROVIDED"   , TKProvided   )
     , ("WITHIN"     , TKWithin     )
     , ("HENCE"      , TKHence      )
     , ("LEST"       , TKLest       )
@@ -924,6 +925,7 @@ displayTokenType tt =
     TKDo              -> "DO"
     TKDoes            -> "DOES"
     TKMust            -> "MUST"
+    TKProvided        -> "PROVIDED"
     TKWithin          -> "WITHIN"
     TKHence           -> "HENCE"
     TKLest            -> "LEST"
@@ -969,7 +971,7 @@ showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
-  TContractDirective -> "#CONTRACT"
+  TContractDirective -> "#PROVISION"
 
 data TokenCategory
   = CIdentifier
@@ -1060,6 +1062,7 @@ posTokenCategory =
     TKDo -> CKeyword
     TKDoes -> CKeyword
     TKMust -> CKeyword
+    TKProvided -> CKeyword
     TKWithin -> CKeyword
     TKHence -> CKeyword
     TKLest -> CKeyword
