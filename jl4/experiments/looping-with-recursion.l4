@@ -24,7 +24,7 @@ DECLARE Action IS ONE OF
 // the buyer makes four payments
 
 GIVEN symtab IS A  `Symbol Table`
-GIVETH CONTRACT Actor Action
+GIVETH PROVISION Actor Action
 `Initial Sale` MEANS
  PARTY Seller
  MUST deliver "apple" 1
@@ -50,7 +50,7 @@ GIVEN symtab IS A  `Symbol Table`
               paid  IS symtab's paid PLUS 50
 
 
-#CONTRACT `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+#PROVISION `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
   PARTY Seller DOES deliver "apple" 1 AT 2
   PARTY Buyer  DOES pay 50 AT 13
   PARTY Buyer  DOES pay 50 AT 23
@@ -65,7 +65,7 @@ GIVEN symtab IS A  `Symbol Table`
 -- we want a predicate to allow multiple inputs to match the action params.
 -- see page 41 from Hvitved: we want a condition e that tests x.
 
-#CONTRACT `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+#PROVISION `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
   PARTY Seller DOES deliver "apple" 1 AT 2
   PARTY Buyer  DOES pay 100 AT 13
   PARTY Buyer  DOES pay 100 AT 23

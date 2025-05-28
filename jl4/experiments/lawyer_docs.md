@@ -201,7 +201,7 @@ MUST `act in best interests of charity and beneficiaries`
 
 # **Part 3: Multi-Step Legal Processes**
 
-## **3.1 Beyond Single Rules: The CONTRACT Approach**
+## **3.1 Beyond Single Rules: The PROVISION Approach**
 
 **Problem:** Real legal processes involve multiple connected steps, not isolated rules.
 
@@ -215,11 +215,11 @@ PARTY Commissioner MUST `make decision`
 -- These are disconnected rules
 ```
 
-**CONTRACT approach (powerful):**
+**PROVISION approach (powerful):**
 ```l4
 § `Charity Registration Process`
 GIVEN applicant IS A CharityApplication
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `registration process` MEANS
   PARTY Applicant OF applicant
   MUST ProvideApplication OF applicationContents
@@ -255,7 +255,7 @@ DECLARE Action IS ONE OF
 
 **Example using structured actors/actions:**
 ```l4
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `registration assessment` MEANS
   PARTY Commissioner
   MUST AssessApplication OF application
@@ -287,7 +287,7 @@ DECIDE `add charity to register` IS
 
 **Complete process with state changes:**
 ```l4
-GIVETH A CONTRACT Actor Action  
+GIVETH A PROVISION Actor Action  
 `complete registration` MEANS
   PARTY Commissioner
   MUST RegisterCharity OF newCharity
@@ -330,7 +330,7 @@ CharityRegister  -- Official register maintained by Commissioner
 ```l4
 -- Annual return obligation (Art 13)
 § `Annual Return Obligation`
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `annual return process` MEANS
   PARTY RegisteredCharity  
   MUST FileReturn OF financialData
@@ -362,7 +362,7 @@ emptyRegister MEANS CharityRegister
 **Add registration process:**
 ```l4
 § `Charity Registration (Art 11)`
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `registration process` MEANS
   PARTY Applicant OF application
   MUST ProvideApplication OF requiredDocuments
@@ -372,7 +372,7 @@ GIVETH A CONTRACT Actor Action
 
 **Show the complete flow:**
 ```l4
-#CONTRACT `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
+#PROVISION `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
   -- Step 1: Application
   PARTY applicant DOES ProvideApplication OF applicationDocs AT 10
   
@@ -390,7 +390,7 @@ GIVETH A CONTRACT Actor Action
 ```l4
 -- Governor misconduct (Art 19-20)
 § `Governor Misconduct Process`
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `misconduct response` MEANS
   IF `misconduct discovered`
   THEN PARTY Commissioner
@@ -400,7 +400,7 @@ GIVETH A CONTRACT Actor Action
 
 -- Required Steps Notice (Art 27)
 § `Required Steps Notice Power`  
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `enforcement escalation` MEANS
   IF `compliance failure detected`
   THEN PARTY Commissioner
@@ -413,7 +413,7 @@ GIVETH A CONTRACT Actor Action
 **Complete charity lifecycle simulation:**
 
 ```l4
-#CONTRACT `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
+#PROVISION `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
   -- Registration
   PARTY charity DOES ProvideApplication OF docs AT 10
   PARTY Commissioner DOES RegisterCharity OF charity AT 20
@@ -473,7 +473,7 @@ WITHIN 30 days OF event's date
 - **Prevents inconsistency:** Can't accidentally use wrong notification type
 - **Enables automation:** Computer can check compliance automatically
 
-## **5.2 Why CONTRACT Over Simple Rules**
+## **5.2 Why PROVISION Over Simple Rules**
 
 **Traditional legal drafting:** Each section states an isolated obligation.
 
@@ -487,11 +487,11 @@ WITHIN 30 days OF event's date
 
 **These are connected steps in a process, not separate obligations.**
 
-**CONTRACT approach captures the connections:**
+**PROVISION approach captures the connections:**
 
 ```l4
 § `Annual Return Workflow`
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `annual return process` MEANS
   PARTY RegisteredCharity
   MUST FileReturn OF financials
@@ -590,7 +590,7 @@ DECLARE AppealableDecision IS ONE OF
 
 § `Universal Appeal Right (Art 33)`
 GIVEN decision IS AN AppealableDecision
-GIVETH A CONTRACT Actor Action  
+GIVETH A PROVISION Actor Action  
 `appeal process` MEANS
   PARTY AffectedParty
   MAY AppealDecision OF decision
@@ -611,7 +611,7 @@ Combines requirements from 4 different instruments:
 
 **L4 integration approach:**
 
-**Step 1:** Define the complex data structure outside the CONTRACT:
+**Step 1:** Define the complex data structure outside the PROVISION:
 ```l4
 -- Define integrated financial data structure first
 integratedFinancialData MEANS IntegratedFinancialData WITH
@@ -620,10 +620,10 @@ integratedFinancialData MEANS IntegratedFinancialData WITH
          publicBenefitNarrative IS TRUE  -- Additional Info Order 2018
 ```
 
-**Step 2:** Reference it in the CONTRACT rule:
+**Step 2:** Reference it in the PROVISION rule:
 ```l4
 § `Integrated Annual Return (4 instruments)`
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `comprehensive annual return` MEANS
   PARTY RegisteredCharity
   MUST FileReturn OF integratedFinancialData
@@ -632,11 +632,11 @@ GIVETH A CONTRACT Actor Action
   LEST `lateFlag set + Required Steps Notice enabled`
 ```
 
-**Key insight:** Keep CONTRACT actions simple by pre-defining complex objects rather than constructing them inline.
+**Key insight:** Keep PROVISION actions simple by pre-defining complex objects rather than constructing them inline.
 
-## **6.2a CONTRACT Syntax Best Practices**
+## **6.2a PROVISION Syntax Best Practices**
 
-**Critical Rule:** Avoid complex object construction within CONTRACT rules.
+**Critical Rule:** Avoid complex object construction within PROVISION rules.
 
 **❌ Problematic (causes syntax errors):**
 ```l4
@@ -651,7 +651,7 @@ MUST ProvideApplication OF ApplicationContents WITH
 
 **✅ Correct approach - Use helper functions:**
 ```l4
--- Define helper function outside CONTRACT
+-- Define helper function outside PROVISION
 GIVEN applicant IS A RegisterEntry
 GIVETH AN ApplicationContents
 DECIDE `build application contents` IS
@@ -662,34 +662,34 @@ DECIDE `build application contents` IS
       income IS Money OF 0 "GBP",
       expenditure IS Money OF 0 "GBP"
 
--- Use simple reference in CONTRACT
+-- Use simple reference in PROVISION
 PARTY applicant
 MUST ProvideApplication OF `build application contents` applicant
 ```
 
 **✅ Alternative - Pre-define examples:**
 ```l4
--- Define complete example outside CONTRACT
+-- Define complete example outside PROVISION
 exampleApplication MEANS ApplicationContents WITH
     constitution IS standardConstitution,
     purposes IS LIST `advancement of education`,
     coreFinancialInfo IS standardFinancials
 
--- Reference directly in CONTRACT
+-- Reference directly in PROVISION
 PARTY applicant
 MUST ProvideApplication OF exampleApplication
 ```
 
 **Why this matters:**
-- **Syntax requirements:** L4 parser expects simple expressions in CONTRACT actions
+- **Syntax requirements:** L4 parser expects simple expressions in PROVISION actions
 - **Readability:** Complex object construction clutters the legal logic
-- **Maintainability:** Helper functions can be reused across multiple CONTRACT rules
+- **Maintainability:** Helper functions can be reused across multiple PROVISION rules
 - **Testing:** Pre-defined objects are easier to validate and test
 
 **Pattern for actions with structured data:**
 1. **Define the structure** using `DECLARE`
 2. **Create helper functions** or examples using `DECIDE` or `MEANS`
-3. **Use simple references** in CONTRACT rules
+3. **Use simple references** in PROVISION rules
 4. **Keep legal logic clean** and focus on the process flow
 
 ## **6.3 Advanced Simulations**
@@ -697,7 +697,7 @@ MUST ProvideApplication OF exampleApplication
 **Multi-party scenario with error handling:**
 
 ```l4
-#CONTRACT `Complex Misconduct Scenario` charity Commissioner governor tribunal AT 1 WITH
+#PROVISION `Complex Misconduct Scenario` charity Commissioner governor tribunal AT 1 WITH
   -- Discovery phase
   PARTY Commissioner DOES `discover potential misconduct` governor AT 10
   PARTY Commissioner DOES `investigate allegations` AT 20
@@ -1024,7 +1024,7 @@ You've learned to:
 
 1. **Write precise legal rules** that capture obligations, conditions, and consequences
 2. **Model complex legal entities** with proper types and relationships  
-3. **Handle multi-step legal processes** using the CONTRACT approach
+3. **Handle multi-step legal processes** using the PROVISION approach
 4. **Organize complete regulatory schemes** using the three-layer architecture
 5. **Understand the design principles** that make L4 effective for legal modeling
 6. **Apply advanced techniques** for real-world complexity
@@ -1064,9 +1064,9 @@ DECLARE EnumType IS ONE OF   -- Enumeration
     Option2 HAS data IS A Type
 ```
 
-## **CONTRACT Syntax**
+## **PROVISION Syntax**
 ```l4
-GIVETH A CONTRACT Actor Action
+GIVETH A PROVISION Actor Action
 `process name` MEANS
   PARTY Actor
   MUST Action OF simpleParameter  -- Use simple parameters only
@@ -1075,7 +1075,7 @@ GIVETH A CONTRACT Actor Action
   LEST errorPath
 ```
 
-**Important:** Avoid complex object construction within CONTRACT rules. Use helper functions or pre-defined objects instead.
+**Important:** Avoid complex object construction within PROVISION rules. Use helper functions or pre-defined objects instead.
 
 ```l4
 -- ❌ Don't do this:
@@ -1090,7 +1090,7 @@ MUST Action OF predefinedExample
 ## **Simulation**
 ```l4
 #EVAL expression                                    -- Evaluate expression
-#CONTRACT `name` actor1 actor2 state AT time WITH  -- Simulate process
+#PROVISION `name` actor1 actor2 state AT time WITH  -- Simulate process
   PARTY actor1 DOES action1 AT time1
   PARTY actor2 DOES action2 AT time2
 ```

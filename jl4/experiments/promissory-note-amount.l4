@@ -139,7 +139,47 @@ GIVEN `Outstanding Payment Amount` IS A Money
                                     `Next Payment Due`'s Amount's Value
 
 
-§§§ `Definitions`
+
+§§ `Testing`
+
+#EVAL `Total Interest Amount`
+
+#EVAL `Total Repayment Amount`
+
+#EVAL `Monthly Installment Amount`
+
+#EVAL EVALCONTRACT (`Outstanding Obligations for` `Total Repayment Amount`)
+                   (LIST  EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 29
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 59
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 89
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 119
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 149
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 179
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 209
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 239
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 269
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 299
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 329
+                          EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 359)
+                   360
+
+
+#CONTRACT `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 29
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 359
+
+
+§§ `Definitions`
 
 DECLARE Money
     HAS Currency            IS A STRING
@@ -211,16 +251,20 @@ GIVEN a IS A NUMBER
 
 #EVAL `Monthly Installment Amount`
 
-#PROVISION `Payment Obligations` `Total Repayment Amount` AT 360 WITH
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 29
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 59
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 89
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 119
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 149
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 179
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 209
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 239
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 269
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 299
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.83) AT 329
-    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.87) AT 359
+#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 40
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 359
+
+#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 41 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 80
+

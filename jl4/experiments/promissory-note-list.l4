@@ -146,7 +146,7 @@ GIVEN `Payments Received` IS A LIST OF Payment
 #EVAL `Total Repayment Amount`
 
 
-#EVAL EVALCONTRACT (`Outstanding Payments Due for` EMPTY)
+#EVAL EVALPROVISION (`Outstanding Payments Due for` EMPTY)
                    (LIST  EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 25
                           EVENT `Jane Dough` (`pay debts to` `John Doe` (Money "USD" 2000)) 29)
                    5
