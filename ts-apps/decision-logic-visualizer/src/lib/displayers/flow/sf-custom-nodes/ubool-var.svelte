@@ -71,31 +71,29 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 <WithContentfulNodeStyles>
   <ValueIndicator
     value={uboolvarValue}
-    borderClasses={['ubool-var-node-border']}
+    additionalClasses={['ubool-var-node-border', ...data.classes]}
   >
-    <div class={data.classes}>
-      <WithNormalHandles>
-        <button
-          class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-          onclick={() => {
-            const ladderGraph = ladderEnv
-              .getTopFunDeclLirNode(data.context)
-              .getBody(data.context)
-            const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+    <WithNormalHandles>
+      <button
+        class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+        onclick={() => {
+          const ladderGraph = ladderEnv
+            .getTopFunDeclLirNode(data.context)
+            .getBody(data.context)
+          const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
-            const newValue = cycle(node.getValue(data.context))
-            ladderGraph.submitNewBinding(data.context, {
-              unique: node.getUnique(data.context),
-              value: newValue,
-            })
-          }}
-        >
-          {data.name.label}
-        </button>
-        {#if data.canInline}
-          {@render inlineUI()}
-        {/if}
-      </WithNormalHandles>
-    </div>
+          const newValue = cycle(node.getValue(data.context))
+          ladderGraph.submitNewBinding(data.context, {
+            unique: node.getUnique(data.context),
+            value: newValue,
+          })
+        }}
+      >
+        {data.name.label}
+      </button>
+      {#if data.canInline}
+        {@render inlineUI()}
+      {/if}
+    </WithNormalHandles>
   </ValueIndicator>
 </WithContentfulNodeStyles>

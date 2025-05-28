@@ -8,18 +8,19 @@
 
   interface ValueIndicatorProps {
     value: UBoolVal
-    borderClasses: string[]
+    /** Additional CSS classes to add to the outermost div */
+    additionalClasses: string[]
     children: Snippet
   }
 </script>
 
 <script lang="ts">
-  let { value, borderClasses, children }: ValueIndicatorProps = $props()
+  let { value, additionalClasses, children }: ValueIndicatorProps = $props()
 </script>
 
 <!-- Need the parent to be relatively positioned,
  for the absolute positioning to work -->
-<div class={['relative', ...borderClasses, ...value.getClasses()]}>
+<div class={['relative', ...additionalClasses, ...value.getClasses()]}>
   {@render children()}
   <div
     class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2

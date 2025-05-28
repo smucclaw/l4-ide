@@ -38,10 +38,15 @@
 {#snippet argUI(arg: (typeof data.args)[number], i: number)}
   <ValueIndicator
     value={argValues[i]}
-    borderClasses={['border', 'border-black', 'rounded-lg']}
+    additionalClasses={[
+      'border',
+      'border-black',
+      'rounded-lg',
+      ...arg.getAllClasses(data.context),
+    ]}
   >
     <button
-      class={['p-2', 'text-xs', ...arg.getAllClasses(data.context)]}
+      class={['p-2', 'text-xs']}
       onclick={async () => {
         console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
