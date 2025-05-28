@@ -23,23 +23,39 @@ startup MEANS
   WHERE
     `Pre Money Cap Table` MEANS -- founder shares
       LIST (`Cap Table Entry` OF
-              Investor WITH Name         IS "Thomas Gorissen"
-                            Address      IS (LIST "23 Sentosa Way")
-                            Jurisdiction IS JUST "Singapore"
-                            `ID Number`  IS "SG12345678"
+              `Individual Investor` WITH
+                individual IS
+                  `NaturalPerson` WITH
+                   Name         IS "Thomas Gorissen"
+                   Title        IS JUST "Meister"
+                   Address      IS JUST "23 Sentosa Way"
+                   Jurisdiction IS JUST "Singapore"
+                   `ID Number`  IS JUST "SG12345678"
               Security WITH
                 Instrument IS "Shares"
                 Name       IS "ordinary"
-                Quantity   IS `Shares` 123
+                Quantity   IS `Shares` 100 (Money 123 "USD")
              )
 
-`Lead Angel` MEANS
+`SAFE investor` MEANS
   `Cap Table Entry` OF
-     Investor OF "Eduardo Saverin"
-                 (LIST "25 Sentosa Way")
-                 JUST "Singapore"
-                 TBD
-     Security OF "Shares", "ordinary", `Shares` 23
+     `Individual Investor` OF
+       `NaturalPerson` OF
+         "Andrew Bechtolsheim", JUST "Mr."
+         JUST "27 Sentosa Way"
+         JUST "Singapore"
+         TBD
+     Security OF "SAFE", "SAFE Tranche 1", `Dollars` (Money 100000 "USD")
+
+`series A investor` MEANS
+  `Cap Table Entry` OF
+     `Individual Investor` OF
+        `NaturalPerson` OF
+          "Eduardo Saverin", JUST "Mr."
+          JUST "25 Sentosa Way"
+          JUST "Singapore"
+          TBD
+     Security OF "Preferred Shares", "Class A", `Shares` 23 (Money 23000 "USD")
 
 §§ `Key Parameters`
 
@@ -54,17 +70,37 @@ DECLARE `Post-Money Valuation` IS A Money
     amount IS 10000000
     currency IS "SGD"
 
+§§ `Actors and Parties`
+DECLARE Actor IS ONE OF Company, Investor
 
-
-§§ `Events`
-
-
+§§ `Events and Actions`
+DECLARE Action IS ONE OF
+   Notify HAS actor IS AN Actor
+              contents IS A Notice
+   `Equity Financing Transaction` HAS transaction IS A `Cap Table Entry`
+   `Update Cap Table`             HAS issue       IS A `Cap Table Entry`
 
 §§§ `Equity Financing`
 
 -- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
 --      on the initial closing of such Equity Financing,
---      this Safe will automatically convert into the greater of:
+--      this Safe will automatically convert
+
+`Equity Financing Handler` MEANS
+  PARTY startup
+  MUST  `Equity Financing Transaction` OF eft
+        PROVIDED eft's security's Instrument EQUALS "Preference Shares"
+  HENCE PARTY startup
+          MUST `Update Cap Table` OF issue
+          PROVIDED issue EQUALS
+            `Cap Table Entry` OF
+              `SAFE investor`'s Holder
+              Security WITH
+                Instrument IS "Preference Shares"
+                Name       IS "Standard or SAFE Preference Shares -- [TODO]"
+                Quantity   IS Shares 0 (Money 0 "USD") -- computation [TODO]
+
+--      into the greater of:
 --         (1) the number of Standard Preference Shares equal to
 --                 the Purchase Amount divided by
 --                 the lowest price per share of the Standard Preference Shares; or
@@ -102,6 +138,7 @@ GIVEN      `Post-Money Valuation Cap`   IS A Money
                                      `Company Capitalization`
 
 
+
 -- 	“Standard Preference Shares” means the shares of the series of Preference Shares
 --  issued to the investors investing new money in the Company
 --  in connection with the initial closing of the Equity Financing.
@@ -127,28 +164,15 @@ GIVEN      `Post-Money Valuation Cap`   IS A Money
 --                 MUST NOTIFY startup
 --                        WITH `executed by` contents investor
 -- WHERE `rewrite cap table` MEANS
--- -- 	1.  convert the SAFE into shares
--- -- 	2.  add the shares to the cap table
--- -- 	3.  remove the SAFE from the cap table
--- -- 	4.  update the cap table
+-- 	1.  convert the SAFE into shares
+-- 	2.  add the shares to the cap table
+-- 	3.  remove the SAFE from the cap table
+-- 	4.  update the cap table
 
 -- what do we actually do here?
 -- we rewrite the cap table
 -- and we generate some paperwork that the investor MUST sign
 -- and if the investor doesn't sign, the investor is not entitled to the shares
-
-GIVEN `SAFE Events` IS A LIST OF Event
-DECIDE `Equity Financing Event` IF
-   any (GIVEN event YIELD event's name EQUALS "Equity Financing")
-       `SAFE Events`
-
-
-GIVEN transaction IS AN Event
-GIVETH A BOOLEAN
-`is part of an Equity Financing Event` MEANS
-  transaction's name EQUALS "equity issue"
-
-
 
 
 DECIDE `Equity Financing Conversion` IS
@@ -191,9 +215,9 @@ GIVEN Company IS A Company
 `Capital Shares` MEANS
   sum OF
     map OF
-      GIVEN `Cap Table Entry` YIELD amount OF `Cap Table Entry`'s Security's Quantity
+      GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s security's Quantity's count
       filter OF
-         GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s Security's Instrument EQUALS "Shares"
+         GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s security's Instrument EQUALS "Shares"
          Company's `Cap Table`
 -- we want to be able to say, later,
 GIVEN c IS A Company
@@ -204,6 +228,10 @@ cs MEANS c's `Capital Shares`
 --                           pursuant to which the Company issues and sells Preference Shares at a fixed valuation,
 --                             including but not limited to, a pre-money or post-money valuation.
 
+-- how do we data-model an equity financing? The language above admits a a rolling close, where there are multiple investors and multiple tranches and multiple closings.
+-- But the equity financing event language says that on the initial closing the SAFE automatically converts.
+-- Pragmatically, everybody's happy as long as we can pretend that we converted the SAFE into shares,
+-- at a price that takes reference from the "initial closing"; even if that conversion and share issuance "actually" happens later.
 
 -- 	“Change of Control” means
 -- (i)   a transfer  (whether  by merger,  consolidation, exchange  or  otherwise),  in  one  transaction  or  a  series  of related transactions, to a person or group of affiliated persons (other than an underwriter of the Company’s securities), of the Company’s securities or Capital Shares
@@ -254,22 +282,16 @@ DECLARE Company
         `Cap Table`           IS A LIST OF `Cap Table Entry`
 
 DECLARE NaturalPerson
-    HAS name           IS A STRING
-        title          IS A MAYBE STRING
-        address        IS A MAYBE STRING
-        jurisdiction   IS A MAYBE STRING
-        id_number      IS A MAYBE STRING
-
-DECLARE Inv IS ONE OF
-   InvNP HAS np IS A NaturalPerson
-   InvCo HAS nc IS A Company
+    HAS `Name`           IS A STRING
+        `Title`          IS A MAYBE STRING
+        `Address`        IS A MAYBE STRING
+        `Jurisdiction`   IS A MAYBE STRING
+        `ID Number`      IS A MAYBE STRING
 
 -- the above is more complete; the below is more relatable; it is simplified.
-DECLARE Investor
-    HAS `Name`         IS A STRING
-        `Address`      IS A LIST OF STRING
-        `Jurisdiction` IS A MAYBE STRING
-        `ID Number`    IS A STRING
+DECLARE Investor IS ONE OF
+   `Corporate Investor`  HAS company    IS A Company
+   `Individual Investor` HAS individual IS A NaturalPerson
 
 DECLARE Founder IS AN Investor
 
@@ -314,14 +336,15 @@ DECLARE `Security Type` IS A STRING
 
 
 DECLARE `Security Quantity` IS ONE OF
-    Shares   HAS count IS A NUMBER
+    Shares   HAS count            IS A NUMBER
+                 `purchase price` IS A Money
     Dollars  HAS money IS A Money
 
 GIVEN `some security quantity` IS A `Security Quantity`
-`amount` MEANS
+`security price` MEANS
   CONSIDER `some security quantity`
-      WHEN Shares   count  THEN count
-      WHEN Dollars  money  THEN money's amount
+      WHEN Shares   count price THEN price
+      WHEN Dollars  money       THEN money
 
 DECLARE Security
     HAS Instrument     IS A `Security Type`
