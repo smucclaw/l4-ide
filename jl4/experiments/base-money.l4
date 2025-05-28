@@ -5,6 +5,9 @@ DECLARE Money
     HAS amount   IS A NUMBER
         currency IS A STRING
 
+USD d MEANS Money OF d, "USD"
+SGD d MEANS Money OF d, "SGD"
+
 -- [TODO] infix operators! please!     -- ($/) MEANS `divide money`
 
 
@@ -21,3 +24,15 @@ GIVETH MAYBE Money
         amount   IS a's amount DIVIDED BY b's amount
         currency IS a's currency
     ELSE NOTHING
+
+GIVEN a IS A Money
+      b IS A NUMBER
+GIVETH MAYBE Money
+`divide money` MEANS
+  IF b EQUALS 0
+    THEN NOTHING
+    ELSE JUST OF Money
+      WITH
+        amount   IS a's amount DIVIDED BY b
+        currency IS a's currency
+
