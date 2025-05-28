@@ -15,11 +15,7 @@ export function isPathsListLirNode(
 export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
-  constructor(
-    nodeInfo: LirNodeInfo,
-    protected ladderGraph: LadderGraphLirNode,
-    paths: Array<LinPathLirNode>
-  ) {
+  constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
     super(nodeInfo)
     this.paths = paths.map((n) => n.getId())
   }
@@ -28,7 +24,11 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
     return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
   }
 
-  highlightPaths(context: LirContext, paths: LinPathLirNode[]) {
+  highlightPaths(
+    context: LirContext,
+    ladderGraph: LadderGraphLirNode,
+    paths: LinPathLirNode[]
+  ) {
     // 1. Get the subgraph to be highlighted
     // Exploits the property that (G, +, ε) is an idempotent monoid
     const graphToHighlight = paths
@@ -36,8 +36,8 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
       .reduceRight(overlay, empty())
 
     // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
-    this.ladderGraph.clearHighlightEdgeStyles(context)
-    this.ladderGraph.highlightSubgraph(context, graphToHighlight)
+    ladderGraph.clearHighlightEdgeStyles(context)
+    ladderGraph.highlightSubgraph(context, graphToHighlight)
   }
 
   getChildren(context: LirContext) {
