@@ -31,7 +31,7 @@
   }
   const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
 
-  onDestroy(unsub.unsubscribe)
+  onDestroy(() => unsub.unsubscribe())
 </script>
 
 <!-- App Arg UI -->

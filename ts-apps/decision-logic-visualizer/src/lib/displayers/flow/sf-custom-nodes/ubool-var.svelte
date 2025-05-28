@@ -34,7 +34,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   }
   const unsub = ladderEnv.getLirRegistry().subscribe(onValueChange)
 
-  onDestroy(unsub.unsubscribe)
+  onDestroy(() => unsub.unsubscribe())
 </script>
 
 {#snippet inlineUI()}
