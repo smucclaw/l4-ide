@@ -32,7 +32,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
     // 1. Get the subgraph to be highlighted
     // Exploits the property that (G, +, ε) is an idempotent monoid
     const graphToHighlight = paths
-      .map((p) => p._getRawPath())
+      .map((p) => p.getRawPathGraph())
       .reduceRight(overlay, empty())
 
     // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph

@@ -18,6 +18,8 @@ import { ComparisonResult } from '$lib/utils.js'
 import {
   empty,
   isVertex,
+  overlays,
+  vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
@@ -32,13 +34,14 @@ import type {
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
 import { PathsListLirNode } from '../paths-list.js'
-import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   pprintPathGraph,
-  isNnf,
   getVerticesFromAlgaDag,
 } from './ladder-dag-helpers.js'
+import _ from 'lodash'
+import ArrayKeyedMap from 'array-keyed-map'
+
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -116,8 +119,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
     super(nodeInfo)
   }
 
-  /** To be called only by the PathsListLirNode */
-  _getRawPath() {
+  getRawPathGraph() {
     return this.rawPath
   }
 
@@ -285,7 +287,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
-  #noBundlingNodeDag: DirectedAcyclicGraph<LirId>
+  #noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>
+  #noBundlingNodePathToLadderLinPath: ArrayKeyedMap<LirId, LinPathLirNode>
   #selectedForHighlightPaths: Set<LirId> = new Set()
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
@@ -297,7 +300,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
-    noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv,
@@ -306,10 +308,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
-    this.#noBundlingNodeDag = noBundlingNodeDag
+    this.#noIntermediateBundlingNodeDag = noIntermediateBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
     this.#pathsList = pathsList
+    this.#noBundlingNodePathToLadderLinPath = noBundlingNodePathToLadderLinPath
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -337,26 +340,28 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
-    // Make the noBundlingNodeDag by replacing source nodes with their immediate predecessors
+    // Make the noIntermediateBundlingNodeDag by
+    // starting with middle, which doesn't have the overallSource and overallSink nodes
+    // and replacing source nodes with their immediate predecessors
     // and sink nodes with their immediate successors
     // (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
-    const dagNodes = dag
+
+    const vertices = dag
       .getVertices()
       .map((v) => nodeInfo.context.get(v) as LadderLirNode)
     const sources = new Set(
-      dagNodes.filter(isSourceLirNode).map((n) => n.getId())
+      vertices.filter(isSourceLirNode).map((n) => n.getId())
     )
-    const sinks = new Set(dagNodes.filter(isSinkLirNode).map((n) => n.getId()))
+    const sinks = new Set(vertices.filter(isSinkLirNode).map((n) => n.getId()))
 
     const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
     const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
-    const noSourceDag = toSourceEdges.reduceRight(
-      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
-      dag
-    )
-    const noBundlingNodeDag = fromSinkEdges.reduceRight(
+    const noIntermediateBundlingNodeDag = fromSinkEdges.reduceRight(
       (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
-      noSourceDag
+      toSourceEdges.reduceRight(
+        (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
+        dag
+      )
     )
 
     // Make the PathsList if it's in NNF
@@ -368,16 +373,56 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
             .map((rawPath) => new LinPathLirNode(nodeInfo, rawPath))
         )
       : undefined
+    const noBundlingNodePathToLadderLinPath = new ArrayKeyedMap<
+      LirId,
+      LinPathLirNode
+    >(pathsList
+        .getPaths(nodeInfo.context)
+        .map((path): [LirId[], LinPathLirNode] => {
+          const topSort = path
+            .getRawPathGraph()
+            .getTopSort()
+            .filter((v) => {
+              const isOverallSource = dag.getSource().isEqualTo(vertex(v))
+              const isOverallSink = dag.getSink().isEqualTo(vertex(v))
+              return (
+                isOverallSource ||
+                isOverallSink ||
+                isSelectableLadderLirNode(
+                  nodeInfo.context.get(v) as LadderLirNode
+                )
+              )
+            })
+          return [topSort, path]
+        })
+    )
+
+    console.log('\n=== noBundlingNodePathToLadderLinPath ===')
+    if (noBundlingNodePathToLadderLinPath.size === 0) {
+      console.log('No paths found')
+    } else {
+      noBundlingNodePathToLadderLinPath.forEach((_path, key, index) => {
+        const nodeLabels = key.map((id) => {
+          return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
+        })
+        console.log(nodeLabels.join(' → '))
+      })
+    }
+    console.log('===================================================\n')
+
+    console.log('ladder graph dag: ', dag.toString())
+
 
     // Make the LadderGraphLirNode
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
-      noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
       ladderEnv,
-      pathsList
+      pathsList,
+      noIntermediateBundlingNodeDag,
+      noBundlingNodePathToLadderLinPath
     )
 
     // doEval (may not want to start with this?)
@@ -480,16 +525,16 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         Highlight
   ******************************/
 
-  // Selecting nodes in NonBundlingNode version of graph for highlighting
+  // Selecting nodes in the main graph for highlighting
 
-  addNodeToSelection(context: LirContext, node: NonBundlingLadderLirNode) {
+  addNodeToSelection(context: LirContext, node: SelectableLadderLirNode) {
     this.#selectedForHighlightPaths.add(node.getId())
     this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
 
     this.getRegistry().publish(context, this.getId())
   }
 
-  deselectNode(context: LirContext, node: NonBundlingLadderLirNode) {
+  deselectNode(context: LirContext, node: SelectableLadderLirNode) {
     this.#selectedForHighlightPaths.delete(node.getId())
     this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
 
@@ -498,26 +543,80 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   // TODO: Also, look into better names for this
   private syncSelectedForHighlight(context: LirContext, selected: Set<LirId>) {
-    console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
-    // Get the paths through the selected subgraph of the noBundlingNode graph
-    const noBundlingNodePaths = this.#noBundlingNodeDag
-      .induce((nodeId: LirId) => {
-        const isOverallSource =
-          nodeId == (this.getOverallSource(context) as SourceLirNode).getId()
-        const isOverallSink =
-          nodeId == (this.getOverallSink(context) as SinkLirNode).getId()
-        return isOverallSource || isOverallSink || selected.has(nodeId)
-      })
-      .getAllPaths()
-      .filter(
-        (path) =>
-          path.getSource().isEqualTo(this.#dag.getSource()) &&
-          path.getSink().isEqualTo(this.#dag.getSink())
-      )
+    /* 
+    We are in effect maintaining two representations of the ladder graph:
 
-    // TODO: Get the corresponding lin paths / subgraph of #dag
-    // TODO: Highlight the corresponding lin paths / subgraph of #dag
+    1. #dag: The main ladder graph
+    2. #noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
+
+    Every time there is a change in the user's node selection on the main graph --- which
+    in effect corresponds to a change in what nodes of #noIntermediateBundlingNodeDag are selected ---
+    we check if the user has selected nodes corresponding to a lin path in #dag.
+    */
+    console.log(
+      '=======================  syncSelectedForHighlight =====================\n'
+    )
+    console.log(
+      'selected',
+      Array.from(selected).map((id) => id.toString())
+    )
+    console.log(
+      'noIntermediateBundlingNodeDag',
+      this.#noIntermediateBundlingNodeDag.toString()
+    )
+    // Compute the paths through the selected subgraph of the noBundlingNode graph
+    // that start from noIntermediateBundlingNodeDag's source and end at noIntermediateBundlingNodeDag's sink
+    const pathsSelectedSubgraphOfNoBundlingNodeGraph =
+      this.#noIntermediateBundlingNodeDag
+        .induce((nodeId: LirId) => {
+          const isSource = this.#noIntermediateBundlingNodeDag
+            .getSource()
+            .isEqualTo(vertex(nodeId))
+          const isSink = this.#noIntermediateBundlingNodeDag
+            .getSink()
+            .isEqualTo(vertex(nodeId))
+          return selected.has(nodeId) || isSource || isSink
+        })
+        .getAllPaths()
+    const numPaths = pathsSelectedSubgraphOfNoBundlingNodeGraph.length
+    console.log(`---- numPaths: ${numPaths}`)
+    pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
+      console.log(
+        `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
+        p.toString()
+      )
+    )
+
+    // Get the lin paths / subgraph of #dag that correspond to the computed paths in #noIntermediateBundlingNodeDag (if there are any)
+    const linPaths = pathsSelectedSubgraphOfNoBundlingNodeGraph
+      .map((nbnPathGraph) =>
+        this.#noBundlingNodePathToLadderLinPath.get(nbnPathGraph.getTopSort())
+      )
+      .filter((linPath) => !!linPath)
+    console.log('\n=== Linear Paths Found ===')
+    if (linPaths.length === 0) {
+      console.log('No linear paths found through selected nodes')
+    } else {
+      linPaths.forEach((path, index) => {
+        const nodeLabels = path.getVertices(context).map((node) => {
+          return `${node.getId().toString()} (${node.toPretty(context)})`
+        })
+        console.log(`\nPath ${index + 1}:`)
+        console.log(nodeLabels.join(' → '))
+      })
+    }
+    console.log('=========================\n')
+
+    // Highlight these lin paths / subgraph of #dag
+    // (or, if there are no corresponding lin paths, just highlight the selected nodes)
     this.clearHighlightEdgeStyles(context)
+    this.highlightSubgraph(
+      context,
+      overlays([
+        ...linPaths.map((linPath) => linPath.getRawPathGraph()),
+        ...Array.from(selected).map(vertex),
+      ])
+    )
   }
 
   // Core highlight ops
@@ -718,10 +817,17 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
-export type NonBundlingLadderLirNode = Omit<
-  LadderLirNode,
-  'BundlingFlowLirNode'
->
+export type SelectableLadderLirNode =
+  | UBoolVarLirNode
+  | AppLirNode
+  | NotStartLirNode
+export function isSelectableLadderLirNode(
+  node: LadderLirNode
+): node is SelectableLadderLirNode {
+  return (
+    isUBoolVarLirNode(node) || isAppLirNode(node) || isNotStartLirNode(node)
+  )
+}
 
 /**********************************************
         Bool Lit Lir Nodes
