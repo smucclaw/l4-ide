@@ -688,6 +688,7 @@ runUnaryBuiltin s vals op = do
     UnaryRound -> valInt $ round val
     UnaryCeiling -> valInt $ ceiling val
     UnaryFloor -> valInt $ floor val
+    UnaryPercent -> ValNumber $ val / 100
 
 runBinaryBuiltin :: Stack -> [Value] -> BinOp -> Eval Value
 runBinaryBuiltin s vals op = do

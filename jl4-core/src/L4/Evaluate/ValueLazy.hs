@@ -106,15 +106,3 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
-
-instance NFData BinaryBuiltinFun where
-  rnf :: BinaryBuiltinFun -> ()
-  rnf PlusFn = ()
-  rnf MinusFn = ()
-  rnf TimesFn = ()
-  rnf DivideFn = ()
-  rnf ModuloFn = ()
-  rnf LtFun = ()
-  rnf LeqFun = ()
-  rnf GtFun = ()
-  rnf GeqFun = ()
