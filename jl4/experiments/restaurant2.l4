@@ -14,7 +14,7 @@ IMPORT prelude
 GIVEN patron   IS AN Actor
       bar      IS AN Actor
       symtab   IS A `Symbol Table`
-GIVETH CONTRACT Actor Action
+GIVETH PROVISION Actor Action
 `entry point` MEANS
          -- [TODO] how do we allow the patron to order an arbitrary nonnegative number of beers?
             PARTY     patron  MUST order "beer"   1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "beer")
@@ -101,7 +101,7 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 
 -- mouseover the following to see that after hungryHippo orders a beer and a potato, and then pays, everything is done.
 
-#CONTRACT `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "potato"   1 AT 2
   PARTY hungryHippo DOES order "beer"     1 AT 4
   PARTY hungryHippo DOES order "potato"   1 AT 6
@@ -113,14 +113,14 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 -- it will simply be the next step. Well, it will be all the steps, but the mouseover
 -- only shows the next step.
 
-#CONTRACT `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
   PARTY eatAtJoes   DOES showBill 12      AT 30
 
 -- if all the steps happened, but happened late, then we have a breach, don't we.
-#CONTRACT `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
@@ -133,7 +133,7 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 -- track partial payments toward a full amount, but that could be done by clever
 -- manipulation of the symtab, perhaps by tracking another attribute "payment made".
 
-#CONTRACT `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20

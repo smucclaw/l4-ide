@@ -150,7 +150,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
 
 #EVAL `Monthly Installment Amount`
 
-#EVAL EVALCONTRACT (`Outstanding Obligations for` `Total Repayment Amount`)
+#EVAL EVALPROVISION (`Outstanding Obligations for` `Total Repayment Amount`)
                    (LIST  EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 29
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 59
                           EVENT `The Borrower` (`pay debts to` `The Lender` (Money "USD" 239583)) 89
@@ -166,7 +166,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                    360
 
 
-#CONTRACT `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
+#PROVISION `Outstanding Obligations for` `Total Repayment Amount` AT 360 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 29
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 59
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (Money "USD" 239583) AT 89
@@ -257,7 +257,7 @@ GIVEN a IS A NUMBER
 
 #EVAL `Monthly Installment Amount`
 
-#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 0 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 40
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 59
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 89
@@ -271,6 +271,6 @@ GIVEN a IS A NUMBER
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 329
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 359
 
-#CONTRACT `Payment Obligations` `Total Repayment Amount` AT 41 WITH
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 41 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 80
 

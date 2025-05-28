@@ -31,7 +31,7 @@ johnDoe MEANS NaturalPerson OF "John Doe"
 GIVEN investor IS A Actor
       company  IS A Actor
       symtab   IS A `Symbol Table`
-GIVETH CONTRACT Actor Action
+GIVETH PROVISION Actor Action
 `Series A Financing` MEANS
   PARTY   investor
   MUST    pay 200
@@ -48,7 +48,7 @@ GIVETH CONTRACT Actor Action
 GIVEN investor IS A Actor
       company  IS A Actor
       symtab   IS A `Symbol Table`
-GIVETH CONTRACT Actor Action
+GIVETH PROVISION Actor Action
 `Series A Issue` MEANS
   PARTY   company
   MUST    issue (shares 300)
@@ -64,7 +64,7 @@ GIVETH CONTRACT Actor Action
 
 
 GIVEN symtab   IS A `Symbol Table`
-GIVETH CONTRACT Actor Action
+GIVETH PROVISION Actor Action
 `returnFulfilled` MEANS FULFILLED
 
 
@@ -79,23 +79,23 @@ startState MEANS
 -- mouseover the following to see that after johnDoe pays $200,
 -- the contract is not fulfilled yet, because the company has not issued
 -- the equity yet. So you will see the "residual" contract in the mouseover.
-#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
 
 
 -- Now the trace has one additional step: the company issues equity correctly.
 -- And you will see that the residual contract is simply fulfilled.
-#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 3
 
 
 -- If the company issued the equity, but late, the contract is breached.
-#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 13
 
 
 
-#CONTRACT `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 0 AT 20
