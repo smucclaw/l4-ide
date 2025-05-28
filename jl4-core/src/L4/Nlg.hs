@@ -12,6 +12,8 @@ import L4.Lexer (PosToken)
 import L4.Syntax
 import L4.Utils.Ratio (prettyRatio)
 import Optics
+import qualified L4.TypeCheck.Environment as TypeCheck
+import qualified Data.Map.Strict as Map
 
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
@@ -190,7 +192,12 @@ instance Linearize (Expr Resolved) where
       , text "then"
       , lin e
       ]
-    App _ n es -> hcat $
+    App _ n es
+      | Just f <- isBuiltinBinary n, [e1, e2] <- es ->
+          lin (f e1 e2)
+      | Just f <- isBuiltinUnary n, [e] <- es ->
+          lin (f e)
+      | otherwise -> hcat $
       [ linearize n
       ]
       <> ifNonEmpty es
@@ -430,3 +437,44 @@ enumerate sep lastSep (x:xs) = x <> sep <> enumerate sep lastSep xs
 
 spaced :: LinTree -> LinTree
 spaced p = text " " <> p <> text " "
+
+-- ----------------------------------------------------------------------------
+-- Builtins
+-- ----------------------------------------------------------------------------
+
+-- | Operations such as Plus and Minus are desugared to prefix function
+-- notation.
+-- However, we don't want to show the prefix function name
+-- but rather the infix version. So, we translate the prefix function
+-- notation back to the infix one. In a way, we are undoing the
+-- desugaring again.
+isBuiltinBinary :: Resolved -> Maybe (Expr Resolved -> Expr Resolved -> Expr Resolved)
+isBuiltinBinary r =
+  Map.lookup (rawNameToText $ rawName $ getActual r) builtinBinFunctions
+
+isBuiltinUnary :: Resolved -> Maybe (Expr Resolved -> Expr Resolved)
+isBuiltinUnary r =
+  Map.lookup (rawNameToText $ rawName $ getActual r) builtinUnaryFunctions
+
+builtinBinFunctions :: Map Text (Expr Resolved -> Expr Resolved -> Expr Resolved)
+builtinBinFunctions = Map.fromList
+  [ (rawNameToText $ rawName TypeCheck.plusName, Plus emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.minusName, Minus emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.timesName, Times emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.divideName, DividedBy emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.moduloName, Modulo emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.ltName, Lt emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.leqName, Leq emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.gtName, Gt emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.geqName, Geq emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.andName, And emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.orName, Or emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.impliesName, Implies emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.consName, Cons emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.equalsName, Equals emptyAnno)
+  ]
+
+builtinUnaryFunctions :: Map Text (Expr Resolved -> Expr Resolved)
+builtinUnaryFunctions = Map.fromList
+  [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
+  ]

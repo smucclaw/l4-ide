@@ -11,6 +11,7 @@ import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
 import L4.Utils.Ratio (prettyRatio)
+import L4.Evaluate.Operators
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -381,6 +382,7 @@ instance LayoutPrinter Eager.Value where
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
     Eager.ValClosure{}              -> "<function>"
     Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
+    Eager.ValBinaryBuiltinFun{}     -> "<function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -408,6 +410,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
+    Lazy.ValBinaryBuiltinFun{}     -> "<function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -436,6 +439,20 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+instance LayoutPrinter BinOp where
+  printWithLayout = \ case
+    BinOpPlus -> "PLUS"
+    BinOpMinus -> "MINUS"
+    BinOpTimes -> "TIMES"
+    BinOpDividedBy -> "DIVIDED"
+    BinOpModulo -> "MODULO"
+    BinOpCons -> "FOLLOWED BY"
+    BinOpEquals -> "EQUALS"
+    BinOpLeq -> "AT MOST"
+    BinOpGeq -> "AT LEAST"
+    BinOpLt -> "LESS THAN"
+    BinOpGt -> "GREATER THAN"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case

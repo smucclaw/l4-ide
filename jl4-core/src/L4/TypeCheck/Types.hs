@@ -71,6 +71,19 @@ data CheckError =
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
+  | DesugarAnnoRewritingError (Expr Name) HoleInfo
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass NFData
+
+-- | When rewriting the 'Anno' of a syntax node, we encountered an internal error.
+-- We expected a certain number of 'AnnoHole's, e.g., in a binary operation we expect 2 'AnnoHole's,
+-- but we got a different number.
+--
+-- This is an internal error that shouldn't occur.
+data HoleInfo = HoleInfo
+  { expected :: !Int
+  , got :: !Int
+  }
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

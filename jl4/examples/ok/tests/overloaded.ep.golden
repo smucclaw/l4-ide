@@ -1,0 +1,106 @@
+DECLARE Vector
+    HAS
+        x IS A NUMBER
+        y IS A NUMBER
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__PLUS__` a b MEANS
+    Vector WITH
+        x IS a's x PLUS b's x
+        y IS a's y PLUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__TIMES__` a b MEANS
+    Vector WITH
+        x IS a's x TIMES b's x
+        y IS a's y TIMES b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__MINUS__` a b MEANS
+    Vector WITH
+        x IS a's x MINUS b's x
+        y IS a's y MINUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__DIVIDE__` a b MEANS
+    Vector WITH
+        x IS a's x DIVIDED BY b's x
+        y IS a's y DIVIDED BY b's y
+
+-- `__MODULO__` is intentionally unused
+
+#EVAL Vector 1 2 PLUS Vector 1 2
+#CHECK Vector 1 2 PLUS Vector 1 2
+#EVAL Vector 1 2 TIMES Vector 1 2
+#CHECK Vector 1 2 TIMES Vector 1 2
+#EVAL Vector 1 2 DIVIDED BY Vector 0.2 2
+#CHECK Vector 1 2 DIVIDED BY Vector 0.5 2
+#EVAL Vector 1 2 MINUS Vector 1 2
+#CHECK Vector 1 2 MINUS Vector 1 2
+-- Fails as intended
+-- #CHECK Vector 1 2 MODULO Vector 1 2
+
+GIVEN a IS A TYPE
+DECLARE VectorP a
+    HAS
+        x IS A a
+        y IS A a
+
+-- Only works for concrete types, not proper subtyping
+GIVEN a IS A VectorP NUMBER
+      b IS A VectorP NUMBER
+GIVETH A Vector
+`__PLUS__` a b MEANS
+    Vector WITH
+        x IS a's x PLUS b's x
+        y IS a's y PLUS b's y
+
+#EVAL VectorP 50 50 PLUS VectorP 25 0
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__LT__` a b MEANS
+    a's x LESS THAN b's x AND a's y LESS THAN b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+
+`__LEQ__` a b MEANS
+    a's x AT MOST b's x AND a's y AT MOST b's y
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__GT__` a b MEANS
+    a's x GREATER THAN b's x AND a's y GREATER THAN b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__GEQ__` a b MEANS
+    a's x AT LEAST b's x AND a's y AT LEAST b's y
+
+#EVAL Vector 0 0 LESS THAN Vector 1 2
+#EVAL Vector 1 2 LESS THAN Vector 1 2
+#EVAL Vector 2 3 LESS THAN Vector 1 2
+
+#EVAL Vector 0 0 AT MOST Vector 1 2
+#EVAL Vector 1 2 AT MOST Vector 1 2
+#EVAL Vector 2 3 AT MOST Vector 1 2
+
+#EVAL Vector 0 0 GREATER THAN Vector 1 2
+#EVAL Vector 1 2 GREATER THAN Vector 1 2
+#EVAL Vector 2 3 GREATER THAN Vector 1 2
+
+#EVAL Vector 0 0 AT LEAST Vector 1 2
+#EVAL Vector 1 2 AT LEAST Vector 1 2
+#EVAL Vector 2 3 AT LEAST Vector 1 2

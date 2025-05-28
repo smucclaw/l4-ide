@@ -52,6 +52,7 @@ library
     prettyprinter,
     safe-exceptions,
     scientific,
+    split,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,

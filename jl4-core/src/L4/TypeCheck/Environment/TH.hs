@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module L4.TypeCheck.Environment.TH (preDef, mkBuiltins, builtinUri, rename) where
+module L4.TypeCheck.Environment.TH (preDef, mkBuiltins, builtinUri, rename, variants) where
 
 import Base
 import Language.Haskell.TH.Syntax
@@ -10,14 +10,21 @@ import L4.Syntax as L4
 import L4.Lexer
 import L4.Parser.SrcSpan
 
-data Renamed = MkRenamed {orig :: String, chosen :: Maybe String}
+data Renamed = MkRenamed
+  { orig :: String
+  , chosen :: Maybe String
+  , variants :: Maybe [String]
+  }
   deriving stock (Eq, Show)
 
 rename :: Renamed -> String -> Renamed
-rename r s = MkRenamed r.orig (Just s)
+rename r s = MkRenamed r.orig (Just s) Nothing
+
+variants :: Renamed -> [String] -> Renamed
+variants r vs = r { variants = Just vs }
 
 instance IsString Renamed where
-  fromString a = MkRenamed a Nothing
+  fromString a = MkRenamed a Nothing Nothing
 
 -- | Helper function to create a predefined name.
 preDef :: Text -> L4.Name
@@ -31,39 +38,63 @@ preDef t =
         )
       ]
     )
-    (PreDef t)
+    (NormalName t)
 
 mkBuiltins :: [Renamed] -> Q [Dec]
-mkBuiltins = fmap mconcat . traverse mkBuiltin . zip [1..]
+mkBuiltins rs = fmap concat $ evalStateT (mapM go rs) 1
+  where
+    go :: Renamed -> StateT Int Q [Dec]
+    go renamed = do
+      ix <- get
+      (decs, newIx) <- Base.lift $ mkBuiltin ix renamed
+      put newIx
+      pure decs
 
 builtinUri :: NormalizedUri
 builtinUri = toNormalizedUri (Uri "jl4:builtin")
 
-mkBuiltin :: (Int, Renamed) -> Q [Dec]
-mkBuiltin (i, MkRenamed name o) = do
-
-  unqName <- newName (name <> "Unique")
-  unqExp <- [| MkUnique 'b' i builtinUri |]
-
+-- | Generate names for builtins.
+--
+-- We receive an initial "unique" value ('Int') which we can use as the start for
+-- generating more than one name. This is used for built-ins with more than one
+-- implementation, for example 'LESS THAN' works for numbers, string, and bool
+-- values.
+-- We produce the next unique that hasn't been used by 'mkBuiltin' already.
+mkBuiltin :: Int -> Renamed -> Q ([Dec], Int)
+mkBuiltin i (MkRenamed name o vars) = do
   nameName <- newName (name <> "Name")
   nameExp <- [| preDef $(pure $ LitE $ StringL $ fromMaybe (map Char.toUpper name) o) |]
 
-  let unqVar = pure $ VarE unqName
-      nameVar = pure $ VarE nameName
+  defs <- forM (zip [(i :: Int) ..] nameSuffixes) \(j, v) -> do
+    unqName <- newName (name <> v <> "Unique")
+    unqExp <- [| MkUnique 'b' j builtinUri |]
 
-  defName <- newName (name <> "Def")
-  defExp <- [| Def $unqVar $nameVar |]
+    let unqVar = pure $ VarE unqName
+        nameVar = pure $ VarE nameName
 
-  refName <- newName (name <> "Ref")
-  refExp <- [| Ref $nameVar $unqVar $nameVar |]
+    defName <- newName (name <> v <> "Def")
+    defExp <- [| Def $unqVar $nameVar |]
+
+    refName <- newName (name <> v <> "Ref")
+    refExp <- [| Ref $nameVar $unqVar $nameVar |]
+    pure
+      [ SigD unqName (ConT ''Unique)
+      , SigD defName (ConT ''Resolved)
+      , SigD refName (ConT ''Resolved)
+      , FunD unqName [Clause [] (NormalB unqExp) []]
+      , FunD defName [Clause [] (NormalB defExp) []]
+      , FunD refName [Clause [] (NormalB refExp) []]
+      ]
 
   pure
-    [ SigD unqName (ConT ''Unique)
-    , SigD nameName (ConT ''L4.Name)
-    , SigD defName (ConT ''Resolved)
-    , SigD refName (ConT ''Resolved)
-    , FunD unqName [Clause [] (NormalB unqExp) []]
-    , FunD nameName [Clause [] (NormalB nameExp) []]
-    , FunD defName [Clause [] (NormalB defExp) []]
-    , FunD refName [Clause [] (NormalB refExp) []]
-    ]
+    ( [ SigD nameName (ConT ''L4.Name)
+      , FunD nameName [Clause [] (NormalB nameExp) []]
+      ] <> concat defs
+    , i + length nameSuffixes + 1
+    )
+  where
+    nameSuffixes =
+      case vars of
+        Nothing -> [""]
+        Just vs -> vs
+

@@ -19,6 +19,7 @@ import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.Value
 import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
+import qualified L4.EvaluateLazy.Machine as Lazy
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -260,7 +261,13 @@ trueVal = ValConstructor TypeCheck.trueRef []
 
 initialEnvironment :: Environment
 initialEnvironment =
-  Map.fromList
+  let
+    binOps =
+      [ (unique, ValBinaryBuiltinFun binOp)
+      | (binOp, unique) <- Lazy.builtinBinOps
+      ]
+  in
+  Map.fromList $
     [ (TypeCheck.falseUnique, falseVal)
     , (TypeCheck.trueUnique,  trueVal)
     , (TypeCheck.emptyUnique, ValList [])
@@ -268,7 +275,12 @@ initialEnvironment =
     , (TypeCheck.roundUnique, ValUnaryBuiltinFun UnaryRound)
     , (TypeCheck.ceilingUnique, ValUnaryBuiltinFun UnaryCeiling)
     , (TypeCheck.floorUnique, ValUnaryBuiltinFun UnaryFloor)
+    , (TypeCheck.andUnique,     andClosureVal trueVal falseVal)
+    , (TypeCheck.orUnique,      orClosureVal trueVal falseVal)
+    , (TypeCheck.impliesUnique, impliesClosureVal trueVal falseVal)
+    , (TypeCheck.notUnique,     notClosureVal trueVal falseVal)
     ]
+    <> binOps
 
 evalModule :: Module Resolved -> Eval ()
 evalModule (MkModule _ann _uri sec) =
@@ -504,7 +516,10 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
       pushExprFrame (Map.union env'' env') (ss - 1) stack e
     Just (ValUnaryBuiltinFun builtin) -> do
       popFrame val
-      runBuiltin stack0 (reverse (val : vals)) builtin
+      runUnaryBuiltin stack0 (reverse (val : vals)) builtin
+    Just (ValBinaryBuiltinFun builtin) -> do
+      popFrame val
+      runBinaryBuiltin stack0 (reverse (val : vals)) builtin
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
@@ -654,17 +669,19 @@ computeEquals (ValConstructor r1 vs1) (ValConstructor r2 vs2)
   | otherwise                                   = Just False
 computeEquals _                _                = Nothing
 
-
 valBool :: Bool -> Value
 valBool False = falseVal
 valBool True  = trueVal
+
+valInt :: Integer -> Value
+valInt = ValNumber . toRational
 
 runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
 
-runBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
-runBuiltin s vals op = do
+runUnaryBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
+runUnaryBuiltin s vals op = do
   val :: Rational <- expect1Number s vals
   pure case op of
     UnaryIsInteger -> valBool $ isJust $ isInteger val
@@ -672,15 +689,23 @@ runBuiltin s vals op = do
     UnaryCeiling -> valInt $ ceiling val
     UnaryFloor -> valInt $ floor val
     UnaryPercent -> ValNumber $ val / 100
-  where
-    valInt :: Integer -> Value
-    valInt = ValNumber . toRational
+
+runBinaryBuiltin :: Stack -> [Value] -> BinOp -> Eval Value
+runBinaryBuiltin s vals op = do
+  (a, b) <- expect2 s vals
+  runBinOp op a b s
 
 expect1 :: Stack -> [a] -> Eval a
 expect1 s = \ case
   [x] -> pure x
   xs ->
     exception (RuntimeTypeError $ "Expected 1 argument but got " <> Text.show (length xs)) s
+
+expect2 :: Stack -> [a] -> Eval (a, a)
+expect2 s = \ case
+  [x, y] -> pure (x, y)
+  xs ->
+    exception (RuntimeTypeError $ "Expected 2 arguments but got " <> Text.show (length xs)) s
 
 expectNumber :: Stack -> Value -> Eval Rational
 expectNumber s = \ case
@@ -720,3 +745,70 @@ buildModuleEnvironment initial m = (execEvalModuleWithEnv initial m).environment
 
 unionEnvironments :: Foldable f => f (Map Unique Value) -> Environment
 unionEnvironments m = if null m then initialEnvironment else Map.unions m
+
+boolBinOpClosure :: Value -> Value -> (Resolved -> Resolved -> Expr Resolved) -> Value
+boolBinOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno TypeCheck.bDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef TypeCheck.bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+boolUnaryOpClosure :: Value -> Value -> (Resolved -> Expr Resolved) -> Value
+boolUnaryOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+andClosureVal :: Value -> Value -> Value
+andClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
+
+notClosureVal :: Value -> Value -> Value
+notClosureVal true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orClosureVal :: Value -> Value -> Value
+orClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesClosureVal :: Value -> Value -> Value
+impliesClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )
