@@ -15,10 +15,12 @@
 
   let { data }: AppDisplayerProps = $props()
 
+  // Get LadderEnv, L4 Connection
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
 
+  // The values of the arguments of the App
   const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
   const onArgValueChange = (context: LirContext, id: LirId) => {
     data.args.forEach((arg, i) => {

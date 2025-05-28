@@ -15,9 +15,11 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
   let { data }: UBoolVarDisplayerProps = $props()
 
+  // Get LadderEnv, L4 Connection
   const ladderEnv = useLadderEnv()
   const l4Conn = ladderEnv.getL4Connection()
 
+  // The value of the UBoolVar
   let uboolvarValue = $state(
     (data.context.get(data.originalLirId) as UBoolVarLirNode).getValue(
       data.context
