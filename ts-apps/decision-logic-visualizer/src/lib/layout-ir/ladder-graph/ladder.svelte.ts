@@ -38,7 +38,11 @@ import {
 } from '../paths-list.js'
 import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
-import { pprintPathGraph, isNnf } from './ladder-dag-helpers.js'
+import {
+  pprintPathGraph,
+  isNnf,
+  getVerticesFromAlgaDag,
+} from './ladder-dag-helpers.js'
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -726,16 +730,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#dag.dispose()
     context.clear(this.getId())
   }
-}
-
-/** Helper function */
-function getVerticesFromAlgaDag(
-  context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>
-): LadderLirNode[] {
-  return Array.from(dag.getVertices()).map(
-    (id) => context.get(id) as LadderLirNode
-  )
 }
 
 /**********************************************

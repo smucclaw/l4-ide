@@ -13,11 +13,24 @@ import {
 import { DirectedEdge } from '../../algebraic-graphs/edge.js'
 import type { LadderLirNode, NotStartLirNode } from './ladder.svelte.js'
 import {
-  LadderGraphLirNode,
+  LinPathLirNode,
   isNotStartLirNode,
   isUBoolVarLirNode,
 } from './ladder.svelte.js'
 import { match, P } from 'ts-pattern'
+/************************************************
+        Vertices from alga dag
+*************************************************/
+
+/** Helper function */
+export function getVerticesFromAlgaDag(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): LadderLirNode[] {
+  return Array.from(dag.getVertices()).map(
+    (id) => context.get(id) as LadderLirNode
+  )
+}
 
 /************************************************
           isNnf
