@@ -1,0 +1,240 @@
+IMPORT prelude
+
+
+§ `Promissory Note`
+
+`Note Date` MEANS  "4 February 2024"
+
+`Principal Amount` MEANS USD 25000
+
+`Interest Rate Per Annum` MEANS 15%
+
+`Security Collateral` MEANS NOTHING
+
+`Monthly Installments` MEANS 12
+
+`Default After Days Not Paid Beyond Due` MEANS 30
+
+`Late Payment Penalty` MEANS Penalty WITH
+                                `Interest Rate`     IS 5%
+                                `Grace Period Days` IS 10
+
+`Governing Law` MEANS "Republic of Singapore"
+
+
+§§ `Parties`
+
+`The Borrower` MEANS
+  `Commercial Borrower` OF
+    Company WITH
+      `Name`           IS "Jane Dough Pte Ltd"
+      `Address`        IS "42 Jane Doe Rd #04-20, Singapore 420000"
+      `Jurisdiction`   IS "Singapore"
+      `Company Number` IS "UEN 200424242N"
+      `Account`        IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "Jane Dough Pte Ltd"
+                              `Account Number` IS "242-242424-9"
+                              `SWIFT`          IS "DBSSSGSG"
+
+`The Lender` MEANS
+  `Individual Lender` OF
+    `Natural Person` WITH
+      `Name`          IS "John Doe"
+      `Address`       IS "42 The Lender Rd, Singapore 424242"
+      `Jurisdiction`  IS "Singapore"
+      `ID Number`     IS "G5301960D"
+      `Account`       IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "The Lender"
+                              `Account Number` IS "120-643240-1"
+                              `SWIFT`          IS "DBSSSGSG"
+
+
+§§ `Repayment Terms`
+
+`Total Interest Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Value     IS `Principal Amount`'s Value TIMES
+                         (`Interest Rate Per Annum`
+                              DIVIDED BY 12)
+                                    TIMES `Monthly Installments`
+
+`Total Repayment Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Value     IS `Principal Amount`'s Value PLUS `Total Interest Amount`'s Value
+
+`Monthly Installment Amount` MEANS
+    Money WITH
+        Currency IS
+            `Total Repayment Amount`'s Currency
+        Value IS
+            `Total Repayment Amount`'s Value
+                DIVIDED BY `Monthly Installments`
+
+
+GIVEN `Outstanding Payment Amount` IS A Money
+`Payment Obligations` MEANS
+    IF `Outstanding Payment Amount`'s Value GREATER THAN 0
+        THEN  PARTY   `The Borrower`
+              MUST    `pay debts to`
+                          `The Lender`
+                          `Amount Transferred` PROVIDED
+                              `Amount Transferred`'s Currency EQUALS `Next Payment Due`'s Amount's Currency
+                                  AND `Amount Transferred`'s Value AT LEAST (`Next Payment Due`'s Amount's Value
+                                                                                MINUS 0.05)
+                              
+              WITHIN  `Next Payment Due Date`
+              HENCE   `Payment Obligations`
+                          (Money WITH
+                              Currency  IS `Monthly Installment Amount`'s Currency
+                              Value     IS `Outstanding Payment Amount`'s Value
+                                                MINUS `Amount Transferred`'s Value)
+              LEST     PARTY   `The Borrower`
+                       MUST    `pay debts to`
+                                  `The Lender`
+                                  `Amount Transferred` PROVIDED
+                                      `Amount Transferred`'s Currency EQUALS `Next Payment Due Amount With Penalty`'s Currency
+                                          AND `Amount Transferred`'s Value AT LEAST (`Next Payment Due Amount With Penalty`'s Value
+                                                                                MINUS 0.05)
+                       WITHIN  `Default After Days Beyond Commencement`
+                       LEST    PARTY  `The Borrower`
+                               MUST   `pay debts to`
+                                          `The Lender`
+                                          `Amount Transferred` PROVIDED
+                                              `Amount Transferred`'s Currency EQUALS `All Outstanding Debts`'s Currency
+                                                   AND `Amount Transferred`'s Value AT LEAST `All Outstanding Debts`'s Value
+        ELSE  FULFILLED
+      
+
+    WHERE
+        `Installments Covered Since Commencement` MEANS
+            (`Total Repayment Amount`'s Value
+                MINUS `Outstanding Payment Amount`'s Value)
+                    DIVIDED BY `Monthly Installment Amount`'s Value
+
+        `Next Payment Due` MEANS
+            Payment WITH
+                Amount IS
+                    Money WITH
+                        Currency  IS `Monthly Installment Amount`'s Currency
+                        Value     IS `The lesser of`
+                                         (`Monthly Installment Amount`'s Value)
+                                         (`Outstanding Payment Amount`'s Value)
+                `Days Beyond Commencement` IS
+                    (`Installments Covered Since Commencement` PLUS 1) TIMES 30
+
+        `Next Payment Due Date` MEANS
+            `Next Payment Due`'s `Days Beyond Commencement`
+               PLUS `Late Payment Penalty`'s `Grace Period Days`
+
+        `Next Payment Due Amount With Penalty` MEANS
+            Money WITH
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Value     IS `Next Payment Due`'s Amount's Value
+                                 PLUS `Next Payment Due`'s Amount's Value
+                                      TIMES `Late Payment Penalty`'s `Interest Rate`
+
+        `Default After Days Beyond Commencement` MEANS
+            `Next Payment Due`'s `Days Beyond Commencement`
+                PLUS `Default After Days Not Paid Beyond Due`
+
+        `All Outstanding Debts` MEANS
+            Money WITH
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Value     IS `Outstanding Payment Amount`'s Value 
+                                 PLUS `Next Payment Due Amount With Penalty`'s Value
+                                    MINUS `Next Payment Due`'s Amount's Value
+
+
+§§§ `Definitions`
+
+DECLARE Money
+    HAS Currency            IS A STRING
+        Value               IS A NUMBER
+
+GIVEN a IS A NUMBER
+USD MEANS
+   Money WITH
+      Currency IS "USD"
+      Value    IS a
+
+DECLARE Company
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `Company Number`    IS A STRING
+        `Account`           IS A `Bank Account`
+
+DECLARE `Natural Person`
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `ID Number`         IS A STRING
+        `Account`           IS A `Bank Account`
+
+DECLARE Borrower IS ONE OF
+   `Individual Borrower`
+        HAS Individual      IS A `Natural Person`
+   `Commercial Borrower`
+        HAS Entity          IS A Company
+
+DECLARE Lender IS ONE OF
+   `Individual Lender`
+        HAS Individual      IS A `Natural Person`
+   `Commercial Lender`
+        HAS Entity          IS A Company
+
+DECLARE `Bank Account`
+    HAS `Bank Name`         IS A STRING
+        `Account Name`      IS A STRING
+        `Account Number`    IS A STRING
+        `SWIFT`             IS A STRING
+
+DECLARE Payment
+    HAS Amount                       IS A Money
+        `Days Beyond Commencement`   IS A NUMBER
+
+DECLARE Penalty
+    HAS `Interest Rate`     IS A NUMBER
+        `Grace Period Days` IS A NUMBER
+
+DECLARE `pay debts to`
+    HAS Recipient           IS A Lender
+        Amount              IS A Money
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+`The lesser of` MEANS
+    IF a GREATER THAN b
+        THEN b
+        ELSE a
+
+
+§§§ `Testing`
+
+#EVAL `Total Interest Amount`
+
+#EVAL `Total Repayment Amount`
+
+#EVAL `Monthly Installment Amount`
+
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 29
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 59
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 89
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 119
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 149
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 179
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 209
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 239
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 269
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 299
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 329
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2396.20) AT 359
+
+#PROVISION `Payment Obligations` `Total Repayment Amount` AT 0 WITH
+    PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2395.80) AT 59
+    

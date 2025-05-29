@@ -1,0 +1,16 @@
+IMPORT `safe-post`
+
+#EVAL EVALPROVISION x (LIST EVENT S delivery 5, EVENT B payment 42) 5
+
+#PROVISION x AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 2
+
+#PROVISION x AT 4 WITH 
+  PARTY S DOES delivery AT 4
+  PARTY B DOES payment AT 2
+  PARTY S DOES payment AT 5
+
+#PROVISION z AT 3 WITH
+#PROVISION z AT 4 WITH
+
