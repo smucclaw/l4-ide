@@ -79,23 +79,23 @@ startState MEANS
 -- mouseover the following to see that after johnDoe pays $200,
 -- the contract is not fulfilled yet, because the company has not issued
 -- the equity yet. So you will see the "residual" contract in the mouseover.
-#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
 
 
 -- Now the trace has one additional step: the company issues equity correctly.
 -- And you will see that the residual contract is simply fulfilled.
-#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 3
 
 
 -- If the company issued the equity, but late, the contract is breached.
-#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 200 AT 2
   PARTY unicorn DOES issue (shares 300) AT 13
 
 
 
-#PROVISION `Series A Financing` johnDoe unicorn startState AT 1 WITH
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
   PARTY johnDoe DOES pay 0 AT 20

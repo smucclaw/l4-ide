@@ -214,7 +214,7 @@ GIVEN a IS A NUMBER
 
 #EVAL `Monthly Installment Amount`
 
-#PROVISION `Payment Obligations` `Total Repayment Amount` AT 360 WITH
+#TRACE `Payment Obligations` `Total Repayment Amount` AT 360 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 29
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 59
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 89
@@ -228,6 +228,6 @@ GIVEN a IS A NUMBER
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 329
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 359
 
-#PROVISION `Payment Obligations` `Total Repayment Amount` AT 41 WITH
+#TRACE `Payment Obligations` `Total Repayment Amount` AT 41 WITH
     PARTY `The Borrower` DOES `pay debts to` `The Lender` (USD 2300) AT 80
 
