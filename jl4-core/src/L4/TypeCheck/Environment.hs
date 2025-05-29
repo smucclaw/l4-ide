@@ -33,7 +33,7 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
-  , "advanceTimeTo"
+  , "waitUntil" `rename`  "WAIT UNTIL"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "a", "b", "c", "d", "g", "h", "i"
   -- NOTE: these are NOT supposed to be in the initial environment for the type/scope checker
@@ -164,8 +164,8 @@ evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOn
   mkTyVar r = TyApp emptyAnno r []
 
 -- forall a b. NUMBER -> EVENT a b
-advanceTimeToInfo :: CheckEntity
-advanceTimeToInfo = KnownTerm (forall' [a'Def, b'Def] (fun [MkOptionallyNamedType emptyAnno Nothing number] $ event (tyvar a'Ref) (tyvar b'Ref))) Computable
+waitUntilInfo :: CheckEntity
+waitUntilInfo = KnownTerm (forall' [a'Def, b'Def] (fun [MkOptionallyNamedType emptyAnno Nothing number] $ event (tyvar a'Ref) (tyvar b'Ref))) Computable
   where tyvar r = TyApp emptyAnno r []
 
 initialEnvironment :: Environment
@@ -187,7 +187,7 @@ initialEnvironment =
     , (NormalName "ROUND",        [roundUnique     ])
     , (NormalName "CEILING",      [ceilingUnique   ])
     , (NormalName "FLOOR",        [floorUnique     ])
-    , (NormalName "ADVANCETIMETO",[advanceTimeToUnique])
+    , (NormalName "WAIT UNTIL",   [waitUntilUnique])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -210,5 +210,5 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
-    , (advanceTimeToUnique,(advanceTimeToName,advanceTimeToInfo))
+    , (waitUntilUnique,    (waitUntilName,    waitUntilInfo   ))
     ]

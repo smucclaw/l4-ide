@@ -1044,8 +1044,8 @@ evalContractVal = do
     (App emptyAnno ar [App emptyAnno br [], App emptyAnno cr []])
     emptyEnvironment
 
-advanceTimeToVal :: Reference -> Reference -> Reference -> Machine (Value a)
-advanceTimeToVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
+waitUntilVal :: Reference -> Reference -> Reference -> Machine (Value a)
+waitUntilVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
   let an = MkName emptyAnno $ NormalName "a"
   ad <- def an
   ar <- ref an ad
@@ -1165,7 +1165,7 @@ initialEnvironment = do
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
-  advanceTimeToRef <- AllocateValue =<< advanceTimeToVal eventCRef neverMatchesPartyRef neverMatchesActRef
+  waitUntilRef <- AllocateValue =<< waitUntilVal eventCRef neverMatchesPartyRef neverMatchesActRef
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)
@@ -1178,5 +1178,5 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
-      , (TypeCheck.advanceTimeToUnique, advanceTimeToRef)
+      , (TypeCheck.waitUntilUnique, waitUntilRef)
       ]

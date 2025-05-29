@@ -21,7 +21,7 @@ aContract MEANS
 #TRACE aContract AT 0 WITH
   PARTY 2
   DOES S AT delivery PARTY 4
-  DOES B AT payment 21 ADVANCETIMETO 10
+  DOES B AT payment 21 `WAIT UNTIL` 10
 
 
 #TRACE aContract AT 0 WITH

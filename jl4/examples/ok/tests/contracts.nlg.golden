@@ -1,4 +1,4 @@
-executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 21 at 4 `ADVANCETIMETO` with 10
+executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 21 at 4 `WAIT UNTIL` with 10
 executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 20 at 4
 executing contract `aContract` at 0 with the following events:  party `S` did `delivery` at 2 party `B` did `payment` with 30 at 6 party `B` did `payment` with 10 at 9
 `EVALTRACE` with `x`, 5 and list of `EVENT` with `S`, `delivery` and 5 and `EVENT` with `B`, `payment` with 3 and 42
