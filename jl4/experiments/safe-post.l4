@@ -90,7 +90,7 @@ DECLARE Action IS ONE OF
     WHEN JUST n  THEN n's amount
 
 
-#PROVISION `Equity Financing Conversion` AT 1 WITH
+#TRACE `Equity Financing Conversion` AT 1 WITH
   PARTY startup DOES `Equity Financing Transaction` OF `series A investment` AT 3
 --   PARTY startup DOES `Update Cap Table`             OF `SAFE conversion` AT 2
 
