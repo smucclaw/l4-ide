@@ -11,11 +11,12 @@ import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
-/*
-TODO: There is currently a fair bit of code duplication
+/* TODOs
+- There is currently a fair bit of code duplication
 between the various kinds of alga graphs in this mini-lib
 (eg between this and adjacency-map-directed-graph.ts).
 Would be good to improve that.
+- Would be better to use `union` and `join`, like in https://github.com/snowleopard/alga/blob/main/src/Algebra/Graph/Acyclic/AdjacencyMap.hs
 */
 
 export type DirectedAcyclicGraph<A extends Ord<A>> =
@@ -51,6 +52,7 @@ export abstract class Dag<A extends Ord<A>>
     return new Connect(this, other)
   }
 
+  // TODO: Test / check: would this actually remove vertices?
   /**
   * instance Functor Graph where
       fmap f g = g >>= (vertex . f)
@@ -62,11 +64,12 @@ export abstract class Dag<A extends Ord<A>>
   /**
    * FlatMap (bind) operation for the Dag monad.
    * Applies a function to each vertex in the graph and flattens the result.
+   * Note: This is specialized to DAGs.
    */
   bind<B extends Ord<B>>(
     f: (a: A) => DirectedAcyclicGraph<B>
   ): DirectedAcyclicGraph<B> {
-    return buildg<B>((e, v, o, c) =>
+    const g = buildg<B>((e, v, o, c) =>
       foldg<A, DirectedAcyclicGraph<B>>(
         e,
         (a: A) => foldg(e, v, o, c, f(a)),
@@ -75,6 +78,8 @@ export abstract class Dag<A extends Ord<A>>
         this
       )
     )
+    g.removeSelfLoops()
+    return g
   }
 
   /**
@@ -179,6 +184,16 @@ export abstract class Dag<A extends Ord<A>>
       })
     })
     return pathGraphs
+  }
+
+  /** Internal helper */
+  removeSelfLoops() {
+    this.getEdges().forEach((edge) => {
+      if (edge.getU().isEqualTo(edge.getV())) {
+        this._removeEdge(edge.getU(), edge.getV())
+        this.removeEdgeFromEdgeAttributes(edge)
+      }
+    })
   }
 }
 
