@@ -12,7 +12,7 @@ aContract MEANS
     PARTY B
     MUST payment price PROVIDED price >= 20
     WITHIN 3
-    HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return)
+    HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return WITHIN 10)
     LEST
       PARTY B
       MUST payment fine PROVIDED fine = 10
@@ -21,8 +21,10 @@ aContract MEANS
 #TRACE aContract AT 0 WITH
   PARTY 2
   DOES S AT delivery PARTY 4
+  DOES B AT payment 21 `WAIT UNTIL` 10
 
-DOES B AT payment 21 #TRACE aContract AT 0 WITH
+
+#TRACE aContract AT 0 WITH
   PARTY 2
   DOES S AT delivery PARTY 4
 

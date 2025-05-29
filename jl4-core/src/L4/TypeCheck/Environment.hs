@@ -33,7 +33,13 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "waitUntil" `rename`  "WAIT UNTIL"
+  , "a'" `rename` "a", "b'" `rename` "b"
   , "a", "b", "c", "d", "g", "h", "i"
+  -- NOTE: these are NOT supposed to be in the initial environment for the type/scope checker
+  -- this is essentially the event that's always leading to a breach - it is only relevant
+  -- for its timestamp
+  , "neverMatchesParty", "neverMatchesAct"
   ]
 
 boolean :: Type' Resolved
@@ -157,6 +163,10 @@ evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOn
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
   mkTyVar r = TyApp emptyAnno r []
 
+-- forall a b. NUMBER -> EVENT a b
+waitUntilInfo :: CheckEntity
+waitUntilInfo = KnownTerm (forall' [a'Def, b'Def] (fun [MkOptionallyNamedType emptyAnno Nothing number] $ event (tyvar a'Ref) (tyvar b'Ref))) Computable
+  where tyvar r = TyApp emptyAnno r []
 
 initialEnvironment :: Environment
 initialEnvironment =
@@ -177,6 +187,7 @@ initialEnvironment =
     , (NormalName "ROUND",        [roundUnique     ])
     , (NormalName "CEILING",      [ceilingUnique   ])
     , (NormalName "FLOOR",        [floorUnique     ])
+    , (NormalName "WAIT UNTIL",   [waitUntilUnique])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -199,4 +210,5 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (waitUntilUnique,    (waitUntilName,    waitUntilInfo   ))
     ]

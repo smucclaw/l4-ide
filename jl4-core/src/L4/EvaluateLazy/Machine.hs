@@ -924,14 +924,13 @@ evalDirective env (Contract ann expr t evs) =
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
-  evs' <- evListExpr
-  pure $ App emptyAnno TypeCheck.evalContractRef [contract, t, evs']
+  pure $ App emptyAnno TypeCheck.evalContractRef [contract, t, evListExpr]
   where
-  evListExpr = List emptyAnno <$> traverse eventExpr evs
+  evListExpr = List emptyAnno $ map eventExpr evs
 
-eventExpr :: Expr Resolved -> Machine (Expr Resolved)
-eventExpr (Event _ann ev) = pure $ desugarEvent ev
-eventExpr o = InternalException $ RuntimeTypeError $ "expected an EVENT, but got " <> prettyLayout o
+eventExpr :: Expr Resolved -> Expr Resolved
+eventExpr (Event _ann ev) = desugarEvent ev
+eventExpr o = o -- NOTE: we must assume that the event is already desugared
 
 desugarEvent :: Event Resolved -> Expr Resolved
 desugarEvent (MkEvent ann party act timestamp _atFirst) = App ann TypeCheck.eventCRef [party, act, timestamp]
@@ -1045,6 +1044,31 @@ evalContractVal = do
     (App emptyAnno ar [App emptyAnno br [], App emptyAnno cr []])
     emptyEnvironment
 
+waitUntilVal :: Reference -> Reference -> Reference -> Machine (Value a)
+waitUntilVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
+  let an = MkName emptyAnno $ NormalName "a"
+  ad <- def an
+  ar <- ref an ad
+  pure $ ValClosure
+    (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno ad Nothing])
+    (App emptyAnno TypeCheck.eventCRef [neverMatchesPartyExpr, neverMatchesActExpr, Var emptyAnno ar])
+    (Map.fromList
+      [ (TypeCheck.eventCUnique, eventcRef)
+      , (TypeCheck.neverMatchesPartyUnique, neverMatchesPartyRef)
+      , (TypeCheck.neverMatchesActUnique, neverMatchesActRef)
+      ]
+    )
+
+pattern ValNeverMatchesParty, ValNeverMatchesAct :: Value a
+pattern ValNeverMatchesParty <- (\case ValConstructor r [] -> r `sameResolved` TypeCheck.neverMatchesPartyRef; _ -> False -> True)
+  where ValNeverMatchesParty = ValConstructor TypeCheck.neverMatchesPartyRef []
+pattern ValNeverMatchesAct <- (\case ValConstructor r [] -> r `sameResolved` TypeCheck.neverMatchesActRef; _ -> False -> True)
+  where ValNeverMatchesAct = ValConstructor TypeCheck.neverMatchesActRef []
+
+neverMatchesPartyExpr, neverMatchesActExpr :: Expr Resolved
+neverMatchesPartyExpr = App emptyAnno TypeCheck.neverMatchesPartyRef []
+neverMatchesActExpr = App emptyAnno TypeCheck.neverMatchesActRef []
+
 -- EVENT :: party -> act -> Number -> EVENT party act
 eventCVal :: Value a
 eventCVal = ValUnappliedConstructor TypeCheck.eventCRef
@@ -1139,6 +1163,9 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fulfilRef <- AllocateValue ValFulfilled
+  neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
+  neverMatchesActRef <- AllocateValue ValNeverMatchesAct
+  waitUntilRef <- AllocateValue =<< waitUntilVal eventCRef neverMatchesPartyRef neverMatchesActRef
   pure $
     Map.fromList
       [ (TypeCheck.falseUnique, falseRef)
@@ -1151,4 +1178,5 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
+      , (TypeCheck.waitUntilUnique, waitUntilRef)
       ]
