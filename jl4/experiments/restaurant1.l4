@@ -134,7 +134,7 @@ startState MEANS
 
 -- -- mouseover the following to see that after hungryHippo orders a beer, the contract is not complete, because there's more to the story.
 
-#PROVISION `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
@@ -145,14 +145,14 @@ startState MEANS
 -- it will simply be the next step. Well, it will be all the steps, but the mouseover
 -- only shows the next step.
 
-#PROVISION `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
   PARTY eatAtJoes   DOES showBill 12      AT 30
 
 -- if all the steps happened, but happened late, then we have a breach, don't we.
-#PROVISION `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
@@ -163,7 +163,7 @@ startState MEANS
 -- continues to wait for a proper performance. Because the payment was imperfect.
 -- so we wait for the transaction to be perfected.
 
-#PROVISION `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20

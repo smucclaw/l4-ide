@@ -101,7 +101,7 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 
 -- mouseover the following to see that after hungryHippo orders a beer and a potato, and then pays, everything is done.
 
-#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "potato"   1 AT 2
   PARTY hungryHippo DOES order "beer"     1 AT 4
   PARTY hungryHippo DOES order "potato"   1 AT 6
@@ -113,14 +113,14 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 -- it will simply be the next step. Well, it will be all the steps, but the mouseover
 -- only shows the next step.
 
-#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
   PARTY eatAtJoes   DOES showBill 12      AT 30
 
 -- if all the steps happened, but happened late, then we have a breach, don't we.
-#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20
@@ -133,7 +133,7 @@ hungryHippo MEANS NaturalPerson OF "John Doe"
 -- track partial payments toward a full amount, but that could be done by clever
 -- manipulation of the symtab, perhaps by tracking another attribute "payment made".
 
-#PROVISION `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
   PARTY hungryHippo DOES order "beer"   1 AT 2
   PARTY hungryHippo DOES order "potato" 1 AT 12
   PARTY hungryHippo DOES getBill          AT 20

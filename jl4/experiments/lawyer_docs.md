@@ -372,7 +372,7 @@ GIVETH A PROVISION Actor Action
 
 **Show the complete flow:**
 ```l4
-#PROVISION `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
+#TRACE `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
   -- Step 1: Application
   PARTY applicant DOES ProvideApplication OF applicationDocs AT 10
   
@@ -413,7 +413,7 @@ GIVETH A PROVISION Actor Action
 **Complete charity lifecycle simulation:**
 
 ```l4
-#PROVISION `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
+#TRACE `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
   -- Registration
   PARTY charity DOES ProvideApplication OF docs AT 10
   PARTY Commissioner DOES RegisterCharity OF charity AT 20
@@ -697,7 +697,7 @@ MUST ProvideApplication OF exampleApplication
 **Multi-party scenario with error handling:**
 
 ```l4
-#PROVISION `Complex Misconduct Scenario` charity Commissioner governor tribunal AT 1 WITH
+#TRACE `Complex Misconduct Scenario` charity Commissioner governor tribunal AT 1 WITH
   -- Discovery phase
   PARTY Commissioner DOES `discover potential misconduct` governor AT 10
   PARTY Commissioner DOES `investigate allegations` AT 20
@@ -1090,7 +1090,7 @@ MUST Action OF predefinedExample
 ## **Simulation**
 ```l4
 #EVAL expression                                    -- Evaluate expression
-#PROVISION `name` actor1 actor2 state AT time WITH  -- Simulate process
+#TRACE `name` actor1 actor2 state AT time WITH  -- Simulate process
   PARTY actor1 DOES action1 AT time1
   PARTY actor2 DOES action2 AT time2
 ```
