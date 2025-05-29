@@ -43,9 +43,6 @@ export function makeL4RpcRequestType<P extends object, R>(
   return new RequestType<P, R, void>(method)
 }
 
-// LspResponse
-export type LspResponse<T> = T | null
-
 // Notification type
 export type L4RpcNotificationType<P extends object> = NotificationType<P>
 

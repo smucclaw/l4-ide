@@ -1,8 +1,4 @@
-import type {
-  L4RpcRequestType,
-  LspResponse,
-  LadderBackendApi,
-} from 'jl4-client-rpc'
+import type { L4RpcRequestType, LadderBackendApi } from 'jl4-client-rpc'
 import { makeLspRelayRequestType } from 'jl4-client-rpc'
 import { Messenger } from 'vscode-messenger-webview'
 import { HOST_EXTENSION } from 'vscode-messenger-common'
@@ -25,7 +21,7 @@ export class LadderApiForWebview implements LadderBackendApi {
   async sendClientRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>> {
+  ): Promise<R | null> {
     return await this.messenger.sendRequest(
       makeLspRelayRequestType<P, R>(),
       HOST_EXTENSION,

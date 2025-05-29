@@ -1,8 +1,4 @@
-import type {
-  L4RpcRequestType,
-  LspResponse,
-  LadderBackendApi,
-} from 'jl4-client-rpc'
+import type { L4RpcRequestType, LadderBackendApi } from 'jl4-client-rpc'
 import type { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
 import type { RenderAsLadderInfo } from '@repo/viz-expr'
 
@@ -23,7 +19,7 @@ export class LadderApiForMonaco implements LadderBackendApi {
   async sendClientRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>> {
+  ): Promise<R | null> {
     return await this.languageClient.sendRequest(type, params)
   }
 

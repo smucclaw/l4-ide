@@ -1,9 +1,5 @@
 import { LanguageClient } from 'vscode-languageclient/node.js'
-import {
-  type L4RpcRequestType,
-  type LspResponse,
-  L4LanguageClient,
-} from 'jl4-client-rpc'
+import { type L4RpcRequestType, L4LanguageClient } from 'jl4-client-rpc'
 
 export class VSCodeL4LanguageClient implements L4LanguageClient {
   /* TODO: Add a static `make` method that initializes the client and server options in the future, 
@@ -32,7 +28,7 @@ export class VSCodeL4LanguageClient implements L4LanguageClient {
   async sendRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>> {
+  ): Promise<R | null> {
     return this.client.sendRequest(type.method, params)
   }
 
