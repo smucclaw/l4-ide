@@ -10,8 +10,6 @@ IMPORT `base-money`
     version      IS "1.2"
     safeType     IS `SAFE (Post-Money)`
 
-ASSUME TBD IS A STRING
-
 §§ Parties
 // sample startup
 startup MEANS
