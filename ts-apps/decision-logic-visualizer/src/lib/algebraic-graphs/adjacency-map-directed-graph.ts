@@ -92,6 +92,11 @@ export class DirectedAMGraph<A extends Ord<A>>
     this.edgeAttributes.set(makeEdgeKey(edge), newAttr)
   }
 
+  /** Internal helper */
+  protected removeEdgeFromEdgeAttributes<T extends Edge<A>>(edge: T) {
+    this.edgeAttributes.delete(makeEdgeKey(edge))
+  }
+
   /** Internal */
   _getEdgeAttributesMap() {
     return this.edgeAttributes
