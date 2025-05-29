@@ -85,9 +85,9 @@ DECLARE Action IS ONE OF
           WITHIN -1   // (👀)v
   WHERE
    numShares MEANS
-    CONSIDER (`divide money` OF `SAFE Purchase Amount`, `price per share` OF `series A investment`)
+    CONSIDER (`divide maybe money` OF `SAFE Purchase Amount`, `price per share` OF `series A investment`)
     WHEN NOTHING THEN 0
-    WHEN JUST n  THEN n
+    WHEN JUST n  THEN n's amount
 
 
 #PROVISION `Equity Financing Conversion` AT 1 WITH
