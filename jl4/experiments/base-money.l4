@@ -28,7 +28,7 @@ GIVEN a IS A Money
 GIVETH MAYBE Money
 `divide money` MEANS
   IF    a's currency EQUALS b's currency
-  THEN  `divide money` a b
+  THEN  `divide money` a (b's amount)
   ELSE  NOTHING
     
     
