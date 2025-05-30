@@ -1,0 +1,172 @@
+
+// we illustrate the labeled transition system of multi-agent contracts,
+// where moving parties act in time.
+// in this example, a patron goes to a restaurant and orders a beer, then a potato, and then `patron asks for the bill.check out please`
+// the restaurant shows them the bill, and the patron pays.
+// this is a simplified example, with only a single linear sequential path of execution: one beer, one potato, done.
+// the next example restaurant2.l4 allows the patron to order multiple beers and potatoes, and to check out at any time.
+
+IMPORT prelude
+
+DECLARE Actor IS ONE OF
+  NaturalPerson          HAS name IS A STRING
+  Restaurant             ^   ^    ^  ^ ^
+
+DECLARE Action IS ONE OF
+  order    HAS itemName   IS A STRING
+               quantity   IS A  NUMBER
+  serve    HAS itemName   IS A  STRING
+               quantity   IS A  NUMBER
+  getBill
+  showBill HAS amount     IS A  NUMBER
+  pay      HAS amount     IS A  NUMBER
+
+DECLARE `Symbol Table`
+    HAS bill      IS A NUMBER
+        beers     IS A NUMBER
+        potatoes  IS A NUMBER
+        log       IS A LIST OF STRING
+
+eatAtJoes MEANS Restaurant OF "EatAtJoes, Inc."
+hungryHippo MEANS NaturalPerson OF "John Doe"
+
+§ `patron orders a beer`
+GIVEN patron   IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`order beer` MEANS
+  IF      TRUE
+  THEN    PARTY   patron
+          MUST    order "beer" 1
+          WITHIN  10
+          HENCE   `order potato` patron company newState
+  ELSE    FULFILLED      
+  WHERE
+    newState MEANS `Symbol Table`
+      WITH
+        bill      IS symtab's bill
+        beers     IS symtab's beers + 1
+        potatoes  IS symtab's potatoes
+        log       IS "patron ordered a beer" FOLLOWED BY symtab's log
+
+
+
+§ `patron orders a potato`
+GIVEN patron   IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`order potato` MEANS
+  PARTY   patron
+  MUST    order "potato" 1
+  WITHIN  10
+  HENCE   `check out please` patron company newState
+        
+  WHERE
+    newState MEANS `Symbol Table`
+      WITH
+        bill      IS symtab's bill
+        beers     IS symtab's beers
+        potatoes  IS symtab's potatoes + 1
+        log       IS "patron ordered a potato" FOLLOWED BY symtab's log
+
+
+
+§ `patron asks for the bill`
+GIVEN patron   IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`check out please` MEANS
+  PARTY   patron
+  MUST    getBill
+  WITHIN  10
+  HENCE   `please look at the receipt and confirm` patron company newState
+  WHERE
+    newState MEANS symtab
+    -- [TODO] mutate single attribute of record
+    --        log       IS "customer asked for the bill" FOLLOWED BY symtab's log
+
+
+§ `restaurant gives the bill`
+GIVEN patron   IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`please look at the receipt and confirm` MEANS
+  PARTY   company
+  MUST    showBill (newState's bill)
+  WITHIN  10
+  HENCE   `pay with credit card` patron company newState
+  WHERE
+    newState MEANS `Symbol Table`
+      WITH
+        bill      IS      symtab's bill
+                     PLUS symtab's beers    * 10
+                     PLUS symtab's potatoes *  2
+        beers     IS symtab's beers
+        potatoes  IS symtab's potatoes
+        log       IS "restaurant printed the bill for review" FOLLOWED BY symtab's log
+
+
+
+§ `patron pays`
+GIVEN patron   IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`pay with credit card` MEANS
+  PARTY   patron
+  MUST    pay (symtab's bill)
+  WITHIN  10
+  HENCE   FULFILLED
+
+
+
+GIVETH A `Symbol Table`
+startState MEANS
+  `Symbol Table` WITH
+    bill      IS 0
+    beers     IS 0
+    potatoes  IS 0
+    log       IS (LIST "", "nothing has happened yet")
+
+-- -- mouseover the following to see that after hungryHippo orders a beer, the contract is not complete, because there's more to the story.
+
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+  PARTY hungryHippo DOES pay 12           AT 40
+
+-- if one of the steps is missing, the residual contract will not be FULFILLED;
+-- it will simply be the next step. Well, it will be all the steps, but the mouseover
+-- only shows the next step.
+
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+
+-- if all the steps happened, but happened late, then we have a breach, don't we.
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+  PARTY hungryHippo DOES pay 12           AT 400
+
+-- if all the steps happened, but the money was a dollar short, then the contract
+-- continues to wait for a proper performance. Because the payment was imperfect.
+-- so we wait for the transaction to be perfected.
+
+#TRACE `order beer` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+  PARTY hungryHippo DOES pay 11           AT 40
+

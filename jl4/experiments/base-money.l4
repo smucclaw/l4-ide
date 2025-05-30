@@ -1,0 +1,48 @@
+
+IMPORT prelude
+
+DECLARE Money
+    HAS amount   IS A NUMBER
+        currency IS A STRING
+
+USD d MEANS Money OF d, "USD"
+SGD d MEANS Money OF d, "SGD"
+
+-- [TODO] infix operators! please!     -- ($/) MEANS `divide money`
+
+
+-- `divide money` is a function that takes two Money and returns a Maybe Money; nothing if the currencies are different
+
+-- in the future it would be nice to have an Exception based on Either.
+GIVEN a IS A Money
+      b IS A MAYBE Money
+GIVETH MAYBE NUMBER
+`divide maybe money` MEANS
+  CONSIDER b
+      WHEN NOTHING  THEN NOTHING
+      WHEN JUST b   THEN (`divide money` a b)
+
+
+GIVEN a IS A Money
+      b IS A Money
+GIVETH MAYBE NUMBER
+`divide money` MEANS
+  IF         a's currency EQUALS b's currency
+    AND NOT  b's amount   EQUALS 0
+  THEN JUST OF a's amount / b's amount
+  ELSE NOTHING
+    
+    
+GIVEN a IS A Money
+      b IS A NUMBER
+GIVETH MAYBE Money
+`divide money number` MEANS
+  IF    NOT b EQUALS 0
+  THEN  JUST OF Money WITH
+                amount   IS a's amount DIVIDED BY b
+                currency IS a's currency
+  ELSE  NOTHING
+
+GIVEN mm IS A MAYBE Money
+GIVETH A NUMBER
+toZero MEANS maybe amount 0 mm

@@ -1,0 +1,87 @@
+IMPORT prelude
+IMPORT `jerseyCharities-types`
+
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014
+
+§ `11 Application To Register`
+
+§§ `11.1A variant -- motivations relevant`
+
+// (1) An entity (“the applicant”),
+//       that wishes to have available to it the advantages of registration as a charity under this Law,
+//     may apply to be registered.
+
+DECLARE Reasons         IS A STRING
+GIVEN reasons           IS A LIST OF Reasons
+      applicant         IS AN Entity
+      commissioner      IS A Role
+      submission        IS A Submission
+`application 1A` MEANS
+  PARTY    applicant
+    MUST   Notify OF target  IS Role        OF commissioner
+                     content IS application OF submission
+  PROVIDED reasons CONTAINS "wishes to have available to it the advantages of registration as a charity under this Law"
+  
+§§ `11.1B variant -- motivations not relevant`
+
+// (1)     An entity (“the applicant”) may apply to be registered by submitting a valid application to the Commissioner.
+GIVEN applicant         IS AN Entity
+      commissioner      IS A Role
+      submission        IS A Submission
+`application 1B` MEANS
+  PARTY applicant
+    MAY Notify WITH target  IS Role OF commissioner
+                    content IS application OF submission
+
+// (2)     The applicant must provide to the Commissioner:
+
+DECLARE Submission
+    HAS constitution                                        IS A  Document
+        `draft statement of registered charitable purposes` IS A  LIST OF Purposes
+        `draft registered public benefit statement`         IS A  Document
+        // financial accounts and so on and so forth              
+        `form of submission`                                IS A  Format
+        `entity description`                                IS AN `Entity Description Category`
+        `authorized promoters`                              IS A LIST OF Entity
+
+// ...in such form as the Commissioner may publish in relation to an entity of a description into which that charity falls...
+GIVEN `entity description` IS AN `Entity Description Category`
+      `form of submission` IS A  Format
+PARTY Commissioner
+  MAY publish `form of submission`
+HENCE   UPDATE `publicly known`'s `forms of submission` FOR `entity description` IS `form of submission`
+
+DECLARE Format IS ONE OF
+    `paper bundle`
+    `web app`
+
+GIVEN submission IS A Submission
+GIVETH A BOOLEAN
+DECIDE `application is valid to be approved` IF
+       `human review` OF submission's constitution
+   AND `human review` OF submission's `draft registered public benefit statement`
+   AND         length OF submission's `draft statement of registered charitable purposes` AT LEAST 1
+// AND ...
+   AND submission's `form of submission` EQUALS `publicly known's` `forms of submission` FOR submission's `entity description`
+// AND submission's `authorized promoters` CONTAINS `publicly known's` `authorized promoters` FOR submission's `entity description`
+
+
+// (2)     The applicant must provide to the Commissioner, in such form as the Commissioner may publish in relation to an entity of a description into which that charity falls –
+//   (a)     information and evidence, as at the time of the application and (if different) as proposed once the entity is registered, as to –
+//     (i)      how the entity meets the requirements of paragraphs (4)(c) and (d),
+//     (ii)      the matters that are required to be registered under sub-paragraphs (a), (b) and (d) of Article 8(3), and
+//     (iii)     if applicable, the matters that are required to be registered under sub-paragraphs (h), (i), (m) and (n) of Article 8(3);
+//   (b)     a copy of the applicant’s constitution;
+//   (c)     a draft of the proposed statement of the entity’s registered charitable purposes;
+//   (d)     a draft of the entity’s registered public benefit statement;
+//   (e)     details of –
+//     (i)      the applicant’s most recent, if any, financial accounts,
+//     (ii)      any payment made to any governor of the entity in the 12 months preceding the application, and if an Order under Article 13(9)(b) applies to the registered charity, a draft of the proposed statement under that Order,
+//     (iii)     any other financial information that would be required if the application were for registration under the Non-Profit Organizations (Jersey) Law 2008, and
+//     (iv)     if the applicant is not requesting entry in the restricted section of the register, any further financial information prescribed by the Minister by Order; and
+//   (f)      such other information, documents and evidence as may be –
+//     (i)      required by Regulations under paragraph (3), or
+//     (ii)      otherwise requested by the Commissioner in order to determine the application.
+// 
+
+

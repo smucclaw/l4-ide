@@ -1,0 +1,18 @@
+
+ASSUME Person IS A TYPE
+ASSUME Car IS A TYPE
+ASSUME reversing IS A FUNCTION FROM Car TO BOOLEAN
+ASSUME `is driving` IS A FUNCTION FROM Person AND Car TO BOOLEAN
+ASSUME `is a police officer` IS A FUNCTION FROM Person TO BOOLEAN
+
+GIVEN p      IS A Person
+      car    IS A Car
+safetyRule42 MEANS
+  PARTY   p
+  MUST    `wear a seatbelt`
+  PROVIDED `is driving` p car
+           AND NOT     reversing car
+                    OR `is a police officer` p
+  THE ENTIRE TIME
+  
+

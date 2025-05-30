@@ -1,0 +1,244 @@
+IMPORT prelude
+
+IMPORT `jerseyCharities-types`
+
+@ref txt="Art 13" href="https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797843" parts="(7)-(10)"
+
+// 13
+//   (7) A registered charity must send an annual return to the
+//   Commissioner, containing information as to any matter falling within
+//   paragraph (6) arising during the year to which the return relates, and
+//   as to any other matter prescribed by the Minister by Order for this
+//   purpose.
+// 
+//   (8) An Order under paragraph (7) may also make provision as to the
+//   format and timing of the annual return, the consequences of lateness,
+//   and the content of any entries to be made on the register in respect
+//   of the annual return.
+// 
+//   (9) The Minister may by Order –
+// 
+//     (a) require a registered charity to include in its annual return
+//     details of a prescribed description of any payment made, during the
+//     year to which the return relates, by or on behalf of the registered
+//     charity to a governor, or to a person having a prescribed connection
+//     with a governor;
+// 
+//     (b) require a registered charity to provide to the Commissioner a
+//     statement of its current intentions as to making any payments of such
+//     a prescribed description in future;
+// 
+//     (c) provide for the entry on the register by the Commissioner of the
+//     details included under sub-paragraph (a) in the charity’s latest
+//     annual return, and of the statement provided under sub-paragraph (b).
+// 
+//   (10) The Minister may by Order, after consulting the Commissioner and
+//   any body appearing to the Minister to be representative of interested
+//   registered charities, provide that any provision of paragraph (6) or
+//   (7), or of any Order under paragraph (7), (8) or (9) –
+// 
+//     (a) does not apply to a prescribed description of charity appearing to
+//     the Minister to require relief from the burden of that provision by
+//     virtue of the small size, or lack of resources or expertise of
+//     charities of that description; or
+// 
+//     (b) applies to a prescribed description of charity only subject to a
+//     modification prescribed by the Order, being a modification that
+//     appears to the Minister to give reasonable relief from the burden of
+//     that provision, having regard to the small size, or lack of resources
+//     or expertise of charities of that description.
+// 
+
+@ref txt="Core Info Regs" href="https://www.jerseylaw.je/laws/current/ro_19_2018"
+
+//  1 Core financial information defined
+//
+//    (1) In these Regulations “core financial information” means a
+//    statement setting out, in relation to an entity and a year –
+//
+//      (a) the total amount of the entity’s income for the year;
+//
+//      (b) the total amount of the entity’s expenditure for the year;
+//
+//      (c) the total amount of the value of the money and valued assets held
+//      by the entity at the start of the year;
+//
+//      (d) the total amount of the value of the money and valued assets held
+//      by the entity at the end of the year; and
+//
+//      (e) a list of any other assets, or classes of assets, held by the
+//      entity at the end of the year, giving –
+//
+//        (i) addresses for land or other assets that have an address, and
+//
+//        (ii) brief descriptions or other identifying details for other assets
+//        or classes of assets.
+//
+//
+//    (2) For the purpose of paragraph (1) –
+//
+//      (a) “asset” includes any asset of any form, without taking account of
+//      any liabilities;
+//
+//      (b) “valued asset” means any asset in respect of which the entity is
+//      aware of the asset’s value, or uses an estimate of the asset’s value
+//      for the entity’s accounting purposes, at the relevant time.
+//
+//  2 Duty to provide core financial information on application for
+//  registration
+//
+//    (1) An entity applying for registration as a charity under the
+//    Charities (Jersey) Law 2014 must provide to the Commissioner the core
+//    financial information in relation to that entity and to the relevant
+//    year.
+//
+//    (2) The relevant year is –
+//
+//      (a) if the entity provides financial accounts under Article
+//      11(2)(e)(i) of the Charities (Jersey) Law 2014, the last financial
+//      year of the entity to which those accounts relate;
+//
+//      (b) if sub-paragraph (a) does not apply and the entity came into being
+//      less than one year before the application, the period from the date on
+//      which the entity came into being until a date chosen by the entity
+//      that is not more than 28 days before the date of the application; or
+//
+//      (c) if neither of sub-paragraphs (a) and (b) applies, the year ending
+//      on the 31st December immediately preceding the date of the
+//      application.
+//
+
+
+@ref txt="Additional Info Order" href="https://www.jerseylaw.je/laws/current/ro_59_2018#_Toc181797774"
+
+// 3 Additional financial information for annual return
+// 
+//   (1) A registered charity must include in its annual return –
+// 
+//     (a) the core financial information in relation to that charity and
+//     to the year to which the return relates; and
+// 
+//     (b) the charity’s most recent, if any, financial accounts.
+// 
+//   (2) A registered charity must include in its annual return details
+//   of any governor payments made, during the year to which the return
+//   relates, by or on behalf of the registered charity.
+// 
+//   (3)     The details provided under paragraph (2) –
+// 
+//     (a) may be given for each payment individually, subject to
+//     sub-paragraphs (b) and (d);
+// 
+//     (b) must include the total of the amounts of the governor payments
+//     for the year, or enable that total to be readily calculated;
+// 
+//     (c) must include the name of each governor or connected person who
+//     was paid, and, in the case of a connected person, the name of the
+//     governor to whom the person is connected;
+// 
+//     (d) must include the total of the amounts paid in the year to each
+//     governor or connected person, or include details from which that
+//     total can be readily calculated;
+// 
+//     (e) must include a description of any services or goods that the
+//     charity has obtained as a result of the governor payments, in
+//     relation to each governor or connected person paid (whether in
+//     relation to each payment individually or to a total of payments in
+//     the year to that governor or connected person for that description
+//     of services or goods).
+// 
+//   (4) When a registered charity makes its first annual return after
+//   registering, it must also include the core financial information in
+//   relation to any period between –
+// 
+//     (a) the end of the year or other period in relation to which it
+//     provided the core financial information that it submitted with its
+//     application for registration; and
+// 
+//     (b) the start of the year to which the first annual return
+//     relates.
+// 
+// 3A     Additional information as to public benefit in annual return[2]
+// 
+//   (1) A registered charity must include in its annual return a
+//   narrative statement of the manner in which the charity claims to
+//   have, during the year to which the annual return relates, complied
+//   (or failed to comply) with its public benefit duty.
+// 
+//   (2) When a registered charity makes its first annual return after
+//   registering, it must also include a narrative statement of the
+//   manner in which the charity has complied with its public benefit
+//   duty during the period (if any) between –
+// 
+//     (a)     the date on which it was registered; and
+// 
+//     (b)     the start of the year to which the first annual return relates.
+// 
+
+@ref txt="Timing Order" href="https://www.jerseylaw.je/laws/current/ro_144_2019"
+
+-- 
+--  Timing of annual return
+-- 
+-- An annual return must –
+-- 
+-- (a)     relate to a year that ends on an anniversary –
+-- 
+-- (i)      of the date of registration of the charity, or
+-- 
+-- (ii)      of another date that is agreed by the charity and the Commissioner, if that agreement is reached within the first year after the registration of the charity; and
+-- 
+-- (b)     be sent to, and received by, the Commissioner in the period of 2 months following the end of the year to which it relates.
+-- 
+
+DECLARE Actor IS ONE OF
+   Charity HAS entry  IS A RegisterEntry
+   Person  HAS person IS A Person
+   Role    HAS role   IS A Role
+   OtherActor HAS other  IS A STRING
+
+DECLARE Action IS ONE OF
+   Notify  HAS target  IS AN Actor
+               content IS A Notice
+   Other   HAS act     IS A STRING
+
+§ `Annual Return Obligation (Art 13, Law 2014 & Art 2, R&O 59/2018)`
+GIVEN charity  IS A RegisterEntry
+      register IS A CharityRegister
+GIVETH A PROVISION Actor Action
+`annual return requested` MEANS
+  PARTY Role OF Commissioner
+  MUST  Notify OF Charity charity
+                  OtherMessage OF "require annual return from charity"
+
+  WITHIN relativeTime OF 14, Months OF charity's lastFinancialRecord's financialYear's endDate
+  HENCE `file annual return` charity register nextFY
+  WHERE nextFY MEANS relativeTime OF 1, Year OF charity's lastFinancialRecord's financialYear's endDate
+    
+GIVEN n       IS A NUMBER
+      du      IS A DateRel
+relativeTime MEANS n
+
+
+
+DECLARE DateRel IS ONE OF
+   Day    HAS n IS A Date
+   Days   HAS n IS A Date
+   Week   HAS n IS A Date
+   Weeks  HAS n IS A Date
+   Month  HAS n IS A Date
+   Months HAS n IS A Date
+   Year   HAS n IS A Date
+   Years  HAS n IS A Date
+
+GIVEN charity  IS A RegisterEntry
+      register IS A CharityRegister
+      financialYear IS A NUMBER
+GIVETH A PROVISION Actor Action
+`file annual return` MEANS
+  PARTY Charity charity
+  MUST Notify OF Role OF Commissioner
+                 annualReturn
+  WITHIN {- relativeTime OF -} 2 // , Months OF -- previous event
+  HENCE FULFILLED // `register updated with annual return` register entry financialData
+  LEST .... // `Commissioner may issue Required Steps Notice`

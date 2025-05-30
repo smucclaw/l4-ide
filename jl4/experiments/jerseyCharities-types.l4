@@ -1,0 +1,293 @@
+IMPORT prelude
+
+-- ======================================================================
+-- SECTION A – STRUCTURAL / INTERPRETIVE LAYER
+-- ======================================================================
+-- | Provision (instrument) | What it seeds (examples) | Why it is structural | Citations |
+-- | --------------------- | ------------------------ | -------------------- | --------- |
+-- | Arts 1-2 Law 2014     | Core terms              | Pure definitions     |           |
+-- | Arts 3-4 & Sched 1    | Charity Commissioner    | Institutional        |           |
+-- | Arts 38-43 & Sched 2  | Service rules           | Administrative       |           |
+-- | Arts 1-2 R&O 59/2018  | Financial definitions   | Extends glossary     |           |
+-- | Art 1 R&O 60/2018     | Restricted section terms| Supports funding     |           |
+
+-- The Charity Register itself (Art 8)
+DECLARE CharityRegister
+    HAS generalSection IS A LIST OF RegisterEntry
+        restrictedSection IS A LIST OF RegisterEntry
+        historicSection IS A LIST OF RegisterEntry
+        nextRegistrationNumber IS A NUMBER
+        lastUpdated IS A Date
+
+-- A register entry, containing all data recorded in the register
+DECLARE RegisterEntry
+    HAS registrationNumber IS A STRING
+        name IS A STRING
+        previousNames IS A LIST OF STRING
+        constitution IS A Constitution
+        purposes IS A LIST OF Purpose
+        address IS A STRING
+        registrationDate IS A Date
+        agreedFinancialYearEnd IS A Date
+        deregistrationDate IS A MAYBE Date
+        section IS A RegisterSection
+        governors IS A LIST OF Person
+        financials IS A LIST OF FinancialYearRecord
+        publicBenefitStatement IS A PublicBenefitStatement
+        notices IS A LIST OF Notice
+        fundingCondition IS A BOOLEAN
+        retrospectiveDeregistration IS A BOOLEAN
+        deregistrationReason IS A MAYBE STRING
+
+ASSUME lastFinancialRecord IS A FUNCTION FROM RegisterEntry TO FinancialYearRecord
+
+-- Record of a financial year's data
+DECLARE FinancialYearRecord
+    HAS financialYear IS A DateRange
+        annualIncome IS A Money
+        annualExpenditure IS A Money
+        assets IS A Money
+        governorPayments IS A Money
+        publicBenefit IS A STRING
+        lateFlag IS A BOOLEAN
+        submissionDate IS A Date
+
+DECLARE Constitution
+    HAS document IS A STRING
+        isWritten IS A BOOLEAN
+        lastUpdated IS A Date
+        allowsGovtControl IS A BOOLEAN
+
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+        role IS A Role
+        isGovernor IS A BOOLEAN
+        isDisqualified IS A BOOLEAN
+        convictions IS A LIST OF Conviction
+        position IS A MAYBE STRING
+        
+DECLARE Property
+    HAS description IS A STRING
+        value IS A Money
+        acquisitionDate IS A Date
+        purpose IS A Purpose
+
+DECLARE Conviction
+    HAS offenseType IS A STRING
+        date IS A Date
+        isSpent IS A BOOLEAN
+        involvesVulnerablePerson IS A BOOLEAN
+
+DECLARE PublicBenefitStatement
+    HAS statement IS A STRING
+        lastUpdated IS A Date
+
+DECLARE DateRange
+    HAS startDate IS A Date
+        endDate IS A Date
+
+DECLARE Money 
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+DECLARE Role IS ONE OF
+    Commissioner
+    GovernorRole HAS charityName IS A STRING
+                     position IS A STRING
+    Minister
+    StatesAssemblyMember
+    TribunalMember
+
+-- Notice and Decision types
+DECLARE Submission
+    HAS submissionId IS A STRING
+        submissionDate IS A Date
+        submissionType IS A STRING
+        applicantName IS A STRING
+        documents IS A LIST OF STRING
+        status IS A SubmissionStatus
+
+DECLARE SubmissionStatus IS ONE OF
+    Received
+    UnderReview
+    Approved
+    Rejected
+    RequiresMoreInfo
+
+DECLARE Notice IS ONE OF
+  required       HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A DeregistrationNotice
+  message        HAS notice IS A STRING
+  annualReturn
+  application    HAS submission IS A Submission
+
+
+DECLARE RequiredStepsNotice HAS noticeId IS A STRING
+                                issueDate IS A Date
+                                steps IS A LIST OF STRING
+                                deadline IS A Date
+                                reasonCodes IS A LIST OF STRING
+                                complianceStatus IS A ComplianceStatus
+
+
+DECLARE DeregistrationNotice HAS noticeId IS A STRING
+                                 date IS A Date
+                                 reasons IS A LIST OF STRING
+                                 isVoluntary IS A BOOLEAN
+
+DECLARE ComplianceStatus IS ONE OF
+    Pending
+    Complied
+    Failed
+
+DECLARE Decision IS ONE OF
+    RegistrationRefusal HAS reasons IS A LIST OF STRING
+                            date IS A Date
+    DeregistrationDecision HAS date IS A Date
+                               reasons IS A LIST OF STRING
+    NameChangeRefusal HAS reasons IS A LIST OF STRING
+                          date IS A Date
+    RequiredStepsNoticeDecision HAS notice IS A RequiredStepsNotice
+                                    date IS A Date
+
+-- Date structure
+DECLARE Date
+  HAS year IS A NUMBER
+      month IS A NUMBER
+      day IS A NUMBER
+
+-- Core timepoints from the law
+commencement MEANS Date OF 2014, 8, 14
+`appointed day` MEANS Date OF 2015, 5, 1
+
+-- Register sections enumeration
+DECLARE RegisterSection
+  IS ONE OF
+    GeneralSection
+    RestrictedSection
+    HistoricSection
+
+-- Charitable purposes enumeration (from Art 6 of the Law)
+// let's do this as a list of purposes which are known to be charitable, plus room for "other" purposes
+DECLARE Purpose
+  IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    `advancement of religion`
+    `advancement of health`
+    `saving of lives`
+    `advancement of citizenship or community development`
+    `advancement of arts, heritage, culture or science`
+    `advancement of public participation in sport`
+    `provision of recreational facilities`
+    `advancement of human rights`
+    `promotion of religious or racial harmony`
+    `promotion of equality and diversity`
+    `advancement of environmental protection`
+    `relief of those in need`
+    `advancement of animal welfare`
+    `analogous purpose`
+    otherPurpose HAS value IS A STRING
+
+-- Information and disclosure types
+DECLARE Information
+    HAS description IS A STRING
+        section IS A RegisterSection
+        isPublic IS A BOOLEAN
+        dataType IS A STRING
+
+-- ======================================================================
+-- ENHANCED TYPES FOR SUBSIDIARY LEGISLATION COMPLIANCE
+-- ======================================================================
+-- Additional types required for full RO 19/2018, RO 59/2018, and RO 024/2025 implementation
+
+-- Enhanced Conviction type for RO 024/2025 Art 2(2) vulnerable person definitions
+DECLARE EnhancedConviction
+    HAS offenseType IS A STRING
+        date IS A Date
+        isSpent IS A BOOLEAN
+        involvesVulnerablePerson IS A BOOLEAN
+        victimAge IS A NUMBER
+        victimHadMentalDisorder IS A BOOLEAN
+        victimHadSignificantImpairment IS A BOOLEAN
+        victimHadPhysicalDisability IS A BOOLEAN
+
+-- Governor Payment types for RO 59/2018 Articles 2-3
+DECLARE GovernorPayment
+    HAS amount IS A Money
+        recipientName IS A STRING
+        serviceDescription IS A STRING
+        governorConnectionName IS A STRING
+        isDirectGovernorPayment IS A BOOLEAN
+        paymentDate IS A Date
+        paymentType IS A PaymentType
+
+DECLARE PaymentType IS ONE OF
+    Salary
+    Expenses
+    ConsultingFee
+    DirectorFee
+    Other HAS description IS A STRING
+
+-- Enhanced FinancialYearRecord for RO 19/2018 core financial information
+DECLARE EnhancedFinancialYearRecord
+    HAS financialYear IS A DateRange
+        annualIncome IS A Money
+        annualExpenditure IS A Money
+        assets IS A Money
+        openingAssets IS A Money
+        closingAssets IS A Money
+        otherAssets IS A LIST OF Asset
+        governorPayments IS A LIST OF GovernorPayment
+        publicBenefit IS A STRING
+        lateFlag IS A BOOLEAN
+        submissionDate IS A Date
+
+-- Asset types for RO 19/2018 Regulation 1(1)(e)
+DECLARE Asset
+    HAS description IS A STRING
+        address IS A MAYBE STRING
+        estimatedValue IS A MAYBE Money
+        assetType IS A AssetType
+
+DECLARE AssetType IS ONE OF
+    Land HAS address IS A STRING
+    Property HAS address IS A STRING
+    Equipment HAS description IS A STRING
+    Investment HAS description IS A STRING
+    Other HAS description IS A STRING
+
+-- Enhanced Person type with connection tracking for RO 59/2018 Article 2
+DECLARE EnhancedPerson
+    HAS name IS A STRING
+        address IS A STRING
+        role IS A Role
+        isGovernor IS A BOOLEAN
+        isDisqualified IS A BOOLEAN
+        convictions IS A LIST OF EnhancedConviction
+        position IS A MAYBE STRING
+        spouseName IS A MAYBE STRING
+        familyConnections IS A LIST OF STRING
+        partnerships IS A LIST OF STRING
+        corporateConnections IS A LIST OF STRING
+
+-- Enhanced RegisterEntry with additional fields for timing flexibility and payment tracking
+DECLARE EnhancedRegisterEntry
+    HAS registrationNumber IS A STRING
+        name IS A STRING
+        previousNames IS A LIST OF STRING
+        constitution IS A Constitution
+        purposes IS A LIST OF Purpose
+        address IS A STRING
+        registrationDate IS A Date
+        agreedFinancialYearEnd IS A Date
+        deregistrationDate IS A MAYBE Date
+        section IS A RegisterSection
+        governors IS A LIST OF EnhancedPerson
+        financials IS A LIST OF EnhancedFinancialYearRecord
+        publicBenefitStatement IS A PublicBenefitStatement
+        notices IS A LIST OF Notice
+        fundingCondition IS A BOOLEAN
+        retrospectiveDeregistration IS A BOOLEAN
+        deregistrationReason IS A MAYBE STRING

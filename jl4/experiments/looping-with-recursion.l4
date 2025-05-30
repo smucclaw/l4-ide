@@ -1,0 +1,84 @@
+IMPORT prelude
+
+// in this example, we illustrate how to do with recursion what we would ordinarily do by looping through a list.
+
+// let's suppose we buy a very expensive apple and we click on the shopping site's option to make payment in four instalments.
+
+// we have a seller and a buyer
+
+DECLARE Actor IS ONE OF Buyer, Seller
+
+// we keep track of things using some sort of wallet
+
+DECLARE `Symbol Table`
+    HAS total     IS A NUMBER
+        paid      IS A NUMBER
+
+// the seller delivers the goods
+
+DECLARE Action IS ONE OF
+  deliver  HAS itemName IS A STRING
+               quantity IS A NUMBER
+  pay      HAS amount IS A NUMBER
+
+// the buyer makes four payments
+
+GIVEN symtab IS A  `Symbol Table`
+GIVETH PROVISION Actor Action
+`Initial Sale` MEANS
+ PARTY Seller
+ MUST deliver "apple" 1
+ WITHIN 10
+ HENCE `Pay Until Zero` OF
+         `Symbol Table`
+           WITH
+            total IS 200
+            paid  IS   0
+
+GIVEN symtab IS A  `Symbol Table`
+`Pay Until Zero` MEANS
+ IF symtab's total EQUALS symtab's paid
+ THEN FULFILLED
+ ELSE
+   PARTY Buyer
+     MUST pay 50
+   WITHIN 30
+   HENCE `Pay Until Zero` OF
+           `Symbol Table`
+             WITH
+              total IS symtab's total
+              paid  IS symtab's paid PLUS 50
+
+
+#TRACE `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+  PARTY Seller DOES deliver "apple" 1 AT 2
+  PARTY Buyer  DOES pay 50 AT 13
+  PARTY Buyer  DOES pay 50 AT 23
+  PARTY Buyer  DOES pay 50 AT 33
+  PARTY Buyer  DOES pay 50 AT 43
+-- this leads to FULFILLED
+
+-- but we don't always want it to have to be 50 50 50 50.
+-- What if we want it to be just a one-shot payment of 200?
+-- Or two payments of 100?
+-- The arguments to `pay` shouldn't have to be an exact match;
+-- we want a predicate to allow multiple inputs to match the action params.
+-- see page 41 from Hvitved: we want a condition e that tests x.
+
+#TRACE `Initial Sale` (`Symbol Table` OF 0, 0) AT 1 WITH
+  PARTY Seller DOES deliver "apple" 1 AT 2
+  PARTY Buyer  DOES pay 100 AT 13
+  PARTY Buyer  DOES pay 100 AT 23
+
+-- Fully instantiated obligation clauses have the form:
+--   <p> k(x)  where e  due after n_1  within n_2  remaining z  then c
+-- 
+-- which should be read:
+-- Party p is responsible that (but need not be in charge of) an action of
+-- kind k satisfying condition e takes place. This action should happen
+-- after n_1 time units, but within n_2 time units thereafter. If these
+-- requirements are satisfied, then the continuation clause c determines any
+-- further obligations.
+-- 
+-- note from p.41: Value parameters are dynamic, that is they
+-- can be instantiated with values from earlier events
