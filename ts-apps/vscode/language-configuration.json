@@ -7,7 +7,8 @@
     ["[", "]"],
     ["(", ")"]
   ],
-  "autoClosingPairs": [{
+  "autoClosingPairs": [
+    {
       "open": "{-",
       "close": "-}"
     },
