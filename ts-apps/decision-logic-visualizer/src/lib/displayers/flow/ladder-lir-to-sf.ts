@@ -7,12 +7,16 @@ import type {
   AppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
+  isTrueExprLirNode,
+  isFalseExprLirNode,
   isUBoolVarLirNode,
   isNotStartLirNode,
   isSinkLirNode,
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
+  TrueExprLirNode,
+  FalseExprLirNode,
   UBoolVarLirNode,
   NotStartLirNode,
   NotEndLirNode,
@@ -22,6 +26,8 @@ import {
 import {
   type LadderSFGraph,
   type LadderSFNode,
+  trueExprNodeType,
+  falseExprNodeType,
   uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -103,6 +109,20 @@ export function ladderLirNodeToSfNode(
   }
 
   return match(node)
+    .with(P.when(isTrueExprLirNode), (n: TrueExprLirNode) => {
+      return {
+        ...defaults,
+        type: trueExprNodeType,
+        data: { ...defaultData, ...n.getData(context) },
+      }
+    })
+    .with(P.when(isFalseExprLirNode), (n: FalseExprLirNode) => {
+      return {
+        ...defaults,
+        type: falseExprNodeType,
+        data: { ...defaultData, ...n.getData(context) },
+      }
+    })
     .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
       return {
         ...defaults,

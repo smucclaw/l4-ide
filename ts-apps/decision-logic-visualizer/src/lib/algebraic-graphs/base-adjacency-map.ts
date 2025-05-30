@@ -24,6 +24,21 @@ export abstract class BaseAMGraph<A extends Ord<A>> {
 
   // Misc useful
 
+  /** Internal helper: Remove an edge from the internal adjacency map.
+   * (It's OK if the putative edge is not present.)
+   * Use with caution. */
+  protected _removeEdge(u: A, v: A): void {
+    const neighbors = this.adjacencyMap.get(u)
+    if (neighbors) {
+      this.adjacencyMap.set(
+        u,
+        new Set(
+          [...neighbors].filter((n) => n.compare(v) !== ComparisonResult.Equal)
+        )
+      )
+    }
+  }
+
   /** Check if a graph contains a given vertex. */
   hasVertex(vertex: A): boolean {
     return this.adjacencyMap.has(vertex)

@@ -1,7 +1,5 @@
-import type {
-  InlineExprsRequestParams,
-  InlineExprsSuccess,
-} from '@repo/viz-expr'
+import type { InlineExprsRequestParams } from '@repo/viz-expr'
+import { makeVizInfoDecoder } from '@repo/viz-expr'
 import type { EvalAppResult, LadderBackendApi } from 'jl4-client-rpc'
 import {
   EvalAppRequestType,
@@ -9,7 +7,9 @@ import {
   InlineExprsRequestType,
 } from 'jl4-client-rpc'
 
-/** Higher-level wrapper around functionality provided by the Ladder backend.
+const decodeInlineExprsResult = makeVizInfoDecoder()
+
+/** Higher-level wrapper around functionality provided by the LadderBackendApi (i.e., the Ladder backend and hosting webview).
  * The software design here was inspired by VSCode-Lean's 'EditorConnection' and 'EditorApi'.
  */
 export class L4Connection {
@@ -18,16 +18,24 @@ export class L4Connection {
   // TODO: Think about how we can remove the need for consumers of L4Connection to supply a `verDocId`
   // it feels like something that L4Connection can just get by itself from LadderEnv; or perhaps it can be passed in when L4Connection is created
 
-  /** Inline exprs with the given Uniques */
+  /** Initiate the process of inlining exprs with the given Uniques */
   async inlineExprs(
     uniques: InlineExprsRequestParams['uniques'],
     verDocId: InlineExprsRequestParams['verDocId']
-  ): Promise<InlineExprsSuccess | null> {
+  ): Promise<void> {
     const params: InlineExprsRequestParams = {
       uniques,
       verDocId,
     }
-    return this.api.sendClientRequest(InlineExprsRequestType, params)
+    const renderLadderInfoEither = decodeInlineExprsResult(
+      await this.api.sendClientRequest(InlineExprsRequestType, params)
+    )
+    // TODO: Improve this in the future
+    if (renderLadderInfoEither._tag === 'Right') {
+      await this.api.updateViz(renderLadderInfoEither.right)
+    } else {
+      throw new Error('Error: Failed to decode InlineExprsRequestParams')
+    }
   }
 
   /** Evaluate an App with actual arguments on the backend. */

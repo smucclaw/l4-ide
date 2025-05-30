@@ -19,13 +19,15 @@ import {
   EvalAppRequestParams,
   EvalAppResult,
   InlineExprsRequestParams,
-  InlineExprsSuccess,
+  InlineExprsResult,
+  RenderAsLadderInfo,
 } from '@repo/viz-expr'
 export {
   EvalAppRequestParams,
   EvalAppResult,
   InlineExprsRequestParams,
-  InlineExprsSuccess,
+  InlineExprsResult,
+  RenderAsLadderInfo,
 }
 
 /****************************************
@@ -40,9 +42,6 @@ export function makeL4RpcRequestType<P extends object, R>(
 ): L4RpcRequestType<P, R> {
   return new RequestType<P, R, void>(method)
 }
-
-// LspResponse
-export type LspResponse<T> = T | null
 
 // Notification type
 export type L4RpcNotificationType<P extends object> = NotificationType<P>
@@ -70,5 +69,5 @@ export const EvalAppRequestType = makeL4RpcRequestType<
  */
 export const InlineExprsRequestType = makeL4RpcRequestType<
   InlineExprsRequestParams,
-  InlineExprsSuccess
+  InlineExprsResult
 >('l4/inlineExprs')

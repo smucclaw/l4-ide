@@ -95,6 +95,7 @@ data TokenType =
   | TImplies
   | TDividedBy
   | TOtherSymbolic !Text
+  | TColon
     -- keywords
   | TKGiven
   | TKGiveth
@@ -105,8 +106,6 @@ data TokenType =
   | TKThen
   | TKElse
   | TKOtherwise
-  -- | TKFalse
-  -- | TKTrue
   | TKAnd
   | TKOr
   | TKRAnd
@@ -131,6 +130,7 @@ data TokenType =
   | TKDo
   | TKDoes
   | TKMust
+  | TKProvided
   | TKWithin
   | TKHence
   | TKLest
@@ -268,7 +268,7 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
-  , (TContractDirective,   "CONTRACT")
+  , (TContractDirective,   "TRACE")
   ]
 
 integerLiteral :: Lexer (Text, Integer)
@@ -336,6 +336,7 @@ tokenPayload =
   <|> TParagraph           <$  char '§'
   <|> TComma               <$  char ','
   <|> TSemicolon           <$  char ';'
+  <|> TPercent             <$  char '%'
   <|> TDot                 <$  char '.'
   <|> TCopy Nothing        <$  char '^'
   <|> symbolic
@@ -394,6 +395,7 @@ symbols =
     , ("||", TOr           )
     , ("=>", TImplies      )
     , ("/" , TDividedBy    )
+    , (":" , TColon)
     ]
 
 keywords :: Map Text TokenType
@@ -432,6 +434,7 @@ keywords =
     , ("DO"         , TKDo         )
     , ("DOES"       , TKDoes       )
     , ("MUST"       , TKMust       )
+    , ("PROVIDED"   , TKProvided   )
     , ("WITHIN"     , TKWithin     )
     , ("HENCE"      , TKHence      )
     , ("LEST"       , TKLest       )
@@ -886,6 +889,7 @@ displayTokenType tt =
     TImplies          -> "=>"
     TDividedBy        -> "/"
     TOtherSymbolic t  -> t
+    TColon           -> ":"
     TKGiven           -> "GIVEN"
     TKGiveth          -> "GIVETH"
     TKDecide          -> "DECIDE"
@@ -921,6 +925,7 @@ displayTokenType tt =
     TKDo              -> "DO"
     TKDoes            -> "DOES"
     TKMust            -> "MUST"
+    TKProvided        -> "PROVIDED"
     TKWithin          -> "WITHIN"
     TKHence           -> "HENCE"
     TKLest            -> "LEST"
@@ -966,7 +971,7 @@ showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
-  TContractDirective -> "#CONTRACT"
+  TContractDirective -> "#TRACE"
 
 data TokenCategory
   = CIdentifier
@@ -1021,6 +1026,7 @@ posTokenCategory =
     TImplies -> COperator
     TDividedBy -> COperator
     TOtherSymbolic _ -> CSymbol
+    TColon -> CSymbol
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
     TKDecide -> CKeyword
@@ -1056,6 +1062,7 @@ posTokenCategory =
     TKDo -> CKeyword
     TKDoes -> CKeyword
     TKMust -> CKeyword
+    TKProvided -> CKeyword
     TKWithin -> CKeyword
     TKHence -> CKeyword
     TKLest -> CKeyword

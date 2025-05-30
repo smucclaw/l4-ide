@@ -33,7 +33,13 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "waitUntil" `rename`  "WAIT UNTIL"
+  , "a'" `rename` "a", "b'" `rename` "b"
   , "a", "b", "c", "d", "g", "h", "i"
+  -- NOTE: these are NOT supposed to be in the initial environment for the type/scope checker
+  -- this is essentially the event that's always leading to a breach - it is only relevant
+  -- for its timestamp
+  , "neverMatchesParty", "neverMatchesAct"
   ]
 
 boolean :: Type' Resolved
@@ -54,7 +60,7 @@ string = TyApp emptyAnno stringRef []
 list :: Type' Resolved -> Type' Resolved
 list a = app listRef [a]
 
--- CONTRACT
+-- PROVISION
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
 contract party action = TyApp emptyAnno contractRef [party, action]
@@ -132,7 +138,7 @@ contractInfo :: CheckEntity
 contractInfo =
   KnownType 2 [] Nothing
 
--- forall a b. CONTRACT a b
+-- forall a b. PROVISION a b
 fulfilInfo :: CheckEntity
 fulfilInfo = KnownTerm (Forall emptyAnno [hDef, iDef] (TyApp emptyAnno contractRef [TyApp emptyAnno hRef [], TyApp emptyAnno iRef []])) Constructor
 
@@ -148,15 +154,19 @@ eventCInfo = KnownTerm (Forall emptyAnno [dDef, gDef] (Fun emptyAnno [mkOnt part
   mkTyVar x = TyApp emptyAnno x []
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
 
--- forall a b. CONTRACT a b -> [Event a b] -> CONTRACT a b
+-- forall a b. PROVISION a b -> NUMBER -> [Event a b] -> PROVISION a b
 evalContractInfo :: CheckEntity
-evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt (list eventTy), mkOnt number] ctrct)) Computable
+evalContractInfo = KnownTerm (Forall emptyAnno [bDef, cDef] (Fun emptyAnno [mkOnt ctrct, mkOnt number, mkOnt (list eventTy)] ctrct)) Computable
   where
   ctrct = contract (mkTyVar bRef) (mkTyVar cRef)
   eventTy = TyApp emptyAnno eventRef [mkTyVar bRef, mkTyVar cRef]
   mkOnt = MkOptionallyNamedType emptyAnno Nothing
   mkTyVar r = TyApp emptyAnno r []
 
+-- forall a b. NUMBER -> EVENT a b
+waitUntilInfo :: CheckEntity
+waitUntilInfo = KnownTerm (forall' [a'Def, b'Def] (fun [MkOptionallyNamedType emptyAnno Nothing number] $ event (tyvar a'Ref) (tyvar b'Ref))) Computable
+  where tyvar r = TyApp emptyAnno r []
 
 initialEnvironment :: Environment
 initialEnvironment =
@@ -168,15 +178,16 @@ initialEnvironment =
     , (NormalName "STRING",       [stringUnique      ])
     , (NormalName "LIST",         [listUnique        ])
     , (NormalName "EMPTY",        [emptyUnique       ])
-    , (NormalName "CONTRACT",     [contractUnique    ])
+    , (NormalName "PROVISION",    [contractUnique    ])
     , (NormalName "EVENT",        [eventUnique       ])
     , (NormalName "EVENT",        [eventCUnique      ])
-    , (NormalName "EVALCONTRACT", [evalContractUnique])
+    , (NormalName "EVALTRACE",[evalContractUnique])
     , (NormalName "FULFILLED",    [fulfilUnique      ])
     , (NormalName "IS INTEGER",   [isIntegerUnique ])
     , (NormalName "ROUND",        [roundUnique     ])
     , (NormalName "CEILING",      [ceilingUnique   ])
     , (NormalName "FLOOR",        [floorUnique     ])
+    , (NormalName "WAIT UNTIL",   [waitUntilUnique])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -199,4 +210,5 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (waitUntilUnique,    (waitUntilName,    waitUntilInfo   ))
     ]

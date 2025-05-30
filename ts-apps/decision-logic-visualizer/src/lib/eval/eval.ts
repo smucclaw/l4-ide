@@ -70,6 +70,22 @@ export const Evaluator: LadderEvaluator = {
       intermediate: Map<IRId, UBoolVal>
     ): Promise<EvalResult> {
       return match(ladder)
+        .with({ $type: 'TrueE' }, () => {
+          const result = new TrueVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+          }
+        })
+        .with({ $type: 'FalseE' }, () => {
+          const result = new FalseVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+          }
+        })
         .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
           const result = assignment.get(expr.name.unique) as UBoolVal
           const newIntermediate = intermediate.set(expr.id, result)
@@ -147,7 +163,7 @@ export const Evaluator: LadderEvaluator = {
           }
           const argsForApp = args
             .map(toVEBoolValue)
-            .filter((a) => a !== 'Unknown')
+            .filter((a) => a !== 'UnknownV')
 
           const lspResponse = await l4connection.evalApp(
             expr.id,

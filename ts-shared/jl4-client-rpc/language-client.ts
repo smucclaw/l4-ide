@@ -1,4 +1,4 @@
-import type { LspResponse, L4RpcRequestType } from './custom-protocol.js'
+import type { L4RpcRequestType } from './custom-protocol.js'
 import { IAmDisposable } from './utils.js'
 
 /**
@@ -25,5 +25,5 @@ export interface L4LanguageClient extends IAmDisposable {
   sendRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>>
+  ): Promise<R | null>
 }

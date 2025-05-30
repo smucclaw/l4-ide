@@ -932,17 +932,27 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   pure (IfThenElse ann e1' e2' e3')
 
 checkObligation
-  :: Anno -> Expr Name -> Expr Name
+  :: Anno -> Expr Name -> RAction Name
   -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
   -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
 checkObligation ann party action due hence lest partyT actionT = do
   partyR <- checkExpr ExpectRegulativePartyContext party partyT
-  actionR <- checkExpr ExpectRegulativeActionContext action actionT
+  (actionR, boundByPattern) <- checkAction action actionT
   let rTy = contract partyT actionT
-  dueR <- traverse (\ e -> checkExpr ExpectRegulativeDeadlineContext e number) due
-  henceR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) hence
-  lestR <- traverse (\ e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
+  dueR <- traverse (\e -> checkExpr ExpectRegulativeDeadlineContext e number) due
+  henceR <- traverse (\e -> extendKnownMany boundByPattern $ checkExpr ExpectRegulativeFollowupContext e rTy) hence
+  lestR <- traverse (\e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
   pure (MkObligation ann partyR actionR dueR henceR lestR)
+
+checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
+checkAction MkAction {anno, action, provided = mprovided} actionT = do
+  (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
+  -- NOTE: the provided clauses must evaluate to booleans
+  provided <- forM mprovided \provided ->
+    extendKnownMany bounds do
+      checkExpr ExpectRegulativeProvidedContext provided boolean
+  pure (MkAction {anno, action = pat, provided}, bounds)
+
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -1135,15 +1145,18 @@ inferExpr' g =
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
       pure (Event ann ev', ty)
+    Percent ann e -> do
+      e' <- checkExpr ExpectPercentArgumentContext e number
+      pure (Percent ann e', number)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
-inferEvent (MkEvent ann party action timestamp) = do
+inferEvent (MkEvent ann party action timestamp atFirst) = do
   partyT <- fresh (NormalName "party")
   actionT <- fresh (NormalName "action")
   party' <- checkExpr ExpectRegulativePartyContext party partyT
   action' <- checkExpr ExpectRegulativeActionContext action actionT
   timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
-  pure (MkEvent ann party' action' timestamp', event partyT actionT)
+  pure (MkEvent ann party' action' timestamp' atFirst, event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being
@@ -1227,6 +1240,10 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
   -- giving us a type signature.
   patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
+inferPattern g@(PatLit ann lit) = errorContext (WhileCheckingPattern g) do
+  ty <- inferLit lit
+  resPatLit <- setAnnResolvedType ty Nothing (PatLit ann lit)
+  pure (resPatLit, ty, [])
 
 inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternVar n = do
@@ -1620,13 +1637,12 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
 scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
-scanFunSigAssume a@(MkAssume _ tysig appForm _mt) = do
+scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
   -- declaration of a term
+  let tysig' = mergeResultTypeInto tysig mt
   errorContext (WhileCheckingAssume (getName appForm)) do
-    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig'
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
-    -- check that the given result type matches the result type in the type signature
-
     aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
     pure $ Just $ MkFunTypeSig
@@ -1637,6 +1653,27 @@ scanFunSigAssume a@(MkAssume _ tysig appForm _mt) = do
       , name
       , arguments = extendsTySig <> extendsAppForm
       }
+  where
+    -- In the specific case where we have no GIVETH, but a type for the ASSUME itself,
+    -- we merge the GIVEN part with the ASSUME type to get a full type signature.
+    --
+    -- If we don't do that, something like
+    --
+    -- @
+    -- GIVEN a
+    -- ASSUME foo IS AN a
+    -- @
+    --
+    -- would go wrong, because the pre-scan would ignore the use of the type variable
+    -- and we could no longer get a polymorphic type.
+    --
+    mergeResultTypeInto :: TypeSig Name -> Maybe (Type' Name) -> TypeSig Name
+    mergeResultTypeInto typesig@(MkTypeSig _ (MkGivenSig _ []) Nothing) (Just _) =
+      typesig
+    mergeResultTypeInto (MkTypeSig ann given Nothing) (Just t) =
+      MkTypeSig ann given (Just (MkGivethSig emptyAnno t))
+    mergeResultTypeInto typesig _ =
+      typesig
 
 -- ----------------------------------------------------------------------------
 -- Typecheck Utils
@@ -1819,6 +1856,8 @@ prettyTypeMismatch ExpectIfConditionContext expected given =
   standardTypeMismatch [ "The condition in an IF-THEN-ELSE construct is expected to be of type" ] expected given
 prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPercentArgumentContext expected given =
+  standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
@@ -1914,11 +1953,13 @@ prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
 prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
   standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeContractContext expected given =
-  standardTypeMismatch [ "The contract passed to a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The contract passed to a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
-  standardTypeMismatch [ "The timestamp passed to an event in a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The timestamp passed to an event in a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeEventContext expected given =
-  standardTypeMismatch [ "The event expr passed to a CONTRACT directive is expected to be of type" ] expected given
+  standardTypeMismatch [ "The event expr passed to a TRACE directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
+  standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

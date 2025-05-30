@@ -24,7 +24,7 @@ GIVEN tn IS TwoNumbers
 GIVETH A NUMBER
 test tn MEANS
   CONSIDER tn
-  WHEN MkTwoNumbers OF x, y THEN x + y + 3
+  WHEN MkTwoNumbers OF x, y THEN x + y + 3 %
 
 DECIDE const1a IS
   GIVEN x, y YIELD x

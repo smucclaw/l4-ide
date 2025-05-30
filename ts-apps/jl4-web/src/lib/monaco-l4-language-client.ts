@@ -1,9 +1,5 @@
 import { MonacoLanguageClient } from 'monaco-languageclient'
-import type {
-  L4LanguageClient,
-  L4RpcRequestType,
-  LspResponse,
-} from 'jl4-client-rpc'
+import type { L4LanguageClient, L4RpcRequestType } from 'jl4-client-rpc'
 
 export class MonacoL4LanguageClient implements L4LanguageClient {
   // I don't like this ctor, for reasons outlined in the VSCode version; it's just the pragmatic thing to do right now.
@@ -16,7 +12,7 @@ export class MonacoL4LanguageClient implements L4LanguageClient {
   async sendRequest<P extends object, R>(
     type: L4RpcRequestType<P, R>,
     params: P
-  ): Promise<LspResponse<R>> {
+  ): Promise<R | null> {
     return this.client.sendRequest(type.method, params)
   }
 

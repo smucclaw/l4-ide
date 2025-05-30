@@ -10,12 +10,7 @@
   const graphicSize = 84
 </script>
 
-<div
-  class={[
-    'svelte-flow__node-basic content-bearing-sf-node-border',
-    ...data.classes,
-  ]}
->
+<div class={['base-sf-node-styles', ...data.classes]}>
   <Handle
     type="target"
     position={defaultSFHandlesInfo.targetPosition}
