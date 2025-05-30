@@ -18,6 +18,9 @@
   })
 
   const paths = pathsListLirNode.getPaths(context)
+  const ladderGraph = useLadderEnv()
+    .getTopFunDeclLirNode(context)
+    .getBody(context)
 </script>
 
 <!-- TODO: Make this a 'controlled' component / make the selected vs non-selected state a view of that in a more centralized location -->
@@ -32,9 +35,6 @@
       console.log('onvalueChange', value)
       console.log('onValueChange', selectedPaths)
 
-      const ladderGraph = useLadderEnv()
-        .getTopFunDeclLirNode(context)
-        .getBody(context)
       pathsListLirNode.highlightPaths(context, ladderGraph, selectedPaths)
     }}
   >
