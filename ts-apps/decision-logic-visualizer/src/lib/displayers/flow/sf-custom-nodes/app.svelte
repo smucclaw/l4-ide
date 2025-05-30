@@ -7,8 +7,10 @@
   import type { AppDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import type { AppLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import { onDestroy } from 'svelte'
   import type { LirContext, LirId } from '$lib/layout-ir/core.js'
@@ -72,20 +74,29 @@
   -->
   <div class={['bg-gray-100 app-node-border', ...data.classes]}>
     <WithNormalHandles>
-      <div
-        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+      <WithHighlightableNodeContextMenu
+        onSelect={() => {
+          ladderGraph.toggleSelection(
+            data.context,
+            data.context.get(data.originalLirId) as AppLirNode
+          )
+        }}
       >
-        <!-- Function name -->
-        <div class="font-bold text-[1.1rem]">
-          {data.fnName.label}
+        <div
+          class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+        >
+          <!-- Function name -->
+          <div class="font-bold text-[1.1rem]">
+            {data.fnName.label}
+          </div>
+          <!-- Args (see also note above)-->
+          <div class="flex flex-wrap gap-1 justify-center">
+            {#each data.args as arg, i}
+              {@render argUI(arg, i)}
+            {/each}
+          </div>
         </div>
-        <!-- Args (see also note above)-->
-        <div class="flex flex-wrap gap-1 justify-center">
-          {#each data.args as arg, i}
-            {@render argUI(arg, i)}
-          {/each}
-        </div>
-      </div>
+      </WithHighlightableNodeContextMenu>
     </WithNormalHandles>
   </div>
 </WithContentfulNodeStyles>
