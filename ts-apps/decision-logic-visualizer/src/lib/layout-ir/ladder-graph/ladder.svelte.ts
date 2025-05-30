@@ -408,16 +408,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     )
 
     console.log('\n=== noBundlingNodePathToLadderLinPath ===')
-    if (noBundlingNodePathToLadderLinPath.size === 0) {
-      console.log('No paths found')
-    } else {
-      noBundlingNodePathToLadderLinPath.forEach((_path, key, index) => {
-        const nodeLabels = key.map((id) => {
-          return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
-        })
-        console.log(nodeLabels.join(' → '))
+    noBundlingNodePathToLadderLinPath.forEach((_path, key) => {
+      const nodeLabels = key.map((id) => {
+        return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
       })
-    }
+      console.log(nodeLabels.join(' → '))
+    })
     console.log('===================================================\n')
 
     console.log('ladder graph dag: ', dag.toString())
@@ -575,7 +571,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       this.#noIntermediateBundlingNodeDag.toString()
     )
     // Compute the paths through the selected subgraph of the noBundlingNode graph
-    // that start from noIntermediateBundlingNodeDag's source and end at noIntermediateBundlingNodeDag's sink
+    // (These paths will start from noIntermediateBundlingNodeDag's source.)
     const pathsSelectedSubgraphOfNoBundlingNodeGraph =
       this.#noIntermediateBundlingNodeDag
         .induce((nodeId: LirId) => {
@@ -588,14 +584,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
           return selected.has(nodeId) || isSource || isSink
         })
         .getAllPaths()
-    const numPaths = pathsSelectedSubgraphOfNoBundlingNodeGraph.length
-    console.log(`---- numPaths: ${numPaths}`)
-    pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
-      console.log(
-        `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
-        p.toString()
-      )
-    )
+    // pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
+    //   console.log(
+    //     `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
+    //     p.toString()
+    //   )
+    // )
 
     // Get the lin paths / subgraph of #dag that correspond to the computed paths in #noIntermediateBundlingNodeDag (if there are any)
     const linPaths = pathsSelectedSubgraphOfNoBundlingNodeGraph
@@ -603,19 +597,15 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         this.#noBundlingNodePathToLadderLinPath.get(nbnPathGraph.getTopSort())
       )
       .filter((linPath) => !!linPath)
-    console.log('\n=== Linear Paths Found ===')
-    if (linPaths.length === 0) {
-      console.log('No linear paths found through selected nodes')
-    } else {
-      linPaths.forEach((path, index) => {
-        const nodeLabels = path.getVertices(context).map((node) => {
-          return `${node.getId().toString()} (${node.toPretty(context)})`
-        })
-        console.log(`\nPath ${index + 1}:`)
-        console.log(nodeLabels.join(' → '))
-      })
-    }
-    console.log('=========================\n')
+    // console.log('\n=== Lin Paths ===')
+    // linPaths.forEach((path, index) => {
+    //   const nodeLabels = path.getVertices(context).map((node) => {
+    //     return `${node.getId().toString()} (${node.toPretty(context)})`
+    //   })
+    //   console.log(`\nLin Path ${index + 1}:`)
+    //   console.log(nodeLabels.join(' → '))
+    // })
+    // console.log('=========================\n')
 
     // Highlight these lin paths / subgraph of #dag
     // (or, if there are no corresponding lin paths, just highlight the selected nodes)
