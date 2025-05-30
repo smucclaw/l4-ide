@@ -63,7 +63,7 @@ startup MEANS
          "Andrew Bechtolsheim", JUST "Mr."
          JUST "27 Sentosa Way"
          JUST "Singapore"
-         TBD
+         JUST "[TBD]"
      Security OF "SAFE", "SAFE Tranche 1", `Dollars` `SAFE Purchase Amount`
 
 -- for testing purposes, we construct a scenario where two Series A investors
@@ -78,7 +78,7 @@ startup MEANS
             "Eduardo Saverin", JUST "Mr."
             JUST "25 Sentosa Way"
             JUST "Singapore"
-            TBD
+            JUST "[TBD]"
        Security OF "Preference Shares", "Class A", `Shares` 150 (USD 200000) // $1333.33 per share
     `Cap Table Entry` OF
        `Individual Investor` OF
@@ -86,7 +86,7 @@ startup MEANS
             "Jim Rogers", JUST "Mr."
             JUST "23 Sentosa Way"
             JUST "Singapore"
-            TBD
+            JUST "[TBD]"
        Security OF "Preference Shares", "Class A", `Shares` 200 (USD 200000) // $1000 per share
 
 -- so the SAFE conversion will be at the best price per share of the Series A investors.
