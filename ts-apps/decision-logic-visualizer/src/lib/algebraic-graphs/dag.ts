@@ -16,7 +16,7 @@ import _ from 'lodash'
 between the various kinds of alga graphs in this mini-lib
 (eg between this and adjacency-map-directed-graph.ts).
 Would be good to improve that.
-- Would be better to use `union` and `join`, like in https://github.com/snowleopard/alga/blob/main/src/Algebra/Graph/Acyclic/AdjacencyMap.hs
+- May (not sure) be better to use `union` and `join`, like in https://github.com/snowleopard/alga/blob/main/src/Algebra/Graph/Acyclic/AdjacencyMap.hs
 */
 
 export type DirectedAcyclicGraph<A extends Ord<A>> =
