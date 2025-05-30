@@ -340,12 +340,22 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
-    // Make the noIntermediateBundlingNodeDag by
-    // starting with middle, which doesn't have the overallSource and overallSink nodes
-    // and replacing source nodes with their immediate predecessors
-    // and sink nodes with their immediate successors
-    // (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
+    /* 
+    Make a dag with no intermediate bundling nodes 
+    -- i.e., the noIntermediateBundlingNodeDag -- by
+    replacing intermediate source nodes with their immediate predecessors
+    and intermediate sink nodes with their immediate successors
+    (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
 
+    The noIntermediateBundlingNodeDag still has bundling nodes --- the overall source and sink nodes.
+    It's just that it doesn't have *intermediate* bundling nodes.
+
+    This gets used to figure out what paths on the main graph the user is trying to highlight,
+    when they select nodes on the main graph.
+
+    See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
+    for more on how to debug and understand this better.
+    */
     const vertices = dag
       .getVertices()
       .map((v) => nodeInfo.context.get(v) as LadderLirNode)
