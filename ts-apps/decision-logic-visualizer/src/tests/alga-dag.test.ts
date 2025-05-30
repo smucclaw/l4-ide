@@ -125,33 +125,43 @@ describe('Algebraic graphs - Distributive Laws', () => {
 ********************/
 
 describe('Alga: DAG - Monoid Laws', () => {
-  test('x -> empty = x for dags)', () => {
+  test('x * empty = x for dags)', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const x = connect(vertex(nw1), vertex(nw2))
-
-    // Empty DAG
     const emptyDag = empty<NumberWrapper>()
 
-    // x -> empty
-    const resultDag = connect(x, emptyDag)
-
-    // resultDag should be equal to x
+    const resultDag = connect(x, emptyDag) // x * empty
     expect(resultDag.isEqualTo(x)).toBeTruthy()
   })
 
-  test('empty -> x = x for dags', () => {
+  test('empty * x = x for dags', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const x = connect(vertex(nw1), vertex(nw2))
-
-    // Empty DAG
     const emptyDag = empty<NumberWrapper>()
 
-    // empty -> x
-    const resultDag = connect(emptyDag, x)
+    const resultDag = connect(emptyDag, x) // empty * x
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
 
-    // resultDag should be equal to x
+  test('x + empty = x for dags (overlay identity)', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+    const emptyDag = empty<NumberWrapper>()
+
+    const resultDag = overlay(x, emptyDag) // x + empty
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
+
+  test('empty + x = x for dags (overlay identity)', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+    const emptyDag = empty<NumberWrapper>()
+
+    const resultDag = overlay(emptyDag, x) // empty + x
     expect(resultDag.isEqualTo(x)).toBeTruthy()
   })
 })
@@ -214,8 +224,8 @@ describe('DAG - Topological Sort', () => {
     const nw2 = new NumberWrapper(2)
     const dag1 = connect(vertex(nw1), vertex(nw2))
     const dag2 = connect(vertex(nw2), vertex(nw1))
-    const cyclicDag = overlay(dag1, dag2)
-    expect(() => cyclicDag.getTopSort()).toThrow()
+    const cyclicGraph = overlay(dag1, dag2)
+    expect(() => cyclicGraph.getTopSort()).toThrow()
   })
 })
 
@@ -308,9 +318,9 @@ describe('Alga: DAG - Complex Structures', () => {
     const dag1 = connect(vertex(nw1), vertex(nw2))
     const dag2 = connect(vertex(nw2), vertex(nw3))
     const backEdge = connect(vertex(nw3), vertex(nw1))
-    const cyclicDag = overlay(dag1, overlay(dag2, backEdge))
+    const cyclicGraph = overlay(dag1, overlay(dag2, backEdge))
 
-    expect(() => cyclicDag.getTopSort()).toThrow()
+    expect(() => cyclicGraph.getTopSort()).toThrow()
   })
 })
 
