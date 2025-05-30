@@ -55,6 +55,7 @@ data CheckErrorWithContext =
 
 data CheckError =
     OutOfScopeError Name (Type' Resolved)
+  | CannotResolvedPattern Name (Type' Resolved)
   | KindError Kind [Type' Name]
   | TypeMismatch ExpectationContext (Type' Resolved) (Type' Resolved) -- expected, given
   | InconsistentNameInSignature Name (Maybe Name)

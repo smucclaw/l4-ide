@@ -267,12 +267,17 @@ data Branch n =
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+-- TODO: most of these will not be parsed, PatLit will
+-- A PatLit contains an appform, which will be converted
+-- to one of the other patterns during scope checking
 data Pattern n =
     PatVar Anno n
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
+    -- ^ not used during parsing, but after scope-checking;
+    -- the idea is that if your pattern mentions an in scope name, you
+  | PatLit Anno (Expr n)
   | PatCons Anno (Pattern n) (Pattern n)
-  | PatLit Anno Lit
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -348,8 +353,8 @@ appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
 decideBody :: Lens' (Decide n) (Expr n)
-decideBody = lens 
-             (\(MkDecide _ _ (MkAppForm{}) body)       -> body) 
+decideBody = lens
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body)
              (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
 
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
