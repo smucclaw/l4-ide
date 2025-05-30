@@ -533,22 +533,28 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   // Selecting nodes in the main graph for highlighting
 
-  addNodeToSelection(context: LirContext, node: SelectableLadderLirNode) {
-    this.#selectedForHighlightPaths.add(node.getId())
-    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
+  toggleSelection(context: LirContext, node: SelectableLadderLirNode) {
+    if (this.#selectedForHighlightPaths.has(node.getId())) {
+      this.#selectedForHighlightPaths.delete(node.getId())
+    } else {
+      this.#selectedForHighlightPaths.add(node.getId())
+    }
+    this.updateHighlighting(
+      context,
+      Array.from(this.#selectedForHighlightPaths).map(
+        (id) => context.get(id) as SelectableLadderLirNode
+      )
+    )
 
     this.getRegistry().publish(context, this.getId())
   }
 
-  deselectNode(context: LirContext, node: SelectableLadderLirNode) {
-    this.#selectedForHighlightPaths.delete(node.getId())
-    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  // TODO: Also, look into better names for this
-  private syncSelectedForHighlight(context: LirContext, selected: Set<LirId>) {
+  /** Helper: Update what subgraph of the main graph is highlighted, based on what nodes the user has selected in the main graph */
+  private updateHighlighting(
+    context: LirContext,
+    selected: Array<SelectableLadderLirNode>
+  ) {
+    const selectedIds = new Set(selected.map((node) => node.getId()))
     /* 
     We are in effect maintaining two representations of the ladder graph:
 
@@ -560,11 +566,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     we check if the user has selected nodes corresponding to a lin path in #dag.
     */
     console.log(
-      '=======================  syncSelectedForHighlight =====================\n'
+      '=======================  updateHighlighting =====================\n'
     )
     console.log(
       'selected',
-      Array.from(selected).map((id) => id.toString())
+      Array.from(selectedIds).map((id) => id.toString())
     )
     console.log(
       'noIntermediateBundlingNodeDag',
@@ -581,7 +587,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
           const isSink = this.#noIntermediateBundlingNodeDag
             .getSink()
             .isEqualTo(vertex(nodeId))
-          return selected.has(nodeId) || isSource || isSink
+          return selectedIds.has(nodeId) || isSource || isSink
         })
         .getAllPaths()
     // pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
@@ -614,7 +620,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       context,
       overlays([
         ...linPaths.map((linPath) => linPath.getRawPathGraph()),
-        ...Array.from(selected).map(vertex),
+        ...Array.from(selectedIds).map(vertex),
       ])
     )
   }

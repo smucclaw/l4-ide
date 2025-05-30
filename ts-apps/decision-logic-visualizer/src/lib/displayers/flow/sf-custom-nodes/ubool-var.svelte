@@ -15,6 +15,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   let { data }: LadderNodeDisplayerProps = $props()
 
   // Get LadderEnv, L4 Connection
+  // (Note: useLadderEnv must be invoked on component initalization)
   const ladderEnv = useLadderEnv()
   const ladderGraph = ladderEnv
     .getTopFunDeclLirNode(data.context)
@@ -61,7 +62,17 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ]}
   >
     <WithNormalHandles>
-      <WithHighlightableNodeContextMenu>
+      <WithHighlightableNodeContextMenu
+        onSelect={() => {
+          const ladderGraph = ladderEnv
+            .getTopFunDeclLirNode(data.context)
+            .getBody(data.context)
+          ladderGraph.toggleSelection(
+            data.context,
+            data.context.get(data.originalLirId) as UBoolVarLirNode
+          )
+        }}
+      >
         <!-- Yes, we need cursor-pointer here. -->
         <button
           class="label-wrapper-for-content-bearing-sf-node cursor-pointer"

@@ -4,13 +4,14 @@
 
   interface HighlightableNodeContextMenuProps {
     children: Snippet
+    onSelect?: () => void
   }
 </script>
 
 <script lang="ts">
   import * as ContextMenu from '$lib/ui-primitives/context-menu/index.js'
 
-  let { children }: HighlightableNodeContextMenuProps = $props()
+  let { children, onSelect }: HighlightableNodeContextMenuProps = $props()
 </script>
 
 <ContextMenu.Root>
@@ -18,6 +19,7 @@
     {@render children()}
   </ContextMenu.Trigger>
   <ContextMenu.Content>
-    <ContextMenu.Item inset>Highlight</ContextMenu.Item>
+    <!-- We can consider using a CheckboxItem in the future -->
+    <ContextMenu.Item inset {onSelect}>Toggle Highlight</ContextMenu.Item>
   </ContextMenu.Content>
 </ContextMenu.Root>
