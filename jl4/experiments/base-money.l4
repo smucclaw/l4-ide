@@ -16,7 +16,7 @@ SGD d MEANS Money OF d, "SGD"
 -- in the future it would be nice to have an Exception based on Either.
 GIVEN a IS A Money
       b IS A MAYBE Money
-GIVETH MAYBE Money
+GIVETH MAYBE NUMBER
 `divide maybe money` MEANS
   CONSIDER b
       WHEN NOTHING  THEN NOTHING
@@ -25,11 +25,12 @@ GIVETH MAYBE Money
 
 GIVEN a IS A Money
       b IS A Money
-GIVETH MAYBE Money
+GIVETH MAYBE NUMBER
 `divide money` MEANS
-  IF    a's currency EQUALS b's currency
-  THEN  `divide money` a (b's amount)
-  ELSE  NOTHING
+  IF         a's currency EQUALS b's currency
+    AND NOT  b's amount   EQUALS 0
+  THEN JUST OF a's amount / b's amount
+  ELSE NOTHING
     
     
 GIVEN a IS A Money
