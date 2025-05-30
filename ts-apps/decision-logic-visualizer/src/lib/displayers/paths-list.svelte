@@ -5,6 +5,7 @@
     ToggleGroup,
     ToggleGroupItem,
   } from '$lib/ui-primitives/toggle-group/index.js'
+  import { useLadderEnv } from '$lib/ladder-env.js'
 
   /************************
        Lir
@@ -17,6 +18,9 @@
   })
 
   const paths = pathsListLirNode.getPaths(context)
+  const ladderGraph = useLadderEnv()
+    .getTopFunDeclLirNode(context)
+    .getBody(context)
 </script>
 
 <!-- TODO: Make this a 'controlled' component / make the selected vs non-selected state a view of that in a more centralized location -->
@@ -30,7 +34,8 @@
         .map((pathIndex) => paths[pathIndex])
       console.log('onvalueChange', value)
       console.log('onValueChange', selectedPaths)
-      pathsListLirNode.highlightPaths(context, selectedPaths)
+
+      pathsListLirNode.highlightPaths(context, ladderGraph, selectedPaths)
     }}
   >
     <ul class="space-y-1">

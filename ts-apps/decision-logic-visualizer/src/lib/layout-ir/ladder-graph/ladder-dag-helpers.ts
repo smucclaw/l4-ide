@@ -1,4 +1,4 @@
-import type { LirId } from '../core.js'
+import type { LirId, LirNodeInfo } from '../core.js'
 import { LirContext } from '../core.js'
 import {
   isEmpty,
@@ -13,11 +13,50 @@ import {
 import { DirectedEdge } from '../../algebraic-graphs/edge.js'
 import type { LadderLirNode, NotStartLirNode } from './ladder.svelte.js'
 import {
-  LadderGraphLirNode,
+  LinPathLirNode,
   isNotStartLirNode,
   isUBoolVarLirNode,
 } from './ladder.svelte.js'
 import { match, P } from 'ts-pattern'
+import type { PathsListLirNode } from '../paths-list.js'
+import {
+  ValidPathsListLirNode,
+  InvalidPathsListLirNode,
+} from '../paths-list.js'
+
+/************************************************
+        Vertices from alga dag
+*************************************************/
+
+/** Helper function */
+export function getVerticesFromAlgaDag(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): LadderLirNode[] {
+  return Array.from(dag.getVertices()).map(
+    (id) => context.get(id) as LadderLirNode
+  )
+}
+
+/************************************************
+          makePathsList
+*************************************************/
+
+export function makePathsList(
+  nodeInfo: LirNodeInfo,
+  dag: DirectedAcyclicGraph<LirId>
+): PathsListLirNode {
+  // Don't show the lin paths for a non-NNF
+  if (isNnf(nodeInfo.context, dag)) {
+    const rawPaths = dag.getAllPaths()
+    const paths = rawPaths.map(
+      (rawPath) => new LinPathLirNode(nodeInfo, rawPath)
+    )
+    return new ValidPathsListLirNode(nodeInfo, paths)
+  } else {
+    return new InvalidPathsListLirNode(nodeInfo)
+  }
+}
 
 /************************************************
           isNnf
@@ -25,10 +64,8 @@ import { match, P } from 'ts-pattern'
 
 export function isNnf(
   context: LirContext,
-  ladder: LadderGraphLirNode
+  dag: DirectedAcyclicGraph<LirId>
 ): boolean {
-  const notStartVertices = ladder.getVertices(context).filter(isNotStartLirNode)
-
   const negandIsSimpleVar = (notStart: NotStartLirNode) => {
     // TODO: Will have to update this when we add more complicated Lir Nodes
     const negand = notStart.getNegand(context)
@@ -38,6 +75,9 @@ export function isNnf(
     )
   }
 
+  const notStartVertices = getVerticesFromAlgaDag(context, dag).filter(
+    isNotStartLirNode
+  )
   return notStartVertices.every(negandIsSimpleVar)
 }
 
