@@ -267,9 +267,6 @@ data Branch n =
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
--- TODO: most of these will not be parsed, PatLit will
--- A PatLit contains an appform, which will be converted
--- to one of the other patterns during scope checking
 data Pattern n =
     PatVar Anno n
     -- ^ not used during parsing, but after scope-checking
