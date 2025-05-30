@@ -75,7 +75,7 @@ data InternalEvalException =
 
 data UserEvalException =
     BlackholeForced (Expr Resolved)
-  | EqualityOnUnsupportedType
+  | EqualityOnUnsupportedType WHNF WHNF
   | NonExhaustivePatterns Reference -- we could try to warn statically
   | StackOverflow
   | DivisionByZero BinOp
@@ -721,7 +721,8 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
           EvalRef r1
   | otherwise                                           = Backward $ ValBool False
 -- TODO: we probably also want to check ValObligations for equality
-runBinOpEquals _                       _                = UserException EqualityOnUnsupportedType
+runBinOpEquals (ValAssumed r)          _                = StuckOnAssumed r
+runBinOpEquals v1                       v2              = UserException (EqualityOnUnsupportedType v1 v2)
 
 pattern ValFulfilled :: Value a
 pattern ValFulfilled <- (fulfilView -> True)
@@ -1123,7 +1124,11 @@ prettyUserEvalException = \ case
   BlackholeForced expr ->
     [ "Infinite loop detected while trying to evaluate:"
     , prettyLayout expr ]
-  EqualityOnUnsupportedType -> ["Trying to check equality on types that do not support it."]
+  EqualityOnUnsupportedType v1 v2 ->
+    [ "Trying to check equality on types that do not support it"
+    , "These were the values you tried to compare:" ]
+    <> indentMany v1
+    <> indentMany v2
   NonExhaustivePatterns val ->
     [ "Value" ]
     <> indentMany val
