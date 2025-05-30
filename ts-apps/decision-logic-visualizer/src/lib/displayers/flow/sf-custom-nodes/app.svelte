@@ -7,8 +7,10 @@
   import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import type { AppLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import type {
     AppArgLirNode,
@@ -67,6 +69,13 @@
     ]}
   >
     <WithNormalHandles>
+      <WithHighlightableNodeContextMenu
+        onSelect={() => {
+          ladderGraph.toggleSelection(
+            data.context,
+            data.context.get(data.originalLirId) as AppLirNode
+          )
+        }}
       <div
         class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
       >
@@ -81,6 +90,7 @@
           {/each}
         </div>
       </div>
+      </WithHighlightableNodeContextMenu>
     </WithNormalHandles>
   </div>
 </WithContentfulNodeStyles>
