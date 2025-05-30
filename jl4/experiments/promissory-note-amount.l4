@@ -79,13 +79,12 @@ GIVEN `Outstanding Payment Amount` IS A Money
 `Payment Obligations` MEANS
     IF `Outstanding Payment Amount`'s Value GREATER THAN 0
         THEN  PARTY   `The Borrower`
-              MUST    `pay monthly installments to`
+              MUST    `pay monthly installment to`
                           `The Lender`
                           `Amount Transferred` PROVIDED
                              `Amount Transferred`'s Currency EQUALS `Next Payment Due`'s Amount's Currency
                                 AND `Amount Transferred`'s Value AT LEAST (`Next Payment Due`'s Amount's Value
-                                                                    MINUS 0.05)
-                              
+                                                                    MINUS 0.05)      
               WITHIN  `Next Payment Due Date`
               HENCE   `Payment Obligations`
                           (Money WITH
@@ -93,7 +92,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                               Value     IS `Outstanding Payment Amount`'s Value
                                                 MINUS `Amount Transferred`'s Value)
               LEST     PARTY   `The Borrower`
-                       MUST    `pay monthly installments to`
+                       MUST    `pay monthly installment to`
                                   `The Lender`
                                   `Amount Transferred` PROVIDED
                                       `Amount Transferred`'s Currency EQUALS `Next Payment Due Amount With Penalty`'s Currency
@@ -101,7 +100,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
                                                                                 MINUS 0.05)
                        WITHIN  `Default After Days Beyond Commencement`
                        LEST    PARTY  `The Borrower`
-                               MUST   `pay monthly installments to`
+                               MUST   `pay monthly installment to`
                                           `The Lender`
                                           `Amount Transferred` PROVIDED
                                               `Amount Transferred`'s Currency EQUALS `All Outstanding Debts`'s Currency
@@ -201,7 +200,7 @@ DECLARE Penalty
     HAS `Interest Rate`     IS A NUMBER
         `Grace Period Days` IS A NUMBER
 
-DECLARE `pay monthly installments to` IS ONE OF `pay monthly installments to`
+DECLARE `pay monthly installment to`
     HAS Recipient           IS A Lender
         Amount              IS A Money
 
@@ -223,27 +222,19 @@ GIVEN a IS A NUMBER
 #EVAL `Monthly Installment Amount`
 
 #TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 29
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 59
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 89
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 119
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 149
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 179
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 29
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 59
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 89
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 119
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 149
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 179
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 209
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 239
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 269
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 299
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 329
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2396.20) AT 359
 
 #TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 29
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 59
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 89
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 119
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 149
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 179
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 209
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 239
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 269
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 299
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 329
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2396.20) AT 359
-
-#TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay monthly installments to` `The Lender` (USD 2395.80) AT 59
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 59
     
