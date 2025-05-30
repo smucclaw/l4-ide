@@ -99,7 +99,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
           </button>
         </ContextMenu.Trigger>
         <ContextMenu.Content>
-          <ContextMenu.Item inset>Select</ContextMenu.Item>
+          <ContextMenu.Item inset>Highlight</ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Root>
       {#if data.canInline}
