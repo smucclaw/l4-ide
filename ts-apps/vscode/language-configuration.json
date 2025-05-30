@@ -1,0 +1,48 @@
+{
+  "comments": {
+    "lineComment": "--",
+    "blockComment": ["{-", "-}"]
+  },
+  "brackets": [
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{-", "close": "-}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "`", "close": "`" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["{-", "-}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""],
+    ["`", "`"]
+  ],
+  "autoClosingQuotes": "always",
+  "autoClosingBrackets": "always",
+  "autoSurround": "brackets",
+  "formatOnType": true,
+  "formatOnPaste": true,
+  "suggestOnTriggerCharacters": true,
+  "acceptSuggestionOnEnter": "on",
+  "tabCompletion": "on",
+  "wordBasedSuggestions": true,
+  "suggestSelection": "first",
+  "suggest.showMethods": true,
+  "suggest.showFunctions": true,
+  "suggest.showFields": true,
+  "suggest.showVariables": true,
+  "suggest.showProperties": true,
+  "suggest.showEvents": true,
+  "suggest.showOperators": true,
+  "suggest.showValues": true,
+  "suggest.showConstants": true,
+  "suggest.showEnums": true,
+  "suggest.showKeywords": true,
+  "suggest.showWords": true,
+  "suggest.showReferences": true,
+  "suggest.showSnippets": true
+}
