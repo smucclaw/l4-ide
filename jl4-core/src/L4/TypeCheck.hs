@@ -1185,10 +1185,90 @@ checkPattern ec p t = errorContext (WhileCheckingPattern p) do
   expect ec t rt
   pure (rp, extend)
 
--- Note: PatVar doesn't really get produced by the parser. We replace
+-- NOTE: PatVar doesn't really get produced by the parser. We replace
 -- PatApps that are not in scope with PatVar applications here in the
 -- scope and type checker.
+-- NOTE: this part of the pattern is the most crucial one because it decides what part
+-- of the pattern is an expression and what part is an "actual" pattern
+-- The algorithm is as follows:
+-- appforms (possibly without variables) are the only critical point in the conversion:
+-- - if the head of the may be a constructor, then this is a constructor pattern,
+--   and we continue by trying to convert each argument into a pattern;
+-- - if the head of the appform may be a function, then this is an expression, and we stop
+--   conversion (if anything underneath is out of scope, it's just an error);
+-- - if the head of the appform is not in scope and the appform doesn't have arguments,
+--   then it's a variable pattern;
+-- - if the head of the appform is not in scope and the appform does have arguments,
+--   then it's an error
 inferPattern :: Pattern Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
+inferPattern g@(PatLit ann expr) = errorContext (WhileCheckingPattern g) case expr of
+  Cons ann' x xs -> inferPattern $ PatCons ann' (patLit x) (patLit xs)
+  App ann' n ns -> do
+    -- NOTE: resolveTerm does not work here because any constructor also resolves as a
+    -- function and if a name is in scope as constructor *and* as function, we want to always prefer
+    -- the constructor (in accordance with the algorithm)
+    (r, rty) <- do
+      candidates <- lookupRawNameInEnvironment $ rawName n
+      (constructors, others) <- partitionEithers . catMaybes <$> forM candidates \(u, o, ce) -> case ce of
+        KnownTerm ty Constructor -> do
+          n' <-  setAnnResolvedType ty (Just Constructor) n
+          pure $ Just $ Left (Ref n' u o, ty)
+        KnownTerm _ Selector ->
+          -- NOTE: we don't consider selectors, because it is common to write
+          -- DECLARE foo HAS bar IS AN X and then further
+          -- WHEN foo bar THEN ...
+          -- This should thus be not an error
+          pure Nothing
+        KnownTerm ty tk -> do
+          n' <-  setAnnResolvedType ty (Just tk) n
+          pure $ Just $ Right (Ref n' u o, ty)
+        _ -> pure Nothing -- NOTE: we cut out everything that isn't a known term
+      -- NOTE: if there are any constructors, then we don't want to consider anything else
+      case (constructors, others) of
+        ([], []) -> do
+          v <- fresh (rawName n)
+          pure (Nothing, v)
+        ([(r, rty)], _) -> pure (Just (Left r) , rty)
+        ([], [(r, rty)]) -> pure (Just (Right r), rty)
+        (rs, rs') -> either (\(r, ty) -> (Just $ Left r, ty)) (\(r, ty) -> (Just $ Right r, ty)) <$> do
+          -- NOTE: in the case where there are multiple constructors
+          -- in scope or multiple functions (or both) we deliberately
+          -- tell the user that they're ambiguous. it doesn't make sense
+          -- to pick the single function if there are multiple constructors
+          anyOf (map Left rs <> map Right rs') <|> do
+            v <- fresh (rawName n)
+            n' <- setAnnResolvedType v Nothing n
+            rn <- ambiguousTerm n' (rs <> rs')
+            pure $ Left (rn, v)
+    case r of
+      -- NOTE: the name is out of scope
+      Nothing
+        -- NOTE: the name is not in scope, hence we cannot interpret it as an
+        -- expression or pattern - it is thus a variable bound by the pattern
+        | null ns -> inferPattern (PatVar ann' n)
+        -- NOTE: the name is not in scope, but we supplied arguments: we still
+        -- don't know how to interpret this, but we also cannot bind any variables,
+        -- hence we throw an error
+        | otherwise -> do
+            addError (CannotResolvedPattern n rty)
+            (rexpr, _) <- inferExpr expr
+            pure (patLit rexpr, rty, [])
+      Just (Left _) ->
+        -- NOTE: the pattern is a "real" pattern - translate to a PatApp
+        inferPattern $ PatApp ann' n $ map patLit ns
+      Just (Right _) ->
+        patternIsLiteral
+  _ ->
+    -- NOTE: the pattern is some expression that is not an appform - we abort and
+    -- assume that the user is specifying an expression
+    patternIsLiteral
+  where
+    patLit e = PatLit (view annoOf e) e
+    patternIsLiteral = do
+      (rexpr, ty) <- inferExpr expr
+      rexpr' <- setAnnResolvedType ty Nothing (PatLit ann rexpr)
+      pure (rexpr', ty, [])
+
 inferPattern g@(PatVar _ann n)      = errorContext (WhileCheckingPattern g) do
   inferPatternVar n
 inferPattern g@(PatApp ann n [])   = errorContext (WhileCheckingPattern g) do
@@ -1204,10 +1284,6 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
   -- giving us a type signature.
   patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
-inferPattern g@(PatLit ann lit) = errorContext (WhileCheckingPattern g) do
-  ty <- inferLit lit
-  resPatLit <- setAnnResolvedType ty Nothing (PatLit ann lit)
-  pure (resPatLit, ty, [])
 
 inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternVar n = do
@@ -1799,6 +1875,18 @@ prettyCheckError (OutOfScopeError n t)                     =
   , "which I have inferred to be of type: "
   , ""
   , "  " <> prettyLayout t
+  ]
+prettyCheckError (CannotResolvedPattern n t)                     =
+  [ "I could not find a definition for the idenfier"
+  , ""
+  , "  " <> prettyLayout n
+  , ""
+  , "in a pattern match. This could mean that the type"
+  , ""
+  , "  " <> prettyLayout t
+  , ""
+  , "doesn't have a constructor with that name, or you were trying to use"
+  , "a function with that name, which is not in scope."
   ]
 prettyCheckError (KindError k ts)                          =
   [ "The arities of the types do not match."
