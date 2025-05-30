@@ -73,12 +73,6 @@
   --ring: 0.137 0.036 258.53;
   /* TODO: Might want to tweak `radius` */
   --radius: 0.3rem;
-
-  /* TODO: Need to migrate the other css vars to the new convention where the vars are wrapped in oklch
-  https://next.shadcn-svelte.com/docs/theming
-  */
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
 }
 
 @theme inline {
