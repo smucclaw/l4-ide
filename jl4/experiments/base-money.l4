@@ -36,10 +36,13 @@ GIVETH MAYBE NUMBER
 GIVEN a IS A Money
       b IS A NUMBER
 GIVETH MAYBE Money
-`divide money` MEANS
+`divide money number` MEANS
   IF    NOT b EQUALS 0
   THEN  JUST OF Money WITH
                 amount   IS a's amount DIVIDED BY b
                 currency IS a's currency
   ELSE  NOTHING
 
+GIVEN mm IS A MAYBE Money
+GIVETH A NUMBER
+toZero MEANS maybe amount 0 mm

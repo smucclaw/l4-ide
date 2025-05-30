@@ -133,18 +133,16 @@ DECLARE Action IS ONE OF
               PROVIDED all (GIVEN eft YIELD eft's security's Instrument EQUALS "Preference Shares") efts
   WHERE
     numShares MEANS
-       maximum OF
-         catMaybes OF
-            map  (GIVEN cte YIELD `divide maybe money`
-                                    `SAFE Purchase Amount`
-                                    (`price per share` OF cte))
-                 `series A investment`
-
-
+      toZero OF
+         `divide money number`
+             `SAFE Purchase Amount`
+               (minimum OF map amount
+                               (catMaybes (map (GIVEN cte YIELD `price per share` OF cte)
+                                               `series A investment`)))
 
 #TRACE `Equity Financing Conversion` AT 1 WITH
   PARTY (ActorCompany OF startup) DOES (`Convert SAFE`                 `SAFE issue`         ) AT 2
-  PARTY (ActorCompany OF startup) DOES (`Equity Financing Transaction` `series A investment`) AT 3
+  PARTY (ActorCompany OF startup) DOES (`Equity Financing Transaction` WITH txns IS `series A investment`) AT 3
 
 
 
@@ -172,7 +170,7 @@ GIVEN transaction IS A `Cap Table Entry`
 GIVETH A MAYBE Money
 `price per share` MEANS
   CONSIDER transaction's security's Quantity
-      WHEN `Shares` count price THEN `divide money` price count
+      WHEN `Shares` count price THEN `divide money number` price count
       WHEN `Dollars` money      THEN NOTHING
 
 --  AND     PARTY  startup
