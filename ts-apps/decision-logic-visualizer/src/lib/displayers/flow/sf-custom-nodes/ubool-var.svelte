@@ -76,15 +76,17 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   >
     <WithNormalHandles>
       <ContextMenu.Root>
-      <ContextMenu.Trigger>
-      <!-- Yes, we need cursor-pointer here. -->
-      <button
-        class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-        onclick={() => {
-          const ladderGraph = ladderEnv
-            .getTopFunDeclLirNode(data.context)
-            .getBody(data.context)
-          const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+        <ContextMenu.Trigger>
+          <!-- Yes, we need cursor-pointer here. -->
+          <button
+            class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+            onclick={() => {
+              const ladderGraph = ladderEnv
+                .getTopFunDeclLirNode(data.context)
+                .getBody(data.context)
+              const node = data.context.get(
+                data.originalLirId
+              ) as UBoolVarLirNode
 
               const newValue = cycle(node.getValue(data.context))
               ladderGraph.submitNewBinding(data.context, {
