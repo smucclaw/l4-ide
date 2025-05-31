@@ -31,11 +31,7 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import {
-  ValidPathsListLirNode,
-  InvalidPathsListLirNode,
-  type PathsListLirNode,
-} from '../paths-list.js'
+import { PathsListLirNode } from '../paths-list.js'
 import _ from 'lodash'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import { pprintPathGraph, isNnf } from './ladder-dag-helpers.js'
@@ -300,6 +296,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   #selectedForHighlightPaths: Set<LirId> = new Set()
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes.
+   *
+   * No pathsListLirNode iff graph expr is not NNF.
    */
   #pathsList?: PathsListLirNode
 
@@ -420,24 +418,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   /** Get list of all simple paths through the Dag */
   getPathsList(context: LirContext) {
-    if (!this.#pathsList) {
+    if (!this.#pathsList && isNnf(context, this)) {
       // Don't show the lin paths for a non-NNF
-      if (isNnf(context, this)) {
-        const rawPaths = this.#dag.getAllPaths()
-        const paths = rawPaths.map(
-          (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-        )
+      const rawPaths = this.#dag.getAllPaths()
+      const paths = rawPaths.map(
+        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
+      )
 
-        this.#pathsList = new ValidPathsListLirNode(
-          this.makeNodeInfo(context),
-          this,
-          paths
-        )
-      } else {
-        this.#pathsList = new InvalidPathsListLirNode(
-          this.makeNodeInfo(context)
-        )
-      }
+      this.#pathsList = new PathsListLirNode(
+        this.makeNodeInfo(context),
+        this,
+        paths
+      )
     }
 
     return this.#pathsList
