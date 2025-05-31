@@ -1217,30 +1217,15 @@ indentedPattern p =
 -- See also 'expr'.
 --
 pattern' :: Parser (Pattern Name)
-pattern' =
-  indentedPattern (mkPos 1)
-
+pattern' = indentedPattern (mkPos 1)
 
 basePattern :: Parser (Pattern Name)
 basePattern =
-      patApp
-  <|> paren pattern'
-
-atomicPattern :: Parser (Pattern Name)
-atomicPattern =
   patLit
-  <|> nameAsPatApp
   <|> paren pattern'
 
 patLit :: Parser (Pattern Name)
-patLit = attachAnno $ PatLit emptyAnno <$> annoHole rawLit
-
-nameAsPatApp :: Parser (Pattern Name)
-nameAsPatApp =
-  attachAnno $
-    PatApp emptyAnno
-    <$> annoHole name
-    <*> annoHole (pure [])
+patLit = attachAnno $ PatLit emptyAnno <$> annoHole expr
 
 patternCont :: Pos -> Parser (Cont Pattern)
 patternCont = cont patOperator basePattern
@@ -1248,17 +1233,6 @@ patternCont = cont patOperator basePattern
 patOperator :: Parser (Prio, Assoc, Pattern Name -> Pattern Name -> Pattern Name)
 patOperator =
   (\ op -> (5, AssocRight, infix2' PatCons      op)) <$> ((\ l1 l2 -> mkSimpleEpaAnno (lexToEpa l1) <> mkSimpleEpaAnno (lexToEpa l2)) <$> spacedToken_ TKFollowed <*> spacedToken_ TKBy)
-
-patApp :: Parser (Pattern Name)
-patApp = do
-  current <- Lexer.indentLevel
-  attachAnno $
-    PatApp emptyAnno
-    <$> annoHole name
-    <*> (      annoLexeme (spacedToken_ TKOf)
-            *> annoHole (lsepBy (indented basePattern current) (spacedToken_ TComma))
-        <|> annoHole (lmany (indented atomicPattern current))
-        )
 
 -- Some manual left-factoring here to prevent left-recursion
 -- TODO: the interaction between projection and application has to be properly sorted out
