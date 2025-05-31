@@ -34,7 +34,6 @@
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
   import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
   import PathsList from '../paths-list.svelte'
@@ -214,7 +213,7 @@
         PathsList event listener
   **********************************************/
   const onPathsListChange = (context: LirContext, id: LirId) => {
-    if (id === pathsList.getId()) {
+    if (pathsList && id === pathsList.getId()) {
       pathsList = ladderGraph.getPathsList(context)
     }
   }
@@ -338,7 +337,7 @@ Misc SF UI TODOs:
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
-  {#if isValidPathsListLirNode(pathsList)}
+  {#if pathsList}
     <div class="paths-container">
       <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
       <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
