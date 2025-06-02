@@ -793,7 +793,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
 }
 
 /**********************************************
-        Not related Lir Nodes
+        NotStart, NotEnd Lir Nodes
 ***********************************************/
 
 export function isNotStartLirNode(
