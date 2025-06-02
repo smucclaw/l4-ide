@@ -60,15 +60,13 @@ IMPORT prelude
     Money WITH
         Currency  IS `Principal Amount`'s Currency
         Value     IS `Principal Amount`'s Value
-                        TIMES (`Monthly Interest Rate`
-                                    TIMES `To the power of`
-                                                (1 PLUS `Monthly Interest Rate`)
-                                                `Monthly Installments`
-                              )
-                        DIVIDED BY (`To the power of` 
-                                        (1 PLUS `Monthly Interest Rate`)
-                                        `Monthly Installments`
-                                   MINUS 1)
+                        TIMES (`Monthly Interest Rate` TIMES `Termed Rate`)
+                            DIVIDED BY (`Termed Rate` MINUS 1)
+    WHERE
+        `Termed Rate` MEANS
+            `Rate to the power of`
+                (1 PLUS `Monthly Interest Rate`)
+                `Monthly Installments`
 
 `Total Repayment Amount` MEANS
     Money WITH
@@ -219,12 +217,12 @@ GIVEN a IS A NUMBER
 
 GIVEN a IS A NUMBER
       b IS A NUMBER
-`To the power of` MEANS
+`Rate to the power of` MEANS
     IF      b EQUALS 0
     THEN    1
     ELSE    IF      b EQUALS 1
             THEN    a
-            ELSE    a TIMES `To the power of` a (b MINUS 1)
+            ELSE    a TIMES `Rate to the power of` a (b MINUS 1)
 
 
 §§§ `Testing`
