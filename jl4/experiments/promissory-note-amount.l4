@@ -53,28 +53,33 @@ IMPORT prelude
 
 §§ `Repayment Terms`
 
-`Total Interest Amount` MEANS
+`Monthly Interest Rate` MEANS
+    `Interest Rate Per Annum` DIVIDED BY 12
+
+`Monthly Installment Amount` MEANS
     Money WITH
         Currency  IS `Principal Amount`'s Currency
-        Value     IS `Principal Amount`'s Value TIMES
-                         (`Interest Rate Per Annum`
-                              DIVIDED BY 12)
-                                    TIMES `Monthly Installments`
+        Value     IS `Principal Amount`'s Value
+                        TIMES (`Monthly Interest Rate`
+                                    TIMES `To the power of`
+                                                (1 PLUS `Monthly Interest Rate`)
+                                                `Monthly Installments`
+                              )
+                        DIVIDED BY (`To the power of` 
+                                        (1 PLUS `Monthly Interest Rate`)
+                                        `Monthly Installments`
+                                   MINUS 1)
 
 `Total Repayment Amount` MEANS
     Money WITH
         Currency  IS `Principal Amount`'s Currency
-        Value     IS `Principal Amount`'s Value PLUS `Total Interest Amount`'s Value
+        Value     IS `Monthly Installment Amount`'s Value TIMES `Monthly Installments`
 
-`Monthly Installment Amount` MEANS
+`Total Interest Amount` MEANS
     Money WITH
-        Currency IS
-            `Total Repayment Amount`'s Currency
-        Value IS
-            `Total Repayment Amount`'s Value
-                DIVIDED BY `Monthly Installments`
+        Currency  IS `Principal Amount`'s Currency
+        Value     IS `Total Repayment Amount`'s Value MINUS `Principal Amount`'s Value
 
-                
 GIVEN `Outstanding Payment Amount` IS A Money
 `Payment Obligations` MEANS
     IF `Outstanding Payment Amount`'s Value GREATER THAN 0
@@ -212,6 +217,15 @@ GIVEN a IS A NUMBER
         THEN b
         ELSE a
 
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+`To the power of` MEANS
+    IF      b EQUALS 0
+    THEN    1
+    ELSE    IF      b EQUALS 1
+            THEN    a
+            ELSE    a TIMES `To the power of` a (b MINUS 1)
+
 
 §§§ `Testing`
 
@@ -219,22 +233,24 @@ GIVEN a IS A NUMBER
 
 #EVAL `Total Repayment Amount`
 
+#EVAL `Monthly Interest Rate`
+
 #EVAL `Monthly Installment Amount`
 
 #TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 29
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 59
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 89
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 119
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 149
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 179
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 209
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 239
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 269
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 299
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 329
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2396.20) AT 359
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 29
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 59
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 89
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 119
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 149
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 179
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 209
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 239
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 269
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 299
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 329
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 359
 
 #TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
-    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2395.80) AT 59
+    PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 59
     
