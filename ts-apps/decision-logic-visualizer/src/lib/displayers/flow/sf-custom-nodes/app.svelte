@@ -22,6 +22,7 @@
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
+  const pathsTracker = ladderGraph.getPathsTracker(data.context)
 
   const node = data.node as AppLirNode
 </script>
@@ -55,6 +56,23 @@
   </ValueIndicator>
 {/snippet}
 
+{#snippet coreAppUI()}
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
+    <!-- Function name -->
+    <div class="font-bold text-[1.1rem]">
+      {node.getFnName(data.context).label}
+    </div>
+    <!-- Args (see also note above)-->
+    <div class="flex flex-wrap gap-1 justify-center">
+      {#each node.getArgs(data.context) as arg}
+        {@render argUI(arg)}
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
 <WithContentfulNodeStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
@@ -69,28 +87,19 @@
     ]}
   >
     <WithNormalHandles>
-      <WithHighlightableNodeContextMenu
-        onSelect={() => {
-          ladderGraph.toggleSelection(
-            data.context,
-            data.context.get(data.originalLirId) as AppLirNode
-          )
-        }}
-      <div
-        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-      >
-        <!-- Function name -->
-        <div class="font-bold text-[1.1rem]">
-          {node.getFnName(data.context).label}
-        </div>
-        <!-- Args (see also note above)-->
-        <div class="flex flex-wrap gap-1 justify-center">
-          {#each node.getArgs(data.context) as arg}
-            {@render argUI(arg)}
-          {/each}
-        </div>
-      </div>
-      </WithHighlightableNodeContextMenu>
+      {#if pathsTracker}
+        <WithHighlightableNodeContextMenu
+          onSelect={() => {
+            pathsTracker.toggleNodeSelection(
+              data.context,
+              data.context.get(data.originalLirId) as AppLirNode,
+              ladderGraph
+            )
+          }}
+        >
+          {@render coreAppUI()}
+        </WithHighlightableNodeContextMenu>
+      {/if}
     </WithNormalHandles>
   </div>
 </WithContentfulNodeStyles>
