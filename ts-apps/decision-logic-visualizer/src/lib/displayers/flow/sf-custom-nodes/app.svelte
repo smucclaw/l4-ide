@@ -10,7 +10,7 @@
   import type { AppLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import type {
     AppArgLirNode,
@@ -88,17 +88,13 @@
   >
     <WithNormalHandles>
       {#if pathsTracker}
-        <WithHighlightableNodeContextMenu
-          onSelect={() => {
-            pathsTracker.toggleNodeSelection(
-              data.context,
-              data.context.get(data.originalLirId) as AppLirNode,
-              ladderGraph
-            )
-          }}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          node={data.context.get(data.originalLirId) as AppLirNode}
+          {pathsTracker}
         >
           {@render coreAppUI()}
-        </WithHighlightableNodeContextMenu>
+        </WithSelectableNodeContextMenu>
       {:else}
         {@render coreAppUI()}
       {/if}

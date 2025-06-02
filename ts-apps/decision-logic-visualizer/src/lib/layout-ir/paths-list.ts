@@ -1,6 +1,6 @@
 import {
   type LadderLirNode,
-  type SelectableLadderLirNode,
+  type SelectableNode,
   LadderGraphLirNode,
   LinPathLirNode,
   isSourceLirNode,
@@ -244,7 +244,7 @@ export class PathsTracker {
   /** Get the nodes on the ladder graph that the user has selected for highlighting by interacting with the main graph UI */
   getSelectedForHighlightPaths(context: LirContext) {
     return Array.from(this.#selectedForHighlightPaths).map(
-      (id) => context.get(id) as SelectableLadderLirNode
+      (id) => context.get(id) as SelectableNode
     )
   }
 
@@ -257,7 +257,7 @@ export class PathsTracker {
   /** Toggle whether a specific node is selected for highlighting */
   toggleNodeSelection(
     context: LirContext,
-    node: SelectableLadderLirNode,
+    node: SelectableNode,
     ladderGraph: LadderGraphLirNode
   ) {
     if (this.#selectedForHighlightPaths.has(node.getId())) {
@@ -305,7 +305,7 @@ export class PathsTracker {
   }
 
   /** Given the selected nodes, figure out what lin paths through the ladder graph, if any, these correspond to */
-  findCorrespondingLinPaths(selected: Array<SelectableLadderLirNode>) {
+  findCorrespondingLinPaths(selected: Array<SelectableNode>) {
     /** 1. Compute the paths through the selected subgraph of the noBundlingNode graph
      * (These paths will start from noIntermediateBundlingNodeDag's source.)
      */

@@ -9,7 +9,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
@@ -81,17 +81,13 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   >
     <WithNormalHandles>
       {#if pathsTracker}
-        <WithHighlightableNodeContextMenu
-          onSelect={() => {
-            pathsTracker.toggleNodeSelection(
-              data.context,
-              data.context.get(data.originalLirId) as UBoolVarLirNode,
-              ladderEnv.getTopFunDeclLirNode(data.context).getBody(data.context)
-            )
-          }}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          node={data.context.get(data.originalLirId) as UBoolVarLirNode}
+          {pathsTracker}
         >
           {@render coreUBoolVarUI()}
-        </WithHighlightableNodeContextMenu>
+        </WithSelectableNodeContextMenu>
       {:else}
         {@render coreUBoolVarUI()}
       {/if}

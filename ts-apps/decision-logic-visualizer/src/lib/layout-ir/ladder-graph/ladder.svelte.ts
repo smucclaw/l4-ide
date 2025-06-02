@@ -18,8 +18,6 @@ import { ComparisonResult } from '$lib/utils.js'
 import {
   empty,
   isVertex,
-  overlays,
-  vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
@@ -28,7 +26,7 @@ import type {
   LadderNodeCSSClass,
   NodeStyleModifierCSSClass,
 } from './node-styles.js'
-import { FadedNodeCSSClass } from './node-styles.js'
+import { FadedNodeCSSClass, HighlightedNodeCSSClass } from './node-styles.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
@@ -190,6 +188,7 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
   protected modifierCSSClasses: Set<NodeStyleModifierCSSClass> = new Set()
+  protected otherCSSClasses: Set<LadderNodeCSSClass> = new Set()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -224,7 +223,7 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   ***********************************************/
 
   getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return this.getModifierCSSClasses(context)
+    return [...this.getModifierCSSClasses(context), ...this.otherCSSClasses]
   }
 
   getModifierCSSClasses(_context: LirContext): NodeStyleModifierCSSClass[] {
@@ -248,6 +247,18 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   }
 
   abstract toPretty(context: LirContext): string
+}
+
+export abstract class HighlightableFlowLirNode extends BaseFlowLirNode {
+  highlight(context: LirContext) {
+    this.otherCSSClasses.add(HighlightedNodeCSSClass)
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  unhighlight(context: LirContext) {
+    this.otherCSSClasses.delete(HighlightedNodeCSSClass)
+    this.getRegistry().publish(context, this.getId())
+  }
 }
 
 /**********************************************
@@ -649,13 +660,10 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
-export type SelectableLadderLirNode =
-  | UBoolVarLirNode
-  | AppLirNode
-  | NotStartLirNode
+export type SelectableNode = UBoolVarLirNode | AppLirNode | NotStartLirNode
 export function isSelectableLadderLirNode(
   node: LadderLirNode
-): node is SelectableLadderLirNode {
+): node is SelectableNode {
   return (
     isUBoolVarLirNode(node) || isAppLirNode(node) || isNotStartLirNode(node)
   )
@@ -677,7 +685,10 @@ export function isFalseExprLirNode(
   return node instanceof FalseExprLirNode
 }
 
-export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class FalseExprLirNode
+  extends HighlightableFlowLirNode
+  implements FlowLirNode
+{
   #name: Name
   #value = new FalseVal()
 
@@ -703,7 +714,10 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
-export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class TrueExprLirNode
+  extends HighlightableFlowLirNode
+  implements FlowLirNode
+{
   #name: Name
   #value = new TrueVal()
 
@@ -750,7 +764,7 @@ export function isUBoolVarLirNode(
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
-export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+export class UBoolVarLirNode extends HighlightableFlowLirNode implements VarLirNode {
   #originalExpr: UBoolVar
   #initialValue: UBoolVal
 
@@ -784,6 +798,8 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     return ladderGraph.getValueOfUnique(context, this.getUnique(context))
   }
 
+  highlight(_context: LirContext) {}
+
   toPretty(context: LirContext) {
     return this.getLabel(context)
   }
@@ -803,7 +819,10 @@ export function isNotStartLirNode(
   return node instanceof NotStartLirNode
 }
 
-export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class NotStartLirNode
+  extends HighlightableFlowLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
@@ -825,7 +844,10 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
-export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class NotEndLirNode
+  extends HighlightableFlowLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
@@ -853,7 +875,10 @@ export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
   return node instanceof AppLirNode
 }
 
-export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class AppLirNode
+  extends HighlightableFlowLirNode
+  implements FlowLirNode
+{
   #fnName: Name
   #args: LirId[]
 

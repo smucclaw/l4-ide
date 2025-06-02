@@ -178,7 +178,7 @@
 }
 
 /*************************************
-  Utility SF styles
+        Utility classes
 *************************************/
 
 /* Need !important in true-val and false-val to be able to override base / default background colors
@@ -257,6 +257,11 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 @utility bool-lit-node-border {
   border: calc(var(--ladder-node-border-width) - 1px) solid var(--color-primary);
   border-radius: 2px;
+}
+
+@utility highlighted-ladder-node {
+  border: var(--ladder-node-border-width) solid
+    var(--color-highlighted-path-in-flow);
 }
 
 /*************************************
