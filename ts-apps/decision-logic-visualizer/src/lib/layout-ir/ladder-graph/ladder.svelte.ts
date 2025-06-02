@@ -613,6 +613,19 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     // })
     // console.log('=========================\n')
 
+    // TODO: I think I need to be able to change the toggle group value / state (which lin paths are selected) from outside the pathslist displayer? ie put state for that on the pathslistlirnode and then listen for changes to it in the pathslist displayer? 
+
+    // TODO: Refactor to make this just change what lin paths are selected --- without also doing the highlight paths logic
+    // e.g. with selectPaths
+
+    // Rename the the current highlightPaths method (that changes stuff in the main graph) to a private highlightPathsInMainGraph method 
+    // CAll highlihgtPaths at the end of selectPaths, or have a different listener trigger the highlightPaths stuff (thus changing highlighting in mai ngraph) whenever there's a change in what lin paths are selected
+    // (But don't use onValueChange in the displayer for this --- I don't want to couple it too much to the bitsui component)
+
+    // That way, all attempts at highlighting will eventually go thru 1 common method: this select/highlightPaths method on PathsList
+    // TODO: Will also want to add HighlightedNode styles, so that can highlight individual nodes as well on the main graph
+    // And then highlight the individual nodes after highlighting the lin path subgraph
+
     // Highlight these lin paths / subgraph of #dag
     // (or, if there are no corresponding lin paths, just highlight the selected nodes)
     this.clearHighlightEdgeStyles(context)
