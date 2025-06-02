@@ -1,0 +1,79 @@
+DECLARE Vector
+    HAS
+        x IS A NUMBER
+        y IS A NUMBER
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__PLUS__` a b MEANS
+    Vector WITH
+        x IS a's x PLUS b's x
+        y IS a's y PLUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__TIMES__` a b MEANS
+    Vector WITH
+        x IS a's x TIMES b's x
+        y IS a's y TIMES b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__MINUS__` a b MEANS
+    Vector WITH
+        x IS a's x MINUS b's x
+        y IS a's y MINUS b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A Vector
+`__DIVIDE__` a b MEANS
+    Vector WITH
+        x IS a's x DIVIDED BY b's x
+        y IS a's y DIVIDED BY b's y
+
+plus1 a b MEANS a PLUS b
+plus2 a b MEANS a + b
+
+minus1 a b MEANS a MINUS b
+minus2 a b MEANS a - b
+
+times1 a b MEANS a TIMES b
+times2 a b MEANS a * b
+
+divide1 a b MEANS a DIVIDED BY b
+divide2 a b MEANS a / b
+
+modulo1 a b MEANS a MODULO b
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__LT__` a b MEANS
+    a's x LESS THAN b's x AND a's y LESS THAN b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+
+`__LEQ__` a b MEANS
+    a's x AT MOST b's x AND a's y AT MOST b's y
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__GT__` a b MEANS
+    a's x GREATER THAN b's x AND a's y GREATER THAN b's y
+
+GIVEN a IS A Vector
+      b IS A Vector
+GIVETH A BOOLEAN
+`__GEQ__` a b MEANS
+    a's x AT LEAST b's x AND a's y AT LEAST b's y
+
+lessThan1 a b    MEANS a LESS THAN b
+atMost1 a b      MEANS a AT MOST b
+greaterThan1 a b MEANS a GREATER THAN b
+atLeast1 a b     MEANS a AT LEAST b
