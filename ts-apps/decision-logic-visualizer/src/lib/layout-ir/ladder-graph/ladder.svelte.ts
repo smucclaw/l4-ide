@@ -733,6 +733,7 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
         UBoolVar Lir Node
 ***********************************************/
 
+// TODO: Prob just remove this
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
 
