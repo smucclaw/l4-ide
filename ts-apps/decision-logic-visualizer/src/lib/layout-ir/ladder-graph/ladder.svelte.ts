@@ -33,9 +33,10 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { PathsListLirNode } from '../paths-list.js'
+import { PathsListLirNode, PathsTracker } from '../paths-list.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
+  isNnf,
   pprintPathGraph,
   getVerticesFromAlgaDag,
 } from './ladder-dag-helpers.js'
@@ -287,15 +288,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
-  #noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>
-  #noBundlingNodePathToLadderLinPath: ArrayKeyedMap<LirId, LinPathLirNode>
+  #pathsTracker?: PathsTracker
   #selectedForHighlightPaths: Set<LirId> = new Set()
-  /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
-   * No need to update it, tho, if changing edge attributes.
-   *
-   * No pathsListLirNode iff graph expr is not NNF.
-   */
-  #pathsList?: PathsListLirNode
 
   private constructor(
     nodeInfo: LirNodeInfo,
@@ -303,16 +297,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv,
-    pathsList?: PathsListLirNode
+    pathsTracker?: PathsTracker
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
-    this.#noIntermediateBundlingNodeDag = noIntermediateBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
-    this.#pathsList = pathsList
-    this.#noBundlingNodePathToLadderLinPath = noBundlingNodePathToLadderLinPath
+    this.#pathsTracker = pathsTracker
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -340,84 +332,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
-    /* 
-    Make a dag with no intermediate bundling nodes 
-    -- i.e., the noIntermediateBundlingNodeDag -- by
-    replacing intermediate source nodes with their immediate predecessors
-    and intermediate sink nodes with their immediate successors
-    (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
-
-    The noIntermediateBundlingNodeDag still has bundling nodes --- the overall source and sink nodes.
-    It's just that it doesn't have *intermediate* bundling nodes.
-
-    This gets used to figure out what paths on the main graph the user is trying to highlight,
-    when they select nodes on the main graph.
-
-    See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
-    for more on how to debug and understand this better.
-    */
-    const vertices = dag
-      .getVertices()
-      .map((v) => nodeInfo.context.get(v) as LadderLirNode)
-    const sources = new Set(
-      vertices.filter(isSourceLirNode).map((n) => n.getId())
-    )
-    const sinks = new Set(vertices.filter(isSinkLirNode).map((n) => n.getId()))
-
-    const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
-    const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
-    const noIntermediateBundlingNodeDag = fromSinkEdges.reduceRight(
-      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
-      toSourceEdges.reduceRight(
-        (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
-        dag
-      )
-    )
-
-    // Make the PathsList if it's in NNF
-    const pathsList = isNnf(nodeInfo.context, dag)
-      ? new PathsListLirNode(
-          nodeInfo,
-          dag
-            .getAllPaths()
-            .map((rawPath) => new LinPathLirNode(nodeInfo, rawPath))
-        )
+    // Make the PathsTracker if the dag's in NNF
+    const pathsTracker = isNnf(nodeInfo.context, dag)
+      ? PathsTracker.make(nodeInfo, dag)
       : undefined
-    const noBundlingNodePathToLadderLinPath = new ArrayKeyedMap<
-      LirId,
-      LinPathLirNode
-    >(pathsList
-        .getPaths(nodeInfo.context)
-        .map((path): [LirId[], LinPathLirNode] => {
-          const topSort = path
-            .getRawPathGraph()
-            .getTopSort()
-            .filter((v) => {
-              const isOverallSource = dag.getSource().isEqualTo(vertex(v))
-              const isOverallSink = dag.getSink().isEqualTo(vertex(v))
-              return (
-                isOverallSource ||
-                isOverallSink ||
-                isSelectableLadderLirNode(
-                  nodeInfo.context.get(v) as LadderLirNode
-                )
-              )
-            })
-          return [topSort, path]
-        })
-    )
-
-    console.log('\n=== noBundlingNodePathToLadderLinPath ===')
-    noBundlingNodePathToLadderLinPath.forEach((_path, key) => {
-      const nodeLabels = key.map((id) => {
-        return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
-      })
-      console.log(nodeLabels.join(' → '))
-    })
-    console.log('===================================================\n')
-
-    console.log('ladder graph dag: ', dag.toString())
-
 
     // Make the LadderGraphLirNode
     const ladderGraph = new LadderGraphLirNode(
@@ -426,9 +344,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       vizExprToLirGraph,
       originalExpr,
       ladderEnv,
-      pathsList,
-      noIntermediateBundlingNodeDag,
-      noBundlingNodePathToLadderLinPath
+      pathsTracker
     )
 
     // doEval (may not want to start with this?)
@@ -467,9 +383,9 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  /** Get list of all simple paths through the Dag */
+  /** Get list of all simple paths through the main ladder graph, if it's in NNF */
   getPathsList(_context: LirContext) {
-    return this.#pathsList
+    return this.#pathsTracker?.getPathsList()
   }
 
   getOverallSource(context: LirContext): undefined | SourceLirNode {
@@ -554,55 +470,19 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     context: LirContext,
     selected: Array<SelectableLadderLirNode>
   ) {
-    const selectedIds = new Set(selected.map((node) => node.getId()))
     /* 
     We are in effect maintaining two representations of the ladder graph:
 
-    1. #dag: The main ladder graph
-    2. #noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
+    1. The main ladder graph
+    2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
 
     Every time there is a change in the user's node selection on the main graph --- which
     in effect corresponds to a change in what nodes of #noIntermediateBundlingNodeDag are selected ---
     we check if the user has selected nodes corresponding to a lin path in #dag.
     */
-    console.log(
-      '=======================  updateHighlighting =====================\n'
-    )
-    console.log(
-      'selected',
-      Array.from(selectedIds).map((id) => id.toString())
-    )
-    console.log(
-      'noIntermediateBundlingNodeDag',
-      this.#noIntermediateBundlingNodeDag.toString()
-    )
-    // Compute the paths through the selected subgraph of the noBundlingNode graph
-    // (These paths will start from noIntermediateBundlingNodeDag's source.)
-    const pathsSelectedSubgraphOfNoBundlingNodeGraph =
-      this.#noIntermediateBundlingNodeDag
-        .induce((nodeId: LirId) => {
-          const isSource = this.#noIntermediateBundlingNodeDag
-            .getSource()
-            .isEqualTo(vertex(nodeId))
-          const isSink = this.#noIntermediateBundlingNodeDag
-            .getSink()
-            .isEqualTo(vertex(nodeId))
-          return selectedIds.has(nodeId) || isSource || isSink
-        })
-        .getAllPaths()
-    // pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
-    //   console.log(
-    //     `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
-    //     p.toString()
-    //   )
-    // )
 
-    // Get the lin paths / subgraph of #dag that correspond to the computed paths in #noIntermediateBundlingNodeDag (if there are any)
-    const linPaths = pathsSelectedSubgraphOfNoBundlingNodeGraph
-      .map((nbnPathGraph) =>
-        this.#noBundlingNodePathToLadderLinPath.get(nbnPathGraph.getTopSort())
-      )
-      .filter((linPath) => !!linPath)
+    const linPaths =
+      this.#pathsTracker?.findCorrespondingLinPaths(selected) ?? []
     // console.log('\n=== Lin Paths ===')
     // linPaths.forEach((path, index) => {
     //   const nodeLabels = path.getVertices(context).map((node) => {
@@ -613,12 +493,12 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     // })
     // console.log('=========================\n')
 
-    // TODO: I think I need to be able to change the toggle group value / state (which lin paths are selected) from outside the pathslist displayer? ie put state for that on the pathslistlirnode and then listen for changes to it in the pathslist displayer? 
+    // TODO: I think I need to be able to change the toggle group value / state (which lin paths are selected) from outside the pathslist displayer? ie put state for that on the pathslistlirnode and then listen for changes to it in the pathslist displayer?
 
     // TODO: Refactor to make this just change what lin paths are selected --- without also doing the highlight paths logic
     // e.g. with selectPaths
 
-    // Rename the the current highlightPaths method (that changes stuff in the main graph) to a private highlightPathsInMainGraph method 
+    // Rename the the current highlightPaths method (that changes stuff in the main graph) to a private highlightPathsInMainGraph method
     // CAll highlihgtPaths at the end of selectPaths, or have a different listener trigger the highlightPaths stuff (thus changing highlighting in mai ngraph) whenever there's a change in what lin paths are selected
     // (But don't use onValueChange in the displayer for this --- I don't want to couple it too much to the bitsui component)
 
@@ -633,7 +513,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       context,
       overlays([
         ...linPaths.map((linPath) => linPath.getRawPathGraph()),
-        ...Array.from(selectedIds).map(vertex),
+        ...selected.map((node) => vertex(node.getId())),
       ])
     )
   }
