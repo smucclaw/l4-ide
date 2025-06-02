@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   LadderGraphLirNode,
   LinPathLirNode,
@@ -7,39 +6,13 @@ import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import { overlay, empty } from '../algebraic-graphs/dag.js'
 
-export type PathsListLirNode = InvalidPathsListLirNode | ValidPathsListLirNode
-
-export function isInvalidPathsListLirNode(
+export function isPathsListLirNode(
   node: PathsListLirNode
-): node is InvalidPathsListLirNode {
-  return node instanceof InvalidPathsListLirNode
+): node is PathsListLirNode {
+  return node instanceof PathsListLirNode
 }
 
-export class InvalidPathsListLirNode extends DefaultLirNode implements LirNode {
-  constructor(nodeInfo: LirNodeInfo) {
-    super(nodeInfo)
-  }
-
-  toString(): string {
-    return 'INVALID_PATHS_LIST_LIR_NODE'
-  }
-
-  getChildren(_context: LirContext) {
-    return []
-  }
-
-  dispose(context: LirContext) {
-    context.clear(this.getId())
-  }
-}
-
-export function isValidPathsListLirNode(
-  node: PathsListLirNode
-): node is ValidPathsListLirNode {
-  return node instanceof ValidPathsListLirNode
-}
-
-export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
+export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
 
   constructor(
@@ -81,6 +54,6 @@ export class ValidPathsListLirNode extends DefaultLirNode implements LirNode {
   }
 
   toString(): string {
-    return 'VALID_PATHS_LIST_LIR_NODE'
+    return 'PATHS_LIST_LIR_NODE'
   }
 }
