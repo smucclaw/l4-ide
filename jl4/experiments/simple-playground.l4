@@ -1,0 +1,20 @@
+-- how do i do simple objects
+
+DECLARE Person
+    HAS name IS A STRING
+        num  IS A NUMBER
+        wallet IS A Money
+
+DECLARE Money
+    HAS amount IS A NUMBER
+        currency IS A STRING
+
+
+obj1 MEANS
+    Person WITH
+        name IS "obj1"
+        num  IS 1
+        wallet IS Money WITH
+            amount IS 100
+            currency IS "USD"
+
