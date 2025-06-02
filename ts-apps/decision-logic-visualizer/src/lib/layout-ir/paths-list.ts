@@ -3,14 +3,18 @@ import {
   type SelectableNode,
   LadderGraphLirNode,
   LinPathLirNode,
-  isSourceLirNode,
-  isSinkLirNode,
   isSelectableLadderLirNode,
+  isBundlingFlowLirNode,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import {
+  // connect,
   type DirectedAcyclicGraph,
+  // empty,
+  // foldg,
+  // isVertex,
+  // overlay,
   overlays,
   vertex,
 } from '../algebraic-graphs/dag.js'
@@ -127,6 +131,21 @@ function linPathToPathInNoIntermediateBundlingNodeDag(
     })
 }
 
+export function contractIntermediateBundlingNodes(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): DirectedAcyclicGraph<LirId> {
+  const overallSource = dag.getSource()
+  const overallSink = dag.getSink()
+
+  const isIntermediateBundlingNode = (node: LadderLirNode): boolean => {
+    const isOverallSource = vertex(node.getId()).isEqualTo(overallSource)
+    const isOverallSink = vertex(node.getId()).isEqualTo(overallSink)
+    return isBundlingFlowLirNode(node) && !isOverallSource && !isOverallSink
+  }
+  // TODO
+}
+
 /**
  * This stores the PathsList (the paths through the main ladder graph), as well as what nodes the user has selected on the ladder graph.
  * It also tracks how the nodes that the user has selected on the ladder graph
@@ -155,13 +174,7 @@ export class PathsTracker {
     * 1. The main ladder graph
     * 2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink (i.e., no intermediate bundling nodes)
     
-    Here, we make the noIntermediateBundlingNodeDag, 
-    by replacing intermediate source nodes 
-    with their immediate predecessors
-    and intermediate sink nodes with their immediate successors
-    (We only have to consider the *immedate* precedessors / successors because of 
-    the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
-
+    Here, we make the noIntermediateBundlingNodeDag by contracting intermediate bundling nodes.
     The noIntermediateBundlingNodeDag still has bundling nodes --- the overall source and sink nodes.
     It's just that it doesn't have *intermediate* bundling nodes.
 
@@ -171,23 +184,15 @@ export class PathsTracker {
     See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
     for more on how to debug and understand this better.
     */
-    const vertices = dag
-      .getVertices()
-      .map((v) => nodeInfo.context.get(v) as LadderLirNode)
-    const sources = new Set(
-      vertices.filter(isSourceLirNode).map((n) => n.getId())
+    const noIntermediateBundlingNodeDag = contractIntermediateBundlingNodes(
+      nodeInfo.context,
+      dag
     )
-    const sinks = new Set(vertices.filter(isSinkLirNode).map((n) => n.getId()))
-
-    const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
-    const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
-    const noIntermediateBundlingNodeDag = fromSinkEdges.reduceRight(
-      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
-      toSourceEdges.reduceRight(
-        (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
-        dag
-      )
+    console.log(
+      'noIntermediateBundlingNodeDag: ',
+      noIntermediateBundlingNodeDag.toString()
     )
+    console.log('===================================================\n')
 
     // Make pathsList and a map from paths in the noIntermediateBundlingNodeDag to the corresponding lin paths on the main graph
     const pathsList = new PathsListLirNode(
@@ -213,14 +218,16 @@ export class PathsTracker {
           }
         )
     )
-    // console.log('\n=== noBundlingNodePathToLadderLinPath ===')
-    // noBundlingNodePathToLadderLinPath.forEach((_path, key) => {
-    //   const nodeLabels = key.map((id) => {
-    //     return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
-    //   })
-    //   console.log(nodeLabels.join(' → '))
-    // })
-    // console.log('===================================================\n')
+    console.log('\n=== noBundlingNodePathToLadderLinPath ===')
+    noBundlingNodePathToLadderLinPath.forEach(
+      (_, noIntermedBundlingNodePath) => {
+        const nodeLabels = noIntermedBundlingNodePath.map((id) => {
+          return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
+        })
+        console.log(nodeLabels.join(' -> '))
+      }
+    )
+    console.log('===================================================\n')
 
     return new PathsTracker(
       noIntermediateBundlingNodeDag,
@@ -282,15 +289,15 @@ export class PathsTracker {
     const linPaths = this.findCorrespondingLinPaths(
       this.getSelectedForHighlightPaths(context)
     )
-    // console.log('\n=== Lin Paths ===')
-    // linPaths.forEach((path, index) => {
-    //   const nodeLabels = path.getVertices(context).map((node) => {
-    //     return `${node.getId().toString()} (${node.toPretty(context)})`
-    //   })
-    //   console.log(`\nLin Path ${index + 1}:`)
-    //   console.log(nodeLabels.join(' -> '))
-    // })
-    // console.log('=========================\n')
+    console.log('\n=== Lin Paths ===')
+    linPaths.forEach((path, index) => {
+      const nodeLabels = path.getVertices(context).map((node) => {
+        return `${node.getId().toString()} (${node.toPretty(context)})`
+      })
+      console.log(`\nLin Path ${index + 1}:`)
+      console.log(nodeLabels.join(' -> '))
+    })
+    console.log('=========================\n')
 
     // Highlight the graph union of the corresponding lin paths and the selected nodes on the ladder graph
     // (We don't just highlight the lin paths b/c also want to be able to see if we've highlighted specific nodes.)
