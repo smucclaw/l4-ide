@@ -45,8 +45,8 @@ import L4.Nlg (simpleLinearizer)
 -- LSP Autocompletions
 -- ----------------------------------------------------------------------------
 
-buildCompletionItem :: RawName -> [CheckEntity] -> [CompletionItem]
-buildCompletionItem raw = foldMap \ case
+buildCompletionItem :: RawName -> CheckEntity -> [CompletionItem]
+buildCompletionItem raw = \ case
   KnownTerm ty term ->
     pure (defaultTopDeclCompletionItem ty)
       { CompletionItem._kind = Just $ case (term, ty) of
@@ -287,33 +287,25 @@ completions rope nuri typeCheck pos@(Position ln col) = do
         $ Map.keys keywords
         <> annotations
         <> map snd directives
-      -- FUTUREWORK(mangoiv): we could
-      -- 1 pass through the token here
-      -- 2 check the token category and if the category is COperator
-      -- 3 set the CompletionItemKind to CompletionItemKind_Operator
+
       keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
       -- NOTE: combine toplevel check info and info brought in scope
       finalCheckInfos
-        = (\a -> trace (Text.unpack $ Text.unlines $ rawNameToText <$> Map.keys a) a)
-          $ Map.unionsWith (\a b -> nub $ a <> b)
-          $ map (uncurry combineEnvironmentEntityInfo)
-          $ (typeCheck.environment, typeCheck.entityInfo)
-              : map snd (IV.search (lspPositionToSrcPos pos) typeCheck.scopeMap)
+        = Map.unionsWith (\a b -> nub $ a <> b)
+        $ map (uncurry combineEnvironmentEntityInfo)
+        $ (typeCheck.environment, typeCheck.entityInfo)
+            : map snd (IV.search (lspPositionToSrcPos pos) typeCheck.scopeMap)
 
       scopedItems
         = filterMatchesOn CompletionItem._label
         $ foldMap
             (\(name, ces) ->
-              buildCompletionItem name
-              $ map (applyFinalSubstitution typeCheck.substitution nuri) ces
+              foldMap
+                (buildCompletionItem name . applyFinalSubstitution typeCheck.substitution nuri)
+                ces
             )
         $ Map.toList finalCheckInfos
-
-  -- TODO: maybe we should sort these as follows
-  -- 1 keywords
-  -- 2 toplevel values
-  -- 3 toplevel types
 
   keywordItems <> scopedItems
 
