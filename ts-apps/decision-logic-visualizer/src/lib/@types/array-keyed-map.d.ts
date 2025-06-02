@@ -3,24 +3,30 @@
  **************************************************/
 
 declare module 'array-keyed-map' {
-  export default class ArrayKeyedMap<K, V> {
-    constructor(initialEntries?: Array<[K[], V]>)
+  // TKeyArray is the type of the key array itself (e.g., string[], number[], LirId[]).
+  // V is the type of the value.
+  export default class ArrayKeyedMap<TKeyArray extends unknown[], V> {
+    constructor(initialEntries?: Array<[TKeyArray, V]>)
 
-    set(path: K[], value: V): this
-    has(path: K[]): boolean
-    get(path: K[]): V | undefined
-    delete(path: K[]): boolean
+    set(path: TKeyArray, value: V): this
+    has(path: TKeyArray): boolean
+    get(path: TKeyArray): V | undefined
+    delete(path: TKeyArray): boolean
     clear(): void
-    hasPrefix(path: K[]): boolean
+    hasPrefix(path: TKeyArray): boolean
 
     readonly size: number;
 
-    [Symbol.iterator](): Iterator<[K[], V]>
-    entries(): Iterator<[K[], V]>
-    keys(): Iterator<K[]>
+    [Symbol.iterator](): Iterator<[TKeyArray, V]>
+    entries(): Iterator<[TKeyArray, V]>
+    keys(): Iterator<TKeyArray>
     values(): Iterator<V>
     forEach(
-      callback: (value: V, key: K[], map: ArrayKeyedMap<K, V>) => void,
+      callback: (
+        value: V,
+        key: TKeyArray,
+        map: ArrayKeyedMap<TKeyArray, V>
+      ) => void,
       thisArg?: object
     ): void
   }
