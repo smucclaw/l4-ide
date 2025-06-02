@@ -273,6 +273,8 @@ data Pattern n =
   | PatApp Anno n [Pattern n]
     -- ^ not used during parsing, but after scope-checking;
     -- the idea is that if your pattern mentions an in scope name, you
+    -- only get a "real" pattern if that name is a constructor, but that
+    -- can only be decided during type/scope checking
   | PatLit Anno (Expr n)
   | PatCons Anno (Pattern n) (Pattern n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)

@@ -1191,15 +1191,16 @@ checkPattern ec p t = errorContext (WhileCheckingPattern p) do
 -- NOTE: this part of the pattern is the most crucial one because it decides what part
 -- of the pattern is an expression and what part is an "actual" pattern
 -- The algorithm is as follows:
--- appforms (possibly without variables) are the only critical point in the conversion:
--- - if the head of the may be a constructor, then this is a constructor pattern,
+-- appforms (or in this case, something that resembles an appform, possibly without variables)
+-- are the only critical point in the conversion:
+-- - if the head of appform is a constructor, then this is a constructor pattern,
 --   and we continue by trying to convert each argument into a pattern;
--- - if the head of the appform may be a function, then this is an expression, and we stop
+-- - if the head of the appform is a function, then this is an expression, and we stop
 --   conversion (if anything underneath is out of scope, it's just an error);
 -- - if the head of the appform is not in scope and the appform doesn't have arguments,
 --   then it's a variable pattern;
 -- - if the head of the appform is not in scope and the appform does have arguments,
---   then it's an error
+--   then that's an error
 inferPattern :: Pattern Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPattern g@(PatLit ann expr) = errorContext (WhileCheckingPattern g) case expr of
   Cons ann' x xs -> inferPattern $ PatCons ann' (patLit x) (patLit xs)
@@ -1209,7 +1210,13 @@ inferPattern g@(PatLit ann expr) = errorContext (WhileCheckingPattern g) case ex
     -- the constructor (in accordance with the algorithm)
     (r, rty) <- do
       candidates <- lookupRawNameInEnvironment $ rawName n
-      (constructors, others) <- partitionEithers . catMaybes <$> forM candidates \(u, o, ce) -> case ce of
+      -- NOTE:
+      -- Maybe (Either _ _)
+      -- - the name is Not a kown entity (Nothing) or
+      -- - a known entity (Just)
+      --   - a constructor entity (Left)
+      --   - a non-constructor entity (Right)
+      (constructorCes, nonConstructorCes) <- partitionEithers . catMaybes <$> forM candidates \(u, o, ce) -> case ce of
         KnownTerm ty Constructor -> do
           n' <-  setAnnResolvedType ty (Just Constructor) n
           pure $ Just $ Left (Ref n' u o, ty)
@@ -1223,11 +1230,11 @@ inferPattern g@(PatLit ann expr) = errorContext (WhileCheckingPattern g) case ex
           n' <-  setAnnResolvedType ty (Just tk) n
           pure $ Just $ Right (Ref n' u o, ty)
         _ -> pure Nothing -- NOTE: we cut out everything that isn't a known term
-      -- NOTE: if there are any constructors, then we don't want to consider anything else
-      case (constructors, others) of
+      case (constructorCes, nonConstructorCes) of
         ([], []) -> do
           v <- fresh (rawName n)
           pure (Nothing, v)
+        -- NOTE: if there are any constructors, then we don't want to consider anything else
         ([(r, rty)], _) -> pure (Just (Left r) , rty)
         ([], [(r, rty)]) -> pure (Just (Right r), rty)
         (rs, rs') -> either (\(r, ty) -> (Just $ Left r, ty)) (\(r, ty) -> (Just $ Right r, ty)) <$> do
