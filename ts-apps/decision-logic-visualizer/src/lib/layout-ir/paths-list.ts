@@ -262,8 +262,10 @@ export class PathsTracker {
   ) {
     if (this.#selectedForHighlightPaths.has(node.getId())) {
       this.#selectedForHighlightPaths.delete(node.getId())
+      node.unhighlight(context)
     } else {
       this.#selectedForHighlightPaths.add(node.getId())
+      node.highlight(context)
     }
 
     /* 

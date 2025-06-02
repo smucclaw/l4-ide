@@ -24,11 +24,12 @@
     children,
   }: SelectableNodeContextMenuProps = $props()
 
+  const ladderEnv = useLadderEnv()
   const onSelect = () => {
     pathsTracker.toggleNodeSelection(
       context,
       node,
-      useLadderEnv().getTopFunDeclLirNode(context).getBody(context)
+      ladderEnv.getTopFunDeclLirNode(context).getBody(context)
     )
   }
 </script>

@@ -188,7 +188,9 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
   protected modifierCSSClasses: Set<NodeStyleModifierCSSClass> = new Set()
-  protected otherCSSClasses: Set<LadderNodeCSSClass> = new Set()
+  protected additionalCSSClasses: Set<
+    Omit<LadderNodeCSSClass, NodeStyleModifierCSSClass>
+  > = new Set()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -223,7 +225,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   ***********************************************/
 
   getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [...this.getModifierCSSClasses(context), ...this.otherCSSClasses]
+    return [
+      ...this.getModifierCSSClasses(context),
+      ...(Array.from(this.additionalCSSClasses) as LadderNodeCSSClass[]),
+    ]
   }
 
   getModifierCSSClasses(_context: LirContext): NodeStyleModifierCSSClass[] {
@@ -251,12 +256,14 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 
 export abstract class HighlightableFlowLirNode extends BaseFlowLirNode {
   highlight(context: LirContext) {
-    this.otherCSSClasses.add(HighlightedNodeCSSClass)
+    this.additionalCSSClasses.add(HighlightedNodeCSSClass)
+    this.getData(context).dataHighlighted = true
     this.getRegistry().publish(context, this.getId())
   }
 
   unhighlight(context: LirContext) {
-    this.otherCSSClasses.delete(HighlightedNodeCSSClass)
+    this.additionalCSSClasses.delete(HighlightedNodeCSSClass)
+    this.getData(context).dataHighlighted = false
     this.getRegistry().publish(context, this.getId())
   }
 }
@@ -797,8 +804,6 @@ export class UBoolVarLirNode extends HighlightableFlowLirNode implements VarLirN
   getValue(context: LirContext, ladderGraph: LadderGraphLirNode): UBoolVal {
     return ladderGraph.getValueOfUnique(context, this.getUnique(context))
   }
-
-  highlight(_context: LirContext) {}
 
   toPretty(context: LirContext) {
     return this.getLabel(context)

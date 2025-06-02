@@ -260,8 +260,9 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 }
 
 @utility highlighted-ladder-node {
-  border: var(--ladder-node-border-width) solid
-    var(--color-highlighted-path-in-flow);
+  /* TODO: The !important here is a hack --- need to find a more robust way to override the default border */
+  border: calc(var(--ladder-node-border-width) + 1px) solid
+    var(--color-highlighted-path-in-flow) !important;
 }
 
 /*************************************
