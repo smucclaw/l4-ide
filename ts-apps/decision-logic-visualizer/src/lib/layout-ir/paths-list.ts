@@ -337,12 +337,12 @@ export class PathsTracker {
           return selectedIds.has(nodeId) || isSource || isSink
         })
         .getAllPaths()
-    // pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
-    //   console.log(
-    //     `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
-    //     p.toString()
-    //   )
-    // )
+    pathsSelectedSubgraphOfNoBundlingNodeGraph.forEach((p, index) =>
+      console.log(
+        `---- pathsSelectedSubgraphOfNoBundlingNodeGraph path ${index}: `,
+        p.toString()
+      )
+    )
 
     /** 2. Get the lin paths / subgraph of #dag that correspond to the (computed) paths through the selected subgraph of the noIntermediateBundlingNodeDag */
     return pathsSelectedSubgraphOfNoBundlingNodeGraph

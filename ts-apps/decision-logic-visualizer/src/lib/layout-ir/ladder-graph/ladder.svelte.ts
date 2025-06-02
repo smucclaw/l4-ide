@@ -257,13 +257,11 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 export abstract class HighlightableFlowLirNode extends BaseFlowLirNode {
   highlight(context: LirContext) {
     this.additionalCSSClasses.add(HighlightedNodeCSSClass)
-    this.getData(context).dataHighlighted = true
     this.getRegistry().publish(context, this.getId())
   }
 
   unhighlight(context: LirContext) {
     this.additionalCSSClasses.delete(HighlightedNodeCSSClass)
-    this.getData(context).dataHighlighted = false
     this.getRegistry().publish(context, this.getId())
   }
 }
