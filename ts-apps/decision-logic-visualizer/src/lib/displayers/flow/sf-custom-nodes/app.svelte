@@ -99,6 +99,8 @@
         >
           {@render coreAppUI()}
         </WithHighlightableNodeContextMenu>
+      {:else}
+        {@render coreAppUI()}
       {/if}
     </WithNormalHandles>
   </div>
