@@ -118,6 +118,7 @@ data TypeCheckResult = TypeCheckResult
   , substitution :: Substitution
   , infoMap :: TypeCheck.InfoMap
   , nlgMap :: TypeCheck.NlgMap
+  , scopeMap :: TypeCheck.ScopeMap
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
@@ -352,6 +353,7 @@ jl4Rules rootDirectory recorder = do
           , supply = cState.supply
           , infoMap = IV.empty
           , nlgMap = IV.empty
+          , scopeMap = IV.empty
           }
         unionCheckEnv cEnv tcRes =
           TypeCheck.MkCheckEnv
@@ -384,6 +386,7 @@ jl4Rules rootDirectory recorder = do
         , infos
         , infoMap = result.infoMap
         , nlgMap = result.nlgMap
+        , scopeMap = result.scopeMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
         }
       )

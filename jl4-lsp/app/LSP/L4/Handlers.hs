@@ -85,6 +85,7 @@ data Log
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
+  -- TODO: unused
   | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri

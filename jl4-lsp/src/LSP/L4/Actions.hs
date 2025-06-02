@@ -45,10 +45,10 @@ import L4.Nlg (simpleLinearizer)
 -- LSP Autocompletions
 -- ----------------------------------------------------------------------------
 
-topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
-topDeclToCompletionItem name = \ case
+buildCompletionItem :: RawName -> [CheckEntity] -> [CompletionItem]
+buildCompletionItem raw = foldMap \ case
   KnownTerm ty term ->
-    Just (defaultTopDeclCompletionItem ty)
+    pure (defaultTopDeclCompletionItem ty)
       { CompletionItem._kind = Just $ case (term, ty) of
          (Constructor, _) -> CompletionItemKind_Constructor
          (Selector, _) -> CompletionItemKind_Field
@@ -56,15 +56,21 @@ topDeclToCompletionItem name = \ case
          _ -> CompletionItemKind_Constant
       }
   KnownType kind _args _tydec ->
-    Just (defaultTopDeclCompletionItem (typeFunction kind))
+    pure (defaultTopDeclCompletionItem (typeFunction kind))
       { CompletionItem._kind = Just CompletionItemKind_Class
       }
   KnownSection (MkSection _ (Just n) _ _) ->
-    Just (defaultCompletionItem $  nameToText $ getOriginal n)
+    pure (defaultCompletionItem $  nameToText $ getOriginal n)
       { CompletionItem._kind = Just CompletionItemKind_Module
       }
-  KnownSection (MkSection _ Nothing _ _) -> Nothing
-  KnownTypeVariable {} -> Nothing
+  KnownSection (MkSection _ Nothing _ _) ->
+    -- NOTE: a section without name is just the toplevel section - we don't need to
+    -- autocomplete anything there
+    []
+  KnownTypeVariable ->
+    pure (defaultCompletionItem prepared)
+     { CompletionItem._kind = Just CompletionItemKind_Variable
+     }
   where
     -- a function (but also a constant, in theory) can be polymorphic, so we have to strip
     -- all the foralls to get to the "actual" type.
@@ -81,9 +87,9 @@ topDeclToCompletionItem name = \ case
           , _detail = Just $ " IS A " <> prettyLayout ty
           }
       }
-      where
-        prepared :: Text
-        prepared = case name of MkName _ raw -> rawNameToText raw
+
+    prepared :: Text
+    prepared = rawNameToText raw
 
 defaultCompletionItem :: Text -> CompletionItem
 defaultCompletionItem label = CompletionItem label
@@ -257,7 +263,7 @@ decideNodeStartsAtPos pos d = Just pos == do
 -- ----------------------------------------------------------------------------
 
 completions :: Rope -> NormalizedUri -> TypeCheckResult -> Position -> [CompletionItem]
-completions rope nuri typeCheck (Position ln col) = do
+completions rope nuri typeCheck pos@(Position ln col) = do
   let completionPrefix =
         Text.takeWhileEnd isAlphaNum
         $ Rope.toText
@@ -287,24 +293,29 @@ completions rope nuri typeCheck (Position ln col) = do
       -- 3 set the CompletionItemKind to CompletionItemKind_Operator
       keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
-      topDeclItems
+      -- NOTE: combine toplevel check info and info brought in scope
+      finalCheckInfos
+        = (\a -> trace (Text.unpack $ Text.unlines $ rawNameToText <$> Map.keys a) a)
+          $ Map.unionsWith (\a b -> nub $ a <> b)
+          $ map (uncurry combineEnvironmentEntityInfo)
+          $ (typeCheck.environment, typeCheck.entityInfo)
+              : map snd (IV.search (lspPositionToSrcPos pos) typeCheck.scopeMap)
+
+      scopedItems
         = filterMatchesOn CompletionItem._label
-        $ mapMaybe
-            (\(name, checkEntity) ->
-              topDeclToCompletionItem name
-              $ applyFinalSubstitution typeCheck.substitution nuri checkEntity
+        $ foldMap
+            (\(name, ces) ->
+              buildCompletionItem name
+              $ map (applyFinalSubstitution typeCheck.substitution nuri) ces
             )
-            (combineEnvironmentEntityInfo
-              typeCheck.environment
-              typeCheck.entityInfo
-            )
+        $ Map.toList finalCheckInfos
 
   -- TODO: maybe we should sort these as follows
   -- 1 keywords
   -- 2 toplevel values
   -- 3 toplevel types
 
-  keywordItems <> topDeclItems
+  keywordItems <> scopedItems
 
 -- ----------------------------------------------------------------------------
 -- LSP Hovers
