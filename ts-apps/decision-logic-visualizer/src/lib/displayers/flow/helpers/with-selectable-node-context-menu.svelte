@@ -38,8 +38,10 @@
   <ContextMenu.Trigger>
     {@render children()}
   </ContextMenu.Trigger>
-  <ContextMenu.Content>
-    <!-- We can consider using a CheckboxItem in the future -->
-    <ContextMenu.Item inset {onSelect}>Toggle Highlight</ContextMenu.Item>
-  </ContextMenu.Content>
+  <div class="text-[0.625rem]">
+    <ContextMenu.Content>
+      <!-- We can consider using a CheckboxItem in the future -->
+      <ContextMenu.Item {onSelect}>Toggle Highlight</ContextMenu.Item>
+    </ContextMenu.Content>
+  </div>
 </ContextMenu.Root>
