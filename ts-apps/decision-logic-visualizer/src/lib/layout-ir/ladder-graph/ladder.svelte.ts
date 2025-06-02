@@ -33,7 +33,7 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { PathsListLirNode, PathsTracker } from '../paths-list.js'
+import { PathsTracker } from '../paths-list.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   isNnf,
@@ -41,7 +41,6 @@ import {
   getVerticesFromAlgaDag,
 } from './ladder-dag-helpers.js'
 import _ from 'lodash'
-import ArrayKeyedMap from 'array-keyed-map'
 
 /*
 Design principles:
@@ -289,7 +288,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   #pathsTracker?: PathsTracker
-  #selectedForHighlightPaths: Set<LirId> = new Set()
 
   private constructor(
     nodeInfo: LirNodeInfo,
@@ -383,11 +381,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     })
   }
 
-  /** Get list of all simple paths through the main ladder graph, if it's in NNF */
-  getPathsList(_context: LirContext) {
-    return this.#pathsTracker?.getPathsList()
-  }
-
   getOverallSource(context: LirContext): undefined | SourceLirNode {
     const source = this.#dag.getSource()
     if (!isVertex(source)) return undefined
@@ -444,81 +437,21 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 
   /*****************************
-        Highlight
+      PathsList, PathsTracker
   ******************************/
 
-  // Selecting nodes in the main graph for highlighting
-
-  toggleSelection(context: LirContext, node: SelectableLadderLirNode) {
-    if (this.#selectedForHighlightPaths.has(node.getId())) {
-      this.#selectedForHighlightPaths.delete(node.getId())
-    } else {
-      this.#selectedForHighlightPaths.add(node.getId())
-    }
-    this.updateHighlighting(
-      context,
-      Array.from(this.#selectedForHighlightPaths).map(
-        (id) => context.get(id) as SelectableLadderLirNode
-      )
-    )
-
-    this.getRegistry().publish(context, this.getId())
+  getPathsTracker(_context: LirContext) {
+    return this.#pathsTracker
   }
 
-  /** Helper: Update what subgraph of the main graph is highlighted, based on what nodes the user has selected in the main graph */
-  private updateHighlighting(
-    context: LirContext,
-    selected: Array<SelectableLadderLirNode>
-  ) {
-    /* 
-    We are in effect maintaining two representations of the ladder graph:
-
-    1. The main ladder graph
-    2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
-
-    Every time there is a change in the user's node selection on the main graph --- which
-    in effect corresponds to a change in what nodes of #noIntermediateBundlingNodeDag are selected ---
-    we check if the user has selected nodes corresponding to a lin path in #dag.
-    */
-
-    const linPaths =
-      this.#pathsTracker?.findCorrespondingLinPaths(selected) ?? []
-    // console.log('\n=== Lin Paths ===')
-    // linPaths.forEach((path, index) => {
-    //   const nodeLabels = path.getVertices(context).map((node) => {
-    //     return `${node.getId().toString()} (${node.toPretty(context)})`
-    //   })
-    //   console.log(`\nLin Path ${index + 1}:`)
-    //   console.log(nodeLabels.join(' → '))
-    // })
-    // console.log('=========================\n')
-
-    // TODO: I think I need to be able to change the toggle group value / state (which lin paths are selected) from outside the pathslist displayer? ie put state for that on the pathslistlirnode and then listen for changes to it in the pathslist displayer?
-
-    // TODO: Refactor to make this just change what lin paths are selected --- without also doing the highlight paths logic
-    // e.g. with selectPaths
-
-    // Rename the the current highlightPaths method (that changes stuff in the main graph) to a private highlightPathsInMainGraph method
-    // CAll highlihgtPaths at the end of selectPaths, or have a different listener trigger the highlightPaths stuff (thus changing highlighting in mai ngraph) whenever there's a change in what lin paths are selected
-    // (But don't use onValueChange in the displayer for this --- I don't want to couple it too much to the bitsui component)
-
-    // That way, all attempts at highlighting will eventually go thru 1 common method: this select/highlightPaths method on PathsList
-    // TODO: Will also want to add HighlightedNode styles, so that can highlight individual nodes as well on the main graph
-    // And then highlight the individual nodes after highlighting the lin path subgraph
-
-    // Highlight these lin paths / subgraph of #dag
-    // (or, if there are no corresponding lin paths, just highlight the selected nodes)
-    this.clearHighlightEdgeStyles(context)
-    this.highlightSubgraph(
-      context,
-      overlays([
-        ...linPaths.map((linPath) => linPath.getRawPathGraph()),
-        ...selected.map((node) => vertex(node.getId())),
-      ])
-    )
+  /** Get list of all simple paths through the main ladder graph, if it's in NNF */
+  getPathsList(_context: LirContext) {
+    return this.#pathsTracker?.getPathsList()
   }
 
-  // Core highlight ops
+  /*****************************
+        Highlight
+  ******************************/
 
   clearHighlightEdgeStyles(context: LirContext) {
     const edges = this.#dag.getEdges()

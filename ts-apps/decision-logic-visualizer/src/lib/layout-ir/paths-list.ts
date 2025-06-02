@@ -10,9 +10,8 @@ import {
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
 import {
-  overlay,
-  empty,
   type DirectedAcyclicGraph,
+  overlays,
   vertex,
 } from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
@@ -27,9 +26,21 @@ export function isPathsListLirNode(
   return node instanceof PathsListLirNode
 }
 
-/** Assumes that the original dag is in NNF */
+/** Assumes that the original ladder graph is in NNF.
+ *
+ * Tracks what the linearized paths through the ladder graph are,
+ * as well as what paths are selected by the user
+ * (whether by interacting with the main graph UI or with the paths list UI).
+ *
+ * This is the abstract LirNode that gets rendered by {@link $lib/displayers/paths-list.svelte}
+ */
 export class PathsListLirNode extends DefaultLirNode implements LirNode {
   private paths: Array<LirId>
+  /** What lin paths in the paths list are selected.
+   * Paths can be selected, not just via interaction with the PathsList UI,
+   * but also indirectly, by selecting nodes on the main graph UI.
+   */
+  private selected: Set<LirId> = new Set()
 
   constructor(nodeInfo: LirNodeInfo, paths: Array<LinPathLirNode>) {
     super(nodeInfo)
@@ -40,16 +51,33 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
     return this.paths.map((id) => context.get(id)) as Array<LinPathLirNode>
   }
 
-  highlightPaths(
+  getSelectedPaths(context: LirContext) {
+    return Array.from(this.selected).map(
+      (id) => context.get(id) as LinPathLirNode
+    )
+  }
+
+  /** Select the linearized paths in the PathsList and highlight the corresponding paths on the ladder graph */
+  selectPaths(
+    context: LirContext,
+    paths: LinPathLirNode[],
+    ladderGraph: LadderGraphLirNode
+  ) {
+    this.selected = new Set(paths.map((p) => p.getId()))
+    this.highlightPathsOnLadderGraph(context, ladderGraph, paths)
+
+    this.getRegistry().publish(context, this.getId())
+  }
+
+  /** Helper: Highlight the paths on the ladder graph that correspond to the given LinPathLirNodes */
+  private highlightPathsOnLadderGraph(
     context: LirContext,
     ladderGraph: LadderGraphLirNode,
     paths: LinPathLirNode[]
   ) {
     // 1. Get the subgraph to be highlighted
     // Exploits the property that (G, +, ε) is an idempotent monoid
-    const graphToHighlight = paths
-      .map((p) => p.getRawPathGraph())
-      .reduceRight(overlay, empty())
+    const graphToHighlight = overlays(paths.map((p) => p.getRawPathGraph()))
 
     // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
     ladderGraph.clearHighlightEdgeStyles(context)
@@ -80,19 +108,40 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
 
 type PathInNoIntermediateBundlingNodeDag = LirId[]
 
+function linPathToPathInNoIntermediateBundlingNodeDag(
+  context: LirContext,
+  originalLadderDag: DirectedAcyclicGraph<LirId>,
+  linPath: LinPathLirNode
+): PathInNoIntermediateBundlingNodeDag {
+  return linPath
+    .getRawPathGraph()
+    .getTopSort()
+    .filter((v) => {
+      const isOverallSource = originalLadderDag.getSource().isEqualTo(vertex(v))
+      const isOverallSink = originalLadderDag.getSink().isEqualTo(vertex(v))
+      return (
+        isOverallSource ||
+        isOverallSink ||
+        isSelectableLadderLirNode(context.get(v) as LadderLirNode)
+      )
+    })
+}
+
 /**
- * We are in effect maintaining two representations of the ladder graph:
- *
- * 1. The main ladder graph
- * 2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink (i.e., no intermediate bundling nodes)
- *
- * This stores the paths through the main ladder graph,
- * and tracks how the nodes that the user has selected on the ladder graph
+ * This stores the PathsList (the paths through the main ladder graph), as well as what nodes the user has selected on the ladder graph.
+ * It also tracks how the nodes that the user has selected on the ladder graph
  * might correspond to lin paths through the ladder graph.
  *
  * Assumes that the original dag is in NNF.
  */
 export class PathsTracker {
+  /** What nodes on the ladder graph, if any, the user has selected for highlighting *by interacting with the main graph UI*.
+   *
+   * (This is different from the selected paths in the PathsList --- those are the paths that the user has selected by interacting with the PathsList UI.)
+   * The LirIds will correspond to those of SelectableLadderLirNodes.
+   */
+  #selectedForHighlightPaths: Set<LirId> = new Set()
+
   static make(
     nodeInfo: LirNodeInfo,
     /** The ladder graph dag. Assumes that this is in NNF. */
@@ -100,11 +149,18 @@ export class PathsTracker {
   ) {
     console.log('ladder graph dag: ', dag.toString())
 
-    /* Make the noIntermediateBundlingNodeDag, 
+    /* 
+     * We are in effect maintaining two representations of the ladder graph:
+    *
+    * 1. The main ladder graph
+    * 2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink (i.e., no intermediate bundling nodes)
+    
+    Here, we make the noIntermediateBundlingNodeDag, 
     by replacing intermediate source nodes 
     with their immediate predecessors
     and intermediate sink nodes with their immediate successors
-    (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
+    (We only have to consider the *immedate* precedessors / successors because of 
+    the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
 
     The noIntermediateBundlingNodeDag still has bundling nodes --- the overall source and sink nodes.
     It's just that it doesn't have *intermediate* bundling nodes.
@@ -144,23 +200,18 @@ export class PathsTracker {
     >(
       pathsList
         .getPaths(nodeInfo.context)
-        .map((path): [LirId[], LinPathLirNode] => {
-          const topSort = path
-            .getRawPathGraph()
-            .getTopSort()
-            .filter((v) => {
-              const isOverallSource = dag.getSource().isEqualTo(vertex(v))
-              const isOverallSink = dag.getSink().isEqualTo(vertex(v))
-              return (
-                isOverallSource ||
-                isOverallSink ||
-                isSelectableLadderLirNode(
-                  nodeInfo.context.get(v) as LadderLirNode
-                )
-              )
-            })
-          return [topSort, path]
-        })
+        .map(
+          (linPath): [PathInNoIntermediateBundlingNodeDag, LinPathLirNode] => {
+            return [
+              linPathToPathInNoIntermediateBundlingNodeDag(
+                nodeInfo.context,
+                dag,
+                linPath
+              ),
+              linPath,
+            ]
+          }
+        )
     )
     // console.log('\n=== noBundlingNodePathToLadderLinPath ===')
     // noBundlingNodePathToLadderLinPath.forEach((_path, key) => {
@@ -189,6 +240,69 @@ export class PathsTracker {
       LinPathLirNode
     >
   ) {}
+
+  /** Get the nodes on the ladder graph that the user has selected for highlighting by interacting with the main graph UI */
+  getSelectedForHighlightPaths(context: LirContext) {
+    return Array.from(this.#selectedForHighlightPaths).map(
+      (id) => context.get(id) as SelectableLadderLirNode
+    )
+  }
+
+  /** Reset the set of nodes selected on the main ladder graph UI for highlighting */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  resetSelectedForHighlightPaths(_context: LirContext) {
+    this.#selectedForHighlightPaths = new Set()
+  }
+
+  /** Toggle whether a specific node is selected for highlighting */
+  toggleNodeSelection(
+    context: LirContext,
+    node: SelectableLadderLirNode,
+    ladderGraph: LadderGraphLirNode
+  ) {
+    if (this.#selectedForHighlightPaths.has(node.getId())) {
+      this.#selectedForHighlightPaths.delete(node.getId())
+    } else {
+      this.#selectedForHighlightPaths.add(node.getId())
+    }
+
+    /* 
+    We are in effect maintaining two representations of the ladder graph:
+
+    1. The main ladder graph
+    2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
+
+    Every time there is a change in the user's node selection on the ladder graph --- which
+    in effect corresponds to a change in what nodes of noIntermediateBundlingNodeDag are selected ---
+    we check if the user has selected nodes corresponding to lin path(s) in the ladder dag,
+    and select the corresponding path(s) in the PathsList.
+    */
+    const linPaths = this.findCorrespondingLinPaths(
+      this.getSelectedForHighlightPaths(context)
+    )
+    // console.log('\n=== Lin Paths ===')
+    // linPaths.forEach((path, index) => {
+    //   const nodeLabels = path.getVertices(context).map((node) => {
+    //     return `${node.getId().toString()} (${node.toPretty(context)})`
+    //   })
+    //   console.log(`\nLin Path ${index + 1}:`)
+    //   console.log(nodeLabels.join(' -> '))
+    // })
+    // console.log('=========================\n')
+
+    // Highlight the graph union of the corresponding lin paths and the selected nodes on the ladder graph
+    // (We don't just highlight the lin paths b/c also want to be able to see if we've highlighted specific nodes.)
+    this.pathsList.selectPaths(context, linPaths, ladderGraph)
+    ladderGraph.highlightSubgraph(
+      context,
+      overlays([
+        ...linPaths.map((linPath) => linPath.getRawPathGraph()),
+        ...this.getSelectedForHighlightPaths(context).map((node) =>
+          vertex(node.getId())
+        ),
+      ])
+    )
+  }
 
   /** Given the selected nodes, figure out what lin paths through the ladder graph, if any, these correspond to */
   findCorrespondingLinPaths(selected: Array<SelectableLadderLirNode>) {

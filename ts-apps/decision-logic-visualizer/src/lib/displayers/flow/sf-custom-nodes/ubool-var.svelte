@@ -14,13 +14,15 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
   let { data }: LadderNodeDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
+  // Get LadderEnv, L4 Connection, pathsTracker
   // (Note: useLadderEnv must be invoked on component initalization)
   const ladderEnv = useLadderEnv()
   const ladderGraph = ladderEnv
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
+  const pathsTracker = ladderGraph
+    .getPathsTracker(data.context)
 
   const node = data.node as UBoolVarLirNode
 </script>
@@ -49,6 +51,22 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   </div>
 {/snippet}
 
+{#snippet coreUBoolVarUI()}
+  <!-- Yes, we need cursor-pointer here. -->
+  <button
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    onclick={() => {
+      const newValue = cycle(node.getValue(data.context, ladderGraph))
+      ladderGraph.submitNewBinding(data.context, {
+        unique: node.getUnique(data.context),
+        value: newValue,
+      })
+    }}
+  >
+    {node.getLabel(data.context)}
+  </button>
+{/snippet}
+
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` 
 TODO: Look into why this is the case --- are they not re-mounting the ubool-var component? 
 -->
@@ -62,31 +80,21 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ]}
   >
     <WithNormalHandles>
-      <WithHighlightableNodeContextMenu
-        onSelect={() => {
-          const ladderGraph = ladderEnv
-            .getTopFunDeclLirNode(data.context)
-            .getBody(data.context)
-          ladderGraph.toggleSelection(
-            data.context,
-            data.context.get(data.originalLirId) as UBoolVarLirNode
-          )
-        }}
-      >
-        <!-- Yes, we need cursor-pointer here. -->
-        <button
-          class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-          onclick={() => {
-            const newValue = cycle(node.getValue(data.context, ladderGraph))
-            ladderGraph.submitNewBinding(data.context, {
-              unique: node.getUnique(data.context),
-              value: newValue,
-            })
+      {#if pathsTracker}
+        <WithHighlightableNodeContextMenu
+          onSelect={() => {
+            pathsTracker.toggleNodeSelection(
+              data.context,
+              data.context.get(data.originalLirId) as UBoolVarLirNode,
+              ladderEnv.getTopFunDeclLirNode(data.context).getBody(data.context)
+            )
           }}
         >
-          {node.getLabel(data.context)}
-        </button>
-      </WithHighlightableNodeContextMenu>
+          {@render coreUBoolVarUI()}
+        </WithHighlightableNodeContextMenu>
+      {:else}
+        {@render coreUBoolVarUI()}
+      {/if}
       {#if node.canInline(data.context)}
         {@render inlineUI()}
       {/if}

@@ -6,6 +6,8 @@
     ToggleGroupItem,
   } from '$lib/ui-primitives/toggle-group/index.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import type { LinPathLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
   /************************
        Lir
@@ -13,30 +15,69 @@
 
   const { context, node: pathsListLirNode }: PathListDisplayerProps = $props()
 
-  onDestroy(() => {
-    pathsListLirNode.dispose(context)
-  })
-
-  const paths = pathsListLirNode.getPaths(context)
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(context)
     .getBody(context)
-</script>
+  const paths = pathsListLirNode.getPaths(context)
 
-<!-- TODO: Make this a 'controlled' component / make the selected vs non-selected state a view of that in a more centralized location -->
+  /** Key state: Track what lin paths in the paths list are selected */
+  let selectedPaths: LinPathLirNode[] = $state(
+    pathsListLirNode.getSelectedPaths(context)
+  )
+  const onSelectedPathsChange = (context: LirContext, id: LirId) => {
+    if (id === pathsListLirNode.getId()) {
+      selectedPaths = pathsListLirNode.getSelectedPaths(context)
+      console.log('onSelectedPathsChange', $state.snapshot(selectedPaths))
+    }
+  }
+  const unsub = useLadderEnv().getLirRegistry().subscribe(onSelectedPathsChange)
+
+  onDestroy(() => {
+    pathsListLirNode.dispose(context)
+    unsub.unsubscribe()
+  })
+
+  // Synchronize state in the PathsListLirNode with state in the concrete UI (the ToggleGroup)
+  const pathLirIdToPathIndex = new Map(
+    paths.map((p, idx) => [p.getId(), idx.toString()])
+  )
+  function getSelectedPathsForToggleGroup() {
+    console.log(
+      'getSelectedPathsForToggleGroup selectedPaths',
+      $state.snapshot(selectedPaths)
+    )
+    return selectedPaths.map(
+      (p) => pathLirIdToPathIndex.get(p.getId()) as string
+    )
+  }
+  function setSelectedPathsForToggleGroup(toggleGroupPathIndices: string[]) {
+    const selectedLinPaths = toggleGroupPathIndices
+      .map((v) => parseInt(v)) // the `value` for this component must be a string
+      .map((pathIndex) => paths[pathIndex])
+    console.log(
+      'setSelectedPathsForToggleGroup toggleGroupPaths',
+      toggleGroupPathIndices
+    )
+    console.log(
+      'setSelectedPathsForToggleGroup selectedPaths',
+      selectedLinPaths
+    )
+
+    // Clear state what nodes were selected on the main ladder graph for highlighting,
+    // to avoid having to deal with complicated state synchronization between selected lin paths in the paths list
+    // and selected nodes on the ladder graph.
+    // I.e., think of selecting paths on the paths list as starting afresh.
+    ladderGraph
+      .getPathsTracker(context)
+      ?.resetSelectedForHighlightPaths(context)
+    pathsListLirNode.selectPaths(context, selectedLinPaths, ladderGraph)
+  }
+</script>
 
 <section class="paths-list-content-wrapper">
   <ToggleGroup
     type="multiple"
-    onValueChange={(value: string[]) => {
-      const selectedPaths = value
-        .map((v) => parseInt(v)) // the `value` for this component must be a string
-        .map((pathIndex) => paths[pathIndex])
-      console.log('onvalueChange', value)
-      console.log('onValueChange', selectedPaths)
-
-      pathsListLirNode.highlightPaths(context, ladderGraph, selectedPaths)
-    }}
+    bind:value={getSelectedPathsForToggleGroup, setSelectedPathsForToggleGroup}
   >
     <ul class="space-y-1">
       {#each paths as path, pathIndex}
