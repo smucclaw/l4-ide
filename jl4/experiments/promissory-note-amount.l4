@@ -60,10 +60,10 @@ IMPORT prelude
     Money WITH
         Currency  IS `Principal Amount`'s Currency
         Value     IS `Principal Amount`'s Value
-                        TIMES (`Monthly Interest Rate` TIMES `Termed Rate`)
-                            DIVIDED BY (`Termed Rate` MINUS 1)
+                        TIMES (`Monthly Interest Rate` TIMES `Compound Factor`)
+                            DIVIDED BY (`Compound Factor` MINUS 1)
     WHERE
-        `Termed Rate` MEANS
+        `Compound Factor` MEANS
             `Rate to the power of`
                 (1 PLUS `Monthly Interest Rate`)
                 `Monthly Installments`
