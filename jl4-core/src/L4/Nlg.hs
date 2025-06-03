@@ -311,7 +311,8 @@ instance Linearize (Pattern Resolved) where
       , text "by"
       , lin rest
       ]
-    PatLit _ lit -> lin lit
+    PatExpr _ expr -> hcat [ "is", "exactly", lin expr ]
+    PatLit _ lit -> hcat [ lin lit ]
 
 instance Linearize (GivenSig Resolved) where
   linearize = \ case

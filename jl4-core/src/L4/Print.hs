@@ -363,6 +363,7 @@ instance LayoutPrinterWithName a => LayoutPrinter (Pattern a) where
       [] -> mempty
       pats'@(_:_) -> space <> vsep (fmap printWithLayout pats')
     PatCons _ patHead patTail -> printWithLayout patHead <+> "FOLLOWED BY" <+> printWithLayout patTail
+    PatExpr _ expr -> "EXACTLY" <+> printWithLayout expr
     PatLit _ lit -> printWithLayout lit
 
 instance LayoutPrinter Nlg where
