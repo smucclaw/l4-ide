@@ -11,11 +11,12 @@ import { topologicalSort } from 'graphology-dag'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
-/*
-TODO: There is currently a fair bit of code duplication
+/* TODOs
+- There is currently a fair bit of code duplication
 between the various kinds of alga graphs in this mini-lib
 (eg between this and adjacency-map-directed-graph.ts).
 Would be good to improve that.
+- May (not sure) be better to use `union` and `join`, like in https://github.com/snowleopard/alga/blob/main/src/Algebra/Graph/Acyclic/AdjacencyMap.hs
 */
 
 export type DirectedAcyclicGraph<A extends Ord<A>> =
@@ -51,6 +52,7 @@ export abstract class Dag<A extends Ord<A>>
     return new Connect(this, other)
   }
 
+  // TODO: Test / check: would this actually remove vertices?
   /**
   * instance Functor Graph where
       fmap f g = g >>= (vertex . f)
@@ -62,11 +64,12 @@ export abstract class Dag<A extends Ord<A>>
   /**
    * FlatMap (bind) operation for the Dag monad.
    * Applies a function to each vertex in the graph and flattens the result.
+   * Note: This is specialized to DAGs.
    */
   bind<B extends Ord<B>>(
     f: (a: A) => DirectedAcyclicGraph<B>
   ): DirectedAcyclicGraph<B> {
-    return buildg<B>((e, v, o, c) =>
+    const g = buildg<B>((e, v, o, c) =>
       foldg<A, DirectedAcyclicGraph<B>>(
         e,
         (a: A) => foldg(e, v, o, c, f(a)),
@@ -75,6 +78,8 @@ export abstract class Dag<A extends Ord<A>>
         this
       )
     )
+    g.removeSelfLoops()
+    return g
   }
 
   /**
@@ -93,29 +98,6 @@ export abstract class Dag<A extends Ord<A>>
       induced: this.induce(predicate),
       complement: this.induce(complementPred),
     }
-  }
-
-  /** Replace a vertex with one of its neighbors.
-   * Similar in spirit to the original Haskell alga's `Acyclic.shrink . AM.replaceVertex`,
-   * but much more specialized (that's why the implementation here is a lot simpler than Haskell alga's `shrink`).
-   *
-   * @param from - The vertex to replace.
-   * @param to - The **neighbor** to replace `from` with.
-   */
-  replaceVertexWithNeighbor(from: A, to: A): DirectedAcyclicGraph<A> {
-    const newG = this.gmap((w) => (w.isEqualTo(from) ? to : w)) as Dag<A>
-    /* 
-      We remove the edge <to, to>, if it exists, because
-      the gmap above can create a cycle if we already have the edge 
-      <`to`, `from`> or <`from`, `to`>. 
-      (Remember that we're assuming `from`, `to` are neighbors to begin with.)
-      
-      Note, furthermore, that this is also the *only* way 
-      in which a cycle can be created, when doing the above on a dag.
-      So, the final graph is still a DAG.
-    */
-    newG._removeEdge(to, to)
-    return newG
   }
 
   /** Errors if not a DAG */
@@ -179,6 +161,16 @@ export abstract class Dag<A extends Ord<A>>
       })
     })
     return pathGraphs
+  }
+
+  /** Internal helper */
+  removeSelfLoops() {
+    this.getEdges().forEach((edge) => {
+      if (edge.getU().isEqualTo(edge.getV())) {
+        this._removeEdge(edge.getU(), edge.getV())
+        this.removeEdgeFromEdgeAttributes(edge)
+      }
+    })
   }
 }
 
@@ -445,15 +437,6 @@ export function pathFromVertices<A extends Ord<A>>(
     .slice(1)
     .map((neighborVertex, i) => connect(vertices[i], neighborVertex))
   return edges.reduce(overlay)
-}
-
-export function connectNodeToSource<A extends Ord<A>>(
-  dag: DirectedAcyclicGraph<A>,
-  node: A
-): DirectedAcyclicGraph<A> {
-  const nodeV = vertex(node)
-  /* (G, ->, empty) is a monoid */
-  return dag.overlay(nodeV.connect(dag.getSource()))
 }
 
 export function connectSinkToNode<A extends Ord<A>>(

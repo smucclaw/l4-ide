@@ -26,15 +26,20 @@ import type {
   LadderNodeCSSClass,
   NodeStyleModifierCSSClass,
 } from './node-styles.js'
-import { FadedNodeCSSClass } from './node-styles.js'
+import { FadedNodeCSSClass, HighlightedNodeCSSClass } from './node-styles.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { PathsListLirNode } from '../paths-list.js'
-import _ from 'lodash'
+import { LadderNodeSelectionTracker, PathsListLirNode } from '../paths-list.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
-import { pprintPathGraph, isNnf } from './ladder-dag-helpers.js'
+import {
+  isNnf,
+  pprintPathGraph,
+  getVerticesFromAlgaDag,
+} from './ladder-dag-helpers.js'
+import _ from 'lodash'
+
 /*
 Design principles:
 * The stuff here should not know about the concrete displayers/renderers (e.g. SvelteFlow),
@@ -112,8 +117,7 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
     super(nodeInfo)
   }
 
-  /** To be called only by the PathsListLirNode */
-  _getRawPath() {
+  getRawPathGraph() {
     return this.rawPath
   }
 
@@ -124,11 +128,13 @@ export class LinPathLirNode extends DefaultLirNode implements LirNode {
       .filter((n) => !!n) as LadderLirNode[]
   }
 
-  getNonBundlingNodeVertices(context: LirContext) {
+  getSelectableVertices(context: LirContext) {
     return this.rawPath
       .getVertices()
       .map((id) => context.get(id) as LadderLirNode)
-      .filter((n) => !isBundlingFlowLirNode(n))
+      .filter((n) =>
+        isSelectableLadderLirNode(n)
+      ) as Array<SelectableLadderLirNode>
   }
 
   dispose(context: LirContext) {
@@ -184,6 +190,9 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
   protected modifierCSSClasses: Set<NodeStyleModifierCSSClass> = new Set()
+  protected additionalCSSClasses: Set<
+    Omit<LadderNodeCSSClass, NodeStyleModifierCSSClass>
+  > = new Set()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -218,7 +227,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   ***********************************************/
 
   getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return this.getModifierCSSClasses(context)
+    return [
+      ...this.getModifierCSSClasses(context),
+      ...(Array.from(this.additionalCSSClasses) as LadderNodeCSSClass[]),
+    ]
   }
 
   getModifierCSSClasses(_context: LirContext): NodeStyleModifierCSSClass[] {
@@ -242,6 +254,26 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   }
 
   abstract toPretty(context: LirContext): string
+}
+
+export abstract class SelectableLadderLirNode extends BaseFlowLirNode {
+  isSelected(
+    _context: LirContext,
+    nodeSelectionTracker: LadderNodeSelectionTracker
+  ) {
+    return nodeSelectionTracker.nodeIsSelected(this)
+  }
+
+  /** Thin / cosmetic wrapper over LadderNodeSelectionTracker.toggleNodeSelection + publishing */
+  toggleSelection(
+    context: LirContext,
+    nodeSelectionTracker: LadderNodeSelectionTracker,
+    ladderGraph: LadderGraphLirNode
+  ) {
+    nodeSelectionTracker.toggleNodeSelection(context, this, ladderGraph)
+
+    this.getRegistry().publish(context, this.getId())
+  }
 }
 
 /**********************************************
@@ -281,29 +313,27 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
-  #noBundlingNodeDag: DirectedAcyclicGraph<LirId>
-  #selectedForHighlightPaths: Set<LirId> = new Set()
+  #nodeSelectionTracker?: LadderNodeSelectionTracker
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
-   * No need to update it, tho, if changing edge attributes.
-   *
-   * No pathsListLirNode iff graph expr is not NNF.
-   */
+   * No need to update it, tho, if changing edge attributes. */
   #pathsList?: PathsListLirNode
 
   private constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
-    noBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    nodeSelectionTracker?: LadderNodeSelectionTracker,
+    pathsList?: PathsListLirNode
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
-    this.#noBundlingNodeDag = noBundlingNodeDag
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
+    this.#nodeSelectionTracker = nodeSelectionTracker
+    this.#pathsList = pathsList
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -328,38 +358,35 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
-    // Make the noBundlingNodeDag by replacing source nodes with their immediate predecessors
-    // and sink nodes with their immediate successors
-    // (We only have to consider the *immedate* precedessors / successors because of the structure of the *Ladder* dag; i.e., the logic here won't work for *any* arbitrary dag.)
-    const dagNodes = dag
-      .getVertices()
-      .map((v) => nodeInfo.context.get(v) as LadderLirNode)
-    const sources = new Set(
-      dagNodes.filter(isSourceLirNode).map((n) => n.getId())
-    )
-    const sinks = new Set(dagNodes.filter(isSinkLirNode).map((n) => n.getId()))
+    // Make the NodeSelectionTracker and PathsListLirNode if the dag's in NNF
+    let pathsList, nodeSelectionTracker
+    const isNNF = isNnf(nodeInfo.context, dag)
+    if (isNNF) {
+      pathsList = new PathsListLirNode(
+        nodeInfo,
+        dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, p))
+      )
+      nodeSelectionTracker = LadderNodeSelectionTracker.make(
+        nodeInfo,
+        dag,
+        noIntermediateBundlingNodeGraph,
+        pathsList
+      )
+    }
 
-    const toSourceEdges = dag.getEdges().filter((e) => sources.has(e.getV()))
-    const fromSinkEdges = dag.getEdges().filter((e) => sinks.has(e.getU()))
-    const noSourceDag = toSourceEdges.reduceRight(
-      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getV(), edge.getU()),
-      dag
-    )
-    const noBundlingNodeDag = fromSinkEdges.reduceRight(
-      (acc, edge) => acc.replaceVertexWithNeighbor(edge.getU(), edge.getV()),
-      noSourceDag
-    )
-
+    // Make the LadderGraphLirNode
     const ladderGraph = new LadderGraphLirNode(
       nodeInfo,
       dag,
-      noBundlingNodeDag,
       vizExprToLirGraph,
       originalExpr,
-      ladderEnv
+      ladderEnv,
+      nodeSelectionTracker,
+      pathsList
     )
 
     // doEval (may not want to start with this?)
@@ -396,25 +423,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getEdges().map((edge) => {
       return new DefaultLadderLirEdge(edge)
     })
-  }
-
-  /** Get list of all simple paths through the Dag */
-  getPathsList(context: LirContext) {
-    if (!this.#pathsList && isNnf(context, this)) {
-      // Don't show the lin paths for a non-NNF
-      const rawPaths = this.#dag.getAllPaths()
-      const paths = rawPaths.map(
-        (rawPath) => new LinPathLirNode(this.makeNodeInfo(context), rawPath)
-      )
-
-      this.#pathsList = new PathsListLirNode(
-        this.makeNodeInfo(context),
-        this,
-        paths
-      )
-    }
-
-    return this.#pathsList
   }
 
   getOverallSource(context: LirContext): undefined | SourceLirNode {
@@ -472,37 +480,24 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
+  /*****************************************
+      NodeSelectionTracker, PathsList
+  *******************************************/
+
+  getNodeSelectionTracker(_context: LirContext) {
+    return this.#nodeSelectionTracker
+  }
+
+  /** Get list of all simple paths through the main ladder graph, if it's in NNF */
+  getPathsList(_context: LirContext) {
+    return this.#pathsList
+  }
+
   /*****************************
         Highlight
   ******************************/
 
-  // Selecting nodes in NonBundlingNode version of graph for highlighting
-
-  addNodeToSelection(context: LirContext, node: NonBundlingLadderLirNode) {
-    this.#selectedForHighlightPaths.add(node.getId())
-    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  deselectNode(context: LirContext, node: NonBundlingLadderLirNode) {
-    this.#selectedForHighlightPaths.delete(node.getId())
-    this.syncSelectedForHighlight(context, this.#selectedForHighlightPaths)
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  // TODO: Also, look into better names for this
-  private syncSelectedForHighlight(
-    _context: LirContext,
-    _selected: Set<LirId>
-  ) {
-    console.log('noBundlingNodeDag', this.#noBundlingNodeDag.toString())
-    // TODO
-  }
-
-  // Core highlight ops
-
+  /** Clear the highlight-related styles from all edges in the ladder graph */
   clearHighlightEdgeStyles(context: LirContext) {
     const edges = this.#dag.getEdges()
     edges.forEach((edge) => {
@@ -515,7 +510,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.getRegistry().publish(context, this.getId())
   }
 
-  highlightSubgraph(
+  highlightSubgraphEdges(
     context: LirContext,
     subgraph: DirectedAcyclicGraph<LirId>
   ) {
@@ -685,16 +680,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   }
 }
 
-/** Helper function */
-function getVerticesFromAlgaDag(
-  context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>
-): LadderLirNode[] {
-  return Array.from(dag.getVertices()).map(
-    (id) => context.get(id) as LadderLirNode
-  )
-}
-
 /**********************************************
           Ladder Lir Node
 ***********************************************/
@@ -709,10 +694,13 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
-export type NonBundlingLadderLirNode = Omit<
-  LadderLirNode,
-  'BundlingFlowLirNode'
->
+export function isSelectableLadderLirNode(
+  node: LadderLirNode
+): node is SelectableLadderLirNode {
+  return (
+    isUBoolVarLirNode(node) || isAppLirNode(node) || isNotStartLirNode(node)
+  )
+}
 
 /**********************************************
         Bool Lit Lir Nodes
@@ -730,7 +718,10 @@ export function isFalseExprLirNode(
   return node instanceof FalseExprLirNode
 }
 
-export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class FalseExprLirNode
+  extends SelectableLadderLirNode
+  implements FlowLirNode
+{
   #name: Name
   #value = new FalseVal()
 
@@ -756,7 +747,10 @@ export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
-export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class TrueExprLirNode
+  extends SelectableLadderLirNode
+  implements FlowLirNode
+{
   #name: Name
   #value = new TrueVal()
 
@@ -786,6 +780,7 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
         UBoolVar Lir Node
 ***********************************************/
 
+// TODO: Prob just remove this
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
 
@@ -802,7 +797,10 @@ export function isUBoolVarLirNode(
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
-export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+export class UBoolVarLirNode
+  extends SelectableLadderLirNode
+  implements VarLirNode
+{
   #originalExpr: UBoolVar
   #initialValue: UBoolVal
 
@@ -846,7 +844,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
 }
 
 /**********************************************
-        Not related Lir Nodes
+        NotStart, NotEnd Lir Nodes
 ***********************************************/
 
 export function isNotStartLirNode(
@@ -855,7 +853,10 @@ export function isNotStartLirNode(
   return node instanceof NotStartLirNode
 }
 
-export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class NotStartLirNode
+  extends SelectableLadderLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
@@ -877,7 +878,10 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   }
 }
 
-export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class NotEndLirNode
+  extends SelectableLadderLirNode
+  implements FlowLirNode
+{
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
@@ -905,7 +909,7 @@ export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
   return node instanceof AppLirNode
 }
 
-export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
+export class AppLirNode extends SelectableLadderLirNode implements FlowLirNode {
   #fnName: Name
   #args: LirId[]
 

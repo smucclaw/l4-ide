@@ -4,7 +4,6 @@ import {
   vertex,
   overlay,
   connect,
-  connectNodeToSource,
   connectSinkToNode,
   pathFromValues,
 } from '../lib/algebraic-graphs/dag.js'
@@ -125,33 +124,43 @@ describe('Algebraic graphs - Distributive Laws', () => {
 ********************/
 
 describe('Alga: DAG - Monoid Laws', () => {
-  test('x -> empty = x for dags)', () => {
+  test('x * empty = x for dags)', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const x = connect(vertex(nw1), vertex(nw2))
-
-    // Empty DAG
     const emptyDag = empty<NumberWrapper>()
 
-    // x -> empty
-    const resultDag = connect(x, emptyDag)
-
-    // resultDag should be equal to x
+    const resultDag = connect(x, emptyDag) // x * empty
     expect(resultDag.isEqualTo(x)).toBeTruthy()
   })
 
-  test('empty -> x = x for dags', () => {
+  test('empty * x = x for dags', () => {
     const nw1 = new NumberWrapper(1)
     const nw2 = new NumberWrapper(2)
     const x = connect(vertex(nw1), vertex(nw2))
-
-    // Empty DAG
     const emptyDag = empty<NumberWrapper>()
 
-    // empty -> x
-    const resultDag = connect(emptyDag, x)
+    const resultDag = connect(emptyDag, x) // empty * x
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
 
-    // resultDag should be equal to x
+  test('x + empty = x for dags (overlay identity)', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+    const emptyDag = empty<NumberWrapper>()
+
+    const resultDag = overlay(x, emptyDag) // x + empty
+    expect(resultDag.isEqualTo(x)).toBeTruthy()
+  })
+
+  test('empty + x = x for dags (overlay identity)', () => {
+    const nw1 = new NumberWrapper(1)
+    const nw2 = new NumberWrapper(2)
+    const x = connect(vertex(nw1), vertex(nw2))
+    const emptyDag = empty<NumberWrapper>()
+
+    const resultDag = overlay(emptyDag, x) // empty + x
     expect(resultDag.isEqualTo(x)).toBeTruthy()
   })
 })
@@ -197,17 +206,17 @@ describe('DAG - Topological Sort', () => {
     expect(updatedDag.getSink()).toEqual(vertex(nw3))
   })
 
-  test('Connecting new node to source makes the new node the source', () => {
-    const nw1 = new NumberWrapper(1)
-    const nw2 = new NumberWrapper(2)
-    const nw0 = new NumberWrapper(0)
+  // test('Connecting new node to source makes the new node the source', () => {
+  //   const nw1 = new NumberWrapper(1)
+  //   const nw2 = new NumberWrapper(2)
+  //   const nw0 = new NumberWrapper(0)
 
-    // 1 -> 2
-    const dag = vertex(nw1).connect(vertex(nw2))
-    expect(dag.getSource()).toEqual(vertex(nw1))
-    const updatedDag = connectNodeToSource(dag, nw0)
-    expect(updatedDag.getSource()).toEqual(vertex(nw0))
-  })
+  //   // 1 -> 2
+  //   const dag = vertex(nw1).connect(vertex(nw2))
+  //   expect(dag.getSource()).toEqual(vertex(nw1))
+  //   const updatedDag = connectVertexToSourceOf(nw0, dag)
+  //   expect(updatedDag.getSource()).toEqual(vertex(nw0))
+  // })
 
   test('Topological sort throws error on cyclic graph', () => {
     const nw1 = new NumberWrapper(1)

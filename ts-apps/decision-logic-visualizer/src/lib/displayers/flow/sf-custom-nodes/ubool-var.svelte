@@ -9,17 +9,19 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
+  // Get LadderEnv, L4 Connection, nodeSelectionTracker
+  // (Note: useLadderEnv must be invoked on component initalization)
   const ladderEnv = useLadderEnv()
   const ladderGraph = ladderEnv
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
+  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as UBoolVarLirNode
 </script>
@@ -48,6 +50,22 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   </div>
 {/snippet}
 
+{#snippet coreUBoolVarUI()}
+  <!-- Yes, we need cursor-pointer here. -->
+  <button
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    onclick={() => {
+      const newValue = cycle(node.getValue(data.context, ladderGraph))
+      ladderGraph.submitNewBinding(data.context, {
+        unique: node.getUnique(data.context),
+        value: newValue,
+      })
+    }}
+  >
+    {node.getLabel(data.context)}
+  </button>
+{/snippet}
+
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` 
 TODO: Look into why this is the case --- are they not re-mounting the ubool-var component? 
 -->
@@ -61,21 +79,17 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ]}
   >
     <WithNormalHandles>
-      <WithHighlightableNodeContextMenu>
-        <!-- Yes, we need cursor-pointer here. -->
-        <button
-          class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-          onclick={() => {
-            const newValue = cycle(node.getValue(data.context, ladderGraph))
-            ladderGraph.submitNewBinding(data.context, {
-              unique: node.getUnique(data.context),
-              value: newValue,
-            })
-          }}
+      {#if nodeSelectionTracker}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          node={data.node as UBoolVarLirNode}
+          {nodeSelectionTracker}
         >
-          {node.getLabel(data.context)}
-        </button>
-      </WithHighlightableNodeContextMenu>
+          {@render coreUBoolVarUI()}
+        </WithSelectableNodeContextMenu>
+      {:else}
+        {@render coreUBoolVarUI()}
+      {/if}
       {#if node.canInline(data.context)}
         {@render inlineUI()}
       {/if}

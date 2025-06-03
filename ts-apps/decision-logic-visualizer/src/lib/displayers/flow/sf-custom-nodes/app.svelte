@@ -7,19 +7,22 @@
   import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
-  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
-  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import type {
     AppArgLirNode,
     AppLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+
+  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
+  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
+  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as AppLirNode
 </script>
@@ -53,6 +56,23 @@
   </ValueIndicator>
 {/snippet}
 
+{#snippet coreAppUI()}
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
+    <!-- Function name -->
+    <div class="font-bold text-[1.1rem]">
+      {node.getFnName(data.context).label}
+    </div>
+    <!-- Args (see also note above)-->
+    <div class="flex flex-wrap gap-1 justify-center">
+      {#each node.getArgs(data.context) as arg}
+        {@render argUI(arg)}
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
 <WithContentfulNodeStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
@@ -67,20 +87,17 @@
     ]}
   >
     <WithNormalHandles>
-      <div
-        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-      >
-        <!-- Function name -->
-        <div class="font-bold text-[1.1rem]">
-          {node.getFnName(data.context).label}
-        </div>
-        <!-- Args (see also note above)-->
-        <div class="flex flex-wrap gap-1 justify-center">
-          {#each node.getArgs(data.context) as arg}
-            {@render argUI(arg)}
-          {/each}
-        </div>
-      </div>
+      {#if nodeSelectionTracker}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          {node}
+          {nodeSelectionTracker}
+        >
+          {@render coreAppUI()}
+        </WithSelectableNodeContextMenu>
+      {:else}
+        {@render coreAppUI()}
+      {/if}
     </WithNormalHandles>
   </div>
 </WithContentfulNodeStyles>
