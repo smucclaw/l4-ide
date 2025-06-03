@@ -769,7 +769,10 @@ export function isUBoolVarLirNode(
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
-export class UBoolVarLirNode extends HighlightableFlowLirNode implements VarLirNode {
+export class UBoolVarLirNode
+  extends HighlightableFlowLirNode
+  implements VarLirNode
+{
   #originalExpr: UBoolVar
   #initialValue: UBoolVal
 

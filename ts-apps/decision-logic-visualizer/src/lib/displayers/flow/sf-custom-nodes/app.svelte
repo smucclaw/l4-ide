@@ -7,15 +7,15 @@
   import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
-  import type { AppLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
-  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
-  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
   import type {
     AppArgLirNode,
     AppLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+
+  import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
+  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
+  import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
@@ -90,7 +90,7 @@
       {#if pathsTracker}
         <WithSelectableNodeContextMenu
           context={data.context}
-          node={data.context.get(data.originalLirId) as AppLirNode}
+          {node}
           {pathsTracker}
         >
           {@render coreAppUI()}
