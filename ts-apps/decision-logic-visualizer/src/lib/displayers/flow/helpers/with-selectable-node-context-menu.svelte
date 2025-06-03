@@ -27,18 +27,24 @@
   const ladderEnv = useLadderEnv()
   const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
   const onSelect = () => {
-    nodeSelectionTracker.toggleNodeSelection(context, node, ladderGraph)
+    node.toggleSelection(context, nodeSelectionTracker, ladderGraph)
   }
 </script>
 
-<ContextMenu.Root>
-  <ContextMenu.Trigger>
-    {@render children()}
-  </ContextMenu.Trigger>
-  <div class="text-[0.625rem]">
-    <ContextMenu.Content>
-      <!-- We can consider using a CheckboxItem in the future -->
-      <ContextMenu.Item {onSelect}>Toggle Highlight</ContextMenu.Item>
-    </ContextMenu.Content>
-  </div>
-</ContextMenu.Root>
+<div
+  class={node.isSelected(context, nodeSelectionTracker)
+    ? 'highlighted-ladder-node'
+    : ''}
+>
+  <ContextMenu.Root>
+    <ContextMenu.Trigger>
+      {@render children()}
+    </ContextMenu.Trigger>
+    <div class="text-[0.625rem]">
+      <ContextMenu.Content>
+        <!-- We can consider using a CheckboxItem in the future -->
+        <ContextMenu.Item {onSelect}>Toggle Highlight</ContextMenu.Item>
+      </ContextMenu.Content>
+    </div>
+  </ContextMenu.Root>
+</div>
