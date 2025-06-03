@@ -62,9 +62,10 @@ IMPORT prelude
         Value     IS `Principal Amount`'s Value
                         TIMES (`Monthly Interest Rate` TIMES `Compound Factor`)
                             DIVIDED BY (`Compound Factor` MINUS 1)
+     
     WHERE
         `Compound Factor` MEANS
-            `Rate to the power of`
+            `Base to the power of`
                 (1 PLUS `Monthly Interest Rate`)
                 `Monthly Installments`
 
@@ -215,14 +216,23 @@ GIVEN a IS A NUMBER
         THEN b
         ELSE a
 
-GIVEN a IS A NUMBER
-      b IS A NUMBER
-`Rate to the power of` MEANS
-    IF      b EQUALS 0
+ASSUME NaN IS A NUMBER
+
+GIVEN base  IS A NUMBER
+      exp IS A NUMBER
+`Base to the power of` MEANS
+    IF      exp EQUALS 0
     THEN    1
-    ELSE    IF      b EQUALS 1
-            THEN    a
-            ELSE    a TIMES `Rate to the power of` a (b MINUS 1)
+    ELSE    IF      base EQUALS 0
+            THEN    IF      exp LESS THAN 0
+                    THEN    NaN
+                    ELSE    0
+            ELSE    IF      exp EQUALS 1
+                    THEN    base
+                    ELSE    IF      exp GREATER THAN 0
+                            THEN    base TIMES `Base to the power of` base (exp MINUS 1)
+                            ELSE    1 DIVIDED BY `Base to the power of` base (0 MINUS exp)
+
 
 
 §§§ `Testing`
@@ -251,4 +261,3 @@ GIVEN a IS A NUMBER
 
 #TRACE `Payment Obligations` `Total Repayment Amount` AT 0 WITH
     PARTY `The Borrower` DOES `pay monthly installment to` `The Lender` (USD 2256.46) AT 59
-    
