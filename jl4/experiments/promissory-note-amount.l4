@@ -62,7 +62,6 @@ IMPORT prelude
         Value     IS `Principal Amount`'s Value
                         TIMES (`Monthly Interest Rate` TIMES `Compound Factor`)
                             DIVIDED BY (`Compound Factor` MINUS 1)
-     
     WHERE
         `Compound Factor` MEANS
             `Base to the power of`
@@ -219,7 +218,7 @@ GIVEN a IS A NUMBER
 ASSUME NaN IS A NUMBER
 
 GIVEN base  IS A NUMBER
-      exp IS A NUMBER
+      exp   IS A NUMBER
 `Base to the power of` MEANS
     IF      exp EQUALS 0
     THEN    1
