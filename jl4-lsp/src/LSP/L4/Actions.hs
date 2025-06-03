@@ -69,7 +69,7 @@ buildCompletionItem raw = \ case
     []
   KnownTypeVariable ->
     pure (defaultCompletionItem prepared)
-     { CompletionItem._kind = Just CompletionItemKind_Variable
+     { CompletionItem._kind = Just CompletionItemKind_TypeParameter
      }
   where
     -- a function (but also a constant, in theory) can be polymorphic, so we have to strip

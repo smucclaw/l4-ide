@@ -85,8 +85,6 @@ data Log
   | LogModifiedTextDocument !Uri
   | LogSavedTextDocument !Uri
   | LogClosedTextDocument !Uri
-  -- TODO: unused
-  | LogRequestedCompletionsFor !Text
   | LogFileStore FileStore.Log
   | LogMultipleDecideClauses !Uri
   | LogHandlingCustomRequest !Uri !Text          -- ^ Uri CustomMethodName
@@ -101,7 +99,6 @@ instance Pretty Log where
     LogModifiedTextDocument uri -> "Modified text document:" <+> pretty (getUri uri)
     LogSavedTextDocument uri -> "Saved text document:" <+> pretty (getUri uri)
     LogClosedTextDocument uri -> "Closed text document:" <+> pretty (getUri uri)
-    LogRequestedCompletionsFor t -> "requesting completions for:" <+> pretty t
     LogMultipleDecideClauses uri -> "Document contains multiple decide clauses:" <+> pretty (getUri uri)
     LogSuppliedTooManyArguments args -> "Visualization command was passed too many arguments, this is a bug:" <+> pretty (Aeson.encodeToLazyText args)
     LogExecutingCommand cmd -> "Executing command:" <+> pretty cmd
