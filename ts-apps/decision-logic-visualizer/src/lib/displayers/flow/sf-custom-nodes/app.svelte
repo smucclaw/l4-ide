@@ -13,7 +13,6 @@
 
   let { data }: AppDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
