@@ -270,7 +270,11 @@ export abstract class SelectableLadderLirNode extends BaseFlowLirNode {
     nodeSelectionTracker: LadderNodeSelectionTracker,
     ladderGraph: LadderGraphLirNode
   ) {
-    nodeSelectionTracker.toggleNodeSelection(context, this, ladderGraph)
+    nodeSelectionTracker.toggleNodeSelectionAndUpdateProjections(
+      context,
+      this,
+      ladderGraph
+    )
 
     this.getRegistry().publish(context, this.getId())
   }
