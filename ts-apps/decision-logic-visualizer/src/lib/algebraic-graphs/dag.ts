@@ -462,15 +462,6 @@ export function pathFromVertices<A extends Ord<A>>(
   return edges.reduce(overlay)
 }
 
-export function connectNodeToSource<A extends Ord<A>>(
-  dag: DirectedAcyclicGraph<A>,
-  node: A
-): DirectedAcyclicGraph<A> {
-  const nodeV = vertex(node)
-  /* (G, ->, empty) is a monoid */
-  return dag.overlay(nodeV.connect(dag.getSource()))
-}
-
 export function connectSinkToNode<A extends Ord<A>>(
   dag: DirectedAcyclicGraph<A>,
   node: A
