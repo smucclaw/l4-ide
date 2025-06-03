@@ -275,8 +275,6 @@ export abstract class SelectableLadderLirNode extends BaseFlowLirNode {
       this,
       ladderGraph
     )
-
-    this.getRegistry().publish(context, this.getId())
   }
 }
 
