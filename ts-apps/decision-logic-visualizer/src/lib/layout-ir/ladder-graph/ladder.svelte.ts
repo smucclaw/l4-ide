@@ -9,7 +9,7 @@ import {
   TrueVal,
   FalseVal,
 } from '../../eval/type.js'
-import { Assignment, Corefs } from '../../eval/assignment.js'
+import { Assignment } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
 import type { LirId, LirNode, LirNodeInfo } from '../core.js'
 import { LirContext, DefaultLirNode } from '../core.js'
@@ -284,7 +284,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   #originalExpr: IRExpr
   #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
-  #corefs: Corefs
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
   #evalResult: EvalResult = {
@@ -329,17 +328,10 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     const initialAssignmentAssocList: Array<[Unique, UBoolVal]> = varNodes.map(
       (varN) => [
         varN.getUnique(nodeInfo.context),
-        varN.getValue(nodeInfo.context),
+        varN.getInitialValue(nodeInfo.context),
       ]
     )
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
-
-    // Make the initial corefs
-    const uniqLirIdPairs: Array<[Unique, LirId]> = varNodes.map((n) => [
-      n.getUnique(nodeInfo.context),
-      n.getId(),
-    ])
-    this.#corefs = Corefs.fromEntries(uniqLirIdPairs)
   }
 
   static async make(
@@ -607,6 +599,14 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     console.log('whatif eval result: ', result)
   }
 
+  getValueOfUnique(_context: LirContext, unique: Unique): UBoolVal {
+    const val = this.#bindings.get(unique)
+    if (!val) {
+      throw new Error(`Internal error: No value found for unique ${unique}`)
+    }
+    return val
+  }
+
   /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
   async submitNewBinding(
     context: LirContext,
@@ -614,15 +614,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   ) {
     // Update the args with the new binding
     this.#bindings.set(binding.unique, binding.value)
-
-    // Update all VarLirNodes with this Unique with the new Value
-    const corefs = Array.from(this.#corefs.getCoreferents(binding.unique))
-    // console.log('corefs: ', corefs)
-    corefs.forEach((coref) => {
-      const node = context.get(coref) as VarLirNode
-      node._setValue(context, binding.value)
-    })
-
     /*
     Try #WhatIf-style evaluation.
     ---------
@@ -699,7 +690,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
 
   dispose(context: LirContext) {
     this.getVertices(context).map((n) => n.dispose(context))
-    this.#corefs.dispose()
     this.#dag.dispose()
     context.clear(this.getId())
   }
@@ -809,12 +799,8 @@ export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
 export interface VarLirNode extends FlowLirNode {
   getUnique(context: LirContext): Unique
 
-  /** This should be used only for UI purposes (and not, e.g., for evaluation) */
-  getValue(context: LirContext): UBoolVal
-  /** For displayers.
-   *
-   * This will only be invoked by LadderGraphLirNode. */
-  _setValue(context: LirContext, value: UBoolVal): void
+  /** This should be used only for UI purposes. This is just a thin wrapper over the LadderGraphLirNode's getValueOfUnique. */
+  getValue(context: LirContext, ladderGraph: LadderGraphLirNode): UBoolVal
 }
 
 export function isUBoolVarLirNode(
@@ -827,10 +813,7 @@ export function isUBoolVarLirNode(
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
 export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
-  /** The value here is used only for UI purposes
-   * The actual evaluation uses a different data structure (that is nevertheless kept
-   * in sync with what values are stored on the VarLirNodes) */
-  #value: UBoolVal
+  #initialValue: UBoolVal
   #name: Name
   #canInline: boolean
 
@@ -840,7 +823,7 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
-    this.#value = toUBoolVal(originalExpr.value)
+    this.#initialValue = toUBoolVal(originalExpr.value)
     this.#name = originalExpr.name
     this.#canInline = originalExpr.canInline
   }
@@ -861,13 +844,12 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     }
   }
 
-  getValue(_context: LirContext): UBoolVal {
-    return this.#value
+  getInitialValue(_context: LirContext): UBoolVal {
+    return this.#initialValue
   }
 
-  _setValue(context: LirContext, value: UBoolVal) {
-    this.#value = value
-    this.getRegistry().publish(context, this.getId())
+  getValue(context: LirContext, ladderGraph: LadderGraphLirNode): UBoolVal {
+    return ladderGraph.getValueOfUnique(context, this.getUnique(context))
   }
 
   toPretty(context: LirContext) {

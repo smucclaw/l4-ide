@@ -10,34 +10,18 @@
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
-  import { onDestroy } from 'svelte'
-  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
   let { data }: AppDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
-
-  // The values of the arguments of the App
-  const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
-  const onArgValueChange = (context: LirContext, id: LirId) => {
-    data.args.forEach((arg, i) => {
-      if (id === arg.getId()) {
-        argValues[i] = arg.getValue(context)
-      }
-    })
-  }
-  const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
-
-  onDestroy(() => unsub.unsubscribe())
 </script>
 
 <!-- App Arg UI -->
 {#snippet argUI(arg: (typeof data.args)[number], i: number)}
   <ValueIndicator
-    value={argValues[i]}
+    value={data.args.map((arg) => arg.getValue(data.context, ladderGraph))[i]}
     additionalClasses={[
       'border',
       'border-black',
@@ -51,7 +35,7 @@
       onclick={async () => {
         console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
-        const newValue = cycle(arg.getValue(data.context))
+        const newValue = cycle(arg.getValue(data.context, ladderGraph))
         await ladderGraph.submitNewBinding(data.context, {
           unique: arg.getUnique(data.context),
           value: newValue,
