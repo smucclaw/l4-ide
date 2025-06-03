@@ -349,7 +349,7 @@ GIVETH AN a
 fromMaybe default x MEANS
   CONSIDER x
   WHEN NOTHING THEN default
-  WHEN JUST y  THEN y
+  WHEN JUST x  THEN x
 
 GIVEN
   a       IS A TYPE
@@ -361,7 +361,7 @@ GIVETH A b
 maybe just nothing x MEANS
   CONSIDER x
   WHEN NOTHING THEN nothing
-  WHEN JUST y  THEN just y
+  WHEN JUST x  THEN just x
 
 GIVEN
   a       IS A TYPE
@@ -371,7 +371,7 @@ GIVETH A MAYBE a
 orElse x y MEANS
   CONSIDER x
   WHEN NOTHING THEN y
-  WHEN JUST z  THEN JUST z
+  WHEN JUST x  THEN JUST x
 
 GIVEN
   a       IS A TYPE
@@ -380,7 +380,7 @@ GIVETH A LIST OF a
 maybeToList x MEANS
   CONSIDER x
   WHEN NOTHING THEN EMPTY
-  WHEN JUST y  THEN LIST y
+  WHEN JUST x  THEN LIST x
 
 GIVEN
   a       IS A TYPE
@@ -436,7 +436,7 @@ GIVETH A MAYBE b
 lookup key list MEANS
   CONSIDER list
   WHEN EMPTY                       THEN NOTHING
-  WHEN (PAIR OF k, v) FOLLOWED BY xs THEN
+  WHEN PAIR OF k, v FOLLOWED BY xs THEN
     IF key EQUALS k
       THEN JUST v
       ELSE lookup key xs
