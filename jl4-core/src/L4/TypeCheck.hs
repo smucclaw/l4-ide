@@ -106,6 +106,7 @@ mkInitialCheckState substitution =
     , supply       = 0
     , infoMap      = IV.empty
     , nlgMap       = IV.empty
+    , scopeMap     = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -161,6 +162,7 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , entityInfo = env.entityInfo
               , infoMap = s'.infoMap
               , nlgMap = s'.nlgMap
+              , scopeMap = s'.scopeMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
@@ -225,20 +227,16 @@ lookupAssumeCheckedByAnno = lookupFromCheckEnv (.assumeDeclarations)
 
 -- | Combines environment and entityInfo into one single list
 --
--- This is currently used to generate top-level completions.
+-- This is currently used to generate completions.
 --
-combineEnvironmentEntityInfo :: Environment -> EntityInfo -> [(Name, CheckEntity)]
+combineEnvironmentEntityInfo :: Environment -> EntityInfo -> Map RawName [CheckEntity]
 combineEnvironmentEntityInfo env ei =
-    foldMap (uncurry lookupUniques) $ Map.toList env
-    where
-      lookupUniques rn = mapMaybe \unique -> do
-        (n, ce) <- ei Map.!? unique
-        pure (replaceRawName rn n, ce)
-
-      -- NOTE: the reason why we do this is because the CheckEntity doesn't contain the original name
-      -- e.g. if you have `foo AKA bar`, the CheckEntity will always contain `bar`. However, the environment
-      -- still has the correct name.
-      replaceRawName rn (MkName a _) = MkName a rn
+  Map.unionsWith catUnq $ foldMap (uncurry lookupUniques) $ Map.toList env
+  where
+  lookupUniques rn = mapMaybe \unique -> do
+    (_, ce) <- ei Map.!? unique
+    pure $ Map.singleton rn [ce]
+  catUnq a b = nub $ a <> b -- if there are multiple of the same checkEntity, throw them out
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.

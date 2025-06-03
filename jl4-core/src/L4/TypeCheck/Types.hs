@@ -21,8 +21,10 @@ import Control.Exception (throw, Exception)
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
 type Substitution = Map Int (Type' Resolved)
-type InfoMap      = IV.IntervalMap SrcPos Info
-type NlgMap       = IV.IntervalMap SrcPos Nlg
+type RangeMap     = IV.IntervalMap SrcPos
+type InfoMap      = RangeMap Info
+type ScopeMap     = RangeMap (Environment, EntityInfo)
+type NlgMap       = RangeMap Nlg
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -41,6 +43,7 @@ data CheckState =
     { substitution :: !Substitution
     , supply       :: !Int
     , infoMap      :: !InfoMap
+    , scopeMap     :: !ScopeMap
     , nlgMap       :: !NlgMap
     }
   deriving stock (Generic)
@@ -273,6 +276,7 @@ data CheckResult =
     , entityInfo   :: !EntityInfo
     , infoMap      :: !InfoMap
     , nlgMap       :: !NlgMap
+    , scopeMap     :: !ScopeMap
     }
 
 -- -------------------
@@ -382,7 +386,11 @@ ambiguousType n xs = do
 
 
 addInfoForSrcRange :: SrcRange -> Info -> Check ()
-addInfoForSrcRange srcRange i =
+addInfoForSrcRange srcRange i = do
+  env <- asks $ view #environment
+  ei <- asks $ view #entityInfo
+  modifying' #scopeMap $
+    IV.insert (IV.srcRangeToInterval srcRange) (env, ei)
   modifying' #infoMap $
     IV.insert (IV.srcRangeToInterval srcRange) i
 
