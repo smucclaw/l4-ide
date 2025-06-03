@@ -271,12 +271,8 @@ data Pattern n =
     PatVar Anno n
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
-    -- ^ not used during parsing, but after scope-checking;
-    -- the idea is that if your pattern mentions an in scope name, you
-    -- only get a "real" pattern if that name is a constructor, but that
-    -- can only be decided during type/scope checking
-  | PatLit Anno (Expr n)
   | PatCons Anno (Pattern n) (Pattern n)
+  | PatLit Anno Lit
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -352,8 +348,8 @@ appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
 decideBody :: Lens' (Decide n) (Expr n)
-decideBody = lens
-             (\(MkDecide _ _ (MkAppForm{}) body)       -> body)
+decideBody = lens 
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body) 
              (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
 
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n

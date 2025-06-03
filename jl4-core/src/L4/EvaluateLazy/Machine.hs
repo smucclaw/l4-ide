@@ -46,13 +46,11 @@ data Frame =
   | IfThenElse1 {- -} (Expr Resolved) (Expr Resolved) Environment
   | ConsiderWhen1 Reference {- -} (Expr Resolved) [Branch Resolved] Environment
   | PatNil0
-  | PatCons0 (Pattern Resolved) Environment (Pattern Resolved)
-  | PatCons1 {- -} Reference Environment (Pattern Resolved)
+  | PatCons0 (Pattern Resolved) (Pattern Resolved)
+  | PatCons1 {- -} Reference (Pattern Resolved)
   | PatCons2 Environment {- -}
-  | PatLit0 Environment (Expr Resolved) -- env, literal
-  | PatLit1 WHNF -- the scrutinee
-  | PatLit2
-  | PatApp0 Resolved Environment [Pattern Resolved]
+  | PatLit0 Lit
+  | PatApp0 Resolved [Pattern Resolved]
   | PatApp1 [Environment] {- -} [(Reference, Pattern Resolved)]
   | EqConstructor1 {- -} Reference [(Reference, Reference)]
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
@@ -321,18 +319,18 @@ backward val = WithPoppedFrame $ \ case
         Backward (ValEnvironment Map.empty)
       _ ->
         patternMatchFailure
-  Just (PatCons0 p1 env p2) -> do
+  Just (PatCons0 p1 p2) -> do
     case val of
       ValCons rf1 rf2 -> do
-        PushFrame (PatCons1 rf2 env p2)
-        matchPattern rf1 env p1
+        PushFrame (PatCons1 rf2 p2)
+        matchPattern rf1 p1
       _ ->
         patternMatchFailure
-  Just (PatCons1 rf2 env p2) -> do
+  Just (PatCons1 rf2 p2) -> do
     case val of
       ValEnvironment env1 -> do
         PushFrame (PatCons2 env1)
-        matchPattern rf2 env p2
+        matchPattern rf2 p2
       _ ->
         InternalException $ RuntimeTypeError $
           "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY"
@@ -342,7 +340,7 @@ backward val = WithPoppedFrame $ \ case
         Backward (ValEnvironment (Map.union env2 env1))
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY"
-  Just (PatApp0 n env ps) ->
+  Just (PatApp0 n ps) ->
     case val of
       ValConstructor n' rfs
         | sameResolved n n' ->
@@ -355,7 +353,7 @@ backward val = WithPoppedFrame $ \ case
                   []             -> Backward (ValEnvironment Map.empty)
                   ((r, p) : rps) -> do
                     PushFrame (PatApp1 [] rps)
-                    matchPattern r env p
+                    matchPattern r p
             else InternalException $ RuntimeTypeError
               "pattern for constructor has the wrong number of arguments"
       _ ->
@@ -367,22 +365,20 @@ backward val = WithPoppedFrame $ \ case
           []              -> Backward (ValEnvironment (Map.unions (env : envs)))
           ((r, p) : rps') -> do
             PushFrame (PatApp1 (env : envs) rps')
-            matchPattern r env p
+            matchPattern r p
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching constructor"
-  Just (PatLit0 env lit) -> do
-    PushFrame (PatLit1 val)
-    ForwardExpr env lit
-  Just (PatLit1 lit) -> do
-    PushFrame PatLit2
-    runBinOpEquals lit val
-  Just PatLit2 ->
-    case val of
-      -- NOTE: in future, we may give the pattern that was matched a name, potentially
-      ValBool True -> Backward $ ValEnvironment emptyEnvironment
-      ValBool False -> patternMatchFailure
-      _ -> InternalException $ RuntimeTypeError $
-        "expected a boolean but found: " <> prettyLayout val <> " while matching literal pattern"
+  Just (PatLit0 lit)
+    | NumericLit _ n <- lit
+    , ValNumber n' <- val -> if  n == n'
+      then Backward $ ValEnvironment emptyEnvironment
+      else patternMatchFailure
+    | StringLit _ s <- lit
+    , ValString s' <- val  -> if s == s'
+      then Backward $ ValEnvironment emptyEnvironment
+      else patternMatchFailure
+    | otherwise -> InternalException $ RuntimeTypeError $
+      "expected a literal type but found: " <> prettyLayout val <> " when matching on a literal pattern"
   Just (EqConstructor1 rf rfs) -> do
     PushFrame (EqConstructor2 val rfs)
     EvalRef rf
@@ -481,7 +477,7 @@ backwardContractFrame val = \ case
       ValBool True -> do
         pushCFrame (Contract11 (ActionDoesn'tmatch {..}))
         pushCFrame (Contract9 ScrutinizeEnvironment {..})
-        matchPattern ev'act env act.action
+        matchPattern ev'act act.action
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
@@ -628,23 +624,23 @@ matchBranches _scrutinee env (Otherwise _ann e : _) =
   ForwardExpr env e
 matchBranches scrutinee env (When _ann pat e : branches) = do
   PushFrame (ConsiderWhen1 scrutinee e branches env)
-  matchPattern scrutinee env pat
+  matchPattern scrutinee pat
 
-matchPattern :: Reference -> Environment -> Pattern Resolved -> Machine Config
-matchPattern scrutinee _env (PatVar _ann n) = do
+matchPattern :: Reference -> Pattern Resolved -> Machine Config
+matchPattern scrutinee (PatVar _ann n) = do
   Backward (ValEnvironment (Map.singleton (getUnique n) scrutinee))
-matchPattern scrutinee _env (PatApp _ann n [])
+matchPattern scrutinee (PatApp _ann n [])
   | getUnique n == TypeCheck.emptyUnique = do -- pattern for the empty list
   PushFrame PatNil0
   EvalRef scrutinee
-matchPattern scrutinee env (PatCons _ann p1 p2) = do
-  PushFrame (PatCons0 p1 env p2 )
+matchPattern scrutinee (PatCons _ann p1 p2) = do
+  PushFrame (PatCons0 p1 p2 )
   EvalRef scrutinee
-matchPattern scrutinee env (PatApp _ann n ps) = do
-  PushFrame (PatApp0 n env ps)
+matchPattern scrutinee (PatApp _ann n ps) = do
+  PushFrame (PatApp0 n ps )
   EvalRef scrutinee
-matchPattern scrutinee env (PatLit _ann expr) = do
-  PushFrame (PatLit0 env expr)
+matchPattern scrutinee (PatLit _ann lit) = do
+  PushFrame (PatLit0 lit)
   EvalRef scrutinee
 
 -- | This unwinds the stack until it finds the enclosing pattern match and then resumes.
