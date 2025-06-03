@@ -21,7 +21,7 @@
 <!-- App Arg UI -->
 {#snippet argUI(arg: (typeof data.args)[number], i: number)}
   <ValueIndicator
-    value={data.args.map((arg) => arg.getValue(data.context))[i]}
+    value={data.args.map((arg) => arg.getValue(data.context, ladderGraph))[i]}
     additionalClasses={[
       'border',
       'border-black',
@@ -35,7 +35,7 @@
       onclick={async () => {
         console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
-        const newValue = cycle(arg.getValue(data.context))
+        const newValue = cycle(arg.getValue(data.context, ladderGraph))
         await ladderGraph.submitNewBinding(data.context, {
           unique: arg.getUnique(data.context),
           value: newValue,

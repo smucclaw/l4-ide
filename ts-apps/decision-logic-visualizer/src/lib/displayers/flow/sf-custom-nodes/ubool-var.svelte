@@ -16,6 +16,9 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
   // Get LadderEnv, L4 Connection
   const ladderEnv = useLadderEnv()
+  const ladderGraph = ladderEnv
+    .getTopFunDeclLirNode(data.context)
+    .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
 
   const node = data.context.get(data.originalLirId) as UBoolVarLirNode
@@ -31,11 +34,8 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
           onclick={() => {
             console.log('inline lir id', data.originalLirId.toString())
 
-            const uniq = (
-              data.context.get(data.originalLirId) as UBoolVarLirNode
-            ).getUnique(data.context)
             l4Conn.inlineExprs(
-              [uniq],
+              [node.getUnique(data.context)],
               ladderEnv.getVersionedTextDocIdentifier()
             )
           }}
@@ -54,7 +54,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 
 <WithContentfulNodeStyles>
   <ValueIndicator
-    value={node.getValue(data.context)}
+    value={node.getValue(data.context, ladderGraph)}
     additionalClasses={['ubool-var-node-border', ...data.classes]}
   >
     <WithNormalHandles>
@@ -63,11 +63,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
         <button
           class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
           onclick={() => {
-            const ladderGraph = ladderEnv
-              .getTopFunDeclLirNode(data.context)
-              .getBody(data.context)
-
-            const newValue = cycle(node.getValue(data.context))
+            const newValue = cycle(node.getValue(data.context, ladderGraph))
             ladderGraph.submitNewBinding(data.context, {
               unique: node.getUnique(data.context),
               value: newValue,
