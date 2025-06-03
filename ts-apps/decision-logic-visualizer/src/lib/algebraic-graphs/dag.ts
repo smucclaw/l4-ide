@@ -100,29 +100,6 @@ export abstract class Dag<A extends Ord<A>>
     }
   }
 
-  /** Replace a vertex with one of its neighbors.
-   * Similar in spirit to the original Haskell alga's `Acyclic.shrink . AM.replaceVertex`,
-   * but much more specialized (that's why the implementation here is a lot simpler than Haskell alga's `shrink`).
-   *
-   * @param from - The vertex to replace.
-   * @param to - The **neighbor** to replace `from` with.
-   */
-  replaceVertexWithNeighbor(from: A, to: A): DirectedAcyclicGraph<A> {
-    const newG = this.gmap((w) => (w.isEqualTo(from) ? to : w)) as Dag<A>
-    /* 
-      We remove the edge <to, to>, if it exists, because
-      the gmap above can create a cycle if we already have the edge 
-      <`to`, `from`> or <`from`, `to`>. 
-      (Remember that we're assuming `from`, `to` are neighbors to begin with.)
-      
-      Note, furthermore, that this is also the *only* way 
-      in which a cycle can be created, when doing the above on a dag.
-      So, the final graph is still a DAG.
-    */
-    newG._removeEdge(to, to)
-    return newG
-  }
-
   /** Errors if not a DAG */
   getTopSort(): Array<A> {
     if (this.topologicalOrdering) return this.topologicalOrdering as A[]
