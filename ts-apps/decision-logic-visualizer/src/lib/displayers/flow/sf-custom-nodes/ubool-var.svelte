@@ -2,7 +2,7 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
-  import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
+  import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
@@ -12,7 +12,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
-  let { data }: UBoolVarDisplayerProps = $props()
+  let { data }: LadderNodeDisplayerProps = $props()
 
   // Get LadderEnv, L4 Connection
   const ladderEnv = useLadderEnv()
@@ -21,7 +21,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
 
-  const node = data.context.get(data.originalLirId) as UBoolVarLirNode
+  const node = data.node as UBoolVarLirNode
 </script>
 
 {#snippet inlineUI()}
@@ -32,7 +32,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
           aria-label="Unfold to definition"
           class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
           onclick={() => {
-            console.log('inline lir id', data.originalLirId.toString())
+            console.log('inline lir id', node.getId())
 
             l4Conn.inlineExprs(
               [node.getUnique(data.context)],
@@ -55,7 +55,10 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 <WithContentfulNodeStyles>
   <ValueIndicator
     value={node.getValue(data.context, ladderGraph)}
-    additionalClasses={['ubool-var-node-border', ...data.classes]}
+    additionalClasses={[
+      'ubool-var-node-border',
+      ...node.getAllClasses(data.context),
+    ]}
   >
     <WithNormalHandles>
       <WithHighlightableNodeContextMenu>
@@ -70,10 +73,10 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
             })
           }}
         >
-          {data.name.label}
+          {node.getLabel(data.context)}
         </button>
       </WithHighlightableNodeContextMenu>
-      {#if data.canInline}
+      {#if node.canInline(data.context)}
         {@render inlineUI()}
       {/if}
     </WithNormalHandles>
