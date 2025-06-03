@@ -264,13 +264,15 @@ export abstract class SelectableLadderLirNode extends BaseFlowLirNode {
     return nodeSelectionTracker.nodeIsSelected(this)
   }
 
-  /** Thin / cosmetic wrapper over LadderNodeSelectionTracker.toggleNodeSelection */
+  /** Thin / cosmetic wrapper over LadderNodeSelectionTracker.toggleNodeSelection + publishing */
   toggleSelection(
     context: LirContext,
     nodeSelectionTracker: LadderNodeSelectionTracker,
     ladderGraph: LadderGraphLirNode
   ) {
     nodeSelectionTracker.toggleNodeSelection(context, this, ladderGraph)
+
+    this.getRegistry().publish(context, this.getId())
   }
 }
 
@@ -356,6 +358,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): Promise<LadderGraphLirNode> {
@@ -370,6 +373,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
       nodeSelectionTracker = LadderNodeSelectionTracker.make(
         nodeInfo,
         dag,
+        noIntermediateBundlingNodeGraph,
         pathsList
       )
     }

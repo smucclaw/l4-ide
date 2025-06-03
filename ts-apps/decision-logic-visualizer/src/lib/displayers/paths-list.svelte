@@ -8,6 +8,7 @@
   import { useLadderEnv } from '$lib/ladder-env.js'
   import type { LinPathLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import type { LirContext, LirId } from '$lib/layout-ir/core.js'
+  // import { LadderNodeSelectionTracker } from '$lib/layout-ir/paths-list.js'
 
   /************************
        Lir
@@ -15,9 +16,12 @@
 
   const { context, node: pathsListLirNode }: PathListDisplayerProps = $props()
 
-  const ladderGraph = useLadderEnv()
-    .getTopFunDeclLirNode(context)
-    .getBody(context)
+  // const ladderGraph = useLadderEnv()
+  //   .getTopFunDeclLirNode(context)
+  //   .getBody(context)
+  // const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(
+  //   context
+  // ) as LadderNodeSelectionTracker
   const paths = pathsListLirNode.getPaths(context)
 
   /** Key state: Track what lin paths in the paths list are selected */
@@ -42,10 +46,6 @@
     paths.map((p, idx) => [p.getId(), idx.toString()])
   )
   function getSelectedPathsForToggleGroup() {
-    console.log(
-      'getSelectedPathsForToggleGroup selectedPaths',
-      $state.snapshot(selectedPaths)
-    )
     return selectedPaths.map(
       (p) => pathLirIdToPathIndex.get(p.getId()) as string
     )
@@ -63,14 +63,15 @@
       selectedLinPaths
     )
 
-    // Clear state what nodes were selected on the main ladder graph for highlighting,
-    // to avoid having to deal with complicated state synchronization between selected lin paths in the paths list
-    // and selected nodes on the ladder graph.
-    // I.e., think of selecting paths on the paths list as starting afresh.
-    ladderGraph
-      .getNodeSelectionTracker(context)
-      ?.resetSelectedForHighlightPaths(context)
+    // // Clear state what nodes were selected on the main ladder graph for highlighting,
+    // // to avoid having to deal with complicated state synchronization between selected lin paths in the paths list
+    // // and selected nodes on the ladder graph.
+    // // I.e., think of selecting paths on the paths list as starting afresh.
+    // ladderGraph
+    //   .getNodeSelectionTracker(context)
+    //   ?.resetSelectedForHighlightPaths(context)
     pathsListLirNode.selectPaths(context, selectedLinPaths)
+    // TODO: Figure out how best to update parent state
   }
 </script>
 

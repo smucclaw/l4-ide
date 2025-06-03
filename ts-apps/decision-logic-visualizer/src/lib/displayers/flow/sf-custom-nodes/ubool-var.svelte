@@ -82,7 +82,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
       {#if nodeSelectionTracker}
         <WithSelectableNodeContextMenu
           context={data.context}
-          {node}
+          node={data.node as UBoolVarLirNode}
           {nodeSelectionTracker}
         >
           {@render coreUBoolVarUI()}
