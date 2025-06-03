@@ -19,9 +19,8 @@
 </script>
 
 <!-- App Arg UI -->
-{#snippet argUI(arg: (typeof data.args)[number], i: number)}
+{#snippet argUI(arg: AppArgLirNode)}
   <ValueIndicator
-    value={data.args.map((arg) => arg.getValue(data.context, ladderGraph))[i]}
     additionalClasses={[
       'border',
       'border-black',
@@ -65,8 +64,8 @@
         </div>
         <!-- Args (see also note above)-->
         <div class="flex flex-wrap gap-1 justify-center">
-          {#each data.args as arg, i}
-            {@render argUI(arg, i)}
+          {#each node.getArgs(data.context) as arg}
+            {@render argUI(arg)}
           {/each}
         </div>
       </div>
