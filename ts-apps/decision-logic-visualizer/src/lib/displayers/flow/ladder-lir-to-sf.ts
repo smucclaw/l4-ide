@@ -4,7 +4,6 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
-  AppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   isTrueExprLirNode,
@@ -15,10 +14,6 @@ import {
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
-  TrueExprLirNode,
-  FalseExprLirNode,
-  UBoolVarLirNode,
-  NotStartLirNode,
   NotEndLirNode,
   SinkLirNode,
   isAppLirNode,
@@ -104,53 +99,52 @@ export function ladderLirNodeToSfNode(
 
   const defaultData = {
     context,
-    originalLirId: node.getId(),
-    classes: [],
+    node,
   }
 
   return match(node)
-    .with(P.when(isTrueExprLirNode), (n: TrueExprLirNode) => {
+    .with(P.when(isTrueExprLirNode), () => {
       return {
         ...defaults,
         type: trueExprNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.when(isFalseExprLirNode), (n: FalseExprLirNode) => {
+    .with(P.when(isFalseExprLirNode), () => {
       return {
         ...defaults,
         type: falseExprNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
+    .with(P.when(isUBoolVarLirNode), () => {
       return {
         ...defaults,
         type: uBoolVarNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.when(isAppLirNode), (n: AppLirNode) => {
+    .with(P.when(isAppLirNode), () => {
       return {
         ...defaults,
         type: appNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.when(isNotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.when(isNotStartLirNode), () => {
       return {
         ...defaults,
         type: notStartNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
+    .with(P.instanceOf(NotEndLirNode), () => {
       return {
         ...defaults,
         type: notEndNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
-    })
+    }) // TODO: Continue refactoring the following
     .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,

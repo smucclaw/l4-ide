@@ -1,6 +1,5 @@
 // Types and util functions for the Svelte Flow graph
-
-import type { Name } from '@repo/viz-expr'
+import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
@@ -18,8 +17,6 @@ import {
   emptyEdgeLabel,
   EdgeStylesContainer,
 } from '$lib/layout-ir/ladder-graph/edge-attributes.js'
-import type { LadderNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
-import type { AppArgLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte'
 
 /**
  * The result type of the ladder lir graph to SF graph conversion.
@@ -124,16 +121,8 @@ export const sfNodeTypes: SF.NodeTypes = {
 
 // Displayer props
 
-export interface AppDisplayerProps {
-  data: AppDisplayerData
-}
-
-export interface UBoolVarDisplayerProps {
-  data: UBoolVarDisplayerData
-}
-
-export interface BoolLitDisplayerProps {
-  data: BoolLitDisplayerData
+export interface LadderNodeDisplayerProps {
+  data: LadderSFNodeData
 }
 
 export interface BundlingNodeDisplayerProps {
@@ -142,37 +131,15 @@ export interface BundlingNodeDisplayerProps {
 
 // Node data
 
-// TODO: Might be better to just pass along the LirNode
-// and not bother with passing along specific pieces of info
-// that's alr on the LirNode.
-// But there may also be complications wrt reactivity;
-// need to look more into this
-
 export interface LadderSFNodeData {
   context: LirContext
-  originalLirId: LirId
-  classes: LadderNodeCSSClass[]
+  node: LadderLirNode
 }
 
-export interface AppDisplayerData extends LadderSFNodeData {
-  fnName: Name
-  args: AppArgLirNode[]
-}
-
-export interface UBoolVarDisplayerData extends LadderSFNodeData {
-  name: Name
-  canInline: boolean
-}
-
-export type BoolLitDisplayerData = LadderSFNodeData
-
+// TODO: refactor bundling node displayers to just use LadderSFNodeData as well
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {
   /** Currently used for the explanatory labels */
   annotation: string
-}
-
-export interface NotDisplayerProps {
-  data: LadderSFNodeData
 }
 
 /************************************************

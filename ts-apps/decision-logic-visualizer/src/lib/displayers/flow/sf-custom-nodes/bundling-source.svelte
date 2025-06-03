@@ -15,7 +15,7 @@
     position={defaultSFHandlesInfo.sourcePosition}
   />
   {#if !data.context.shouldEnableZenMode()}
-    <div class={['node-annotation', ...data.classes]}>
+    <div class={['node-annotation', ...data.node.getAllClasses(data.context)]}>
       {data.annotation}
     </div>
   {/if}

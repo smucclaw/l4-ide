@@ -230,16 +230,6 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   }
 
   /***********************************************
-         getData
-  ***********************************************/
-
-  getData(context: LirContext) {
-    return {
-      classes: this.getAllClasses(context),
-    }
-  }
-
-  /***********************************************
          isEqualTo, dispose, toPretty
   ***********************************************/
 
@@ -813,9 +803,8 @@ export function isUBoolVarLirNode(
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
 export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
+  #originalExpr: UBoolVar
   #initialValue: UBoolVal
-  #name: Name
-  #canInline: boolean
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -823,25 +812,20 @@ export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
+    this.#originalExpr = originalExpr
     this.#initialValue = toUBoolVal(originalExpr.value)
-    this.#name = originalExpr.name
-    this.#canInline = originalExpr.canInline
   }
 
   getLabel(_context: LirContext) {
-    return this.#name.label
+    return this.#originalExpr.name.label
   }
 
   getUnique(_context: LirContext) {
-    return this.#name.unique
+    return this.#originalExpr.name.unique
   }
 
-  getData(context: LirContext) {
-    return {
-      name: this.#name,
-      classes: this.getAllClasses(context),
-      canInline: this.#canInline,
-    }
+  canInline(_context: LirContext) {
+    return this.#originalExpr.canInline
   }
 
   getInitialValue(_context: LirContext): UBoolVal {
@@ -936,8 +920,12 @@ export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
     this.#args = args.map((arg) => arg.getId())
   }
 
+  getFnName(_context: LirContext) {
+    return this.#fnName
+  }
+
   getArgs(context: LirContext) {
-    return this.#args.map((arg) => context.get(arg) as LadderLirNode)
+    return this.#args.map((arg) => context.get(arg) as AppArgLirNode)
   }
 
   getChildren(context: LirContext) {
@@ -953,14 +941,6 @@ export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
 
   toString() {
     return 'APP_LIR_NODE'
-  }
-
-  getData(context: LirContext) {
-    return {
-      fnName: this.#fnName,
-      args: this.#args.map((arg) => context.get(arg) as LadderLirNode),
-      classes: this.getAllClasses(context),
-    }
   }
 }
 
