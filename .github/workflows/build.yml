@@ -49,12 +49,6 @@ jobs:
           xz-utils
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      # FIXME: this is a temporary fix, the docker container should never be dirty
-      # at the begin of a run
-      - name: Remove cabal store
-        run: |
-          rm -rf ~/.cabal
-
       - uses: actions/checkout@v4
 
       - name: Update git submodules
