@@ -6,7 +6,7 @@ import {
   isSelectableLadderLirNode,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
-import { LirContext, DefaultLirNode } from './core.js'
+import { LirContext, DefaultLirNode, LirRegistry } from './core.js'
 import {
   type DirectedAcyclicGraph,
   overlays,
@@ -183,6 +183,7 @@ export class LadderNodeSelectionTracker {
     console.log('===================================================\n')
 
     return new LadderNodeSelectionTracker(
+      nodeInfo.registry,
       noIntermediateBundlingNodeDag,
       noBundlingNodePathToLadderLinPath,
       pathsList
@@ -190,6 +191,7 @@ export class LadderNodeSelectionTracker {
   }
 
   constructor(
+    private lirRegistry: LirRegistry,
     private noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
     /** Map from path in the noIntermediateBundlingNodeDag to the corresponding lin path on the ladder graph */
     private noBundlingNodePathToLadderLinPath: ArrayKeyedMap<
@@ -252,12 +254,24 @@ export class LadderNodeSelectionTracker {
     ladderGraph.highlightSubgraphEdges(context, graphToHighlight)
   }
 
+  resetSelectedNodes(context: LirContext) {
+    const prevSelected = this.getSelectedForHighlightPaths(context)
+    this.#selected = new Set()
+    prevSelected.forEach((node) =>
+      this.lirRegistry.publish(context, node.getId())
+    )
+  }
+
   selectNodesAndUpdateProjections(
     context: LirContext,
     nodes: Array<SelectableLadderLirNode>,
     ladderGraph: LadderGraphLirNode
   ) {
+    this.resetSelectedNodes(context)
+
     this.#selected = new Set(nodes.map((node) => node.getId()))
+    nodes.forEach((node) => this.lirRegistry.publish(context, node.getId()))
+
     this.updateProjections(context, ladderGraph)
   }
 
@@ -272,6 +286,8 @@ export class LadderNodeSelectionTracker {
     } else {
       this.#selected.add(node.getId())
     }
+    this.lirRegistry.publish(context, node.getId())
+
     this.updateProjections(context, ladderGraph)
   }
 

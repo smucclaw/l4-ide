@@ -11,6 +11,8 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
+  import { onDestroy } from 'svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
@@ -24,6 +26,18 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as UBoolVarLirNode
+
+  // Selected state and updates thereof
+  let selected = $state(false)
+  const onSelectionChange = (context: LirContext, id: LirId) => {
+    if (id === node.getId() && nodeSelectionTracker) {
+      selected = node.isSelected(context, nodeSelectionTracker)
+      console.log('onSelectionChange', selected)
+    }
+  }
+
+  const unsub = ladderEnv.getLirRegistry().subscribe(onSelectionChange)
+  onDestroy(() => unsub.unsubscribe())
 </script>
 
 {#snippet inlineUI()}
@@ -74,6 +88,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   <ValueIndicator
     value={node.getValue(data.context, ladderGraph)}
     additionalClasses={[
+      selected ? 'highlighted-ladder-node' : '',
       'ubool-var-node-border',
       ...node.getAllClasses(data.context),
     ]}
