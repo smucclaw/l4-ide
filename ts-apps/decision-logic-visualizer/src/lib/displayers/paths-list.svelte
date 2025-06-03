@@ -68,9 +68,9 @@
     // and selected nodes on the ladder graph.
     // I.e., think of selecting paths on the paths list as starting afresh.
     ladderGraph
-      .getPathsTracker(context)
+      .getNodeSelectionTracker(context)
       ?.resetSelectedForHighlightPaths(context)
-    pathsListLirNode.selectPaths(context, selectedLinPaths, ladderGraph)
+    pathsListLirNode.selectPaths(context, selectedLinPaths)
   }
 </script>
 

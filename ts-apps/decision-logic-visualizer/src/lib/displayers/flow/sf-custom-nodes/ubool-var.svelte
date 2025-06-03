@@ -14,14 +14,14 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 
   let { data }: LadderNodeDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection, pathsTracker
+  // Get LadderEnv, L4 Connection, nodeSelectionTracker
   // (Note: useLadderEnv must be invoked on component initalization)
   const ladderEnv = useLadderEnv()
   const ladderGraph = ladderEnv
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
-  const pathsTracker = ladderGraph.getPathsTracker(data.context)
+  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as UBoolVarLirNode
 </script>
@@ -79,11 +79,11 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ]}
   >
     <WithNormalHandles>
-      {#if pathsTracker}
+      {#if nodeSelectionTracker}
         <WithSelectableNodeContextMenu
           context={data.context}
           {node}
-          {pathsTracker}
+          {nodeSelectionTracker}
         >
           {@render coreUBoolVarUI()}
         </WithSelectableNodeContextMenu>

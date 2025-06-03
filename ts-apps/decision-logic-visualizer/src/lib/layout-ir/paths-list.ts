@@ -1,10 +1,9 @@
 import {
   type LadderLirNode,
-  type SelectableNode,
+  type SelectableLadderLirNode,
   LadderGraphLirNode,
   LinPathLirNode,
   isSelectableLadderLirNode,
-  isBundlingFlowLirNode,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode } from './core.js'
@@ -61,32 +60,35 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
     )
   }
 
-  /** Select the linearized paths in the PathsList and highlight the corresponding paths on the ladder graph */
-  selectPaths(
-    context: LirContext,
-    paths: LinPathLirNode[],
-    ladderGraph: LadderGraphLirNode
-  ) {
+  getSelectableNodesOfSelectedPaths(
+    context: LirContext
+  ): Array<SelectableLadderLirNode> {
+    return this.getSelectedPaths(context).flatMap((p) =>
+      p.getSelectableVertices(context)
+    )
+  }
+
+  /** Select the linearized paths in the PathsList */
+  selectPaths(context: LirContext, paths: LinPathLirNode[]) {
     this.selected = new Set(paths.map((p) => p.getId()))
-    this.highlightPathsOnLadderGraph(context, ladderGraph, paths)
 
     this.getRegistry().publish(context, this.getId())
   }
 
-  /** Helper: Highlight the paths on the ladder graph that correspond to the given LinPathLirNodes */
-  private highlightPathsOnLadderGraph(
-    context: LirContext,
-    ladderGraph: LadderGraphLirNode,
-    paths: LinPathLirNode[]
-  ) {
-    // 1. Get the subgraph to be highlighted
-    // Exploits the property that (G, +, ε) is an idempotent monoid
-    const graphToHighlight = overlays(paths.map((p) => p.getRawPathGraph()))
+  // /** Helper: Highlight the paths on the ladder graph that correspond to the given LinPathLirNodes */
+  // highlightPathsOnLadderGraph(
+  //   context: LirContext,
+  //   ladderGraph: LadderGraphLirNode,
+  //   paths: LinPathLirNode[]
+  // ) {
+  //   // 1. Get the subgraph to be highlighted
+  //   // Exploits the property that (G, +, ε) is an idempotent monoid
+  //   const graphToHighlight = overlays(paths.map((p) => p.getRawPathGraph()))
 
-    // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
-    ladderGraph.clearHighlightEdgeStyles(context)
-    ladderGraph.highlightSubgraph(context, graphToHighlight)
-  }
+  //   // 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
+  //   ladderGraph.clearHighlightEdgeStyles(context)
+  //   ladderGraph.highlightSubgraphEdges(context, graphToHighlight)
+  // }
 
   getChildren(context: LirContext) {
     return this.getPaths(context)
@@ -107,7 +109,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
 }
 
 /************************************************
-          PathsTracker
+          LadderNodeSelectionTracker
 *************************************************/
 
 type PathInNoIntermediateBundlingNodeDag = LirId[]
@@ -131,40 +133,44 @@ function linPathToPathInNoIntermediateBundlingNodeDag(
     })
 }
 
-export function contractIntermediateBundlingNodes(
-  context: LirContext,
-  dag: DirectedAcyclicGraph<LirId>
-): DirectedAcyclicGraph<LirId> {
-  const overallSource = dag.getSource()
-  const overallSink = dag.getSink()
+// export function contractIntermediateBundlingNodes(
+//   context: LirContext,
+//   dag: DirectedAcyclicGraph<LirId>
+// ): DirectedAcyclicGraph<LirId> {
+//   const overallSource = dag.getSource()
+//   const overallSink = dag.getSink()
 
-  const isIntermediateBundlingNode = (node: LadderLirNode): boolean => {
-    const isOverallSource = vertex(node.getId()).isEqualTo(overallSource)
-    const isOverallSink = vertex(node.getId()).isEqualTo(overallSink)
-    return isBundlingFlowLirNode(node) && !isOverallSource && !isOverallSink
-  }
-  // TODO
-}
+//   const isIntermediateBundlingNode = (node: LadderLirNode): boolean => {
+//     const isOverallSource = vertex(node.getId()).isEqualTo(overallSource)
+//     const isOverallSink = vertex(node.getId()).isEqualTo(overallSink)
+//     return isBundlingFlowLirNode(node) && !isOverallSource && !isOverallSink
+//   }
+//   // TODO
+// }
 
 /**
- * This stores the PathsList (the paths through the main ladder graph), as well as what nodes the user has selected on the ladder graph.
- * It also tracks how the nodes that the user has selected on the ladder graph
+ * Tracks what nodes the user has selected on the ladder graph,
+ * and how the nodes that the user has selected on the ladder graph
  * might correspond to lin paths through the ladder graph.
  *
- * Assumes that the original dag is in NNF.
+ * Has all the info needed to update the projections
+ * (which lin paths are selected in the PathsList; which edges on the ladder graph are highlighted)
+ *
+ * Assumes that the original ladder graph is in NNF.
  */
-export class PathsTracker {
+export class LadderNodeSelectionTracker {
   /** What nodes on the ladder graph, if any, the user has selected for highlighting *by interacting with the main graph UI*.
    *
    * (This is different from the selected paths in the PathsList --- those are the paths that the user has selected by interacting with the PathsList UI.)
-   * The LirIds will correspond to those of SelectableLadderLirNodes.
+   * The LirIds will correspond to those of SelectableFlowLirNodes.
    */
   #selectedForHighlightPaths: Set<LirId> = new Set()
 
   static make(
     nodeInfo: LirNodeInfo,
     /** The ladder graph dag. Assumes that this is in NNF. */
-    dag: DirectedAcyclicGraph<LirId>
+    dag: DirectedAcyclicGraph<LirId>,
+    pathsList: PathsListLirNode
   ) {
     console.log('ladder graph dag: ', dag.toString())
 
@@ -184,21 +190,17 @@ export class PathsTracker {
     See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
     for more on how to debug and understand this better.
     */
-    const noIntermediateBundlingNodeDag = contractIntermediateBundlingNodes(
-      nodeInfo.context,
-      dag
-    )
-    console.log(
-      'noIntermediateBundlingNodeDag: ',
-      noIntermediateBundlingNodeDag.toString()
-    )
-    console.log('===================================================\n')
+    const noIntermediateBundlingNodeDag: any = undefined // TODO
+    // contractIntermediateBundlingNodes(
+    //   nodeInfo.context,
+    //   dag
+    // )
+    // console.log(
+    //   'noIntermediateBundlingNodeDag: ',
+    //   noIntermediateBundlingNodeDag.toString()
+    // )
+    // console.log('===================================================\n')
 
-    // Make pathsList and a map from paths in the noIntermediateBundlingNodeDag to the corresponding lin paths on the main graph
-    const pathsList = new PathsListLirNode(
-      nodeInfo,
-      dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, p))
-    )
     const noBundlingNodePathToLadderLinPath = new ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
       LinPathLirNode
@@ -229,29 +231,27 @@ export class PathsTracker {
     )
     console.log('===================================================\n')
 
-    return new PathsTracker(
+    return new LadderNodeSelectionTracker(
       noIntermediateBundlingNodeDag,
-      pathsList,
-      noBundlingNodePathToLadderLinPath
+      noBundlingNodePathToLadderLinPath,
+      pathsList
     )
   }
 
   constructor(
     private noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
-    /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
-     * No need to update it, tho, if changing edge attributes. */
-    private pathsList: PathsListLirNode,
     /** Map from path in the noIntermediateBundlingNodeDag to the corresponding lin path on the ladder graph */
     private noBundlingNodePathToLadderLinPath: ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
       LinPathLirNode
-    >
+    >,
+    private pathsList: PathsListLirNode
   ) {}
 
   /** Get the nodes on the ladder graph that the user has selected for highlighting by interacting with the main graph UI */
   getSelectedForHighlightPaths(context: LirContext) {
     return Array.from(this.#selectedForHighlightPaths).map(
-      (id) => context.get(id) as SelectableNode
+      (id) => context.get(id) as SelectableLadderLirNode
     )
   }
 
@@ -261,18 +261,20 @@ export class PathsTracker {
     this.#selectedForHighlightPaths = new Set()
   }
 
+  nodeIsSelected(node: SelectableLadderLirNode) {
+    return this.#selectedForHighlightPaths.has(node.getId())
+  }
+
   /** Toggle whether a specific node is selected for highlighting */
   toggleNodeSelection(
     context: LirContext,
-    node: SelectableNode,
+    node: SelectableLadderLirNode,
     ladderGraph: LadderGraphLirNode
   ) {
     if (this.#selectedForHighlightPaths.has(node.getId())) {
       this.#selectedForHighlightPaths.delete(node.getId())
-      node.unhighlight(context)
     } else {
       this.#selectedForHighlightPaths.add(node.getId())
-      node.highlight(context)
     }
 
     /* 
@@ -283,38 +285,36 @@ export class PathsTracker {
 
     Every time there is a change in the user's node selection on the ladder graph --- which
     in effect corresponds to a change in what nodes of noIntermediateBundlingNodeDag are selected ---
-    we check if the user has selected nodes corresponding to lin path(s) in the ladder dag,
-    and select the corresponding path(s) in the PathsList.
+    we update our projections (a and b below).
     */
-    const linPaths = this.findCorrespondingLinPaths(
+
+    // a. check if the user has selected nodes corresponding to lin path(s) in the ladder dag,
+    // and select the corresponding path(s) in the PathsList.
+    const correspondingLinPaths = this.findCorrespondingLinPaths(
       this.getSelectedForHighlightPaths(context)
     )
-    console.log('\n=== Lin Paths ===')
-    linPaths.forEach((path, index) => {
-      const nodeLabels = path.getVertices(context).map((node) => {
-        return `${node.getId().toString()} (${node.toPretty(context)})`
-      })
-      console.log(`\nLin Path ${index + 1}:`)
-      console.log(nodeLabels.join(' -> '))
-    })
-    console.log('=========================\n')
+    this.pathsList.selectPaths(context, correspondingLinPaths)
+    // console.log('\n=== Lin Paths ===')
+    // correspondingLinPaths.forEach((path, index) => {
+    //   const nodeLabels = path.getVertices(context).map((node) => {
+    //     return `${node.getId().toString()} (${node.toPretty(context)})`
+    //   })
+    //   console.log(`\nLin Path ${index + 1}:`)
+    //   console.log(nodeLabels.join(' -> '))
+    // })
+    // console.log('=========================\n')
 
-    // Highlight the graph union of the corresponding lin paths and the selected nodes on the ladder graph
-    // (We don't just highlight the lin paths b/c also want to be able to see if we've highlighted specific nodes.)
-    this.pathsList.selectPaths(context, linPaths, ladderGraph)
-    ladderGraph.highlightSubgraph(
+    // b. update ladder graph edge highlighting
+    ladderGraph.highlightSubgraphEdges(
       context,
-      overlays([
-        ...linPaths.map((linPath) => linPath.getRawPathGraph()),
-        ...this.getSelectedForHighlightPaths(context).map((node) =>
-          vertex(node.getId())
-        ),
-      ])
+      overlays(
+        correspondingLinPaths.map((linPath) => linPath.getRawPathGraph())
+      )
     )
   }
 
   /** Given the selected nodes, figure out what lin paths through the ladder graph, if any, these correspond to */
-  findCorrespondingLinPaths(selected: Array<SelectableNode>) {
+  findCorrespondingLinPaths(selected: Array<SelectableLadderLirNode>) {
     /** 1. Compute the paths through the selected subgraph of the noBundlingNode graph
      * (These paths will start from noIntermediateBundlingNodeDag's source.)
      */
@@ -357,9 +357,5 @@ export class PathsTracker {
         this.noBundlingNodePathToLadderLinPath.get(nbnPathGraph.getTopSort())
       )
       .filter((linPath) => !!linPath)
-  }
-
-  getPathsList() {
-    return this.pathsList
   }
 }

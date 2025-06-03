@@ -2,13 +2,13 @@
 <script lang="ts" module>
   import type { Snippet } from 'svelte'
   import type { LirContext } from '$lib/layout-ir/core'
-  import { PathsTracker } from '$lib/layout-ir/paths-list.js'
-  import type { SelectableNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import type { LadderNodeSelectionTracker } from '$lib/layout-ir/paths-list.js'
+  import type { SelectableLadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   interface SelectableNodeContextMenuProps {
     context: LirContext
-    node: SelectableNode
-    pathsTracker: PathsTracker
+    node: SelectableLadderLirNode
+    nodeSelectionTracker: LadderNodeSelectionTracker
     children: Snippet
   }
 </script>
@@ -20,17 +20,14 @@
   let {
     context,
     node,
-    pathsTracker,
+    nodeSelectionTracker,
     children,
   }: SelectableNodeContextMenuProps = $props()
 
   const ladderEnv = useLadderEnv()
+  const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
   const onSelect = () => {
-    pathsTracker.toggleNodeSelection(
-      context,
-      node,
-      ladderEnv.getTopFunDeclLirNode(context).getBody(context)
-    )
+    nodeSelectionTracker.toggleNodeSelection(context, node, ladderGraph)
   }
 </script>
 
