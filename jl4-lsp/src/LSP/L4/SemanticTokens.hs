@@ -266,6 +266,7 @@ instance ToSemTokens () PosToken Resolved where
 
       highlightFunction = \case
         Fun{} -> withTokenType identIsFunction
+        Forall _ _ ty -> highlightFunction ty
         _ -> id
 
 instance ToSemTokens () PosToken (Module  Resolved) where

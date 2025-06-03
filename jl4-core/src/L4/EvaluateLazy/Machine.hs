@@ -19,6 +19,8 @@ module L4.EvaluateLazy.Machine
 , emptyEnvironment
 , prettyEvalException
 , boolView
+-- * Constants exposed for the eager evaluator
+, builtinBinOps
 )
 where
 
@@ -54,6 +56,8 @@ data Frame =
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
   | UnaryBuiltin0 UnaryBuiltinFun
+  | BinBuiltin1 BinOp Reference
+  | BinBuiltin2 BinOp WHNF
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   deriving stock Show
@@ -150,10 +154,12 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
-  And  _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-  Or   _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
   RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Left e1) (Left e2))
   ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Left e1) (Left e2))
+  And  _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or   _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
   Implies _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
   Not _ann e ->
@@ -248,6 +254,11 @@ backward val = WithPoppedFrame $ \ case
     ForwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
+  Just (BinBuiltin1 binOp r) -> do
+    PushFrame (BinBuiltin2 binOp val)
+    EvalRef r
+  Just (BinBuiltin2 binOp val1) ->
+    runBinOp binOp val1 val
   Just f@(App1 rs) -> do
     case val of
       ValClosure givens e env' -> do
@@ -273,6 +284,15 @@ backward val = WithPoppedFrame $ \ case
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
+      ValBinaryBuiltinFun fn -> do
+        (x, y) <- expect2 rs
+        case fn of
+          -- 'BinOpCons' doesn't need to evaluate anything!
+          BinOpCons -> do
+            Backward $ ValCons x y
+          _ -> do
+            PushFrame (BinBuiltin1 fn y)
+            EvalRef x
       ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
@@ -645,6 +665,11 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+
+expect2 :: [a] -> Machine (a, a)
+expect2 = \ case
+  [x, y] -> pure (x, y)
   xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
@@ -1171,8 +1196,21 @@ initialEnvironment = do
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
   waitUntilRef <- AllocateValue =<< waitUntilVal eventCRef neverMatchesPartyRef neverMatchesActRef
+  andRef <- AllocateValue =<< andValClosure trueRef falseRef
+  orRef <- AllocateValue =<< orValClosure trueRef falseRef
+  impliesRef <- AllocateValue =<< impliesValClosure trueRef falseRef
+  notRef <- AllocateValue =<< notValClosure trueRef falseRef
+
+  builtinBinOpRefs <-
+    traverse
+      (\(funVal, uniq) -> do
+        r <- AllocateValue $ ValBinaryBuiltinFun funVal
+        pure (uniq, r)
+      )
+      builtinBinOps
+
   pure $
-    Map.fromList
+    Map.fromList $
       [ (TypeCheck.falseUnique, falseRef)
       , (TypeCheck.trueUnique,  trueRef)
       , (TypeCheck.emptyUnique, nilRef)
@@ -1184,4 +1222,108 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
+      , (TypeCheck.andUnique, andRef)
+      , (TypeCheck.orUnique, orRef)
+      , (TypeCheck.impliesUnique, impliesRef)
+      , (TypeCheck.notUnique, notRef)
       ]
+      <> builtinBinOpRefs
+
+builtinBinOps :: [(BinOp, Unique)]
+builtinBinOps =
+  [ (val, unique)
+  | (val, uniques) <-
+      [ (BinOpLt,        TypeCheck.ltUniques)
+      , (BinOpLeq,       TypeCheck.leqUniques)
+      , (BinOpGt,        TypeCheck.gtUniques)
+      , (BinOpGeq,       TypeCheck.geqUniques)
+      , (BinOpPlus,      [TypeCheck.plusUnique])
+      , (BinOpMinus,     [TypeCheck.minusUnique])
+      , (BinOpTimes,     [TypeCheck.timesUnique])
+      , (BinOpDividedBy, [TypeCheck.divideUnique])
+      , (BinOpModulo,    [TypeCheck.moduloUnique])
+      , (BinOpCons,      [TypeCheck.consUnique])
+      , (BinOpEquals,    [TypeCheck.equalsUnique])
+      ]
+  , unique <- uniques
+  ]
+
+boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
+boolBinOpClosure true false buildExpr = do
+  let
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+    nb = mkName "b"
+  aDef <- def na
+  bDef <- def nb
+  aRef <- ref na aDef
+  bRef <- ref nb bDef
+  pure $ ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno bDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr aRef bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+boolUnaryOpClosure :: Reference -> Reference -> (Resolved -> Expr Resolved) -> Machine (Value a)
+boolUnaryOpClosure true false buildExpr = do
+  let
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+  aDef <- def na
+  aRef <- ref na aDef
+  pure $ ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+andValClosure :: Reference -> Reference -> Machine (Value a)
+andValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
+
+notValClosure :: Reference -> Reference -> Machine (Value a)
+notValClosure true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orValClosure :: Reference -> Reference -> Machine (Value a)
+orValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesValClosure :: Reference -> Reference -> Machine (Value a)
+impliesValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )
