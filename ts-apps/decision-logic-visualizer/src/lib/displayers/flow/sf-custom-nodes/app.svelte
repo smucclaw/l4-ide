@@ -10,8 +10,6 @@
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
-  import { onDestroy } from 'svelte'
-  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
   let { data }: AppDisplayerProps = $props()
 
@@ -19,25 +17,12 @@
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
-
-  // The values of the arguments of the App
-  const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
-  const onArgValueChange = (context: LirContext, id: LirId) => {
-    data.args.forEach((arg, i) => {
-      if (id === arg.getId()) {
-        argValues[i] = arg.getValue(context)
-      }
-    })
-  }
-  const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
-
-  onDestroy(() => unsub.unsubscribe())
 </script>
 
 <!-- App Arg UI -->
 {#snippet argUI(arg: (typeof data.args)[number], i: number)}
   <ValueIndicator
-    value={argValues[i]}
+    value={data.args.map((arg) => arg.getValue(data.context))[i]}
     additionalClasses={[
       'border',
       'border-black',

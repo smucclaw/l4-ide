@@ -2,8 +2,6 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte'
-  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
   import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
@@ -20,22 +18,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   const ladderEnv = useLadderEnv()
   const l4Conn = ladderEnv.getL4Connection()
 
-  // The value of the UBoolVar
-  let uboolvarValue = $state(
-    (data.context.get(data.originalLirId) as UBoolVarLirNode).getValue(
-      data.context
-    )
-  )
-  const onValueChange = (context: LirContext, id: LirId) => {
-    if (id === data.originalLirId) {
-      uboolvarValue = (
-        context.get(data.originalLirId) as UBoolVarLirNode
-      ).getValue(context)
-    }
-  }
-  const unsub = ladderEnv.getLirRegistry().subscribe(onValueChange)
-
-  onDestroy(() => unsub.unsubscribe())
+  const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 </script>
 
 {#snippet inlineUI()}
@@ -71,7 +54,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 
 <WithContentfulNodeStyles>
   <ValueIndicator
-    value={uboolvarValue}
+    value={node.getValue(data.context)}
     additionalClasses={['ubool-var-node-border', ...data.classes]}
   >
     <WithNormalHandles>
@@ -83,7 +66,6 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
             const ladderGraph = ladderEnv
               .getTopFunDeclLirNode(data.context)
               .getBody(data.context)
-            const node = data.context.get(data.originalLirId) as UBoolVarLirNode
 
             const newValue = cycle(node.getValue(data.context))
             ladderGraph.submitNewBinding(data.context, {
