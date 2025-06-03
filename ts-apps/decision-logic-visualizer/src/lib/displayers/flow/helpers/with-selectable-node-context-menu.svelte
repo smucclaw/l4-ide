@@ -43,6 +43,7 @@
   onDestroy(() => unsub.unsubscribe())
 </script>
 
+<!-- TODO: Node highlight styles not wroking yet -->
 <ContextMenu.Root>
   <ContextMenu.Trigger>
     <div class={selected ? 'highlighted-ladder-node' : ''}>

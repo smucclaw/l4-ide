@@ -128,21 +128,6 @@ function linPathToPathInNoIntermediateBundlingNodeDag(
     })
 }
 
-// export function contractIntermediateBundlingNodes(
-//   context: LirContext,
-//   dag: DirectedAcyclicGraph<LirId>
-// ): DirectedAcyclicGraph<LirId> {
-//   const overallSource = dag.getSource()
-//   const overallSink = dag.getSink()
-
-//   const isIntermediateBundlingNode = (node: LadderLirNode): boolean => {
-//     const isOverallSource = vertex(node.getId()).isEqualTo(overallSource)
-//     const isOverallSink = vertex(node.getId()).isEqualTo(overallSink)
-//     return isBundlingFlowLirNode(node) && !isOverallSource && !isOverallSink
-//   }
-//   // TODO
-// }
-
 /**
  * Tracks what nodes the user has selected on the ladder graph,
  * and how the nodes that the user has selected on the ladder graph
