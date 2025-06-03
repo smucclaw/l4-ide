@@ -1,0 +1,52 @@
+root: ./
+structure:
+  readme: README.md
+  summary: SUMMARY.md
+  glossary: GLOSSARY.md
+  chapters:
+    - Introduction:
+        - Background: Background.md
+        - Principles: principles.md
+        - Scope: scope.md
+        - Who: who.md
+    - Language Fundamentals:
+        - Data Types: 10-data-types.md
+        - Boolean Logic: 10-boolean-logic.md
+        - Basic Syntax: 20-basic-syntax.md
+        - Functions: 25-functions.md
+        - Algebraic Types: 30-algebraic-types.md
+    - Advanced Concepts:
+        - Default Logic: default-logic.md
+        - Default Values: default-values.md
+        - Multitemporals: multitemporals.md
+        - Modifiers: modifiers.md
+    - Regulative Framework:
+        - Overview: regulative.md
+        - Deontics: regulative-deontics.md
+        - Examples: regulative-examples.md
+        - Shall Statements: regulative-shall.md
+    - Applications:
+        - Apps Overview: apps.md
+        - Future Features: future-features.md
+    - Reports & Proposals:
+        - 2024 Report: 2024-12-report.md
+        - JL4 Query Proposal: proposal-jl4-nl-query-mar-24-2025.md
+
+plugins:
+  - search
+  - codeblock-filename
+  - copy-code-button
+  - highlight
+  - theme-default
+  - tbfed-pagefooter
+  - page-toc-button
+  - page-treeview
+  - back-to-top-button
+  - expandable-chapters
+  - sectionx
+  - splitter
+  - toggle-chapters
+  - sharing
+  - edit-link
+  - github
+  - github-buttons
