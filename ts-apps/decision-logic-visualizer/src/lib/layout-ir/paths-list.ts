@@ -212,7 +212,7 @@ export class LadderNodeSelectionTracker {
     return this.#selected.has(node.getId())
   }
 
-  private updateProjections(
+  private updateDerivedState(
     context: LirContext,
     ladderGraph: LadderGraphLirNode
   ) {
@@ -254,29 +254,26 @@ export class LadderNodeSelectionTracker {
     ladderGraph.highlightSubgraphEdges(context, graphToHighlight)
   }
 
-  resetSelectedNodes(context: LirContext) {
-    const prevSelected = this.getSelectedForHighlightPaths(context)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  clearSelectedNodes(_context: LirContext) {
     this.#selected = new Set()
-    prevSelected.forEach((node) =>
-      this.lirRegistry.publish(context, node.getId())
-    )
   }
 
-  selectNodesAndUpdateProjections(
+  selectNodesAndUpdate(
     context: LirContext,
     nodes: Array<SelectableLadderLirNode>,
     ladderGraph: LadderGraphLirNode
   ) {
-    this.resetSelectedNodes(context)
+    this.clearSelectedNodes(context)
 
     this.#selected = new Set(nodes.map((node) => node.getId()))
     nodes.forEach((node) => this.lirRegistry.publish(context, node.getId()))
 
-    this.updateProjections(context, ladderGraph)
+    this.updateDerivedState(context, ladderGraph)
   }
 
-  /** Toggle whether a specific node is selected for highlighting (and update projections) */
-  toggleNodeSelectionAndUpdateProjections(
+  /** Toggle whether a specific node is selected for highlighting (and update derived state) */
+  toggleNodeSelectionAndUpdate(
     context: LirContext,
     node: SelectableLadderLirNode,
     ladderGraph: LadderGraphLirNode
@@ -288,7 +285,7 @@ export class LadderNodeSelectionTracker {
     }
     this.lirRegistry.publish(context, node.getId())
 
-    this.updateProjections(context, ladderGraph)
+    this.updateDerivedState(context, ladderGraph)
   }
 
   /** Given the selected nodes, figure out what lin paths through the ladder graph, if any, these correspond to */

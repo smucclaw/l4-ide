@@ -2,13 +2,11 @@
 <script lang="ts" module>
   import { type Snippet } from 'svelte'
   import type { LirContext } from '$lib/layout-ir/core'
-  import type { LadderNodeSelectionTracker } from '$lib/layout-ir/paths-list.js'
   import type { SelectableLadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   interface SelectableNodeContextMenuProps {
     context: LirContext
     node: SelectableLadderLirNode
-    nodeSelectionTracker: LadderNodeSelectionTracker
     children: Snippet
   }
 </script>
@@ -17,21 +15,16 @@
   import * as ContextMenu from '$lib/ui-primitives/context-menu/index.js'
   import { useLadderEnv } from '$lib/ladder-env'
 
-  let {
-    context,
-    node,
-    nodeSelectionTracker,
-    children,
-  }: SelectableNodeContextMenuProps = $props()
+  let { context, node, children }: SelectableNodeContextMenuProps = $props()
 
-  const ladderEnv = useLadderEnv()
-  const ladderGraph = ladderEnv.getTopFunDeclLirNode(context).getBody(context)
+  const ladderGraph = useLadderEnv()
+    .getTopFunDeclLirNode(context)
+    .getBody(context)
   const onSelect = () => {
-    node.toggleSelection(context, nodeSelectionTracker, ladderGraph)
+    ladderGraph.toggleNodeSelection(context, node)
   }
 </script>
 
-<!-- TODO: Node highlight styles not wroking yet -->
 <ContextMenu.Root>
   <ContextMenu.Trigger>
     {@render children()}
