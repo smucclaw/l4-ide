@@ -156,6 +156,7 @@ data Assume n =
 data Directive n =
     StrictEval Anno (Expr n)
   | LazyEval Anno (Expr n)
+  | LazyEvalTrace Anno (Expr n)
   | Check Anno (Expr n)
   | Contract Anno (Expr n) (Expr n) [Expr n]
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
@@ -348,8 +349,8 @@ appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
 decideBody :: Lens' (Decide n) (Expr n)
-decideBody = lens 
-             (\(MkDecide _ _ (MkAppForm{}) body)       -> body) 
+decideBody = lens
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body)
              (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
 
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
