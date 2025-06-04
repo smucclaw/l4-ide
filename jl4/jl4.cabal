@@ -37,6 +37,7 @@ executable jl4-cli
 
 test-suite jl4-test
   import: defaults
+  ghc-options: -threaded -rtsopts
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
   main-is: Main.hs

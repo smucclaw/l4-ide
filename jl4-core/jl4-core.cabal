@@ -70,6 +70,7 @@ library
     Paths_jl4_core
     L4.Annotation
     L4.Citations
+    L4.Desugar
     L4.Evaluate
     L4.Evaluate.Operators
     L4.Evaluate.Value

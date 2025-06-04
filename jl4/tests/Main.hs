@@ -65,10 +65,10 @@ main = do
 
 l4Golden :: Bool -> String -> String -> IO (Golden String)
 l4Golden isOk dir inputFile = do
-  (output_, _) <- capture (checkFile isOk inputFile)
+  (output, _) <- capture (checkFile isOk inputFile)
   pure
     Golden
-      { output = output_
+      { output
       , encodePretty = show
       , writeToFile = writeFile
       , readFromFile = readFile

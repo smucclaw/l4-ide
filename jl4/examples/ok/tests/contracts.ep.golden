@@ -15,8 +15,10 @@ aContract MEANS
     HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return WITHIN 10)
     LEST
       PARTY B
-      MUST payment fine PROVIDED fine = 10
+      MUST EXACTLY payment fine
       WITHIN 3
+  WHERE
+  fine MEANS 10
 
 #TRACE aContract AT 0 WITH
   PARTY 2
@@ -44,8 +46,14 @@ x MEANS
 GIVETH PROVISION Person Action
 y MEANS 
   PARTY B
-  MUST payment 2
+  MUST payment EXACTLY n
   WITHIN 5
+  WHERE
+  n MEANS 2
+
+foo MEANS 
+  CONSIDER 5 
+    WHEN EXACTLY 3 THEN 6
 
 #TRACE y AT 0 WITH
   PARTY 5

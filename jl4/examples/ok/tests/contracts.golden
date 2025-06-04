@@ -1,35 +1,35 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-contracts.l4:21:1-24:18:
+contracts.l4:23:1-26:18:
   PARTY B
 MUST return
 WITHIN 4
 HENCE FULFILLED
-contracts.l4:27:1-29:31:
+contracts.l4:29:1-31:31:
   FULFILLED
-contracts.l4:31:1-34:31:
+contracts.l4:33:1-36:31:
   FULFILLED
-contracts.l4:36:1-70:
+contracts.l4:38:1-70:
   FULFILLED
-contracts.l4:50:1-52:30:
+contracts.l4:58:1-60:30:
   FULFILLED
-contracts.l4:61:1-64:28:
+contracts.l4:69:1-72:28:
   FULFILLED
-contracts.l4:73:1-56:
+contracts.l4:81:1-56:
   FULFILLED
-contracts.l4:75:1-76:29:
+contracts.l4:83:1-84:29:
   FULFILLED
-contracts.l4:78:1-79:30:
+contracts.l4:86:1-87:30:
   PARTY B
-MUST payment 2
+MUST payment EXACTLY n
 WITHIN 5
 HENCE FULFILLED
-contracts.l4:81:1-83:31:
+contracts.l4:89:1-91:31:
   FULFILLED
-contracts.l4:85:1-87:31:
+contracts.l4:93:1-95:31:
   FULFILLED
-contracts.l4:94:1-96:30:
+contracts.l4:102:1-104:30:
   PROVISION BREACHED:
   party
     B
@@ -43,7 +43,7 @@ contracts.l4:94:1-96:30:
     MUST payment n PROVIDED n EQUALS 7
   before their deadline, which was at
     2
-contracts.l4:98:1-100:30:
+contracts.l4:106:1-108:30:
   PROVISION BREACHED:
   party
     S

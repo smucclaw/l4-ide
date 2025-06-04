@@ -177,6 +177,7 @@ nlgPattern = \ case
     PatCons ann
       <$> nlgPattern pat
       <*> nlgPattern pats
+  PatExpr ann expr -> pure $ PatExpr ann expr
   PatLit ann lit -> pure $ PatLit ann lit
 nlgLocalDecl :: LocalDecl Resolved -> Check (LocalDecl Resolved)
 nlgLocalDecl = \ case
