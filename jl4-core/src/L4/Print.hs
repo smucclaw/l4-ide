@@ -11,6 +11,12 @@ import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
 import L4.Utils.Ratio (prettyRatio)
+import L4.Evaluate.Operators
+import L4.Names
+import qualified Data.Map.Strict as Map
+import L4.Annotation (emptyAnno)
+import qualified L4.TypeCheck.Environment as TypeCheck
+import Control.Category ((>>>))
 
 prettyLayout :: LayoutPrinter a => a -> Text
 prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
@@ -29,6 +35,8 @@ class LayoutPrinter a where
   parensIfNeeded :: a -> Doc ann
   parensIfNeeded = printWithLayout
 
+type LayoutPrinterWithName name = (LayoutPrinter name, HasName name)
+
 instance LayoutPrinter Name where
   printWithLayout n = printWithLayout (rawName n)
 
@@ -41,7 +49,7 @@ instance LayoutPrinter RawName where
     QualifiedName qs t -> pretty t <+> parens ("qualified at section" <+> pretty (Text.intercalate "." $ NE.toList qs))
     PreDef t -> pretty $ quoteIfNeeded t
 
-instance LayoutPrinter a => LayoutPrinter (Type' a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Type' a) where
   printWithLayout = \ case
     Type _ -> "TYPE"
     TyApp _ n ps -> printWithLayout n <> case ps of
@@ -55,23 +63,23 @@ instance LayoutPrinter a => LayoutPrinter (Type' a) where
     InfVar _ raw uniq -> printWithLayout raw <> pretty uniq
 
 -- We currently have no syntax for actual names occurring here
-instance LayoutPrinter a => LayoutPrinter (OptionallyNamedType a) where
+instance LayoutPrinterWithName a => LayoutPrinter (OptionallyNamedType a) where
   printWithLayout = \ case
     MkOptionallyNamedType _ _ ty ->
       printWithLayout ty
 
-instance LayoutPrinter a => LayoutPrinter (OptionallyTypedName a) where
+instance LayoutPrinterWithName a => LayoutPrinter (OptionallyTypedName a) where
   printWithLayout = \ case
     MkOptionallyTypedName _ a ty ->
       printWithLayout a <> case ty of
         Nothing -> mempty
         Just ty' -> space <> "IS" <+> printWithLayout ty'
 
-instance LayoutPrinter a => LayoutPrinter (TypedName a) where
+instance LayoutPrinterWithName a => LayoutPrinter (TypedName a) where
   printWithLayout = \ case
     MkTypedName _ a ty -> printWithLayout a <+> "IS" <+> printWithLayout ty
 
-instance LayoutPrinter a => LayoutPrinter (TypeSig a) where
+instance LayoutPrinterWithName a => LayoutPrinter (TypeSig a) where
   printWithLayout = \ case
     MkTypeSig _ given mGiveth ->
       case given of
@@ -83,17 +91,17 @@ instance LayoutPrinter a => LayoutPrinter (TypeSig a) where
             Just giveth -> line <> printWithLayout giveth
             Nothing -> mempty
 
-instance LayoutPrinter a => LayoutPrinter (GivenSig a) where
+instance LayoutPrinterWithName a => LayoutPrinter (GivenSig a) where
   printWithLayout = \ case
     MkGivenSig _ ns -> case ns of
       [] -> mempty
       names@(_:_) -> "GIVEN" <+> align (vsep (fmap printWithLayout names))
 
-instance LayoutPrinter a => LayoutPrinter (GivethSig a) where
+instance LayoutPrinterWithName a => LayoutPrinter (GivethSig a) where
   printWithLayout = \ case
     MkGivethSig _ ty -> "GIVETH" <+> printWithLayout ty
 
-instance LayoutPrinter a => LayoutPrinter (Declare a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Declare a) where
   printWithLayout = \ case
     MkDeclare _ tySig appForm tyDecl  ->
       fillCat
@@ -105,7 +113,7 @@ instance LayoutPrinter a => LayoutPrinter (Declare a) where
         , indent 2 (printWithLayout tyDecl)
         ]
 
-instance LayoutPrinter a => LayoutPrinter (AppForm a) where
+instance LayoutPrinterWithName a => LayoutPrinter (AppForm a) where
   printWithLayout = \ case
     MkAppForm _ n ns maka ->
       (printWithLayout n <> case ns of
@@ -116,11 +124,11 @@ instance LayoutPrinter a => LayoutPrinter (AppForm a) where
         Nothing  -> mempty
         Just aka -> space <> printWithLayout aka
 
-instance LayoutPrinter a => LayoutPrinter (Aka a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Aka a) where
   printWithLayout = \ case
     MkAka _ ns -> "AKA" <+> vsep (punctuate comma $ fmap printWithLayout ns)
 
-instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
+instance LayoutPrinterWithName a => LayoutPrinter (TypeDecl a) where
   printWithLayout = \ case
     RecordDecl _ _ fields  ->
       vcat
@@ -138,14 +146,14 @@ instance LayoutPrinter a => LayoutPrinter (TypeDecl a) where
         , indent 2 (printWithLayout t)
         ]
 
-instance LayoutPrinter a => LayoutPrinter (ConDecl a) where
+instance LayoutPrinterWithName a => LayoutPrinter (ConDecl a) where
   printWithLayout = \ case
     MkConDecl _ n fields  ->
       printWithLayout n <> case fields of
         [] -> mempty
         _:_ -> space <> "HAS" <+> vsep (punctuate comma $ fmap printWithLayout fields)
 
-instance LayoutPrinter a => LayoutPrinter (Assume a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Assume a) where
   printWithLayout = \ case
     MkAssume _ tySig appForm ty ->
       fillCat
@@ -155,7 +163,7 @@ instance LayoutPrinter a => LayoutPrinter (Assume a) where
             Just ty' -> space <> "IS" <+> printWithLayout ty'
         ]
 
-instance LayoutPrinter a => LayoutPrinter (Decide a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where
   printWithLayout = \ case
     MkDecide _ tySig appForm expr ->
       vcat
@@ -164,7 +172,7 @@ instance LayoutPrinter a => LayoutPrinter (Decide a) where
         , indent 2 (printWithLayout expr)
         ]
 
-instance LayoutPrinter a => LayoutPrinter (Directive a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
   printWithLayout = \ case
     StrictEval _ e ->
       "#SEVAL" <+> printWithLayout e
@@ -176,11 +184,11 @@ instance LayoutPrinter a => LayoutPrinter (Directive a) where
       "#TRACE" <+> printWithLayout e <+> printWithLayout t :
       map printWithLayout stmts
 
-instance LayoutPrinter a => LayoutPrinter (Import a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Import a) where
   printWithLayout = \ case
     MkImport _ n _mr -> "IMPORT" <+> printWithLayout n
 
-instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
+instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, Section a) where
   printWithLayout = \ case
     (i, MkSection _ Nothing _ ds)    ->
       vcat (map (printWithLayout . (i + 1 ,)) ds)
@@ -195,14 +203,14 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, Section a) where
           [] -> mempty
           _ -> map (printWithLayout . (i + 1 ,)) ds
 
-instance LayoutPrinter a => LayoutPrinter (Module  a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Module  a) where
   printWithLayout = \ case
     MkModule _ _ sect -> printWithLayout (1, sect)
 
-instance LayoutPrinter a => LayoutPrinter (TopDecl a) where
+instance LayoutPrinterWithName a => LayoutPrinter (TopDecl a) where
   printWithLayout t = printWithLayout (1, t)
 
-instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
+instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
   printWithLayout = \ case
     (_, Declare   _ t) -> printWithLayout t
     (_, Decide    _ t) -> printWithLayout t
@@ -211,9 +219,9 @@ instance (LayoutPrinter a, n ~ Int) => LayoutPrinter (n, TopDecl a) where
     (_, Import    _ t) -> printWithLayout t
     (i, Section   _ t) -> printWithLayout (i, t)
 
-instance LayoutPrinter a => LayoutPrinter (Expr a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
-  printWithLayout = \ case
+  printWithLayout = carameliseExpr >>> \ case
     e@And{} ->
       let
         conjunction = scanAnd e
@@ -322,18 +330,18 @@ prettyObligation p a t f l =
 mprint :: (Foldable t, LayoutPrinter a) => Doc ann -> t a -> [Doc ann]
 mprint kw = foldMap \x -> [kw <+> printWithLayout x]
 
-instance LayoutPrinter n => LayoutPrinter (RAction n) where
+instance LayoutPrinterWithName n => LayoutPrinter (RAction n) where
   printWithLayout MkAction {action, provided} = hsep $
     [ "MUST", printWithLayout action
     ]
     <> mprint "PROVIDED" provided
 
-instance LayoutPrinter a => LayoutPrinter (NamedExpr a) where
+instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
     MkNamedExpr _ name e ->
       printWithLayout name <+> "IS" <+> printWithLayout e
 
-instance LayoutPrinter a => LayoutPrinter (LocalDecl a) where
+instance LayoutPrinterWithName a => LayoutPrinter (LocalDecl a) where
   printWithLayout = \ case
     LocalDecide _ t -> printWithLayout t
     LocalAssume _ t -> printWithLayout t
@@ -343,12 +351,12 @@ instance LayoutPrinter Lit where
     NumericLit _ t -> pretty (prettyRatio t)
     StringLit _ t -> surround (pretty $ escapeStringLiteral t) "\"" "\""
 
-instance LayoutPrinter a => LayoutPrinter (Branch a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Branch a) where
   printWithLayout = \ case
     When _ pat e -> "WHEN" <+> printWithLayout pat <+> "THEN" <+> printWithLayout e
     Otherwise _ e -> "OTHERWISE" <+> printWithLayout e
 
-instance LayoutPrinter a => LayoutPrinter (Pattern a) where
+instance LayoutPrinterWithName a => LayoutPrinter (Pattern a) where
   printWithLayout = \ case
     PatVar _ n -> printWithLayout n
     PatApp _ n pats -> printWithLayout n <> hang 2 case pats of
@@ -368,7 +376,7 @@ instance LayoutPrinter Nlg where
       prettyNlgs (x@MkNlgRef{}:xs) = printWithLayout x <+> prettyNlgs xs
       prettyNlgs (x:xs) = printWithLayout x <> prettyNlgs xs
 
-instance LayoutPrinter a => LayoutPrinter (NlgFragment a) where
+instance LayoutPrinterWithName a => LayoutPrinter (NlgFragment a) where
   printWithLayout = \ case
     MkNlgText _ t -> pretty t
     MkNlgRef  _ n -> "%" <> printWithLayout n <> "%"
@@ -381,6 +389,7 @@ instance LayoutPrinter Eager.Value where
       "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
     Eager.ValClosure{}              -> "<function>"
     Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
+    Eager.ValBinaryBuiltinFun{}     -> "<function>"
     Eager.ValAssumed r              -> printWithLayout r
     Eager.ValUnappliedConstructor r -> printWithLayout r
     Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -408,6 +417,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
+    Lazy.ValBinaryBuiltinFun{}     -> "<function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -436,6 +446,20 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValAssumed{}              -> printWithLayout v
     Lazy.ValConstructor r []       -> printWithLayout r
     _ -> surround (printWithLayout v) "(" ")"
+
+instance LayoutPrinter BinOp where
+  printWithLayout = \ case
+    BinOpPlus -> "PLUS"
+    BinOpMinus -> "MINUS"
+    BinOpTimes -> "TIMES"
+    BinOpDividedBy -> "DIVIDED"
+    BinOpModulo -> "MODULO"
+    BinOpCons -> "FOLLOWED BY"
+    BinOpEquals -> "EQUALS"
+    BinOpLeq -> "AT MOST"
+    BinOpGeq -> "AT LEAST"
+    BinOpLt -> "LESS THAN"
+    BinOpGt -> "GREATER THAN"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
@@ -536,3 +560,66 @@ escapeStringLiteral = Text.concatMap (\ case
   '\\' -> "\\\\"
   c -> Text.singleton c
   )
+
+-- ----------------------------------------------------------------------------
+-- Caramelize
+-- ----------------------------------------------------------------------------
+
+-- | We desugar expressions during typechecking, for example, @2 PLUS 3@ is
+-- turned into the function @__PLUS__ 2 3@. This is less readable during natural
+-- language generation, so we undo some of our desugaring and add the syntactic sugar
+-- back.
+--
+-- We call this process "caramelise". Primarily, because fendor likes caramel,
+-- and it feels like a good name for the opposite of "desugaring".
+carameliseExpr :: HasName n => Expr n -> Expr n
+carameliseExpr = \case
+  App _ n es
+    | Just caramelise <- isBuiltinBinary (rawName $ getName n)
+    , [e1, e2] <- es ->
+        caramelise e1 e2
+    | Just caramelise <- isBuiltinUnary (rawName $ getName n)
+    , [e1] <- es ->
+        caramelise e1
+  expr -> expr
+
+-- ----------------------------------------------------------------------------
+-- Builtins
+-- ----------------------------------------------------------------------------
+
+-- | Operations such as Plus and Minus are desugared to prefix function
+-- notation.
+-- However, we don't want to show the prefix function name
+-- but rather the infix version. So, we translate the prefix function
+-- notation back to the infix one. In a way, we are undoing the
+-- desugaring again.
+isBuiltinBinary :: RawName -> Maybe (Expr n -> Expr n -> Expr n)
+isBuiltinBinary r =
+  Map.lookup (rawNameToText r) builtinBinFunctions
+
+isBuiltinUnary :: RawName -> Maybe (Expr n -> Expr n)
+isBuiltinUnary r =
+  Map.lookup (rawNameToText r) builtinUnaryFunctions
+
+builtinBinFunctions :: Map Text (Expr n -> Expr n -> Expr n)
+builtinBinFunctions = Map.fromList
+  [ (rawNameToText $ rawName TypeCheck.plusName, Plus emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.minusName, Minus emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.timesName, Times emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.divideName, DividedBy emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.moduloName, Modulo emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.ltName, Lt emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.leqName, Leq emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.gtName, Gt emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.geqName, Geq emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.andName, And emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.orName, Or emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.impliesName, Implies emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.consName, Cons emptyAnno)
+  , (rawNameToText $ rawName TypeCheck.equalsName, Equals emptyAnno)
+  ]
+
+builtinUnaryFunctions :: Map Text (Expr n -> Expr n)
+builtinUnaryFunctions = Map.fromList
+  [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
+  ]

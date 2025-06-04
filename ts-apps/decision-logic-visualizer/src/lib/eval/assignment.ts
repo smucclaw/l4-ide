@@ -1,6 +1,5 @@
 import type { Unique } from '@repo/viz-expr'
 import type { UBoolVal } from './type.js'
-import type { LirId } from '../layout-ir/core.js'
 
 /** A mapping from Unique to UBoolVal */
 export class Assignment {
@@ -45,37 +44,5 @@ export class Assignment {
 
   clone() {
     return new Assignment(this.#subst.slice())
-  }
-}
-
-/**
- * Coreferents: mapping from Unique to Set<LirId>
- */
-export class Corefs {
-  // A Unique is a non-negative integer
-  #coreferents: Array<Set<LirId>>
-
-  static fromEntries(entries: Array<[Unique, LirId]>): Corefs {
-    const initialCoreferents: Array<Set<LirId>> = []
-    entries.forEach(([unique, lirId]) => {
-      if (!initialCoreferents[unique]) {
-        initialCoreferents[unique] = new Set([lirId])
-      } else {
-        initialCoreferents[unique].add(lirId)
-      }
-    })
-    return new Corefs(initialCoreferents)
-  }
-
-  private constructor(initialCoreferents: Array<Set<LirId>>) {
-    this.#coreferents = initialCoreferents
-  }
-
-  getCoreferents(unique: Unique) {
-    return this.#coreferents[unique] ?? new Set<LirId>()
-  }
-
-  dispose() {
-    this.#coreferents = []
   }
 }

@@ -21,8 +21,10 @@ import Control.Exception (throw, Exception)
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
 type Substitution = Map Int (Type' Resolved)
-type InfoMap      = IV.IntervalMap SrcPos Info
-type NlgMap       = IV.IntervalMap SrcPos Nlg
+type RangeMap     = IV.IntervalMap SrcPos
+type InfoMap      = RangeMap Info
+type ScopeMap     = RangeMap (Environment, EntityInfo)
+type NlgMap       = RangeMap Nlg
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -41,6 +43,7 @@ data CheckState =
     { substitution :: !Substitution
     , supply       :: !Int
     , infoMap      :: !InfoMap
+    , scopeMap     :: !ScopeMap
     , nlgMap       :: !NlgMap
     }
   deriving stock (Generic)
@@ -71,6 +74,19 @@ data CheckError =
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
+  | DesugarAnnoRewritingError (Expr Name) HoleInfo
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass NFData
+
+-- | When rewriting the 'Anno' of a syntax node, we encountered an internal error.
+-- We expected a certain number of 'AnnoHole's, e.g., in a binary operation we expect 2 'AnnoHole's,
+-- but we got a different number.
+--
+-- This is an internal error that shouldn't occur.
+data HoleInfo = HoleInfo
+  { expected :: !Int
+  , got :: !Int
+  }
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -260,6 +276,7 @@ data CheckResult =
     , entityInfo   :: !EntityInfo
     , infoMap      :: !InfoMap
     , nlgMap       :: !NlgMap
+    , scopeMap     :: !ScopeMap
     }
 
 -- -------------------
@@ -369,7 +386,11 @@ ambiguousType n xs = do
 
 
 addInfoForSrcRange :: SrcRange -> Info -> Check ()
-addInfoForSrcRange srcRange i =
+addInfoForSrcRange srcRange i = do
+  env <- asks $ view #environment
+  ei <- asks $ view #entityInfo
+  modifying' #scopeMap $
+    IV.insert (IV.srcRangeToInterval srcRange) (env, ei)
   modifying' #infoMap $
     IV.insert (IV.srcRangeToInterval srcRange) i
 

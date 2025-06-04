@@ -79,6 +79,7 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Annotation
+import L4.Names
 import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM, SrcRange (..), zeroSrcPos)
 import L4.Print (prettyLayout, quotedName,)
 import L4.Syntax
@@ -95,6 +96,8 @@ import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
+import Data.List.Split (splitWhen)
+import Optics ((%~))
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -103,6 +106,7 @@ mkInitialCheckState substitution =
     , supply       = 0
     , infoMap      = IV.empty
     , nlgMap       = IV.empty
+    , scopeMap     = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -158,6 +162,7 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , entityInfo = env.entityInfo
               , infoMap = s'.infoMap
               , nlgMap = s'.nlgMap
+              , scopeMap = s'.scopeMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
@@ -222,20 +227,16 @@ lookupAssumeCheckedByAnno = lookupFromCheckEnv (.assumeDeclarations)
 
 -- | Combines environment and entityInfo into one single list
 --
--- This is currently used to generate top-level completions.
+-- This is currently used to generate completions.
 --
-combineEnvironmentEntityInfo :: Environment -> EntityInfo -> [(Name, CheckEntity)]
+combineEnvironmentEntityInfo :: Environment -> EntityInfo -> Map RawName [CheckEntity]
 combineEnvironmentEntityInfo env ei =
-    foldMap (uncurry lookupUniques) $ Map.toList env
-    where
-      lookupUniques rn = mapMaybe \unique -> do
-        (n, ce) <- ei Map.!? unique
-        pure (replaceRawName rn n, ce)
-
-      -- NOTE: the reason why we do this is because the CheckEntity doesn't contain the original name
-      -- e.g. if you have `foo AKA bar`, the CheckEntity will always contain `bar`. However, the environment
-      -- still has the correct name.
-      replaceRawName rn (MkName a _) = MkName a rn
+  Map.unionsWith catUnq $ foldMap (uncurry lookupUniques) $ Map.toList env
+  where
+  lookupUniques rn = mapMaybe \unique -> do
+    (_, ce) <- ei Map.!? unique
+    pure $ Map.singleton rn [ce]
+  catUnq a b = nub $ a <> b -- if there are multiple of the same checkEntity, throw them out
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
@@ -786,27 +787,6 @@ resolveType n = do
       pure (Ref n' u o, kind)
     proc _                               = Nothing
 
-class HasName a where
-  getName :: a -> Name
-
-instance HasName Name where
-  getName n = n
-
-instance HasName Resolved where
-  getName = getActual
-
-instance HasName a => HasName (AppForm a) where
-  getName (MkAppForm _ n _ _) = getName n
-
-instance HasName a => HasName (ConDecl a) where
-  getName (MkConDecl _ n _) = getName n
-
-instance HasName a => HasName (TypedName a) where
-  getName (MkTypedName _ann n _t) = getName n
-
-instance HasName a => HasName (OptionallyTypedName a) where
-  getName (MkOptionallyTypedName _ann n _mt) = getName n
-
 kindOfAppForm :: AppForm n -> Kind
 kindOfAppForm (MkAppForm _ann _n args _maka) =
   length args
@@ -966,20 +946,15 @@ inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
   re' <- setAnnResolvedType te Nothing re
   pure (re', te)
 
-
-ambiguousOperatorError :: Text ->  Expr Name -> Expr Name -> (Expr Resolved -> Expr Resolved -> Expr Resolved) -> Check (Expr Resolved, Type' Resolved)
-ambiguousOperatorError opName e1 e2 mkOp = do
-  addError $ AmbiguousOperatorError opName
-  (e1', _) <- inferExpr e1
-  (e2', _) <- inferExpr e2
-  t <- fresh (PreDef opName)
-  pure (mkOp e1' e2', t)
-
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
-    And ann e1 e2 -> checkBinOp boolean boolean boolean "AND"  And ann e1 e2
-    Or ann e1 e2 -> checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
+    And ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName andName) g ann e1 e2
+      inferExpr' dsFun
+    Or ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName orName) g ann e1 e2
+      inferExpr' dsFun
     RAnd ann e1 e2 -> do
       partyT <- fresh (NormalName "party")
       actT <- fresh (NormalName "action")
@@ -990,58 +965,45 @@ inferExpr' g =
       actT <- fresh (NormalName "action")
       let contractT = contract partyT actT
       checkBinOp contractT contractT contractT "OR" ROr ann  e1 e2
-    Implies ann e1 e2 ->
-      checkBinOp boolean boolean boolean "IMPLIES" Implies ann e1 e2
+    Implies ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName impliesName) g ann e1 e2
+      inferExpr' dsFun
     Equals ann e1 e2 -> do
-      (re1, rt1) <- inferExpr e1
-      re2 <- checkExpr (ExpectBinOpArgContext "EQUALS" 2) e2 rt1 -- TODO: it would be better to have a designated expectation context for EQUALS
-      pure (Equals ann re1 re2, boolean)
-    Leq ann e1 e2 -> -- TODO: consider making all the comparison operators polymorphic as well
-      choose
-        [ checkBinOp boolean boolean boolean "AT MOST" Leq ann e1 e2
-        , checkBinOp number  number  boolean "AT MOST" Leq ann e1 e2
-        , checkBinOp string  string  boolean "AT MOST" Leq ann e1 e2
-        , ambiguousOperatorError "AT MOST" e1 e2 (Leq ann)
-        ]
-    Geq ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "AT LEAST" Geq ann e1 e2
-        , checkBinOp number  number  boolean "AT LEAST" Geq ann e1 e2
-        , checkBinOp string  string  boolean "AT LEAST" Geq ann e1 e2
-        , ambiguousOperatorError "AT LEAST" e1 e2 (Geq ann)
-        ]
-    Lt ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "LESS THAN" Lt ann e1 e2
-        , checkBinOp number  number  boolean "LESS THAN" Lt ann e1 e2
-        , checkBinOp string  string  boolean "LESS THAN" Lt ann e1 e2
-        , ambiguousOperatorError "LESS THAN" e1 e2 (Lt ann)
-        ]
-    Gt ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "GREATER THAN" Gt ann e1 e2
-        , checkBinOp number  number  boolean "GREATER THAN" Gt ann e1 e2
-        , checkBinOp string  string  boolean "GREATER THAN" Gt ann e1 e2
-        , ambiguousOperatorError "GREATER THAN" e1 e2 (Gt ann)
-        ]
+      dsFun <- desugarBinOpToFunction (rawName equalsName) g ann e1 e2
+      inferExpr' dsFun
+    Leq ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName leqName) g ann e1 e2
+      inferExpr' dsFun
+    Geq ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName geqName) g ann e1 e2
+      inferExpr' dsFun
+    Lt ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName ltName) g ann e1 e2
+      inferExpr' dsFun
+    Gt ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName gtName) g ann e1 e2
+      inferExpr' dsFun
     Not ann e -> do
-      e' <- checkExpr ExpectNotArgumentContext e boolean
-      pure (Not ann e', boolean)
-    Plus ann e1 e2 ->
-      checkBinOp number number number "PLUS" Plus ann e1 e2
-    Minus ann e1 e2 ->
-      checkBinOp number number number "MINUS" Minus ann e1 e2
-    Times ann e1 e2 ->
-      checkBinOp number number number "TIMES" Times ann e1 e2
-    DividedBy ann e1 e2 ->
-      checkBinOp number number number "DIVIDED BY" DividedBy ann e1 e2
-    Modulo ann e1 e2 ->
-      checkBinOp number number number "MODULO" Modulo ann e1 e2
+      dsFun <- desugarUnaryOpToFunction (rawName notName) g ann e
+      inferExpr' dsFun
+    Plus ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName plusName) g ann e1 e2
+      inferExpr' dsFun
+    Minus ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName minusName) g ann e1 e2
+      inferExpr' dsFun
+    Times ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName timesName) g ann e1 e2
+      inferExpr' dsFun
+    DividedBy ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName divideName) g ann e1 e2
+      inferExpr' dsFun
+    Modulo ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName moduloName) g ann e1 e2
+      inferExpr' dsFun
     Cons ann e1 e2 -> do
-      (re1, rt1) <- inferExpr e1
-      let listType = list rt1
-      re2 <- checkExpr ExpectConsArgument2Context e2 listType
-      pure (Cons ann re1 re2, listType)
+      dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
+      inferExpr' dsFun
     Proj ann e l -> do
       -- Handling this similar to App.
       --
@@ -1676,6 +1638,128 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
       typesig
 
 -- ----------------------------------------------------------------------------
+-- Desugaring Utilities
+-- ----------------------------------------------------------------------------
+
+desugarBinOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Expr Name -> Check (Expr Name)
+desugarBinOpToFunction name g ann e1 e2 = do
+  args <- rewriteBinOpAnno g e1 e2
+  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
+  where
+  annoNoFunName a as =
+    fixAnnoSrcRange
+      Anno
+        { extra = a.extra
+        , range = a.range
+        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
+        }
+
+desugarUnaryOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Check (Expr Name)
+desugarUnaryOpToFunction name g ann e  = do
+  args <- rewriteUnaryOpAnno g e
+  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
+  where
+  annoNoFunName a as =
+    fixAnnoSrcRange
+      Anno
+        { extra = a.extra
+        , range = a.range
+        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
+        }
+
+-- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
+-- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.
+--
+-- Let's assume an 'Expr' for the code:
+--
+-- @
+--   1 PLUS 2
+-- @
+--
+-- We want to desugar this to use a prefix function:
+--
+-- @
+--   \_\_PLUS\_\_ 1 2
+-- @
+--
+-- To make exactprinting still faithful to the original sources, we need
+-- to be very careful that it is printed the same way. First, let's look at the
+-- 'Anno' for the @1 PLUS 2@ expression:
+-- (a @_@ marks an 'AnnoHole'):
+--
+-- @
+--   _ PLUS _
+-- @
+--
+-- The 'Anno' of a function looks like '_ [OF] _', so two holes, one for the name of the function
+-- and one for *all* arguments of the function. The first hole is easy to manage, just make
+-- sure the 'Name' of the function has an 'emptyAnno', then it is basically skipped over.
+-- For the second hole to accurately reproduce the same concrete syntax nodes, we need to be more
+-- careful.
+--
+-- We need to massage now the concrete syntax nodes of '_ PLUS _' into the arguments
+-- of the prefix function notation.
+-- For each 'AnnoHole' in the original 'Anno', we get all the 'AnnoCsn' that come
+-- afterwards and attach them to the 'Anno' of the argument.
+-- Note, for the first element, we need to do the same thing for leading 'AnnoCsn' elements.
+-- The finalised 'Anno' of each argument should then look like:
+--
+-- @
+--   [[_, " PLUS "], [_]]
+-- @
+--
+-- where the inner holes are then filled by the underlying @'Expr' 'Name'@.
+--
+-- This works also nicely for parenthesis, the expression @(1 PLUS 2)@
+-- is then translated to:
+--
+-- @
+--   [["(", _, " PLUS "], [_, ")"]]
+-- @
+rewriteBinOpAnno :: Expr Name -> Expr Name -> Expr Name -> Check [Expr Name]
+rewriteBinOpAnno expr e1 e2 =
+    case csnSlices of
+    [beforeFirst, beforeSecond, after] ->
+      pure
+        [ e1 & annoOf %~ surroundWithCsn beforeFirst beforeSecond
+        , e2 & annoOf %~ surroundWithCsn [] after
+        ]
+    _slices -> do
+      addError $ DesugarAnnoRewritingError expr (HoleInfo 2 numberOfAnnoHoles)
+      pure []
+ where
+  annoPieces = (getAnno expr).payload
+  csnSlices = splitWhen (isJust . preview #_AnnoHole) annoPieces
+  numberOfAnnoHoles = length $ filter (isJust . preview #_AnnoHole) annoPieces
+
+-- | Just like 'rewriteBinOpAnno', but special case for unary function
+rewriteUnaryOpAnno :: Expr Name -> Expr Name -> Check [Expr Name]
+rewriteUnaryOpAnno expr e =
+    case csnSlices of
+    [before, after] ->
+      pure
+        [ e & annoOf %~ surroundWithCsn before after
+        ]
+    _slices -> do
+      addError $ DesugarAnnoRewritingError expr (HoleInfo 2 numberOfAnnoHoles)
+      pure []
+ where
+  annoPieces = (getAnno expr).payload
+  csnSlices = splitWhen (isJust . preview #_AnnoHole) annoPieces
+  numberOfAnnoHoles = length $ filter (isJust . preview #_AnnoHole) annoPieces
+
+-- | Internal function that takes two lists of concrete syntax nodes and
+-- embeds them into the given 'Anno'.
+surroundWithCsn :: [AnnoElement] -> [AnnoElement] -> Anno -> Anno
+surroundWithCsn before after a =
+  fixAnnoSrcRange
+    Anno
+      { extra = a.extra
+      , range = a.range
+      , payload = before <> a.payload <> after
+      }
+
+-- ----------------------------------------------------------------------------
 -- Typecheck Utils
 -- ----------------------------------------------------------------------------
 
@@ -1833,6 +1917,16 @@ prettyCheckError (MissingEntityInfo r)                     =
   , "  " <> prettyLayout r
   , ""
   , "This is an error in this system and should be reported as a bug."
+  ]
+prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
+  [ "Error while desugaring:"
+  , "While trying to desugar the expression"
+  , ""
+  , "  " <> prettyLayout context
+  , ""
+  , "We ran into the error:"
+  , "The source annotation are not matching the expected number of arguments."
+  , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
   ]
 
 -- | Forms a plural when needed.

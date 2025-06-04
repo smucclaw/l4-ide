@@ -9,4 +9,9 @@ export const UnknownValCSSClass = 'bg-white' as const
 export type NodeStyleModifierCSSClass = typeof FadedNodeCSSClass
 export const FadedNodeCSSClass = 'nonviable-ladder-element' as const
 
-export type LadderNodeCSSClass = UBoolValCSSClass | NodeStyleModifierCSSClass
+export const HighlightedNodeCSSClass = 'highlighted-ladder-node' as const
+
+export type LadderNodeCSSClass =
+  | UBoolValCSSClass
+  | typeof HighlightedNodeCSSClass
+  | NodeStyleModifierCSSClass

@@ -22,7 +22,7 @@ import {
 import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
-import { vertex, overlay } from '../algebraic-graphs/dag.js'
+import { vertex, overlays } from '../algebraic-graphs/dag.js'
 
 import { match } from 'ts-pattern'
 
@@ -63,23 +63,23 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
       // 1. Get structure of the graph
       const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
-
-      const { graph: middle, vizExprToLirGraph } = transform(
-        nodeInfo,
-        new Map(),
-        expr
-      )
-
-      const dag = overallSource
-        .connect(middle.getSource())
-        .overlay(middle)
-        .overlay(middle.getSink().connect(overallSink))
+      const {
+        graph: middle,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph,
+      } = transform(nodeInfo, new Map(), expr)
+      const dag = sandwichWithSourceAndSink(overallSource, overallSink, middle)
       vizExprToLirGraph.set(expr.id, dag)
+
+      const finalNoIntermediateBundlingNodeGraph = overallSource
+        .connect(noIntermediateBundlingNodeGraph)
+        .connect(overallSink)
 
       const ladderGraph = await LadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,
+        finalNoIntermediateBundlingNodeGraph,
         expr,
         env
       )
@@ -98,6 +98,7 @@ export interface ToLirResult {
   graph: DirectedAcyclicGraph<LirId>
   /** TODO: Would be better to use a branded type over the underlying number for IRId, instead of the IRId wrapper */
   vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>
+  noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>
 }
 
 /** Internal helper */
@@ -134,41 +135,67 @@ function transform(
       const uboolvar = new UBoolVarLirNode(nodeInfo, originalVar)
       const graph = vertex(uboolvar.getId())
       const newEnv = new Map(env).set(originalVar.id, graph)
-      return { graph, vizExprToLirGraph: newEnv }
+      return {
+        graph,
+        vizExprToLirGraph: newEnv,
+        noIntermediateBundlingNodeGraph: graph,
+      }
     })
     .with({ $type: 'Not' }, (neg) => {
-      const { graph: negand, vizExprToLirGraph: negandEnv } = transform(
-        nodeInfo,
-        env,
-        neg.negand
-      )
+      const {
+        graph: negand,
+        vizExprToLirGraph: negandEnv,
+        noIntermediateBundlingNodeGraph: negandNoIntermediateBundlingNodeGraph,
+      } = transform(nodeInfo, env, neg.negand)
 
       // Make the NOT subgraph
       const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
 
-      const notGraph = notStart
-        .connect(negand.getSource())
-        .overlay(negand)
-        .overlay(negand.getSink().connect(notEnd))
+      const notGraph = sandwichWithSourceAndSink(notStart, notEnd, negand)
+      const noIntermediateBundlingNodeGraph = sandwichWithSourceAndSink(
+        notStart,
+        notEnd,
+        negandNoIntermediateBundlingNodeGraph
+      )
 
       // Combine the envs
       const combinedEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
 
-      return { graph: notGraph, vizExprToLirGraph: combinedEnv }
+      return {
+        graph: notGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'And' }, (andExpr) => {
       const childResults = andExpr.args.map((arg) =>
         transform(nodeInfo, env, arg)
       )
       const childGraphs = childResults.map((result) => result.graph)
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
 
       // Make the AND subgraph
-      const combinedGraph = childGraphs.reduceRight((acc, left) => {
-        const accSource = acc.getSource()
+      const makeAndGraph = (
+        left: DirectedAcyclicGraph<LirId>,
+        right: DirectedAcyclicGraph<LirId>
+      ) => {
+        const rightSource = right.getSource()
         const leftSink = left.getSink()
-        return leftSink.connect(accSource).overlay(left).overlay(acc)
-      })
+        return leftSink.connect(rightSource).overlay(left).overlay(right)
+      }
+      const makeAndForNoIntermediateBN = (
+        left: DirectedAcyclicGraph<LirId>,
+        right: DirectedAcyclicGraph<LirId>
+      ) => {
+        return left.connect(right)
+      }
+
+      const combinedGraph = childGraphs.reduce(makeAndGraph)
+      const noIntermediateBundlingNodeGraph =
+        childNoIntermediateBundlingNodeGraphs.reduce(makeAndForNoIntermediateBN)
 
       // Combine envs from all child transformations
       const allEnvs = [
@@ -177,11 +204,18 @@ function transform(
       ]
       const combinedEnv = combineEnvs(allEnvs).set(andExpr.id, combinedGraph)
 
-      return { graph: combinedGraph, vizExprToLirGraph: combinedEnv }
+      return {
+        graph: combinedGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'Or' }, (orExpr) => {
       const childResults = orExpr.args.map((n) => transform(nodeInfo, env, n))
       const childGraphs = childResults.map((result) => result.graph)
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
 
       // Make the OR subgraph
       const overallSource = vertex(
@@ -199,12 +233,12 @@ function transform(
         child.getSink().connect(overallSink)
       )
 
-      const orGraph = [
+      const orGraph = overlays([
         overallSource,
         ...leftEdges,
         ...childGraphs,
         ...rightEdges,
-      ].reduce(overlay)
+      ])
 
       // Combine envs from all child transformations
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
@@ -213,7 +247,16 @@ function transform(
         orGraph
       )
 
-      return { graph: orGraph, vizExprToLirGraph: combinedEnv }
+      // noIntermediateBundlingNodeGraph
+      const noIntermediateBundlingNodeGraph = overlays(
+        childNoIntermediateBundlingNodeGraphs
+      )
+
+      return {
+        graph: orGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'App' }, (app) => {
       console.log(
@@ -236,19 +279,31 @@ function transform(
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
       const combinedEnv = combineEnvs([env, ...childEnvs]).set(app.id, appGraph)
 
-      return { graph: appGraph, vizExprToLirGraph: combinedEnv }
+      return {
+        graph: appGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph: appGraph,
+      }
     })
     .with({ $type: 'TrueE' }, (trueExpr) => {
       const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
       const vizExprToLirGraph = new Map(env).set(trueExpr.id, graph)
-      return { graph, vizExprToLirGraph }
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
     })
     .with({ $type: 'FalseE' }, (falseExpr) => {
       const graph = vertex(
         new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
       )
       const vizExprToLirGraph = new Map(env).set(falseExpr.id, graph)
-      return { graph, vizExprToLirGraph }
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
     })
     .exhaustive()
 }
@@ -267,4 +322,15 @@ function combineEnvs(
       [] as [IRId, DirectedAcyclicGraph<LirId>][]
     )
   )
+}
+
+function sandwichWithSourceAndSink(
+  overallSource: Vertex<LirId>,
+  overallSink: Vertex<LirId>,
+  middle: DirectedAcyclicGraph<LirId>
+) {
+  return overallSource
+    .connect(middle.getSource())
+    .overlay(middle)
+    .overlay(middle.getSink().connect(overallSink))
 }
