@@ -1,17 +1,21 @@
 <script lang="ts">
   import {
     defaultSFHandlesInfo,
-    type NotDisplayerProps,
+    type LadderNodeDisplayerProps,
   } from '../svelteflow-types.js'
-  // import type { NodeProps, Node } from '@xyflow/svelte'
   import { Handle } from '@xyflow/svelte'
 
-  let { data }: NotDisplayerProps = $props()
+  let { data }: LadderNodeDisplayerProps = $props()
 
   const graphicSize = 100
 </script>
 
-<div class={['base-sf-node-styles m-0 p-0', ...data.classes]}>
+<div
+  class={[
+    'base-sf-node-styles m-0 p-0',
+    ...data.node.getAllClasses(data.context),
+  ]}
+>
   <Handle
     type="target"
     position={defaultSFHandlesInfo.targetPosition}

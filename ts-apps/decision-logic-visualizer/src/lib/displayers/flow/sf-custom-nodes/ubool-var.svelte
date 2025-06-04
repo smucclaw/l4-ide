@@ -2,39 +2,41 @@
 https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/components/nodes/DefaultNode.svelte
 -->
 <script lang="ts">
-  import { onDestroy } from 'svelte'
-  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
-  import type { UBoolVarDisplayerProps } from '../svelteflow-types.js'
+  import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
-  import WithHighlightableNodeContextMenu from '$lib/displayers/flow/helpers/with-highlightable-node-context-menu.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
+  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
+  import { onDestroy } from 'svelte'
 
-  let { data }: UBoolVarDisplayerProps = $props()
+  let { data }: LadderNodeDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
+  // Get LadderEnv, L4 Connection, nodeSelectionTracker
+  // (Note: useLadderEnv must be invoked on component initalization)
   const ladderEnv = useLadderEnv()
+  const ladderGraph = ladderEnv
+    .getTopFunDeclLirNode(data.context)
+    .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
+  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
-  // The value of the UBoolVar
-  let uboolvarValue = $state(
-    (data.context.get(data.originalLirId) as UBoolVarLirNode).getValue(
-      data.context
-    )
-  )
-  const onValueChange = (context: LirContext, id: LirId) => {
-    if (id === data.originalLirId) {
-      uboolvarValue = (
-        context.get(data.originalLirId) as UBoolVarLirNode
-      ).getValue(context)
+  const node = data.node as UBoolVarLirNode
+
+  // Selected state and updates thereof
+  let selected = $state(false)
+  const onSelectionChange = (context: LirContext, id: LirId) => {
+    if (id === node.getId() && nodeSelectionTracker) {
+      selected = node.isSelected(context, nodeSelectionTracker)
+      console.log('onSelectionChange', selected)
     }
   }
-  const unsub = ladderEnv.getLirRegistry().subscribe(onValueChange)
 
+  const unsub = ladderEnv.getLirRegistry().subscribe(onSelectionChange)
   onDestroy(() => unsub.unsubscribe())
 </script>
 
@@ -46,13 +48,10 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
           aria-label="Unfold to definition"
           class="px-0.5 text-[0.625rem] rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-150"
           onclick={() => {
-            console.log('inline lir id', data.originalLirId.toString())
+            console.log('inline lir id', node.getId())
 
-            const uniq = (
-              data.context.get(data.originalLirId) as UBoolVarLirNode
-            ).getUnique(data.context)
             l4Conn.inlineExprs(
-              [uniq],
+              [node.getUnique(data.context)],
               ladderEnv.getVersionedTextDocIdentifier()
             )
           }}
@@ -65,37 +64,48 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   </div>
 {/snippet}
 
+{#snippet coreUBoolVarUI()}
+  <!-- Yes, we need cursor-pointer here. -->
+  <button
+    class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
+    onclick={() => {
+      const newValue = cycle(node.getValue(data.context, ladderGraph))
+      ladderGraph.submitNewBinding(data.context, {
+        unique: node.getUnique(data.context),
+        value: newValue,
+      })
+    }}
+  >
+    {node.getLabel(data.context)}
+  </button>
+{/snippet}
+
 <!-- Need to use data.bleh to maintain reactivity -- can't, e.g., do `const bleh = data.bleh` 
 TODO: Look into why this is the case --- are they not re-mounting the ubool-var component? 
 -->
 
 <WithContentfulNodeStyles>
   <ValueIndicator
-    value={uboolvarValue}
-    additionalClasses={['ubool-var-node-border', ...data.classes]}
+    value={node.getValue(data.context, ladderGraph)}
+    additionalClasses={[
+      selected ? 'highlighted-ladder-node' : '',
+      'ubool-var-node-border',
+      ...node.getAllClasses(data.context),
+    ]}
   >
     <WithNormalHandles>
-      <WithHighlightableNodeContextMenu>
-        <!-- Yes, we need cursor-pointer here. -->
-        <button
-          class="label-wrapper-for-content-bearing-sf-node cursor-pointer"
-          onclick={() => {
-            const ladderGraph = ladderEnv
-              .getTopFunDeclLirNode(data.context)
-              .getBody(data.context)
-            const node = data.context.get(data.originalLirId) as UBoolVarLirNode
-
-            const newValue = cycle(node.getValue(data.context))
-            ladderGraph.submitNewBinding(data.context, {
-              unique: node.getUnique(data.context),
-              value: newValue,
-            })
-          }}
+      {#if nodeSelectionTracker}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          node={data.node as UBoolVarLirNode}
+          {nodeSelectionTracker}
         >
-          {data.name.label}
-        </button>
-      </WithHighlightableNodeContextMenu>
-      {#if data.canInline}
+          {@render coreUBoolVarUI()}
+        </WithSelectableNodeContextMenu>
+      {:else}
+        {@render coreUBoolVarUI()}
+      {/if}
+      {#if node.canInline(data.context)}
         {@render inlineUI()}
       {/if}
     </WithNormalHandles>
