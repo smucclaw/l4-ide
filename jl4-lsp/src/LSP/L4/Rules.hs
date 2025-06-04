@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module LSP.L4.Rules where
 
@@ -22,7 +23,6 @@ import L4.TypeCheck (CheckErrorWithContext (..), CheckResult (..), Substitution,
 import qualified L4.TypeCheck as TypeCheck
 
 import Control.Applicative
-import Control.Exception (assert)
 import Control.Monad.Trans.Maybe
 import Data.Hashable (Hashable)
 import Data.Monoid (Ap (..))
@@ -52,6 +52,7 @@ import qualified Data.List as List
 import System.Directory
 import qualified Paths_jl4_core
 import qualified L4.Utils.IntervalMap as IV
+import UnliftIO
 
 type instance RuleResult GetLexTokens = ([PosToken], Text)
 data GetLexTokens = GetLexTokens
@@ -126,7 +127,20 @@ data TypeCheckResult = TypeCheckResult
   , dependencies :: [TypeCheckResult]
   }
   deriving stock (Generic)
-  deriving anyclass (NFData)
+
+-- | instance that doesn't force the intervalmaps because they're very large and their values are sometimes expensive
+instance NFData TypeCheckResult where
+  rnf TypeCheckResult {..} =
+    rnf module'
+    `seq` rnf substitution
+    `seq` infoMap
+    `seq` nlgMap
+    `seq` scopeMap
+    `seq` rnf success
+    `seq` rnf environment
+    `seq` rnf entityInfo
+    `seq` rnf infos
+    `seq` rnf dependencies
 
 type instance RuleResult Evaluate = [Evaluate.EvalDirectiveResult]
 data Evaluate = Evaluate
