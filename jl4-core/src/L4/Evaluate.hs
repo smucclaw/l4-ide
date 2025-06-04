@@ -380,6 +380,7 @@ evalDirective (StrictEval _ann expr) = do
   v <- evalExpr expr
   addEvalDirectiveResult expr v
 evalDirective (LazyEval _ann _expr) = pure ()
+evalDirective (LazyEvalTrace _ann _expr) = pure ()
 evalDirective (Check _ _) = pure ()
 evalDirective (Contract {}) = pure ()
 

@@ -53,6 +53,7 @@ data AnnoType
 data TDirectives
   = TStrictEvalDirective
   | TLazyEvalDirective
+  | TLazyEvalTraceDirective
   | TCheckDirective
   | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
@@ -60,10 +61,11 @@ data TDirectives
 
 directives :: Map Text TDirectives
 directives = Map.fromList
-  [ ("SEVAL", TStrictEvalDirective)
-  , ("EVAL" , TLazyEvalDirective)
-  , ("CHECK", TCheckDirective)
-  , ("TRACE", TContractDirective)
+  [ ("SEVAL"    , TStrictEvalDirective)
+  , ("EVALTRACE", TLazyEvalTraceDirective)
+  , ("EVAL"     , TLazyEvalDirective)
+  , ("CHECK"    , TCheckDirective)
+  , ("TRACE"    , TContractDirective)
   ]
 
 data TAnnotations

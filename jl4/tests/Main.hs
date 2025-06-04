@@ -166,7 +166,7 @@ checkFile isOk file = do
  where
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
   evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
-  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
+  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res t) = (r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
   renderMessage (r, txt) = cliErrorMessage r txt
 
 cliErrorMessage :: Maybe JL4.SrcRange -> [Text] -> Text
