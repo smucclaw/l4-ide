@@ -245,7 +245,7 @@ Some of these questions may expand further. From MACMA:
 
 That turns into the following L4:
 
-```
+```l4
 DECLARE Direction IS ONE OF Inbound, Outbound
 GIVEN  fc    IS A Country
        ag    IS A Person -- the attorney general
@@ -332,7 +332,7 @@ How would an L4 implementation desugar and interpret this syntax?
 
 We know from CSL that the idea is to have an `action` with `action_parameters`.
 
-```
+```l4
    IF  sg EQUALS Singapore
 PARTY  aa    IS A Person
   WHO  `is an appropriate authority`
@@ -347,7 +347,7 @@ PARTY  aa    IS A Person
 
 We can use named record fields for a lot of this:
 
-```
+```l4
 DECLARE requestParams
     HAS that  IS A BOOLEAN
         be    IS A BOOLEAN
@@ -380,7 +380,7 @@ the original statute. We bring this up mainly for the sake of the tutorial.
 
 There is another, somewhat contrived, but still possible reading of the same text:
 
-```
+```l4
 DECIDE `is an appropriate authority of` IF
        `is a person`
     OR `is an authority` aa

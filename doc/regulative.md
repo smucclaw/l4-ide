@@ -427,7 +427,7 @@ or properties, _over_ the object level of the state transition system.
 
 The purely mechanistic object-level form of a regulative rule is structured like this:
 
-```
+```l4
     §  clause 1
    IF  preconditions
  UPON  trigger event  -- only used at top-level, otherwise this clause follows from some other clause
@@ -496,7 +496,7 @@ What if we allow regulative clauses to examine the history trace so far?
 
 We could say "if we got here via path A, vs if we got here via path B".
 
-```
+```l4
 § 9 penalties
    UPON `an offence is committed` `under`  § 1
                                            § 2

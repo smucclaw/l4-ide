@@ -54,7 +54,7 @@ https://www.lomography.com/magazine/337259-color-chronicles-deconstructing-qing
 
 We can declare our own types in terms of the above basic types:
 
-```
+```l4
 DECLARE `count of fruit in my bag` IS A NUMBER
 DECLARE `common name of fruit`     IS A STRING
 DECLARE `scientific name of fruit` IS A STRING

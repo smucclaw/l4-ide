@@ -117,7 +117,7 @@ This is a quick way to test expressions.
 
 In the VS Code IDE with L4 extensions enabled, if you write
 
-```
+```l4
 #EVAL `numbers are big` 1 2
 
 #EVAL `numbers are big` 1000 1000
@@ -131,16 +131,16 @@ In the VS Code IDE with L4 extensions enabled, if you write
 
 You can mouseover the expressions and see the result of evaluation:
 
-```
-False
+```l4
+FALSE
 
-False
-False
-False
-True
+FALSE
+FALSE
+FALSE
+TRUE
 
-True
-True
+TRUE
+TRUE
 ```
 
 ## Example: Fibonacci Function

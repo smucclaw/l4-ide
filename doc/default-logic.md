@@ -171,7 +171,7 @@ L4's Optional type, or Maybe type, works the same way.
 
 A naive data model might say:
 
-```
+```l4
   DECLARE Person
     HAS first_name  IS A String
         middle_name IS A String
@@ -188,7 +188,7 @@ Many countries don't even distinguish middle names. Some countries are perfectly
 
 A more sophisticated data model might say:
 
-```
+```l4
   DECLARE Person
     HAS name      IS AN Optional String
         birthdate IS A  Date
