@@ -53,7 +53,7 @@ THEN
 
 This attempt at formalizing legislation is less mechanical and naive than with the Alcohol Act;
 it also uses more than just boolean propositions.
-E.g., this is an example where the inlining/'unfold to definition' feature of the visualizer is useful.
+E.g., this is an example where the inlining/'unfold to definition' feature of the visualizer would be useful, once it's extended to fn app.
 
 In particular, the following L4 formalization differs from CRLP's breakdown in the following ways:
 
