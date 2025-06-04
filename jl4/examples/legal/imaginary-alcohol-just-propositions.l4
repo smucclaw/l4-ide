@@ -1,5 +1,12 @@
 {-
-The following was mechanically converted from what Matt had sent.
+CRLP's imaginary Alcohol Act
+============================
+
+The following was mechanically converted from what Matt had sent;
+the L4 here was written with the goal of 
+(i) minimizing the concepts required to understand the code
+and
+(ii) to visualize the DECIDEs as a ladder diagram
 
 Provision (1)-(2)
 ------------------
