@@ -661,7 +661,7 @@ jl4Rules rootDirectory recorder = do
         }
 
     evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
-    evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
+    evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res mtrace) = do
       Diagnostic
         { _range = srcRangeToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Information
@@ -669,6 +669,9 @@ jl4Rules rootDirectory recorder = do
         , _codeDescription = Nothing
         , _source = Just "eval"
         , _message = either (Text.unlines . EvaluateLazy.prettyEvalException) Print.prettyLayout res
+                     <> case mtrace of
+                          Nothing -> Text.empty
+                          Just t  -> "\n─────\n" <> Print.prettyLayout t
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

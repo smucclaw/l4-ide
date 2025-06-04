@@ -131,12 +131,12 @@ evalApp contextModule evalParams recentViz =
         Nothing -> defaultResponseError "No eval result found"
   where
     evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
-    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
+    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res _mtrace) = case res of
       Right (EL.MkNF val) ->
         case EL.boolView val of
           Just b  -> pure $ EvalAppResult (toUBoolValue b)
           Nothing -> throwExpectBoolResultError
-      Right EL.ToDeep    -> defaultResponseError "Evaluation exceeded maximum depth limit"
+      Right EL.Omitted   -> defaultResponseError "Evaluation exceeded maximum depth limit"
       Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
 
     throwExpectBoolResultError :: ExceptT (TResponseError method) m a
