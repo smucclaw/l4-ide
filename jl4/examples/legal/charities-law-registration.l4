@@ -1,0 +1,121 @@
+{- 
+Formalizing the registration decision provision from the Charities Law in L4,
+for visualization as a ladder diagram
+=============================================================================
+https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797841
+
+CRLP's breakdown of Provision 11(4) into simple propositions
+-------------------------------------------------------------
+IF
+    the applicant complies with paragraph (2)
+    AND
+        NOT Regulations have been made under paragraph (3)
+        OR
+            Regulations have been made under paragraph (3)
+            AND
+            the applicant complies with the Regulations
+    AND
+    the applicant complies with Article 19(5)
+    AND
+        the Commissioner is satisfied that the applicant meets the charity test
+        OR
+        the Commissioner is satisfied that the applicant will meet the charity test on registration
+    AND
+    the Commissioner is satisfied that the constitution of the applicant is a written document
+    AND
+        the Commissioner is satisfied that the applicant is a Jersey entity
+        OR
+            the Commissioner is satisfied that the applicant carries out, in or from within Jersey, an activity
+            AND
+            in the opinion of the Commissioner, the activity is substantial
+        OR
+            the Commissioner is satisfied that the applicant intends to carry out, in or from within Jersey, an activity
+            AND
+            in the opinion of the Commissioner, the activity is substantial
+    AND
+    the Commissioner is satisfied that the applicant has a principal address in Jersey, within the meaning of Article 8(4)
+    AND
+    the Commissioner is satisfied that the name of the applicant is not undesirable under Article 12
+    AND
+        NOT one or more grounds for refusal has been prescribed under paragraph (7)
+        OR
+            one or more grounds for refusal has been prescribed under paragraph (7)
+            AND
+            the Commissioner is satisfied that none of the grounds applies
+            AND
+            the Commissioner is satisfied that none of the grounds should be applied
+THEN
+    the Commissioner must register the applicant as a charity
+
+@ref url https://www.jerseylaw.je/laws/current/l_41_2014#_Toc181797841
+
+-------------------------------------------------------------------------------------------------------------------------
+
+This attempt at formalizing legislation is less mechanical and naive than with the Alcohol Act;
+it also uses more than just boolean propositions.
+E.g., this is an example where the inlining/'unfold to definition' feature of the visualizer is useful.
+
+In particular, the following L4 formalization differs from CRLP's breakdown in the following ways:
+
+1. It tucks some of the more complicated logic under auxiliary propositions / declarations. 
+    This is a somewhat superficial difference --- it doesn't make a semantic difference in the end --- but
+    I think it makes things more readable, and keeps the code looking more like the original.
+2. It is closer to something that one might use as part of a system that
+automatedly determines if the Commissioner must register the applicant as a charity.
+    E.g., it uses data structures like records to model the Applicant.  
+-}
+
+-- This is debatable
+DECLARE Constitution
+  IS ONE OF
+    `written document`
+    `something else`
+
+-- An address in a realistic system will likely have more structure than just a string
+DECLARE Address IS STRING
+
+DECLARE Applicant
+HAS name                 IS A   STRING
+    constitution         IS A   Constitution
+    `principal address` IS AN  Address
+
+§ `11(4)`
+GIVEN `the applicant` IS AN Applicant
+DECIDE `the Commissioner must register as a charity` `the applicant`
+IF  `complies with paragraph (2), with any Regulations under paragraph (3), and with Article 19(5)` `the applicant` AND `the Commissioner is satisfied that the other conditions of § 11(4) are met by` `the applicant`
+        WHERE
+            GIVEN applicant IS AN Applicant
+            DECIDE `the Commissioner is satisfied that the other conditions of § 11(4) are met by` applicant 
+            IF
+                -- There is a data modelling choice here: You might not want to bother breaking it down into these two propositions
+                `the Commissioner is satisfied that the charity test is met by` applicant
+                OR `the Commissioner is satisfied that the charity test will be met, on registration, by` applicant 
+                
+                AND `the Commissioner is satisfied that` (applicant's constitution) `is a written document`
+                AND `the Commissioner is satisfied that` applicant `is a Jersey entity`
+                AND `the Commissioner is satisfied that` (applicant's `principal address`) `is in Jersey, within the meaning of Article 8(4)` 
+                AND `the Commissioner is satisfied that` (applicant's name) `is not undesirable under Article 12`
+
+--  Other helper functions
+
+ASSUME `complies with paragraph (2), with any Regulations under paragraph (3), and with Article 19(5)` IS FUNCTION FROM Applicant TO BOOLEAN
+
+ASSUME `the Commissioner is satisfied that the charity test is met by` IS FUNCTION FROM Applicant TO BOOLEAN
+ASSUME `the Commissioner is satisfied that the charity test will be met, on registration, by` IS FUNCTION FROM Applicant TO BOOLEAN
+
+ASSUME `is a Jersey entity` IS FUNCTION FROM Applicant TO BOOLEAN
+ASSUME `is in Jersey, within the meaning of Article 8(4)` IS FUNCTION FROM Address TO BOOLEAN
+
+ASSUME `is not undesirable under Article 12` IS FUNCTION FROM STRING TO BOOLEAN
+
+`is a written document` constitution MEANS
+    CONSIDER constitution
+      WHEN `written document` THEN TRUE
+      WHEN `something else`   THEN FALSE
+
+GIVEN a IS A TYPE
+      thing IS A a
+      property IS FUNCTION FROM a TO BOOLEAN
+`the Commissioner is satisfied that` thing property MEANS
+    property OF thing
+
