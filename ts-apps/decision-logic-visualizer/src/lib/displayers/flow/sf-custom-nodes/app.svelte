@@ -4,40 +4,33 @@
   - Allow for non-atomic expressions to be supplied as arguments (this would likely require subflows)
  -->
 <script lang="ts">
-  import type { AppDisplayerProps } from '../svelteflow-types.js'
+  import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import type {
+    AppArgLirNode,
+    AppLirNode,
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
-  import { onDestroy } from 'svelte'
-  import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 
-  let { data }: AppDisplayerProps = $props()
+  let { data }: LadderNodeDisplayerProps = $props()
 
-  // Get LadderEnv, L4 Connection
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
+  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
-  // The values of the arguments of the App
-  const argValues = $state(data.args.map((arg) => arg.getValue(data.context)))
-  const onArgValueChange = (context: LirContext, id: LirId) => {
-    data.args.forEach((arg, i) => {
-      if (id === arg.getId()) {
-        argValues[i] = arg.getValue(context)
-      }
-    })
-  }
-  const unsub = useLadderEnv().getLirRegistry().subscribe(onArgValueChange)
-
-  onDestroy(() => unsub.unsubscribe())
+  const node = data.node as AppLirNode
 </script>
 
 <!-- App Arg UI -->
-{#snippet argUI(arg: (typeof data.args)[number], i: number)}
+{#snippet argUI(arg: AppArgLirNode)}
   <ValueIndicator
-    value={argValues[i]}
+    value={arg.getValue(data.context, ladderGraph)}
     additionalClasses={[
       'border',
       'border-black',
@@ -51,7 +44,7 @@
       onclick={async () => {
         console.log('clicked: ', arg.getLabel(data.context), arg.getId())
 
-        const newValue = cycle(arg.getValue(data.context))
+        const newValue = cycle(arg.getValue(data.context, ladderGraph))
         await ladderGraph.submitNewBinding(data.context, {
           unique: arg.getUnique(data.context),
           value: newValue,
@@ -63,6 +56,23 @@
   </ValueIndicator>
 {/snippet}
 
+{#snippet coreAppUI()}
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
+    <!-- Function name -->
+    <div class="font-bold text-[1.1rem]">
+      {node.getFnName(data.context).label}
+    </div>
+    <!-- Args (see also note above)-->
+    <div class="flex flex-wrap gap-1 justify-center">
+      {#each node.getArgs(data.context) as arg}
+        {@render argUI(arg)}
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
 <WithContentfulNodeStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
@@ -70,22 +80,24 @@
   <!-- TODO: Add a value indicator for the App itself 
        NOTE: We do NOT want cursor-pointer for the App UI itself.
   -->
-  <div class={['bg-gray-100 app-node-border', ...data.classes]}>
+  <div
+    class={[
+      'bg-gray-100 app-node-border',
+      ...data.node.getAllClasses(data.context),
+    ]}
+  >
     <WithNormalHandles>
-      <div
-        class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-      >
-        <!-- Function name -->
-        <div class="font-bold text-[1.1rem]">
-          {data.fnName.label}
-        </div>
-        <!-- Args (see also note above)-->
-        <div class="flex flex-wrap gap-1 justify-center">
-          {#each data.args as arg, i}
-            {@render argUI(arg, i)}
-          {/each}
-        </div>
-      </div>
+      {#if nodeSelectionTracker}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          {node}
+          {nodeSelectionTracker}
+        >
+          {@render coreAppUI()}
+        </WithSelectableNodeContextMenu>
+      {:else}
+        {@render coreAppUI()}
+      {/if}
     </WithNormalHandles>
   </div>
 </WithContentfulNodeStyles>

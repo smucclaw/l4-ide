@@ -5,7 +5,22 @@
 <script lang="ts">
   import type { LirId } from '$lib/layout-ir/core.js'
   import { LirContext } from '$lib/layout-ir/core.js'
+  import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
+  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
+  import {
+    type LadderSFNodeWithDims,
+    type LadderSFGraph,
+    type LadderSFNode,
+    sfNodeTypes,
+    sfEdgeTypes,
+    getSFNodeId,
+  } from './svelteflow-types.js'
+  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
+  import PathsList from '../paths-list.svelte'
+
+  import { Collapsible } from 'bits-ui'
+  import List from 'lucide-svelte/icons/list'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -18,25 +33,10 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import * as SF from '@xyflow/svelte'
-  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
-  import {
-    type LadderSFNodeWithDims,
-    type LadderSFGraph,
-    type LadderSFNode,
-    sfNodeTypes,
-    sfEdgeTypes,
-    getSFNodeId,
-  } from './svelteflow-types.js'
-  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
-  import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import { Collapsible } from 'bits-ui'
-  import List from 'lucide-svelte/icons/list'
-  import PathsList from '../paths-list.svelte'
 
   /************************
        Lir

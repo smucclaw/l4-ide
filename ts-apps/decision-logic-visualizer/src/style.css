@@ -170,15 +170,12 @@
 ****************************************/
 
 .ubool-var-node-border {
-  border: var(--ladder-node-border, var(--ladder-node-border-default));
-  border-radius: var(
-    --ladder-node-border-radius,
-    var(--ladder-node-border-radius-default)
-  );
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
+  border-radius: var(--ladder-node-border-radius);
 }
 
 /*************************************
-  Utility SF styles
+        Utility classes
 *************************************/
 
 /* Need !important in true-val and false-val to be able to override base / default background colors
@@ -255,29 +252,23 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 }
 
 @utility bool-lit-node-border {
-  border: calc(var(--ladder-node-border-width) - 1px) solid var(--color-primary);
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
   border-radius: 2px;
 }
 
 /*************************************
-  Other styles
+    Other SF styles
 *************************************/
-
-body {
-  color: var(--color-primary);
-  background-color: white;
-  margin: 0;
-}
-
-/* svelte-flow specific */
 
 :root,
 .svelte-flow {
+  /* Border style variables */
+  --ladder-node-border-width-default: 2px;
+  --ladder-node-border-width: var(--ladder-node-border-width-default);
+  --ladder-node-border-color: var(--color-primary);
   --ladder-node-border-radius: var(--radius);
-  --ladder-node-border-width: 2px;
+
   --ladder-node-color: var(--color-node-text, var(--color-primary));
-  --ladder-node-border: var(--ladder-node-border-width) solid
-    var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of
   --xy-* styles  */
@@ -289,4 +280,22 @@ body {
     font-optical-sizing: auto;
     font-style: normal;
   }
+}
+
+/* Override border properties when highlighted */
+.highlighted-ladder-node {
+  --ladder-node-border-width: calc(
+    var(--ladder-node-border-width-default) + 1px
+  );
+  --ladder-node-border-color: var(--color-highlighted-path-in-flow);
+}
+
+/*************************************
+  Other styles
+*************************************/
+
+body {
+  color: var(--color-primary);
+  background-color: white;
+  margin: 0;
 }
