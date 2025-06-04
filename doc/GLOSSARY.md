@@ -1,71 +1,148 @@
 # L4 Language Glossary
 
-## Core Language Concepts
+## A
 
-### [Basic Data Types](10-data-types.md)
+- [**Algebraic Types**](30-algebraic-types.md) - Ways to combine and structure data types
+- [**Annotations**](20-basic-syntax.md) - Paratextual information enclosed in `[square brackets]`
+- [**AND**](10-boolean-logic.md) - Logical conjunction operator
+- [**ASSUME**](guide-index.md) - Declares a variable with a specific type
+- [**AT**](regulative.md) - Temporal operator for specifying time points
+- [**AT LEAST**](default-logic.md) - Operator for minimum quantity conditions `>=`
+- [**AT MOST**](default-logic.md) - Operator for maximum quantity conditions `<=`
 
-- **Booleans**: Basic true/false values represented as `TRUE` and `FALSE`
-- **Strings**: Text values enclosed in double quotes
-- **Numbers**: Numeric values (no distinction between integers and floats)
-- **Records**: Composite data types that group related data together
+## B
 
-### [Basic Syntax](20-basic-syntax.md)
+- [**Basic Data Types**](10-data-types.md) - Core data types including booleans, strings, numbers, and records
+- [**Booleans**](10-data-types.md) - Basic true/false values represented as `TRUE` and `FALSE`
+- [**Boolean Logic**](10-boolean-logic.md) - Logical operators and conditional logic
+- [**BY**](regulative.md) - Specifies the method or means of an action
 
-- **Identifiers**: Space-separated words enclosed in backticks
-- **Comments**: Single-line comments using `--` or block comments using `{- ... -}`
-- **Annotations**: Paratextual information enclosed in `[square brackets]`
-- **References**: Citations using `@` symbol
-- **Ditto Syntax**: Using `^` to reference the word above in the same column
+## C
 
-### [Functions](25-functions.md)
+- [**Comments**](20-basic-syntax.md) - Single-line comments `--` or block comments `{- ... -}`
+- [**Conditional Logic**](10-boolean-logic.md) - IF/THEN/ELSE structures
+- [**CONSIDER**](10-data-types.md) - Pattern matching operator for type matching
+- [**DECIDE**](25-functions.md) - Keyword for defining decision functions
+- [**DIVIDED BY**](10-data-types.md) - Division operator for numbers `÷`
 
-- **Function Definition**: Core building blocks for reusable code
-- **Function Parameters**: Input values for functions
-- **Return Values**: Output values from functions
+## D
 
-### [Algebraic Types](30-algebraic-types.md)
+- [**Default Logic**](default-logic.md) - Predefined values and their handling
+- [**Default Reasoning**](default-logic.md) - Logic for handling unspecified cases
+- [**DECLARE**](10-data-types.md) - Keyword for defining new types
+- [**Deontic Logic**](regulative.md) - Logic of obligation and permission
+- [**Ditto Syntax**](20-basic-syntax.md) - Using `^` to reference the word above in the same column
+- [**DO**](regulative.md) - Action operator in regulative rules
+- [**DOES**](regulative.md) - Alternative form of DO for actions
 
-- **Type Composition**: Ways to combine and structure data types
-- **Type Patterns**: Methods for working with complex type structures
+## E
 
-## Advanced Concepts
+- [**ELSE**](10-boolean-logic.md) - Alternative branch in conditional logic
+- [**EQUALS**](10-boolean-logic.md) - Equality comparison operator
+- [**EXACTLY**](default-logic.md) - Operator for exact matching conditions
+- [**#EVAL**](25-functions.md) - Directive for evaluating expressions inline
 
-### [Default Logic](default-logic.md)
+## F
 
-- **Default Values**: Predefined values and their handling
-- **Default Reasoning**: Logic for handling unspecified cases
+- [**FALSE**](10-data-types.md) - Boolean false value
+- [**FOLLOWED**](regulative.md) - Temporal operator for sequence
+- [**FOR**](regulative.md) - Specifies purpose or target
+- [**FROM**](regulative.md) - Specifies source or origin
+- [**Functions**](25-functions.md) - Core building blocks for reusable code
+- [**FULFILLED**](regulative.md) - State indicating successful completion
 
-### [Regulative Concepts](regulative.md)
+## G
 
-- **Deontic Logic**: Logic of obligation and permission
-- **Regulative Rules**: Rules governing behavior and constraints
-- **Shall Statements**: Mandatory requirements and obligations
+- [**GIVEN**](25-functions.md) - Keyword for declaring function parameters
+- [**GIVETH**](25-functions.md) - Keyword for specifying return type
+- [**GREATER THAN**](10-boolean-logic.md) - Greater than comparison operator
 
-### [Multitemporal Logic](multitemporals.md)
+## H
 
-- **Temporal Reasoning**: Handling time-based logic and constraints
-- **Time-based Rules**: Rules that change over time
+- [**HAS**](10-data-types.md) - Keyword for defining record fields
+- [**HENCE**](regulative.md) - Consequence operator in regulative rules
 
-## Language Features
+## I
 
-### [Modifiers](modifiers.md)
+- [**Identifiers**](20-basic-syntax.md) - Space-separated words enclosed in backticks
+- [**IF**](10-boolean-logic.md) - Conditional operator
+- [**IMPLIES**](10-boolean-logic.md) - Logical implication operator
+- [**IMPORT**](guide-index.md) - Keyword for importing external definitions
+- [**IS**](10-data-types.md) - Type assertion operator
 
-- **Type Modifiers**: Ways to modify and extend types
-- **Behavior Modifiers**: Ways to modify program behavior
+## L
 
-### [Boolean Logic](10-boolean-logic.md)
+- [**LESS THAN**](10-boolean-logic.md) - Less than comparison operator `<`
+- [**LIST**](30-algebraic-types.md) - Collection type for ordered elements
+- [**LEST**](regulative.md) - Alternative consequence operator
+- [**Logical Operators**](10-boolean-logic.md) - AND, OR, NOT operations
 
-- **Logical Operators**: AND, OR, NOT operations
-- **Conditional Logic**: IF/THEN/ELSE structures
+## M
 
-## Development and Tools
+- [**MEANS**](25-functions.md) - Assignment operator for definitions
+- [**MINUS**](10-data-types.md) - Subtraction operator `-`
+- [**MODULO**](10-data-types.md) - Modulo operator for numbers `%`
+- [**MUST**](regulative.md) - Obligation operator in regulative rules
+- [**Multitemporal Logic**](multitemporals.md) - Handling time-based logic and constraints
 
-### [Development Guide](guide-index.md)
+## N
 
-- **Development Practices**: Best practices for L4 development
-- **Tool Usage**: Available development tools and their usage
+- [**NOT**](10-boolean-logic.md) - Logical negation operator
+- [**NOTHING**](default-logic.md) - Represents absence of value
+- [**Numbers**](10-data-types.md) - Numeric values (no distinction between integers and floats)
+- [**@nlg**](guide-index.md) - Natural Language Generation annotation
 
-### [Future Features](future-features.md)
+## O
 
-- **Planned Features**: Upcoming language features and improvements
-- **Roadmap**: Development timeline and priorities
+- [**OF**](10-data-types.md) - Type composition operator
+- [**ONE**](10-data-types.md) - Enumeration operator
+- [**OR**](10-boolean-logic.md) - Logical disjunction operator
+- [**OTHERWISE**](10-boolean-logic.md) - Alternative branch in conditional logic
+
+## P
+
+- [**PARTY**](regulative.md) - Specifies actor in regulative rules
+- [**PLUS**](10-data-types.md) - Addition operator `+`
+- [**PROVIDED**](regulative.md) - Alternative to IF for preconditions
+
+## R
+
+- [**RAND**](10-boolean-logic.md) - Random AND operator
+- [**ROR**](10-boolean-logic.md) - Random OR operator
+- [**Records**](10-data-types.md) - Composite data types that group related data together
+- [**References**](20-basic-syntax.md) - Citations using `@` symbol
+- [**@ref**](20-basic-syntax.md) - Reference annotation
+- [**@ref-map**](20-basic-syntax.md) - Reference mapping annotation
+- [**@ref-src**](20-basic-syntax.md) - Reference source annotation
+- [**Regulative Rules**](regulative.md) - Rules governing behavior and constraints
+- [**Return Values**](25-functions.md) - Output values from functions
+
+## S
+
+- [**#SEVAL**](25-functions.md) - Directive for evaluating expressions in sections
+- [**Shall Statements**](regulative.md) - Mandatory requirements and obligations
+- [**STARTING**](regulative.md) - Temporal operator for beginning
+- [**Strings**](10-data-types.md) - Text values enclosed in double quotes
+
+## T
+
+- [**TBD**](future-features.md) - Placeholder for future implementation
+- [**THE**](guide-index.md) - Article in type definitions
+- [**THEN**](10-boolean-logic.md) - Consequence operator in conditional logic
+- [**Time-based Rules**](multitemporals.md) - Rules that change over time
+- [**TIMES**](10-data-types.md) - Multiplication operator `*`
+- [**TO**](regulative.md) - Destination or target operator
+- [**TRUE**](10-data-types.md) - Boolean true value
+- [**Types**](30-algebraic-types.md) - Ways to combine and structure data types
+- [**#TRACE**](25-functions.md) - Directive for tracing execution
+
+## W
+
+- [**WHEN**](10-data-types.md) - Pattern matching operator
+- [**WHERE**](25-functions.md) - Local definition scope
+- [**WITH**](10-data-types.md) - Record construction operator
+- [**WITHIN**](regulative.md) - Temporal operator for duration
+
+## Y
+
+- [**YIELD**](25-functions.md) - Return value operator
