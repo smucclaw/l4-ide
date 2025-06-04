@@ -1,0 +1,142 @@
+
+// we illustrate the labeled transition system of multi-agent contracts,
+// where moving parties act in time.
+//
+// in this example, a patron goes to a restaurant and orders a number of beers and potatoes.
+// when they've had enough, they check out, review the bill, and pay.
+//
+// unlike the previous restaurant1.l4 example, this one involves "external choice", via the "ROR" operator.
+// this means that the patron can order multiple beers and potatoes, or call for the bill.
+
+IMPORT prelude
+
+§ `a patron walks into a bar`
+GIVEN patron   IS AN Actor
+      bar      IS AN Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`entry point` MEANS
+         -- [TODO] how do we allow the patron to order an arbitrary nonnegative number of beers?
+            PARTY     patron  MUST order "beer"   1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "beer")
+      ROR   PARTY     patron  MUST order "potato" 1              WITHIN 20 HENCE `entry point` patron bar (addToTab 1 "potato")
+      ROR   PARTY     patron  MUST getBill                       WITHIN 20 HENCE
+             PARTY    bar     MUST showBill (`final tab`'s bill) WITHIN 20 HENCE
+              PARTY   patron  MUST pay      (`final tab`'s bill) WITHIN 20 HENCE FULFILLED
+
+  WHERE
+    `final tab` MEANS `Symbol Table` WITH
+        bill          IS      symtab's bill
+                         PLUS (symtab's beers    * 10)
+                         PLUS (symtab's potatoes *  2)
+        beers         IS symtab's beers
+        potatoes      IS symtab's potatoes
+        log           IS "bar printed the bill for review" FOLLOWED BY symtab's log
+
+    GIVEN n    IS A NUMBER
+          item IS A STRING
+    addToTab MEANS `Symbol Table` WITH
+        bill          IS symtab's bill
+        beers         IS symtab's beers     PLUS (IF item EQUALS "beer"   THEN n ELSE 0)
+        potatoes      IS symtab's potatoes  PLUS (IF item EQUALS "potato" THEN n ELSE 0)
+        log           IS   IF      item EQUALS "beer"   THEN showBeers(n)
+                           ELSE IF item EQUALS "potato" THEN showPotatoes(n)
+                           ELSE    item
+                         FOLLOWED BY symtab's log
+
+// we track the orders in the "bar tab", also known as a "symbol table".
+DECLARE `Symbol Table`
+    HAS bill      IS A NUMBER
+        beers     IS A NUMBER
+        potatoes  IS A NUMBER
+        log       IS A LIST OF STRING
+
+GIVETH A `Symbol Table`
+startState MEANS
+  `Symbol Table` OF 0, 0, 0, (LIST "", "nothing has happened yet")
+
+GIVEN n IS A NUMBER
+showBeers MEANS
+        IF          n EQUALS 0 THEN "no beers"
+    ELSE IF         n EQUALS 1 THEN "one beer"
+    ELSE  IF        n EQUALS 2 THEN "two beers"
+    ELSE   IF       n EQUALS 3 THEN "three beers"
+    ELSE    IF      n EQUALS 4 THEN "four beers"
+    ELSE     IF     n EQUALS 5 THEN "five beers"
+    ELSE      IF    n EQUALS 6 THEN "six beers"
+    ELSE       IF   n EQUALS 7 THEN "seven beers"
+    ELSE        IF  n EQUALS 8 THEN "eight beers"
+    ELSE         IF n EQUALS 9 THEN "nine beers"
+    ELSE          "many beers"
+
+GIVEN n IS A NUMBER
+showPotatoes MEANS
+        IF          n EQUALS 0 THEN "no potatoes"
+    ELSE IF         n EQUALS 1 THEN "one potato"
+    ELSE  IF        n EQUALS 2 THEN "two potatoes"
+    ELSE   IF       n EQUALS 3 THEN "three potatoes"
+    ELSE    IF      n EQUALS 4 THEN "four potatoes"
+    ELSE     IF     n EQUALS 5 THEN "five potatoes"
+    ELSE      IF    n EQUALS 6 THEN "six potatoes"
+    ELSE       IF   n EQUALS 7 THEN "seven potatoes"
+    ELSE        IF  n EQUALS 8 THEN "eight potatoes"
+    ELSE         IF n EQUALS 9 THEN "nine potatoes"
+    ELSE          "many potatoes"
+
+DECLARE Actor IS ONE OF
+  NaturalPerson   HAS name IS A STRING
+  Bar             ^   ^    ^  ^ ^
+
+DECLARE Action IS ONE OF
+  order    HAS itemName   IS A STRING
+               quantity   IS A  NUMBER
+  serve    HAS itemName   IS A  STRING
+               quantity   IS A  NUMBER
+  getBill
+  showBill HAS amount     IS A  NUMBER
+  pay      HAS amount     IS A  NUMBER
+
+eatAtJoes MEANS Bar OF "EatAtJoes, Inc."
+hungryHippo MEANS NaturalPerson OF "John Doe"
+
+
+-- mouseover the following to see that after hungryHippo orders a beer and a potato, and then pays, everything is done.
+
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "potato"   1 AT 2
+  PARTY hungryHippo DOES order "beer"     1 AT 4
+  PARTY hungryHippo DOES order "potato"   1 AT 6
+  PARTY hungryHippo DOES getBill            AT 10
+  PARTY eatAtJoes   DOES showBill 12        AT 20 -- you get a comped potato!
+  PARTY hungryHippo DOES pay      12        AT 30
+
+-- if one of the steps is missing, the residual contract will not be FULFILLED;
+-- it will simply be the next step. Well, it will be all the steps, but the mouseover
+-- only shows the next step.
+
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+
+-- if all the steps happened, but happened late, then we have a breach, don't we.
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+  PARTY hungryHippo DOES pay 12           AT 400
+
+-- if all the steps happened, but the money was a dollar short, then the contract
+-- continues to wait for a proper performance. Because the payment was imperfect.
+-- so we wait for the transaction to be perfected. This particular example doesn't
+-- track partial payments toward a full amount, but that could be done by clever
+-- manipulation of the symtab, perhaps by tracking another attribute "payment made".
+
+#TRACE `entry point` hungryHippo eatAtJoes startState AT 1 WITH
+  PARTY hungryHippo DOES order "beer"   1 AT 2
+  PARTY hungryHippo DOES order "potato" 1 AT 12
+  PARTY hungryHippo DOES getBill          AT 20
+  PARTY eatAtJoes   DOES showBill 12      AT 30
+  PARTY hungryHippo DOES pay 11           AT 40
+

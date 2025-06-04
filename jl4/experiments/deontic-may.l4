@@ -1,0 +1,139 @@
+IMPORT prelude
+
+// notes from a discussion about legal vs software interpretations of deontic vs alethic "MAY" and other deontic modals.
+
+// For related discussion, see https://claude.ai/share/04bb41fa-717c-42d5-8f07-9eb5341c137f
+
+
+
+// you always may; in certain situations, you must.
+
+// the government may retract a pofma order, always;
+// but it must retract a pofma order IF it would be patently irrational, given the facts, not to do so.
+
+GIVEN pofmaOrder IS A  POFMA Order
+      government IS A  Government
+UPON  `receiving a request regarding` pofmaOrder
+PARTY government
+MAY   `retract pofmaOrder`
+// HENCE FULFILLED
+// LEST  FULFILLED
+
+GIVEN pofmaOrder IS A  POFMA Order
+      government IS A  Government
+      applicant  IS A  Applicant
+UPON     `receiving a request regarding` pofmaOrder
+PROVIDED `is patently irrational` pofmaOrder [burdenOfProof: applicant]
+PARTY     government
+MUST     `retract pofmaOrder`
+// HENCE FULFILLED
+// LEST  BREACH -- we throw an uncaught exception to be handled by people putting on suits and turning up at 8am.
+
+// now, we combine the above two ideas into a wrapper function!
+GIVEN actor      IS AN Actor
+      someAction IS AN Action
+      condition  IS A  Predicate
+usuallyMayButSometimesMustWhen MEANS
+  IF   condition
+  THEN PARTY actor   MUST someAction
+  ELSE PARTY actor   MAY  someAction
+
+
+// you're looking for situations that look like this:
+PARTY A
+  MAY  `do something`
+  HENCE PARTY B
+        MUST `do something else`
+
+// Prohibitions can also be modelled as external choices,
+// where the consequence is an unfulfillable obligation on the party who performed
+// the prohibited action
+
+PARTY A
+  MAY `violate confidentiality agreement`
+  HENCE Breach
+
+// laws are made to be broken, duh.
+
+// this is the "nonopinionated" form
+PARTY A
+DO    `violate confidentiality agreement`
+HENCE Breach
+LEST  FULFILLED
+
+
+PARTY A
+DO   `violate confidentiality agreement`
+HENCE Breach
+LEST  FULFILLED
+
+
+
+PARTY A
+MAY  `violate confidentiality agreement`
+HENCE Breach
+LEST  FULFILLED
+
+
+PARTY investor
+MAY   `make section 83(b) election` // external choice
+HENCE  taxes := rated_at_reduced_scheme
+LEST   taxes := rated_at_normal_scheme
+
+
+PARTY investor
+DO    `make section 83(b) election` // external choice
+HENCE  taxes := rated_at_reduced_scheme
+LEST   taxes := rated_at_normal_scheme
+
+MUSTNT / SHANT / MAYNT / MAYNOT
+
+// after we have squeezed out the deontics, we can put them back, but at the specification level.
+
+// G(tax_break → (filed_83b_election S received_restricted_stock))
+
+
+
+
+
+EVERY Party p
+UPON  `violates confidentiality agreement`
+HENCE PenaltyClause (RapSheet OF Section123_Offence IS TRUE)
+
+§ PenaltyClause
+GIVEN rapsheet IS A RapSheet
+PARTY P
+MUST `suffer consequences` fine jail
+WHERE
+  (fine, jail) MEANS
+    IF        Section123_Offence                        THEN (Fine OF SGD 20000, No Jail)
+    ELSE IF   Section123_Offence AND Section456_Offence THEN (Fine OF SGD 60000, No Jail)
+    ELSE IF   Section456_Offence AND Section789_Offence THEN (Fine OF SGD 10000, Jail 2 years)
+    ELSE ...
+
+
+
+// subsequently we humans can come along and layer on an opinionated judgement:
+
+// you must not -- (bounded deontics: if you want to avoid breach) -- violate the confidentiality agreement
+
+// but I am Martin Luther Deepthroat and I want to whistleblow
+
+// and so after the breach happens, the supreme court eventually lets me off the hook
+
+
+
+
+
+// you must not, except in certain situations, you may.
+
+// we have a higher-order function that basically expands to the above two stanzas.
+
+GIVEN government IS A  Government
+      pofmaOrder IS A  POFMA Order
+      applicant  IS A  Applicant
+UPON     `receiving a request regarding` pofmaOrder
+usuallyMayButSometimesMustWhen
+    government
+    `retract pofmaOrder`
+    (`is patently irrational` pofmaOrder [burdenOfProof: applicant])

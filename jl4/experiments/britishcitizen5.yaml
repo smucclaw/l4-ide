@@ -87,4 +87,3 @@ function:
       m_knownBritish:
             type: boolean
             description: if we know, a priori, that the mother is a British citizen.
-

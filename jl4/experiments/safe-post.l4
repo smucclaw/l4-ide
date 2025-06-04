@@ -1,0 +1,461 @@
+-- this is a comment
+IMPORT prelude -- a core set of base libraries; in future this will be assumed
+IMPORT `base-money`
+
+§ SAFE
+§§ Preamble
+`about this document` MEANS
+  `Agreement Template` WITH
+    jurisdiction IS "Singapore"
+    version      IS "1.2"
+    safeType     IS `SAFE (Post-Money)`
+
+§§ `Key Parameters`
+`SAFE Purchase Amount`     MEANS USD    60000
+`Post-Money Valuation Cap` MEANS USD 10000000
+
+§§ Parties
+-- for testing purposes, we configure a sample startup with two existing shareholders
+startup MEANS
+  Company WITH
+    `Name`           IS "My Deca Unicorn Inc."
+    `Address`        IS "123 Acme St, Singapore"
+    `Jurisdiction`   IS "Singapore"
+    `Company Number` IS "12345678"
+    `Cap Table`      IS `Pre Money Cap Table`
+
+  WHERE
+    `Pre Money Cap Table` MEANS
+      -- founder shares
+      LIST `Cap Table Entry` OF
+              `Individual Investor` OF
+                  `NaturalPerson` WITH
+                   Name         IS "Thomas Gorissen"
+                   Title        IS JUST "Meister"
+                   Address      IS JUST "3 Sentosa Way"
+                   Jurisdiction IS JUST "Singapore"
+                   `ID Number`  IS JUST "SG12345678"
+              Security WITH
+                Instrument IS "Shares"
+                Name       IS "ordinary"
+                Quantity   IS `Shares`  10 (USD 20)
+           `Cap Table Entry` OF
+              `Individual Investor` OF
+                  `NaturalPerson` WITH
+                   Name         IS "Elon Musk"
+                   Title        IS JUST "Großmeister"
+                   Address      IS JUST "5 Sentosa Way"
+                   Jurisdiction IS JUST "Singapore"
+                   `ID Number`  IS JUST "ZA12345678"
+              Security WITH
+                Instrument IS "Shares"
+                Name       IS "ordinary"
+                Quantity   IS `Shares` 100 (USD 200)
+
+§§ `L4 Internals`
+§§§ `Test Values`
+
+-- for testing purposes, we set up a particular safe investment.
+`SAFE investment` MEANS
+  `Cap Table Entry` OF
+     `Individual Investor` OF
+       `NaturalPerson` OF
+         "Andrew Bechtolsheim", JUST "Mr."
+         JUST "27 Sentosa Way"
+         JUST "Singapore"
+         JUST "[TBD]"
+     Security OF "SAFE", "SAFE Tranche 1", `Dollars` `SAFE Purchase Amount`
+
+-- for testing purposes, we construct a scenario where two Series A investors
+-- come in at the Next Equity Financing.
+-- we further pretend they come in at different valuations, which allows us to exercise the logic
+-- around converting the SAFEs at the best price per share.
+`series A investment` MEANS
+  LIST
+    `Cap Table Entry` OF
+       `Individual Investor` OF
+          `NaturalPerson` OF
+            "Eduardo Saverin", JUST "Mr."
+            JUST "25 Sentosa Way"
+            JUST "Singapore"
+            JUST "[TBD]"
+       Security OF "Preference Shares", "Class A", `Shares` 150 (USD 200000) // $1333.33 per share
+    `Cap Table Entry` OF
+       `Individual Investor` OF
+          `NaturalPerson` OF
+            "Jim Rogers", JUST "Mr."
+            JUST "23 Sentosa Way"
+            JUST "Singapore"
+            JUST "[TBD]"
+       Security OF "Preference Shares", "Class A", `Shares` 200 (USD 200000) // $1000 per share
+
+-- so the SAFE conversion will be at the best price per share of the Series A investors.
+-- $60,000 divided by $1000 is 60 shares.
+`SAFE issue` MEANS
+  `Cap Table Entry` OF
+    `SAFE investment`'s Holder
+    Security WITH
+      Instrument IS "Preference Shares"
+      Name       IS "Class A (converted from SAFE)"
+      Quantity   IS Shares 60 `SAFE Purchase Amount`
+
+§§§ `Datatype Infrastructure`
+-- these are used for the Provisions below.
+-- They describe the parties who can take actions, and the actions they can take.
+DECLARE Actor IS ONE OF
+   ActorCompany  HAS actor IS A Company
+   ActorInvestor HAS actor IS AN Investor
+DECLARE Action IS ONE OF
+   Notify HAS actor IS AN Actor
+              contents IS A Notice
+   `Equity Financing Transaction` HAS txns  IS A LIST OF `Cap Table Entry`
+   `Convert SAFE`                 HAS issue IS A         `Cap Table Entry`
+
+§§ `Equity Financing`
+
+-- (a)	Equity Financing. If there is an Equity Financing before the termination of this Safe,
+--      on the initial closing of such Equity Financing,
+--      this Safe will automatically convert
+
+`Equity Financing Conversion` MEANS
+  PARTY ActorCompany OF startup
+    MUST `Convert SAFE` issue
+    PROVIDED issue EQUALS
+      `Cap Table Entry` OF
+        `SAFE investment`'s Holder
+        Security WITH
+          Instrument IS "Preference Shares"
+          Name       IS "Class A (converted from SAFE)"
+          Quantity   IS Shares numShares `SAFE Purchase Amount`
+    HENCE
+      PARTY ActorCompany OF startup
+        MUST  `Equity Financing Transaction` efts
+              PROVIDED all (GIVEN eft YIELD eft's security's Instrument EQUALS "Preference Shares") efts
+  WHERE
+    numShares MEANS
+      toZero OF
+         `divide money number`
+             `SAFE Purchase Amount`
+               (minimum OF map amount
+                               (catMaybes (map (GIVEN cte YIELD `price per share` OF cte)
+                                               `series A investment`)))
+
+#TRACE `Equity Financing Conversion` AT 1 WITH
+  PARTY (ActorCompany OF startup) DOES (`Convert SAFE`                 `SAFE issue`         ) AT 2
+  PARTY (ActorCompany OF startup) DOES (`Equity Financing Transaction` WITH txns IS `series A investment`) AT 3
+
+
+
+--      into the greater of:
+--         (1) the number of Standard Preference Shares equal to
+--                 the Purchase Amount divided by
+--                 the lowest price per share of the Standard Preference Shares; or
+--         (2) the number of Safe Preference Shares equal to
+--                 the Purchase Amount divided by the Safe Price.
+-- In connection with the automatic conversion of this Safe into Standard Preference Shares or Safe Preference Shares,
+-- the Investor will execute and deliver to the Company all of the transaction documents related to the Equity Financing;
+--    provided, that such documents (i) are the same documents to be entered into with the purchasers of Standard Preference Shares,
+--                                      with appropriate variations for the Safe Preference Shares if applicable,
+--                             and (ii) have customary exceptions to any drag-along applicable to the Investor,
+--                                      including (without limitation) limited representations, warranties, liability and indemnification obligations for the Investor.
+
+-- 	“Safe Price” means the price per share equal to the Post-Money Valuation Cap divided by the Company Capitalization.
+-- it's wrapped in a Maybe in case the currencies are different
+GIVEN      `Company Capitalization`     IS A Money
+`Safe Price` MEANS   `divide money`  `Post-Money Valuation Cap`
+                                     `Company Capitalization`
+
+
+GIVEN transaction IS A `Cap Table Entry`
+GIVETH A MAYBE Money
+`price per share` MEANS
+  CONSIDER transaction's security's Quantity
+      WHEN `Shares` count price THEN `divide money number` price count
+      WHEN `Dollars` money      THEN NOTHING
+
+--  AND     PARTY  startup
+--          MUST   NOTIFY  `Investor`
+--                   WITH  Notice WITH
+--                           contents IS "please sign this stack of documents"
+--          HENCE PARTY investor
+--                 MUST NOTIFY startup
+--                        WITH `executed by` contents investor
+-- WHERE `rewrite cap table` MEANS
+-- 	1.  convert the SAFE into shares
+-- 	2.  add the shares to the cap table
+-- 	3.  remove the SAFE from the cap table
+-- 	4.  update the cap table
+
+
+
+
+-- We will model automatic conversion as just a function from Company to Company; the cap table will be updated
+-- the old SAFEs will be removed from the cap table
+-- the new shares will be added to the cap table
+-- and what we need to calculate here is the number of Standard or Safe Preference Shares, blah blah blah.
+
+
+
+
+-- 	“Standard Preference Shares” means the shares of the series of Preference Shares
+--  issued to the investors investing new money in the Company
+--  in connection with the initial closing of the Equity Financing.
+
+-- 	“Safe Preference Shares” means shares of the series of Preference Shares
+-- issued to the Investor in an Equity Financing,
+-- having the identical rights, privileges, preferences, seniority, liquidation multiple and restrictions
+-- as the shares of Standard Preference Shares,
+-- except that any price-based preferences (such as the per share liquidation amount, initial conversion price and per share dividend amount)
+-- will be based on the Safe Price.
+
+
+
+
+
+-- what do we actually do here?
+-- we rewrite the cap table
+-- and we generate some paperwork that the investor MUST sign
+-- and if the investor doesn't sign, the investor is not entitled to the shares
+
+
+
+§§§ `Liquidity Event`
+
+-- (b)	Liquidity Event.  If there is a Liquidity Event before the termination of this Safe,
+--  the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below)
+--  to receive a portion of Proceeds, due and payable to the Investor immediately prior to, or concurrent with,
+--  the consummation of such Liquidity Event, equal to the greater of
+--   (i) the Purchase Amount (the “Cash-Out Amount”) or
+--  (ii) the amount payable on the number of Ordinary Shares equal to the Purchase Amount divided by the Liquidity Price (the “Conversion Amount”).
+-- If any of the Company’s securityholders are given a choice as to the form and amount of Proceeds to be received in a Liquidity Event,
+-- the Investor will be given the same choice, provided that
+--           the Investor may not choose to receive a form of consideration
+--             that the Investor would be ineligible to receive as a result of
+--               the Investor’s failure to satisfy any requirement or limitation generally applicable to the Company’s securityholders,
+--                                                                            or under any applicable laws.
+-- Notwithstanding the foregoing, in connection with a Change of Control intended to qualify as a tax-free reorganization, the Company may reduce the cash portion of Proceeds payable to the Investor by the amount determined by its board of directors in good faith for such Change of Control to qualify as a tax-free reorganization, provided that such reduction (A) does not reduce the total Proceeds payable to such Investor and (B) is applied in the same manner and on a pro rata basis to all securityholders who have equal priority to the Investor under Section 1(d).
+
+§§§ `Dissolution Event`
+
+-- (c)	Dissolution Event. If there is a Dissolution Event before the termination of this Safe, the Investor will automatically be entitled (subject to the liquidation priority set forth in Section 1(d) below) to receive a portion of Proceeds equal to the Cash-Out Amount, due and payable to the Investor immediately prior to the consummation of the Dissolution Event.
+
+§§§ `Termination Event`
+
+-- (e)	Termination.
+-- This Safe will automatically terminate (without relieving the Company of any obligations arising from a prior breach of or non-compliance with this Safe)
+-- immediately following the earliest to occur of:
+-- (i) the issuance of Capital Shares to the Investor pursuant to the automatic conversion of this Safe under Section 1(a); or
+-- (ii) the payment, or setting aside for payment, of amounts due the Investor pursuant to Section 1(b) or Section 1(c).
+
+
+§§ Definitions
+
+-- class methods, or maybe a $_
+GIVEN Company IS A Company
+`Capital Shares` MEANS
+  sum OF
+    map OF
+      GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s security's Quantity's count
+      filter OF
+         GIVEN `Cap Table Entry` YIELD `Cap Table Entry`'s security's Instrument EQUALS "Shares"
+         Company's `Cap Table`
+-- we want to be able to say, later,
+GIVEN c IS A Company
+cs MEANS c's `Capital Shares`
+
+-- 	“Equity Financing” means a bona fide transaction or series of transactions
+--                             with the principal purpose of raising capital,
+--                           pursuant to which the Company issues and sells Preference Shares at a fixed valuation,
+--                             including but not limited to, a pre-money or post-money valuation.
+
+-- how do we data-model an equity financing? The language above admits a a rolling close, where there are multiple investors and multiple tranches and multiple closings.
+-- But the equity financing event language says that on the initial closing the SAFE automatically converts.
+-- Pragmatically, everybody's happy as long as we can pretend that we converted the SAFE into shares,
+-- at a price that takes reference from the "initial closing"; even if that conversion and share issuance "actually" happens later.
+
+-- 	“Change of Control” means
+-- (i)   a transfer  (whether  by merger,  consolidation, exchange  or  otherwise),  in  one  transaction  or  a  series  of related transactions, to a person or group of affiliated persons (other than an underwriter of the Company’s securities), of the Company’s securities or Capital Shares
+--       if, after such closing, such person or group of affiliated persons would hold at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity,
+-- (ii)  any reorganization, scheme of arrangement, merger, amalgamation or other consolidation of the Company, other than a transaction or series of related transactions in which the holders of the voting securities of the Company outstanding immediately prior to such transaction or series of related transactions retain, immediately after such transaction or series of related transactions, at least a majority of the total voting power represented by the outstanding voting securities of the Company or such other surviving or resulting entity or
+-- (iii) a sale, lease or other disposition of all or substantially all of the assets of the Group Companies.
+
+-- a transfer is composed of one or more transactions that affect the cap table in some way
+
+-- we need list-splitOn semantics
+--GIVEN `startup before`  IS A Company
+--      events            IS LIST OF Event
+--`Change of Control` MEANS
+--  NOT          `controller of` `startup before`
+--       EQUALS  `controller of` `startup after`
+--  WHERE
+
+
+// “Converting Securities” includes this Safe and other convertible securities issued by the Company, including but not limited to: (i) other Safes; (ii) convertible promissory notes and other convertible debt instruments; and (iii) convertible securities that have the right to convert into Capital Shares.
+
+
+// “Direct Listing” means (i) the Company’s initial listing of its Ordinary Shares (other than Ordinary Shares not eligible for resale under Rule 144 under the Securities Act) on a national securities exchange in the United States by means of an effective registration statement on Form F-1 or Form S-1 filed by the Company with the United States Securities and Exchange Commission that registers the Company’s existing Capital Shares for resale, as approved by the Company’s board of directors, or (ii) any analogous listing not involving any underwritten offering of securities in any exchange located in a jurisdiction other than the United States. For the avoidance of doubt, a Direct Listing will not be deemed to be an underwritten offering and will not involve any underwriting services.
+
+
+// 	“Dissolution Event” means (i) a voluntary termination of operations, (ii) a general assignment for the benefit of the Company’s creditors or (iii) any other liquidation, dissolution or winding up of the Company (excluding a Liquidity Event), whether voluntary or involuntary.
+
+
+// 	“Dividend Amount” means, with respect to any date on which the Company pays a dividend on its outstanding Ordinary Shares, the amount of such dividend that is paid per Ordinary Share multiplied by (x) the Purchase Amount divided by (y) the Liquidity Price (treating the dividend date as a Liquidity Event solely for purposes of calculating such Liquidity Price).
+
+
+// 	“Equity Financing” means a bona fide transaction or series of transactions with the principal purpose of raising capital, pursuant to which the Company issues and sells Preference Shares at a fixed valuation, including but not limited to, a pre-money or post-money valuation.
+
+
+// 	“Group Companies” means the Company and the Company’s subsidiaries from time to time. 
+
+
+// 	“Initial Public Offering” means the closing of the Company’s first firm commitment underwritten initial public offering of Ordinary Shares in conjunction with the listing of such Ordinary Shares on any securities exchange, which will be deemed to have occurred upon the consummation of the listing transaction as prescribed under the listing rules of the applicable securities exchange.
+
+
+// 	“Liquidity Capitalization” is calculated as of immediately prior to the Liquidity Event, and (without double- counting, in each case calculated on an as-converted to Ordinary Shares basis): 
+// •	Includes all Capital Shares issued and outstanding;
+// •	Includes all (i) issued and outstanding Options and (ii) to the extent receiving Proceeds, Promised Options;
+// •	Includes all Converting Securities, other than any Safes and other convertible securities (including without limitation Preference Shares) where the holders of such securities are receiving Cash-Out Amounts or similar liquidation preference payments in lieu of Conversion Amounts or similar “as-converted” payments; and
+// •	Excludes the Unissued Option Pool.
+// 
+
+
+// 	“Liquidity Event” means a Change of Control, a Direct Listing or an Initial Public Offering.
+
+// 	“Liquidity Price” means the price per share equal to the Post-Money Valuation Cap divided by the Liquidity Capitalization.	
+
+// 	“Options” includes options, restricted share awards or purchases, restricted share units, share appreciation rights, warrants or similar securities, vested or unvested.
+
+// 	“Ordinary Shares” means the Company's ordinary shares. 
+
+// 	“Preference Shares” means the Company's preference shares. 
+
+// “Proceeds” means cash and other assets (including without limitation share consideration) that are proceeds from the Liquidity Event or the Dissolution Event, as applicable, and legally available for distribution.  
+
+// “Promised Options” means promised but ungranted Options that are the greater of those (i) promised pursuant to agreements or understandings made prior to the execution of, or in connection with, the term sheet or letter of intent for the Equity Financing or Liquidity Event, as applicable (or the initial closing of the Equity Financing or the consummation of the Liquidity Event, if there is no term sheet or letter of intent), (ii) in the case of an Equity Financing, treated as outstanding Options in the calculation of the Standard Preference Shares’ price per share, or (iii) in the case of a Liquidity Event, treated as outstanding Options in the calculation of the distribution of the Proceeds.
+
+// 	“Safe” means an instrument containing a future right to Capital Shares, similar in form and content to this instrument, purchased by investors for the purpose of funding the Company’s business operations.  References to “this Safe” mean this specific instrument. 
+
+-- 	“Safe Preference Shares” means shares of the series of Preference Shares issued to the Investor in an Equity Financing,
+-- having the identical rights, privileges, preferences, seniority, liquidation multiple and restrictions as
+--           the shares of Standard Preference Shares,
+-- except that any price-based preferences
+--    (such as the per share liquidation amount, initial conversion price and per share dividend amount)
+-- will be based on the Safe Price.
+
+
+// 	“Safe Price” means the price per share equal to
+-- the Post-Money Valuation Cap
+-- divided by the Company Capitalization.
+-- it's wrapped in a Maybe in case the currencies are different
+-- `Safe Price` MEANS
+--   `divide money` `Post-Money Valuation Cap`
+--                  `Company Capitalization`
+
+// 	“Standard Preference Shares” means
+-- the shares of the series of Preference Shares issued to the investors
+--    investing new money in the Company
+--    in connection with the initial closing of the Equity Financing.
+
+// 	“Unissued Option Pool” means all Capital Shares that are reserved, available for future grant and not subject to any outstanding Options or Promised Options (but in the case of a Liquidity Event, only to the extent Proceeds are payable on such Promised Options) under any equity incentive or similar Company plan.
+// 
+
+
+
+§§ `Company Representations`
+
+§§ `Investor Representations`
+
+§§ `Miscellaneous`
+
+-- document versioning and variety
+
+DECLARE SafeType IS ONE OF
+    `SAFT`
+    `SAFE`
+    `SAFE+`
+    `SAFE+ (Post-Money)`
+    `SAFE (Post-Money)`
+    `SAFE (Post-Money) (with MFN)`
+
+DECLARE `Agreement Template`
+    HAS jurisdiction IS A STRING
+        version      IS A STRING
+        safeType     IS A SafeType
+
+-- These will live in libraries in future
+DECLARE Action IS ONE OF delivery, payment, return
+
+-- IMPORT Entity
+DECLARE Company
+    HAS `Name`                IS A STRING
+        `Address`             IS A STRING
+        `Jurisdiction`        IS A STRING
+        `Company Number`      IS A STRING
+        `Cap Table`           IS A LIST OF `Cap Table Entry`
+
+DECLARE NaturalPerson
+    HAS `Name`           IS A STRING
+        `Title`          IS A MAYBE STRING
+        `Address`        IS A MAYBE STRING
+        `Jurisdiction`   IS A MAYBE STRING
+        `ID Number`      IS A MAYBE STRING
+
+-- the above is more complete; the below is more relatable; it is simplified.
+DECLARE Investor IS ONE OF
+   `Corporate Investor`  HAS company    IS A Company
+   `Individual Investor` HAS individual IS A NaturalPerson
+
+DECLARE Founder IS AN Investor
+
+-- IMPORT Notices
+GIVEN c IS A LIST OF Document
+      inv IS AN Investor
+executed MEANS all (GIVEN d IS A Document YIELD is_signed_by d inv) c
+  WHERE
+    GIVEN d IS A Document
+          i IS AN Investor
+    is_signed_by MEANS
+      any (GIVEN s IS AN Investor YIELD s EQUALS i) (d's signatures)
+
+DECLARE Notice IS A Document
+
+DECLARE Date
+    HAS year  IS A NUMBER
+        month IS A NUMBER
+        day   IS A NUMBER
+
+DECLARE Document
+    HAS contents   IS A STRING
+        signatures IS A LIST OF Investor
+        date       IS A Date
+
+
+DECLARE `Security Type` IS A STRING
+
+-- [TODO]
+-- request constructor aliases, allowing singleton arguments to sum types
+-- allowing us to say something like
+-- DECLARE `Security Quantity` IS ONE OF
+--     `Number of Shares` IS A NUMBER
+--     `Dollar Amount`    IS A Money
+
+
+DECLARE `Security Quantity` IS ONE OF
+    Shares   HAS count            IS A NUMBER
+                 `purchase price` IS A Money
+    Dollars  HAS money IS A Money
+
+GIVEN `some security quantity` IS A `Security Quantity`
+`security price` MEANS
+  CONSIDER `some security quantity`
+      WHEN Shares   count price THEN price
+      WHEN Dollars  money       THEN money
+
+DECLARE Security
+    HAS Instrument     IS A `Security Type`
+        Name           IS A STRING -- e.g. "Class A", "Class B", "SAFE", "KISS"
+        Quantity       IS A `Security Quantity`
+
+DECLARE `Cap Table Entry`
+    HAS Holder       IS A Investor
+        security     IS A Security
