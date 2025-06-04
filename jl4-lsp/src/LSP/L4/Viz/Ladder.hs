@@ -40,6 +40,7 @@ import LSP.L4.Viz.VizExpr
   )
 import qualified LSP.L4.Viz.VizExpr as V
 import qualified LSP.L4.Viz.CustomProtocol as V (EvalAppRequestParams (..))
+import L4.Desugar
 
 ------------------------------------------------------
 -- Monad
@@ -246,7 +247,7 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
     assign #defsForInlining =<< collectDefsForInlining
     shouldSimplify <- getShouldSimplify
     vid            <- getFresh
-    vizBody        <- translateExpr shouldSimplify body
+    vizBody        <- translateExpr shouldSimplify (carameliseExpr body)
     pure $ V.MkFunDecl
       vid
       -- didn't want a backtick'd name in the header
@@ -293,7 +294,7 @@ translateExpr False = go
             _ -> varLeaf vid vname resolved
             -- TODO: Check how exactly a function of no args, as opposed to a var, would be represented?
             -- There was some discussion of this at a meeting, but can't remember exactly what was said
-            
+
         App appAnno fnResolved args -> do
           fnOfAppIsFnFromBooleansToBoolean <- and <$> traverse hasBooleanType (appAnno : map getAnno args)
           -- for now, only translating App of boolean functions to V.App
