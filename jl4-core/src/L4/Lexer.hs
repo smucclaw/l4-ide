@@ -100,6 +100,7 @@ data TokenType =
   | TKGiven
   | TKGiveth
   | TKDecide
+  | TKExact
   | TKMeans
   | TKDeclare
   | TKIf
@@ -404,6 +405,7 @@ keywords =
     [ ("GIVEN"      , TKGiven      )
     , ("GIVETH"     , TKGiveth     )
     , ("DECIDE"     , TKDecide     )
+    , ("EXACTLY"    , TKExact     )
     , ("MEANS"      , TKMeans      )
     , ("DECLARE"    , TKDeclare    )
     , ("IF"         , TKIf         )
@@ -893,6 +895,7 @@ displayTokenType tt =
     TKGiven           -> "GIVEN"
     TKGiveth          -> "GIVETH"
     TKDecide          -> "DECIDE"
+    TKExact           -> "EXACTLY"
     TKMeans           -> "MEANS"
     TKDeclare         -> "DECLARE"
     TKIf              -> "IF"
@@ -1030,6 +1033,7 @@ posTokenCategory =
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
     TKDecide -> CKeyword
+    TKExact -> CKeyword
     TKMeans -> CKeyword
     TKDeclare -> CKeyword
     TKIf -> CKeyword
