@@ -68,7 +68,7 @@
 
     // Update state in the LadderNodeSelectionTracker with the new selected lin paths
     // (This in turn triggers updates to the derived state / projections)
-    nodeSelectionTracker.selectNodesAndUpdateProjections(
+    nodeSelectionTracker.selectNodesAndUpdate(
       context,
       selectedLinPaths.flatMap((p) => p.getSelectableVertices(context)),
       ladderGraph

@@ -22,7 +22,6 @@
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
-  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as AppLirNode
 </script>
@@ -87,12 +86,8 @@
     ]}
   >
     <WithNormalHandles>
-      {#if nodeSelectionTracker}
-        <WithSelectableNodeContextMenu
-          context={data.context}
-          {node}
-          {nodeSelectionTracker}
-        >
+      {#if ladderGraph.getNodeSelectionTracker(data.context)}
+        <WithSelectableNodeContextMenu context={data.context} {node}>
           {@render coreAppUI()}
         </WithSelectableNodeContextMenu>
       {:else}

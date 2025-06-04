@@ -26,7 +26,7 @@ import type {
   LadderNodeCSSClass,
   NodeStyleModifierCSSClass,
 } from './node-styles.js'
-import { FadedNodeCSSClass, HighlightedNodeCSSClass } from './node-styles.js'
+import { FadedNodeCSSClass } from './node-styles.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
@@ -256,28 +256,6 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   abstract toPretty(context: LirContext): string
 }
 
-export abstract class SelectableLadderLirNode extends BaseFlowLirNode {
-  isSelected(
-    _context: LirContext,
-    nodeSelectionTracker: LadderNodeSelectionTracker
-  ) {
-    return nodeSelectionTracker.nodeIsSelected(this)
-  }
-
-  /** Thin / cosmetic wrapper over LadderNodeSelectionTracker.toggleNodeSelection + publishing */
-  toggleSelection(
-    context: LirContext,
-    nodeSelectionTracker: LadderNodeSelectionTracker,
-    ladderGraph: LadderGraphLirNode
-  ) {
-    nodeSelectionTracker.toggleNodeSelectionAndUpdateProjections(
-      context,
-      this,
-      ladderGraph
-    )
-  }
-}
-
 /**********************************************
           Ladder Graph Lir Node
 ***********************************************/
@@ -485,6 +463,22 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   /*****************************************
       NodeSelectionTracker, PathsList
   *******************************************/
+
+  nodeIsSelected(_context: LirContext, node: SelectableLadderLirNode) {
+    return this.#nodeSelectionTracker?.nodeIsSelected(node) ?? false
+  }
+
+  toggleNodeSelection(context: LirContext, node: SelectableLadderLirNode) {
+    this.#nodeSelectionTracker?.toggleNodeSelectionAndUpdate(
+      context,
+      node,
+      this
+    )
+  }
+
+  selectNodes(context: LirContext, nodes: Array<SelectableLadderLirNode>) {
+    this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
+  }
 
   getNodeSelectionTracker(_context: LirContext) {
     return this.#nodeSelectionTracker
@@ -696,6 +690,11 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
+export type SelectableLadderLirNode =
+  | UBoolVarLirNode
+  | AppLirNode
+  | NotStartLirNode
+
 export function isSelectableLadderLirNode(
   node: LadderLirNode
 ): node is SelectableLadderLirNode {
@@ -720,10 +719,7 @@ export function isFalseExprLirNode(
   return node instanceof FalseExprLirNode
 }
 
-export class FalseExprLirNode
-  extends SelectableLadderLirNode
-  implements FlowLirNode
-{
+export class FalseExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
   #value = new FalseVal()
 
@@ -749,10 +745,7 @@ export class FalseExprLirNode
   }
 }
 
-export class TrueExprLirNode
-  extends SelectableLadderLirNode
-  implements FlowLirNode
-{
+export class TrueExprLirNode extends BaseFlowLirNode implements FlowLirNode {
   #name: Name
   #value = new TrueVal()
 
@@ -799,10 +792,7 @@ export function isUBoolVarLirNode(
 /* For now, changes to the data associated with BoolVarLirNodes will be published
 by the LadderGraphLirNode, as opposed to the BoolVarLirNode itself.
 */
-export class UBoolVarLirNode
-  extends SelectableLadderLirNode
-  implements VarLirNode
-{
+export class UBoolVarLirNode extends BaseFlowLirNode implements VarLirNode {
   #originalExpr: UBoolVar
   #initialValue: UBoolVal
 
@@ -855,10 +845,7 @@ export function isNotStartLirNode(
   return node instanceof NotStartLirNode
 }
 
-export class NotStartLirNode
-  extends SelectableLadderLirNode
-  implements FlowLirNode
-{
+export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
@@ -880,10 +867,7 @@ export class NotStartLirNode
   }
 }
 
-export class NotEndLirNode
-  extends SelectableLadderLirNode
-  implements FlowLirNode
-{
+export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     position: Position = DEFAULT_INITIAL_POSITION
@@ -911,7 +895,7 @@ export function isAppLirNode(node: LadderLirNode): node is AppLirNode {
   return node instanceof AppLirNode
 }
 
-export class AppLirNode extends SelectableLadderLirNode implements FlowLirNode {
+export class AppLirNode extends BaseFlowLirNode implements FlowLirNode {
   #fnName: Name
   #args: LirId[]
 
