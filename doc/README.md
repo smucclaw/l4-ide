@@ -112,9 +112,6 @@ moving parts. Conversion to Petri Nets, Non-deterministic Finite
 Automata, finite state machines, BPMN diagrams, and the like are
 supported by the L4 toolchain. (See: [regulative rules](./regulative-proposal.org))
 
-Legislation and regulation can be thought of a special kind of rule
-where every qualifying person is a party to the rules. (See: [the `WHO` keyword](./who.md))
-
 ## Deontics as Property Assertions About An LTS
 
 Legal writing frequently uses modals like "must" and "may", in deontic
