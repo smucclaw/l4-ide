@@ -11,8 +11,8 @@ import L4.Annotation
 import L4.Lexer (PosToken)
 import L4.Syntax
 import L4.Utils.Ratio (prettyRatio)
+import L4.Desugar
 import Optics
-import L4.Print (carameliseExpr)
 
 -- TODO: I would like to be able to attach meta information and
 -- to be able to tell apart variables, parameters and global definitions.
@@ -68,7 +68,7 @@ class Linearize a where
   linearize :: a -> LinTree
 
 instance Linearize (Expr Resolved) where
-  linearize expr = case carameliseExpr expr of
+  linearize expr = case carameliseNode expr of
     And _ e1 e2 -> hcat
       [ lin e1
       , text "and"

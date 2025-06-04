@@ -13,9 +13,7 @@ import qualified Data.List.NonEmpty as NE
 import L4.Utils.Ratio (prettyRatio)
 import L4.Evaluate.Operators
 import L4.Names
-import qualified Data.Map.Strict as Map
-import L4.Annotation (emptyAnno)
-import qualified L4.TypeCheck.Environment as TypeCheck
+import L4.Desugar
 import Control.Category ((>>>))
 
 prettyLayout :: LayoutPrinter a => a -> Text
@@ -221,7 +219,7 @@ instance (LayoutPrinterWithName a, n ~ Int) => LayoutPrinter (n, TopDecl a) wher
 
 instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
   printWithLayout :: LayoutPrinter a => Expr a -> Doc ann
-  printWithLayout = carameliseExpr >>> \ case
+  printWithLayout = carameliseNode >>> \ case
     e@And{} ->
       let
         conjunction = scanAnd e
@@ -561,66 +559,3 @@ escapeStringLiteral = Text.concatMap (\ case
   '\\' -> "\\\\"
   c -> Text.singleton c
   )
-
--- ----------------------------------------------------------------------------
--- Caramelize
--- ----------------------------------------------------------------------------
-
--- | We desugar expressions during typechecking, for example, @2 PLUS 3@ is
--- turned into the function @__PLUS__ 2 3@. This is less readable during natural
--- language generation, so we undo some of our desugaring and add the syntactic sugar
--- back.
---
--- We call this process "caramelise". Primarily, because fendor likes caramel,
--- and it feels like a good name for the opposite of "desugaring".
-carameliseExpr :: HasName n => Expr n -> Expr n
-carameliseExpr = \case
-  App _ n es
-    | Just caramelise <- isBuiltinBinary (rawName $ getName n)
-    , [e1, e2] <- es ->
-        caramelise e1 e2
-    | Just caramelise <- isBuiltinUnary (rawName $ getName n)
-    , [e1] <- es ->
-        caramelise e1
-  expr -> expr
-
--- ----------------------------------------------------------------------------
--- Builtins
--- ----------------------------------------------------------------------------
-
--- | Operations such as Plus and Minus are desugared to prefix function
--- notation.
--- However, we don't want to show the prefix function name
--- but rather the infix version. So, we translate the prefix function
--- notation back to the infix one. In a way, we are undoing the
--- desugaring again.
-isBuiltinBinary :: RawName -> Maybe (Expr n -> Expr n -> Expr n)
-isBuiltinBinary r =
-  Map.lookup (rawNameToText r) builtinBinFunctions
-
-isBuiltinUnary :: RawName -> Maybe (Expr n -> Expr n)
-isBuiltinUnary r =
-  Map.lookup (rawNameToText r) builtinUnaryFunctions
-
-builtinBinFunctions :: Map Text (Expr n -> Expr n -> Expr n)
-builtinBinFunctions = Map.fromList
-  [ (rawNameToText $ rawName TypeCheck.plusName, Plus emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.minusName, Minus emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.timesName, Times emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.divideName, DividedBy emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.moduloName, Modulo emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.ltName, Lt emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.leqName, Leq emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.gtName, Gt emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.geqName, Geq emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.andName, And emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.orName, Or emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.impliesName, Implies emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.consName, Cons emptyAnno)
-  , (rawNameToText $ rawName TypeCheck.equalsName, Equals emptyAnno)
-  ]
-
-builtinUnaryFunctions :: Map Text (Expr n -> Expr n)
-builtinUnaryFunctions = Map.fromList
-  [ (rawNameToText $ rawName TypeCheck.notName, Not emptyAnno)
-  ]
