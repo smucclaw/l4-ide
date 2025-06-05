@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "npm run package",
+    "build": "npm run clean && npm run package",
     "build:styles": "npx @tailwindcss/cli -i src/style.css -o dist/style.css",
     "preview": "vite preview",
     "prepare": "svelte-kit sync",
@@ -15,7 +15,7 @@
     "format": "prettier --write . --ignore-path ../../.prettierignore",
     "lint": "eslint --max-warnings=0 .",
     "test": "vitest --run",
-    "clean": "git clean -fdx dist .sveltekit"
+    "clean": "git clean -fdx dist .sveltekit || echo 'git not available'"
   },
   "sideEffects": [
     "**/*.css"

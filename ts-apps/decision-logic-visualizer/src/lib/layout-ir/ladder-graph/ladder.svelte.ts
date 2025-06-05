@@ -31,7 +31,10 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { LadderNodeSelectionTracker, PathsListLirNode } from '../paths-list.js'
+import {
+  LadderNodeSelectionTracker,
+  PathsListLirNode,
+} from '../node-paths-selection.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   isNnf,
@@ -260,6 +263,10 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
           Ladder Graph Lir Node
 ***********************************************/
 
+export type LadderGraphLirNode =
+  | NNFLadderGraphLirNode
+  | NonNNFLadderGraphLirNode
+
 /*
 * What is a 'ladder graph' in this context, conceptually speaking?
 * ---------------------------------------------------
@@ -279,7 +286,10 @@ will go through the LadderGraphLirNode.
   - For instance, we do not publish changes to the position of the nodes/edges --- that is state that
     is owned by SvelteFlow.
 */
-export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
+abstract class BaseLadderGraphLirNode
+  extends DefaultLirNode
+  implements LirNode
+{
   #ladderEnv: LadderEnv
 
   #dag: DirectedAcyclicGraph<LirId>
@@ -293,27 +303,18 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     intermediate: new Map(),
   }
 
-  #nodeSelectionTracker?: LadderNodeSelectionTracker
-  /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
-   * No need to update it, tho, if changing edge attributes. */
-  #pathsList?: PathsListLirNode
-
-  private constructor(
+  protected constructor(
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv,
-    nodeSelectionTracker?: LadderNodeSelectionTracker,
-    pathsList?: PathsListLirNode
+    ladderEnv: LadderEnv
   ) {
     super(nodeInfo)
     this.#dag = dag
     this.#originalExpr = originalExpr
     this.#vizExprToLirDag = vizExprToLirGraph
     this.#ladderEnv = ladderEnv
-    this.#nodeSelectionTracker = nodeSelectionTracker
-    this.#pathsList = pathsList
     // console.log(
     //   'vizExprToLirGraph',
     //   vizExprToLirGraph.entries().forEach(([_, dag]) => {
@@ -334,44 +335,8 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
   }
 
-  static async make(
-    nodeInfo: LirNodeInfo,
-    dag: DirectedAcyclicGraph<LirId>,
-    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
-    originalExpr: IRExpr,
-    ladderEnv: LadderEnv
-  ): Promise<LadderGraphLirNode> {
-    // Make the NodeSelectionTracker and PathsListLirNode if the dag's in NNF
-    let pathsList, nodeSelectionTracker
-    const isNNF = isNnf(nodeInfo.context, dag)
-    if (isNNF) {
-      pathsList = new PathsListLirNode(
-        nodeInfo,
-        dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, p))
-      )
-      nodeSelectionTracker = LadderNodeSelectionTracker.make(
-        nodeInfo,
-        dag,
-        noIntermediateBundlingNodeGraph,
-        pathsList
-      )
-    }
-
-    // Make the LadderGraphLirNode
-    const ladderGraph = new LadderGraphLirNode(
-      nodeInfo,
-      dag,
-      vizExprToLirGraph,
-      originalExpr,
-      ladderEnv,
-      nodeSelectionTracker,
-      pathsList
-    )
-
-    // doEval (may not want to start with this?)
-    await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
-    return ladderGraph
+  getLadderEnv(): LadderEnv {
+    return this.#ladderEnv
   }
 
   getVizExprToLirGraph() {
@@ -460,35 +425,6 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     return this.#dag.getAttributesForEdge(edge).getStyles()
   }
 
-  /*****************************************
-      NodeSelectionTracker, PathsList
-  *******************************************/
-
-  nodeIsSelected(_context: LirContext, node: SelectableLadderLirNode) {
-    return this.#nodeSelectionTracker?.nodeIsSelected(node) ?? false
-  }
-
-  toggleNodeSelection(context: LirContext, node: SelectableLadderLirNode) {
-    this.#nodeSelectionTracker?.toggleNodeSelectionAndUpdate(
-      context,
-      node,
-      this
-    )
-  }
-
-  selectNodes(context: LirContext, nodes: Array<SelectableLadderLirNode>) {
-    this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
-  }
-
-  getNodeSelectionTracker(_context: LirContext) {
-    return this.#nodeSelectionTracker
-  }
-
-  /** Get list of all simple paths through the main ladder graph, if it's in NNF */
-  getPathsList(_context: LirContext) {
-    return this.#pathsList
-  }
-
   /*****************************
         Highlight
   ******************************/
@@ -567,7 +503,7 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
         Eval, Bindings
   ******************************/
 
-  private async doEvalLadderExprWithVarBindings(context: LirContext) {
+  async doEvalLadderExprWithVarBindings(context: LirContext) {
     const result = await Evaluator.eval(
       this.#ladderEnv.getL4Connection(),
       this.#ladderEnv.getVersionedTextDocIdentifier(),
@@ -641,11 +577,11 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
   ***************************************/
 
   toggleZenModeStatus(context: LirContext) {
-    const currZenModeStatus = context.shouldEnableZenMode()
+    const currZenModeStatus = this.#ladderEnv.shouldEnableZenMode()
     if (currZenModeStatus) {
-      context.disableZenMode()
+      this.#ladderEnv.disableZenMode()
     } else {
-      context.enableZenMode()
+      this.#ladderEnv.enableZenMode()
     }
 
     this.getRegistry().publish(context, this.getId())
@@ -665,14 +601,160 @@ export class LadderGraphLirNode extends DefaultLirNode implements LirNode {
     ]
   }
 
-  toString(): string {
-    return 'LADDER_GRAPH_LIR_NODE'
-  }
-
   dispose(context: LirContext) {
     this.getVertices(context).map((n) => n.dispose(context))
     this.#dag.dispose()
     context.clear(this.getId())
+  }
+}
+
+export async function makeLadderGraphLirNode(
+  nodeInfo: LirNodeInfo,
+  dag: DirectedAcyclicGraph<LirId>,
+  vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+  noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
+  originalExpr: IRExpr,
+  ladderEnv: LadderEnv
+) {
+  const ladderGraph = isNnf(nodeInfo.context, dag)
+    ? NNFLadderGraphLirNode.make(
+        nodeInfo,
+        dag,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph,
+        originalExpr,
+        ladderEnv
+      )
+    : NonNNFLadderGraphLirNode.make(
+        nodeInfo,
+        dag,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph,
+        originalExpr,
+        ladderEnv
+      )
+  await ladderGraph.doEvalLadderExprWithVarBindings(nodeInfo.context)
+  return ladderGraph
+}
+
+export function isNNFLadderGraphLirNode(
+  node: LadderGraphLirNode
+): node is NNFLadderGraphLirNode {
+  return node instanceof NNFLadderGraphLirNode
+}
+
+// I would usually use delegation / composition instead of inheritance for this sort of thing,
+// but there really are a lot of methods on the BaseLadderGraphLirNode class.
+export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
+  #nodeSelectionTracker: LadderNodeSelectionTracker
+  /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
+   * No need to update it, tho, if changing edge attributes. */
+  #pathsList: PathsListLirNode
+
+  private constructor(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv,
+    nodeSelectionTracker: LadderNodeSelectionTracker,
+    pathsList: PathsListLirNode
+  ) {
+    super(nodeInfo, dag, vizExprToLirGraph, originalExpr, ladderEnv)
+
+    this.#nodeSelectionTracker = nodeSelectionTracker
+    this.#pathsList = pathsList
+  }
+
+  static make(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
+  ): NNFLadderGraphLirNode {
+    const pathsList = new PathsListLirNode(
+      nodeInfo,
+      dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, p))
+    )
+    const nodeSelectionTracker = LadderNodeSelectionTracker.make(
+      nodeInfo,
+      dag,
+      noIntermediateBundlingNodeGraph,
+      pathsList
+    )
+
+    return new NNFLadderGraphLirNode(
+      nodeInfo,
+      dag,
+      vizExprToLirGraph,
+      originalExpr,
+      ladderEnv,
+      nodeSelectionTracker,
+      pathsList
+    )
+  }
+
+  nodeIsSelected(_context: LirContext, node: SelectableLadderLirNode) {
+    return this.#nodeSelectionTracker?.nodeIsSelected(node) ?? false
+  }
+
+  toggleNodeSelection(context: LirContext, node: SelectableLadderLirNode) {
+    this.#nodeSelectionTracker?.toggleNodeSelectionAndUpdate(
+      context,
+      node,
+      this
+    )
+  }
+
+  selectNodes(context: LirContext, nodes: Array<SelectableLadderLirNode>) {
+    this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
+  }
+
+  getNodeSelectionTracker() {
+    return this.#nodeSelectionTracker
+  }
+
+  getPathsList(_context: LirContext) {
+    return this.#pathsList
+  }
+
+  toString(): string {
+    return 'NNF_LADDER_GRAPH_LIR_NODE'
+  }
+}
+
+export class NonNNFLadderGraphLirNode extends BaseLadderGraphLirNode {
+  private constructor(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
+  ) {
+    super(nodeInfo, dag, vizExprToLirGraph, originalExpr, ladderEnv)
+  }
+
+  static make(
+    nodeInfo: LirNodeInfo,
+    dag: DirectedAcyclicGraph<LirId>,
+    vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
+    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
+    originalExpr: IRExpr,
+    ladderEnv: LadderEnv
+  ): NonNNFLadderGraphLirNode {
+    return new NonNNFLadderGraphLirNode(
+      nodeInfo,
+      dag,
+      vizExprToLirGraph,
+      originalExpr,
+      ladderEnv
+    )
+  }
+
+  toString(): string {
+    return 'NON_NNF_LADDER_GRAPH_LIR_NODE'
   }
 }
 
@@ -1129,7 +1211,7 @@ export function augmentEdgesWithExplanatoryLabel(
     ladderGraph.setEdgeLabel(
       context,
       edge,
-      context.getExplanatoryAndEdgeLabel()
+      ladderGraph.getLadderEnv().getExplanatoryAndEdgeLabel()
     )
   })
 }

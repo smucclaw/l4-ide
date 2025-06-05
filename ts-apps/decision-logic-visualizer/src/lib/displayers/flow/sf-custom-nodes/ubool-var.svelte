@@ -4,7 +4,10 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 <script lang="ts">
   import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
-  import { UBoolVarLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import {
+    isNNFLadderGraphLirNode,
+    UBoolVarLirNode,
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
@@ -21,7 +24,6 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
   const l4Conn = ladderEnv.getL4Connection()
-  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(data.context)
 
   const node = data.node as UBoolVarLirNode
 </script>
@@ -74,6 +76,9 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
   <ValueIndicator
     value={node.getValue(data.context, ladderGraph)}
     additionalClasses={[
+      // It's easier if the highlighted border styles are on the same element as the normal border styles.
+      // TODO: This could prob be cleaner.
+      isNNFLadderGraphLirNode(ladderGraph) &&
       ladderGraph.nodeIsSelected(data.context, node)
         ? 'highlighted-ladder-node'
         : '',
@@ -82,10 +87,11 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
     ]}
   >
     <WithNormalHandles>
-      {#if nodeSelectionTracker}
+      {#if isNNFLadderGraphLirNode(ladderGraph)}
         <WithSelectableNodeContextMenu
           context={data.context}
           node={data.node as UBoolVarLirNode}
+          {ladderGraph}
         >
           {@render coreUBoolVarUI()}
         </WithSelectableNodeContextMenu>

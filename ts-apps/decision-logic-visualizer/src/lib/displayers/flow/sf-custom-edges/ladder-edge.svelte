@@ -3,6 +3,7 @@
     BezierEdge,
     // EdgeLabel,
   } from '@xyflow/svelte'
+  import { useLadderEnv } from '$lib/ladder-env.js'
   import type { LadderEdgeProps } from '../svelteflow-types.js'
 
   let {
@@ -14,6 +15,7 @@
     targetPosition,
     data,
   }: LadderEdgeProps = $props()
+  const ladderEnv = useLadderEnv()
 </script>
 
 <BezierEdge
@@ -23,7 +25,7 @@
   {targetX}
   {targetY}
   {targetPosition}
-  label={data?.context.shouldEnableZenMode() ? undefined : data?.label}
+  label={ladderEnv.shouldEnableZenMode() ? undefined : data?.label}
   pathOptions={{ curvature: 1 }}
   style={'transition-property: opacity; transition-duration: 300ms;' +
     data?.edgeStyles}

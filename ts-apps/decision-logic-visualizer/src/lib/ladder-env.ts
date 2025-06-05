@@ -11,6 +11,7 @@ import type { LirContext, LirRegistry, LirRootType } from './layout-ir/core.js'
 import type { FunDeclLirNode } from './layout-ir/ladder-graph/ladder.svelte.js'
 import { setContext, getContext } from 'svelte'
 import type { VersionedDocId } from '@repo/viz-expr'
+import { type VizConfig, defaultVizConfig } from './viz-config.js'
 
 export class LadderEnv {
   /** Initialize the Ladder Env */
@@ -18,14 +19,16 @@ export class LadderEnv {
     lirRegistry: LirRegistry,
     versionedDocId: VersionedDocId,
     backendApi: LadderBackendApi,
-    LADDER_VIZ_ROOT_TYPE: LirRootType
+    LADDER_VIZ_ROOT_TYPE: LirRootType,
+    config: VizConfig = defaultVizConfig
   ) {
     const l4Connection = new L4Connection(backendApi)
     return new LadderEnv(
       lirRegistry,
       l4Connection,
       versionedDocId,
-      LADDER_VIZ_ROOT_TYPE
+      LADDER_VIZ_ROOT_TYPE,
+      config
     )
   }
 
@@ -33,7 +36,8 @@ export class LadderEnv {
     private readonly lirRegistry: LirRegistry,
     private readonly l4Connection: L4Connection,
     private readonly versionedDocId: VersionedDocId,
-    private readonly LADDER_VIZ_ROOT_TYPE: LirRootType
+    private readonly LADDER_VIZ_ROOT_TYPE: LirRootType,
+    private readonly config: VizConfig
   ) {}
 
   getLirRegistry(): LirRegistry {
@@ -60,6 +64,35 @@ export class LadderEnv {
 
   setInSvelteContext() {
     setContext(ladderEnvKeyForSvelteContext, this)
+  }
+
+  /***************
+     Viz Config 
+  ****************/
+
+  // Zen mode
+
+  shouldEnableZenMode() {
+    return this.config.shouldEnableZenMode
+  }
+
+  enableZenMode() {
+    this.config.shouldEnableZenMode = true
+  }
+
+  disableZenMode() {
+    this.config.shouldEnableZenMode = false
+  }
+
+  // Constants
+  // TODO: Move constants to LadderEnv
+
+  getExplanatoryAndEdgeLabel() {
+    return this.config.constants.EXPLANATORY_AND_EDGE_LABEL
+  }
+
+  getOrBundlingNodeLabel() {
+    return this.config.constants.OR_BUNDLING_NODE_LABEL
   }
 }
 
