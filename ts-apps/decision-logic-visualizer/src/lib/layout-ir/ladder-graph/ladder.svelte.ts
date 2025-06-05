@@ -31,7 +31,10 @@ import type {
   Dimensions,
   BundlingNodeDisplayerData,
 } from '$lib/displayers/flow/svelteflow-types.js'
-import { LadderNodeSelectionTracker, PathsListLirNode } from '../paths-list.js'
+import {
+  LadderNodeSelectionTracker,
+  PathsListLirNode,
+} from '../node-paths-selection.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   isNnf,
