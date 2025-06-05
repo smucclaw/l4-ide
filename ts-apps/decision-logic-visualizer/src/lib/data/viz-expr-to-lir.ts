@@ -5,6 +5,7 @@ Do not use $lib for the layout-ir imports
 import type { LirId, LirNodeInfo } from '../layout-ir/core.js'
 import type { LadderLirSource } from '../layout-ir/ladder-lir-source.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
+import type { LadderGraphLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import {
   FunDeclLirNode,
   UBoolVarLirNode,
@@ -13,11 +14,11 @@ import {
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
   SinkLirNode,
-  LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
   AppLirNode,
   TrueExprLirNode,
   FalseExprLirNode,
+  makeLadderGraphLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
@@ -75,7 +76,7 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
         .connect(noIntermediateBundlingNodeGraph)
         .connect(overallSink)
 
-      const ladderGraph = await LadderGraphLirNode.make(
+      const ladderGraph = await makeLadderGraphLirNode(
         nodeInfo,
         dag,
         vizExprToLirGraph,

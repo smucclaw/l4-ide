@@ -2,24 +2,25 @@
 <script lang="ts" module>
   import { type Snippet } from 'svelte'
   import type { LirContext } from '$lib/layout-ir/core'
-  import type { SelectableLadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import type {
+    SelectableLadderLirNode,
+    NNFLadderGraphLirNode,
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   interface SelectableNodeContextMenuProps {
     context: LirContext
     node: SelectableLadderLirNode
+    ladderGraph: NNFLadderGraphLirNode
     children: Snippet
   }
 </script>
 
 <script lang="ts">
   import * as ContextMenu from '$lib/ui-primitives/context-menu/index.js'
-  import { useLadderEnv } from '$lib/ladder-env'
 
-  let { context, node, children }: SelectableNodeContextMenuProps = $props()
+  let { context, node, ladderGraph, children }: SelectableNodeContextMenuProps =
+    $props()
 
-  const ladderGraph = useLadderEnv()
-    .getTopFunDeclLirNode(context)
-    .getBody(context)
   const onSelect = () => {
     ladderGraph.toggleNodeSelection(context, node)
   }

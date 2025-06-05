@@ -7,9 +7,10 @@
   import type { LadderNodeDisplayerProps } from '../svelteflow-types.js'
   import { cycle } from '$lib/eval/type.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
-  import type {
-    AppArgLirNode,
-    AppLirNode,
+  import {
+    isNNFLadderGraphLirNode,
+    type AppArgLirNode,
+    type AppLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
@@ -22,11 +23,32 @@
   const ladderGraph = useLadderEnv()
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
-
   const node = data.node as AppLirNode
 </script>
 
-<!-- App Arg UI -->
+<!---------------------------------------------------
+               Core App UI
+--------------------------------------------------->
+{#snippet coreAppUI()}
+  <div
+    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
+  >
+    <!-- Function name -->
+    <div class="font-bold text-[1.1rem]">
+      {node.getFnName(data.context).label}
+    </div>
+    <!-- Args (see also note above)-->
+    <div class="flex flex-wrap gap-1 justify-center">
+      {#each node.getArgs(data.context) as arg}
+        {@render argUI(arg)}
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
+<!---------------------------------------------------
+               App Arg UI
+--------------------------------------------------->
 {#snippet argUI(arg: AppArgLirNode)}
   <ValueIndicator
     value={arg.getValue(data.context, ladderGraph)}
@@ -55,23 +77,6 @@
   </ValueIndicator>
 {/snippet}
 
-{#snippet coreAppUI()}
-  <div
-    class="flex flex-col gap-2 label-wrapper-for-content-bearing-sf-node p-4"
-  >
-    <!-- Function name -->
-    <div class="font-bold text-[1.1rem]">
-      {node.getFnName(data.context).label}
-    </div>
-    <!-- Args (see also note above)-->
-    <div class="flex flex-wrap gap-1 justify-center">
-      {#each node.getArgs(data.context) as arg}
-        {@render argUI(arg)}
-      {/each}
-    </div>
-  </div>
-{/snippet}
-
 <WithContentfulNodeStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
@@ -82,12 +87,22 @@
   <div
     class={[
       'bg-gray-100 app-node-border',
+      // It's easier if the highlighted border styles are on the same element as the normal border styles.
+      // TODO: This could prob be cleaner.
+      isNNFLadderGraphLirNode(ladderGraph) &&
+      ladderGraph.nodeIsSelected(data.context, node)
+        ? 'highlighted-ladder-node'
+        : '',
       ...data.node.getAllClasses(data.context),
     ]}
   >
     <WithNormalHandles>
-      {#if ladderGraph.getNodeSelectionTracker(data.context)}
-        <WithSelectableNodeContextMenu context={data.context} {node}>
+      {#if isNNFLadderGraphLirNode(ladderGraph)}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          {node}
+          {ladderGraph}
+        >
           {@render coreAppUI()}
         </WithSelectableNodeContextMenu>
       {:else}

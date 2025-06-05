@@ -4,6 +4,7 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
+  LadderGraphLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   isTrueExprLirNode,
@@ -13,7 +14,6 @@ import {
   isSinkLirNode,
   isSourceNoAnnoLirNode,
   isSourceWithOrAnnoLirNode,
-  LadderGraphLirNode,
   NotEndLirNode,
   SinkLirNode,
   isAppLirNode,

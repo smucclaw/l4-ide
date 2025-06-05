@@ -1,7 +1,7 @@
 import {
   type LadderLirNode,
   type SelectableLadderLirNode,
-  LadderGraphLirNode,
+  type LadderGraphLirNode,
   LinPathLirNode,
   isSelectableLadderLirNode,
 } from './ladder-graph/ladder.svelte.js'
@@ -55,7 +55,7 @@ export class PathsListLirNode extends DefaultLirNode implements LirNode {
       .toSorted((a, b) => a.compare(b))
   }
 
-  /** Select the linearized paths in the PathsList (without updating any related state) */
+  /** Select the linearized paths in the PathsList (*without* updating any related state) */
   selectPaths(context: LirContext, paths: LinPathLirNode[]) {
     this.selected = new Set(paths.map((p) => p.getId()))
 

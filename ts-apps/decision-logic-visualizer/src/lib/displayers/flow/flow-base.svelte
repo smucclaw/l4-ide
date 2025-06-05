@@ -5,7 +5,10 @@
 <script lang="ts">
   import type { LirId } from '$lib/layout-ir/core.js'
   import { LirContext } from '$lib/layout-ir/core.js'
-  import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import {
+    type LadderLirNode,
+    isNNFLadderGraphLirNode,
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
   import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
   import {
@@ -91,8 +94,11 @@
   }
 
   // PathsList
-  // TODO:
-  let pathsList = $state(ladderGraph.getPathsList(context))
+  let pathsList = $state(
+    isNNFLadderGraphLirNode(ladderGraph)
+      ? ladderGraph.getPathsList(context)
+      : null
+  )
 
   /***********************************
       SvelteFlow hooks
@@ -213,7 +219,11 @@
         PathsList event listener
   **********************************************/
   const onPathsListChange = (context: LirContext, id: LirId) => {
-    if (pathsList && id === pathsList.getId()) {
+    if (
+      isNNFLadderGraphLirNode(ladderGraph) &&
+      pathsList &&
+      id === pathsList.getId()
+    ) {
       pathsList = ladderGraph.getPathsList(context)
     }
   }
@@ -337,7 +347,7 @@ Misc SF UI TODOs:
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
-  {#if pathsList}
+  {#if pathsList && isNNFLadderGraphLirNode(ladderGraph)}
     <div class="paths-container">
       <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
       <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
@@ -351,7 +361,7 @@ Misc SF UI TODOs:
           </button>
         </Collapsible.Trigger>
         <Collapsible.Content class="pt-2">
-          <PathsList {context} node={pathsList} />
+          <PathsList {context} node={pathsList} {ladderGraph} />
         </Collapsible.Content>
       </Collapsible.Root>
     </div>

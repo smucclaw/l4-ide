@@ -8,20 +8,17 @@
   import { useLadderEnv } from '$lib/ladder-env.js'
   import type { LinPathLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import type { LirContext, LirId } from '$lib/layout-ir/core.js'
-  import { LadderNodeSelectionTracker } from '$lib/layout-ir/paths-list.js'
 
   /************************
        Lir
   *************************/
 
-  const { context, node: pathsListLirNode }: PathListDisplayerProps = $props()
+  const {
+    context,
+    node: pathsListLirNode,
+    ladderGraph,
+  }: PathListDisplayerProps = $props()
 
-  const ladderGraph = useLadderEnv()
-    .getTopFunDeclLirNode(context)
-    .getBody(context)
-  const nodeSelectionTracker = ladderGraph.getNodeSelectionTracker(
-    context
-  ) as LadderNodeSelectionTracker // if pathsListLirNode is present, LadderNodeSelectionTracker is also present
   const paths = pathsListLirNode.getPaths(context)
 
   /** Key state: What lin paths in the paths list are selected */
@@ -68,10 +65,9 @@
 
     // Update state in the LadderNodeSelectionTracker with the new selected lin paths
     // (This in turn triggers updates to the derived state / projections)
-    nodeSelectionTracker.selectNodesAndUpdate(
+    ladderGraph.selectNodes(
       context,
-      selectedLinPaths.flatMap((p) => p.getSelectableVertices(context)),
-      ladderGraph
+      selectedLinPaths.flatMap((p) => p.getSelectableVertices(context))
     )
   }
 </script>
