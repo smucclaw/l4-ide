@@ -68,7 +68,7 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
         graph: middle,
         vizExprToLirGraph,
         noIntermediateBundlingNodeGraph,
-      } = transform(nodeInfo, new Map(), expr)
+      } = transform(nodeInfo, new Map(), expr, env)
       const dag = sandwichWithSourceAndSink(overallSource, overallSink, middle)
       vizExprToLirGraph.set(expr.id, dag)
 
@@ -106,8 +106,9 @@ export interface ToLirResult {
 function transform(
   nodeInfo: LirNodeInfo,
   /** vizExprToLirEnv */
-  env: Map<IRId, DirectedAcyclicGraph<LirId>>,
-  expr: IRExpr
+  veToLir: Map<IRId, DirectedAcyclicGraph<LirId>>,
+  expr: IRExpr,
+  ladderEnv: LadderEnv
 ): ToLirResult {
   /*
   One of the insights behind the ladder diagram, in particular, behind Meng's `layman`:
@@ -132,13 +133,12 @@ function transform(
   */
 
   return match(expr)
-    .with({ $type: 'UBoolVar' }, (originalVar) => {
-      const uboolvar = new UBoolVarLirNode(nodeInfo, originalVar)
-      const graph = vertex(uboolvar.getId())
-      const newEnv = new Map(env).set(originalVar.id, graph)
+    .with({ $type: 'UBoolVar' }, (varExpr) => {
+      const graph = vertex(new UBoolVarLirNode(nodeInfo, varExpr).getId())
+      const vizExprToLirGraph = new Map(veToLir).set(varExpr.id, graph)
       return {
         graph,
-        vizExprToLirGraph: newEnv,
+        vizExprToLirGraph,
         noIntermediateBundlingNodeGraph: graph,
       }
     })
@@ -147,7 +147,7 @@ function transform(
         graph: negand,
         vizExprToLirGraph: negandEnv,
         noIntermediateBundlingNodeGraph: negandNoIntermediateBundlingNodeGraph,
-      } = transform(nodeInfo, env, neg.negand)
+      } = transform(nodeInfo, veToLir, neg.negand, ladderEnv)
 
       // Make the NOT subgraph
       const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
@@ -161,7 +161,10 @@ function transform(
       )
 
       // Combine the envs
-      const combinedEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
+      const combinedEnv = new Map([...veToLir, ...negandEnv]).set(
+        neg.id,
+        notGraph
+      )
 
       return {
         graph: notGraph,
@@ -171,7 +174,7 @@ function transform(
     })
     .with({ $type: 'And' }, (andExpr) => {
       const childResults = andExpr.args.map((arg) =>
-        transform(nodeInfo, env, arg)
+        transform(nodeInfo, veToLir, arg, ladderEnv)
       )
       const childGraphs = childResults.map((result) => result.graph)
       const childNoIntermediateBundlingNodeGraphs = childResults.map(
@@ -200,7 +203,7 @@ function transform(
 
       // Combine envs from all child transformations
       const allEnvs = [
-        env,
+        veToLir,
         ...childResults.map((result) => result.vizExprToLirGraph),
       ]
       const combinedEnv = combineEnvs(allEnvs).set(andExpr.id, combinedGraph)
@@ -212,7 +215,9 @@ function transform(
       }
     })
     .with({ $type: 'Or' }, (orExpr) => {
-      const childResults = orExpr.args.map((n) => transform(nodeInfo, env, n))
+      const childResults = orExpr.args.map((n) =>
+        transform(nodeInfo, veToLir, n, ladderEnv)
+      )
       const childGraphs = childResults.map((result) => result.graph)
       const childNoIntermediateBundlingNodeGraphs = childResults.map(
         (result) => result.noIntermediateBundlingNodeGraph
@@ -222,7 +227,7 @@ function transform(
       const overallSource = vertex(
         new SourceWithOrAnnoLirNode(
           nodeInfo,
-          nodeInfo.context.getOrBundlingNodeLabel()
+          ladderEnv.getOrBundlingNodeLabel()
         ).getId()
       )
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
@@ -243,7 +248,7 @@ function transform(
 
       // Combine envs from all child transformations
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
-      const combinedEnv = combineEnvs([env, ...childEnvs]).set(
+      const combinedEnv = combineEnvs([veToLir, ...childEnvs]).set(
         orExpr.id,
         orGraph
       )
@@ -265,7 +270,7 @@ function transform(
       )
       const childResults = app.args
         .filter((arg) => arg.$type === 'UBoolVar')
-        .map((arg) => transform(nodeInfo, env, arg))
+        .map((arg) => transform(nodeInfo, veToLir, arg, ladderEnv))
 
       // Get the transformed arg lir nodes
       const argNodes = childResults
@@ -278,7 +283,10 @@ function transform(
 
       // Combine envs from all child transformations
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
-      const combinedEnv = combineEnvs([env, ...childEnvs]).set(app.id, appGraph)
+      const combinedEnv = combineEnvs([veToLir, ...childEnvs]).set(
+        app.id,
+        appGraph
+      )
 
       return {
         graph: appGraph,
@@ -288,7 +296,7 @@ function transform(
     })
     .with({ $type: 'TrueE' }, (trueExpr) => {
       const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
-      const vizExprToLirGraph = new Map(env).set(trueExpr.id, graph)
+      const vizExprToLirGraph = new Map(veToLir).set(trueExpr.id, graph)
       return {
         graph,
         vizExprToLirGraph,
@@ -299,7 +307,7 @@ function transform(
       const graph = vertex(
         new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
       )
-      const vizExprToLirGraph = new Map(env).set(falseExpr.id, graph)
+      const vizExprToLirGraph = new Map(veToLir).set(falseExpr.id, graph)
       return {
         graph,
         vizExprToLirGraph,

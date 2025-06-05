@@ -6,6 +6,7 @@ import type {
   SourceWithOrAnnoLirNode,
   LadderGraphLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+import type { LadderEnv } from '$lib/ladder-env.js'
 import {
   isTrueExprLirNode,
   isFalseExprLirNode,
@@ -37,13 +38,16 @@ import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
 export function ladderGraphToSFGraph(
+  ladderEnv: LadderEnv,
   context: LirContext,
   ladderGraph: LadderGraphLirNode
 ): LadderSFGraph {
   const ladderNodes = (
     ladderGraph.getVertices(context) as LadderLirNode[]
   ).toSorted((v1, v2) => v2.compare(v1))
-  const nodes = ladderNodes.map(ladderLirNodeToSfNode.bind(null, context))
+  const nodes = ladderNodes.map(
+    ladderLirNodeToSfNode.bind(null, ladderEnv, context)
+  )
   const idsAssocList = _.zip(nodes, ladderNodes)
     .filter(
       (pair): pair is [LadderSFNode, LadderLirNode] => !!pair[0] && !!pair[1]
@@ -87,6 +91,7 @@ function lirIdToSFId(id: LirId): string {
  * Converts a LadderLirNode into an SF.Node object.
  */
 export function ladderLirNodeToSfNode(
+  ladderEnv: LadderEnv,
   context: LirContext,
   node: LadderLirNode
 ): LadderSFNode {
@@ -100,6 +105,7 @@ export function ladderLirNodeToSfNode(
   const defaultData = {
     context,
     node,
+    ladderEnv,
   }
 
   return match(node)

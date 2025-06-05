@@ -17,7 +17,7 @@ TODO: reduce code duplication between this and SourceSFNode
     style="opacity:0;"
     position={defaultSFHandlesInfo.sourcePosition}
   />
-  {#if !data.context.shouldEnableZenMode()}
+  {#if !data.ladderEnv.shouldEnableZenMode()}
     <div class={['node-annotation', ...data.node.getAllClasses(data.context)]}>
       {data.annotation}
     </div>

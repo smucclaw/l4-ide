@@ -335,6 +335,10 @@ abstract class BaseLadderGraphLirNode
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
   }
 
+  getLadderEnv(): LadderEnv {
+    return this.#ladderEnv
+  }
+
   getVizExprToLirGraph() {
     return this.#vizExprToLirDag
   }
@@ -573,11 +577,11 @@ abstract class BaseLadderGraphLirNode
   ***************************************/
 
   toggleZenModeStatus(context: LirContext) {
-    const currZenModeStatus = context.shouldEnableZenMode()
+    const currZenModeStatus = this.#ladderEnv.shouldEnableZenMode()
     if (currZenModeStatus) {
-      context.disableZenMode()
+      this.#ladderEnv.disableZenMode()
     } else {
-      context.enableZenMode()
+      this.#ladderEnv.enableZenMode()
     }
 
     this.getRegistry().publish(context, this.getId())
@@ -1207,7 +1211,7 @@ export function augmentEdgesWithExplanatoryLabel(
     ladderGraph.setEdgeLabel(
       context,
       edge,
-      context.getExplanatoryAndEdgeLabel()
+      ladderGraph.getLadderEnv().getExplanatoryAndEdgeLabel()
     )
   })
 }

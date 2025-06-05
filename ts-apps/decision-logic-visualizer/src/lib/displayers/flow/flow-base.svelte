@@ -78,7 +78,7 @@
 
   // Initial nodes and edges
   const ladderGraph = funDeclLirNode.getBody(context)
-  const initialSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+  const initialSfGraph = ladderGraphToSFGraph(ladderEnv, context, ladderGraph)
 
   // SvelteFlow nodes and edges variables
   let NODES = $state.raw<LadderSFGraph['nodes']>(initialSfGraph.nodes)
@@ -204,7 +204,7 @@
    */
   const onLadderGraphNonPositionalChange = (context: LirContext, id: LirId) => {
     if (id === ladderGraph.getId()) {
-      const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+      const newSfGraph = ladderGraphToSFGraph(ladderEnv, context, ladderGraph)
       NODES = newSfGraph.nodes
       EDGES = newSfGraph.edges
       sfIdToLirId = newSfGraph.sfIdToLirId
