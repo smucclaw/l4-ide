@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 {
   imports = [
     ./jl4-web/configuration.nix
@@ -8,7 +8,7 @@
     ./module.nix
   ];
 
-  system.stateVersion = "24.11";
+  system.stateVersion = "25.05";
 
   systemd.network.enable = true;
 
@@ -58,4 +58,13 @@
     enable = true;
     settings.PasswordAuthentication = false;
   };
+
+  # we don't really expect anyone to log in, but if they do, it's nice to have some quality-of-life packages available
+  environment.systemPackages = with pkgs; [
+    vim
+    wget
+    emacs-nox
+    btop
+    zsh
+  ];
 }

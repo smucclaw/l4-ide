@@ -1,8 +1,9 @@
 {
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -16,6 +17,7 @@
           devShells.default = import ./nix/shell.nix { inherit pkgs; };
         };
       flake = {
+        # initial prototype from WT
         nixosConfigurations.jl4-demo = inputs.nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           modules = [
@@ -33,6 +35,25 @@
             inputs.disko.nixosModules.default
             ./nix/configuration.nix
             ./nix/hetzner.nix
+          ];
+        };
+
+        # working version on AWS
+        nixosConfigurations.jl4-aws = inputs.nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            {
+              jl4-demo = {
+                domain = "jl4.legalese.com";
+                acme-email = "mengwong@legalese.com";
+                root-ssh-keys = [
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO2u9PR5FnBb8joGKHUVGqy9/cZu/iXIjgLpblkOF0H+ meng-and-ruslan"
+                ];
+              };
+            }
+            inputs.disko.nixosModules.default
+            ./nix/configuration.nix
+            ./nix/aws-ec2.nix
           ];
         };
       };
