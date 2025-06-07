@@ -776,12 +776,16 @@ export type SelectableLadderLirNode =
   | UBoolVarLirNode
   | AppLirNode
   | NotStartLirNode
+  | NotEndLirNode
 
 export function isSelectableLadderLirNode(
   node: LadderLirNode
 ): node is SelectableLadderLirNode {
   return (
-    isUBoolVarLirNode(node) || isAppLirNode(node) || isNotStartLirNode(node)
+    isUBoolVarLirNode(node) ||
+    isAppLirNode(node) ||
+    isNotStartLirNode(node) ||
+    isNotEndLirNode(node)
   )
 }
 
@@ -931,6 +935,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
+    private readonly originalExpr: IRExpr,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
@@ -940,6 +945,14 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.negand
   }
 
+  getOriginalExpr(_context: LirContext) {
+    return this.originalExpr
+  }
+
+  getWholeNotGraph(_context: LirContext, ladderGraph: LadderGraphLirNode) {
+    return ladderGraph.getVizExprToLirGraph().get(this.originalExpr.id)
+  }
+
   toPretty(_context: LirContext) {
     return 'NOT ('
   }
@@ -947,6 +960,10 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   toString(): string {
     return 'NOT_START_LIR_NODE'
   }
+}
+
+export function isNotEndLirNode(node: LadderLirNode): node is NotEndLirNode {
+  return node instanceof NotEndLirNode
 }
 
 export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {
