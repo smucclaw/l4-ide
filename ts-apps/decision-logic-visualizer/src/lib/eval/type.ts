@@ -4,8 +4,9 @@ import * as VE from '@repo/viz-expr'
 import {
   TrueValCSSClass,
   FalseValCSSClass,
+  UnknownValCSSClass,
 } from '$lib/layout-ir/ladder-graph/node-styles.js'
-import type { BoolValCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
+import type { UBoolValCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
 
 import { match } from 'ts-pattern'
 
@@ -14,30 +15,35 @@ import { match } from 'ts-pattern'
 *********************************/
 
 export type UBoolVal = TrueVal | FalseVal | UnknownVal
-// export function isUBoolValue(val: Value): val is UBoolVal {
-//   return (
-//     val.$type === 'TrueVal' ||
-//     val.$type === 'FalseVal' ||
-//     val.$type === 'UnknownVal'
-//   )
-// }
+
+export function toUBoolVal(value: VE.UBoolValue): UBoolVal {
+  return match(value)
+    .with('TrueV', () => new TrueVal())
+    .with('FalseV', () => new FalseVal())
+    .with('UnknownV', () => new UnknownVal())
+    .exhaustive()
+}
+
+export function toVEBoolValue(val: UBoolVal): VE.UBoolValue {
+  return val.$type
+}
 
 interface UBoolV {
-  $type: 'TrueVal' | 'FalseVal' | 'UnknownVal'
-  getClasses(): BoolValCSSClass[]
+  $type: TrueVal['$type'] | FalseVal['$type'] | UnknownVal['$type']
+  getClasses(): UBoolValCSSClass[]
   toPretty(): string
 }
 
 export function isTrueVal(val: UBoolVal): val is TrueVal {
-  return val.$type === 'TrueVal'
+  return val.$type === 'TrueV'
 }
 
 export function isFalseVal(val: UBoolVal): val is FalseVal {
-  return val.$type === 'FalseVal'
+  return val.$type === 'FalseV'
 }
 
 export class TrueVal implements UBoolV {
-  $type: 'TrueVal' = 'TrueVal' as const
+  $type: 'TrueV' = 'TrueV' as const
   constructor() {}
 
   getClasses() {
@@ -50,7 +56,7 @@ export class TrueVal implements UBoolV {
 }
 
 export class FalseVal implements UBoolV {
-  $type: 'FalseVal' = 'FalseVal' as const
+  $type: 'FalseV' = 'FalseV' as const
   constructor() {}
 
   getClasses() {
@@ -63,15 +69,15 @@ export class FalseVal implements UBoolV {
 }
 
 export function isUnknownVal(val: UBoolVal): val is UnknownVal {
-  return val.$type === 'UnknownVal'
+  return val.$type === 'UnknownV'
 }
 
 export class UnknownVal implements UBoolV {
-  $type: 'UnknownVal' = 'UnknownVal' as const
+  $type: 'UnknownV' = 'UnknownV' as const
   constructor() {}
 
   getClasses() {
-    return []
+    return [UnknownValCSSClass]
   }
 
   toPretty() {
@@ -81,9 +87,9 @@ export class UnknownVal implements UBoolV {
 
 export function cycle(val: UBoolVal): UBoolVal {
   return match(val)
-    .with({ $type: 'TrueVal' }, () => new FalseVal())
-    .with({ $type: 'FalseVal' }, () => new UnknownVal())
-    .with({ $type: 'UnknownVal' }, () => new TrueVal())
+    .with({ $type: 'TrueV' }, () => new FalseVal())
+    .with({ $type: 'FalseV' }, () => new UnknownVal())
+    .with({ $type: 'UnknownV' }, () => new TrueVal())
     .exhaustive()
 }
 
@@ -103,6 +109,8 @@ export type EvUBoolVar = Omit<VE.UBoolVar, 'value'>
 export type Not = VE.Not
 export type Or = VE.Or
 export type And = VE.And
+export type TrueE = VE.TrueE
+export type FalseE = VE.FalseE
 
 export function veExprToEvExpr(expr: IRExpr): Expr {
   return match(expr)

@@ -4,10 +4,26 @@
  in a component that descends from a component that initializes SvelteFlowProvider -->
 <script lang="ts">
   import type { LirId } from '$lib/layout-ir/core.js'
+  import { LirContext } from '$lib/layout-ir/core.js'
   import {
-    LirContext,
-    getLirRegistryFromSvelteContext,
-  } from '$lib/layout-ir/core.js'
+    type LadderLirNode,
+    isNNFLadderGraphLirNode,
+  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
+  import { useLadderEnv } from '$lib/ladder-env.js'
+  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
+  import {
+    type LadderSFNodeWithDims,
+    type LadderSFGraph,
+    type LadderSFNode,
+    sfNodeTypes,
+    sfEdgeTypes,
+    getSFNodeId,
+  } from './svelteflow-types.js'
+  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
+  import PathsList from '../paths-list.svelte'
+
+  import { Collapsible } from 'bits-ui'
+  import List from 'lucide-svelte/icons/list'
   import dagre from '@dagrejs/dagre'
   import { getLayoutedElements, type DagreConfig } from './layout.js'
   import {
@@ -20,30 +36,10 @@
     useSvelteFlow,
   } from '@xyflow/svelte'
   import * as SF from '@xyflow/svelte'
-  import type { BaseLadderFlowDisplayerProps } from './flow-props.js'
-  import {
-    type LadderSFNodeWithDims,
-    type LadderSFGraph,
-    type LadderSFNode,
-    sfNodeTypes,
-    sfEdgeTypes,
-    isBoolVarSFNode,
-    getSFNodeId,
-  } from './svelteflow-types.js'
-  import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
-  import { cycle } from '$lib/eval/type.js'
   import { onMount } from 'svelte'
   import { Debounced, watch } from 'runed'
 
   import '@xyflow/svelte/dist/style.css' // TODO: Prob remove this
-  import type {
-    UBoolVarLirNode,
-    LadderLirNode,
-  } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import { isValidPathsListLirNode } from '$lib/layout-ir/paths-list.js'
-  import { Collapsible } from 'bits-ui'
-  import List from 'lucide-svelte/icons/list'
-  import PathsList from '../paths-list.svelte'
 
   /************************
        Lir
@@ -60,8 +56,9 @@
    * whenever `node` changes --- I'm not sure offhand which is better.
    * This was just the simpler route given what I already have.
    */
-  const declLirNode = node
-  const lir = getLirRegistryFromSvelteContext()
+  const funDeclLirNode = node
+  const ladderEnv = useLadderEnv()
+  const lir = ladderEnv.getLirRegistry()
 
   /***********************************
       SvelteFlow config
@@ -80,8 +77,8 @@
   ************************************/
 
   // Initial nodes and edges
-  const ladderGraph = declLirNode.getBody(context)
-  const initialSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+  const ladderGraph = funDeclLirNode.getBody(context)
+  const initialSfGraph = ladderGraphToSFGraph(ladderEnv, context, ladderGraph)
 
   // SvelteFlow nodes and edges variables
   let NODES = $state.raw<LadderSFGraph['nodes']>(initialSfGraph.nodes)
@@ -97,8 +94,11 @@
   }
 
   // PathsList
-  // TODO: Would be better to compute this on demand
-  const pathsList = ladderGraph.getPathsList(context)
+  let pathsList = $state(
+    isNNFLadderGraphLirNode(ladderGraph)
+      ? ladderGraph.getPathsList(context)
+      : null
+  )
 
   /***********************************
       SvelteFlow hooks
@@ -135,7 +135,10 @@
       }
     )
 
-    const unsub = lir.subscribe(onLadderGraphNonPositionalChange)
+    const unsubs = [
+      lir.subscribe(onLadderGraphNonPositionalChange),
+      lir.subscribe(onPathsListChange),
+    ]
 
     /** Clean up when component is destroyed.
      *
@@ -156,28 +159,14 @@
      * In particular, I might need to do more when it comes to the PathsList and PathLirNodes.
      */
     return () => {
-      declLirNode.dispose(context)
-      unsub.unsubscribe()
+      funDeclLirNode.dispose(context)
+      unsubs.forEach((unsub) => unsub.unsubscribe())
     }
   })
 
   /*************************************
       Other SvelteFlow event listeners
   ***************************************/
-
-  // TODO: prob better to put this in ubool-var.svelte.ts
-  const onBoolVarNodeClick: SF.NodeEventWithPointer<MouseEvent | TouchEvent> = (
-    event
-  ) => {
-    const lirId = sfNodeToLirId(event.node as LadderSFNode)
-    const varNode = context.get(lirId) as UBoolVarLirNode
-
-    const newValue = cycle(varNode.getValue(context))
-    ladderGraph.submitNewBinding(context, {
-      unique: varNode.getUnique(context),
-      value: newValue,
-    })
-  }
 
   const onNodeDragStop: SF.NodeTargetEventWithPointer<
     MouseEvent | TouchEvent
@@ -215,7 +204,7 @@
    */
   const onLadderGraphNonPositionalChange = (context: LirContext, id: LirId) => {
     if (id === ladderGraph.getId()) {
-      const newSfGraph = ladderGraphToSFGraph(context, ladderGraph)
+      const newSfGraph = ladderGraphToSFGraph(ladderEnv, context, ladderGraph)
       NODES = newSfGraph.nodes
       EDGES = newSfGraph.edges
       sfIdToLirId = newSfGraph.sfIdToLirId
@@ -223,6 +212,19 @@
       // console.log('newSfGraph NODES', NODES)
 
       updateResultDisplay()
+    }
+  }
+
+  /*********************************************
+        PathsList event listener
+  **********************************************/
+  const onPathsListChange = (context: LirContext, id: LirId) => {
+    if (
+      isNNFLadderGraphLirNode(ladderGraph) &&
+      pathsList &&
+      id === pathsList.getId()
+    ) {
+      pathsList = ladderGraph.getPathsList(context)
     }
   }
 
@@ -316,7 +318,7 @@ Misc SF UI TODOs:
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
 <div class="overall-container">
-  <h1>{declLirNode.getFunName(context)}</h1>
+  <h1>{funDeclLirNode.getFunName(context)}</h1>
   <h2>{resultMessage}</h2>
   <div
     class="flow-container transition-opacity"
@@ -331,9 +333,6 @@ Misc SF UI TODOs:
       fitView
       connectionLineType={ConnectionLineType.Bezier}
       defaultEdgeOptions={{ type: 'bezier', animated: false }}
-      onnodeclick={(event) => {
-        if (isBoolVarSFNode(event.node)) onBoolVarNodeClick(event)
-      }}
       onnodedragstop={onNodeDragStop}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
@@ -348,7 +347,7 @@ Misc SF UI TODOs:
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
-  {#if isValidPathsListLirNode(pathsList)}
+  {#if pathsList && isNNFLadderGraphLirNode(ladderGraph)}
     <div class="paths-container">
       <!-- TODO: Make a standalone wrapper over the collapsible component, as suggested by https://bits-ui.com/docs/components/collapsible  -->
       <!-- Using setTimeout instead of window requestAnimationFrame because it can take time to generate the paths list the first time round -->
@@ -362,7 +361,7 @@ Misc SF UI TODOs:
           </button>
         </Collapsible.Trigger>
         <Collapsible.Content class="pt-2">
-          <PathsList {context} node={pathsList} />
+          <PathsList {context} node={pathsList} {ladderGraph} />
         </Collapsible.Content>
       </Collapsible.Root>
     </div>

@@ -4,6 +4,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 module L4.Annotation where
 
 import Base
@@ -11,16 +13,16 @@ import qualified Base.Text as Text
 import L4.Parser.SrcSpan
 
 import qualified Control.Monad.Extra as Extra
-import Data.Default
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified GHC.Generics as GHC
-import GHC.Stack
+import GHC.Stack.CCS
 import Generics.SOP as SOP
 import Generics.SOP.Constraint
 import Generics.SOP.NP
 import Generics.SOP.NS
 import Optics.Generic
 import Optics.Operators
+import System.IO.Unsafe
 
 data NodeVisibility
   = -- | A token cluster that is hidden because it was inserted by some tool.
@@ -41,7 +43,7 @@ data ConcreteSyntaxNode_ t = ConcreteSyntaxNode
   , range :: Maybe SrcRange
   , visibility :: NodeVisibility
   }
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 -- | A Concrete Syntax Node (CSN) cluster is a 'ConcreteSyntaxNode_' for tokens
@@ -51,17 +53,17 @@ data CsnCluster_ t = CsnCluster
   { payload :: ConcreteSyntaxNode_ t
   , trailing :: ConcreteSyntaxNode_ t
   }
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data AnnoElement_ t
   = AnnoHole (Maybe SrcRange)
   | AnnoCsn  (Maybe SrcRange) (CsnCluster_ t)
-  deriving stock (Show, Ord, Eq, GHC.Generic)
+  deriving stock (Show, Ord, Eq, GHC.Generic, Functor, Traversable, Foldable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 rangeOfAnnoElement :: AnnoElement_ t -> Maybe SrcRange
-rangeOfAnnoElement = \case
+rangeOfAnnoElement = \ case
   AnnoHole srcRange -> srcRange
   AnnoCsn srcRange _ -> srcRange
 
@@ -88,17 +90,20 @@ annoExtra = #extra
 allClusterTokens :: CsnCluster_ t -> [t]
 allClusterTokens cluster = cluster.payload.tokens <> cluster.trailing.tokens
 
-mkAnno :: Default e => [AnnoElement_ t] -> Anno_ t e
-mkAnno es = fixAnnoSrcRange $ Anno def Nothing es
+mkAnno :: Monoid e => [AnnoElement_ t] -> Anno_ t e
+mkAnno es = fixAnnoSrcRange $ Anno mempty Nothing es
 
-emptyAnno :: Default e => Anno_ t e
+emptyAnno :: Monoid e => Anno_ t e
 emptyAnno = mkAnno []
 
-instance Default e => Default (Anno_ t e) where
-  def = emptyAnno
+isEmptyAnno :: (Monoid e, Eq e) => Anno_ t e -> Bool
+isEmptyAnno ann
+  | Anno e Nothing [] <- ann
+  , e == mempty = True
+  | otherwise = False
 
-isEmptyAnno :: Anno_ t e -> Bool
-isEmptyAnno m = null m.payload
+pattern EmptyAnno :: (Monoid e, Eq e) => Anno_ t e
+pattern EmptyAnno <- (isEmptyAnno -> True)
 
 -- | Calculate the actual 'Maybe SrcRange' of this source annotation.
 --
@@ -122,7 +127,7 @@ type Anno' t = Anno_ (AnnoToken t) (AnnoExtra t)
 overAnno :: HasAnno t => (Anno' t -> Anno' t) -> t -> t
 overAnno f t = let a = getAnno t in setAnno (f a) t
 
-class (Default (AnnoExtra t)) => HasAnno t where
+class (Monoid (AnnoExtra t), Eq (AnnoExtra t)) => HasAnno t where
   type AnnoToken t :: Type
   type AnnoExtra t :: Type
   getAnno :: t -> Anno' t
@@ -140,7 +145,12 @@ genericSetAnno ann e = set (gposition @1) ann e
 genericGetAnno :: GPosition 1 s s a a => s -> a
 genericGetAnno e = e ^. gposition @1
 
-instance Default e => HasAnno (Anno_ t e) where
+-- | Reset the source annotations.
+-- Does not reset 'extra'.
+clearSourceAnno :: HasAnno t => t -> t
+clearSourceAnno = overAnno (\ann -> ann { range = Nothing, payload = [] } )
+
+instance (Monoid e, Eq e) => HasAnno (Anno_ t e) where
   type AnnoToken (Anno_ t e) = t
   type AnnoExtra (Anno_ t e) = e
   getAnno = id
@@ -157,11 +167,13 @@ instance (Head xs ~ Anno' a, All c (Tail xs), xs ~ (Head xs : Tail xs)) => AnnoF
 -- ----------------------------------------------------------------------------
 
 data TraverseAnnoError
-  = InsufficientHoleFit CallStack
-  deriving (Show)
+  = InsufficientHoleFit (Maybe SrcRange) String
+  deriving stock (Show)
 
 prettyTraverseAnnoError :: TraverseAnnoError -> Text
-prettyTraverseAnnoError (InsufficientHoleFit cs) = "HoleFit requested but not enough given at: " <> Text.pack (prettyCallStack cs)
+prettyTraverseAnnoError (InsufficientHoleFit mr cs) = Text.unlines
+  [ "HoleFit requested but not enough given at: " <> prettySrcRangeM mr
+  , Text.pack cs ]
 
 toNodesEither :: ToConcreteNodes t a => a -> Either TraverseAnnoError [CsnCluster_ t]
 toNodesEither = runExcept . toNodes
@@ -193,16 +205,20 @@ instance ToConcreteNodes t a => ToConcreteNodes t (Maybe a) where
   toNodes =
     maybe (pure []) toNodes
 
-flattenConcreteNodes :: (HasCallStack, MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
+flattenConcreteNodes :: (MonadError TraverseAnnoError m) => Anno_ t e -> [m [CsnCluster_ t]] -> m [CsnCluster_ t]
 flattenConcreteNodes (Anno _ _ csns) = go csns
   where
     go []                 _        = pure []
-    go (AnnoHole _ : cs)  holeFits =
+    go (AnnoHole mr : cs)  holeFits =
       case holeFits of
-        [] -> throwError $ InsufficientHoleFit callStack
+        [] -> throwInsufficientHolefit mr
         (x : xs) -> (<>) <$> x <*> go cs xs
     go (AnnoCsn _ m : cs) holeFits =
       (m :) <$> go cs holeFits
+
+{-# NOINLINE throwInsufficientHolefit #-}
+throwInsufficientHolefit :: MonadError TraverseAnnoError m => Maybe SrcRange -> m a
+throwInsufficientHolefit mr = throwError $ InsufficientHoleFit mr $ renderStack $ unsafePerformIO currentCallStack
 
 -- ----------------------------------------------------------------------------
 -- Source Range manipulation
@@ -286,7 +302,7 @@ isCsnClusterVisible :: CsnCluster_ t -> Bool
 isCsnClusterVisible csn = csn.payload.visibility == Visible
 
 debugShow :: AnnoElement_ t -> String
-debugShow = \case
+debugShow = \ case
   AnnoHole r -> "AnnoHole [" <> show r <> "]"
   AnnoCsn r p  -> "AnnoCsn [" <> show r <> "]: " <> show (p.payload.visibility, p.trailing.visibility, p.payload.range)
 
@@ -306,5 +322,11 @@ rangeOfNode a = case runExcept $ toNodes a of
 -- Annotation Instances
 -- ----------------------------------------------------------------------------
 
-instance Default e => Semigroup (Anno_ t e) where
-  (Anno _e1 _r1 m1) <> (Anno _e2 _r2 m2) = Anno def Nothing (m1 <> m2)
+instance (Monoid e, Eq e) => Semigroup (Anno_ t e) where
+  EmptyAnno <> ann = ann
+  ann <> EmptyAnno = ann
+  (Anno e1 r1 m1) <> (Anno e2 r2 m2)
+    | r1 == r2 = Anno (e1 <> e2) r1 (m1 <> m2)
+    -- NOTE: we do not know what to do when we're trying to merge
+    -- Anno's with different source ranges
+    | otherwise = Anno mempty Nothing (m1 <> m2)

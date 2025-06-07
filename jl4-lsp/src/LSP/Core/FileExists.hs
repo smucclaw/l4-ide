@@ -92,7 +92,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogFileStore msg -> pretty msg
     LogShake msg     -> pretty msg
 

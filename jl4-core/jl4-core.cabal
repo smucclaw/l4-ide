@@ -31,6 +31,7 @@ library
   hs-source-dirs: src
   build-depends:
     bytestring,
+    placeholder,
     cassava,
     containers,
     data-default,
@@ -50,9 +51,12 @@ library
     pretty-simple,
     prettyprinter,
     safe-exceptions,
+    scientific,
+    split,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
+    template-haskell,
 
   autogen-modules:
     Paths_jl4_core
@@ -66,17 +70,21 @@ library
     Paths_jl4_core
     L4.Annotation
     L4.Citations
+    L4.Desugar
     L4.Evaluate
     L4.Evaluate.Operators
     L4.Evaluate.Value
     L4.Evaluate.ValueLazy
     L4.EvaluateLazy
+    L4.EvaluateLazy.Machine
+    L4.EvaluateLazy.ContractFrame
     L4.ExactPrint
     L4.FindDefinition
-    L4.HoverInfo
     L4.Lexer
+    L4.Names
     L4.Nlg
     L4.Parser
+    L4.Parser.Anno
     L4.Parser.ResolveAnnotation
     L4.Parser.SrcSpan
     L4.ParserCombinators
@@ -86,7 +94,10 @@ library
     L4.TypeCheck
     L4.TypeCheck.Annotation
     L4.TypeCheck.Environment
+    L4.TypeCheck.Environment.TH
     L4.TypeCheck.Types
     L4.TypeCheck.Unify
     L4.TypeCheck.With
+    L4.Utils.IntervalMap
     L4.Utils.RevList
+    L4.Utils.Ratio

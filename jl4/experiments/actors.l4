@@ -1,0 +1,101 @@
+
+// we illustrate the labeled transition system of multi-agent contracts,
+// where moving parties act in time.
+
+IMPORT prelude
+
+DECLARE Actor IS ONE OF
+  NaturalPerson          HAS name IS A STRING
+  Company                ^   ^    ^  ^ ^
+
+DECLARE Action IS ONE OF
+  deliver  HAS itemName   IS A  STRING
+               quantity   IS A  NUMBER
+  pay      HAS amount     IS A  NUMBER
+  issue    HAS instrument IS AN Instrument
+
+DECLARE Instrument IS ONE OF
+  shares  HAS amount IS A NUMBER
+  debt    ^   ^      ^  ^ ^
+
+DECLARE `Symbol Table`
+    HAS bill      IS A NUMBER
+        beers     IS A NUMBER
+        potatoes  IS A NUMBER
+        log       IS A LIST OF STRING
+
+unicorn MEANS Company OF "Deca Unicorn, Inc."
+
+johnDoe MEANS NaturalPerson OF "John Doe"
+
+GIVEN investor IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`Series A Financing` MEANS
+  PARTY   investor
+  MUST    pay 200
+  WITHIN  10
+  HENCE   `Series A Issue` investor company newState
+  WHERE
+    newState MEANS `Symbol Table`
+      WITH
+        bill      IS symtab's bill
+        beers     IS symtab's beers + 2
+        potatoes  IS symtab's potatoes + 1
+        log       IS "investor paid $200" FOLLOWED BY symtab's log
+
+GIVEN investor IS A Actor
+      company  IS A Actor
+      symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`Series A Issue` MEANS
+  PARTY   company
+  MUST    issue (shares 300)
+  WITHIN  5
+  HENCE   returnFulfilled OF
+            `Symbol Table`
+              WITH
+                bill      IS      symtab's beers * 20
+                             PLUS symtab's potatoes + 4
+                beers     IS 0
+                potatoes  IS 0
+                log       IS "calculated final bill" FOLLOWED BY symtab's log
+
+
+GIVEN symtab   IS A `Symbol Table`
+GIVETH PROVISION Actor Action
+`returnFulfilled` MEANS FULFILLED
+
+
+GIVETH A `Symbol Table`
+startState MEANS
+  `Symbol Table` WITH
+    bill      IS 0
+    beers     IS 0
+    potatoes  IS 0
+    log       IS (LIST "", "obasdf")
+
+-- mouseover the following to see that after johnDoe pays $200,
+-- the contract is not fulfilled yet, because the company has not issued
+-- the equity yet. So you will see the "residual" contract in the mouseover.
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+
+
+-- Now the trace has one additional step: the company issues equity correctly.
+-- And you will see that the residual contract is simply fulfilled.
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+  PARTY unicorn DOES issue (shares 300) AT 3
+
+
+-- If the company issued the equity, but late, the contract is breached.
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
+  PARTY johnDoe DOES pay 200 AT 2
+  PARTY unicorn DOES issue (shares 300) AT 13
+
+
+
+#TRACE `Series A Financing` johnDoe unicorn startState AT 1 WITH
+  PARTY johnDoe DOES pay 0 AT 20

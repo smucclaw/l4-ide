@@ -542,3 +542,9 @@ GIVEN
 GIVETH A LIST OF a
 nub list MEANS
   nubBy (GIVEN x, y YIELD x EQUALS y) list
+
+-- polymorphic placeholder
+GIVEN
+  a IS A TYPE
+GIVETH AN a
+ASSUME TBD

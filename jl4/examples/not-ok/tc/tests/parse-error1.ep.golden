@@ -10,4 +10,4 @@ File: parse-error1.l4
     12 | GIVEN n IS A NUMBER
        | ^^^^^
     unexpected GIVEN
-    expecting ELSE or space token
+    expecting %, ELSE, or space token

@@ -2,7 +2,10 @@ import type { FunDecl, IRExpr, IRId } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
-import type { LirSource, LirId, LirNodeInfo } from '../layout-ir/core.js'
+import type { LirId, LirNodeInfo } from '../layout-ir/core.js'
+import type { LadderLirSource } from '../layout-ir/ladder-lir-source.js'
+import type { LadderEnv } from '$lib/ladder-env.js'
+import type { LadderGraphLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
 import {
   FunDeclLirNode,
   UBoolVarLirNode,
@@ -11,13 +14,16 @@ import {
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
   SinkLirNode,
-  LadderGraphLirNode,
   augmentEdgesWithExplanatoryLabel,
+  AppLirNode,
+  TrueExprLirNode,
+  FalseExprLirNode,
+  makeLadderGraphLirNode,
 } from '../layout-ir/ladder-graph/ladder.svelte.js'
-import type { DirectedAcyclicGraph } from '../algebraic-graphs/dag.js'
+import type { DirectedAcyclicGraph, Vertex } from '../algebraic-graphs/dag.js'
 /* IMPT: Cannot currently use $lib for the following import,
 because of how the functions were defined */
-import { vertex, overlay } from '../algebraic-graphs/dag.js'
+import { vertex, overlays } from '../algebraic-graphs/dag.js'
 
 import { match } from 'ts-pattern'
 
@@ -25,14 +31,18 @@ import { match } from 'ts-pattern'
         Lir Data Sources
 ************************************/
 
-export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, decl: FunDecl): FunDeclLirNode {
-    return new FunDeclLirNode(
+export const VizDeclLirSource: LadderLirSource<FunDecl, FunDeclLirNode> = {
+  async toLir(
+    nodeInfo: LirNodeInfo,
+    env: LadderEnv,
+    decl: FunDecl
+  ): Promise<FunDeclLirNode> {
+    const ladderGraph = await LadderGraphLirSource.toLir(
       nodeInfo,
-      decl.name,
-      decl.params,
-      LadderGraphLirSource.toLir(nodeInfo, decl.body)
+      env,
+      decl.body
     )
+    return new FunDeclLirNode(nodeInfo, decl.name, decl.params, ladderGraph)
   },
 }
 
@@ -44,37 +54,43 @@ export const VizDeclLirSource: LirSource<FunDecl, FunDeclLirNode> = {
     nested exprs like (AND [a (AND [b])]) should have already been flattened to (AND [a b]).
 *
 */
-export const LadderGraphLirSource: LirSource<IRExpr, LadderGraphLirNode> = {
-  toLir(nodeInfo: LirNodeInfo, expr: IRExpr): LadderGraphLirNode {
-    // 1. Get structure of the graph
-    const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
-    const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
+export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
+  {
+    async toLir(
+      nodeInfo: LirNodeInfo,
+      env: LadderEnv,
+      expr: IRExpr
+    ): Promise<LadderGraphLirNode> {
+      // 1. Get structure of the graph
+      const overallSource = vertex(new SourceNoAnnoLirNode(nodeInfo).getId())
+      const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
+      const {
+        graph: middle,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph,
+      } = transform(nodeInfo, new Map(), expr, env)
+      const dag = sandwichWithSourceAndSink(overallSource, overallSink, middle)
+      vizExprToLirGraph.set(expr.id, dag)
 
-    const { graph: middle, vizExprToLirGraph } = transform(
-      nodeInfo,
-      new Map(),
-      expr
-    )
+      const finalNoIntermediateBundlingNodeGraph = overallSource
+        .connect(noIntermediateBundlingNodeGraph)
+        .connect(overallSink)
 
-    const dag = overallSource
-      .connect(middle.getSource())
-      .overlay(middle)
-      .overlay(middle.getSink().connect(overallSink))
-    vizExprToLirGraph.set(expr.id, dag)
+      const ladderGraph = await makeLadderGraphLirNode(
+        nodeInfo,
+        dag,
+        vizExprToLirGraph,
+        finalNoIntermediateBundlingNodeGraph,
+        expr,
+        env
+      )
 
-    const ladderGraph = new LadderGraphLirNode(
-      nodeInfo,
-      dag,
-      vizExprToLirGraph,
-      expr
-    )
+      // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
+      augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
 
-    // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
-    augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
-
-    return ladderGraph
-  },
-}
+      return ladderGraph
+    },
+  }
 
 // TODO2: Attach a group id to the label for the flownode to make it easier to debug
 // TODO3: Return the number of groups as metadata in the FlowGraph
@@ -83,14 +99,16 @@ export interface ToLirResult {
   graph: DirectedAcyclicGraph<LirId>
   /** TODO: Would be better to use a branded type over the underlying number for IRId, instead of the IRId wrapper */
   vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>
+  noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>
 }
 
 /** Internal helper */
 function transform(
   nodeInfo: LirNodeInfo,
   /** vizExprToLirEnv */
-  env: Map<IRId, DirectedAcyclicGraph<LirId>>,
-  expr: IRExpr
+  veToLir: Map<IRId, DirectedAcyclicGraph<LirId>>,
+  expr: IRExpr,
+  ladderEnv: LadderEnv
 ): ToLirResult {
   /*
   One of the insights behind the ladder diagram, in particular, behind Meng's `layman`:
@@ -115,62 +133,101 @@ function transform(
   */
 
   return match(expr)
-    .with({ $type: 'UBoolVar' }, (originalVar) => {
-      const uboolvar = new UBoolVarLirNode(nodeInfo, originalVar)
-      const graph = vertex(uboolvar.getId())
-      const newEnv = new Map(env).set(originalVar.id, graph)
-      return { graph, vizExprToLirGraph: newEnv }
+    .with({ $type: 'UBoolVar' }, (varExpr) => {
+      const graph = vertex(new UBoolVarLirNode(nodeInfo, varExpr).getId())
+      const vizExprToLirGraph = new Map(veToLir).set(varExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
     })
     .with({ $type: 'Not' }, (neg) => {
-      const { graph: negand, vizExprToLirGraph: negandEnv } = transform(
-        nodeInfo,
-        env,
-        neg.negand
-      )
+      const {
+        graph: negand,
+        vizExprToLirGraph: negandEnv,
+        noIntermediateBundlingNodeGraph: negandNoIntermediateBundlingNodeGraph,
+      } = transform(nodeInfo, veToLir, neg.negand, ladderEnv)
+
+      // Make the NOT subgraph
       const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
 
-      const notGraph = notStart
-        .connect(negand.getSource())
-        .overlay(negand)
-        .overlay(negand.getSink().connect(notEnd))
-      const newEnv = new Map([...env, ...negandEnv]).set(neg.id, notGraph)
+      const notGraph = sandwichWithSourceAndSink(notStart, notEnd, negand)
+      const noIntermediateBundlingNodeGraph = sandwichWithSourceAndSink(
+        notStart,
+        notEnd,
+        negandNoIntermediateBundlingNodeGraph
+      )
 
-      return { graph: notGraph, vizExprToLirGraph: newEnv }
+      // Combine the envs
+      const combinedEnv = new Map([...veToLir, ...negandEnv]).set(
+        neg.id,
+        notGraph
+      )
+
+      return {
+        graph: notGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'And' }, (andExpr) => {
       const childResults = andExpr.args.map((arg) =>
-        transform(nodeInfo, env, arg)
+        transform(nodeInfo, veToLir, arg, ladderEnv)
       )
       const childGraphs = childResults.map((result) => result.graph)
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
 
-      const combinedGraph = childGraphs.reduceRight((acc, left) => {
-        const accSource = acc.getSource()
+      // Make the AND subgraph
+      const makeAndGraph = (
+        left: DirectedAcyclicGraph<LirId>,
+        right: DirectedAcyclicGraph<LirId>
+      ) => {
+        const rightSource = right.getSource()
         const leftSink = left.getSink()
-        return leftSink.connect(accSource).overlay(left).overlay(acc)
-      })
+        return leftSink.connect(rightSource).overlay(left).overlay(right)
+      }
+      const makeAndForNoIntermediateBN = (
+        left: DirectedAcyclicGraph<LirId>,
+        right: DirectedAcyclicGraph<LirId>
+      ) => {
+        return left.connect(right)
+      }
 
+      const combinedGraph = childGraphs.reduce(makeAndGraph)
+      const noIntermediateBundlingNodeGraph =
+        childNoIntermediateBundlingNodeGraphs.reduce(makeAndForNoIntermediateBN)
+
+      // Combine envs from all child transformations
       const allEnvs = [
-        env,
+        veToLir,
         ...childResults.map((result) => result.vizExprToLirGraph),
       ]
-      const combinedEnv = new Map(
-        allEnvs.reduceRight(
-          (accEntries, env) => [...env, ...accEntries],
-          [] as [IRId, DirectedAcyclicGraph<LirId>][]
-        )
-      ).set(andExpr.id, combinedGraph)
+      const combinedEnv = combineEnvs(allEnvs).set(andExpr.id, combinedGraph)
 
-      return { graph: combinedGraph, vizExprToLirGraph: combinedEnv }
+      return {
+        graph: combinedGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'Or' }, (orExpr) => {
-      const childResults = orExpr.args.map((n) => transform(nodeInfo, env, n))
+      const childResults = orExpr.args.map((n) =>
+        transform(nodeInfo, veToLir, n, ladderEnv)
+      )
       const childGraphs = childResults.map((result) => result.graph)
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
 
+      // Make the OR subgraph
       const overallSource = vertex(
         new SourceWithOrAnnoLirNode(
           nodeInfo,
-          nodeInfo.context.getOrBundlingNodeLabel()
+          ladderEnv.getOrBundlingNodeLabel()
         ).getId()
       )
       const overallSink = vertex(new SinkLirNode(nodeInfo).getId())
@@ -182,29 +239,107 @@ function transform(
         child.getSink().connect(overallSink)
       )
 
-      const orGraph = [
+      const orGraph = overlays([
         overallSource,
         ...leftEdges,
         ...childGraphs,
         ...rightEdges,
-      ].reduce(overlay)
+      ])
 
-      // Envs
+      // Combine envs from all child transformations
       const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
-      const newEnv = new Map(
-        childEnvs.reduceRight(
-          (entries, env) => [...env, ...entries],
-          [] as [IRId, DirectedAcyclicGraph<LirId>][]
-        )
-      ).set(orExpr.id, orGraph)
+      const combinedEnv = combineEnvs([veToLir, ...childEnvs]).set(
+        orExpr.id,
+        orGraph
+      )
 
-      return { graph: orGraph, vizExprToLirGraph: newEnv }
+      // noIntermediateBundlingNodeGraph
+      const noIntermediateBundlingNodeGraph = overlays(
+        childNoIntermediateBundlingNodeGraphs
+      )
+
+      return {
+        graph: orGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph,
+      }
     })
     .with({ $type: 'App' }, (app) => {
-      console.log('app: \n', app)
-      throw new Error(
-        `viz-expr-to-lir: App translation not yet implemented. ${JSON.stringify(app, undefined, 2)}`
+      console.log(
+        'Note: the App Ladder node currently only supports UBoolVar arguments'
       )
+      const childResults = app.args
+        .filter((arg) => arg.$type === 'UBoolVar')
+        .map((arg) => transform(nodeInfo, veToLir, arg, ladderEnv))
+
+      // Get the transformed arg lir nodes
+      const argNodes = childResults
+        .map((result) => (result.graph as Vertex<LirId>).getValue())
+        .map((id) => nodeInfo.context.get(id) as UBoolVarLirNode)
+
+      // Make the App node and its graph
+      const appNode = new AppLirNode(nodeInfo, app.fnName, argNodes)
+      const appGraph = vertex(appNode.getId())
+
+      // Combine envs from all child transformations
+      const childEnvs = childResults.map((result) => result.vizExprToLirGraph)
+      const combinedEnv = combineEnvs([veToLir, ...childEnvs]).set(
+        app.id,
+        appGraph
+      )
+
+      return {
+        graph: appGraph,
+        vizExprToLirGraph: combinedEnv,
+        noIntermediateBundlingNodeGraph: appGraph,
+      }
+    })
+    .with({ $type: 'TrueE' }, (trueExpr) => {
+      const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
+      const vizExprToLirGraph = new Map(veToLir).set(trueExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
+    })
+    .with({ $type: 'FalseE' }, (falseExpr) => {
+      const graph = vertex(
+        new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
+      )
+      const vizExprToLirGraph = new Map(veToLir).set(falseExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
     })
     .exhaustive()
+}
+
+/****************************
+     Helper functions
+ ****************************/
+
+/** Helper to combine multiple environments into one */
+function combineEnvs(
+  envs: Map<IRId, DirectedAcyclicGraph<LirId>>[]
+): Map<IRId, DirectedAcyclicGraph<LirId>> {
+  return new Map(
+    envs.reduceRight(
+      (accEntries, env) => [...env, ...accEntries],
+      [] as [IRId, DirectedAcyclicGraph<LirId>][]
+    )
+  )
+}
+
+function sandwichWithSourceAndSink(
+  overallSource: Vertex<LirId>,
+  overallSink: Vertex<LirId>,
+  middle: DirectedAcyclicGraph<LirId>
+) {
+  return overallSource
+    .connect(middle.getSource())
+    .overlay(middle)
+    .overlay(middle.getSink().connect(overallSink))
 }

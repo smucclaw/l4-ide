@@ -165,19 +165,34 @@
   --color-false-value: var(--color-rose-200);
 }
 
+/***************************************
+         UBoolVarNode border 
+****************************************/
+
+.ubool-var-node-border {
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
+  border-radius: var(--ladder-node-border-radius);
+}
+
 /*************************************
-  Utility SF styles
+        Utility classes
 *************************************/
 
-@utility svelte-flow__node-basic {
+/* Need !important in true-val and false-val to be able to override base / default background colors
+that a node might have (e.g., the darker background of (the 'function part' of) an App node). */
+@utility true-val {
+  background-color: var(--color-true-value) !important;
+}
+
+@utility false-val {
+  background-color: var(--color-false-value) !important;
+}
+
+@utility base-sf-node-styles {
   font-size: 1rem;
   text-align: center;
 
   color: var(--ladder-node-color, var(--ladder-node-color-default));
-  background-color: var(
-    --xy-node-background-color,
-    var(--xy-node-background-color-default)
-  );
 }
 
 /** Controls min/max widths of the labels,
@@ -215,7 +230,7 @@
 
 /** For the source and sink bundling nodes */
 @utility bundling-node {
-  @apply svelte-flow__node-basic;
+  @apply base-sf-node-styles;
   /* Will lose the bundling node if width is 0 px */
   width: 1px;
   height: 1px;
@@ -236,23 +251,24 @@
   opacity: var(--opacity-ladder-nonviable);
 }
 
-/*************************************
-  Other styles
-*************************************/
-
-body {
-  color: var(--color-primary);
-  background-color: white;
-  margin: 0;
+@utility bool-lit-node-border {
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
+  border-radius: 2px;
 }
 
-/* svelte-flow specific */
+/*************************************
+    Other SF styles
+*************************************/
 
 :root,
 .svelte-flow {
+  /* Border style variables */
+  --ladder-node-border-width-default: 2px;
+  --ladder-node-border-width: var(--ladder-node-border-width-default);
+  --ladder-node-border-color: var(--color-primary);
   --ladder-node-border-radius: var(--radius);
+
   --ladder-node-color: var(--color-node-text, var(--color-primary));
-  --ladder-node-border: 2px solid var(--color-primary);
 
   /* TODO: Refactor the stuff below to move away from fragile overriding of
   --xy-* styles  */
@@ -264,4 +280,22 @@ body {
     font-optical-sizing: auto;
     font-style: normal;
   }
+}
+
+/* Override border properties when highlighted */
+.highlighted-ladder-node {
+  --ladder-node-border-width: calc(
+    var(--ladder-node-border-width-default) + 1px
+  );
+  --ladder-node-border-color: var(--color-highlighted-path-in-flow);
+}
+
+/*************************************
+  Other styles
+*************************************/
+
+body {
+  color: var(--color-primary);
+  background-color: white;
+  margin: 0;
 }

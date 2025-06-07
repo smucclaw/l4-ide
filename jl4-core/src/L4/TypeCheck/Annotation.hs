@@ -20,26 +20,16 @@ resolveNlgAnnotation a = do
         MkParsedNlg ann frags -> do
           resolvedFrags <- traverse resolveNlgFragment frags
           pure $ MkResolvedNlg ann resolvedFrags
-      pure $ a & annoOf % annNlg ?~ resolvedNlg
+      setAnnNlg resolvedNlg a
 
 resolveNlgFragment :: NlgFragment Name -> Check (NlgFragment Resolved)
-resolveNlgFragment = \case
+resolveNlgFragment = \ case
   MkNlgText ann t -> pure $ MkNlgText ann t
   MkNlgRef ann n ->
     MkNlgRef ann . fst <$> resolveTerm n
 
 resolveNlgAnnotationInResolved :: Resolved -> Check Resolved
-resolveNlgAnnotationInResolved = \case
-  Def uniq name -> do
-    Def uniq <$> resolveNlgAnnotation name
-  Ref refName uniq origName ->
-    Ref
-      <$> resolveNlgAnnotation refName
-      <*> pure uniq
-      <*> pure origName
-  OutOfScope uniq origName -> do
-    OutOfScope uniq <$> resolveNlgAnnotation origName
-
+resolveNlgAnnotationInResolved = traverseResolved resolveNlgAnnotation
 
 nlgDecide :: Decide Resolved -> Check (Decide Resolved)
 nlgDecide (MkDecide ann tySig appForm body) =
@@ -49,7 +39,7 @@ nlgDecide (MkDecide ann tySig appForm body) =
     <*> nlgExpr body
 
 nlgExpr :: Expr Resolved -> Check (Expr Resolved)
-nlgExpr = \case
+nlgExpr = \ case
     And ann e1 e2 -> do
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
@@ -58,6 +48,14 @@ nlgExpr = \case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ Or ann e1' e2'
+    RAnd ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ RAnd ann e1' e2'
+    ROr ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ ROr ann e1' e2'
     Implies ann e1 e2 -> do
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
@@ -134,6 +132,14 @@ nlgExpr = \case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ IfThenElse ann b' e1' e2'
+    Regulative ann (MkObligation ann'' party (MkAction ann' rule provided) deadline followup lest) -> do
+      party' <- nlgExpr party
+      rule' <- nlgPattern rule
+      provided' <- traverse nlgExpr provided
+      deadline' <- traverse nlgExpr deadline
+      followup' <- traverse nlgExpr followup
+      lest' <- traverse nlgExpr lest
+      pure $ Regulative ann (MkObligation ann'' party' (MkAction ann' rule' provided') deadline' followup' lest')
     Consider ann e branches  -> do
       e' <- nlgExpr e
       -- Since the bindings in the branches bring new variables into
@@ -142,6 +148,8 @@ nlgExpr = \case
       pure $ Consider ann e' branches
     expr@Lit{} -> do
       pure expr
+    Percent ann expr -> do
+      Percent ann <$> nlgExpr expr
     List ann es -> do
       es' <- traverse nlgExpr es
       pure $ List ann es'
@@ -150,9 +158,14 @@ nlgExpr = \case
       -- scope, we have to resolve the annotations when checking the 'Where'
       -- case. Thus, we don't need to traverse it here again.
       pure $ Where ann e lcl
+    Event ann (MkEvent ann' e e1 e2 atFirst) -> do
+      e' <- nlgExpr e
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Event ann (MkEvent ann' e' e1' e2' atFirst)
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
-nlgPattern = \case
+nlgPattern = \ case
   PatVar ann n ->
     PatVar ann
       <$> resolveNlgAnnotationInResolved n
@@ -164,9 +177,10 @@ nlgPattern = \case
     PatCons ann
       <$> nlgPattern pat
       <*> nlgPattern pats
-
+  PatExpr ann expr -> pure $ PatExpr ann expr
+  PatLit ann lit -> pure $ PatLit ann lit
 nlgLocalDecl :: LocalDecl Resolved -> Check (LocalDecl Resolved)
-nlgLocalDecl = \case
+nlgLocalDecl = \ case
   LocalDecide ann decide ->
     LocalDecide ann
       <$> nlgDecide decide
@@ -175,7 +189,7 @@ nlgLocalDecl = \case
       <$> nlgAssume assume
 
 nlgAssume :: Assume Resolved -> Check (Assume Resolved)
-nlgAssume = \case
+nlgAssume = \ case
   MkAssume ann tySig appForm mTy ->
     MkAssume ann
       <$> nlgTypeSig tySig
@@ -183,7 +197,7 @@ nlgAssume = \case
       <*> traverse nlgType mTy
 
 nlgNamedExpr :: NamedExpr Resolved -> Check (NamedExpr Resolved)
-nlgNamedExpr = \case
+nlgNamedExpr = \ case
   MkNamedExpr ann n expr ->
     MkNamedExpr ann
       <$> resolveNlgAnnotationInResolved n
@@ -208,7 +222,7 @@ nlgGivethSig (MkGivethSig ann ty) =
     <$> nlgType ty
 
 nlgType :: Type' Resolved -> Check (Type' Resolved)
-nlgType = \case
+nlgType = \ case
   Type   ann ->
     pure $ Type ann
   TyApp  ann n tys ->
@@ -249,7 +263,7 @@ nlgDeclare (MkDeclare ann tysig appForm tydecl) =
     <*> nlgTypeDecl tydecl
 
 nlgTypeDecl :: TypeDecl Resolved -> Check (TypeDecl Resolved)
-nlgTypeDecl = \case
+nlgTypeDecl = \ case
   RecordDecl ann mName typedNames ->
     RecordDecl ann
       <$> traverse resolveNlgAnnotationInResolved mName

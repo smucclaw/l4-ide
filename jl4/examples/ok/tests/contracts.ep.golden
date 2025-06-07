@@ -1,0 +1,108 @@
+DECLARE Person IS ONE OF B, S
+DECLARE Action IS ONE OF 
+  delivery 
+  payment HAS amount IS A NUMBER
+  foo
+
+aContract MEANS 
+  PARTY S
+  MUST delivery 
+  WITHIN 3
+  HENCE 
+    PARTY B
+    MUST payment price PROVIDED price >= 20
+    WITHIN 3
+    HENCE (IF price = 20 THEN FULFILLED ELSE PARTY B MUST return WITHIN 10)
+    LEST
+      PARTY B
+      MUST EXACTLY payment fine
+      WITHIN 3
+  WHERE
+  fine MEANS 10
+
+#TRACE aContract AT 0 WITH
+  PARTY 2
+  DOES S AT delivery PARTY 4
+  DOES B AT payment 21 `WAIT UNTIL` 10
+
+
+#TRACE aContract AT 0 WITH
+  PARTY 2
+  DOES S AT delivery PARTY 4
+
+DOES B AT payment 20 #TRACE aContract AT 0 WITH
+  PARTY 2
+  DOES S AT delivery PARTY 6
+  DOES B AT payment 30 PARTY 9
+
+DOES B AT payment 10 #EVAL EVALTRACE x 5 (LIST EVENT S delivery 5, EVENT B (payment 3) 42)
+
+GIVETH PROVISION Person Action
+x MEANS 
+  PARTY S
+  MUST delivery
+  WITHIN 3
+
+GIVETH PROVISION Person Action
+y MEANS 
+  PARTY B
+  MUST payment EXACTLY n
+  WITHIN 5
+  WHERE
+  n MEANS 2
+
+foo MEANS 
+  CONSIDER 5 
+    WHEN EXACTLY 3 THEN 6
+
+#TRACE y AT 0 WITH
+  PARTY 5
+  DOES B AT payment 2 AT S PARTY delivery
+
+DOES 20 DECLARE foo IS ONE OF bar, qux
+DECLARE baz IS ONE OF baz HAS x IS A foo
+                      quuux
+
+quux MEANS 
+  PARTY B MUST baz bar 
+
+#TRACE quux AT 0 WITH
+  PARTY 1
+  DOES B AT quuux PARTY 1
+  DOES B AT baz qux PARTY 1
+
+DOES B AT baz bar GIVETH PROVISION Person Action
+z MEANS 
+  x ROR y
+
+a MEANS 
+  z RAND z 
+
+#TRACE ((PARTY B MUST payment) ROR FULFILLED) AT 2 WITH
+
+#TRACE x AT 4 WITH 
+  PARTY 4
+
+DOES S AT delivery #TRACE y AT 4 WITH 
+  PARTY 4
+
+DOES B AT payment 4 #TRACE z AT 4 WITH 
+  PARTY 4
+  DOES S AT delivery PARTY 26
+
+DOES B AT payment 4 #TRACE z AT 4 WITH
+  PARTY 4
+  DOES S AT delivery PARTY 26
+
+DOES B AT payment 5 goesOn MEANS
+  PARTY S 
+  MUST payment n PROVIDED n = 7  
+  WITHIN 2
+
+#TRACE goesOn AT 0 WITH 
+  PARTY 2
+  DOES S AT delivery PARTY 3
+  
+DOES B AT payment 6 #TRACE goesOn AT 0 WITH 
+  PARTY 2
+  DOES S AT delivery PARTY 3DOES S AT payment 7 

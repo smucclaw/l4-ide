@@ -14,6 +14,7 @@ import qualified Generics.SOP as SOP
 import Optics
 import qualified Base.Text as Text
 import qualified Data.List.NonEmpty as NE
+import Control.Applicative
 
 data Name = MkName Anno RawName
   deriving stock (GHC.Generic, Eq, Show)
@@ -51,6 +52,12 @@ getUnique :: Resolved -> Unique
 getUnique (Def u _)        = u
 getUnique (Ref _ u _)      = u
 getUnique (OutOfScope u _) = u
+
+traverseResolved :: Applicative f => (Name -> f Name) -> Resolved -> f Resolved
+traverseResolved f =  \ case
+  Def u n ->  Def u <$> f n
+  Ref r u o -> Ref <$> f r <*> pure u <*> pure o
+  OutOfScope u n -> OutOfScope u <$> f n
 
 -- | Extract the raw name from a name.
 rawName :: Name -> RawName
@@ -150,6 +157,18 @@ data Directive n =
     StrictEval Anno (Expr n)
   | LazyEval Anno (Expr n)
   | Check Anno (Expr n)
+  | Contract Anno (Expr n) (Expr n) [Expr n]
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data Event n
+  = MkEvent
+  { anno :: Anno
+  , party :: Expr n
+  , action :: Expr n
+  , timestamp :: Expr n
+  , atFirst :: Bool
+  }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -175,6 +194,9 @@ data Expr n =
     -- (var1 AND var3) AND {- Comment -}var2
     -- [AnnoHole, CSN "AND", CSN " ", CSN "{- Comment -}", AnnoHole]
   | Or         Anno (Expr n) (Expr n)
+  -- regulative and / or
+  | RAnd        Anno (Expr n) (Expr n)
+  | ROr         Anno (Expr n) (Expr n)
   | Implies    Anno (Expr n) (Expr n)
   | Equals     Anno (Expr n) (Expr n)
   | Not        Anno (Expr n)
@@ -194,11 +216,37 @@ data Expr n =
   | App        Anno n [Expr n]
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
+  | Regulative Anno (Obligation n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
   | Lit        Anno Lit
+  | Percent    Anno (Expr n)
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
+  | Event      Anno (Event n)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+-- | obligations ala CSL; this represents an obligation with the following form:
+-- <party> action(params) due <maybe time> (fromMaybe 0) <maybe then> (fromMaybe fulfilment)
+data Obligation n
+  = MkObligation
+  { anno :: Anno
+  , party :: Expr n
+  , action :: RAction n
+  , due :: Maybe (Expr n)
+  , hence :: Maybe (Expr n)
+  , lest :: Maybe (Expr n)
+  }
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data RAction n
+  = MkAction
+  { anno :: Anno
+  , action :: Pattern n
+  , provided :: Maybe (Expr n)
+  }
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -208,7 +256,7 @@ data NamedExpr n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Lit =
-    NumericLit Anno Int
+    NumericLit Anno Rational
   | StringLit  Anno Text
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
@@ -224,6 +272,8 @@ data Pattern n =
     -- ^ not used during parsing, but after scope-checking
   | PatApp Anno n [Pattern n]
   | PatCons Anno (Pattern n) (Pattern n)
+  | PatExpr Anno (Expr n)
+  | PatLit Anno Lit
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -276,6 +326,12 @@ foldTopDecls
   :: forall n m. (Monoid m) => (TopDecl n -> m) -> Module n -> m
 foldTopDecls = _foldNodeType
 
+-- | Given a @'Decide' n@, runs a 'foldMap' over *all* 'Decide' nodes
+-- within it (including itself *and* nested ones, e.g. in 'Where' clauses).
+foldDecides
+  :: forall n m. (Monoid m) => (Decide n -> m) -> Decide n -> m
+foldDecides = Optics.foldMapOf $ Optics.cosmosOf (Optics.gplate @(Decide n))
+
 overImports :: forall nodeType n. (Optics.GPlate (Import n) (nodeType n)) => (Import n -> Import n) -> nodeType n -> nodeType n
 overImports = Optics.over Optics.gplate
 
@@ -292,10 +348,21 @@ appFormHeads (MkAppForm _ann n _ns maka) =
 appFormArgs :: Lens' (AppForm n) [n]
 appFormArgs = lensVL (\ wrap (MkAppForm ann n ns maka) -> (\ wns -> MkAppForm ann n wns maka) <$> wrap ns)
 
+decideBody :: Lens' (Decide n) (Expr n)
+decideBody = lens
+             (\(MkDecide _ _ (MkAppForm{}) body)       -> body)
+             (\(MkDecide dann tys appf _oldBody) body' -> MkDecide dann tys appf body')
+
 updateImport :: Eq n => [(n, NormalizedUri)] -> Import n -> Import n
 updateImport imported i@(MkImport ann n _) = case mapMaybe (\(importName, importUri) -> if importName == n then Just importUri else Nothing) imported of
   (u' : _) -> MkImport ann n (Just u')
   [] -> i
+
+moduleTopDecls :: Lens' (Module n) [TopDecl n]
+moduleTopDecls = lens
+                 (\(MkModule _ _ (MkSection _ _ _ decls)) -> decls)
+                 (\(MkModule ann nuri (MkSection sann sresolved maka _oldDecls)) decls ->
+                     MkModule ann nuri (MkSection sann sresolved maka decls))
 
 -- ----------------------------------------------------------------------------
 -- Source Annotations
@@ -308,10 +375,17 @@ data Extension = Extension
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+instance Semigroup Extension where
+  Extension i1 nlg1 <> Extension i2 nlg2 =
+    Extension (i1 <|> i2) (nlg1 <|> nlg2)
+
+instance Monoid Extension where
+  mempty = Extension Nothing Nothing
+
 data Info =
-    TypeInfo (Type' Resolved) (Maybe Nlg)
+    TypeInfo (Type' Resolved) (Maybe TermKind)
   | KindInfo Kind
-  | KeywordInfo
+  | TypeVariable
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -331,6 +405,15 @@ annNlg = #extra % #nlg
 
 setNlg :: Nlg -> Anno -> Anno
 setNlg n a = a & annNlg ?~ n
+
+data TermKind =
+    Computable -- ^ a variable with known definition (let or global)
+  | Assumed
+  | Local -- ^ a local variable (introduced by a lambda or pattern)
+  | Constructor
+  | Selector
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 type Anno = Anno_ PosToken Extension
 type AnnoElement = AnnoElement_ PosToken
@@ -381,6 +464,12 @@ deriving via L4Syntax (ConDecl n)
   instance HasAnno (ConDecl n)
 deriving via L4Syntax (Expr n)
   instance HasAnno (Expr n)
+deriving via L4Syntax (Obligation n)
+  instance HasAnno (Obligation n)
+deriving via L4Syntax (RAction n)
+  instance HasAnno (RAction n)
+deriving via L4Syntax (Event n)
+  instance HasAnno (Event n)
 deriving via L4Syntax (NamedExpr n)
   instance HasAnno (NamedExpr n)
 deriving via L4Syntax Lit
@@ -417,6 +506,8 @@ deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
+deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
+deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Name)
@@ -426,6 +517,12 @@ deriving anyclass instance ToConcreteNodes PosToken (GivethSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (GivenSig Name)
 deriving anyclass instance ToConcreteNodes PosToken (Directive Name)
 deriving anyclass instance ToConcreteNodes PosToken (Import Name)
+
+instance ToConcreteNodes PosToken (Event Name) where
+  toNodes (MkEvent ann party does ts atFirst) =
+    if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 instance ToConcreteNodes PosToken (Module Name) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
@@ -451,6 +548,8 @@ deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (RAction Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (NamedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Branch Resolved)
@@ -463,6 +562,10 @@ deriving anyclass instance ToConcreteNodes PosToken (Import Resolved)
 instance ToConcreteNodes PosToken (Module Resolved) where
   toNodes (MkModule ann _ secs) = flattenConcreteNodes ann [toNodes secs]
 
+instance ToConcreteNodes PosToken (Event Resolved) where
+  toNodes (MkEvent ann party does ts atFirst) = if atFirst
+      then flattenConcreteNodes ann [toNodes party, toNodes does, toNodes ts]
+      else flattenConcreteNodes ann [toNodes ts, toNodes party, toNodes does]
 
 data Comment = MkComment Anno [Text]
   deriving stock (Show, Eq, GHC.Generic)
@@ -517,7 +620,7 @@ instance ToConcreteNodes PosToken Comment where
 deriving anyclass instance ToConcreteNodes PosToken Nlg
 
 instance ToConcreteNodes PosToken n => ToConcreteNodes PosToken (NlgFragment n) where
-  toNodes = \case
+  toNodes = \ case
     MkNlgText ann _ -> flattenConcreteNodes ann []
     MkNlgRef ann n -> flattenConcreteNodes ann [toNodes n]
 
@@ -571,6 +674,7 @@ deriving anyclass instance HasSrcRange (Decide a)
 deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)
+deriving anyclass instance HasSrcRange (Obligation a)
 deriving anyclass instance HasSrcRange (LocalDecl a)
 deriving anyclass instance HasSrcRange (NamedExpr a)
 deriving anyclass instance HasSrcRange (Branch a)
@@ -579,6 +683,8 @@ deriving anyclass instance HasSrcRange (TypeSig a)
 deriving anyclass instance HasSrcRange (GivethSig a)
 deriving anyclass instance HasSrcRange (GivenSig a)
 deriving anyclass instance HasSrcRange (Directive a)
+deriving anyclass instance HasSrcRange (RAction a)
+deriving anyclass instance HasSrcRange (Event n)
 deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name

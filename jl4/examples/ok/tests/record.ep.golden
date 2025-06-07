@@ -8,3 +8,22 @@ HAS name IS A STRING, colour IS A Colour
 DECLARE Folder2
 HAS name IS A STRING
     colour IS A Colour
+
+DECLARE Folder3
+HAS name: A STRING
+    colour: A Colour
+
+DECLARE Folder4
+HAS name: STRING
+    colour: Colour
+
+DECLARE Folder4
+HAS name: STRING, colour: A Colour
+
+DECLARE Folder5
+HAS name: STRING, colour IS A Colour
+
+GIVEN a: TYPE
+DECLARE Folder6 HAS
+    name: a
+    colour IS A a

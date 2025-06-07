@@ -1,0 +1,663 @@
+-- L4 Patterns and Idioms Reference
+-- Based on analysis of the L4 codebase and parser
+-- UPDATED VERSION: Aligned with current L4 implementation
+
+IMPORT prelude
+
+-- ======================================================================
+-- SECTION 1: REQUIRED FUNCTION ASSUMPTIONS
+-- ======================================================================
+
+-- Essential functions not in prelude that we need for examples
+ASSUME cat IS A FUNCTION FROM A STRING AND A STRING TO A STRING
+ASSUME contains IS A FUNCTION FROM A STRING AND A STRING TO A BOOLEAN
+ASSUME monthsBetween IS A FUNCTION FROM A Date AND A Date TO A NUMBER
+ASSUME addDays IS A FUNCTION FROM A Date AND A NUMBER TO A Date
+ASSUME addMonths IS A FUNCTION FROM A Date AND A NUMBER TO A Date
+
+-- ======================================================================
+-- SECTION 2: MISSING PRELUDE FUNCTIONS
+-- ======================================================================
+
+-- Define length function (not in prelude but commonly needed)
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+length list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 + length xs
+
+-- ======================================================================
+-- SECTION 3: BASIC TYPE DECLARATIONS
+-- ======================================================================
+
+-- Pattern: Simple enum types
+DECLARE Status IS ONE OF
+  Active
+  Inactive
+  Suspended HAS suspensionReason IS A STRING
+
+-- Pattern: Record types with fields (using unique field names)
+DECLARE Person
+  HAS personName IS A STRING
+      personAge IS A NUMBER
+      personIsAdult IS A BOOLEAN
+
+-- Pattern: Union types with complex constructors
+DECLARE LegalEntity IS ONE OF
+  Individual HAS person IS A Person
+  Corporation HAS corporationName IS A STRING
+                  jurisdiction IS A STRING
+  Partnership HAS partners IS A LIST OF Person
+
+-- Pattern: Proper Date type (L4 standard)
+DECLARE Date
+  HAS year IS A NUMBER
+      month IS A NUMBER
+      day IS A NUMBER
+
+-- Pattern: Money type with currency
+DECLARE Money
+  HAS amount IS A NUMBER
+      currency IS A STRING
+
+-- ======================================================================
+-- SECTION 4: DOMAIN-SPECIFIC TYPES (For Educational Examples)
+-- ======================================================================
+
+-- Types for educational contract examples
+DECLARE ContractParty IS A STRING
+DECLARE ContractAction IS A STRING
+DECLARE ContractDuration IS A NUMBER
+
+-- Types for legal examples
+DECLARE Purpose IS A STRING
+DECLARE Conviction
+  HAS convictionDescription IS A STRING
+      isSpent IS A BOOLEAN
+
+DECLARE RegisterEntry
+  HAS entryName IS A STRING
+      entryPurposes IS A LIST OF Purpose
+      entryGovernors IS A LIST OF Person
+      entryConstitution IS A STRING
+      entryIsActive IS A BOOLEAN
+
+-- Financial record types
+DECLARE FinancialYearRecord
+  HAS financialYear IS A NUMBER
+      financialIncome IS A Money
+      financialExpenses IS A Money
+
+-- ======================================================================
+-- SECTION 5: PROVISION TYPES AND PATTERNS (NEW)
+-- ======================================================================
+
+-- Pattern: Actor types for contracts
+DECLARE Actor IS ONE OF
+   PersonActor HAS person IS A Person
+   CompanyActor HAS company IS A STRING
+   GovernmentActor
+
+-- Pattern: Action types for contracts
+DECLARE Action IS ONE OF
+   PayMoney HAS amount IS A Money
+                recipient IS AN Actor
+   DeliverGoods HAS description IS A STRING
+                    recipient IS AN Actor
+   ProvideService HAS serviceType IS A STRING
+                      duration IS A NUMBER
+   Other HAS description IS A STRING
+
+-- ======================================================================
+-- SECTION 6: SIMPLE FUNCTION DEFINITIONS
+-- ======================================================================
+
+-- Pattern: Simple function with GIVEN...GIVETH
+GIVEN x IS A NUMBER
+GIVETH A NUMBER
+square MEANS x * x
+
+-- Pattern: Multi-parameter function
+GIVEN personAge IS A NUMBER
+      threshold IS A NUMBER
+GIVETH A BOOLEAN
+isOlderThan MEANS personAge > threshold
+
+-- Pattern: Function with conditional logic
+GIVEN status IS A Status
+GIVETH A STRING
+statusMessage MEANS
+  IF status EQUALS Active
+  THEN "Entity is active"
+  ELSE IF status EQUALS Inactive
+       THEN "Entity is inactive"
+       ELSE "Entity has issues"
+
+-- Pattern: Function with pattern matching on algebraic types
+GIVEN entity IS A LegalEntity
+GIVETH A STRING
+entityType MEANS
+  CONSIDER entity
+  WHEN Individual p THEN cat "Individual: " (p's personName)
+  WHEN Corporation n j THEN cat (cat "Corporation: " n) (cat " in " j)
+  WHEN Partnership ps THEN cat "Partnership with " "multiple partners"
+
+-- ======================================================================
+-- SECTION 7: PROVISION FUNCTION PATTERNS (NEW)
+-- ======================================================================
+
+-- Pattern: Simple contract obligation
+GIVEN debtor IS AN Actor
+      amount IS A Money
+GIVETH A PROVISION Actor Action
+simplePayment MEANS
+  PARTY debtor
+  MUST PayMoney amount (PersonActor (Person "Creditor" 30 TRUE))
+  WITHIN 30  -- 30 days
+  HENCE FULFILLED
+
+-- Pattern: Conditional contract
+GIVEN buyer IS AN Actor
+      seller IS AN Actor
+      goods IS A STRING
+      condition IS A BOOLEAN
+GIVETH A PROVISION Actor Action
+conditionalSale MEANS
+  IF condition
+  THEN PARTY seller
+       MUST DeliverGoods goods buyer
+       WITHIN 14
+       HENCE FULFILLED
+  ELSE FULFILLED
+
+-- Pattern: Sequential obligations
+GIVEN serviceProvider IS AN Actor
+      client IS AN Actor
+      serviceType IS A STRING
+GIVETH A PROVISION Actor Action
+serviceContract MEANS
+  PARTY serviceProvider
+  MUST ProvideService serviceType 30
+  WITHIN 7  -- Start within 7 days
+  HENCE paymentDue serviceProvider client
+
+GIVEN provider IS AN Actor
+      client IS AN Actor
+GIVETH A PROVISION Actor Action
+paymentDue MEANS
+  PARTY client
+  MUST PayMoney (Money 1000 "USD") provider
+  WITHIN 30  -- Pay within 30 days of service completion
+  HENCE FULFILLED
+
+-- ======================================================================
+-- SECTION 8: STRING OPERATIONS (CORRECTED)
+-- ======================================================================
+
+-- ✅ CORRECT: String concatenation using cat function
+GIVEN firstName IS A STRING
+      lastName IS A STRING
+GIVETH A STRING
+fullName MEANS cat (cat firstName " ") lastName
+
+-- ✅ CORRECT: String validation
+GIVEN input IS A STRING
+GIVETH A BOOLEAN
+isValidEmail MEANS
+  contains input "@" AND contains input "."
+
+-- ✅ CORRECT: String non-emptiness check
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+hasContent MEANS NOT text EQUALS ""
+
+-- ======================================================================
+-- SECTION 9: LIST OPERATIONS (CORRECTED WITH CONSTRUCTOR SYNTAX)
+-- ======================================================================
+
+-- ✅ CORRECT: List length checking (using our length function)
+GIVEN purposes IS A LIST OF Purpose
+GIVETH A BOOLEAN
+hasMultiplePurposes MEANS length purposes > 1
+
+-- ✅ CORRECT: List membership using prelude elem
+GIVEN targetPurpose IS A Purpose
+      purposeList IS A LIST OF Purpose
+GIVETH A BOOLEAN
+containsPurpose MEANS elem targetPurpose purposeList
+
+-- ✅ CORRECT: List processing with prelude functions
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+allPositive MEANS all (GIVEN n YIELD n > 0) numbers
+
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+anyNegative MEANS any (GIVEN n YIELD n < 0) numbers
+
+-- ✅ CORRECT: List construction in constructors (requires parentheses)
+DECIDE samplePerson IS Person "John Doe" 25 TRUE
+DECIDE sampleEntity IS Individual samplePerson
+DECIDE sampleCorporation IS Corporation "ACME Corp" "Delaware"
+DECIDE samplePartnership IS Partnership (LIST samplePerson)
+
+-- ======================================================================
+-- SECTION 10: VALUE DEFINITIONS
+-- ======================================================================
+
+-- Pattern: Simple constants
+DECIDE adultAge IS 18
+DECIDE companyName IS "ACME Corporation"
+
+-- Pattern: List definitions
+DECIDE weekdays IS LIST "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
+
+-- Pattern: Date construction (L4 standard)
+DECIDE sampleDate IS Date OF 2024, 6, 15
+DECIDE oldDate IS Date OF 2022, 12, 31
+
+-- Pattern: Money construction
+DECIDE salaryAmount IS Money 50000 "USD"
+DECIDE smallAmount IS Money 100 "GBP"
+
+-- Pattern: Computed values with MEANS
+GIVEN today IS A STRING
+GIVETH A STRING
+todayMessage MEANS cat "Today is " today
+
+-- ======================================================================
+-- SECTION 11: CONDITIONAL EXPRESSIONS
+-- ======================================================================
+
+-- Pattern: Simple conditionals
+GIVEN age IS A NUMBER
+GIVETH A BOOLEAN
+canVote MEANS
+  IF age >= 18
+  THEN TRUE
+  ELSE FALSE
+
+-- Pattern: Nested conditionals
+GIVEN score IS A NUMBER
+GIVETH A STRING
+grade MEANS
+  IF score >= 90
+  THEN "A"
+  ELSE IF score >= 80
+       THEN "B"
+       ELSE IF score >= 70
+            THEN "C"
+            ELSE "F"
+
+-- ======================================================================
+-- SECTION 12: BOOLEAN LOGIC
+-- ======================================================================
+
+-- Pattern: Complex boolean expressions with parentheses for clarity
+GIVEN condition1 IS A BOOLEAN
+      condition2 IS A BOOLEAN
+      condition3 IS A BOOLEAN
+      condition4 IS A BOOLEAN
+GIVETH A BOOLEAN
+complexCondition MEANS (condition1 OR condition2) AND (condition3 OR condition4)
+
+-- Pattern: Validation functions
+GIVEN email IS A STRING
+GIVETH A BOOLEAN
+isValidEmailAddress MEANS
+  contains email "@" AND contains email "." AND NOT email EQUALS ""
+
+-- ======================================================================
+-- SECTION 13: SAFE OPERATIONS WITH MAYBE TYPES (Using Prelude)
+-- ======================================================================
+
+-- Pattern: Safe operations that might fail (using prelude MAYBE)
+GIVEN numbers IS A LIST OF NUMBER
+GIVETH A MAYBE NUMBER
+safeHead MEANS
+  CONSIDER numbers
+  WHEN EMPTY THEN NOTHING
+  WHEN x FOLLOWED BY xs THEN JUST x
+
+-- Pattern: Working with Maybe types (using prelude MAYBE)
+GIVEN maybeValue IS A MAYBE NUMBER
+GIVETH A NUMBER
+getValueOrDefault MEANS
+  CONSIDER maybeValue
+  WHEN NOTHING THEN 0
+  WHEN JUST x THEN x
+
+-- ======================================================================
+-- SECTION 14: PATTERN MATCHING WITH CONSIDER
+-- ======================================================================
+
+-- Pattern: Pattern matching on enum types
+GIVEN status IS A Status
+GIVETH A STRING
+handleStatus MEANS
+  CONSIDER status
+  WHEN Active THEN "Process normally"
+  WHEN Inactive THEN "Cannot process"
+  WHEN Suspended reason THEN cat "Suspended: " reason
+  OTHERWISE "Unknown status"
+
+-- Pattern: Pattern matching on lists
+GIVEN items IS A LIST OF STRING
+GIVETH A STRING
+processItems MEANS
+  CONSIDER items
+  WHEN EMPTY THEN "Empty list"
+  WHEN first FOLLOWED BY rest THEN cat "First: " (cat first ", Rest available")
+  OTHERWISE "Unexpected case"
+
+-- ======================================================================
+-- SECTION 15: WORKING WITH RECORDS
+-- ======================================================================
+
+-- Pattern: Record field access (using unique field names)
+GIVEN p IS A Person
+GIVETH A STRING
+personInfo MEANS cat (p's personName) " is an adult"
+
+-- Pattern: Record validation
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+isValidEntry MEANS
+  (NOT entry's entryName EQUALS "") AND
+  (length (entry's entryPurposes) > 0) AND
+  entry's entryIsActive EQUALS TRUE
+
+-- ======================================================================
+-- SECTION 16: FUNCTIONAL PROGRAMMING PATTERNS
+-- ======================================================================
+
+-- ✅ CORRECT: Function application with proper parentheses
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+hasValidPurposes MEANS length (entry's entryPurposes) > 0
+
+-- ✅ CORRECT: Using all with proper parentheses
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+allGovernorsAdult MEANS
+  all (GIVEN gov YIELD gov's personAge >= 18) (entry's entryGovernors)
+
+-- ✅ CORRECT: Using any with proper parentheses
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+hasYoungGovernor MEANS
+  any (GIVEN gov YIELD gov's personAge < 18) (entry's entryGovernors)
+
+-- ✅ CORRECT: Complex nested field access
+GIVEN conviction IS A Conviction
+GIVETH A BOOLEAN
+isActiveConviction MEANS conviction's isSpent EQUALS FALSE
+
+-- ======================================================================
+-- SECTION 17: TEMPORAL AND NUMERIC OPERATIONS
+-- ======================================================================
+
+-- Pattern: Date comparisons (using proper Date type)
+GIVEN currentDate IS A Date
+      deadline IS A Date
+GIVETH A BOOLEAN
+isPastDue MEANS
+  (currentDate's year > deadline's year) OR
+  (currentDate's year EQUALS deadline's year AND currentDate's month > deadline's month) OR
+  (currentDate's year EQUALS deadline's year AND currentDate's month EQUALS deadline's month AND currentDate's day > deadline's day)
+
+-- Pattern: Money operations
+GIVEN income IS A Money
+      expenses IS A Money
+GIVETH A Money
+profit MEANS Money (income's amount - expenses's amount) (income's currency)
+
+GIVEN amount IS A Money
+GIVETH A BOOLEAN
+isSignificantAmount MEANS amount's amount > 1000
+
+-- ======================================================================
+-- SECTION 18: HIGHER-ORDER FUNCTION PATTERNS
+-- ======================================================================
+
+-- Pattern: Function composition equivalent
+GIVEN base IS A NUMBER
+GIVETH A NUMBER
+complexCalculation MEANS
+  result + bonus
+  WHERE
+    result MEANS base * 2
+    bonus MEANS IF result > 100 THEN 10 ELSE 0
+
+-- Pattern: Conditional function application
+GIVEN numbers IS A LIST OF NUMBER
+      operation IS A STRING
+GIVETH A LIST OF NUMBER
+applyOperation MEANS
+  IF operation EQUALS "double"
+  THEN map (GIVEN n YIELD n * 2) numbers
+  ELSE IF operation EQUALS "increment"
+       THEN map (GIVEN n YIELD n + 1) numbers
+       ELSE numbers
+
+-- ======================================================================
+-- SECTION 19: WHAT DOESN'T WORK (ANTI-PATTERNS)
+-- ======================================================================
+
+-- ❌ DON'T USE: String arithmetic (+ operator is for numbers only)
+-- "hello" + " world"  -- WRONG! Use: cat "hello" " world"
+
+-- ❌ DON'T USE: LIST without parentheses in constructors
+-- SomeType LIST item1, item2  -- WRONG! Use: SomeType (LIST item1, item2)
+
+-- ❌ DON'T USE: Pattern matching on primitive values
+-- CONSIDER someString
+-- WHEN "option1" THEN ...  -- WRONG! Use IF/THEN/ELSE for strings
+
+-- ❌ DON'T USE: Function calls without parentheses in complex expressions
+-- length entity's purposes > 0  -- WRONG! Use: length (entity's purposes) > 0
+
+-- ❌ DON'T USE: Redefining prelude functions (elem, MAYBE, etc.)
+
+-- ❌ DON'T USE: Complex nested constructors in DECIDE statements
+-- DECIDE complex IS SomeType (OtherType (func arg1) arg2)  -- May fail! Break into steps
+
+-- ======================================================================
+-- SECTION 20: CORRECT ALTERNATIVES FOR COMMON PATTERNS
+-- ======================================================================
+
+-- ✅ For string matching, use IF/THEN/ELSE:
+GIVEN application IS A STRING
+GIVETH A STRING
+processApplication MEANS
+  IF application EQUALS "loan"
+  THEN "Processing loan application"
+  ELSE IF application EQUALS "credit_card"
+       THEN "Processing credit card application"
+       ELSE "Unknown application type"
+
+-- ✅ For validation, use boolean functions:
+GIVEN registrationEntry IS A RegisterEntry
+GIVETH A BOOLEAN
+isCompleteApplication MEANS
+  (NOT registrationEntry's entryName EQUALS "") AND
+  (length (registrationEntry's entryPurposes) > 0) AND
+  registrationEntry's entryIsActive EQUALS TRUE
+
+-- ✅ For safe operations, use prelude MAYBE types:
+GIVEN dataList IS A LIST OF RegisterEntry
+      targetName IS A STRING
+GIVETH A MAYBE RegisterEntry
+findByName MEANS
+  IF null dataList
+  THEN NOTHING
+  ELSE
+    CONSIDER dataList
+    WHEN entry FOLLOWED BY rest THEN
+      IF entry's entryName EQUALS targetName
+      THEN JUST entry
+      ELSE findByName rest targetName
+    OTHERWISE NOTHING
+
+-- ✅ For complex constructors, break into steps:
+DECIDE step1 IS Money 1000 "USD"
+DECIDE step2 IS PersonActor samplePerson
+DECIDE complexAction IS PayMoney step1 step2
+
+-- ======================================================================
+-- SECTION 21: DEBUGGING CHECKLIST (UPDATED)
+-- ======================================================================
+
+-- When you see: "unexpected 's" error
+-- ✅ FIX: Add parentheses around field access in function calls
+-- length entity's purposes > 0  →  length (entity's purposes) > 0
+
+-- When you see: "expecting BOOLEAN, got STRING"
+-- ✅ FIX: Use correct type operations
+-- length textField > 0  →  NOT textField EQUALS ""
+
+-- When you see: "The first argument of the PLUS operator is expected to be NUMBER"
+-- ✅ FIX: Use cat for strings, + for numbers
+-- "hello" + " world"  →  cat "hello" " world"
+
+-- When you see: "multiple definitions" error
+-- ✅ FIX: Don't redefine prelude functions (elem, MAYBE, etc.)
+
+-- When you see: "could not find definition for [function]"
+-- ✅ FIX: Add ASSUME statement, define it yourself, or use prelude version
+
+-- When you see: "unexpected LIST expecting &&, *, +, -, /, ;"
+-- ✅ FIX: Add parentheses around LIST in constructors
+-- SomeType LIST items  →  SomeType (LIST items)
+
+-- When you see: "expects N arguments, but you are applying it to M arguments"
+-- ✅ FIX: Check type definition and match exact field count
+-- Count all fields in DECLARE statement and provide exact number of arguments
+
+-- When you see: "unexpected FinancialYearRecord expecting &&, *, +, -, /"
+-- ✅ FIX: Break complex constructors into simple steps
+-- Complex nested constructor  →  Multiple DECIDE statements
+
+-- ======================================================================
+-- SECTION 22: COMPLETE WORKING EXAMPLES
+-- ======================================================================
+
+-- Example: Person eligibility checker
+GIVEN applicant IS A Person
+      minimumAge IS A NUMBER
+GIVETH A BOOLEAN
+isEligible MEANS
+  applicant's personAge >= minimumAge AND applicant's personIsAdult EQUALS TRUE
+
+-- Example: String processing
+GIVEN firstName IS A STRING
+      lastName IS A STRING
+GIVETH A STRING
+createUsername MEANS
+  IF contains firstName " " OR contains lastName " "
+  THEN "invalid_name"
+  ELSE cat (cat firstName "_") lastName
+
+-- Example: List validation
+GIVEN items IS A LIST OF STRING
+GIVETH A BOOLEAN
+allItemsValid MEANS
+  all (GIVEN item YIELD NOT item EQUALS "") items
+
+-- Example: Record processing with safe operations
+GIVEN maybeEntry IS A MAYBE RegisterEntry
+GIVETH A STRING
+getEntryName MEANS
+  CONSIDER maybeEntry
+  WHEN NOTHING THEN "No entry found"
+  WHEN JUST entry THEN entry's entryName
+
+-- Example: Complex boolean logic
+GIVEN entry IS A RegisterEntry
+GIVETH A BOOLEAN
+isReadyForApproval MEANS
+  (NOT entry's entryName EQUALS "") AND
+  (length (entry's entryPurposes) > 0) AND
+  (length (entry's entryGovernors) > 0) AND
+  entry's entryIsActive EQUALS TRUE
+
+-- Example: Contract with proper syntax
+GIVEN borrower IS AN Actor
+      lender IS AN Actor
+      loanAmount IS A Money
+GIVETH A PROVISION Actor Action
+loanAgreement MEANS
+  PARTY borrower
+  MUST PayMoney loanAmount lender
+  WITHIN 365  -- One year to repay
+  HENCE FULFILLED
+
+#EVAL square 5
+#EVAL isOlderThan 25 18
+#EVAL fullName "John" "Doe"
+#EVAL createUsername "Alice" "Smith"
+
+-- ======================================================================
+-- SECTION 12: DEBUGGING PATTERNS
+-- ======================================================================
+
+-- Pattern: Missing Type Reference Resolution
+-- When you get errors like "The type 'TypeName' is not in scope"
+-- Always define the missing type before it's referenced
+
+-- Example: Missing Submission type causing Notice declaration to fail
+DECLARE RequiredStepsNotice
+    HAS noticeId IS A STRING
+        issueDate IS A Date
+        steps IS A LIST OF STRING
+        deadline IS A Date
+        reasonCodes IS A LIST OF STRING
+
+DECLARE DeregistrationNotice
+    HAS noticeId IS A STRING
+        date IS A Date
+        reasons IS A LIST OF STRING
+        isVoluntary IS A BOOLEAN
+
+DECLARE SubmissionStatus IS ONE OF
+    Received
+    UnderReview
+    Approved
+    Rejected
+    RequiresMoreInfo
+
+DECLARE Submission
+    HAS submissionId IS A STRING
+        submissionDate IS A Date
+        submissionType IS A STRING
+        applicantName IS A STRING
+        documents IS A LIST OF STRING
+        status IS A SubmissionStatus
+
+-- Now this Notice type can reference Submission without error
+DECLARE Notice IS ONE OF
+  required       HAS notice IS A RequiredStepsNotice
+  deregistration HAS notice IS A DeregistrationNotice
+  message        HAS notice IS A STRING
+  annualReturn
+  application    HAS submission IS A Submission
+
+-- Pattern: Indentation Debugging
+-- L4 is very strict about indentation in record field declarations
+-- All fields must align exactly (usually 6 spaces for HAS fields)
+
+-- WRONG (will cause "unexpected fieldName" errors):
+-- DECLARE BadRecord
+--   HAS field1 IS A STRING
+--         field2 IS A STRING    -- 8 spaces - wrong!
+--       field3 IS A STRING      -- 6 spaces but inconsistent
+
+-- CORRECT:
+DECLARE GoodRecord
+  HAS field1 IS A STRING
+      field2 IS A STRING          -- All fields consistently 6 spaces
+      field3 IS A STRING
+
+-- ======================================================================

@@ -18,11 +18,14 @@ import qualified Base.Map as Map
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.Value
+import L4.Evaluate.ValueLazy (UnaryBuiltinFun(..))
+import qualified L4.EvaluateLazy.Machine as Lazy
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.Utils.RevList
+import L4.Utils.Ratio
 
 import Data.Either
 
@@ -115,6 +118,8 @@ data EvalException =
   | EqualityOnUnsupportedType
   | NonExhaustivePatterns Value -- we could try to warn statically
   | StackOverflow
+  | DivisionByZero
+  | NotAnInteger Rational
   | Stuck
     (Expr Resolved)
     -- ^ the expression we were evaluating when getting stuck
@@ -124,7 +129,7 @@ data EvalException =
   deriving anyclass NFData
 
 prettyEvalException :: EvalException -> [Text]
-prettyEvalException = \case
+prettyEvalException = \ case
   RuntimeScopeError r ->
     [ "Internal error:" ]
     <> prepare r
@@ -148,6 +153,12 @@ prettyEvalException = \case
     [ "Stack overflow: "
     , "Recursion depth of " <> Text.show maximumStackSize
     , "exceeded." ]
+  DivisionByZero ->
+    [ "Division by zero"
+    ]
+  NotAnInteger num ->
+    [ "Expected an Integer but got the fractional number: " ]
+    <> [ prettyRatio num ]
   Stuck expr r ->
     [ "Expression stuck while evaluating:" ]
     <> prepare expr
@@ -250,11 +261,26 @@ trueVal = ValConstructor TypeCheck.trueRef []
 
 initialEnvironment :: Environment
 initialEnvironment =
-  Map.fromList
+  let
+    binOps =
+      [ (unique, ValBinaryBuiltinFun binOp)
+      | (binOp, unique) <- Lazy.builtinBinOps
+      ]
+  in
+  Map.fromList $
     [ (TypeCheck.falseUnique, falseVal)
     , (TypeCheck.trueUnique,  trueVal)
     , (TypeCheck.emptyUnique, ValList [])
+    , (TypeCheck.isIntegerUnique, ValUnaryBuiltinFun UnaryIsInteger)
+    , (TypeCheck.roundUnique, ValUnaryBuiltinFun UnaryRound)
+    , (TypeCheck.ceilingUnique, ValUnaryBuiltinFun UnaryCeiling)
+    , (TypeCheck.floorUnique, ValUnaryBuiltinFun UnaryFloor)
+    , (TypeCheck.andUnique,     andClosureVal trueVal falseVal)
+    , (TypeCheck.orUnique,      orClosureVal trueVal falseVal)
+    , (TypeCheck.impliesUnique, impliesClosureVal trueVal falseVal)
+    , (TypeCheck.notUnique,     notClosureVal trueVal falseVal)
     ]
+    <> binOps
 
 evalModule :: Module Resolved -> Eval ()
 evalModule (MkModule _ann _uri sec) =
@@ -355,6 +381,7 @@ evalDirective (StrictEval _ann expr) = do
   addEvalDirectiveResult expr v
 evalDirective (LazyEval _ann _expr) = pure ()
 evalDirective (Check _ _) = pure ()
+evalDirective (Contract {}) = pure ()
 
 maximumStackSize :: Int
 maximumStackSize = 50
@@ -395,6 +422,8 @@ forwardExpr env !ss stack (And _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 e2 falseExpr)
 forwardExpr env !ss stack (Or _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 trueExpr e2)
+forwardExpr _env !_ss stack (RAnd {}) = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
+forwardExpr _env !_ss stack (ROr {}) = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
 forwardExpr env !ss stack (Implies _ann e1 e2) = do
   pushExprFrame env ss stack (IfThenElse emptyAnno e1 e2 trueExpr)
 forwardExpr env !ss stack (Not _ann e) = do
@@ -448,11 +477,15 @@ forwardExpr env !ss stack (AppNamed ann n nes (Just order)) =
     pushExprFrame env ss stack (App ann n es)
 forwardExpr env !ss stack (IfThenElse _ann e1 e2 e3) = do
   pushEvalFrame env ss (IfThenElse1 e2 e3 env stack) e1
+forwardExpr _env !_ss stack Regulative {} = exception (RuntimeTypeError "strict evaluation of contracts is currently not supported") stack
+forwardExpr _env !_ss stack Event {} = exception (RuntimeTypeError "strict evaluation of events is currently not supported") stack
 forwardExpr env !ss stack (Consider _ann e branches) = do
   pushEvalFrame env ss (Consider1 branches env stack) e
 forwardExpr _env !ss stack (Lit _ann lit) = do
   rval <- runLit lit
   backwardExpr ss stack rval
+forwardExpr env !ss stack (Percent _ann expr) = do
+  pushExprFrame env ss stack (DividedBy _ann expr (Lit emptyAnno (NumericLit emptyAnno 100)))
 forwardExpr _env !ss stack (List _ann []) = do
   backwardExpr ss stack (ValList [])
 forwardExpr env !ss stack (List _ann (e : es)) = do
@@ -481,6 +514,12 @@ backwardExpr !ss stack0@(App1 n vals [] env stack) val = do
       popFrame val
       env'' <- matchGivens givens (reverse (val : vals)) stack0
       pushExprFrame (Map.union env'' env') (ss - 1) stack e
+    Just (ValUnaryBuiltinFun builtin) -> do
+      popFrame val
+      runUnaryBuiltin stack0 (reverse (val : vals)) builtin
+    Just (ValBinaryBuiltinFun builtin) -> do
+      popFrame val
+      runBinaryBuiltin stack0 (reverse (val : vals)) builtin
     Just (ValUnappliedConstructor r) -> do
       popFrame val
       backwardExpr (ss - 1) stack (ValConstructor r (reverse (val : vals)))
@@ -572,11 +611,18 @@ exception exc _stack = do
   throwError exc
 
 runBinOp :: BinOp -> Value -> Value -> Stack -> Eval Value
-runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 + num2)
-runBinOp BinOpMinus  (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 - num2)
-runBinOp BinOpTimes  (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 * num2)
-runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `div` num2)
-runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 `mod` num2)
+runBinOp BinOpPlus      (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 + num2)
+runBinOp BinOpMinus     (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 - num2)
+runBinOp BinOpTimes     (ValNumber num1) (ValNumber num2) _stack = pure $ ValNumber (num1 * num2)
+runBinOp BinOpDividedBy (ValNumber num1) (ValNumber num2)  stack
+  | num2 /= 0 = pure $ ValNumber (num1 / num2)
+  | otherwise = exception DivisionByZero stack
+runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2) stack  = do
+  n1 <- expectInteger stack num1
+  n2 <- expectInteger stack num2
+  if n2 /= 0
+    then pure $ ValNumber (toRational $ n1 `mod` n2)
+    else exception DivisionByZero stack
 runBinOp BinOpCons   val1             (ValList val2)   _stack = pure $ ValList (val1 : val2)
 runBinOp BinOpEquals val1             val2             stack  = runBinOpEquals val1 val2 stack
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2) _stack = pure $ valBool (num1 <= num2)
@@ -623,14 +669,59 @@ computeEquals (ValConstructor r1 vs1) (ValConstructor r2 vs2)
   | otherwise                                   = Just False
 computeEquals _                _                = Nothing
 
-
 valBool :: Bool -> Value
 valBool False = falseVal
 valBool True  = trueVal
 
+valInt :: Integer -> Value
+valInt = ValNumber . toRational
+
 runLit :: Lit -> Eval Value
 runLit (NumericLit _ann num) = pure (ValNumber num)
 runLit (StringLit _ann str)  = pure (ValString str)
+
+runUnaryBuiltin :: Stack -> [Value] -> UnaryBuiltinFun -> Eval Value
+runUnaryBuiltin s vals op = do
+  val :: Rational <- expect1Number s vals
+  pure case op of
+    UnaryIsInteger -> valBool $ isJust $ isInteger val
+    UnaryRound -> valInt $ round val
+    UnaryCeiling -> valInt $ ceiling val
+    UnaryFloor -> valInt $ floor val
+    UnaryPercent -> ValNumber $ val / 100
+
+runBinaryBuiltin :: Stack -> [Value] -> BinOp -> Eval Value
+runBinaryBuiltin s vals op = do
+  (a, b) <- expect2 s vals
+  runBinOp op a b s
+
+expect1 :: Stack -> [a] -> Eval a
+expect1 s = \ case
+  [x] -> pure x
+  xs ->
+    exception (RuntimeTypeError $ "Expected 1 argument but got " <> Text.show (length xs)) s
+
+expect2 :: Stack -> [a] -> Eval (a, a)
+expect2 s = \ case
+  [x, y] -> pure (x, y)
+  xs ->
+    exception (RuntimeTypeError $ "Expected 2 arguments but got " <> Text.show (length xs)) s
+
+expectNumber :: Stack -> Value -> Eval Rational
+expectNumber s = \ case
+  ValNumber f -> pure f
+  _ -> exception (RuntimeTypeError "Expected number.") s
+
+expect1Number :: Stack -> [Value] -> Eval Rational
+expect1Number s vs = do
+  v <- expect1 s vs
+  expectNumber s v
+
+expectInteger :: Stack -> Rational -> Eval Integer
+expectInteger stack n = do
+  case isInteger n of
+    Nothing -> exception (NotAnInteger n) stack
+    Just i -> pure i
 
 lookupTerm :: Environment -> Resolved -> Maybe Value
 lookupTerm env r =
@@ -654,3 +745,70 @@ buildModuleEnvironment initial m = (execEvalModuleWithEnv initial m).environment
 
 unionEnvironments :: Foldable f => f (Map Unique Value) -> Environment
 unionEnvironments m = if null m then initialEnvironment else Map.unions m
+
+boolBinOpClosure :: Value -> Value -> (Resolved -> Resolved -> Expr Resolved) -> Value
+boolBinOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno TypeCheck.bDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef TypeCheck.bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+boolUnaryOpClosure :: Value -> Value -> (Resolved -> Expr Resolved) -> Value
+boolUnaryOpClosure true false buildExpr = do
+  ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno TypeCheck.aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr TypeCheck.aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+andClosureVal :: Value -> Value -> Value
+andClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
+
+notClosureVal :: Value -> Value -> Value
+notClosureVal true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orClosureVal :: Value -> Value -> Value
+orClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesClosureVal :: Value -> Value -> Value
+impliesClosureVal true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )

@@ -1,4 +1,5 @@
 import { Schema, Pretty, JSONSchema } from 'effect'
+import { VersionedDocId } from './versioned-doc-id.js'
 
 /**********************
       VizExpr IR
@@ -119,7 +120,7 @@ export interface FunDecl extends IRNode {
 }
 
 /** The Ladder graph visualizer focuses on boolean formulas. */
-export type IRExpr = And | Or | UBoolVar | Not | App
+export type IRExpr = And | Or | Not | UBoolVar | TrueE | FalseE | App
 
 /* Thanks to Andres for pointing out that an n-ary representation would be better for the arguments for And / Or.
 It's one of those things that seems obvious in retrospect; to quote
@@ -158,13 +159,12 @@ export interface App extends IRNode {
   readonly args: readonly IRExpr[]
 }
 
-/** For the original Viz / IRExpr */
+/** For the original Viz / IRExpr (as opposed to the values that the frontend evaluator uses) */
 export type UBoolValue = Schema.Schema.Type<typeof UBoolValue>
 export type BoolValue = Schema.Schema.Type<typeof BoolValue>
+export type Value = UBoolValue
 
 export type UBoolVar = Schema.Schema.Type<typeof UBoolVar>
-
-export type Value = UBoolValue
 
 /***********************************
   The corresponding Effect Schemas
@@ -175,6 +175,8 @@ export const IRExpr = Schema.Union(
   Schema.suspend((): Schema.Schema<Or> => Or),
   Schema.suspend((): Schema.Schema<Not> => Not),
   Schema.suspend((): Schema.Schema<UBoolVar> => UBoolVar),
+  Schema.suspend((): Schema.Schema<TrueE> => TrueE),
+  Schema.suspend((): Schema.Schema<FalseE> => FalseE),
   Schema.suspend((): Schema.Schema<App> => App)
 ).annotations({ identifier: 'IRExpr' })
 
@@ -227,17 +229,33 @@ export const Not = Schema.Struct({
 }).annotations({ identifier: 'Not' })
 
 export const BoolValue = Schema.Union(
-  Schema.Literal('False'),
-  Schema.Literal('True')
+  Schema.Literal('FalseV'),
+  Schema.Literal('TrueV')
 )
-export const UBoolValue = Schema.Union(BoolValue, Schema.Literal('Unknown'))
+export const UBoolValue = Schema.Union(BoolValue, Schema.Literal('UnknownV'))
 
 export const UBoolVar = Schema.Struct({
   $type: Schema.tag('UBoolVar'),
   value: UBoolValue,
   id: IRId,
   name: Name,
+  canInline: Schema.Boolean,
 }).annotations({ identifier: 'UBoolVar' })
+
+/** We have an IRId even for bool lits b/c it's useful to be able to associate IRExprs with the Lir nodes that they get translated to */
+export const TrueE = Schema.Struct({
+  $type: Schema.tag('TrueE'),
+  id: IRId,
+  name: Name,
+}).annotations({ identifier: 'TrueE' })
+export type TrueE = Schema.Schema.Type<typeof TrueE>
+
+export const FalseE = Schema.Struct({
+  $type: Schema.tag('FalseE'),
+  id: IRId,
+  name: Name,
+}).annotations({ identifier: 'FalseE' })
+export type FalseE = Schema.Schema.Type<typeof FalseE>
 
 /***********************************
   Wrapper / Protocol interfaces
@@ -247,6 +265,7 @@ export const UBoolVar = Schema.Struct({
 export type RenderAsLadderInfo = Schema.Schema.Type<typeof RenderAsLadderInfo>
 
 export const RenderAsLadderInfo = Schema.Struct({
+  verDocId: VersionedDocId,
   funDecl: FunDecl,
 }).annotations({ identifier: 'RenderAsLadderInfo' })
 
@@ -291,11 +310,3 @@ export function exportRenderAsLadderInfoToJSONSchema() {
   return JSON.stringify(JSONSchema.make(RenderAsLadderInfo))
 }
 // console.log(exportRenderAsLadderInfoToJSONSchema())
-
-/*************************
-    JSON Schema version
-**************************/
-
-/*
-
-*/

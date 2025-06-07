@@ -1,0 +1,30 @@
+§ `Expressions`
+
+GIVEN n IS A NUMBER
+GIVETH A NUMBER
+DECIDE fibNaive n IS
+  IF n EQUALS 0
+    THEN 0
+    ELSE IF n EQUALS 1
+      THEN 1
+      ELSE      fibNaive OF
+                        n
+                  MINUS 1
+           PLUS fibNaive OF
+                        n
+                  MINUS 2
+
+DECLARE TwoNumbers
+  IS ONE OF
+    MkTwoNumbers HAS
+      num1 IS A NUMBER
+      num2 IS A NUMBER
+
+GIVEN tn IS TwoNumbers
+GIVETH A NUMBER
+test tn MEANS
+  CONSIDER tn
+  WHEN MkTwoNumbers OF x, y THEN x + y + 3 %
+
+DECIDE const1a IS
+  GIVEN x, y YIELD x

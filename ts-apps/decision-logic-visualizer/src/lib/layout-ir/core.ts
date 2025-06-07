@@ -8,7 +8,6 @@ but this framework is now getting quite different from what it used to be.
 */
 
 import { ComparisonResult } from '../utils.js'
-import { setContext, getContext } from 'svelte'
 
 /*********************************************
        Registry, Top-level Lir
@@ -154,27 +153,6 @@ export abstract class DefaultLirNode
 }
 
 /*********************************************
-       Viz Config
-***********************************************/
-
-export interface VizConfig {
-  constants: {
-    readonly EXPLANATORY_AND_EDGE_LABEL: string
-    readonly OR_BUNDLING_NODE_LABEL: string
-  }
-  shouldEnableZenMode: boolean
-}
-
-const defaultVizConfig: VizConfig = {
-  constants: {
-    EXPLANATORY_AND_EDGE_LABEL: 'AND',
-    /** aka anyOfBundlingNodeAnno.annotation */
-    OR_BUNDLING_NODE_LABEL: 'ANY OF',
-  },
-  shouldEnableZenMode: false,
-}
-
-/*********************************************
        LirContext
 ***********************************************/
 
@@ -191,7 +169,7 @@ export class LirContext {
   /** Can contain both FlowLirNodes and non-FlowLirNodes */
   #nodes: Map<LirId, LirNode> = new Map()
 
-  constructor(private config: VizConfig = defaultVizConfig) {}
+  constructor() {}
 
   get(id: LirId) {
     return this.#nodes.get(id)
@@ -204,44 +182,6 @@ export class LirContext {
   clear(id: LirId) {
     this.#nodes.delete(id)
   }
-
-  /***************
-     Viz Config 
-  ****************/
-
-  // Zen mode
-
-  shouldEnableZenMode() {
-    return this.config.shouldEnableZenMode
-  }
-
-  enableZenMode() {
-    this.config.shouldEnableZenMode = true
-  }
-
-  disableZenMode() {
-    this.config.shouldEnableZenMode = false
-  }
-
-  // Constants
-  // (The rough thought for now is, if we want to change these,
-  // we'd make and pass in a different Context. But not sure.)
-
-  getExplanatoryAndEdgeLabel() {
-    return this.config.constants.EXPLANATORY_AND_EDGE_LABEL
-  }
-
-  getOrBundlingNodeLabel() {
-    return this.config.constants.OR_BUNDLING_NODE_LABEL
-  }
-}
-
-/*********************************************
-       Lir Data Source
-***********************************************/
-
-export interface LirSource<A, B> {
-  toLir(nodeInfo: LirNodeInfo, data: A): B
 }
 
 /*************************************************
@@ -251,24 +191,4 @@ export interface LirSource<A, B> {
 export interface DisplayerProps {
   context: LirContext
   node: LirNode
-}
-
-export interface RootDisplayerProps extends DisplayerProps {
-  /** The root displayer will set the `lir` in the Svelte context so that children displayers can also access it */
-  lir: LirRegistry
-}
-
-const lirRegistryKey = 'lirRegistry'
-
-export function setLirRegistryInSvelteContext(
-  lir: ReturnType<typeof getLirRegistryFromSvelteContext>
-) {
-  setContext(lirRegistryKey, lir)
-}
-
-/** This must be called during component initialization
- * since setContext / getContext must be called during component initialization.
- */
-export function getLirRegistryFromSvelteContext(): LirRegistry {
-  return getContext(lirRegistryKey)
 }

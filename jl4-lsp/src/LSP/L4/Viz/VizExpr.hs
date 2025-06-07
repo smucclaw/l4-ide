@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module LSP.L4.Viz.VizExpr where
 
 import Autodocodec
@@ -5,16 +6,17 @@ import Autodocodec.Aeson ()
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.List.NonEmpty as NE
-import Data.Text (Text)
+import Base.Text (Text)
 import Data.Tuple.Optics
 import GHC.Generics (Generic)
 import Optics
+import qualified Language.LSP.Protocol.Types as LSP
 
-newtype RenderAsLadderInfo = MkRenderAsLadderInfo
-  { funDecl :: FunDecl -- TODO: change the fieldname once this becomes more stable
+data RenderAsLadderInfo = MkRenderAsLadderInfo
+  { verDocId  :: LSP.VersionedTextDocumentIdentifier
+  , funDecl   :: FunDecl
   }
-  deriving newtype (Eq)
-  deriving stock (Show, Generic)
+  deriving stock (Show, Generic, Eq)
 
 type Unique = Int
 -- | TODO: Consider renaming this to something other than `Name`
@@ -36,10 +38,13 @@ data IRExpr
   = And ID [IRExpr]
   | Or ID [IRExpr]
   | Not ID IRExpr
-  | UBoolVar ID Name UBoolValue
+  | UBoolVar ID Name UBoolValue Bool -- ^ id name ubvalue canInline
   | App ID Name [IRExpr]
+  | TrueE ID Name 
+  | FalseE ID Name
   deriving (Show, Eq, Generic)
 
+{- | See  viz-expr-to-lir.ts and ladder.svelte.ts for examples of how the IRIds get used -}
 newtype ID = MkID
   { id :: Int
   }
@@ -67,7 +72,7 @@ instance HasCodec ID where
 
 -- | Corresponds to the Typescript `'False' | 'True' | 'Unknown'`
 instance HasCodec UBoolValue where
-  codec = stringConstCodec $ NE.fromList [(FalseV, "False"), (TrueV, "True"), (UnknownV, "Unknown")]
+  codec = stringConstCodec $ NE.fromList [(FalseV, "FalseV"), (TrueV, "TrueV"), (UnknownV, "UnknownV")]
 
 -- Related examples
 -- https://github.com/NorfairKing/autodocodec/blob/e939442995debec6d0e014bfcc45449b3a2cb6e6/autodocodec-api-usage/src/Autodocodec/Usage.hs#L688
@@ -82,16 +87,19 @@ instance HasCodec FunDecl where
       <*> requiredField' "body"   .= view #body
 
 instance HasCodec IRExpr where
+  -- TODO: Look into whether discriminatedUnionCodec really is better than the typeField approach here
   codec = object "IRExpr" $ discriminatedUnionCodec "$type" enc dec
     where
       -- Encoder: maps Haskell constructors to (tag, codec)
-      enc = \case
+      enc = \ case
         And uid args -> ("And", mapToEncoder (uid, args) naryExprCodec)
         Or uid args -> ("Or", mapToEncoder (uid, args) naryExprCodec)
         Not uid expr -> ("Not", mapToEncoder (uid, expr) notExprCodec)
-        UBoolVar uid name value -> ("UBoolVar", mapToEncoder (uid, name, value) uBoolVarCodec)
+        UBoolVar uid name value canInline -> ("UBoolVar", mapToEncoder (uid, name, value, canInline) uBoolVarCodec)
         App uid name args -> ("App", mapToEncoder (uid, name, args) appExprCodec)
-        
+        TrueE uid name -> ("TrueE", mapToEncoder (uid, name) boolLitCodec)
+        FalseE uid name -> ("FalseE", mapToEncoder (uid, name) boolLitCodec)
+
       -- Decoder: maps tag to (constructor name, codec)
       dec =
         HashMap.fromList
@@ -99,10 +107,12 @@ instance HasCodec IRExpr where
             ("Or", ("Or", mapToDecoder (uncurry Or) naryExprCodec)),
             ("Not", ("Not", mapToDecoder (uncurry Not) notExprCodec)),
             ("UBoolVar", ("UBoolVar", mapToDecoder mkUBoolVar uBoolVarCodec)),
-            ("App", ("App", mapToDecoder mkAppExpr appExprCodec))
+            ("App", ("App", mapToDecoder mkAppExpr appExprCodec)),
+            ("TrueE", ("TrueE", mapToDecoder (uncurry TrueE) boolLitCodec)),
+            ("FalseE", ("FalseE", mapToDecoder (uncurry FalseE) boolLitCodec))
           ]
-          
-      mkUBoolVar (uid, name, value) = UBoolVar uid name value
+
+      mkUBoolVar (uid, name, value, canInline) = UBoolVar uid name value canInline
       mkAppExpr (uid, name, args) = App uid name args
 
       -- Codec for 'And' and 'Or' expressions.
@@ -117,10 +127,11 @@ instance HasCodec IRExpr where
           <*> requiredField' "negand" .= snd
 
       uBoolVarCodec =
-        (,,)
+        (,,,)
           <$> requiredField' "id" .= view _1
           <*> requiredField' "name" .= view _2
           <*> requiredField' "value" .= view _3
+          <*> requiredField' "canInline" .= view _4
 
       appExprCodec =
         (,,)
@@ -128,12 +139,21 @@ instance HasCodec IRExpr where
           <*> requiredField' "fnName" .= view _2
           <*> requiredField' "args" .= view _3
 
+      boolLitCodec =
+        (,)
+          <$> requiredField' "id"   .= fst
+          <*> requiredField' "name" .= snd
+
 instance HasCodec RenderAsLadderInfo where
   codec =
     named "RenderAsLadderInfo" $
       object "RenderAsLadderInfo" $
         MkRenderAsLadderInfo
-          <$> requiredField' "funDecl" .= view #funDecl
+          <$> requiredField' "verDocId" .= view #verDocId
+          <*> requiredField' "funDecl"  .= view #funDecl
+
+instance HasCodec LSP.VersionedTextDocumentIdentifier where
+  codec = codecViaAeson "VersionedTextDocumentIdentifier"
 
 -------------------------------------------------------------
 -- To/FromJSON Instances via Autodocodec

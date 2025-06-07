@@ -181,6 +181,19 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
+    Contract ann e t evs -> do
+      e' <- addNlg e
+      t' <- addNlg t
+      evs' <- traverse addNlg evs
+      pure $ Contract ann e' t' evs'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
+  addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
+    party' <- addNlg party
+    act' <- addNlg act
+    timestamp' <- addNlg timestamp
+    pure (MkEvent ann party' act' timestamp' atFirst)
+
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Import n) where
   addNlg a = extendNlgA a $ case a of
@@ -306,6 +319,14 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ Or ann e1' e2'
+    RAnd ann e1 e2 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      pure $ RAnd ann e1' e2'
+    ROr ann e1 e2 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      pure $ ROr ann e1' e2'
     Implies ann e1 e2 -> do
       e1' <- addNlg e1
       e2' <- addNlg e2
@@ -381,11 +402,16 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ IfThenElse ann b' e1' e2'
+    Regulative ann r -> do
+      r' <- addNlg r
+      pure $ Regulative ann r'
     Consider ann e branches  -> do
       e' <- addNlg e
       branches' <- traverse addNlg branches
       pure $ Consider ann e' branches'
     Lit{} -> do
+      pure expr
+    Percent{} -> do
       pure expr
     List ann es -> do
       es' <- traverse addNlg es
@@ -394,6 +420,22 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e' <- addNlg e
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
+    Event ann e -> Event ann <$> addNlg e
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
+  addNlg (MkObligation ann' party event deadline followup lest) = do
+    party' <- addNlg party
+    event' <- addNlg event
+    deadline' <- traverse addNlg deadline
+    followup' <- traverse addNlg followup
+    lest' <- traverse addNlg lest
+    pure $  MkObligation ann' party' event' deadline' followup' lest'
+
+instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
+  addNlg (MkAction ann rule provided) = do
+    rule' <- addNlg rule
+    provided' <- traverse addNlg provided
+    pure $  MkAction ann rule' provided'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
@@ -418,6 +460,8 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Pattern n) where
       patHead' <- addNlg patHead
       patTail' <-addNlg patTail
       pure $ PatCons ann patHead' patTail'
+    PatExpr ann expr -> pure $ PatExpr ann expr
+    PatLit ann lit -> pure $ PatLit ann lit
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (NamedExpr n) where
   addNlg a = extendNlgA a $ case a of
@@ -582,12 +626,12 @@ instance Semigroup LowerBound where
   StartPos l <> StartPos r = StartPos (max l r) -- See the docs for 'UpperBound'.
 
 upperBoundToSrcSpan :: UpperBound -> SrcPos
-upperBoundToSrcSpan = \case
+upperBoundToSrcSpan = \ case
   EndOfFile -> MkSrcPos maxBound maxBound
   EndPos p -> p
 
 lowerBoundToSrcSpan :: LowerBound -> SrcPos
-lowerBoundToSrcSpan = \case
+lowerBoundToSrcSpan = \ case
   -- No position is lower than 1.
   -- Don't use 'minBound' because it is ugly during debugging.
   StartOfFile -> MkSrcPos 1 1

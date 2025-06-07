@@ -1,11 +1,13 @@
 // Types and util functions for the Svelte Flow graph
-
-import type { Name } from '@repo/viz-expr'
-import type { UBoolVal } from '$lib/eval/type.js'
+import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte'
+import type { LadderEnv } from '$lib/ladder-env'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
+import TrueExprSFNode from './sf-custom-nodes/true-expr.svelte'
+import FalseExprSFNode from './sf-custom-nodes/false-expr.svelte'
 import UBoolVarSFNode from './sf-custom-nodes/ubool-var.svelte'
+import AppSFNode from './sf-custom-nodes/app.svelte'
 import NotStartSFNode from './sf-custom-nodes/not-start.svelte'
 import NotEndSFNode from './sf-custom-nodes/not-end.svelte'
 import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
@@ -16,7 +18,6 @@ import {
   emptyEdgeLabel,
   EdgeStylesContainer,
 } from '$lib/layout-ir/ladder-graph/edge-attributes.js'
-import type { LadderNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'
 
 /**
  * The result type of the ladder lir graph to SF graph conversion.
@@ -56,11 +57,14 @@ export interface Dimensions {
 *************************************************/
 
 export const uBoolVarNodeType = 'uBoolVarNode' as const
+export const appNodeType = 'appNode' as const
 export const notStartNodeType = 'notStartNode' as const
 export const notEndNodeType = 'notEndNode' as const
 export const sourceNoAnnoNodeType = 'sourceNoAnnoNode' as const
 export const sourceWithOrAnnoNodeType = 'sourceWithOrAnnoNode' as const
 export const sinkNodeType = 'sinkNode' as const
+export const trueExprNodeType = 'trueExprNode' as const
+export const falseExprNodeType = 'falseExprNode' as const
 
 export type SFNode<T extends string> = SF.Node & { type: T }
 function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
@@ -70,6 +74,17 @@ function isSFNode<T extends string>(node: SF.Node, type: T): node is SFNode<T> {
 export const isBoolVarSFNode = (
   node: SF.Node
 ): node is SFNode<typeof uBoolVarNodeType> => isSFNode(node, uBoolVarNodeType)
+
+export const isTrueExprSFNode = (
+  node: SF.Node
+): node is SFNode<typeof trueExprNodeType> => isSFNode(node, trueExprNodeType)
+export const isFalseExprSFNode = (
+  node: SF.Node
+): node is SFNode<typeof falseExprNodeType> => isSFNode(node, falseExprNodeType)
+
+export const isSFAppNode = (node: SF.Node): node is SFAppNode =>
+  isSFNode(node, appNodeType)
+export type SFAppNode = SFNode<typeof appNodeType>
 
 export type SFSourceNoAnnoNode = SFNode<typeof sourceNoAnnoNodeType>
 export type SFSinkNode = SFNode<typeof sinkNodeType>
@@ -91,11 +106,14 @@ export const isSFBundlingNode = (
 /** This is where we declare all the custom nodes for Svelte Flow */
 export const sfNodeTypes: SF.NodeTypes = {
   [uBoolVarNodeType]: UBoolVarSFNode,
+  [appNodeType]: AppSFNode,
   [notStartNodeType]: NotStartSFNode,
   [notEndNodeType]: NotEndSFNode,
   [sourceNoAnnoNodeType]: SourceSFNode,
   [sourceWithOrAnnoNodeType]: SourceSFNode,
   [sinkNodeType]: SinkSFNode,
+  [trueExprNodeType]: TrueExprSFNode,
+  [falseExprNodeType]: FalseExprSFNode,
 }
 
 /************************************************
@@ -104,8 +122,8 @@ export const sfNodeTypes: SF.NodeTypes = {
 
 // Displayer props
 
-export interface UBoolVarDisplayerProps {
-  data: UBoolVarDisplayerData
+export interface LadderNodeDisplayerProps {
+  data: LadderSFNodeData
 }
 
 export interface BundlingNodeDisplayerProps {
@@ -116,22 +134,14 @@ export interface BundlingNodeDisplayerProps {
 
 export interface LadderSFNodeData {
   context: LirContext
-  originalLirId: LirId
-  classes: LadderNodeCSSClass[]
+  node: LadderLirNode
+  ladderEnv: LadderEnv
 }
 
-export interface UBoolVarDisplayerData extends LadderSFNodeData {
-  name: Name
-  value: UBoolVal
-}
-
+// TODO: refactor bundling node displayers to just use LadderSFNodeData as well
 export interface BundlingNodeDisplayerData extends LadderSFNodeData {
   /** Currently used for the explanatory labels */
   annotation: string
-}
-
-export interface NotDisplayerProps {
-  data: LadderSFNodeData
 }
 
 /************************************************

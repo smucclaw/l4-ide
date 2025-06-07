@@ -1,27 +1,33 @@
 Parsing successful
 Typechecking successful
 Evaluation successful
-elem.l4:16:7-33:
+elem.l4:16:1-33:
   TRUE
-elem.l4:17:7-33:
+elem.l4:17:1-33:
   FALSE
-elem.l4:19:7-30:18:
+elem.l4:19:1-30:18:
   TRUE
-elem.l4:32:7-71:
+elem.l4:32:1-71:
   TRUE
-elem.l4:34:7-43:
+elem.l4:34:1-43:
   FALSE
-elem.l4:43:7-63:
+elem.l4:43:1-63:
   TRUE
-elem.l4:53:7-28:
+elem.l4:53:1-28:
   FALSE
-elem.l4:54:7-27:
+elem.l4:54:1-27:
   FALSE
-elem.l4:55:7-27:
+elem.l4:55:1-27:
   TRUE
-elem.l4:57:7-25:
+elem.l4:57:1-25:
   TRUE
-elem.l4:62:7-23:
-  Trying to check equality on types that do not support it.
-elem.l4:63:7-23:
-  Trying to check equality on types that do not support it.
+elem.l4:62:1-23:
+  Trying to check equality on types that do not support it
+  These were the values you tried to compare:
+    Left
+    Left
+elem.l4:63:1-23:
+  Trying to check equality on types that do not support it
+  These were the values you tried to compare:
+    <function>
+    <function>

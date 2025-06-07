@@ -1,0 +1,49 @@
+
+-- Some top level definitions
+pi MEANS 3.14159265358979
+GIVETH A NUMBER
+DECIDE euler IS 2.71828
+DECIDE two IS 2
+
+-- Basic CHECK AND EVAL of NUMBER variables
+#CHECK pi
+#EVAL euler
+#EVAL pi
+#CHECK pi + euler
+#EVAL pi * euler MINUS pi
+#EVAL pi DIVIDED BY euler
+
+-- Division by zero
+#EVAL 5 DIVIDED BY 0.0
+#EVAL 5 DIVIDED BY 0
+
+-- module only works with integers
+#EVAL 10 MODULO 5
+#EVAL 10.0 MODULO 5.0
+#EVAL 0.5 MODULO 5.0
+#EVAL 5.0 MODULO 0.0
+
+-- Equality ad
+#EVAL 5.0 = 5.0
+#EVAL 5.0 = 5
+-- We are using RATIONAL, so we don't suffer from floating point inaccuracies
+#EVAL 0.1 + 0.2
+#EVAL 0.1 + 0.2 = 0.3
+-- We are still printing the full number, and not use scientific notation here
+#EVAL 0.0000001
+
+-- Composite expressions
+#CHECK ROUND pi + FLOOR pi
+#EVAL pi + ROUND pi * pi
+#EVAL FLOOR pi * FLOOR pi
+#EVAL CEILING pi
+
+-- Check whether a number is an integer
+#CHECK `IS INTEGER`
+#EVAL `IS INTEGER` pi
+#EVAL `IS INTEGER` 2
+#EVAL `IS INTEGER` 2.0
+#EVAL `IS INTEGER` 2.00000001
+#EVAL CONSIDER `IS INTEGER` pi
+    WHEN TRUE THEN pi
+    WHEN FALSE THEN 0.1 + 0.2

@@ -1,0 +1,42 @@
+{
+  "name": "jl4-client-rpc",
+  "version": "0.0.1",
+  "private": true,
+  "description": "LSP client functionality for JL4 that can be used by the various language clients / IDE extensions (e.g. VSCode, Monaco), as well as RPC functionality and message types (e.g. between the VSCode extension and the VSCode webview).",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "git clean -fdx dist || echo 'git not available'",
+    "build": "npm run clean && tsc",
+    "check": "tsc --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "lint-fix": "eslint . --fix"
+  },
+  "packageManager": "npm@11.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "prettier": "@repo/prettier-config",
+  "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/prettier-config": "*",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.16.0"
+  },
+  "dependencies": {
+    "@repo/viz-expr": "*",
+    "@types/vscode": "^1.99.1",
+    "@typescript-eslint/eslint-plugin": "^8.23.0",
+    "ts-pattern": "^5.6.1",
+    "vscode-jsonrpc": "^8.2.1"
+  }
+}

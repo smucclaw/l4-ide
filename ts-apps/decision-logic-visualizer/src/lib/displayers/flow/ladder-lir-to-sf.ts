@@ -4,24 +4,26 @@ import type {
   LadderLirEdge,
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
-} from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-import {
-  isSourceNoAnnoLirNode,
-  isSourceWithOrAnnoLirNode,
   LadderGraphLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-/* IMPT: Cannot currently use $lib for the following import,
-because of how the functions were defined */
+import type { LadderEnv } from '$lib/ladder-env.js'
 import {
+  isTrueExprLirNode,
+  isFalseExprLirNode,
   isUBoolVarLirNode,
-  UBoolVarLirNode,
-  NotStartLirNode,
+  isNotStartLirNode,
+  isSinkLirNode,
+  isSourceNoAnnoLirNode,
+  isSourceWithOrAnnoLirNode,
   NotEndLirNode,
   SinkLirNode,
+  isAppLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 import {
   type LadderSFGraph,
   type LadderSFNode,
+  trueExprNodeType,
+  falseExprNodeType,
   uBoolVarNodeType,
   notStartNodeType,
   notEndNodeType,
@@ -29,19 +31,23 @@ import {
   sourceWithOrAnnoNodeType,
   sinkNodeType,
   ladderEdgeType,
+  appNodeType,
 } from './svelteflow-types.js'
 import * as SF from '@xyflow/svelte'
 import { match, P } from 'ts-pattern'
 import _ from 'lodash'
 
 export function ladderGraphToSFGraph(
+  ladderEnv: LadderEnv,
   context: LirContext,
   ladderGraph: LadderGraphLirNode
 ): LadderSFGraph {
   const ladderNodes = (
     ladderGraph.getVertices(context) as LadderLirNode[]
   ).toSorted((v1, v2) => v2.compare(v1))
-  const nodes = ladderNodes.map(ladderLirNodeToSfNode.bind(null, context))
+  const nodes = ladderNodes.map(
+    ladderLirNodeToSfNode.bind(null, ladderEnv, context)
+  )
   const idsAssocList = _.zip(nodes, ladderNodes)
     .filter(
       (pair): pair is [LadderSFNode, LadderLirNode] => !!pair[0] && !!pair[1]
@@ -85,6 +91,7 @@ function lirIdToSFId(id: LirId): string {
  * Converts a LadderLirNode into an SF.Node object.
  */
 export function ladderLirNodeToSfNode(
+  ladderEnv: LadderEnv,
   context: LirContext,
   node: LadderLirNode
 ): LadderSFNode {
@@ -97,32 +104,53 @@ export function ladderLirNodeToSfNode(
 
   const defaultData = {
     context,
-    originalLirId: node.getId(),
-    classes: [],
+    node,
+    ladderEnv,
   }
 
   return match(node)
-    .with(P.when(isUBoolVarLirNode), (n: UBoolVarLirNode) => {
+    .with(P.when(isTrueExprLirNode), () => {
+      return {
+        ...defaults,
+        type: trueExprNodeType,
+        data: defaultData,
+      }
+    })
+    .with(P.when(isFalseExprLirNode), () => {
+      return {
+        ...defaults,
+        type: falseExprNodeType,
+        data: defaultData,
+      }
+    })
+    .with(P.when(isUBoolVarLirNode), () => {
       return {
         ...defaults,
         type: uBoolVarNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(NotStartLirNode), (n: NotStartLirNode) => {
+    .with(P.when(isAppLirNode), () => {
+      return {
+        ...defaults,
+        type: appNodeType,
+        data: defaultData,
+      }
+    })
+    .with(P.when(isNotStartLirNode), () => {
       return {
         ...defaults,
         type: notStartNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
     })
-    .with(P.instanceOf(NotEndLirNode), (n: NotEndLirNode) => {
+    .with(P.instanceOf(NotEndLirNode), () => {
       return {
         ...defaults,
         type: notEndNodeType,
-        data: { ...defaultData, ...n.getData(context) },
+        data: defaultData,
       }
-    })
+    }) // TODO: Continue refactoring the following
     .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,
@@ -137,7 +165,7 @@ export function ladderLirNodeToSfNode(
         data: { ...defaultData, ...n.getData(context) },
       }
     })
-    .with(P.instanceOf(SinkLirNode), (n: SinkLirNode) => {
+    .with(P.when(isSinkLirNode), (n: SinkLirNode) => {
       return {
         ...defaults,
         type: sinkNodeType,

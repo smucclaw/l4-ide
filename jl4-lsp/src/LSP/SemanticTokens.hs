@@ -10,14 +10,12 @@ import Base
 import Control.Applicative (Alternative (..))
 import Control.Lens hiding (Iso)
 import qualified Control.Monad.Extra as Extra
-import Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.Except as Except
 import qualified Control.Monad.Trans.Reader as ReaderT
 import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as Text
 import qualified GHC.Generics as Generics
-import GHC.Stack
 import Generics.SOP as SOP
 import qualified Language.LSP.Protocol.Lens as J
 import Language.LSP.Protocol.Types hiding (Pattern)
@@ -36,7 +34,7 @@ runSemanticTokensM semTokenCtx a = Except.runExcept $ ReaderT.runReaderT (toSemT
 --
 -- We might want to override some functionality here. We should perhaps
 -- try to find another way to do this.
-class ToSemTokens c t a | a t -> c where
+class ToSemTokens c t a where
   toSemTokens :: a -> SemanticTokensM c t [SemanticToken]
   default toSemTokens ::
     (SOP.Generic a, All (AnnoFirst a (ToSemTokens c t)) (Code a), HasAnno a, ToSemToken t, AnnoToken a ~ t) =>
@@ -51,10 +49,10 @@ genericToSemTokens :: forall a t c .
 genericToSemTokens =
   genericToNodes (Proxy @(ToSemTokens c t)) toSemTokens traverseCsnWithHoles
 
-traverseCsnWithHoles :: (HasCallStack, ToSemToken t) => Anno_ t e -> [SemanticTokensM c t [SemanticToken]] -> SemanticTokensM c t [SemanticToken]
+traverseCsnWithHoles :: (ToSemToken t) => Anno_ t e -> [SemanticTokensM c t [SemanticToken]] -> SemanticTokensM c t [SemanticToken]
 traverseCsnWithHoles (Anno _ _ []) _ = pure []
-traverseCsnWithHoles (Anno e mSrcRange (AnnoHole _ : cs)) holeFits = case holeFits of
-  [] -> lift $ throwE $ InsufficientHoleFit callStack
+traverseCsnWithHoles (Anno e mSrcRange (AnnoHole mr : cs)) holeFits = case holeFits of
+  [] -> lift $ throwInsufficientHolefit mr
   (x : xs) -> do
     toks <- x
     restOfTokens <- traverseCsnWithHoles (Anno e mSrcRange cs) xs

@@ -10,11 +10,12 @@ import qualified Base.Set as Set
 import qualified Base.Text as Text
 
 import Data.Monoid (Alt (..))
+import qualified Data.Scientific as Sci
 import Data.Char hiding (Space)
 import GHC.Show (showLitString)
 import Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char
-import Text.Megaparsec.State
+import Text.Megaparsec.State ( initialPosState )
 import qualified Text.Megaparsec.Char.Lexer as Lexer
 import L4.Parser.SrcSpan
 
@@ -52,6 +53,7 @@ data DirectiveType
   = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
+  | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -59,7 +61,8 @@ data DirectiveType
 data TokenType =
     TIdentifier   !Text
   | TQuoted       !Text
-  | TIntLit       !Text !Int
+  | TIntLit       !Text !Integer
+  | TRationalLit  !Text !Rational
   | TStringLit    !Text
   | TDirective    !DirectiveType
     -- copy token / ditto mark, currently '^'
@@ -92,20 +95,22 @@ data TokenType =
   | TImplies
   | TDividedBy
   | TOtherSymbolic !Text
+  | TColon
     -- keywords
   | TKGiven
   | TKGiveth
   | TKDecide
+  | TKExact
   | TKMeans
   | TKDeclare
   | TKIf
   | TKThen
   | TKElse
   | TKOtherwise
-  -- | TKFalse
-  -- | TKTrue
   | TKAnd
   | TKOr
+  | TKRAnd
+  | TKROr
   | TKNot
   | TKIs
   | TKHas
@@ -122,6 +127,14 @@ data TokenType =
   | TKAssume
   | TKWhen
   | TKType
+  | TKParty
+  | TKDo
+  | TKDoes
+  | TKMust
+  | TKProvided
+  | TKWithin
+  | TKHence
+  | TKLest
   | TKFunction
   | TKFrom
   | TKTo
@@ -139,6 +152,7 @@ data TokenType =
   | TKAbove
   | TKBelow
   | TKAt
+  | TKStarting
   | TKLeast
   | TKMost
   | TKFollowed
@@ -255,46 +269,77 @@ directives =
   [ (TStrictEvalDirective, "SEVAL")
   , (TLazyEvalDirective,   "EVAL")
   , (TCheckDirective,      "CHECK")
+  , (TContractDirective,   "TRACE")
   ]
 
-integerLiteral :: Lexer (Text, Int)
+integerLiteral :: Lexer (Text, Integer)
 integerLiteral =
       (\ x (xs, i) -> (x <> xs, negate i)) <$> string "-" <*> decimal
   <|> decimal
 
-decimal :: Lexer (Text, Int)
+decimal :: Lexer (Text, Integer)
 decimal = decimal_ <?> "integer"
 
-decimal_ :: Lexer (Text, Int)
+decimal_ :: Lexer (Text, Integer)
 decimal_ = (\ s -> (s, mkNum s)) <$> takeWhile1P (Just "digit") isDigit
   where
-    mkNum :: Text -> Int
+    mkNum :: Text -> Integer
     mkNum = foldl' step 0 . chunkToTokens (Proxy :: Proxy Text)
     step a c = a * 10 + fromIntegral (digitToInt c)
 
+rationalLiteral :: Lexer (Text, Rational)
+rationalLiteral =
+      (\ x (xs, i) -> (x <> xs, negate i)) <$> string "-" <*> floatP
+  <|> floatP
+{-# INLINE rationalLiteral #-}
+
+floatP :: Lexer (Text, Rational)
+floatP = float_ <?> "float"
+{-# INLINE floatP #-}
+
+float_ :: Lexer (Text, Rational)
+float_ = do
+  (t, c') <- decimal_
+  (c, e, t2) <- dotDecimal_ c'
+  pure (t <> "." <> t2, realToFrac $ Sci.scientific c e)
+{-# INLINE float_ #-}
+
+dotDecimal_ :: Integer -> Lexer (Integer, Int, Text)
+dotDecimal_ c' = do
+  void (satisfy (== '.'))
+  let mkNum = foldl' step (c', 0) . chunkToTokens (Proxy :: Proxy Text)
+      step (a, e') c =
+          ( (a * 10 + fromIntegral (digitToInt c))
+          , (e' - 1)
+          )
+  (\ s -> let (c, e) = mkNum s in (c, e, s)) <$> takeWhile1P (Just "digit") isDigit
+{-# INLINE dotDecimal_ #-}
+
 tokenPayload :: Lexer TokenType
 tokenPayload =
-      uncurry TIntLit <$> try integerLiteral
-  <|> TStringLit      <$> stringLiteral
-  <|> TGenitive       <$  string "'s"
-  <|> TQuoted         <$> quoted
-  <|> TDirective      <$> directiveLiteral
-  <|> TRefSrc         <$> refSrcAnnotation
-  <|> TRefMap         <$> refMapAnnotation
-  <|> uncurry TNlg    <$> nlgAnnotation
-  <|> uncurry TRef    <$> refAnnotation
-  <|> TSpace          <$> whitespace
-  <|> TLineComment    <$> lineComment
-  <|> TBlockComment   <$> blockComment
-  <|> TPOpen          <$  char '('
-  <|> TPClose         <$  char ')'
-  <|> TCOpen          <$  char '{'
-  <|> TCClose         <$  char '}'
-  <|> TParagraph      <$  char '§'
-  <|> TComma          <$  char ','
-  <|> TSemicolon      <$  char ';'
-  <|> TDot            <$  char '.'
-  <|> TCopy Nothing   <$  char '^'
+      uncurry TRationalLit <$> try rationalLiteral
+  <|> uncurry TIntLit      <$> try integerLiteral
+  <|> TStringLit           <$> stringLiteral
+  <|> TGenitive            <$  string "'s"
+  <|> TQuoted              <$> quoted
+  <|> TDirective           <$> directiveLiteral
+  <|> TRefSrc              <$> refSrcAnnotation
+  <|> TRefMap              <$> refMapAnnotation
+  <|> uncurry TNlg         <$> nlgAnnotation
+  <|> uncurry TRef         <$> refAnnotation
+  <|> TSpace               <$> whitespace
+  <|> TLineComment         <$> lineComment
+  <|> TBlockComment        <$> blockComment
+  <|> TPOpen               <$  char '('
+  <|> TPClose              <$  char ')'
+  <|> TCOpen               <$  char '{'
+  <|> TCClose              <$  char '}'
+  <|> TParagraph           <$  char '§'
+  <|> TComma               <$  char ','
+  <|> TSemicolon           <$  char ';'
+  <|> TPercent             <$  char '%'
+  <|> TDot                 <$  char '.'
+  <|> TCopy Nothing        <$  char '^'
   <|> symbolic
   <|> identifierOrKeyword
 
@@ -351,6 +396,7 @@ symbols =
     , ("||", TOr           )
     , ("=>", TImplies      )
     , ("/" , TDividedBy    )
+    , (":" , TColon)
     ]
 
 keywords :: Map Text TokenType
@@ -359,16 +405,17 @@ keywords =
     [ ("GIVEN"      , TKGiven      )
     , ("GIVETH"     , TKGiveth     )
     , ("DECIDE"     , TKDecide     )
+    , ("EXACTLY"    , TKExact     )
     , ("MEANS"      , TKMeans      )
     , ("DECLARE"    , TKDeclare    )
     , ("IF"         , TKIf         )
     , ("THEN"       , TKThen       )
     , ("ELSE"       , TKElse       )
     , ("OTHERWISE"  , TKOtherwise  )
-    -- , ("FALSE"      , TKFalse      )
-    -- , ("TRUE"       , TKTrue       )
     , ("AND"        , TKAnd        )
     , ("OR"         , TKOr         )
+    , ("RAND"       , TKRAnd       )
+    , ("ROR"        , TKROr        )
     , ("NOT"        , TKNot        )
     , ("IS"         , TKIs         )
     , ("ONE"        , TKOne        )
@@ -385,6 +432,14 @@ keywords =
     , ("ASSUME"     , TKAssume     )
     , ("WHEN"       , TKWhen       )
     , ("TYPE"       , TKType       )
+    , ("PARTY"      , TKParty      )
+    , ("DO"         , TKDo         )
+    , ("DOES"       , TKDoes       )
+    , ("MUST"       , TKMust       )
+    , ("PROVIDED"   , TKProvided   )
+    , ("WITHIN"     , TKWithin     )
+    , ("HENCE"      , TKHence      )
+    , ("LEST"       , TKLest       )
     , ("FUNCTION"   , TKFunction   )
     , ("FROM"       , TKFrom       )
     , ("TO"         , TKTo         )
@@ -402,6 +457,7 @@ keywords =
     , ("ABOVE"      , TKAbove      )
     , ("BELOW"      , TKBelow      )
     , ("AT"         , TKAt         )
+    , ("STARTING"   , TKStarting   )
     , ("LEAST"      , TKLeast      )
     , ("MOST"       , TKMost       )
     , ("FOLLOWED"   , TKFollowed   )
@@ -755,13 +811,13 @@ errorBundleToErrorMessages ParseErrorBundle{..} =
 
 -- | Get length of the “pointer” to display under a given 'ErrorItem'.
 errorItemLength :: (VisualStream s) => Proxy s -> ErrorItem (Token s) -> Int
-errorItemLength pxy = \case
+errorItemLength pxy = \ case
   Tokens ts -> tokensLength pxy ts
   _ -> 1
 
 -- | Get length of the “pointer” to display under a given 'ErrorFancy'.
 errorFancyLength :: (ShowErrorComponent e) => ErrorFancy e -> Int
-errorFancyLength = \case
+errorFancyLength = \ case
   ErrorCustom a -> errorComponentLen a
   _ -> 1
 
@@ -784,7 +840,7 @@ toAnno
   -> AnnoType
   -- ^ inline or line anno
   -> Text
-toAnno lh oh ch t = \case
+toAnno lh oh ch t = \ case
   InlineAnno -> oh <> t <> ch
   LineAnno -> lh <> t
 
@@ -800,110 +856,125 @@ displayPosToken (MkPosToken _r tt) =
 displayTokenType :: TokenType -> Text
 displayTokenType tt =
   case tt of
-    TIdentifier t    -> t
-    TQuoted t        -> "`" <> t <> "`"
-    TIntLit t _i     -> t
-    TStringLit s     -> showStringLit s
-    TDirective d     -> showDirective d
-    TCopy _          -> "^"
-    TPOpen           -> "("
-    TPClose          -> ")"
-    TCOpen           -> "{"
-    TCClose          -> "}"
-    TRefOpen         -> "<<"
-    TRefClose        -> ">>"
-    TNlgOpen         -> "["
-    TNlgClose        -> "]"
-    TParagraph       -> "§"
-    TComma           -> ","
-    TSemicolon       -> ";"
-    TDot             -> "."
-    TGenitive        -> "'s"
-    TTimes           -> "*"
-    TPlus            -> "+"
-    TMinus           -> "-"
-    TGreaterEquals   -> ">="
-    TLessEquals      -> "<="
-    TGreaterThan     -> ">"
-    TLessThan        -> "<"
-    TEquals          -> "="
-    TEqualsEquals    -> "=="
-    TNotEquals       -> "/="
-    TAnd             -> "&&"
-    TOr              -> "||"
-    TImplies         -> "=>"
-    TDividedBy       -> "/"
-    TOtherSymbolic t -> t
-    TKGiven          -> "GIVEN"
-    TKGiveth         -> "GIVETH"
-    TKDecide         -> "DECIDE"
-    TKMeans          -> "MEANS"
-    TKDeclare        -> "DECLARE"
-    TKIf             -> "IF"
-    TKThen           -> "THEN"
-    TKElse           -> "ELSE"
-    TKOtherwise      -> "OTHERWISE"
-    -- TKFalse          -> "FALSE"
-    -- TKTrue           -> "TRUE"
-    TKAnd            -> "AND"
-    TKOr             -> "OR"
-    TKNot            -> "NOT"
-    TKIs             -> "IS"
-    TKHas            -> "HAS"
-    TKOne            -> "ONE"
-    TKOf             -> "OF"
-    TKWith           -> "WITH"
-    TKA              -> "A"
-    TKAn             -> "AN"
-    TKThe            -> "THE"
-    TKYield          -> "YIELD"
-    TKConsider       -> "CONSIDER"
-    TKWhere          -> "WHERE"
-    TKList           -> "LIST"
-    TKAssume         -> "ASSUME"
-    TKWhen           -> "WHEN"
-    TKType           -> "TYPE"
-    TKFunction       -> "FUNCTION"
-    TKFrom           -> "FROM"
-    TKTo             -> "TO"
-    TKEquals         -> "EQUALS"
-    TKImplies        -> "IMPLIES"
-    TKPlus           -> "PLUS"
-    TKMinus          -> "MINUS"
-    TKTimes          -> "TIMES"
-    TKDivided        -> "DIVIDED"
-    TKModulo         -> "MODULO"
-    TKBy             -> "BY"
-    TKGreater        -> "GREATER"
-    TKLess           -> "LESS"
-    TKThan           -> "THAN"
-    TKAbove          -> "ABOVE"
-    TKBelow          -> "BELOW"
-    TKAt             -> "AT"
-    TKLeast          -> "LEAST"
-    TKMost           -> "MOST"
-    TKFollowed       -> "FOLLOWED"
-    TKFor            -> "FOR"
-    TKAll            -> "ALL"
-    TKAka            -> "AKA"
-    TNlg t ty        -> toNlgAnno t ty
-    TRef t ty        -> toRefAnno t ty
-    TRefSrc t        -> "@ref-src" <> t
-    TRefMap t        -> "@ref-map" <> t
-    TNlgString t     -> t
-    TNlgPrefix       -> "@nlg"
-    TPercent         -> "%"
-    TKImport         -> "IMPORT"
-    TSpace t         -> t
-    TLineComment t   -> t
-    TBlockComment t  -> t
-    EOF              -> ""
+    TIdentifier t     -> t
+    TQuoted t         -> "`" <> t <> "`"
+    TIntLit t _i      -> t
+    TRationalLit t _i -> t
+    TStringLit s      -> showStringLit s
+    TDirective d      -> showDirective d
+    TCopy _           -> "^"
+    TPOpen            -> "("
+    TPClose           -> ")"
+    TCOpen            -> "{"
+    TCClose           -> "}"
+    TRefOpen          -> "<<"
+    TRefClose         -> ">>"
+    TNlgOpen          -> "["
+    TNlgClose         -> "]"
+    TParagraph        -> "§"
+    TComma            -> ","
+    TSemicolon        -> ";"
+    TDot              -> "."
+    TGenitive         -> "'s"
+    TTimes            -> "*"
+    TPlus             -> "+"
+    TMinus            -> "-"
+    TGreaterEquals    -> ">="
+    TLessEquals       -> "<="
+    TGreaterThan      -> ">"
+    TLessThan         -> "<"
+    TEquals           -> "="
+    TEqualsEquals     -> "=="
+    TNotEquals        -> "/="
+    TAnd              -> "&&"
+    TOr               -> "||"
+    TImplies          -> "=>"
+    TDividedBy        -> "/"
+    TOtherSymbolic t  -> t
+    TColon           -> ":"
+    TKGiven           -> "GIVEN"
+    TKGiveth          -> "GIVETH"
+    TKDecide          -> "DECIDE"
+    TKExact           -> "EXACTLY"
+    TKMeans           -> "MEANS"
+    TKDeclare         -> "DECLARE"
+    TKIf              -> "IF"
+    TKThen            -> "THEN"
+    TKElse            -> "ELSE"
+    TKOtherwise       -> "OTHERWISE"
+    -- TKFalse           -> "FALSE"
+    -- TKTrue            -> "TRUE"
+    TKAnd             -> "AND"
+    TKOr              -> "OR"
+    TKRAnd            -> "RAND"
+    TKROr             -> "ROR"
+    TKNot             -> "NOT"
+    TKIs              -> "IS"
+    TKHas             -> "HAS"
+    TKOne             -> "ONE"
+    TKOf              -> "OF"
+    TKWith            -> "WITH"
+    TKA               -> "A"
+    TKAn              -> "AN"
+    TKThe             -> "THE"
+    TKYield           -> "YIELD"
+    TKConsider        -> "CONSIDER"
+    TKWhere           -> "WHERE"
+    TKList            -> "LIST"
+    TKAssume          -> "ASSUME"
+    TKWhen            -> "WHEN"
+    TKType            -> "TYPE"
+    TKParty           -> "PARTY"
+    TKDo              -> "DO"
+    TKDoes            -> "DOES"
+    TKMust            -> "MUST"
+    TKProvided        -> "PROVIDED"
+    TKWithin          -> "WITHIN"
+    TKHence           -> "HENCE"
+    TKLest            -> "LEST"
+    TKFunction        -> "FUNCTION"
+    TKFrom            -> "FROM"
+    TKTo              -> "TO"
+    TKEquals          -> "EQUALS"
+    TKImplies         -> "IMPLIES"
+    TKPlus            -> "PLUS"
+    TKMinus           -> "MINUS"
+    TKTimes           -> "TIMES"
+    TKDivided         -> "DIVIDED"
+    TKModulo          -> "MODULO"
+    TKBy              -> "BY"
+    TKGreater         -> "GREATER"
+    TKLess            -> "LESS"
+    TKThan            -> "THAN"
+    TKAbove           -> "ABOVE"
+    TKBelow           -> "BELOW"
+    TKAt              -> "AT"
+    TKStarting        -> "STARTING"
+    TKLeast           -> "LEAST"
+    TKMost            -> "MOST"
+    TKFollowed        -> "FOLLOWED"
+    TKFor             -> "FOR"
+    TKAll             -> "ALL"
+    TKAka             -> "AKA"
+    TNlg t ty         -> toNlgAnno t ty
+    TRef t ty         -> toRefAnno t ty
+    TRefSrc t         -> "@ref-src" <> t
+    TRefMap t         -> "@ref-map" <> t
+    TNlgString t      -> t
+    TNlgPrefix        -> "@nlg"
+    TPercent          -> "%"
+    TKImport          -> "IMPORT"
+    TSpace t          -> t
+    TLineComment t    -> t
+    TBlockComment t   -> t
+    EOF               -> ""
 
 showDirective :: DirectiveType -> Text
-showDirective = \case
+showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
   TCheckDirective -> "#CHECK"
+  TContractDirective -> "#TRACE"
 
 data TokenCategory
   = CIdentifier
@@ -921,10 +992,11 @@ data TokenCategory
 
 posTokenCategory :: TokenType -> TokenCategory
 posTokenCategory =
-  \case
+  \ case
     TIdentifier _ -> CIdentifier
     TQuoted _ -> CIdentifier
-    TIntLit _ _ -> CNumberLit
+    TIntLit{} -> CNumberLit
+    TRationalLit{} -> CNumberLit
     TStringLit _ -> CStringLit
     TDirective _ -> CDirective
     TCopy Nothing -> CSymbol
@@ -957,9 +1029,11 @@ posTokenCategory =
     TImplies -> COperator
     TDividedBy -> COperator
     TOtherSymbolic _ -> CSymbol
+    TColon -> CSymbol
     TKGiven -> CKeyword
     TKGiveth -> CKeyword
     TKDecide -> CKeyword
+    TKExact -> CKeyword
     TKMeans -> CKeyword
     TKDeclare -> CKeyword
     TKIf -> CKeyword
@@ -970,6 +1044,8 @@ posTokenCategory =
     -- TKTrue -> CKeyword
     TKAnd -> CKeyword
     TKOr -> CKeyword
+    TKRAnd -> CKeyword
+    TKROr -> CKeyword
     TKNot -> CKeyword
     TKIs -> CKeyword
     TKHas -> CKeyword
@@ -986,6 +1062,14 @@ posTokenCategory =
     TKAssume -> CKeyword
     TKWhen -> CKeyword
     TKType -> CKeyword
+    TKParty -> CKeyword
+    TKDo -> CKeyword
+    TKDoes -> CKeyword
+    TKMust -> CKeyword
+    TKProvided -> CKeyword
+    TKWithin -> CKeyword
+    TKHence -> CKeyword
+    TKLest -> CKeyword
     TKFunction -> CKeyword
     TKFrom -> CKeyword
     TKTo -> CKeyword
@@ -1003,6 +1087,7 @@ posTokenCategory =
     TKAbove -> CKeyword
     TKBelow -> CKeyword
     TKAt -> CKeyword
+    TKStarting -> CKeyword
     TKLeast -> CKeyword
     TKMost -> CKeyword
     TKFollowed -> CKeyword

@@ -1,4 +1,5 @@
 module L4.Evaluate.Operators where
+import Base
 
 data BinOp =
     BinOpPlus
@@ -12,4 +13,5 @@ data BinOp =
   | BinOpGeq
   | BinOpLt
   | BinOpGt
-  deriving stock Show
+  deriving stock (Show, Generic)
+  deriving anyclass (NFData)

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build-haskell:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     container:
       image: ubuntu:24.04
     strategy:
@@ -49,12 +49,6 @@ jobs:
           xz-utils
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      # FIXME: this is a temporary fix, the docker container should never be dirty
-      # at the begin of a run
-      - name: Remove cabal store
-        run: |
-          rm -rf ~/.cabal
-
       - uses: actions/checkout@v4
 
       - name: Update git submodules
@@ -111,7 +105,7 @@ jobs:
 
   build-ts-monorepo:
     name: TS Monorepo (including VSCode Extension) ${{ matrix.node-version }} on ${{ matrix.os }}
-    runs-on: self-hosted
+    runs-on: ${{ matrix.os }}
     container:
       image: ubuntu:24.04
     strategy:

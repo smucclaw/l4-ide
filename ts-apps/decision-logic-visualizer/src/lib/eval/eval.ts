@@ -1,8 +1,19 @@
-import { IRId } from '@repo/viz-expr'
+import { App, IRId } from '@repo/viz-expr'
 import type { UBoolVal, Expr, EvUBoolVar, Not, Or, And } from './type.js'
-import { TrueVal, FalseVal, UnknownVal, isTrueVal, isFalseVal } from './type.js'
+import {
+  TrueVal,
+  FalseVal,
+  UnknownVal,
+  isTrueVal,
+  isFalseVal,
+  isUnknownVal,
+  toVEBoolValue,
+  toUBoolVal,
+} from './type.js'
 import { Assignment } from './assignment.js'
-import { match } from 'ts-pattern'
+import type { L4Connection } from '$lib/l4-connection.js'
+import type { VersionedDocId } from '@repo/viz-expr'
+import { match, P } from 'ts-pattern'
 
 /**********************************************************
                    Evaluator
@@ -39,91 +50,145 @@ export interface EvalResult {
 
 /** Boolean operator evaluator */
 export interface LadderEvaluator {
-  eval(ladder: Expr, assignment: Assignment): EvalResult
+  eval(
+    l4connection: L4Connection,
+    verDocId: VersionedDocId,
+    ladder: Expr,
+    assignment: Assignment
+  ): Promise<EvalResult>
 }
 
 export const Evaluator: LadderEvaluator = {
-  eval(ladder: Expr, assignment: Assignment): EvalResult {
-    return eval_(ladder, assignment, new Map<IRId, UBoolVal>())
-  },
-}
+  async eval(
+    l4connection: L4Connection,
+    verDocId: VersionedDocId,
+    ladder: Expr,
+    assignment: Assignment
+  ): Promise<EvalResult> {
+    async function eval_(
+      ladder: Expr,
+      intermediate: Map<IRId, UBoolVal>
+    ): Promise<EvalResult> {
+      return match(ladder)
+        .with({ $type: 'TrueE' }, () => {
+          const result = new TrueVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+          }
+        })
+        .with({ $type: 'FalseE' }, () => {
+          const result = new FalseVal()
+          const newIntermediate = intermediate.set(ladder.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+          }
+        })
+        .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
+          const result = assignment.get(expr.name.unique) as UBoolVal
+          const newIntermediate = intermediate.set(expr.id, result)
+          return {
+            result,
+            intermediate: newIntermediate,
+          }
+        })
+        .with({ $type: 'Not' }, async (expr: Not) => {
+          const { result: negandV, intermediate: intermediate2 } = await eval_(
+            expr.negand,
+            intermediate
+          )
+          const result = match(negandV)
+            .with(P.when(isTrueVal), () => new FalseVal())
+            .with(P.when(isFalseVal), () => new TrueVal())
+            .with(P.when(isUnknownVal), () => new UnknownVal())
+            .exhaustive()
 
-function eval_(
-  ladder: Expr,
-  assignment: Assignment,
-  intermediate: Map<IRId, UBoolVal>
-): EvalResult {
-  return match(ladder)
-    .with({ $type: 'UBoolVar' }, (expr: EvUBoolVar) => {
-      const result = assignment.get(expr.name.unique) as UBoolVal
-      const newIntermediate = intermediate.set(expr.id, result)
-      return {
-        result,
-        intermediate: newIntermediate,
-      }
-    })
-    .with({ $type: 'Not' }, (expr: Not) => {
-      const { result: negandV, intermediate: intermediate2 } = eval_(
-        expr.negand,
-        assignment,
-        intermediate
-      )
-      const result = match(negandV)
-        .with({ $type: 'TrueVal' }, () => new FalseVal())
-        .with({ $type: 'FalseVal' }, () => new TrueVal())
-        .with({ $type: 'UnknownVal' }, () => new UnknownVal())
+          const finalIntermediate = new Map(intermediate2).set(expr.id, result)
+
+          return {
+            result,
+            intermediate: finalIntermediate,
+          }
+        })
+        .with({ $type: 'And' }, async (expr: And) => {
+          const andResults = await Promise.all(
+            expr.args.map((arg) => eval_(arg, intermediate))
+          )
+          const result = evalAndChain(andResults.map((res) => res.result))
+
+          const finalIntermediate = combineIntermediates(
+            andResults.map((res) => res.intermediate)
+          ).set(expr.id, result)
+
+          return {
+            result,
+            intermediate: finalIntermediate,
+          }
+        })
+        .with({ $type: 'Or' }, async (expr: Or) => {
+          const orResults = await Promise.all(
+            expr.args.map((arg) => eval_(arg, intermediate))
+          )
+          const result = evalOrChain(orResults.map((res) => res.result))
+
+          const finalIntermediate = combineIntermediates(
+            orResults.map((res) => res.intermediate)
+          ).set(expr.id, result)
+
+          return {
+            result,
+            intermediate: finalIntermediate,
+          }
+        })
+        .with({ $type: 'App' }, async (expr: App) => {
+          const argResults = await Promise.all(
+            expr.args.map((arg) => eval_(arg, intermediate))
+          )
+          const args = argResults.map((res) => res.result)
+
+          if (args.some(isUnknownVal)) {
+            console.log(
+              "Currently don't support eval-ing an App with Unknown args: will just return UnknownVal"
+            )
+            const res = new UnknownVal()
+            const finalIntermediate = combineIntermediates(
+              argResults.map((res) => res.intermediate)
+            ).set(expr.id, res)
+            return {
+              result: res,
+              intermediate: finalIntermediate,
+            }
+          }
+          const argsForApp = args
+            .map(toVEBoolValue)
+            .filter((a) => a !== 'UnknownV')
+
+          const lspResponse = await l4connection.evalApp(
+            expr.id,
+            argsForApp,
+            verDocId
+          )
+          console.log('eval.ts: eval app lspResponse', lspResponse)
+          if (!lspResponse) {
+            throw new Error(`Problem evaluating App ${expr}`)
+          }
+          const res = toUBoolVal(lspResponse.value)
+          const finalIntermediate = combineIntermediates(
+            argResults.map((res) => res.intermediate)
+          ).set(expr.id, res)
+
+          return {
+            result: res,
+            intermediate: finalIntermediate,
+          }
+        })
         .exhaustive()
+    }
 
-      const finalIntermediate = new Map(intermediate2).set(expr.id, result)
-
-      return {
-        result,
-        intermediate: finalIntermediate,
-      }
-    })
-    .with({ $type: 'And' }, (expr: And) => {
-      const andResults = expr.args.map((arg) =>
-        eval_(arg, assignment, intermediate)
-      )
-      const result = evalAndChain(andResults.map((res) => res.result))
-
-      const combinedIntermeds = andResults
-        .map((res) => res.intermediate)
-        .reduceRight((acc, res) => {
-          return new Map([...acc, ...res])
-        })
-      const finalIntermediate = new Map(combinedIntermeds).set(expr.id, result)
-
-      return {
-        result,
-        intermediate: finalIntermediate,
-      }
-    })
-    .with({ $type: 'Or' }, (expr: Or) => {
-      const orResults = expr.args.map((arg) =>
-        eval_(arg, assignment, intermediate)
-      )
-      const result = evalOrChain(orResults.map((res) => res.result))
-
-      const combinedIntermediates = orResults
-        .map((res) => res.intermediate)
-        .reduceRight((acc, res) => {
-          return new Map([...acc, ...res])
-        })
-      const finalIntermediate = new Map(combinedIntermediates).set(
-        expr.id,
-        result
-      )
-
-      return {
-        result,
-        intermediate: finalIntermediate,
-      }
-    })
-    .with({ $type: 'App' }, () => {
-      throw new Error('TODO: Pending integration with backend')
-    })
-    .exhaustive()
+    return eval_(ladder, new Map<IRId, UBoolVal>())
+  },
 }
 
 /***************************
@@ -148,4 +213,20 @@ function evalOrChain(bools: UBoolVal[]) {
     return new FalseVal()
   }
   return new UnknownVal()
+}
+
+/***************************
+      Misc helpers
+****************************/
+
+/** Helper to combine multiple intermediate result maps into one */
+function combineIntermediates(
+  intermediates: Map<IRId, UBoolVal>[]
+): Map<IRId, UBoolVal> {
+  return new Map(
+    intermediates.reduceRight(
+      (accEntries, intermediate) => [...intermediate, ...accEntries],
+      [] as [IRId, UBoolVal][]
+    )
+  )
 }

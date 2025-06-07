@@ -6,17 +6,21 @@ import {
   RevealOutputChannelOn,
   ServerOptions,
 } from 'vscode-languageclient/node.js'
+import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
+import type { PanelConfig } from './webview-panel.js'
+import { PanelManager } from './webview-panel.js'
+
+import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+
+import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
+import { Schema } from 'effect'
 import type { WebviewTypeMessageParticipant } from 'vscode-messenger-common'
 import { Messenger } from 'vscode-messenger'
 import {
-  RenderAsLadderInfo,
-  WebviewFrontendIsReadyNotification,
   RenderAsLadder,
-} from '@repo/viz-expr'
-import { Schema } from 'effect'
-// import { cmdViz } from './commands.js'
-import type { PanelConfig } from './viz.js'
-import { PanelManager } from './viz.js'
+  WebviewFrontendIsReadyNotification,
+  makeLspRelayRequestType,
+} from 'jl4-client-rpc'
 
 /***********************************************
      decode for RenderAsLadderInfo
@@ -29,7 +33,8 @@ const decode = Schema.decodeUnknownSync(RenderAsLadderInfo)
       Language Client
 ****************************************/
 
-let client: LanguageClient
+let client: VSCodeL4LanguageClient
+const code2ProtocolConverter = createCodeConverter()
 
 /***************************************
        Webview Panel
@@ -44,6 +49,48 @@ const PANEL_CONFIG: PanelConfig = {
 const vizWebviewFrontend: WebviewTypeMessageParticipant = {
   type: 'webview',
   webviewType: 'l4Viz',
+}
+
+/***************************************
+      Set up webview messenger
+****************************************/
+
+function initializeWebviewMessenger(
+  outputChannel: vscode.OutputChannel,
+  panelManager: PanelManager
+) {
+  /** Messenger for VSCode extension to communicate with webview */
+  const webviewMessenger = new Messenger({ debugLog: true })
+
+  // Set up listeners
+  // -- Listen for whether webview frontend has initialized
+  webviewMessenger.onNotification(WebviewFrontendIsReadyNotification, () => {
+    panelManager.markFrontendAsReady()
+    outputChannel.appendLine(`Ext: got frontend is ready notification!`)
+  })
+
+  // -- Listen for LSP client relay requests from webview
+  webviewMessenger.onRequest(
+    makeLspRelayRequestType<object, unknown>(),
+    async (clientReqParams) => {
+      outputChannel.appendLine(
+        `Ext: Received LSP relay request from webview:\n${JSON.stringify(clientReqParams)}`
+      )
+      const response = await client.sendRequest(
+        clientReqParams.requestType,
+        clientReqParams.params
+      )
+      outputChannel.appendLine(
+        `Response from server:\n${JSON.stringify(response)}`
+      )
+      outputChannel.appendLine(
+        '--------------------------------------------------'
+      )
+      return response
+    }
+  )
+
+  return webviewMessenger
 }
 
 /***************************************
@@ -69,9 +116,12 @@ export async function activate(context: ExtensionContext) {
     },
   }
 
+  // Initialize panelManager and webviewMessenger
   const panelManager = new PanelManager(PANEL_CONFIG)
-
-  const webviewMessenger = new Messenger({ debugLog: true })
+  const webviewMessenger = initializeWebviewMessenger(
+    outputChannel,
+    panelManager
+  )
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -91,8 +141,12 @@ export async function activate(context: ExtensionContext) {
             args.push(editor.document.uri.toString())
           }
 
-          outputChannel.appendLine('in executeCommand...')
-          outputChannel.appendLine(`args are ${args.toString()}`)
+          outputChannel.appendLine('')
+          outputChannel.appendLine(
+            '<executeCommand>--------------------------------------------------'
+          )
+          outputChannel.appendLine(`called with args\n${JSON.stringify(args)}`)
+          outputChannel.appendLine('')
 
           const responseFromLangServer: unknown = await next(command, args)
 
@@ -103,25 +157,16 @@ export async function activate(context: ExtensionContext) {
             return
           }
 
+          outputChannel.appendLine('')
           outputChannel.appendLine(
-            `Received command response ${JSON.stringify(responseFromLangServer)}`
+            `Received command response\n${JSON.stringify(responseFromLangServer)}`
           )
+          outputChannel.appendLine('')
 
           const ladderInfo: RenderAsLadderInfo = decode(responseFromLangServer)
 
-          outputChannel.appendLine(JSON.stringify(ladderInfo))
-
           panelManager.render(context, editor.document.uri)
           webviewMessenger.registerWebviewPanel(panelManager.getPanel())
-          webviewMessenger.onNotification(
-            WebviewFrontendIsReadyNotification,
-            () => {
-              panelManager.markFrontendAsReady()
-              outputChannel.appendLine(
-                `Ext: got frontend is ready notification!`
-              )
-            }
-          )
           await panelManager.getWebviewFrontendIsReadyPromise()
 
           const response = await webviewMessenger.sendRequest(
@@ -130,11 +175,17 @@ export async function activate(context: ExtensionContext) {
             ladderInfo
           )
           if (response.$type === 'error') {
-            outputChannel.appendLine(`Error in visualisation request`)
+            outputChannel.appendLine(`Error in render viz in webview request`)
           } else if (response.$type === 'ok') {
-            outputChannel.appendLine(`Visualisation request success`)
+            outputChannel.appendLine(
+              `Request to render viz in webview succeeded`
+            )
           }
         }
+
+        outputChannel.appendLine(
+          '--------------------------------------------------</executeCommand>'
+        )
         // TODO: else show pop up to client
       },
       didChange: async (event, next) => {
@@ -142,10 +193,12 @@ export async function activate(context: ExtensionContext) {
         // we do this after invoking the callback to avoid blocking the editor
         // on the command invokation
         await next(event)
-        await vscode.commands.executeCommand(
-          'l4.visualize',
-          event.document.uri.toString()
-        )
+
+        const verDocId: VersionedDocId =
+          code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+            event.document
+          )
+        await vscode.commands.executeCommand('l4.visualize', verDocId)
       },
     },
   }
@@ -155,14 +208,17 @@ export async function activate(context: ExtensionContext) {
   )
 
   // Create the language client and start the client.
-  client = new LanguageClient(langId, langName, serverOptions, clientOptions)
+  client = new VSCodeL4LanguageClient(
+    new LanguageClient(langId, langName, serverOptions, clientOptions)
+  )
+
   // Start the client. This will also launch the server
   await client.start()
 }
 
-export function deactivate(): Thenable<void> | undefined {
+export async function deactivate(): Promise<void> {
   if (!client) {
     return undefined
   }
-  return client.stop()
+  await client.dispose()
 }

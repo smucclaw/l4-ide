@@ -1,3 +1,6 @@
+<!-- DEMO page for Ladder Visualizer,
+ mostly for local development / manual testing -->
+
 <script lang="ts">
   import { Schema } from 'effect'
   import { FunDecl } from '@repo/viz-expr'
@@ -7,15 +10,23 @@
     LirRegistry,
     type LirRootType,
   } from '$lib/layout-ir/core.js'
-
+  import { LadderEnv } from '$lib/ladder-env.js'
   import Flow from '$lib/displayers/flow/flow.svelte'
+  import { mockLadderBackendApi } from 'jl4-client-rpc'
 
   // TODO: This stuff should just be replaced with the tailwind on hovered classes
   let isHovered = $state(false)
 
+  const mockVersionedDocId = {
+    uri: 'file://local.ladder',
+    version: 1,
+  }
+
   /***************************
       Example 1
   ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE_1: LirRootType = 'VizFunDecl_1'
 
   // Parse JSON object into IRExpr
   const example1 = {
@@ -31,27 +42,30 @@
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'True' as const,
+              value: 'TrueV' as const,
               id: { id: 1 },
               name: { label: 'eats', unique: 2 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'Unknown' as const,
+              value: 'UnknownV' as const,
               id: { id: 2 },
               name: {
                 label: 'walkswalkswalkswalkswalkswalkswalkswalkswalkswalks',
                 unique: 3,
               },
+              canInline: false,
             },
           ],
           id: { id: 3 },
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 4 },
           name: { label: 'swims', unique: 4 },
+          canInline: false,
         },
       ],
       id: { id: 5 },
@@ -60,17 +74,28 @@
 
   const decode = Schema.decodeSync(FunDecl)
   const decl = decode(example1)
+
   // Set up Lir
   const lirRegistry = new LirRegistry()
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  const funDeclLirNode = VizDeclLirSource.toLir(nodeInfo, decl)
-  lirRegistry.setRoot(context, 'EXAMPLE_1' as LirRootType, funDeclLirNode)
+  const mockEnv1 = LadderEnv.make(
+    lirRegistry,
+    mockVersionedDocId,
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_1
+  )
+  const funDeclLirNodePromise = VizDeclLirSource.toLir(nodeInfo, mockEnv1, decl)
+  funDeclLirNodePromise.then((funDeclLirNode) => {
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_1, funDeclLirNode)
+  })
 
   /***************************
       Example 2
   ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE_2: LirRootType = 'VizFunDecl_2'
 
   const example2 = {
     $type: 'FunDecl' as const,
@@ -85,30 +110,34 @@
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'False' as const,
+              value: 'FalseV' as const,
               id: { id: 1 },
               name: { label: 'flies', unique: 6 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'True' as const,
+              value: 'TrueV' as const,
               id: { id: 2 },
               name: { label: 'runs', unique: 7 },
+              canInline: false,
             },
             {
               $type: 'And' as const,
               args: [
                 {
                   $type: 'UBoolVar' as const,
-                  value: 'Unknown' as const,
+                  value: 'UnknownV' as const,
                   id: { id: 3 },
                   name: { label: 'swims', unique: 8 },
+                  canInline: false,
                 },
                 {
                   $type: 'UBoolVar' as const,
-                  value: 'True' as const,
+                  value: 'TrueV' as const,
                   id: { id: 4 },
                   name: { label: 'dives', unique: 9 },
+                  canInline: false,
                 },
               ],
               id: { id: 5 },
@@ -118,60 +147,79 @@
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 7 },
           name: { label: 'jumps', unique: 10 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'False' as const,
+          value: 'FalseV' as const,
           id: { id: 8 },
           name: { label: 'jogs', unique: 11 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'False' as const,
+          value: 'FalseV' as const,
           id: { id: 9 },
           name: { label: 'reads', unique: 12 },
+          canInline: false,
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 10 },
           name: { label: 'writes', unique: 13 },
+          canInline: false,
         },
         {
           $type: 'Or' as const,
           args: [
             {
               $type: 'UBoolVar' as const,
-              value: 'Unknown' as const,
+              value: 'UnknownV' as const,
               id: { id: 11 },
               name: { label: 'sketches', unique: 14 },
+              canInline: false,
             },
             {
               $type: 'UBoolVar' as const,
-              value: 'False' as const,
+              value: 'FalseV' as const,
               id: { id: 12 },
               name: { label: 'paints', unique: 15 },
+              canInline: false,
             },
           ],
           id: { id: 13 },
         },
         {
           $type: 'UBoolVar' as const,
-          value: 'True' as const,
+          value: 'TrueV' as const,
           id: { id: 14 },
           name: { label: 'codes', unique: 16 },
+          canInline: false,
         },
       ],
       id: { id: 15 },
     },
   }
 
-  const decl2 = decode(example2)
-  const declLirNode2 = VizDeclLirSource.toLir(nodeInfo, decl2)
-  lirRegistry.setRoot(context, 'EXAMPLE_2' as LirRootType, declLirNode2)
+  const funDecl2 = decode(example2)
+  const mockEnv2 = LadderEnv.make(
+    lirRegistry,
+    mockVersionedDocId,
+    mockLadderBackendApi,
+    LADDER_VIZ_ROOT_TYPE_2
+  )
+  const funDeclLirNode2Promise = VizDeclLirSource.toLir(
+    nodeInfo,
+    mockEnv2,
+    funDecl2
+  )
+  funDeclLirNode2Promise.then((funDeclLirNode2) => {
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE_2, funDeclLirNode2)
+  })
 </script>
 
 <h1 class="text-4xl font-bold text-center">Ladder Visualizer demo page</h1>
@@ -184,13 +232,25 @@
 </section>
 <section id="example 1" class="example w-3/4 mx-auto space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={funDeclLirNode} lir={lirRegistry} />
+    {#await funDeclLirNodePromise}
+      <p>Loading Example 1...</p>
+    {:then funDeclLirNode}
+      <Flow {context} node={funDeclLirNode} env={mockEnv1} />
+    {:catch error}
+      <p>Error loading Example 1: {error.message}</p>
+    {/await}
   </div>
 </section>
 <!-- TODO: Use a svelte snippet to reduce code duplication -->
 <section id="example 2" class="example w-3/4 mx-auto my-2 space-y-4">
   <div class="viz-container-with-height">
-    <Flow {context} node={declLirNode2} lir={lirRegistry} />
+    {#await funDeclLirNode2Promise}
+      <p>Loading Example 2...</p>
+    {:then funDeclLirNode2}
+      <Flow {context} node={funDeclLirNode2} env={mockEnv2} />
+    {:catch error}
+      <p>Error loading Example 2: {error.message}</p>
+    {/await}
   </div>
   <section class="json-visualisation space-y-2">
     <input type="checkbox" id="example-2-json" class="peer hidden" />

@@ -10,6 +10,7 @@ import qualified L4.Evaluate.Value as Eval
 import L4.Print
 import qualified L4.Print as Print
 import L4.Syntax
+import L4.Utils.Ratio
 import System.FilePath ((<.>))
 import Base (liftIO)
 import Language.LSP.Protocol.Types (normalizedFilePathToUri)
@@ -78,8 +79,8 @@ createFunction fnDecl fnImpl =
 data WrapStyle = WrapInInputs | NoWrap
 
 literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
-literalToExpr = \case
-  FnLitInt i -> pure . mkLit $ mkNumericLit $ fromIntegral i
+literalToExpr = \ case
+  FnLitInt i -> pure . mkLit $ mkNumericLit i
   FnLitDouble d -> throwE $ CannotHandleParameterType $ FnLitDouble d
   FnLitBool b -> pure . mkVar $ mkBoolean b
   FnLitString s -> pure . mkLit $ mkStringLit s
@@ -91,13 +92,18 @@ literalToExpr = \case
   FnUnknown -> pure $ mkVar mkUnknown
 
 valueToFnLiteral :: (Monad m) => Eval.Value -> ExceptT EvaluatorError m FnLiteral
-valueToFnLiteral = \case
-  Eval.ValNumber i -> pure $ FnLitInt $ fromIntegral i
+valueToFnLiteral = \ case
+  Eval.ValNumber i ->
+    pure $ case isInteger i of
+      Just int -> FnLitInt int
+      Nothing ->  FnLitDouble $ fromRational i
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValList vals -> do
     lits <- traverse valueToFnLiteral vals
     pure $ FnArray lits
   Eval.ValClosure {} -> throwE $ InterpreterError "#EVAL produced function closure."
+  Eval.ValBinaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced function closure."
+  Eval.ValUnaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
@@ -182,9 +188,9 @@ mkBoolean b =
     True -> l4True
     False -> l4False
 
-mkNumericLit :: Int -> Lit
+mkNumericLit :: Integer -> Lit
 mkNumericLit =
-  NumericLit emptyAnno
+  NumericLit emptyAnno . toRational
 
 mkStringLit :: Text -> Lit
 mkStringLit =

@@ -38,7 +38,7 @@ data FnLiteral
   deriving (Show, Read, Ord, Eq, Generic)
 
 instance ToJSON FnLiteral where
-  toJSON = \case
+  toJSON = \ case
     FnLitInt val -> String $ tshow val
     FnLitDouble val -> String $ tshow val
     FnLitBool val -> String $ tshow val
@@ -52,7 +52,7 @@ instance ToJSON FnLiteral where
     tshow = Text.pack . show
 
 instance FromJSON FnLiteral where
-  parseJSON = \case
+  parseJSON = \ case
     String val -> pure $ parseTextAsFnLiteral val
     Bool val -> pure $ FnLitBool val
     Number val

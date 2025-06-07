@@ -1,23 +1,31 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { debounce } from '$lib/utils'
+  import * as Resizable from '$lib/components/ui/resizable/index.js'
+
+  import type { MessageTransports, Middleware } from 'vscode-languageclient'
+  import { type ConsoleLogger } from 'monaco-languageclient/tools'
+  import * as vscode from 'vscode'
+  import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
+  import * as monaco from '@codingame/monaco-vscode-editor-api'
+
+  import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
+  import type { LadderBackendApi } from 'jl4-client-rpc'
+  import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
+
   import {
     LadderFlow,
     LirContext,
     LirRegistry,
-    VizDeclLirSource,
     type FunDeclLirNode,
-    type LirRootType,
+    LadderEnv,
+    VizDeclLirSource,
   } from '@repo/decision-logic-visualizer'
-  import { makeVizInfoDecoder, type RenderAsLadderInfo } from '@repo/viz-expr'
   import {
-    type MessageTransports,
-    type Middleware,
-  } from 'vscode-languageclient'
-  import { type ConsoleLogger } from 'monaco-languageclient/tools'
-  import * as vscode from 'vscode'
-  import * as monaco from '@codingame/monaco-vscode-editor-api'
-  import { debounce } from '$lib/utils'
-  import * as Resizable from '$lib/components/ui/resizable/index.js'
+    makeVizInfoDecoder,
+    type RenderAsLadderInfo,
+    type VersionedDocId,
+  } from '@repo/viz-expr'
 
   /***********************************
     Persistent-session-related vars
@@ -43,7 +51,37 @@
   const context = new LirContext()
   const nodeInfo = { registry: lirRegistry, context }
 
-  let funDeclLirNode: FunDeclLirNode | undefined = $state(undefined)
+  /**************************
+      FunDeclLirNode maker
+  ****************************/
+
+  const LADDER_VIZ_ROOT_TYPE = 'VizFunDecl'
+
+  let backendApi: LadderBackendApi
+  let ladderEnv: LadderEnv
+
+  // See vscode webview for the rationale for this
+  const placeholderAlwaysPendingPromise = new Promise<{
+    funDeclLirNode: FunDeclLirNode
+    env: LadderEnv
+  }>(() => {})
+  let renderLadderPromise: Promise<{
+    funDeclLirNode: FunDeclLirNode
+    env: LadderEnv
+  }> = $state(placeholderAlwaysPendingPromise)
+
+  async function makeFunDeclLirNodeAndSetLirRoot(
+    ladderEnv: LadderEnv,
+    renderLadderInfo: RenderAsLadderInfo
+  ) {
+    const funDeclLirNode = await VizDeclLirSource.toLir(
+      nodeInfo,
+      ladderEnv,
+      renderLadderInfo.funDecl
+    )
+    lirRegistry.setRoot(context, LADDER_VIZ_ROOT_TYPE, funDeclLirNode)
+    return { env: ladderEnv, funDeclLirNode }
+  }
 
   /******************************
       VizInfo Payload Decoder
@@ -55,11 +93,11 @@
       Debounced run visualize cmd
   ***********************************/
 
-  const debouncedVisualize = debounce(async (uri: string) => {
+  const debouncedVisualize = debounce(async (verDocId: VersionedDocId) => {
     await vscode.commands.executeCommand(
       // TODO: Should probably put the command in the viz-expr package
       'l4.visualize',
-      uri
+      verDocId
     )
   }, 150)
 
@@ -67,8 +105,12 @@
   //       Monadco
   // ****************************/
 
-  let editor: monaco.editor.IStandaloneCodeEditor | undefined
+  const code2ProtocolConverter = createCodeConverter()
 
+  let editor: monaco.editor.IStandaloneCodeEditor | undefined
+  let monacoL4LangClient: MonacoL4LanguageClient | undefined
+
+  // TODO: Need to refactor this --- too long
   onMount(async () => {
     const { initServices } = await import(
       'monaco-languageclient/vscode/services'
@@ -147,9 +189,15 @@
       if (sessionid) {
         const response = await fetch(`${sessionUrl}?id=${sessionid}`)
         logger.debug('sent GET for session')
-        const prog = await response.json()
-        if (prog) {
-          editor.setValue(prog)
+        if (response.ok) {
+          const prog = await response.json()
+          if (prog) {
+            editor.setValue(prog)
+          }
+        } else {
+          logger.debug('response was not okay - deleting search param')
+          ownUrl.searchParams.delete('id')
+          history.pushState(null, '', ownUrl)
         }
       }
 
@@ -195,7 +243,7 @@
       logger: ConsoleLogger
     ): WebSocket => {
       const webSocket = new WebSocket(url)
-      webSocket.onopen = () => {
+      webSocket.onopen = async () => {
         const socket = toSocket(webSocket)
         const reader = new WebSocketMessageReader(socket)
         const writer = new WebSocketMessageWriter(socket)
@@ -203,17 +251,46 @@
           reader,
           writer,
         })
-        languageClient.start()
-        reader.onClose(() => languageClient.stop())
+        await languageClient.start()
+        reader.onClose(() => {
+          languageClient.dispose()
+        })
       }
       return webSocket
     }
 
+    /**********************************
+           makeLadderFlow
+    ***********************************/
+
+    const makeLadderFlow = async (
+      ladderInfo: RenderAsLadderInfo
+    ): Promise<void> => {
+      // Re-make / update ladderEnv using the verDocId from the new ladderInfo,
+      // just in case
+      ladderEnv = LadderEnv.make(
+        lirRegistry,
+        ladderInfo.verDocId,
+        backendApi,
+        LADDER_VIZ_ROOT_TYPE
+      )
+      renderLadderPromise = makeFunDeclLirNodeAndSetLirRoot(
+        ladderEnv,
+        ladderInfo
+      )
+      await renderLadderPromise
+    }
+
+    /**********************************
+           createLanguageClient
+    ***********************************/
+
+    /** Make MonacoL4LanguageClient and LadderBackendApi */
     const createLanguageClient = (
       logger: ConsoleLogger,
       messageTransports: MessageTransports
     ) => {
-      return new MonacoLanguageClient({
+      const internalClient = new MonacoLanguageClient({
         name: 'JL4 Language Client',
         clientOptions: {
           // use a language id as a document selector
@@ -223,14 +300,25 @@
             error: () => ({ action: ErrorAction.Continue }),
             closed: () => ({ action: CloseAction.Restart }),
           },
-          middleware: mkMiddleware(logger),
+          middleware: mkMiddleware(logger, makeLadderFlow),
         },
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
       })
+      monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
+
+      /**********************************
+            Init LadderBackendApi
+      ***********************************/
+      backendApi = new LadderApiForMonaco(monacoL4LangClient, makeLadderFlow)
+
+      return monacoL4LangClient
     }
 
-    function mkMiddleware(logger: ConsoleLogger): Middleware {
+    function mkMiddleware(
+      logger: ConsoleLogger,
+      makeLadderFlow: (ladderInfo: RenderAsLadderInfo) => Promise<void>
+    ): Middleware {
       return {
         /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
@@ -250,39 +338,35 @@
           switch (decoded._tag) {
             case 'Right':
               if (decoded.right) {
-                const ladderInfo: RenderAsLadderInfo = decoded.right
-                funDeclLirNode = VizDeclLirSource.toLir(
-                  nodeInfo,
-                  ladderInfo.funDecl
-                )
-                lirRegistry.setRoot(
-                  context,
-                  'VizFunDecl' as LirRootType,
-                  funDeclLirNode
-                )
-                logger.debug(
-                  'New declLirNode ',
-                  (funDeclLirNode as FunDeclLirNode).getId().toString()
-                )
+                const renderLadderInfo: RenderAsLadderInfo = decoded.right
+                await makeLadderFlow(renderLadderInfo)
               }
               break
             case 'Left':
               errorMessage = `Internal error: Failed to decode response. Please report this to the JL4 developers. ${decoded?.left}`
+              renderLadderPromise = Promise.reject(new Error(errorMessage)) // Ensure #await catches this
               break
           }
         },
         didChange: async (event, next) => {
           await next(event)
-          // YM: If the http calls in persistSession() don't succeed (e.g. cos the web sessions server isn't loaded),
-          // the rest of the didChange callback does not run, at least not when testing on localhost.
+
           if (persistSession) {
-            await persistSession()
+            try {
+              await persistSession()
+            } catch (e) {
+              console.error('Error persisting session', e)
+            }
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
           // Also, I don't like how I'm lumping different things / concerns in the didChange handler.
           // But I guess this is fine for now. I should just put in the effort to refactor it if I really care about this.
-          debouncedVisualize(event.document.uri.toString())
+          const verDocId: VersionedDocId =
+            code2ProtocolConverter.asVersionedTextDocumentIdentifier(
+              event.document
+            )
+          debouncedVisualize(verDocId)
         },
       }
     }
@@ -334,17 +418,19 @@ DECIDE \`is a British citizen (variant)\` IS
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#if funDeclLirNode}
-        <!-- TODO: Think more about whether to use #key -- which destroys and rebuilds the component --- or have flow-base work with the reactive node prop -->
-        {#key funDeclLirNode}
+      {#await renderLadderPromise then ladder}
+        {#key ladder.funDeclLirNode}
           <div class="slightly-shorter-than-full-viewport-height pb-1">
-            <LadderFlow {context} node={funDeclLirNode} lir={lirRegistry} />
+            <LadderFlow
+              {context}
+              node={ladder.funDeclLirNode}
+              env={ladder.env}
+            />
           </div>
         {/key}
-      {/if}
-      {#if errorMessage}
-        {errorMessage}
-      {/if}
+      {:catch error}
+        <p>Error loading Ladder Diagram: {error.message}</p>
+      {/await}
     </div>
   </Resizable.Pane>
 </Resizable.PaneGroup>

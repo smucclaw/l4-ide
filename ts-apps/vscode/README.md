@@ -40,7 +40,7 @@ npm run package
 that means you aren't in the right directory.)
 
 3. Install the extension
-   The extension will be packaged as `jl4-lsp-client-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.
+   The extension will be packaged as `jl4-vscode-0.0.1`. Open VSCode, select the _Install from VSIX_ option, and install the file.
 
    > Note: After installation, the extension might initially appear inactive. To activate it, load or write an L4 rule (see details below).
 
@@ -93,10 +93,10 @@ After opening a .l4 file, to visualize an eligible rule as a ladder diagram, cli
 Jan 20 2025, tsconfig.json: `"DOM"` had to be added to the value for `lib` to avoid issues like the following
 
 ```bash
-┌ jl4-lsp-client#build > cache miss, executing a18c902b9c9c2a55
+┌ jl4-vscode#build > cache miss, executing a18c902b9c9c2a55
 │
 │
-│ > jl4-lsp-client@0.0.1 build
+│ > jl4-vscode@0.0.1 build
 │ > tsc -b tsconfig.json && npm run esbuild-base
 │
 │ ../../node_modules/@types/d3-drag/index.d.ts:14:38 - error TS2304: Cannot find name 'Element'.

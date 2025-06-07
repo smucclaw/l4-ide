@@ -79,6 +79,7 @@ import Base
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 import L4.Annotation
+import L4.Names
 import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM, SrcRange (..), zeroSrcPos)
 import L4.Print (prettyLayout, quotedName,)
 import L4.Syntax
@@ -87,6 +88,7 @@ import L4.TypeCheck.Environment as X
 import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
+import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
 import Control.Monad.Extra (mapMaybeM)
@@ -94,12 +96,17 @@ import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
+import Data.List.Split (splitWhen)
+import Optics ((%~))
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
   MkCheckState
     { substitution
     , supply       = 0
+    , infoMap      = IV.empty
+    , nlgMap       = IV.empty
+    , scopeMap     = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -153,6 +160,9 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , substitution = s'.substitution
               , environment = env.environment
               , entityInfo = env.entityInfo
+              , infoMap = s'.infoMap
+              , nlgMap = s'.nlgMap
+              , scopeMap = s'.scopeMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
@@ -217,20 +227,16 @@ lookupAssumeCheckedByAnno = lookupFromCheckEnv (.assumeDeclarations)
 
 -- | Combines environment and entityInfo into one single list
 --
--- This is currently used to generate top-level completions.
+-- This is currently used to generate completions.
 --
-combineEnvironmentEntityInfo :: Environment -> EntityInfo -> [(Name, CheckEntity)]
+combineEnvironmentEntityInfo :: Environment -> EntityInfo -> Map RawName [CheckEntity]
 combineEnvironmentEntityInfo env ei =
-    foldMap (uncurry lookupUniques) $ Map.toList env
-    where
-      lookupUniques rn = mapMaybe \unique -> do
-        (n, ce) <- ei Map.!? unique
-        pure (replaceRawName rn n, ce)
-
-      -- NOTE: the reason why we do this is because the CheckEntity doesn't contain the original name
-      -- e.g. if you have `foo AKA bar`, the CheckEntity will always contain `bar`. However, the environment
-      -- still has the correct name.
-      replaceRawName rn (MkName a _) = MkName a rn
+  Map.unionsWith catUnq $ foldMap (uncurry lookupUniques) $ Map.toList env
+  where
+  lookupUniques rn = mapMaybe \unique -> do
+    (_, ce) <- ei Map.!? unique
+    pure $ Map.singleton rn [ce]
+  catUnq a b = nub $ a <> b -- if there are multiple of the same checkEntity, throw them out
 
 -- | Can be used to apply the final substitution after type-checking, expanding
 -- inference variables whenever possible.
@@ -352,6 +358,15 @@ inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
   pure (Check ann re)
+inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e) do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  let contractT = contract partyT actionT
+      eventT = event partyT actionT
+  re <- prune $ checkExpr ExpectRegulativeContractContext e contractT
+  rt <- prune $ checkExpr ExpectRegulativeTimestampContext t number
+  revs <- traverse (prune . flip (checkExpr ExpectRegulativeEventContext) eventT) evs
+  pure (Contract ann re rt revs)
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -461,7 +476,7 @@ checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann 
     (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing) <$> ns)) mgiveth)
 checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTermAppFormTypeSigConsistency'
-    (MkAppForm aann n (getName <$> filter isTerm otns) maka)
+    (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
     tysig
 checkTermAppFormTypeSigConsistency appForm tysig =
   checkTermAppFormTypeSigConsistency' appForm tysig
@@ -502,7 +517,7 @@ checkTypeAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann 
     (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno))) <$> ns)) mgiveth)
 checkTypeAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTypeAppFormTypeSigConsistency'
-    (MkAppForm aann n (getName <$> otns) maka)
+    (MkAppForm aann n (clearSourceAnno . getName <$> otns) maka)
     tysig
 checkTypeAppFormTypeSigConsistency appForm tysig =
   checkTypeAppFormTypeSigConsistency' appForm tysig
@@ -635,7 +650,7 @@ inferTypeDecl rappForm (EnumDecl ann conDecls) = do
 inferTypeDecl rappForm (RecordDecl ann _mcon tns) = do
   -- we currently do not allow the user to specify their own constructor name
   -- a record declaration is just a special case of an enum declaration
-  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (getOriginal (view appFormHead rappForm)) tns)
+  (MkConDecl _ mrcon rtns, extend) <- inferConDecl rappForm (MkConDecl ann (clearSourceAnno $ getOriginal (view appFormHead rappForm)) tns)
   let
     td = RecordDecl ann (Just mrcon) rtns
   pure (td, extend)
@@ -749,39 +764,28 @@ resolveType n = do
   case mapMaybe proc options of
     [] -> do
       let kind = 0
-      rn <- outOfScope (setAnnResolvedKind kind n) (Type emptyAnno)
+      n' <- setAnnResolvedKind kind n
+      rn <- outOfScope n' (Type emptyAnno)
       pure (rn, kind)
-    [x] -> pure x
-    xs -> anyOf xs <|> do
+    [x] -> x
+    xs -> choose xs <|> do
       let kind = 0
-      rn <- ambiguousType (setAnnResolvedKind kind n) xs
+      n' <- setAnnResolvedKind kind n
+      xs' <- sequenceA xs
+      rn <- ambiguousType n' xs'
       pure (rn, kind)
   where
-    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Kind)
-    proc (u, o, KnownTypeVariable)       = let kind = 0 in Just (Ref (setAnnResolvedKind kind n) u o, kind)
-    proc (u, o, KnownType kind _ _)      = Just (Ref (setAnnResolvedKind kind n) u o, kind)
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Check (Resolved, Kind))
+    proc (u, o, KnownTypeVariable)       =
+      let
+        kind = 0
+      in Just do
+        n' <- setAnnResolvedKind kind n
+        pure (Ref n' u o, kind)
+    proc (u, o, KnownType kind _ _)      = Just do
+      n' <- setAnnResolvedKind kind n
+      pure (Ref n' u o, kind)
     proc _                               = Nothing
-
-class HasName a where
-  getName :: a -> Name
-
-instance HasName Name where
-  getName n = n
-
-instance HasName Resolved where
-  getName = getActual
-
-instance HasName a => HasName (AppForm a) where
-  getName (MkAppForm _ n _ _) = getName n
-
-instance HasName a => HasName (ConDecl a) where
-  getName (MkConDecl _ n _) = getName n
-
-instance HasName a => HasName (TypedName a) where
-  getName (MkTypedName _ann n _t) = getName n
-
-instance HasName a => HasName (OptionallyTypedName a) where
-  getName (MkOptionallyTypedName _ann n _mt) = getName n
 
 kindOfAppForm :: AppForm n -> Kind
 kindOfAppForm (MkAppForm _ann _n args _maka) =
@@ -874,12 +878,10 @@ ensureDistinct ndc ns = do
 checkExpr :: ExpectationContext -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkExpr ec (IfThenElse ann e1 e2 e3) t = softprune $ do
   re <- checkIfThenElse ec ann e1 e2 e3 t
-  let re' = setAnnResolvedType t re
-  pure re'
+  setAnnResolvedType t Nothing re
 checkExpr ec (Consider ann e branches) t = softprune $ do
   re <- checkConsider ec ann e branches t
-  let re' = setAnnResolvedType t re
-  pure re'
+  setAnnResolvedType t Nothing re
 -- checkExpr (ParenExpr ann e) t = do
 --   re <- checkExpr e t
 --   pure (ParenExpr ann re)
@@ -896,8 +898,7 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     -- We have to immediately resolve 'Nlg' annotations, as 'ds'
     -- brings new bindings into scope.
     nlgExpr re
-  let re' = setAnnResolvedType t (Where ann re rds)
-  pure re'
+  setAnnResolvedType t Nothing (Where ann re rds)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
@@ -910,6 +911,29 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
+checkObligation
+  :: Anno -> Expr Name -> RAction Name
+  -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
+  -> Type' Resolved -> Type' Resolved -> Check (Obligation Resolved)
+checkObligation ann party action due hence lest partyT actionT = do
+  partyR <- checkExpr ExpectRegulativePartyContext party partyT
+  (actionR, boundByPattern) <- checkAction action actionT
+  let rTy = contract partyT actionT
+  dueR <- traverse (\e -> checkExpr ExpectRegulativeDeadlineContext e number) due
+  henceR <- traverse (\e -> extendKnownMany boundByPattern $ checkExpr ExpectRegulativeFollowupContext e rTy) hence
+  lestR <- traverse (\e -> checkExpr ExpectRegulativeFollowupContext e rTy) lest
+  pure (MkObligation ann partyR actionR dueR henceR lestR)
+
+checkAction :: RAction Name -> Type' Resolved -> Check (RAction Resolved, [CheckInfo])
+checkAction MkAction {anno, action, provided = mprovided} actionT = do
+  (pat, bounds) <- checkPattern ExpectRegulativeActionContext action actionT
+  -- NOTE: the provided clauses must evaluate to booleans
+  provided <- forM mprovided \provided ->
+    extendKnownMany bounds do
+      checkExpr ExpectRegulativeProvidedContext provided boolean
+  pure (MkAction {anno, action = pat, provided}, bounds)
+
+
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
@@ -919,64 +943,67 @@ checkConsider ec ann e branches t = do
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr g = softprune $ errorContext (WhileCheckingExpression g) do
   (re, te) <- inferExpr' g
-  let re' = setAnnResolvedType te re
+  re' <- setAnnResolvedType te Nothing re
   pure (re', te)
 
 inferExpr' :: Expr Name -> Check (Expr Resolved, Type' Resolved)
 inferExpr' g =
   case g of
-    And ann e1 e2 ->
-      checkBinOp boolean boolean boolean "AND" And ann e1 e2
-    Or ann e1 e2 ->
-      checkBinOp boolean boolean boolean "OR"  Or ann e1 e2
-    Implies ann e1 e2 ->
-      checkBinOp boolean boolean boolean "IMPLIES" Implies ann e1 e2
+    And ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName andName) g ann e1 e2
+      inferExpr' dsFun
+    Or ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName orName) g ann e1 e2
+      inferExpr' dsFun
+    RAnd ann e1 e2 -> do
+      partyT <- fresh (NormalName "party")
+      actT <- fresh (NormalName "action")
+      let contractT = contract partyT actT
+      checkBinOp contractT contractT contractT "AND" RAnd ann e1 e2
+    ROr ann e1 e2 -> do
+      partyT <- fresh (NormalName "party")
+      actT <- fresh (NormalName "action")
+      let contractT = contract partyT actT
+      checkBinOp contractT contractT contractT "OR" ROr ann  e1 e2
+    Implies ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName impliesName) g ann e1 e2
+      inferExpr' dsFun
     Equals ann e1 e2 -> do
-      (re1, rt1) <- inferExpr e1
-      re2 <- checkExpr (ExpectBinOpArgContext "EQUALS" 2) e2 rt1 -- TODO: it would be better to have a designated expectation context for EQUALS
-      pure (Equals ann re1 re2, boolean)
-    Leq ann e1 e2 -> -- TODO: consider making all the comparison operators polymorphic as well
-      choose
-        [ checkBinOp boolean boolean boolean "AT MOST" Leq ann e1 e2
-        , checkBinOp number  number  boolean "AT MOST" Leq ann e1 e2
-        , checkBinOp string  string  boolean "AT MOST" Leq ann e1 e2
-        ]
-    Geq ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "AT LEAST" Geq ann e1 e2
-        , checkBinOp number  number  boolean "AT LEAST" Geq ann e1 e2
-        , checkBinOp string  string  boolean "AT LEAST" Geq ann e1 e2
-        ]
-    Lt ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "LESS THAN" Lt ann e1 e2
-        , checkBinOp number  number  boolean "LESS THAN" Lt ann e1 e2
-        , checkBinOp string  string  boolean "LESS THAN" Lt ann e1 e2
-        ]
-    Gt ann e1 e2 ->
-      choose
-        [ checkBinOp boolean boolean boolean "GREATER THAN" Gt ann e1 e2
-        , checkBinOp number  number  boolean "GREATER THAN" Gt ann e1 e2
-        , checkBinOp string  string  boolean "GREATER THAN" Gt ann e1 e2
-        ]
+      dsFun <- desugarBinOpToFunction (rawName equalsName) g ann e1 e2
+      inferExpr' dsFun
+    Leq ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName leqName) g ann e1 e2
+      inferExpr' dsFun
+    Geq ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName geqName) g ann e1 e2
+      inferExpr' dsFun
+    Lt ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName ltName) g ann e1 e2
+      inferExpr' dsFun
+    Gt ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName gtName) g ann e1 e2
+      inferExpr' dsFun
     Not ann e -> do
-      e' <- checkExpr ExpectNotArgumentContext e boolean
-      pure (Not ann e', boolean)
-    Plus ann e1 e2 ->
-      checkBinOp number number number "PLUS" Plus ann e1 e2
-    Minus ann e1 e2 ->
-      checkBinOp number number number "MINUS" Minus ann e1 e2
-    Times ann e1 e2 ->
-      checkBinOp number number number "TIMES" Times ann e1 e2
-    DividedBy ann e1 e2 ->
-      checkBinOp number number number "DIVIDED BY" DividedBy ann e1 e2
-    Modulo ann e1 e2 ->
-      checkBinOp number number number "MODULO" Modulo ann e1 e2
+      dsFun <- desugarUnaryOpToFunction (rawName notName) g ann e
+      inferExpr' dsFun
+    Plus ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName plusName) g ann e1 e2
+      inferExpr' dsFun
+    Minus ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName minusName) g ann e1 e2
+      inferExpr' dsFun
+    Times ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName timesName) g ann e1 e2
+      inferExpr' dsFun
+    DividedBy ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName divideName) g ann e1 e2
+      inferExpr' dsFun
+    Modulo ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName moduloName) g ann e1 e2
+      inferExpr' dsFun
     Cons ann e1 e2 -> do
-      (re1, rt1) <- inferExpr e1
-      let listType = list rt1
-      re2 <- checkExpr ExpectConsArgument2Context e2 listType
-      pure (Cons ann re1 re2, listType)
+      dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
+      inferExpr' dsFun
     Proj ann e l -> do
       -- Handling this similar to App.
       --
@@ -1048,6 +1075,11 @@ inferExpr' g =
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
       pure (re, v)
+    Regulative ann (MkObligation ann'' e1 e2 me3 me4 me5) -> do
+      party <- fresh (NormalName "party")
+      action <- fresh (NormalName "action")
+      ob <- checkObligation ann'' e1 e2 me3 me4 me5 party action
+      pure (Regulative ann ob, contract party action)
     Consider ann e branches -> do
       v <- fresh (NormalName "consider")
       re <- checkConsider ExpectConsiderBranchesContext ann e branches v
@@ -1072,6 +1104,21 @@ inferExpr' g =
         unzip <$> traverse inferLocalDecl ds
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
+    Event ann ev -> do
+      (ev', ty) <- inferEvent ev
+      pure (Event ann ev', ty)
+    Percent ann e -> do
+      e' <- checkExpr ExpectPercentArgumentContext e number
+      pure (Percent ann e', number)
+
+inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
+inferEvent (MkEvent ann party action timestamp atFirst) = do
+  partyT <- fresh (NormalName "party")
+  actionT <- fresh (NormalName "action")
+  party' <- checkExpr ExpectRegulativePartyContext party partyT
+  action' <- checkExpr ExpectRegulativeActionContext action actionT
+  timestamp' <- checkExpr ExpectRegulativeTimestampContext timestamp number
+  pure (MkEvent ann party' action' timestamp' atFirst, event partyT actionT)
 
 -- | The goal here is to not just infer the type of the named application,
 -- but also to determine the order in which the arguments are actually being
@@ -1140,10 +1187,10 @@ checkPattern ec p t = errorContext (WhileCheckingPattern p) do
 -- PatApps that are not in scope with PatVar applications here in the
 -- scope and type checker.
 inferPattern :: Pattern Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
-inferPattern g@(PatVar ann n)      = errorContext (WhileCheckingPattern g) do
-  inferPatternVar ann n
+inferPattern g@(PatVar _ann n)      = errorContext (WhileCheckingPattern g) do
+  inferPatternVar n
 inferPattern g@(PatApp ann n [])   = errorContext (WhileCheckingPattern g) do
-  inferPatternApp ann n [] `orElse` inferPatternVar ann n
+  inferPatternApp ann n [] `orElse` inferPatternVar n
 inferPattern g@(PatApp ann n ps)   = errorContext (WhileCheckingPattern g) do
   inferPatternApp ann n ps
 inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
@@ -1153,14 +1200,27 @@ inferPattern g@(PatCons ann p1 p2) = errorContext (WhileCheckingPattern g) do
 
   -- Allows us to hover over the 'FOLLOWED BY',
   -- giving us a type signature.
-  let patCons = setAnnResolvedType listType $ PatCons ann rp1 rp2
+  patCons <- setAnnResolvedType listType Nothing (PatCons ann rp1 rp2)
   pure (patCons, listType, extend1 <> extend2)
+inferPattern g@(PatExpr ann expr) = errorContext (WhileCheckingPattern g) do
+  (rexpr, ty) <- inferExpr expr
+  resPatExpr <- setAnnResolvedType ty Nothing (PatExpr ann rexpr)
+  pure (resPatExpr, ty, [])
+inferPattern g@(PatLit ann lit) = errorContext (WhileCheckingPattern g) do
+  ty <- inferLit lit
+  resPatLit <- setAnnResolvedType ty Nothing (PatLit ann lit)
+  pure (resPatLit, ty, [])
 
-inferPatternVar :: Anno -> Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
-inferPatternVar ann n = do
+inferPatternVar :: Name -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
+inferPatternVar n = do
   rn <- def n
   rt <- fresh (NormalName "p")
-  pure (PatVar ann rn, rt, [makeKnown rn (KnownTerm rt Local)])
+  let
+    patVar =
+      PatVar
+        (mkAnno [mkHoleWithSrcRange rn])
+        rn
+  pure (patVar, rt, [makeKnown rn (KnownTerm rt Local)])
 
 inferPatternApp :: Anno -> Name -> [Pattern Name] -> Check (Pattern Resolved, Type' Resolved, [CheckInfo])
 inferPatternApp ann n ps = do
@@ -1373,12 +1433,12 @@ inferTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse inferTyDeclTopLevel topDecls
 
 inferTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe (DeclChecked DeclareOrAssume))
-inferTyDeclLocalDecl = \case
+inferTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> ((Right <$>) <$>) <$> inferTyDeclAssume p
 
 inferTyDeclTopLevel :: TopDecl Name -> Check [DeclChecked DeclareOrAssume]
-inferTyDeclTopLevel = \case
+inferTyDeclTopLevel = \ case
   Declare   _ p -> maybeToList <$> ((Left <$>) <$>) <$> inferTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> ((Right <$>) <$>) <$> inferTyDeclAssume p
@@ -1401,6 +1461,7 @@ inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
             <*> traverse resolvedType declHead.rappForm
             <*> pure rt
             >>= nlgDeclare
+
           pure $ Just MkDeclChecked
             { payload = declare
             , publicNames = extendTySynonym : extendsTyDecl
@@ -1429,7 +1490,7 @@ scanTyDeclSection (MkSection _ _ _ topDecls) =
   concat <$> traverse scanTyDeclTopLevel topDecls
 
 scanTyDeclTopLevel :: TopDecl Name -> Check [DeclTypeSig]
-scanTyDeclTopLevel = \case
+scanTyDeclTopLevel = \ case
   Declare   _ p -> List.singleton <$> scanTyDeclDeclare p
   Decide    _ _ -> pure []
   Assume    _ p -> maybeToList <$> scanTyDeclAssume p
@@ -1438,7 +1499,7 @@ scanTyDeclTopLevel = \case
   Section   _ s -> scanTyDeclSection s
 
 scanTyDeclLocalDecl :: LocalDecl Name -> Check (Maybe DeclTypeSig)
-scanTyDeclLocalDecl = \case
+scanTyDeclLocalDecl = \ case
   LocalDecide _ _ -> pure Nothing
   LocalAssume _ p -> scanTyDeclAssume p
 
@@ -1458,7 +1519,7 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
       , name
       }
   where
-    isTypeSynonym = \case
+    isTypeSynonym = \ case
       SynonymDecl _ ty -> Just ty
       _ -> Nothing
 
@@ -1510,7 +1571,7 @@ scanFunSigSection (MkSection _ name maka topDecls) =
     akaToRawNames (MkAka _ ns) = fmap rawName ns
 
 scanFunSigTopLevel :: TopDecl Name -> Check [FunTypeSig]
-scanFunSigTopLevel = \case
+scanFunSigTopLevel = \ case
   Declare   _ _ -> pure []
   Decide    _ p -> List.singleton <$> scanFunSigDecide p
   Assume    _ p -> maybeToList <$> scanFunSigAssume p
@@ -1519,20 +1580,20 @@ scanFunSigTopLevel = \case
   Section   _ s -> scanFunSigSection s
 
 scanFunSigLocalDecl :: LocalDecl Name -> Check (Maybe FunTypeSig)
-scanFunSigLocalDecl = \case
+scanFunSigLocalDecl = \ case
   LocalDecide _ p -> Just <$> scanFunSigDecide p
   LocalAssume _ p -> scanFunSigAssume p
 
 scanFunSigDecide :: Decide Name -> Check FunTypeSig
-scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
+scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
   errorContext (WhileCheckingDecide (getName appForm)) do
     (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
     (ce, rt, result, extendsAppForm) <- extendKnownMany extendsTySig do
       inferTermAppForm rappForm rtysig
-    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    dty <- setAnnResolvedType rt (Just Computable) d
     name <- withQualified (appFormHeads rappForm) ce
     pure $ MkFunTypeSig
-      { anno = ann'
+      { anno = getAnno dty
       , rtysig
       , rappForm
       , resultType = result
@@ -1541,23 +1602,165 @@ scanFunSigDecide (MkDecide ann tysig appForm _) = prune $
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
-scanFunSigAssume (MkAssume _   _     _       (Just (Type _tann))) = pure Nothing
-scanFunSigAssume (MkAssume ann tysig appForm _mt) = do
+scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
+scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
   -- declaration of a term
+  let tysig' = mergeResultTypeInto tysig mt
   errorContext (WhileCheckingAssume (getName appForm)) do
-    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig
+    (rappForm, rtysig, extendsTySig) <- checkTermAppFormTypeSigConsistency appForm tysig'
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
-    -- check that the given result type matches the result type in the type signature
-
-    let ann' = set annInfo (Just (TypeInfo rt Nothing)) ann
+    aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
     pure $ Just $ MkFunTypeSig
-      { anno = ann'
+      { anno = getAnno aty
       , rtysig
       , rappForm = rappForm
       , resultType = result
       , name
       , arguments = extendsTySig <> extendsAppForm
+      }
+  where
+    -- In the specific case where we have no GIVETH, but a type for the ASSUME itself,
+    -- we merge the GIVEN part with the ASSUME type to get a full type signature.
+    --
+    -- If we don't do that, something like
+    --
+    -- @
+    -- GIVEN a
+    -- ASSUME foo IS AN a
+    -- @
+    --
+    -- would go wrong, because the pre-scan would ignore the use of the type variable
+    -- and we could no longer get a polymorphic type.
+    --
+    mergeResultTypeInto :: TypeSig Name -> Maybe (Type' Name) -> TypeSig Name
+    mergeResultTypeInto typesig@(MkTypeSig _ (MkGivenSig _ []) Nothing) (Just _) =
+      typesig
+    mergeResultTypeInto (MkTypeSig ann given Nothing) (Just t) =
+      MkTypeSig ann given (Just (MkGivethSig emptyAnno t))
+    mergeResultTypeInto typesig _ =
+      typesig
+
+-- ----------------------------------------------------------------------------
+-- Desugaring Utilities
+-- ----------------------------------------------------------------------------
+
+desugarBinOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Expr Name -> Check (Expr Name)
+desugarBinOpToFunction name g ann e1 e2 = do
+  args <- rewriteBinOpAnno g e1 e2
+  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
+  where
+  annoNoFunName a as =
+    fixAnnoSrcRange
+      Anno
+        { extra = a.extra
+        , range = a.range
+        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
+        }
+
+desugarUnaryOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Check (Expr Name)
+desugarUnaryOpToFunction name g ann e  = do
+  args <- rewriteUnaryOpAnno g e
+  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
+  where
+  annoNoFunName a as =
+    fixAnnoSrcRange
+      Anno
+        { extra = a.extra
+        , range = a.range
+        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
+        }
+
+-- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
+-- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.
+--
+-- Let's assume an 'Expr' for the code:
+--
+-- @
+--   1 PLUS 2
+-- @
+--
+-- We want to desugar this to use a prefix function:
+--
+-- @
+--   \_\_PLUS\_\_ 1 2
+-- @
+--
+-- To make exactprinting still faithful to the original sources, we need
+-- to be very careful that it is printed the same way. First, let's look at the
+-- 'Anno' for the @1 PLUS 2@ expression:
+-- (a @_@ marks an 'AnnoHole'):
+--
+-- @
+--   _ PLUS _
+-- @
+--
+-- The 'Anno' of a function looks like '_ [OF] _', so two holes, one for the name of the function
+-- and one for *all* arguments of the function. The first hole is easy to manage, just make
+-- sure the 'Name' of the function has an 'emptyAnno', then it is basically skipped over.
+-- For the second hole to accurately reproduce the same concrete syntax nodes, we need to be more
+-- careful.
+--
+-- We need to massage now the concrete syntax nodes of '_ PLUS _' into the arguments
+-- of the prefix function notation.
+-- For each 'AnnoHole' in the original 'Anno', we get all the 'AnnoCsn' that come
+-- afterwards and attach them to the 'Anno' of the argument.
+-- Note, for the first element, we need to do the same thing for leading 'AnnoCsn' elements.
+-- The finalised 'Anno' of each argument should then look like:
+--
+-- @
+--   [[_, " PLUS "], [_]]
+-- @
+--
+-- where the inner holes are then filled by the underlying @'Expr' 'Name'@.
+--
+-- This works also nicely for parenthesis, the expression @(1 PLUS 2)@
+-- is then translated to:
+--
+-- @
+--   [["(", _, " PLUS "], [_, ")"]]
+-- @
+rewriteBinOpAnno :: Expr Name -> Expr Name -> Expr Name -> Check [Expr Name]
+rewriteBinOpAnno expr e1 e2 =
+    case csnSlices of
+    [beforeFirst, beforeSecond, after] ->
+      pure
+        [ e1 & annoOf %~ surroundWithCsn beforeFirst beforeSecond
+        , e2 & annoOf %~ surroundWithCsn [] after
+        ]
+    _slices -> do
+      addError $ DesugarAnnoRewritingError expr (HoleInfo 2 numberOfAnnoHoles)
+      pure []
+ where
+  annoPieces = (getAnno expr).payload
+  csnSlices = splitWhen (isJust . preview #_AnnoHole) annoPieces
+  numberOfAnnoHoles = length $ filter (isJust . preview #_AnnoHole) annoPieces
+
+-- | Just like 'rewriteBinOpAnno', but special case for unary function
+rewriteUnaryOpAnno :: Expr Name -> Expr Name -> Check [Expr Name]
+rewriteUnaryOpAnno expr e =
+    case csnSlices of
+    [before, after] ->
+      pure
+        [ e & annoOf %~ surroundWithCsn before after
+        ]
+    _slices -> do
+      addError $ DesugarAnnoRewritingError expr (HoleInfo 2 numberOfAnnoHoles)
+      pure []
+ where
+  annoPieces = (getAnno expr).payload
+  csnSlices = splitWhen (isJust . preview #_AnnoHole) annoPieces
+  numberOfAnnoHoles = length $ filter (isJust . preview #_AnnoHole) annoPieces
+
+-- | Internal function that takes two lists of concrete syntax nodes and
+-- embeds them into the given 'Anno'.
+surroundWithCsn :: [AnnoElement] -> [AnnoElement] -> Anno -> Anno
+surroundWithCsn before after a =
+  fixAnnoSrcRange
+    Anno
+      { extra = a.extra
+      , range = a.range
+      , payload = before <> a.payload <> after
       }
 
 -- ----------------------------------------------------------------------------
@@ -1651,6 +1854,14 @@ prettyCheckError (AmbiguousTypeError n rs)                 =
   , "The options are:"
   , ""
   ] ++ map (\ (r, k) -> "  " <> prettyResolvedWithRange r <> " of arity " <> Text.pack (show k)) rs
+prettyCheckError (AmbiguousOperatorError opName)                 =
+  ["There are multiple valid types for the operator"
+  , ""
+  , "  " <> opName
+  , ""
+  , "in this context and I do not have sufficient information to make a choice between them."
+  ] -- TODO(mangoiv): maybe we can do better here by providing the types that are available?
+    -- I don't see how to make this not ad-hoc, though.
 prettyCheckError InternalAmbiguityError                    =
   [ "I've encountered an internal ambiguity error."
   , "This means I have encountered a name ambiguity at a position where"
@@ -1711,6 +1922,16 @@ prettyCheckError (MissingEntityInfo r)                     =
   , ""
   , "This is an error in this system and should be reported as a bug."
   ]
+prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
+  [ "Error while desugaring:"
+  , "While trying to desugar the expression"
+  , ""
+  , "  " <> prettyLayout context
+  , ""
+  , "We ran into the error:"
+  , "The source annotation are not matching the expected number of arguments."
+  , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
+  ]
 
 -- | Forms a plural when needed.
 prettyCount :: Int -> Text -> Text
@@ -1733,6 +1954,8 @@ prettyTypeMismatch ExpectIfConditionContext expected given =
   standardTypeMismatch [ "The condition in an IF-THEN-ELSE construct is expected to be of type" ] expected given
 prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPercentArgumentContext expected given =
+  standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
@@ -1819,6 +2042,22 @@ prettyTypeMismatch (ExpectBinOpArgContext txt i) expected given =
   standardTypeMismatch
     [ "The " <> prettyOrdinal i <> " argument of the " <> txt <> " operator is expected to be" ]
     expected given
+prettyTypeMismatch ExpectRegulativePartyContext expected given =
+  standardTypeMismatch [ "The PARTY clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeActionContext expected given =
+  standardTypeMismatch [ "The DO clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeDeadlineContext expected given =
+  standardTypeMismatch [ "The WITHIN clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeFollowupContext expected given =
+  standardTypeMismatch [ "The HENCE clause of a regulative rule is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeContractContext expected given =
+  standardTypeMismatch [ "The contract passed to a TRACE directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeTimestampContext expected given =
+  standardTypeMismatch [ "The timestamp passed to an event in a TRACE directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeEventContext expected given =
+  standardTypeMismatch [ "The event expr passed to a TRACE directive is expected to be of type" ] expected given
+prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
+  standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

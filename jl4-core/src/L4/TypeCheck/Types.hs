@@ -6,20 +6,25 @@ import Base
 import qualified Optics
 import L4.Annotation (HasSrcRange(..), HasAnno(..), AnnoExtra, AnnoToken, emptyAnno)
 import L4.Lexer (PosToken)
-import L4.Parser.SrcSpan (SrcRange(..))
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos)
 import L4.Syntax
 import L4.TypeCheck.With
+import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
 import Data.Bifunctor
 import qualified Data.Map.Strict as Map
 import qualified Generics.SOP as SOP
-import Optics.Core (gplate, traverseOf)
+import Optics.Core (gplate, traverseOf, (%), (?~))
 import Control.Exception (throw, Exception)
 
 type Environment  = Map RawName [Unique]
 type EntityInfo   = Map Unique (Name, CheckEntity)
 type Substitution = Map Int (Type' Resolved)
+type RangeMap     = IV.IntervalMap SrcPos
+type InfoMap      = RangeMap Info
+type ScopeMap     = RangeMap (Environment, EntityInfo)
+type NlgMap       = RangeMap Nlg
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -33,21 +38,15 @@ data CheckEntity =
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
-data TermKind =
-    Computable -- ^ a variable with known definition (let or global)
-  | Assumed
-  | Local -- ^ a local variable (introduced by a lambda or pattern)
-  | Constructor
-  | Selector
-  deriving stock (Eq, Generic, Show)
-  deriving anyclass NFData
-
 data CheckState =
   MkCheckState
     { substitution :: !Substitution
     , supply       :: !Int
+    , infoMap      :: !InfoMap
+    , scopeMap     :: !ScopeMap
+    , nlgMap       :: !NlgMap
     }
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Generic)
 
 data CheckErrorWithContext =
   MkCheckErrorWithContext
@@ -65,6 +64,7 @@ data CheckError =
   | InconsistentNameInAppForm Name (Maybe Name)
   | NonDistinctError NonDistinctContext [[Name]]
   | AmbiguousTermError Name [(Resolved, Type' Resolved)]
+  | AmbiguousOperatorError Text
   | AmbiguousTypeError Name [(Resolved, Kind)]
   | InternalAmbiguityError
   | IncorrectArgsNumberApp Resolved Int Int -- expected, given
@@ -74,6 +74,19 @@ data CheckError =
   | CheckInfo (Type' Resolved)
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
+  | DesugarAnnoRewritingError (Expr Name) HoleInfo
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass NFData
+
+-- | When rewriting the 'Anno' of a syntax node, we encountered an internal error.
+-- We expected a certain number of 'AnnoHole's, e.g., in a binary operation we expect 2 'AnnoHole's,
+-- but we got a different number.
+--
+-- This is an internal error that shouldn't occur.
+data HoleInfo = HoleInfo
+  { expected :: !Int
+  , got :: !Int
+  }
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -89,6 +102,7 @@ data ExpectationContext =
   | ExpectIfConditionContext -- condition of if-then-else
   | ExpectPatternScrutineeContext (Expr Resolved) -- pattern type must match type of scrutinee
   | ExpectNotArgumentContext -- arg of NOT
+  | ExpectPercentArgumentContext -- arg of '%'
   | ExpectConsArgument2Context -- second arg of cons
   | ExpectIfBranchesContext -- all branches of an if-then-else must have the same type
   | ExpectConsiderBranchesContext -- all branches of a consider must have the same type
@@ -97,6 +111,14 @@ data ExpectationContext =
   | ExpectAppArgContext Bool Resolved Int -- projection?, function, number of arg
   | ExpectBinOpArgContext Text Int -- opname, number of arg (TODO: it would be better to have the token and its range here!)
   | ExpectDecideSignatureContext (Maybe SrcRange) -- actual result type range from the signature, if it exists
+  | ExpectRegulativePartyContext -- party clause of obligation
+  | ExpectRegulativeActionContext -- action clause of obligation
+  | ExpectRegulativeDeadlineContext -- within clause of obligation
+  | ExpectRegulativeTimestampContext -- timestamp of a regulative event
+  | ExpectRegulativeFollowupContext -- hence clause of regulative rule
+  | ExpectRegulativeContractContext -- when invoking a contract directive
+  | ExpectRegulativeEventContext -- check an event expr
+  | ExpectRegulativeProvidedContext -- the provided clauses are predicates on the variables bound by the pattern
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -252,8 +274,10 @@ data CheckResult =
     , substitution :: !Substitution
     , environment  :: !Environment
     , entityInfo   :: !EntityInfo
+    , infoMap      :: !InfoMap
+    , nlgMap       :: !NlgMap
+    , scopeMap     :: !ScopeMap
     }
-  deriving stock (Eq, Show)
 
 -- -------------------
 -- Instances for Check
@@ -357,6 +381,25 @@ ambiguousType n xs = do
   pure (OutOfScope u n)
 
 -- ----------------------------------------------------------------------------
+-- Info Map
+-- ----------------------------------------------------------------------------
+
+
+addInfoForSrcRange :: SrcRange -> Info -> Check ()
+addInfoForSrcRange srcRange i = do
+  env <- asks $ view #environment
+  ei <- asks $ view #entityInfo
+  modifying' #scopeMap $
+    IV.insert (IV.srcRangeToInterval srcRange) (env, ei)
+  modifying' #infoMap $
+    IV.insert (IV.srcRangeToInterval srcRange) i
+
+addNlgForSrcRange :: SrcRange -> Nlg -> Check ()
+addNlgForSrcRange srcRange i =
+  modifying' #nlgMap $
+    IV.insert (IV.srcRangeToInterval srcRange) i
+
+-- ----------------------------------------------------------------------------
 -- JL4 specific primitives for resolving names
 -- ----------------------------------------------------------------------------
 
@@ -371,11 +414,14 @@ resolvedType n = do
       -- addError $ MissingEntityInfo n
       pure n
     Just (_, checkEntity) ->
-      pure case checkEntity of
-        KnownType kind _resolved _ -> setAnnResolvedKindOfResolved kind n
-        KnownTerm ty _term -> setAnnResolvedTypeOfResolved ty n
-        KnownTypeVariable -> setAnnResolvedKindOfResolved 0 n
-        KnownSection _ -> n -- TODO: this is probably not what we want, maybe some internal error?
+      case checkEntity of
+        KnownType kind _resolved _ -> do
+          setAnnResolvedKindOfResolved kind n
+        KnownTerm ty term -> do
+          setAnnResolvedTypeOfResolved ty (Just term) n
+        KnownTypeVariable -> do
+          setAnnResolvedAsTypeVar n
+        KnownSection _ -> pure n -- TODO: this is probably not what we want, maybe some internal error?
 
 lookupRawNameInEnvironment :: RawName -> Check [(Unique, Name, CheckEntity)]
 lookupRawNameInEnvironment rn = do
@@ -395,7 +441,7 @@ lookupRawNameInEnvironment rn = do
 isTopLevelBindingInSection :: Unique -> Section Resolved -> Bool
 isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map getUnique . relevantResolveds) decls
   where
-  relevantResolveds = \case
+  relevantResolveds = \ case
     Declare _ (MkDeclare _ _ af _) -> appFormHeads af
     Decide _ (MkDecide _ _ af _) -> appFormHeads af
     Assume _ (MkAssume _ _ af _) -> appFormHeads af
@@ -411,16 +457,21 @@ resolveTerm' p n = do
   case mapMaybe proc options of
     [] -> do
       v <- fresh (rawName n)
-      rn <- outOfScope (setAnnResolvedType v n) v
+      n' <- setAnnResolvedType v Nothing n
+      rn <- outOfScope n' v
       pure (rn, v)
-    [x] -> pure x
-    xs -> anyOf xs <|> do
+    [x] -> x
+    xs -> choose xs <|> do
       v <- fresh (rawName n)
-      rn <- ambiguousTerm (setAnnResolvedType v n) xs
+      n' <- setAnnResolvedType v Nothing n
+      xs' <- sequenceA xs
+      rn <- ambiguousTerm n' xs'
       pure (rn, v)
   where
-    proc :: (Unique, Name, CheckEntity) -> Maybe (Resolved, Type' Resolved)
-    proc (u, o, KnownTerm t tk) | p tk = Just (Ref (setAnnResolvedType t n) u o, t)
+    proc :: (Unique, Name, CheckEntity) -> Maybe (Check (Resolved, Type' Resolved))
+    proc (u, o, KnownTerm t tk) | p tk = Just $ do
+      n' <-  setAnnResolvedType t (Just tk) n
+      pure (Ref n' u o, t)
     proc _                             = Nothing
 
 resolveTerm :: Name -> Check (Resolved, Type' Resolved)
@@ -432,29 +483,53 @@ _resolveSelector = resolveTerm' (== Selector)
 resolveConstructor :: Name -> Check (Resolved, Type' Resolved)
 resolveConstructor = resolveTerm' (== Constructor)
 
+setAnnNlg ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => Nlg -> a -> Check a
+setAnnNlg nlg a = withRange a $ \r -> do
+  addNlgForSrcRange r nlg
+  pure $ a & annoOf % annNlg ?~ nlg
+
 setAnnResolvedType ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Type' Resolved -> a -> a
-setAnnResolvedType t x =
-  setAnno (set annInfo (Just (TypeInfo t Nothing)) (getAnno x)) x
+  => Type' Resolved -> Maybe TermKind -> a -> Check a
+setAnnResolvedType t k a = withRange a $ \r -> do
+  let info = TypeInfo t k
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
 setAnnResolvedKind ::
      (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
-  => Kind -> a -> a
-setAnnResolvedKind k x =
-  setAnno (set annInfo (Just (KindInfo k)) (getAnno x)) x
+  => Kind -> a -> Check a
+setAnnResolvedKind k a = withRange a $ \r -> do
+  let info = KindInfo k
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
-setAnnResolvedTypeOfResolved :: Type' Resolved -> Resolved -> Resolved
-setAnnResolvedTypeOfResolved t = \case
-  Def u n -> Def u (setAnnResolvedType t n)
-  Ref r u o -> Ref (setAnnResolvedType t r) u o
-  OutOfScope u n -> OutOfScope u (setAnnResolvedType t n)
+setAnnTypeVar ::
+     (HasAnno a, AnnoToken a ~ PosToken, AnnoExtra a ~ Extension)
+  => a -> Check a
+setAnnTypeVar a = withRange a $ \r -> do
+  let info = TypeVariable
+  addInfoForSrcRange r info
+  pure $ a & annoOf % annInfo ?~ info
 
-setAnnResolvedKindOfResolved :: Kind -> Resolved -> Resolved
-setAnnResolvedKindOfResolved k = \case
-  Def u n -> Def u (setAnnResolvedKind k n)
-  Ref r u o -> Ref (setAnnResolvedKind k r) u o
-  OutOfScope u n -> OutOfScope u (setAnnResolvedKind k n)
+withRange :: (HasAnno a, Applicative f) => a -> (SrcRange -> f a) -> f a
+withRange a f = case rangeOf (getAnno a) of
+  Nothing -> pure a
+  Just r -> f r
+
+setAnnNlgOfResolved :: Nlg -> Resolved -> Check Resolved
+setAnnNlgOfResolved nlg = traverseResolved (setAnnNlg nlg)
+
+setAnnResolvedTypeOfResolved :: Type' Resolved -> Maybe TermKind -> Resolved -> Check Resolved
+setAnnResolvedTypeOfResolved t k = traverseResolved (setAnnResolvedType t k)
+
+setAnnResolvedKindOfResolved :: Kind -> Resolved -> Check Resolved
+setAnnResolvedKindOfResolved k = traverseResolved (setAnnResolvedKind k)
+
+setAnnResolvedAsTypeVar :: Resolved -> Check Resolved
+setAnnResolvedAsTypeVar = traverseResolved setAnnTypeVar
 
 type ToResolved = Optics.GPlate Resolved
 
@@ -576,17 +651,27 @@ prune m = do
 
       -- We have a success, we don't want a second one
       procPlain a []                   = [a]
-      procPlain a ((Plain _, _)  : []) = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
-      procPlain _ ((Plain _, _)  : cs) = [last cs]
       procPlain a ((With _ _, _) : cs) = procPlain a cs
+      procPlain a cs
+        | plain = [first (With (MkCheckErrorWithContext InternalAmbiguityError ctx)) a]
+        -- NOTE: in the case of ambiguity errors, the ambiguity error will always occurs as
+        -- the last element in the list
+        | otherwise = [last cs]
+        where
+          plain = allPlain $ map fst cs
 
       -- We have a failure, we're still looking for a success, and prefer the last failure
-      procWith a []                     = [a]
-      procWith _ ((Plain a, s')  : cs)  = procPlain (Plain a, s') cs
-      procWith _ ((With e x, s') : cs)  = procWith (With e x, s') cs
+      procWith a []                    = [a]
+      procWith _ ((Plain a, s')  : cs) = procPlain (Plain a, s') cs
+      procWith _ ((With e x, s') : cs) = procWith (With e x, s') cs
 
     in
       proc candidates
+
+allPlain :: [With e a] -> Bool
+allPlain = all \case
+  Plain{} -> True
+  With {} -> False
 
 -- | Prune to one result if there's a clearly best one at this point,
 -- but don't force it.
@@ -605,7 +690,6 @@ softprune m = do
 
       -- We have a success, we don't want a second one
       procPlain a []                    = [a]
-      procPlain _ ((Plain _, _)  : [])  = candidates
       procPlain _ ((Plain _, _)  : _cs) = candidates
       procPlain a ((With _ _, _) :  cs) = procPlain a cs
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns, DataKinds #-}
 module LSP.L4.Actions where
 
 import Base
@@ -13,36 +13,42 @@ import qualified Data.List as List
 import Data.Ord (Down (..))
 import Data.Text.Mixed.Rope (Rope)
 import qualified Data.Text.Mixed.Rope as Rope
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IVMap
 import qualified Text.Fuzzy as Fuzzy
 
 import L4.Annotation
-import L4.Citations
 import L4.FindDefinition
-import L4.HoverInfo
 import L4.Lexer (annotations, directives, keywords)
-import L4.Nlg (simpleLinearizer)
 import L4.Parser.SrcSpan
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck
+import qualified L4.Evaluate.ValueLazy   as EL
+import qualified L4.EvaluateLazy         as EL
+import qualified L4.EvaluateLazy.Machine as EL
+import qualified L4.Utils.IntervalMap as IV
 import LSP.Core.PositionMapping
 import LSP.Core.Shake
 import LSP.L4.Rules
+
 import qualified LSP.L4.Viz.Ladder as Ladder
+import qualified LSP.L4.Viz.VizExpr as Ladder
+import qualified LSP.L4.Viz.CustomProtocol as Ladder
+import           LSP.L4.Viz.CustomProtocol (EvalAppRequestParams (..),
+                                            EvalAppResult (..))
 
 import Language.LSP.Protocol.Message
 import Language.LSP.Protocol.Types
 import Language.LSP.Protocol.Types as CompletionItem (CompletionItem (..))
+import L4.Nlg (simpleLinearizer)
 
 -- ----------------------------------------------------------------------------
 -- LSP Autocompletions
 -- ----------------------------------------------------------------------------
 
-topDeclToCompletionItem :: Name -> CheckEntity -> Maybe CompletionItem
-topDeclToCompletionItem name = \case
+buildCompletionItem :: RawName -> CheckEntity -> [CompletionItem]
+buildCompletionItem raw = \ case
   KnownTerm ty term ->
-    Just (defaultTopDeclCompletionItem ty)
+    pure (defaultTopDeclCompletionItem ty)
       { CompletionItem._kind = Just $ case (term, ty) of
          (Constructor, _) -> CompletionItemKind_Constructor
          (Selector, _) -> CompletionItemKind_Field
@@ -50,15 +56,21 @@ topDeclToCompletionItem name = \case
          _ -> CompletionItemKind_Constant
       }
   KnownType kind _args _tydec ->
-    Just (defaultTopDeclCompletionItem (typeFunction kind))
+    pure (defaultTopDeclCompletionItem (typeFunction kind))
       { CompletionItem._kind = Just CompletionItemKind_Class
       }
   KnownSection (MkSection _ (Just n) _ _) ->
-    Just (defaultCompletionItem $  nameToText $ getOriginal n)
+    pure (defaultCompletionItem $  nameToText $ getOriginal n)
       { CompletionItem._kind = Just CompletionItemKind_Module
       }
-  KnownSection (MkSection _ Nothing _ _) -> Nothing
-  KnownTypeVariable {} -> Nothing
+  KnownSection (MkSection _ Nothing _ _) ->
+    -- NOTE: a section without name is just the toplevel section - we don't need to
+    -- autocomplete anything there
+    []
+  KnownTypeVariable ->
+    pure (defaultCompletionItem prepared)
+     { CompletionItem._kind = Just CompletionItemKind_TypeParameter
+     }
   where
     -- a function (but also a constant, in theory) can be polymorphic, so we have to strip
     -- all the foralls to get to the "actual" type.
@@ -75,9 +87,9 @@ topDeclToCompletionItem name = \case
           , _detail = Just $ " IS A " <> prettyLayout ty
           }
       }
-      where
-        prepared :: Text
-        prepared = case name of MkName _ raw -> rawNameToText raw
+
+    prepared :: Text
+    prepared = rawNameToText raw
 
 defaultCompletionItem :: Text -> CompletionItem
 defaultCompletionItem label = CompletionItem label
@@ -96,6 +108,43 @@ gotoDefinition pos m positionMapping = do
   newRange <- toCurrentRange positionMapping lspRange
   pure (Location (fromNormalizedUri range.moduleUri) newRange)
 
+
+-- ----------------------------------------------------------------------------
+-- Ladder evalApp
+-- ----------------------------------------------------------------------------
+
+evalApp
+  :: forall m.
+  (MonadIO m)
+  => (EL.Environment, Module Resolved)
+  -> Ladder.EvalAppRequestParams
+  -> RecentlyVisualised
+  -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
+evalApp contextModule evalParams recentViz =
+  case Ladder.lookupAppExprMaker recentViz.vizState evalParams.appExpr of
+    Nothing -> defaultResponseError "No expr maker found" -- TODO: Improve error codehere
+    Just evalAppMaker -> do
+      let appExpr = evalAppMaker evalParams
+      res <- liftIO $ EL.execEvalExprInContextOfModule appExpr contextModule
+      case res of
+        Just evalRes -> Aeson.toJSON <$> evalResultToLadderEvalAppResult evalRes
+        Nothing -> defaultResponseError "No eval result found"
+  where
+    evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
+    evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res) = case res of
+      Right (EL.MkNF val) ->
+        case EL.boolView val of
+          Just b  -> pure $ EvalAppResult (toUBoolValue b)
+          Nothing -> throwExpectBoolResultError
+      Right EL.ToDeep    -> defaultResponseError "Evaluation exceeded maximum depth limit"
+      Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
+
+    throwExpectBoolResultError :: ExceptT (TResponseError method) m a
+    throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"
+
+    toUBoolValue :: Bool -> Ladder.UBoolValue
+    toUBoolValue b = if b then Ladder.TrueV else Ladder.FalseV
+
 -- ----------------------------------------------------------------------------
 -- Ladder visualisation
 -- ----------------------------------------------------------------------------
@@ -104,44 +153,59 @@ visualise
   :: Monad m
   => Maybe TypeCheckResult
   -> (m (Maybe RecentlyVisualised), RecentlyVisualised -> m ())
-  -> Uri
-  -- ^ The document uri whose decides should be visualised
+  -> VersionedTextDocumentIdentifier
+  -- ^ The VersionedTextDocumentIdentifier of the document whose Decides should be visualised
   -> Maybe (SrcPos, Bool)
   -- ^ The location of the `Decide` to visualize and whether or not to simplify it
   -> ExceptT (TResponseError method) m (Aeson.Value |? Null)
-visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
-  mdecide :: Maybe (Decide Resolved, Bool, Substitution) <- case msrcPos of
-    -- the command was issued by the button in vscode or autorefresh
+visualise mtcRes (getRecVis, setRecVis) verTextDocId msrcPos = do
+  let uri = verTextDocId._uri
+
+  -- Try to pinpoint a Decide (and VizConfig) based on how the command was issued (autorefresh vs code action/code lens)
+  mdecide :: Maybe (Decide Resolved, Ladder.VizConfig) <- case msrcPos of
+    -- a. the command was issued by autorefresh
     -- NOTE: when we get the typecheck results via autorefresh, we can be lenient about it, i.e. we return 'Nothing
     -- exits by returning Nothing instead of throwing an error
     Nothing -> runMaybeT do
       tcRes <- hoistMaybe mtcRes
       recentlyVisualised <- MaybeT $ lift getRecVis
+      -- Since this is from autorefresh, we want to get the most up-to-date version of the Decide
       decide <- hoistMaybe $ (.getOne) $  foldTopLevelDecides (matchOnAvailableDecides recentlyVisualised) tcRes.module'
-      pure (decide, recentlyVisualised.simplify, tcRes.substitution)
+      let updatedVizConfig = updateVizConfig verTextDocId tcRes recentlyVisualised
+      pure (decide, updatedVizConfig)
 
-    -- the command was issued by a code action or codelens
+    -- b. the command was issued by a code action or codelens
     Just (srcPos, simp) -> do
       tcRes <- do
         case mtcRes of
           Nothing -> defaultResponseError $ "Failed to typecheck " <> Text.pack (show uri.getUri) <> "."
           Just tcRes -> pure tcRes
       case foldTopLevelDecides (\d -> [d | decideNodeStartsAtPos srcPos d]) tcRes.module' of
-        [decide] -> pure $ Just (decide, simp, tcRes.substitution)
+        [decide] ->
+          let vizConfig = Ladder.mkVizConfig verTextDocId tcRes.module' tcRes.substitution simp
+          in pure $ Just (decide, vizConfig)
         -- NOTE: if this becomes a problem, we should use
         -- https://hackage.haskell.org/package/lsp-types-2.3.0.1/docs/Language-LSP-Protocol-Types.html#t:VersionedTextDocumentIdentifier
         _ -> defaultResponseError "The program was changed in the time between pressing the code lens and rendering the program"
 
-  let recentlyVisualisedDecide (MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) simplify substitution
-        = Just RecentlyVisualised {pos = range.start, name = rawName $ getName appform, type' = applyFinalSubstitution substitution (toNormalizedUri uri) ty, simplify}
-      recentlyVisualisedDecide _ _ _ = Nothing
+  -- Makes a 'RecentlyVisualised' iff the given 'Decide' has a valid range and a resolved type.
+  -- Assumes the vizConfig in the given vizState is up-to-date.
+  let recentlyVisualisedDecide decide@(MkDecide Anno {range = Just range, extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} _tydec appform _expr) vizState
+        = Just RecentlyVisualised
+          { pos = range.start
+          , name = rawName $ getName appform
+          , type' = applyFinalSubstitution (Ladder.getVizConfig vizState).substitution (Ladder.getVizConfig vizState).moduleUri ty
+          , vizState = vizState
+          , decide
+          }
+      recentlyVisualisedDecide _ _ = Nothing
 
   case mdecide of
     Nothing -> pure (InR Null)
-    Just (decide, simp, substitution) ->
-      case Ladder.doVisualize decide (Ladder.MkVizEnv (toNormalizedUri uri) substitution simp) of
-        Right vizProgramInfo -> do
-          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide simp substitution
+    Just (decide, vizConfig) ->
+      case Ladder.doVisualize decide vizConfig of
+        Right (vizProgramInfo, vizState) -> do
+          traverse_ (lift . setRecVis) $ recentlyVisualisedDecide decide vizState
           pure $ InL $ Aeson.toJSON vizProgramInfo
         Left vizError ->
           defaultResponseError $ Text.unlines
@@ -150,6 +214,14 @@ visualise mtcRes (getRecVis, setRecVis) uri msrcPos = do
             , Ladder.prettyPrintVizError vizError
             ]
   where
+    {- | Make a new VizConfig by combining (i) old config (e.g. whether to simplify) from the RecentlyVisualized (which itself contains a VizConfig)
+    with (ii) up-to-date versions of potentially stale info (verTxtDocId, tcRes) -}
+    updateVizConfig :: VersionedTextDocumentIdentifier -> TypeCheckResult -> RecentlyVisualised -> Ladder.VizConfig
+    updateVizConfig verTxtDocId tcRes recentlyVisualised =
+      Ladder.getVizConfig recentlyVisualised.vizState
+        & set #verTxtDocId verTxtDocId
+        & set #moduleUri (toNormalizedUri verTxtDocId._uri)
+        & set #substitution tcRes.substitution
 
     -- TODO: in the future we want to be a bit more clever wrt. which
     -- DECIDE/MEANS we snap to. We can use the type of the 'Decide' here
@@ -191,7 +263,7 @@ decideNodeStartsAtPos pos d = Just pos == do
 -- ----------------------------------------------------------------------------
 
 completions :: Rope -> NormalizedUri -> TypeCheckResult -> Position -> [CompletionItem]
-completions rope nuri typeCheck (Position ln col) = do
+completions rope nuri typeCheck pos@(Position ln col) = do
   let completionPrefix =
         Text.takeWhileEnd isAlphaNum
         $ Rope.toText
@@ -215,39 +287,36 @@ completions rope nuri typeCheck (Position ln col) = do
         $ Map.keys keywords
         <> annotations
         <> map snd directives
-      -- FUTUREWORK(mangoiv): we could
-      -- 1 pass through the token here
-      -- 2 check the token category and if the category is COperator
-      -- 3 set the CompletionItemKind to CompletionItemKind_Operator
+
       keywordItems = map mkKeyWordCompletionItem keyWordMatches
 
-      topDeclItems
+      -- NOTE: combine toplevel check info and info brought in scope
+      finalCheckInfos
+        = Map.unionsWith (\a b -> nub $ a <> b)
+        $ map (uncurry combineEnvironmentEntityInfo)
+        $ (typeCheck.environment, typeCheck.entityInfo)
+            : map snd (IV.search (lspPositionToSrcPos pos) typeCheck.scopeMap)
+
+      scopedItems
         = filterMatchesOn CompletionItem._label
-        $ mapMaybe
-            (\(name, checkEntity) ->
-              topDeclToCompletionItem name
-              $ applyFinalSubstitution typeCheck.substitution nuri checkEntity
+        $ foldMap
+            (\(name, ces) ->
+              foldMap
+                (buildCompletionItem name . applyFinalSubstitution typeCheck.substitution nuri)
+                ces
             )
-            (combineEnvironmentEntityInfo
-              typeCheck.environment
-              typeCheck.entityInfo
-            )
+        $ Map.toList finalCheckInfos
 
-  -- TODO: maybe we should sort these as follows
-  -- 1 keywords
-  -- 2 toplevel values
-  -- 3 toplevel types
-
-  keywordItems <> topDeclItems
+  keywordItems <> scopedItems
 
 -- ----------------------------------------------------------------------------
 -- LSP Hovers
 -- ----------------------------------------------------------------------------
 
-referenceHover :: Position -> IVMap.IntervalMap SrcPos (NormalizedUri, Int, Maybe Text) -> Maybe Hover
+referenceHover :: Position -> IV.IntervalMap SrcPos (NormalizedUri, Int, Maybe Text) -> Maybe Hover
 referenceHover pos refs = do
   -- NOTE: it's fine to cut of the tail here because we shouldn't ever get overlapping intervals
-  let ivToRange (iv, (uri, len, reference)) = (intervalToSrcRange uri len iv, reference)
+  let ivToRange (iv, (uri, len, reference)) = (IV.intervalToSrcRange uri len iv, reference)
   -- NOTE: this is subtle: if there are multiple results for a location, then we want to
   -- prefer Just's, so we reverse sort the references we get.
   -- Squashing on snd also wouldn't make sense because if we'd had all 'Nothing' that would
@@ -256,7 +325,7 @@ referenceHover pos refs = do
   (range, mreference) <- listToMaybe
     $ List.sortOn (Down . snd)
     $ ivToRange
-    <$> IVMap.search (lspPositionToSrcPos pos) refs
+    <$> IV.search (lspPositionToSrcPos pos) refs
   let lspRange = srcRangeToLspRange (Just range)
   pure $ Hover
     (InL
@@ -271,24 +340,26 @@ referenceHover pos refs = do
 typeHover :: Position -> NormalizedUri -> TypeCheckResult -> PositionMapping -> Maybe Hover
 typeHover pos nuri tcRes positionMapping = do
   oldPos <- fromCurrentPosition positionMapping pos
-  (range, i) <- findInfo (lspPositionToSrcPos oldPos) tcRes.module'
+  let oldLspPos = lspPositionToSrcPos oldPos
+  (range, i) <- IV.smallestContaining nuri oldLspPos tcRes.infoMap
+  let mNlg = IV.smallestContaining nuri oldLspPos tcRes.nlgMap
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
-  pure (infoToHover nuri tcRes.substitution newLspRange i)
+  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg))
 
-infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Hover
-infoToHover nuri subst r i =
+infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Hover
+infoToHover nuri subst r i mNlg =
   Hover (InL (mkMarkdown x)) (Just r)
   where
     x =
       case i of
-        TypeInfo t mNlg -> mdCodeBlock (prettyLayout (applyFinalSubstitution subst nuri t)) <>
-          case mNlg of
-            Nothing -> mempty
-            Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
-
-        KindInfo k      -> mdCodeBlock $ prettyLayout $ typeFunction k
-        KeywordInfo     -> mdCodeBlock "keyword"
+        TypeInfo t _ ->
+          mdCodeBlock (prettyLayout (applyFinalSubstitution subst nuri t)) <>
+            case mNlg of
+              Nothing -> mempty
+              Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
+        KindInfo k -> mdCodeBlock $ prettyLayout $ typeFunction k
+        TypeVariable -> "TYPE VAR"
 
 mdCodeBlock :: Text -> Text
 mdCodeBlock c =

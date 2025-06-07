@@ -69,7 +69,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case
+  pretty = \ case
     LogCouldNotIdentifyReverseDeps path ->
       "Could not identify reverse dependencies for" <+> viaShow path
     (LogTypeCheckingReverseDeps path reverseDepPaths) ->
