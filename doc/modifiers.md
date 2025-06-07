@@ -2,6 +2,8 @@
 
 These modifiers frequently appear at the start of clauses.
 
+Informally this subject is dealt with under the name "defeasibility".
+
 > §10 Beer taxes. The retail sale of beer shall be taxed at 6%.
 
 > §11 Sunday beer. Notwithstanding §10, on Sundays, the retail sale of beer shall be taxed at 9%.
