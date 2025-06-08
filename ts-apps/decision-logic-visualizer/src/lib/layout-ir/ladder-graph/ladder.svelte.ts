@@ -712,8 +712,8 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
   }
 
-  getNodeSelectionTracker() {
-    return this.#nodeSelectionTracker
+  getSelectedNodes(context: LirContext) {
+    return this.#nodeSelectionTracker.getSelectedForHighlightPaths(context)
   }
 
   getPathsList(_context: LirContext) {
