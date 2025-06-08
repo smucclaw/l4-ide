@@ -43,7 +43,9 @@
       stroke={isSelected
         ? 'var(--color-highlighted-path-in-flow)'
         : 'var(--ladder-node-color)'}
-      stroke-width={isSelected ? '4' : '3'}
+      stroke-width={isSelected
+        ? 'calc(3px + var(--path-highlight-delta))'
+        : '3px'}
       stroke-linecap="round"
     />
 
