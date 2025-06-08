@@ -85,7 +85,6 @@ export class LadderEnv {
   }
 
   // Constants
-  // TODO: Move constants to LadderEnv
 
   getExplanatoryAndEdgeLabel() {
     return this.config.constants.EXPLANATORY_AND_EDGE_LABEL

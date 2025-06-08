@@ -313,7 +313,6 @@
 Misc SF UI TODOs:
 
 * Make it clearer that the bool var nodes are clickable
-(should at least change the cursor to a pointer on mouseover)
 -->
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
