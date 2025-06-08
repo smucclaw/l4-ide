@@ -142,8 +142,12 @@
 
   /* Stroke width */
   --stroke-width-default: 1px;
+  --path-highlight-delta: 2px;
+  --node-border-highlight-delta: 2px;
   /* TODO: Think about whether the default should be 2px */
-  --highlighted-stroke-width: calc(var(--stroke-width-default) + 2px);
+  --highlighted-stroke-width: calc(
+    var(--stroke-width-default) + var(--path-highlight-delta)
+  );
 
   /* Stroke color */
   --ladder-stroke-color-default: var(--color-primary);
@@ -285,7 +289,7 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
 /* Override border properties when highlighted */
 .highlighted-ladder-node {
   --ladder-node-border-width: calc(
-    var(--ladder-node-border-width-default) + 1px
+    var(--ladder-node-border-width-default) + var(--node-border-highlight-delta)
   );
   --ladder-node-border-color: var(--color-highlighted-path-in-flow);
 }

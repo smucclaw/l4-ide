@@ -1,14 +1,14 @@
-<!-- Wrapper that provides the base styles for contentful nodes -->
+<!-- Wrapper that provides the base styles for non-bundling nodes -->
 <script lang="ts" module>
   import type { Snippet } from 'svelte'
 
-  interface WithContentfulNodeStylesProps {
+  interface WithNonBundlingNodeBaseStylesProps {
     children: Snippet
   }
 </script>
 
 <script lang="ts">
-  let { children }: WithContentfulNodeStylesProps = $props()
+  let { children }: WithNonBundlingNodeBaseStylesProps = $props()
 </script>
 
 <div class="base-sf-node-styles transition-opacity duration-300">

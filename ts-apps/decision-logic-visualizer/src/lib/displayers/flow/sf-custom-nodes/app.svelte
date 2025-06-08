@@ -14,7 +14,7 @@
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
-  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
@@ -77,7 +77,7 @@
   </ValueIndicator>
 {/snippet}
 
-<WithContentfulNodeStyles>
+<WithNonBundlingNodeBaseStyles>
   <!-- bg-gray
  to evoke the idea of a fn being a 'black box'
 (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
@@ -110,7 +110,7 @@
       {/if}
     </WithNormalHandles>
   </div>
-</WithContentfulNodeStyles>
+</WithNonBundlingNodeBaseStyles>
 
 <style>
   .app-node-border {
