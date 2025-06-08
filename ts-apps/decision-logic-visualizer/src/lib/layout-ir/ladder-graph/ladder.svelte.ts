@@ -772,6 +772,13 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
+/** The name is perhaps misleading: these are nodes that can be given a highlighted / selected style;
+ * but not all the nodes here can be selected for highlighting by the user.
+ * E.g., you will not be able to select a NotEnd node in the graph
+ * by right-clicking on it --- the NOT subgraph
+ * is selected by right-clicking on the NotSTART node.
+ * TODO: Would be good to come up with a better name.
+ */
 export type SelectableLadderLirNode =
   | UBoolVarLirNode
   | AppLirNode
