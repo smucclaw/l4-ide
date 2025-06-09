@@ -24,6 +24,10 @@
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
+  swapDevices = [
+    { device = "/dev/disk/by-partlabel/swap"; }
+  ];
+
   disko.devices = {
     disk = {
       main = {
@@ -45,6 +49,15 @@
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
+              };
+            };
+            plainSwap = {
+              size = "1G";
+              name = "swap";
+              content = {
+                type = "swap";
+                discardPolicy = "both";
+                resumeDevice = true; # resume from hiberation from this device
               };
             };
             root = {

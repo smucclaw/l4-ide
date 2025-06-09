@@ -8,8 +8,6 @@
     ./module.nix
   ];
 
-  system.stateVersion = "25.05";
-
   systemd.network.enable = true;
 
   # ---------------------------------------------
@@ -43,6 +41,8 @@
     defaults.email = config.jl4-demo.acme-email;
   };
 
+  security.sudo.wheelNeedsPassword = false;
+
   # ---------------------------------------------
   # ssh
   # ---------------------------------------------
@@ -66,5 +66,7 @@
     emacs-nox
     btop
     zsh
+    bat
+    ripgrep
   ];
 }

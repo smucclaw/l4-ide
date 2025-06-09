@@ -22,6 +22,7 @@
           system = "x86_64-linux";
           modules = [
             {
+              system.stateVersion = "24.11";
               jl4-demo = {
                 domain = "jl4.well-typed.com";
                 acme-email = "magnus@well-typed.com";
@@ -39,10 +40,12 @@
         };
 
         # working version on AWS
-        nixosConfigurations.jl4-aws = inputs.nixpkgs.lib.nixosSystem {
+        nixosConfigurations.jl4-aws-2505 = inputs.nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
+
           modules = [
             {
+              system.stateVersion = "25.05";
               jl4-demo = {
                 domain = "jl4.legalese.com";
                 acme-email = "mengwong@legalese.com";
@@ -54,6 +57,7 @@
             inputs.disko.nixosModules.default
             ./nix/configuration.nix
             ./nix/aws-ec2.nix
+            ./nix/aws-vm.nix
           ];
         };
       };
