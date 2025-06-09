@@ -186,7 +186,7 @@
 
   let resultMessage: string = $state('')
   function updateResultDisplay() {
-    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()}`
   }
 
   /*********************************************
@@ -223,7 +223,7 @@
         setTimeout(() => {
           doLayout() // Paths can get visually mis-aligned otherwise
           // Need a small delay to ensure that the nodes have been measured
-        }, 100)
+        }, 30)
         selectedNodes = newSelectedNodes
       }
     }
