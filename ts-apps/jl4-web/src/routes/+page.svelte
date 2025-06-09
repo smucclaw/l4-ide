@@ -12,6 +12,7 @@
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
   import type { LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
+  import { MonacoErrorLens, setupErrorLens } from '@ym-han/monaco-error-lens'
 
   import {
     LadderFlow,
@@ -109,6 +110,7 @@
 
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
+  let monacoErrorLens: MonacoErrorLens | undefined
 
   // TODO: Need to refactor this --- too long
   onMount(async () => {
@@ -182,7 +184,22 @@
         wordBasedSuggestions: 'off',
         theme: 'jl4Theme',
         'semanticHighlighting.enabled': true,
+        glyphMargin: true, // Required for gutter icons
       })
+
+      // Set up Monaco Error Lens
+      ;(window as Window).monaco = monaco
+      if (editor) {
+        monacoErrorLens = setupErrorLens(editor, {
+          enableInlineMessages: true,
+          enableLineHighlights: true,
+          enableGutterIcons: true,
+          followCursor: 'allLines',
+          messageTemplate: '{message}',
+          maxMessageLength: 150,
+          updateDelay: 200,
+        })
+      }
 
       const ownUrl: URL = new URL(window.location.href)
       const sessionid: string | null = ownUrl.searchParams.get('id')
@@ -305,6 +322,7 @@
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
       })
+
       monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
 
       /**********************************
@@ -374,13 +392,22 @@
   })
 
   onDestroy(() => {
+    if (monacoErrorLens) {
+      monacoErrorLens.dispose()
+      monacoErrorLens = undefined
+    }
+
     // YM: I'm not sure that this is necessary --- just adding it for now because I've seen examples on GitHub that do this.
     // I'll look into this more in the future.
     if (editor) {
       editor.dispose()
       editor = undefined
     }
-    // TODO: May also want to clean up the websocket, but not sure if necessary
+
+    if (monacoL4LangClient) {
+      monacoL4LangClient.dispose?.()
+      monacoL4LangClient = undefined
+    }
   })
 
   const britishCitizen = `§ \`Assumptions\`

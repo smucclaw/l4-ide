@@ -40,12 +40,13 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@codingame/monaco-vscode-api": "^14.0.4",
     "@repo/decision-logic-visualizer": "*",
     "@repo/viz-expr": "*",
+    "jl4-client-rpc": "*",
+    "@codingame/monaco-vscode-api": "^14.0.4",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "jl4-client-rpc": "*",
+    "@ym-han/monaco-error-lens": "^0.0.1",
     "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@^14.0.4",
     "monaco-editor-wrapper": "^6.4.0",
     "monaco-languageclient": "^9.4.0",
