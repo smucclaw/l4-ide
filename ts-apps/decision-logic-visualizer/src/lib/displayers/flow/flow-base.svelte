@@ -223,7 +223,7 @@
         setTimeout(() => {
           doLayout() // Paths can get visually mis-aligned otherwise
           // Need a small delay to ensure that the nodes have been measured
-        }, 100)
+        }, 30)
         selectedNodes = newSelectedNodes
       }
     }
