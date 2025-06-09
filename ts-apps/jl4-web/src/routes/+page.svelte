@@ -8,11 +8,12 @@
   import * as vscode from 'vscode'
   import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
+  import { monacoModuleWrapperForErrorLens } from '$lib/monaco-error-lens-helpers'
 
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
   import type { LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
-  import { MonacoErrorLens, setupErrorLens } from '@ym-han/monaco-error-lens'
+  import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
 
   import {
     LadderFlow,
@@ -188,9 +189,10 @@
       })
 
       // Set up Monaco Error Lens
-      ;(window as Window).monaco = monaco
-      if (editor) {
-        monacoErrorLens = setupErrorLens(editor, {
+      monacoErrorLens = new MonacoErrorLens(
+        editor,
+        monacoModuleWrapperForErrorLens,
+        {
           enableInlineMessages: true,
           enableLineHighlights: true,
           enableGutterIcons: true,
@@ -198,9 +200,10 @@
           messageTemplate: '{message}',
           maxMessageLength: 150,
           updateDelay: 200,
-        })
-      }
+        }
+      )
 
+      // Persistent sessions
       const ownUrl: URL = new URL(window.location.href)
       const sessionid: string | null = ownUrl.searchParams.get('id')
       if (sessionid) {
@@ -338,7 +341,7 @@
       makeLadderFlow: (ladderInfo: RenderAsLadderInfo) => Promise<void>
     ): Middleware {
       return {
-        /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`)
           const responseFromLangServer = await next(command, args)
