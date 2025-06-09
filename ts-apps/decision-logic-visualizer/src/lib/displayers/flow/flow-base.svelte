@@ -186,7 +186,7 @@
 
   let resultMessage: string = $state('')
   function updateResultDisplay() {
-    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()}`
   }
 
   /*********************************************
