@@ -92,12 +92,10 @@ describe('Edge Attributes - Graph Operations', () => {
     const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
-    const attr1 = new DefaultEdgeAttributes('Label1')
-    g1.setEdgeAttributes(edge, attr1)
+    g1.setEdgeAttributes(edge, new DefaultEdgeAttributes('Label1'))
 
     const g2 = vertex(nw1).connect(vertex(nw2))
-    const attr2 = new DefaultEdgeAttributes('Label2')
-    g2.setEdgeAttributes(edge, attr2)
+    g2.setEdgeAttributes(edge, new DefaultEdgeAttributes('Label2'))
 
     const overlaid = g1.overlay(g2)
 
@@ -115,12 +113,10 @@ describe('Edge Attributes - Graph Operations', () => {
     const edge2 = new DirectedEdge(nw1, nw3)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
-    const attr1 = new DefaultEdgeAttributes('Edge1')
-    g1.setEdgeAttributes(edge1, attr1)
+    g1.setEdgeAttributes(edge1, new DefaultEdgeAttributes('Edge1'))
 
     const g2 = vertex(nw1).connect(vertex(nw3))
-    const attr2 = new DefaultEdgeAttributes('Edge2')
-    g2.setEdgeAttributes(edge2, attr2)
+    g2.setEdgeAttributes(edge2, new DefaultEdgeAttributes('Edge2'))
 
     // Connect g1 and g2
     const connected = g1.connect(g2)
@@ -140,18 +136,15 @@ describe('Edge Attributes - Graph Operations', () => {
     const edge = new DirectedEdge(nw1, nw2)
 
     const g1 = vertex(nw1).connect(vertex(nw2))
-    const attr1 = new DefaultEdgeAttributes('Label1')
-    g1.setEdgeAttributes(edge, attr1)
+    g1.setEdgeAttributes(edge, new DefaultEdgeAttributes('Label1'))
 
-    // Create g2 with edge nw1 -> nw2, set attribute attr2 with empty label
+    // Create g2 with edge nw1 -> nw2, set empty label on edge
     const g2 = vertex(nw1).connect(vertex(nw2))
-    const attr2 = new DefaultEdgeAttributes('')
-    g2.setEdgeAttributes(edge, attr2)
+    g2.setEdgeAttributes(edge, new DefaultEdgeAttributes(''))
 
     const overlaid = g1.overlay(g2)
 
     const resultingAttr = overlaid.getAttributesForEdge(edge)
     expect(resultingAttr.getLabel()).toBe('Label1')
-    // attr2's label is empty, so use attr1's label
   })
 })
