@@ -11,6 +11,7 @@
     context: LirContext
     node: SelectableLadderLirNode
     ladderGraph: NNFLadderGraphLirNode
+    onSelect?: () => void
     children: Snippet
   }
 </script>
@@ -18,12 +19,17 @@
 <script lang="ts">
   import * as ContextMenu from '$lib/ui-primitives/context-menu/index.js'
 
-  let { context, node, ladderGraph, children }: SelectableNodeContextMenuProps =
-    $props()
-
-  const onSelect = () => {
+  const defaultOnSelect = () => {
     ladderGraph.toggleNodeSelection(context, node)
   }
+
+  let {
+    context,
+    node,
+    ladderGraph,
+    onSelect = defaultOnSelect,
+    children,
+  }: SelectableNodeContextMenuProps = $props()
 </script>
 
 <ContextMenu.Root>

@@ -150,7 +150,9 @@ function transform(
       } = transform(nodeInfo, veToLir, neg.negand, ladderEnv)
 
       // Make the NOT subgraph
-      const notStart = vertex(new NotStartLirNode(nodeInfo, negand).getId())
+      const notStart = vertex(
+        new NotStartLirNode(nodeInfo, negand, neg).getId()
+      )
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
 
       const notGraph = sandwichWithSourceAndSink(notStart, notEnd, negand)

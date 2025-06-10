@@ -11,7 +11,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import * as Tooltip from '$lib/ui-primitives/tooltip/index.js'
   import { cycle } from '$lib/eval/type.js'
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
-  import WithContentfulNodeStyles from '$lib/displayers/flow/helpers/with-contentful-node-styles.svelte'
+  import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
@@ -72,7 +72,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
 TODO: Look into why this is the case --- are they not re-mounting the ubool-var component? 
 -->
 
-<WithContentfulNodeStyles>
+<WithNonBundlingNodeBaseStyles>
   <ValueIndicator
     value={node.getValue(data.context, ladderGraph)}
     additionalClasses={[
@@ -103,4 +103,4 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
       {/if}
     </WithNormalHandles>
   </ValueIndicator>
-</WithContentfulNodeStyles>
+</WithNonBundlingNodeBaseStyles>

@@ -712,8 +712,8 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
   }
 
-  getNodeSelectionTracker() {
-    return this.#nodeSelectionTracker
+  getSelectedNodes(context: LirContext) {
+    return this.#nodeSelectionTracker.getSelectedForHighlightPaths(context)
   }
 
   getPathsList(_context: LirContext) {
@@ -772,16 +772,27 @@ export type LadderLirNode =
   | TrueExprLirNode
   | FalseExprLirNode
 
+/** The name is perhaps misleading: these are nodes that can be given a highlighted / selected style;
+ * but not all the nodes here can be selected for highlighting by the user.
+ * E.g., you will not be able to select a NotEnd node in the graph
+ * by right-clicking on it --- the NOT subgraph
+ * is selected by right-clicking on the NotSTART node.
+ * TODO: Would be good to come up with a better name.
+ */
 export type SelectableLadderLirNode =
   | UBoolVarLirNode
   | AppLirNode
   | NotStartLirNode
+  | NotEndLirNode
 
 export function isSelectableLadderLirNode(
   node: LadderLirNode
 ): node is SelectableLadderLirNode {
   return (
-    isUBoolVarLirNode(node) || isAppLirNode(node) || isNotStartLirNode(node)
+    isUBoolVarLirNode(node) ||
+    isAppLirNode(node) ||
+    isNotStartLirNode(node) ||
+    isNotEndLirNode(node)
   )
 }
 
@@ -931,6 +942,7 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   constructor(
     nodeInfo: LirNodeInfo,
     private readonly negand: DirectedAcyclicGraph<LirId>,
+    private readonly originalExpr: IRExpr,
     position: Position = DEFAULT_INITIAL_POSITION
   ) {
     super(nodeInfo, position)
@@ -940,6 +952,14 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
     return this.negand
   }
 
+  getOriginalExpr(_context: LirContext) {
+    return this.originalExpr
+  }
+
+  getWholeNotGraph(_context: LirContext, ladderGraph: LadderGraphLirNode) {
+    return ladderGraph.getVizExprToLirGraph().get(this.originalExpr.id)
+  }
+
   toPretty(_context: LirContext) {
     return 'NOT ('
   }
@@ -947,6 +967,10 @@ export class NotStartLirNode extends BaseFlowLirNode implements FlowLirNode {
   toString(): string {
     return 'NOT_START_LIR_NODE'
   }
+}
+
+export function isNotEndLirNode(node: LadderLirNode): node is NotEndLirNode {
+  return node instanceof NotEndLirNode
 }
 
 export class NotEndLirNode extends BaseFlowLirNode implements FlowLirNode {

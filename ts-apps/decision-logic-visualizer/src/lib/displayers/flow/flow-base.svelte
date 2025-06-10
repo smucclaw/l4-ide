@@ -7,6 +7,7 @@
   import { LirContext } from '$lib/layout-ir/core.js'
   import {
     type LadderLirNode,
+    type SelectableLadderLirNode,
     isNNFLadderGraphLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import { useLadderEnv } from '$lib/ladder-env.js'
@@ -185,12 +186,14 @@
 
   let resultMessage: string = $state('')
   function updateResultDisplay() {
-    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()} (what-if mode)`
+    resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()}`
   }
 
   /*********************************************
         LadderGraph event listener
   **********************************************/
+
+  let selectedNodes: SelectableLadderLirNode[] = []
 
   /**
    * Most naive version: When a non-positional change occurs in the LadderGraphLirNode,
@@ -212,6 +215,17 @@
       // console.log('newSfGraph NODES', NODES)
 
       updateResultDisplay()
+
+      const newSelectedNodes = isNNFLadderGraphLirNode(ladderGraph)
+        ? ladderGraph.getSelectedNodes(context)
+        : []
+      if (newSelectedNodes.length !== selectedNodes.length) {
+        setTimeout(() => {
+          doLayout() // Paths can get visually mis-aligned otherwise
+          // Need a small delay to ensure that the nodes have been measured
+        }, 30)
+        selectedNodes = newSelectedNodes
+      }
     }
   }
 
@@ -247,10 +261,7 @@
   }
 
   function doLayout() {
-    if (
-      debouncedSfNodes$Initialized.current &&
-      NODES.every((node) => node.measured?.height && node.measured?.width)
-    ) {
+    if (NODES.every((node) => node.measured?.height && node.measured?.width)) {
       // Layout
       const layoutedElements = getLayoutedElements(
         dagreConfig,
@@ -313,7 +324,6 @@
 Misc SF UI TODOs:
 
 * Make it clearer that the bool var nodes are clickable
-(should at least change the cursor to a pointer on mouseover)
 -->
 
 <!-- The consumer containing div must set the height to, e.g., 96svh if that's what's wanted -->
