@@ -1,8 +1,16 @@
+# Modifiers for defeasibility
+
+Certain modifiers frequently appear at the start of clauses.
+
+Informally this subject is dealt with under the name "defeasibility", or "meta-rules".
+
+## Principles
+
+We use function composition to model "meta-rule" interactions between ordinary rules.
+
 # Despite / Notwithstanding
 
-These modifiers frequently appear at the start of clauses.
-
-Informally this subject is dealt with under the name "defeasibility".
+## Examples
 
 > §10 Beer taxes. The retail sale of beer shall be taxed at 6%.
 
