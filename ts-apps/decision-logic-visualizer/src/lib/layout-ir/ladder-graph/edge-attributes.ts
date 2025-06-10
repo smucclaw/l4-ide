@@ -8,8 +8,7 @@ import 'core-js/actual/set'
 // it's just that we will prob use LirNode methods for node data
 
 export interface EdgeAttributes extends Eq<EdgeAttributes> {
-  getStyles(): EdgeStylesContainer
-  setStyles(styles: EdgeStylesContainer): void
+  // There used to be more attrs than just the label
 
   getLabel(): string
   setLabel(label: string): void
@@ -22,28 +21,14 @@ export interface EdgeAttributes extends Eq<EdgeAttributes> {
 }
 
 export class DefaultEdgeAttributes implements EdgeAttributes {
-  constructor(
-    protected styles: EdgeStylesContainer = new EdgeStylesContainer(),
-    protected label: string = ''
-  ) {}
+  constructor(protected label: string = '') {}
 
   isEqualTo<T extends EdgeAttributes>(other: T): boolean {
-    return (
-      this.getStyles().isEqualTo(other.getStyles()) &&
-      this.getLabel() === other.getLabel()
-    )
+    return this.getLabel() === other.getLabel()
   }
 
   clone(): EdgeAttributes {
-    return new DefaultEdgeAttributes(this.styles, this.label)
-  }
-
-  getStyles(): EdgeStylesContainer {
-    return this.styles
-  }
-
-  setStyles(styles: EdgeStylesContainer) {
-    this.styles = styles
+    return new DefaultEdgeAttributes(this.label)
   }
 
   getLabel(): string {
@@ -75,108 +60,18 @@ export function mergeEdgeAttributes(
   }
 
   return new DefaultEdgeAttributes(
-    a1.getStyles().mergeWith(a2.getStyles()),
     mergeEdgeLabels(a1.getLabel(), a2.getLabel())
   )
 }
 
 /***************************
-    Edge Label and Styles
+      Edge Label
 ****************************/
 
 export const emptyEdgeLabel = ''
 
 /***************************
-    Edge Style Container
-****************************/
-
-/** Container for the edge style strings */
-export class EdgeStylesContainer implements Eq<EdgeStylesContainer> {
-  constructor(
-    private readonly base: BaseEdgeStyle = NonHighlightedEdgeStyle,
-    private readonly modifiers: Set<typeof FadedEdgeStyle> = new Set()
-  ) {}
-
-  isHighlighted() {
-    return this.base === HighlightedEdgeStyle
-  }
-
-  isFaded() {
-    return this.modifiers.has(FadedEdgeStyle)
-  }
-
-  /********************************************************
-                  Getters
-  *********************************************************/
-
-  getBase() {
-    return this.base
-  }
-
-  getModifiers() {
-    return this.modifiers
-  }
-
-  getStyleStrings(): Array<EdgeStyle> {
-    return [this.base, ...this.modifiers]
-  }
-
-  getCombinedEdgeStyleString() {
-    return [this.base, ...this.modifiers].join(' ')
-  }
-
-  getLabelStyleString() {
-    // TODO: This is a bit of a hack
-    return this.isFaded() ? FadedEdgeStyle : ''
-  }
-
-  /********************************************************
-              Edge Style Counterparts
-  *********************************************************/
-
-  /** Get a version of the edge styles that's the same, except highlighted */
-  getHighlightedCounterpart() {
-    return new EdgeStylesContainer(HighlightedEdgeStyle, this.modifiers)
-  }
-
-  /** Get a version of the edge styles that's the same, except that it's *not* highlighted */
-  getNonHighlightedCounterpart() {
-    return new EdgeStylesContainer(NonHighlightedEdgeStyle, this.modifiers)
-  }
-
-  /** Get a version of the edge styles that's the same, except faded */
-  getFadedCounterpart() {
-    return new EdgeStylesContainer(
-      this.base,
-      new Set([...this.modifiers, FadedEdgeStyle])
-    )
-  }
-
-  getNonFadedCounterpart() {
-    return new EdgeStylesContainer(
-      this.base,
-      new Set([...this.modifiers].filter((elt) => elt !== FadedEdgeStyle))
-    )
-  }
-
-  mergeWith(other: EdgeStylesContainer) {
-    const newBase =
-      this.base === NonHighlightedEdgeStyle ? other.base : this.base
-    const newModifiers = new Set(this.modifiers).union(other.getModifiers())
-    return new EdgeStylesContainer(newBase, newModifiers)
-  }
-
-  isEqualTo(other: EdgeStylesContainer): boolean {
-    const sameBase = this.base === other.getBase()
-    const sameModifiers =
-      this.getModifiers().isSubsetOf(other.getModifiers()) &&
-      other.getModifiers().isSubsetOf(this.getModifiers())
-    return sameBase && sameModifiers
-  }
-}
-
-/***************************
-      Edge Style String
+      Edge Styles
 ****************************/
 
 export type EdgeStyle = BaseEdgeStyle | ModifierEdgeStyle

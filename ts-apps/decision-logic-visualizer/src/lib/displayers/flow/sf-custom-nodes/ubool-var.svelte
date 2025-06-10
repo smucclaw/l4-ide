@@ -13,6 +13,7 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
+  import IsViableIndicator from '$lib/displayers/flow/helpers/is-viable-indicator.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
@@ -73,34 +74,35 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
 -->
 
 <WithNonBundlingNodeBaseStyles>
-  <ValueIndicator
-    value={node.getValue(data.context, ladderGraph)}
-    additionalClasses={[
-      // It's easier if the highlighted border styles are on the same element as the normal border styles.
-      // TODO: This could prob be cleaner.
-      isNNFLadderGraphLirNode(ladderGraph) &&
-      ladderGraph.nodeIsSelected(data.context, node)
-        ? 'highlighted-ladder-node'
-        : '',
-      'ubool-var-node-border',
-      ...node.getAllClasses(data.context),
-    ]}
-  >
-    <WithNormalHandles>
-      {#if isNNFLadderGraphLirNode(ladderGraph)}
-        <WithSelectableNodeContextMenu
-          context={data.context}
-          node={data.node as UBoolVarLirNode}
-          {ladderGraph}
-        >
+  <IsViableIndicator context={data.context} node={data.node}>
+    <ValueIndicator
+      value={node.getValue(data.context, ladderGraph)}
+      additionalClasses={[
+        // It's easier if the highlighted border styles are on the same element as the normal border styles.
+        'ubool-var-node-border',
+        // TODO: This could prob be cleaner.
+        isNNFLadderGraphLirNode(ladderGraph) &&
+        ladderGraph.nodeIsSelected(data.context, data.node)
+          ? 'highlighted-ladder-node'
+          : '',
+      ]}
+    >
+      <WithNormalHandles>
+        {#if isNNFLadderGraphLirNode(ladderGraph)}
+          <WithSelectableNodeContextMenu
+            context={data.context}
+            node={data.node as UBoolVarLirNode}
+            {ladderGraph}
+          >
+            {@render coreUBoolVarUI()}
+          </WithSelectableNodeContextMenu>
+        {:else}
           {@render coreUBoolVarUI()}
-        </WithSelectableNodeContextMenu>
-      {:else}
-        {@render coreUBoolVarUI()}
-      {/if}
-      {#if node.canInline(data.context)}
-        {@render inlineUI()}
-      {/if}
-    </WithNormalHandles>
-  </ValueIndicator>
+        {/if}
+        {#if node.canInline(data.context)}
+          {@render inlineUI()}
+        {/if}
+      </WithNormalHandles>
+    </ValueIndicator>
+  </IsViableIndicator>
 </WithNonBundlingNodeBaseStyles>

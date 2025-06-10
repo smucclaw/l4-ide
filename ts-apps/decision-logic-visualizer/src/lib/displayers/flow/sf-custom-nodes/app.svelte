@@ -16,6 +16,7 @@
   import WithNormalHandles from '$lib/displayers/flow/helpers/with-normal-handles.svelte'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
+  import IsViableIndicator from '$lib/displayers/flow/helpers/is-viable-indicator.svelte'
   import ValueIndicator from '$lib/displayers/flow/helpers/value-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
@@ -50,66 +51,64 @@
                App Arg UI
 --------------------------------------------------->
 {#snippet argUI(arg: AppArgLirNode)}
-  <ValueIndicator
-    value={arg.getValue(data.context, ladderGraph)}
-    additionalClasses={[
-      'border',
-      'border-black',
-      'rounded-lg',
-      ...arg.getAllClasses(data.context),
-    ]}
-  >
-    <!-- Yes, we need cursor-pointer here. -->
-    <button
-      class={['p-2', 'text-xs', 'cursor-pointer']}
-      onclick={async () => {
-        console.log('clicked: ', arg.getLabel(data.context), arg.getId())
-
-        const newValue = cycle(arg.getValue(data.context, ladderGraph))
-        await ladderGraph.submitNewBinding(data.context, {
-          unique: arg.getUnique(data.context),
-          value: newValue,
-        })
-      }}
+  <IsViableIndicator context={data.context} node={arg}>
+    <ValueIndicator
+      value={arg.getValue(data.context, ladderGraph)}
+      additionalClasses={['border', 'border-black', 'rounded-lg']}
     >
-      {arg.getLabel(data.context)}
-    </button>
-  </ValueIndicator>
+      <!-- Yes, we need cursor-pointer here. -->
+      <button
+        class={['p-2', 'text-xs', 'cursor-pointer']}
+        onclick={async () => {
+          console.log('clicked: ', arg.getLabel(data.context), arg.getId())
+
+          const newValue = cycle(arg.getValue(data.context, ladderGraph))
+          await ladderGraph.submitNewBinding(data.context, {
+            unique: arg.getUnique(data.context),
+            value: newValue,
+          })
+        }}
+      >
+        {arg.getLabel(data.context)}
+      </button>
+    </ValueIndicator>
+  </IsViableIndicator>
 {/snippet}
 
 <WithNonBundlingNodeBaseStyles>
-  <!-- bg-gray
- to evoke the idea of a fn being a 'black box'
-(but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
-  <!-- TODO: Add a value indicator for the App itself 
-       NOTE: We do NOT want cursor-pointer for the App UI itself.
-  -->
-  <div
-    class={[
-      'bg-gray-100 app-node-border',
-      // It's easier if the highlighted border styles are on the same element as the normal border styles.
-      // TODO: This could prob be cleaner.
-      isNNFLadderGraphLirNode(ladderGraph) &&
-      ladderGraph.nodeIsSelected(data.context, node)
-        ? 'highlighted-ladder-node'
-        : '',
-      ...data.node.getAllClasses(data.context),
-    ]}
-  >
-    <WithNormalHandles>
-      {#if isNNFLadderGraphLirNode(ladderGraph)}
-        <WithSelectableNodeContextMenu
-          context={data.context}
-          {node}
-          {ladderGraph}
-        >
+  <IsViableIndicator context={data.context} {node}>
+    <!-- bg-gray
+   to evoke the idea of a fn being a 'black box'
+  (but not using solid black b/c don't want too much contrast between this and a uboolvarnode) -->
+    <!-- TODO: Add a value indicator for the App itself 
+         NOTE: We do NOT want cursor-pointer for the App UI itself.
+    -->
+    <div
+      class={[
+        'bg-gray-100 app-node-border',
+        // It's easier if the highlighted border styles are on the same element as the normal border styles.
+        // TODO: This could prob be cleaner.
+        isNNFLadderGraphLirNode(ladderGraph) &&
+        ladderGraph.nodeIsSelected(data.context, node)
+          ? 'highlighted-ladder-node'
+          : '',
+      ]}
+    >
+      <WithNormalHandles>
+        {#if isNNFLadderGraphLirNode(ladderGraph)}
+          <WithSelectableNodeContextMenu
+            context={data.context}
+            {node}
+            {ladderGraph}
+          >
+            {@render coreAppUI()}
+          </WithSelectableNodeContextMenu>
+        {:else}
           {@render coreAppUI()}
-        </WithSelectableNodeContextMenu>
-      {:else}
-        {@render coreAppUI()}
-      {/if}
-    </WithNormalHandles>
-  </div>
+        {/if}
+      </WithNormalHandles>
+    </div>
+  </IsViableIndicator>
 </WithNonBundlingNodeBaseStyles>
 
 <style>
