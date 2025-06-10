@@ -13,6 +13,7 @@
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
   import WithSelectableNodeContextMenu from '$lib/displayers/flow/helpers/with-selectable-node-context-menu.svelte'
+  import IsViableIndicator from '$lib/displayers/flow/helpers/is-viable-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
@@ -77,45 +78,47 @@ stroke-linecap="round"
 {/snippet}
 
 <WithNonBundlingNodeBaseStyles>
-  <div class={['m-0 p-0', ...data.node.getAllClasses(data.context)]}>
-    <Handle
-      type="target"
-      position={defaultSFHandlesInfo.targetPosition}
-      style="opacity: 0.4"
-    />
-    {#if isNNFLadderGraphLirNode(ladderGraph)}
-      <WithSelectableNodeContextMenu
-        context={data.context}
-        node={data.node as NotStartLirNode}
-        {ladderGraph}
-        onSelect={() => {
-          const notGraph = (data.node as NotStartLirNode).getWholeNotGraph(
-            data.context,
-            ladderGraph
-          )
-          if (!notGraph) {
-            throw new Error('Not graph not found')
-          }
-          const nodes = notGraph
-            .getVertices()
-            .map((v) => data.context.get(v))
-            .filter((node): node is LadderLirNode => node !== undefined)
-            .filter(isSelectableLadderLirNode)
-          nodes.forEach((node) => {
-            // TODO: Might not want to actually select the negand too
-            ladderGraph.toggleNodeSelection(data.context, node)
-          })
-        }}
-      >
+  <IsViableIndicator context={data.context} node={data.node}>
+    <div class="m-0 p-0">
+      <Handle
+        type="target"
+        position={defaultSFHandlesInfo.targetPosition}
+        style="opacity: 0.4"
+      />
+      {#if isNNFLadderGraphLirNode(ladderGraph)}
+        <WithSelectableNodeContextMenu
+          context={data.context}
+          node={data.node as NotStartLirNode}
+          {ladderGraph}
+          onSelect={() => {
+            const notGraph = (data.node as NotStartLirNode).getWholeNotGraph(
+              data.context,
+              ladderGraph
+            )
+            if (!notGraph) {
+              throw new Error('Not graph not found')
+            }
+            const nodes = notGraph
+              .getVertices()
+              .map((v) => data.context.get(v))
+              .filter((node): node is LadderLirNode => node !== undefined)
+              .filter(isSelectableLadderLirNode)
+            nodes.forEach((node) => {
+              // TODO: Might not want to actually select the negand too
+              ladderGraph.toggleNodeSelection(data.context, node)
+            })
+          }}
+        >
+          {@render coreNotStartUI()}
+        </WithSelectableNodeContextMenu>
+      {:else}
         {@render coreNotStartUI()}
-      </WithSelectableNodeContextMenu>
-    {:else}
-      {@render coreNotStartUI()}
-    {/if}
-    <Handle
-      type="source"
-      position={defaultSFHandlesInfo.sourcePosition}
-      style="opacity: 0.3"
-    />
-  </div>
+      {/if}
+      <Handle
+        type="source"
+        position={defaultSFHandlesInfo.sourcePosition}
+        style="opacity: 0.3"
+      />
+    </div>
+  </IsViableIndicator>
 </WithNonBundlingNodeBaseStyles>

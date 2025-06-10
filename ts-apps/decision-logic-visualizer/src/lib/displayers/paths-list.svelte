@@ -42,10 +42,10 @@
     paths.map((p, idx) => [p.getId(), idx.toString()])
   )
   function getSelectedPaths() {
-    console.log(
-      'getSelectedPaths',
-      selectedPaths.map((p) => pathLirIdToPathIndex.get(p.getId()) as string)
-    )
+    // console.log(
+    //   'getSelectedPaths',
+    //   selectedPaths.map((p) => pathLirIdToPathIndex.get(p.getId()) as string)
+    // )
     return selectedPaths.map(
       (p) => pathLirIdToPathIndex.get(p.getId()) as string
     )
@@ -54,14 +54,6 @@
     const selectedLinPaths = toggleGroupPathIndices
       .map((v) => parseInt(v)) // the `value` for this component must be a string
       .map((pathIndex) => paths[pathIndex])
-    console.log(
-      'setSelectedPathsForToggleGroup toggleGroupPaths',
-      toggleGroupPathIndices
-    )
-    console.log(
-      'setSelectedPathsForToggleGroup selectedPaths',
-      selectedLinPaths
-    )
 
     // Update state in the LadderNodeSelectionTracker with the new selected lin paths
     // (This in turn triggers updates to the derived state / projections)

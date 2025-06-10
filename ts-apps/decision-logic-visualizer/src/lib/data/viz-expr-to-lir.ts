@@ -26,6 +26,7 @@ because of how the functions were defined */
 import { vertex, overlays } from '../algebraic-graphs/dag.js'
 
 import { match } from 'ts-pattern'
+import { makeNoIntermediateBundlingNodeDag } from '$lib/layout-ir/node-paths-selection.js'
 
 /***********************************
         Lir Data Sources
@@ -72,17 +73,21 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
       const dag = sandwichWithSourceAndSink(overallSource, overallSink, middle)
       vizExprToLirGraph.set(expr.id, dag)
 
-      const finalNoIntermediateBundlingNodeGraph = overallSource
-        .connect(noIntermediateBundlingNodeGraph)
-        .connect(overallSink)
+      const finalNoIntermediateBundlingNodeGraph =
+        makeNoIntermediateBundlingNodeDag(
+          nodeInfo.context,
+          overallSource
+            .connect(noIntermediateBundlingNodeGraph)
+            .connect(overallSink)
+        )
 
       const ladderGraph = await makeLadderGraphLirNode(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        finalNoIntermediateBundlingNodeGraph,
         expr,
-        env
+        env,
+        finalNoIntermediateBundlingNodeGraph
       )
 
       // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
@@ -142,6 +147,26 @@ function transform(
         noIntermediateBundlingNodeGraph: graph,
       }
     })
+    .with({ $type: 'TrueE' }, (trueExpr) => {
+      const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
+      const vizExprToLirGraph = new Map(veToLir).set(trueExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
+    })
+    .with({ $type: 'FalseE' }, (falseExpr) => {
+      const graph = vertex(
+        new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
+      )
+      const vizExprToLirGraph = new Map(veToLir).set(falseExpr.id, graph)
+      return {
+        graph,
+        vizExprToLirGraph,
+        noIntermediateBundlingNodeGraph: graph,
+      }
+    })
     .with({ $type: 'Not' }, (neg) => {
       const {
         graph: negand,
@@ -154,18 +179,18 @@ function transform(
         new NotStartLirNode(nodeInfo, negand, neg).getId()
       )
       const notEnd = vertex(new NotEndLirNode(nodeInfo).getId())
-
       const notGraph = sandwichWithSourceAndSink(notStart, notEnd, negand)
-      const noIntermediateBundlingNodeGraph = sandwichWithSourceAndSink(
-        notStart,
-        notEnd,
-        negandNoIntermediateBundlingNodeGraph
-      )
 
       // Combine the envs
       const combinedEnv = new Map([...veToLir, ...negandEnv]).set(
         neg.id,
         notGraph
+      )
+
+      const noIntermediateBundlingNodeGraph = sandwichWithSourceAndSink(
+        notStart,
+        notEnd,
+        negandNoIntermediateBundlingNodeGraph
       )
 
       return {
@@ -179,9 +204,6 @@ function transform(
         transform(nodeInfo, veToLir, arg, ladderEnv)
       )
       const childGraphs = childResults.map((result) => result.graph)
-      const childNoIntermediateBundlingNodeGraphs = childResults.map(
-        (result) => result.noIntermediateBundlingNodeGraph
-      )
 
       // Make the AND subgraph
       const makeAndGraph = (
@@ -192,16 +214,7 @@ function transform(
         const leftSink = left.getSink()
         return leftSink.connect(rightSource).overlay(left).overlay(right)
       }
-      const makeAndForNoIntermediateBN = (
-        left: DirectedAcyclicGraph<LirId>,
-        right: DirectedAcyclicGraph<LirId>
-      ) => {
-        return left.connect(right)
-      }
-
       const combinedGraph = childGraphs.reduce(makeAndGraph)
-      const noIntermediateBundlingNodeGraph =
-        childNoIntermediateBundlingNodeGraphs.reduce(makeAndForNoIntermediateBN)
 
       // Combine envs from all child transformations
       const allEnvs = [
@@ -209,6 +222,15 @@ function transform(
         ...childResults.map((result) => result.vizExprToLirGraph),
       ]
       const combinedEnv = combineEnvs(allEnvs).set(andExpr.id, combinedGraph)
+
+      // Make the no-intermediate-bundling node graph
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
+      const noIntermediateBundlingNodeGraph =
+        childNoIntermediateBundlingNodeGraphs.reduce((left, right) =>
+          left.connect(right)
+        )
 
       return {
         graph: combinedGraph,
@@ -221,9 +243,6 @@ function transform(
         transform(nodeInfo, veToLir, n, ladderEnv)
       )
       const childGraphs = childResults.map((result) => result.graph)
-      const childNoIntermediateBundlingNodeGraphs = childResults.map(
-        (result) => result.noIntermediateBundlingNodeGraph
-      )
 
       // Make the OR subgraph
       const overallSource = vertex(
@@ -256,6 +275,9 @@ function transform(
       )
 
       // noIntermediateBundlingNodeGraph
+      const childNoIntermediateBundlingNodeGraphs = childResults.map(
+        (result) => result.noIntermediateBundlingNodeGraph
+      )
       const noIntermediateBundlingNodeGraph = overlays(
         childNoIntermediateBundlingNodeGraphs
       )
@@ -294,26 +316,6 @@ function transform(
         graph: appGraph,
         vizExprToLirGraph: combinedEnv,
         noIntermediateBundlingNodeGraph: appGraph,
-      }
-    })
-    .with({ $type: 'TrueE' }, (trueExpr) => {
-      const graph = vertex(new TrueExprLirNode(nodeInfo, trueExpr.name).getId())
-      const vizExprToLirGraph = new Map(veToLir).set(trueExpr.id, graph)
-      return {
-        graph,
-        vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph: graph,
-      }
-    })
-    .with({ $type: 'FalseE' }, (falseExpr) => {
-      const graph = vertex(
-        new FalseExprLirNode(nodeInfo, falseExpr.name).getId()
-      )
-      const vizExprToLirGraph = new Map(veToLir).set(falseExpr.id, graph)
-      return {
-        graph,
-        vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph: graph,
       }
     })
     .exhaustive()

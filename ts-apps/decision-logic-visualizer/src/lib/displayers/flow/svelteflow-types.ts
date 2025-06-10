@@ -1,5 +1,8 @@
 // Types and util functions for the Svelte Flow graph
-import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte'
+import type {
+  LadderLirEdge,
+  LadderLirNode,
+} from '$lib/layout-ir/ladder-graph/ladder.svelte'
 import type { LadderEnv } from '$lib/ladder-env'
 import type { LirContext, LirId } from '$lib/layout-ir/core.js'
 import * as SF from '@xyflow/svelte'
@@ -14,10 +17,7 @@ import SourceSFNode from './sf-custom-nodes/bundling-source.svelte'
 import SinkSFNode from './sf-custom-nodes/bundling-sink.svelte'
 import LadderEdge from './sf-custom-edges/ladder-edge.svelte'
 
-import {
-  emptyEdgeLabel,
-  EdgeStylesContainer,
-} from '$lib/layout-ir/ladder-graph/edge-attributes.js'
+import { emptyEdgeLabel } from '$lib/layout-ir/ladder-graph/edge-attributes.js'
 
 /**
  * The result type of the ladder lir graph to SF graph conversion.
@@ -179,22 +179,17 @@ export const sfEdgeTypes: SF.EdgeTypes = {
 /* xyflow does this `extends Record<string, unknown>` thing
 with their EdgeData */
 
-/** A ladder (SvelteFlow) edge is an edge that is highlightable
- * and can have a label */
 export interface LadderEdgeAttrs extends Record<string, unknown> {
   label: string
-  edgeStyles: string
-  labelStyles: string
 }
 
 export const defaultLadderEdgeAttrs = {
   label: emptyEdgeLabel,
-  edgeStyles: new EdgeStylesContainer().getCombinedEdgeStyleString(),
-  labelStyles: new EdgeStylesContainer().getLabelStyleString(),
 }
 
 export interface LadderEdgeData extends LadderEdgeAttrs {
   context: LirContext
+  originalEdge: LadderLirEdge
 }
 
 export interface LadderEdgeProps extends SF.EdgeProps {

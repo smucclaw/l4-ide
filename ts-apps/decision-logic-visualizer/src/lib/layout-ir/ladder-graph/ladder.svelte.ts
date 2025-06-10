@@ -18,15 +18,11 @@ import { ComparisonResult } from '$lib/utils.js'
 import {
   empty,
   isVertex,
+  overlays,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
-import type { EdgeStylesContainer, EdgeAttributes } from './edge-attributes.js'
-import type {
-  LadderNodeCSSClass,
-  NodeStyleModifierCSSClass,
-} from './node-styles.js'
-import { FadedNodeCSSClass } from './node-styles.js'
+import type { EdgeAttributes } from './edge-attributes.js'
 import type {
   Dimensions,
   BundlingNodeDisplayerData,
@@ -34,6 +30,7 @@ import type {
 import {
   LadderNodeSelectionTracker,
   PathsListLirNode,
+  type NoIntermediateBundlingNodeDag,
 } from '../node-paths-selection.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
@@ -181,21 +178,12 @@ export interface FlowLirNode extends LirNode, Ord<FlowLirNode> {
   getPosition(context: LirContext): Position
   setPosition(context: LirContext, position: Position): void
 
-  getAllClasses(context: LirContext): LadderNodeCSSClass[]
-  getModifierCSSClasses(context: LirContext): NodeStyleModifierCSSClass[]
-  /** To be invoked only by LadderGraphLirNode */
-  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]): void
-
   toPretty(context: LirContext): string
 }
 
 abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
   protected position: Position
   protected dimensions?: Dimensions
-  protected modifierCSSClasses: Set<NodeStyleModifierCSSClass> = new Set()
-  protected additionalCSSClasses: Set<
-    Omit<LadderNodeCSSClass, NodeStyleModifierCSSClass>
-  > = new Set()
 
   constructor(
     nodeInfo: LirNodeInfo,
@@ -223,25 +211,6 @@ abstract class BaseFlowLirNode extends DefaultLirNode implements FlowLirNode {
 
   setPosition(_context: LirContext, position: Position): void {
     this.position = position
-  }
-
-  /***********************************************
-         CSS Classes
-  ***********************************************/
-
-  getAllClasses(context: LirContext): LadderNodeCSSClass[] {
-    return [
-      ...this.getModifierCSSClasses(context),
-      ...(Array.from(this.additionalCSSClasses) as LadderNodeCSSClass[]),
-    ]
-  }
-
-  getModifierCSSClasses(_context: LirContext): NodeStyleModifierCSSClass[] {
-    return Array.from(this.modifierCSSClasses)
-  }
-
-  _setModifierCSSClasses(classes: NodeStyleModifierCSSClass[]) {
-    this.modifierCSSClasses = new Set(classes)
   }
 
   /***********************************************
@@ -291,17 +260,19 @@ abstract class BaseLadderGraphLirNode
   implements LirNode
 {
   #ladderEnv: LadderEnv
-
   #dag: DirectedAcyclicGraph<LirId>
 
   #originalExpr: IRExpr
   #vizExprToLirDag: Map<IRId, DirectedAcyclicGraph<LirId>>
+
   /** Keeps track of what values the user has assigned to the various var ladder nodes */
   #bindings: Assignment
   #evalResult: EvalResult = {
     result: new UnknownVal(),
     intermediate: new Map(),
   }
+  // It's easier to work with the *non*-viable subgraph
+  #nonViableSubgraph: DirectedAcyclicGraph<LirId> = empty()
 
   protected constructor(
     nodeInfo: LirNodeInfo,
@@ -418,85 +389,31 @@ abstract class BaseLadderGraphLirNode
     this.getRegistry().publish(context, this.getId())
   }
 
-  getEdgeStyles<T extends Edge<LirId>>(
+  /**********************************
+     Viable vs non-viable Subgraph
+  ***********************************/
+
+  nodeIsInNonViableSubgraph(_context: LirContext, node: LadderLirNode) {
+    return this.#nonViableSubgraph.hasVertex(node.getId())
+  }
+
+  edgeIsInNonViableSubgraph(_context: LirContext, edge: LadderLirEdge) {
+    return this.#nonViableSubgraph.hasEdge(edge.getU(), edge.getV())
+  }
+
+  /** Helper: Compute the subgraph that is no longer viable in light of user's choices */
+  private computeNonViableSubgraph(
     _context: LirContext,
-    edge: T
-  ): EdgeStylesContainer {
-    return this.#dag.getAttributesForEdge(edge).getStyles()
-  }
-
-  /*****************************
-        Highlight
-  ******************************/
-
-  /** Clear the highlight-related styles from all edges in the ladder graph */
-  clearHighlightEdgeStyles(context: LirContext) {
-    const edges = this.#dag.getEdges()
-    edges.forEach((edge) => {
-      const attrs = this.#dag.getAttributesForEdge(edge)
-      // Ok to mutate because getAttributesForEdge returns a cloned object
-      attrs.setStyles(attrs.getStyles().getNonHighlightedCounterpart())
-      this.#dag.setEdgeAttributes(edge, attrs)
-    })
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  highlightSubgraphEdges(
-    context: LirContext,
-    subgraph: DirectedAcyclicGraph<LirId>
+    evalResult: EvalResult
   ) {
-    subgraph.getEdges().forEach((edge) => {
-      const attrs = this.getEdgeAttributes(context, edge)
-      attrs.setStyles(attrs.getStyles().getHighlightedCounterpart())
-      this.#dag.setEdgeAttributes(edge, attrs)
-    })
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  /*****************************
-        Fade / grey out
-  ******************************/
-
-  clearFadeOutStyles(context: LirContext) {
-    this.#dag.getEdges().forEach((edge) => {
-      const attrs = this.#dag.getAttributesForEdge(edge)
-      attrs.setStyles(attrs.getStyles().getNonFadedCounterpart())
-      this.#dag.setEdgeAttributes(edge, attrs)
-    })
-    /* Need to use getChildren instead of dag's getVertices,
-    because an App node's ArgLirNodes are not vertices in the dag 
-    (but instead children of the AppLirNode) */
-    this.getChildren(context).forEach((node) => {
-      node._setModifierCSSClasses(
-        node
-          .getModifierCSSClasses(context)
-          .filter((cls) => cls !== FadedNodeCSSClass)
-      )
-    })
-
-    this.getRegistry().publish(context, this.getId())
-  }
-
-  fadeOutSubgraph(context: LirContext, subgraph: DirectedAcyclicGraph<LirId>) {
-    console.log('fadeOutSubgraph', subgraph.toString())
-    subgraph.getEdges().forEach((edge) => {
-      const attrs = this.getEdgeAttributes(context, edge)
-      attrs.setStyles(attrs.getStyles().getFadedCounterpart())
-
-      this.#dag.setEdgeAttributes(edge, attrs)
-    })
-
-    subgraph.getVertices().forEach((vertex) => {
-      const node = context.get(vertex) as LadderLirNode
-      node._setModifierCSSClasses([
-        ...node.getModifierCSSClasses(context),
-        FadedNodeCSSClass,
-      ])
-    })
-
-    this.getRegistry().publish(context, this.getId())
+    const nonViableIRIds = Array.from(evalResult.intermediate.entries())
+      .filter(([_id, val]) => isFalseVal(val))
+      .map(([irId, _val]) => irId)
+    const nonviableSubgraph = nonViableIRIds
+      .map((irId) => this.#vizExprToLirDag.get(irId))
+      .filter((dag) => !!dag)
+      .reduceRight((acc, curr) => acc.overlay(curr), empty())
+    return nonviableSubgraph
   }
 
   /*****************************
@@ -511,9 +428,7 @@ abstract class BaseLadderGraphLirNode
       this.#bindings
     )
     this.setEvalResult(context, result)
-
-    console.log('evaluating ', this.#bindings.getEntries())
-    console.log('whatif eval result: ', result)
+    this.#nonViableSubgraph = this.computeNonViableSubgraph(context, result)
   }
 
   getValueOfUnique(_context: LirContext, unique: Unique): UBoolVal {
@@ -524,7 +439,7 @@ abstract class BaseLadderGraphLirNode
     return val
   }
 
-  /** This is what gets called when the user clicks on a node, in 'WhatIf' mode */
+  /** This is what gets called when the user clicks on a node */
   async submitNewBinding(
     context: LirContext,
     binding: { unique: Unique; value: UBoolVal }
@@ -540,19 +455,6 @@ abstract class BaseLadderGraphLirNode
     * the default value for a VarNode is UnknownV
     */
     await this.doEvalLadderExprWithVarBindings(context)
-
-    // Fade out subgraphs that are no longer viable in light of user's choices
-    const nonviableIRIds = Array.from(this.#evalResult.intermediate.entries())
-      .filter(([_id, val]) => isFalseVal(val))
-      .map(([irId, _val]) => irId)
-    const nonviableSubgraph = nonviableIRIds
-      .map((irId) => this.#vizExprToLirDag.get(irId))
-      .filter((dag) => !!dag)
-      .reduceRight((acc, curr) => acc.overlay(curr), empty())
-    // console.log('nonviableSubgraph: ', nonviableSubgraph)
-
-    this.clearFadeOutStyles(context)
-    this.fadeOutSubgraph(context, nonviableSubgraph)
 
     this.getRegistry().publish(context, this.getId())
   }
@@ -612,24 +514,23 @@ export async function makeLadderGraphLirNode(
   nodeInfo: LirNodeInfo,
   dag: DirectedAcyclicGraph<LirId>,
   vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-  noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
   originalExpr: IRExpr,
-  ladderEnv: LadderEnv
+  ladderEnv: LadderEnv,
+  noIntermediateBundlingNodeGraph: NoIntermediateBundlingNodeDag
 ) {
   const ladderGraph = isNnf(nodeInfo.context, dag)
     ? NNFLadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph,
         originalExpr,
-        ladderEnv
+        ladderEnv,
+        noIntermediateBundlingNodeGraph
       )
     : NonNNFLadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph,
         originalExpr,
         ladderEnv
       )
@@ -643,13 +544,12 @@ export function isNNFLadderGraphLirNode(
   return node instanceof NNFLadderGraphLirNode
 }
 
-// I would usually use delegation / composition instead of inheritance for this sort of thing,
-// but there really are a lot of methods on the BaseLadderGraphLirNode class.
 export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
   #nodeSelectionTracker: LadderNodeSelectionTracker
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
    * No need to update it, tho, if changing edge attributes. */
   #pathsList: PathsListLirNode
+  #highlightedSubgraph: DirectedAcyclicGraph<LirId> = empty()
 
   private constructor(
     nodeInfo: LirNodeInfo,
@@ -670,9 +570,9 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    noIntermediateBundlingNodeGraph: NoIntermediateBundlingNodeDag
   ): NNFLadderGraphLirNode {
     const pathsList = new PathsListLirNode(
       nodeInfo,
@@ -697,19 +597,62 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
   }
 
   nodeIsSelected(_context: LirContext, node: SelectableLadderLirNode) {
-    return this.#nodeSelectionTracker?.nodeIsSelected(node) ?? false
+    return this.#nodeSelectionTracker.nodeIsSelected(node) ?? false
+  }
+
+  edgeIsInHighlightedSubgraph(_context: LirContext, edge: LadderLirEdge) {
+    return this.#highlightedSubgraph.hasEdge(edge.getU(), edge.getV())
+  }
+
+  /** Helper: Update state that depends on what nodes user has selected */
+  private updatePathsListAndHighlightedSubgraph(
+    context: LirContext,
+    selected: SelectableLadderLirNode[]
+  ) {
+    /* Every time there is a change in the user's node selection on the ladder graph --- which
+    in effect corresponds to a change in what 
+    nodes of noIntermediateBundlingNodeDag are selected ---
+    we update our projections (a and b below). */
+
+    // a. check if the user has selected nodes corresponding to lin path(s) in the ladder dag,
+    // and select the corresponding path(s) in the PathsList.
+    const correspondingLinPaths =
+      this.#nodeSelectionTracker.findCorrespondingLinPaths(selected)
+    this.#pathsList.selectPaths(context, correspondingLinPaths)
+
+    // b. update the highlighted subgraph
+    // Exploits the property that (G, +, ε) is an idempotent monoid
+    this.#highlightedSubgraph = overlays(
+      correspondingLinPaths.map((linPath) => linPath.getRawPathGraph())
+    )
+
+    // console.log('\n=== Lin Paths ===')
+    // correspondingLinPaths.forEach((path, index) => {
+    //   const nodeLabels = path.getVertices(context).map((node) => {
+    //     return `${node.getId().toString()} (${node.toPretty(context)})`
+    //   })
+    //   console.log(`\nLin Path ${index + 1}:`)
+    //   console.log(nodeLabels.join(' -> '))
+    // })
+    // console.log('=========================\n')
   }
 
   toggleNodeSelection(context: LirContext, node: SelectableLadderLirNode) {
-    this.#nodeSelectionTracker?.toggleNodeSelectionAndUpdate(
+    this.#nodeSelectionTracker.toggleNodeSelection(context, node)
+    this.updatePathsListAndHighlightedSubgraph(
       context,
-      node,
-      this
+      this.#nodeSelectionTracker.getSelectedForHighlightPaths(context)
     )
+    this.getRegistry().publish(context, this.getId())
   }
 
   selectNodes(context: LirContext, nodes: Array<SelectableLadderLirNode>) {
-    this.#nodeSelectionTracker?.selectNodesAndUpdate(context, nodes, this)
+    this.#nodeSelectionTracker.selectNodes(context, nodes)
+    this.updatePathsListAndHighlightedSubgraph(
+      context,
+      this.#nodeSelectionTracker.getSelectedForHighlightPaths(context)
+    )
+    this.getRegistry().publish(context, this.getId())
   }
 
   getSelectedNodes(context: LirContext) {
@@ -740,7 +683,6 @@ export class NonNNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): NonNNFLadderGraphLirNode {
@@ -1078,8 +1020,8 @@ abstract class BaseBundlingFlowLirNode extends BaseFlowLirNode {
     super(nodeInfo, position)
   }
 
-  getData(context: LirContext) {
-    return { annotation: this.annotation, classes: this.getAllClasses(context) }
+  getData(_context: LirContext) {
+    return { annotation: this.annotation }
   }
 }
 

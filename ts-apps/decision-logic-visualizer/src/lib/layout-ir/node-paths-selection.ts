@@ -1,18 +1,51 @@
 import {
   type LadderLirNode,
   type SelectableLadderLirNode,
-  type LadderGraphLirNode,
   LinPathLirNode,
   isSelectableLadderLirNode,
+  isBundlingFlowLirNode,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode, LirRegistry } from './core.js'
-import {
-  type DirectedAcyclicGraph,
-  overlays,
-  vertex,
-} from '../algebraic-graphs/dag.js'
+import { type DirectedAcyclicGraph, vertex } from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
+import type { Branded } from '../utils.js'
+
+/************************************************
+          NoIntermediateBundlingNodeDag
+*************************************************/
+
+/** A variant of the main ladder dag that (i) has the same source and sink as the main ladder dag,
+ * but (ii) does not have *intermediate* bundling nodes.
+ * (I.e., this dag does have bundling nodes: namely, the overall source and sink nodes.)
+ */
+export type NoIntermediateBundlingNodeDag = Branded<
+  DirectedAcyclicGraph<LirId>,
+  'NoIntermediateBundlingNodeDag'
+>
+
+export function makeNoIntermediateBundlingNodeDag(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): NoIntermediateBundlingNodeDag {
+  const intermediateVertices = dag
+    .getVertices()
+    .filter(
+      (v) =>
+        !dag.getSource().isEqualTo(vertex(v)) &&
+        !dag.getSink().isEqualTo(vertex(v))
+    )
+  if (
+    intermediateVertices.some((v) =>
+      isBundlingFlowLirNode(context.get(v) as LadderLirNode)
+    )
+  ) {
+    throw new Error(
+      'NoIntermediateBundlingNodeDag cannot have intermediate bundling nodes'
+    )
+  }
+  return dag as NoIntermediateBundlingNodeDag
+}
 
 /************************************************
           PathsListLirNode
@@ -127,8 +160,7 @@ export class LadderNodeSelectionTracker {
     nodeInfo: LirNodeInfo,
     /** The ladder graph dag. Assumes that this is in NNF. */
     dag: DirectedAcyclicGraph<LirId>,
-    // TODO: should use a branded type for this
-    noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
+    noIntermediateBundlingNodeDag: NoIntermediateBundlingNodeDag,
     pathsList: PathsListLirNode
   ) {
     /* 
@@ -146,11 +178,6 @@ export class LadderNodeSelectionTracker {
     See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
     for more on how to debug and understand this better.
     */
-    console.log(
-      'noIntermediateBundlingNodeDag: ',
-      noIntermediateBundlingNodeDag.toString()
-    )
-    console.log('===================================================\n')
 
     const noBundlingNodePathToLadderLinPath = new ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
@@ -171,16 +198,16 @@ export class LadderNodeSelectionTracker {
           }
         )
     )
-    console.log('\n=== noBundlingNodePathToLadderLinPath ===')
-    noBundlingNodePathToLadderLinPath.forEach(
-      (_, noIntermedBundlingNodePath) => {
-        const nodeLabels = noIntermedBundlingNodePath.map((id) => {
-          return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
-        })
-        console.log(nodeLabels.join(' -> '))
-      }
-    )
-    console.log('===================================================\n')
+    // console.log('\n=== noBundlingNodePathToLadderLinPath ===')
+    // noBundlingNodePathToLadderLinPath.forEach(
+    //   (_, noIntermedBundlingNodePath) => {
+    //     const nodeLabels = noIntermedBundlingNodePath.map((id) => {
+    //       return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
+    //     })
+    //     console.log(nodeLabels.join(' -> '))
+    //   }
+    // )
+    // console.log('===================================================\n')
 
     return new LadderNodeSelectionTracker(
       nodeInfo.registry,
@@ -192,7 +219,7 @@ export class LadderNodeSelectionTracker {
 
   constructor(
     private lirRegistry: LirRegistry,
-    private noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
+    private noIntermediateBundlingNodeDag: NoIntermediateBundlingNodeDag,
     /** Map from path in the noIntermediateBundlingNodeDag to the corresponding lin path on the ladder graph */
     private noBundlingNodePathToLadderLinPath: ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
@@ -212,80 +239,26 @@ export class LadderNodeSelectionTracker {
     return this.#selected.has(node.getId())
   }
 
-  private updateDerivedState(
-    context: LirContext,
-    ladderGraph: LadderGraphLirNode
-  ) {
-    /* 
-    We are in effect maintaining two representations of the ladder graph:
-
-    1. The main ladder graph
-    2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
-
-    Every time there is a change in the user's node selection on the ladder graph --- which
-    in effect corresponds to a change in what nodes of noIntermediateBundlingNodeDag are selected ---
-    we update our projections (a and b below).
-    */
-
-    // a. check if the user has selected nodes corresponding to lin path(s) in the ladder dag,
-    // and select the corresponding path(s) in the PathsList.
-    const correspondingLinPaths = this.findCorrespondingLinPaths(
-      this.getSelectedForHighlightPaths(context)
-    )
-    this.pathsList.selectPaths(context, correspondingLinPaths)
-    console.log('\n=== Lin Paths ===')
-    correspondingLinPaths.forEach((path, index) => {
-      const nodeLabels = path.getVertices(context).map((node) => {
-        return `${node.getId().toString()} (${node.toPretty(context)})`
-      })
-      console.log(`\nLin Path ${index + 1}:`)
-      console.log(nodeLabels.join(' -> '))
-    })
-    console.log('=========================\n')
-
-    // b. update ladder graph edge highlighting
-    // --- 1. Get the subgraph whose edges should be highlighted
-    // Exploits the property that (G, +, ε) is an idempotent monoid
-    const graphToHighlight = overlays(
-      correspondingLinPaths.map((linPath) => linPath.getRawPathGraph())
-    )
-    // --- 2. Reset edge styles wrt highlighting on ladder graph, then add highlight style to the subgraph
-    ladderGraph.clearHighlightEdgeStyles(context)
-    ladderGraph.highlightSubgraphEdges(context, graphToHighlight)
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   clearSelectedNodes(_context: LirContext) {
     this.#selected = new Set()
   }
 
-  selectNodesAndUpdate(
-    context: LirContext,
-    nodes: Array<SelectableLadderLirNode>,
-    ladderGraph: LadderGraphLirNode
-  ) {
+  selectNodes(context: LirContext, nodes: Array<SelectableLadderLirNode>) {
     this.clearSelectedNodes(context)
 
     this.#selected = new Set(nodes.map((node) => node.getId()))
     nodes.forEach((node) => this.lirRegistry.publish(context, node.getId()))
-
-    this.updateDerivedState(context, ladderGraph)
   }
 
   /** Toggle whether a specific node is selected for highlighting (and update derived state) */
-  toggleNodeSelectionAndUpdate(
-    context: LirContext,
-    node: SelectableLadderLirNode,
-    ladderGraph: LadderGraphLirNode
-  ) {
+  toggleNodeSelection(context: LirContext, node: SelectableLadderLirNode) {
     if (this.#selected.has(node.getId())) {
       this.#selected.delete(node.getId())
     } else {
       this.#selected.add(node.getId())
     }
     this.lirRegistry.publish(context, node.getId())
-
-    this.updateDerivedState(context, ladderGraph)
   }
 
   /** Given the selected nodes, figure out what lin paths through the ladder graph, if any, these correspond to */

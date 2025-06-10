@@ -150,7 +150,7 @@ export function ladderLirNodeToSfNode(
         type: notEndNodeType,
         data: defaultData,
       }
-    }) // TODO: Continue refactoring the following
+    }) // TODO: Refactor the following as well
     .with(P.when(isSourceNoAnnoLirNode), (n: SourceNoAnnoLirNode) => {
       return {
         ...defaults,
@@ -184,17 +184,13 @@ export function ladderLirEdgeToSfEdge(
   graph: LadderGraphLirNode,
   edge: LadderLirEdge
 ): SF.Edge {
-  const label = graph.getEdgeLabel(context, edge)
-  const styles = graph.getEdgeStyles(context, edge)
-
   return {
     id: edge.getId(),
     type: ladderEdgeType,
     data: {
       context,
-      label,
-      edgeStyles: styles.getCombinedEdgeStyleString(),
-      labelStyles: styles.getLabelStyleString(),
+      label: graph.getEdgeLabel(context, edge),
+      originalEdge: edge,
     },
     source: edge.getU().toString(),
     target: edge.getV().toString(),

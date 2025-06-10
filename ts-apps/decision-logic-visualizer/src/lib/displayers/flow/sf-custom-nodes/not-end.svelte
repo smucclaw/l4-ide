@@ -10,6 +10,7 @@
     NotEndLirNode,
   } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
   import WithNonBundlingNodeBaseStyles from '$lib/displayers/flow/helpers/with-non-bundling-node-base-styles.svelte'
+  import IsViableIndicator from '$lib/displayers/flow/helpers/is-viable-indicator.svelte'
 
   let { data }: LadderNodeDisplayerProps = $props()
 
@@ -28,7 +29,7 @@
 </script>
 
 <WithNonBundlingNodeBaseStyles>
-  <div class={[...data.node.getAllClasses(data.context)]}>
+  <IsViableIndicator context={data.context} node={data.node}>
     <Handle
       type="target"
       position={defaultSFHandlesInfo.targetPosition}
@@ -58,5 +59,5 @@
       position={defaultSFHandlesInfo.sourcePosition}
       style="opacity:0"
     />
-  </div>
+  </IsViableIndicator>
 </WithNonBundlingNodeBaseStyles>
