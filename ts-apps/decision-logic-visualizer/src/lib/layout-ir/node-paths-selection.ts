@@ -183,11 +183,6 @@ export class LadderNodeSelectionTracker {
     See l4-ide/doc/dev/frontend/no-intermediate-bundling-node-dag.md
     for more on how to debug and understand this better.
     */
-    console.log(
-      'noIntermediateBundlingNodeDag: ',
-      noIntermediateBundlingNodeDag.toString()
-    )
-    console.log('===================================================\n')
 
     const noBundlingNodePathToLadderLinPath = new ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
@@ -208,16 +203,16 @@ export class LadderNodeSelectionTracker {
           }
         )
     )
-    console.log('\n=== noBundlingNodePathToLadderLinPath ===')
-    noBundlingNodePathToLadderLinPath.forEach(
-      (_, noIntermedBundlingNodePath) => {
-        const nodeLabels = noIntermedBundlingNodePath.map((id) => {
-          return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
-        })
-        console.log(nodeLabels.join(' -> '))
-      }
-    )
-    console.log('===================================================\n')
+    // console.log('\n=== noBundlingNodePathToLadderLinPath ===')
+    // noBundlingNodePathToLadderLinPath.forEach(
+    //   (_, noIntermedBundlingNodePath) => {
+    //     const nodeLabels = noIntermedBundlingNodePath.map((id) => {
+    //       return `${id.toString()}(${(nodeInfo.context.get(id) as LadderLirNode).toPretty(nodeInfo.context)})`
+    //     })
+    //     console.log(nodeLabels.join(' -> '))
+    //   }
+    // )
+    // console.log('===================================================\n')
 
     return new LadderNodeSelectionTracker(
       nodeInfo.registry,
@@ -254,11 +249,6 @@ export class LadderNodeSelectionTracker {
     ladderGraph: LadderGraphLirNode
   ) {
     /* 
-    We are in effect maintaining two representations of the ladder graph:
-
-    1. The main ladder graph
-    2. The noIntermediateBundlingNodeDag: The ladder graph, where the only bundling nodes are the overall source and sink
-
     Every time there is a change in the user's node selection on the ladder graph --- which
     in effect corresponds to a change in what nodes of noIntermediateBundlingNodeDag are selected ---
     we update our projections (a and b below).
@@ -270,15 +260,15 @@ export class LadderNodeSelectionTracker {
       this.getSelectedForHighlightPaths(context)
     )
     this.pathsList.selectPaths(context, correspondingLinPaths)
-    console.log('\n=== Lin Paths ===')
-    correspondingLinPaths.forEach((path, index) => {
-      const nodeLabels = path.getVertices(context).map((node) => {
-        return `${node.getId().toString()} (${node.toPretty(context)})`
-      })
-      console.log(`\nLin Path ${index + 1}:`)
-      console.log(nodeLabels.join(' -> '))
-    })
-    console.log('=========================\n')
+    // console.log('\n=== Lin Paths ===')
+    // correspondingLinPaths.forEach((path, index) => {
+    //   const nodeLabels = path.getVertices(context).map((node) => {
+    //     return `${node.getId().toString()} (${node.toPretty(context)})`
+    //   })
+    //   console.log(`\nLin Path ${index + 1}:`)
+    //   console.log(nodeLabels.join(' -> '))
+    // })
+    // console.log('=========================\n')
 
     // b. update ladder graph edge highlighting
     // --- 1. Get the subgraph whose edges should be highlighted
