@@ -34,6 +34,7 @@ import type {
 import {
   LadderNodeSelectionTracker,
   PathsListLirNode,
+  type NoIntermediateBundlingNodeDag,
 } from '../node-paths-selection.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import {
@@ -612,24 +613,23 @@ export async function makeLadderGraphLirNode(
   nodeInfo: LirNodeInfo,
   dag: DirectedAcyclicGraph<LirId>,
   vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-  noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
   originalExpr: IRExpr,
-  ladderEnv: LadderEnv
+  ladderEnv: LadderEnv,
+  noIntermediateBundlingNodeGraph: NoIntermediateBundlingNodeDag
 ) {
   const ladderGraph = isNnf(nodeInfo.context, dag)
     ? NNFLadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph,
         originalExpr,
-        ladderEnv
+        ladderEnv,
+        noIntermediateBundlingNodeGraph
       )
     : NonNNFLadderGraphLirNode.make(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        noIntermediateBundlingNodeGraph,
         originalExpr,
         ladderEnv
       )
@@ -643,8 +643,6 @@ export function isNNFLadderGraphLirNode(
   return node instanceof NNFLadderGraphLirNode
 }
 
-// I would usually use delegation / composition instead of inheritance for this sort of thing,
-// but there really are a lot of methods on the BaseLadderGraphLirNode class.
 export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
   #nodeSelectionTracker: LadderNodeSelectionTracker
   /** The pathsList will have to be updated if (and only if) we change the structure of the graph.
@@ -670,9 +668,9 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
-    ladderEnv: LadderEnv
+    ladderEnv: LadderEnv,
+    noIntermediateBundlingNodeGraph: NoIntermediateBundlingNodeDag
   ): NNFLadderGraphLirNode {
     const pathsList = new PathsListLirNode(
       nodeInfo,
@@ -740,7 +738,6 @@ export class NonNNFLadderGraphLirNode extends BaseLadderGraphLirNode {
     nodeInfo: LirNodeInfo,
     dag: DirectedAcyclicGraph<LirId>,
     vizExprToLirGraph: Map<IRId, DirectedAcyclicGraph<LirId>>,
-    noIntermediateBundlingNodeGraph: DirectedAcyclicGraph<LirId>,
     originalExpr: IRExpr,
     ladderEnv: LadderEnv
   ): NonNNFLadderGraphLirNode {

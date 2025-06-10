@@ -4,6 +4,7 @@ import {
   type LadderGraphLirNode,
   LinPathLirNode,
   isSelectableLadderLirNode,
+  isBundlingFlowLirNode,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from './core.js'
 import { LirContext, DefaultLirNode, LirRegistry } from './core.js'
@@ -13,6 +14,43 @@ import {
   vertex,
 } from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
+import type { Branded } from '../utils.js'
+
+/************************************************
+          NoIntermediateBundlingNodeDag
+*************************************************/
+
+/** A variant of the main ladder dag that (i) has the same source and sink as the main ladder dag,
+ * but (ii) does not have *intermediate* bundling nodes.
+ * (I.e., this dag does have bundling nodes: namely, the overall source and sink nodes.)
+ */
+export type NoIntermediateBundlingNodeDag = Branded<
+  DirectedAcyclicGraph<LirId>,
+  'NoIntermediateBundlingNodeDag'
+>
+
+export function makeNoIntermediateBundlingNodeDag(
+  context: LirContext,
+  dag: DirectedAcyclicGraph<LirId>
+): NoIntermediateBundlingNodeDag {
+  const intermediateVertices = dag
+    .getVertices()
+    .filter(
+      (v) =>
+        !dag.getSource().isEqualTo(vertex(v)) &&
+        !dag.getSink().isEqualTo(vertex(v))
+    )
+  if (
+    intermediateVertices.some((v) =>
+      isBundlingFlowLirNode(context.get(v) as LadderLirNode)
+    )
+  ) {
+    throw new Error(
+      'NoIntermediateBundlingNodeDag cannot have intermediate bundling nodes'
+    )
+  }
+  return dag as NoIntermediateBundlingNodeDag
+}
 
 /************************************************
           PathsListLirNode
@@ -127,8 +165,7 @@ export class LadderNodeSelectionTracker {
     nodeInfo: LirNodeInfo,
     /** The ladder graph dag. Assumes that this is in NNF. */
     dag: DirectedAcyclicGraph<LirId>,
-    // TODO: should use a branded type for this
-    noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
+    noIntermediateBundlingNodeDag: NoIntermediateBundlingNodeDag,
     pathsList: PathsListLirNode
   ) {
     /* 
@@ -192,7 +229,7 @@ export class LadderNodeSelectionTracker {
 
   constructor(
     private lirRegistry: LirRegistry,
-    private noIntermediateBundlingNodeDag: DirectedAcyclicGraph<LirId>,
+    private noIntermediateBundlingNodeDag: NoIntermediateBundlingNodeDag,
     /** Map from path in the noIntermediateBundlingNodeDag to the corresponding lin path on the ladder graph */
     private noBundlingNodePathToLadderLinPath: ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,

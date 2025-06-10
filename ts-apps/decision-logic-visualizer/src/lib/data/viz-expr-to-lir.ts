@@ -26,6 +26,7 @@ because of how the functions were defined */
 import { vertex, overlays } from '../algebraic-graphs/dag.js'
 
 import { match } from 'ts-pattern'
+import { makeNoIntermediateBundlingNodeDag } from '$lib/layout-ir/node-paths-selection.js'
 
 /***********************************
         Lir Data Sources
@@ -72,17 +73,21 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
       const dag = sandwichWithSourceAndSink(overallSource, overallSink, middle)
       vizExprToLirGraph.set(expr.id, dag)
 
-      const finalNoIntermediateBundlingNodeGraph = overallSource
-        .connect(noIntermediateBundlingNodeGraph)
-        .connect(overallSink)
+      const finalNoIntermediateBundlingNodeGraph =
+        makeNoIntermediateBundlingNodeDag(
+          nodeInfo.context,
+          overallSource
+            .connect(noIntermediateBundlingNodeGraph)
+            .connect(overallSink)
+        )
 
       const ladderGraph = await makeLadderGraphLirNode(
         nodeInfo,
         dag,
         vizExprToLirGraph,
-        finalNoIntermediateBundlingNodeGraph,
         expr,
-        env
+        env,
+        finalNoIntermediateBundlingNodeGraph
       )
 
       // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
