@@ -378,6 +378,10 @@ Misc SF UI TODOs:
         </Collapsible.Content>
       </Collapsible.Root>
     </div>
+  {:else}
+    <div class="text-center text-xs">
+      To list paths, first click on 'Simplify and visualise' in the editor.
+    </div>
   {/if}
 </div>
 
