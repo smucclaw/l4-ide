@@ -212,8 +212,7 @@ export class LadderNodeSelectionTracker {
     return new LadderNodeSelectionTracker(
       nodeInfo.registry,
       noIntermediateBundlingNodeDag,
-      noBundlingNodePathToLadderLinPath,
-      pathsList
+      noBundlingNodePathToLadderLinPath
     )
   }
 
@@ -224,8 +223,7 @@ export class LadderNodeSelectionTracker {
     private noBundlingNodePathToLadderLinPath: ArrayKeyedMap<
       PathInNoIntermediateBundlingNodeDag,
       LinPathLirNode
-    >,
-    private pathsList: PathsListLirNode
+    >
   ) {}
 
   /** Get the nodes on the ladder graph that the user has selected for highlighting by interacting with the main graph UI */
