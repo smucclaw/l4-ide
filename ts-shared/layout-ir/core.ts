@@ -7,7 +7,7 @@ that I learned from Jimmy Koppel (https://www.jameskoppel.com/),
 but this framework is now getting quite different from what it used to be.
 */
 
-import { ComparisonResult } from './utils.js'
+import { ComparisonResult } from '@repo/type-utils'
 
 /*********************************************
        Registry, Top-level Lir
@@ -162,8 +162,6 @@ export abstract class DefaultLirNode
  *
  * Operations on LirNodes should have the LirContext as an opaque context parameter.
  * This makes it easier to add, e.g., various kinds of synchronization in the future.
- *
- * This LirContext has been specialized to the LirFlow setting
  */
 export class LirContext {
   /** Can contain both FlowLirNodes and non-FlowLirNodes */

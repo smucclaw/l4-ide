@@ -1,4 +1,4 @@
-import type { Eq } from '@repo/layout-ir'
+import type { Eq } from '@repo/type-utils'
 import 'core-js/actual/set'
 
 /********************************

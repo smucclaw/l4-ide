@@ -1,5 +1,5 @@
-import type { Ord } from '@repo/layout-ir'
-import { ComparisonResult, isLessThanOrEquals } from '@repo/layout-ir'
+import type { Ord } from '@repo/type-utils'
+import { ComparisonResult, isLessThanOrEquals } from '@repo/type-utils'
 
 /********************************
       Edge types

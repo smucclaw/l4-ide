@@ -1,5 +1,5 @@
 import { BaseAMGraph } from './base-adjacency-map.js'
-import type { Eq, Ord } from '@repo/layout-ir'
+import type { Eq, Ord } from '@repo/type-utils'
 import {
   DirectedEdge,
   stringifyEdge as makeEdgeKey,

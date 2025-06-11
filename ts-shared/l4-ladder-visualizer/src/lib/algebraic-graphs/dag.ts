@@ -1,4 +1,4 @@
-import type { Eq, Ord, HasId } from '@repo/layout-ir'
+import type { Eq, Ord, HasId } from '@repo/type-utils'
 import {
   DirectedAMGraph,
   makeDirectedConnectAdjacencyMap,

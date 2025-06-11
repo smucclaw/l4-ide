@@ -30,6 +30,10 @@ buildNpmPackage rec {
 
     pushd ./ts-shared
 
+    pushd ./type-utils
+    npm run build
+    popd
+
     pushd ./viz-expr
     npm run build
     popd

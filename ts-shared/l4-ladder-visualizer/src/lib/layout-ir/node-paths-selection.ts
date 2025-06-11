@@ -9,7 +9,7 @@ import type { LirId, LirNode, LirNodeInfo } from '@repo/layout-ir'
 import { LirContext, DefaultLirNode, LirRegistry } from '@repo/layout-ir'
 import { type DirectedAcyclicGraph, vertex } from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
-import type { Branded } from '../utils.js'
+import type { Branded } from '@repo/type-utils'
 
 /************************************************
           NoIntermediateBundlingNodeDag

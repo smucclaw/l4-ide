@@ -1,8 +1,8 @@
 {
-  "name": "@repo/layout-ir",
+  "name": "@repo/type-utils",
   "version": "1.0.0",
   "private": true,
-  "description": "Layout IR framework:  an intermediate representation that's neither the underlying data nor the concrete UI 'displayers, and that's focused on content as opposed to presentation. Enables certain sorts of synchronization that would be difficult to add in a post-hoc way.",
+  "description": "Useful utils (mostly type related or pseudo type classes) that various other libs / apps in the monorepo use",
   "type": "module",
   "exports": {
     ".": "./dist/index.js"
@@ -33,6 +33,6 @@
     "typescript-eslint": "^8.16.0"
   },
   "dependencies": {
-    "@repo/type-utils": "*"
+    "csstype": "^3.1.3"
   }
 }

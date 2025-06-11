@@ -11,8 +11,10 @@ import {
 } from '../../eval/type.js'
 import { Assignment } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
-import type { LirId, LirNode, LirNodeInfo, Ord } from '@repo/layout-ir'
-import { LirContext, DefaultLirNode, ComparisonResult } from '@repo/layout-ir'
+import type { LirId, LirNode, LirNodeInfo } from '@repo/layout-ir'
+import { LirContext, DefaultLirNode } from '@repo/layout-ir'
+import type { Ord } from '@repo/type-utils'
+import { ComparisonResult } from '@repo/type-utils'
 import {
   empty,
   isVertex,
