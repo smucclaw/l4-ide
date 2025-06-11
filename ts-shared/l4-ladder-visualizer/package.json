@@ -1,5 +1,5 @@
 {
-  "name": "@repo/decision-logic-visualizer",
+  "name": "l4-ladder-visualizer",
   "version": "0.0.1",
   "private": true,
   "scripts": {

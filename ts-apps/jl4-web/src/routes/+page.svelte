@@ -22,7 +22,7 @@
     type FunDeclLirNode,
     LadderEnv,
     VizDeclLirSource,
-  } from '@repo/decision-logic-visualizer'
+  } from 'l4-ladder-visualizer'
   import {
     makeVizInfoDecoder,
     type RenderAsLadderInfo,

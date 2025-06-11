@@ -20,7 +20,7 @@
     LadderFlow,
     type FunDeclLirNode,
     VizDeclLirSource,
-  } from '@repo/decision-logic-visualizer'
+  } from 'l4-ladder-visualizer'
 
   /**************************
       Set up Lir
