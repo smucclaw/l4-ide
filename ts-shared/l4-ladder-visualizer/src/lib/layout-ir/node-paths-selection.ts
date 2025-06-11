@@ -5,8 +5,8 @@ import {
   isSelectableLadderLirNode,
   isBundlingFlowLirNode,
 } from './ladder-graph/ladder.svelte.js'
-import type { LirId, LirNode, LirNodeInfo } from './core.js'
-import { LirContext, DefaultLirNode, LirRegistry } from './core.js'
+import type { LirId, LirNode, LirNodeInfo } from '@repo/layout-ir'
+import { LirContext, DefaultLirNode, LirRegistry } from '@repo/layout-ir'
 import { type DirectedAcyclicGraph, vertex } from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
 import type { Branded } from '../utils.js'

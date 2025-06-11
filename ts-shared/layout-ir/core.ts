@@ -7,7 +7,7 @@ that I learned from Jimmy Koppel (https://www.jameskoppel.com/),
 but this framework is now getting quite different from what it used to be.
 */
 
-import { ComparisonResult } from '../utils.js'
+import { ComparisonResult } from './utils.js'
 
 /*********************************************
        Registry, Top-level Lir

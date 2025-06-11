@@ -7,7 +7,7 @@ that can be used by components that are children of LadderEnvProvider
 
 import { L4Connection } from './l4-connection.js'
 import type { LadderBackendApi } from 'jl4-client-rpc'
-import type { LirContext, LirRegistry, LirRootType } from './layout-ir/core.js'
+import type { LirContext, LirRegistry, LirRootType } from '@repo/layout-ir'
 import type { FunDeclLirNode } from './layout-ir/ladder-graph/ladder.svelte.js'
 import { setContext, getContext } from 'svelte'
 import type { VersionedDocId } from '@repo/viz-expr'

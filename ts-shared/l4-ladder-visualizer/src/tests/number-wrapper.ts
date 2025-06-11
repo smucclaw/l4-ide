@@ -1,5 +1,5 @@
-import { ComparisonResult } from '../lib/utils.js'
-import type { Ord, HasId } from '../lib/utils.js'
+import { ComparisonResult } from '@repo/layout-ir'
+import type { Ord, HasId } from '@repo/layout-ir'
 
 export class NumberWrapper implements Ord<NumberWrapper>, HasId {
   constructor(private value: number) {}

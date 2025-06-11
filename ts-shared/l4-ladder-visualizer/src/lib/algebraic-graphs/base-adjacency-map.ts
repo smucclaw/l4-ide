@@ -1,5 +1,5 @@
-import type { Ord } from '$lib/utils.js'
-import { ComparisonResult } from '$lib/utils.js'
+import type { Ord } from '@repo/layout-ir'
+import { ComparisonResult } from '@repo/layout-ir'
 import { AbsEdgeWithOrd } from './edge.js'
 
 /**************************************************************

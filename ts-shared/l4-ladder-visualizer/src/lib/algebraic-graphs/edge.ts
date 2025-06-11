@@ -1,5 +1,5 @@
-import type { Ord } from '$lib/utils.js'
-import { ComparisonResult, isLessThanOrEquals } from '$lib/utils.js'
+import type { Ord } from '@repo/layout-ir'
+import { ComparisonResult, isLessThanOrEquals } from '@repo/layout-ir'
 
 /********************************
       Edge types

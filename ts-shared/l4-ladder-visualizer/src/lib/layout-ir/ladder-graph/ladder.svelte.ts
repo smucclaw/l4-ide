@@ -11,10 +11,8 @@ import {
 } from '../../eval/type.js'
 import { Assignment } from '../../eval/assignment.js'
 import { Evaluator, type EvalResult } from '$lib/eval/eval.js'
-import type { LirId, LirNode, LirNodeInfo } from '../core.js'
-import { LirContext, DefaultLirNode } from '../core.js'
-import type { Ord } from '$lib/utils.js'
-import { ComparisonResult } from '$lib/utils.js'
+import type { LirId, LirNode, LirNodeInfo, Ord } from '@repo/layout-ir'
+import { LirContext, DefaultLirNode, ComparisonResult } from '@repo/layout-ir'
 import {
   empty,
   isVertex,
@@ -304,10 +302,6 @@ abstract class BaseLadderGraphLirNode
       ]
     )
     this.#bindings = Assignment.fromEntries(initialAssignmentAssocList)
-  }
-
-  getLadderEnv(): LadderEnv {
-    return this.#ladderEnv
   }
 
   getVizExprToLirGraph() {
@@ -1144,6 +1138,7 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
 }
 
 export function augmentEdgesWithExplanatoryLabel(
+  env: LadderEnv,
   context: LirContext,
   ladderGraph: LadderGraphLirNode
 ) {
@@ -1174,10 +1169,6 @@ export function augmentEdgesWithExplanatoryLabel(
 
   const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
   edgesToAddLabel.forEach((edge) => {
-    ladderGraph.setEdgeLabel(
-      context,
-      edge,
-      ladderGraph.getLadderEnv().getExplanatoryAndEdgeLabel()
-    )
+    ladderGraph.setEdgeLabel(context, edge, env.getExplanatoryAndEdgeLabel())
   })
 }

@@ -2,7 +2,7 @@ import type { FunDecl, IRExpr, IRId } from '@repo/viz-expr'
 /*
 Do not use $lib for the layout-ir imports
 */
-import type { LirId, LirNodeInfo } from '../layout-ir/core.js'
+import type { LirId, LirNodeInfo } from '@repo/layout-ir'
 import type { LadderLirSource } from '../layout-ir/ladder-lir-source.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
 import type { LadderGraphLirNode } from '../layout-ir/ladder-graph/ladder.svelte.js'
