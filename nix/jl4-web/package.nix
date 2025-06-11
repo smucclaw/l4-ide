@@ -38,6 +38,10 @@ buildNpmPackage rec {
     npm run build
     popd
 
+    pushd ./layout-ir
+    npm run build
+    popd
+
     pushd ./l4-ladder-visualizer
     npm run build
     popd
