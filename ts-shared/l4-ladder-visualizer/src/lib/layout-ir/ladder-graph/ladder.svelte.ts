@@ -722,6 +722,8 @@ export type SelectableLadderLirNode =
   | AppLirNode
   | NotStartLirNode
   | NotEndLirNode
+  | TrueExprLirNode
+  | FalseExprLirNode
 
 export function isSelectableLadderLirNode(
   node: LadderLirNode
@@ -730,7 +732,9 @@ export function isSelectableLadderLirNode(
     isUBoolVarLirNode(node) ||
     isAppLirNode(node) ||
     isNotStartLirNode(node) ||
-    isNotEndLirNode(node)
+    isNotEndLirNode(node) ||
+    isTrueExprLirNode(node) ||
+    isFalseExprLirNode(node)
   )
 }
 
