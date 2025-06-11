@@ -72,6 +72,8 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
+    "@repo/layout-ir": "*",
+    "@repo/type-utils": "*",
     "@repo/viz-expr": "*",
     "@tailwindcss/cli": "^4.0.9",
     "@tailwindcss/vite": "^4.0.6",

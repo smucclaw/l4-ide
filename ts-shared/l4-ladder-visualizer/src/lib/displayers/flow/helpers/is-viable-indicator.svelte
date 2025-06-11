@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import type { Snippet } from 'svelte'
   import { useLadderEnv } from '$lib/ladder-env.js'
-  import type { LirContext } from '$lib/layout-ir/core'
+  import type { LirContext } from '@repo/layout-ir'
   import type { LadderLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
 
   import { FadedNodeCSSClass } from '$lib/layout-ir/ladder-graph/node-styles.js'

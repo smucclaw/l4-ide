@@ -3,8 +3,8 @@
  is because the SvelteFlow lib requires that any use of SF hooks happen
  in a component that descends from a component that initializes SvelteFlowProvider -->
 <script lang="ts">
-  import type { LirId } from '$lib/layout-ir/core.js'
-  import { LirContext } from '$lib/layout-ir/core.js'
+  import type { LirId } from '@repo/layout-ir'
+  import { LirContext } from '@repo/layout-ir'
   import {
     type LadderLirNode,
     type SelectableLadderLirNode,

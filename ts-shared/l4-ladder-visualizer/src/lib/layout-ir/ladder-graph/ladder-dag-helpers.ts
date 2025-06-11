@@ -1,5 +1,5 @@
-import type { LirId } from '../core.js'
-import { LirContext } from '../core.js'
+import type { LirId } from '@repo/layout-ir'
+import { LirContext } from '@repo/layout-ir'
 import {
   isEmpty,
   isVertex,
