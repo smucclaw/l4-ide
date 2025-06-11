@@ -91,7 +91,7 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
       )
 
       // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
-      augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderGraph)
+      augmentEdgesWithExplanatoryLabel(env, nodeInfo.context, ladderGraph)
 
       return ladderGraph
     },
