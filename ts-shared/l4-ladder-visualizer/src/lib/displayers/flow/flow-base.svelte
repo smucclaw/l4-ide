@@ -344,6 +344,9 @@ Misc SF UI TODOs:
       connectionLineType={ConnectionLineType.Bezier}
       defaultEdgeOptions={{ type: 'bezier', animated: false }}
       onnodedragstop={onNodeDragStop}
+      proOptions={{
+        hideAttribution: true,
+      }}
     >
       <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
       <Controls position="bottom-right" showLock={false}>

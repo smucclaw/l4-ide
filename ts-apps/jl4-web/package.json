@@ -40,7 +40,7 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@repo/decision-logic-visualizer": "*",
+    "l4-ladder-visualizer": "*",
     "@repo/viz-expr": "*",
     "jl4-client-rpc": "*",
     "@codingame/monaco-vscode-api": "^14.0.4",
