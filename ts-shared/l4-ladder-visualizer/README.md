@@ -141,6 +141,10 @@ For instance, don't use the App variant of IREXpr and don't set `canInline` to t
 
 The less hack-y way is to add an additional API for this usecase. This shouldn't require much work since the relevant parts of the codebase are quite modular and explicitly named and designed.
 
+## See also the other frontend codebase docs
+
+[Make sure to also check out these other docs](../../doc/dev/frontend/): there's also some info there on the architecture.
+
 ## Notes on dependency-related things / errors / decisions
 
 ### Make sure that SF nodes don't try to render and measure themselves in a non-browser environment (e.g. if SSR is enabled)
