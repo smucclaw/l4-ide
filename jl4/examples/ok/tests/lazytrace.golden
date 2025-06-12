@@ -1,0 +1,147 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+lazytrace.l4:23:1-36:
+  35
+  ─────
+  ┌ sum OF (everyOther OF example)
+  │┌ everyOther OF example
+  ││┌ example
+  ││└ LIST 25, ..., 9, ..., 1, ...
+  ││┌ everyOther
+  ││└ <function>
+  │├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││                 WHEN EMPTY THEN EMPTY
+  ││┌ list
+  ││└ LIST 25, ..., 9, ..., 1, ...
+  │├ x FOLLOWED BY (everyOther OF ys)
+  ││┌ x
+  ││└ 25
+  ││┌ everyOther OF ys
+  │││┌ ys
+  │││└ LIST 9, ..., 1, ...
+  │││┌ everyOther
+  │││└ <function>
+  ││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  │││┌ list
+  │││└ LIST 9, ..., 1, ...
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ x
+  │││└ 9
+  │││┌ everyOther OF ys
+  ││││┌ ys
+  ││││└ LIST 1, ...
+  ││││┌ everyOther
+  ││││└ <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  ││││┌ list
+  ││││└ LIST 1, ...
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ x
+  ││││└ 1
+  ││││┌ everyOther OF ys
+  │││││┌ ys
+  │││││└ EMPTY
+  │││││┌ everyOther
+  │││││└ <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  │││││┌ list
+  │││││└ EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY
+  ││││┌ `__CONS__`
+  ││││└ <function>
+  │││└ LIST 1
+  │││┌ `__CONS__`
+  │││└ <function>
+  ││└ LIST 9, 1
+  ││┌ `__CONS__`
+  ││└ <function>
+  │└ LIST 25, 9, 1
+  │┌ sum
+  │└ <function>
+  ├   go OF 0, list
+  │ WHERE
+  │   GIVEN acc
+  │         l
+  │   DECIDE go acc l IS
+  │     CONSIDER l WHEN EMPTY THEN acc,
+  │                  WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  │• <function>
+  ├ go OF 0, list
+  │┌ 0
+  │└ 0
+  │┌ list
+  │└ LIST 25, 9, 1
+  │┌ go
+  │└ <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  │┌ l
+  │└ LIST 25, 9, 1
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││┌ acc
+  ││└ 0
+  ││┌ x
+  ││└ 25
+  ││┌ `__PLUS__`
+  ││└ <function>
+  ││• 0
+  ││• 25
+  │└ 25
+  │┌ xs
+  │└ LIST 9, 1
+  │┌ go
+  │└ <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  │┌ l
+  │└ LIST 9, 1
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││┌ acc
+  ││└ 25
+  ││┌ x
+  ││└ 9
+  ││┌ `__PLUS__`
+  ││└ <function>
+  ││• 25
+  ││• 9
+  │└ 34
+  │┌ xs
+  │└ LIST 1
+  │┌ go
+  │└ <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  │┌ l
+  │└ LIST 1
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  ││┌ acc
+  ││└ 34
+  ││┌ x
+  ││└ 1
+  ││┌ `__PLUS__`
+  ││└ <function>
+  ││• 34
+  ││• 1
+  │└ 35
+  │┌ xs
+  │└ EMPTY
+  │┌ go
+  │└ <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  │┌ l
+  │└ EMPTY
+  ├ acc
+  └ 35
