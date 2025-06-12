@@ -58,3 +58,7 @@ formula10 a b c d MEANS
          AND b
       OR     c
          AND d
+
+formula11 a b MEANS a IMPLIES b && b => a
+
+#EVAL LIST formula11 TRUE TRUE, formula11 FALSE FALSE, formula11 TRUE FALSE, formula11 FALSE TRUE

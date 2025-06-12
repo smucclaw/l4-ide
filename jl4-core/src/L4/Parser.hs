@@ -942,8 +942,9 @@ data Assoc = AssocLeft | AssocRight
 -- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr     <|> spacedToken_ TOr    )
-  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedToken_ TKAnd    <|> spacedToken_ TAnd   )
+      (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr      <|> spacedToken_ TOr      )
+  <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedToken_ TKAnd     <|> spacedToken_ TAnd     )
+  <|> (\ op -> (4, AssocRight, infix2  Implies   op)) <$> (spacedToken_ TKImplies <|> spacedToken_ TImplies )
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedToken_ TKROr
   <|> (\ op -> (3, AssocRight, infix2  RAnd      op)) <$> spacedToken_ TKRAnd
   <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
