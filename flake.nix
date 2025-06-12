@@ -53,11 +53,17 @@
                   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO2u9PR5FnBb8joGKHUVGqy9/cZu/iXIjgLpblkOF0H+ meng-and-ruslan"
                 ];
               };
+              environment.etc."my-deploy-marker" = {
+                text = "deployed-from-flake-2025-05-12 15:37";
+                mode = "0444";
+              };
             }
             inputs.disko.nixosModules.default
             ./nix/configuration.nix
             ./nix/aws-ec2.nix
             ./nix/aws-vm.nix
+
+
           ];
         };
       };

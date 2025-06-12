@@ -4,6 +4,7 @@
 
 ```sh
 nixos-rebuild switch --flake .#jl4-demo --target-host root@olive.well-typed.com
+nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host root@nano
 ```
 
 ## deploying to a new machine on Hetzner
