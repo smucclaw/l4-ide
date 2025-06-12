@@ -160,3 +160,7 @@ https://github.com/bscotch/stitch/tree/develop/packages/vscode/webviews
 ### Layout x xyflow
 
 - An elkjs example featuring subflows that seems easier to understand than the sample code: https://codesandbox.io/p/sandbox/elkjs-layout-subflows-9og9hl?file=%2Flayout.js
+
+## License
+
+Apache License 2.0
