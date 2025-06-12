@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module L4.Lexer where
 
@@ -49,7 +50,7 @@ data AnnoType
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToExpr, NFData)
 
-data DirectiveType
+data TDirectives
   = TStrictEvalDirective
   | TLazyEvalDirective
   | TCheckDirective
@@ -57,47 +58,72 @@ data DirectiveType
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
--- | The type of token, plus information needed to reconstruct its contents.
-data TokenType =
-    TIdentifier   !Text
-  | TQuoted       !Text
-  | TIntLit       !Text !Integer
-  | TRationalLit  !Text !Rational
-  | TStringLit    !Text
-  | TDirective    !DirectiveType
-    -- copy token / ditto mark, currently '^'
-  | TCopy         (Maybe TokenType)
-    -- parentheses
+directives :: Map Text TDirectives
+directives = Map.fromList
+  [ ("SEVAL", TStrictEvalDirective)
+  , ("EVAL" , TLazyEvalDirective)
+  , ("CHECK", TCheckDirective)
+  , ("TRACE", TContractDirective)
+  ]
+
+data TAnnotations
+  = TNlg          !Text !AnnoType
+  | TRefSrc       !Text
+  | TRefMap       !Text
+  | TRef          !Text !AnnoType
+  | TNlgString    !Text
+  | TNlgPrefix    -- ^ "@nlg"
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+data TIdentifiers
+  = TIdentifier !Text
+  | TQuoted     !Text
+  | TGenitive
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+data TSymbols
+  = TRefOpen
+  | TRefClose
+  | TNlgOpen
+  | TNlgClose
+  | TParagraph
   | TPOpen
   | TPClose
   | TCOpen
   | TCClose
-    -- punctuation
-  | TParagraph
   | TComma
   | TSemicolon
   | TDot
-    -- genitive
-  | TGenitive
-    -- symbolic operators
-  | TTimes
-  | TPlus
-  | TMinus
-  | TGreaterEquals
-  | TLessEquals
-  | TGreaterThan
-  | TLessThan
-  | TEquals
-  | TEqualsEquals
-  | TNotEquals
-  | TAnd
-  | TOr
-  | TImplies
-  | TDividedBy
-  | TOtherSymbolic !Text
   | TColon
-    -- keywords
-  | TKGiven
+  | TPercent
+  | TCopy (Maybe TokenType)
+  | TOtherSymbolic !Text
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+symbols :: Map Text TSymbols
+symbols = Map.fromList
+  [ ("^" , TCopy Nothing)
+  , ("(" , TPOpen)
+  , (")" , TPClose)
+  , ("{" , TCOpen)
+  , ("}" , TCClose)
+  , ("<<", TRefOpen)
+  , (">>", TRefClose)
+  , ("[" , TNlgOpen)
+  , ("]" , TNlgClose)
+  , ("§" , TParagraph)
+  , ("," , TComma)
+  , (";" , TSemicolon)
+  , ("." , TDot)
+  , ("%" , TPercent)
+  , (":" , TColon)
+  ]
+
+data TKeywords
+  = TKGiven
   | TKGiveth
   | TKDecide
   | TKExact
@@ -161,24 +187,138 @@ data TokenType =
   | TKAll
   | TKAka
   | TKImport
-    -- annotations
-  | TNlg          !Text !AnnoType
-  | TRefSrc       !Text
-  | TRefMap       !Text
-  | TRef          !Text !AnnoType
-  | TRefOpen
-  | TRefClose
-  | TNlgOpen
-  | TNlgClose
-    -- tokens within annotations
-  | TNlgString    !Text
-  | TNlgPrefix    -- ^ "@nlg"
-  | TPercent
-    -- space
-  | TSpace        !Text
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+keywords :: Map Text TKeywords
+keywords = Map.fromList
+  [ ("GIVEN"      , TKGiven      )
+  , ("GIVETH"     , TKGiveth     )
+  , ("DECIDE"     , TKDecide     )
+  , ("EXACTLY"    , TKExact      )
+  , ("MEANS"      , TKMeans      )
+  , ("DECLARE"    , TKDeclare    )
+  , ("IF"         , TKIf         )
+  , ("BRANCH"     , TKBranch     )
+  , ("THEN"       , TKThen       )
+  , ("ELSE"       , TKElse       )
+  , ("OTHERWISE"  , TKOtherwise  )
+  , ("AND"        , TKAnd        )
+  , ("OR"         , TKOr         )
+  , ("RAND"       , TKRAnd       )
+  , ("ROR"        , TKROr        )
+  , ("NOT"        , TKNot        )
+  , ("IS"         , TKIs         )
+  , ("ONE"        , TKOne        )
+  , ("OF"         , TKOf         )
+  , ("WITH"       , TKWith       )
+  , ("A"          , TKA          )
+  , ("AN"         , TKAn         )
+  , ("HAS"        , TKHas        )
+  , ("THE"        , TKThe        )
+  , ("YIELD"      , TKYield      )
+  , ("CONSIDER"   , TKConsider   )
+  , ("WHERE"      , TKWhere      )
+  , ("LIST"       , TKList       )
+  , ("ASSUME"     , TKAssume     )
+  , ("WHEN"       , TKWhen       )
+  , ("TYPE"       , TKType       )
+  , ("PARTY"      , TKParty      )
+  , ("DO"         , TKDo         )
+  , ("DOES"       , TKDoes       )
+  , ("MUST"       , TKMust       )
+  , ("PROVIDED"   , TKProvided   )
+  , ("WITHIN"     , TKWithin     )
+  , ("HENCE"      , TKHence      )
+  , ("LEST"       , TKLest       )
+  , ("FUNCTION"   , TKFunction   )
+  , ("FROM"       , TKFrom       )
+  , ("TO"         , TKTo         )
+  , ("EQUALS"     , TKEquals     )
+  , ("IMPLIES"    , TKImplies    )
+  , ("PLUS"       , TKPlus       )
+  , ("MINUS"      , TKMinus      )
+  , ("TIMES"      , TKTimes      )
+  , ("DIVIDED"    , TKDivided    )
+  , ("MODULO"     , TKModulo     )
+  , ("BY"         , TKBy         )
+  , ("GREATER"    , TKGreater    )
+  , ("LESS"       , TKLess       )
+  , ("THAN"       , TKThan       )
+  , ("ABOVE"      , TKAbove      )
+  , ("BELOW"      , TKBelow      )
+  , ("AT"         , TKAt         )
+  , ("STARTING"   , TKStarting   )
+  , ("LEAST"      , TKLeast      )
+  , ("MOST"       , TKMost       )
+  , ("FOLLOWED"   , TKFollowed   )
+  , ("FOR"        , TKFor        )
+  , ("ALL"        , TKAll        )
+  , ("AKA"        , TKAka        )
+  , ("IMPORT"     , TKImport     )
+  ]
+
+data TOperators
+  = TTimes
+  | TPlus
+  | TMinus
+  | TGreaterEquals
+  | TLessEquals
+  | TGreaterThan
+  | TLessThan
+  | TEquals
+  | TEqualsEquals
+  | TNotEquals
+  | TAnd
+  | TOr
+  | TImplies
+  | TDividedBy
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+operators :: Map Text TOperators
+operators = Map.fromList
+  [ ("*" , TTimes        )
+  , ("+" , TPlus         )
+  , ("-" , TMinus        )
+  , (">=", TGreaterEquals)
+  , ("<=", TLessEquals   )
+  , (">" , TGreaterThan  )
+  , ("<" , TLessThan     )
+  , ("=" , TEquals       )
+  , ("==", TEqualsEquals )
+  , ("&&", TAnd          )
+  , ("||", TOr           )
+  , ("=>", TImplies      )
+  , ("/" , TDividedBy    )
+  ]
+
+
+data TSpaces
+  = TSpace        !Text
   | TLineComment  !Text
   | TBlockComment !Text
   | EOF
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+data TLiterals
+  = TIntLit       !Text !Integer
+  | TRationalLit  !Text !Rational
+  | TStringLit    !Text
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (ToExpr, NFData)
+
+-- | The type of token, plus information needed to reconstruct its contents.
+data TokenType
+  = TDirectives  !TDirectives
+  | TLiterals    !TLiterals
+  | TSpaces      !TSpaces
+  | TKeywords    !TKeywords
+  | TAnnotations !TAnnotations
+  | TSymbols     !TSymbols
+  | TIdentifiers !TIdentifiers
+  | TOperators   !TOperators
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -260,18 +400,10 @@ quoted :: Lexer Text
 quoted =
   char '`' *> takeWhile1P (Just "printable char except backticks") (\ x -> isPrint x && not (x `elem` ("`" :: String))) <* char '`'
 
-directiveLiteral :: Lexer DirectiveType
+directiveLiteral :: Lexer TDirectives
 directiveLiteral = do
   _herald <- "#"
-  getAlt $ foldMap (\(d, t) -> Alt $ d <$ chunk t) directives
-
-directives :: [(DirectiveType, Text)]
-directives =
-  [ (TStrictEvalDirective, "SEVAL")
-  , (TLazyEvalDirective,   "EVAL")
-  , (TCheckDirective,      "CHECK")
-  , (TContractDirective,   "TRACE")
-  ]
+  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toList directives
 
 integerLiteral :: Lexer (Text, Integer)
 integerLiteral =
@@ -316,158 +448,88 @@ dotDecimal_ c' = do
   (\ s -> let (c, e) = mkNum s in (c, e, s)) <$> takeWhile1P (Just "digit") isDigit
 {-# INLINE dotDecimal_ #-}
 
+literalPayload :: Lexer TLiterals
+literalPayload = asum
+  [ uncurry TRationalLit <$> try rationalLiteral
+  , uncurry TIntLit      <$> try integerLiteral
+  , TStringLit           <$> stringLiteral
+  ]
+
+identifiersPayload :: Lexer TIdentifiers
+identifiersPayload = asum
+  [ TGenitive <$  string "'s"
+  , TQuoted   <$> quoted
+  ]
+
+annotationsPayload :: Lexer TAnnotations
+annotationsPayload = asum
+  [ TRefSrc       <$> refSrcAnnotation
+  , TRefMap       <$> refMapAnnotation
+  , uncurry TNlg  <$> nlgAnnotation
+  , uncurry TRef  <$> refAnnotation
+  ]
+
+spacesPayload :: Lexer TSpaces
+spacesPayload = asum
+  [ TSpace        <$> whitespace
+  , TLineComment  <$> lineComment
+  , TBlockComment <$> blockComment
+  ]
+
+symbolsPayload :: Lexer TSymbols
+symbolsPayload
+  = asum
+  $ map (\(t, sym) -> sym <$ string t)
+  $ Map.toList symbols
+
 tokenPayload :: Lexer TokenType
-tokenPayload =
-      uncurry TRationalLit <$> try rationalLiteral
-  <|> uncurry TIntLit      <$> try integerLiteral
-  <|> TStringLit           <$> stringLiteral
-  <|> TGenitive            <$  string "'s"
-  <|> TQuoted              <$> quoted
-  <|> TDirective           <$> directiveLiteral
-  <|> TRefSrc              <$> refSrcAnnotation
-  <|> TRefMap              <$> refMapAnnotation
-  <|> uncurry TNlg         <$> nlgAnnotation
-  <|> uncurry TRef         <$> refAnnotation
-  <|> TSpace               <$> whitespace
-  <|> TLineComment         <$> lineComment
-  <|> TBlockComment        <$> blockComment
-  <|> TPOpen               <$  char '('
-  <|> TPClose              <$  char ')'
-  <|> TCOpen               <$  char '{'
-  <|> TCClose              <$  char '}'
-  <|> TParagraph           <$  char '§'
-  <|> TComma               <$  char ','
-  <|> TSemicolon           <$  char ';'
-  <|> TPercent             <$  char '%'
-  <|> TDot                 <$  char '.'
-  <|> TCopy Nothing        <$  char '^'
-  <|> symbolic
-  <|> identifierOrKeyword
+tokenPayload = asum
+  [ TLiterals    <$> literalPayload
+  , TIdentifiers <$> identifiersPayload
+  , TDirectives  <$> directiveLiteral
+  , TAnnotations <$> annotationsPayload
+  , TSpaces      <$> spacesPayload
+  , TSymbols     <$> symbolsPayload
+  , TOperators   <$> operatorsPayload
+  , TSymbols . TOtherSymbolic
+                 <$> operatorString
+  , either TIdentifiers TKeywords
+                 <$> identifierOrKeyword
+  ]
 
 nlgTokenPayload :: Lexer TokenType
-nlgTokenPayload =
-      TPercent    <$  nlgExprDelimiter
-  <|> TQuoted     <$> quoted
-  <|> TNlgOpen    <$  char nlgInlineAnnotationOpenChar
-  <|> TNlgClose   <$  char nlgInlineAnnotationCloseChar
-  <|> TNlgPrefix  <$  "@nlg"
-  <|> TSpace      <$> whitespace
-  <|> TIdentifier <$> identifier
-  <|> TNlgString  <$> nlgString
+nlgTokenPayload = asum
+  [ TSymbols TPercent          <$  nlgExprDelimiter
+  , TSpaces . TSpace           <$> whitespace
+  , TIdentifiers . TQuoted     <$> quoted
+  , TIdentifiers . TIdentifier <$> identifier
+  , TSymbols TNlgOpen          <$  char nlgInlineAnnotationOpenChar
+  , TSymbols TNlgClose         <$  char nlgInlineAnnotationCloseChar
+  , TAnnotations TNlgPrefix    <$  "@nlg"
+  , TAnnotations . TNlgString  <$> nlgString
+  ]
 
-symbolic :: Lexer TokenType
-symbolic =
-  do
-    s <- symbolString
-    case Map.lookup s symbols of
-      Nothing -> pure (TOtherSymbolic s)
-      Just tt -> pure tt
+operatorsPayload :: Lexer TOperators
+operatorsPayload = do
+  s <- operatorString
+  maybe mzero pure (Map.lookup s operators)
 
-symbolString :: Lexer Text
-symbolString =
-  takeWhile1P (Just "symbol char") (\ x -> x `elem` ("=<>+-*/:~&|%§" :: [Char]))
+operatorString :: Lexer Text
+operatorString =
+  takeWhile1P (Just "operator char") (\ x -> x `elem` ("=<>+-*/:~&|%§" :: [Char]))
 
-identifierOrKeyword :: Lexer TokenType
-identifierOrKeyword =
-  do
-    i <- identifier
-    case Map.lookup i keywords of
-      Nothing -> pure (TIdentifier i)
-      Just tt -> pure tt
+identifierOrKeyword :: Lexer (Either TIdentifiers TKeywords)
+identifierOrKeyword = do
+  i <- identifier
+  pure case Map.lookup i keywords of
+    Nothing -> Left $ TIdentifier i
+    Just tt -> Right tt
 
 identifier :: Lexer Text
 identifier =
   Text.cons
   <$> satisfy isAlpha
   <*> takeWhileP (Just "identifier char") (\ x -> isAlphaNum x || x == '_')
-
-symbols :: Map Text TokenType
-symbols =
-  Map.fromList
-    [ ("*" , TTimes        )
-    , ("+" , TPlus         )
-    , ("-" , TMinus        )
-    , (">=", TGreaterEquals)
-    , ("<=", TLessEquals   )
-    , (">" , TGreaterThan  )
-    , ("<" , TLessThan     )
-    , ("=" , TEquals       )
-    , ("==", TEqualsEquals )
-    , ("&&", TAnd          )
-    , ("||", TOr           )
-    , ("=>", TImplies      )
-    , ("/" , TDividedBy    )
-    , (":" , TColon)
-    ]
-
-keywords :: Map Text TokenType
-keywords =
-  Map.fromList
-    [ ("GIVEN"      , TKGiven      )
-    , ("GIVETH"     , TKGiveth     )
-    , ("DECIDE"     , TKDecide     )
-    , ("EXACTLY"    , TKExact     )
-    , ("MEANS"      , TKMeans      )
-    , ("DECLARE"    , TKDeclare    )
-    , ("IF"         , TKIf         )
-    , ("BRANCH"     , TKBranch     )
-    , ("THEN"       , TKThen       )
-    , ("ELSE"       , TKElse       )
-    , ("OTHERWISE"  , TKOtherwise  )
-    , ("AND"        , TKAnd        )
-    , ("OR"         , TKOr         )
-    , ("RAND"       , TKRAnd       )
-    , ("ROR"        , TKROr        )
-    , ("NOT"        , TKNot        )
-    , ("IS"         , TKIs         )
-    , ("ONE"        , TKOne        )
-    , ("OF"         , TKOf         )
-    , ("WITH"       , TKWith       )
-    , ("A"          , TKA          )
-    , ("AN"         , TKAn         )
-    , ("HAS"        , TKHas        )
-    , ("THE"        , TKThe        )
-    , ("YIELD"      , TKYield      )
-    , ("CONSIDER"   , TKConsider   )
-    , ("WHERE"      , TKWhere      )
-    , ("LIST"       , TKList       )
-    , ("ASSUME"     , TKAssume     )
-    , ("WHEN"       , TKWhen       )
-    , ("TYPE"       , TKType       )
-    , ("PARTY"      , TKParty      )
-    , ("DO"         , TKDo         )
-    , ("DOES"       , TKDoes       )
-    , ("MUST"       , TKMust       )
-    , ("PROVIDED"   , TKProvided   )
-    , ("WITHIN"     , TKWithin     )
-    , ("HENCE"      , TKHence      )
-    , ("LEST"       , TKLest       )
-    , ("FUNCTION"   , TKFunction   )
-    , ("FROM"       , TKFrom       )
-    , ("TO"         , TKTo         )
-    , ("EQUALS"     , TKEquals     )
-    , ("IMPLIES"    , TKImplies    )
-    , ("PLUS"       , TKPlus       )
-    , ("MINUS"      , TKMinus      )
-    , ("TIMES"      , TKTimes      )
-    , ("DIVIDED"    , TKDivided    )
-    , ("MODULO"     , TKModulo     )
-    , ("BY"         , TKBy         )
-    , ("GREATER"    , TKGreater    )
-    , ("LESS"       , TKLess       )
-    , ("THAN"       , TKThan       )
-    , ("ABOVE"      , TKAbove      )
-    , ("BELOW"      , TKBelow      )
-    , ("AT"         , TKAt         )
-    , ("STARTING"   , TKStarting   )
-    , ("LEAST"      , TKLeast      )
-    , ("MOST"       , TKMost       )
-    , ("FOLLOWED"   , TKFollowed   )
-    , ("FOR"        , TKFor        )
-    , ("ALL"        , TKAll        )
-    , ("AKA"        , TKAka        )
-    , ("IMPORT"     , TKImport     )
-    ]
 
 trivialToken :: NormalizedUri -> TokenType -> PosToken
 trivialToken uri tt =
@@ -549,7 +611,7 @@ mkPosTokens sourcePosOffset uri txt rtoks =
       let
         payload  =
           case rtok.payload of
-            TCopy Nothing -> TCopy (findMatchingToken posStart.column prevLineToks')
+            TSymbols (TCopy Nothing) -> TSymbols $ TCopy (findMatchingToken posStart.column prevLineToks')
             other         -> other
         pt       =
           MkPosToken
@@ -573,23 +635,20 @@ findMatchingToken c pts = do
 computedPayload :: PosToken -> TokenType
 computedPayload pt =
   case pt.payload of
-    TCopy (Just original) -> original
+    RealTCopy original -> original
     other                 -> other
 
 isSpaceToken :: PosToken -> Bool
 isSpaceToken t =
   case computedPayload t of
-    TSpace _        -> True
-    TLineComment _  -> True
-    TBlockComment _ -> True
-    _               -> False
+    TSpaces {} -> True
+    _ -> False
 
 isAnnotationToken :: PosToken -> Bool
 isAnnotationToken t =
   case computedPayload t of
-    TNlg {} -> True
-    TRef {} -> True
-    _      -> False
+    TAnnotations {} -> True
+    _ -> False
 
 -- | Convert from a Megaparsec source position to one of ours.
 convertPos :: SourcePos -> SrcPos
@@ -855,129 +914,38 @@ displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
   displayTokenType tt
 
+inversedCompleteLookup :: (Eq a, Show a) => a -> Map c a -> c
+inversedCompleteLookup k = fromJust . (\case {Nothing -> error ("error while looking up: " <> show k); a -> a}) . lookup k . map (\(a, b) -> (b, a)) . Map.toList
+
 displayTokenType :: TokenType -> Text
-displayTokenType tt =
-  case tt of
-    TIdentifier t     -> t
-    TQuoted t         -> "`" <> t <> "`"
+displayTokenType = \case
+  TSpaces spcs -> case spcs of
+    TSpace t          -> t
+    TLineComment t    -> t
+    TBlockComment t   -> t
+    EOF               -> ""
+  TLiterals lit -> case lit of
     TIntLit t _i      -> t
     TRationalLit t _i -> t
     TStringLit s      -> showStringLit s
-    TDirective d      -> showDirective d
-    TCopy _           -> "^"
-    TPOpen            -> "("
-    TPClose           -> ")"
-    TCOpen            -> "{"
-    TCClose           -> "}"
-    TRefOpen          -> "<<"
-    TRefClose         -> ">>"
-    TNlgOpen          -> "["
-    TNlgClose         -> "]"
-    TParagraph        -> "§"
-    TComma            -> ","
-    TSemicolon        -> ";"
-    TDot              -> "."
-    TGenitive         -> "'s"
-    TTimes            -> "*"
-    TPlus             -> "+"
-    TMinus            -> "-"
-    TGreaterEquals    -> ">="
-    TLessEquals       -> "<="
-    TGreaterThan      -> ">"
-    TLessThan         -> "<"
-    TEquals           -> "="
-    TEqualsEquals     -> "=="
-    TNotEquals        -> "/="
-    TAnd              -> "&&"
-    TOr               -> "||"
-    TImplies          -> "=>"
-    TDividedBy        -> "/"
-    TOtherSymbolic t  -> t
-    TColon           -> ":"
-    TKGiven           -> "GIVEN"
-    TKGiveth          -> "GIVETH"
-    TKDecide          -> "DECIDE"
-    TKExact           -> "EXACTLY"
-    TKMeans           -> "MEANS"
-    TKDeclare         -> "DECLARE"
-    TKIf              -> "IF"
-    TKBranch          -> "BRANCH"
-    TKThen            -> "THEN"
-    TKElse            -> "ELSE"
-    TKOtherwise       -> "OTHERWISE"
-    -- TKFalse           -> "FALSE"
-    -- TKTrue            -> "TRUE"
-    TKAnd             -> "AND"
-    TKOr              -> "OR"
-    TKRAnd            -> "RAND"
-    TKROr             -> "ROR"
-    TKNot             -> "NOT"
-    TKIs              -> "IS"
-    TKHas             -> "HAS"
-    TKOne             -> "ONE"
-    TKOf              -> "OF"
-    TKWith            -> "WITH"
-    TKA               -> "A"
-    TKAn              -> "AN"
-    TKThe             -> "THE"
-    TKYield           -> "YIELD"
-    TKConsider        -> "CONSIDER"
-    TKWhere           -> "WHERE"
-    TKList            -> "LIST"
-    TKAssume          -> "ASSUME"
-    TKWhen            -> "WHEN"
-    TKType            -> "TYPE"
-    TKParty           -> "PARTY"
-    TKDo              -> "DO"
-    TKDoes            -> "DOES"
-    TKMust            -> "MUST"
-    TKProvided        -> "PROVIDED"
-    TKWithin          -> "WITHIN"
-    TKHence           -> "HENCE"
-    TKLest            -> "LEST"
-    TKFunction        -> "FUNCTION"
-    TKFrom            -> "FROM"
-    TKTo              -> "TO"
-    TKEquals          -> "EQUALS"
-    TKImplies         -> "IMPLIES"
-    TKPlus            -> "PLUS"
-    TKMinus           -> "MINUS"
-    TKTimes           -> "TIMES"
-    TKDivided         -> "DIVIDED"
-    TKModulo          -> "MODULO"
-    TKBy              -> "BY"
-    TKGreater         -> "GREATER"
-    TKLess            -> "LESS"
-    TKThan            -> "THAN"
-    TKAbove           -> "ABOVE"
-    TKBelow           -> "BELOW"
-    TKAt              -> "AT"
-    TKStarting        -> "STARTING"
-    TKLeast           -> "LEAST"
-    TKMost            -> "MOST"
-    TKFollowed        -> "FOLLOWED"
-    TKFor             -> "FOR"
-    TKAll             -> "ALL"
-    TKAka             -> "AKA"
+  TAnnotations ann -> case ann of
     TNlg t ty         -> toNlgAnno t ty
     TRef t ty         -> toRefAnno t ty
     TRefSrc t         -> "@ref-src" <> t
     TRefMap t         -> "@ref-map" <> t
     TNlgString t      -> t
     TNlgPrefix        -> "@nlg"
-    TPercent          -> "%"
-    TKImport          -> "IMPORT"
-    TSpace t          -> t
-    TLineComment t    -> t
-    TBlockComment t   -> t
-    EOF               -> ""
-
-showDirective :: DirectiveType -> Text
-showDirective = \ case
-  TStrictEvalDirective -> "#SEVAL"
-  TLazyEvalDirective -> "#EVAL"
-  TCheckDirective -> "#CHECK"
-  TContractDirective -> "#TRACE"
+  TIdentifiers i -> case i of
+    TGenitive         -> "'s"
+    TIdentifier t     -> t
+    TQuoted t         -> "`" <> t <> "`"
+  TDirectives dir -> ("#" <>) $ inversedCompleteLookup dir directives
+  TKeywords kws -> inversedCompleteLookup kws keywords
+  -- NOTE: we cannot look up TCopy (Just _) in the map - instead we just act as if it was
+  -- TCopy Nothing, which is fine
+  RealTCopy _ -> displayTokenType (TSymbols (TCopy Nothing))
+  TSymbols sym -> inversedCompleteLookup sym symbols
+  TOperators op -> inversedCompleteLookup op operators
 
 data TokenCategory
   = CIdentifier
@@ -994,122 +962,25 @@ data TokenCategory
   deriving stock Eq
 
 posTokenCategory :: TokenType -> TokenCategory
-posTokenCategory =
-  \ case
-    TIdentifier _ -> CIdentifier
-    TQuoted _ -> CIdentifier
-    TIntLit{} -> CNumberLit
-    TRationalLit{} -> CNumberLit
-    TStringLit _ -> CStringLit
-    TDirective _ -> CDirective
-    TCopy Nothing -> CSymbol
-    TCopy (Just t) -> posTokenCategory t
-    TPOpen -> CSymbol
-    TPClose -> CSymbol
-    TCOpen -> CSymbol
-    TCClose -> CSymbol
-    TRefOpen -> CSymbol
-    TRefClose -> CSymbol
-    TNlgOpen -> CAnnotation
-    TNlgClose -> CAnnotation
-    TParagraph -> CSymbol
-    TComma -> CSymbol
-    TSemicolon -> CSymbol
-    TDot -> CSymbol
-    TGenitive -> CIdentifier
-    TTimes -> COperator
-    TPlus -> COperator
-    TMinus -> COperator
-    TGreaterEquals -> COperator
-    TLessEquals -> COperator
-    TGreaterThan -> COperator
-    TLessThan -> COperator
-    TEquals -> COperator
-    TEqualsEquals -> COperator
-    TNotEquals -> COperator
-    TAnd -> COperator
-    TOr -> COperator
-    TImplies -> COperator
-    TDividedBy -> COperator
-    TOtherSymbolic _ -> CSymbol
-    TColon -> CSymbol
-    TKGiven -> CKeyword
-    TKGiveth -> CKeyword
-    TKDecide -> CKeyword
-    TKExact -> CKeyword
-    TKMeans -> CKeyword
-    TKDeclare -> CKeyword
-    TKIf -> CKeyword
-    TKBranch -> CKeyword
-    TKThen -> CKeyword
-    TKElse -> CKeyword
-    TKOtherwise -> CKeyword
-    -- TKFalse -> CKeyword
-    -- TKTrue -> CKeyword
-    TKAnd -> CKeyword
-    TKOr -> CKeyword
-    TKRAnd -> CKeyword
-    TKROr -> CKeyword
-    TKNot -> CKeyword
-    TKIs -> CKeyword
-    TKHas -> CKeyword
-    TKOne -> CKeyword
-    TKOf -> CKeyword
-    TKWith -> CKeyword
-    TKA -> CKeyword
-    TKAn -> CKeyword
-    TKThe -> CKeyword
-    TKYield -> CKeyword
-    TKConsider -> CKeyword
-    TKWhere -> CKeyword
-    TKList -> CKeyword
-    TKAssume -> CKeyword
-    TKWhen -> CKeyword
-    TKType -> CKeyword
-    TKParty -> CKeyword
-    TKDo -> CKeyword
-    TKDoes -> CKeyword
-    TKMust -> CKeyword
-    TKProvided -> CKeyword
-    TKWithin -> CKeyword
-    TKHence -> CKeyword
-    TKLest -> CKeyword
-    TKFunction -> CKeyword
-    TKFrom -> CKeyword
-    TKTo -> CKeyword
-    TKEquals -> CKeyword
-    TKImplies -> CKeyword
-    TKPlus -> CKeyword
-    TKMinus -> CKeyword
-    TKTimes -> CKeyword
-    TKDivided -> CKeyword
-    TKModulo -> CKeyword
-    TKBy -> CKeyword
-    TKGreater -> CKeyword
-    TKLess -> CKeyword
-    TKThan -> CKeyword
-    TKAbove -> CKeyword
-    TKBelow -> CKeyword
-    TKAt -> CKeyword
-    TKStarting -> CKeyword
-    TKLeast -> CKeyword
-    TKMost -> CKeyword
-    TKFollowed -> CKeyword
-    TKFor -> CKeyword
-    TKAll -> CKeyword
-    TKAka -> CKeyword
-    TNlg {} -> CAnnotation
-    TRef {} -> CAnnotation
-    TRefSrc _ -> CAnnotation
-    TRefMap _ -> CAnnotation
-    TNlgString _ -> CAnnotation
-    TNlgPrefix -> CAnnotation
-    TPercent -> CSymbol
-    TKImport -> CKeyword
-    TSpace _ -> CWhitespace
-    TLineComment _ -> CComment
-    TBlockComment _ -> CComment
-    EOF -> CEOF
+posTokenCategory = \ case
+  TSpaces EOF -> CEOF
+  TSpaces TLineComment {} -> CComment
+  TSpaces TBlockComment {} -> CComment
+  TSpaces TSpace {} -> CWhitespace
+  TLiterals TStringLit {} -> CStringLit
+  TLiterals TIntLit {} -> CNumberLit
+  TLiterals TRationalLit {} -> CNumberLit
+  TOperators {} -> COperator
+  TDirectives {} -> CDirective
+  TKeywords {} -> CKeyword
+  TAnnotations {} -> CAnnotation
+  RealTCopy tt -> posTokenCategory tt
+  TSymbols {} -> CSymbol
+  TIdentifiers {} -> CIdentifier
 
 showNormalizedUri :: NormalizedUri -> String
 showNormalizedUri =  Text.unpack . (.getUri) . fromNormalizedUri
+
+-- | A TCopy that carries a copied token
+pattern RealTCopy :: TokenType -> TokenType
+pattern RealTCopy tt = TSymbols (TCopy (Just tt))

@@ -33,7 +33,7 @@ preDef t =
     (mkAnno
       [mkCluster
         (CsnCluster
-          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos 0 0) (MkSrcPos 0 0) 0 builtinUri) (TIdentifier t)] Nothing Visible)
+          (ConcreteSyntaxNode [MkPosToken (MkSrcRange (MkSrcPos 0 0) (MkSrcPos 0 0) 0 builtinUri) (TIdentifiers (TIdentifier t))] Nothing Visible)
           (ConcreteSyntaxNode [] Nothing Hidden)
         )
       ]
