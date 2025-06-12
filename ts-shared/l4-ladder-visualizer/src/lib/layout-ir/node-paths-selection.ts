@@ -1,15 +1,28 @@
 import {
   type LadderLirNode,
   type SelectableLadderLirNode,
-  LinPathLirNode,
   isSelectableLadderLirNode,
   isBundlingFlowLirNode,
+  augmentEdgesWithExplanatoryLabel,
 } from './ladder-graph/ladder.svelte.js'
 import type { LirId, LirNode, LirNodeInfo } from '@repo/layout-ir'
 import { LirContext, DefaultLirNode, LirRegistry } from '@repo/layout-ir'
-import { type DirectedAcyclicGraph, vertex } from '../algebraic-graphs/dag.js'
+import {
+  type DirectedAcyclicGraph,
+  vertex,
+  isEmpty,
+  isVertex,
+  isOverlay,
+  isConnect,
+  type Overlay,
+  type Connect,
+  type Vertex,
+} from '../algebraic-graphs/dag.js'
 import ArrayKeyedMap from 'array-keyed-map'
 import type { Branded } from '@repo/type-utils'
+import { DirectedEdge } from '../algebraic-graphs/edge.js'
+import { match, P } from 'ts-pattern'
+import { LadderEnv } from '../ladder-env.js'
 
 /************************************************
           NoIntermediateBundlingNodeDag
@@ -45,6 +58,54 @@ export function makeNoIntermediateBundlingNodeDag(
     )
   }
   return dag as NoIntermediateBundlingNodeDag
+}
+
+/*************************************************
+          Lin Path
+ *************************************************/
+
+export class LinPathLirNode extends DefaultLirNode implements LirNode {
+  constructor(
+    nodeInfo: LirNodeInfo,
+    env: LadderEnv,
+    protected rawPath: DirectedAcyclicGraph<LirId>
+  ) {
+    super(nodeInfo)
+    augmentEdgesWithExplanatoryLabel(nodeInfo.context, env, this.rawPath)
+  }
+
+  getRawPathGraph() {
+    return this.rawPath
+  }
+
+  getVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id))
+      .filter((n) => !!n) as LadderLirNode[]
+  }
+
+  getSelectableVertices(context: LirContext) {
+    return this.rawPath
+      .getVertices()
+      .map((id) => context.get(id) as LadderLirNode)
+      .filter((n) =>
+        isSelectableLadderLirNode(n)
+      ) as Array<SelectableLadderLirNode>
+  }
+
+  dispose(context: LirContext) {
+    this.rawPath.dispose()
+    context.clear(this.getId())
+  }
+
+  toPretty(context: LirContext) {
+    return pprintPathGraph(context, this.rawPath)
+  }
+
+  toString() {
+    return 'LIN_PATH_LIR_NODE'
+  }
 }
 
 /************************************************
@@ -304,4 +365,48 @@ export class LadderNodeSelectionTracker {
       )
       .filter((linPath) => !!linPath)
   }
+}
+
+/************************************************
+          Pretty print path graph
+*************************************************/
+
+export function pprintPathGraph(
+  context: LirContext,
+  initialGraph: DirectedAcyclicGraph<LirId>
+): string {
+  /** Each node should only be pprinted once in the linearization of the dag */
+  const processed = new Set<LirId>()
+
+  function pprintHelper(
+    context: LirContext,
+    g: DirectedAcyclicGraph<LirId>
+  ): string {
+    return match(g)
+      .with(P.when(isEmpty<LirId>), () => '')
+      .with(P.when(isVertex<LirId>), (v: Vertex<LirId>) => {
+        if (processed.has(v.getValue())) return ''
+
+        processed.add(v.getValue())
+        return (context.get(v.getValue()) as LadderLirNode).toPretty(context)
+      })
+      .with(P.when(isOverlay<LirId>), (o: Overlay<LirId>) => {
+        return `${pprintHelper(context, o.getLeft())} ${pprintHelper(context, o.getRight())}`
+      })
+      .with(P.when(isConnect<LirId>), (c: Connect<LirId>) => {
+        const from = pprintHelper(context, c.getFrom())
+        const to = pprintHelper(context, c.getTo())
+        const edgeAttrs = initialGraph.getAttributesForEdge(
+          new DirectedEdge(
+            (c.getFrom() as Vertex<LirId>).getValue(),
+            (c.getTo() as Vertex<LirId>).getValue()
+          )
+        )
+        const edgeLabel = edgeAttrs.getLabel()
+        return `${from} ${edgeLabel} ${to}`
+      })
+      .exhaustive()
+  }
+
+  return pprintHelper(context, initialGraph)
 }
