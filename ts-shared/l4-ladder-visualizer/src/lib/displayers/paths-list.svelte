@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import type { LirContext, LirId } from '@repo/layout-ir'
+  import type { LinPathLirNode } from '$lib/layout-ir/node-paths-selection.js'
   import type { PathListDisplayerProps } from './non-flow-props.js'
+  import { useLadderEnv } from '$lib/ladder-env.js'
+  import { onDestroy } from 'svelte'
   import {
     ToggleGroup,
     ToggleGroupItem,
   } from '$lib/ui-primitives/toggle-group/index.js'
-  import { useLadderEnv } from '$lib/ladder-env.js'
-  import type { LinPathLirNode } from '$lib/layout-ir/ladder-graph/ladder.svelte.js'
-  import type { LirContext, LirId } from '@repo/layout-ir'
 
   /************************
        Lir

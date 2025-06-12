@@ -14,7 +14,6 @@ import {
   SourceNoAnnoLirNode,
   SourceWithOrAnnoLirNode,
   SinkLirNode,
-  augmentEdgesWithExplanatoryLabel,
   AppLirNode,
   TrueExprLirNode,
   FalseExprLirNode,
@@ -89,9 +88,6 @@ export const LadderGraphLirSource: LadderLirSource<IRExpr, LadderGraphLirNode> =
         env,
         finalNoIntermediateBundlingNodeGraph
       )
-
-      // 2. Augment with explanatory edge labels (TODO: Not sure this shld happen here)
-      augmentEdgesWithExplanatoryLabel(env, nodeInfo.context, ladderGraph)
 
       return ladderGraph
     },
