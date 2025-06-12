@@ -15,6 +15,9 @@
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
   import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
 
+  import { defaultExample, type LegalExample } from '$lib/legal-examples'
+  import ExampleSelector from '$lib/components/example-selector.svelte'
+
   import {
     LadderFlow,
     LirContext,
@@ -179,7 +182,7 @@
       })
 
       editor = monaco.editor.create(editorElement, {
-        value: britishCitizen,
+        value: defaultExample.content,
         language: 'jl4',
         automaticLayout: true,
         wordBasedSuggestions: 'off',
@@ -413,6 +416,12 @@
     }
   })
 
+  function handleExampleSelect (example: LegalExample) {
+    if (editor) {
+      editor.setValue(example.content)
+    }
+  }
+
   const britishCitizen = `§ \`Assumptions\`
 
 ASSUME Person IS A TYPE
@@ -442,10 +451,14 @@ DECIDE \`is a British citizen (variant)\` IS
 </script>
 
 <Resizable.PaneGroup direction="horizontal">
-  <Resizable.Pane defaultSize={60}>
+  <Resizable.Pane defaultSize={20}>
+    <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
+  </Resizable.Pane>
+  <Resizable.Handle />
+  <Resizable.Pane defaultSize={40}>
     <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
   </Resizable.Pane>
-  <Resizable.Handle style="width: 10px;" />
+  <Resizable.Handle />
   <Resizable.Pane>
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
       {#await renderLadderPromise then ladder}
