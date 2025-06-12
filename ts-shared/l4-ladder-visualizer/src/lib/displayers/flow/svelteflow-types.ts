@@ -4,7 +4,7 @@ import type {
   LadderLirNode,
 } from '$lib/layout-ir/ladder-graph/ladder.svelte'
 import type { LadderEnv } from '$lib/ladder-env'
-import type { LirContext, LirId } from '$lib/layout-ir/core.js'
+import type { LirContext, LirId } from '@repo/layout-ir'
 import * as SF from '@xyflow/svelte'
 // SF custom node components
 import TrueExprSFNode from './sf-custom-nodes/true-expr.svelte'

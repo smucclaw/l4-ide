@@ -27,6 +27,13 @@ https://github.com/xyflow/xyflow/blob/migrate/svelte5/packages/svelte/src/lib/co
   const l4Conn = ladderEnv.getL4Connection()
 
   const node = data.node as UBoolVarLirNode
+
+  const maybeHighlightedStyle = $derived(
+    isNNFLadderGraphLirNode(ladderGraph) &&
+      ladderGraph.nodeIsSelected(data.context, data.node as UBoolVarLirNode)
+      ? 'highlighted-ladder-node'
+      : ''
+  )
 </script>
 
 {#snippet inlineUI()}
@@ -81,10 +88,7 @@ TODO: Look into why this is the case --- are they not re-mounting the ubool-var 
         // It's easier if the highlighted border styles are on the same element as the normal border styles.
         'ubool-var-node-border',
         // TODO: This could prob be cleaner.
-        isNNFLadderGraphLirNode(ladderGraph) &&
-        ladderGraph.nodeIsSelected(data.context, data.node)
-          ? 'highlighted-ladder-node'
-          : '',
+        maybeHighlightedStyle,
       ]}
     >
       <WithNormalHandles>

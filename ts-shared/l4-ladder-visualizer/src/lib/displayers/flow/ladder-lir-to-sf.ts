@@ -1,4 +1,4 @@
-import type { LirContext, LirId } from '$lib/layout-ir/core.js'
+import type { LirContext, LirId } from '@repo/layout-ir'
 import type {
   LadderLirNode,
   LadderLirEdge,

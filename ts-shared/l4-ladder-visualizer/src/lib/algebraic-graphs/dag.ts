@@ -1,4 +1,4 @@
-import type { Eq, Ord, HasId } from '$lib/utils.js'
+import type { Eq, Ord, HasId } from '@repo/type-utils'
 import {
   DirectedAMGraph,
   makeDirectedConnectAdjacencyMap,

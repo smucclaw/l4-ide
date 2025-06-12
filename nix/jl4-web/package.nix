@@ -30,11 +30,19 @@ buildNpmPackage rec {
 
     pushd ./ts-shared
 
+    pushd ./type-utils
+    npm run build
+    popd
+
     pushd ./viz-expr
     npm run build
     popd
 
     pushd ./jl4-client-rpc
+    npm run build
+    popd
+
+    pushd ./layout-ir
     npm run build
     popd
 

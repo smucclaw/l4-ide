@@ -25,6 +25,13 @@
     .getTopFunDeclLirNode(data.context)
     .getBody(data.context)
   const node = data.node as AppLirNode
+
+  const maybeHighlightedStyle = $derived(
+    isNNFLadderGraphLirNode(ladderGraph) &&
+      ladderGraph.nodeIsSelected(data.context, node as AppLirNode)
+      ? 'highlighted-ladder-node'
+      : ''
+  )
 </script>
 
 <!---------------------------------------------------
@@ -88,10 +95,7 @@
         'bg-gray-100 app-node-border',
         // It's easier if the highlighted border styles are on the same element as the normal border styles.
         // TODO: This could prob be cleaner.
-        isNNFLadderGraphLirNode(ladderGraph) &&
-        ladderGraph.nodeIsSelected(data.context, node)
-          ? 'highlighted-ladder-node'
-          : '',
+        maybeHighlightedStyle,
       ]}
     >
       <WithNormalHandles>
@@ -114,7 +118,7 @@
 <style>
   .app-node-border {
     border: calc(var(--ladder-node-border-width) + 1px) solid
-      var(--color-primary);
+      var(--ladder-node-border-color);
     border-radius: 20px;
   }
 </style>

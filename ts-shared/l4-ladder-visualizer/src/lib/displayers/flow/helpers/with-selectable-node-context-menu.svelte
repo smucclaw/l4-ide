@@ -1,7 +1,7 @@
 <!-- For adding a context menu to a node that can be selected for highlighting -->
 <script lang="ts" module>
   import { type Snippet } from 'svelte'
-  import type { LirContext } from '$lib/layout-ir/core'
+  import type { LirContext } from '@repo/layout-ir'
   import type {
     SelectableLadderLirNode,
     NNFLadderGraphLirNode,

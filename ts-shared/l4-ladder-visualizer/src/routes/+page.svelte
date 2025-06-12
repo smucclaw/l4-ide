@@ -5,11 +5,7 @@
   import { Schema } from 'effect'
   import { FunDecl } from '@repo/viz-expr'
   import { VizDeclLirSource } from '$lib/data/viz-expr-to-lir.js'
-  import {
-    LirContext,
-    LirRegistry,
-    type LirRootType,
-  } from '$lib/layout-ir/core.js'
+  import { LirContext, LirRegistry, type LirRootType } from '@repo/layout-ir'
   import { LadderEnv } from '$lib/ladder-env.js'
   import Flow from '$lib/displayers/flow/flow.svelte'
   import { mockLadderBackendApi } from 'jl4-client-rpc'
