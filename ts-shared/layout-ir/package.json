@@ -1,0 +1,38 @@
+{
+  "name": "@repo/layout-ir",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Layout IR framework:  an intermediate representation that's neither the underlying data nor the concrete UI 'displayers, and that's focused on content as opposed to presentation. Enables certain sorts of synchronization that would be difficult to add in a post-hoc way.",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "git clean -fdx dist || echo 'git not available'",
+    "build": "npm run clean && tsc",
+    "check": "tsc --noEmit",
+    "lint": "eslint --max-warnings=0 .",
+    "lint-fix": "eslint . --fix"
+  },
+  "packageManager": "npm@11.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "prettier": "@repo/prettier-config",
+  "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/prettier-config": "*",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.16.0"
+  },
+  "dependencies": {
+    "@repo/type-utils": "*"
+  }
+}

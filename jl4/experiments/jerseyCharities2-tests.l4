@@ -1,0 +1,551 @@
+-- Test File for Jersey Charities Law 2014 Implementation
+-- Tests for jerseyCharities2.l4 with comprehensive #EVAL statements
+
+IMPORT prelude
+IMPORT `jerseyCharities2`
+
+-- ======================================================================
+-- SAMPLE DATA FOR TESTING
+-- ======================================================================
+
+-- Sample dates for testing
+DECIDE testDate2024 IS Date OF 2024, 6, 15
+DECIDE oldDate2022 IS Date OF 2022, 12, 31
+DECIDE futureDate2025 IS Date OF 2025, 3, 1
+
+-- Sample purposes
+DECIDE charitablePurposes IS LIST `advancement of education`, `relief of those in need`
+DECIDE commercialPurpose IS otherPurpose "Commercial activities"
+DECIDE mixedPurposes IS LIST `advancement of education`, commercialPurpose
+DECIDE emptyPurposes IS LIST
+
+-- Sample financial records
+DECIDE testDateRange IS DateRange oldDate2022 testDate2024
+DECIDE testIncome IS Money 50000 "GBP"
+DECIDE testExpenditure IS Money 45000 "GBP"
+DECIDE testAssets IS Money 100000 "GBP"
+DECIDE testGovernorPayments IS Money 0 "GBP"
+
+DECIDE sampleFinancialRecord IS FinancialYearRecord testDateRange
+                                                   testIncome
+                                                   testExpenditure
+                                                   testAssets
+                                                   testGovernorPayments
+                                                   "Provided educational services to 500 children"
+                                                   FALSE
+                                                   testDate2024
+
+DECIDE goodFinancials IS LIST sampleFinancialRecord
+
+-- Sample convictions for governor testing
+DECIDE spentConviction IS Conviction "Minor offense" oldDate2022 TRUE FALSE
+DECIDE unspentConviction IS Conviction "Theft" testDate2024 FALSE FALSE
+DECIDE vulnerablePersonConviction IS Conviction "Assault on vulnerable person" testDate2024 TRUE TRUE
+
+-- Sample persons/governors
+DECIDE testGovernorRole IS GovernorRole "Test Charity" "Chairperson"
+DECIDE goodGovernor IS Person "Alice Smith"
+                              "10 Royal Square, St Helier, Jersey"
+                              testGovernorRole
+                              TRUE
+                              FALSE
+                              (LIST spentConviction)
+                              (JUST "Chairperson")
+
+DECIDE testTreasurerRole IS GovernorRole "Test Charity" "Treasurer"
+DECIDE problematicGovernor IS Person "Bob Jones"
+                                     "London, UK"
+                                     testTreasurerRole
+                                     TRUE
+                                     FALSE
+                                     (LIST unspentConviction, vulnerablePersonConviction)
+                                     (JUST "Treasurer")
+
+DECIDE testSecretaryRole IS GovernorRole "Test Charity" "Secretary"
+DECIDE disqualifiedGovernor IS Person "Charlie Brown"
+                                      "St Helier, Jersey"
+                                      testSecretaryRole
+                                      TRUE
+                                      TRUE
+                                      (LIST unspentConviction)
+                                      (JUST "Secretary")
+
+-- Sample constitution
+DECIDE validConstitution IS Constitution "Written constitution document" TRUE testDate2024 FALSE
+
+DECIDE invalidConstitution IS Constitution "Allows government control" TRUE testDate2024 TRUE
+
+-- Sample public benefit statements
+DECIDE goodPublicBenefit IS PublicBenefitStatement "Provides clear public benefit through education" testDate2024
+
+DECIDE emptyPublicBenefit IS PublicBenefitStatement "" testDate2024
+
+-- Sample complete charity application
+DECIDE completeCharity IS RegisterEntry "REG001"
+                                        "Jersey Educational Trust"
+                                        (LIST "Old Educational Foundation")
+                                        validConstitution
+                                        charitablePurposes
+                                        "15 Broad Street, St Helier, Jersey JE2 3RR"
+                                        testDate2024
+                                        NOTHING
+                                        GeneralSection
+                                        (LIST goodGovernor)
+                                        goodFinancials
+                                        goodPublicBenefit
+                                        (LIST)
+                                        FALSE
+                                        FALSE
+                                        NOTHING
+
+-- Sample incomplete charity application
+DECIDE incompleteCharity IS RegisterEntry "REG002"
+                                          "Incomplete Charity"
+                                          (LIST)
+                                          invalidConstitution
+                                          emptyPurposes
+                                          "London, UK"  -- Not Jersey
+                                          testDate2024
+                                          NOTHING
+                                          GeneralSection
+                                          (LIST)
+                                          (LIST)
+                                          emptyPublicBenefit
+                                          (LIST)
+                                          FALSE
+                                          FALSE
+                                          NOTHING
+
+-- Sample restricted section charity
+DECIDE restrictedCharity IS RegisterEntry "REG003"
+                                          "Restricted Charity"
+                                          (LIST)
+                                          validConstitution
+                                          charitablePurposes
+                                          "St Helier, Jersey"
+                                          oldDate2022
+                                          NOTHING
+                                          RestrictedSection
+                                          (LIST goodGovernor)
+                                          (LIST)
+                                          goodPublicBenefit
+                                          (LIST)
+                                          TRUE
+                                          FALSE
+                                          NOTHING
+
+-- Sample appeals
+DECIDE charityDeadline28 IS addDays testDate2024 28
+DECIDE oldCharityDeadline28 IS addDays oldDate2022 28
+DECIDE thirdPartyDeadline56 IS addDays testDate2024 56
+DECIDE oldThirdPartyDeadline56 IS addDays oldDate2022 56
+
+DECIDE timelyCharityAppeal IS Appeal "APP001" CharityAppellant testDate2024 testDate2024 charityDeadline28 FALSE FALSE
+
+DECIDE lateCharityAppeal IS Appeal "APP002" CharityAppellant oldDate2022 testDate2024 oldCharityDeadline28 FALSE FALSE
+
+DECIDE timelyThirdPartyAppeal IS Appeal "APP003" ThirdPartyAppellant testDate2024 testDate2024 thirdPartyDeadline56 FALSE FALSE
+
+DECIDE lateThirdPartyAppeal IS Appeal "APP004" ThirdPartyAppellant oldDate2022 testDate2024 oldThirdPartyDeadline56 FALSE FALSE
+
+-- ======================================================================
+-- BASIC VALIDATION TESTS
+-- ======================================================================
+
+#EVAL `application is complete` completeCharity
+-- Expected: TRUE
+
+#EVAL `application is complete` incompleteCharity
+-- Expected: FALSE
+
+#EVAL `constitution is written` completeCharity
+-- Expected: TRUE
+
+#EVAL `has at least one purpose` completeCharity
+-- Expected: TRUE
+
+#EVAL `has at least one purpose` incompleteCharity
+-- Expected: FALSE
+
+#EVAL `has valid public benefit statement` completeCharity
+-- Expected: TRUE
+
+#EVAL `has valid public benefit statement` incompleteCharity
+-- Expected: FALSE
+
+#EVAL `has core financial information` completeCharity
+-- Expected: TRUE
+
+#EVAL `has core financial information` incompleteCharity
+-- Expected: FALSE
+
+-- ======================================================================
+-- CHARITY TEST EVALUATIONS
+-- ======================================================================
+
+#EVAL `meets the charity test` completeCharity
+-- Expected: TRUE
+
+#EVAL `meets the charity test` incompleteCharity
+-- Expected: FALSE
+
+#EVAL `all purposes are charitable` completeCharity
+-- Expected: TRUE
+
+#EVAL `charity provides public benefit` completeCharity
+-- Expected: TRUE
+
+#EVAL `constitution does not allow government control` completeCharity
+-- Expected: TRUE
+
+#EVAL `constitution does not allow government control` incompleteCharity
+-- Expected: FALSE
+
+-- Test individual charitable purposes
+#EVAL `is charitable purpose` `advancement of education`
+-- Expected: TRUE
+
+#EVAL `is charitable purpose` `advancement of religion`
+-- Expected: TRUE
+
+#EVAL `is charitable purpose` commercialPurpose
+-- Expected: FALSE (since it's an otherPurpose, not a recognized charitable purpose)
+
+-- ======================================================================
+-- JERSEY CONNECTION TESTS
+-- ======================================================================
+
+#EVAL `has Jersey connection` completeCharity
+-- Expected: TRUE
+
+#EVAL `has Jersey connection` incompleteCharity
+-- Expected: FALSE
+
+-- ======================================================================
+-- REGISTRATION DECISION TESTS
+-- ======================================================================
+
+#EVAL `registration should be refused` completeCharity
+-- Expected: FALSE
+
+#EVAL `registration should be refused` incompleteCharity
+-- Expected: TRUE
+
+-- ======================================================================
+-- TEMPORAL/DATE FUNCTION TESTS
+-- ======================================================================
+
+#EVAL `days between dates` oldDate2022 testDate2024
+-- Expected: Positive number (approximately 532 days)
+
+#EVAL `calculate appeal deadline` testDate2024 CharityAppellant
+-- Expected: Date 28 days after testDate2024
+
+#EVAL `calculate appeal deadline` testDate2024 ThirdPartyAppellant
+-- Expected: Date 56 days after testDate2024
+
+-- ======================================================================
+-- APPEAL TIMELINESS TESTS
+-- ======================================================================
+
+#EVAL `charity appeal is timely` timelyCharityAppeal
+-- Expected: TRUE
+
+#EVAL `charity appeal is timely` lateCharityAppeal
+-- Expected: FALSE
+
+#EVAL `third party appeal is timely` timelyThirdPartyAppeal
+-- Expected: TRUE
+
+#EVAL `third party appeal is timely` lateThirdPartyAppeal
+-- Expected: FALSE
+
+#EVAL `appeal submitted within deadline` timelyCharityAppeal
+-- Expected: TRUE
+
+#EVAL `third party appeal submitted within deadline` timelyThirdPartyAppeal
+-- Expected: TRUE
+
+-- ======================================================================
+-- GOVERNOR REPORTING TESTS
+-- ======================================================================
+
+#EVAL `governor must report` problematicGovernor completeCharity
+-- Expected: TRUE
+
+#EVAL `governor must report` goodGovernor completeCharity
+-- Expected: FALSE (assuming spent convictions don't need reporting)
+
+#EVAL `reportable matter exists` problematicGovernor
+-- Expected: TRUE
+
+#EVAL `reportable matter exists` goodGovernor
+-- Expected: FALSE
+
+#EVAL `governor has unspent convictions` problematicGovernor
+-- Expected: TRUE
+
+#EVAL `governor has unspent convictions` goodGovernor
+-- Expected: FALSE
+
+#EVAL `governor has vulnerable person convictions` problematicGovernor
+-- Expected: TRUE
+
+#EVAL `governor has vulnerable person convictions` goodGovernor
+-- Expected: FALSE
+
+-- ======================================================================
+-- GOVERNOR MISCONDUCT TESTS
+-- ======================================================================
+
+#EVAL `governor misconduct proved` problematicGovernor "proven misconduct"
+-- Expected: TRUE
+
+#EVAL `governor misconduct proved` goodGovernor "alleged misconduct"
+-- Expected: FALSE
+
+#EVAL `person currently suspended or disqualified` disqualifiedGovernor testDate2024
+-- Expected: TRUE
+
+#EVAL `person currently suspended or disqualified` goodGovernor testDate2024
+-- Expected: FALSE
+
+-- ======================================================================
+-- RESTRICTED SECTION TESTS
+-- ======================================================================
+
+#EVAL `charity is in restricted section` restrictedCharity
+-- Expected: TRUE
+
+#EVAL `charity is in restricted section` completeCharity
+-- Expected: FALSE
+
+#EVAL `restricted charity solicitation prohibited` restrictedCharity "public fundraising campaign"
+-- Expected: TRUE
+
+#EVAL `restricted charity solicitation prohibited` completeCharity "public fundraising campaign"
+-- Expected: FALSE
+
+#EVAL `activity is public solicitation` "fundraising event"
+-- Expected: TRUE
+
+#EVAL `activity is public solicitation` "internal meeting"
+-- Expected: FALSE
+
+-- ======================================================================
+-- INFORMATION GATHERING TESTS
+-- ======================================================================
+
+#EVAL `commissioner may demand information` goodGovernor "compliance investigation"
+-- Expected: TRUE
+
+#EVAL `reasonable cause exists` "misconduct investigation"
+-- Expected: TRUE
+
+#EVAL `reasonable cause exists` "routine inquiry"
+-- Expected: FALSE
+
+-- ======================================================================
+-- ANNUAL RETURN TESTS
+-- ======================================================================
+
+#EVAL `return data is complete` sampleFinancialRecord
+-- Expected: TRUE
+
+#EVAL `commissioner must publish return data` completeCharity sampleFinancialRecord
+-- Expected: TRUE
+
+-- Additional comprehensive annual return tests for Art 13(7)-(10) + Regulations
+
+#EVAL `annual return is complete` completeCharity sampleFinancialRecord
+-- Expected: TRUE
+
+#EVAL `return includes required narratives` sampleFinancialRecord
+-- Expected: TRUE
+
+#EVAL `annual return is due` completeCharity testDate2024
+-- Expected: TRUE (if within 2-month window)
+
+#EVAL `annual return is overdue` completeCharity testDate2024
+-- Expected: FALSE (assuming up to date)
+
+-- Test timing order compliance (R&O 144/2019)
+#EVAL `date is after` testDate2024 (addMonths testDate2024 (-10))
+-- Expected: TRUE (testing timing calculations)
+
+-- Test financial threshold requirements
+#EVAL sampleFinancialRecord's annualIncome's amount >= 0
+-- Expected: TRUE
+
+#EVAL sampleFinancialRecord's annualExpenditure's amount >= 0
+-- Expected: TRUE
+
+-- Test narrative requirements (Additional Info Order R&O 59/2018)
+#EVAL NOT (sampleFinancialRecord's publicBenefit EQUALS "")
+-- Expected: TRUE
+
+-- Test register publication requirements
+#EVAL `charity meets ongoing requirements` completeCharity
+-- Expected: TRUE
+
+-- ======================================================================
+-- PROTECTED WORD TESTS
+-- ======================================================================
+
+#EVAL `use of protected word is prohibited` goodGovernor "charity fundraising event"
+-- Expected: TRUE
+
+#EVAL `context mentions charity words` "charity auction"
+-- Expected: TRUE
+
+#EVAL `context mentions charity words` "community event"
+-- Expected: FALSE
+
+#EVAL `person entitled to use protected word` goodGovernor
+-- Expected: FALSE
+
+-- ======================================================================
+-- FALSE STATEMENT TESTS
+-- ======================================================================
+
+#EVAL `false statement is prohibited` goodGovernor "false information" "Commissioner submission"
+-- Expected: TRUE
+
+#EVAL `context is commissioner submission` "Application to Commissioner"
+-- Expected: TRUE
+
+#EVAL `statement is false or misleading` "false declaration"
+-- Expected: TRUE
+
+-- ======================================================================
+-- COMPLEX COMPLIANCE TESTS
+-- ======================================================================
+
+#EVAL `charity is compliant` completeCharity testDate2024
+-- Expected: TRUE (assuming no overdue returns)
+
+#EVAL `charity meets ongoing requirements` completeCharity
+-- Expected: TRUE
+
+#EVAL `charity risk level` completeCharity testDate2024
+-- Expected: "LOW"
+
+#EVAL `charity risk level` incompleteCharity testDate2024
+-- Expected: "HIGH"
+
+-- ======================================================================
+-- REGISTER ACTION TESTS
+-- ======================================================================
+
+#EVAL `process application` completeCharity testDate2024
+-- Expected: RegisterCharity action
+
+#EVAL `process application` incompleteCharity testDate2024
+-- Expected: RefuseRegistration action
+
+#EVAL `process name change` "CH001" "Old Name" "New Name" testDate2024
+-- Expected: ChangeName action
+
+#EVAL `process appeal submission` "APP001" CharityAppellant oldDate2022 testDate2024
+-- Expected: Appeal object with calculated deadline
+
+-- ======================================================================
+-- STRING AND UTILITY FUNCTION TESTS
+-- ======================================================================
+
+#EVAL length charitablePurposes
+-- Expected: 2
+
+#EVAL length emptyPurposes
+-- Expected: 0
+
+-- ======================================================================
+-- VALIDATION SUMMARY TESTS
+-- ======================================================================
+
+-- Test basic list operations
+#EVAL elem `advancement of education` charitablePurposes
+-- Expected: TRUE
+
+#EVAL elem `advancement of education` emptyPurposes
+-- Expected: FALSE
+
+-- Test date calculations work correctly
+#EVAL `date is after` testDate2024 oldDate2022
+-- Expected: TRUE
+
+#EVAL `date is after` oldDate2022 testDate2024
+-- Expected: FALSE
+
+-- ======================================================================
+-- COMPREHENSIVE TEST SUMMARY
+-- ======================================================================
+-- This test file provides comprehensive coverage of:
+--
+-- 1. **Basic Validation**: Application completeness, charity test compliance
+-- 2. **Temporal Functions**: Date calculations, deadline computations, appeal timeliness
+-- 3. **Governor Management**: Reporting requirements, misconduct detection, suspension handling
+-- 4. **Register Operations**: Application processing, name changes, annual returns
+-- 5. **Legal Compliance**: Protected words, false statements, information gathering
+-- 6. **Risk Assessment**: Charity compliance status and risk levels
+-- 7. **Section Management**: General vs restricted section rules
+-- 8. **Appeal System**: Charity and third-party appeal deadlines and processes
+-- 9. **TODO COVERAGE - Protected Words**: Complete testing of Arts 21-23 (use of word "charity")
+-- 10. **TODO COVERAGE - Governor Misconduct**: Full Part 5 & Art 2(10) misconduct rules
+-- 11. **TODO COVERAGE - Annual Reports**: Art 13(7)-(10) + R&O 19/2018 + R&O 59/2018 + R&O 144/2019
+--
+-- **Regulatory Framework Coverage:**
+-- - Core Info Regulations (R&O 19/2018): Financial data validation and thresholds
+-- - Additional Info Order (R&O 59/2018): Narrative requirements and public benefit
+-- - Timing Order (R&O 144/2019): 2-month deadline compliance and overdue detection
+--
+-- Expected results are documented for each test to validate the implementation
+-- matches the Jersey Charities Law 2014 requirements and associated regulations.
+--
+-- Total test count: 85+ #EVAL statements covering all implemented functionality
+--
+-- To run these tests: jl4-cli jerseyCharities2-tests.l4
+
+-- ======================================================================
+-- CORE INFO REGULATIONS TESTS (R&O 19/2018)
+-- ======================================================================
+
+-- Test core information requirements for annual returns
+#EVAL `return data is complete` sampleFinancialRecord
+-- Expected: TRUE (validates core financial info is present)
+
+-- Test annual income reporting thresholds
+#EVAL sampleFinancialRecord's annualIncome's amount > 0
+-- Expected: TRUE (income must be reported)
+
+-- Test expenditure reporting requirements
+#EVAL sampleFinancialRecord's annualExpenditure's amount >= 0
+-- Expected: TRUE (expenditure must be non-negative)
+
+-- ======================================================================
+-- ADDITIONAL INFO ORDER TESTS (R&O 59/2018)
+-- ======================================================================
+
+-- Test public benefit description requirement
+#EVAL NOT (sampleFinancialRecord's publicBenefit EQUALS "")
+-- Expected: TRUE (public benefit narrative required)
+
+-- Test enhanced reporting for larger charities
+#EVAL `return includes required narratives` sampleFinancialRecord
+-- Expected: TRUE (additional narratives for qualifying charities)
+
+-- ======================================================================
+-- TIMING ORDER TESTS (R&O 144/2019)
+-- ======================================================================
+
+-- Test 2-month filing deadline from Art 13
+#EVAL `annual return is due` completeCharity testDate2024
+-- Expected: TRUE/FALSE (depends on financial year end)
+
+-- Test overdue return detection
+#EVAL `annual return is overdue` completeCharity testDate2024
+-- Expected: FALSE (assuming compliant charity)
+
+-- Test deadline calculation accuracy
+#EVAL `date is after` (addMonths testDate2024 2) testDate2024
+-- Expected: TRUE (validates addMonths function works correctly)

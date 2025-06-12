@@ -11,6 +11,7 @@ import L4.Annotation
 import L4.Lexer (PosToken)
 import L4.Syntax
 import L4.Utils.Ratio (prettyRatio)
+import L4.Desugar
 import Optics
 
 -- TODO: I would like to be able to attach meta information and
@@ -67,7 +68,7 @@ class Linearize a where
   linearize :: a -> LinTree
 
 instance Linearize (Expr Resolved) where
-  linearize = \ case
+  linearize expr = case carameliseNode expr of
     And _ e1 e2 -> hcat
       [ lin e1
       , text "and"
@@ -310,7 +311,8 @@ instance Linearize (Pattern Resolved) where
       , text "by"
       , lin rest
       ]
-    PatLit _ lit -> lin lit
+    PatExpr _ expr -> hcat [ "is", "exactly", lin expr ]
+    PatLit _ lit -> hcat [ lin lit ]
 
 instance Linearize (GivenSig Resolved) where
   linearize = \ case

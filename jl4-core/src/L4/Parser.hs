@@ -1223,17 +1223,27 @@ pattern' =
 
 basePattern :: Parser (Pattern Name)
 basePattern =
-      patApp
+  patLit
+  <|> patExpr
+  <|> patApp
   <|> paren pattern'
 
 atomicPattern :: Parser (Pattern Name)
 atomicPattern =
   patLit
+  <|> patExpr
   <|> nameAsPatApp
   <|> paren pattern'
 
 patLit :: Parser (Pattern Name)
 patLit = attachAnno $ PatLit emptyAnno <$> annoHole rawLit
+
+patExpr :: Parser (Pattern Name)
+patExpr = attachAnno $
+  PatExpr emptyAnno
+    <$> do
+      annoLexeme (spacedToken_ TKExact)
+        *> annoHole expr
 
 nameAsPatApp :: Parser (Pattern Name)
 nameAsPatApp =

@@ -19,6 +19,8 @@ module L4.EvaluateLazy.Machine
 , emptyEnvironment
 , prettyEvalException
 , boolView
+-- * Constants exposed for the eager evaluator
+, builtinBinOps
 )
 where
 
@@ -44,16 +46,20 @@ data Frame =
   | IfThenElse1 {- -} (Expr Resolved) (Expr Resolved) Environment
   | ConsiderWhen1 Reference {- -} (Expr Resolved) [Branch Resolved] Environment
   | PatNil0
-  | PatCons0 (Pattern Resolved) (Pattern Resolved)
-  | PatCons1 {- -} Reference (Pattern Resolved)
+  | PatCons0 (Pattern Resolved) Environment (Pattern Resolved)
+  | PatCons1 {- -} Reference Environment (Pattern Resolved)
   | PatCons2 Environment {- -}
-  | PatLit0 Lit
-  | PatApp0 Resolved [Pattern Resolved]
+  | PatLit0 Environment (Expr Resolved) -- env, literal
+  | PatLit1 WHNF -- the scrutinee
+  | PatLit2
+  | PatApp0 Resolved Environment [Pattern Resolved]
   | PatApp1 [Environment] {- -} [(Reference, Pattern Resolved)]
   | EqConstructor1 {- -} Reference [(Reference, Reference)]
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
   | UnaryBuiltin0 UnaryBuiltinFun
+  | BinBuiltin1 BinOp Reference
+  | BinBuiltin2 BinOp WHNF
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   deriving stock Show
@@ -150,10 +156,12 @@ pattern StuckOnAssumed assumedResolved = UserException (Stuck assumedResolved)
 
 forwardExpr :: Environment -> Expr Resolved -> Machine Config
 forwardExpr env = \ case
-  And  _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
-  Or   _ann e1 e2 -> ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
   RAnd _ann e1 e2 -> Backward (ValROp env ValRAnd (Left e1) (Left e2))
   ROr  _ann e1 e2 -> Backward (ValROp env ValROr (Left e1) (Left e2))
+  And  _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 e2 falseExpr)
+  Or   _ann e1 e2 ->
+    ForwardExpr env (IfThenElse emptyAnno e1 trueExpr e2)
   Implies _ann e1 e2 ->
     ForwardExpr env (IfThenElse emptyAnno e1 e2 trueExpr)
   Not _ann e ->
@@ -248,6 +256,11 @@ backward val = WithPoppedFrame $ \ case
     ForwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
+  Just (BinBuiltin1 binOp r) -> do
+    PushFrame (BinBuiltin2 binOp val)
+    EvalRef r
+  Just (BinBuiltin2 binOp val1) ->
+    runBinOp binOp val1 val
   Just f@(App1 rs) -> do
     case val of
       ValClosure givens e env' -> do
@@ -273,6 +286,15 @@ backward val = WithPoppedFrame $ \ case
         r <- expect1 rs
         PushFrame (UnaryBuiltin0 fn)
         EvalRef r
+      ValBinaryBuiltinFun fn -> do
+        (x, y) <- expect2 rs
+        case fn of
+          -- 'BinOpCons' doesn't need to evaluate anything!
+          BinOpCons -> do
+            Backward $ ValCons x y
+          _ -> do
+            PushFrame (BinBuiltin1 fn y)
+            EvalRef x
       ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
@@ -299,18 +321,18 @@ backward val = WithPoppedFrame $ \ case
         Backward (ValEnvironment Map.empty)
       _ ->
         patternMatchFailure
-  Just (PatCons0 p1 p2) -> do
+  Just (PatCons0 p1 env p2) -> do
     case val of
       ValCons rf1 rf2 -> do
-        PushFrame (PatCons1 rf2 p2)
-        matchPattern rf1 p1
+        PushFrame (PatCons1 rf2 env p2)
+        matchPattern rf1 env p1
       _ ->
         patternMatchFailure
-  Just (PatCons1 rf2 p2) -> do
+  Just (PatCons1 rf2 env p2) -> do
     case val of
       ValEnvironment env1 -> do
         PushFrame (PatCons2 env1)
-        matchPattern rf2 p2
+        matchPattern rf2 env p2
       _ ->
         InternalException $ RuntimeTypeError $
           "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY"
@@ -320,7 +342,7 @@ backward val = WithPoppedFrame $ \ case
         Backward (ValEnvironment (Map.union env2 env1))
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY"
-  Just (PatApp0 n ps) ->
+  Just (PatApp0 n env ps) ->
     case val of
       ValConstructor n' rfs
         | sameResolved n n' ->
@@ -333,7 +355,7 @@ backward val = WithPoppedFrame $ \ case
                   []             -> Backward (ValEnvironment Map.empty)
                   ((r, p) : rps) -> do
                     PushFrame (PatApp1 [] rps)
-                    matchPattern r p
+                    matchPattern r env p
             else InternalException $ RuntimeTypeError
               "pattern for constructor has the wrong number of arguments"
       _ ->
@@ -345,20 +367,22 @@ backward val = WithPoppedFrame $ \ case
           []              -> Backward (ValEnvironment (Map.unions (env : envs)))
           ((r, p) : rps') -> do
             PushFrame (PatApp1 (env : envs) rps')
-            matchPattern r p
+            matchPattern r env p
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching constructor"
-  Just (PatLit0 lit)
-    | NumericLit _ n <- lit
-    , ValNumber n' <- val -> if  n == n'
-      then Backward $ ValEnvironment emptyEnvironment
-      else patternMatchFailure
-    | StringLit _ s <- lit
-    , ValString s' <- val  -> if s == s'
-      then Backward $ ValEnvironment emptyEnvironment
-      else patternMatchFailure
-    | otherwise -> InternalException $ RuntimeTypeError $
-      "expected a literal type but found: " <> prettyLayout val <> " when matching on a literal pattern"
+  Just (PatLit0 env lit) -> do
+    PushFrame (PatLit1 val)
+    ForwardExpr env lit
+  Just (PatLit1 lit) -> do
+    PushFrame PatLit2
+    runBinOpEquals lit val
+  Just PatLit2 ->
+    case val of
+      -- NOTE: in future, we may give the pattern that was matched a name, potentially
+      ValBool True -> Backward $ ValEnvironment emptyEnvironment
+      ValBool False -> patternMatchFailure
+      _ -> InternalException $ RuntimeTypeError $
+        "expected a boolean but found: " <> prettyLayout val <> " while matching literal pattern"
   Just (EqConstructor1 rf rfs) -> do
     PushFrame (EqConstructor2 val rfs)
     EvalRef rf
@@ -457,7 +481,7 @@ backwardContractFrame val = \ case
       ValBool True -> do
         pushCFrame (Contract11 (ActionDoesn'tmatch {..}))
         pushCFrame (Contract9 ScrutinizeEnvironment {..})
-        matchPattern ev'act act.action
+        matchPattern ev'act env act.action
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
@@ -604,23 +628,28 @@ matchBranches _scrutinee env (Otherwise _ann e : _) =
   ForwardExpr env e
 matchBranches scrutinee env (When _ann pat e : branches) = do
   PushFrame (ConsiderWhen1 scrutinee e branches env)
-  matchPattern scrutinee pat
+  matchPattern scrutinee env pat
 
-matchPattern :: Reference -> Pattern Resolved -> Machine Config
-matchPattern scrutinee (PatVar _ann n) = do
+matchPattern :: Reference -> Environment -> Pattern Resolved -> Machine Config
+matchPattern scrutinee _env (PatVar _ann n) = do
   Backward (ValEnvironment (Map.singleton (getUnique n) scrutinee))
-matchPattern scrutinee (PatApp _ann n [])
+matchPattern scrutinee _env (PatApp _ann n [])
   | getUnique n == TypeCheck.emptyUnique = do -- pattern for the empty list
   PushFrame PatNil0
   EvalRef scrutinee
-matchPattern scrutinee (PatCons _ann p1 p2) = do
-  PushFrame (PatCons0 p1 p2 )
+matchPattern scrutinee env (PatCons _ann p1 p2) = do
+  PushFrame (PatCons0 p1 env p2 )
   EvalRef scrutinee
-matchPattern scrutinee (PatApp _ann n ps) = do
-  PushFrame (PatApp0 n ps )
+matchPattern scrutinee env (PatApp _ann n ps) = do
+  PushFrame (PatApp0 n env ps)
   EvalRef scrutinee
-matchPattern scrutinee (PatLit _ann lit) = do
-  PushFrame (PatLit0 lit)
+matchPattern scrutinee env (PatExpr _ann expr) = do
+  PushFrame (PatLit0 env expr)
+  EvalRef scrutinee
+matchPattern scrutinee _env (PatLit _ann lit) = do
+  PushFrame $ PatLit1 case lit of
+    NumericLit _ n -> ValNumber n
+    StringLit _ s -> ValString  s
   EvalRef scrutinee
 
 -- | This unwinds the stack until it finds the enclosing pattern match and then resumes.
@@ -645,6 +674,11 @@ runLit (StringLit _ann str)  = pure (ValString str)
 expect1 :: [a] -> Machine a
 expect1 = \ case
   [x] -> pure x
+  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+
+expect2 :: [a] -> Machine (a, a)
+expect2 = \ case
+  [x, y] -> pure (x, y)
   xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
@@ -1171,8 +1205,21 @@ initialEnvironment = do
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
   waitUntilRef <- AllocateValue =<< waitUntilVal eventCRef neverMatchesPartyRef neverMatchesActRef
+  andRef <- AllocateValue =<< andValClosure trueRef falseRef
+  orRef <- AllocateValue =<< orValClosure trueRef falseRef
+  impliesRef <- AllocateValue =<< impliesValClosure trueRef falseRef
+  notRef <- AllocateValue =<< notValClosure trueRef falseRef
+
+  builtinBinOpRefs <-
+    traverse
+      (\(funVal, uniq) -> do
+        r <- AllocateValue $ ValBinaryBuiltinFun funVal
+        pure (uniq, r)
+      )
+      builtinBinOps
+
   pure $
-    Map.fromList
+    Map.fromList $
       [ (TypeCheck.falseUnique, falseRef)
       , (TypeCheck.trueUnique,  trueRef)
       , (TypeCheck.emptyUnique, nilRef)
@@ -1184,4 +1231,108 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
+      , (TypeCheck.andUnique, andRef)
+      , (TypeCheck.orUnique, orRef)
+      , (TypeCheck.impliesUnique, impliesRef)
+      , (TypeCheck.notUnique, notRef)
       ]
+      <> builtinBinOpRefs
+
+builtinBinOps :: [(BinOp, Unique)]
+builtinBinOps =
+  [ (val, unique)
+  | (val, uniques) <-
+      [ (BinOpLt,        TypeCheck.ltUniques)
+      , (BinOpLeq,       TypeCheck.leqUniques)
+      , (BinOpGt,        TypeCheck.gtUniques)
+      , (BinOpGeq,       TypeCheck.geqUniques)
+      , (BinOpPlus,      [TypeCheck.plusUnique])
+      , (BinOpMinus,     [TypeCheck.minusUnique])
+      , (BinOpTimes,     [TypeCheck.timesUnique])
+      , (BinOpDividedBy, [TypeCheck.divideUnique])
+      , (BinOpModulo,    [TypeCheck.moduloUnique])
+      , (BinOpCons,      [TypeCheck.consUnique])
+      , (BinOpEquals,    [TypeCheck.equalsUnique])
+      ]
+  , unique <- uniques
+  ]
+
+boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
+boolBinOpClosure true false buildExpr = do
+  let
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+    nb = mkName "b"
+  aDef <- def na
+  bDef <- def nb
+  aRef <- ref na aDef
+  bRef <- ref nb bDef
+  pure $ ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      , MkOptionallyTypedName emptyAnno bDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr aRef bRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+boolUnaryOpClosure :: Reference -> Reference -> (Resolved -> Expr Resolved) -> Machine (Value a)
+boolUnaryOpClosure true false buildExpr = do
+  let
+    mkName = MkName emptyAnno . NormalName
+    na = mkName "a"
+  aDef <- def na
+  aRef <- ref na aDef
+  pure $ ValClosure
+    (MkGivenSig emptyAnno
+      [ MkOptionallyTypedName emptyAnno aDef (Just TypeCheck.boolean)
+      ])
+    (buildExpr aRef)
+    ( Map.fromList
+      [ (TypeCheck.trueUnique, true)
+      , (TypeCheck.falseUnique, false)
+      ]
+    )
+
+andValClosure :: Reference -> Reference -> Machine (Value a)
+andValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        falseExpr
+    )
+
+notValClosure :: Reference -> Reference -> Machine (Value a)
+notValClosure true false =
+  boolUnaryOpClosure true false
+    (\aRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        falseExpr
+        trueExpr
+    )
+
+orValClosure :: Reference -> Reference -> Machine (Value a)
+orValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        trueExpr
+        (Var emptyAnno bRef)
+    )
+
+impliesValClosure :: Reference -> Reference -> Machine (Value a)
+impliesValClosure true false =
+  boolBinOpClosure true false
+    (\aRef bRef ->
+      IfThenElse emptyAnno
+        (Var emptyAnno aRef)
+        (Var emptyAnno bRef)
+        trueExpr
+    )

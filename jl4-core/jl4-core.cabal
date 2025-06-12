@@ -52,6 +52,7 @@ library
     prettyprinter,
     safe-exceptions,
     scientific,
+    split,
     text >= 2 && < 2.1.2,
     tree-diff,
     vector,
@@ -69,6 +70,7 @@ library
     Paths_jl4_core
     L4.Annotation
     L4.Citations
+    L4.Desugar
     L4.Evaluate
     L4.Evaluate.Operators
     L4.Evaluate.Value
@@ -79,6 +81,7 @@ library
     L4.ExactPrint
     L4.FindDefinition
     L4.Lexer
+    L4.Names
     L4.Nlg
     L4.Parser
     L4.Parser.Anno

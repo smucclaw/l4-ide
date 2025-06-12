@@ -8,10 +8,12 @@
   import * as vscode from 'vscode'
   import { createConverter as createCodeConverter } from 'vscode-languageclient/lib/common/codeConverter.js'
   import * as monaco from '@codingame/monaco-vscode-editor-api'
+  import { monacoModuleWrapperForErrorLens } from '$lib/monaco-error-lens-helpers'
 
   import { MonacoL4LanguageClient } from '$lib/monaco-l4-language-client'
   import type { LadderBackendApi } from 'jl4-client-rpc'
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
+  import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
 
   import {
     LadderFlow,
@@ -20,7 +22,7 @@
     type FunDeclLirNode,
     LadderEnv,
     VizDeclLirSource,
-  } from '@repo/decision-logic-visualizer'
+  } from 'l4-ladder-visualizer'
   import {
     makeVizInfoDecoder,
     type RenderAsLadderInfo,
@@ -109,6 +111,7 @@
 
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
   let monacoL4LangClient: MonacoL4LanguageClient | undefined
+  let monacoErrorLens: MonacoErrorLens | undefined
 
   // TODO: Need to refactor this --- too long
   onMount(async () => {
@@ -182,8 +185,25 @@
         wordBasedSuggestions: 'off',
         theme: 'jl4Theme',
         'semanticHighlighting.enabled': true,
+        glyphMargin: true, // Required for gutter icons
       })
 
+      // Set up Monaco Error Lens
+      monacoErrorLens = new MonacoErrorLens(
+        editor,
+        monacoModuleWrapperForErrorLens,
+        {
+          enableInlineMessages: true,
+          enableLineHighlights: true,
+          enableGutterIcons: true,
+          followCursor: 'allLines',
+          messageTemplate: '{message}',
+          maxMessageLength: 150,
+          updateDelay: 200,
+        }
+      )
+
+      // Persistent sessions
       const ownUrl: URL = new URL(window.location.href)
       const sessionid: string | null = ownUrl.searchParams.get('id')
       if (sessionid) {
@@ -305,6 +325,7 @@
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
       })
+
       monacoL4LangClient = new MonacoL4LanguageClient(internalClient)
 
       /**********************************
@@ -320,7 +341,7 @@
       makeLadderFlow: (ladderInfo: RenderAsLadderInfo) => Promise<void>
     ): Middleware {
       return {
-        /* eslint-disable-next-line  @typescript-eslint/no-explicit-any */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         executeCommand: async (command: any, args: any, next: any) => {
           logger.debug(`trying to execute command ${command}`)
           const responseFromLangServer = await next(command, args)
@@ -374,13 +395,22 @@
   })
 
   onDestroy(() => {
+    if (monacoErrorLens) {
+      monacoErrorLens.dispose()
+      monacoErrorLens = undefined
+    }
+
     // YM: I'm not sure that this is necessary --- just adding it for now because I've seen examples on GitHub that do this.
     // I'll look into this more in the future.
     if (editor) {
       editor.dispose()
       editor = undefined
     }
-    // TODO: May also want to clean up the websocket, but not sure if necessary
+
+    if (monacoL4LangClient) {
+      monacoL4LangClient.dispose?.()
+      monacoL4LangClient = undefined
+    }
   })
 
   const britishCitizen = `§ \`Assumptions\`

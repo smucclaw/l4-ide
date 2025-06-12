@@ -1,0 +1,305 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+
+@import '@xyflow/svelte/dist/style.css';
+
+@import 'tailwindcss';
+@import './tailwindcss-animate.css';
+
+/*******************************************************
+        Base theme variables / styles
+        -- includes variables for Shadcn Svelte
+*********************************************************
+
+  Shadcn Svelte stuff adapted from https://github.com/MattL-NZ/svelte-tailwind4-starter/blob/main/src/app.css
+
+  > The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  > If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+:root {
+  /** Base Shadcn Svelte colors.
+  * Color css vars that don't have the "color-" prefix
+    should be 'raw' oklch values. 
+  * See https://next.shadcn-svelte.com/docs/theming
+  * > CSS variables must be defined without the color space function.
+  * This is probably a holdover from TW 3 which they haven't updated yet.
+  */
+  --background: 1 0 0;
+  --foreground: 0.137 0.036 258.53;
+
+  /* fuschia 50
+  Formerly: 0.96 0.005 249.1 */
+  --muted: 0.977 0.017 320.058;
+  --muted-foreground: 0.53 0.035 251.2;
+
+  /* The default shadcn svelte border color: 214.3 31.8% 91.4%; 
+   * Raw oklch value of --color-sky-700; */
+  --border: 0.5 0.134 242.749;
+
+  --input: 0.91 0.035 240.2;
+
+  /* The old primary was #001188. This is quite close -- just more convenient to align with Tailwind color palette. 
+   * The original shadcn svelte default is 
+      --primary: 190 91% 36%; 
+    The following is the raw value of --color-cyan-900.
+  */
+  --primary: 0.398 0.07 227.392;
+  --primary-foreground: 0.98 0.005 249.1;
+
+  --secondary: 0.96 0.005 249.1;
+  --secondary-foreground: 0.19 0.045 257.2;
+
+  /*  The default shadcn svelte accent: 210 40% 96.1%;
+   * The old color-button-hover: #a5b4fc;
+    The following is the raw value of --color-sky-100 */
+  --accent: 0.951 0.026 236.824;
+  --accent-foreground: 0.19 0.045 257.2;
+
+  --destructive: 0.55 0.23 29.2;
+  --destructive-foreground: 0.98 0.005 249.1;
+  --ring: 0.137 0.036 258.53;
+  /* TODO: Might want to tweak `radius` */
+  --radius: 0.3rem;
+}
+
+@theme inline {
+  /***************************************
+       Shadcn Svelte border
+  ****************************************/
+
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /***************************************
+      More base Shadcn Svelte colors
+  ****************************************/
+
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
+
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
+
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
+
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
+
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-caution: oklch(var(--color-red-500));
+  --color-warning: oklch(var(--color-amber-500));
+  --color-info: oklch(var(--color-sky-500));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/*--------------------------------------------------------------------
+          END of shadcn svelte related variables 
+**********************************************************************/
+
+@theme inline {
+  /*******************************************
+      Other specific --color-* things
+  ********************************************/
+
+  --color-node-text: #00004d;
+  /* Another color to consider for node annotations? --color-zinc-400 */
+  --color-node-annotation: var(--color-node-text);
+  --color-button: #c7d2fe;
+
+  /***************************************
+        Highlighted vs normal paths 
+  ****************************************/
+
+  /* Stroke width */
+  --stroke-width-default: 1px;
+  --path-highlight-delta: 2px;
+  --node-border-highlight-delta: 2px;
+  /* TODO: Think about whether the default should be 2px */
+  --highlighted-stroke-width: calc(
+    var(--stroke-width-default) + var(--path-highlight-delta)
+  );
+
+  /* Stroke color */
+  --ladder-stroke-color-default: var(--color-primary);
+  --color-highlighted-path-in-flow: var(--color-sky-600);
+
+  /***********************************************
+      Viable vs non-viable nodes and edges 
+  ************************************************/
+
+  /* TODO: Experiment with changing opacity vs changing color */
+  /* --color-nonviable-path: var(--color-zinc-300); */
+  --opacity-ladder-nonviable: 0.6;
+
+  /***************************************
+         BoolValue: True vs False 
+  ****************************************/
+
+  --color-true-value: var(--color-lime-200);
+  --color-false-value: var(--color-rose-200);
+}
+
+/***************************************
+         UBoolVarNode border 
+****************************************/
+
+.ubool-var-node-border {
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
+  border-radius: var(--ladder-node-border-radius);
+}
+
+/*************************************
+        Utility classes
+*************************************/
+
+/* Need !important in true-val and false-val to be able to override base / default background colors
+that a node might have (e.g., the darker background of (the 'function part' of) an App node). */
+@utility true-val {
+  background-color: var(--color-true-value) !important;
+}
+
+@utility false-val {
+  background-color: var(--color-false-value) !important;
+}
+
+@utility base-sf-node-styles {
+  font-size: 1rem;
+  text-align: center;
+
+  color: var(--ladder-node-color, var(--ladder-node-color-default));
+}
+
+/** Controls min/max widths of the labels,
+* as well as text wrapping behavior.
+*
+* To be used in the div that wraps the label. */
+@utility label-wrapper-for-content-bearing-sf-node {
+  /* horizontal padding */
+  @apply px-2.5;
+  /* vertical padding */
+  @apply py-2;
+
+  /* To deal with long text / avoid overflow issues:
+
+    break-words: so that long unbreakable words won't overflow the container
+
+    whitespace-pre-wrap vs whitespace-breaks-spaces:
+      https://stackoverflow.com/questions/64699828/css-property-white-space-example-for-break-spaces
+  */
+  @apply break-words whitespace-break-spaces;
+
+  /*
+  * Max width so that the node doesn't get too wide.
+  * But also need min width to minimize edge crossings when
+  * stacking nodes with labels of different lengths
+  * on top of each other.
+  *
+  * TODO: To experiment with in the future: probably better to dynamically
+  * adjust the min/max width based on the size of the the relevant neighbor nodes?
+  * Hard to find a one-size-fits-all set of min/max widths.
+  */
+  @apply min-w-[12ch] leading-normal;
+  max-width: 40ch;
+}
+
+/** For the source and sink bundling nodes */
+@utility bundling-node {
+  @apply base-sf-node-styles;
+  /* Will lose the bundling node if width is 0 px */
+  width: 1px;
+  height: 1px;
+}
+
+@utility node-annotation {
+  position: absolute;
+  top: -25px; /* Adjust this value to control the vertical position */
+  left: 50%;
+  transform: translateX(-58%); /* Centers the text horizontally, ish */
+
+  @apply uppercase;
+  @apply text-base leading-none;
+  @apply text-(--ladder-color-node-annotation);
+}
+
+@utility nonviable-ladder-element {
+  opacity: var(--opacity-ladder-nonviable);
+}
+
+@utility bool-lit-node-border {
+  border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
+  border-radius: 2px;
+}
+
+/*************************************
+    Other SF styles
+*************************************/
+
+:root,
+.svelte-flow {
+  /* Border style variables */
+  --ladder-node-border-width-default: 2px;
+  --ladder-node-border-width: var(--ladder-node-border-width-default);
+  --ladder-node-border-color: var(--color-primary);
+  --ladder-node-border-radius: var(--radius);
+
+  --ladder-node-color: var(--color-node-text, var(--color-primary));
+
+  /* TODO: Refactor the stuff below to move away from fragile overriding of
+  --xy-* styles  */
+  --xy-handle-background-color: var(--color-primary);
+  --xy-edge-stroke: var(--color-primary);
+
+  .svelte-flow__node {
+    font-family: 'Source Sans 3', serif;
+    font-optical-sizing: auto;
+    font-style: normal;
+  }
+}
+
+/* Override border properties when highlighted */
+.highlighted-ladder-node {
+  --ladder-node-border-width: calc(
+    var(--ladder-node-border-width-default) + var(--node-border-highlight-delta)
+  );
+  --ladder-node-border-color: var(--color-highlighted-path-in-flow);
+}
+
+/*************************************
+  Other styles
+*************************************/
+
+body {
+  color: var(--color-primary);
+  background-color: white;
+  margin: 0;
+}
