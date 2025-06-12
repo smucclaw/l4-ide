@@ -19,6 +19,7 @@ import {
   empty,
   isVertex,
   overlays,
+  vertex,
   type DirectedAcyclicGraph,
 } from '../../algebraic-graphs/dag.js'
 import { type Edge, DirectedEdge } from '../../algebraic-graphs/edge.js'
@@ -30,14 +31,11 @@ import type {
 import {
   LadderNodeSelectionTracker,
   PathsListLirNode,
+  LinPathLirNode,
   type NoIntermediateBundlingNodeDag,
 } from '../node-paths-selection.js'
 import type { LadderEnv } from '$lib/ladder-env.js'
-import {
-  isNnf,
-  pprintPathGraph,
-  getVerticesFromAlgaDag,
-} from './ladder-dag-helpers.js'
+import { isNnf, getVerticesFromAlgaDag } from './ladder-dag-helpers.js'
 import _ from 'lodash'
 
 /*
@@ -101,57 +99,6 @@ export class FunDeclLirNode extends DefaultLirNode implements LirNode {
     return 'FUN_DECL_LIR_NODE'
   }
 }
-
-/*************************************************
-          Lin Path
- *************************************************/
-
-/** The simplest version of the LinPathLirNode -- no distinguishing between
- * viable and non-viable linearized paths
- */
-export class LinPathLirNode extends DefaultLirNode implements LirNode {
-  constructor(
-    nodeInfo: LirNodeInfo,
-    protected rawPath: DirectedAcyclicGraph<LirId>
-  ) {
-    super(nodeInfo)
-  }
-
-  getRawPathGraph() {
-    return this.rawPath
-  }
-
-  getVertices(context: LirContext) {
-    return this.rawPath
-      .getVertices()
-      .map((id) => context.get(id))
-      .filter((n) => !!n) as LadderLirNode[]
-  }
-
-  getSelectableVertices(context: LirContext) {
-    return this.rawPath
-      .getVertices()
-      .map((id) => context.get(id) as LadderLirNode)
-      .filter((n) =>
-        isSelectableLadderLirNode(n)
-      ) as Array<SelectableLadderLirNode>
-  }
-
-  dispose(context: LirContext) {
-    this.rawPath.dispose()
-    context.clear(this.getId())
-  }
-
-  toPretty(context: LirContext) {
-    return pprintPathGraph(context, this.rawPath)
-  }
-
-  toString() {
-    return 'LIN_PATH_LIR_NODE'
-  }
-}
-
-// TODO: Differentiate between viable and non-viable linearized paths
 
 /******************************************************
                   Flow Lir Nodes
@@ -514,6 +461,8 @@ export async function makeLadderGraphLirNode(
   ladderEnv: LadderEnv,
   noIntermediateBundlingNodeGraph: NoIntermediateBundlingNodeDag
 ) {
+  augmentEdgesWithExplanatoryLabel(nodeInfo.context, ladderEnv, dag)
+
   const ladderGraph = isNnf(nodeInfo.context, dag)
     ? NNFLadderGraphLirNode.make(
         nodeInfo,
@@ -572,7 +521,7 @@ export class NNFLadderGraphLirNode extends BaseLadderGraphLirNode {
   ): NNFLadderGraphLirNode {
     const pathsList = new PathsListLirNode(
       nodeInfo,
-      dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, p))
+      dag.getAllPaths().map((p) => new LinPathLirNode(nodeInfo, ladderEnv, p))
     )
     const nodeSelectionTracker = LadderNodeSelectionTracker.make(
       nodeInfo,
@@ -1144,13 +1093,13 @@ export class DefaultLadderLirEdge implements LadderLirEdge {
 }
 
 export function augmentEdgesWithExplanatoryLabel(
-  env: LadderEnv,
   context: LirContext,
-  ladderGraph: LadderGraphLirNode
+  env: LadderEnv,
+  graph: DirectedAcyclicGraph<LirId>
 ) {
-  const edges = ladderGraph.getEdges(context)
+  const edges = graph.getEdges()
 
-  const isEdgeToAddAndLabel = (edge: LadderLirEdge) => {
+  const isEdgeToAddAndLabel = (edge: DirectedEdge<LirId>) => {
     const edgeU = context.get(edge.getU()) as LadderLirNode
     const edgeV = context.get(edge.getV()) as LadderLirNode
 
@@ -1161,10 +1110,7 @@ export function augmentEdgesWithExplanatoryLabel(
       isAppLirNode(edgeV)
 
     const sourceIsNotOverallSource =
-      ladderGraph.getOverallSource(context) &&
-      !edge
-        .getU()
-        .isEqualTo(ladderGraph.getOverallSource(context)?.getId() as LirId)
+      graph.getSource() && !vertex(edge.getU()).isEqualTo(graph.getSource())
     const sourceIsEligible =
       !isSourceWithOrAnnoLirNode(edgeU) &&
       sourceIsNotOverallSource &&
@@ -1175,6 +1121,8 @@ export function augmentEdgesWithExplanatoryLabel(
 
   const edgesToAddLabel = edges.filter(isEdgeToAddAndLabel)
   edgesToAddLabel.forEach((edge) => {
-    ladderGraph.setEdgeLabel(context, edge, env.getExplanatoryAndEdgeLabel())
+    const attrs = graph.getAttributesForEdge(edge)
+    attrs.setLabel(env.getExplanatoryAndEdgeLabel())
+    graph.setEdgeAttributes(edge, attrs)
   })
 }
