@@ -33,6 +33,8 @@ There's also misc config files and dev infra at the top level of the repo, e.g.
   - and of course, Turborepo for the TS monorepo, with `npm` (`pnpm` would have required more work to use it with `vsce`)
 - We use the 'Layout-IR' data structure as an intermediate data structure for more complex UIs. The core layout IR library is currently in [the Ladder visualizer](../../../ts-shared/l4-ladder-visualizer), but it should be factored out to a package in ts-shared at some point.
 - [The Ladder visualizer](../../../ts-shared/l4-ladder-visualizer) uses the algebraic-graphs formalism when constructing graphs; this allows us to construct and manipulate graphs in a high-level, safe way. This has, in the admittedly-biased opinion of the person who made this decision, been a huge productivity win.
+  - See [the alga paper](https://dl.acm.org/authorize?N46678) for more info --- the key constructs are easy to understand
+  - The Haskell lib is also worth checking out.
 - Re the client-side RPC, see [the README in jl4-client-rpc](../../../ts-shared/jl4-client-rpc/README.md).
 
 ## Misc notes on infra
