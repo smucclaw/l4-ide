@@ -435,7 +435,6 @@ catMaybes list MEANS
     WHEN NOTHING THEN catMaybes xs
     WHEN JUST y  THEN y FOLLOWED BY catMaybes xs
 
-
 DECLARE PAIR OF a, b
   HAS fst IS AN a
       snd IS A  b
