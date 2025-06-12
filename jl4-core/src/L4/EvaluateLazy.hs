@@ -4,12 +4,14 @@ module L4.EvaluateLazy
 , execEvalModuleWithEnv
 , execEvalExprInContextOfModule
 , prettyEvalException
+, prettyEvalDirectiveResult
 )
 where
 
 import Base
 import qualified Base.Map as Map
 import qualified Base.Set as Set
+import qualified Base.Text as Text
 import L4.EvaluateLazy.Machine
 import L4.Evaluate.ValueLazy
 import L4.Parser.SrcSpan (SrcRange)
@@ -172,6 +174,9 @@ data EvalTraceAction =
   | Pop -- ^ explicit pop (would not be needed / could be combined with Exit)
   deriving stock Show
 
+-- | This instance is primarily used for debugging. It shows individual actions
+-- without any postprocessing.
+--
 instance LayoutPrinter EvalTraceAction where
   printWithLayout = \ case
     Enter e      -> ">>> " <+> printWithLayout e
@@ -183,6 +188,7 @@ instance LayoutPrinter EvalTraceAction where
     Push         -> "+++ "
     Pop          -> "--- "
 
+-- | This shows a full trace.
 instance LayoutPrinter EvalTrace where
   printWithLayout = printEvalTrace 0
 
@@ -337,8 +343,8 @@ splitEvalTraceActions = go 0 [(0, Nothing, id)] Map.empty
           -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
           -> [EvalTraceAction]
           -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
-    go d1 stack _m actions
-      | trace (show d1 <> " " <> show ((\ (x, _, _) -> x) <$> stack) <> " " <> show (prettyLayout' <$> take 2 actions)) False = undefined
+    -- go d1 stack _m actions
+    --   | trace (show d1 <> " " <> show ((\ (x, _, _) -> x) <$> stack) <> " " <> show (prettyLayout' <$> take 2 actions)) False = undefined
     go d1 [] m (_a@(SetRef r) : as@(Exit v : _)) =
       let
         m' = Map.insertWith (\ _new old -> old) (Just r.address) (Left v) m
@@ -378,37 +384,11 @@ splitEvalTraceActions = go 0 [(0, Nothing, id)] Map.empty
     go (-1) [] m [] = m
     go (-1) [] m (Exit _ : Pop : actions) = go (-1) [] m actions
     go d stack _m as = error $ "splitEvalTraceActions: internal error: " <> show (d, length stack, length as, show as)
-{-
-    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Enter _ : _)) =
-      go d1 ((d1, Just r.address , id) : (d2, ma, casf . (a :)) : stack) m as
-    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Exit v : _)) =
-      let
-        m' = Map.insertWith (\ _new old -> old) (Just r.address) (Left v) m
-      in
-        go d1 ((d2, ma, casf . (a :)) : stack) m' as
-    go _d1 _stack _m (SetRef _r : _) =
-      error "splitEvalTraceActions: unexpected order of trace actions"
-    go d1 ((d2, ma, casf) : stack) m (a@(Enter _) : as) =
-      go (d1 + 1) ((d2, ma, casf . (a :)) : stack) m as
-    go d1 ((d2, ma, casf) : stack) m (a@(Exit _) : as)
-      | d1 - 1 == d2 =
-        let
-          m' = Map.insertWith (\ _new old -> old) ma (Right (casf . (a :) $ [])) m
-        in
-          go (d1 - 1) stack m' as
-      | otherwise =
-      go (d1 - 1) ((d2, ma, casf . (a :)) : stack) m as
-    go d1 ((d2, ma, casf) : stack) m (a : as) =
-      go d1 ((d2, ma, casf . (a :)) : stack) m as
-    go d stack _m as = error $ "splitEvalTraceActions: internal error: " <> show (d, length stack, length as)
--}
 
 data EvalPreTrace =
     PreTrace [(Expr Resolved, [EvalPreTrace])] WHNF
   | PrePlaceholder Address
   | PreValue WHNF
-
--- ((Expr Resolved) [EvalPreTrace])* WHNF
 
 data EvalTrace =
     Trace [((Expr Resolved), [EvalTrace])] NF
@@ -476,43 +456,14 @@ buildEvalPreTrace as = case as of
     addSubTraceToFrame t (PreTraceFrame (MkRevList ((e, subs) : esubs')) Nothing) = PreTraceFrame (MkRevList ((e, pushRevList t subs) : esubs')) Nothing
     addSubTraceToFrame _ (PreTraceFrame _ (Just _))                               = error "addSubTraceToFrame: subtrace after value"
     addSubTraceToFrame _ HiddenFrame                                              = HiddenFrame
-{-
-    go :: [(Expr Resolved, [EvalPreTrace] -> [EvalPreTrace])] -> [EvalTraceAction] -> EvalPreTrace
-    go fs (Enter e : actions) = go ((e, id) : fs) actions
-    go ((e, subs) : fs) (Push : actions) =
-      go ((e, subs) : fs) actions -- TODO: temporary
-    go ((e, subs) : fs) (Pop : actions) =
-      go ((e, subs) : fs) actions -- TODO: temporary
-    go ((e, subs) : fs) (Exit v : actions) =
-      let
-        t = PreTrace e (subs []) v
-      in
-        case fs of
-          [] -> t
-          ((e', subs') : fs') -> go ((e', subs' . (t :)) : fs') actions
-    go ((e, subs) : fs) (SetRef _r : actions) =
-      go ((e, subs) : fs) actions
-    go ((e, subs) : fs) (Alloc _e r : actions) =
-      go ((e, subs . (PrePlaceholder r.address :)) : fs) actions
-    go ((e, subs) : fs) (AllocPre _x r : actions) =
-      go ((e, subs . (PrePlaceholder r.address :)) : fs) actions
-    go _ [] = error "buildEvalPreTrace: premature end of action sequence"
-    go [] _ = error "buildEvalPreTrace: actions after end in action sequence"
--}
 
 buildEvalPreTraces :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> Map (Maybe Address) (Either WHNF EvalPreTrace)
 buildEvalPreTraces = Map.map (bimap id buildEvalPreTrace)
 
 buildEvalTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> EvalPreTrace -> EvalTrace
 buildEvalTrace m (PreTrace esubs w)  = Trace (second (fmap (buildEvalTrace m)) <$> esubs) (nfFromTrace m w)
-buildEvalTrace m (PrePlaceholder a)  = maybe (TraceValue Omitted) (either (TraceValue . nfFromTrace m) (buildEvalTrace m)) (Map.lookup (Just a) m) -- either _ (buildEvalTrace m) (m Map.! Just a)
+buildEvalTrace m (PrePlaceholder a)  = maybe (TraceValue Omitted) (either (TraceValue . nfFromTrace m) (buildEvalTrace m)) (Map.lookup (Just a) m)
 buildEvalTrace m (PreValue v)        = TraceValue (nfFromTrace m v)
-
-_findm :: (Ord a1, Show a1) => Map a1 a2 -> a1 -> a2
-_findm m x =
-  case Map.lookup x m of
-    Nothing -> error ("could not find: " <> show x)
-    Just y  -> y
 
 nfFromTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> WHNF -> NF
 nfFromTrace m = \ case
@@ -598,7 +549,11 @@ postprocessTrace actions =
   let
     splitActions = splitEvalTraceActions actions
     tracedHeap = buildEvalPreTraces splitActions
-    finalTrace = buildEvalTrace tracedHeap (either (error "postprocessTrace: no trace for main value") id (tracedHeap Map.! Nothing))
+    mainTrace = case Map.lookup Nothing tracedHeap of
+                  Nothing -> err
+                  Just t  -> t
+    err = error "postprocessTrace: no trace for main value"
+    finalTrace = buildEvalTrace tracedHeap (either err id mainTrace)
   in
     finalTrace
 
@@ -624,6 +579,15 @@ data EvalDirectiveResult =
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
+-- | Prints the results but not the range of an eval directive, including
+-- the trace if present.
+--
+prettyEvalDirectiveResult :: EvalDirectiveResult -> Text
+prettyEvalDirectiveResult (MkEvalDirectiveResult _range res mtrace) =
+   either (Text.unlines . prettyEvalException) prettyLayout res
+   <> case mtrace of
+        Nothing -> Text.empty
+        Just t  -> "\n─────\n" <> prettyLayout t
 
 -- | Evaluate WHNF to NF, with a cutoff (which possibly could be made configurable).
 nf :: WHNF -> Eval NF
