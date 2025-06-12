@@ -1,6 +1,6 @@
 # README
 
-What follows are developer-oriented docs, though I imagine that a non-developer should still be able to get quite a lot of them.
+What follows are developer-oriented docs, though I imagine that a non-developer should still be able to get quite a lot out of them.
 
 ## What is the ladder visualizer?
 
