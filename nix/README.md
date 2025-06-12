@@ -4,9 +4,10 @@
 
 ```sh
 nixos-rebuild switch --flake .#jl4-demo --target-host root@olive.well-typed.com
+nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host root@nano
 ```
 
-## deploying to a new machine
+## deploying to a new machine on Hetzner
 
 If the machine is an x86_64 cloud machine on hetzner, then just run
 
@@ -20,6 +21,22 @@ If you're deploying to a different machine type, create a new file like `hetzner
 create a new output in `flake.nixosModules` in the flake and import your new module as well
 as the application specific modules from there. Then use `nixos-anywhere` with the respective
 `target-host`.
+
+## deploying to a new machine on AWS EC2
+
+Following the instructions above:
+
+Suppose you have an ubuntu t3a.small instance on EC2
+
+Assuming you have preconfigured your .ssh/config with the SSH key to log in without password,
+
+    % nixos-anywhere --flake '.#jl4-aws' ubuntu@ecXXXXXX.ap-southeast-1.compute.amazonaws.com
+
+You can then reach the web interface at the EC2 hostname, and the decision service under `/decision/swagger-ui/` and so on, all served by Nginx.
+
+There is potentially some difficulty with the bringing up of the ACME letsencrypt component.
+
+## See Also
 
 Check the [documentation for `nixos-anywhere`](https://github.com/nix-community/nixos-anywhere)
 and the example `hetzner.nix` to figure out what you need to do.
