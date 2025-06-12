@@ -226,6 +226,11 @@ forwardExpr env = \ case
   IfThenElse _ann e1 e2 e3 -> do
     PushFrame (IfThenElse1 e2 e3 env)
     ForwardExpr env e1
+  MultiWayIf _ann es e -> ForwardExpr env $ desugarMultiWayIf es e
+    where
+    desugarMultiWayIf :: [(Expr Resolved, Expr Resolved)] -> Expr Resolved -> Expr Resolved
+    desugarMultiWayIf [] o = o
+    desugarMultiWayIf ((c, f) : es') o = IfThenElse emptyAnno c f $ desugarMultiWayIf es' o
   Consider _ann e branches -> do
     rf <- allocate_ e env
     matchBranches rf env branches

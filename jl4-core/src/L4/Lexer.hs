@@ -104,6 +104,7 @@ data TokenType =
   | TKMeans
   | TKDeclare
   | TKIf
+  | TKBranch
   | TKThen
   | TKElse
   | TKOtherwise
@@ -409,6 +410,7 @@ keywords =
     , ("MEANS"      , TKMeans      )
     , ("DECLARE"    , TKDeclare    )
     , ("IF"         , TKIf         )
+    , ("BRANCH"     , TKBranch     )
     , ("THEN"       , TKThen       )
     , ("ELSE"       , TKElse       )
     , ("OTHERWISE"  , TKOtherwise  )
@@ -899,6 +901,7 @@ displayTokenType tt =
     TKMeans           -> "MEANS"
     TKDeclare         -> "DECLARE"
     TKIf              -> "IF"
+    TKBranch          -> "BRANCH"
     TKThen            -> "THEN"
     TKElse            -> "ELSE"
     TKOtherwise       -> "OTHERWISE"
@@ -1037,6 +1040,7 @@ posTokenCategory =
     TKMeans -> CKeyword
     TKDeclare -> CKeyword
     TKIf -> CKeyword
+    TKBranch -> CKeyword
     TKThen -> CKeyword
     TKElse -> CKeyword
     TKOtherwise -> CKeyword

@@ -1,0 +1,10 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: ifthenelse.l4
+  Hidden:   no
+  Range:    1:1-1:1
+  Source: ifthenelse.l4
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    HoleFit requested but not enough given at: ifthenelse.l4:5:6-8
+    CallStack (from -prof):

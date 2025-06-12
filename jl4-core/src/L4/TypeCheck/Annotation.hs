@@ -1,5 +1,6 @@
 module L4.TypeCheck.Annotation where
 
+import Base
 import L4.TypeCheck.Types
 import L4.Annotation
 import L4.Lexer
@@ -132,6 +133,13 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ IfThenElse ann b' e1' e2'
+    MultiWayIf ann es e -> do
+      es' <- for es \(c, f) -> do
+        c' <- nlgExpr c
+        f' <- nlgExpr f
+        pure (c', f')
+      e' <- nlgExpr e
+      pure $ MultiWayIf ann es' e'
     Regulative ann (MkObligation ann'' party (MkAction ann' rule provided) deadline followup lest) -> do
       party' <- nlgExpr party
       rule' <- nlgPattern rule

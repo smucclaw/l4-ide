@@ -195,6 +195,8 @@ instance ToSemTokens Context PosToken (Event Name) where
 
 
 instance ToSemTokens Context PosToken (Expr Name) where
+instance (ToSemTokens Context PosToken a, ToSemTokens Context PosToken b) => ToSemTokens Context PosToken (a, b) where
+  toSemTokens (a, b) = liftA2 (<>) (toSemTokens a) (toSemTokens b)
 instance ToSemTokens Context PosToken (Obligation Name) where
 instance ToSemTokens Context PosToken (RAction Name) where
 instance ToSemTokens Context PosToken (LocalDecl Name) where
@@ -309,6 +311,8 @@ instance ToSemTokens () PosToken (GivethSig Resolved) where
 instance ToSemTokens () PosToken (GivenSig Resolved) where
 instance ToSemTokens () PosToken (Directive Resolved) where
 instance ToSemTokens () PosToken (Import Resolved) where
+instance (ToSemTokens () PosToken a, ToSemTokens () PosToken b) => ToSemTokens () PosToken (a, b) where
+  toSemTokens (a, b) = liftA2 (<>) (toSemTokens a) (toSemTokens b)
 instance ToSemTokens () PosToken NormalizedUri where
   toSemTokens _ = pure []
 

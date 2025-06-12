@@ -285,6 +285,11 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         , "THEN" <+> printWithLayout then'
         , "ELSE" <+> printWithLayout else'
         ]
+    MultiWayIf _ conds o ->
+      vcat $
+        [ "BRANCH" ]
+        <> map (\(a, b) -> "IF" <+> printWithLayout a <+> "THEN" <+> printWithLayout b) conds
+        <> [ "OTHERWISE" <+> printWithLayout o ]
     Regulative _ (MkObligation _ p a t f l) -> prettyObligation p a t f l
     Consider   _ expr branches ->
       "CONSIDER" <+> printWithLayout expr <+> hang 2 (vsep $ punctuate comma (fmap printWithLayout branches))

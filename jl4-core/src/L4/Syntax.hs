@@ -216,6 +216,7 @@ data Expr n =
   | App        Anno n [Expr n]
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
+  | MultiWayIf Anno [(Expr n, Expr n)] (Expr n)
   | Regulative Anno (Obligation n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
@@ -492,6 +493,9 @@ deriving via L4Syntax (LocalDecl n)
 instance ToConcreteNodes PosToken (Section Name) where
   toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
+
+instance (ToConcreteNodes PosToken a, ToConcreteNodes PosToken b) => ToConcreteNodes PosToken (a, b) where
+  toNodes (a, b) = liftA2 (<>) (toNodes a) (toNodes b)
 
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (Assume Name)

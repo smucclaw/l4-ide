@@ -1,0 +1,4 @@
+`x` with `TRUE`, `TRUE` and `TRUE`
+`x` with `FALSE`, `TRUE` and `TRUE`
+`x` with `FALSE`, `FALSE` and `TRUE`
+`x` with `FALSE`, `FALSE` and `FALSE`

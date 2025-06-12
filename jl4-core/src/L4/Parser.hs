@@ -987,6 +987,7 @@ baseExpr' =
       try projection
   <|> negation
   <|> ifthenelse
+  <|> multiWayIf
   <|> try event
   <|> regulative
   <|> lam
@@ -1129,6 +1130,23 @@ ifthenelse = do
       <*  annoLexeme (spacedToken_ TKThen)
       <*> annoHole (indentedExpr current)
       <*  annoLexeme (spacedToken_ TKElse)
+      <*> annoHole (indentedExpr current)
+
+multiWayIf :: Parser (Expr Name)
+multiWayIf = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    MultiWayIf emptyAnno
+      <$  annoLexeme (spacedToken_ TKBranch)
+      <*> many do
+        (,)
+          <$> do
+             annoLexeme (spacedToken_ TKIf)
+              *> annoHole (indentedExpr current)
+          <*> do
+             annoLexeme (spacedToken_ TKThen)
+              *> annoHole (indentedExpr current)
+      <*  annoLexeme (spacedToken_ TKOtherwise)
       <*> annoHole (indentedExpr current)
 
 regulative :: Parser (Expr Name)
