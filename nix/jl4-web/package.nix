@@ -30,6 +30,10 @@ buildNpmPackage rec {
 
     pushd ./ts-shared
 
+    pushd ./type-utils
+    npm run build
+    popd
+
     pushd ./viz-expr
     npm run build
     popd
@@ -38,12 +42,17 @@ buildNpmPackage rec {
     npm run build
     popd
 
+    pushd ./layout-ir
+    npm run build
+    popd
+
+    pushd ./l4-ladder-visualizer
+    npm run build
+    popd
+
     popd
 
     pushd ./ts-apps
-    pushd ./decision-logic-visualizer
-    npm run build
-    popd
 
     pushd ./webview
     npm run build

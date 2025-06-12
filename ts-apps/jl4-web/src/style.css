@@ -8,7 +8,7 @@
   we are importing via the public entrypoint declared in the dlv's package.json,
   and that we use the @repo/... alias (per Turborepo best practices).
 ****************************************************************************/
-@import '@repo/decision-logic-visualizer/dist/style.css';
+@import 'l4-ladder-visualizer/dist/style.css';
 /* ladder lib's css needs to come before tailwind import */
 
 @import 'tailwindcss';
