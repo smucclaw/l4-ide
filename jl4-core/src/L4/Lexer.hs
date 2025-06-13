@@ -914,8 +914,20 @@ displayPosToken :: PosToken -> Text
 displayPosToken (MkPosToken _r tt) =
   displayTokenType tt
 
-inversedCompleteLookup :: (Eq a, Show a) => a -> Map c a -> c
-inversedCompleteLookup k = fromJust . (\case {Nothing -> error ("error while looking up: " <> show k); a -> a}) . lookup k . map (\(a, b) -> (b, a)) . Map.toList
+-- | "turns around" a map that is expected to
+-- - be surjective
+-- - be injective
+-- - be a function otherwise (i.e. all elements in its
+--   codomain have exactly one image
+--
+-- NOTE: This is really slow for obvious reasons, so it might
+-- be a good target for potential future optimizations
+inverseCompleteLookup :: (Eq a, Show a) => a -> Map c a -> c
+inverseCompleteLookup k
+  = fromMaybe (error $ "inverse complete lookup for " <> show k <> "was actually not cmoplete")
+  . lookup k
+  . map (\(a, b) -> (b, a))
+  . Map.toList
 
 displayTokenType :: TokenType -> Text
 displayTokenType = \case
@@ -939,13 +951,13 @@ displayTokenType = \case
     TGenitive         -> "'s"
     TIdentifier t     -> t
     TQuoted t         -> "`" <> t <> "`"
-  TDirectives dir -> ("#" <>) $ inversedCompleteLookup dir directives
-  TKeywords kws -> inversedCompleteLookup kws keywords
+  TDirectives dir -> ("#" <>) $ inverseCompleteLookup dir directives
+  TKeywords kws -> inverseCompleteLookup kws keywords
   -- NOTE: we cannot look up TCopy (Just _) in the map - instead we just act as if it was
   -- TCopy Nothing, which is fine
   RealTCopy _ -> displayTokenType (TSymbols (TCopy Nothing))
-  TSymbols sym -> inversedCompleteLookup sym symbols
-  TOperators op -> inversedCompleteLookup op operators
+  TSymbols sym -> inverseCompleteLookup sym symbols
+  TOperators op -> inverseCompleteLookup op operators
 
 data TokenCategory
   = CIdentifier
