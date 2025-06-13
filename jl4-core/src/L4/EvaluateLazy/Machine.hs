@@ -10,6 +10,8 @@ module L4.EvaluateLazy.Machine
 , Allocation (..)
 , Config (..)
 , forwardExpr
+, matchBranches
+, matchPattern
 , backward
 , EvalDirective (..)
 , evalModule
@@ -128,12 +130,20 @@ pattern PreAllocate r = Allocate' (PreAllocation r)
 
 data Config
   = ForwardMachine Environment (Expr Resolved)
+  | MatchBranchesMachine Reference Environment [Branch Resolved]
+  | MatchPatternMachine Reference Environment (Pattern Resolved)
   | BackwardMachine WHNF
   | EvalRefMachine Reference
   | DoneMachine WHNF
 
 pattern ForwardExpr :: Environment -> Expr Resolved -> Machine Config
 pattern ForwardExpr env e = Config (ForwardMachine env e)
+
+pattern MatchBranches :: Reference -> Environment -> [Branch Resolved] -> Machine Config
+pattern MatchBranches r env e = Config (MatchBranchesMachine r env e)
+
+pattern MatchPattern :: Reference -> Environment -> Pattern Resolved -> Machine Config
+pattern MatchPattern r env pat = Config (MatchPatternMachine r env pat)
 
 pattern Backward :: WHNF -> Machine Config
 pattern Backward whnf = Config (BackwardMachine whnf)
@@ -233,7 +243,7 @@ forwardExpr env = \ case
     desugarMultiWayIf (MkGuardedExpr _ann c f : es') o = IfThenElse emptyAnno c f $ desugarMultiWayIf es' o
   Consider _ann e branches -> do
     rf <- allocate_ e env
-    matchBranches rf env branches
+    MatchBranches rf env branches
   Lit _ann lit -> do
     rval <- runLit lit
     Backward rval
@@ -330,14 +340,14 @@ backward val = WithPoppedFrame $ \ case
     case val of
       ValCons rf1 rf2 -> do
         PushFrame (PatCons1 rf2 env p2)
-        matchPattern rf1 env p1
+        MatchPattern rf1 env p1
       _ ->
         patternMatchFailure
   Just (PatCons1 rf2 env p2) -> do
     case val of
       ValEnvironment env1 -> do
         PushFrame (PatCons2 env1)
-        matchPattern rf2 env p2
+        MatchPattern rf2 env p2
       _ ->
         InternalException $ RuntimeTypeError $
           "expected an environment but found: " <> prettyLayout val <> " when matching FOLLOWED BY"
@@ -360,7 +370,7 @@ backward val = WithPoppedFrame $ \ case
                   []             -> Backward (ValEnvironment Map.empty)
                   ((r, p) : rps) -> do
                     PushFrame (PatApp1 [] rps)
-                    matchPattern r env p
+                    MatchPattern r env p
             else InternalException $ RuntimeTypeError
               "pattern for constructor has the wrong number of arguments"
       _ ->
@@ -372,7 +382,7 @@ backward val = WithPoppedFrame $ \ case
           []              -> Backward (ValEnvironment (Map.unions (env : envs)))
           ((r, p) : rps') -> do
             PushFrame (PatApp1 (env : envs) rps')
-            matchPattern r env p
+            MatchPattern r env p
       _ -> InternalException $ RuntimeTypeError $
         "expected an environment but found: " <> prettyLayout val <> " when matching constructor"
   Just (PatLit0 env lit) -> do
@@ -486,7 +496,7 @@ backwardContractFrame val = \ case
       ValBool True -> do
         pushCFrame (Contract11 (ActionDoesn'tmatch {..}))
         pushCFrame (Contract9 ScrutinizeEnvironment {..})
-        matchPattern ev'act env act.action
+        MatchPattern ev'act env act.action
       ValBool False -> do
         newTime <- AllocateValue time
         tryNextEvent ScrutinizeEvents {party = Right party, time = newTime, ..} events
@@ -633,7 +643,7 @@ matchBranches _scrutinee env (Otherwise _ann e : _) =
   ForwardExpr env e
 matchBranches scrutinee env (When _ann pat e : branches) = do
   PushFrame (ConsiderWhen1 scrutinee e branches env)
-  matchPattern scrutinee env pat
+  MatchPattern scrutinee env pat
 
 matchPattern :: Reference -> Environment -> Pattern Resolved -> Machine Config
 matchPattern scrutinee _env (PatVar _ann n) = do
@@ -663,7 +673,7 @@ patternMatchFailure = WithPoppedFrame $ \ case
   Nothing ->
     InternalException UnhandledPatternMatch
   Just (ConsiderWhen1 scrutinee _ branches env) ->
-    matchBranches scrutinee env branches
+    MatchBranches scrutinee env branches
   -- we have unwound the frame that would reenter when scrutinizing the event
   Just (ContractFrame (Contract11 ActionDoesn'tmatch {..})) -> do
     newTime <- AllocateValue time
@@ -954,7 +964,9 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) expr env]
+  pure [MkEvalDirective (rangeOf ann) False expr env]
+evalDirective env (LazyEvalTrace ann expr) =
+  pure [MkEvalDirective (rangeOf ann) True expr env]
 evalDirective _env (StrictEval _ann _expr) =
   pure []
 evalDirective _env (Check _ann _expr) =
@@ -1119,6 +1131,7 @@ emptyEnvironment = Map.empty
 data EvalDirective =
   MkEvalDirective
     { range :: Maybe SrcRange -- ^ of the (L)EVAL directive
+    , trace :: !Bool -- ^ whether a trace is wanted
     , expr  :: !(Expr Resolved) -- ^ expression to evaluate
     , env   :: !Environment -- ^ environment to evaluate the expression in
     }

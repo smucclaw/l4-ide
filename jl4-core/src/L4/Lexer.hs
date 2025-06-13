@@ -52,6 +52,7 @@ data AnnoType
 data DirectiveType
   = TStrictEvalDirective
   | TLazyEvalDirective
+  | TLazyEvalTraceDirective
   | TCheckDirective
   | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
@@ -267,10 +268,11 @@ directiveLiteral = do
 
 directives :: [(DirectiveType, Text)]
 directives =
-  [ (TStrictEvalDirective, "SEVAL")
-  , (TLazyEvalDirective,   "EVAL")
-  , (TCheckDirective,      "CHECK")
-  , (TContractDirective,   "TRACE")
+  [ (TStrictEvalDirective,    "SEVAL")
+  , (TLazyEvalTraceDirective, "EVALTRACE")
+  , (TLazyEvalDirective,      "EVAL")
+  , (TCheckDirective,         "CHECK")
+  , (TContractDirective,      "TRACE")
   ]
 
 integerLiteral :: Lexer (Text, Integer)
@@ -976,6 +978,7 @@ showDirective :: DirectiveType -> Text
 showDirective = \ case
   TStrictEvalDirective -> "#SEVAL"
   TLazyEvalDirective -> "#EVAL"
+  TLazyEvalTraceDirective -> "#EVALTRACE"
   TCheckDirective -> "#CHECK"
   TContractDirective -> "#TRACE"
 

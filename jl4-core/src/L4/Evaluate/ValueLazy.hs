@@ -34,7 +34,7 @@ type Environment = Map Unique Reference
 
 type WHNF = Value Reference
 
-data NF = MkNF (Value NF) | ToDeep
+data NF = MkNF (Value NF) | Omitted
   deriving stock (Generic, Show)
   deriving anyclass NFData
 

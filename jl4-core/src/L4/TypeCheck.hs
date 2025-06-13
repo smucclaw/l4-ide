@@ -354,6 +354,9 @@ inferDirective (StrictEval ann e) = errorContext (WhileCheckingExpression e) do
 inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (LazyEval ann re)
+inferDirective (LazyEvalTrace ann e) = errorContext (WhileCheckingExpression e) do
+  (re, _) <- prune $ inferExpr e
+  pure (LazyEvalTrace ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)

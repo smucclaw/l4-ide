@@ -19,7 +19,6 @@ import Base
 
 import L4.Parser.SrcSpan
 
-import Control.Arrow (first)
 import HaskellWorks.Data.IntervalMap.FingerTree (Interval, IntervalMap)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IV
 

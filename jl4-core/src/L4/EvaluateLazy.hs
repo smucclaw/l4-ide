@@ -4,18 +4,24 @@ module L4.EvaluateLazy
 , execEvalModuleWithEnv
 , execEvalExprInContextOfModule
 , prettyEvalException
+, prettyEvalDirectiveResult
 )
 where
 
 import Base
+import qualified Base.DList as DList
 import qualified Base.Map as Map
 import qualified Base.Set as Set
+import qualified Base.Text as Text
 import L4.EvaluateLazy.Machine
-import Control.Concurrent
+import L4.EvaluateLazy.Trace
 import L4.Evaluate.ValueLazy
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Annotation
+import L4.Print
 import L4.Syntax
+
+import Control.Concurrent
 
 -----------------------------------------------------------------------------
 -- The Eval monad and the required types for the monad
@@ -25,6 +31,7 @@ data EvalState =
     { moduleUri :: !NormalizedUri
     , stack     :: !(IORef Stack)
     , supply    :: !(IORef Int)   -- used for uniques and addresses
+    , evalTrace :: !(Maybe (IORef (DList EvalTraceAction)))
     }
 
 newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
@@ -130,57 +137,146 @@ interpMachine = \ case
       rf <- newReference
       let env' = env rf
       updateRef rf $ Unevaluated Set.empty expr env'
+      traceEval (Alloc expr rf)
       pure (rf, env')
     Value whnf -> do
       rf <- newReference
       updateRef rf $ WHNF whnf
+      -- we don't trace this because it is used for initial environment stuff which is misleading in the trace
+      -- traceEval (AllocVal whnf rf)
       pure rf
     PreAllocation r -> do
       rf <- newReference
+      traceEval (AllocPre r rf)
       pure (getUnique r, rf)
-  WithPoppedFrame k -> withPoppedFrame (interpMachine . k)
+  WithPoppedFrame k -> do
+    traceEval Pop
+    withPoppedFrame (interpMachine . k)
   PokeThunk rf k -> do
     tid <- liftIO myThreadId
     conf <- lookupAndUpdateRef rf (k tid)
     interpMachine $ pure conf
   Bind act k -> interpMachine act >>= interpMachine . k
-  PushFrame f -> pushFrame f
+  PushFrame f -> do
+    traceEval Push
+    pushFrame f
   NewUnique -> newUnique
+
+traceEval :: EvalTraceAction -> Eval ()
+traceEval ta = do
+  mtr <- asks (.evalTrace)
+  case mtr of
+    Nothing -> pure ()
+    Just tr -> liftIO (modifyIORef' tr (`DList.snoc` ta))
+
+-- | For the given eval action, enable tracing and accumulate a trace.
+--
+-- We try to make it so that in principle, nested calls to `captureTrace`
+-- will yield the correct result.
+--
+captureTrace :: Eval a -> Eval (a, [EvalTraceAction])
+captureTrace m = do
+  mtr <- asks (.evalTrace) -- save old state
+  ntr <- liftIO (newIORef mempty)
+  r <- local (\ s -> s { evalTrace = Just ntr }) m
+  tas <- liftIO (readIORef ntr)
+  combine mtr tas -- combine our trace with old trace if it was active
+  pure (r, toList tas)
+  where
+    combine :: Maybe (IORef (DList EvalTraceAction)) -> DList EvalTraceAction -> Eval ()
+    combine Nothing   _   = pure ()
+    combine (Just tr) tas = liftIO (modifyIORef' tr (<> tas))
 
 runConfig :: Config -> Eval WHNF
 runConfig = \ case
-  ForwardMachine env expr ->  runConfig =<< interpMachine (forwardExpr env expr)
-  BackwardMachine whnf -> runConfig =<< interpMachine (backward whnf)
-  EvalRefMachine r -> runConfig =<< interpMachine (evalRef r)
-  DoneMachine whnf -> pure whnf
-
-runConfigM :: Machine Config -> Eval WHNF
-runConfigM mc = interpMachine mc >>= runConfig
+  ForwardMachine env expr -> do
+    traceEval (Enter expr)
+    next <- interpMachine (forwardExpr env expr)
+    runConfig next
+  MatchBranchesMachine scrutinee env branches -> do
+    next <- interpMachine (matchBranches scrutinee env branches)
+    runConfig next
+  MatchPatternMachine r env pat -> do
+    next <- interpMachine (matchPattern r env pat)
+    runConfig next
+  BackwardMachine whnf -> do
+    traceEval (Exit whnf)
+    next <- interpMachine (backward whnf)
+    runConfig next
+  EvalRefMachine r -> do
+    traceEval (SetRef r)
+    next <- interpMachine (evalRef r)
+    runConfig next
+  DoneMachine whnf ->
+    pure whnf
 
 -- | Evaluate an EVAL directive. For this, we evaluate to normal form,
 -- not just WHNF.
 nfDirective :: EvalDirective -> Eval EvalDirectiveResult
-nfDirective (MkEvalDirective r expr env) = do
-  v <- tryEval $ do
-    whnf <- runConfig $ ForwardMachine env expr
-    nf whnf
-  pure (MkEvalDirectiveResult r v)
+nfDirective (MkEvalDirective r traced expr env) = do
+  (v, mt) <-
+    if traced
+      then second Just <$> do
+        captureTrace $ tryEval $ do
+          whnf <- runConfig $ ForwardMachine env expr
+          nf whnf
+      else fmap (, Nothing) $ tryEval $ do
+        whnf <- runConfig $ ForwardMachine env expr
+        nf whnf
+  let finalTrace = postprocessTrace <$> mt
+  pure (MkEvalDirectiveResult r v finalTrace)
+
+postprocessTrace :: [EvalTraceAction] -> EvalTrace
+postprocessTrace actions =
+  let
+    splitActions = splitEvalTraceActions actions
+    tracedHeap = buildEvalPreTraces splitActions
+    mainTrace = case Map.lookup Nothing tracedHeap of
+                  Nothing -> err
+                  Just t  -> t
+    err = error "postprocessTrace: no trace for main value"
+    finalTrace = buildEvalTrace tracedHeap (either err id mainTrace)
+  in
+    finalTrace
+
+{-
+debugEvalActions :: [EvalTraceAction] -> IO ()
+debugEvalActions = go 0
+  where
+    go :: Int -> [EvalTraceAction] -> IO ()
+    go d (a@Push : as) = showAt d a >> go (d + 1) as
+    go d (a@Pop  : as) = showAt (d - 1) a >> go (d - 1) as
+    go d (a      : as) = showAt d a >> go d as
+    go _ []            = pure ()
+
+    showAt d a = putStrLn (show d <> " " <> prettyLayout' a)
+-}
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
     { range  :: Maybe SrcRange -- ^ of the (L)EVAL / PROVISION directive
     , result :: Either EvalException NF
+    , trace  :: Maybe EvalTrace
     }
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
+-- | Prints the results but not the range of an eval directive, including
+-- the trace if present.
+--
+prettyEvalDirectiveResult :: EvalDirectiveResult -> Text
+prettyEvalDirectiveResult (MkEvalDirectiveResult _range res mtrace) =
+   either (Text.unlines . prettyEvalException) prettyLayout res
+   <> case mtrace of
+        Nothing -> Text.empty
+        Just t  -> "\n─────\n" <> prettyLayout t
 
 -- | Evaluate WHNF to NF, with a cutoff (which possibly could be made configurable).
 nf :: WHNF -> Eval NF
 nf = nfAux maximumStackSize
 
 nfAux :: Int -> WHNF -> Eval NF
-nfAux  d _v | d < 0                  = pure ToDeep
+nfAux  d _v | d < 0                  = pure Omitted
 nfAux _d (ValNumber i)               = pure (MkNF (ValNumber i))
 nfAux _d (ValString s)               = pure (MkNF (ValString s))
 nfAux _d ValNil                      = pure (MkNF ValNil)
@@ -218,7 +314,9 @@ traverseAndNF :: Int -> Either a WHNF -> Eval (Either a (Value NF))
 traverseAndNF d = traverse (traverse (evalAndNF d))
 
 evalAndNF :: Int -> Reference -> Eval NF
-evalAndNF d = nfAux (d - 1) <=< runConfigM . evalRef
+evalAndNF d r = do
+  w <- runConfig (EvalRefMachine r)
+  nfAux (d - 1) w
 
 -- | Main entry point.
 --
@@ -232,9 +330,10 @@ execEvalModuleWithEnv :: Environment -> Module Resolved -> IO (Environment, [Eva
 execEvalModuleWithEnv env m@(MkModule _ moduleUri _) = do
   case evalModuleAndDirectives env m of
     MkEval f -> do
-      stack  <- newIORef emptyStack
-      supply <- newIORef 0
-      r <- f MkEvalState {moduleUri, stack, supply}
+      stack     <- newIORef emptyStack
+      supply    <- newIORef 0
+      let evalTrace = Nothing
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace}
       case r of
         Left _exc -> do
           -- exceptions at the top-level are unusual; after all, we don't actually
