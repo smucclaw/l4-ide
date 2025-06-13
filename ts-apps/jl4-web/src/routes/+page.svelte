@@ -421,33 +421,6 @@
       editor.setValue(example.content)
     }
   }
-
-  const britishCitizen = `§ \`Assumptions\`
-
-ASSUME Person IS A TYPE
-ASSUME \`mother of\` IS A FUNCTION FROM Person TO Person
-ASSUME \`father of\` IS A FUNCTION FROM Person TO Person
-
-ASSUME \`is born in the United Kingdom after commencement\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is born in a qualifying territory after the appointed day\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is settled in the United Kingdom\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is settled in the qualifying territory in which the person is born\` IS A FUNCTION FROM Person TO BOOLEAN
-
-§ \`The British Citizen Act\`
-
-\`for father or mother of\` person property MEANS
-      property OF \`father of\` person
-   OR property OF \`mother of\` person
-
-GIVEN p IS A Person
-GIVETH A BOOLEAN
-DECIDE \`is a British citizen (variant)\` IS
-         \`is born in the United Kingdom after commencement\` p
-      OR \`is born in a qualifying territory after the appointed day\` p
-  AND -- when the person is born ...
-         \`for father or mother of\` p \`is a British citizen (variant)\`
-      OR \`for father or mother of\` p \`is settled in the United Kingdom\`
-      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``
 </script>
 
 <Resizable.PaneGroup direction="horizontal">
