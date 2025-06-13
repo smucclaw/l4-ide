@@ -74,7 +74,7 @@ l4Golden isOk dir inputFile = do
       , readFromFile = readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "actual"))
-      , failFirstTime = False
+      , failFirstTime = True
       }
 
 jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
@@ -95,7 +95,7 @@ jl4ExactPrintGolden dir inputFile = do
       , readFromFile = Text.readFile
       , goldenFile = dir </> (takeFileName inputFile -<.> "ep.golden")
       , actualFile = Just (dir </> (takeFileName inputFile -<.> "ep.actual"))
-      , failFirstTime = False
+      , failFirstTime = True
       }
 
 jl4NlgAnnotationsGolden :: Bool -> String -> FilePath -> IO (Golden Text)
@@ -124,7 +124,7 @@ jl4NlgAnnotationsGolden isOk dir inputFile = do
       , readFromFile = Text.readFile
       , goldenFile = dir </> takeFileName inputFile -<.> "nlg.golden"
       , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
-      , failFirstTime = False
+      , failFirstTime = True
       }
 
 -- ----------------------------------------------------------------------------
