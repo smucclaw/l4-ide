@@ -36,6 +36,7 @@ library
     containers,
     data-default,
     deepseq,
+    dlist,
     extra,
     file-io,
     filepath,
@@ -63,6 +64,7 @@ library
 
   exposed-modules:
     Base
+    Base.DList
     Base.Map
     Base.Set
     Base.Pretty
@@ -78,6 +80,7 @@ library
     L4.EvaluateLazy
     L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
+    L4.EvaluateLazy.Trace
     L4.ExactPrint
     L4.FindDefinition
     L4.Lexer
