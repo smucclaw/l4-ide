@@ -416,7 +416,7 @@
     }
   })
 
-  function handleExampleSelect (example: LegalExample) {
+  function handleExampleSelect(example: LegalExample) {
     if (editor) {
       editor.setValue(example.content)
     }
