@@ -195,8 +195,7 @@ instance ToSemTokens Context PosToken (Event Name) where
 
 
 instance ToSemTokens Context PosToken (Expr Name) where
-instance (ToSemTokens Context PosToken a, ToSemTokens Context PosToken b) => ToSemTokens Context PosToken (a, b) where
-  toSemTokens (a, b) = liftA2 (<>) (toSemTokens a) (toSemTokens b)
+instance ToSemTokens Context PosToken (GuardedExpr Name) where
 instance ToSemTokens Context PosToken (Obligation Name) where
 instance ToSemTokens Context PosToken (RAction Name) where
 instance ToSemTokens Context PosToken (LocalDecl Name) where
@@ -295,6 +294,7 @@ instance ToSemTokens () PosToken (Event Resolved) where
   toSemTokens (MkEvent ann p a t atFirst) = traverseCsnWithHoles ann $ map toSemTokens
     if atFirst then [t, p, a] else [p, a, t]
 instance ToSemTokens () PosToken (Expr Resolved) where
+instance ToSemTokens () PosToken (GuardedExpr Resolved) where
 instance ToSemTokens () PosToken (LocalDecl Resolved) where
 instance ToSemTokens () PosToken (Assume Resolved) where
 instance ToSemTokens () PosToken (TypedName Resolved) where
@@ -311,8 +311,6 @@ instance ToSemTokens () PosToken (GivethSig Resolved) where
 instance ToSemTokens () PosToken (GivenSig Resolved) where
 instance ToSemTokens () PosToken (Directive Resolved) where
 instance ToSemTokens () PosToken (Import Resolved) where
-instance (ToSemTokens () PosToken a, ToSemTokens () PosToken b) => ToSemTokens () PosToken (a, b) where
-  toSemTokens (a, b) = liftA2 (<>) (toSemTokens a) (toSemTokens b)
 instance ToSemTokens () PosToken NormalizedUri where
   toSemTokens _ = pure []
 

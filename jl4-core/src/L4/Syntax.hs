@@ -216,7 +216,7 @@ data Expr n =
   | App        Anno n [Expr n]
   | AppNamed   Anno n [NamedExpr n] (Maybe [Int]) -- we store the order of arguments during type checking
   | IfThenElse Anno (Expr n) (Expr n) (Expr n)
-  | MultiWayIf Anno [(Expr n, Expr n)] (Expr n)
+  | MultiWayIf Anno [GuardedExpr n] (Expr n)
   | Regulative Anno (Obligation n)
   | Consider   Anno (Expr n) [Branch n]
   -- | ParenExpr  Anno (Expr n) -- temporary
@@ -225,6 +225,11 @@ data Expr n =
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
   | Event      Anno (Event n)
+  deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+data GuardedExpr n =
+  MkGuardedExpr Anno (Expr n) (Expr n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -465,6 +470,8 @@ deriving via L4Syntax (ConDecl n)
   instance HasAnno (ConDecl n)
 deriving via L4Syntax (Expr n)
   instance HasAnno (Expr n)
+deriving via L4Syntax (GuardedExpr n)
+  instance HasAnno (GuardedExpr n)
 deriving via L4Syntax (Obligation n)
   instance HasAnno (Obligation n)
 deriving via L4Syntax (RAction n)
@@ -494,9 +501,6 @@ instance ToConcreteNodes PosToken (Section Name) where
   toNodes (MkSection ann name maka decls) =
     flattenConcreteNodes ann [toNodes name, toNodes maka, toNodes decls]
 
-instance (ToConcreteNodes PosToken a, ToConcreteNodes PosToken b) => ToConcreteNodes PosToken (a, b) where
-  toNodes (a, b) = liftA2 (<>) (toNodes a) (toNodes b)
-
 deriving anyclass instance ToConcreteNodes PosToken (TopDecl Name)
 deriving anyclass instance ToConcreteNodes PosToken (Assume Name)
 deriving anyclass instance ToConcreteNodes PosToken (Declare Name)
@@ -510,6 +514,7 @@ deriving anyclass instance ToConcreteNodes PosToken (Decide Name)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Name)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Name)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Name)
+deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Name)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Name)
 deriving anyclass instance ToConcreteNodes PosToken (RAction Name)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Name)
@@ -552,6 +557,7 @@ deriving anyclass instance ToConcreteNodes PosToken (Decide Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (AppForm Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Aka Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Expr Resolved)
+deriving anyclass instance ToConcreteNodes PosToken (GuardedExpr Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (Obligation Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (RAction Resolved)
 deriving anyclass instance ToConcreteNodes PosToken (LocalDecl Resolved)
@@ -678,6 +684,7 @@ deriving anyclass instance HasSrcRange (Decide a)
 deriving anyclass instance HasSrcRange (AppForm a)
 deriving anyclass instance HasSrcRange (Aka a)
 deriving anyclass instance HasSrcRange (Expr a)
+deriving anyclass instance HasSrcRange (GuardedExpr a)
 deriving anyclass instance HasSrcRange (Obligation a)
 deriving anyclass instance HasSrcRange (LocalDecl a)
 deriving anyclass instance HasSrcRange (NamedExpr a)

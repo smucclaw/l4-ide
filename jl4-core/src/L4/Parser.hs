@@ -321,9 +321,12 @@ tokenAsName tt =
       where
         t = displayPosToken p
 
-indented :: (TraversableStream s, MonadParsec e s m) => m b -> Pos -> m b
+indented :: Parser b -> Pos -> Parser b
 indented parser pos =
   withIndent GT pos $ \ _ -> parser
+
+indented' :: AnnoParser b -> Pos -> AnnoParser b
+indented' parser pos = wrapAnnoParser $ indented (unwrapAnnoParser parser) pos
 
 module' :: NormalizedUri -> Parser (Module Name)
 module' uri = do
@@ -942,9 +945,9 @@ data Assoc = AssocLeft | AssocRight
 -- TODO: My ad-hoc fix for multi-token operators can probably be done more elegantly.
 operator :: Parser (Prio, Assoc, Expr Name -> Expr Name -> Expr Name)
 operator =
-      (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr      <|> spacedToken_ TOr      )
+      (\ op -> (1, AssocRight, infix2  Implies   op)) <$> (spacedToken_ TKImplies <|> spacedToken_ TImplies )
+  <|> (\ op -> (2, AssocRight, infix2  Or        op)) <$> (spacedToken_ TKOr      <|> spacedToken_ TOr      )
   <|> (\ op -> (3, AssocRight, infix2  And       op)) <$> (spacedToken_ TKAnd     <|> spacedToken_ TAnd     )
-  <|> (\ op -> (4, AssocRight, infix2  Implies   op)) <$> (spacedToken_ TKImplies <|> spacedToken_ TImplies )
   <|> (\ op -> (2, AssocRight, infix2  ROr       op)) <$> spacedToken_ TKROr
   <|> (\ op -> (3, AssocRight, infix2  RAnd      op)) <$> spacedToken_ TKRAnd
   <|> (\ op -> (4, AssocRight, infix2  Equals    op)) <$> (spacedToken_ TKEquals <|> spacedToken_ TEquals)
@@ -1132,22 +1135,33 @@ ifthenelse = do
       <*  annoLexeme (spacedToken_ TKElse)
       <*> annoHole (indentedExpr current)
 
+-- NOTE: this is a bit subtle: each of the
+-- indents is scoped over only one token,
+-- so we need to be careful to apply it to
+-- each of them
 multiWayIf :: Parser (Expr Name)
 multiWayIf = do
   current <- Lexer.indentLevel
-  attachAnno $
+  attachAnno do
+    _ <- annoLexeme (spacedToken_ TKBranch)
+    let ind = flip indented' current
     MultiWayIf emptyAnno
-      <$  annoLexeme (spacedToken_ TKBranch)
-      <*> many do
-        (,)
-          <$> do
-             annoLexeme (spacedToken_ TKIf)
-              *> annoHole (indentedExpr current)
-          <*> do
-             annoLexeme (spacedToken_ TKThen)
-              *> annoHole (indentedExpr current)
-      <*  annoLexeme (spacedToken_ TKOtherwise)
-      <*> annoHole (indentedExpr current)
+      <$> annoHole (many (parseGuardedExpr current))
+      <*> ind do
+        annoLexeme (spacedToken_ TKOtherwise)
+          *> annoHole (indentedExpr current)
+
+parseGuardedExpr :: Pos -> Parser (GuardedExpr Name)
+parseGuardedExpr pos = attachAnno $
+  MkGuardedExpr emptyAnno
+    <$> ind do
+       annoLexeme (spacedToken_ TKIf)
+        *> annoHole (indentedExpr pos)
+    <*> ind do
+       annoLexeme (spacedToken_ TKThen)
+        *> annoHole (indentedExpr pos)
+  where
+  ind = flip indented' pos
 
 regulative :: Parser (Expr Name)
 regulative = attachAnno $

@@ -212,7 +212,7 @@ instance Linearize (Expr Resolved) where
       , lin else'
       ]
     MultiWayIf _ conds o -> hcat $
-      foldMap (\(c, f) -> ["if", lin c, "then", lin f]) conds
+      foldMap (\(MkGuardedExpr _ c f) -> ["if", lin c, "then", lin f]) conds
       <> ["otherwise", lin o ]
     Regulative _ (MkObligation _ party (MkAction _ rule mprovided) mdeadline mfollowup mlest) -> hcat $
       [ text "party"

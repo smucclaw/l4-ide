@@ -403,10 +403,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e2' <- addNlg e2
       pure $ IfThenElse ann b' e1' e2'
     MultiWayIf ann es e2 -> do
-      es' <- for es \(l, r) -> do
+      es' <- for es \(MkGuardedExpr ann' l r) -> do
         l' <- addNlg l
         r' <- addNlg r
-        pure (l', r')
+        pure $ MkGuardedExpr ann' l' r'
       e2' <- addNlg e2
       pure $ MultiWayIf ann es' e2'
     Regulative ann r -> do

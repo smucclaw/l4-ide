@@ -911,12 +911,12 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
-checkMultiWayIf :: Anno -> [(Expr Name, Expr Name)] -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
+checkMultiWayIf :: Anno -> [GuardedExpr Name] -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkMultiWayIf ann es e t = do
-  es' <- for es \(c, f) -> do
+  es' <- for es \(MkGuardedExpr ann' c f) -> do
     c' <- checkExpr ExpectIfConditionContext c boolean
     f' <- checkExpr ExpectIfBranchesContext f t
-    pure (c', f')
+    pure $ MkGuardedExpr ann' c' f'
   e' <- checkExpr ExpectIfBranchesContext e t
   pure (MultiWayIf ann es' e')
 
