@@ -17,6 +17,8 @@ This allows you to understand boolean functions by interactively changing the va
 
 ### A more detailed breakdown of the key features
 
+The features that require the backend have been tagged with '(involves the backend)'.
+
 #### Seeing what paths, what ways to make the function true, cease to be viable as you change your choices
 
 We've talked about how you can see what the whole function evaluates to, given a possibly partial assignment of values to its constituent parts or sub-expressions.
@@ -25,7 +27,7 @@ But it's not just that --- you can also interactively see what paths cease to be
 
 ![seeing what paths cease to be viable as you change your choices](./images-for-docs/non-viable-paths.png)
 
-### Evaluating expressions on the backend
+### Evaluating expressions on the backend (involves the backend)
 
 (The following might not make much sense if you are not a developer --- apologies for that.)
 
@@ -37,21 +39,23 @@ But evaluating things like function applications
 happens on the backend, using the same evaluation engine that powers, e.g., the #EVAL functionality.
 For more info, see the L4Connection and L4BackendApi parts of the codebase, as well as the Ladder backend.
 
-### Simplifying or doing logical transformations on expressions and visualizing them (involves the backend)
+### Simplifying or doing logical transformations on expressions with the backend and then visualizing them (involves the backend)
 
 If you have something with a complicated expression in the scope of a NOT like
 
 ![complicated NOT](./images-for-docs/complicated-not.png)
 
-you can simplify it by clicking on 'Simplify and visualize'.
+you can simplify it by clicking on the 'Simplify and visualize' codelens.
 
 ![simplified](./images-for-docs/simplified.png)
+
+This simplification is done by the backend --- the core L4 system has facilities for simplifying and transforming L4 expressions.
 
 Simplifying the expression also allows you to selct nodes or paths in the visualized graph.
 
 ### Selecting or highlighting nodes and paths
 
-Suppose the expression of the function declaration is in negation normal form.
+Suppose the body of the function declaration is in negation normal form.
 Then you can select nodes by right-clicking on them and clicking on 'Toggle Highlight'.
 
 ![selected node](./images-for-docs/toggle-highlight.png)
@@ -73,7 +77,7 @@ is typically, but not always, possible.
 
 (Homework for the reader: can you figure out why?)
 
-### Inlining expressions
+### Inlining expressions (involves the backend)
 
 Finally, given something like
 
