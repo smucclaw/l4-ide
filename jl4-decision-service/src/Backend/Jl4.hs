@@ -1,109 +1,298 @@
 module Backend.Jl4 (createFunction) where
 
-import Backend.Api
-import Base.Text
+import Base hiding (trace)
+import qualified Base.Map as Map
 import qualified Base.Text as Text
-import Control.Monad.Trans.Except
+
 import L4.Annotation
 import L4.Evaluate
 import qualified L4.Evaluate.Value as Eval
+import L4.Names
 import L4.Print
 import qualified L4.Print as Print
 import L4.Syntax
+import qualified L4.TypeCheck.Environment as TypeCheck
 import L4.Utils.Ratio
-import System.FilePath ((<.>))
-import Base (liftIO)
-import Language.LSP.Protocol.Types (normalizedFilePathToUri)
+import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
-import qualified LSP.Core.Shake as Shake
+
+import Language.LSP.Protocol.Types (normalizedFilePathToUri)
+import System.FilePath ((<.>))
+
+import Backend.Api
 
 createFunction ::
   FunctionDeclaration ->
   Text ->
   RunFunction
 createFunction fnDecl fnImpl =
-    RunFunction
-      { runFunction = \params _outFilter {- TODO: how to handle the outFilter? -} -> do
-          l4Params <- traverse (uncurry toL4Param) params
-          let
-            wrapstyle = if "DECLARE Inputs" `Text.isInfixOf` fnImpl then WrapInInputs else NoWrap
-            l4InputWithEval =
-              Text.unlines
-                [ fnImpl
-                , prettyLayout $ evalStatement wrapstyle l4Params
-                ]
-          (errs, mp) <- liftIO $ oneshotL4ActionAndErrors file \nfp -> do
-            let  uri = normalizedFilePathToUri nfp
-            _ <- Shake.addVirtualFile nfp l4InputWithEval
-            Shake.use Rules.TypeCheck uri
-          case mp of
-            Nothing -> throwE $ InterpreterError (mconcat errs)
-            Just tcRes -> do
-              case doEvalModule tcRes.module' of
-                [ MkEvalDirectiveResult { result, trace } ] -> case result of
-                  Left evalExc -> throwE $ InterpreterError $ Text.show evalExc
-                  Right val -> do
-                    r <- valueToFnLiteral val
-                    pure $
-                      ResponseWithReason
-                        { values = [("result", r)]
-                        , reasoning = buildReasoningTree trace
-                        }
-                [] -> throwE $ InterpreterError "L4 Internal Error: No #EVAL"
-                _xs -> throwE $ InterpreterError "L4 Error: More than ONE #EVAL found"
-      }
+  RunFunction
+    { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} -> do
+        params <- assumeNoUnknowns params'
+        (initErrs, mTcRes) <- typecheckModule file fnImpl
+        funExpr <- case mTcRes of
+          Nothing -> throwError $ InterpreterError (mconcat initErrs)
+          Just tcRes -> do
+            let
+              recordMap = getAllRecords tcRes.module'
+            l4fun <- getFunctionDefinition funRawName tcRes.module'
+            buildEvalFunApp funRawName l4fun recordMap params
+        let
+          l4InputWithEval =
+            Text.unlines
+              [ fnImpl
+              , prettyLayout $ mkTopDeclDirective $ mkEval funExpr
+              ]
+
+        (errs, mTcResWithEval) <- typecheckModule file l4InputWithEval
+        case mTcResWithEval of
+          Nothing -> throwError $ InterpreterError (mconcat errs)
+          Just tcRes -> do
+            case doEvalModule tcRes.module' of
+              [MkEvalDirectiveResult{result, trace}] -> case result of
+                Left evalExc -> throwError $ InterpreterError $ Text.show evalExc
+                Right val -> do
+                  r <- valueToFnLiteral val
+                  pure $
+                    ResponseWithReason
+                      { values = [("result", r)]
+                      , reasoning = buildReasoningTree trace
+                      }
+              [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
+              _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
+    }
  where
-  toL4Param _ Nothing = do
-    throwE CannotHandleUnknownVars
-  toL4Param nameText (Just fnLiteral) = do
-    (mkName nameText,) <$> literalToExpr fnLiteral
-
   file = Text.unpack fnDecl.name <.> "l4"
+  funRawName = mkNormalName fnDecl.name
 
-  funName = mkName fnDecl.name
+  assumeNoUnknowns :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m [(Text, FnLiteral)]
+  assumeNoUnknowns inputs = do
+    traverse assumeKnown inputs
 
-  inputName = mkName "Inputs"
+  assumeKnown :: (Monad m) => (Text, Maybe FnLiteral) -> ExceptT EvaluatorError m (Text, FnLiteral)
+  assumeKnown (t, Just l) = pure (t, l)
+  assumeKnown (t, Nothing) = throwError $ InterpreterError $ "L4: can't handle missing values for field: " <> t
 
-  evalStatement :: WrapStyle -> [(Name, Expr Name)] -> TopDecl Name
-  evalStatement wrapstyle args =
-    mkTopDeclDirective $
-      mkEval $
-          case wrapstyle of
-            WrapInInputs ->
-              mkFunApp funName [ mkNamedFunApp inputName $ fmap (uncurry mkArg) args ]
-            NoWrap       ->
-              mkNamedFunApp
-                funName $ fmap (uncurry mkArg) args
+type RecordMap = Map RawName [TypedName Resolved]
 
-data WrapStyle = WrapInInputs | NoWrap
+-- | Build the final function application for the given
+--
+-- See Note [Support for nested objects] for details.
+buildEvalFunApp ::
+  (Monad m) =>
+  RawName ->
+  Decide Resolved ->
+  RecordMap ->
+  [(Text, FnLiteral)] ->
+  ExceptT EvaluatorError m (Expr Name)
+buildEvalFunApp funName decide recordMap args = do
+  exprArgs <- matchFunctionArgs recordMap args funArgs
+  pure $ mkNamedFunApp (mkName funName) exprArgs
+ where
+  MkDecide _ (MkTypeSig _ given _) _ _ = decide
+  MkGivenSig _ ns = given
+  funArgs = mapMaybe typedNameToTuple ns
+  typedNameToTuple (MkOptionallyTypedName _ n (Just ty)) = case ty of
+    Type{} -> Nothing -- We don't care about TYPE
+    TyApp{} -> Just (n, ty)
+    Fun{} -> Just (n, ty)
+    Forall{} -> Just (n, ty)
+    InfVar{} -> Nothing -- Should never happen
+  typedNameToTuple (MkOptionallyTypedName _ _ Nothing) = Nothing
 
+matchFunctionArgs :: (Monad m) => RecordMap -> [(Text, FnLiteral)] -> [(Resolved, Type' Resolved)] -> ExceptT EvaluatorError m [NamedExpr Name]
+matchFunctionArgs recordMap input parameters =
+  zipWithM (matchFunctionArg recordMap) (sortOn fst input) (sortOn (resolvedRawName . fst) parameters)
+ where
+  resolvedRawName = rawName . getActual
+
+-- | Try to match the given argument 'FnLiteral' with the expected type of the argument.
+--
+-- See Note [Support for nested objects] for details.
+matchFunctionArg ::
+  (Monad m) =>
+  RecordMap ->
+  (Text, FnLiteral) ->
+  (Resolved, Type' Resolved) ->
+  ExceptT EvaluatorError m (NamedExpr Name)
+matchFunctionArg recordMap (inputName, inputValue) (r, ty)
+  | inputName /= rawNameToText (rawNameOfResolved r) =
+      throwError $ InterpreterError $ "L4: Unexpected parameter name, expected " <> rawNameToText (rawNameOfResolved r) <> ", but got " <> inputName
+  | otherwise = do
+      arguments <- matchFunctionArg' recordMap inputValue (r, ty)
+      pure $ mkArg (mkNormalNameText inputName) arguments
+
+-- | Worker function of 'matchFunctionArg'. Match the 'FnLiteral' with the
+-- expected type given by @'Type'' 'Resolved'@.
+matchFunctionArg' ::
+  (Monad m) =>
+  RecordMap ->
+  FnLiteral ->
+  (Resolved, Type' Resolved) ->
+  ExceptT EvaluatorError m (Expr Name)
+matchFunctionArg' recordMap inputValue (r, ty)
+  | Just (constrName, fieldNames) <- lookupRecordFields recordMap ty = do
+      matchRecord recordMap constrName fieldNames inputValue
+  | Just nty <- isListConstr r ty = do
+      -- We need to treat list of objects differently to
+      vals <- expectArray inputValue
+      case lookupRecordFields recordMap nty of
+        Just (constrName, fieldNames) -> do
+          l4Vals <- traverse (matchRecord recordMap constrName fieldNames) vals
+          pure $ mkList l4Vals
+        Nothing -> do
+          l4Vals <- traverse literalToExpr vals
+          pure $ mkList l4Vals
+  | otherwise =
+      literalToExpr inputValue
+
+-- | Given the 'RawName' of a record and its fields, match the 'FnLiteral' with the
+-- fields of the record.
+-- The fields of the record may also be records, which we will recursively match.
+matchRecord :: (Monad m) => RecordMap -> RawName -> [TypedName Resolved] -> FnLiteral -> ExceptT EvaluatorError m (Expr Name)
+matchRecord recordMap constrName fieldNames inputValue = do
+  inputObj <- expectObject inputValue
+  arguments <- matchFunctionArgs recordMap inputObj (fmap toRecord fieldNames)
+  pure (mkNamedFunApp (mkName constrName) arguments)
+ where
+  toRecord (MkTypedName _ n ns) = (n, ns)
+
+isListConstr :: Resolved -> Type' Resolved -> Maybe (Type' Resolved)
+isListConstr r ty
+  | r == TypeCheck.listRef = case ty of
+      TyApp _ _list [innerTy] -> Just innerTy
+      _ -> Nothing
+  | otherwise = Nothing
+
+-- | Given a type, lookup the 'RawName' of the constructor and the fields of the record.
+lookupRecordFields :: RecordMap -> Type' Resolved -> Maybe (RawName, [TypedName Resolved])
+lookupRecordFields recordMap ty = do
+  tyName <- tyNameOf ty
+  fieldNames <- Map.lookup (rawNameOfResolved tyName) recordMap
+  pure (rawNameOfResolved tyName, fieldNames)
+ where
+  tyNameOf = \case
+    Type{} -> Nothing
+    TyApp _ n _ -> Just n
+    Fun{} -> Nothing
+    Forall _ _ fty -> tyNameOf fty
+    InfVar{} -> Nothing
+
+-- | Find the first function with the given name in the module.
+getFunctionDefinition :: (Monad m) => RawName -> Module Resolved -> ExceptT EvaluatorError m (Decide Resolved)
+getFunctionDefinition name (MkModule _ _ sect) = case goSection sect of
+  Nothing -> throwError $ InterpreterError $ "L4: No function with name " <> prettyLayout name <> " found."
+  Just dec -> pure dec
+ where
+  goSection (MkSection _ _ _ decls) =
+    listToMaybe $ mapMaybe (goTopDecl) decls
+
+  rawNameOfDecide = rawNameToText . rawName . getActual . nameOf
+
+  goTopDecl = \case
+    Decide _ dec ->
+      if rawNameOfDecide dec == rawNameToText name
+        then Just dec
+        else Nothing
+    Declare _ _ -> Nothing
+    Assume _ _ -> Nothing
+    Directive _ _ -> Nothing
+    Import _ _ -> Nothing
+    Section _ s -> goSection s
+
+  nameOf (MkDecide _ _ (MkAppForm _ n _ _) _) = n
+
+-- | Find all records defined in this module.
+getAllRecords :: Module Resolved -> RecordMap
+getAllRecords (MkModule _ _ sect) = Map.fromList $ goSection sect
+ where
+  goSection (MkSection _ _ _ decls) =
+    Base.concatMap goDecl decls
+
+  goDecl = \case
+    Decide _ _ -> []
+    Declare _ decl -> goDeclare decl
+    Assume _ _ -> []
+    Directive _ _ -> []
+    Import _ _ -> []
+    Section _ s -> goSection s
+
+  goDeclare (MkDeclare _ _ _ tyDecl) = maybeToList $ isRecordDecl tyDecl
+
+isRecordDecl :: (HasName n) => TypeDecl n -> Maybe (RawName, [TypedName n])
+isRecordDecl = \case
+  RecordDecl _ (Just n) typedNames -> Just (rawName $ getName n, typedNames)
+  RecordDecl _ Nothing _ -> Nothing
+  EnumDecl{} -> Nothing
+  SynonymDecl{} -> Nothing
+
+{-
+Note [Support for nested objects]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We support nested function arguments, including objects, arrays, and arrays of objects.
+To support this, we perform type-directed deserialisation.
+
+1. Collect all record names and their fields defined in the module.
+2. Find the function that will be executed.
+3. Extract the arguments of the function from the 'GivenSig'.
+  * We ignore 'TYPE' variables, as we only generate an untyped AST node, it is up to the
+    later stages to reject ill-typed programs.
+4. Match the 'FnLiteral' with the arguments of the function.
+  * Essentially zipping the arguments with the expected arguments.
+5. For each 'FnLiteral' check whether the argument type matches.
+  * For objects, the type of the function argument needs to be a record.
+    We retrieve the fields of the record and match them with the fields of the object.
+    Then, repeat step (5)
+  * For arrays, we check whether a 'LIST ty' is expected.
+    If it is, we use the type information of 'ty'
+  * For all other types, L4 provides primitives to which we translate.
+6. Build the final function application.
+-}
+
+-- ----------------------------------------------------------------------------
+-- Helpers and other non-generic functions
+-- ----------------------------------------------------------------------------
+
+rawNameOfResolved :: Resolved -> RawName
+rawNameOfResolved = rawName . getActual
+
+expectObject :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m [(Text, FnLiteral)]
+expectObject = \case
+  FnObject flds -> pure flds
+  _ -> throwError $ InterpreterError "L4: expected object but got something else."
+
+expectArray :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m [FnLiteral]
+expectArray = \case
+  FnArray arr -> pure arr
+  _ -> throwError $ InterpreterError "L4: expected list but got something else."
+
+-- | Translate simple 'FnLiteral' to 'Expr Name'.
+-- Does not work for nested objects, such as 'FnArray' and 'FnObject'.
 literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
-literalToExpr = \ case
-  FnLitInt i -> pure . mkLit $ mkNumericLit i
-  FnLitDouble d -> throwE $ CannotHandleParameterType $ FnLitDouble d
+literalToExpr = \case
+  FnLitInt i -> pure . mkLit $ realToLit i
+  FnLitDouble d -> pure . mkLit $ realToLit d
   FnLitBool b -> pure . mkVar $ mkBoolean b
   FnLitString s -> pure . mkLit $ mkStringLit s
-  FnArray arr -> do
-    es <- traverse literalToExpr arr
-    pure $ mkList es
-  FnObject obj -> throwE $ CannotHandleParameterType $ FnObject obj
+  FnArray arr -> throwError $ CannotHandleParameterType $ FnArray arr
+  FnObject obj -> throwError $ CannotHandleParameterType $ FnObject obj
   FnUncertain -> pure $ mkVar mkUncertain
   FnUnknown -> pure $ mkVar mkUnknown
 
 valueToFnLiteral :: (Monad m) => Eval.Value -> ExceptT EvaluatorError m FnLiteral
-valueToFnLiteral = \ case
+valueToFnLiteral = \case
   Eval.ValNumber i ->
     pure $ case isInteger i of
       Just int -> FnLitInt int
-      Nothing ->  FnLitDouble $ fromRational i
+      Nothing -> FnLitDouble $ fromRational i
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValList vals -> do
     lits <- traverse valueToFnLiteral vals
     pure $ FnArray lits
-  Eval.ValClosure {} -> throwE $ InterpreterError "#EVAL produced function closure."
-  Eval.ValBinaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced function closure."
-  Eval.ValUnaryBuiltinFun {} -> throwE $ InterpreterError "#EVAL produced builtin closure."
+  Eval.ValClosure{} -> throwError $ InterpreterError "#EVAL produced function closure."
+  Eval.ValBinaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced function closure."
+  Eval.ValUnaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
@@ -116,29 +305,19 @@ valueToFnLiteral = \ case
         [ (prettyLayout $ getActual resolved, FnArray lits)
         ]
   Eval.ValAssumed var ->
-    throwE $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
+    throwError $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
 
-buildReasoningTree :: EvalTrace -> Reasoning
-buildReasoningTree xs =
-  Reasoning
-    { payload = toReasoningTree xs
-    }
+-- ----------------------------------------------------------------------------
+-- L4 helpers
+-- ----------------------------------------------------------------------------
 
-toReasoningTree :: EvalTrace -> ReasoningTree
-toReasoningTree (Trace expr children val) =
-  ReasoningTree
-    { payload =
-        ReasonNode
-          { exampleCode =
-              [Print.prettyLayout expr]
-          , explanation =
-              [ "Result: " <> case val of
-                  Left exc -> Text.show exc
-                  Right v -> Print.prettyLayout v
-              ]
-          }
-    , children = fmap toReasoningTree children
-    }
+typecheckModule :: (MonadIO m) => FilePath -> Text -> m ([Text], Maybe Rules.TypeCheckResult)
+typecheckModule file input = do
+  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+    let
+      uri = normalizedFilePathToUri nfp
+    _ <- Shake.addVirtualFile nfp input
+    Shake.use Rules.TypeCheck uri
 
 -- ----------------------------------------------------------------------------
 -- L4 syntax builders
@@ -150,10 +329,6 @@ mkTopDeclDirective = Directive emptyAnno
 mkEval :: Expr n -> Directive n
 mkEval = StrictEval emptyAnno
 
-mkFunApp :: n -> [Expr n] -> Expr n
-mkFunApp =
-  App emptyAnno
-
 mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
 mkNamedFunApp con args =
   AppNamed emptyAnno con args Nothing
@@ -162,9 +337,15 @@ mkArg :: n -> Expr n -> NamedExpr n
 mkArg =
   MkNamedExpr emptyAnno
 
-mkName :: Text -> Name
+mkName :: RawName -> Name
 mkName =
-  MkName emptyAnno . NormalName
+  MkName emptyAnno
+
+mkNormalName :: Text -> RawName
+mkNormalName = NormalName
+
+mkNormalNameText :: Text -> Name
+mkNormalNameText = mkName . mkNormalName
 
 mkVar :: n -> Expr n
 mkVar =
@@ -188,8 +369,8 @@ mkBoolean b =
     True -> l4True
     False -> l4False
 
-mkNumericLit :: Integer -> Lit
-mkNumericLit =
+realToLit :: (Real a) => a -> Lit
+realToLit =
   NumericLit emptyAnno . toRational
 
 mkStringLit :: Text -> Lit
@@ -201,7 +382,33 @@ mkList =
   List emptyAnno
 
 mkUncertain :: Name
-mkUncertain = mkName "uncertain"
+mkUncertain = mkNormalNameText "uncertain"
 
 mkUnknown :: Name
-mkUnknown = mkName "unknown"
+mkUnknown = mkNormalNameText "unknown"
+
+-- ----------------------------------------------------------------------------
+-- Trace builders
+-- ----------------------------------------------------------------------------
+
+buildReasoningTree :: EvalTrace -> Reasoning
+buildReasoningTree xs =
+  Reasoning
+    { payload = toReasoningTree xs
+    }
+
+toReasoningTree :: EvalTrace -> ReasoningTree
+toReasoningTree (Trace expr children val) =
+  ReasoningTree
+    { payload =
+        ReasonNode
+          { exampleCode =
+              [Print.prettyLayout expr]
+          , explanation =
+              [ "Result: " <> case val of
+                  Left exc -> Text.show exc
+                  Right v -> Print.prettyLayout v
+              ]
+          }
+    , children = fmap toReasoningTree children
+    }
