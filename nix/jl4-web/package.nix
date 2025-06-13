@@ -17,6 +17,7 @@ buildNpmPackage rec {
     "^ts-shared.*"
     "^package-lock.json$"
     "^package.json$"
+    "^jl4/examples/legal(/.*)?$"
   ];
   npmDeps = importNpmLock { npmRoot = src; };
   npmWorkspace = src;
