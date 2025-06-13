@@ -17,16 +17,16 @@ import L4.Desugar
 import Control.Category ((>>>))
 
 prettyLayout :: LayoutPrinter a => a -> Text
-prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
+prettyLayout a = docText $ printWithLayout a
 
-prettyLines :: LayoutPrinter a => a -> [Text]
-prettyLines = Text.lines . prettyLayout
+docText :: Doc ann -> Text
+docText = renderStrict . layoutPretty (LayoutOptions Unbounded)
 
 -- | Hack to get the lines of a document as 'Doc'. Used for the trace printer
 -- and in situations where we need to prefix all the lines with something else.
 --
-docLines :: LayoutPrinter a => a -> [Doc ann]
-docLines = fmap pretty . prettyLines
+docLines :: Doc ann -> [Doc ann]
+docLines = fmap pretty . Text.lines . docText
 
 prettyLayout' :: LayoutPrinter a => a -> String
 prettyLayout' = Text.unpack . prettyLayout
