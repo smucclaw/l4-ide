@@ -5,6 +5,7 @@ import qualified Base.DList as DList
 import qualified Base.Map as Map
 import L4.Syntax
 import L4.Evaluate.ValueLazy
+import L4.EvaluateLazy.Machine (EvalException, prettyEvalException)
 import L4.Print
 import L4.Utils.RevList
 
@@ -137,6 +138,7 @@ import Prettyprinter
 data EvalTraceAction =
     Enter (Expr Resolved)           -- ^ corresponds to forward, is not always pushing a frame (e.g. tail calls)
   | Exit WHNF                       -- ^ corresponds to backward, is always popping a frame
+  | ExitException EvalException     -- ^ exceptional exit, unrolls the stack
   | SetRef Reference                -- ^ can result in evaluation (always pushes a frame) or direct return (immediately exits / pops)
   | Alloc (Expr Resolved) Reference -- ^ allocation, used for lambdas
   | AllocPre Resolved Reference     -- ^ allocation, used for mutually recursive let/where
@@ -150,25 +152,26 @@ data EvalTraceAction =
 instance LayoutPrinter EvalTraceAction where
   printWithLayout :: EvalTraceAction -> Doc ann
   printWithLayout = \ case
-    Enter e      -> ">>> " <+> printWithLayout e
-    Exit v       -> "<<< " <+> printWithLayout v
-    SetRef r     -> "!!! " <+> printWithLayout r
-    Alloc e r    -> "??? " <+> printWithLayout e <+> printWithLayout r
-    AllocPre x r -> "??p " <+> printWithLayout x <+> "=" <+> printWithLayout r
-    Push         -> "+++ "
-    Pop          -> "--- "
+    Enter e           -> ">>> " <+> printWithLayout e
+    Exit v            -> "<<< " <+> printWithLayout v
+    ExitException exc -> "*** " <+> vcat (map pretty (prettyEvalException exc))
+    SetRef r          -> "!!! " <+> printWithLayout r
+    Alloc e r         -> "??? " <+> printWithLayout e <+> printWithLayout r
+    AllocPre x r      -> "??p " <+> printWithLayout x <+> "=" <+> printWithLayout r
+    Push              -> "+++ "
+    Pop               -> "--- "
 
 -- | A pre-trace has the same hierarchical structure as the final trace, but it contains
 -- only WHNFs as results, and it contains placeholders with the idea that other parts
 -- of the trace should be inserted there.
 --
 data EvalPreTrace =
-    PreTrace [(Expr Resolved, [EvalPreTrace])] WHNF
+    PreTrace [(Expr Resolved, [EvalPreTrace])] (Either EvalException WHNF)
   | PrePlaceholder Address
   | PreValue WHNF
 
 data EvalTrace =
-    Trace [((Expr Resolved), [EvalTrace])] NF
+    Trace [((Expr Resolved), [EvalTrace])] (Either EvalException NF)
   | TraceValue NF
   deriving stock (Generic, Show)
   deriving anyclass NFData
@@ -231,6 +234,14 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
           go (d1 - 1) stack m' as
       | otherwise =
         go (d1 - 1) ((d2, ma, casf `DList.snoc` a1 `DList.snoc` a2) : stack) m as
+    go d1 ((d2, ma, casf) : stack) m (a1@(ExitException _) : a2@Pop : as)
+      | d1 == d2 =
+        let
+          m' = Map.insertWith (\ _new old -> old) ma (Right (toList (casf `DList.snoc` a1 `DList.snoc` a2))) m
+        in
+          go (d1 - 1) stack m' as
+      | otherwise =
+        go (d1 - 1) ((d2, ma, casf `DList.snoc` a1 `DList.snoc` a2) : stack) m as
     go d1 ((d2, ma, casf) : stack) m (a@Pop : as)
       | d1 == d2 =
         let
@@ -245,7 +256,32 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
     -- go 0 [] m [Pop] = m
     go (-1) [] m [] = m
     go (-1) [] m (Exit _ : Pop : actions) = go (-1) [] m actions
-    go d stack _m as = error $ "splitEvalTraceActions: internal error: " <> show (d, length stack, length as, show as)
+    go (-1) [] m (ExitException _ : Pop : actions) = go (-1) [] m actions
+    go d stack m as =
+      error msg
+      where
+        msg          = header <> "\n" <> depth <> "\n" <> addressStack <> "\n" <> recorded <> "\n" <> actions
+        header       = "splitEvalTraceActions: internal error -- encountered an unexpected sequence of lazy eval trace actions"
+        depth        = "current stack depth:\n" <> show d <> "\n"
+        addressStack = "current address stack:\n" <> debugAddressStack stack <> "\n"
+        actions      = "remaining actions:\n" <> debugEvalTraceActionsFromLevel d as <> "\n"
+        recorded     = "already recorded actions:\n" <> debugSplitMap m <> "\n"
+
+debugSplitMap :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> String
+debugSplitMap = intercalate "\n" . map go . Map.toList
+  where
+    go :: (Maybe Address, Either WHNF [EvalTraceAction]) -> [Char]
+    go (ma, r) =
+      "for " <> show ma <> "\n" <>
+      either prettyLayout' (debugEvalTraceActions . toList) r
+
+debugAddressStack :: [(Int, Maybe Address, DList EvalTraceAction)] -> String
+debugAddressStack = intercalate "\n" . map go
+  where
+    go :: (Int, Maybe Address, DList EvalTraceAction) -> String
+    go (d, ma, as) =
+      "threshold " <> show d <> ", address " <> show ma <> "\n" <>
+      debugEvalTraceActionsFromLevel d (toList as)
 
 -- | This shows a full trace.
 instance LayoutPrinter EvalTrace where
@@ -254,10 +290,10 @@ instance LayoutPrinter EvalTrace where
 printEvalTrace :: forall ann. Int -> EvalTrace -> Doc ann
 printEvalTrace lvl = \ case
   Trace [] v ->
-    printEvalTrace lvl (TraceValue v)
+    pre lvl <> "•" <> " " <> printExceptionOrNF v
   Trace (esubs : otheresubs) v -> -- TODO: otheresubs ignored
     let
-      proc :: forall a. LayoutPrinter a => Doc ann -> Doc ann -> a -> [Doc ann]
+      proc :: Doc ann -> Doc ann -> Doc ann -> [Doc ann]
       proc firstd followd x =
         case docLines x of
           [] ->
@@ -267,12 +303,11 @@ printEvalTrace lvl = \ case
             : (fmap (\ d -> pre lvl <> followd <> " " <> d) ls)
 
       proc' firstd followd (e, subs) =
-        proc firstd followd e <> (printEvalTrace (lvl + 1) <$> subs)
+        proc firstd followd (printWithLayout e) <> (printEvalTrace (lvl + 1) <$> subs)
 
       esubsd      = proc' "┌" "│" esubs
       otheresubsd = proc' "├" "│" <$> otheresubs
-      vd          = proc "└" " " v
-
+      vd          = proc "└" " " (printExceptionOrNF v)
     in
       vcat $
            esubsd
@@ -284,10 +319,14 @@ printEvalTrace lvl = \ case
     pre :: Int -> Doc ann
     pre i = pretty (replicate i '│')
 
+printExceptionOrNF :: Either EvalException NF -> Doc ann
+printExceptionOrNF (Left _)  = "↯"
+printExceptionOrNF (Right v) = printWithLayout v
+
 type PreTraceStack = [PreTraceFrame]
 
 data PreTraceFrame =
-    PreTraceFrame (RevList (Expr Resolved, RevList EvalPreTrace)) (Maybe WHNF)
+    PreTraceFrame (RevList (Expr Resolved, RevList EvalPreTrace)) (Maybe (Either EvalException WHNF))
   | HiddenFrame
 
 buildEvalPreTrace :: [EvalTraceAction] -> EvalPreTrace
@@ -330,7 +369,7 @@ buildEvalPreTrace as = case as of
     addExprToFrame _ HiddenFrame                   = HiddenFrame
 
     addValToFrame :: WHNF -> PreTraceFrame -> PreTraceFrame
-    addValToFrame v (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just v)
+    addValToFrame v (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just (Right v))
     addValToFrame _ (PreTraceFrame _ (Just _))    = error "addValToFrame: double value"
     addValToFrame _ HiddenFrame                   = HiddenFrame
 
@@ -349,7 +388,7 @@ buildEvalPreTraces :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> Map
 buildEvalPreTraces = Map.map (bimap id buildEvalPreTrace)
 
 buildEvalTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> EvalPreTrace -> EvalTrace
-buildEvalTrace m (PreTrace esubs w)  = Trace (second (fmap (buildEvalTrace m)) <$> esubs) (nfFromTrace m w)
+buildEvalTrace m (PreTrace esubs w)  = Trace (second (fmap (buildEvalTrace m)) <$> esubs) (second (nfFromTrace m) w)
 buildEvalTrace m (PrePlaceholder a)  = maybe (TraceValue Omitted) (either (TraceValue . nfFromTrace m) (buildEvalTrace m)) (Map.lookup (Just a) m)
 buildEvalTrace m (PreValue v)        = TraceValue (nfFromTrace m v)
 
@@ -389,7 +428,32 @@ nfFromTrace m = \ case
       maybe Omitted (either (nfFromTrace m) extractVal) (Map.lookup (Just a) m)
 
     extractVal :: EvalPreTrace -> NF
-    extractVal (PreTrace _ v)     = nfFromTrace m v
-    extractVal (PrePlaceholder a) = rec' a
-    extractVal (PreValue v)       = nfFromTrace m v
+    extractVal (PreTrace _ (Left _))  = Omitted
+    extractVal (PreTrace _ (Right v)) = nfFromTrace m v
+    extractVal (PrePlaceholder a)     = rec' a
+    extractVal (PreValue v)           = nfFromTrace m v
+
+-- | This function exists purely for debugging / internal error messages.
+--
+-- It displays a somewhat readable string from a list of eval trace actions.
+-- It additionally tracks the evaluation stack depth.
+--
+debugEvalTraceActions :: [EvalTraceAction] -> String
+debugEvalTraceActions = debugEvalTraceActionsFromLevel 0
+
+-- | This function exists purely for debugging / internal error messages.
+--
+-- It displays a somewhat readable string from a list of eval trace actions.
+-- It additionally tracks the evaluation stack depth. It allows to specify
+-- the initial stack depth.
+--
+debugEvalTraceActionsFromLevel :: Int -> [EvalTraceAction] -> String
+debugEvalTraceActionsFromLevel = go
+  where
+    go d (a@Push : as) = showAt d a <> go (d + 1) as
+    go d (a@Pop  : as) = showAt (d - 1) a <> go (d - 1) as
+    go d (a      : as) = showAt d a <> go d as
+    go _ []            = ""
+
+    showAt d a = show d <> " " <> prettyLayout' a <> "\n"
 

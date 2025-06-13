@@ -60,11 +60,11 @@ readRef r = asks r >>= liftIO . readIORef
 writeRef :: (EvalState -> IORef a) -> a -> Eval ()
 writeRef r !x = asks r >>= liftIO . flip writeIORef x
 
-pushFrame :: Frame -> Eval ()
-pushFrame frame = do
+pushFrame :: (EvalException -> Eval ()) -> Frame -> Eval ()
+pushFrame k frame = do
   s <- readRef (.stack)
   if s.size == maximumStackSize
-    then exception $ UserEvalException StackOverflow
+    then k $ UserEvalException StackOverflow
     else writeRef (.stack) (over #frames (frame :) s)
 
 -- | Pops a stack frame (if any are left) and calls the continuation on it.
@@ -79,11 +79,11 @@ withPoppedFrame k = do
 
 -- | For the time being, exceptions are always fatal. But we could
 -- in principle have exception we can recover from ...
-exception :: EvalException -> Eval a
-exception exc =
+exception :: (EvalException -> Eval a) -> EvalException -> Eval a
+exception k exc =
   withPoppedFrame $ \ case
     Nothing -> throwError exc
-    Just _f -> exception exc
+    Just _f -> k exc
 
 tryEval :: Eval a -> Eval (Either EvalException a)
 tryEval = tryError
@@ -131,7 +131,9 @@ newAddress = do
 interpMachine :: Machine a -> Eval a
 interpMachine = \ case
   Config a -> pure a
-  Exception e -> exception e
+  Exception e -> do
+    traceEval (ExitException e)
+    exception (interpMachine . Exception) e
   Allocate' alloc -> case alloc of
     Recursive expr env -> do
       rf <- newReference
@@ -159,7 +161,7 @@ interpMachine = \ case
   Bind act k -> interpMachine act >>= interpMachine . k
   PushFrame f -> do
     traceEval Push
-    pushFrame f
+    pushFrame (interpMachine . Exception) f
   NewUnique -> newUnique
 
 traceEval :: EvalTraceAction -> Eval ()
@@ -238,19 +240,6 @@ postprocessTrace actions =
     finalTrace = buildEvalTrace tracedHeap (either err id mainTrace)
   in
     finalTrace
-
-{-
-debugEvalActions :: [EvalTraceAction] -> IO ()
-debugEvalActions = go 0
-  where
-    go :: Int -> [EvalTraceAction] -> IO ()
-    go d (a@Push : as) = showAt d a >> go (d + 1) as
-    go d (a@Pop  : as) = showAt (d - 1) a >> go (d - 1) as
-    go d (a      : as) = showAt d a >> go d as
-    go _ []            = pure ()
-
-    showAt d a = putStrLn (show d <> " " <> prettyLayout' a)
--}
 
 data EvalDirectiveResult =
   MkEvalDirectiveResult
