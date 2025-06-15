@@ -70,6 +70,7 @@ pushFrame k frame = do
 -- | Pops a stack frame (if any are left) and calls the continuation on it.
 withPoppedFrame :: (Maybe Frame -> Eval a) -> Eval a
 withPoppedFrame k = do
+  traceEval Pop
   stack <- readRef (.stack)
   case stack.frames of
     []       -> k Nothing
@@ -84,6 +85,7 @@ exception k exc =
   withPoppedFrame $ \ case
     Nothing -> throwError exc
     Just _f -> k exc
+
 
 tryEval :: Eval a -> Eval (Either EvalException a)
 tryEval = tryError
@@ -151,8 +153,7 @@ interpMachine = \ case
       rf <- newReference
       traceEval (AllocPre r rf)
       pure (getUnique r, rf)
-  WithPoppedFrame k -> do
-    traceEval Pop
+  WithPoppedFrame k ->
     withPoppedFrame (interpMachine . k)
   PokeThunk rf k -> do
     tid <- liftIO myThreadId
