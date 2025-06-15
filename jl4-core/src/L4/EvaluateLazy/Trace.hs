@@ -342,6 +342,8 @@ buildEvalPreTrace as = case as of
       go (addExprToFrame e frame : stack) actions
     go (frame : stack) (Exit v : actions) =
       go (addValToFrame v frame : stack) actions
+    go (frame : stack) (ExitException exc : actions) =
+      go (addExceptionToFrame exc frame : stack) actions
     go (frame : stack) (Pop : actions) =
       case closeFrame frame of
         Nothing -> go stack actions -- hidden frame, just drop
@@ -368,10 +370,13 @@ buildEvalPreTrace as = case as of
     addExprToFrame _ (PreTraceFrame _ (Just _))    = error "addExprToFrame: unexpected expression after value"
     addExprToFrame _ HiddenFrame                   = HiddenFrame
 
-    addValToFrame :: WHNF -> PreTraceFrame -> PreTraceFrame
-    addValToFrame v (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just (Right v))
-    addValToFrame _ (PreTraceFrame _ (Just _))    = error "addValToFrame: double value"
-    addValToFrame _ HiddenFrame                   = HiddenFrame
+    addResultToFrame :: (Either EvalException WHNF) -> PreTraceFrame -> PreTraceFrame
+    addResultToFrame r (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just r)
+    addResultToFrame _ (PreTraceFrame _ (Just _))    = error "addValToFrame: double value"
+    addResultToFrame _ HiddenFrame                   = HiddenFrame
+
+    addValToFrame       = addResultToFrame . Right
+    addExceptionToFrame = addResultToFrame . Left
 
     closeFrame :: PreTraceFrame -> Maybe EvalPreTrace
     closeFrame (PreTraceFrame esubs (Just v)) = Just (PreTrace (second unRevList <$> unRevList esubs) v)
