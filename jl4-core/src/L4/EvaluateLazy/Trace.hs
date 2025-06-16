@@ -136,14 +136,13 @@ import Prettyprinter
 -- information so that we can recover a meaningful evaluation trace via posprocessing.
 --
 data EvalTraceAction =
-    Enter (Expr Resolved)           -- ^ corresponds to forward, is not always pushing a frame (e.g. tail calls)
-  | Exit WHNF                       -- ^ corresponds to backward, is always popping a frame
-  | ExitException EvalException     -- ^ exceptional exit, unrolls the stack
-  | SetRef Reference                -- ^ can result in evaluation (always pushes a frame) or direct return (immediately exits / pops)
-  | Alloc (Expr Resolved) Reference -- ^ allocation, used for lambdas
-  | AllocPre Resolved Reference     -- ^ allocation, used for mutually recursive let/where
-  | Push                            -- ^ explicit push
-  | Pop                             -- ^ explicit pop (would not be needed / could be combined with Exit)
+    Enter (Expr Resolved)            -- ^ corresponds to forward, is not always pushing a frame (e.g. tail calls)
+  | Exit (Either EvalException WHNF) -- ^ corresponds to backward or exception, is always popping a frame
+  | SetRef Reference                 -- ^ can result in evaluation (always pushes a frame) or direct return (immediately exits / pops)
+  | Alloc (Expr Resolved) Reference  -- ^ allocation, used for lambdas
+  | AllocPre Resolved Reference      -- ^ allocation, used for mutually recursive let/where
+  | Push                             -- ^ explicit push
+  | Pop                              -- ^ explicit pop (would not be needed / could be combined with Exit)
   deriving stock Show
 
 -- | This instance is primarily used for debugging. It shows individual actions
@@ -153,8 +152,8 @@ instance LayoutPrinter EvalTraceAction where
   printWithLayout :: EvalTraceAction -> Doc ann
   printWithLayout = \ case
     Enter e           -> ">>> " <+> printWithLayout e
-    Exit v            -> "<<< " <+> printWithLayout v
-    ExitException exc -> "*** " <+> vcat (map pretty (prettyEvalException exc))
+    Exit (Right v)    -> "<<< " <+> printWithLayout v
+    Exit (Left exc)   -> "*** " <+> vcat (map pretty (prettyEvalException exc))
     SetRef r          -> "!!! " <+> printWithLayout r
     Alloc e r         -> "??? " <+> printWithLayout e <+> printWithLayout r
     AllocPre x r      -> "??p " <+> printWithLayout x <+> "=" <+> printWithLayout r
@@ -203,7 +202,7 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
           -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
     -- go d1 stack _m actions
     --   | trace (show d1 <> " " <> show ((\ (x, _, _) -> x) <$> stack) <> " " <> show (prettyLayout' <$> take 2 actions)) False = undefined
-    go d1 [] m (_a@(SetRef r) : as@(Exit v : _)) =
+    go d1 [] m (_a@(SetRef r) : as@(Exit (Right v) : _)) =
       -- If a 'SetRef' is immediately followed by an 'Exit', then we are looking up an
       -- already evaluated address. In this case, we don't have to push or pop from
       -- our address stack at all.
@@ -217,7 +216,7 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
         go d1 [] m' as
     go d1 [] m (_a@(SetRef r) : as) =
       go d1 ((d1 + 1, Just r.address, mempty) : []) m as
-    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Exit v : _)) =
+    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Exit (Right v) : _)) =
       let
         m' = Map.insertWith (\ _new old -> old) (Just r.address) (Left v) m
       in
@@ -227,14 +226,6 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
     go d1 ((d2, ma, casf) : stack) m (a@Push : as) =
       go (d1 + 1) ((d2, ma, casf `DList.snoc` a) : stack) m as
     go d1 ((d2, ma, casf) : stack) m (a1@(Exit _) : a2@Pop : as)
-      | d1 == d2 =
-        let
-          m' = Map.insertWith (\ _new old -> old) ma (Right (toList (casf `DList.snoc` a1 `DList.snoc` a2))) m
-        in
-          go (d1 - 1) stack m' as
-      | otherwise =
-        go (d1 - 1) ((d2, ma, casf `DList.snoc` a1 `DList.snoc` a2) : stack) m as
-    go d1 ((d2, ma, casf) : stack) m (a1@(ExitException _) : a2@Pop : as)
       | d1 == d2 =
         let
           m' = Map.insertWith (\ _new old -> old) ma (Right (toList (casf `DList.snoc` a1 `DList.snoc` a2))) m
@@ -256,7 +247,6 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
     -- go 0 [] m [Pop] = m
     go (-1) [] m [] = m
     go (-1) [] m (Exit _ : Pop : actions) = go (-1) [] m actions
-    go (-1) [] m (ExitException _ : Pop : actions) = go (-1) [] m actions
     go d stack m as =
       error msg
       where
@@ -341,9 +331,7 @@ buildEvalPreTrace as = case as of
     go (frame : stack) (Enter e : actions) =
       go (addExprToFrame e frame : stack) actions
     go (frame : stack) (Exit v : actions) =
-      go (addValToFrame v frame : stack) actions
-    go (frame : stack) (ExitException exc : actions) =
-      go (addExceptionToFrame exc frame : stack) actions
+      go (addResultToFrame v frame : stack) actions
     go (frame : stack) (Pop : actions) =
       case closeFrame frame of
         Nothing -> go stack actions -- hidden frame, just drop
@@ -374,9 +362,6 @@ buildEvalPreTrace as = case as of
     addResultToFrame r (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just r)
     addResultToFrame _ (PreTraceFrame _ (Just _))    = error "addValToFrame: double value"
     addResultToFrame _ HiddenFrame                   = HiddenFrame
-
-    addValToFrame       = addResultToFrame . Right
-    addExceptionToFrame = addResultToFrame . Left
 
     closeFrame :: PreTraceFrame -> Maybe EvalPreTrace
     closeFrame (PreTraceFrame esubs (Just v)) = Just (PreTrace (second unRevList <$> unRevList esubs) v)

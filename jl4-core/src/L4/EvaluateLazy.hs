@@ -134,7 +134,7 @@ interpMachine :: Machine a -> Eval a
 interpMachine = \ case
   Config a -> pure a
   Exception e -> do
-    traceEval (ExitException e)
+    traceEval (Exit (Left e))
     exception (interpMachine . Exception) e
   Allocate' alloc -> case alloc of
     Recursive expr env -> do
@@ -203,7 +203,7 @@ runConfig = \ case
     next <- interpMachine (matchPattern r env pat)
     runConfig next
   BackwardMachine whnf -> do
-    traceEval (Exit whnf)
+    traceEval (Exit (Right whnf))
     next <- interpMachine (backward whnf)
     runConfig next
   EvalRefMachine r -> do
