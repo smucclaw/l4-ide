@@ -56,14 +56,8 @@ lazytrace.l4:23:1-36:
   │││││└ EMPTY
   ││││├ EMPTY
   ││││└ EMPTY
-  ││││┌ `__CONS__`
-  ││││└ <function>
   │││└ LIST 1
-  │││┌ `__CONS__`
-  │││└ <function>
   ││└ LIST 9, 1
-  ││┌ `__CONS__`
-  ││└ <function>
   │└ LIST 25, 9, 1
   │┌ sum
   │└ <function>
@@ -74,10 +68,7 @@ lazytrace.l4:23:1-36:
   │   DECIDE go acc l IS
   │     CONSIDER l WHEN EMPTY THEN acc,
   │                  WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
-  │• <function>
   ├ go OF 0, list
-  │┌ 0
-  │└ 0
   │┌ list
   │└ LIST 25, 9, 1
   │┌ go
@@ -92,10 +83,6 @@ lazytrace.l4:23:1-36:
   ││└ 0
   ││┌ x
   ││└ 25
-  ││┌ `__PLUS__`
-  ││└ <function>
-  ││• 0
-  ││• 25
   │└ 25
   │┌ xs
   │└ LIST 9, 1
@@ -111,10 +98,6 @@ lazytrace.l4:23:1-36:
   ││└ 25
   ││┌ x
   ││└ 9
-  ││┌ `__PLUS__`
-  ││└ <function>
-  ││• 25
-  ││• 9
   │└ 34
   │┌ xs
   │└ LIST 1
@@ -130,10 +113,6 @@ lazytrace.l4:23:1-36:
   ││└ 34
   ││┌ x
   ││└ 1
-  ││┌ `__PLUS__`
-  ││└ <function>
-  ││• 34
-  ││• 1
   │└ 35
   │┌ xs
   │└ EMPTY

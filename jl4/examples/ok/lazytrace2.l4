@@ -1,0 +1,28 @@
+x MEANS 2 + 2
+y MEANS FALSE
+
+DECLARE Pair
+  IS ONE OF
+    MkPair HAS p1 IS A NUMBER, p2 IS A NUMBER
+
+DECIDE addPair p
+  IS
+    CONSIDER p
+    WHEN MkPair p1 p2 THEN p1 + p2
+
+DECIDE l
+  IS LIST 1,2,3
+
+DECIDE sumList list
+  IS
+    CONSIDER list
+    WHEN EMPTY THEN 0
+    WHEN z FOLLOWED BY zs THEN z + sumList zs
+
+#EVALTRACE x * x
+#EVALTRACE IF y THEN 3 ELSE 5
+#EVALTRACE MkPair 1 2
+#EVALTRACE addPair (MkPair 1 2)
+#EVALTRACE l
+#EVALTRACE sumList (LIST 1,2,3)
+#EVALTRACE (2 + 3) * (4 + 5)

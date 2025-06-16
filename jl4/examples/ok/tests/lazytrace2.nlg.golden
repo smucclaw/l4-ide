@@ -1,0 +1,7 @@
+the product of `x` and `x`
+if `y` then 3 else 5
+`MkPair` with 1 and 2
+`addPair` with `MkPair` with 1 and 2
+`l`
+`sumList` with list of 1, 2 and 3
+the product of the sum of 2 and 3 and the sum of 4 and 5

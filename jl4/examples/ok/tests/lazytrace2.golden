@@ -1,0 +1,121 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+lazytrace2.l4:22:1-17:
+  16
+  ─────
+  ┌ x TIMES x
+  │┌ x
+  │└ 4
+  │┌ x
+  │└ 4
+  └ 16
+lazytrace2.l4:23:1-30:
+  5
+  ─────
+  ┌ IF y
+  │ THEN 3
+  │ ELSE 5
+  │┌ y
+  │└ FALSE
+  ├ 5
+  └ 5
+lazytrace2.l4:24:1-22:
+  MkPair OF 1, 2
+  ─────
+  ┌ MkPair OF 1, 2
+  └ MkPair OF 1, 2
+lazytrace2.l4:25:1-32:
+  3
+  ─────
+  ┌ addPair OF (MkPair OF 1, 2)
+  │┌ MkPair OF 1, 2
+  │└ MkPair OF 1, 2
+  │┌ addPair
+  │└ <function>
+  ├ CONSIDER p WHEN MkPair p1
+  │                         p2 THEN p1 PLUS p2
+  │┌ p
+  │└ MkPair OF 1, 2
+  ├ p1 PLUS p2
+  │┌ p1
+  │└ 1
+  │┌ p2
+  │└ 2
+  └ 3
+lazytrace2.l4:26:1-13:
+  LIST 1, 2, 3
+  ─────
+  ┌ l
+  └ LIST 1, 2, 3
+lazytrace2.l4:27:1-32:
+  6
+  ─────
+  ┌ sumList OF (LIST 1, 2, 3)
+  │┌ LIST 1, 2, 3
+  │├ 1 FOLLOWED BY (LIST 2, 3)
+  ││┌ LIST 2, 3
+  ││├ 2 FOLLOWED BY (LIST 3)
+  │││┌ LIST 3
+  │││├ 3 FOLLOWED BY (LIST )
+  ││││┌ LIST 
+  ││││└ EMPTY
+  │││└ LIST 3
+  ││└ LIST 2, 3
+  │└ LIST 1, 2, 3
+  │┌ sumList
+  │└ <function>
+  ├ CONSIDER list WHEN EMPTY THEN 0,
+  │                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │┌ list
+  │└ LIST 1, 2, 3
+  ├ z PLUS (sumList OF zs)
+  │┌ z
+  │└ 1
+  │┌ sumList OF zs
+  ││┌ zs
+  ││└ LIST 2, 3
+  ││┌ sumList
+  ││└ <function>
+  │├ CONSIDER list WHEN EMPTY THEN 0,
+  ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││┌ list
+  ││└ LIST 2, 3
+  │├ z PLUS (sumList OF zs)
+  ││┌ z
+  ││└ 2
+  ││┌ sumList OF zs
+  │││┌ zs
+  │││└ LIST 3
+  │││┌ sumList
+  │││└ <function>
+  ││├ CONSIDER list WHEN EMPTY THEN 0,
+  │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  │││┌ list
+  │││└ LIST 3
+  ││├ z PLUS (sumList OF zs)
+  │││┌ z
+  │││└ 3
+  │││┌ sumList OF zs
+  ││││┌ zs
+  ││││└ EMPTY
+  ││││┌ sumList
+  ││││└ <function>
+  │││├ CONSIDER list WHEN EMPTY THEN 0,
+  ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
+  ││││┌ list
+  ││││└ EMPTY
+  │││├ 0
+  │││└ 0
+  ││└ 3
+  │└ 5
+  └ 6
+lazytrace2.l4:28:1-29:
+  45
+  ─────
+  ┌ (2 PLUS 3) TIMES (4 PLUS 5)
+  │┌ 2 PLUS 3
+  │└ 5
+  │┌ 4 PLUS 5
+  │└ 9
+  └ 45
