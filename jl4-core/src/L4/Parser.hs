@@ -446,7 +446,7 @@ directive =
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalDirective))
           <*> annoHole expr
       , LazyEvalTrace emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirective TLazyEvalTraceDirective))
+          <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalTraceDirective))
           <*> annoHole expr
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TCheckDirective))

@@ -405,7 +405,9 @@ quoted =
 directiveLiteral :: Lexer TDirectives
 directiveLiteral = do
   _herald <- "#"
-  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toList directives
+  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toDescList directives
+    -- we use toDescList to make sure that longer tokens with common prefixes
+    -- appear before shorter ones, in particular EVALTRACE before EVAL
 
 integerLiteral :: Lexer (Text, Integer)
 integerLiteral =
