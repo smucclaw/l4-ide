@@ -238,7 +238,7 @@ postprocessTrace actions =
                   Nothing -> err
                   Just t  -> t
     err = error "postprocessTrace: no trace for main value"
-    finalTrace = buildEvalTrace tracedHeap (either err id mainTrace)
+    finalTrace = simplifyEvalTrace (buildEvalTrace tracedHeap (either err id mainTrace))
   in
     finalTrace
 

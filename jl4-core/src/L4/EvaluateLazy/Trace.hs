@@ -1,11 +1,13 @@
+{-# LANGUAGE PatternSynonyms #-}
 module L4.EvaluateLazy.Trace where
 
 import Base
 import qualified Base.DList as DList
 import qualified Base.Map as Map
+import qualified Base.Text as Text
 import L4.Syntax
 import L4.Evaluate.ValueLazy
-import L4.EvaluateLazy.Machine (EvalException, prettyEvalException)
+import L4.EvaluateLazy.Machine (EvalException(..), InternalEvalException(..), UserEvalException(..), prettyEvalException)
 import L4.Print
 import L4.Utils.RevList
 
@@ -57,79 +59,25 @@ import Prettyprinter
 --   Map (Maybe Address) (Either WHNF [EvalTraceAction])
 -- @
 --
--- 2. Every list of actions is turned into a trace with placeholders.
+-- 3. Every list of actions is turned into a trace with placeholders.
 -- For every alloc action, we introduce a placeholder for that address.
 -- For every setref action, we introduce a placeholder for the value
 -- belonging to that address. We keep WHNFs where eventually NFs are
 -- expected.
 --
--- (Map Address [EvalTraceAction], [EvalTraceAction]) -> (Map Address PreTrace, PreTrace)
+-- @
+--   [EvalTraceAction] -> EvalPreTrace
+-- @
 --
--- 3. We "zonk" the whole structure, by replacing placeholders correspondingly,
+-- 4. We "zonk" the whole structure, by replacing placeholders correspondingly,
 -- and turning WHNFs into NFs.
 --
--- (Map Address PreTrace, PreTrace) -> Trace
+-- @
+--   Map (Maybe Address) (Either WHNF EvalPreTrace) -> EvalPreTrace -> EvalTrace
+-- @
 --
---
--- 0 >>>  test
---   !!!  &14@file://experiments/trace.l4
--- 1 >>>  inc OF (2 PLUS 2)
---   ???  2 PLUS 2 &16@file://experiments/trace.l4
--- 2 >>>  inc
---   !!!  &13@file://experiments/trace.l4
--- 2 <<<  <function>
--- 2 >>>  x PLUS 1
--- 3 >>>  x
---   !!!  &16@file://experiments/trace.l4
--- 4 >>>  2 PLUS 2
--- 5 >>>  2
--- 5 <<<  2
--- 5 >>>  2
--- 5 <<<  2
--- 4 <<<  4
--- 3 <<<  4
--- 3 >>>  1
--- 3 <<<  1
--- 2 <<<  5
--- 1 <<<  5
--- 0 <<<  5
---
--- Nothing: final value 5
---
--- 0 >>>  test
--- 1 !!!  &14
--- 0 <<<  5
---
--- &14: final value 5
---
--- 1 >>>  inc OF (2 PLUS 2)
--- 2 ???  2 PLUS 2 &16
--- 2 >>>  inc
--- 3 !!!  &13
--- 2 <<<  <function>
--- 2 >>>  x PLUS 1
--- 3 >>>  x
---   !!!  &16
--- 3 <<<  4
--- 3 >>>  1
--- 3 <<<  1
--- 2 <<<  5
--- 1 <<<  5
---
--- &13: final value <function>
---
--- (empty)
---
--- &16: final value 4
---
--- 4 >>>  2 PLUS 2
--- 5 >>>  2
--- 5 <<<  2
--- 5 >>>  2
--- 5 <<<  2
--- 4 <<<  4
---
---
+-- 5. We simplify the trace by removing some trivial nodes.
+
 -- | 'EvalTraceAction's are optionally generated during evaluation. The idea is that
 -- they are themselves not extremely large (i.e., they don't contain unbounded data;
 -- we omit any stacks or environments), yet they still should contain sufficient
@@ -167,13 +115,17 @@ instance LayoutPrinter EvalTraceAction where
 data EvalPreTrace =
     PreTrace [(Expr Resolved, [EvalPreTrace])] (Either EvalException WHNF)
   | PrePlaceholder Address
-  | PreValue WHNF
 
 data EvalTrace =
     Trace [((Expr Resolved), [EvalTrace])] (Either EvalException NF)
-  | TraceValue NF
   deriving stock (Generic, Show)
   deriving anyclass NFData
+
+pattern PreValue :: WHNF -> EvalPreTrace
+pattern PreValue v = PreTrace [] (Right v)
+
+pattern TraceValue :: NF -> EvalTrace
+pattern TraceValue v = Trace [] (Right v)
 
 -- | Implements step 2 of Note [Lazy evaluation tracing]
 splitEvalTraceActions :: [EvalTraceAction] -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
@@ -202,52 +154,59 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
           -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
     -- go d1 stack _m actions
     --   | trace (show d1 <> " " <> show ((\ (x, _, _) -> x) <$> stack) <> " " <> show (prettyLayout' <$> take 2 actions)) False = undefined
-    go d1 [] m (_a@(SetRef r) : as@(Exit (Right v) : _)) =
+    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Exit (Right v) : _)) =
       -- If a 'SetRef' is immediately followed by an 'Exit', then we are looking up an
       -- already evaluated address. In this case, we don't have to push or pop from
       -- our address stack at all.
-      --
-      -- NOTE: Our address stack is empty here, so does this situation actually
-      -- arise? If so, when?
-      --
       let
-        m' = Map.insertWith (\ _new old -> old) (Just r.address) (Left v) m
-      in
-        go d1 [] m' as
-    go d1 [] m (_a@(SetRef r) : as) =
-      go d1 ((d1 + 1, Just r.address, mempty) : []) m as
-    go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as@(Exit (Right v) : _)) =
-      let
-        m' = Map.insertWith (\ _new old -> old) (Just r.address) (Left v) m
+        m' = insertIfMissing (Just r.address) (Left v) m
       in
         go d1 ((d2, ma, casf `DList.snoc` a) : stack) m' as
     go d1 ((d2, ma, casf) : stack) m (a@(SetRef r) : as) =
+      -- The normal situation if we encounter a 'SetRef' is to create a new frame on
+      -- our address stack with an empty action list.
       go d1 ((d1 + 1, Just r.address, mempty) : (d2, ma, casf `DList.snoc` a) : stack) m as
     go d1 ((d2, ma, casf) : stack) m (a@Push : as) =
+      -- A 'Push' increases the tracked depth and is otherwise stored normally.
       go (d1 + 1) ((d2, ma, casf `DList.snoc` a) : stack) m as
-    go d1 ((d2, ma, casf) : stack) m (a1@(Exit _) : a2@Pop : as)
-      | d1 == d2 =
-        let
-          m' = Map.insertWith (\ _new old -> old) ma (Right (toList (casf `DList.snoc` a1 `DList.snoc` a2))) m
-        in
-          go (d1 - 1) stack m' as
-      | otherwise =
-        go (d1 - 1) ((d2, ma, casf `DList.snoc` a1 `DList.snoc` a2) : stack) m as
     go d1 ((d2, ma, casf) : stack) m (a@Pop : as)
+      -- If we encounter a 'Pop', we have to check whether it is the 'Pop' that
+      -- closes off our top entry on the address stack. If so, we store it as the
+      -- final instruction in that eval action list, pop the address stack, and
+      -- continue. If not, we only decrease the tracked depth and continue with
+      -- the same address stack.
       | d1 == d2 =
         let
-          m' = Map.insertWith (\ _new old -> old) ma (Right (toList (casf `DList.snoc` a))) m
+          m' = insertIfMissing ma (Right (toList casf')) m
         in
           go (d1 - 1) stack m' as
       | otherwise =
-        go (d1 - 1) ((d2, ma, casf `DList.snoc` a) : stack) m as
+        go (d1 - 1) ((d2, ma, casf') : stack) m as
+      where
+        casf' = casf `DList.snoc` a
     go d1 ((d2, ma, casf) : stack) m (a : as) =
+      -- The normal case is that we just push encountered actions onto the end of
+      -- the action list on the top element of our address stack.
       go d1 ((d2, ma, casf `DList.snoc` a) : stack) m as
-    -- go 0 [] m (Exit _ : Pop : []) = m -- not good, we drop the exit
-    -- go 0 [] m [Pop] = m
-    go (-1) [] m [] = m
-    go (-1) [] m (Exit _ : Pop : actions) = go (-1) [] m actions
+    go (-1) [] m [] =
+      -- We end at level -1, because we generate a 'Pop' for the final *attempt*
+      -- to pop the stack when it is empty.
+      m
+    go (-1) [] m as@(SetRef _ : _) =
+      -- This case occurs if after we're done with the main expression, we
+      -- have other subexpressions left to evaluate (because we're computing
+      -- the *normal form*, not the weak head normal form). Then we're at
+      -- level -1, having tried to pop the empty stack and returned everything,
+      -- but we're continuing with a `SetRef` from the next encountered
+      -- subexpression we still want to compute. In such a case, we simply
+      -- re-initialise to level 0 and a one-element address stack. Reusing
+      -- 'Nothing' is fine; we will never overwrite already existing results.
+      -- The actual result of this computation will be determined by the
+      -- 'SetRef' in the next step.
+      --
+      go 0 [(0, Nothing, mempty)] m as
     go d stack m as =
+      -- In any other situations, we produce an error message.
       error msg
       where
         msg          = header <> "\n" <> depth <> "\n" <> addressStack <> "\n" <> recorded <> "\n" <> actions
@@ -257,6 +216,11 @@ splitEvalTraceActions = go 0 [(0, Nothing, mempty)] Map.empty
         actions      = "remaining actions:\n" <> debugEvalTraceActionsFromLevel d as <> "\n"
         recorded     = "already recorded actions:\n" <> debugSplitMap m <> "\n"
 
+    insertIfMissing :: Ord k => k -> a -> Map k a -> Map k a
+    insertIfMissing = Map.insertWith (\ _new old -> old)
+
+-- | Just used in error messages to produce a reasonably readable version
+-- of the split address action map maintained during 'splitEvalTraceActions'.
 debugSplitMap :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> String
 debugSplitMap = intercalate "\n" . map go . Map.toList
   where
@@ -265,6 +229,8 @@ debugSplitMap = intercalate "\n" . map go . Map.toList
       "for " <> show ma <> "\n" <>
       either prettyLayout' (debugEvalTraceActions . toList) r
 
+-- | Just used in error messages to display the address stack maintained
+-- during 'splitEvalTraceActions'.
 debugAddressStack :: [(Int, Maybe Address, DList EvalTraceAction)] -> String
 debugAddressStack = intercalate "\n" . map go
   where
@@ -273,15 +239,16 @@ debugAddressStack = intercalate "\n" . map go
       "threshold " <> show d <> ", address " <> show ma <> "\n" <>
       debugEvalTraceActionsFromLevel d (toList as)
 
--- | This shows a full trace.
+-- | This shows a full lazy evaluation trace.
 instance LayoutPrinter EvalTrace where
   printWithLayout = printEvalTrace 0
 
+-- | Shows a lazy evaluation trace. Keeps track of the level.
 printEvalTrace :: forall ann. Int -> EvalTrace -> Doc ann
 printEvalTrace lvl = \ case
   Trace [] v ->
     pre lvl <> "•" <> " " <> printExceptionOrNF v
-  Trace (esubs : otheresubs) v -> -- TODO: otheresubs ignored
+  Trace (esubs : otheresubs) v ->
     let
       proc :: Doc ann -> Doc ann -> Doc ann -> [Doc ann]
       proc firstd followd x =
@@ -303,22 +270,50 @@ printEvalTrace lvl = \ case
            esubsd
         <> concat otheresubsd
         <> vd
-  TraceValue v ->
-    pre lvl <> "•" <> " " <> printWithLayout v
   where
     pre :: Int -> Doc ann
     pre i = pretty (replicate i '│')
 
+-- | Helper function to display an exception or final value in a trace.
 printExceptionOrNF :: Either EvalException NF -> Doc ann
-printExceptionOrNF (Left _)  = "↯"
+printExceptionOrNF (Left e)  = "↯ " <> printEvalExceptionShort e
 printExceptionOrNF (Right v) = printWithLayout v
 
+-- | Shows just the kind of the exception, for display in a trace.
+printEvalExceptionShort :: EvalException -> Doc ann
+printEvalExceptionShort (InternalEvalException e) = printInternalEvalExceptionShort e
+printEvalExceptionShort (UserEvalException e)     = printUserEvalExceptionShort e
+
+printInternalEvalExceptionShort :: InternalEvalException -> Doc ann
+printInternalEvalExceptionShort (RuntimeScopeError _) = "run-time scope error"
+printInternalEvalExceptionShort (RuntimeTypeError _)  = "run-time type error"
+printInternalEvalExceptionShort PrematureGC           = "accessed garbage-collected value"
+printInternalEvalExceptionShort DanglingPointer       = "dangling pointer"
+printInternalEvalExceptionShort UnhandledPatternMatch = "unhandled pattern match"
+
+printUserEvalExceptionShort :: UserEvalException -> Doc ann
+printUserEvalExceptionShort (BlackholeForced _)             = "loop detected"
+printUserEvalExceptionShort (EqualityOnUnsupportedType _ _) = "called equality on unsupported type"
+printUserEvalExceptionShort (NonExhaustivePatterns _)       = "non-exhaustive patterns"
+printUserEvalExceptionShort StackOverflow                   = "stack overflow"
+printUserEvalExceptionShort (DivisionByZero _)              = "division by zero"
+printUserEvalExceptionShort (NotAnInteger _ _)              = "not an integer"
+printUserEvalExceptionShort (Stuck _)                       = "stuck"
+
+-- | This is a stack data structure that is maintained while building an 'EvalPreTrace'.
 type PreTraceStack = [PreTraceFrame]
 
+-- | These a stack frames maintained while building an 'EvalPreTrace'.
+--
+-- Each frame contains a partial 'EvalPreTrace' node. It contains a list of
+-- expressions and subtraces, and it possibly contains a result or exception
+-- already.
+--
 data PreTraceFrame =
     PreTraceFrame (RevList (Expr Resolved, RevList EvalPreTrace)) (Maybe (Either EvalException WHNF))
   | HiddenFrame
 
+-- | Implements step 3 of Note [Lazy evaluation tracing]
 buildEvalPreTrace :: [EvalTraceAction] -> EvalPreTrace
 buildEvalPreTrace as = case as of
   Enter _ : _ -> go [PreTraceFrame emptyRevList Nothing] as -- outer expression starts with Enter
@@ -353,21 +348,33 @@ buildEvalPreTrace as = case as of
     go frames actions =
       error $ "buildEvalPreTrace: unexpected action sequence: " <> show (length frames, prettyLayout' <$> actions)
 
+    -- Tries to add an expression to the current frame. If the current frame already
+    -- has an expression, then it will get another expression. This happens during
+    -- tail-calls, where one expression is directly rewritten into another.
+    --
+    -- We don't expect expressions to be added after we already have a result. In such
+    -- a case, we fail.
+    --
     addExprToFrame :: Expr Resolved -> PreTraceFrame -> PreTraceFrame
     addExprToFrame e (PreTraceFrame esubs Nothing) = PreTraceFrame (pushRevList (e, emptyRevList) esubs) Nothing
     addExprToFrame _ (PreTraceFrame _ (Just _))    = error "addExprToFrame: unexpected expression after value"
     addExprToFrame _ HiddenFrame                   = HiddenFrame
 
+    -- Add a value or exception to the current frame. We expect this to occur exactly
+    -- once, and we expect to close the frame after that.
     addResultToFrame :: (Either EvalException WHNF) -> PreTraceFrame -> PreTraceFrame
     addResultToFrame r (PreTraceFrame esubs Nothing) = PreTraceFrame esubs (Just r)
     addResultToFrame _ (PreTraceFrame _ (Just _))    = error "addValToFrame: double value"
     addResultToFrame _ HiddenFrame                   = HiddenFrame
 
+    -- Close the current frame by turning it into an actual eval pre trace node.
     closeFrame :: PreTraceFrame -> Maybe EvalPreTrace
     closeFrame (PreTraceFrame esubs (Just v)) = Just (PreTrace (second unRevList <$> unRevList esubs) v)
     closeFrame (PreTraceFrame _ Nothing)      = Nothing -- error "closeFrame: trying to close frame without value"
     closeFrame HiddenFrame                    = Nothing
 
+    -- Adds a new sub-trace (subcomputation) to the current frame. This fails if the current
+    -- frame already has a result.
     addSubTraceToFrame :: EvalPreTrace -> PreTraceFrame -> PreTraceFrame
     addSubTraceToFrame _ (PreTraceFrame (MkRevList []) Nothing)                   = HiddenFrame
     addSubTraceToFrame t (PreTraceFrame (MkRevList ((e, subs) : esubs')) Nothing) = PreTraceFrame (MkRevList ((e, pushRevList t subs) : esubs')) Nothing
@@ -377,11 +384,46 @@ buildEvalPreTrace as = case as of
 buildEvalPreTraces :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> Map (Maybe Address) (Either WHNF EvalPreTrace)
 buildEvalPreTraces = Map.map (bimap id buildEvalPreTrace)
 
+-- | Implements step 4 of Note [Lazy evaluation tracing]
 buildEvalTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> EvalPreTrace -> EvalTrace
 buildEvalTrace m (PreTrace esubs w)  = Trace (second (fmap (buildEvalTrace m)) <$> esubs) (second (nfFromTrace m) w)
 buildEvalTrace m (PrePlaceholder a)  = maybe (TraceValue Omitted) (either (TraceValue . nfFromTrace m) (buildEvalTrace m)) (Map.lookup (Just a) m)
-buildEvalTrace m (PreValue v)        = TraceValue (nfFromTrace m v)
 
+-- | Implements step 5 of Note [Lazy evaluation tracing]
+simplifyEvalTrace :: EvalTrace -> EvalTrace
+simplifyEvalTrace (Trace children v) = Trace (second (concatMap go) <$> children) v
+  where
+    go :: EvalTrace -> [EvalTrace]
+    go (Trace [] (Right _))              = []   -- eliminate trivial successful trace nodes
+    go (Trace [(Lit _ _, [])] (Right _)) = []   -- eliminate trivial literal evaluations
+    go (Trace [(Var _ n, [])] (Right (MkNF (ValConstructor n' []))))
+      | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
+    go (Trace [(Var _ n, [])] (Right (MkNF (ValUnappliedConstructor n'))))
+      | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
+    go (Trace [(App _ n [], [])] (Right (MkNF (ValConstructor n' []))))
+      | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
+    go (Trace [(App _ n [], [])] (Right (MkNF (ValUnappliedConstructor n'))))
+      | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
+    go (Trace [(Var _ n, [])] _)
+      | isInternalName n                 = []   -- eliminate internal function applications
+    go (Trace [(App _ n _xs, [])] _)
+      | isInternalName n                 = []   -- eliminate internal function applications
+    go t                                 = [simplifyEvalTrace t]
+
+    -- Heuristically declare functions to be internal that start with double underscores.
+    -- TODO: we could be more systematic about this.
+    isInternalName :: Resolved -> Bool
+    isInternalName r =
+      case rawName (getOriginal r) of
+        NormalName n -> Text.take 2 n == "__"
+        _            -> False
+
+-- | Helper function that turns a WHNF into an NF, but not by actively evaluating,
+-- but by looking up the values in the heap of traces.
+--
+-- This function is similar to 'nf', and both could probably be unified by abstracting
+-- over the recursive calls.
+--
 nfFromTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> WHNF -> NF
 nfFromTrace m = \ case
   ValNumber i   -> MkNF (ValNumber i)
@@ -421,7 +463,6 @@ nfFromTrace m = \ case
     extractVal (PreTrace _ (Left _))  = Omitted
     extractVal (PreTrace _ (Right v)) = nfFromTrace m v
     extractVal (PrePlaceholder a)     = rec' a
-    extractVal (PreValue v)           = nfFromTrace m v
 
 -- | This function exists purely for debugging / internal error messages.
 --

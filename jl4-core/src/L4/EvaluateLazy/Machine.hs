@@ -6,6 +6,7 @@ module L4.EvaluateLazy.Machine
 ( Frame
 , EvalException (..)
 , UserEvalException (..)
+, InternalEvalException (..)
 , Machine (Allocate, AllocateValue, PreAllocate, ..)
 , Allocation (..)
 , Config (..)
