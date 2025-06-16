@@ -146,8 +146,7 @@ interpMachine = \ case
     Value whnf -> do
       rf <- newReference
       updateRef rf $ WHNF whnf
-      -- we don't trace this because it is used for initial environment stuff which is misleading in the trace
-      -- traceEval (AllocVal whnf rf)
+      -- we don't trace this because it is used for allocating values in the initial environment which would be misleading in the trace
       pure rf
     PreAllocation r -> do
       rf <- newReference
