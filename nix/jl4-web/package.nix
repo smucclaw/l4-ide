@@ -12,12 +12,21 @@
 buildNpmPackage rec {
   pname = "jl4-web";
   version = "0-latest";
-  src = lib.sources.sourceByRegex ../../. [
-    "^ts-apps.*"
-    "^ts-shared.*"
-    "^package-lock.json$"
-    "^package.json$"
-  ];
+  src = lib.cleanSourceWith {
+    src = ../../.;
+    filter = path: type:
+      let
+        relPath = lib.removePrefix (toString ../../. + "/") (toString path);
+        baseName = baseNameOf (toString path);
+      in
+        # Include all directories to maintain path structure for copy-examples.ts, while only copying specific files
+        type == "directory" ||
+        lib.hasPrefix "ts-apps" relPath ||
+        lib.hasPrefix "ts-shared" relPath ||
+        baseName == "package.json" ||
+        baseName == "package-lock.json" ||
+        lib.hasPrefix "jl4/examples/legal" relPath;
+  };
   npmDeps = importNpmLock { npmRoot = src; };
   npmWorkspace = src;
   nativeBuildInputs = [ pkg-config ];
