@@ -423,6 +423,18 @@ mapMaybe f list MEANS
     WHEN NOTHING THEN mapMaybe f xs
     WHEN JUST y  THEN y FOLLOWED BY mapMaybe f xs
 
+GIVEN
+  a    IS A TYPE
+  list IS A LIST OF MAYBE a
+GIVETH A LIST OF a
+catMaybes list MEANS
+  CONSIDER list
+  WHEN EMPTY            THEN EMPTY
+  WHEN x FOLLOWED BY xs THEN
+    CONSIDER x
+    WHEN NOTHING THEN catMaybes xs
+    WHEN JUST y  THEN y FOLLOWED BY catMaybes xs
+
 DECLARE PAIR OF a, b
   HAS fst IS AN a
       snd IS A  b
@@ -548,3 +560,4 @@ GIVEN
   a IS A TYPE
 GIVETH AN a
 ASSUME TBD
+

@@ -911,6 +911,15 @@ checkIfThenElse ec ann e1 e2 e3 t = do
   e3' <- checkExpr ec e3 t
   pure (IfThenElse ann e1' e2' e3')
 
+checkMultiWayIf :: Anno -> [GuardedExpr Name] -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
+checkMultiWayIf ann es e t = do
+  es' <- for es \(MkGuardedExpr ann' c f) -> do
+    c' <- checkExpr ExpectIfConditionContext c boolean
+    f' <- checkExpr ExpectIfBranchesContext f t
+    pure $ MkGuardedExpr ann' c' f'
+  e' <- checkExpr ExpectIfBranchesContext e t
+  pure (MultiWayIf ann es' e')
+
 checkObligation
   :: Anno -> Expr Name -> RAction Name
   -> Maybe (Expr Name) -> Maybe (Expr Name) -> Maybe (Expr Name)
@@ -1074,6 +1083,10 @@ inferExpr' g =
     IfThenElse ann e1 e2 e3 -> do
       v <- fresh (NormalName "ifthenelse")
       re <- checkIfThenElse ExpectIfBranchesContext ann e1 e2 e3 v
+      pure (re, v)
+    MultiWayIf ann es e -> do
+      v <- fresh (NormalName "multiwayif")
+      re <- checkMultiWayIf ann es e v
       pure (re, v)
     Regulative ann (MkObligation ann'' e1 e2 me3 me4 me5) -> do
       party <- fresh (NormalName "party")
@@ -1951,7 +1964,7 @@ prettyNonDistinctContext NonDistinctTermAppForm =
 
 prettyTypeMismatch :: ExpectationContext -> Type' Resolved -> Type' Resolved -> [Text]
 prettyTypeMismatch ExpectIfConditionContext expected given =
-  standardTypeMismatch [ "The condition in an IF-THEN-ELSE construct is expected to be of type" ] expected given
+  standardTypeMismatch [ "The condition in IF-THEN-ELSE and BRANCH-IF-THEN-OTHERWISE constructs is expected to be of type" ] expected given
 prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
 prettyTypeMismatch ExpectPercentArgumentContext expected given =
@@ -1973,7 +1986,7 @@ prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
   , "  " <> prettyLayout given
   ]
 prettyTypeMismatch ExpectIfBranchesContext expected given =
-  [ "Both the THEN and the ELSE branch of an IF-THEN-ELSE construct must have the same type."
+  [ "Both the THEN and the ELSE branch of an IF-THEN-ELSE and BRANCH-IF-THEN-OTHERWISE constructs must have the same type."
   , "From looking at the context, if have inferred that this type must be"
   , ""
   , "  " <> prettyLayout expected

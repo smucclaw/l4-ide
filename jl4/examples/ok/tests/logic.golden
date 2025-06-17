@@ -1,2 +1,5 @@
 Parsing successful
 Typechecking successful
+Evaluation successful
+logic.l4:64:1-98:
+  LIST TRUE, TRUE, FALSE, FALSE
