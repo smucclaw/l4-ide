@@ -2,7 +2,9 @@
 
 ## **Introduction**
 
-L4 is a programming language designed specifically for translating legal documents into precise, executable code. This guide will take you step-by-step from writing your first legal rule to modeling complete regulatory schemes like the Jersey Charities Law.
+L4 is a programming language designed specifically for translating legal documents into precise, executable code. This guide will take you step-by-step from writing your first legal rule to modeling complete regulatory schemes.
+
+Remember, L4 is a programming language at the end of the day. So accuracy and formatting matter. Things like indentation are essential to code functioning - but if you're familiar with legal drafting, indentation and other matters where accuracy are paramount will come naturally.
 
 **What You'll Learn:**
 - How to write legal rules that a computer can understand and execute
