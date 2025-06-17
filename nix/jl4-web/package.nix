@@ -12,13 +12,24 @@
 buildNpmPackage rec {
   pname = "jl4-web";
   version = "0-latest";
-  src = lib.sources.sourceByRegex ../../. [
-    "^ts-apps.*"
-    "^ts-shared.*"
-    "^package-lock.json$"
-    "^package.json$"
-    "^jl4/examples/legal(/.*)?$"
-  ];
+  src = lib.cleanSourceWith {
+    src = ../../.;
+    filter = path: type:
+      let
+        relPath = lib.removePrefix (toString ../../. + "/") (toString path);
+        baseName = baseNameOf (toString path);
+      in
+        # Always include directories to preserve structure
+        type == "directory" ||
+        # Include TypeScript files
+        lib.hasPrefix "ts-apps" relPath ||
+        lib.hasPrefix "ts-shared" relPath ||
+        # Include package files
+        baseName == "package.json" ||
+        baseName == "package-lock.json" ||
+        # Include the legal directory and its contents
+        lib.hasPrefix "jl4/examples/legal" relPath;
+  };
   npmDeps = importNpmLock { npmRoot = src; };
   npmWorkspace = src;
   nativeBuildInputs = [ pkg-config ];
