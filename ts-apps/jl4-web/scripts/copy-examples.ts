@@ -2,20 +2,26 @@ import { readdirSync, copyFileSync, mkdirSync, existsSync } from 'fs'
 import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 
+// Debug flag - set to true to see detailed path resolution information
+// Useful for troubleshooting path-related issues in the Nix build environment
+const DEBUG = false
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const sourceDir = resolve(__dirname, '../../../jl4/examples/legal')
 const targetDir = resolve(__dirname, '../static/examples')
 
-console.log('Debug: Current directory:', process.cwd())
-console.log('Debug: __dirname:', __dirname)
-console.log('Debug: Attempting to resolve source directory:', sourceDir)
-console.log('Debug: Source directory exists:', existsSync(sourceDir))
+if (DEBUG) {
+  console.log('Debug: Current directory:', process.cwd())
+  console.log('Debug: __dirname:', __dirname)
+  console.log('Debug: Attempting to resolve source directory:', sourceDir)
+  console.log('Debug: Source directory exists:', existsSync(sourceDir))
+}
 
 // Ensure target directory exists
 if (!existsSync(targetDir)) {
-  console.log('Debug: Creating target directory:', targetDir)
+  if (DEBUG) console.log('Debug: Creating target directory:', targetDir)
   mkdirSync(targetDir, { recursive: true })
 }
 
@@ -29,7 +35,8 @@ if (files.length === 0) {
 files.forEach((file) => {
   const sourcePath = join(sourceDir, file)
   const targetPath = join(targetDir, file)
-  console.log(`Debug: Copying ${file} from ${sourcePath} to ${targetPath}`)
+  if (DEBUG)
+    console.log(`Debug: Copying ${file} from ${sourcePath} to ${targetPath}`)
   copyFileSync(sourcePath, targetPath)
 })
 

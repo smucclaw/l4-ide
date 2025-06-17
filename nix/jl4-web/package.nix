@@ -19,15 +19,12 @@ buildNpmPackage rec {
         relPath = lib.removePrefix (toString ../../. + "/") (toString path);
         baseName = baseNameOf (toString path);
       in
-        # Always include directories to preserve structure
+        # Include all directories to maintain path structure for copy-examples.ts, while only copying specific files
         type == "directory" ||
-        # Include TypeScript files
         lib.hasPrefix "ts-apps" relPath ||
         lib.hasPrefix "ts-shared" relPath ||
-        # Include package files
         baseName == "package.json" ||
         baseName == "package-lock.json" ||
-        # Include the legal directory and its contents
         lib.hasPrefix "jl4/examples/legal" relPath;
   };
   npmDeps = importNpmLock { npmRoot = src; };
