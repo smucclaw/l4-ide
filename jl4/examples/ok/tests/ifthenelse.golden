@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+ifthenelse.l4:9:1-23:
+  1
+ifthenelse.l4:10:1-24:
+  2
+ifthenelse.l4:11:1-25:
+  3
+ifthenelse.l4:12:1-26:
+  4

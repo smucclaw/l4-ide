@@ -285,8 +285,8 @@ completions rope nuri typeCheck pos@(Position ln col) = do
         }
       keyWordMatches = filterMatchesOn id
         $ Map.keys keywords
+        <> Map.keys directives
         <> annotations
-        <> map snd directives
 
       keywordItems = map mkKeyWordCompletionItem keyWordMatches
 

@@ -67,7 +67,7 @@ instance FromJSON FnLiteral where
           ps <- traverse (\(k, v) -> fmap (Aeson.toText k,) (parseJSON v)) (Aeson.toList o)
           pure $ FnObject ps
 
-data RunFunction = RunFunction
+newtype RunFunction = RunFunction
   { -- | Run a function with parameters
     runFunction ::
       [(Text, Maybe FnLiteral)] ->
@@ -101,7 +101,7 @@ data ResponseWithReason = ResponseWithReason
   deriving anyclass (FromJSON, ToJSON)
 
 -- | Wrap our reasoning into a top-level field.
-data Reasoning = Reasoning
+newtype Reasoning = Reasoning
   { payload :: ReasoningTree
   }
   deriving (Show, Read, Ord, Eq, Generic)
