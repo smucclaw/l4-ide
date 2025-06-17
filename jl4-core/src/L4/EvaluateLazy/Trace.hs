@@ -117,7 +117,7 @@ data EvalPreTrace =
   | PrePlaceholder Address
 
 data EvalTrace =
-    Trace [((Expr Resolved), [EvalTrace])] (Either EvalException NF)
+    Trace [(Expr Resolved, [EvalTrace])] (Either EvalException NF)
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
