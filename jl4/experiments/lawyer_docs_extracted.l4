@@ -1,0 +1,193 @@
+-- L4 Code Extracted from lawyer_docs.md
+-- This file contains all the L4 code snippets for testing and fixing
+
+IMPORT prelude
+
+-- Define Date type (L4 standard)
+DECLARE Date
+    HAS year IS A NUMBER
+        month IS A NUMBER
+        day IS A NUMBER
+
+-- Define missing types first
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING  
+        registrationDate IS A Date
+        address IS A STRING
+        purposes IS A LIST OF Purpose
+        governors IS A LIST OF Person
+        isRegistered IS A BOOLEAN
+
+DECLARE Solicitor
+    HAS name IS A STRING
+        licenseNumber IS A STRING
+
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education` 
+    `advancement of religion`
+    `advancement of health`
+    `advancement of animal welfare`
+    otherPurpose HAS description IS A STRING
+
+-- Example 11: Person type (moved up to be defined before use)
+DECLARE Person
+    HAS name IS A STRING
+        address IS A STRING
+        isGovernor IS A BOOLEAN
+
+-- Define Actor and Action types for PROVISION signatures
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+    SolicitorActor HAS solicitor IS A Solicitor
+    PersonActor HAS person IS A Person
+    CommissionerActor
+    ApplicantActor HAS name IS A STRING
+
+DECLARE Action IS ONE OF
+    FileAnnualReturn
+    MaintainConfidentiality
+    IssueNotice HAS notice IS A STRING
+    ProvideApplication HAS contents IS A STRING
+    AssessApplication HAS application IS A STRING
+    RegisterCharity HAS charity IS A RegisteredCharity
+    ActInBestInterests HAS description IS A STRING
+
+-- Helper function for charitable purpose validation
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+`is analogous to charitable purpose` MEANS
+    CONSIDER p
+    WHEN otherPurpose desc THEN TRUE  -- Simplified for now
+    OTHERWISE FALSE
+
+-- Example 1: Basic legal obligation (converted to function)
+GIVEN charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
+`charity annual return obligation` MEANS
+  PARTY CharityActor charity
+  MUST FileAnnualReturn
+  WITHIN 365
+  HENCE FULFILLED
+
+-- Example 2: Answer to exercise (converted to function)
+GIVEN solicitor IS A Solicitor
+GIVETH A CONTRACT Actor Action
+`solicitor confidentiality obligation` MEANS
+  PARTY SolicitorActor solicitor
+  MUST MaintainConfidentiality
+  WITHIN 365
+  HENCE FULFILLED
+
+-- Example 3: Adding conditions and consequences (converted to function)
+GIVEN charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
+`charity conditional return obligation` MEANS
+  IF charity's isRegistered EQUALS TRUE
+  THEN PARTY CharityActor charity
+       MUST FileAnnualReturn
+       WITHIN 60  -- 2 months in days
+       HENCE FULFILLED
+       LEST FULFILLED
+  ELSE FULFILLED
+
+-- Example 4: First simulation
+-- Create a test charity (using DECIDE syntax)
+DECIDE testCharity IS RegisteredCharity "Animal Welfare Society" "CH001" (Date 2020 1 15) "Jersey" (LIST `advancement of animal welfare`) (LIST) TRUE
+
+-- Example 7: Creating structured entity (using DECIDE syntax)
+DECIDE animalCharity IS RegisteredCharity "Jersey Animal Welfare" "CH001" (Date 2020 1 15) "St. Helier, Jersey" (LIST `advancement of animal welfare`) (LIST) TRUE
+
+-- Example 10: Pattern matching with legal categories (fix DECIDE syntax)
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+`is charitable purpose` MEANS
+    CONSIDER p
+    WHEN `advancement of education` THEN TRUE
+    WHEN `advancement of animal welfare` THEN TRUE
+    WHEN `prevention or relief of poverty` THEN TRUE
+    WHEN otherPurpose s THEN `is analogous to charitable purpose` p
+    OTHERWISE FALSE
+
+-- Example 13: Real legal rule using relationships (converted to function)
+GIVEN governor IS A Person
+      charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
+`governor fiduciary obligation` MEANS
+  IF governor's isGovernor EQUALS TRUE AND elem governor (charity's governors)
+  THEN PARTY PersonActor governor
+       MUST ActInBestInterests "act in best interests of charity and beneficiaries"
+       WITHIN 365
+       HENCE FULFILLED
+  ELSE FULFILLED
+
+-- Example 18: CharityRegister type
+DECLARE CharityRegister
+    HAS activeCharities IS A LIST OF RegisteredCharity
+        historicCharities IS A LIST OF RegisteredCharity
+        lastUpdated IS A Date
+
+-- Example 30: NotificationTarget type
+DECLARE NotificationTarget IS ONE OF
+    Governor HAS name IS A STRING
+    Commissioner
+    Secretary HAS name IS A STRING
+
+DECLARE NotificationEvent IS ONE OF  
+    GovernorAppointment HAS date IS A Date
+    ConvictionReported HAS convictionDate IS A Date
+    AddressChange HAS changeDate IS A Date
+
+-- Example 33: Functional mindset
+-- Define missing RegisterEntry type first
+DECLARE RegisterEntry
+    HAS entryName IS A STRING
+        entryPurposes IS A LIST OF Purpose
+        entryGovernors IS A LIST OF Person
+        entryConstitution IS A STRING
+        entryIsActive IS A BOOLEAN
+
+-- Helper functions referenced in examples
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`constitution is written` MEANS NOT applicant's entryConstitution EQUALS ""
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has at least one purpose` MEANS length (applicant's entryPurposes) > 0
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has valid public benefit statement` MEANS TRUE  -- Simplified
+
+-- Define what completeness IS
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`application is complete` MEANS
+    `constitution is written` applicant
+    AND `has at least one purpose` applicant
+    AND `has valid public benefit statement` applicant
+
+-- Define what charitable purposes ARE
+GIVEN charity IS A RegisterEntry
+GIVETH A BOOLEAN
+`all purposes are charitable` MEANS
+    all (GIVEN p YIELD `is charitable purpose` p) (charity's entryPurposes)
+
+-- Define registration criteria using the above
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`should register` MEANS
+    `application is complete` applicant
+    AND `all purposes are charitable` applicant
+
+-- Essential missing functions to define
+-- List length (also missing from prelude)
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+length list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 + length xs 

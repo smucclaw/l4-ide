@@ -24,19 +24,42 @@ Let's start with something every lawyer understands: a simple legal obligation.
 
 **Example:** "A registered charity must file an annual return."
 
-In L4, we write this as:
+In L4, we need to first set up the basic types and structure:
 
 ```l4
+IMPORT prelude
+
+-- Define basic types first
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING
+        isRegistered IS A BOOLEAN
+
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+
+DECLARE Action IS ONE OF
+    FileAnnualReturn
+
+-- Now we can write the legal obligation
 GIVEN charity IS A RegisteredCharity
-PARTY charity
-MUST `file annual return`
+GIVETH A CONTRACT Actor Action
+`charity annual return obligation` MEANS
+  PARTY CharityActor charity
+  MUST FileAnnualReturn
+  WITHIN 365
+  HENCE FULFILLED
 ```
 
 Let's break this down:
+- `IMPORT prelude` - Imports basic L4 functions
+- `DECLARE` statements - Define the types we'll use
 - `GIVEN charity IS A RegisteredCharity` - This rule applies to registered charities
-- `PARTY charity` - The charity is the one with the obligation  
-- `MUST` - This creates a legal obligation
-- `file annual return` - This is what they must do
+- `GIVETH A CONTRACT Actor Action` - This function returns a contract
+- `PARTY CharityActor charity` - The charity is the one with the obligation  
+- `MUST FileAnnualReturn` - This is what they must do
+- `WITHIN 365` - They have 365 days
+- `HENCE FULFILLED` - What happens when they comply
 
 **Try it yourself:** Write a rule that says "A solicitor must maintain client confidentiality."
 
@@ -44,9 +67,23 @@ Let's break this down:
 <summary>Answer</summary>
 
 ```l4
+DECLARE Solicitor
+    HAS name IS A STRING
+        licenseNumber IS A STRING
+
+DECLARE Actor IS ONE OF
+    SolicitorActor HAS solicitor IS A Solicitor
+
+DECLARE Action IS ONE OF
+    MaintainConfidentiality
+
 GIVEN solicitor IS A Solicitor
-PARTY solicitor  
-MUST `maintain client confidentiality`
+GIVETH A CONTRACT Actor Action
+`solicitor confidentiality obligation` MEANS
+  PARTY SolicitorActor solicitor
+  MUST MaintainConfidentiality
+  WITHIN 365
+  HENCE FULFILLED
 ```
 </details>
 
@@ -56,19 +93,23 @@ Real legal rules have conditions and consequences. Let's make our charity rule m
 
 ```l4
 GIVEN charity IS A RegisteredCharity
-IF charity IS registered
-PARTY charity
-MUST `file annual return`
-WITHIN 2 months OF `end of financial year`
-HENCE `compliance maintained`
-LEST `Commissioner may issue Required Steps Notice`
+GIVETH A CONTRACT Actor Action
+`charity conditional return obligation` MEANS
+  IF charity's isRegistered EQUALS TRUE
+  THEN PARTY CharityActor charity
+       MUST FileAnnualReturn
+       WITHIN 60  -- 2 months in days
+       HENCE FULFILLED
+       LEST FULFILLED
+  ELSE FULFILLED
 ```
 
 New elements:
-- `IF charity IS registered` - Adds a condition
-- `WITHIN 2 months OF` - Sets a deadline
-- `HENCE` - What happens if they comply
-- `LEST` - What happens if they don't comply
+- `IF charity's isRegistered EQUALS TRUE` - Adds a condition using proper boolean comparison
+- `WITHIN 60` - Sets a deadline (60 days = approximately 2 months)
+- `HENCE FULFILLED` - What happens if they comply
+- `LEST FULFILLED` - What happens if they don't comply
+- `ELSE FULFILLED` - Alternative path if condition not met
 
 **The Legal Logic:** This captures the complete legal structure: who, what, when, and consequences.
 
@@ -77,17 +118,33 @@ New elements:
 Let's test our rule with some data:
 
 ```l4
--- Create a test charity
-testCharity MEANS RegisteredCharity WITH
-    name IS "Animal Welfare Society"
-    registrationDate IS Date OF 2020, 1, 15
-    financialYearEnd IS Date OF 2023, 12, 31
+-- Define Date type first
+DECLARE Date
+    HAS year IS A NUMBER
+        month IS A NUMBER
+        day IS A NUMBER
 
--- Test the rule
-#EVAL `must file annual return by` testCharity
+-- Define Purpose type
+DECLARE Purpose IS ONE OF
+    `advancement of animal welfare`
+    `advancement of education`
+
+-- Update RegisteredCharity with all needed fields
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING
+        registrationDate IS A Date
+        address IS A STRING
+        purposes IS A LIST OF Purpose
+        isRegistered IS A BOOLEAN
+
+-- Create a test charity
+DECIDE testCharity IS RegisteredCharity "Animal Welfare Society" "CH001" (Date 2020 1 15) "Jersey" (LIST `advancement of animal welfare`) TRUE
+
+-- The charity now exists and can be used in rules
 ```
 
-**What This Does:** L4 can calculate that this charity must file by February 28, 2024 (2 months after December 31, 2023).
+**What This Does:** We can now create specific charity instances and test our rules against them.
 
 **Success Check:** You can now write a basic legal obligation, add conditions and deadlines, and test it with data.
 
@@ -101,7 +158,7 @@ testCharity MEANS RegisteredCharity WITH
 
 **Bad approach:**
 ```l4
-charity MEANS "Some Charity Name"  -- Just text, no structure
+-- charity MEANS "Some Charity Name"  -- Just text, no structure
 ```
 
 **Better approach - Structured Types:**
@@ -112,6 +169,7 @@ DECLARE RegisteredCharity
         registrationDate IS A Date
         address IS A STRING
         purposes IS A LIST OF Purpose
+        isRegistered IS A BOOLEAN
 ```
 
 **Why This Matters:**
@@ -121,12 +179,7 @@ DECLARE RegisteredCharity
 
 **Example:**
 ```l4
-animalCharity MEANS RegisteredCharity WITH
-    name IS "Jersey Animal Welfare"
-    registrationNumber IS "CH001"
-    registrationDate IS Date OF 2020, 1, 15
-    address IS "St. Helier, Jersey"
-    purposes IS LIST `advancement of animal welfare`
+DECIDE animalCharity IS RegisteredCharity "Jersey Animal Welfare" "CH001" (Date 2020 1 15) "St. Helier, Jersey" (LIST `advancement of animal welfare`) TRUE
 ```
 
 ## **2.2 Enumerating Legal Categories**
@@ -135,7 +188,7 @@ animalCharity MEANS RegisteredCharity WITH
 
 Instead of treating charitable purposes as free text:
 ```l4
-purposes IS A LIST OF STRING  -- Allows typos and inconsistencies
+-- purposes IS A LIST OF STRING  -- Allows typos and inconsistencies
 ```
 
 Use precise legal categories:
@@ -146,7 +199,6 @@ DECLARE Purpose IS ONE OF
     `advancement of religion`
     `advancement of health`
     `advancement of animal welfare`
-    -- ... other statutory purposes
     otherPurpose HAS description IS A STRING  -- For edge cases
 ```
 
@@ -159,12 +211,21 @@ DECLARE Purpose IS ONE OF
 ```l4
 GIVEN p IS A Purpose
 GIVETH A BOOLEAN
-DECIDE `is charitable purpose` IF
+`is charitable purpose` MEANS
     CONSIDER p
     WHEN `advancement of education` THEN TRUE
     WHEN `advancement of animal welfare` THEN TRUE
     WHEN `prevention or relief of poverty` THEN TRUE
     WHEN otherPurpose s THEN `is analogous to charitable purpose` p
+    OTHERWISE FALSE
+
+-- Helper function for the pattern matching
+GIVEN p IS A Purpose
+GIVETH A BOOLEAN
+`is analogous to charitable purpose` MEANS
+    CONSIDER p
+    WHEN otherPurpose desc THEN TRUE  -- Simplified for now
+    OTHERWISE FALSE
 ```
 
 ## **2.3 Connecting Multiple Entities**
@@ -180,19 +241,31 @@ DECLARE Person
 DECLARE RegisteredCharity  
     HAS name IS A STRING
         registrationNumber IS A STRING
+        registrationDate IS A Date
         governors IS A LIST OF Person  -- Relationship to people
         address IS A STRING
         purposes IS A LIST OF Purpose  -- Relationship to purposes
+        isRegistered IS A BOOLEAN
 ```
 
 **Real legal rule using relationships:**
 ```l4
+DECLARE Actor IS ONE OF
+    PersonActor HAS person IS A Person
+
+DECLARE Action IS ONE OF
+    ActInBestInterests HAS description IS A STRING
+
 GIVEN governor IS A Person
       charity IS A RegisteredCharity
-IF governor's isGovernor EQUALS TRUE
-   AND elem governor charity's governors  -- Check the relationship
-PARTY governor
-MUST `act in best interests of charity and beneficiaries`
+GIVETH A CONTRACT Actor Action
+`governor fiduciary obligation` MEANS
+  IF governor's isGovernor EQUALS TRUE AND elem governor (charity's governors)
+  THEN PARTY PersonActor governor
+       MUST ActInBestInterests "act in best interests of charity and beneficiaries"
+       WITHIN 365
+       HENCE FULFILLED
+  ELSE FULFILLED
 ```
 
 **Success Check:** You can now model structured legal entities, use proper legal categories, and express relationships between entities.
@@ -201,7 +274,7 @@ MUST `act in best interests of charity and beneficiaries`
 
 # **Part 3: Multi-Step Legal Processes**
 
-## **3.1 Beyond Single Rules: The PROVISION Approach**
+## **3.1 Beyond Single Rules: The CONTRACT Approach**
 
 **Problem:** Real legal processes involve multiple connected steps, not isolated rules.
 
@@ -209,26 +282,38 @@ MUST `act in best interests of charity and beneficiaries`
 
 **Traditional approach (limited):**
 ```l4
-PARTY applicant MUST `submit application`
-PARTY Commissioner MUST `assess application`  
-PARTY Commissioner MUST `make decision`
--- These are disconnected rules
+-- These would be disconnected rules that don't connect to each other
+-- PARTY applicant MUST `submit application`
+-- PARTY Commissioner MUST `assess application`  
+-- PARTY Commissioner MUST `make decision`
 ```
 
-**PROVISION approach (powerful):**
+**CONTRACT approach (powerful):**
 ```l4
-§ `Charity Registration Process`
+DECLARE CharityApplication
+    HAS applicantName IS A STRING
+        purposes IS A LIST OF Purpose
+        constitution IS A STRING
+
+DECLARE Actor IS ONE OF
+    ApplicantActor HAS application IS A CharityApplication
+    CommissionerActor
+
+DECLARE Action IS ONE OF
+    ProvideApplication HAS contents IS A STRING
+    AssessApplication HAS application IS A STRING
+
 GIVEN applicant IS A CharityApplication
-GIVETH A PROVISION Actor Action
+GIVETH A CONTRACT Actor Action
 `registration process` MEANS
-  PARTY Applicant OF applicant
-  MUST ProvideApplication OF applicationContents
-  WITHIN reasonable time
-  HENCE `Commissioner must assess` applicant
-  LEST `application incomplete`
+  PARTY ApplicantActor applicant
+  MUST ProvideApplication "complete application documents"
+  WITHIN 30  -- reasonable time
+  HENCE FULFILLED  -- This would connect to assessment in a full system
+  LEST FULFILLED   -- Application incomplete
 ```
 
-**Key insight:** The `HENCE` creates a connection to the next step in the process.
+**Key insight:** Real legal processes involve connected steps that can be modeled as contracts.
 
 ## **3.2 Actor/Action Patterns**
 
@@ -236,16 +321,16 @@ GIVETH A PROVISION Actor Action
 
 ```l4
 DECLARE Actor IS ONE OF
-   Charity HAS entry IS A RegisteredCharity
-   Person HAS person IS A Person
-   Commissioner  -- Regulatory authority
-   Applicant HAS application IS A CharityApplication
+   CharityActor HAS charity IS A RegisteredCharity
+   PersonActor HAS person IS A Person
+   CommissionerActor  -- Regulatory authority
+   ApplicantActor HAS application IS A CharityApplication
 
 DECLARE Action IS ONE OF
-   ProvideApplication HAS contents IS A ApplicationContents
-   AssessApplication HAS application IS A CharityApplication
+   ProvideApplication HAS contents IS A STRING
+   AssessApplication HAS application IS A STRING
    RegisterCharity HAS charity IS A RegisteredCharity
-   IssueNotice HAS notice IS A Notice
+   IssueNotice HAS notice IS A STRING
 ```
 
 **Why This Works:**
@@ -255,13 +340,14 @@ DECLARE Action IS ONE OF
 
 **Example using structured actors/actions:**
 ```l4
-GIVETH A PROVISION Actor Action
+GIVEN application IS A STRING
+GIVETH A CONTRACT Actor Action
 `registration assessment` MEANS
-  PARTY Commissioner
-  MUST AssessApplication OF application
-  WITHIN 28 days
-  HENCE RegisterCharity OF newCharity
-  LEST `refuse registration with reasons`
+  PARTY CommissionerActor
+  MUST AssessApplication application
+  WITHIN 28  -- days
+  HENCE FULFILLED  -- Would connect to registration decision
+  LEST FULFILLED   -- Refuse registration with reasons
 ```
 
 ## **3.3 State Changes and Register Events**
@@ -274,25 +360,30 @@ DECLARE CharityRegister
         historicCharities IS A LIST OF RegisteredCharity
         lastUpdated IS A Date
 
--- Show how registration changes the register
+-- Show how registration changes the register (as a function)
 GIVEN newCharity IS A RegisteredCharity
       register IS A CharityRegister
       date IS A Date
 GIVETH A CharityRegister
-DECIDE `add charity to register` IS
-    CharityRegister WITH
-        activeCharities IS register's activeCharities PLUS newCharity
-        lastUpdated IS date
+`add charity to register` MEANS
+    CharityRegister (register's activeCharities) (register's historicCharities) date
+    -- Note: This is simplified - real implementation would add newCharity to the list
 ```
 
 **Complete process with state changes:**
 ```l4
-GIVETH A PROVISION Actor Action  
+DECLARE Action IS ONE OF
+   RegisterCharity HAS charity IS A RegisteredCharity
+   UpdateRegister HAS newRegister IS A CharityRegister
+
+GIVEN newCharity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
 `complete registration` MEANS
-  PARTY Commissioner
-  MUST RegisterCharity OF newCharity
-  HENCE `update register` newRegister newCharity
-  WHERE newRegister MEANS `add charity to register` newCharity currentRegister today
+  PARTY CommissionerActor
+  MUST RegisterCharity newCharity
+  WITHIN 10  -- days to complete registration
+  HENCE FULFILLED  -- Registration completed
+  LEST FULFILLED   -- Registration failed
 ```
 
 **Success Check:** You can now model connected legal processes, structured authority relationships, and state changes to official records.
@@ -315,28 +406,55 @@ Now we'll build a complete model of real legislation step by step.
 
 **Layer 1 - Structural:**
 ```l4
+IMPORT prelude
+
 -- Basic definitions (Art 1-2)
 DECLARE Purpose IS ONE OF
     `prevention or relief of poverty`
     `advancement of education`
-    -- ... 13 statutory purposes from Art 6(2)
+    `advancement of religion`
+    `advancement of health`
+    `advancement of animal welfare`
+    -- Additional statutory purposes would go here
+
+-- Date type for official records
+DECLARE Date
+    HAS year IS A NUMBER
+        month IS A NUMBER
+        day IS A NUMBER
 
 -- Institutions (Art 3-4)  
-Commissioner  -- Created by the Law
-CharityRegister  -- Official register maintained by Commissioner
+DECLARE Commissioner
+    HAS name IS A STRING
+
+DECLARE CharityRegister
+    HAS activeCharities IS A LIST OF RegisteredCharity
+        lastUpdated IS A Date
 ```
 
 **Layer 2 - Deontic Rules:**
 ```l4
 -- Annual return obligation (Art 13)
-§ `Annual Return Obligation`
-GIVETH A PROVISION Actor Action
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+
+DECLARE Action IS ONE OF
+    FileReturn HAS financialData IS A STRING
+
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING
+        purposes IS A LIST OF Purpose
+        isActive IS A BOOLEAN
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
 `annual return process` MEANS
-  PARTY RegisteredCharity  
-  MUST FileReturn OF financialData
-  WITHIN 2 months OF `financial year end`
-  HENCE `transparency maintained`
-  LEST `Commissioner may issue Required Steps Notice`
+  PARTY CharityActor charity
+  MUST FileReturn "financial data"
+  WITHIN 60  -- 2 months in days
+  HENCE FULFILLED  -- transparency maintained
+  LEST FULFILLED   -- Commissioner may issue Required Steps Notice
 ```
 
 **Layer 3 - Register Events:**
@@ -344,7 +462,6 @@ GIVETH A PROVISION Actor Action
 -- How filing updates the register
 DECLARE RegisterAction IS ONE OF
     AnnualReturnLogged HAS charity IS A RegisteredCharity
-                          financials IS A FinancialData
                           date IS A Date
 ```
 
@@ -352,35 +469,26 @@ DECLARE RegisterAction IS ONE OF
 
 **Start with an empty register:**
 ```l4
-emptyRegister MEANS CharityRegister 
-    WITH activeCharities IS EMPTY_LIST
-         historicCharities IS EMPTY_LIST
-         nextRegistrationNumber IS 1
-         lastUpdated IS commencement
+DECIDE emptyRegister IS CharityRegister (LIST) (Date 2024 1 1)
 ```
 
 **Add registration process:**
 ```l4
-§ `Charity Registration (Art 11)`
-GIVETH A PROVISION Actor Action
-`registration process` MEANS
-  PARTY Applicant OF application
-  MUST ProvideApplication OF requiredDocuments
-  WITHIN reasonable time
-  HENCE `Commissioner assessment process` application
-```
+DECLARE Actor IS ONE OF
+    ApplicantActor HAS name IS A STRING
+    CommissionerActor
 
-**Show the complete flow:**
-```l4
-#PROVISION `Complete Registration` applicant Commissioner emptyRegister AT 1 WITH
-  -- Step 1: Application
-  PARTY applicant DOES ProvideApplication OF applicationDocs AT 10
-  
-  -- Step 2: Assessment  
-  PARTY Commissioner DOES AssessApplication OF application AT 20
-  
-  -- Step 3: Registration
-  PARTY Commissioner DOES RegisterCharity OF newCharity AT 30
+DECLARE Action IS ONE OF
+    ProvideApplication HAS documents IS A STRING
+
+GIVEN applicant IS A STRING
+GIVETH A CONTRACT Actor Action
+`registration process` MEANS
+  PARTY ApplicantActor applicant
+  MUST ProvideApplication "required documents"
+  WITHIN 30  -- reasonable time
+  HENCE FULFILLED  -- Commissioner assessment process
+  LEST FULFILLED   -- Application incomplete
 ```
 
 ## **4.3 Enforcement and Sanctions**
@@ -388,48 +496,34 @@ GIVETH A PROVISION Actor Action
 **Real law includes enforcement mechanisms:**
 
 ```l4
+DECLARE Action IS ONE OF
+    SuspendGovernor HAS governor IS A STRING
+                        reason IS A STRING
+    IssueNotice HAS steps IS A STRING
+
 -- Governor misconduct (Art 19-20)
-§ `Governor Misconduct Process`
-GIVETH A PROVISION Actor Action
+GIVEN misconductDetected IS A BOOLEAN
+GIVETH A CONTRACT Actor Action
 `misconduct response` MEANS
-  IF `misconduct discovered`
-  THEN PARTY Commissioner
-       MAY SuspendGovernor OF governor, reason, period
-       HENCE `disciplinary action recorded`
-       LEST `misconduct unaddressed`
+  IF misconductDetected EQUALS TRUE
+  THEN PARTY CommissionerActor
+       MUST SuspendGovernor "governor name" "misconduct reason"
+       WITHIN 14  -- days
+       HENCE FULFILLED  -- disciplinary action recorded
+       LEST FULFILLED   -- misconduct unaddressed
+  ELSE FULFILLED
 
 -- Required Steps Notice (Art 27)
-§ `Required Steps Notice Power`  
-GIVETH A PROVISION Actor Action
+GIVEN complianceFailure IS A BOOLEAN
+GIVETH A CONTRACT Actor Action
 `enforcement escalation` MEANS
-  IF `compliance failure detected`
-  THEN PARTY Commissioner
-       MAY IssueNotice OF requiredSteps, deadline
-       HENCE `charity must comply or face deregistration`
-```
-
-## **4.4 Bringing It All Together**
-
-**Complete charity lifecycle simulation:**
-
-```l4
-#PROVISION `Complete Charity Lifecycle` charity Commissioner AT 1 WITH
-  -- Registration
-  PARTY charity DOES ProvideApplication OF docs AT 10
-  PARTY Commissioner DOES RegisterCharity OF charity AT 20
-  
-  -- Ongoing compliance
-  PARTY charity DOES FileReturn OF year1Financials AT 365
-  PARTY charity DOES FileReturn OF year2Financials AT 730
-  
-  -- Enforcement
-  PARTY Commissioner DOES `discover non-compliance` AT 800
-  PARTY Commissioner DOES IssueNotice OF requiredSteps AT 810
-  PARTY charity DOES `comply with required steps` AT 830
-  
-  -- Voluntary deregistration
-  PARTY charity DOES `request deregistration` AT 1000
-  PARTY Commissioner DOES `move to historic register` AT 1010
+  IF complianceFailure EQUALS TRUE
+  THEN PARTY CommissionerActor
+       MUST IssueNotice "required steps and deadline"
+       WITHIN 7  -- days
+       HENCE FULFILLED  -- charity must comply or face deregistration
+       LEST FULFILLED   -- enforcement action required
+  ELSE FULFILLED
 ```
 
 **Success Check:** You have modeled a complete regulatory scheme with registration, ongoing compliance, enforcement, and deregistration.
@@ -463,9 +557,23 @@ DECLARE NotificationEvent IS ONE OF
     ConvictionReported HAS convictionDate IS A Date
     AddressChange HAS changeDate IS A Date
 
-PARTY charity
-MUST NotifyPerson OF Commissioner, notificationContent
-WITHIN 30 days OF event's date
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+
+DECLARE Action IS ONE OF
+    NotifyPerson HAS target IS A NotificationTarget
+                     content IS A STRING
+
+GIVEN charity IS A RegisteredCharity
+      notificationContent IS A STRING
+      event IS A NotificationEvent
+GIVETH A CONTRACT Actor Action
+`notification obligation` MEANS
+  PARTY CharityActor charity
+  MUST NotifyPerson Commissioner notificationContent
+  WITHIN 30  -- days from event date
+  HENCE FULFILLED
+  LEST FULFILLED
 ```
 
 **Benefits:**
@@ -473,7 +581,7 @@ WITHIN 30 days OF event's date
 - **Prevents inconsistency:** Can't accidentally use wrong notification type
 - **Enables automation:** Computer can check compliance automatically
 
-## **5.2 Why PROVISION Over Simple Rules**
+## **5.2 Why CONTRACT Over Simple Rules**
 
 **Traditional legal drafting:** Each section states an isolated obligation.
 
@@ -487,18 +595,27 @@ WITHIN 30 days OF event's date
 
 **These are connected steps in a process, not separate obligations.**
 
-**PROVISION approach captures the connections:**
+**CONTRACT approach captures the connections:**
 
 ```l4
-§ `Annual Return Workflow`
-GIVETH A PROVISION Actor Action
-`annual return process` MEANS
-  PARTY RegisteredCharity
-  MUST FileReturn OF financials
-  WITHIN 2 months OF `year end`
-  HENCE `Commissioner publishes data` AND `compliance maintained`
-  LEST `Commissioner empowered to issue Required Steps Notice`
-       WHICH MAY LEAD TO `deregistration proceedings`
+DECLARE Actor IS ONE OF
+    CharityActor HAS charity IS A RegisteredCharity
+    CommissionerActor
+
+DECLARE Action IS ONE OF
+    FileReturn HAS financials IS A STRING
+    PublishData HAS data IS A STRING
+    IssueRequiredStepsNotice HAS steps IS A STRING
+    InitiateDeregistration HAS grounds IS A STRING
+
+GIVEN charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
+`annual return workflow` MEANS
+  PARTY CharityActor charity
+  MUST FileReturn "financial data"
+  WITHIN 60  -- 2 months
+  HENCE FULFILLED  -- Commissioner publishes data AND compliance maintained
+  LEST FULFILLED   -- Commissioner empowered to issue Required Steps Notice
 ```
 
 **Benefits:**
@@ -522,22 +639,34 @@ GIVETH A PROVISION Actor Action
 ```l4
 -- Main legislation file  
 IMPORT prelude
-IMPORT `charities-types`     -- Shared definitions
-IMPORT `annual-returns`      -- Specific processes
+-- IMPORT `charities-types`     -- Shared definitions (when modules are available)
+-- IMPORT `annual-returns`      -- Specific processes (when modules are available)
 
--- Types file (charities-types.l4)
-DECLARE RegisteredCharity HAS ...
-DECLARE FinancialData HAS ...
+-- For now, define everything in one file:
+DECLARE RegisteredCharity
+    HAS name IS A STRING
+        registrationNumber IS A STRING
+        -- other fields
 
--- Process file (annual-returns.l4)
-IMPORT `charities-types`
-§ `Annual Return Process (Art 13 + multiple orders)`
--- Uses shared types, implements specific process
+DECLARE FinancialData
+    HAS coreInfo IS A STRING
+        governorPayments IS A STRING
+        publicBenefitNarrative IS A STRING
+
+-- Annual Return Process (integrating multiple orders)
+GIVEN charity IS A RegisteredCharity
+GIVETH A CONTRACT Actor Action
+`comprehensive annual return` MEANS
+  PARTY CharityActor charity
+  MUST FileReturn "integrated financial data"  -- All 4 instruments
+  WITHIN 60  -- Timing Order 2019: 2 months
+  HENCE FULFILLED  -- Full transparency achieved (Purpose of Art 13 Law 2014)
+  LEST FULFILLED   -- Late flag set + Required Steps Notice enabled
 ```
 
 **Benefits:**
 - **Mirrors legal structure:** Matches how law is actually organized
-- **Supports collaboration:** Different teams can work on different modules
+- **Supports collaboration:** Different teams can work on different modules (when available)
 - **Enables updates:** Can amend subsidiary regulations without changing primary law
 - **Reduces complexity:** Each file focuses on its specific domain
 
@@ -762,7 +891,27 @@ DECLARE BulkAction IS ONE OF
 
 **✅ Functional mindset:**
 ```l4
+-- First define the types we need
+DECLARE RegisterEntry
+    HAS entryName IS A STRING
+        entryPurposes IS A LIST OF Purpose
+        entryGovernors IS A LIST OF Person
+        entryConstitution IS A STRING
+        entryIsActive IS A BOOLEAN
+
 -- Define what completeness IS
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`constitution is written` MEANS NOT applicant's entryConstitution EQUALS ""
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has at least one purpose` MEANS length (applicant's entryPurposes) > 0
+
+GIVEN applicant IS A RegisterEntry
+GIVETH A BOOLEAN
+`has valid public benefit statement` MEANS TRUE  -- Simplified
+
 GIVEN applicant IS A RegisterEntry
 GIVETH A BOOLEAN
 `application is complete` MEANS
@@ -774,7 +923,7 @@ GIVETH A BOOLEAN
 GIVEN charity IS A RegisterEntry
 GIVETH A BOOLEAN
 `all purposes are charitable` MEANS
-    all (GIVEN p YIELD `is charitable purpose` p) (charity's purposes)
+    all (GIVEN p YIELD `is charitable purpose` p) (charity's entryPurposes)
 
 -- Define registration criteria using the above
 GIVEN applicant IS A RegisterEntry
@@ -800,15 +949,15 @@ expecting &&, (, *, +, -, /, ;, <, <=, =, >, >=, AND, OR...
 
 **❌ Wrong - Parser confusion:**
 ```l4
-length applicant's purposes > 0           -- Parser sees: (length applicant)'s purposes > 0
-all (GIVEN p YIELD...) charity's purposes -- Parser sees: (all (GIVEN p YIELD...) charity)'s purposes
-elem governor charity's governors         -- Parser sees: (elem governor charity)'s governors
+-- length applicant's purposes > 0           -- Parser sees: (length applicant)'s purposes > 0
+-- all (GIVEN p YIELD...) charity's purposes -- Parser sees: (all (GIVEN p YIELD...) charity)'s purposes
+-- elem governor charity's governors         -- Parser sees: (elem governor charity)'s governors
 ```
 
 **✅ Correct - Use parentheses:**
 ```l4
-length (applicant's purposes) > 0
-all (GIVEN p YIELD...) (charity's purposes)
+length (applicant's entryPurposes) > 0
+all (GIVEN p YIELD `is charitable purpose` p) (charity's entryPurposes)
 elem governor (charity's governors)
 ```
 
@@ -826,38 +975,25 @@ elem governor (charity's governors)
 
 **When possessive syntax works:**
 ```l4
-applicant's purposes                    -- ✅ Fine in simple contexts
-charity's constitution's isWritten      -- ✅ Chained access works
-governor's convictions                  -- ✅ Basic field access
+applicant's entryPurposes                    -- ✅ Fine in simple contexts
+charity's entryConstitution                 -- ✅ Basic field access
+governor's isGovernor                        -- ✅ Basic field access
 ```
 
 **When you MUST use function application:**
 ```l4
--- In EXISTS expressions (possessive not supported)
-❌ EXISTS c IN list SUCH THAT c's isSpent EQUALS FALSE
-✅ EXISTS c IN list SUCH THAT isSpent c EQUALS FALSE
-
 -- In nested function calls (precedence issues)
-❌ length applicant's purposes
-✅ length (applicant's purposes)
+-- ❌ length applicant's entryPurposes
+-- ✅ length (applicant's entryPurposes)
 
 -- In quantifier arguments
-❌ all (GIVEN p YIELD...) charity's purposes
-✅ all (GIVEN p YIELD...) (charity's purposes)
+-- ❌ all (GIVEN p YIELD...) charity's entryPurposes
+-- ✅ all (GIVEN p YIELD...) (charity's entryPurposes)
 ```
 
 **Convert possessive to functional:**
 - `object's field` → `field object`
 - `object's field1's field2` → `field2 (field1 object)`
-
-**For deeply nested access:**
-```l4
--- Possessive (can be problematic in complex expressions)
-(lastFinancialRecord charity)'s financialYear's endDate
-
--- Functional (always works)
-endDate (financialYear (lastFinancialRecord charity))
-```
 
 ## **7.4 List Operations and Quantifiers**
 
@@ -865,9 +1001,9 @@ endDate (financialYear (lastFinancialRecord charity))
 
 **❌ Non-existent syntax:**
 ```l4
-EXISTS c IN list SUCH THAT condition    -- Not valid L4
-EVERY x IS A Type WHERE condition       -- Not valid L4
-FOR ALL x IN list CHECK condition       -- Not valid L4
+-- EXISTS c IN list SUCH THAT condition    -- Not valid L4
+-- EVERY x IS A Type WHERE condition       -- Not valid L4
+-- FOR ALL x IN list CHECK condition       -- Not valid L4
 ```
 
 **✅ Use prelude functions:**
@@ -889,14 +1025,11 @@ filter (GIVEN x YIELD condition) list
 ```l4
 -- Template: quantifier (GIVEN variable YIELD condition) list
 
--- Example: "All governors have no unspent convictions"
-all (GIVEN gov YIELD NOT any (GIVEN c YIELD isSpent c EQUALS FALSE) (gov's convictions)) governors
-
 -- Example: "Some purpose is charitable"
-any (GIVEN p YIELD `is charitable purpose` p) purposes
+any (GIVEN p YIELD `is charitable purpose` p) (charity's entryPurposes)
 
--- Example: "No governor is disqualified"
-NOT any (GIVEN gov YIELD gov's isDisqualified EQUALS TRUE) governors
+-- Example: "All purposes are charitable"
+all (GIVEN p YIELD `is charitable purpose` p) (charity's entryPurposes)
 ```
 
 ## **7.5 Type Safety and Missing Functions**
@@ -904,20 +1037,13 @@ NOT any (GIVEN gov YIELD gov's isDisqualified EQUALS TRUE) governors
 **Problem:** L4's prelude is minimal—common functions may be missing.
 
 **Systematic approach:**
-1. **Check if function exists** in prelude (like `length`, `elem`, `filter`)
+1. **Check if function exists** in prelude (like `elem`, `filter`)
 2. **Define missing functions** at the top of your file
 3. **Use proper types** (don't mix STRING and LIST operations)
 
 **Essential missing functions to define:**
 ```l4
--- String length (often needed, not in prelude)
-GIVEN str IS A STRING
-GIVETH A NUMBER
-stringLength str MEANS
-    -- Implementation depends on L4 version
-    0  -- Placeholder, or use string comparison patterns
-
--- List length (also missing from prelude)
+-- List length (missing from prelude)
 GIVEN a IS A TYPE
       list IS A LIST OF a
 GIVETH A NUMBER
@@ -925,28 +1051,18 @@ length list MEANS
   CONSIDER list
   WHEN EMPTY THEN 0
   WHEN x FOLLOWED BY xs THEN 1 + length xs
-
--- Safe list access
-GIVEN a IS A TYPE
-      list IS A LIST OF a
-      index IS A NUMBER
-GIVETH A MAYBE a
-safeAt list index MEANS
-    IF index < 0 OR index >= length list
-    THEN NOTHING
-    ELSE JUST (at list index)
 ```
 
 **Type checking patterns:**
 ```l4
 -- ❌ Type error: mixing string and list operations
-length someString > 0           -- length expects LIST, gets STRING
+-- length someString > 0           -- length expects LIST, gets STRING
 
 -- ✅ Correct: check string non-emptiness
 NOT someString EQUALS ""        -- STRING comparison
 
 -- ✅ Correct: check list non-emptiness
-length someList > 0            -- LIST operation
+length (someList) > 0            -- LIST operation
 ```
 
 ## **7.6 Boolean Logic and Comparison Patterns**
@@ -1024,7 +1140,7 @@ You've learned to:
 
 1. **Write precise legal rules** that capture obligations, conditions, and consequences
 2. **Model complex legal entities** with proper types and relationships  
-3. **Handle multi-step legal processes** using the PROVISION approach
+3. **Handle multi-step legal processes** using the CONTRACT approach
 4. **Organize complete regulatory schemes** using the three-layer architecture
 5. **Understand the design principles** that make L4 effective for legal modeling
 6. **Apply advanced techniques** for real-world complexity
@@ -1044,53 +1160,127 @@ You've learned to:
 ## **Basic Syntax**
 ```l4
 -- Comments start with --
-GIVEN entity IS A Type        -- Input parameters
-PARTY actor                   -- Who has the obligation
-MUST action                   -- What they must do  
-WITHIN timeframe             -- Deadline
-HENCE consequence            -- If they comply
-LEST alternative             -- If they don't comply
+IMPORT prelude                   -- Always start with this
+
+-- Type definitions
+DECLARE TypeName
+    HAS field1 IS A Type1
+        field2 IS A Type2
+
+DECLARE EnumType IS ONE OF       -- Enumeration
+    Option1
+    Option2 HAS data IS A Type
+
+-- Function definitions
+GIVEN entity IS A Type           -- Input parameters
+GIVETH A Type                    -- Return type
+functionName MEANS expression    -- Function body
+
+-- Contract definitions
+GIVEN entity IS A Type
+GIVETH A CONTRACT Actor Action
+contractName MEANS
+  PARTY Actor                    -- Who has the obligation
+  MUST Action                    -- What they must do  
+  WITHIN timeframe              -- Deadline (in days)
+  HENCE FULFILLED               -- If they comply
+  LEST FULFILLED                -- If they don't comply
 ```
 
 ## **Type Declarations**
 ```l4
-DECLARE TypeName              -- Simple type
-DECLARE RecordType           -- Record with fields
-    HAS field1 IS A Type1
-        field2 IS A Type2
+-- Basic record type
+DECLARE Person
+    HAS name IS A STRING
+        age IS A NUMBER
+        isActive IS A BOOLEAN
 
-DECLARE EnumType IS ONE OF   -- Enumeration
-    Option1
-    Option2 HAS data IS A Type
+-- Enumeration with data
+DECLARE Purpose IS ONE OF
+    `prevention or relief of poverty`
+    `advancement of education`
+    otherPurpose HAS description IS A STRING
+
+-- Actor/Action types for contracts
+DECLARE Actor IS ONE OF
+    PersonActor HAS person IS A Person
+    OrganizationActor HAS name IS A STRING
+
+DECLARE Action IS ONE OF
+    FileDocument HAS content IS A STRING
+    PayAmount HAS amount IS A NUMBER
 ```
 
-## **PROVISION Syntax**
+## **CONTRACT Syntax**
 ```l4
-GIVETH A PROVISION Actor Action
-`process name` MEANS
-  PARTY Actor
-  MUST Action OF simpleParameter  -- Use simple parameters only
-  WITHIN timeframe
-  HENCE nextStep
-  LEST errorPath
+GIVEN entity IS A Type
+GIVETH A CONTRACT Actor Action
+`contract name` MEANS
+  IF condition                   -- Optional condition
+  THEN PARTY ActorType parameter -- Actor with obligation
+       MUST ActionType parameter -- Action they must perform
+       WITHIN days               -- Time limit in days
+       HENCE FULFILLED           -- Success outcome
+       LEST FULFILLED            -- Failure outcome
+  ELSE FULFILLED                 -- Alternative when condition false
 ```
 
-**Important:** Avoid complex object construction within PROVISION rules. Use helper functions or pre-defined objects instead.
+**Important:** 
+- Always use proper Actor and Action constructors, not string literals
+- Use simple parameters in MUST clauses - avoid complex object construction
+- Parenthesize field access when used as function arguments: `length (entity's field)`
 
+## **Value Creation**
 ```l4
--- ❌ Don't do this:
-MUST Action OF ComplexType WITH field1 IS ..., field2 IS ...
+-- Simple values
+DECIDE constantName IS value
 
--- ✅ Do this instead:
-MUST Action OF `build complex object` parameters
--- or
-MUST Action OF predefinedExample
+-- Constructor with parameters (match exact field count)
+DECIDE entityName IS TypeName field1Value field2Value field3Value
+
+-- List construction
+DECIDE listName IS LIST item1, item2, item3
+DECIDE emptyList IS LIST  -- Empty list of inferred type
+
+-- Date construction  
+DECIDE dateValue IS Date 2024 6 15  -- year month day
 ```
 
-## **Simulation**
+## **Common Patterns**
 ```l4
-#EVAL expression                                    -- Evaluate expression
-#PROVISION `name` actor1 actor2 state AT time WITH  -- Simulate process
-  PARTY actor1 DOES action1 AT time1
-  PARTY actor2 DOES action2 AT time2
+-- List operations (define length function first)
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+length list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 + length xs
+
+-- Boolean validation
+GIVEN text IS A STRING
+GIVETH A BOOLEAN
+isNotEmpty MEANS NOT text EQUALS ""
+
+-- List validation with quantifiers
+GIVEN items IS A LIST OF Type
+GIVETH A BOOLEAN
+allValid MEANS all (GIVEN item YIELD condition) items
+
+-- Field access in function arguments (always use parentheses)
+length (entity's fieldName) > 0
+elem item (entity's listField)
+all (GIVEN x YIELD condition) (entity's items)
+```
+
+## **Essential Functions to Define**
+```l4
+-- Length function (not in prelude)
+GIVEN a IS A TYPE
+      list IS A LIST OF a
+GIVETH A NUMBER
+length list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN 0
+  WHEN x FOLLOWED BY xs THEN 1 + length xs
 ```
