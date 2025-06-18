@@ -22,6 +22,7 @@ import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
+import Paths_jl4_decision_service ( getDataFileName ) -- deployment environment relies on cabal's data-files facility, rather than direct access to source dir
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -72,7 +73,8 @@ expandSourcePaths paths = do
   return $ filter (\f -> takeExtension f == ".l4") files
 
 expandPath :: FilePath -> IO [FilePath]
-expandPath path = do
+expandPath origPath = do
+  path <- getDataFileName origPath
   isDir <- doesDirectoryExist path
   if isDir
     then do

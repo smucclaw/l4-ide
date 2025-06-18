@@ -7,7 +7,7 @@ module Examples (functionSpecs, loadL4File, loadL4Functions) where
 
 import Backend.Jl4 as Jl4
 import Control.Monad.Trans.Except
-import Control.Monad (when, unless)
+import Control.Monad (when)
 import qualified Data.Map.Strict as Map
 import Data.String.Interpolate
 import Data.Text (Text)
@@ -18,17 +18,24 @@ import qualified Data.Yaml as Yaml
 import Server
 import System.FilePath (replaceExtension, takeBaseName)
 import System.Directory (doesFileExist)
+import Paths_jl4_decision_service ( getDataFileName ) -- deployment environment relies on cabal's data-files facility, rather than direct access to source dir
 import Data.Maybe (catMaybes)
 -- ----------------------------------------------------------------------------
 -- load example L4 files and descriptions from disk.
 -- ----------------------------------------------------------------------------
 
 loadL4File :: FilePath -> IO (Maybe (Text, Text, Function))
-loadL4File path = do
+loadL4File relativePath = do
+  path <- robustGetDataFileName relativePath
   let yamlPath = replaceExtension path ".yaml"
   yamlExists <- doesFileExist yamlPath
   if not yamlExists
-    then return Nothing
+    then do
+      putStrLn $ "  >>> " <> relativePath
+      putStrLn $ "   >> " <> path
+      putStrLn $ "    > " <> yamlPath
+      putStrLn $ "   !! lacking YAML file " <> yamlPath
+      return Nothing
     else do
       content <- TIO.readFile path
       yamlContent <- TIO.readFile yamlPath
@@ -42,6 +49,25 @@ loadL4File path = do
           let fnDeclWithName = if T.null (fnDecl.name) then fnDecl { name = T.pack $ takeBaseName path } else fnDecl
           print fnDeclWithName
           return (Just (fnDecl.name, content, fnDeclWithName))
+  where
+    robustGetDataFileName =
+      (replacePrefixWithSlash <$>) . getDataFileName
+
+    -- 's(.*//)(/)'
+    -- because `cabal run` tends to expand the getDataFileName to something relative
+    -- to the current directory, with a /home....//home/... mess
+
+    replacePrefixWithSlash :: String -> String
+    replacePrefixWithSlash s = case dropWhile (not . isSlashSlash) (tails s) of
+                                 (_:_:rest):_ -> '/' : rest
+                                 _            -> s
+      where
+        isSlashSlash ('/':'/':_) = True
+        isSlashSlash _           = False
+
+        tails []     = []
+        tails x@(_:xs) = x : tails xs
+
 
 loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction)
 loadL4Functions paths = do
@@ -49,11 +75,13 @@ loadL4Functions paths = do
   when (null paths) $ do
      putStrLn "* to load L4 functions from disk, run with --sourcePaths"
      putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
+     putStrLn "               --sourcePaths ../jl4/experiments/something.l4"
      putStrLn "  each .l4 file needs a matching .yaml definition"
-  unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
-  let
-    validFiles = catMaybes files
-    functions = Map.fromList [(name, createValidatedFunction name content fn) | (name, content, fn) <- validFiles]
+
+  let validFiles = catMaybes files
+      functions = Map.fromList [ (name, createValidatedFunction name content fn)
+                               | (name, content, fn) <- validFiles]
+  putStrLn $ "* Loaded " <> show (length validFiles) <> " .l4 files"
   return functions
 
 
