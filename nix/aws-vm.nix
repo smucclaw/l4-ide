@@ -1,3 +1,10 @@
+# this is meant for local dev of the nix flake deployment; it omits ACME and SSL.
+# this variant is automatically selected by Nix when we run the flake with
+#    nixos-rebuild build-vm --flake '.#jl4-aws-2505'
+#    result/bin/ruj-jl4-demo-vm
+#
+# you can also get it to run via libvirt, with virt-install
+
 { config, pkgs, lib, ... }:
 {
   virtualisation.vmVariant = {

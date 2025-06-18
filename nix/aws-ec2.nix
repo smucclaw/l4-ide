@@ -1,4 +1,6 @@
 # for aws ec2 originally ubuntu AMI 20250606
+# reinstalled using nixos-anywhere
+# subsequently updated using nixos-rebuild switch --target-host
 
 { modulesPath, lib, ... }:
 {
