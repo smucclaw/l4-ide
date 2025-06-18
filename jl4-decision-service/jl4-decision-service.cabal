@@ -4,9 +4,19 @@ version: 0.1.0.0
 build-type: Simple
 tested-with: ghc ==9.6.6
 
+data-files:
+    jl4/experiments/*.l4
+    jl4/experiments/*.yaml
+    doc/tutorial-code/*.l4
+    doc/tutorial-code/*.yaml
+
+data-dir: ../
+
 source-repository head
   type: git
   location: https://github.com/smucclaw/l4-ide/tree/main/jl4-decision-service
+
+
 
 common defaults
   default-language: GHC2021
@@ -42,6 +52,8 @@ common defaults
   build-depends:
     base >=4.7 && <5
 
+
+
 library
   import: defaults
   exposed-modules:
@@ -61,6 +73,7 @@ library
 
   hs-source-dirs:
     src
+
 
   build-depends:
     aeson,
@@ -98,9 +111,6 @@ executable jl4-decision-service-exe
   import: defaults
   main-is: Main.hs
   other-modules:
-    Paths_jl4_decision_service
-
-  autogen-modules:
     Paths_jl4_decision_service
 
   hs-source-dirs:
