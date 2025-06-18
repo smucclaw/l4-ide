@@ -57,7 +57,7 @@ semanticTokenGolden dir inputFile = do
       , readFromFile = Text.readFile
       , goldenFile = dir </> takeFileName inputFile -<.> "golden"
       , actualFile = Just (dir </> takeFileName inputFile -<.> "actual")
-      , failFirstTime = False
+      , failFirstTime = True
       }
  where
   prettyToken :: SemanticToken -> Text

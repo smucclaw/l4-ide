@@ -43,6 +43,7 @@ carameliseExpr = carameliseNode >>> \ case
   App        ann n es  -> App ann n (fmap carameliseExpr es)
   AppNamed   ann n nes morder -> AppNamed ann n (fmap caramliseNamedExpr nes) morder
   IfThenElse ann b t e -> IfThenElse ann (carameliseExpr b) (carameliseExpr t) (carameliseExpr e)
+  MultiWayIf ann es e -> MultiWayIf ann (map (\(MkGuardedExpr ann' a b) -> MkGuardedExpr ann' (carameliseExpr a) (carameliseExpr b)) es) (carameliseExpr e)
   Regulative ann o -> Regulative ann (carameliseObligation o)
   Consider   ann e branches -> Consider ann (carameliseExpr e) (fmap carameliseBranch branches)
   Lit        ann l -> Lit ann l

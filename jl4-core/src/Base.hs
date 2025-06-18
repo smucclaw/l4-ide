@@ -23,6 +23,7 @@ import Data.List.NonEmpty as X (NonEmpty(..), nonEmpty)
 import Data.Proxy as X
 import Data.Set as X (Set)
 import Data.String as X
+import Data.Traversable as X (for)
 import Data.Text as X (Text)
 import Data.TreeDiff.Class as X (ToExpr)
 import Data.Void as X
