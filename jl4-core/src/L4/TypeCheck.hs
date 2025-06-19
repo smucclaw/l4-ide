@@ -348,9 +348,6 @@ inferAssume (MkAssume ann _tysig appForm mt) = do
           pure (assume, [dHead.name])
 
 inferDirective :: Directive Name -> Check (Directive Resolved)
-inferDirective (StrictEval ann e) = errorContext (WhileCheckingExpression e) do
-  (re, _) <- prune $ inferExpr e
-  pure (StrictEval ann re)
 inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (LazyEval ann re)

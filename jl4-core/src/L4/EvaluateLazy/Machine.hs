@@ -968,8 +968,6 @@ evalDirective env (LazyEval ann expr) =
   pure [MkEvalDirective (rangeOf ann) False expr env]
 evalDirective env (LazyEvalTrace ann expr) =
   pure [MkEvalDirective (rangeOf ann) True expr env]
-evalDirective _env (StrictEval _ann _expr) =
-  pure []
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =

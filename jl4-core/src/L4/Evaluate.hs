@@ -86,31 +86,6 @@ data EvalTrace =
   deriving stock (Show, Generic)
   deriving anyclass NFData
 
--- | Intermediate structure used for building something resembling a "Stack Frame".
-data EvalFrame =
-  Frame (Expr Resolved) (RevList EvalTrace)
-
-buildEvalTrace :: [EvalAction] -> EvalTrace
-buildEvalTrace = go []
-  where
-    go :: [EvalFrame] -> [EvalAction] -> EvalTrace
-    go fs                  (Enter e : actions)    = go (Frame e emptyRevList : fs) actions
-    go (Frame e subs : fs) (Exit v     : actions) =
-      let
-        t = Trace e (unRevList subs) (Right v)
-      in
-        case fs of
-          []                         -> t
-          (Frame e' subs' : fs') -> go (Frame e' (pushRevList t subs') : fs') actions
-    go (Frame e subs : fs) actions@(Exception exc : _) =
-      let
-        t = Trace e (unRevList subs) (Left exc)
-      in
-        case fs of
-          []                     -> t
-          (Frame e' subs' : fs') -> go (Frame e' (pushRevList t subs') : fs') actions
-    go _ _ = error "illegal eval action sequence"
-
 data EvalException =
     RuntimeScopeError Resolved -- internal
   | RuntimeTypeError Text -- internal
@@ -224,17 +199,6 @@ usingEnvironment env m = scope $ do
 makeKnown :: Resolved -> Value -> Eval ()
 makeKnown r val =
   modifying #environment (Map.insert (getUnique r) val)
-
-addEvalDirectiveResult :: HasSrcRange a => a -> Either EvalException Value -> Eval ()
-addEvalDirectiveResult a val = do
-  evalTrace <- use #evalActions
-  assign' #evalActions emptyRevList
-  let
-    esTrace = buildEvalTrace $ unRevList evalTrace
-    res = (\r -> MkEvalDirectiveResult r val esTrace) <$> rangeOf a
-
-  maybe (pure ()) (modifying #directiveResults . (:)) res
-
 
 data Stack =
     BinOp1 BinOp {- -} (Expr Resolved) Environment Stack
@@ -376,9 +340,6 @@ evalExpr expr =
     )
 
 evalDirective :: Directive Resolved -> Eval ()
-evalDirective (StrictEval _ann expr) = do
-  v <- evalExpr expr
-  addEvalDirectiveResult expr v
 evalDirective (LazyEval _ann _expr) = pure ()
 evalDirective (LazyEvalTrace _ann _expr) = pure ()
 evalDirective (Check _ _) = pure ()

@@ -181,8 +181,6 @@ instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
   printWithLayout = \ case
-    StrictEval _ e ->
-      "#SEVAL" <+> printWithLayout e
     LazyEval _ e ->
       "#EVAL" <+> printWithLayout e
     LazyEvalTrace _ e ->
