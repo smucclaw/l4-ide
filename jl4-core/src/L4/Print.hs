@@ -2,7 +2,6 @@ module L4.Print where
 
 import Base
 import qualified Base.Text as Text
-import L4.Evaluate.Value as Eager
 import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
@@ -393,31 +392,6 @@ instance LayoutPrinterWithName a => LayoutPrinter (NlgFragment a) where
   printWithLayout = \ case
     MkNlgText _ t -> pretty t
     MkNlgRef  _ n -> "%" <> printWithLayout n <> "%"
-
-instance LayoutPrinter Eager.Value where
-  printWithLayout = \ case
-    Eager.ValNumber i               -> pretty (prettyRatio i)
-    Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
-    Eager.ValList vs                ->
-      "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
-    Eager.ValClosure{}              -> "<function>"
-    Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
-    Eager.ValBinaryBuiltinFun{}     -> "<function>"
-    Eager.ValAssumed r              -> printWithLayout r
-    Eager.ValUnappliedConstructor r -> printWithLayout r
-    Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
-      [] -> mempty
-      vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
-
-  parensIfNeeded :: Eager.Value -> Doc ann
-  parensIfNeeded v = case v of
-    Eager.ValNumber{}               -> printWithLayout v
-    Eager.ValString{}               -> printWithLayout v
-    Eager.ValClosure{}              -> printWithLayout v
-    Eager.ValUnappliedConstructor{} -> printWithLayout v
-    Eager.ValAssumed{}              -> printWithLayout v
-    Eager.ValConstructor r []       -> printWithLayout r
-    _ -> surround (printWithLayout v) "(" ")"
 
 instance (LayoutPrinter a, LayoutPrinter b) => LayoutPrinter (Either a b) where
   printWithLayout = either printWithLayout printWithLayout
