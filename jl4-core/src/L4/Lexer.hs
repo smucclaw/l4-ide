@@ -51,8 +51,7 @@ data AnnoType
   deriving anyclass (ToExpr, NFData)
 
 data TDirectives
-  = TStrictEvalDirective
-  | TLazyEvalDirective
+  = TLazyEvalDirective
   | TLazyEvalTraceDirective
   | TCheckDirective
   | TContractDirective
@@ -61,8 +60,7 @@ data TDirectives
 
 directives :: Map Text TDirectives
 directives = Map.fromList
-  [ ("SEVAL"    , TStrictEvalDirective)
-  , ("EVALTRACE", TLazyEvalTraceDirective)
+  [ ("EVALTRACE", TLazyEvalTraceDirective)
   , ("EVAL"     , TLazyEvalDirective)
   , ("CHECK"    , TCheckDirective)
   , ("TRACE"    , TContractDirective)

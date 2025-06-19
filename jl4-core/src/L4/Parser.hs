@@ -439,10 +439,7 @@ directive :: Parser (Directive Name)
 directive =
   attachAnno $
     choice
-      [ StrictEval emptyAnno
-          <$ annoLexeme (spacedToken_ (TDirectives TStrictEvalDirective))
-          <*> annoHole expr
-      , LazyEval emptyAnno
+      [ LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalDirective))
           <*> annoHole expr
       , LazyEvalTrace emptyAnno

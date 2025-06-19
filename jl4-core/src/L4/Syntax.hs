@@ -154,8 +154,7 @@ data Assume n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Directive n =
-    StrictEval Anno (Expr n)
-  | LazyEval Anno (Expr n)
+    LazyEval Anno (Expr n)
   | LazyEvalTrace Anno (Expr n)
   | Check Anno (Expr n)
   | Contract Anno (Expr n) (Expr n) [Expr n]

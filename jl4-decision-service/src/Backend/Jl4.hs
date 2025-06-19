@@ -1,12 +1,15 @@
 module Backend.Jl4 (createFunction) where
 
 import Base hiding (trace)
+import qualified Base.DList as DList
 import qualified Base.Map as Map
 import qualified Base.Text as Text
 
 import L4.Annotation
-import L4.Evaluate
-import qualified L4.Evaluate.Value as Eval
+-- import qualified L4.Evaluate.Value as Eval
+import qualified L4.Evaluate.ValueLazy as Eval
+import qualified L4.EvaluateLazy as Eval
+import L4.EvaluateLazy.Trace
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
@@ -42,25 +45,23 @@ createFunction fnDecl fnImpl =
           l4InputWithEval =
             Text.unlines
               [ fnImpl
-              , prettyLayout $ mkTopDeclDirective $ mkEval funExpr
+              , prettyLayout $ mkTopDeclDirective $ mkEvalTrace funExpr
               ]
 
-        (errs, mTcResWithEval) <- typecheckModule file l4InputWithEval
-        case mTcResWithEval of
+        (errs, mEvalRes) <- evaluateModule file l4InputWithEval
+        case mEvalRes of
           Nothing -> throwError $ InterpreterError (mconcat errs)
-          Just tcRes -> do
-            case doEvalModule tcRes.module' of
-              [MkEvalDirectiveResult{result, trace}] -> case result of
+          Just [Eval.MkEvalDirectiveResult{result, trace}] -> case result of
                 Left evalExc -> throwError $ InterpreterError $ Text.show evalExc
                 Right val -> do
-                  r <- valueToFnLiteral val
+                  r <- nfToFnLiteral val
                   pure $
                     ResponseWithReason
                       { values = [("result", r)]
                       , reasoning = buildReasoningTree trace
                       }
-              [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
-              _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
+          Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
+          Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
     }
  where
   file = Text.unpack fnDecl.name <.> "l4"
@@ -280,32 +281,48 @@ literalToExpr = \case
   FnUncertain -> pure $ mkVar mkUncertain
   FnUnknown -> pure $ mkVar mkUnknown
 
-valueToFnLiteral :: (Monad m) => Eval.Value -> ExceptT EvaluatorError m FnLiteral
+nfToFnLiteral :: (Monad m) => Eval.NF -> ExceptT EvaluatorError m FnLiteral
+nfToFnLiteral (Eval.MkNF v) = valueToFnLiteral v
+nfToFnLiteral Eval.Omitted  = pure FnUnknown
+
+valueToFnLiteral :: (Monad m) => Eval.Value Eval.NF -> ExceptT EvaluatorError m FnLiteral
 valueToFnLiteral = \case
   Eval.ValNumber i ->
     pure $ case isInteger i of
       Just int -> FnLitInt int
       Nothing -> FnLitDouble $ fromRational i
   Eval.ValString t -> pure $ FnLitString t
-  Eval.ValList vals -> do
-    lits <- traverse valueToFnLiteral vals
-    pure $ FnArray lits
+  Eval.ValNil -> pure $ FnArray []
+  Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2
   Eval.ValClosure{} -> throwError $ InterpreterError "#EVAL produced function closure."
   Eval.ValBinaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
+  Eval.ValObligation{} -> throwError $ InterpreterError "#EVAL produced obligation."
+  Eval.ValEnvironment{} -> throwError $ InterpreterError "#EVAL produced environment."
+  Eval.ValROp{} -> throwError $ InterpreterError "#EVAL produced regulative operator."
+  Eval.ValBreached{} -> throwError $ InterpreterError "#EVAL produced breach."
   Eval.ValUnappliedConstructor name ->
     pure $ FnLitString $ prettyLayout name
   Eval.ValConstructor resolved [] ->
     -- Constructors such as TRUE and FALSE
     pure $ FnLitString $ prettyLayout $ getActual resolved
   Eval.ValConstructor resolved vals -> do
-    lits <- traverse valueToFnLiteral vals
+    lits <- traverse nfToFnLiteral vals
     pure $
       FnObject
         [ (prettyLayout $ getActual resolved, FnArray lits)
         ]
   Eval.ValAssumed var ->
     throwError $ InterpreterError $ "#EVAL produced ASSUME: " <> prettyLayout var
+
+listToFnLiteral :: Monad m => DList FnLiteral -> Eval.NF -> ExceptT EvaluatorError m FnLiteral
+listToFnLiteral acc Eval.Omitted                     = pure (FnArray (toList (DList.snoc acc FnUnknown)))
+listToFnLiteral acc (Eval.MkNF Eval.ValNil)          = pure (FnArray (toList acc))
+listToFnLiteral acc (Eval.MkNF (Eval.ValCons v1 v2)) = do
+  l1 <- nfToFnLiteral v1
+  listToFnLiteral (DList.snoc acc l1) v2
+listToFnLiteral _acc (Eval.MkNF _)                   =
+  throwError $ InterpreterError "#EVAL produced a type-incorrect list."
 
 -- ----------------------------------------------------------------------------
 -- L4 helpers
@@ -319,6 +336,14 @@ typecheckModule file input = do
     _ <- Shake.addVirtualFile nfp input
     Shake.use Rules.TypeCheck uri
 
+evaluateModule :: (MonadIO m) => FilePath -> Text -> m ([Text], Maybe [Eval.EvalDirectiveResult])
+evaluateModule file input =
+  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+    let
+      uri = normalizedFilePathToUri nfp
+    _ <- Shake.addVirtualFile nfp input
+    Shake.use Rules.EvaluateLazy uri
+
 -- ----------------------------------------------------------------------------
 -- L4 syntax builders
 -- ----------------------------------------------------------------------------
@@ -326,8 +351,8 @@ typecheckModule file input = do
 mkTopDeclDirective :: Directive n -> TopDecl n
 mkTopDeclDirective = Directive emptyAnno
 
-mkEval :: Expr n -> Directive n
-mkEval = StrictEval emptyAnno
+mkEvalTrace :: Expr n -> Directive n
+mkEvalTrace = LazyEvalTrace emptyAnno
 
 mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
 mkNamedFunApp con args =
@@ -391,14 +416,31 @@ mkUnknown = mkNormalNameText "unknown"
 -- Trace builders
 -- ----------------------------------------------------------------------------
 
-buildReasoningTree :: EvalTrace -> Reasoning
+buildReasoningTree :: Maybe EvalTrace -> Reasoning
 buildReasoningTree xs =
   Reasoning
     { payload = toReasoningTree xs
     }
 
-toReasoningTree :: EvalTrace -> ReasoningTree
-toReasoningTree (Trace expr children val) =
+toReasoningTree :: Maybe EvalTrace -> ReasoningTree
+toReasoningTree Nothing  = ReasoningTree (ReasonNode [] []) []
+toReasoningTree (Just t) = toReasoningTree' t
+
+toReasoningTree' :: EvalTrace -> ReasoningTree
+toReasoningTree' (Trace [] val) =
+  ReasoningTree
+    { payload =
+        ReasonNode
+          { exampleCode = []
+          , explanation =
+              [ "Result: " <> case val of
+                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
+                  Right v -> Print.prettyLayout v
+              ]
+          }
+    , children = []
+    }
+toReasoningTree' (Trace [(expr, children)] val) =
   ReasoningTree
     { payload =
         ReasonNode
@@ -406,9 +448,11 @@ toReasoningTree (Trace expr children val) =
               [Print.prettyLayout expr]
           , explanation =
               [ "Result: " <> case val of
-                  Left exc -> Text.show exc
+                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
                   Right v -> Print.prettyLayout v
               ]
           }
-    , children = fmap toReasoningTree children
+    , children = fmap toReasoningTree' children
     }
+toReasoningTree' (Trace ((expr, children) : rest) val) =
+  toReasoningTree' (Trace [(expr, children ++ [Trace rest val])] val)
