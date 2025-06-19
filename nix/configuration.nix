@@ -68,5 +68,6 @@
     zsh
     bat
     ripgrep
+    cloud-utils
   ];
 }
