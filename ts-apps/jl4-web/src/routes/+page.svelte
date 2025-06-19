@@ -34,8 +34,26 @@
   ************************************/
 
   // `persistSession` does not need to be reactive
-  let persistSession: undefined | (() => Promise<void>) = undefined
+  let persistSession: undefined | (() => Promise<string | undefined>) =
+    undefined
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
+
+  let persistButtonBlocked = $state(false)
+  let currentSessionId = $state<string | undefined>(undefined)
+
+  // New function to handle persistence
+  async function handlePersist() {
+    if (!persistSession) return undefined
+
+    persistButtonBlocked = true
+    try {
+      const sessionId = await persistSession()
+      currentSessionId = sessionId
+      return sessionId
+    } finally {
+      persistButtonBlocked = false
+    }
+  }
 
   /***********************************
         UI-related vars
@@ -222,35 +240,21 @@
       }
 
       persistSession = async () => {
-        if (!editor) return
-
+        if (!editor) return undefined
         const bufferContent: string = editor.getValue()
-        const ownUrl: URL = new URL(window.location.href)
-        const sessionid: string | null = ownUrl.searchParams.get('id')
-        if (sessionid) {
-          await fetch(sessionUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jl4program: bufferContent,
-              sessionid: sessionid,
-            }),
-          })
-          logger.debug('sent PUT for session')
+        const response = await fetch(sessionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bufferContent),
+        })
+        logger.debug('sent POST for session')
+        const newSessionId: string = await response.json()
+        if (newSessionId) {
+          logger.debug(`new session id: ${newSessionId}`)
+          return newSessionId
         } else {
-          const response = await fetch(sessionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bufferContent),
-          })
-          logger.debug('sent POST for session')
-          const newSessionId = await response.json()
-          if (newSessionId) {
-            ownUrl.searchParams.set('id', newSessionId.toString())
-            history.pushState(null, '', ownUrl)
-          } else {
-            console.error(`response was not present`)
-          }
+          logger.error(`response was not present`)
+          return undefined
         }
       }
 
@@ -372,12 +376,15 @@
         didChange: async (event, next) => {
           await next(event)
 
-          if (persistSession) {
-            try {
-              await persistSession()
-            } catch (e) {
-              console.error('Error persisting session', e)
-            }
+          const ownUrl: URL = new URL(window.location.href)
+          if (ownUrl.searchParams.has('id')) {
+            ownUrl.searchParams.delete('id')
+            history.pushState(null, '', ownUrl)
+            currentSessionId = undefined
+          }
+
+          if (persistButtonBlocked) {
+            persistButtonBlocked = false
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
@@ -413,6 +420,21 @@
     }
   })
 
+  let copied = $state(false)
+  function copyToClipboard(url: string) {
+    navigator.clipboard.writeText(url)
+    copied = true
+    setTimeout(() => {
+      copied = false
+    }, 2000)
+  }
+
+  let shareUrl = $derived(
+    currentSessionId
+      ? `${window.location.origin}${window.location.pathname}?id=${currentSessionId}`
+      : undefined
+  )
+
   const britishCitizen = `§ \`Assumptions\`
 
 ASSUME Person IS A TYPE
@@ -447,6 +469,36 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
+    <div id="persist-ui" class="flex items-center gap-2 m-1">
+      <button
+        onclick={handlePersist}
+        class="px-3 py-1 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={persistButtonBlocked}
+      >
+        {persistButtonBlocked ? 'Persisting...' : 'Persist Current File'}
+      </button>
+
+      {#if shareUrl}
+        <div class="flex items-center gap-2 text-sm">
+          <span>Share link:</span>
+          <a
+            href={shareUrl}
+            class="text-primary hover:underline"
+            target="_blank"
+          >
+            {shareUrl}
+          </a>
+          <button
+            onclick={() => copyToClipboard(shareUrl)}
+            class={`p-1 transition-colors ${copied ? 'text-green-600 bg-green-100' : 'hover:bg-muted'}`}
+            title={copied ? 'Copied! to clipboard' : 'Copy to clipboard'}
+          >
+            {copied ? '✓' : '📋'}
+          </button>
+        </div>
+      {/if}
+    </div>
+
     <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
       {#await renderLadderPromise then ladder}
         {#key ladder.funDeclLirNode}
