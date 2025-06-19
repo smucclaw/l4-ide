@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { SvelteToast, toast } from '@zerodevx/svelte-toast'
+  import { faShareAlt } from '@fortawesome/free-solid-svg-icons'
+  import { FontAwesomeIcon } from '@fortawesome/svelte-fontawesome'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
@@ -39,21 +42,6 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   let persistButtonBlocked = $state(false)
-  let currentSessionId = $state<string | undefined>(undefined)
-
-  // New function to handle persistence
-  async function handlePersist() {
-    if (!persistSession) return undefined
-
-    persistButtonBlocked = true
-    try {
-      const sessionId = await persistSession()
-      currentSessionId = sessionId
-      return sessionId
-    } finally {
-      persistButtonBlocked = false
-    }
-  }
 
   /***********************************
         UI-related vars
@@ -239,6 +227,18 @@
         }
       }
 
+      const programParam: string | null = ownUrl.searchParams.get('program')
+      if (programParam) {
+        try {
+          const decoded = decodeURIComponent(programParam)
+          editor.setValue(decoded)
+        } catch (e) {
+          logger.error(`could not decode program from url param, error: ${e}`)
+        }
+        ownUrl.searchParams.delete('program')
+        history.replaceState(null, '', ownUrl)
+      }
+
       persistSession = async () => {
         if (!editor) return undefined
         const bufferContent: string = editor.getValue()
@@ -380,7 +380,6 @@
           if (ownUrl.searchParams.has('id')) {
             ownUrl.searchParams.delete('id')
             history.pushState(null, '', ownUrl)
-            currentSessionId = undefined
           }
 
           if (persistButtonBlocked) {
@@ -420,20 +419,28 @@
     }
   })
 
-  let copied = $state(false)
-  function copyToClipboard(url: string) {
-    navigator.clipboard.writeText(url)
-    copied = true
-    setTimeout(() => {
-      copied = false
-    }, 2000)
+  async function handlePersist() {
+    if (!persistSession) return undefined
+
+    persistButtonBlocked = true
+    try {
+      const sessionId = await persistSession()
+      return sessionId
+    } finally {
+      persistButtonBlocked = false
+    }
   }
 
-  let shareUrl = $derived(
-    currentSessionId
-      ? `${window.location.origin}${window.location.pathname}?id=${currentSessionId}`
-      : undefined
-  )
+  async function handleShare() {
+    const sessionId = await handlePersist()
+    if (sessionId) {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?id=${sessionId}`
+      await navigator.clipboard.writeText(shareUrl)
+      toast.push('Session persisted and share link copied to clipboard')
+    } else {
+      toast.push('Could not persist the file.')
+    }
+  }
 
   const britishCitizen = `§ \`Assumptions\`
 
@@ -469,55 +476,47 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
-    <div id="persist-ui" class="flex items-center gap-2 m-1">
-      <button
-        onclick={handlePersist}
-        class="px-3 py-1 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        disabled={persistButtonBlocked}
-      >
-        {persistButtonBlocked ? 'Persisting...' : 'Persist Current File'}
-      </button>
+    <div class="relative h-full">
+      <div id="persist-ui" class="absolute items-center gap-2 m-4">
+        <button
+          onclick={handleShare}
+          class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          disabled={persistButtonBlocked}
+          title="Share the current file"
+          aria-label="Share"
+        >
+          <FontAwesomeIcon icon={faShareAlt} />
+        </button>
+      </div>
 
-      {#if shareUrl}
-        <div class="flex items-center gap-2 text-sm">
-          <span>Share link:</span>
-          <a
-            href={shareUrl}
-            class="text-primary hover:underline"
-            target="_blank"
-          >
-            {shareUrl}
-          </a>
-          <button
-            onclick={() => copyToClipboard(shareUrl)}
-            class={`p-1 transition-colors ${copied ? 'text-green-600 bg-green-100' : 'hover:bg-muted'}`}
-            title={copied ? 'Copied! to clipboard' : 'Copy to clipboard'}
-          >
-            {copied ? '✓' : '📋'}
-          </button>
-        </div>
-      {/if}
-    </div>
-
-    <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#await renderLadderPromise then ladder}
-        {#key ladder.funDeclLirNode}
-          <div class="slightly-shorter-than-full-viewport-height pb-1">
-            <LadderFlow
-              {context}
-              node={ladder.funDeclLirNode}
-              env={ladder.env}
-            />
-          </div>
-        {/key}
-      {:catch error}
-        <p>Error loading Ladder Diagram: {error.message}</p>
-      {/await}
+      <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
+        {#await renderLadderPromise then ladder}
+          {#key ladder.funDeclLirNode}
+            <div class="slightly-shorter-than-full-viewport-height pb-1">
+              <LadderFlow
+                {context}
+                node={ladder.funDeclLirNode}
+                env={ladder.env}
+              />
+            </div>
+          {/key}
+        {:catch error}
+          <p>Error loading Ladder Diagram: {error.message}</p>
+        {/await}
+      </div>
     </div>
   </Resizable.Pane>
 </Resizable.PaneGroup>
 
+<SvelteToast />
+
 <style>
+  :root {
+    --toastColor: #104e64;
+    --toastBackground: #white;
+    --toastBorderRadius: 4px;
+  }
+
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
   }
