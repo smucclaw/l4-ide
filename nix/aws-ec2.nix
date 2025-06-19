@@ -9,7 +9,18 @@
     (modulesPath + "/installer/scan/not-detected.nix")
   ];
 
+  # without this we get weird delay errors upon nixos-rebuild switch
+  systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
   networking.useDHCP = lib.mkDefault true;
+  # but consider the alternative
+    # networking.useDHCP = false;
+    # networking.useNetworkd = true;
+    # systemd.network.networks."10-ens5" = {
+    #   matchConfig.Name = "ens5";
+    #   networkConfig.DHCP = "yes";
+    #   linkConfig.RequiredForOnline = "yes";
+    # };
+  
   time.timeZone = "Asia/Singapore";
 
   boot.loader.grub = {
@@ -25,6 +36,7 @@
   boot.initrd.kernelModules = [ "dm-snapshot" ];
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+
 
   swapDevices = [
     { device = "/dev/disk/by-partlabel/swap"; }
