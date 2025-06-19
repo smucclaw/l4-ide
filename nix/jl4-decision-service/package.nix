@@ -1,29 +1,39 @@
-{ haskell, ... }:
+{ haskell, lib, runCommand, ... }:
 let
   hlib = haskell.lib.compose;
   hpkgs = haskell.packages.ghc98.override {
     overrides = import ../jl4-lsp/hs-overlay.nix hlib;
   };
-  jl4-decision-service = hpkgs.callCabal2nix "jl4-decision-service" ../../jl4-decision-service {  };
-in
-hlib.doJailbreak (hlib.overrideCabal jl4-decision-service (oldAttrs: {
-  postInstall = ''
-    # Create data directory if it doesn't exist
-    mkdir -p $out/share/jl4
-    mkdir -p $out/share/doc
+  
+  # Path to the root of the source tree
+  sourceRoot = ../..;
+  
+  # Create a source directory that includes the data files
+  sourceWithData = runCommand "jl4-decision-service-with-data" {} ''
+    # Copy the main source directory
+    cp -r ${sourceRoot}/jl4-decision-service $out
+    chmod -R u+w $out
     
-    # Copy jl4/experiments directory
-    if [ -d ../../jl4/experiments ]; then
-      cp -r ../../jl4/experiments $out/share/jl4/
+    # Create the data directories to match the data-files paths in the .cabal file
+    mkdir -p $out/jl4
+    mkdir -p $out/doc
+    
+    # Copy the required data files to match the data-files paths in the .cabal file
+    if [ -d ${sourceRoot}/jl4/experiments ]; then
+      cp -r ${sourceRoot}/jl4/experiments $out/jl4/
     else
-      echo "Warning: ../../jl4/experiments directory not found"
+      echo "Warning: jl4/experiments directory not found"
     fi
     
-    # Copy doc/tutorial-code directory
-    if [ -d ../../doc/tutorial-code ]; then
-      cp -r ../../doc/tutorial-code $out/share/doc/
+    if [ -d ${sourceRoot}/doc/tutorial-code ]; then
+      cp -r ${sourceRoot}/doc/tutorial-code $out/doc/
     else
-      echo "Warning: ../../doc/tutorial-code directory not found"
+      echo "Warning: doc/tutorial-code directory not found"
     fi
   '';
-}))
+  
+  customSource = hpkgs.callCabal2nix "jl4-decision-service" sourceWithData { };
+  
+  jl4-decision-service = customSource;
+in
+hlib.doJailbreak jl4-decision-service

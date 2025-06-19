@@ -79,7 +79,7 @@ expandPath origPath = do
   if isDir
     then do
       contents <- listDirectory path
-      concat <$> mapM (expandPath . (path </>)) contents
+      concat <$> mapM (expandPath . (origPath </>)) contents
     else return [path]
 
 type ApiWithSwagger =
