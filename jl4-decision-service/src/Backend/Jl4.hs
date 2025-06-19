@@ -6,7 +6,6 @@ import qualified Base.Map as Map
 import qualified Base.Text as Text
 
 import L4.Annotation
--- import L4.Evaluate
 -- import qualified L4.Evaluate.Value as Eval
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
@@ -338,7 +337,7 @@ typecheckModule file input = do
     Shake.use Rules.TypeCheck uri
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> m ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateModule file input = do
+evaluateModule file input =
   liftIO $ oneshotL4ActionAndErrors file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
