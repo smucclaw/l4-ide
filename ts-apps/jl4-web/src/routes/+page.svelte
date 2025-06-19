@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { SvelteToast, toast } from '@zerodevx/svelte-toast'
+  import { faShareAlt } from '@fortawesome/free-solid-svg-icons'
+  import { FontAwesomeIcon } from '@fortawesome/svelte-fontawesome'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
@@ -34,8 +37,11 @@
   ************************************/
 
   // `persistSession` does not need to be reactive
-  let persistSession: undefined | (() => Promise<void>) = undefined
+  let persistSession: undefined | (() => Promise<string | undefined>) =
+    undefined
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
+
+  let persistButtonBlocked = $state(false)
 
   /***********************************
         UI-related vars
@@ -221,36 +227,34 @@
         }
       }
 
-      persistSession = async () => {
-        if (!editor) return
+      const programParam: string | null = ownUrl.searchParams.get('program')
+      if (programParam) {
+        try {
+          const decoded = decodeURIComponent(programParam)
+          editor.setValue(decoded)
+        } catch (e) {
+          logger.error(`could not decode program from url param, error: ${e}`)
+        }
+        ownUrl.searchParams.delete('program')
+        history.replaceState(null, '', ownUrl)
+      }
 
+      persistSession = async () => {
+        if (!editor) return undefined
         const bufferContent: string = editor.getValue()
-        const ownUrl: URL = new URL(window.location.href)
-        const sessionid: string | null = ownUrl.searchParams.get('id')
-        if (sessionid) {
-          await fetch(sessionUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jl4program: bufferContent,
-              sessionid: sessionid,
-            }),
-          })
-          logger.debug('sent PUT for session')
+        const response = await fetch(sessionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bufferContent),
+        })
+        logger.debug('sent POST for session')
+        const newSessionId: string = await response.json()
+        if (newSessionId) {
+          logger.debug(`new session id: ${newSessionId}`)
+          return newSessionId
         } else {
-          const response = await fetch(sessionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bufferContent),
-          })
-          logger.debug('sent POST for session')
-          const newSessionId = await response.json()
-          if (newSessionId) {
-            ownUrl.searchParams.set('id', newSessionId.toString())
-            history.pushState(null, '', ownUrl)
-          } else {
-            console.error(`response was not present`)
-          }
+          logger.error(`response was not present`)
+          return undefined
         }
       }
 
@@ -372,12 +376,14 @@
         didChange: async (event, next) => {
           await next(event)
 
-          if (persistSession) {
-            try {
-              await persistSession()
-            } catch (e) {
-              console.error('Error persisting session', e)
-            }
+          const ownUrl: URL = new URL(window.location.href)
+          if (ownUrl.searchParams.has('id')) {
+            ownUrl.searchParams.delete('id')
+            history.pushState(null, '', ownUrl)
+          }
+
+          if (persistButtonBlocked) {
+            persistButtonBlocked = false
           }
 
           // YM: I don't like using middleware when, as far as I can see, we aren't really using the intercepting capabilities of middleware.
@@ -413,6 +419,29 @@
     }
   })
 
+  async function handlePersist() {
+    if (!persistSession) return undefined
+
+    persistButtonBlocked = true
+    try {
+      const sessionId = await persistSession()
+      return sessionId
+    } finally {
+      persistButtonBlocked = false
+    }
+  }
+
+  async function handleShare() {
+    const sessionId = await handlePersist()
+    if (sessionId) {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?id=${sessionId}`
+      await navigator.clipboard.writeText(shareUrl)
+      toast.push('Session persisted and share link copied to clipboard')
+    } else {
+      toast.push('Could not persist the file.')
+    }
+  }
+
   const britishCitizen = `§ \`Assumptions\`
 
 ASSUME Person IS A TYPE
@@ -447,25 +476,47 @@ DECIDE \`is a British citizen (variant)\` IS
   </Resizable.Pane>
   <Resizable.Handle style="width: 10px;" />
   <Resizable.Pane>
-    <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-      {#await renderLadderPromise then ladder}
-        {#key ladder.funDeclLirNode}
-          <div class="slightly-shorter-than-full-viewport-height pb-1">
-            <LadderFlow
-              {context}
-              node={ladder.funDeclLirNode}
-              env={ladder.env}
-            />
-          </div>
-        {/key}
-      {:catch error}
-        <p>Error loading Ladder Diagram: {error.message}</p>
-      {/await}
+    <div class="relative h-full">
+      <div id="persist-ui" class="absolute items-center gap-2 m-4">
+        <button
+          onclick={handleShare}
+          class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          disabled={persistButtonBlocked}
+          title="Share the current file"
+          aria-label="Share"
+        >
+          <FontAwesomeIcon icon={faShareAlt} />
+        </button>
+      </div>
+
+      <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
+        {#await renderLadderPromise then ladder}
+          {#key ladder.funDeclLirNode}
+            <div class="slightly-shorter-than-full-viewport-height pb-1">
+              <LadderFlow
+                {context}
+                node={ladder.funDeclLirNode}
+                env={ladder.env}
+              />
+            </div>
+          {/key}
+        {:catch error}
+          <p>Error loading Ladder Diagram: {error.message}</p>
+        {/await}
+      </div>
     </div>
   </Resizable.Pane>
 </Resizable.PaneGroup>
 
+<SvelteToast />
+
 <style>
+  :root {
+    --toastColor: #104e64;
+    --toastBackground: #white;
+    --toastBorderRadius: 4px;
+  }
+
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
   }

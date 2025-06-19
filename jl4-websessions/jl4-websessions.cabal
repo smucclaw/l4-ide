@@ -61,7 +61,6 @@ test-suite jl4-websessions-test
     hspec,
     http-client,
     jl4-websessions,
-    servant,
     servant-client,
     servant-client-core,
     sqlite-simple,
