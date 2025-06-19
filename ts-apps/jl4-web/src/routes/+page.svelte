@@ -42,13 +42,17 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   let persistButtonBlocked = $state(false)
+  let showVisualizer = $state(true)
 
   /***********************************
         UI-related vars
   ************************************/
 
-  /* editorElement does not need to be reactive */
-  let editorElement: HTMLDivElement
+  /* svelte doesn't realize that there will be a div ready for use in either of the branches so 
+  we force it to accept it */
+  let editorElement: HTMLDivElement = $state(
+    undefined as unknown as HTMLDivElement
+  )
   let errorMessage: string | undefined = $state(undefined)
 
   /***********************************
@@ -142,6 +146,9 @@
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug)
 
+      const ownUrl: URL = new URL(window.location.href)
+      showVisualizer = !ownUrl.searchParams.has('no-visualizer')
+
       await initServices(
         {
           loadThemes: true,
@@ -209,8 +216,6 @@
         }
       )
 
-      // Persistent sessions
-      const ownUrl: URL = new URL(window.location.href)
       const sessionid: string | null = ownUrl.searchParams.get('id')
       if (sessionid) {
         const response = await fetch(`${sessionUrl}?id=${sessionid}`)
@@ -470,43 +475,63 @@ DECIDE \`is a British citizen (variant)\` IS
       OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``
 </script>
 
-<Resizable.PaneGroup direction="horizontal">
-  <Resizable.Pane defaultSize={60}>
-    <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
-  </Resizable.Pane>
-  <Resizable.Handle style="width: 10px;" />
-  <Resizable.Pane>
-    <div class="relative h-full">
-      <div id="persist-ui" class="absolute items-center gap-2 m-4">
-        <button
-          onclick={handleShare}
-          class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          disabled={persistButtonBlocked}
-          title="Share the current file"
-          aria-label="Share"
-        >
-          <FontAwesomeIcon icon={faShareAlt} />
-        </button>
+{#if showVisualizer}
+  <Resizable.PaneGroup direction="horizontal">
+    <Resizable.Pane defaultSize={60}>
+      <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
+    </Resizable.Pane>
+    <Resizable.Handle style="width: 10px;" />
+    <Resizable.Pane>
+      <div class="relative h-full">
+        <div id="persist-ui" class="absolute items-center gap-2 m-4">
+          <button
+            onclick={handleShare}
+            class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            disabled={persistButtonBlocked}
+            title="Share the current file"
+            aria-label="Share"
+          >
+            <FontAwesomeIcon icon={faShareAlt} />
+          </button>
+        </div>
+        <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
+          {#await renderLadderPromise then ladder}
+            {#key ladder.funDeclLirNode}
+              <div class="slightly-shorter-than-full-viewport-height pb-1">
+                <LadderFlow
+                  {context}
+                  node={ladder.funDeclLirNode}
+                  env={ladder.env}
+                />
+              </div>
+            {/key}
+          {:catch error}
+            <p>Error loading Ladder Diagram: {error.message}</p>
+          {/await}
+        </div>
       </div>
-
-      <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-        {#await renderLadderPromise then ladder}
-          {#key ladder.funDeclLirNode}
-            <div class="slightly-shorter-than-full-viewport-height pb-1">
-              <LadderFlow
-                {context}
-                node={ladder.funDeclLirNode}
-                env={ladder.env}
-              />
-            </div>
-          {/key}
-        {:catch error}
-          <p>Error loading Ladder Diagram: {error.message}</p>
-        {/await}
-      </div>
+    </Resizable.Pane>
+  </Resizable.PaneGroup>
+{:else}
+  <div class="h-full w-full relative">
+    <div
+      id="jl4-editor"
+      class="relative h-full w-full"
+      bind:this={editorElement}
+    ></div>
+    <div id="persist-ui" class="absolute top-3 left-3 z-10">
+      <button
+        onclick={handleShare}
+        class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+        disabled={persistButtonBlocked}
+        title="Share the current file"
+        aria-label="Share"
+      >
+        <FontAwesomeIcon icon={faShareAlt} />
+      </button>
     </div>
-  </Resizable.Pane>
-</Resizable.PaneGroup>
+  </div>
+{/if}
 
 <SvelteToast />
 
