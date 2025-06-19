@@ -6,7 +6,6 @@ import Control.Monad.IO.Class (liftIO)
 import Database.SQLite.Simple as SQLite (withConnection)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Wai.Handler.Warp (testWithApplication)
-import Servant.API (NoContent(..))
 import Servant.Client
 import Servant.Client.Generic (genericClient)
 import System.FilePath ((</>))
@@ -37,9 +36,12 @@ crudSmokeTest = do
           prog' <- apiClient.readSession uuid
           liftIO $ prog `shouldBe` prog'
 
-          let prog2 = "sub x y MEANS x - y"
-          NoContent <- apiClient.updateSession MkJL4Program {jl4program = prog2, sessionid = uuid}
-          prog2' <- apiClient.readSession uuid
-          liftIO $ prog2 `shouldBe` prog2'
+          -- NOTE: this test was for putting an updated file
+          -- but it has become redundant b/c all sessions are
+          -- supposed to stay persistant
+          -- let prog2 = "sub x y MEANS x - y"
+          -- NoContent <- apiClient.updateSession MkJL4Program {jl4program = prog2, sessionid = uuid}
+          -- prog2' <- apiClient.readSession uuid
+          -- liftIO $ prog2 `shouldBe` prog2'
 
   result `shouldBe` Right ()
