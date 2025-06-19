@@ -42,7 +42,7 @@ createFunction fnDecl fnImpl =
           l4InputWithEval =
             Text.unlines
               [ fnImpl
-              , prettyLayout $ mkTopDeclDirective $ mkEval funExpr
+              , prettyLayout $ mkTopDeclDirective $ mkEvalTrace funExpr
               ]
 
         (errs, mTcResWithEval) <- typecheckModule file l4InputWithEval
@@ -326,8 +326,8 @@ typecheckModule file input = do
 mkTopDeclDirective :: Directive n -> TopDecl n
 mkTopDeclDirective = Directive emptyAnno
 
-mkEval :: Expr n -> Directive n
-mkEval = StrictEval emptyAnno
+mkEvalTrace :: Expr n -> Directive n
+mkEvalTrace = LazyEvalTrace emptyAnno
 
 mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
 mkNamedFunApp con args =
