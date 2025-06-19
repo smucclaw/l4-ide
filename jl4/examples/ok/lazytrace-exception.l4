@@ -1,0 +1,19 @@
+
+and list MEANS
+  CONSIDER list
+  WHEN EMPTY THEN TRUE
+  WHEN x FOLLOWED BY xs THEN x AND and xs
+
+ASSUME something IS A BOOLEAN
+
+-- #EVALTRACE and (LIST TRUE)
+#EVALTRACE and (LIST TRUE, FALSE OR TRUE, TRUE, something, FALSE)
+
+sum l MEANS go 0 l
+  WHERE
+    go acc list MEANS
+      CONSIDER list
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go (acc + x) xs
+
+#EVALTRACE sum (LIST 1, 2, 3, 4 DIVIDED BY 0, 5, 6)

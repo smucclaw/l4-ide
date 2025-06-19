@@ -661,14 +661,14 @@ jl4Rules rootDirectory recorder = do
         }
 
     evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
-    evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
+    evalLazyResultToDiagnostic r@(EvaluateLazy.MkEvalDirectiveResult range _res _mtrace) = do
       Diagnostic
         { _range = srcRangeToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either (Text.unlines . EvaluateLazy.prettyEvalException) Print.prettyLayout res
+        , _message = EvaluateLazy.prettyEvalDirectiveResult r
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

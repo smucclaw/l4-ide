@@ -1,0 +1,23 @@
+
+squaresDownFrom n MEANS
+  IF n < 0
+    THEN EMPTY
+    ELSE n * n FOLLOWED BY squaresDownFrom OF n - 1
+
+everyOther list MEANS
+  CONSIDER list
+  WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY everyOther ys
+  WHEN x FOLLOWED BY EMPTY THEN LIST x
+  WHEN EMPTY THEN EMPTY
+
+sum list MEANS
+  go 0 list
+  WHERE
+    go acc l MEANS
+      CONSIDER l
+      WHEN EMPTY THEN acc
+      WHEN x FOLLOWED BY xs THEN go OF acc + x, xs
+
+example MEANS squaresDownFrom 5
+
+#EVALTRACE sum (everyOther example)
