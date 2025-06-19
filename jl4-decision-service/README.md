@@ -57,6 +57,7 @@ Then try executing a few things at http://localhost:8081/swagger-ui/
 The deployed decision service is configured under [nix/](../nix/jl4-decision-service/configuration.nix).
 
 In the deployed environment, the service automatically loads L4 files from both:
+
 - `jl4/experiments/` - Various experimental L4 programs
 - `doc/tutorial-code/` - Tutorial examples
 
