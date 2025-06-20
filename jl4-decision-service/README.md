@@ -1,36 +1,70 @@
 # Decision Service Backend
 
-Exposes certain pre-compiled JL4 programs for use by an LLM AI, via the Tool Calling / Function Calling API.
+Exposes certain JL4 programs for use by an LLM AI, via the Tool Calling / Function Calling API.
 
-The current MVP exposes a couple of example programs which are hardcoded.
+## Endpoints
 
-In a future iteration the backend will
+    https://jl4.legalese.com/decision/swagger-ui/
 
-1. dynamically load the available programs from the `jl4/examples` directory
-2. parse and run an L4 program `POST`ed in as part of the API call itself.
+Where do the JL4 programs come from?
 
-## Usage
+## Hardcoded
 
-Run the decision service backend locally:
+The current MVP exposes a couple of example programs which are hardcoded: `compute qualifies` and `rodents and vermin`.
 
-    cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths ../doc/tutorial-code/
+You get these for free when you run
+
+    cabal run jl4-decision-service-exe -- \
+       --port 8081 \
+       --serverName http://jl4.legalese.com:8081/
+
+See [src/Examples.hs](Examples.hs) for details.
+
+## Loaded at Runtime
+
+The backend can be instructed to load pairs of `.l4` and `.yaml` files, some of which can be found in the `jl4/experiments` directory.
+
+To tell it where to load, add one or more `sourcePaths` arguments,
+which can be a directory or an L4 file.
+
+    --sourcePaths doc/tutorial-code/
+    --sourcePaths jl4/experiments/
+    --sourcePaths jl4/experiments/something.l4
+
+L4 files without `.yaml` metadata will be ignored.
+
+## Uploaded via the API itself
+
+There is primitive functionality accept a new L4 program via `POST` and subsequently offer it.
+
+This functionality has not been tested.
+
+# Actual Run Examples
+
+Usually you would only run the decision service this way, by hand, in development.
+
+    cabal run jl4-decision-service-exe --           \
+        --port 8081                                 \
+        --serverName http://localhost:8081/         \
+        --sourcePaths jl4/experiments/parking.l4    \
+        --sourcePaths doc/tutorial-code             \
+        --sourcePaths jl4/experiments/britishcitizen5.l4
 
 Then try executing a few things at http://localhost:8081/swagger-ui/
 
-## Loading L4 Functions
+# In Production
 
-Two functions are hardcoded by default; see [src/Examples.hs](Examples.hs) for details.
+The deployed decision service is configured under [nix/](../nix/jl4-decision-service/configuration.nix).
 
-Other functions can be loaded at start time using the `--sourcePaths` command line option.
+In the deployed environment, the service automatically loads L4 files from both:
 
-The argument to the option is a directory or individual `.l4` files.
+- `jl4/experiments/` - Various experimental L4 programs
+- `doc/tutorial-code/` - Tutorial examples
 
-This option looks for `.l4/.yaml` file pairs, containing additional functions to be exposed via the API. Files without `.yaml` metadata will be ignored.
-
-Multiple `--sourcePaths` can be given.
+These files are vendored into the Nix package at build time using Cabal's data-files mechanism.
 
 # See Also
 
 http://github.com/smucclaw/lag
 
-https://jl4.well-typed.com/decision/swagger-ui/
+https://jl4.legalese.com/decision/swagger-ui/
