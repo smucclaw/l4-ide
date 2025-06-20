@@ -188,4 +188,4 @@ runDecisionService' act = do
 
 initExampleAppEnv :: IO AppEnv
 initExampleAppEnv =
-  MkAppEnv <$> newTVarIO Examples.functionSpecs
+  MkAppEnv <$> newTVarIO Examples.functionSpecs <*> pure (BaseUrl Http "localhost" 5008  "") <*> newManager defaultManagerSettings

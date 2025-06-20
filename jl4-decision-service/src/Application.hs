@@ -22,6 +22,8 @@ import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
+import Network.HTTP.Client (newManager, defaultManagerSettings)
+import Servant.Client.Core (BaseUrl(..), Scheme (..))
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -42,7 +44,7 @@ opts =
 
 defaultMain :: IO ()
 defaultMain = do
-  Options{port, serverName, sourcePaths} <- execParser opts
+  Options{port, serverName, sourcePaths, crudServerName} <- execParser opts
 
   l4Files <- expandSourcePaths sourcePaths
   unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
@@ -52,8 +54,11 @@ defaultMain = do
   unless (null l4Functions) $ print $ Map.keys l4Functions
 
   dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
+  mgr <- newManager defaultManagerSettings
+  let baseUrl = maybe (BaseUrl Https "localhost" 5008"") (\(name, path) -> BaseUrl Https name 443 path) crudServerName
+  putStrLn $ "will contact crud server on following base url: " <> show baseUrl
   let
-    initialState = MkAppEnv dbRef
+    initialState = MkAppEnv dbRef baseUrl mgr
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let

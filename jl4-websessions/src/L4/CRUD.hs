@@ -23,6 +23,7 @@ import qualified Database.SQLite.Simple.ToField as SQLite
 import qualified Database.SQLite.Simple.ToRow as SQLite
 import System.Directory
 import Network.Wai.Logger (ApacheLogger, withStdoutLogger)
+import Data.Map (Map)
 
 import Servant
 import Servant.Server.Generic
@@ -54,6 +55,7 @@ data Api mode
   = MkApi
   { createSession :: mode :- ReqBody '[JSON] Text                       :> Post '[JSON] UUID
   , readSession   :: mode :- QueryParam' '[Required, Strict] "id" UUID  :> Get '[JSON] Text
+  , readFnParams  :: mode :- QueryParam' '[Required, Strict] "id" UUID  :> Get '[JSON] (Map Text Text)
   -- NOTE: all sessions are persistant once they're created
   -- and not supposed to be updated
   -- , updateSession :: mode :- ReqBody '[JSON] JL4Program                 :> PutNoContent

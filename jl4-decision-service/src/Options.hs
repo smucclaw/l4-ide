@@ -10,6 +10,7 @@ data Options = Options
   { port :: Int
   , serverName :: Maybe Text.Text
   , sourcePaths :: [FilePath]  -- New field for source files or directories
+  , crudServerName :: Maybe (String, String)
   }
 
 optionsParser :: Parser Options
@@ -39,3 +40,15 @@ optionsParser = do
               <> help "One or more files or directories containing L4 source files to expose"
           )
       )
+    <*> optional do
+      (,)
+        <$> strOption
+              ( long "crudServerName"
+                  <> metavar "CRUDSERVEr"
+                  <> help "Name of the server for sessions. When provided, assumes https"
+              )
+        <*> strOption
+              ( long "crudServerPath"
+                  <> metavar "CRUDPATH"
+                  <> help "path on the server for sessions. When provided, assumes https"
+              )
