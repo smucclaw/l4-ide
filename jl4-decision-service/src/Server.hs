@@ -57,11 +57,11 @@ import qualified Backend.Jl4 as Jl4
 import qualified Chronos
 import Control.Applicative
 import Control.Concurrent.STM
-import Control.Exception (evaluate)
+import Control.Exception (evaluate, displayException)
 import Control.Monad (forM, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Monad.Trans.Reader (ReaderT (..), asks, ask)
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
@@ -89,14 +89,26 @@ import Servant
 import System.Timeout (timeout)
 import Servant.Client.Core.HasClient
 
+import Data.UUID (UUID)
+import qualified Data.UUID as UUID
+import Servant.Client (BaseUrl, ClientError, ClientM, runClientM, mkClientEnv)
+import qualified L4.CRUD as CRUD
+import Servant.Client.Generic (genericClient)
+import Network.HTTP.Client (Manager)
+import System.IO
+import qualified Base.Text as T
+
+
 -- ----------------------------------------------------------------------------
 -- Servant API
 -- ----------------------------------------------------------------------------
 
 data AppEnv = MkAppEnv
   { functionDatabase :: TVar (Map Text ValidatedFunction)
+  , baseUrl :: BaseUrl
+  , manager :: Manager
   }
-  deriving stock (Eq, Generic)
+  deriving stock (Generic)
 
 data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
@@ -474,10 +486,29 @@ getAllFunctions = do
 
 getFunctionHandler :: String -> AppM Function
 getFunctionHandler name = do
+  let tname = Text.pack name
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
-  case Map.lookup (Text.pack name) functions of
-    Nothing -> throwError err404
+  case Map.lookup tname functions of
+    Nothing ->
+      withUUIDFunction
+        tname
+        pure
+        (throwError err404)
     Just function -> pure function.fnImpl
+
+withUUIDFunction :: Text -> (Function -> AppM a) -> AppM a -> AppM a
+withUUIDFunction muuid k err = case UUID.fromText muuid of
+  Nothing -> err
+  Just uuid -> do
+    MkAppEnv {baseUrl, manager} <- ask
+    efun <- liftIO $ sessionFunctionFromUUID uuid baseUrl manager
+    case efun of
+      Left err' -> do
+        liftIO do
+          hPutStrLn stderr "failed to retrieve function from CRUD backend"
+          hPutStrLn stderr $ displayException err'
+        err
+      Right fun -> k fun
 
 timeoutAction :: IO b -> AppM b
 timeoutAction act =
@@ -858,3 +889,27 @@ instance ToJSON BatchResponse where
 instance FromJSON BatchResponse where
   parseJSON = ACD.fromDecoder batchResponseDecoder
 
+crudAPIClient :: CRUD.Api (AsClientT ClientM)
+crudAPIClient = genericClient
+
+runCrudClient :: ClientM a -> BaseUrl -> Manager -> ExceptT ClientError IO a
+runCrudClient m crudBaseUrl mgr = ExceptT $ runClientM m $ mkClientEnv mgr crudBaseUrl
+
+readCrudUUID :: UUID -> BaseUrl -> Manager -> ExceptT ClientError IO Text
+readCrudUUID = runCrudClient . crudAPIClient.readSession
+
+mkSessionFunction :: UUID -> Parameters -> Text -> Function
+mkSessionFunction uuid parameters description =
+  Function
+    { name = T.show uuid
+    , description
+    , parameters
+    , supportedEvalBackend = [JL4]
+    }
+
+sessionFunctionFromUUID :: UUID -> BaseUrl -> Manager -> IO (Either ClientError Function)
+sessionFunctionFromUUID uuid crudBaseUrl mgr = runExceptT do
+  t <- readCrudUUID uuid crudBaseUrl mgr
+  -- TODO: can we do better here? ideally this should be extracted from the jl4 file
+  let params = MkParameters Map.empty []
+  pure $ mkSessionFunction uuid params t
