@@ -17,6 +17,7 @@ import Servant.API (FromHttpApiData (..))
 import Server
 import qualified Test.Hspec.QuickCheck as Hspec
 import Test.QuickCheck.Property
+import qualified Data.Map as Map
 
 spec :: Spec
 spec = do
@@ -95,7 +96,9 @@ instance Arbitrary SimpleResponse where
       ]
 
 instance Arbitrary Parameters where
-  arbitrary = Parameters <$> arbitrary
+  arbitrary = do
+    params <- arbitrary
+    pure $ MkParameters params (Map.keys params)
 
 instance Arbitrary Parameter where
   arbitrary = Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
