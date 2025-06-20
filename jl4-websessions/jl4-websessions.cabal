@@ -30,6 +30,7 @@ library
   build-depends:
     aeson,
     bytestring,
+    containers,
     directory,
     mtl,
     servant-server,
