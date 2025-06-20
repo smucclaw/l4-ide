@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Application (defaultMain) where
+module Application (defaultMain, app) where
 
 import Control.Concurrent.STM (newTVarIO)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -53,7 +53,7 @@ defaultMain = do
 
   dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
   let
-    initialState = DbState dbRef
+    initialState = MkAppEnv dbRef
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let
@@ -84,14 +84,14 @@ type ApiWithSwagger =
   SwaggerSchemaUI "swagger-ui" "swagger.json"
     :<|> Api
 
-appWithSwagger :: DbState -> Maybe ServerName -> Servant.Server ApiWithSwagger
+appWithSwagger :: AppEnv -> Maybe ServerName -> Servant.Server ApiWithSwagger
 appWithSwagger initialDb mServerName =
   swaggerSchemaUIServer (serverOpenApi mServerName)
     :<|> hoistServer (Proxy @Api) (nt initialDb) handler
  where
-  nt :: DbState -> AppM a -> Handler a
+  nt :: AppEnv -> AppM a -> Handler a
   nt s x = runReaderT x s
 
-app :: DbState -> Maybe ServerName -> Application
+app :: AppEnv -> Maybe ServerName -> Application
 app initialDb mServerName = do
   serve (Proxy @ApiWithSwagger) (appWithSwagger initialDb mServerName)

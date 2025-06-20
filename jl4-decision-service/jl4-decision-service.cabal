@@ -80,6 +80,7 @@ library
     optparse-applicative,
     scientific,
     servant >=0.20.2 && <0.21,
+    servant-client-core,
     servant-openapi3,
     servant-server >=0.20.2 && <0.21,
     servant-swagger-ui,
@@ -115,7 +116,9 @@ test-suite jl4-decision-service-test
   main-is: Spec.hs
   other-modules:
     Paths_jl4_decision_service
+    IntegrationSpec
     SchemaSpec
+    TestData
 
   hs-source-dirs:
     test
@@ -124,11 +127,19 @@ test-suite jl4-decision-service-test
     hspec-discover:hspec-discover
 
   build-depends:
-    QuickCheck,
+    transformers ^>=0.6.1.0,
+    string-interpolate ^>=0.3.4.0,
+    containers ^>=0.6.7,
+    stm ^>=2.5.1.0,
     base >=4.7 && <5,
     hspec,
+    http-client,
+    jl4-decision-service,
+    QuickCheck,
     quickcheck-instances,
     servant >=0.20.2 && <0.21,
+    servant-client,
     servant-openapi3,
+    servant-client-core,
     text,
-    jl4-decision-service,
+    warp,
