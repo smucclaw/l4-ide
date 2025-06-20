@@ -4,5 +4,6 @@ packages:
   ./jl4-lsp
   ./jl4-decision-service
   ./jl4-websessions
+  ./doc
 
 index-state: 2025-03-31T10:46:26Z

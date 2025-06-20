@@ -4,15 +4,6 @@ version: 0.1.0.0
 build-type: Simple
 tested-with: ghc ==9.6.6
 
--- these files usually live under the l4-ide/ directory, but pulling in files from outside is too crazy to handle.
--- the nix/jl4-decision-service/package.nix will vendor those files into the build under jl4-decision-service/
--- and then the files will be accessible, hopefully, via --sourcePaths.
-
-data-files:
-    jl4/experiments/*.l4
-    jl4/experiments/*.yaml
-    doc/tutorial-code/*.l4
-    doc/tutorial-code/*.yaml
 
 source-repository head
   type: git
@@ -86,7 +77,9 @@ library
     extra,
     directory,
     filepath,
+    jl4,
     jl4-core,
+    jl4-doc,
     jl4-lsp,
     lens,
     lsp-types,

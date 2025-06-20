@@ -4,6 +4,10 @@ version: 0.1
 build-type: Simple
 tested-with: GHC==9.6.6
 
+data-files:
+  experiments/*.l4
+  experiments/*.yaml
+
 common defaults
   default-language: GHC2021
   ghc-options: -Wall -Wderiving-typeable -Wunused-packages -Werror
@@ -21,6 +25,16 @@ common defaults
     LambdaCase
     -- This is annoying with fourmolu
     NoImportQualifiedPost
+  build-depends:
+    base
+
+library
+  import: defaults
+  hs-source-dirs: src
+  exposed-modules:
+    Paths_jl4
+  autogen-modules:
+    Paths_jl4
   build-depends:
     base
 

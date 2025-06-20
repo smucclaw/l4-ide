@@ -6,8 +6,11 @@
 module Application (defaultMain) where
 
 import Control.Concurrent.STM (newTVarIO)
+import Control.Applicative (Alternative(..), (<|>))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad (unless)
+import Data.Foldable (asum)
+import System.IO.Error (catchIOError)
 import qualified Examples
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -22,7 +25,9 @@ import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
-import Paths_jl4_decision_service ( getDataFileName ) -- deployment environment relies on cabal's data-files facility, rather than direct access to source dir
+import qualified Paths_jl4_decision_service as DS
+import qualified Paths_jl4 as J
+import qualified Paths_jl4_doc as Doc
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -72,9 +77,24 @@ expandSourcePaths paths = do
   files <- concat <$> mapM expandPath paths
   return $ filter (\f -> takeExtension f == ".l4") files
 
+-- | Try to find a file using all available Paths modules
+allGetDataFileName :: FilePath -> IO FilePath
+allGetDataFileName path = 
+  -- Helper to catch IO errors and return empty (which is the identity for <|>)
+  let tryPath getPath = 
+        getPath path `catchIOError` const empty
+  in
+  -- Try each path-finding function in sequence, with the original path as fallback
+  asum [
+    tryPath DS.getDataFileName,
+    tryPath J.getDataFileName,
+    tryPath Doc.getDataFileName, 
+    pure path  -- Fallback to original path if all attempts fail
+  ]
+
 expandPath :: FilePath -> IO [FilePath]
 expandPath origPath = do
-  path <- getDataFileName origPath
+  path <- allGetDataFileName origPath
   isDir <- doesDirectoryExist path
   if isDir
     then do
