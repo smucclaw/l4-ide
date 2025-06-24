@@ -6,9 +6,10 @@
 module Examples (functionSpecs, loadL4File, loadL4Functions) where
 
 import Backend.Jl4 as Jl4
+import Control.Monad (unless, when)
 import Control.Monad.Trans.Except
-import Control.Monad (when, unless)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (catMaybes)
 import Data.String.Interpolate
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -16,16 +17,17 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
 import Server
-import System.FilePath (replaceExtension, takeBaseName)
 import System.Directory (doesFileExist)
-import Data.Maybe (catMaybes)
+import System.FilePath (replaceExtension, takeBaseName)
+
 -- ----------------------------------------------------------------------------
 -- load example L4 files and descriptions from disk.
 -- ----------------------------------------------------------------------------
 
 loadL4File :: FilePath -> IO (Maybe (Text, Text, Function))
 loadL4File path = do
-  let yamlPath = replaceExtension path ".yaml"
+  let
+    yamlPath = replaceExtension path ".yaml"
   yamlExists <- doesFileExist yamlPath
   if not yamlExists
     then return Nothing
@@ -39,7 +41,8 @@ loadL4File path = do
           print err
           return Nothing
         Right (fnDecl :: Function) -> do
-          let fnDeclWithName = if T.null (fnDecl.name) then fnDecl { name = T.pack $ takeBaseName path } else fnDecl
+          let
+            fnDeclWithName = if T.null (fnDecl.name) then fnDecl{name = T.pack $ takeBaseName path} else fnDecl
           print fnDeclWithName
           return (Just (fnDecl.name, content, fnDeclWithName))
 
@@ -47,16 +50,14 @@ loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction)
 loadL4Functions paths = do
   files <- mapM loadL4File paths
   when (null paths) $ do
-     putStrLn "* to load L4 functions from disk, run with --sourcePaths"
-     putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
-     putStrLn "  each .l4 file needs a matching .yaml definition"
+    putStrLn "* to load L4 functions from disk, run with --sourcePaths"
+    putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
+    putStrLn "  each .l4 file needs a matching .yaml definition"
   unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
   let
     validFiles = catMaybes files
     functions = Map.fromList [(name, createValidatedFunction name content fn) | (name, content, fn) <- validFiles]
   return functions
-
-
 
 createValidatedFunction :: Text -> Text -> Function -> ValidatedFunction
 createValidatedFunction _filename content fnDecl =
@@ -101,13 +102,16 @@ personQualifiesFunction = do
                   or a Boolean answer with optional explanation summary.
                 |]
         , parameters =
-            Parameters $
-              Map.fromList
-                [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?")
-                , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?")
-                , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?")
-                ]
-        , supportedEvalBackend = []
+            MkParameters
+              { parameters =
+                  Map.fromList
+                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?")
+                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?")
+                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?")
+                    ]
+              , required = ["walks", "eats", "drinks"]
+              }
+        , supportedEvalBackend = [JL4]
         }
   pure $
     ValidatedFunction
@@ -134,20 +138,26 @@ rodentsAndVerminFunction = do
                     a household appliance, swimming pool or plumbing, heating or air conditioning system
                   |]
         , parameters =
-            Parameters $
-              Map.fromList
-                [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?")
-                , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?")
-                , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?")
-                , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?")
-                , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?")
-                , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss")
-                , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?")
-                , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?")
-                , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?")
-                , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?")
-                ]
-        , supportedEvalBackend = []
+            let
+              params =
+                Map.fromList
+                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?")
+                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?")
+                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?")
+                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?")
+                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?")
+                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss")
+                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?")
+                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?")
+                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?")
+                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?")
+                  ]
+            in
+              MkParameters
+                { parameters = params
+                , required = Map.keys params
+                }
+        , supportedEvalBackend = [JL4]
         }
   pure $
     ValidatedFunction

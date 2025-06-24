@@ -2,7 +2,6 @@ module L4.Print where
 
 import Base
 import qualified Base.Text as Text
-import L4.Evaluate.Value as Eager
 import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
@@ -17,7 +16,16 @@ import L4.Desugar
 import Control.Category ((>>>))
 
 prettyLayout :: LayoutPrinter a => a -> Text
-prettyLayout a = renderStrict $ layoutPretty (LayoutOptions Unbounded) $ printWithLayout a
+prettyLayout a = docText $ printWithLayout a
+
+docText :: Doc ann -> Text
+docText = renderStrict . layoutPretty (LayoutOptions Unbounded)
+
+-- | Hack to get the lines of a document as 'Doc'. Used for the trace printer
+-- and in situations where we need to prefix all the lines with something else.
+--
+docLines :: Doc ann -> [Doc ann]
+docLines = fmap pretty . Text.lines . docText
 
 prettyLayout' :: LayoutPrinter a => a -> String
 prettyLayout' = Text.unpack . prettyLayout
@@ -172,10 +180,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
   printWithLayout = \ case
-    StrictEval _ e ->
-      "#SEVAL" <+> printWithLayout e
     LazyEval _ e ->
       "#EVAL" <+> printWithLayout e
+    LazyEvalTrace _ e ->
+      "#EVALTRACE" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
@@ -385,31 +393,6 @@ instance LayoutPrinterWithName a => LayoutPrinter (NlgFragment a) where
     MkNlgText _ t -> pretty t
     MkNlgRef  _ n -> "%" <> printWithLayout n <> "%"
 
-instance LayoutPrinter Eager.Value where
-  printWithLayout = \ case
-    Eager.ValNumber i               -> pretty (prettyRatio i)
-    Eager.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
-    Eager.ValList vs                ->
-      "LIST" <+> hsep (punctuate comma (fmap parensIfNeeded vs))
-    Eager.ValClosure{}              -> "<function>"
-    Eager.ValUnaryBuiltinFun {}     -> "<builtin-function>"
-    Eager.ValBinaryBuiltinFun{}     -> "<function>"
-    Eager.ValAssumed r              -> printWithLayout r
-    Eager.ValUnappliedConstructor r -> printWithLayout r
-    Eager.ValConstructor r vs       -> printWithLayout r <> case vs of
-      [] -> mempty
-      vals@(_:_) -> space <> "OF" <+> hsep (punctuate comma (fmap parensIfNeeded vals))
-
-  parensIfNeeded :: Eager.Value -> Doc ann
-  parensIfNeeded v = case v of
-    Eager.ValNumber{}               -> printWithLayout v
-    Eager.ValString{}               -> printWithLayout v
-    Eager.ValClosure{}              -> printWithLayout v
-    Eager.ValUnappliedConstructor{} -> printWithLayout v
-    Eager.ValAssumed{}              -> printWithLayout v
-    Eager.ValConstructor r []       -> printWithLayout r
-    _ -> surround (printWithLayout v) "(" ")"
-
 instance (LayoutPrinter a, LayoutPrinter b) => LayoutPrinter (Either a b) where
   printWithLayout = either printWithLayout printWithLayout
 
@@ -485,14 +468,14 @@ instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
 
 instance LayoutPrinter Lazy.NF where
   printWithLayout = \ case
-    Lazy.ToDeep -> "..."
+    Lazy.Omitted -> "..."
     Lazy.MkNF (ValCons v1 v2) -> "LIST" <+> printList v1 v2
     Lazy.MkNF v -> printWithLayout v
     where
       printList v1 (Lazy.MkNF (ValNil))                          = printWithLayout v1
       printList v1 (Lazy.MkNF (ValCons v2 v3))                   = printWithLayout v1 <> comma <+> printList v2 v3
-      printList Lazy.ToDeep Lazy.ToDeep                          = "..."
-      printList v1 Lazy.ToDeep                                   = printWithLayout v1 <> comma <+> "..."
+      printList Lazy.Omitted Lazy.Omitted                        = "..."
+      printList v1 Lazy.Omitted                                  = printWithLayout v1 <> comma <+> "..."
       printList v1 v                                             = printWithLayout v1 <> comma <+> printWithLayout v -- fallback, should not happen
 
   parensIfNeeded :: Lazy.NF -> Doc ann

@@ -12,7 +12,6 @@ import L4.TypeCheck.With
 import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
-import Data.Bifunctor
 import qualified Data.Map.Strict as Map
 import qualified Generics.SOP as SOP
 import Optics.Core (gplate, traverseOf, (%), (?~))

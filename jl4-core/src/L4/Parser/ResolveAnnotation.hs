@@ -172,12 +172,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Assume n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
   addNlg a = extendNlgA a $ case a of
-    StrictEval ann e -> do
-      e' <- addNlg e
-      pure $ StrictEval ann e'
     LazyEval ann e -> do
       e' <- addNlg e
       pure $ LazyEval ann e'
+    LazyEvalTrace ann e -> do
+      e' <- addNlg e
+      pure $ LazyEvalTrace ann e'
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'

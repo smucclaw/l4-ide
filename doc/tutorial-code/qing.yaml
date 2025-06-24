@@ -9,6 +9,7 @@ function:
       c:
         type: "string"
         description: A Colour
-    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    required:
+      - "c"
   supportedBackends:
     - "jl4"

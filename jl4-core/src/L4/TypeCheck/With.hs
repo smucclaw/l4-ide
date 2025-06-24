@@ -12,7 +12,6 @@ module L4.TypeCheck.With where
 import Base
 
 import Control.Monad.Logic
-import Data.Bifunctor
 
 data With e a =
     With e (With e a)

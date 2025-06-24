@@ -7,8 +7,6 @@ module LSP.L4.Rules where
 import Base hiding (use)
 import L4.Annotation
 import L4.Citations
-import L4.Evaluate
-import qualified L4.Evaluate as Evaluate
 import qualified L4.Evaluate.ValueLazy as EvaluateLazy
 import qualified L4.EvaluateLazy as EvaluateLazy
 import qualified L4.ExactPrint as ExactPrint
@@ -142,18 +140,8 @@ instance NFData TypeCheckResult where
     `seq` rnf infos
     `seq` rnf dependencies
 
-type instance RuleResult Evaluate = [Evaluate.EvalDirectiveResult]
-data Evaluate = Evaluate
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
-
 type instance RuleResult EvaluateLazy = [EvaluateLazy.EvalDirectiveResult]
 data EvaluateLazy = EvaluateLazy
-  deriving stock (Generic, Show, Eq)
-  deriving anyclass (NFData, Hashable)
-
-type instance RuleResult GetEvaluationDependencies = Evaluate.EvalState
-data GetEvaluationDependencies = GetEvaluationDependencies
   deriving stock (Generic, Show, Eq)
   deriving anyclass (NFData, Hashable)
 
@@ -436,18 +424,6 @@ jl4Rules rootDirectory recorder = do
       then pure ([], Just typeCheckResult)
       else pure ([], Nothing)
 
-  defineWithCallStack shakeRecorder $ \GetEvaluationDependencies cs f -> do
-    imports <- use_  GetImports f
-    tcRes   <- use_  SuccessfulTypeCheck f
-    -- TODO: when checking for cycles, we should check which one is the
-    -- first element in the cycle that is, i.e. which IMPORT, then scan
-    -- for the IMPORT again and
-    -- put the diagnostic on that IMPORT
-    deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetEvaluationDependencies) $ map (.moduleUri) imports
-    let environment = Evaluate.unionEnvironments $ map (.environment) deps
-        own = execEvalModuleWithEnv environment tcRes.module'
-    pure ([], Just own)
-
   defineWithCallStack shakeRecorder $ \GetLazyEvaluationDependencies cs f -> do
     imports <- use_  GetImports f
     tcRes   <- use_  SuccessfulTypeCheck f
@@ -459,11 +435,6 @@ jl4Rules rootDirectory recorder = do
     let environment = mconcat (fst <$> deps)
     (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv environment tcRes.module')
     pure ([], Just (ownEnv <> environment, ownDirectives))
-
-  define shakeRecorder $ \Evaluate uri -> do
-    res  <- use_ (AttachCallStack [uri] GetEvaluationDependencies) uri
-    let results = res.directiveResults
-    pure (mkSimpleFileDiagnostic uri . evalResultToDiagnostic <$> results, Just results)
 
   define shakeRecorder $ \EvaluateLazy uri -> do
     res  <- use_ (AttachCallStack [uri] GetLazyEvaluationDependencies) uri
@@ -646,29 +617,15 @@ jl4Rules rootDirectory recorder = do
         , _data_ = Nothing
         }
 
-    evalResultToDiagnostic :: EvalDirectiveResult -> Diagnostic
-    evalResultToDiagnostic (MkEvalDirectiveResult range res _trace) = do
-      Diagnostic
-        { _range = srcRangeToLspRange (Just range)
-        , _severity = Just LSP.DiagnosticSeverity_Information
-        , _code = Nothing
-        , _codeDescription = Nothing
-        , _source = Just "eval"
-        , _message = either (Text.unlines . prettyEvalException) Print.prettyLayout res
-        , _tags = Nothing
-        , _relatedInformation = Nothing
-        , _data_ = Nothing
-        }
-
     evalLazyResultToDiagnostic :: EvaluateLazy.EvalDirectiveResult -> Diagnostic
-    evalLazyResultToDiagnostic (EvaluateLazy.MkEvalDirectiveResult range res) = do
+    evalLazyResultToDiagnostic r@(EvaluateLazy.MkEvalDirectiveResult range _res _mtrace) = do
       Diagnostic
         { _range = srcRangeToLspRange range
         , _severity = Just LSP.DiagnosticSeverity_Information
         , _code = Nothing
         , _codeDescription = Nothing
         , _source = Just "eval"
-        , _message = either (Text.unlines . EvaluateLazy.prettyEvalException) Print.prettyLayout res
+        , _message = EvaluateLazy.prettyEvalDirectiveResult r
         , _tags = Nothing
         , _relatedInformation = Nothing
         , _data_ = Nothing

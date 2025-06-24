@@ -7,7 +7,7 @@
 module Server (
   -- * AppM
   AppM,
-  DbState (..),
+  AppEnv (..),
   ValidatedFunction (..),
 
   -- * Servant
@@ -87,12 +87,13 @@ import GHC.Generics
 import GHC.TypeLits
 import Servant
 import System.Timeout (timeout)
+import Servant.Client.Core.HasClient
 
 -- ----------------------------------------------------------------------------
 -- Servant API
 -- ----------------------------------------------------------------------------
 
-data DbState = DbState
+data AppEnv = MkAppEnv
   { functionDatabase :: TVar (Map Text ValidatedFunction)
   }
   deriving stock (Eq, Generic)
@@ -103,8 +104,7 @@ data ValidatedFunction = ValidatedFunction
   }
   deriving stock (Generic)
 
-type AppM = ReaderT DbState Handler
-
+type AppM = ReaderT AppEnv Handler
 type Api = NamedRoutes FunctionApi'
 type FunctionApi = NamedRoutes FunctionApi'
 
@@ -196,8 +196,9 @@ data FunctionImplementation = FunctionImplementation
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
-newtype Parameters = Parameters
-  { getParameters :: Map Text Parameter
+data Parameters = MkParameters
+  { parameters :: Map Text Parameter
+  , required :: [Text]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -248,6 +249,13 @@ instance (HasServer api ctx) => HasServer (OperationId desc :> api) ctx where
 
   route _ = route (Proxy :: Proxy api)
   hoistServerWithContext _ pc nt s = hoistServerWithContext (Proxy :: Proxy api) pc nt s
+
+instance HasClient m api => HasClient m (OperationId desc :> api) where
+  type Client m (OperationId desc :> api) = Client m api
+
+  clientWithRoute pm _ = clientWithRoute pm (Proxy :: Proxy api)
+
+  hoistClientMonad pm _ f cl = hoistClientMonad pm (Proxy :: Proxy api) f cl
 
 -- ----------------------------------------------------------------------------
 -- Web Service Handlers
@@ -575,19 +583,19 @@ instance FromJSON FunctionImplementation where
       <*> o .: "implementation"
 
 instance ToJSON Parameters where
-  toJSON (Parameters props) =
+  toJSON (MkParameters props reqProps) =
     Aeson.object
       [ "type" .= Aeson.String "object"
       , "properties" .= props
-      , "required" .= Map.keys props
+      , "required" .= reqProps
       ]
 
 instance FromJSON Parameters where
   parseJSON = Aeson.withObject "Parameters" $ \o -> do
     _ :: Text <- o .: "type"
     props <- o .: "properties"
-    _ :: Text <- o .: "required"
-    pure $ Parameters props
+    reqProps <- o .: "required"
+    pure $ MkParameters props reqProps
 
 instance ToJSON Parameter where
   toJSON p =
@@ -630,7 +638,7 @@ toDecl fn =
   Api.FunctionDeclaration
     { Api.name = fn.name
     , Api.description = fn.description
-    , Api.longNames = Map.keysSet $ fn.parameters.getParameters
+    , Api.longNames = Map.keysSet $ fn.parameters.parameters
     , Api.nameMapping = shortToLongNameMapping
     }
  where
@@ -638,7 +646,7 @@ toDecl fn =
   shortToLongNameMapping =
     Map.fromList $
       Maybe.mapMaybe (fmap Tuple.swap . Tuple.secondM (.parameterAlias)) $
-        Map.assocs fn.parameters.getParameters
+        Map.assocs fn.parameters.parameters
 
 -- ----------------------------------------------------------------------------
 -- Oracle DB
@@ -849,3 +857,4 @@ instance ToJSON BatchResponse where
 
 instance FromJSON BatchResponse where
   parseJSON = ACD.fromDecoder batchResponseDecoder
+

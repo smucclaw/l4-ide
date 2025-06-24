@@ -51,8 +51,8 @@ data AnnoType
   deriving anyclass (ToExpr, NFData)
 
 data TDirectives
-  = TStrictEvalDirective
-  | TLazyEvalDirective
+  = TLazyEvalDirective
+  | TLazyEvalTraceDirective
   | TCheckDirective
   | TContractDirective
   deriving stock (Eq, Generic, Ord, Show)
@@ -60,10 +60,10 @@ data TDirectives
 
 directives :: Map Text TDirectives
 directives = Map.fromList
-  [ ("SEVAL", TStrictEvalDirective)
-  , ("EVAL" , TLazyEvalDirective)
-  , ("CHECK", TCheckDirective)
-  , ("TRACE", TContractDirective)
+  [ ("EVALTRACE", TLazyEvalTraceDirective)
+  , ("EVAL"     , TLazyEvalDirective)
+  , ("CHECK"    , TCheckDirective)
+  , ("TRACE"    , TContractDirective)
   ]
 
 data TAnnotations
@@ -403,7 +403,9 @@ quoted =
 directiveLiteral :: Lexer TDirectives
 directiveLiteral = do
   _herald <- "#"
-  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toList directives
+  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toDescList directives
+    -- we use toDescList to make sure that longer tokens with common prefixes
+    -- appear before shorter ones, in particular EVALTRACE before EVAL
 
 integerLiteral :: Lexer (Text, Integer)
 integerLiteral =

@@ -4,11 +4,9 @@ module Main (main) where
 import Base
 import Control.Monad.Trans.Maybe
 import qualified L4.Annotation as JL4
-import qualified L4.Evaluate as JL4
 import qualified L4.EvaluateLazy as JL4Lazy
 import qualified L4.Nlg as Nlg
 import qualified L4.Parser.SrcSpan as JL4
-import qualified L4.Print as Print
 import L4.Syntax
 import qualified L4.TypeCheck as JL4
 
@@ -16,7 +14,6 @@ import qualified Paths_jl4
 import qualified Paths_jl4_core
 
 import qualified Base.Text as Text
-import qualified Data.List as List
 import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
@@ -149,12 +146,9 @@ checkFile isOk file = do
       _        <- lift   $ Shake.addVirtualFileFromFS nfp
       _        <- MaybeT $ Shake.use GetParsedAst uri        <* liftIO (Text.putStrLn "Parsing successful")
       checked  <- MaybeT $ Shake.use SuccessfulTypeCheck uri <* liftIO (Text.putStrLn "Typechecking successful")
-      results  <- MaybeT $ Shake.use Evaluate uri
-      when (not (null results)) $ liftIO $ Text.putStrLn "Eager evaluation successful"
       results' <- MaybeT $ Shake.use EvaluateLazy uri
       when (not (null results')) $ liftIO $ Text.putStrLn "Evaluation successful"
       let msgs  =    map typeErrorToMessage checked.infos
-                  <> map evalDirectiveResultToMessage results
                   <> map evalLazyDirectiveResultToMessage results'
           formatted = foldMap (sanitizeFilePaths . renderMessage) $ sortOn fst msgs
       liftIO $ Text.putStr formatted
@@ -165,8 +159,8 @@ checkFile isOk file = do
 
  where
   typeErrorToMessage err = (JL4.rangeOf err, JL4.prettyCheckErrorWithContext err)
-  evalDirectiveResultToMessage (JL4.MkEvalDirectiveResult r res _) = (Just r, either JL4.prettyEvalException (List.singleton . Print.prettyLayout) res)
-  evalLazyDirectiveResultToMessage (JL4Lazy.MkEvalDirectiveResult r res) = (r, either JL4Lazy.prettyEvalException (List.singleton . Print.prettyLayout) res)
+  evalLazyDirectiveResultToMessage res@(JL4Lazy.MkEvalDirectiveResult r _ _) =
+    (r, Text.lines (JL4Lazy.prettyEvalDirectiveResult res))
   renderMessage (r, txt) = cliErrorMessage r txt
 
 cliErrorMessage :: Maybe JL4.SrcRange -> [Text] -> Text

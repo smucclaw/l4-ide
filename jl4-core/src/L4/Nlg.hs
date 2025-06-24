@@ -254,8 +254,8 @@ instance Linearize (Event Resolved) where
 
 instance Linearize (Directive Resolved) where
   linearize = \ case
-    StrictEval _ e -> linearize e
     LazyEval _ e -> linearize e
+    LazyEvalTrace _ e -> linearize e
     Check _ e -> linearize e
     Contract _ e t es -> hcat $
       [ "executing contract", lin e, "at", lin t, "with the following events: " ]
