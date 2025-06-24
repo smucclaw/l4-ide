@@ -1,0 +1,27 @@
+-- This is a test case for #330.
+
+const x y MEANS x
+
+DECLARE NaturalPerson HAS
+  name IS A STRING
+  birthPlace IS A STRING
+
+betty MEANS
+  NaturalPerson WITH
+    name       IS
+      const "Betty" "Michael"
+    birthPlace IS "France"
+
+charlie MEANS NaturalPerson WITH
+  name IS "Charlie"
+  birthPlace IS "France"
+
+david MEANS NaturalPerson WITH  name IS "David"
+                                birthPlace IS "France"
+
+-- The following is weird, but also allowed; basically the , partially disables the
+-- layout parsing for the next field.
+emily MEANS NaturalPerson WITH
+  name IS "Emily",
+       birthPlace
+    IS "France"
