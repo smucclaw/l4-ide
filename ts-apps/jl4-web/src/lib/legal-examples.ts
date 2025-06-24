@@ -1,6 +1,7 @@
-// Load all .l4 files from the static examples directory at build time
-const legalExampleFiles = import.meta.glob('/static/examples/*.l4', {
-  as: 'raw',
+// Load all .l4 files from the src examples directory at build time
+const legalExampleFiles = import.meta.glob('/src/examples/*.l4', {
+  query: '?raw',
+  import: 'default',
   eager: true,
 })
 

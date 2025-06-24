@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const sourceDir = resolve(__dirname, '../../../jl4/examples/legal')
-const targetDir = resolve(__dirname, '../static/examples')
+const targetDir = resolve(__dirname, '../src/examples')
 
 if (DEBUG) {
   console.log('Debug: Current directory:', process.cwd())
@@ -40,4 +40,4 @@ files.forEach((file) => {
   copyFileSync(sourcePath, targetPath)
 })
 
-console.log(`✓ Copied ${files.length} example files to static/examples/`)
+console.log(`✓ Copied ${files.length} example files to src/examples/`)

@@ -44,7 +44,7 @@ build
 dist
 */vscode/static/webview/
 **/.svelte-kit/
-ts-apps/jl4-web/static/examples/
+ts-apps/jl4-web/src/examples/
 
 
 ## Built Visual Studio Code Extensions
