@@ -46,7 +46,7 @@
 
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
-  let showExamples = $state(true)
+  let showExamples = $state(false)
 
   /***********************************
         UI-related vars
@@ -152,7 +152,7 @@
 
       const ownUrl: URL = new URL(window.location.href)
       showVisualizer = !ownUrl.searchParams.has('no-visualizer')
-      showExamples = !ownUrl.searchParams.has('no-examples')
+      showExamples = !ownUrl.searchParams.has('show-examples')
 
       await initServices(
         {
@@ -453,7 +453,7 @@
   }
 
   function handleExampleSelect(example: LegalExample) {
-    if (editor) {
+    if (showExamples && editor) {
       editor.setValue(example.content)
     }
   }
