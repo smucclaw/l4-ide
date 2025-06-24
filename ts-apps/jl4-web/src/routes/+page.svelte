@@ -46,6 +46,7 @@
 
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
+  let showExamples = $state(true)
 
   /***********************************
         UI-related vars
@@ -151,6 +152,7 @@
 
       const ownUrl: URL = new URL(window.location.href)
       showVisualizer = !ownUrl.searchParams.has('no-visualizer')
+      showExamples = !ownUrl.searchParams.has('no-examples')
 
       await initServices(
         {
@@ -459,10 +461,12 @@
 
 {#if showVisualizer}
   <Resizable.PaneGroup direction="horizontal">
+    {#if showExamples}
     <Resizable.Pane defaultSize={20}>
       <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
     </Resizable.Pane>
     <Resizable.Handle />
+    {/if}
     <Resizable.Pane defaultSize={40}>
       <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
     </Resizable.Pane>
