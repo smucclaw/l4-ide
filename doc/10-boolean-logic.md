@@ -1,9 +1,7 @@
 # Boolean Logic
 
 `TRUE` and `FALSE` values are combined using the operators `AND`, `OR`,
-`NOT`, `ANY`, `ALL`.
-
-Logical implication as a special case of syntax.
+`NOT`, and `IMPLIES`.
 
 ## Example: XOR Function
 
