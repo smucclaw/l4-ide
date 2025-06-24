@@ -18,6 +18,6 @@ function:
       phase_of_moon:
         type: "string"
         description: "Current phase of the moon. Possible values are: new moon, waxing crescent, first quarter, waxing gibbous, full moon, waning gibbous, third quarter, waning crescent"
-    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    required: ["day_of_week", "is_public_holiday", "current_weather", "phase_of_moon"]
   supportedBackends:
     - "jl4"
