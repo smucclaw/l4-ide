@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const sourceDir = resolve(__dirname, '../../../jl4/examples/legal')
-const targetDir = resolve(__dirname, '../src/examples')
+const targetDir = resolve(__dirname, '../src/generated')
 
 if (DEBUG) {
   console.log('Debug: Current directory:', process.cwd())
