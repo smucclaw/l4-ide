@@ -18,6 +18,9 @@
   import { LadderApiForMonaco } from '$lib/ladder-api-for-monaco'
   import { MonacoErrorLens } from '@ym-han/monaco-error-lens'
 
+  import { defaultExample, type LegalExample } from '$lib/legal-examples'
+  import ExampleSelector from '$lib/components/example-selector.svelte'
+
   import {
     LadderFlow,
     LirContext,
@@ -192,7 +195,7 @@
       })
 
       editor = monaco.editor.create(editorElement, {
-        value: britishCitizen,
+        value: defaultExample.content,
         language: 'jl4',
         automaticLayout: true,
         wordBasedSuggestions: 'off',
@@ -447,40 +450,23 @@
     }
   }
 
-  const britishCitizen = `§ \`Assumptions\`
-
-ASSUME Person IS A TYPE
-ASSUME \`mother of\` IS A FUNCTION FROM Person TO Person
-ASSUME \`father of\` IS A FUNCTION FROM Person TO Person
-
-ASSUME \`is born in the United Kingdom after commencement\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is born in a qualifying territory after the appointed day\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is settled in the United Kingdom\` IS A FUNCTION FROM Person TO BOOLEAN
-ASSUME \`is settled in the qualifying territory in which the person is born\` IS A FUNCTION FROM Person TO BOOLEAN
-
-§ \`The British Citizen Act\`
-
-\`for father or mother of\` person property MEANS
-      property OF \`father of\` person
-   OR property OF \`mother of\` person
-
-GIVEN p IS A Person
-GIVETH A BOOLEAN
-DECIDE \`is a British citizen (variant)\` IS
-         \`is born in the United Kingdom after commencement\` p
-      OR \`is born in a qualifying territory after the appointed day\` p
-  AND -- when the person is born ...
-         \`for father or mother of\` p \`is a British citizen (variant)\`
-      OR \`for father or mother of\` p \`is settled in the United Kingdom\`
-      OR \`for father or mother of\` p \`is settled in the qualifying territory in which the person is born\``
+  function handleExampleSelect(example: LegalExample) {
+    if (editor) {
+      editor.setValue(example.content)
+    }
+  }
 </script>
 
 {#if showVisualizer}
   <Resizable.PaneGroup direction="horizontal">
-    <Resizable.Pane defaultSize={60}>
+    <Resizable.Pane defaultSize={20}>
+      <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
+    </Resizable.Pane>
+    <Resizable.Handle />
+    <Resizable.Pane defaultSize={40}>
       <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
     </Resizable.Pane>
-    <Resizable.Handle style="width: 10px;" />
+    <Resizable.Handle />
     <Resizable.Pane>
       <div class="relative h-full">
         <div id="persist-ui" class="absolute items-center gap-2 m-4">
