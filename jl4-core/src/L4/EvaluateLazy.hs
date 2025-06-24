@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 module L4.EvaluateLazy
 ( EvalDirectiveResult (..)
+, EvalDirectiveValue(..)
 , execEvalModuleWithEnv
 , execEvalExprInContextOfModule
 , prettyEvalException
@@ -215,7 +216,7 @@ runConfig = \ case
 -- | Evaluate an EVAL directive. For this, we evaluate to normal form,
 -- not just WHNF.
 nfDirective :: EvalDirective -> Eval EvalDirectiveResult
-nfDirective (MkEvalDirective r traced expr env) = do
+nfDirective (MkEvalDirective r traced isAssert expr env) = do
   (v, mt) <-
     if traced
       then second Just <$> do
@@ -225,8 +226,16 @@ nfDirective (MkEvalDirective r traced expr env) = do
       else fmap (, Nothing) $ tryEval $ do
         whnf <- runConfig $ ForwardMachine env expr
         nf whnf
-  let finalTrace = postprocessTrace <$> mt
-  pure (MkEvalDirectiveResult r v finalTrace)
+  let
+    finalTrace = postprocessTrace <$> mt
+    v' =
+      if isAssert
+        then Assertion
+          case v of
+            Right (MkNF nf') | Just True <- boolView nf' -> True
+            _                                            -> False
+        else Reduction v
+  pure (MkEvalDirectiveResult r v' finalTrace)
 
 postprocessTrace :: [EvalTraceAction] -> EvalTrace
 postprocessTrace actions =
@@ -244,18 +253,30 @@ postprocessTrace actions =
 data EvalDirectiveResult =
   MkEvalDirectiveResult
     { range  :: Maybe SrcRange -- ^ of the (L)EVAL / PROVISION directive
-    , result :: Either EvalException NF
+    , result :: EvalDirectiveValue
     , trace  :: Maybe EvalTrace
     }
   deriving stock (Generic, Show)
   deriving anyclass NFData
+
+data EvalDirectiveValue =
+    Assertion Bool
+  | Reduction (Either EvalException NF)
+  deriving stock (Generic, Show)
+  deriving anyclass NFData
+
+prettyEvalDirectiveValue :: EvalDirectiveValue -> Text
+prettyEvalDirectiveValue (Assertion True)       = "assertion satisfied"
+prettyEvalDirectiveValue (Assertion False)      = "assertion failed"
+prettyEvalDirectiveValue (Reduction (Left exc)) = Text.unlines (prettyEvalException exc)
+prettyEvalDirectiveValue (Reduction (Right v))  = prettyLayout v
 
 -- | Prints the results but not the range of an eval directive, including
 -- the trace if present.
 --
 prettyEvalDirectiveResult :: EvalDirectiveResult -> Text
 prettyEvalDirectiveResult (MkEvalDirectiveResult _range res mtrace) =
-   either (Text.unlines . prettyEvalException) prettyLayout res
+   prettyEvalDirectiveValue res
    <> case mtrace of
         Nothing -> Text.empty
         Just t  -> "\n─────\n" <> prettyLayout t

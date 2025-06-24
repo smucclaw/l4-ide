@@ -965,13 +965,15 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False expr env]
+  pure [MkEvalDirective (rangeOf ann) False False expr env]
 evalDirective env (LazyEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True expr env]
+  pure [MkEvalDirective (rangeOf ann) True False expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
+evalDirective env (Assert ann expr) =
+  pure [MkEvalDirective (rangeOf ann) False True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
@@ -1129,10 +1131,11 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range :: Maybe SrcRange -- ^ of the (L)EVAL directive
-    , trace :: !Bool -- ^ whether a trace is wanted
-    , expr  :: !(Expr Resolved) -- ^ expression to evaluate
-    , env   :: !Environment -- ^ environment to evaluate the expression in
+    { range    :: Maybe SrcRange -- ^ of the (L)EVAL directive
+    , trace    :: !Bool -- ^ whether a trace is wanted
+    , isAssert :: !Bool -- ^ whether it is to be treated as an assertion
+    , expr     :: !(Expr Resolved) -- ^ expression to evaluate
+    , env      :: !Environment -- ^ environment to evaluate the expression in
     }
   deriving stock (Generic, Show)
 

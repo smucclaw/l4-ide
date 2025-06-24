@@ -456,6 +456,9 @@ directive =
           <*> annoHole expr
           <* annoLexeme (spacedKeyword_ TKWith)
           <*> contractEvents
+      , Assert emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirectives TAssertDirective))
+          <*> annoHole expr
       ]
 
 contractEvents :: AnnoParser [Expr Name]
