@@ -15,7 +15,7 @@ is called `BOOLEAN`.
 ## Strings
 
 Strings are quoted using double-quotes: `"Alice Avocado"` is a string.
-(Note that `` `Alice Avocado` `` is *not* a string, it is an identifer
+(Note that `` `Alice Avocado` `` is _not_ a string, it is an identifer
 with a compound name, and if used, its meaning must be defined somewhere
 in the program.)
 The type of strings is called `STRING`.
@@ -33,6 +33,7 @@ are examples of valid numbers.
 ## Enumerations, or Enums
 
 An enumeration type can be declared as follows:
+
 ```l4
 DECLARE Colour IS ONE OF red
                          green
@@ -107,6 +108,7 @@ alice MEANS
 
 If using `WITH ... IS ...` syntax, argument order is flexible, so you could
 also define:
+
 ```l4
 bob MEANS
   Person WITH age  IS 20

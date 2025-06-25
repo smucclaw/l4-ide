@@ -15,5 +15,6 @@ pkgs.mkShell {
     pkgs.typescript
     pkgs.nixos-anywhere
     pkgs.sqlite
+    pkgs.prettier
   ];
 }
