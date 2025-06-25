@@ -1,4 +1,5 @@
-module Backend.Jl4 (createFunction) where
+{-# LANGUAGE ViewPatterns #-}
+module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -25,6 +26,19 @@ import System.FilePath ((<.>))
 
 import Backend.Api
 
+buildFunDecide :: Text -> FunctionDeclaration -> ExceptT EvaluatorError IO (Decide Resolved)
+buildFunDecide fnImpl fnDecl = do
+  (initErrs, mTcRes) <- typecheckModule file fnImpl
+
+  tcRes <- case mTcRes of
+    Nothing -> throwError $ InterpreterError (mconcat initErrs)
+    Just tcRes -> pure tcRes
+
+  getFunctionDefinition funRawName tcRes.module'
+ where
+  file = Text.unpack fnDecl.name <.> "l4"
+  funRawName = mkNormalName fnDecl.name
+
 createFunction ::
   FunctionDeclaration ->
   Text ->
@@ -32,23 +46,28 @@ createFunction ::
 createFunction fnDecl fnImpl =
   RunFunction
     { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} -> do
-        params <- assumeNoUnknowns params'
         (initErrs, mTcRes) <- typecheckModule file fnImpl
-        funExpr <- case mTcRes of
+
+        tcRes <- case mTcRes of
           Nothing -> throwError $ InterpreterError (mconcat initErrs)
-          Just tcRes -> do
-            let
-              recordMap = getAllRecords tcRes.module'
-            l4fun <- getFunctionDefinition funRawName tcRes.module'
-            buildEvalFunApp funRawName l4fun recordMap params
+          Just tcRes -> pure tcRes
+
+        params <- assumeNoUnknowns params'
+
+        funExpr <- getFunctionDefinition funRawName tcRes.module'
+
+        let recordMap = getAllRecords tcRes.module'
+        appliedFunExpr <- buildEvalFunApp funRawName funExpr recordMap params
+
         let
           l4InputWithEval =
             Text.unlines
               [ fnImpl
-              , prettyLayout $ mkTopDeclDirective $ mkEvalTrace funExpr
+              , prettyLayout $ mkTopDeclDirective $ mkEvalTrace appliedFunExpr
               ]
 
         (errs, mEvalRes) <- evaluateModule file l4InputWithEval
+
         case mEvalRes of
           Nothing -> throwError $ InterpreterError (mconcat errs)
           Just [Eval.MkEvalDirectiveResult{result, trace}] -> case result of
@@ -68,13 +87,13 @@ createFunction fnDecl fnImpl =
   file = Text.unpack fnDecl.name <.> "l4"
   funRawName = mkNormalName fnDecl.name
 
-  assumeNoUnknowns :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m [(Text, FnLiteral)]
-  assumeNoUnknowns inputs = do
-    traverse assumeKnown inputs
+assumeNoUnknowns :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m [(Text, FnLiteral)]
+assumeNoUnknowns inputs = do
+  traverse assumeKnown inputs
 
-  assumeKnown :: (Monad m) => (Text, Maybe FnLiteral) -> ExceptT EvaluatorError m (Text, FnLiteral)
-  assumeKnown (t, Just l) = pure (t, l)
-  assumeKnown (t, Nothing) = throwError $ InterpreterError $ "L4: can't handle missing values for field: " <> t
+assumeKnown :: (Monad m) => (Text, Maybe FnLiteral) -> ExceptT EvaluatorError m (Text, FnLiteral)
+assumeKnown (t, Just l) = pure (t, l)
+assumeKnown (t, Nothing) = throwError $ InterpreterError $ "L4: can't handle missing values for field: " <> t
 
 type RecordMap = Map RawName [TypedName Resolved]
 
@@ -90,18 +109,25 @@ buildEvalFunApp ::
   ExceptT EvaluatorError m (Expr Name)
 buildEvalFunApp funName decide recordMap args = do
   exprArgs <- matchFunctionArgs recordMap args funArgs
-  pure $ mkNamedFunApp (mkName funName) exprArgs
+  let name = mkName funName
+  -- NOTE: in case we have no arguments, we don't want to add a WITH clause.
+  pure case exprArgs of
+    [] -> App emptyAnno name []
+    _ -> mkNamedFunApp name exprArgs
  where
   MkDecide _ (MkTypeSig _ given _) _ _ = decide
   MkGivenSig _ ns = given
   funArgs = mapMaybe typedNameToTuple ns
-  typedNameToTuple (MkOptionallyTypedName _ n (Just ty)) = case ty of
+  -- TODO: change to use type in anno, not the type given
+  typedNameToTuple (MkOptionallyTypedName _ n (Just ty)) = decTy n ty
+  typedNameToTuple (MkOptionallyTypedName _ n@((.extra.resolvedInfo) . getAnno . getName -> Just (TypeInfo ty _)) Nothing) = decTy n ty
+  typedNameToTuple MkOptionallyTypedName {} = Nothing
+  decTy n ty = case ty of
     Type{} -> Nothing -- We don't care about TYPE
     TyApp{} -> Just (n, ty)
     Fun{} -> Just (n, ty)
     Forall{} -> Just (n, ty)
-    InfVar{} -> Nothing -- Should never happen
-  typedNameToTuple (MkOptionallyTypedName _ _ Nothing) = Nothing
+    InfVar{} -> Nothing
 
 matchFunctionArgs :: (Monad m) => RecordMap -> [(Text, FnLiteral)] -> [(Resolved, Type' Resolved)] -> ExceptT EvaluatorError m [NamedExpr Name]
 matchFunctionArgs recordMap input parameters =
@@ -457,3 +483,4 @@ toReasoningTree' (Trace [(expr, children)] val) =
     }
 toReasoningTree' (Trace ((expr, children) : rest) val) =
   toReasoningTree' (Trace [(expr, children ++ [Trace rest val])] val)
+

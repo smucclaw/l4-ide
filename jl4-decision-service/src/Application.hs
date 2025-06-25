@@ -55,7 +55,7 @@ defaultMain = do
 
   dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
   mgr <- newManager defaultManagerSettings
-  let baseUrl = maybe (BaseUrl Https "localhost" 5008"") (\(name, path) -> BaseUrl Https name 443 path) crudServerName
+  let baseUrl = maybe (BaseUrl Http "localhost" 5008"") (\(name, path) -> BaseUrl Https name 443 path) crudServerName
   putStrLn $ "will contact crud server on following base url: " <> show baseUrl
   let
     initialState = MkAppEnv dbRef baseUrl mgr
