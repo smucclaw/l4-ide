@@ -1,4 +1,10 @@
-import { readdirSync, copyFileSync, mkdirSync, existsSync } from 'fs'
+import {
+  readdirSync,
+  copyFileSync,
+  mkdirSync,
+  existsSync,
+  writeFileSync,
+} from 'fs'
 import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -25,6 +31,10 @@ if (!existsSync(targetDir)) {
   mkdirSync(targetDir, { recursive: true })
 }
 
+const emptyFileName = 'empty.l4'
+const emptyFilePath = join(targetDir, emptyFileName)
+writeFileSync(emptyFilePath, '')
+
 // Copy all .l4 files
 const files = readdirSync(sourceDir).filter((file) => file.endsWith('.l4'))
 
@@ -40,4 +50,6 @@ files.forEach((file) => {
   copyFileSync(sourcePath, targetPath)
 })
 
-console.log(`✓ Copied ${files.length} example files to src/examples/`)
+console.log(
+  `✓ Copied ${files.length} example files to src/examples/ (and the empty file)`
+)

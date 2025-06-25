@@ -9,7 +9,7 @@
 </script>
 
 <div class="example-selector">
-  <h3>Legal Examples</h3>
+  <h3>Examples</h3>
   <div class="button-grid">
     {#each legalExamples as example}
       <button class="example-button" onclick={() => onExampleSelect(example)}>
