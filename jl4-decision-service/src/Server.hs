@@ -90,6 +90,8 @@ import qualified Base.Text as T
 import L4.Syntax
 import L4.Print (prettyLayout)
 import Data.Function
+import qualified Optics
+import L4.Lexer
 
 
 -- ----------------------------------------------------------------------------
@@ -524,11 +526,16 @@ parametersOfDecide :: Decide Resolved -> Parameters
 parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
   -- TODO:
   -- need to change the description of the parameters as soon as we have it in the Decide
-  MkParameters {parameterMap = Map.fromList $ map (\x -> (x , Parameter (fromMaybe "object" $ lookup x bestEffortParameterType) Nothing [] "")) argList, required = argList}
+  MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
+    let argInfo = lookup x bestEffortArgInfo
+     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo))) argList, required = argList}
  where
-  bestEffortParameterType :: [(Text, Text)] = foldr fn [] args
+  bestEffortArgInfo = foldr fn [] args
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
-    Just (MkOptionallyTypedName _ r' mt) | Just t <- mt -> (prettyLayout r', prettyLayout t) : acc
+    Just tn@(MkOptionallyTypedName _ r' mt)
+      | Just t <- mt
+      , let descriptions = mconcat $ nubOrd $ Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+      -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
     _ -> acc
   sameResolved = (==) `on` getUnique
   argList = map prettyLayout args
