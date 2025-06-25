@@ -30,7 +30,7 @@ Decision Logic Visualization as a ladder diagram circuit
 
 An experimental prototype offers a lightweight web-based alternative to VS Code.
 
-https://jl4.well-typed.com/
+https://jl4.legalese.com/
 
 ## VS Code Extension: Download, Install and Build
 

@@ -3,7 +3,7 @@
 ## redeploying
 
 ```sh
-nixos-rebuild switch --flake .#jl4-demo --target-host root@olive.well-typed.com
+nixos-rebuild switch --flake .#jl4-demo --target-host root@example.com
 ```
 
 ## deploying to a new machine
@@ -11,7 +11,7 @@ nixos-rebuild switch --flake .#jl4-demo --target-host root@olive.well-typed.com
 If the machine is an x86_64 cloud machine on hetzner, then just run
 
 ```sh
-nixos-anywhere --flake .#jl4-demo --target-host root@olive.well-typed.com
+nixos-anywhere --flake .#jl4-demo --target-host root@example.com
 ```
 
 `nixos-anywhere` is in `nixpkgs` and can be run directly from repo's flake.
