@@ -64,7 +64,7 @@ DECLARE baz IS ONE OF baz HAS x IS A foo
                       quuux
 
 quux MEANS 
-  PARTY B MUST baz bar 
+  PARTY B MAY DO baz bar 
 
 #TRACE quux AT 0 WITH
   PARTY 1
@@ -105,4 +105,5 @@ DOES B AT payment 5 goesOn MEANS
   
 DOES B AT payment 6 #TRACE goesOn AT 0 WITH 
   PARTY 2
-  DOES S AT delivery PARTY 3DOES S AT payment 7 
+  DOES S AT delivery PARTY 3
+DOES S AT payment 7 
