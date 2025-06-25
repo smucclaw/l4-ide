@@ -53,11 +53,6 @@ library
     Schema
     Server
 
-  other-modules:
-    Paths_jl4_decision_service
-
-  autogen-modules:
-    Paths_jl4_decision_service
 
   hs-source-dirs:
     src
