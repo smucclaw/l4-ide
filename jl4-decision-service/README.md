@@ -115,6 +115,5 @@ function:
 
 ## See Also
 
-http://github.com/smucclaw/lag
-
-https://jl4.well-typed.com/decision/swagger-ui/
+- [http://github.com/smucclaw/lag](http://github.com/smucclaw/lag)
+- [https://jl4.legalese.com/decision/swagger-ui/](https://jl4.legalese.com/decision/swagger-ui/)

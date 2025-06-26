@@ -118,6 +118,7 @@ data ExpectationContext =
   | ExpectRegulativeContractContext -- when invoking a contract directive
   | ExpectRegulativeEventContext -- check an event expr
   | ExpectRegulativeProvidedContext -- the provided clauses are predicates on the variables bound by the pattern
+  | ExpectAssertContext -- assertions should be Boolean
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
