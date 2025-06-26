@@ -40,4 +40,4 @@ files.forEach((file) => {
   copyFileSync(sourcePath, targetPath)
 })
 
-console.log(`✓ Copied ${files.length} example files to src/examples/`)
+console.log(`✓ Copied ${files.length} example files to src/generated/`)
