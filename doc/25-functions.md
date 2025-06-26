@@ -11,10 +11,18 @@ x MEANS 2 + 2
 y MEANS x * x
 ```
 
-Under the hood, the constant `x` and the variable `y` are actually
-functions that take no arguments. They are "defined terms".
+This defines `x` to be `4` and `y` (using the definition of `x`) to be `16`.
+Note that `x` and `y` are _constants_. Their value does never change.
 
-Usually, functions do take arguments...
+Identifiers cannot be used if they are not defined, but the definition may
+occur after their first use:
+
+```l4
+p MEANS q
+q MEANS TRUE
+```
+
+In this case, both `p` and `q` are `TRUE`.
 
 ## Decision Function Example with GIVEN, GIVETH, DECIDE/IS, MEANS
 

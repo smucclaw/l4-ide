@@ -7,7 +7,7 @@ function:
   description: Given some information about a person's birthplace, birthdate, and parentage, determine if that person is a British citizen.
   parameters:
     type: object
-    required: it doesn't seem to matter what this is, as long as it's a string, because it gets overridden by the schema-generating code in the server.
+    required: ["p_name", "p_birthPlace", "p_birthDate", "f_settledIn", "f_knownBritish", "m_settledIn", "m_knownBritish"]
     properties:
       p_name:
         type: string

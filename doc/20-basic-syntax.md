@@ -2,17 +2,17 @@
 
 ## Identifiers
 
-Identifiers, such as function names and record attributes, are quoted using backticks. Where other programming languages might use `camelCase` or `snake_case`, L4 allows the use of `` `space separated words` `` to form a single identifier.
+Identifiers, such as function names and record attributes, are either single words such as `identifier` or `X`, or are quoted using backticks if they are more complex. Where other programming languages might use `camelCase` or `snake_case`, L4 allows the use of `` `space separated words` `` to form a single identifier.
 
 ## Comments
 
-Comments are written using the `--` syntax.
+Comments are written using the `--` syntax. Such comments extend to the end of the current line.
 
 ```l4
 -- This is a comment
 ```
 
-You can also use `{- .... -}` syntax.
+You can also use `{- .... -}` syntax to comment out an entire range of lines.
 
 ## Textual Annotations
 
@@ -29,13 +29,26 @@ Annotations can be added to sections and other constructs.
 
 ## References
 
-References can be added to various constructs using the `@`
-symbol. Typically they are used to cite original sources.
+References can be added to various constructs using three
+related annotation commands.
+
+References are inserted into the code using the `@ref` annotation.
+Such an annotation takes a "reference identifier" as an argument,
+e.g.
 
 ```l4
-@ref-src citations.csv
-@ref url https://...
+@ref FOO-Section2
 ```
+
+The reference identifier has to be mapped to a URL. The URL is then
+available as a link in the IDE. The mapping from reference identifiers
+to URLs can be specified in an external file or directly in the source
+code:
+
+- @ref-src@ takes a filename of a CSV file as an argument. The CSV
+  file should contain a mapping from reference identifiers to URLs.
+- @ref-map@ takes a reference identifier and a URL as an argument and
+  defines one such mapping directly within the source file.
 
 ## Indentation in Expressions
 
@@ -71,7 +84,26 @@ DECIDE `numbers are big`
     OR y GREATER THAN 20000
 ```
 
-This method of grouping was inspired by legal sub-paragraphs and sub-lists. The main difference is in where the "OR" and "AND" words appear.
+This method of grouping was inspired by legal sub-paragraphs and sub-lists. Generally, operators bind stronger
+if they are indented more, and arguments to operators should be indented more than the operators themselves.
+
+Example:
+
+```l4
+    FALSE
+AND    TRUE
+    OR TRUE
+```
+
+yields `FALSE`, whereas
+
+```l4
+       FALSE
+   AND TRUE
+OR TRUE
+```
+
+yields `TRUE`.
 
 ## Ditto Syntax
 
