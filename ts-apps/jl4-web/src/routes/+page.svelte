@@ -469,10 +469,17 @@
     title="Open examples sidebar"
     style="left: 2.5rem; top: 1.5rem;"
   >
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <line x1="4" y1="7" x2="20" y2="7"/>
-      <line x1="4" y1="12" x2="20" y2="12"/>
-      <line x1="4" y1="17" x2="20" y2="17"/>
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+    >
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
     </svg>
   </button>
 {/if}
@@ -485,21 +492,37 @@
   title="Share the current file"
   disabled={persistButtonBlocked}
 >
-  <FontAwesomeIcon icon={faShareAlt} style="font-size: 24px; vertical-align: middle;" />
+  <FontAwesomeIcon
+    icon={faShareAlt}
+    style="font-size: 24px; vertical-align: middle;"
+  />
 </button>
 
 <!-- Sidebar Overlay -->
-<div class="sidebar-overlay {showSidebar ? 'open' : ''}" onclick={() => (showSidebar = false)} tabindex="-1" aria-hidden={!showSidebar}></div>
+<div
+  class="sidebar-overlay {showSidebar ? 'open' : ''}"
+  onclick={() => (showSidebar = false)}
+  tabindex="-1"
+  aria-hidden={!showSidebar}
+></div>
 
 <!-- Sidebar Panel (overlay) -->
 <aside class="sidebar {showSidebar ? 'open' : ''}" aria-label="Examples menu">
   <button
     class="close-btn"
     onclick={() => (showSidebar = false)}
-    aria-label="Close sidebar">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <line x1="6" y1="6" x2="18" y2="18"/>
-      <line x1="6" y1="18" x2="18" y2="6"/>
+    aria-label="Close sidebar"
+  >
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+    >
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="6" y1="18" x2="18" y2="6" />
     </svg>
   </button>
   <ExampleSelector onExampleSelect={handleExampleSelect} />
@@ -557,18 +580,20 @@
     height: 48px;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 300;
     border: none;
     cursor: pointer;
-    transition: box-shadow 0.2s, background 0.2s;
+    transition:
+      box-shadow 0.2s,
+      background 0.2s;
     color: rgba(30, 29, 28, 0.698);
   }
   .fab:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     background: #f3f2f1;
     color: rgba(30, 29, 28, 1);
   }
