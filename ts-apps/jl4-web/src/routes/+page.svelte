@@ -47,7 +47,7 @@
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
   let showExamples = $state(true)
-  let showSidebar = $state(false)
+  let showSidebar = $state(true)
 
   /***********************************
         UI-related vars
@@ -460,101 +460,112 @@
   }
 </script>
 
-<!-- Hamburger FAB (fixed, over editor panel) -->
-{#if !showSidebar}
-  <button
-    class="fab fab-hamburger"
-    onclick={() => (showSidebar = true)}
-    aria-label="Open examples sidebar"
-    title="Open examples sidebar"
-    style="left: 2.5rem; top: 1.5rem;"
-  >
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-    >
-      <line x1="4" y1="7" x2="20" y2="7" />
-      <line x1="4" y1="12" x2="20" y2="12" />
-      <line x1="4" y1="17" x2="20" y2="17" />
-    </svg>
-  </button>
-{/if}
-
-<!-- Share FAB (fixed, top-right) -->
-<button
-  class="fab fab-share"
-  onclick={handleShare}
-  aria-label="Share the current file"
-  title="Share the current file"
-  disabled={persistButtonBlocked}
->
-  <FontAwesomeIcon
-    icon={faShareAlt}
-    style="font-size: 24px; vertical-align: middle;"
-  />
-</button>
-
-<!-- Sidebar Overlay -->
-<div
-  class="sidebar-overlay {showSidebar ? 'open' : ''}"
-  onclick={() => (showSidebar = false)}
-  tabindex="-1"
-  aria-hidden={!showSidebar}
-></div>
-
-<!-- Sidebar Panel (overlay) -->
-<aside class="sidebar {showSidebar ? 'open' : ''}" aria-label="Examples menu">
-  <button
-    class="close-btn"
-    onclick={() => (showSidebar = false)}
-    aria-label="Close sidebar"
-  >
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-    >
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="6" y1="18" x2="18" y2="6" />
-    </svg>
-  </button>
-  <ExampleSelector onExampleSelect={handleExampleSelect} />
-</aside>
-
 {#if showVisualizer}
-  <Resizable.PaneGroup direction="horizontal">
-    <!-- Only show editor and visualizer by default -->
-    <Resizable.Pane defaultSize={50}>
-      <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
-    </Resizable.Pane>
-    <Resizable.Handle />
-    <Resizable.Pane>
-      <div class="relative h-full">
-        <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-          {#await renderLadderPromise then ladder}
-            {#key ladder.funDeclLirNode}
-              <div class="slightly-shorter-than-full-viewport-height pb-1">
-                <LadderFlow
-                  {context}
-                  node={ladder.funDeclLirNode}
-                  env={ladder.env}
-                />
-              </div>
-            {/key}
-          {:catch error}
-            <p>Error loading Ladder Diagram: {error.message}</p>
-          {/await}
+  <div class="top-bar">
+    <div>
+      <h3>L4 Editor</h3>
+    </div>
+    <button
+      class="fab fab-sidebar {showSidebar ? 'open' : ''}"
+      onclick={() => (showSidebar = !showSidebar)}
+      aria-label="Toggle sidebar"
+    >
+      <svg
+        style="opacity: .7"
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.4"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <!-- Square with rounded corners -->
+        <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
+        <!-- Sidebar divider (vertical line) -->
+        <line x1="8.5" y1="3.5" x2="8.5" y2="20.5" />
+        <!-- Arrowhead pointing left (no stem), shifted right for centering -->
+        <polyline class="arrow-left" points="16,9 12,12 16,15" />
+        <polyline class="arrow-right" points="13,9 17,12 13,15" />
+      </svg>
+    </button>
+
+    <button
+      class="fab fab-share"
+      onclick={handleShare}
+      aria-label="Share the current file"
+      title="Share the current file"
+      disabled={persistButtonBlocked}
+    >
+      <svg
+        style="opacity: .6; font-size: 24px; vertical-align: middle; margin-right: .5rem"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Circle for the share origin -->
+        <circle cx="18" cy="5" r="3" />
+        <!-- Circle for the left endpoint -->
+        <circle cx="6" cy="12" r="3" />
+        <!-- Circle for the right endpoint -->
+        <circle cx="18" cy="19" r="3" />
+        <!-- Line from left to top -->
+        <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+        <!-- Line from left to bottom -->
+        <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+      </svg>
+      Share
+    </button>
+  </div>
+  <div class="panes">
+    <Resizable.PaneGroup direction="horizontal">
+      <!-- Only show editor and visualizer by default -->
+      {#if showSidebar && showExamples}
+        <Resizable.Pane defaultSize={20} minSize={20} maxSize={20}>
+          <ExampleSelector onExampleSelect={handleExampleSelect} />
+        </Resizable.Pane>
+      {/if}
+      <Resizable.Handle />
+      <Resizable.Pane defaultSize={50}>
+        <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
+      </Resizable.Pane>
+      <Resizable.Handle />
+      <Resizable.Pane>
+        <div class="relative h-full ladder-border">
+          <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
+            {#await renderLadderPromise then ladder}
+              {#key ladder.funDeclLirNode}
+                <div class="slightly-shorter-than-full-viewport-height pb-1">
+                  <LadderFlow
+                    {context}
+                    node={ladder.funDeclLirNode}
+                    env={ladder.env}
+                  />
+                </div>
+              {/key}
+            {:catch error}
+              <p>Error loading Ladder Diagram: {error.message}</p>
+            {/await}
+          </div>
         </div>
-      </div>
-    </Resizable.Pane>
-  </Resizable.PaneGroup>
+        <style>
+          .ladder-border {
+            border-top: 1px solid #999;
+            border-right: 1px solid #999;
+            border-bottom: 1px solid #999;
+          }
+        </style>
+      </Resizable.Pane>
+    </Resizable.PaneGroup>
+  </div>
 {:else}
   <div class="h-full w-full relative">
     <div
@@ -573,14 +584,27 @@
     --toastBackground: #white;
     --toastBorderRadius: 4px;
   }
-
+  .top-bar {
+    height: 42px;
+    font-family: 'Merriweather', Times, serif;
+    color: rgb(30, 29, 28);
+    background: rgba(250, 250, 249, 0.88);
+    display: flex;
+  }
+  .panes {
+    overflow: hidden;
+    height: calc(100dvh - 42px);
+  }
+  h3 {
+    font-size: 1.4rem;
+    font-weight: bold;
+    padding: 0.4rem 1rem;
+  }
   .fab {
-    position: fixed;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    position: absolute;
+    min-width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -593,64 +617,28 @@
     color: rgba(30, 29, 28, 0.698);
   }
   .fab:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     background: #f3f2f1;
     color: rgba(30, 29, 28, 1);
+    border-radius: 2px;
+    outline: 3px solid #f3f2f1;
+  }
+  .fab-sidebar.open {
+    position: absolute;
+    top: 10px;
+    left: calc(20% + 0.5rem);
+  }
+  .fab-sidebar.open .arrow-right,
+  .fab-sidebar:not(.open) .arrow-left {
+    display: none;
+  }
+  .fab-sidebar {
+    position: relative;
+    top: 10px;
+    left: auto;
   }
   .fab-share {
-    top: 1.5rem;
-    right: 1.5rem;
-  }
-  .sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.2);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 100;
-  }
-  .sidebar-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 260px;
-    background: #fff;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
-    transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 150;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .close-btn {
-    position: absolute;
-    top: 1.5rem;
-    right: 1.5rem;
-    z-index: 1;
-    background: none;
-    border: none;
-    color: rgba(30, 29, 28, 0.698);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 0.5rem;
-    transition: color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .close-btn:hover {
-    color: rgba(30, 29, 28, 1);
+    top: 10px;
+    right: 1rem;
   }
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;

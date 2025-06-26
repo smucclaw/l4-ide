@@ -9,7 +9,6 @@
 </script>
 
 <div class="example-selector">
-  <h3>L4 Editor</h3>
   <div class="button-grid">
     <button
       class="example-button external"
@@ -43,16 +42,11 @@
     padding: 1rem;
     font-family: 'Merriweather', Times, serif;
     color: rgb(30, 29, 28);
-    height: 100dvh;
+    height: 100%;
     background: rgba(250, 250, 249, 0.88);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-  }
-
-  h3 {
-    font-size: 1.5rem;
-    font-weight: bold;
   }
 
   h4 {
@@ -83,6 +77,7 @@
     background: rgb(243, 242, 241);
     margin: -0.2em -0.5em;
     padding: 0.2em 0.5em;
+    border-radius: 3px;
   }
 
   .example-button:active {
