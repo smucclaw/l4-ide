@@ -76,7 +76,17 @@ Open folder [./jl4/examples](./jl4/examples) to see the Language Server in actio
 
 Click on "visualize" to see a rendering of the decision logic.
 
-## Running the web id locally
+## Running the web IDE locally
+
+The general overview is as follows: 
+
+- the webpage is served as a javascript bundle 
+  - it directly connects to the language server provided by the `jl4-lsp` binary via websocket
+  - it directly connects to the session persistance service provided by `jl4-websessions` via http
+
+- the decision service can serve examples from `--sourcePaths` but also by directly contacting the 
+  `jl4-websessions` service via http
+
 
 - to set up the CRUD service for saving files:
   `cabal run exe:jl4-websessions -- 5008 test.db`
@@ -85,3 +95,6 @@ Click on "visualize" to see a rendering of the decision logic.
 - to run the frontend that connects to both:
   `cd ts-apps/jl4-web; npm i; npm run dev`
 - check out `--help` for `jl4-websessions` and `jl4-lsp`
+- to run the decision service locally: 
+  `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths doc/tutorial-code/`
+  The default is set to connect to the webessions service on port 5007
