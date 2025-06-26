@@ -55,6 +55,7 @@ data TDirectives
   | TLazyEvalTraceDirective
   | TCheckDirective
   | TContractDirective
+  | TAssertDirective
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -64,6 +65,7 @@ directives = Map.fromList
   , ("EVAL"     , TLazyEvalDirective)
   , ("CHECK"    , TCheckDirective)
   , ("TRACE"    , TContractDirective)
+  , ("ASSERT"   , TAssertDirective)
   ]
 
 data TAnnotations

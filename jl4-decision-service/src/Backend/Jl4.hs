@@ -52,14 +52,15 @@ createFunction fnDecl fnImpl =
         case mEvalRes of
           Nothing -> throwError $ InterpreterError (mconcat errs)
           Just [Eval.MkEvalDirectiveResult{result, trace}] -> case result of
-                Left evalExc -> throwError $ InterpreterError $ Text.show evalExc
-                Right val -> do
-                  r <- nfToFnLiteral val
-                  pure $
-                    ResponseWithReason
-                      { values = [("result", r)]
-                      , reasoning = buildReasoningTree trace
-                      }
+            Eval.Assertion _ -> throwError $ InterpreterError $ "L4: Got an assertion instead of a normal result."
+            Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+            Eval.Reduction (Right val) -> do
+              r <- nfToFnLiteral val
+              pure $
+                ResponseWithReason
+                  { values = [("result", r)]
+                  , reasoning = buildReasoningTree trace
+                  }
           Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
           Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
     }

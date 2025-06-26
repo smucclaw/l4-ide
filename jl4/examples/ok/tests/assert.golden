@@ -1,0 +1,7 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+assert.l4:1:1-13:
+  assertion satisfied
+assert.l4:2:1-14:
+  assertion failed

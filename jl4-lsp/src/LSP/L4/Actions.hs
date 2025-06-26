@@ -132,12 +132,16 @@ evalApp contextModule evalParams recentViz =
   where
     evalResultToLadderEvalAppResult :: EL.EvalDirectiveResult -> ExceptT (TResponseError method) m EvalAppResult
     evalResultToLadderEvalAppResult (EL.MkEvalDirectiveResult _ res _mtrace) = case res of
-      Right (EL.MkNF val) ->
-        case EL.boolView val of
-          Just b  -> pure $ EvalAppResult (toUBoolValue b)
-          Nothing -> throwExpectBoolResultError
-      Right EL.Omitted   -> defaultResponseError "Evaluation exceeded maximum depth limit"
-      Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
+      EL.Assertion True  -> pure $ EvalAppResult (toUBoolValue True)
+      EL.Assertion False -> pure $ EvalAppResult (toUBoolValue False)
+      EL.Reduction v ->
+        case v of
+          Right (EL.MkNF val) ->
+            case EL.boolView val of
+              Just b  -> pure $ EvalAppResult (toUBoolValue b)
+              Nothing -> throwExpectBoolResultError
+          Right EL.Omitted   -> defaultResponseError "Evaluation exceeded maximum depth limit"
+          Left err           -> defaultResponseError $ Text.unlines $ EL.prettyEvalException err
 
     throwExpectBoolResultError :: ExceptT (TResponseError method) m a
     throwExpectBoolResultError = defaultResponseError "Ladder visualizer is expecting a boolean result (and it should be impossible to have got a fn with a non-bool return type in the first place)"

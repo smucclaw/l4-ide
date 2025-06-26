@@ -189,6 +189,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
     Contract _ e t stmts -> hsep $
       "#TRACE" <+> printWithLayout e <+> printWithLayout t :
       map printWithLayout stmts
+    Assert _ e ->
+      "#ASSERT" <+> printWithLayout e
 
 instance LayoutPrinterWithName a => LayoutPrinter (Import a) where
   printWithLayout = \ case
