@@ -35,6 +35,11 @@
 
 - [Applications](apps.md)
 
+## Libraries
+
+- [Days and Dates](libraries/daydate.md)
+
+
 ## Other
 
 - [2024-12 Report](2024-12-report.md)
