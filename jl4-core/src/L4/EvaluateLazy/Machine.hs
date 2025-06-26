@@ -22,6 +22,7 @@ module L4.EvaluateLazy.Machine
 , emptyEnvironment
 , prettyEvalException
 , boolView
+, pattern ValBool
 -- * Constants exposed for the eager evaluator
 , builtinBinOps
 )
@@ -793,12 +794,12 @@ fulfilView v
   | ValConstructor r [] <- v = r `sameResolved` TypeCheck.fulfilRef
   | otherwise = False
 
-pattern ValBool :: Bool -> WHNF
+pattern ValBool :: Bool -> Value a
 pattern ValBool b <- (boolView -> Just b)
   where
     ValBool b = valBool b
 
-valBool :: Bool -> WHNF
+valBool :: Bool -> Value a
 valBool False = falseVal
 valBool True  = trueVal
 
@@ -1063,13 +1064,13 @@ evalConDecl env (MkConDecl _ann n tns) = do
 falseExpr :: Expr Resolved
 falseExpr = App emptyAnno TypeCheck.falseRef []
 
-falseVal :: WHNF
+falseVal :: Value a
 falseVal = ValConstructor TypeCheck.falseRef []
 
 trueExpr :: Expr Resolved
 trueExpr = App emptyAnno TypeCheck.trueRef []
 
-trueVal :: WHNF
+trueVal :: Value a
 trueVal = ValConstructor TypeCheck.trueRef []
 
 fulfilExpr :: Expr Resolved

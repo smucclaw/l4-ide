@@ -232,8 +232,8 @@ nfDirective (MkEvalDirective r traced isAssert expr env) = do
       if isAssert
         then Assertion
           case v of
-            Right (MkNF nf') | Just True <- boolView nf' -> True
-            _                                            -> False
+            Right (MkNF (ValBool True)) -> True
+            _                           -> False
         else Reduction v
   pure (MkEvalDirectiveResult r v' finalTrace)
 
