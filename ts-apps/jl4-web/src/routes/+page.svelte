@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { SvelteToast, toast } from '@zerodevx/svelte-toast'
-  import { faShareAlt } from '@fortawesome/free-solid-svg-icons'
-  import { FontAwesomeIcon } from '@fortawesome/svelte-fontawesome'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
