@@ -45,9 +45,13 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   let persistButtonBlocked = $state(false)
-  let showVisualizer = $state(true)
-  let showExamples = $state(true)
-  let showSidebar = $state(true)
+
+  // Set from URL search params as early as possible to avoid flicker
+  const ownUrl = new URL(window.location.href)
+
+  let showVisualizer = $state(!ownUrl.searchParams.has('no-visualizer'))
+  let showExamples = $state(!ownUrl.searchParams.has('no-examples'))
+  let showSidebar = $state(!ownUrl.searchParams.has('no-examples'))
 
   /***********************************
         UI-related vars
@@ -150,10 +154,6 @@
 
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug)
-
-      const ownUrl: URL = new URL(window.location.href)
-      showVisualizer = !ownUrl.searchParams.has('no-visualizer')
-      showExamples = !ownUrl.searchParams.has('no-examples')
 
       await initServices(
         {
@@ -465,6 +465,7 @@
     <div>
       <h3>L4 Editor</h3>
     </div>
+    {#if showExamples}
     <button
       class="fab fab-sidebar {showSidebar ? 'open' : ''}"
       onclick={() => (showSidebar = !showSidebar)}
@@ -490,7 +491,7 @@
         <polyline class="arrow-right" points="13,9 17,12 13,15" />
       </svg>
     </button>
-
+    {/if}
     <button
       class="fab fab-share"
       onclick={handleShare}
