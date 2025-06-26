@@ -17,7 +17,6 @@
   networking = {
     inherit (config.jl4-demo) domain;
     hostName = "jl4-demo";
-    networkmanager.enable = true;
     firewall.allowedTCPPorts = [
       80
       443
