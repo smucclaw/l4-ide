@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { SvelteToast, toast } from '@zerodevx/svelte-toast'
-  import { faShareAlt, faBars, faXmark } from '@fortawesome/free-solid-svg-icons'
+  import {
+    faShareAlt,
+    faBars,
+    faXmark,
+  } from '@fortawesome/free-solid-svg-icons'
   import { FontAwesomeIcon } from '@fortawesome/svelte-fontawesome'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
@@ -483,7 +487,8 @@
   <button
     class="close-btn"
     onclick={() => (showSidebar = false)}
-    aria-label="Close sidebar">
+    aria-label="Close sidebar"
+  >
     <FontAwesomeIcon icon={faXmark} />
   </button>
   <ExampleSelector onExampleSelect={handleExampleSelect} />
