@@ -18,116 +18,133 @@ IMPORT daydate
 #EVAL `the earlier of` (Feb 29 2024) (Feb 28 2024)        -- 739308 - Earlier in leap month
 ```
 
-
 ## Constants
 
 ### Time Periods
+
 - `Months in a year`: 12
 - `Days in a year`: 365.2425 (accounts for 4-year leap cycle with 100 and 400 year exceptions)
 - `Days in a month`: 30.436875 (average month length)
 - `Days in a week`: 7
 
 ### Month & Weekday Constants
+
 Following ISO standard with January 1, 0000 being a Sunday:
 
-| Weekday | Alias | Value |
-|---------|-------|-------|
-| `Monday` | `Mon` | 1 |
-| `Tuesday` | `Tue` | 2 |
-| `Wednesday` | `Wed` | 3 |
-| `Thursday` | `Thu` | 4 |
-| `Friday` | `Fri` | 5 |
-| `Saturday` | `Sat` | 6 |
-| `Sunday` | `Sun` | 0 |
+| Weekday     | Alias | Value |
+| ----------- | ----- | ----- |
+| `Monday`    | `Mon` | 1     |
+| `Tuesday`   | `Tue` | 2     |
+| `Wednesday` | `Wed` | 3     |
+| `Thursday`  | `Thu` | 4     |
+| `Friday`    | `Fri` | 5     |
+| `Saturday`  | `Sat` | 6     |
+| `Sunday`    | `Sun` | 0     |
 
-| Month | Alias | Value |
-|-------|-------|-------|
-| `January` | `Jan` | 1 |
-| `February` | `Feb` | 2 |
-| `March` | `Mar` | 3 |
-| `April` | `Apr` | 4 |
-| `May` | | 5 |
-| `June` | `Jun` | 6 |
-| `July` | `Jul` | 7 |
-| `August` | `Aug` | 8 |
-| `September` | `Sep` | 9 |
-| `October` | `Oct` | 10 |
-| `November` | `Nov` | 11 |
-| `December` | `Dec` | 12 |
-
+| Month       | Alias | Value |
+| ----------- | ----- | ----- |
+| `January`   | `Jan` | 1     |
+| `February`  | `Feb` | 2     |
+| `March`     | `Mar` | 3     |
+| `April`     | `Apr` | 4     |
+| `May`       |       | 5     |
+| `June`      | `Jun` | 6     |
+| `July`      | `Jul` | 7     |
+| `August`    | `Aug` | 8     |
+| `September` | `Sep` | 9     |
+| `October`   | `Oct` | 10    |
+| `November`  | `Nov` | 11    |
+| `December`  | `Dec` | 12    |
 
 ## Date Constructors
 
 ### `Date` AKA `Days to date` (from components)
+
 Creates a DATE object from day, month, and year components.
-- **Given**: 
+
+- **Given**:
   - `day`: NUMBER (day of month)
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: DATE object with day, month, and year properties
 
 ### `Date` AKA `Days to date`
+
 Converts a datestamp into a DATE object.
-- **Given**: 
+
+- **Given**:
   - `days`: NUMBER datestamp or DATE object
 - **Giveth**: DATE object with day, month, and year properties
-
 
 ## Datestamp Constructors
 
 ### `Day` AKA `Date to days` (from components)
+
 Creates a datestamp from day, month, and year.
-- **Given**: 
+
+- **Given**:
   - `day`: NUMBER (day of month)
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER datestamp
 
 ### `Day` AKA `Date to days` (from date)
+
 Converts a DATE object to a datestamp.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `Year` (from year)
+
 Creates a datestamp for the first day of a given year.
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER datestamp
 
 ### `Year` (from date)
+
 Creates a datestamp for the first day of a year from a DATE object.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `Month` (from components)
+
 Creates a datestamp for the first day of a month.
-- **Given**: 
+
+- **Given**:
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER datestamp
 
 ### `Month` (from date)
+
 Creates a datestamp for the first day of a month from a DATE object.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `Week` (from components)
+
 Creates a datestamp for the first day of a week a given week and year (Monday).
-- **Given**: 
+
+- **Given**:
   - `week`: NUMBER (week number)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER datestamp
 
 ### `Week` (from date)
+
 Creates a datestamp for the first day of a week (Monday) for a given date.
-- **Given**: 
-  - `date`:  NUMBER datestamp or DATE object
+
+- **Given**:
+  - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
-
-
 
 ## Month Helpers
 
@@ -147,247 +164,303 @@ E.g. `January 1 2025 -> 20088`
 - `November` (AKA `Nov`)
 - `December` (AKA `Dec`)
 
-- **Given**: 
-  - `day`:  NUMBER (day of month)
+- **Given**:
+  - `day`: NUMBER (day of month)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER datestamp
 
 ### `Month of the year`
+
 Gets the month number of a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (month number, e.g. 2 for February)
-
-
 
 ## Datestamp Math Helpers
 
 ### `Months since year start to days` (from components)
+
 Calculates total days from start of year to beginning of a given month.
-- **Given**: 
+
+- **Given**:
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (amount of days)
 
 ### `Months since year start to days` (from date)
+
 Calculates total number of days from start of year to a given month from a DATE object.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (number of days)
 
 ### `Days in month` (from components)
+
 Gets the total number of days in a given month.
-- **Given**: 
+
+- **Given**:
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (number of days)
 
 ### `Days in month` (from date)
+
 Gets the total number of days in a given month for a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (number of days)
 
 ### `Days in year` (from year)
+
 Calculates number of days in a given year.
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (365 or 366)
 
 ### `Days in year` (from date)
+
 Calculates number of days in a given year from a DATE object.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: NUMBER (365 or 366)
 
 ### `Years to days` (from year)
+
 Calculates the total number of days from year 0 to a given year.
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (number of days)
 
 ### `Years to days` (from date)
+
 Calculates the total number of days from year 0 to a DATE objects year.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: NUMBER (number of days)
-
-
 
 ## Weekday Functions
 
 ### `Weekday of` (from days)
+
 Gets the weekday number (0-6) for a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (0-6)
 
 ### `Weekday of 1st day of month` (from components)
+
 Gets the weekday of the first day of a month.
-- **Given**: 
+
+- **Given**:
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (0-6)
 
 ### `Weekday of 1st day of month` (from date)
+
 Gets the weekday of the first day of a month for a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (0-6)
 
 ### `Weekday of 1st day of year` (from year)
+
 Gets the weekday of January 1st of a given year.
 E.g. `2025 -> Wednesday`
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (0-6)
 
 ### `Weekday of 1st day of year` (from date)
+
 Gets the weekday of January 1st from a DATE objects year.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: NUMBER (0-6)
-
-
-
 
 ## Week Functions
 
 ### `Week of the year`
+
 Gets the week of the year number for a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER (week number)
 
 ### `Weeks in year` (from year)
+
 Calculates number of weeks in a given year.
 E.g. `2004 -> 53`
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: NUMBER (52 or 53)
 
 ### `Weeks in year` (from date)
+
 Calculates number of weeks in a given year from a DATE object.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: NUMBER (52 or 53)
-
 
 ## Attribute Checkers
 
 ### `is weekend`
+
 Checks if a given date falls on a weekend.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: BOOLEAN
 
 ### `is weekday`
+
 Checks if a given date falls on a weekday.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: BOOLEAN
 
 ### `is leap year` (from year)
-Checks if a given year is a leap year. 
+
+Checks if a given year is a leap year.
 E.g. `2004 -> TRUE`
-- **Given**: 
+
+- **Given**:
   - `year`: NUMBER (4-digit year)
 - **Giveth**: BOOLEAN
 
 ### `is leap year` (from date)
+
 Checks if a given date's year is a leap year.
-- **Given**: 
+
+- **Given**:
   - `date`: DATE object
 - **Giveth**: BOOLEAN
-
 
 ## Relative Time Phrases
 
 ### `on day`
+
 Gets the date for the nth day of a given date.
-e.g. ```#EVAL Date (`on day` 2 (`the week after` (Jan 2 2026))) -> DATE OF 6, 1, 2026```
+e.g. ``#EVAL Date (`on day` 2 (`the week after` (Jan 2 2026))) -> DATE OF 6, 1, 2026``
+
 - **Given**:
   - `day`: NUMBER (nth day, 1 being the same day)
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the day after`
+
 Gets the date for the day AFTER a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the day before`
+
 Gets the date for the day BEFORE a given date.
-- **Given**: 
+
+- **Given**:
   - `days`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the week after`
+
 Gets the date for Monday of NEXT week from a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the week before`
+
 Gets the date for Monday of the PREVIOUS week from a given date.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the month after`
+
 Gets the date for the first day of NEXT month.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the month before`
+
 Gets the date for the first day of the PREVIOUS month.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the year after`
+
 Gets the date for the first day of NEXT year.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the year before`
+
 Gets the date for the first day of the PREVIOUS year.
-- **Given**: 
+
+- **Given**:
   - `date`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
-
-
 
 ## Comparators
 
 ### `the earlier of`
+
 Returns the earlier of two dates.
-- **Given**: 
+
+- **Given**:
   - `date1`: NUMBER datestamp or DATE object
   - `date2`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
 ### `the later of`
+
 Returns the later of two dates.
-- **Given**: 
+
+- **Given**:
   - `date1`: NUMBER datestamp or DATE object
   - `date2`: NUMBER datestamp or DATE object
 - **Giveth**: NUMBER datestamp
 
-
 ## Stringify Functions
 
 ### `Name of month`
+
 Converts a datestamp to month name. (e.g. January)
-- **Given**: 
+
+- **Given**:
   - `days`: NUMBER datestamp or DATE object
 - **Giveth**: STRING (month name)
 
 ### `Name of weekday`
+
 Converts a datestamp to weekday name. (e.g. Monday)
-- **Given**: 
+
+- **Given**:
   - `days`: NUMBER datestamp or DATE object
 - **Giveth**: STRING (weekday name)
