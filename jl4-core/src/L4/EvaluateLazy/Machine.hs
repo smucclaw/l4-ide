@@ -22,6 +22,7 @@ module L4.EvaluateLazy.Machine
 , emptyEnvironment
 , prettyEvalException
 , boolView
+, pattern ValBool
 -- * Constants exposed for the eager evaluator
 , builtinBinOps
 )
@@ -793,12 +794,12 @@ fulfilView v
   | ValConstructor r [] <- v = r `sameResolved` TypeCheck.fulfilRef
   | otherwise = False
 
-pattern ValBool :: Bool -> WHNF
+pattern ValBool :: Bool -> Value a
 pattern ValBool b <- (boolView -> Just b)
   where
     ValBool b = valBool b
 
-valBool :: Bool -> WHNF
+valBool :: Bool -> Value a
 valBool False = falseVal
 valBool True  = trueVal
 
@@ -965,13 +966,15 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False expr env]
+  pure [MkEvalDirective (rangeOf ann) False False expr env]
 evalDirective env (LazyEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True expr env]
+  pure [MkEvalDirective (rangeOf ann) True False expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
+evalDirective env (Assert ann expr) =
+  pure [MkEvalDirective (rangeOf ann) False True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
@@ -1061,13 +1064,13 @@ evalConDecl env (MkConDecl _ann n tns) = do
 falseExpr :: Expr Resolved
 falseExpr = App emptyAnno TypeCheck.falseRef []
 
-falseVal :: WHNF
+falseVal :: Value a
 falseVal = ValConstructor TypeCheck.falseRef []
 
 trueExpr :: Expr Resolved
 trueExpr = App emptyAnno TypeCheck.trueRef []
 
-trueVal :: WHNF
+trueVal :: Value a
 trueVal = ValConstructor TypeCheck.trueRef []
 
 fulfilExpr :: Expr Resolved
@@ -1129,10 +1132,11 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range :: Maybe SrcRange -- ^ of the (L)EVAL directive
-    , trace :: !Bool -- ^ whether a trace is wanted
-    , expr  :: !(Expr Resolved) -- ^ expression to evaluate
-    , env   :: !Environment -- ^ environment to evaluate the expression in
+    { range    :: Maybe SrcRange -- ^ of the (L)EVAL directive
+    , trace    :: !Bool -- ^ whether a trace is wanted
+    , isAssert :: !Bool -- ^ whether it is to be treated as an assertion
+    , expr     :: !(Expr Resolved) -- ^ expression to evaluate
+    , env      :: !Environment -- ^ environment to evaluate the expression in
     }
   deriving stock (Generic, Show)
 

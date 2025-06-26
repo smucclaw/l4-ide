@@ -367,6 +367,9 @@ inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e)
   rt <- prune $ checkExpr ExpectRegulativeTimestampContext t number
   revs <- traverse (prune . flip (checkExpr ExpectRegulativeEventContext) eventT) evs
   pure (Contract ann re rt revs)
+inferDirective (Assert ann e) = errorContext (WhileCheckingExpression e) do
+  e' <- checkExpr ExpectAssertContext e boolean
+  pure (Assert ann e')
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -2071,6 +2074,8 @@ prettyTypeMismatch ExpectRegulativeEventContext expected given =
   standardTypeMismatch [ "The event expr passed to a TRACE directive is expected to be of type" ] expected given
 prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAssertContext expected given =
+  standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

@@ -158,6 +158,7 @@ data Directive n =
   | LazyEvalTrace Anno (Expr n)
   | Check Anno (Expr n)
   | Contract Anno (Expr n) (Expr n) [Expr n]
+  | Assert Anno (Expr n)
   deriving stock (GHC.Generic, Eq, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

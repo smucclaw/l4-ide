@@ -186,6 +186,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
       t' <- addNlg t
       evs' <- traverse addNlg evs
       pure $ Contract ann e' t' evs'
+    Assert ann e -> do
+      e' <- addNlg e
+      pure $ Assert ann e'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
   addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
