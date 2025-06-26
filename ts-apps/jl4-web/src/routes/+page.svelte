@@ -47,6 +47,7 @@
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
   let showExamples = $state(true)
+  let showSidebar = $state(false)
 
   /***********************************
         UI-related vars
@@ -459,32 +460,60 @@
   }
 </script>
 
+<!-- Hamburger FAB (fixed, over editor panel) -->
+{#if !showSidebar}
+  <button
+    class="fab fab-hamburger"
+    onclick={() => (showSidebar = true)}
+    aria-label="Open examples sidebar"
+    title="Open examples sidebar"
+    style="left: 2.5rem; top: 1.5rem;"
+  >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="4" y1="7" x2="20" y2="7"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="17" x2="20" y2="17"/>
+    </svg>
+  </button>
+{/if}
+
+<!-- Share FAB (fixed, top-right) -->
+<button
+  class="fab fab-share"
+  onclick={handleShare}
+  aria-label="Share the current file"
+  title="Share the current file"
+  disabled={persistButtonBlocked}
+>
+  <FontAwesomeIcon icon={faShareAlt} style="font-size: 24px; vertical-align: middle;" />
+</button>
+
+<!-- Sidebar Overlay -->
+<div class="sidebar-overlay {showSidebar ? 'open' : ''}" onclick={() => (showSidebar = false)} tabindex="-1" aria-hidden={!showSidebar}></div>
+
+<!-- Sidebar Panel (overlay) -->
+<aside class="sidebar {showSidebar ? 'open' : ''}" aria-label="Examples menu">
+  <button
+    class="close-btn"
+    onclick={() => (showSidebar = false)}
+    aria-label="Close sidebar">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <line x1="6" y1="6" x2="18" y2="18"/>
+      <line x1="6" y1="18" x2="18" y2="6"/>
+    </svg>
+  </button>
+  <ExampleSelector onExampleSelect={handleExampleSelect} />
+</aside>
+
 {#if showVisualizer}
   <Resizable.PaneGroup direction="horizontal">
-    {#if showExamples}
-      <Resizable.Pane defaultSize={20}>
-        <ExampleSelector onExampleSelect={handleExampleSelect}
-        ></ExampleSelector>
-      </Resizable.Pane>
-      <Resizable.Handle />
-    {/if}
-    <Resizable.Pane defaultSize={40}>
+    <!-- Only show editor and visualizer by default -->
+    <Resizable.Pane defaultSize={50}>
       <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
     </Resizable.Pane>
     <Resizable.Handle />
     <Resizable.Pane>
       <div class="relative h-full">
-        <div id="persist-ui" class="absolute items-center gap-2 m-4">
-          <button
-            onclick={handleShare}
-            class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            disabled={persistButtonBlocked}
-            title="Share the current file"
-            aria-label="Share"
-          >
-            <FontAwesomeIcon icon={faShareAlt} />
-          </button>
-        </div>
         <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
           {#await renderLadderPromise then ladder}
             {#key ladder.funDeclLirNode}
@@ -510,17 +539,6 @@
       class="relative h-full w-full"
       bind:this={editorElement}
     ></div>
-    <div id="persist-ui" class="absolute top-3 left-3 z-10">
-      <button
-        onclick={handleShare}
-        class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-        disabled={persistButtonBlocked}
-        title="Share the current file"
-        aria-label="Share"
-      >
-        <FontAwesomeIcon icon={faShareAlt} />
-      </button>
-    </div>
   </div>
 {/if}
 
@@ -533,6 +551,82 @@
     --toastBorderRadius: 4px;
   }
 
+  .fab {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    border: none;
+    cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+    color: rgba(30, 29, 28, 0.698);
+  }
+  .fab:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    background: #f3f2f1;
+    color: rgba(30, 29, 28, 1);
+  }
+  .fab-share {
+    top: 1.5rem;
+    right: 1.5rem;
+  }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 100;
+  }
+  .sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    background: #fff;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 150;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .close-btn {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 1;
+    background: none;
+    border: none;
+    color: rgba(30, 29, 28, 0.698);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .close-btn:hover {
+    color: rgba(30, 29, 28, 1);
+  }
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
   }
