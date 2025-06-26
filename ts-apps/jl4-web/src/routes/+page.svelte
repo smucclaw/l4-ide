@@ -152,7 +152,7 @@
 
       const ownUrl: URL = new URL(window.location.href)
       showVisualizer = !ownUrl.searchParams.has('no-visualizer')
-      showExamples = !ownUrl.searchParams.has('show-examples')
+      showExamples = !ownUrl.searchParams.has('no-examples')
 
       await initServices(
         {
