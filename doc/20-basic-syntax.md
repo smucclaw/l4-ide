@@ -35,6 +35,7 @@ related annotation commands.
 References are inserted into the code using the `@ref` annotation.
 Such an annotation takes a "reference identifier" as an argument,
 e.g.
+
 ```l4
 @ref FOO-Section2
 ```
@@ -87,17 +88,21 @@ This method of grouping was inspired by legal sub-paragraphs and sub-lists. Gene
 if they are indented more, and arguments to operators should be indented more than the operators themselves.
 
 Example:
+
 ```l4
     FALSE
 AND    TRUE
     OR TRUE
 ```
+
 yields `FALSE`, whereas
+
 ```l4
        FALSE
    AND TRUE
 OR TRUE
 ```
+
 yields `TRUE`.
 
 ## Ditto Syntax
