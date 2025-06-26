@@ -466,31 +466,31 @@
       <h3>L4 Editor</h3>
     </div>
     {#if showExamples}
-    <button
-      class="fab fab-sidebar {showSidebar ? 'open' : ''}"
-      onclick={() => (showSidebar = !showSidebar)}
-      aria-label="Toggle sidebar"
-    >
-      <svg
-        style="opacity: .7"
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+      <button
+        class="fab fab-sidebar {showSidebar ? 'open' : ''}"
+        onclick={() => (showSidebar = !showSidebar)}
+        aria-label="Toggle sidebar"
       >
-        <!-- Square with rounded corners -->
-        <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
-        <!-- Sidebar divider (vertical line) -->
-        <line x1="8.5" y1="3.5" x2="8.5" y2="20.5" />
-        <!-- Arrowhead pointing left (no stem), shifted right for centering -->
-        <polyline class="arrow-left" points="16,9 12,12 16,15" />
-        <polyline class="arrow-right" points="13,9 17,12 13,15" />
-      </svg>
-    </button>
+        <svg
+          style="opacity: .7"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <!-- Square with rounded corners -->
+          <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
+          <!-- Sidebar divider (vertical line) -->
+          <line x1="8.5" y1="3.5" x2="8.5" y2="20.5" />
+          <!-- Arrowhead pointing left (no stem), shifted right for centering -->
+          <polyline class="arrow-left" points="16,9 12,12 16,15" />
+          <polyline class="arrow-right" points="13,9 17,12 13,15" />
+        </svg>
+      </button>
     {/if}
     <button
       class="fab fab-share"
