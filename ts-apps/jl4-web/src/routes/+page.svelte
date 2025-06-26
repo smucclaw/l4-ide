@@ -46,7 +46,7 @@
 
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
-  let showExamples = $state(false)
+  let showExamples = $state(true)
 
   /***********************************
         UI-related vars
