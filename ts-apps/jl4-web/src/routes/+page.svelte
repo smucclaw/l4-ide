@@ -46,6 +46,7 @@
 
   let persistButtonBlocked = $state(false)
   let showVisualizer = $state(true)
+  let showSidebar = $state(false)
 
   /***********************************
         UI-related vars
@@ -453,17 +454,59 @@
   function handleExampleSelect(example: LegalExample) {
     if (editor) {
       editor.setValue(example.content)
+      showSidebar = false // auto-close sidebar on selection
     }
   }
 </script>
 
+<!-- Sidebar Toggle Button -->
+{#if !showSidebar}
+  <button
+    class="sidebar-toggle"
+    onclick={() => (showSidebar = true)}
+    aria-label="Open examples sidebar"
+  >
+    <svg
+      width="24"
+      height="24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      ><rect x="4" y="6" width="16" height="2" rx="1" /><rect
+        x="4"
+        y="11"
+        width="16"
+        height="2"
+        rx="1"
+      /><rect x="4" y="16" width="16" height="2" rx="1" /></svg
+    >
+  </button>
+{/if}
+
+<!-- Sidebar Overlay -->
+<div
+  class="sidebar-overlay {showSidebar ? 'open' : ''}"
+  onclick={() => (showSidebar = false)}
+  tabindex="-1"
+  aria-hidden={!showSidebar}
+></div>
+
+<!-- Sidebar Panel -->
+<aside class="sidebar {showSidebar ? 'open' : ''}" aria-label="Examples menu">
+  <button
+    class="close-btn"
+    onclick={() => (showSidebar = false)}
+    aria-label="Close sidebar">×</button
+  >
+  <ExampleSelector onExampleSelect={handleExampleSelect} />
+</aside>
+
+<!-- Main Content: Editor + Visualizer (no left pane) -->
 {#if showVisualizer}
   <Resizable.PaneGroup direction="horizontal">
-    <Resizable.Pane defaultSize={20}>
-      <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
-    </Resizable.Pane>
-    <Resizable.Handle />
-    <Resizable.Pane defaultSize={40}>
+    <Resizable.Pane defaultSize={50}>
       <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
     </Resizable.Pane>
     <Resizable.Handle />
@@ -527,8 +570,66 @@
     --toastBackground: #white;
     --toastBorderRadius: 4px;
   }
-
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
+  }
+  .sidebar-toggle {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 60;
+    background: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .sidebar-toggle:focus {
+    outline: 2px solid #104e64;
+  }
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 40;
+  }
+  .sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    background: #fff;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    cursor: pointer;
+    color: #104e64;
+    z-index: 1;
   }
 </style>
