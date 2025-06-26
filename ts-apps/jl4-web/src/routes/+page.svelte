@@ -45,6 +45,7 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   let persistButtonBlocked = $state(false)
+<<<<<<< thomasgorissen/hideExamplePaneFlag
 
   // Set from URL search params as early as possible to avoid flicker
   const ownUrl = new URL(window.location.href)
@@ -52,6 +53,10 @@
   let showVisualizer = $state(!ownUrl.searchParams.has('no-visualizer'))
   let showExamples = $state(!ownUrl.searchParams.has('no-examples'))
   let showSidebar = $state(!ownUrl.searchParams.has('no-examples'))
+=======
+  let showVisualizer = $state(true)
+  let showExamples = $state(true)
+>>>>>>> main
 
   /***********************************
         UI-related vars
@@ -155,6 +160,13 @@
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug)
 
+<<<<<<< thomasgorissen/hideExamplePaneFlag
+=======
+      const ownUrl: URL = new URL(window.location.href)
+      showVisualizer = !ownUrl.searchParams.has('no-visualizer')
+      showExamples = !ownUrl.searchParams.has('no-examples')
+
+>>>>>>> main
       await initServices(
         {
           loadThemes: true,
@@ -461,6 +473,7 @@
 </script>
 
 {#if showVisualizer}
+<<<<<<< thomasgorissen/hideExamplePaneFlag
   <div class="top-bar">
     <div>
       <h3>L4 Editor</h3>
@@ -556,6 +569,46 @@
               <p>Error loading Ladder Diagram: {error.message}</p>
             {/await}
           </div>
+=======
+  <Resizable.PaneGroup direction="horizontal">
+    {#if showExamples}
+    <Resizable.Pane defaultSize={20}>
+      <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
+    </Resizable.Pane>
+    <Resizable.Handle />
+    {/if}
+    <Resizable.Pane defaultSize={40}>
+      <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
+    </Resizable.Pane>
+    <Resizable.Handle />
+    <Resizable.Pane>
+      <div class="relative h-full">
+        <div id="persist-ui" class="absolute items-center gap-2 m-4">
+          <button
+            onclick={handleShare}
+            class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            disabled={persistButtonBlocked}
+            title="Share the current file"
+            aria-label="Share"
+          >
+            <FontAwesomeIcon icon={faShareAlt} />
+          </button>
+        </div>
+        <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
+          {#await renderLadderPromise then ladder}
+            {#key ladder.funDeclLirNode}
+              <div class="slightly-shorter-than-full-viewport-height pb-1">
+                <LadderFlow
+                  {context}
+                  node={ladder.funDeclLirNode}
+                  env={ladder.env}
+                />
+              </div>
+            {/key}
+          {:catch error}
+            <p>Error loading Ladder Diagram: {error.message}</p>
+          {/await}
+>>>>>>> main
         </div>
         <style>
           .ladder-border {

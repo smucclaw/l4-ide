@@ -260,6 +260,7 @@ instance Linearize (Directive Resolved) where
     Contract _ e t es -> hcat $
       [ "executing contract", lin e, "at", lin t, "with the following events: " ]
       <> map lin es
+    Assert _ e -> linearize e
 
 
 instance Linearize (NamedExpr Resolved) where
