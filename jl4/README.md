@@ -33,7 +33,7 @@ Contracts consist of the following two components:
    one of three possible states: 
    - the contract is "stuck", i.e. there's a remaining obligation that awaits an event
    - the contract is "fulfilled", i.e. there's no remaining obligations needing to be fulfilled and successfully so
-   - the contract is "breached", i.e. there's no remaining obligations needing to be fulfilled but unsuccesfully so 
+   - the contract is "breached", i.e. there's no remaining obligations needing to be fulfilled but unsuccessfully so 
 2. A "trace" of events that (hopefully) match the obligations in the provision. Each event consists of
    - a "party" *who* is responsible for emitting the event
    - an "action" which describes *what* the party is doing
@@ -73,8 +73,8 @@ aContract MEANS
     -- on the RHS of the PROVIDED clause, which allows your to further specify the events that match the obligation.
     -- The RHS of the PROVIDED clause needs to be of type BOOLEAN. In this case, it makes sure that the price paid is 
     -- at least 20. 
-    -- Since a succesful match on the pattern means we proceed in the HENCE clause, price also stays in scope there.
-    -- Obviously it mustn't be in scope in the LEST clause, because that implies we didn't have a succesful match.
+    -- Since a successful match on the pattern means we proceed in the HENCE clause, price also stays in scope there.
+    -- Obviously it mustn't be in scope in the LEST clause, because that implies we didn't have a successful match.
     WITHIN 3
     -- since PROVISION's are normal values, we can also return them as results of the usual expressions - in this case, 
     -- the result is FULFILLED if the price is 20 and otherwise a further obligation
@@ -100,7 +100,7 @@ As you may have noticed, you may leave out most of the constructs. The semantics
   if a breaching event arrives (one that is after the deadline but doesn't match the party and action)
 - leaving out `WITHIN`: this is like "whenever", i.e. there's no deadline. Mind that this means that an obligation without a deadline 
   may never result in a breach itself, because there can never be an event that arrives after the deadline
-- leavinout out `PROVIDED` after matching on an action: like `PROVIDED TRUE`, i.e. we always proceed to `HENCE` if the pattern 
+- leaving out `PROVIDED` after matching on an action: like `PROVIDED TRUE`, i.e. we always proceed to `HENCE` if the pattern 
   itself matches.
 
 Wrt syntactic sugar, mind that you may also write 
@@ -142,7 +142,7 @@ Now for evaluating traces against this provision, there are two ways of doing it
 - Event traces are assumed to be ordered by time
 - All time stamps in the event traces are assumed to happen after (or at the same time) the starting time of the trace was
 - Times in obligations / external choices are supposed to be 0 or greater.
-- There's no *explicit* difference between external choice and obligations, this is because the langauge ought to be usable
+- There's no *explicit* difference between external choice and obligations, this is because the language ought to be usable
   even for people who don't know CSL. The difference arises by use (or not use) of `LEST`. `LEST` being used means "this is an 
   external choice", `LEST` not being used means "this is just an obligation".
 - While provisions could be imagined as a state machine (and are vaguely described as such in Hvitved's thesis), in this  
