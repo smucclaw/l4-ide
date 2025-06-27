@@ -43,10 +43,6 @@
   },
   "dependencies": {
     "@codingame/monaco-vscode-api": "^14.0.4",
-    "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-regular-svg-icons": "^6.7.2",
-    "@fortawesome/free-solid-svg-icons": "^6.7.2",
-    "@fortawesome/svelte-fontawesome": "^0.2.3",
     "@repo/viz-expr": "*",
     "@sveltejs/adapter-static": "^3.0.8",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
