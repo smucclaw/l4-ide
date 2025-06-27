@@ -453,7 +453,7 @@
   }
 
   function handleExampleSelect(example: LegalExample) {
-    if (editor) {
+    if (showExamples && editor) {
       editor.setValue(example.content)
     }
   }
@@ -462,10 +462,11 @@
 {#if showVisualizer}
   <Resizable.PaneGroup direction="horizontal">
     {#if showExamples}
-    <Resizable.Pane defaultSize={20}>
-      <ExampleSelector onExampleSelect={handleExampleSelect}></ExampleSelector>
-    </Resizable.Pane>
-    <Resizable.Handle />
+      <Resizable.Pane defaultSize={20}>
+        <ExampleSelector onExampleSelect={handleExampleSelect}
+        ></ExampleSelector>
+      </Resizable.Pane>
+      <Resizable.Handle />
     {/if}
     <Resizable.Pane defaultSize={40}>
       <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
