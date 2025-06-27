@@ -28,4 +28,3 @@ and the example `hetzner.nix` to figure out what you need to do.
 
 - /var/lib/acme/
 - /var/lib/private/jl4-websessions/
-
