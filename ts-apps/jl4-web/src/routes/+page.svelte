@@ -636,7 +636,7 @@
   .fab-sidebar.open {
     position: absolute;
     top: 10px;
-    left: calc(20% + 0.5rem);
+    left: calc(max(20%, 250px) + 0.5rem);
   }
   .fab-sidebar.open .arrow-right,
   .fab-sidebar:not(.open) .arrow-left {
