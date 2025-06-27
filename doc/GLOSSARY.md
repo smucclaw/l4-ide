@@ -27,6 +27,7 @@
 
 ## D
 
+- [**Days and Dates**](libraries/daydate.md) - Library with functions for day and date math
 - [**Default Logic**](default-logic.md#default-logic) - Predefined values and their handling
 - [**Default Reasoning**](default-logic.md#default-reasoning) - Logic for handling unspecified cases
 - [**DECLARE**](10-data-types.md#user-defined-types) - Keyword for defining new types
