@@ -524,15 +524,13 @@
       Share
     </button>
   </div>
+  {#if showExamples && showSidebar}
+    <div class="sidebar">
+      <ExampleSelector onExampleSelect={handleExampleSelect} />
+    </div>
+  {/if}
   <div class="panes">
     <Resizable.PaneGroup direction="horizontal">
-      <!-- Only show editor and visualizer by default -->
-      {#if showSidebar && showExamples}
-        <Resizable.Pane defaultSize={20} minSize={20} maxSize={20}>
-          <ExampleSelector onExampleSelect={handleExampleSelect} />
-        </Resizable.Pane>
-      {/if}
-      <Resizable.Handle />
       <Resizable.Pane defaultSize={50}>
         <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
       </Resizable.Pane>
@@ -590,9 +588,23 @@
     background: rgba(250, 250, 249, 0.88);
     display: flex;
   }
-  .panes {
-    overflow: hidden;
+  .sidebar {
+    width: max(20%, 250px);
+    position: absolute;
+    top: 42px;
     height: calc(100dvh - 42px);
+    left: 0;
+  }
+  .panes {
+    position: absolute;
+    overflow: hidden;
+    top: 42px;
+    left: 0;
+    right: 0;
+    height: calc(100dvh - 42px);
+  }
+  .sidebar + .panes {
+    left: max(20%, 250px);
   }
   h3 {
     font-size: 1.4rem;
