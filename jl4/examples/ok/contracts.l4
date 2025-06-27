@@ -64,7 +64,7 @@ DECLARE baz IS ONE OF baz HAS x IS A foo
                       quuux
 
 quux MEANS 
-  PARTY B MUST baz bar 
+  PARTY B MAY DO baz bar 
 
 #TRACE quux AT 0 WITH
   PARTY B DOES quuux AT 1

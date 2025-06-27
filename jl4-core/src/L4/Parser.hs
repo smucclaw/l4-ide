@@ -1195,10 +1195,16 @@ obligation = do
 must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
-     <$> do
-      annoLexeme (spacedKeyword_ TKMust)
+     <$> asum
+      [ annoLexeme (spacedKeyword_ TKMust)
         *> optional (annoLexeme (spacedKeyword_ TKDo))
         *> annoHole (indentedPattern current)
+      , annoLexeme (spacedKeyword_ TKMay)
+        *> optional (annoLexeme (spacedKeyword_ TKDo))
+        *> annoHole (indentedPattern current)
+      , annoLexeme (spacedKeyword_ TKDo)
+        *> annoHole (indentedPattern current)
+      ]
      <*> optionalWithHole do
       annoLexeme (spacedKeyword_ TKProvided)
         *> annoHole (indentedExpr current)
