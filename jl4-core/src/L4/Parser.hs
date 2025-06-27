@@ -59,6 +59,7 @@ data PState = PState
   { comments :: [Comment]
   , nlgs :: [Nlg]
   , refs :: [Ref]
+  , descs :: [Desc]
   }
   deriving stock (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically PState
@@ -69,6 +70,9 @@ addNlg n s = over #nlgs (n:) s
 addRef :: Ref -> PState -> PState
 addRef ref s = over #refs (ref:) s
 
+addDesc :: Desc -> PState -> PState
+addDesc desc s = over #descs (desc:) s
+
 spaces :: Parser [PosToken]
 spaces =
   takeWhileP (Just "space token") isSpaceToken
@@ -76,8 +80,8 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgAnnotationP <|> fmap Z refP)
-  traverse_ addNlgOrRef nlgs
+  nlgs :: [NS Epa [Ref, Nlg, Desc, ()]] <- many (fmap (S . S . S . Z) refAdditionalP <|> fmap (S . S . Z) descP <|> fmap (S . Z) nlgAnnotationP <|> fmap Z refP)
+  traverse_ addAnnotation nlgs
   let
     epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
   pure $ Lexeme
@@ -90,6 +94,16 @@ refP :: Parser (Epa Ref)
 refP = do
   refExpr <- refAnnotationP
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
+
+descP :: Parser (Epa Desc)
+descP = do
+  e <- hidden $ spacedTokenWs (\ case
+    TAnnotations (TDesc t) -> Just t
+    _ -> Nothing
+    )
+    "Description annotation"
+  pure $ fmap (MkDesc (mkSimpleEpaAnno e)) e
+
 
 nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
@@ -219,8 +233,9 @@ lexeme p = do
     , hiddenClusters = wsOrAnnotation.hiddenClusters
     }
 
-addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
-addNlgOrRef = \ case
+addAnnotation :: NS Epa (Ref : Nlg : Desc : xs) -> Parser ()
+addAnnotation = \ case
+  S (S (Z desc)) -> modify' (addDesc desc.payload)
   S (Z nlg) -> modify' (addNlg nlg.payload)
   Z ref -> modify' (addRef ref.payload)
   _ -> pure ()
@@ -341,25 +356,30 @@ module' uri = do
       <$  annoLexeme_ spaceOrAnnotations
       <*> annoHole anonymousSection
 
-manyLines :: Parser a -> Parser [a]
+manyLines :: (Pos -> Parser a) -> Parser [a]
 manyLines p = do
   current <- Lexer.indentLevel
   manyLinesPos current p
 
-manyLinesPos :: Pos -> Parser a -> Parser [a]
+manyLinesPos :: Pos -> (Pos -> Parser a) -> Parser [a]
 manyLinesPos current p = do
-  many (withIndent EQ current (const p))
+  many (withIndent EQ current p)
 
-someLines :: Parser a -> Parser [a]
+someLines :: (Pos -> Parser a) -> Parser [a]
 someLines p = do
   current <- Lexer.indentLevel
   someLinesPos current p
 
-someLinesPos :: Pos -> Parser a -> Parser [a]
+someLinesPos :: Pos -> (Pos -> Parser a) -> Parser [a]
 someLinesPos current p = do
-  some (withIndent EQ current (const p))
+  some (withIndent EQ current p)
 
 -- | Run the parser only when the indentation is correct and fail otherwise.
+-- Note that indentLevel returns the indentation of the next token, so we only
+-- check that next token. If the given parser then consumes additional tokens,
+-- they can start at arbitrary positions, but of course their parsers can
+-- implement their own checks.
+--
 withIndent :: (TraversableStream s, MonadParsec e s m) => Ordering -> Pos -> (Pos -> m b) -> m b
 withIndent ordering current p = do
   actual <- Lexer.indentLevel
@@ -376,7 +396,7 @@ anonymousSection =
     MkSection emptyAnno
       <$> annoHole (pure Nothing)
       <*> annoHole (pure Nothing)
-      <*> annoHole (lsepBy (topdeclWithRecovery 0) (spacedSymbol_ TSemicolon))
+      <*> annoHole (lsepBy (const (topdeclWithRecovery 0)) (spacedSymbol_ TSemicolon))
 
 section :: Int -> Parser (Section Name)
 section n = attachAnno $
@@ -387,7 +407,7 @@ section n = attachAnno $
            pure wa) *> annoHole (optional name)
         )
     <*> annoHole (optional aka)
-    <*> annoHole (lsepBy (topdeclWithRecovery n) (spacedSymbol_ TSemicolon))
+    <*> annoHole (lsepBy (const (topdeclWithRecovery n)) (spacedSymbol_ TSemicolon))
 
 sectionSymbols :: AnnoParser Int
 sectionSymbols =
@@ -462,7 +482,7 @@ directive =
       ]
 
 contractEvents :: AnnoParser [Expr Name]
-contractEvents = annoHole $ lmany expr
+contractEvents = annoHole $ lmany (const expr)
 
 import' :: Parser (Import Name)
 import' =
@@ -505,7 +525,7 @@ recordDecl =
 recordDecl' :: AnnoParser [TypedName Name]
 recordDecl' =
      annoLexeme (spacedKeyword_ TKHas)
-  *> annoHole (lsepBy reqParam (spacedSymbol_ TComma))
+  *> annoHole (lsepBy (const reqParam) (spacedSymbol_ TComma))
 
 enumOrSynonymDecl :: Parser (TypeDecl Name)
 enumOrSynonymDecl =
@@ -521,7 +541,7 @@ enumDecl =
   EnumDecl emptyAnno
     <$  annoLexeme (spacedKeyword_ TKOne)
     <*  annoLexeme (spacedKeyword_ TKOf)
-    <*> annoHole (lsepBy conDecl (spacedSymbol_ TComma))
+    <*> annoHole (lsepBy (const conDecl) (spacedSymbol_ TComma))
 
 synonymDecl :: AnnoParser (TypeDecl Name)
 synonymDecl =
@@ -563,8 +583,8 @@ appForm = do
   attachAnno $
     MkAppForm emptyAnno
       <$> annoHole name
-      <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 name (spacedSymbol_ TComma))
-          <|> annoHole (lmany (indented name current))
+      <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const name) (spacedSymbol_ TComma))
+          <|> annoHole (lmany (const (indented name current)))
           )
       <*> annoHole (optional aka)
 
@@ -573,7 +593,7 @@ aka =
   attachAnno $
     MkAka emptyAnno
       <$  annoLexeme (spacedKeyword_ TKAka)
-      <*> annoHole (lsepBy name (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const name) (spacedSymbol_ TComma))
 
 typeSig :: Parser (TypeSig Name)
 typeSig =
@@ -587,7 +607,7 @@ givens =
   attachAnno $
     MkGivenSig emptyAnno
       <$  annoLexeme (spacedKeyword_ TKGiven)
-      <*> annoHole (lsepBy param (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const param) (spacedSymbol_ TComma))
 
 giveth :: Parser (GivethSig Name)
 giveth = do
@@ -650,8 +670,8 @@ tyApp = do
   attachAnno $
     TyApp emptyAnno
     <$> annoHole (tokenAsName (TKeywords TKList) <|> name)
-    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (indented type' current) (spacedSymbol_ TComma))
-        <|> annoHole (lmany (indented atomicType current))
+    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indented type' current)) (spacedSymbol_ TComma))
+        <|> annoHole (lmany (const (indented atomicType current)))
         )
 
 fun :: Parser (Type' Name)
@@ -661,7 +681,7 @@ fun = do
     Fun emptyAnno
     <$  annoLexeme (spacedKeyword_ TKFunction)
     <*  annoLexeme (spacedKeyword_ TKFrom)
-    <*> annoHole (lsepBy1 (indented optionallyNamedType current) (spacedKeyword_ TKAnd))
+    <*> annoHole (lsepBy1 (const (indented optionallyNamedType current)) (spacedKeyword_ TKAnd))
     <*  annoLexeme (spacedKeyword_ TKTo)
     <*> annoHole (indented type' current)
 
@@ -672,7 +692,7 @@ forall' = do
     Forall emptyAnno
     <$  annoLexeme (spacedKeyword_ TKFor)
     <*  annoLexeme (spacedKeyword_ TKAll)
-    <*> annoHole (lsepBy1 name (spacedKeyword_ TKAnd))
+    <*> annoHole (lsepBy1 (const name) (spacedKeyword_ TKAnd))
 --    <*  optional article
     <*> annoHole type' -- (indented type' current)
 
@@ -696,23 +716,23 @@ enumType =
     <*> annoHole (lsepBy1 name (spacedToken_ TComma))
 -}
 
-lmany :: Parser a -> Parser [a]
+lmany :: (Pos -> Parser a) -> Parser [a]
 lmany pp =
-  fmap concat $ manyLines $ some pp
+  fmap concat $ manyLines $ \ p -> some (pp p)
 
-lsepBy :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => (Pos -> Parser a) -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy pp sep =
-  fmap concat $ manyLines $ do
-    ps <- P.sepBy1 pp sep
+  fmap concat $ manyLines $ \ p -> do
+    ps <- P.sepBy1 (pp p) sep
     pure $ P.zipSepBy1 id zipAnno ps
   where
     zipAnno :: a -> Lexeme_ (AnnoToken a) (AnnoToken a) -> a
     zipAnno p s = setAnno (fixAnnoSrcRange $ getAnno p <> mkSimpleEpaAnno (lexToEpa s)) p
 
-lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => Parser a -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
+lsepBy1 :: forall a. (HasAnno a, HasField "range" (AnnoToken a) SrcRange) => (Pos -> Parser a) -> Parser (Lexeme_ (AnnoToken a) (AnnoToken a)) -> Parser [a]
 lsepBy1 pp sep =
-  fmap concat $ someLines $ do
-    ps <- P.sepBy1 pp sep
+  fmap concat $ someLines $ \ p -> do
+    ps <- P.sepBy1 (pp p) sep
     pure $ P.zipSepBy1 id zipAnno ps
   where
     zipAnno :: a -> Lexeme_ (AnnoToken a) (AnnoToken a) -> a
@@ -1064,7 +1084,7 @@ list = do
   attachAnno $
     List emptyAnno
       <$  annoLexeme (spacedKeyword_ TKList)
-      <*> annoHole (lsepBy (indentedExpr current) (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
 
 intLit :: Parser Lit
 intLit =
@@ -1092,22 +1112,21 @@ app = do
   attachAnno $
     App emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (indentedExpr current) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
-        <|> annoHole (lmany (indented atomicExpr current))
+    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
+        <|> annoHole (lmany (const (indented atomicExpr current)))
         )
 
 namedApp :: Parser (Expr Name)
 namedApp = do
-  current <- Lexer.indentLevel
   attachAnno $
     AppNamed emptyAnno
     <$> annoHole name
-    <*> (   annoLexeme (spacedKeyword_ TKWith) *> annoHole (lsepBy1 (namedExpr current) (spacedSymbol_ TComma))
+    <*> (   annoLexeme (spacedKeyword_ TKWith) *> annoHole (lsepBy1 namedExpr (spacedSymbol_ TComma))
         )
     <*> pure Nothing
 
 namedExpr :: Pos -> Parser (NamedExpr Name)
-namedExpr current  =
+namedExpr current =
   attachAnno $
     MkNamedExpr emptyAnno
       <$> annoHole   name
@@ -1195,10 +1214,16 @@ obligation = do
 must :: Pos -> Parser (RAction Name)
 must current = attachAnno $
    MkAction emptyAnno
-     <$> do
-      annoLexeme (spacedKeyword_ TKMust)
+     <$> asum
+      [ annoLexeme (spacedKeyword_ TKMust)
         *> optional (annoLexeme (spacedKeyword_ TKDo))
         *> annoHole (indentedPattern current)
+      , annoLexeme (spacedKeyword_ TKMay)
+        *> optional (annoLexeme (spacedKeyword_ TKDo))
+        *> annoHole (indentedPattern current)
+      , annoLexeme (spacedKeyword_ TKDo)
+        *> annoHole (indentedPattern current)
+      ]
      <*> optionalWithHole do
       annoLexeme (spacedKeyword_ TKProvided)
         *> annoHole (indentedExpr current)
@@ -1222,7 +1247,7 @@ consider = do
     Consider emptyAnno
       <$  annoLexeme (spacedKeyword_ TKConsider)
       <*> annoHole (indentedExpr current)
-      <*> annoHole (lsepBy branch (spacedSymbol_ TComma))
+      <*> annoHole (lsepBy (const branch) (spacedSymbol_ TComma))
 
 branch :: Parser (Branch Name)
 branch =
@@ -1309,8 +1334,8 @@ patApp = do
     PatApp emptyAnno
     <$> annoHole name
     <*> (      annoLexeme (spacedKeyword_ TKOf)
-            *> annoHole (lsepBy (indented basePattern current) (spacedSymbol_ TComma))
-        <|> annoHole (lmany (indented atomicPattern current))
+            *> annoHole (lsepBy (const (indented basePattern current)) (spacedSymbol_ TComma))
+        <|> annoHole (lmany (const (indented atomicPattern current)))
         )
 
 -- Some manual left-factoring here to prevent left-recursion
@@ -1514,6 +1539,7 @@ execNlgParserForTokens p uri input ts =
       { nlgs = []
       , comments = []
       , refs = []
+      , descs = []
       }
     stream = MkTokenStream (Text.unpack input) ts
 
@@ -1545,6 +1571,7 @@ execParserForTokens p file input ts =
       { nlgs = []
       , comments = []
       , refs = []
+      , descs = []
       }
     stream = MkTokenStream (Text.unpack input) ts
 

@@ -58,6 +58,7 @@ library
     src
 
   build-depends:
+    uuid,
     aeson,
     aeson-combinators,
     bytestring,
@@ -65,9 +66,11 @@ library
     containers,
     extra,
     directory,
+    http-client,
     filepath,
     jl4-core,
     jl4-lsp,
+    jl4-websessions,
     lens,
     lsp-types,
     openapi3,
@@ -75,6 +78,7 @@ library
     optparse-applicative,
     scientific,
     servant >=0.20.2 && <0.21,
+    servant-client,
     servant-client-core,
     servant-openapi3,
     servant-server >=0.20.2 && <0.21,

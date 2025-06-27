@@ -378,16 +378,17 @@ moduleTopDecls = lens
 data Extension = Extension
   { resolvedInfo :: Maybe Info
   , nlg          :: Maybe Nlg
+  , desc         :: Maybe Desc
   }
   deriving stock (GHC.Generic, Eq, Show)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 instance Semigroup Extension where
-  Extension i1 nlg1 <> Extension i2 nlg2 =
-    Extension (i1 <|> i2) (nlg1 <|> nlg2)
+  Extension i1 nlg1 desc <> Extension i2 nlg2 desc' =
+    Extension (i1 <|> i2) (nlg1 <|> nlg2) (desc <|> desc')
 
 instance Monoid Extension where
-  mempty = Extension Nothing Nothing
+  mempty = Extension Nothing Nothing Nothing
 
 data Info =
     TypeInfo (Type' Resolved) (Maybe TermKind)
@@ -397,7 +398,7 @@ data Info =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 instance Default Extension where
-  def = Extension Nothing Nothing
+  def = Extension Nothing Nothing Nothing
 
 annoOf :: HasAnno a => Lens' a (Anno' a)
 annoOf = lens
@@ -410,8 +411,14 @@ annInfo = annoExtra % #resolvedInfo
 annNlg :: Lens' Anno (Maybe Nlg)
 annNlg = #extra % #nlg
 
+annDesc :: Lens' Anno (Maybe Desc)
+annDesc = #extra % #desc
+
 setNlg :: Nlg -> Anno -> Anno
 setNlg n a = a & annNlg ?~ n
+
+setDesc :: Desc -> Anno -> Anno
+setDesc d a = a & annDesc ?~ d
 
 data TermKind =
     Computable -- ^ a variable with known definition (let or global)
@@ -616,6 +623,16 @@ data Ref = MkRef Anno Text
   deriving stock (Show, Eq, GHC.Generic)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
+getRef :: Ref -> Text
+getRef (MkRef _ t) = t
+
+data Desc = MkDesc Anno Text
+  deriving stock (Show, Eq, GHC.Generic)
+  deriving anyclass (SOP.Generic, ToExpr, NFData)
+
+getDesc :: Desc -> Text
+getDesc (MkDesc _ t) = t
+
 deriving via L4Syntax Nlg
   instance HasAnno Nlg
 deriving via L4Syntax (NlgFragment n)
@@ -624,6 +641,8 @@ deriving via L4Syntax Comment
   instance HasAnno Comment
 deriving via L4Syntax Ref
   instance HasAnno Ref
+deriving via L4Syntax Desc
+  instance HasAnno Desc
 
 instance ToConcreteNodes PosToken Comment where
   toNodes (MkComment ann _) = flattenConcreteNodes ann []
@@ -701,6 +720,7 @@ deriving anyclass instance HasSrcRange (Import a)
 deriving anyclass instance HasSrcRange Lit
 deriving anyclass instance HasSrcRange Name
 deriving anyclass instance HasSrcRange Nlg
+deriving anyclass instance HasSrcRange Desc
 deriving anyclass instance HasSrcRange (NlgFragment n)
 deriving anyclass instance HasSrcRange Comment
 deriving anyclass instance HasSrcRange Ref

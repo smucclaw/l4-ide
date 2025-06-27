@@ -22,6 +22,7 @@ import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
+import Network.HTTP.Client (newManager, defaultManagerSettings)
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -42,7 +43,7 @@ opts =
 
 defaultMain :: IO ()
 defaultMain = do
-  Options{port, serverName, sourcePaths} <- execParser opts
+  Options{port, serverName, sourcePaths, crudServerName} <- execParser opts
 
   l4Files <- expandSourcePaths sourcePaths
   when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
@@ -53,8 +54,10 @@ defaultMain = do
   unless (null l4Functions) $ print $ Map.keys l4Functions
 
   dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
+  mgr <- newManager defaultManagerSettings
+  putStrLn $ "will contact crud server on following base url: " <> show crudServerName
   let
-    initialState = MkAppEnv dbRef
+    initialState = MkAppEnv dbRef crudServerName mgr
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let

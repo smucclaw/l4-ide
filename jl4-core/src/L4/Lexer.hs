@@ -75,6 +75,7 @@ data TAnnotations
   | TRef          !Text !AnnoType
   | TNlgString    !Text
   | TNlgPrefix    -- ^ "@nlg"
+  | TDesc         !Text -- ^ "@desc"
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -160,6 +161,7 @@ data TKeywords
   | TKDo
   | TKDoes
   | TKMust
+  | TKMay
   | TKProvided
   | TKWithin
   | TKHence
@@ -229,6 +231,7 @@ keywords = Map.fromList
   , ("DO"         , TKDo         )
   , ("DOES"       , TKDoes       )
   , ("MUST"       , TKMust       )
+  , ("MAY"        , TKMay       )
   , ("PROVIDED"   , TKProvided   )
   , ("WITHIN"     , TKWithin     )
   , ("HENCE"      , TKHence      )
@@ -351,6 +354,9 @@ refSrcAnnotation = fst <$> lineAnno "@ref-src"
 refMapAnnotation :: Lexer Text
 refMapAnnotation = fst <$> lineAnno "@ref-map"
 
+descAnnotation :: Lexer Text
+descAnnotation = fst <$> lineAnno "@desc"
+
 nlgString :: Lexer Text
 nlgString =
   takeWhile1P (Just "character") (\c -> c `notElem` nlgSpecialChars && not (isSpace c))
@@ -469,6 +475,7 @@ annotationsPayload :: Lexer TAnnotations
 annotationsPayload = asum
   [ TRefSrc       <$> refSrcAnnotation
   , TRefMap       <$> refMapAnnotation
+  , TDesc         <$> descAnnotation
   , uncurry TNlg  <$> nlgAnnotation
   , uncurry TRef  <$> refAnnotation
   ]
@@ -951,6 +958,7 @@ displayTokenType = \case
     TRefMap t         -> "@ref-map" <> t
     TNlgString t      -> t
     TNlgPrefix        -> "@nlg"
+    TDesc t           -> "@desc" <> t
   TIdentifiers i -> case i of
     TGenitive         -> "'s"
     TIdentifier t     -> t

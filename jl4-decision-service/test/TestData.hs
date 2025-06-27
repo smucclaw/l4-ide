@@ -42,7 +42,7 @@ rodentAndVerminFunction = do
                   ]
             in
               MkParameters
-                { parameters = params
+                { parameterMap = params
                 , required = Map.keys params
                 }
         , supportedEvalBackend = [JL4]
