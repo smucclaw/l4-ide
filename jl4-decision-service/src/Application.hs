@@ -23,7 +23,6 @@ import System.FilePath (takeExtension, (</>))
 import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Network.HTTP.Client (newManager, defaultManagerSettings)
-import Servant.Client.Core (BaseUrl(..), Scheme (..))
 
 -- ----------------------------------------------------------------------------
 -- Option Parser
@@ -55,10 +54,9 @@ defaultMain = do
 
   dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
   mgr <- newManager defaultManagerSettings
-  let baseUrl = maybe (BaseUrl Http "localhost" 5008"") (\(name, path) -> BaseUrl Https name 443 path) crudServerName
-  putStrLn $ "will contact crud server on following base url: " <> show baseUrl
+  putStrLn $ "will contact crud server on following base url: " <> show crudServerName
   let
-    initialState = MkAppEnv dbRef baseUrl mgr
+    initialState = MkAppEnv dbRef crudServerName mgr
   putStrLn $ "Application started on port: " <> show port
   withStdoutLogger $ \aplogger -> do
     let

@@ -497,7 +497,7 @@ getFunctionHandler name = do
     Just function -> pure function.fnImpl
 
 withUUIDFunction :: Text -> (ValidatedFunction -> AppM a) -> ((ServerError -> ServerError) -> AppM a) -> AppM a
-withUUIDFunction (T.breakOn ":" -> (muuid, T.drop 1 -> funName)) k err = case UUID.fromText muuid of
+withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
   Nothing -> err id
   Just uuid -> do
     MkAppEnv {baseUrl, manager} <- ask
@@ -513,14 +513,18 @@ withUUIDFunction (T.breakOn ":" -> (muuid, T.drop 1 -> funName)) k err = case UU
             fnDecl = toDecl fnImpl
 
         decide <- liftIO (runExceptT (Jl4.buildFunDecide prog fnDecl))
-          >>= either (const $ throwError err500 {errBody = "evaluator failed"}) pure
+          >>= either (\e -> do
+            liftIO $ hPutStrLn stderr "the evaluator failed with error:"
+            liftIO $ hPrint stderr e
+            throwError err500 {errBody = "evaluator failed"}
+            ) pure
 
         k ValidatedFunction
-          -- TODO: need to extract parameters
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
-          , fnEvaluator = Map.singleton JL4
-          $ Jl4.createFunction fnDecl prog
+          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction fnDecl prog
           }
+  where
+   (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
 
 parametersOfDecide :: Decide Resolved -> Parameters
 parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =

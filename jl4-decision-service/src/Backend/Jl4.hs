@@ -118,7 +118,6 @@ buildEvalFunApp funName decide recordMap args = do
   MkDecide _ (MkTypeSig _ given _) _ _ = decide
   MkGivenSig _ ns = given
   funArgs = mapMaybe typedNameToTuple ns
-  -- TODO: change to use type in anno, not the type given
   typedNameToTuple (MkOptionallyTypedName _ n (Just ty)) = decTy n ty
   typedNameToTuple (MkOptionallyTypedName _ n@((.extra.resolvedInfo) . getAnno . getName -> Just (TypeInfo ty _)) Nothing) = decTy n ty
   typedNameToTuple MkOptionallyTypedName {} = Nothing
