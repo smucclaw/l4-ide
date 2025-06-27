@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { SvelteToast, toast } from '@zerodevx/svelte-toast'
-  import { faShareAlt } from '@fortawesome/free-solid-svg-icons'
-  import { FontAwesomeIcon } from '@fortawesome/svelte-fontawesome'
   import { debounce } from '$lib/utils'
   import * as Resizable from '$lib/components/ui/resizable/index.js'
 
@@ -45,8 +43,13 @@
   const sessionUrl = import.meta.env.VITE_SESSION_URL || 'http://localhost:5008'
 
   let persistButtonBlocked = $state(false)
-  let showVisualizer = $state(true)
-  let showExamples = $state(true)
+
+  // Set from URL search params as early as possible to avoid flicker
+  const ownUrl = new URL(window.location.href)
+
+  let showVisualizer = $state(!ownUrl.searchParams.has('no-visualizer'))
+  let showExamples = $state(!ownUrl.searchParams.has('no-examples'))
+  let showSidebar = $state(!ownUrl.searchParams.has('no-examples'))
 
   /***********************************
         UI-related vars
@@ -149,10 +152,6 @@
 
     const runClient = async () => {
       const logger = new ConsoleLogger(LogLevel.Debug)
-
-      const ownUrl: URL = new URL(window.location.href)
-      showVisualizer = !ownUrl.searchParams.has('no-visualizer')
-      showExamples = !ownUrl.searchParams.has('no-examples')
 
       await initServices(
         {
@@ -460,49 +459,110 @@
 </script>
 
 {#if showVisualizer}
-  <Resizable.PaneGroup direction="horizontal">
+  <div class="top-bar">
+    <div>
+      <h3>L4 Editor</h3>
+    </div>
     {#if showExamples}
-      <Resizable.Pane defaultSize={20}>
-        <ExampleSelector onExampleSelect={handleExampleSelect}
-        ></ExampleSelector>
+      <button
+        class="fab fab-sidebar {showSidebar ? 'open' : ''}"
+        onclick={() => (showSidebar = !showSidebar)}
+        aria-label="Toggle sidebar"
+      >
+        <svg
+          style="opacity: .7"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <!-- Square with rounded corners -->
+          <rect x="2.5" y="2.5" width="19" height="19" rx="4" />
+          <!-- Sidebar divider (vertical line) -->
+          <line x1="8.5" y1="3.5" x2="8.5" y2="20.5" />
+          <!-- Arrowhead pointing left (no stem), shifted right for centering -->
+          <polyline class="arrow-left" points="16,9 12,12 16,15" />
+          <polyline class="arrow-right" points="13,9 17,12 13,15" />
+        </svg>
+      </button>
+    {/if}
+    <button
+      class="fab fab-share"
+      onclick={handleShare}
+      aria-label="Share the current file"
+      title="Share the current file"
+      disabled={persistButtonBlocked}
+    >
+      <svg
+        style="opacity: .6; font-size: 24px; vertical-align: middle; margin-right: .5rem"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Circle for the share origin -->
+        <circle cx="18" cy="5" r="3" />
+        <!-- Circle for the left endpoint -->
+        <circle cx="6" cy="12" r="3" />
+        <!-- Circle for the right endpoint -->
+        <circle cx="18" cy="19" r="3" />
+        <!-- Line from left to top -->
+        <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+        <!-- Line from left to bottom -->
+        <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+      </svg>
+      Share
+    </button>
+  </div>
+  {#if showExamples && showSidebar}
+    <div class="sidebar">
+      <ExampleSelector onExampleSelect={handleExampleSelect} />
+    </div>
+  {/if}
+  <div class="panes">
+    <Resizable.PaneGroup direction="horizontal">
+      <Resizable.Pane defaultSize={50}>
+        <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
       </Resizable.Pane>
       <Resizable.Handle />
-    {/if}
-    <Resizable.Pane defaultSize={40}>
-      <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
-    </Resizable.Pane>
-    <Resizable.Handle />
-    <Resizable.Pane>
-      <div class="relative h-full">
-        <div id="persist-ui" class="absolute items-center gap-2 m-4">
-          <button
-            onclick={handleShare}
-            class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            disabled={persistButtonBlocked}
-            title="Share the current file"
-            aria-label="Share"
-          >
-            <FontAwesomeIcon icon={faShareAlt} />
-          </button>
+      <Resizable.Pane>
+        <div class="relative h-full ladder-border">
+          <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
+            {#await renderLadderPromise then ladder}
+              {#key ladder.funDeclLirNode}
+                <div class="slightly-shorter-than-full-viewport-height pb-1">
+                  <LadderFlow
+                    {context}
+                    node={ladder.funDeclLirNode}
+                    env={ladder.env}
+                  />
+                </div>
+              {/key}
+            {:catch error}
+              <p>Error loading Ladder Diagram: {error.message}</p>
+            {/await}
+          </div>
         </div>
-        <div id="jl4-webview" class="h-full max-w-[96%] mx-auto bg-white">
-          {#await renderLadderPromise then ladder}
-            {#key ladder.funDeclLirNode}
-              <div class="slightly-shorter-than-full-viewport-height pb-1">
-                <LadderFlow
-                  {context}
-                  node={ladder.funDeclLirNode}
-                  env={ladder.env}
-                />
-              </div>
-            {/key}
-          {:catch error}
-            <p>Error loading Ladder Diagram: {error.message}</p>
-          {/await}
-        </div>
-      </div>
-    </Resizable.Pane>
-  </Resizable.PaneGroup>
+        <style>
+          .ladder-border {
+            border-top: 1px solid #999;
+            border-right: 1px solid #999;
+            border-bottom: 1px solid #999;
+          }
+        </style>
+      </Resizable.Pane>
+    </Resizable.PaneGroup>
+  </div>
 {:else}
   <div class="h-full w-full relative">
     <div
@@ -510,17 +570,6 @@
       class="relative h-full w-full"
       bind:this={editorElement}
     ></div>
-    <div id="persist-ui" class="absolute top-3 left-3 z-10">
-      <button
-        onclick={handleShare}
-        class="p-2 rounded-[4px] border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-        disabled={persistButtonBlocked}
-        title="Share the current file"
-        aria-label="Share"
-      >
-        <FontAwesomeIcon icon={faShareAlt} />
-      </button>
-    </div>
   </div>
 {/if}
 
@@ -532,7 +581,76 @@
     --toastBackground: #white;
     --toastBorderRadius: 4px;
   }
-
+  .top-bar {
+    height: 42px;
+    font-family: 'Merriweather', Times, serif;
+    color: rgb(30, 29, 28);
+    background: rgba(250, 250, 249, 0.88);
+    display: flex;
+  }
+  .sidebar {
+    width: max(20%, 250px);
+    position: absolute;
+    top: 42px;
+    height: calc(100dvh - 42px);
+    left: 0;
+  }
+  .panes {
+    position: absolute;
+    overflow: hidden;
+    top: 42px;
+    left: 0;
+    right: 0;
+    height: calc(100dvh - 42px);
+  }
+  .sidebar + .panes {
+    left: max(20%, 250px);
+  }
+  h3 {
+    font-size: 1.4rem;
+    font-weight: bold;
+    padding: 0.4rem 1rem;
+  }
+  .fab {
+    position: absolute;
+    min-width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    border: none;
+    cursor: pointer;
+    transition:
+      box-shadow 0.2s,
+      background 0.2s;
+    color: rgba(30, 29, 28, 0.698);
+  }
+  .fab:hover {
+    background: #f3f2f1;
+    color: rgba(30, 29, 28, 1);
+    border-radius: 2px;
+    outline: 3px solid #f3f2f1;
+  }
+  .fab-sidebar.open {
+    position: absolute;
+    top: 10px;
+    left: calc(max(20%, 250px) + 0.5rem);
+  }
+  .fab-sidebar.open .arrow-right,
+  .fab-sidebar:not(.open) .arrow-left {
+    display: none;
+  }
+  .fab-sidebar {
+    position: relative;
+    top: 10px;
+    left: auto;
+  }
+  .fab-share {
+    top: 10px;
+    right: 1rem;
+  }
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
   }
