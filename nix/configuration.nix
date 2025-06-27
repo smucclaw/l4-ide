@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 {
   imports = [
     ./jl4-web/configuration.nix
@@ -8,10 +8,6 @@
     ./module.nix
   ];
 
-  system.stateVersion = "24.11";
-
-  systemd.network.enable = true;
-
   # ---------------------------------------------
   # web
   # ---------------------------------------------
@@ -19,7 +15,6 @@
   networking = {
     inherit (config.jl4-demo) domain;
     hostName = "jl4-demo";
-    networkmanager.enable = true;
     firewall.allowedTCPPorts = [
       80
       443
@@ -43,6 +38,8 @@
     defaults.email = config.jl4-demo.acme-email;
   };
 
+  security.sudo.wheelNeedsPassword = false;
+
   # ---------------------------------------------
   # ssh
   # ---------------------------------------------
@@ -58,4 +55,18 @@
     enable = true;
     settings.PasswordAuthentication = false;
   };
+
+  # we don't really expect anyone to log in, but if they do, it's nice to have some quality-of-life packages available
+  environment.systemPackages = with pkgs; [
+    vim
+    wget
+    emacs-nox
+    btop
+    zsh
+    bat
+    ripgrep
+    cloud-utils
+    lsof
+    inetutils
+  ];
 }

@@ -23,3 +23,8 @@ as the application specific modules from there. Then use `nixos-anywhere` with t
 
 Check the [documentation for `nixos-anywhere`](https://github.com/nix-community/nixos-anywhere)
 and the example `hetzner.nix` to figure out what you need to do.
+
+## transferring system and application state to a new machine
+
+- /var/lib/acme/
+- /var/lib/private/jl4-websessions/

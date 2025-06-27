@@ -7,7 +7,7 @@ module Application (defaultMain, app) where
 
 import Control.Concurrent.STM (newTVarIO)
 import Control.Monad.Trans.Reader (ReaderT (..))
-import Control.Monad (unless)
+import Control.Monad (when, unless)
 import qualified Examples
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -46,6 +46,7 @@ defaultMain = do
   Options{port, serverName, sourcePaths, crudServerName} <- execParser opts
 
   l4Files <- expandSourcePaths sourcePaths
+  when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
   unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
 
   l4Functions <- Examples.loadL4Functions l4Files

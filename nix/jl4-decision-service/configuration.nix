@@ -33,6 +33,8 @@
         ${pkgs.callPackage ./package.nix { }}/bin/jl4-decision-service-exe \
           --port ${toString config.services.jl4-decision-service.port} \
           --serverName https://${config.networking.domain + config.services.jl4-decision-service.path} \
+          --sourcePaths ${../../jl4/experiments} \
+          --sourcePaths ${../../doc/tutorial-code} \
           --crudServerName ${config.networking.domain} \
           --crudServerPort ${toString config.services.jl4-websessions.port} \
           --crudServerPath ${config.services.jl4-websessions.path} \
