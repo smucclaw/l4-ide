@@ -2,7 +2,7 @@
 
 ## Introduction
 
-- [README](README.md)
+- [Overview](README.md)
 - [Background](Background.md)
 - [Principles](principles.md)
 - [Glossary](GLOSSARY.md)
@@ -34,6 +34,10 @@
 ## Applications and Integration
 
 - [Applications](apps.md)
+
+## Libraries
+
+- [Days and Dates](libraries/daydate.md)
 
 ## Other
 
