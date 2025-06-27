@@ -390,6 +390,10 @@ instance LayoutPrinter Nlg where
       prettyNlgs (x@MkNlgRef{}:xs) = printWithLayout x <+> prettyNlgs xs
       prettyNlgs (x:xs) = printWithLayout x <> prettyNlgs xs
 
+instance LayoutPrinter Desc where
+  printWithLayout = \ case
+    MkDesc _ann n -> pretty n
+
 instance LayoutPrinterWithName a => LayoutPrinter (NlgFragment a) where
   printWithLayout = \ case
     MkNlgText _ t -> pretty t

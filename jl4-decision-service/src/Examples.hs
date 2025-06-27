@@ -103,7 +103,7 @@ personQualifiesFunction = do
                 |]
         , parameters =
             MkParameters
-              { parameters =
+              { parameterMap =
                   Map.fromList
                     [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?")
                     , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?")
@@ -154,7 +154,7 @@ rodentsAndVerminFunction = do
                   ]
             in
               MkParameters
-                { parameters = params
+                { parameterMap = params
                 , required = Map.keys params
                 }
         , supportedEvalBackend = [JL4]

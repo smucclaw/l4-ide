@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Server (
   -- * AppM
@@ -50,18 +50,14 @@ module Server (
   toDecl,
 ) where
 
-import Backend.Api
+import Base
 import Backend.Api as Api
 import qualified Backend.Jl4 as Jl4
 
 import qualified Chronos
 import Control.Applicative
 import Control.Concurrent.STM
-import Control.Exception (evaluate)
-import Control.Monad (forM, when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Exception (evaluate, displayException)
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
@@ -71,23 +67,32 @@ import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString as BS
 import Data.Fixed
 import Data.Int
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe as Maybe
 import Data.Scientific (Scientific)
-import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Tuple.Extra as Tuple
-import Data.Typeable
 import qualified GHC.Clock as Clock
-import GHC.Generics
 import GHC.TypeLits
 import Servant
 import System.Timeout (timeout)
 import Servant.Client.Core.HasClient
+
+import Data.UUID (UUID)
+import qualified Data.UUID as UUID
+import Servant.Client (BaseUrl, ClientError, ClientM, runClientM, mkClientEnv)
+import qualified L4.CRUD as CRUD
+import Servant.Client.Generic (genericClient)
+import Network.HTTP.Client (Manager)
+import qualified Base.Text as T
+import L4.Syntax
+import L4.Print (prettyLayout)
+import Data.Function
+import qualified Optics
+import L4.Lexer
+
 
 -- ----------------------------------------------------------------------------
 -- Servant API
@@ -95,8 +100,10 @@ import Servant.Client.Core.HasClient
 
 data AppEnv = MkAppEnv
   { functionDatabase :: TVar (Map Text ValidatedFunction)
+  , baseUrl :: BaseUrl
+  , manager :: Manager
   }
-  deriving stock (Eq, Generic)
+  deriving stock (Generic)
 
 data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
@@ -197,7 +204,7 @@ data FunctionImplementation = FunctionImplementation
   deriving stock (Show, Read, Ord, Eq, Generic)
 
 data Parameters = MkParameters
-  { parameters :: Map Text Parameter
+  { parameterMap :: Map Text Parameter
   , required :: [Text]
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
@@ -261,6 +268,7 @@ instance HasClient m api => HasClient m (OperationId desc :> api) where
 -- Web Service Handlers
 -- ----------------------------------------------------------------------------
 
+-- TODO: this has become redundant
 data EvalBackend
   = JL4
   deriving ()
@@ -294,10 +302,14 @@ evalFunctionHandler :: String -> FnArguments -> AppM SimpleResponse
 evalFunctionHandler name' args = do
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
+  let fnArgs = Map.assocs args.fnArguments
+      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing
   case Map.lookup name functions of
-    Nothing -> throwError err404
-    Just fnImpl ->
-      runEvaluatorFor args.fnEvalBackend fnImpl (Map.assocs args.fnArguments) Nothing
+    Nothing -> withUUIDFunction
+        name
+        eval
+        (\k -> throwError (k err404))
+    Just fnImpl -> eval fnImpl
  where
   name = Text.pack name'
 
@@ -474,10 +486,63 @@ getAllFunctions = do
 
 getFunctionHandler :: String -> AppM Function
 getFunctionHandler name = do
+  let tname = Text.pack name
   functions <- liftIO . readTVarIO =<< asks (.functionDatabase)
-  case Map.lookup (Text.pack name) functions of
-    Nothing -> throwError err404
+  case Map.lookup tname functions of
+    Nothing ->
+      withUUIDFunction
+        tname
+        (pure . (.fnImpl))
+        (\k -> throwError (k err404))
     Just function -> pure function.fnImpl
+
+withUUIDFunction :: Text -> (ValidatedFunction -> AppM a) -> ((ServerError -> ServerError) -> AppM a) -> AppM a
+withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
+  Nothing -> err id
+  Just uuid -> do
+    MkAppEnv {baseUrl, manager} <- ask
+    eprog <- liftIO $ runExceptT $ readCrudUUID uuid baseUrl manager
+    case eprog of
+      Left err' -> do
+        liftIO do
+          hPutStrLn stderr "failed to retrieve function from CRUD backend"
+          hPutStrLn stderr $ displayException err'
+        err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
+      Right prog -> do
+        let fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
+            fnDecl = toDecl fnImpl
+
+        decide <- liftIO (runExceptT (Jl4.buildFunDecide prog fnDecl))
+          >>= either (\e -> do
+            liftIO $ hPutStrLn stderr "the evaluator failed with error:"
+            liftIO $ hPrint stderr e
+            throwError err500 {errBody = "evaluator failed"}
+            ) pure
+
+        k ValidatedFunction
+          { fnImpl = fnImpl { parameters = parametersOfDecide decide }
+          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction fnDecl prog
+          }
+  where
+   (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
+
+parametersOfDecide :: Decide Resolved -> Parameters
+parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
+  -- TODO:
+  -- need to change the description of the parameters as soon as we have it in the Decide
+  MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
+    let argInfo = lookup x bestEffortArgInfo
+     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo))) argList, required = argList}
+ where
+  bestEffortArgInfo = foldr fn [] args
+  fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
+    Just tn@(MkOptionallyTypedName _ r' mt)
+      | Just t <- mt
+      , let descriptions = mconcat $ nubOrd $ Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+      -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
+    _ -> acc
+  sameResolved = (==) `on` getUnique
+  argList = map prettyLayout args
 
 timeoutAction :: IO b -> AppM b
 timeoutAction act =
@@ -638,7 +703,7 @@ toDecl fn =
   Api.FunctionDeclaration
     { Api.name = fn.name
     , Api.description = fn.description
-    , Api.longNames = Map.keysSet $ fn.parameters.parameters
+    , Api.longNames = Map.keysSet $ fn.parameters.parameterMap
     , Api.nameMapping = shortToLongNameMapping
     }
  where
@@ -646,7 +711,7 @@ toDecl fn =
   shortToLongNameMapping =
     Map.fromList $
       Maybe.mapMaybe (fmap Tuple.swap . Tuple.secondM (.parameterAlias)) $
-        Map.assocs fn.parameters.parameters
+        Map.assocs fn.parameters.parameterMap
 
 -- ----------------------------------------------------------------------------
 -- Oracle DB
@@ -858,3 +923,20 @@ instance ToJSON BatchResponse where
 instance FromJSON BatchResponse where
   parseJSON = ACD.fromDecoder batchResponseDecoder
 
+crudAPIClient :: CRUD.Api (AsClientT ClientM)
+crudAPIClient = genericClient
+
+runCrudClient :: ClientM a -> BaseUrl -> Manager -> ExceptT ClientError IO a
+runCrudClient m crudBaseUrl mgr = ExceptT $ runClientM m $ mkClientEnv mgr crudBaseUrl
+
+readCrudUUID :: UUID -> BaseUrl -> Manager -> ExceptT ClientError IO Text
+readCrudUUID = runCrudClient . crudAPIClient.readSession
+
+mkSessionFunction :: Text -> Parameters -> Text -> Function
+mkSessionFunction name parameters description =
+  Function
+    { name
+    , description
+    , parameters
+    , supportedEvalBackend = [JL4]
+    }

@@ -34,7 +34,7 @@ spec = describe "integration" do
         fun.description `shouldSatisfy` (not . Text.null)
         fun.supportedEvalBackend `shouldContain` [JL4]
         let
-          params = fun.parameters.parameters
+          params = fun.parameters.parameterMap
         Map.keys params `shouldMatchList` ["walks", "eats", "drinks"]
   it "add new function" do
     runDecisionService \api -> do
@@ -188,4 +188,4 @@ runDecisionService' act = do
 
 initExampleAppEnv :: IO AppEnv
 initExampleAppEnv =
-  MkAppEnv <$> newTVarIO Examples.functionSpecs
+  MkAppEnv <$> newTVarIO Examples.functionSpecs <*> pure (BaseUrl Http "localhost" 5008  "") <*> newManager defaultManagerSettings

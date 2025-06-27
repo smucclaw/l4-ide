@@ -5,11 +5,13 @@ module Options (
 
 import qualified Data.Text as Text
 import Options.Applicative
+import Servant.Client
 
 data Options = Options
   { port :: Int
   , serverName :: Maybe Text.Text
   , sourcePaths :: [FilePath]  -- New field for source files or directories
+  , crudServerName :: BaseUrl
   }
 
 optionsParser :: Parser Options
@@ -39,3 +41,28 @@ optionsParser = do
               <> help "One or more files or directories containing L4 source files to expose"
           )
       )
+    <*> do
+      BaseUrl
+        <$> flag Http Https
+              ( long "crudServerSecure"
+                  <> help "Whether or not the server should be securely connected to."
+                  <> showDefault
+              )
+        <*> strOption
+              ( long "crudServerName"
+                  <> help "Name of the server for sessions"
+                  <> value "localhost"
+                  <> showDefault
+              )
+        <*> option auto
+              ( long "crudServerPort"
+                  <> help "Port of the server for sessions."
+                  <> value 5008
+                  <> showDefault
+              )
+        <*> strOption
+              ( long "crudServerPath"
+                  <> help "path on the server for sessions. When provided, assumes https"
+                  <> value mempty
+                  <> showDefault
+              )

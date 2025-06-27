@@ -59,6 +59,7 @@ data PState = PState
   { comments :: [Comment]
   , nlgs :: [Nlg]
   , refs :: [Ref]
+  , descs :: [Desc]
   }
   deriving stock (Show, Eq, Generic)
   deriving (Semigroup, Monoid) via Generically PState
@@ -69,6 +70,9 @@ addNlg n s = over #nlgs (n:) s
 addRef :: Ref -> PState -> PState
 addRef ref s = over #refs (ref:) s
 
+addDesc :: Desc -> PState -> PState
+addDesc desc s = over #descs (desc:) s
+
 spaces :: Parser [PosToken]
 spaces =
   takeWhileP (Just "space token") isSpaceToken
@@ -76,8 +80,8 @@ spaces =
 spaceOrAnnotations :: Parser (Lexeme ())
 spaceOrAnnotations = do
   ws <- spaces
-  nlgs :: [NS Epa [Ref, Nlg, ()]] <- many (fmap (S . S . Z) refAdditionalP <|> fmap (S . Z) nlgAnnotationP <|> fmap Z refP)
-  traverse_ addNlgOrRef nlgs
+  nlgs :: [NS Epa [Ref, Nlg, Desc, ()]] <- many (fmap (S . S . S . Z) refAdditionalP <|> fmap (S . S . Z) descP <|> fmap (S . Z) nlgAnnotationP <|> fmap Z refP)
+  traverse_ addAnnotation nlgs
   let
     epaNlgs = fmap (collapse_NS . map_NS (K . epaToHiddenCluster)) nlgs
   pure $ Lexeme
@@ -90,6 +94,16 @@ refP :: Parser (Epa Ref)
 refP = do
   refExpr <- refAnnotationP
   pure $ fmap (MkRef (mkSimpleEpaAnno refExpr)) refExpr
+
+descP :: Parser (Epa Desc)
+descP = do
+  e <- hidden $ spacedTokenWs (\ case
+    TAnnotations (TDesc t) -> Just t
+    _ -> Nothing
+    )
+    "Description annotation"
+  pure $ fmap (MkDesc (mkSimpleEpaAnno e)) e
+
 
 nlgAnnotationP :: Parser (Epa Nlg)
 nlgAnnotationP = do
@@ -219,8 +233,9 @@ lexeme p = do
     , hiddenClusters = wsOrAnnotation.hiddenClusters
     }
 
-addNlgOrRef :: NS Epa (Ref : Nlg : xs) -> Parser ()
-addNlgOrRef = \ case
+addAnnotation :: NS Epa (Ref : Nlg : Desc : xs) -> Parser ()
+addAnnotation = \ case
+  S (S (Z desc)) -> modify' (addDesc desc.payload)
   S (Z nlg) -> modify' (addNlg nlg.payload)
   Z ref -> modify' (addRef ref.payload)
   _ -> pure ()
@@ -1520,6 +1535,7 @@ execNlgParserForTokens p uri input ts =
       { nlgs = []
       , comments = []
       , refs = []
+      , descs = []
       }
     stream = MkTokenStream (Text.unpack input) ts
 
@@ -1551,6 +1567,7 @@ execParserForTokens p file input ts =
       { nlgs = []
       , comments = []
       , refs = []
+      , descs = []
       }
     stream = MkTokenStream (Text.unpack input) ts
 
