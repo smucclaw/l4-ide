@@ -49,7 +49,7 @@
 
   let showFrame = $state(!ownUrl.searchParams.has('standalone'))
   let showExamples = $state(!ownUrl.searchParams.has('no-examples'))
-  let showSidebar = $state(!ownUrl.searchParams.has('no-examples'))
+  let showSidebar = $state(window.innerWidth < 1024 ? false : !ownUrl.searchParams.has('no-examples'))
 
   /***********************************
         UI-related vars
