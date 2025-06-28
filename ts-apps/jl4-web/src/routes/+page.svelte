@@ -47,7 +47,7 @@
   // Set from URL search params as early as possible to avoid flicker
   const ownUrl = new URL(window.location.href)
 
-  let showVisualizer = $state(!ownUrl.searchParams.has('no-visualizer'))
+  let showFrame = $state(!ownUrl.searchParams.has('standalone'))
   let showExamples = $state(!ownUrl.searchParams.has('no-examples'))
   let showSidebar = $state(!ownUrl.searchParams.has('no-examples'))
 
@@ -333,7 +333,9 @@
             error: () => ({ action: ErrorAction.Continue }),
             closed: () => ({ action: CloseAction.Restart }),
           },
-          middleware: mkMiddleware(logger, makeLadderFlow),
+          middleware: showFrame
+            ? mkMiddleware(logger, makeLadderFlow)
+            : undefined,
         },
         // create a language client connection from the JSON RPC connection on demand
         messageTransports,
@@ -455,11 +457,15 @@
   function handleExampleSelect(example: LegalExample) {
     if (showExamples && editor) {
       editor.setValue(example.content)
+
+      if (window.innerWidth <= 1023) {
+        showSidebar = false
+      }
     }
   }
 </script>
 
-{#if showVisualizer}
+{#if showFrame}
   <div class="top-bar">
     <div>
       <h3>L4 Editor</h3>
@@ -536,7 +542,7 @@
         <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
       </Resizable.Pane>
       <Resizable.Handle />
-      <Resizable.Pane>
+      <Resizable.Pane class="hidden lg:block">
         <div class="relative h-full ladder-border">
           <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
             {#await renderLadderPromise then ladder}
@@ -578,8 +584,8 @@
 
 <style>
   :root {
-    --toastColor: #104e64;
-    --toastBackground: #white;
+    --toastColor: rgb(96, 56, 19);
+    --toastBackground: white;
     --toastBorderRadius: 4px;
   }
   .top-bar {
@@ -654,5 +660,21 @@
   }
   .slightly-shorter-than-full-viewport-height {
     height: 98svh;
+  }
+
+  @media (max-width: 1023px) {
+    .sidebar + .panes {
+      left: 0;
+    }
+    .sidebar {
+      position: fixed;
+      z-index: 10;
+      width: 100vw;
+      backdrop-filter: blur(4px);
+    }
+    .fab-sidebar {
+      position: relative !important;
+      left: auto !important;
+    }
   }
 </style>
