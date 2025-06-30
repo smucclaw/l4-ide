@@ -3,7 +3,7 @@
 JL4 as implemented here is a purely functional, statically typed, lazy programming language. Additionally, though, it has a
 component that makes it possible to evaluate contracts, similarly to how they were described in [Tom Hvitved's PhD thesis](https://di.ku.dk/english/research/phd/phd-theses/2011/hvitved12phd.pdf). 
 
-## Technical documentation for the 
+## Technical documentation for the contract evaluation feature of JL4
 
 ### Introduction to CSL
 
@@ -150,10 +150,44 @@ Now for evaluating traces against this provision, there are two ways of doing it
   the rest of the expression language. More specifically, there's also no state space reduction going on or similar when using
   (expression language) recursion in contracts.
 
-## Further reading
+### Further reading
 
 - [Hvitved's thesis](https://di.ku.dk/english/research/phd/phd-theses/2011/hvitved12phd.pdf), more specifically chapter 2.3
 - in this repository: 
   - `jl4-core/src/L4/EvaluateLazy/Machine.hs`
   - `jl4-core/src/L4/EvaluateLazy/ContractFrame.hs`
   - `jl4/examples/ok/contracts.l4`
+
+## How to use annotations for citations
+
+Similarly to the NLG annotations, there are annotations to allow for citing (and making hover annotations available) within JL4 source code.
+
+```
+@ref-src citations.csv
+@ref-map foo bar baz https://example.com
+GIVEN x IS A BOOLEAN, y IS A BOOLEAN @ref foo bar baz
+GIVETH A BOOLEAN @ref 1981/61 sec. 2
+DECIDE xor x y IS  @ref SG-c-2025-sghcf-14
+     x AND NOT y <<SG-c-2025-sghcf-12>>
+  OR NOT x AND y @nlg Locally overwrite the annotation for %y%
+```
+
+Citation files can be loaded via the `@ref-src` annotation at any toplevel location of an L4 file.
+
+These csv files have the following shape:
+
+```csv
+"regex:sg-c-(\d{4})-([a-z]+)-(\d+)","https://www.elitigation.sg/gd/s/$1_$2_$3"
+"1981/61 sec. 2","https://www.legislation.gov.uk/ukpga/1981/61/section/2"
+"1981/61 sec. 3","https://www.legislation.gov.uk/ukpga/1981/61/section/3"
+"2002/8 sec. 1","https://www.legislation.gov.uk/ukpga/2002/8/section/1"
+```
+
+I.e. you can put verbatim citations (and a link that belongs to it), or you can put regexes by first prefixing your regex with `regex:` and then putting a link where the captures are reinserted again.
+This can be used to programatically generate reference mapping links.
+
+The `@ref-map` annotations can be used to amend the existing mapping in the same vein.
+
+Now the annotations can be initiated using either `@ref` or `<<` and `>>` as shown in the example above.
+
+When using this feature in the IDE, it will show the generated or verbatim links in the reference mapping as a hover link that can be clicked on.
