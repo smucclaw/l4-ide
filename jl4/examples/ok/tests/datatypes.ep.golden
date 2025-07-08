@@ -75,6 +75,7 @@ GIVETH AN a
 fromOptional default o MEANS
   CONSIDER o
     WHEN Missing THEN default
+    WHEN Just a THEN a
 
 GIVEN a IS A TYPE
       b IS A TYPE

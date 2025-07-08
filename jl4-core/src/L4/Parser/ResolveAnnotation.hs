@@ -449,13 +449,13 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (RAction n) where
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Branch n) where
   addNlg a = extendNlgA a $ case a of
-    When ann pat e -> do
+    MkBranch ann' (When ann pat) e -> do
       pat' <- addNlg pat
       e' <- addNlg e
-      pure $ When ann pat' e'
-    Otherwise ann e -> do
+      pure $ MkBranch ann' (When ann pat') e'
+    MkBranch ann' (Otherwise ann) e -> do
       e' <- addNlg e
-      pure $ Otherwise ann e'
+      pure $ MkBranch ann' (Otherwise ann) e'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Pattern n) where
   addNlg a = extendNlgA a $ case a of

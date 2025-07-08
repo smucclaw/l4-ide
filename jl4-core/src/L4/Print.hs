@@ -364,10 +364,13 @@ instance LayoutPrinter Lit where
     NumericLit _ t -> pretty (prettyRatio t)
     StringLit _ t -> surround (pretty $ escapeStringLiteral t) "\"" "\""
 
-instance LayoutPrinterWithName a => LayoutPrinter (Branch a) where
+instance LayoutPrinterWithName a => LayoutPrinter (BranchLhs a) where
   printWithLayout = \ case
-    When _ pat e -> "WHEN" <+> printWithLayout pat <+> "THEN" <+> printWithLayout e
-    Otherwise _ e -> "OTHERWISE" <+> printWithLayout e
+    (When _ pat) -> "WHEN" <+> printWithLayout pat <+> "THEN"
+    (Otherwise _) -> "OTHERWISE"
+
+instance LayoutPrinterWithName a => LayoutPrinter (Branch a) where
+  printWithLayout (MkBranch _ c e) = printWithLayout c <+> printWithLayout e
 
 instance LayoutPrinterWithName a => LayoutPrinter (Pattern a) where
   printWithLayout = \ case
@@ -502,7 +505,7 @@ instance LayoutPrinter Address where
   printWithLayout (MkAddress u a) = "&" <> pretty a <> "@" <> pretty u
 
 quoteIfNeeded :: Text.Text -> Text.Text
-quoteIfNeeded n = case Text.uncons n of
+quoteIfNeeded n = case Text.uncons $ Text.dropAround (== '_') n of
   Nothing -> n
   Just (c, xs)
     | isAlpha c && Text.all isAlphaNum xs -> n

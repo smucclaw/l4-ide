@@ -1257,9 +1257,12 @@ when' :: Parser (Branch Name)
 when' = do
   current <- Lexer.indentLevel
   attachAnno $
-    When emptyAnno
-      <$  annoLexeme (spacedKeyword_ TKWhen)
-      <*> annoHole (indentedPattern current)
+    MkBranch emptyAnno
+      <$> annoHole do
+            attachAnno $
+              When emptyAnno
+                <$  annoLexeme (spacedKeyword_ TKWhen)
+                <*> annoHole (indentedPattern current)
       <*  annoLexeme (spacedKeyword_ TKThen)
       <*> annoHole (indentedExpr current)
 
@@ -1267,8 +1270,11 @@ otherwise' :: Parser (Branch Name)
 otherwise' = do
   current <- Lexer.indentLevel
   attachAnno $
-    Otherwise emptyAnno
-      <$  annoLexeme (spacedKeyword_ TKOtherwise)
+    MkBranch emptyAnno
+      <$> annoHole do
+            attachAnno $
+              Otherwise emptyAnno
+                <$  annoLexeme (spacedKeyword_ TKOtherwise)
       <*> annoHole (indentedExpr current)
 
 indentedPattern :: Pos -> Parser (Pattern Name)

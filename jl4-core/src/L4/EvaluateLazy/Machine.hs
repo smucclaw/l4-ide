@@ -641,9 +641,9 @@ matchGivens' ns f rs = do
 matchBranches :: Reference -> Environment -> [Branch Resolved] -> Machine Config
 matchBranches scrutinee _env [] =
   UserException (NonExhaustivePatterns scrutinee)
-matchBranches _scrutinee env (Otherwise _ann e : _) =
+matchBranches _scrutinee env (MkBranch _ann (Otherwise _ann') e : _) =
   ForwardExpr env e
-matchBranches scrutinee env (When _ann pat e : branches) = do
+matchBranches scrutinee env (MkBranch _ann (When _ann' pat) e : branches) = do
   PushFrame (ConsiderWhen1 scrutinee e branches env)
   MatchPattern scrutinee env pat
 
@@ -1049,7 +1049,7 @@ evalConDecl env (MkConDecl _ann n tns) = do
         ValClosure
           (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno arg Nothing])      -- \ x ->
           (Consider emptyAnno (App emptyAnno argRef [])                             -- case x of
-            [ When emptyAnno (PatApp emptyAnno conRef (PatVar emptyAnno <$> args))  --   Con y_1 ... y_n ->
+            [ MkBranch emptyAnno (When emptyAnno (PatApp emptyAnno conRef (PatVar emptyAnno <$> args)))  --   Con y_1 ... y_n ->
                 (App emptyAnno body [])                                             --     y_i
             ]
           )
