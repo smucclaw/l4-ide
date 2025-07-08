@@ -1,3 +1,8 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant <$>" #-}
 module L4.TypeCheck
   ( module X
   , HasName(..)
@@ -81,7 +86,7 @@ import qualified Base.Text as Text
 import L4.Annotation
 import L4.Names
 import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM, SrcRange (..), zeroSrcPos)
-import L4.Print (prettyLayout, quotedName,)
+import L4.Print (prettyLayout, prettyLayout', quotedName, LayoutPrinter (printWithLayout))
 import L4.Syntax
 import L4.TypeCheck.Annotation
 import L4.TypeCheck.Environment as X
@@ -91,6 +96,7 @@ import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
 
 import Control.Applicative
+import Data.Monoid
 import Control.Monad.Extra (mapMaybeM)
 import qualified Control.Monad.Extra as Extra
 import Data.Either (partitionEithers)
@@ -98,6 +104,9 @@ import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
 import Optics ((%~))
+import qualified Base.Set as Set
+import Data.Function (on)
+import Control.Exception (assert)
 
 mkInitialCheckState :: Substitution -> CheckState
 mkInitialCheckState substitution =
@@ -260,7 +269,7 @@ runCheckUnique c e s =
   case runCheck c e s of
     [] -> error "internal error: expected unique result, got none"
     [(w, s')] -> (w, s')
-    _ -> error $ "internal error: expected unique result, got several"
+    _ -> error "internal error: expected unique result, got several"
 
 -- ------------------------------------
 -- Check Primitives
@@ -882,7 +891,7 @@ checkExpr :: ExpectationContext -> Expr Name -> Type' Resolved -> Check (Expr Re
 checkExpr ec (IfThenElse ann e1 e2 e3) t = softprune $ do
   re <- checkIfThenElse ec ann e1 e2 e3 t
   setAnnResolvedType t Nothing re
-checkExpr ec (Consider ann e branches) t = softprune $ do
+checkExpr ec c@(Consider ann e branches) t = softprune $ errorContext (WhileCheckingExpression c) $ do
   re <- checkConsider ec ann e branches t
   setAnnResolvedType t Nothing re
 -- checkExpr (ParenExpr ann e) t = do
@@ -945,11 +954,53 @@ checkAction MkAction {anno, action, provided = mprovided} actionT = do
       checkExpr ExpectRegulativeProvidedContext provided boolean
   pure (MkAction {anno, action = pat, provided}, bounds)
 
+prettyUnq :: Unique -> Text
+prettyUnq (MkUnique {unique, sort = s}) = Text.show s <>  " " <> Text.show unique
+
+buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
+buildConstructorLookup = foldMap \decl ->
+  let MkDeclare _ _ (MkAppForm _ tr _ _) td = decl.payload
+   in Map.singleton (getUnique tr) case td of
+    RecordDecl _ mc _ -> [fromMaybe tr mc] -- if the constructor name is 'Nothing', that means it's identical to the type name
+    EnumDecl _ cds -> map (\(MkConDecl _ n _) -> n) cds
+    SynonymDecl _ _ -> [] -- FIXME: how to look up synonyms?
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
   rbranches <- traverse (checkBranch ec re te t) branches
+  resolvedDecls <- asks (Map.elems . (.declareDeclarations))
+  pt <- desugarBranches re rbranches
+  let cl = buildConstructorLookup resolvedDecls
+      bs = concretizeInfo cl pt
+
+  let redundant = redundantBranches $ annotateRefinement bs
+      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern re $ normalizeRefinement $ uncoverRefinement bs
+
+  traceM "\n================ "
+  traceM "showing branches after desugaring"
+  traceShowM $ printWithLayout bs
+  traceM "\nshowing refinements after uncovering but before normalizing\n"
+  traceShowM $ printWithLayout $ uncoverRefinement bs
+  traceM "\nshowing refinements after uncovering\n"
+  traceShowM $ printWithLayout  $ normalizeRefinement $ uncoverRefinement bs
+  traceM "\nshowing missing patterns\n"
+  traceShowM $ printWithLayout missing
+
+  traceM "\n================ "
+  traceM "\nshowing refinements after annotation\n"
+  traceShowM $ printWithLayout $ annotateRefinement bs
+
+  traceM "\nredundant branches\n"
+  traceShowM $ printWithLayout redundant
+
+  unless (null missing) do
+    addWarning $ PatternMatchesMissing missing
+  unless (null redundant) do
+    addWarning $ PatternMatchRedundant redundant
+
+
+
   pure (Consider ann re rbranches)
 
 inferExpr :: Expr Name -> Check (Expr Resolved, Type' Resolved)
@@ -1175,7 +1226,7 @@ findOptionallyNamedType n (ont : onts) = do
     pure (i, rn, t, ont : onts')
 
 checkBranch :: ExpectationContext -> Expr Resolved -> Type' Resolved -> Type' Resolved -> Branch Name -> Check (Branch Resolved)
-checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = do
+checkBranch ec scrutinee tscrutinee tresult (MkBranch ann' (When ann pat) e)  = do
   (rpat', extends) <- checkPattern (ExpectPatternScrutineeContext scrutinee) pat tscrutinee
   (rpat, re) <- extendKnownMany extends do
     re' <- checkExpr ec e tresult
@@ -1183,10 +1234,10 @@ checkBranch ec scrutinee tscrutinee tresult (When ann pat e)  = do
       -- See Note [Adding type information to all binders]
       <$> (traverse resolvedType =<< nlgPattern rpat')
       <*> nlgExpr re'
-  pure $ When ann rpat re
-checkBranch ec _scrutinee _tscrutinee tresult (Otherwise ann e) = do
+  pure $ MkBranch ann' (When ann rpat) re
+checkBranch ec _scrutinee _tscrutinee tresult (MkBranch ann' (Otherwise ann) e) = do
   re <- checkExpr ec e tresult
-  Otherwise ann
+  MkBranch ann' (Otherwise ann)
     -- We have to resolve NLG annotations now because
     -- bound variables are brought into scope.
     -- In the 'Otherwise' case, there are no new variables, but
@@ -1249,7 +1300,303 @@ inferPatternApp ann n ps = do
   -- 2. - 5.
   (rps, rt, extend) <- matchPatFunTy rn t ps
 
-  pure (PatApp ann rn rps, rt, extend)
+  ann' <- setAnnResolvedType rt (Just Constructor) ann
+
+  pure (PatApp ann' rn rps, rt, extend)
+
+-- | pattern tree, vaguely adapted from lower your guards
+data PatTree' i n
+  = PatOr (PatTree' i n) (PatTree' i n)
+  -- ^ choice between two pattern trees
+  | PatLeaf (Branch n)
+  -- ^ select RHS
+  | PatAnd (Guard i n) (PatTree' i n)
+  -- ^ a constructor name that must be matched
+  | PatNoBranches
+  deriving stock (Eq, Show, Generic, Functor)
+
+instance (LayoutPrinter n, HasName n, LayoutPrinter i) => LayoutPrinter (PatTree' i n) where
+ printWithLayout = \ case
+   PatOr a b -> "("  <> printWithLayout a <> " | " <> printWithLayout b <> ")"
+   PatLeaf e -> printWithLayout e
+   PatAnd c t -> "("  <> printWithLayout c <> " -> " <> printWithLayout t <> ")"
+   PatNoBranches -> "NO BRANCHES"
+
+instance (LayoutPrinter n, LayoutPrinter i, HasName n)  => LayoutPrinter (Guard i n) where
+  printWithLayout g = "("  <> printWithLayout g.info <> ", " <> printWithLayout g.binding <> ", " <> printWithLayout g.constructor <> ")"
+
+instance LayoutPrinter i => LayoutPrinter [i]  where
+  printWithLayout = (\x -> "(" <> x <> ")") . mconcat  . intersperse ", " . map printWithLayout
+
+-- | simplified guard type
+data Guard i n
+  = MkGuard
+  { info :: i
+  , binding :: Expr n
+  , constructor :: n
+  , constructorArgs :: [n] }
+  deriving stock (Eq, Show, Generic, Functor)
+
+mapInfo :: (i -> i') -> PatTree' i n -> PatTree' i' n
+mapInfo f = go where
+ go = \case
+  PatOr t1 t2 -> PatOr (go t1) (go t2)
+  PatAnd (MkGuard i b n ns) t -> PatAnd (MkGuard (f i) b n ns) (go t)
+  PatLeaf e -> PatLeaf e
+  PatNoBranches -> PatNoBranches
+
+type PatTree = PatTree' Info
+
+desugarBranches :: Expr Resolved -> [Branch Resolved] -> Check (PatTree Resolved)
+desugarBranches _scrut [] = pure PatNoBranches
+desugarBranches scrut nebs = flip evalStateT mempty $ foldr1 PatOr <$> traverse (desugarBranch scrut) nebs
+ where
+  desugarBranch :: Expr Resolved -> Branch Resolved -> StateT VarEnv Check (PatTree Resolved)
+  desugarBranch scrut' = \ case
+    b@(MkBranch _ (When _ p) _) -> foldr PatAnd (PatLeaf b) <$> desugarPat scrut' p
+    b@(MkBranch _ (Otherwise {}) _) -> pure (PatLeaf b)
+
+  newPatName = do
+    unq <- newUnique
+    let rn = NormalName "patvar"
+        n = MkName emptyAnno rn
+    pure $ Def unq n
+
+  -- if there's no scrutinee, we create a new variable that is then putas the scrutinee.
+  -- So: WHEN Foo Bar THEN expr essentially becomes WHEN Foo bar THEN CONSIDER bar WHEN Bar THEN expr
+
+  desugarPat :: Expr Resolved -> Pattern Resolved -> StateT VarEnv Check [Guard Info Resolved]
+  desugarPat scrut' = \ case
+    PatApp ((.extra.resolvedInfo) -> Just info) c ps ->
+      Map.lookup (getUnique c) <$> get >>= \ case
+        Just existingVars -> do
+          pats <- getAp $ flip foldMap (zip existingVars ps) \(var, p) -> Ap do
+             desugarPat (Var emptyAnno var) p
+
+          pure (MkGuard info scrut' c existingVars : pats)
+
+        Nothing -> do
+          (vs, pats) <- getAp $ flip foldMap ps \p -> Ap do
+            n <- lift newPatName
+            guards <- desugarPat (Var emptyAnno n) p
+            pure ([n], guards)
+
+          modify' (Map.insert (getUnique c) vs)
+          pure (MkGuard info scrut' c vs : pats)
+
+    -- NOTE: this second case is very similar to the one for PatApp, because Cons in general is basically a PatApp
+    PatCons ((.extra.resolvedInfo) -> Just info) ph pt ->
+      Map.lookup consUnique <$> get >>= \case
+        Just [nh, nt] -> do
+          ph' <- desugarPat (Var emptyAnno nh) ph
+          pt' <- desugarPat (Var emptyAnno nt) pt
+          pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
+
+        _p -> assert (isNothing _p) do
+          nh <- lift newPatName
+          nt <- lift newPatName
+          ph' <- desugarPat (Var emptyAnno nh) ph
+          pt' <- desugarPat (Var emptyAnno nt) pt
+          modify' (Map.insert consUnique [nh, nt])
+          pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
+
+    PatVar _ _ -> pure []
+    PatExpr _ _ -> pure []
+    PatLit _ _ -> pure []
+    _ -> error "fatal internal error: expected type information but didn't get any"
+
+type VarEnv = Map Unique [Resolved]
+
+-- | replace 'Info' with the names of the constructors that the type has
+concretizeInfo :: Map Unique [n] ->  PatTree n -> PatTree' [n] n
+concretizeInfo cmap = \case
+ PatOr t1 t2 -> PatOr (concretizeInfo cmap t1) (concretizeInfo cmap t2)
+ PatLeaf e -> PatLeaf e
+ PatNoBranches -> PatNoBranches
+ PatAnd (MkGuard i b n ns) t -> case i of
+   TypeInfo ty _
+     | TyApp _ r _ <- ty
+     , Just cs <- Map.lookup (getUnique r) cmap
+     -> PatAnd (MkGuard cs b n ns) (concretizeInfo cmap t)
+   _ -> PatAnd (MkGuard [] b n ns) (concretizeInfo cmap t)
+
+data Refinement n
+  = RefineConj (Refinement n) (Constr n)
+  | RefineDisj (Refinement n) (Refinement n)
+  | RefineTop
+  | RefineBottom
+  deriving stock (Eq, Show, Generic, Functor)
+
+instance  (LayoutPrinter n, HasName n) => LayoutPrinter (Nabla n) where
+  printWithLayout = \ case
+    Bottom -> "_|_"
+    Consistent s -> "consistent: " <> printWithLayout (toList s)
+
+instance (LayoutPrinter n, HasName n) => LayoutPrinter (Refinement n) where
+  printWithLayout = \ case
+    RefineConj r c -> "(" <> printWithLayout c <> " & " <> printWithLayout r <> ")"
+    RefineDisj r r' -> "(" <> printWithLayout r <> " | " <> printWithLayout r' <> ")"
+    RefineTop -> "Top"
+    RefineBottom -> "_|_"
+
+instance (LayoutPrinter n, HasName n) => LayoutPrinter (Constr n) where
+   printWithLayout = \ case
+     IsEq e n _ns -> printWithLayout e <> " == " <> printWithLayout n
+     IsNotEq e n _ns cs -> printWithLayout e <> " != " <> printWithLayout n <> "(one of: " <> foldMap printWithLayout cs <> ")"
+
+-- a constraint
+data Constr n
+  = IsEq (Expr n) n [n]
+  -- ^ in that order:
+  -- - the expression that is scrutinized (most often a Var)
+  -- - the constructor
+  -- - the variables that are scrutinized when scrutinizing this constructor's arguments
+  | IsNotEq (Expr n) n [n] [n]
+  -- ^ in that order:
+  -- - the expression that is scrutinized (most often a Var)
+  -- - the constructor
+  -- - the variables that are scrutinized when scrutinizing this constructor's arguments
+  -- - the other constructors of the type that this constraint is about
+  deriving stock (Eq, Ord, Show, Generic, Functor, Foldable)
+
+-- this is suposed to generate the "unconvered" set, i.e. the
+-- values that are not covered by the pattern tree
+uncoverRefinement :: PatTree' [n] n -> Refinement n
+uncoverRefinement = uncoverRefinementWith RefineTop
+
+uncoverRefinementWith :: Refinement n -> PatTree' [n] n -> Refinement n
+uncoverRefinementWith tau = \case
+  PatLeaf _e -> RefineBottom
+  PatOr t1 t2 -> uncoverRefinementWith (uncoverRefinementWith tau t1) t2
+  PatAnd (MkGuard cs b n ns) t -> (tau `RefineConj` IsNotEq b n ns cs) `RefineDisj`
+    uncoverRefinementWith (tau `RefineConj` IsEq b n ns) t
+  PatNoBranches -> tau
+
+data AnnBranch n
+  = AnnLeaf (Refinement n) (Branch n)
+  | AnnEmpty
+  deriving stock (Eq, Show, Generic)
+
+instance (LayoutPrinter n, HasName n) => LayoutPrinter (AnnBranch n) where
+  printWithLayout = \ case
+    AnnLeaf r e -> "(theta: " <>  printWithLayout r <> ", " <> printWithLayout e <>  ")"
+    AnnEmpty -> "ann empty"
+
+redundantBranches :: [AnnBranch Resolved] -> [Branch Resolved]
+redundantBranches = mapMaybe \case
+  AnnLeaf r b | not (isConsistent r) -> Just b
+  _ -> Nothing
+ where
+  isConsistent :: Refinement Resolved -> Bool
+  isConsistent = go [] where
+    go seen = \ case
+      RefineConj r c -> go (c : seen) r && all (isConsistentWith c) seen
+      RefineDisj r1 r2 -> go seen r1 || go seen r2
+      RefineTop -> True
+      RefineBottom -> False
+
+-- this is supposed to generate the patterns that *are* matched
+annotateRefinement :: PatTree' [n] n -> [AnnBranch n]
+annotateRefinement = go RefineTop
+ where
+  go tau = \case
+    PatLeaf e -> [AnnLeaf tau e]
+    PatOr t1 t2 -> go tau t1 <> go (uncoverRefinementWith tau t1) t2
+    PatAnd (MkGuard _i b n ns) t -> go (tau `RefineConj` IsEq b n ns) t
+    PatNoBranches -> [AnnEmpty]
+
+data Nabla n
+ = Bottom
+ | Consistent !(Set (Constr n))
+ deriving stock (Foldable)
+
+instance Ord n => Semigroup (Nabla n) where
+  Bottom <> s = s
+  s <> Bottom = s
+  Consistent s1 <> Consistent s2 = Consistent $ s1 `Set.union` s2
+
+instance Ord n => Monoid (Nabla n) where
+  mempty = Bottom
+
+lookupConstraints :: Eq n => n -> Nabla n -> [Constr n]
+lookupConstraints n = \ case
+  Bottom -> []
+  Consistent s -> mapMaybe (\c -> if constraintName c == Just n then Just c else Nothing) $ Set.toList s
+
+constraintName :: Constr n -> Maybe n
+constraintName = \ case
+  IsEq (Var _ n) _ _ -> Just n
+  IsNotEq (Var _ n) _ _ _ -> Just n
+  _ -> Nothing
+
+normalizeRefinement :: Refinement Resolved -> Nabla Resolved
+normalizeRefinement = go (Consistent mempty)
+ where
+  go nabla = \ case
+   RefineConj r c -> go (addConsistentConstraint nabla c) r
+   RefineDisj r1 r2 -> go nabla r1 <> go nabla r2
+   RefineTop -> nabla
+   RefineBottom -> Bottom
+
+  addConsistentConstraint :: Nabla Resolved -> Constr Resolved -> Nabla Resolved
+  addConsistentConstraint nabla c = case flip lookupConstraints nabla =<< maybeToList (constraintName c) of
+    [] -> insertConstraint c nabla
+    cs -> if all (c `isConsistentWith`) cs then insertConstraint c nabla else nabla
+
+  insertConstraint c = \ case
+    Bottom -> Consistent (Set.singleton c)
+    Consistent s -> Consistent (Set.insert c s)
+
+isConsistentWith :: Constr Resolved -> Constr Resolved -> Bool
+IsEq (Var _ n1) c1 _ `isConsistentWith` IsEq (Var _ n2) c2 _ | n1 `sameResolved` n2 = c1 `sameResolved` c2
+IsNotEq (Var _ n1) c1 _ _ `isConsistentWith` IsEq (Var _ n2) c2 _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
+IsEq (Var _ n1) c1 _ `isConsistentWith` IsNotEq (Var _ n2) c2 _ _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
+_ `isConsistentWith` _ = True
+
+data ConsistentSet n
+  = EqCon n [n] (ConsistentSet n)
+  | NotEqCons [n] [n]
+  | NoInfo
+
+instance LayoutPrinter n => LayoutPrinter (ConsistentSet n) where
+  printWithLayout = \ case
+    EqCon n ns mor -> "eq con " <>  printWithLayout n <> foldMap printWithLayout ns <> " and " <> printWithLayout mor
+    NotEqCons ns' ns -> "non eq con " <> foldMap printWithLayout ns' <> " | " <> foldMap printWithLayout ns
+    NoInfo -> "no info"
+
+expandToPattern :: Expr Resolved -> Nabla Resolved -> [BranchLhs Resolved]
+expandToPattern scrut = \ case
+  Bottom -> []
+  n@Consistent {} | Var _ n' <- scrut -> map patternToBranch (go n' n)
+  _ -> [Otherwise emptyAnno] -- TODO: if we're casing on non variabla exprs, we can do better
+ where
+  patternToBranch pat
+    | PatVar _ var <- pat, var `sameResolved` underscoreRef
+    = Otherwise emptyAnno
+    | otherwise = When emptyAnno pat
+
+  toConsistentSet :: [Constr Resolved] -> ConsistentSet Resolved
+  toConsistentSet [] = NoInfo
+  toConsistentSet (IsEq _ c ns : rest) = EqCon c ns (toConsistentSet rest)
+  toConsistentSet (IsNotEq _ c ns cs : rest) = case toConsistentSet rest of
+    NotEqCons _ ncs -> NotEqCons ns (delByUnq c ncs)
+    NoInfo -> NotEqCons ns (delByUnq c cs)
+    e@EqCon {} -> e
+
+  delByUnq = deleteBy sameResolved
+
+  go :: Resolved -> Nabla Resolved -> [Pattern Resolved]
+  go n nabla = go' cnstrs
+   where
+    cnstrs = toConsistentSet $ lookupConstraints n nabla
+    go' = \ case
+      EqCon c ns more -> map (PatApp emptyAnno c) (traverse (`go` nabla) ns) <> go' more
+      -- FIXME: add underscores here, instead of []
+      NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' [] ) ncs
+      NoInfo -> [PatVar emptyAnno underscoreRef]
+
+sameResolved :: Resolved -> Resolved -> Bool
+sameResolved = (==) `on` getUnique
 
 inferLit :: Lit -> Check (Type' Resolved)
 inferLit (NumericLit _ _) =
@@ -1786,8 +2133,9 @@ surroundWithCsn before after a =
 severity :: CheckErrorWithContext -> Severity
 severity (MkCheckErrorWithContext e _) =
   case e of
-    CheckInfo {} -> SInfo
-    _            -> SError
+    CheckInfo {}    -> SInfo
+    CheckWarning {} -> SWarn
+    _               -> SError
 
 prettyCheckErrorWithContext :: CheckErrorWithContext -> [Text]
 prettyCheckErrorWithContext (MkCheckErrorWithContext e ctx) =
@@ -1948,6 +2296,23 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
   , "The source annotation are not matching the expected number of arguments."
   , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
   ]
+prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
+
+prettyCheckWarning :: CheckWarning -> [Text]
+prettyCheckWarning = \ case
+  PatternMatchRedundant b ->
+    [ "The following CONSIDER branch is redundant: "
+    , ""
+    , "  " <> prettyLayout b
+    , ""
+    ]
+  PatternMatchesMissing b ->
+    [ "The following branches still need to be considered:"
+    , "" ]
+    <>
+    map (("  " <>) . prettyLayout) b
+    <> [ "" ]
+
 
 -- | Forms a plural when needed.
 prettyCount :: Int -> Text -> Text
