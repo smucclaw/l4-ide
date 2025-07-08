@@ -86,7 +86,7 @@ import qualified Base.Text as Text
 import L4.Annotation
 import L4.Names
 import L4.Parser.SrcSpan (prettySrcRange, prettySrcRangeM, SrcRange (..), zeroSrcPos)
-import L4.Print (prettyLayout, prettyLayout', quotedName, LayoutPrinter (printWithLayout))
+import L4.Print (prettyLayout, quotedName)
 import L4.Syntax
 import L4.TypeCheck.Annotation
 import L4.TypeCheck.Environment as X
@@ -963,7 +963,7 @@ buildConstructorLookup = foldMap \decl ->
    in Map.singleton (getUnique tr) case td of
     RecordDecl _ mc _ -> [fromMaybe tr mc] -- if the constructor name is 'Nothing', that means it's identical to the type name
     EnumDecl _ cds -> map (\(MkConDecl _ n _) -> n) cds
-    SynonymDecl _ _ -> [] -- FIXME: how to look up synonyms?
+    SynonymDecl _ _ -> [] -- TODO: how to look up synonyms?
 
 checkConsider :: ExpectationContext -> Anno -> Expr Name -> [Branch Name] -> Type' Resolved -> Check (Expr Resolved)
 checkConsider ec ann e branches t = do
@@ -976,23 +976,6 @@ checkConsider ec ann e branches t = do
 
   let redundant = redundantBranches $ annotateRefinement bs
       missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern re $ normalizeRefinement $ uncoverRefinement bs
-
-  traceM "\n================ "
-  traceM "showing branches after desugaring"
-  traceShowM $ printWithLayout bs
-  traceM "\nshowing refinements after uncovering but before normalizing\n"
-  traceShowM $ printWithLayout $ uncoverRefinement bs
-  traceM "\nshowing refinements after uncovering\n"
-  traceShowM $ printWithLayout  $ normalizeRefinement $ uncoverRefinement bs
-  traceM "\nshowing missing patterns\n"
-  traceShowM $ printWithLayout missing
-
-  traceM "\n================ "
-  traceM "\nshowing refinements after annotation\n"
-  traceShowM $ printWithLayout $ annotateRefinement bs
-
-  traceM "\nredundant branches\n"
-  traceShowM $ printWithLayout redundant
 
   unless (null missing) do
     addWarning $ PatternMatchesMissing missing
@@ -1315,19 +1298,6 @@ data PatTree' i n
   | PatNoBranches
   deriving stock (Eq, Show, Generic, Functor)
 
-instance (LayoutPrinter n, HasName n, LayoutPrinter i) => LayoutPrinter (PatTree' i n) where
- printWithLayout = \ case
-   PatOr a b -> "("  <> printWithLayout a <> " | " <> printWithLayout b <> ")"
-   PatLeaf e -> printWithLayout e
-   PatAnd c t -> "("  <> printWithLayout c <> " -> " <> printWithLayout t <> ")"
-   PatNoBranches -> "NO BRANCHES"
-
-instance (LayoutPrinter n, LayoutPrinter i, HasName n)  => LayoutPrinter (Guard i n) where
-  printWithLayout g = "("  <> printWithLayout g.info <> ", " <> printWithLayout g.binding <> ", " <> printWithLayout g.constructor <> ")"
-
-instance LayoutPrinter i => LayoutPrinter [i]  where
-  printWithLayout = (\x -> "(" <> x <> ")") . mconcat  . intersperse ", " . map printWithLayout
-
 -- | simplified guard type
 data Guard i n
   = MkGuard
@@ -1427,23 +1397,6 @@ data Refinement n
   | RefineBottom
   deriving stock (Eq, Show, Generic, Functor)
 
-instance  (LayoutPrinter n, HasName n) => LayoutPrinter (Nabla n) where
-  printWithLayout = \ case
-    Bottom -> "_|_"
-    Consistent s -> "consistent: " <> printWithLayout (toList s)
-
-instance (LayoutPrinter n, HasName n) => LayoutPrinter (Refinement n) where
-  printWithLayout = \ case
-    RefineConj r c -> "(" <> printWithLayout c <> " & " <> printWithLayout r <> ")"
-    RefineDisj r r' -> "(" <> printWithLayout r <> " | " <> printWithLayout r' <> ")"
-    RefineTop -> "Top"
-    RefineBottom -> "_|_"
-
-instance (LayoutPrinter n, HasName n) => LayoutPrinter (Constr n) where
-   printWithLayout = \ case
-     IsEq e n _ns -> printWithLayout e <> " == " <> printWithLayout n
-     IsNotEq e n _ns cs -> printWithLayout e <> " != " <> printWithLayout n <> "(one of: " <> foldMap printWithLayout cs <> ")"
-
 -- a constraint
 data Constr n
   = IsEq (Expr n) n [n]
@@ -1476,11 +1429,6 @@ data AnnBranch n
   = AnnLeaf (Refinement n) (Branch n)
   | AnnEmpty
   deriving stock (Eq, Show, Generic)
-
-instance (LayoutPrinter n, HasName n) => LayoutPrinter (AnnBranch n) where
-  printWithLayout = \ case
-    AnnLeaf r e -> "(theta: " <>  printWithLayout r <> ", " <> printWithLayout e <>  ")"
-    AnnEmpty -> "ann empty"
 
 redundantBranches :: [AnnBranch Resolved] -> [Branch Resolved]
 redundantBranches = mapMaybe \case
@@ -1558,12 +1506,6 @@ data ConsistentSet n
   | NotEqCons [n] [n]
   | NoInfo
 
-instance LayoutPrinter n => LayoutPrinter (ConsistentSet n) where
-  printWithLayout = \ case
-    EqCon n ns mor -> "eq con " <>  printWithLayout n <> foldMap printWithLayout ns <> " and " <> printWithLayout mor
-    NotEqCons ns' ns -> "non eq con " <> foldMap printWithLayout ns' <> " | " <> foldMap printWithLayout ns
-    NoInfo -> "no info"
-
 expandToPattern :: Expr Resolved -> Nabla Resolved -> [BranchLhs Resolved]
 expandToPattern scrut = \ case
   Bottom -> []
@@ -1591,7 +1533,7 @@ expandToPattern scrut = \ case
     cnstrs = toConsistentSet $ lookupConstraints n nabla
     go' = \ case
       EqCon c ns more -> map (PatApp emptyAnno c) (traverse (`go` nabla) ns) <> go' more
-      -- FIXME: add underscores here, instead of []
+      -- TODO: add underscores here, instead of []
       NotEqCons _ns ncs -> map (\n' -> PatApp emptyAnno n' [] ) ncs
       NoInfo -> [PatVar emptyAnno underscoreRef]
 
@@ -2303,8 +2245,9 @@ prettyCheckWarning = \ case
   PatternMatchRedundant b ->
     [ "The following CONSIDER branch is redundant: "
     , ""
-    , "  " <> prettyLayout b
-    , ""
+    ] <>
+    map (("  " <>) . prettyLayout) b
+    <> [ ""
     ]
   PatternMatchesMissing b ->
     [ "The following branches still need to be considered:"
