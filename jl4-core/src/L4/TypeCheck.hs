@@ -1,6 +1,4 @@
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant <$>" #-}
 module L4.TypeCheck
@@ -954,9 +952,6 @@ checkAction MkAction {anno, action, provided = mprovided} actionT = do
       checkExpr ExpectRegulativeProvidedContext provided boolean
   pure (MkAction {anno, action = pat, provided}, bounds)
 
-prettyUnq :: Unique -> Text
-prettyUnq (MkUnique {unique, sort = s}) = Text.show s <>  " " <> Text.show unique
-
 buildConstructorLookup :: [DeclChecked (Declare Resolved)] -> Map Unique [Resolved]
 buildConstructorLookup = foldMap \decl ->
   let MkDeclare _ _ (MkAppForm _ tr _ _) td = decl.payload
@@ -970,12 +965,12 @@ checkConsider ec ann e branches t = do
   (re, te) <- inferExpr e
   rbranches <- traverse (checkBranch ec re te t) branches
   resolvedDecls <- asks (Map.elems . (.declareDeclarations))
-  pt <- desugarBranches re rbranches
+  (scrutVar, pt) <- desugarBranches re rbranches
   let cl = buildConstructorLookup resolvedDecls
       bs = concretizeInfo cl pt
 
   let redundant = redundantBranches $ annotateRefinement bs
-      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern re $ normalizeRefinement $ uncoverRefinement bs
+      missing = nubBy ((==) `on` fmap getUnique) $ expandToPattern scrutVar $ normalizeRefinement $ uncoverRefinement bs
 
   unless (null missing) do
     addWarning $ PatternMatchesMissing missing
@@ -1302,28 +1297,27 @@ data PatTree' i n
 data Guard i n
   = MkGuard
   { info :: i
-  , binding :: Expr n
+  , binding :: n
   , constructor :: n
   , constructorArgs :: [n] }
   deriving stock (Eq, Show, Generic, Functor)
 
-mapInfo :: (i -> i') -> PatTree' i n -> PatTree' i' n
-mapInfo f = go where
- go = \case
-  PatOr t1 t2 -> PatOr (go t1) (go t2)
-  PatAnd (MkGuard i b n ns) t -> PatAnd (MkGuard (f i) b n ns) (go t)
-  PatLeaf e -> PatLeaf e
-  PatNoBranches -> PatNoBranches
-
 type PatTree = PatTree' Info
 
-desugarBranches :: Expr Resolved -> [Branch Resolved] -> Check (PatTree Resolved)
-desugarBranches _scrut [] = pure PatNoBranches
-desugarBranches scrut nebs = flip evalStateT mempty $ foldr1 PatOr <$> traverse (desugarBranch scrut) nebs
+desugarBranches :: Expr Resolved -> [Branch Resolved] -> Check (Resolved, PatTree Resolved)
+desugarBranches scrut nebs = do
+  v <- case scrut of
+    Var _ x -> pure x
+    _ -> newPatName
+  res <- case nebs of
+    [] -> pure PatNoBranches
+    _ -> flip evalStateT mempty $ foldr1 PatOr <$> traverse (desugarBranch v) nebs
+  pure (v, res)
  where
-  desugarBranch :: Expr Resolved -> Branch Resolved -> StateT VarEnv Check (PatTree Resolved)
-  desugarBranch scrut' = \ case
-    b@(MkBranch _ (When _ p) _) -> foldr PatAnd (PatLeaf b) <$> desugarPat scrut' p
+  desugarBranch :: Resolved -> Branch Resolved -> StateT VarEnv Check (PatTree Resolved)
+  desugarBranch v  = \ case
+    b@(MkBranch _ (When _ p) _) -> do
+      foldr PatAnd (PatLeaf b) <$> desugarPat v p
     b@(MkBranch _ (Otherwise {}) _) -> pure (PatLeaf b)
 
   newPatName = do
@@ -1332,23 +1326,23 @@ desugarBranches scrut nebs = flip evalStateT mempty $ foldr1 PatOr <$> traverse 
         n = MkName emptyAnno rn
     pure $ Def unq n
 
-  -- if there's no scrutinee, we create a new variable that is then putas the scrutinee.
+  -- NOTE: if there's no scrutinee, we create a new variable that is then putas the scrutinee.
   -- So: WHEN Foo Bar THEN expr essentially becomes WHEN Foo bar THEN CONSIDER bar WHEN Bar THEN expr
 
-  desugarPat :: Expr Resolved -> Pattern Resolved -> StateT VarEnv Check [Guard Info Resolved]
+  desugarPat :: Resolved -> Pattern Resolved -> StateT VarEnv Check [Guard Info Resolved]
   desugarPat scrut' = \ case
     PatApp ((.extra.resolvedInfo) -> Just info) c ps ->
       Map.lookup (getUnique c) <$> get >>= \ case
         Just existingVars -> do
           pats <- getAp $ flip foldMap (zip existingVars ps) \(var, p) -> Ap do
-             desugarPat (Var emptyAnno var) p
+            desugarPat var p
 
           pure (MkGuard info scrut' c existingVars : pats)
 
         Nothing -> do
           (vs, pats) <- getAp $ flip foldMap ps \p -> Ap do
             n <- lift newPatName
-            guards <- desugarPat (Var emptyAnno n) p
+            guards <- desugarPat n p
             pure ([n], guards)
 
           modify' (Map.insert (getUnique c) vs)
@@ -1356,17 +1350,17 @@ desugarBranches scrut nebs = flip evalStateT mempty $ foldr1 PatOr <$> traverse 
 
     -- NOTE: this second case is very similar to the one for PatApp, because Cons in general is basically a PatApp
     PatCons ((.extra.resolvedInfo) -> Just info) ph pt ->
-      Map.lookup consUnique <$> get >>= \case
+      Map.lookup consUnique <$> get >>= \ case
         Just [nh, nt] -> do
-          ph' <- desugarPat (Var emptyAnno nh) ph
-          pt' <- desugarPat (Var emptyAnno nt) pt
+          ph' <- desugarPat nh ph
+          pt' <- desugarPat nt pt
           pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
 
         _p -> assert (isNothing _p) do
           nh <- lift newPatName
           nt <- lift newPatName
-          ph' <- desugarPat (Var emptyAnno nh) ph
-          pt' <- desugarPat (Var emptyAnno nt) pt
+          ph' <- desugarPat nh ph
+          pt' <- desugarPat nt pt
           modify' (Map.insert consUnique [nh, nt])
           pure (MkGuard info scrut' consRef [nh, nt] : ph' <> pt')
 
@@ -1399,12 +1393,12 @@ data Refinement n
 
 -- a constraint
 data Constr n
-  = IsEq (Expr n) n [n]
+  = IsEq n n [n]
   -- ^ in that order:
   -- - the expression that is scrutinized (most often a Var)
   -- - the constructor
   -- - the variables that are scrutinized when scrutinizing this constructor's arguments
-  | IsNotEq (Expr n) n [n] [n]
+  | IsNotEq n n [n] [n]
   -- ^ in that order:
   -- - the expression that is scrutinized (most often a Var)
   -- - the constructor
@@ -1469,13 +1463,12 @@ instance Ord n => Monoid (Nabla n) where
 lookupConstraints :: Eq n => n -> Nabla n -> [Constr n]
 lookupConstraints n = \ case
   Bottom -> []
-  Consistent s -> mapMaybe (\c -> if constraintName c == Just n then Just c else Nothing) $ Set.toList s
+  Consistent s -> mapMaybe (\c -> if constraintName c == n then Just c else Nothing) $ Set.toList s
 
-constraintName :: Constr n -> Maybe n
+constraintName :: Constr n -> n
 constraintName = \ case
-  IsEq (Var _ n) _ _ -> Just n
-  IsNotEq (Var _ n) _ _ _ -> Just n
-  _ -> Nothing
+  IsEq n _ _ -> n
+  IsNotEq n _ _ _ -> n
 
 normalizeRefinement :: Refinement Resolved -> Nabla Resolved
 normalizeRefinement = go (Consistent mempty)
@@ -1487,7 +1480,7 @@ normalizeRefinement = go (Consistent mempty)
    RefineBottom -> Bottom
 
   addConsistentConstraint :: Nabla Resolved -> Constr Resolved -> Nabla Resolved
-  addConsistentConstraint nabla c = case flip lookupConstraints nabla =<< maybeToList (constraintName c) of
+  addConsistentConstraint nabla c = case lookupConstraints (constraintName c) nabla of
     [] -> insertConstraint c nabla
     cs -> if all (c `isConsistentWith`) cs then insertConstraint c nabla else nabla
 
@@ -1496,9 +1489,9 @@ normalizeRefinement = go (Consistent mempty)
     Consistent s -> Consistent (Set.insert c s)
 
 isConsistentWith :: Constr Resolved -> Constr Resolved -> Bool
-IsEq (Var _ n1) c1 _ `isConsistentWith` IsEq (Var _ n2) c2 _ | n1 `sameResolved` n2 = c1 `sameResolved` c2
-IsNotEq (Var _ n1) c1 _ _ `isConsistentWith` IsEq (Var _ n2) c2 _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
-IsEq (Var _ n1) c1 _ `isConsistentWith` IsNotEq (Var _ n2) c2 _ _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
+IsEq n1 c1 _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = c1 `sameResolved` c2
+IsNotEq n1 c1 _ _ `isConsistentWith` IsEq n2 c2 _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
+IsEq n1 c1 _ `isConsistentWith` IsNotEq n2 c2 _ _ | n1 `sameResolved` n2 = not $ c1 `sameResolved` c2
 _ `isConsistentWith` _ = True
 
 data ConsistentSet n
@@ -1506,11 +1499,10 @@ data ConsistentSet n
   | NotEqCons [n] [n]
   | NoInfo
 
-expandToPattern :: Expr Resolved -> Nabla Resolved -> [BranchLhs Resolved]
+expandToPattern :: Resolved -> Nabla Resolved -> [BranchLhs Resolved]
 expandToPattern scrut = \ case
   Bottom -> []
-  n@Consistent {} | Var _ n' <- scrut -> map patternToBranch (go n' n)
-  _ -> [Otherwise emptyAnno] -- TODO: if we're casing on non variabla exprs, we can do better
+  n@Consistent {} -> map patternToBranch (go scrut n)
  where
   patternToBranch pat
     | PatVar _ var <- pat, var `sameResolved` underscoreRef
@@ -1528,9 +1520,9 @@ expandToPattern scrut = \ case
   delByUnq = deleteBy sameResolved
 
   go :: Resolved -> Nabla Resolved -> [Pattern Resolved]
-  go n nabla = go' cnstrs
+  go scrutVar nabla = go' cnstrs
    where
-    cnstrs = toConsistentSet $ lookupConstraints n nabla
+    cnstrs = toConsistentSet $ lookupConstraints scrutVar nabla
     go' = \ case
       EqCon c ns more -> map (PatApp emptyAnno c) (traverse (`go` nabla) ns) <> go' more
       -- TODO: add underscores here, instead of []
