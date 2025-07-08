@@ -1,0 +1,729 @@
+§ `Day & Date Definitions and Helpers`
+
+-- Library with some basic functions to enable math with dates and days following ISO 8601
+-- Functions return datestamps (Number of days since 1st January 0000).
+-- A week begins on Monday
+-- Check the test/daydate.l4 file to see examples
+
+
+
+
+§§ `Constants`
+
+
+`Months in a year`      MEANS 12
+`Days in a year`        MEANS 365.2425   -- Considering 4 year leap-cycle with 100 and 400 year exceptions
+`Days in a month`       MEANS 30.436875  -- Average month
+`Days in a week`        MEANS 7
+
+`Monday`     AKA `Mon`  MEANS 1
+`Tuesday`    AKA `Tue`  MEANS 2
+`Wednesday`  AKA `Wed`  MEANS 3
+`Thursday`   AKA `Thu`  MEANS 4
+`Friday`     AKA `Fri`  MEANS 5
+`Saturday`   AKA `Sat`  MEANS 6
+`Sunday`     AKA `Sun`  MEANS 0
+
+`January`    AKA `Jan`  MEANS 1
+`February`   AKA `Feb`  MEANS 2
+`March`      AKA `Mar`  MEANS 3
+`April`      AKA `Apr`  MEANS 4
+`May`                   MEANS 5
+`June`       AKA `Jun`  MEANS 6
+`July`       AKA `Jul`  MEANS 7
+`August`     AKA `Aug`  MEANS 8
+`September`  AKA `Sep`  MEANS 9
+`October`    AKA `Oct`  MEANS 10
+`November`   AKA `Nov`  MEANS 11
+`December`   AKA `Dec`  MEANS 12
+
+
+
+§§ `Type`
+
+
+DECLARE DATE 
+    HAS day   IS A NUMBER
+        month IS A NUMBER
+        year  IS A NUMBER
+
+
+
+
+§§ `Date Constructors`
+
+
+GIVEN day   IS A NUMBER
+      month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A DATE
+`Date` AKA `Days to date` MEANS
+    `Days to date` (Day day month year)
+
+GIVEN days  IS A NUMBER
+GIVETH A DATE
+`Date` AKA `Days to date` MEANS
+    DATE WITH
+        day   IS  d MINUS dy MINUS dm
+        month IS  m
+        year  IS  y
+    WHERE
+        d   MEANS FLOOR days PLUS 1
+        y   MEANS `Year of days` days
+        dy  MEANS `Years to days` y
+        m   MEANS `Month of days` 1 (d MINUS dy)
+        dm  MEANS `Months since year start to days` m y
+
+        GIVEN i IS A NUMBER
+              c IS A NUMBER
+        `Month of days` MEANS
+            IF    i LESS THAN `Months in a year` AND a LESS THAN c
+            THEN  `Month of days` (i PLUS 1) c
+            ELSE  i
+            WHERE
+                a MEANS `Months since year start to days` (i PLUS 1) y
+
+        GIVEN v IS A NUMBER
+        GIVETH A NUMBER
+        `Year of days` MEANS
+            y400 PLUS y100 PLUS y4 PLUS z
+            WHERE
+                x     MEANS FLOOR v
+                y400  MEANS FLOOR (x DIVIDED BY 146097) TIMES 400
+                r400  MEANS x MODULO 146097
+                y100  MEANS FLOOR (r400 DIVIDED BY 36524) TIMES 100
+                r100  MEANS r400 MODULO 36524
+                y4    MEANS FLOOR (r100 DIVIDED BY 1461) TIMES 4
+                r4    MEANS r100 MODULO 1461
+                z     MEANS FLOOR (r4 DIVIDED BY 365)
+
+GIVEN date  IS A DATE
+GIVETH A DATE
+`Date` AKA `Days to date` MEANS date
+
+
+
+
+§§ `Datestamp Constructors`
+
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Day` AKA `Date to days` MEANS
+    Day (date's day) (date's month) (date's year) 
+
+GIVEN day   IS A NUMBER
+      month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`Day` AKA `Date to days` MEANS
+    Month month year PLUS (day MINUS 1)
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Day`AKA `Date to days` MEANS
+    days
+
+GIVEN year  IS A NUMBER
+GIVETH A NUMBER
+`Year` MEANS
+    Month 1 year
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Year` MEANS
+    Year (date's year)
+
+GIVEN month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`Month` MEANS
+    IF    month LESS THAN 1
+    THEN  `Years to days` y                 -- negative month handling
+              PLUS `Months since year start to days`
+                      (month PLUS (`Months in a year` TIMES n))
+                      y
+    ELSE  `Years to days` year
+              PLUS `Months since year start to days` month year
+    WHERE
+        m MEANS FLOOR month MINUS 1
+        n MEANS FLOOR (1 MINUS (m DIVIDED BY `Months in a year`))
+        y MEANS FLOOR year MINUS n
+            
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Month` MEANS
+    Month (`Days to date` days)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Month` MEANS
+    Month (date's month) (date's year)
+
+GIVEN week  IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`Week` MEANS
+    Year year
+        PLUS (3 MINUS `Days in a week`) MINUS o
+            PLUS (w TIMES `Days in a week`)
+    WHERE
+        w MEANS FLOOR week
+        o MEANS (`Days in a week` PLUS 2
+            PLUS (`Weekday of 1st day of year` year))
+                MODULO `Days in a week`
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Week` MEANS
+    IF   w EQUALS 0
+    THEN days MINUS (`Days in a week` MINUS 1)
+    ELSE days MINUS w PLUS 1
+    WHERE
+        w MEANS `Weekday of` days
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Week` MEANS
+    Week (`Date to days` date)
+
+
+
+§§ `Month Helpers`
+-- Convenience functions for months so you can write: January 1 1972
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`January` AKA `Jan` MEANS
+    Day day 1 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`February` AKA `Feb` MEANS
+    Day day 2 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`March` AKA `Mar` MEANS
+    Day day 3 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`April` AKA `Apr` MEANS
+    Day day 4 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`May` MEANS
+    Day day 5 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`June` AKA `Jun` MEANS
+    Day day 6 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`July` AKA `Jul` MEANS
+    Day day 7 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`August` AKA `Aug` MEANS
+    Day day 8 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`September` AKA `Sep` MEANS
+    Day day 9 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`October` AKA `Oct` MEANS
+    Day day 10 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`November` AKA `Nov` MEANS
+    Day day 11 year
+
+GIVEN day   IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`December` AKA `Dec` MEANS
+    Day day 12 year
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Month of the year` MEANS 
+    `Month of the year` (`Days to date` days)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Month of the year` MEANS                     -- Returns the number of the week of this date
+    `Month of days` 1 (`Months since year start to days` (date's month PLUS 1) (date's year))
+    WHERE
+        GIVEN i IS A NUMBER
+              c IS A NUMBER
+        `Month of days` MEANS
+            IF    i LESS THAN `Months in a year` AND a LESS THAN c
+            THEN  `Month of days` (i PLUS 1) c
+            ELSE  i
+            WHERE
+                a MEANS `Months since year start to days` (i PLUS 1) (date's year)
+
+
+
+
+§§ `Datestamp Math Helpers`
+
+
+GIVEN month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`Months since year start to days` MEANS
+    IF    m LESS THAN 1
+    THEN  0
+    ELSE  `Days in month` m year
+              PLUS `Months since year start to days` m year -- Recursively add all days of months that year
+    WHERE
+        m MEANS FLOOR month MINUS 1
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Months since year start to days` MEANS
+    `Months since year start to days` (`Days to date` days)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Months since year start to days` MEANS
+    `Months since year start to days` (date's month) (date's year)
+
+GIVEN month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A NUMBER
+`Days in month` MEANS
+    IF       m EQUALS 4   -- April
+          OR m EQUALS 6   -- June
+          OR m EQUALS 9   -- September
+          OR m EQUALS 11  -- November
+    THEN  30
+    ELSE  IF    m EQUALS 2
+          THEN  IF    `is leap year` y
+                THEN  29
+                ELSE  28
+          ELSE  31
+    WHERE
+        m MEANS 1 PLUS (FLOOR month MINUS 1)
+                    MINUS (FLOOR ((month MINUS 1)
+                        DIVIDED BY `Months in a year`))
+                            TIMES `Months in a year`
+        y MEANS FLOOR year
+                    PLUS FLOOR (month DIVIDED BY `Months in a year`)
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Days in month` MEANS
+    `Days in month` (`Days to date` days)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Days in month` MEANS
+    `Days in month` (date's month) (date's year)
+
+GIVEN year  IS A NUMBER
+GIVETH A NUMBER
+`Days in year` MEANS
+    IF   `is leap year` year
+    THEN 366
+    ELSE 365
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Days in year` MEANS
+    `Days in year` (date's year)
+
+GIVEN year  IS A NUMBER
+GIVETH A NUMBER
+`Years to days` MEANS
+    (year TIMES 365)
+        PLUS  FLOOR (y DIVIDED BY 4)   -- consider leap years
+        MINUS FLOOR (y DIVIDED BY 100)
+        PLUS  FLOOR (y DIVIDED BY 400)
+    WHERE
+        y MEANS FLOOR (year MINUS 1)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Years to days` MEANS
+    `Years to days` (date's year)
+
+
+
+
+§§ `Weekday Functions`
+
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Weekday of` MEANS
+    days MODULO `Days in a week`
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Weekday of` MEANS
+    `Weekday of` (`Date to days` date)
+
+GIVEN month  IS A NUMBER
+      year   IS A NUMBER
+GIVETH A NUMBER
+`Weekday of 1st day of month` MEANS
+    `Weekday of`
+        (Day 1 month year)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`Weekday of 1st day of month` MEANS
+    `Weekday of 1st day of month` (`Days to date` days)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`Weekday of 1st day of month` MEANS
+    `Weekday of 1st day of month` (date's month) (date's year)
+
+GIVEN year  IS A NUMBER
+GIVETH A NUMBER
+`Weekday of 1st day of year` MEANS
+    `Weekday of` (Year year)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Weekday of 1st day of year` MEANS
+    `Weekday of 1st day of year` (date's year)
+
+
+
+§§ `Week Functions`
+
+
+GIVEN days  IS A NUMBER
+GIVETH A NUMBER
+`Week of the year` MEANS 
+    `Week of the year` (`Days to date` days)
+
+GIVEN date  IS A DATE
+GIVETH A NUMBER
+`Week of the year` MEANS                     -- Returns the number of the week of this date
+    IF    n EQUALS 53 AND `Weeks in year` (date's year) EQUALS 52
+    THEN  1
+    ELSE  IF    n EQUALS 0
+          THEN  `Weeks in year` (date's year MINUS 1)
+          ELSE  n
+    WHERE
+        s MEANS (`Months since year start to days` date)
+            PLUS (date's day MINUS 1)
+        w MEANS (`Days in a week` PLUS 2 PLUS (`Weekday of 1st day of year` (date's year)))
+            MODULO `Days in a week`
+        n MEANS CEILING ((s PLUS w MINUS 2) DIVIDED BY `Days in a week`)
+
+GIVEN year  IS A NUMBER
+GIVETH A NUMBER
+`Weeks in year` MEANS             -- Calculating the weeks in a given year using Zeller's Congruence
+    IF        h EQUALS 5
+          OR (h EQUALS 4 AND `is leap year` year)
+    THEN  53
+    ELSE  52
+    WHERE
+        y MEANS FLOOR year MINUS 1
+        k MEANS y MODULO 100
+        j MEANS FLOOR (y DIVIDED BY 100)
+        h MEANS (37 PLUS k
+                    PLUS FLOOR (k DIVIDED BY 4)
+                    PLUS FLOOR (j DIVIDED BY 4)
+                    PLUS (5 TIMES j))
+                MODULO `Days in a week`
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`Weeks in year` MEANS
+    `Weeks in year` (date's year)   
+
+
+
+
+§§ `Attribute Checkers`
+
+
+GIVEN days  IS A NUMBER
+GIVETH A BOOLEAN
+`is weekend` MEANS
+        w EQUALS Saturday
+    OR  w EQUALS Sunday
+    WHERE
+        d MEANS FLOOR days
+        w MEANS `Weekday of` d
+
+GIVEN date  IS A DATE
+GIVETH A BOOLEAN
+`is weekend` MEANS
+    `is weekend` (`Date to days` date)
+
+
+GIVEN days  IS A NUMBER
+GIVETH A BOOLEAN
+`is weekday` MEANS
+    NOT `is weekend` days
+
+GIVEN date  IS A DATE
+GIVETH A BOOLEAN
+`is weekday` MEANS
+    `is weekday` (`Date to days` date)
+
+GIVEN year  IS A NUMBER
+GIVETH A BOOLEAN
+`is leap year` MEANS
+            y MODULO 4   EQUALS 0
+    AND NOT y MODULO 100 EQUALS 0
+    OR      y MODULO 400 EQUALS 0
+    WHERE
+      y MEANS FLOOR year
+
+GIVEN date   IS A DATE
+GIVETH A BOOLEAN
+`is leap year` MEANS
+    `is leap year` (date's year)
+
+
+
+
+§§ `Relative time phrases`
+
+
+GIVEN day   IS A NUMBER
+      days  IS A NUMBER
+GIVETH A NUMBER
+`on day` MEANS
+    days PLUS day MINUS 1
+
+GIVEN day   IS A NUMBER
+      date  IS A DATE
+GIVETH A NUMBER
+`on day` MEANS
+    `Date to days` date PLUS day MINUS 1
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the day after` MEANS
+    days PLUS 1
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the day after` MEANS
+    Day (date's day PLUS 1) (date's month) (date's year)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the day before` MEANS
+    days MINUS 1
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the day before` MEANS
+    Day (date's day MINUS 1) (date's month) (date's year)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the week after` MEANS
+    IF    d GREATER THAN `Days in a week`
+    THEN  days PLUS d MINUS `Days in a week`
+    ELSE  days PLUS d 
+    WHERE
+        d MEANS `Days in a week` MINUS (`Weekday of` days) PLUS Monday
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the week after` MEANS
+    `the week after` (`Date to days` date)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the week before` MEANS
+    `the week after` days
+        MINUS (`Days in a week` TIMES 2)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the week before` MEANS
+    `the week before` (`Date to days` date)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the month after` MEANS
+    `the month after` (`Days to date` days)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the month after` MEANS
+    Day 1 (date's month PLUS 1) (date's year)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the month before` MEANS
+    `the month before` (`Days to date` days)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the month before` MEANS
+    Day 1 (date's month MINUS 1) (date's year)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the year after` MEANS
+    `the year after` (`Days to date` days)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the year after` MEANS
+    Day 1 1 (date's year PLUS 1)
+
+GIVEN days   IS A NUMBER
+GIVETH A NUMBER
+`the year before` MEANS
+    `the year before` (`Days to date` days)
+
+GIVEN date   IS A DATE
+GIVETH A NUMBER
+`the year before` MEANS
+    Day 1 1 (date's year MINUS 1)
+
+
+§§ `Comperators`
+
+
+GIVEN day1   IS A NUMBER
+      day2   IS A NUMBER
+GIVETH A NUMBER
+`the earlier of` MEANS
+    IF    day1 LESS THAN day2
+    THEN  day1
+    ELSE  day2
+
+GIVEN date1  IS A DATE
+      date2  IS A DATE
+GIVETH A NUMBER
+`the earlier of` MEANS
+    `the earlier of` day1 day2
+    WHERE
+        day1 MEANS `Date to days` date1
+        day2 MEANS `Date to days` date2
+
+GIVEN date1  IS A DATE
+      day2   IS A NUMBER
+GIVETH A NUMBER
+`the earlier of` MEANS
+    `the earlier of` day1 day2
+    WHERE
+        day1 MEANS `Date to days` date1
+
+GIVEN day1   IS A NUMBER
+      date2  IS A DATE
+GIVETH A NUMBER
+`the earlier of` MEANS
+    `the earlier of` day1 day2
+    WHERE
+        day2 MEANS `Date to days` date2
+
+GIVEN day1   IS A NUMBER
+      day2   IS A NUMBER
+GIVETH A NUMBER
+`the later of` MEANS
+    IF    day1 LESS THAN day2
+    THEN  day2
+    ELSE  day1
+
+GIVEN date1  IS A DATE
+      date2  IS A DATE
+GIVETH A NUMBER
+`the later of` MEANS
+    `the later of` day1 day2
+    WHERE
+        day1 MEANS `Date to days` date1
+        day2 MEANS `Date to days` date2
+
+
+GIVEN date1  IS A DATE
+      day2   IS A NUMBER
+GIVETH A NUMBER
+`the later of` MEANS
+    `the later of` day1 day2
+    WHERE
+        day1 MEANS `Date to days` date1
+
+GIVEN day1   IS A NUMBER
+      date2  IS A DATE
+GIVETH A NUMBER
+`the later of` MEANS
+    `the later of` day1 day2
+    WHERE
+        day2 MEANS `Date to days` date2
+
+
+
+
+§§ `Stringify for months and weekdays`
+
+
+GIVEN date  IS A DATE 
+GIVETH A STRING
+`Name of month` MEANS
+    `Name of month` (`Date to days` date)
+
+GIVEN days  IS A NUMBER
+GIVETH A STRING
+`Name of month` MEANS
+    IF m EQUALS 0 THEN "January" ELSE
+        IF m EQUALS 1 THEN "February" ELSE
+            IF m EQUALS 2 THEN "March" ELSE
+                IF m EQUALS 3 THEN "April" ELSE
+                    IF m EQUALS 4 THEN "May" ELSE
+                        IF m EQUALS 5 THEN "June" ELSE
+                            IF m EQUALS 6 THEN "July" ELSE
+                                IF m EQUALS 7 THEN "August" ELSE
+                                    IF m EQUALS 8 THEN "September" ELSE
+                                        IF m EQUALS 9 THEN "October" ELSE
+                                            IF m EQUALS 10 THEN "November" ELSE
+                                                "December"
+    WHERE
+        d MEANS FLOOR days
+        m MEANS IF    d GREATER THAN 0 AND d LESS THAN 13
+                THEN  d MINUS 1
+                ELSE  FLOOR ((`Days to date` d)'s month MINUS 1)
+
+GIVEN days   IS A NUMBER
+GIVETH A STRING
+`Name of weekday` MEANS
+    IF w EQUALS Monday THEN "Monday" ELSE
+        IF w EQUALS Tuesday THEN "Tuesday" ELSE
+            IF w EQUALS Wednesday THEN "Wednesday" ELSE
+                IF w EQUALS Thursday THEN "Thursday" ELSE
+                    IF w EQUALS Friday THEN "Friday" ELSE
+                        IF w EQUALS Saturday THEN "Saturday" ELSE
+                            "Sunday"
+    WHERE
+        w MEANS `Weekday of` days
+
+GIVEN date   IS A DATE
+GIVETH A STRING
+`Name of weekday` MEANS
+    `Name of weekday` (`Date to days` date)
