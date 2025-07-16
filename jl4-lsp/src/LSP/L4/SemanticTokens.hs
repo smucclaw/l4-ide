@@ -208,7 +208,7 @@ instance ToSemTokens Context PosToken (Aka Name) where
 instance ToSemTokens Context PosToken (TypeDecl Name) where
 instance ToSemTokens Context PosToken (NamedExpr Name) where
 instance ToSemTokens Context PosToken (Branch Name) where
-  toSemTokens = genericToSemTokens
+instance ToSemTokens Context PosToken (BranchLhs Name) where
 instance ToSemTokens Context PosToken (Pattern Name) where
   toSemTokens = genericToSemTokens
 instance ToSemTokens Context PosToken (TypeSig Name) where
@@ -305,6 +305,7 @@ instance ToSemTokens () PosToken (Aka Resolved) where
 instance ToSemTokens () PosToken (TypeDecl Resolved) where
 instance ToSemTokens () PosToken (NamedExpr Resolved) where
 instance ToSemTokens () PosToken (Branch Resolved) where
+instance ToSemTokens () PosToken (BranchLhs Resolved) where
 instance ToSemTokens () PosToken (Pattern Resolved) where
 instance ToSemTokens () PosToken (TypeSig Resolved) where
 instance ToSemTokens () PosToken (GivethSig Resolved) where

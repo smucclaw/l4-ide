@@ -1,0 +1,25 @@
+DECLARE foo IS ONE OF
+  bar, baz, qux
+
+-- GIVEN a IS A foo
+-- x MEANS CONSIDER a 
+
+DECLARE foz IS ONE OF 
+  fab, faz HAS bla IS A foo, blup IS A foo
+
+GIVEN a IS A foz
+x2 MEANS CONSIDER a 
+  WHEN faz o baz THEN 4
+  WHEN fab THEN 4
+
+GIVEN a IS A foz
+xx MEANS CONSIDER a 
+  WHEN fab THEN 4
+  WHEN faz qux qux THEN 2
+  WHEN faz qux qux THEN 2
+
+DECLARE empty IS ONE OF
+
+GIVEN a IS AN empty 
+x3 MEANS CONSIDER a
+  OTHERWISE 43

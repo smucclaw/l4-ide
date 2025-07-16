@@ -10,13 +10,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__PLUS__`
+      __PLUS__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__PLUS__` (defined at overloaded-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__PLUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __PLUS__ (defined at overloaded-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
+      __PLUS__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -27,13 +27,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__PLUS__`
+      __PLUS__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__PLUS__` (defined at overloaded-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__PLUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __PLUS__ (defined at overloaded-ambiguous.l4:9:1-11) of type FUNCTION FROM Vector AND Vector TO Vector
+      __PLUS__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -44,13 +44,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__MINUS__`
+      __MINUS__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__MINUS__` (defined at overloaded-ambiguous.l4:25:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__MINUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __MINUS__ (defined at overloaded-ambiguous.l4:25:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
+      __MINUS__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -61,13 +61,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__MINUS__`
+      __MINUS__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__MINUS__` (defined at overloaded-ambiguous.l4:25:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__MINUS__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __MINUS__ (defined at overloaded-ambiguous.l4:25:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
+      __MINUS__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -78,13 +78,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__TIMES__`
+      __TIMES__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__TIMES__` (defined at overloaded-ambiguous.l4:17:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__TIMES__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __TIMES__ (defined at overloaded-ambiguous.l4:17:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
+      __TIMES__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -95,13 +95,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__TIMES__`
+      __TIMES__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__TIMES__` (defined at overloaded-ambiguous.l4:17:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__TIMES__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __TIMES__ (defined at overloaded-ambiguous.l4:17:1-12) of type FUNCTION FROM Vector AND Vector TO Vector
+      __TIMES__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -112,13 +112,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__DIVIDE__`
+      __DIVIDE__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__DIVIDE__` (defined at overloaded-ambiguous.l4:33:1-13) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__DIVIDE__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __DIVIDE__ (defined at overloaded-ambiguous.l4:33:1-13) of type FUNCTION FROM Vector AND Vector TO Vector
+      __DIVIDE__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -129,13 +129,13 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__DIVIDE__`
+      __DIVIDE__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__DIVIDE__` (defined at overloaded-ambiguous.l4:33:1-13) of type FUNCTION FROM Vector AND Vector TO Vector
-      `__DIVIDE__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
+      __DIVIDE__ (defined at overloaded-ambiguous.l4:33:1-13) of type FUNCTION FROM Vector AND Vector TO Vector
+      __DIVIDE__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO NUMBER
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -146,15 +146,15 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__LT__`
+      __LT__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__LT__` (defined at overloaded-ambiguous.l4:55:1-9) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
-      `__LT__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
-      `__LT__` (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
-      `__LT__` (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
+      __LT__ (defined at overloaded-ambiguous.l4:55:1-9) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
+      __LT__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
+      __LT__ (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
+      __LT__ (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -165,15 +165,15 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__LEQ__`
+      __LEQ__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__LEQ__` (defined at overloaded-ambiguous.l4:62:1-10) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
-      `__LEQ__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
-      `__LEQ__` (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
-      `__LEQ__` (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
+      __LEQ__ (defined at overloaded-ambiguous.l4:62:1-10) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
+      __LEQ__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
+      __LEQ__ (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
+      __LEQ__ (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -184,15 +184,15 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__GT__`
+      __GT__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__GT__` (defined at overloaded-ambiguous.l4:67:1-9) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
-      `__GT__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
-      `__GT__` (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
-      `__GT__` (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
+      __GT__ (defined at overloaded-ambiguous.l4:67:1-9) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
+      __GT__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
+      __GT__ (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
+      __GT__ (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
 
 File: overloaded-ambiguous.l4
   Hidden:   no
@@ -203,12 +203,12 @@ File: overloaded-ambiguous.l4
   Message: 
     There are multiple definitions for the identifier
 
-      `__GEQ__`
+      __GEQ__
 
     and I do not have sufficient information to make a choice between them.
     The options are:
 
-      `__GEQ__` (defined at overloaded-ambiguous.l4:73:1-10) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
-      `__GEQ__` (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
-      `__GEQ__` (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
-      `__GEQ__` (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
+      __GEQ__ (defined at overloaded-ambiguous.l4:73:1-10) of type FUNCTION FROM Vector AND Vector TO BOOLEAN
+      __GEQ__ (predefined) of type FUNCTION FROM NUMBER AND NUMBER TO BOOLEAN
+      __GEQ__ (predefined) of type FUNCTION FROM STRING AND STRING TO BOOLEAN
+      __GEQ__ (predefined) of type FUNCTION FROM BOOLEAN AND BOOLEAN TO BOOLEAN
