@@ -57,6 +57,7 @@ GIVEN `The commission`  IS A Commission
       `The action`      IS AN `Action that may have a significant adverse effect on the environment`
 `Filing of draft copy of EIR and causing notice of hearing to be published` MEANS
     IF    `The commission` EQUALS `The action`'s `Lead agency`
+              AND `The action`'s `Has hearing required by statute`
     THEN  PARTY `The commission`
           MUST  `File draft copy of EIR and cause notice of hearing to be published` 
                     `Hearing Notice` `Notice of EIR Completion` `Prepared draft copy of EIR` PROVIDED
