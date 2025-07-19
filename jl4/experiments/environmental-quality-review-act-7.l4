@@ -61,18 +61,65 @@ GIVEN `The commission`  IS A Commission
     THEN  PARTY `The commission`
           MUST  `File draft copy of EIR and cause notice of hearing to be published` 
                     `Hearing Notice` `Notice of EIR Completion` `Prepared draft copy of EIR` PROVIDED
-                        CONSIDER `Prepared draft copy of EIR`
-                            WHEN NOTHING  THEN FALSE
-                            WHEN JUST EIR THEN 
-                                    `Hearing Notice`'s `Scheduled date` AT LEAST EIR's `Draft filing date` PLUS 15
-                                AND `Hearing Notice`'s `Scheduled date` AT MOST  EIR's `Draft filing date` PLUS 60
-                        AND `Hearing Notice`'s `Scheduled date` AT LEAST `Hearing Notice`'s `Publish date` PLUS 14
+                            `Hearing Notice`'s `Scheduled date` AT LEAST `Hearing Notice`'s `Publish date` PLUS 14
                         AND `Hearing Notice`'s `Scheduled date` AT MOST  `Hearing Notice`'s `Publish date` PLUS 60
+                        AND CONSIDER `Prepared draft copy of EIR`
+                                WHEN NOTHING  THEN FALSE
+                                WHEN JUST EIR THEN 
+                                        `Hearing Notice`'s `Scheduled date` AT LEAST EIR's `Draft filing date` PLUS 15
+                                    AND `Hearing Notice`'s `Scheduled date` AT MOST  EIR's `Draft filing date` PLUS 60
                         AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
                         AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
                         AND `Notice of EIR Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
-          
     ELSE  FULFILLED
+
+
+-- TESTING
+
+`Example Commission` MEANS Commission WITH
+                            Name IS "A commission"
+
+`Example EIR` MEANS `Environmental Impact Statement` WITH
+                            `Draft filing date` IS Date Jul 19 2025
+                            `Final filing date` IS None
+
+`Example Action` MEANS `Action that may have a significant adverse effect on the environment` WITH
+                            `Proposed by` IS (Applicant WITH
+                                                Name IS "An applicant")
+                            `Lead agency` IS `Example Commission`
+                            `Potential effect area` IS "Brooklyn"
+                            `Has hearing required by statute` IS TRUE
+                            `Has been withdrawn` IS FALSE
+                            EIR IS `Example EIR`
+
+`Example Filing` MEANS `Filing of draft copy of EIR and causing notice of hearing to be published`
+                            `Example Commission`
+                            `Example Action`
+
+`Example Newspaper` MEANS Newspaper OF "New York Times", "Brooklyn"
+
+`Example Hearing Notice` MEANS Notice WITH
+                                    `Publish date`      IS Date Jul 20 2025
+                                    `Scheduled date`    IS Date Aug 1 2025
+                                    `Publishing medium` IS `Example Newspaper`
+                                    `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
+
+`Example Notice of EIR Completion` MEANS Notice WITH
+                                            `Publish date`      IS Date Jul 20 2025
+                                            `Scheduled date`    IS Date Aug 8 2025
+                                            `Publishing medium` IS `Example Newspaper`
+                                            `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
+
+#EVAL `Example Filing`
+
+#TRACE `Example Filing` AT Jul 19 2025 WITH
+    PARTY `Example Commission`
+    DOES `File draft copy of EIR and cause notice of hearing to be published`
+            `Example Hearing Notice`
+            `Example Notice of EIR Completion`
+            (JUST `Example EIR`)
+    AT Jul 20 2025
+
 
 
 §§§§§§§ `Section 7.3 (b)`
@@ -93,6 +140,21 @@ GIVEN `The decision` IS A `Tentative or recommended decision`
          AND NOT `The decision`'s `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment`
     THEN TRUE
     ELSE FALSE
+
+
+-- TESTING
+
+`Example Proceeding Record` MEANS `Proceeding Record` WITH
+    `Closing date` IS Date Aug 20 2025
+
+`Example Decision` MEANS `Tentative or recommended decision` WITH
+    Action IS `Example Action`
+    `Proceeding Record` IS `Example Proceeding Record`
+    `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment`
+        IS TRUE
+
+#EVAL `Tentative or recommended decision will contain a final EIS` `Example Decision`
+
 
 
 §§§§§§§§ `Section 7.3 (b) (2)`
@@ -134,6 +196,11 @@ GIVETH A NUMBER
         `Closing date` MEANS `The decision`'s `Proceeding Record`'s `Closing date`
                                 PLUS 45
 
+-- TESTING
+
+#EVAL `Determining issuance for final EIS` `Example Decision` NOTHING
+
+
 
 §§§§§§§§ `Section 7.3 (b) (3)`
 
@@ -154,6 +221,8 @@ GIVEN `The decision` IS A `Tentative or recommended decision`
     ELSE FALSE
 
 
+
+
 §§§§§§§§ `Section 7.3 (c)`
 
 DECLARE `Render decision on whether or not to approve action` HAS
@@ -170,6 +239,12 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
                               MUST    `Render decision on whether or not to approve action`
                                           EXACTLY `The action`
                               WITHIN  date PLUS 30
+
+-- TESTING
+
+#EVAL `Rendering of the decision on whether or not to approve action proposed by applicant` `Example Action` FALSE
+
+
 
 
 
