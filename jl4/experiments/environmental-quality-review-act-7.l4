@@ -36,10 +36,10 @@ DECLARE Notice HAS
 DECLARE Applicant HAS
     Name IS A STRING
 
-DECLARE `File draft copy of EIR and cause notice of hearing to be published` HAS
+DECLARE `File draft copy of EIS and cause notice of hearing to be published` HAS
     `Hearing Notice`             IS A Notice
-    `Notice of EIR Completion`   IS A Notice
-    `Prepared draft copy of EIR` IS A MAYBE `Environmental Impact Statement`
+    `Notice of EIS Completion`   IS A Notice
+    `Prepared draft copy of EIS` IS A MAYBE `Environmental Impact Statement`
 
 DECLARE `Action that may have a significant adverse effect on the environment` HAS
     `Proposed by`                     IS AN Applicant
@@ -47,7 +47,7 @@ DECLARE `Action that may have a significant adverse effect on the environment` H
     `Potential effect area`           IS A STRING
     `Has hearing required by statute` IS A BOOLEAN
     `Has been withdrawn`              IS A BOOLEAN
-    EIR                               IS A `Environmental Impact Statement`
+    EIS                               IS A `Environmental Impact Statement`
 
 DECLARE `Environmental Impact Statement` HAS
     `Draft filing date` IS A DATE
@@ -55,22 +55,22 @@ DECLARE `Environmental Impact Statement` HAS
 
 GIVEN `The commission`  IS A Commission
       `The action`      IS AN `Action that may have a significant adverse effect on the environment`
-`Filing of draft copy of EIR and causing notice of hearing to be published` MEANS
+`Filing of draft copy of EIS and causing notice of hearing to be published` MEANS
     IF    `The commission` EQUALS `The action`'s `Lead agency`
               AND `The action`'s `Has hearing required by statute`
     THEN  PARTY `The commission`
-          MUST  `File draft copy of EIR and cause notice of hearing to be published` 
-                    `Hearing Notice` `Notice of EIR Completion` `Prepared draft copy of EIR` PROVIDED
+          MUST  `File draft copy of EIS and cause notice of hearing to be published` 
+                    `Hearing Notice` `Notice of EIS Completion` `Prepared draft copy of EIS` PROVIDED
                             `Hearing Notice`'s `Scheduled date` AT LEAST `Hearing Notice`'s `Publish date` PLUS 14
                         AND `Hearing Notice`'s `Scheduled date` AT MOST  `Hearing Notice`'s `Publish date` PLUS 60
-                        AND CONSIDER `Prepared draft copy of EIR`
+                        AND CONSIDER `Prepared draft copy of EIS`
                                 WHEN NOTHING  THEN FALSE
-                                WHEN JUST EIR THEN 
-                                        `Hearing Notice`'s `Scheduled date` AT LEAST EIR's `Draft filing date` PLUS 15
-                                    AND `Hearing Notice`'s `Scheduled date` AT MOST  EIR's `Draft filing date` PLUS 60
+                                WHEN JUST EIS THEN 
+                                        `Hearing Notice`'s `Scheduled date` AT LEAST EIS's `Draft filing date` PLUS 15
+                                    AND `Hearing Notice`'s `Scheduled date` AT MOST  EIS's `Draft filing date` PLUS 60
                         AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
                         AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
-                        AND `Notice of EIR Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+                        AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
     ELSE  FULFILLED
 
 
@@ -79,7 +79,7 @@ GIVEN `The commission`  IS A Commission
 `Example Commission` MEANS Commission WITH
                             Name IS "A commission"
 
-`Example EIR` MEANS `Environmental Impact Statement` WITH
+`Example EIS` MEANS `Environmental Impact Statement` WITH
                             `Draft filing date` IS Date Jul 19 2025
                             `Final filing date` IS None
 
@@ -90,9 +90,9 @@ GIVEN `The commission`  IS A Commission
                             `Potential effect area` IS "Brooklyn"
                             `Has hearing required by statute` IS TRUE
                             `Has been withdrawn` IS FALSE
-                            EIR IS `Example EIR`
+                            EIS IS `Example EIS`
 
-`Example Filing` MEANS `Filing of draft copy of EIR and causing notice of hearing to be published`
+`Example Filing` MEANS `Filing of draft copy of EIS and causing notice of hearing to be published`
                             `Example Commission`
                             `Example Action`
 
@@ -104,7 +104,7 @@ GIVEN `The commission`  IS A Commission
                                     `Publishing medium` IS `Example Newspaper`
                                     `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
 
-`Example Notice of EIR Completion` MEANS Notice WITH
+`Example Notice of EIS Completion` MEANS Notice WITH
                                             `Publish date`      IS Date Jul 20 2025
                                             `Scheduled date`    IS Date Aug 8 2025
                                             `Publishing medium` IS `Example Newspaper`
@@ -114,10 +114,10 @@ GIVEN `The commission`  IS A Commission
 
 #TRACE `Example Filing` AT Jul 19 2025 WITH
     PARTY `Example Commission`
-    DOES `File draft copy of EIR and cause notice of hearing to be published`
+    DOES `File draft copy of EIS and cause notice of hearing to be published`
             `Example Hearing Notice`
-            `Example Notice of EIR Completion`
-            (JUST `Example EIR`)
+            `Example Notice of EIS Completion`
+            (JUST `Example EIS`)
     AT Jul 20 2025
 
 
@@ -233,7 +233,7 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
 `Rendering of the decision on whether or not to approve action proposed by applicant` MEANS
     IF    `Good cause to delay`
     THEN  FULFILLED
-    ELSE  CONSIDER `The action`'s EIR's `Final filing date`
+    ELSE  CONSIDER `The action`'s EIS's `Final filing date`
           WHEN None      THEN FULFILLED
           WHEN JUST date THEN PARTY   Commission
                               MUST    `Render decision on whether or not to approve action`
