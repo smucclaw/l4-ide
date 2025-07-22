@@ -1,9 +1,10 @@
 IMPORT prelude
+IMPORT daydate
 
 
 § `Promissory Note`
 
-`Note Date` MEANS  "4 February 2024"
+`Note Date` MEANS Feb 4 2025
 
 `Principal Amount` MEANS USD 25000
 

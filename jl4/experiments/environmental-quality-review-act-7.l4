@@ -71,7 +71,11 @@ GIVEN `The commission`  IS A Commission
                         AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
                         AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
                         AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+          WITHIN `the week after` (March 2 2028)
+          HENCE FULFILLED
     ELSE  FULFILLED
+
+
 
 
 -- TESTING
