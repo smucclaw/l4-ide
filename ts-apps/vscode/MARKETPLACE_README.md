@@ -96,4 +96,4 @@ Apache 2.0 - See license file for details.
 
 ## Support
 
-For support and documentation, please refer to the L4 project documentation and community resources. 
+For support and documentation, please refer to the L4 project documentation and community resources.
