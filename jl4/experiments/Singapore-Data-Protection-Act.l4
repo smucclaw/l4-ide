@@ -3,6 +3,7 @@ IMPORT daydate
 
 § `Singapore - The Personal Data Protection Regulations 2021`
 
+@ref url https://sso.agc.gov.sg/SL-Supp/S13-2021/Published/20210128?DocDate=20210128
 
 -- Core entity representing a natural person whose data is protected under the Act.
 DECLARE `Individual` HAS
@@ -163,6 +164,30 @@ DECLARE `Personal Data Protection Regulations 2021` HAS
 
 §§ `PART 1A - BUSINESS CONTACT INFORMATION`
 
+-- 1A.—(1) For the purposes of section 11(5A) of the Act, an
+-- organisation is deemed to have satisfied section 11(5) of the Act if
+-- the organisation makes available the business contact information of
+-- any individual designated by the organisation under section 11(3) of
+-- the Act in any of the following manners:
+-- (a) where the organisation is registered under an applicable
+-- Act— in a record relating to the organisation that is made
+-- available on the Internet website of the Accounting and
+-- Corporate Regulatory Authority at
+-- https://www.bizfile.gov.sg;
+-- (b) in a readily accessible part of the organisation’s official
+-- website.
+-- (2) In paragraph (1)—
+-- “applicable Act” means—
+-- (a) the Business Names Registration Act 2014 (Act 29 of
+-- 2014);
+-- (b) the Companies Act (Cap. 50);
+-- (c) the Limited Liability Partnerships Act (Cap. 163A);
+-- or
+-- (d) the Limited Partnerships Act (Cap. 163B);
+-- “official website”, for an organisation, means a website that is
+-- accessible by the public and through which the organisation
+-- provides information about the organisation to the public.
+
 @ref S 734/2021 wef 01/10/2021
 
 §§§ `1A. Business contact information of designated individuals`
@@ -226,6 +251,26 @@ GIVEN `The organisation` IS AN `Organisation`
 
 
 §§ `PART 2 - REQUESTS FOR ACCESS TO AND CORRECTION OF PERSONAL DATA`
+
+§§§ `2. Definitions of this part`
+
+-- Definitions of this Part
+-- 2. In this Part, unless the context otherwise requires—
+-- “applicant” means an individual who makes a request;
+-- “data protection officer”, in relation to an organisation, means an
+-- individual designated by the organisation under section 11(3)
+-- of the Act or an individual to whom the responsibility of the
+-- data protection officer has been delegated under section 11(4)
+-- of the Act;
+-- “individual’s personal data” means personal data about an
+-- individual;
+-- “request” means a request to an organisation made by an
+-- individual under section 21(1) or 22(1) of the Act;
+-- “use and disclosure information” means the information
+-- specified in section 21(1)(b) of the Act.
+
+-- These definitions have been modelled into the act above.
+
 
 §§§ `3. How to make request`
 
@@ -294,3 +339,122 @@ GIVETH A BOOLEAN
 -- It uses the provided Request and Organisation types, introduces a Request Sending Method type to cover the options in 3(2), and assumes "sufficient detail" is met if relevant fields are populated (non-empty strings or present MAYBE values).
 -- The overall function returns TRUE if the request is made in writing with sufficient detail and sent via a valid method, enabling validation in broader compliance checks.
 -- No tools were needed as this is a direct translation based on the given types and legislation text.
+
+
+
+
+§§§ `4. Duty to respond to request under section 21(1) of Act`
+
+-- Note: This implementation assumes the pre-defined types from the provided declarations.
+-- Additional attributes or types are declared here as needed to model the regulation accurately.
+-- The duty is modeled as a provision function that evaluates to FULFILLED or defines an obligation.
+-- Exceptions (section 21(2), (3), (3A), (4) of the Act, and regulations 6, 7(3)) are not fully detailed here as they are external references; they are represented as a boolean input for simplicity.
+-- Date of request is added as an input since it's not in the base Request type.
+
+DECLARE `Access Provision Method` IS ONE OF
+    `Providing copy in documentary form`
+    `Allowing reasonable opportunity to examine`
+    `Other form requested by applicant and acceptable to organisation`
+
+DECLARE `Respond To Access Request` HAS
+    `Method` IS AN MAYBE `Access Provision Method`
+    `Accurate And Complete As Necessary And Reasonably Possible` IS A BOOLEAN
+    `Representation of the provided data copy or access details provided` IS A BOOLEAN -- Representation of the provided data copy or access details.
+    `Use And Disclosure Information Provided as per section 21(1)(b).` IS A BOOLEAN -- 
+
+§§§§ `4. (1)`
+
+GIVEN `The organisation` IS AN `Organisation`
+      `The request` IS A `Request`
+      `Request date` IS A DATE
+      `Subject to exceptions` IS A BOOLEAN -- True if subject to section 21(2),(3),(3A),(4) or regs 6,7(3).
+`Duty to respond accurately and completely to request under section 21(1)` MEANS
+    IF   `The request`'s `Type` EQUALS `Request of personal data and use and disclosure information under section 21(1)`
+         AND Day `Request date` AT LEAST Feb 1 2021
+         AND NOT `Subject to exceptions`
+    THEN PARTY `The organisation`
+         MUST `Respond To Access Request`
+                  `Method` `Accurate And Complete` `Provided Data Copy` `Use And Disclosure` PROVIDED
+                        CONSIDER `Method`
+                            WHEN NOTHING     THEN FALSE
+                            WHEN JUST method THEN TRUE
+                        AND `Accurate And Complete`
+                        AND `Provided Data Copy`
+                        AND `Use And Disclosure`
+    ELSE FULFILLED
+
+
+
+-- §§§§ `4. (2)`
+
+-- GIVEN `The organisation` IS AN `Organisation`
+--       `The request` IS A `Request`
+--       `Request date` IS A DATE
+--       `Subject to exceptions in section 21(2),(3),(3A),(4) or regs 6,7(3)` IS A BOOLEAN
+--       `Impracticable to provide copy` IS A BOOLEAN -- For sub-paragraph (a) vs (b).
+--       `Applicant requested form` IS A MAYBE STRING -- For sub-paragraph (c); NOTHING if not requested.
+-- GIVETH AN `Access Provision Method`
+-- `Method to provide access to personal data under section 21(1)` MEANS
+--     IF   `The request`'s `Type` EQUALS `Request of personal data and use and disclosure information under section 21(1)`
+--          AND Day `Request date` AT LEAST February 1 2021
+--          AND NOT `Subject to exceptions in section 21(2),(3),(3A),(4) or regs 6,7(3)`
+--     THEN CONSIDER `Applicant requested form`
+--          WHEN JUST form THEN 
+--              IF `The organisation` accepts form
+--              THEN `Other form requested by applicant and acceptable to organisation`
+--              ELSE `Providing copy in documentary form`
+--          WHEN NOTHING THEN
+--              IF   `Impracticable to provide copy`
+--              THEN `Allowing reasonable opportunity to examine`
+--              ELSE `Providing copy in documentary form`
+--     ELSE `Providing copy in documentary form` -- Default; no duty applies.
+
+-- GIVEN `The organisation` IS AN `Organisation`
+--       `The request` IS A `Request`
+--       `Request date` IS A DATE
+--       `Subject to exceptions` IS A BOOLEAN -- True if subject to section 21(2),(3),(3A),(4) or regs 6,7(3).
+--       `Impracticable to provide copy` IS A BOOLEAN
+--       `Applicant requested form` IS A MAYBE STRING
+-- `Duty to provide access to personal data under section 21(1)` MEANS
+--     IF   `The request`'s `Type` EQUALS `Request of personal data and use and disclosure information under section 21(1)`
+--          AND `Request date` AT LEAST Date Feb 1 2021
+--          AND NOT `Subject to exceptions`
+--     THEN PARTY `The organisation`
+--          MUST `Provide access to requested personal data and information`
+--                   `The request`
+--                   USING METHOD `Method to provide access to personal data under section 21(1)` `The organisation` `The request` `Request date` `Subject to exceptions` `Impracticable to provide copy` `Applicant requested form`
+--                   WITH `Personal Data Copy Provided` EQUALS `The request`'s `Personal Data Requested`
+--                   AND `Use And Disclosure Information Provided` EQUALS `The request`'s `Use And Disclosure Information`
+--          HENCE FULFILLED
+--     ELSE FULFILLED
+
+
+-- -- TESTING
+
+-- `Example Organisation` MEANS `Organisation` WITH
+--     `Data Protection Officer` IS (`Data Protection Officer` WITH
+--                                     `Business Contact Information` IS "dpo@example.com"
+--                                     `Designated Under Section 11(3)` IS TRUE)
+--     `Official Website` IS "https://example.com"
+--     `Applicable Act Registration` IS "UEN123"
+--     `Transferring Organisation` IS FALSE
+
+-- `Example Request` MEANS `Request` WITH
+--     `Applicant` IS JUST (`Individual` WITH
+--                             `Personal Data` IS JUST "John Doe's data"
+--                             `Business Contact Information` IS NOTHING
+--                             `Deceased` IS FALSE
+--                             `Nearest Relative` IS NOTHING)
+--     `Type` IS `Request of personal data and use and disclosure information under section 21(1)`
+--     `Personal Data Requested` IS "John Doe's address and phone"
+--     `Use And Disclosure Information` IS JUST "Disclosed to partners"
+--     `Made In Writing` IS TRUE
+--     `Sent To Data Protection Officer` IS TRUE
+--     `Response Timeframe` IS NOTHING
+--     `Fee` IS NOTHING
+
+-- #EVAL `Duty to respond accurately and completely to request under section 21(1)` `Example Organisation` `Example Request` (Date Feb 2 2021) FALSE
+
+-- #EVAL `Method to provide access to personal data under section 21(1)` `Example Organisation` `Example Request` (Date Feb 2 2021) FALSE TRUE NOTHING
+
+-- #EVAL `Duty to provide access to personal data under section 21(1)` `Example Organisation` `Example Request` (Date Feb 2 2021) FALSE TRUE NOTHING
