@@ -21,10 +21,6 @@
       "close": ")"
     },
     {
-      "open": "`",
-      "close": "`"
-    },
-    {
       "open": "\"",
       "close": "\"",
       "notIn": ["string"]
@@ -33,12 +29,10 @@
   "surroundingPairs": [
     ["{-", "-}"],
     ["[", "]"],
-    ["(", ")"],
-    ["\"", "\""],
-    ["`", "`"]
+    ["(", ")"]
   ],
-  "autoClosingQuotes": "always",
-  "autoClosingBrackets": "always",
+  "autoClosingQuotes": "beforeWhitespace",
+  "autoClosingBrackets": "beforeWhitespace",
   "autoSurround": "brackets",
   "formatOnType": true,
   "formatOnPaste": true,

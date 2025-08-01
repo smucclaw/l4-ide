@@ -52,6 +52,25 @@
   let showSidebar = $state(
     window.innerWidth < 1024 ? false : !ownUrl.searchParams.has('no-examples')
   )
+  let showVisualizer = $state(false)
+  let paneGroup: any = $state()
+  let paneKey = $state(0)
+
+  // Reactive statement to handle visualizer state changes
+  $effect(() => {
+    if (
+      showVisualizer &&
+      paneGroup &&
+      typeof paneGroup.setSizes === 'function'
+    ) {
+      // Try to use the API if available
+      setTimeout(() => {
+        if (paneGroup && typeof paneGroup.setSizes === 'function') {
+          paneGroup.setSizes([50, 50])
+        }
+      }, 0)
+    }
+  })
 
   /***********************************
         UI-related vars
@@ -314,6 +333,14 @@
         ladderInfo
       )
       await renderLadderPromise
+      // Automatically show visualizer when ladder object is updated
+      showVisualizer = true
+      // Re-initialize editor after state change
+      setTimeout(() => {
+        if (editorElement && editor) {
+          editor.layout()
+        }
+      }, 0)
     }
 
     /**********************************
@@ -444,13 +471,23 @@
     }
   }
 
+  async function handleVizualiser() {
+    showVisualizer = !showVisualizer
+    // Re-initialize editor after state change
+    setTimeout(() => {
+      if (editorElement && editor) {
+        editor.layout()
+      }
+    }, 0)
+  }
+
   async function handleShare() {
     const sessionId = await handlePersist()
     if (sessionId) {
       const shareUrl = `${window.location.origin}${window.location.pathname}?id=${sessionId}`
       await navigator.clipboard.writeText(shareUrl)
-      window.history.pushState(null, '', shareUrl)
       toast.push('Session persisted and share link copied to clipboard')
+      window.history.pushState(null, '', shareUrl)
     } else {
       toast.push('Could not persist the file.')
     }
@@ -499,6 +536,41 @@
         </svg>
       </button>
     {/if}
+    <div class="spacer"></div>
+    <button
+      class="fab fab-logic {showVisualizer ? 'selected' : ''}"
+      onclick={handleVizualiser}
+      aria-label="Toggle Visualizer"
+      title="Toggle Visualizer"
+    >
+      <svg
+        style="font-size: 24px; vertical-align: middle; margin-right: .5rem"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Top node -->
+        <circle cx="12" cy="5" r="2.2" />
+        <!-- Bottom left node -->
+        <circle cx="7" cy="18" r="2.2" />
+        <!-- Bottom right node -->
+        <circle cx="17" cy="18" r="2.2" />
+        <!-- Line from top node down to split point -->
+        <line x1="12" y1="7.2" x2="12" y2="12" />
+        <!-- Curved line from split to left node -->
+        <path d="M12 12 Q9 15 7 18" />
+        <!-- Curved line from split to right node -->
+        <path d="M12 12 Q15 15 17 18" />
+      </svg>
+      Logic Viz
+    </button>
     <button
       class="fab fab-share"
       onclick={handleShare}
@@ -507,29 +579,21 @@
       disabled={persistButtonBlocked}
     >
       <svg
-        style="opacity: .6; font-size: 24px; vertical-align: middle; margin-right: .5rem"
         width="20"
         height="20"
+        style="font-size: 24px; vertical-align: middle; margin-right: 0.2em;"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        focusable="false"
+        xmlns="http://www.w3.org/2000/svg"
+        stroke-width="1.3"
+        ><path
+          d="M6.99609 9L11.9961 4L16.9961 9M6.99609 9M12 16V4"
+          stroke="currentColor"
+        ></path><path
+          d="M4 15V16C4 18.2091 5.79086 20 8 20H16C18.2091 20 20 18.2091 20 16V15"
+          stroke="currentColor"
+        ></path></svg
       >
-        <!-- Circle for the share origin -->
-        <circle cx="18" cy="5" r="3" />
-        <!-- Circle for the left endpoint -->
-        <circle cx="6" cy="12" r="3" />
-        <!-- Circle for the right endpoint -->
-        <circle cx="18" cy="19" r="3" />
-        <!-- Line from left to top -->
-        <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
-        <!-- Line from left to bottom -->
-        <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
-      </svg>
       Share
     </button>
   </div>
@@ -539,37 +603,39 @@
     </div>
   {/if}
   <div class="panes">
-    <Resizable.PaneGroup direction="horizontal">
-      <Resizable.Pane defaultSize={50}>
+    <Resizable.PaneGroup direction="horizontal" bind:this={paneGroup}>
+      <Resizable.Pane defaultSize={showVisualizer ? 50 : 100}>
         <div id="jl4-editor" class="h-full" bind:this={editorElement}></div>
       </Resizable.Pane>
-      <Resizable.Handle />
-      <Resizable.Pane class="hidden lg:block">
-        <div class="relative h-full ladder-border">
-          <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
-            {#await renderLadderPromise then ladder}
-              {#key ladder.funDeclLirNode}
-                <div class="slightly-shorter-than-full-viewport-height pb-1">
-                  <LadderFlow
-                    {context}
-                    node={ladder.funDeclLirNode}
-                    env={ladder.env}
-                  />
-                </div>
-              {/key}
-            {:catch error}
-              <p>Error loading Ladder Diagram: {error.message}</p>
-            {/await}
+      {#if showVisualizer}
+        <Resizable.Handle />
+        <Resizable.Pane defaultSize={50}>
+          <div class="relative h-full ladder-border">
+            <div id="jl4-webview" class="h-full max-w-[96%] mx-auto">
+              {#await renderLadderPromise then ladder}
+                {#key ladder.funDeclLirNode}
+                  <div class="slightly-shorter-than-full-viewport-height pb-1">
+                    <LadderFlow
+                      {context}
+                      node={ladder.funDeclLirNode}
+                      env={ladder.env}
+                    />
+                  </div>
+                {/key}
+              {:catch error}
+                <p>Error loading Ladder Diagram: {error.message}</p>
+              {/await}
+            </div>
           </div>
-        </div>
-        <style>
-          .ladder-border {
-            border-top: 1px solid #999;
-            border-right: 1px solid #999;
-            border-bottom: 1px solid #999;
-          }
-        </style>
-      </Resizable.Pane>
+          <style>
+            .ladder-border {
+              border-top: 1px solid #999;
+              border-right: 1px solid #999;
+              border-bottom: 1px solid #999;
+            }
+          </style>
+        </Resizable.Pane>
+      {/if}
     </Resizable.PaneGroup>
   </div>
 {:else}
@@ -596,6 +662,12 @@
     color: rgb(30, 29, 28);
     background: rgba(250, 250, 249, 0.88);
     display: flex;
+    gap: 1em;
+    align-items: center;
+    padding-right: 1em;
+  }
+  .spacer {
+    flex: 1;
   }
   .sidebar {
     width: max(20%, 250px);
@@ -621,8 +693,9 @@
     padding: 0.4rem 1rem;
   }
   .fab {
-    position: absolute;
+    border-radius: 2px;
     min-width: 24px;
+    padding: 0 0.3em;
     height: 24px;
     font-size: 0.8rem;
     display: flex;
@@ -636,10 +709,14 @@
       background 0.2s;
     color: rgba(30, 29, 28, 0.698);
   }
+  .fab svg {
+    margin: 0 -0.1em;
+  }
   .fab:hover {
-    background: #f3f2f1;
     color: rgba(30, 29, 28, 1);
-    border-radius: 2px;
+  }
+  .fab.selected {
+    background: #f3f2f1;
     outline: 3px solid #f3f2f1;
   }
   .fab-sidebar.open {
@@ -653,15 +730,11 @@
   }
   .fab-sidebar {
     position: relative;
-    top: 10px;
     left: auto;
-  }
-  .fab-share {
-    top: 10px;
-    right: 1rem;
+    padding: 0;
   }
   .slightly-shorter-than-full-viewport-height {
-    height: 98svh;
+    height: 100%;
   }
 
   @media (max-width: 1023px) {
