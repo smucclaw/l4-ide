@@ -1,10 +1,29 @@
 {
-  "name": "jl4-vscode",
-  "description": "VSCode extension for the JL4 language",
-  "author": "Smucclaw",
-  "license": "MIT",
-  "version": "0.0.1",
-  "publisher": "smucclaw",
+  "name": "l4-vscode",
+  "displayName": "L4 Rules-as-code",
+  "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
+  "readme": "MARKETPLACE_README.md",
+  "license": "Apache-2.0",
+  "version": "1.0.0",
+  "publisher": "legalese",
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "l4",
+    "legal",
+    "jl4",
+    "language",
+    "legislation",
+    "rules-as-code",
+    "rules"
+  ],
+  "icon": "static/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "publishConfig": {
     "files": [
       "!**/.DS_Store",
@@ -19,7 +38,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/smucclaw/mattwaddington.git",
+    "url": "https://github.com/legalese/l4-ide",
     "directory": "ts-apps/vscode"
   },
   "activationEvents": [
@@ -96,7 +115,7 @@
     "@typescript-eslint/parser": "^8.18.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^3.2.1",
+    "@vscode/vsce": "^3.6.0",
     "babel-loader": "^9.2.1",
     "esbuild": "^0.24.2",
     "eslint": "^9.17.0",
