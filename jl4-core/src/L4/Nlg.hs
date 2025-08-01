@@ -283,13 +283,13 @@ instance Linearize Lit where
 
 instance Linearize (Branch Resolved) where
   linearize = \ case
-    When _ pat e -> hcat
+    MkBranch _ (When _ pat) e -> hcat
       [ text "when"
       , lin pat
       , text "then"
       , lin e
       ]
-    Otherwise _ e -> hcat
+    MkBranch _ (Otherwise _) e -> hcat
       [ text "in"
       , text "any"
       , text "other"

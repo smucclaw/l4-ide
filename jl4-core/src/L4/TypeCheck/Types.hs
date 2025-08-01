@@ -71,9 +71,16 @@ data CheckError =
   | IllegalAppNamed Resolved (Type' Resolved)
   | IncompleteAppNamed Resolved [OptionallyNamedType Resolved]
   | CheckInfo (Type' Resolved)
+  | CheckWarning CheckWarning
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass NFData
+
+data CheckWarning
+  = PatternMatchRedundant [Branch Resolved]
+  | PatternMatchesMissing [BranchLhs Resolved]
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -343,6 +350,9 @@ addError :: CheckError -> Check ()
 addError e = do
   ctx <- asks (.errorContext)
   with (MkCheckErrorWithContext e ctx)
+
+addWarning :: CheckWarning -> Check ()
+addWarning = addError . CheckWarning
 
 fatalInternalError :: InternalCheckError -> Check a
 fatalInternalError e = throw e

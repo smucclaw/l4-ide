@@ -55,6 +55,7 @@ mkBuiltins
   -- this is essentially the event that's always leading to a breach - it is only relevant
   -- for its timestamp
   , "neverMatchesParty", "neverMatchesAct"
+  , "underscore" `rename` "_"
   ]
 
 boolean :: Type' Resolved

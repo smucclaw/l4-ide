@@ -64,8 +64,8 @@ carameliseDecide = \ case
 
 carameliseBranch :: HasName n => Branch n -> Branch n
 carameliseBranch = \ case
-  When ann pat e -> When ann (caramelisePattern pat) (carameliseExpr e)
-  Otherwise ann e -> Otherwise ann (carameliseExpr e)
+  MkBranch ann (When ann' pat) e -> MkBranch ann (When ann' (caramelisePattern pat)) (carameliseExpr e)
+  MkBranch ann (Otherwise ann') e -> MkBranch ann (Otherwise ann') (carameliseExpr e)
 
 caramelisePattern :: HasName n => Pattern n -> Pattern n
 caramelisePattern = \ case
