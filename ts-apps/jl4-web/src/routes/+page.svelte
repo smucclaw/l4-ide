@@ -53,8 +53,8 @@
     window.innerWidth < 1024 ? false : !ownUrl.searchParams.has('no-examples')
   )
   let showVisualizer = $state(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let paneGroup: any = $state()
-  let paneKey = $state(0)
 
   // Reactive statement to handle visualizer state changes
   $effect(() => {
