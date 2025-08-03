@@ -1,111 +1,100 @@
-# jl4 LSP Client
+# L4 Language Support
 
-This is the VSCode LSP client for `jl4` programs.
-It includes a webview extension designed to visualize L4 programs as ladder diagrams.
+Language support for L4 rules-as-code functional programming language with syntax highlighting, IntelliSense, and ladder diagram visualization.
 
-## Running the Extension
+Documentation: https://l4.legalese.com
+Language Server: https://github.com/legalese/l4-ide
 
-From the root directory:
+## Features
+
+- **Syntax Highlighting**: Full support for L4 syntax with proper color coding
+- **Language Server Protocol (LSP)**: Advanced language features including:
+  - IntelliSense and autocompletion
+  - Error detection and diagnostics
+  - Code navigation
+  - Symbol search
+- **Logic Diagram Visualization**: Interactive visualization of L4 rules as ladder diagrams
+  - Real-time updates as you edit your code
+  - Visual representation of logical relationships
+  - Interactive exploration of rule structures
+
+## What is L4?
+
+L4 is a domain-specific language designed for expressing legal logic and rules in a formal, computable way. It allows legal professionals and developers to:
+
+- Write legal rules in a structured, unambiguous format
+- Visualize complex legal logic through ladder diagrams
+- Validate legal reasoning through formal methods
+- Generate executable code from legal specifications
+
+## Getting Started
+
+1. **Install the Extension**: Install this extension from the VS Code marketplace
+2. **Clone and run the Language Server**: Follow the the instructions in [here](https://github.com/legalese/l4-ide/blob/main/README.md).
+3. **Open an L4 File**: Create or open a file with the `.l4` extension
+
+### Language Server Setup
+
+The extension expects to find `jl4-lsp` on your system PATH. You can install it via:
 
 ```bash
-npm install # if you haven't installed already
-code .
-# In VSCode, press 'F5'
+cabal install exe:jl4-lsp --overwrite-policy=always
 ```
 
-Pressing 'F5' will launch an `Extension Development Host` Editor with the extension installed.
-
-Make sure to open the root directory of this project in VSCode, to make sure `.vscode/launch.json` is picked up.
-
-### Installing the Extension
-
-1. Install dependencies and build the project
-
-It is best to install starting from the root directory.
-
-```bash
-npm install
-npm run build
-```
-
-2. Package the extension
-
-From this (i.e., the `vscode`) directory:
-
-```bash
-npm run package
-```
-
-(If you get a `npm error Missing script: "package"` error,
-that means you aren't in the right directory.)
-
-3. Install the extension
-   The extension will be packaged as `l4-vscode-1.0.0`. Open VSCode, select the _Install from VSIX_ option, and install the file.
-
-   > Note: After installation, the extension might initially appear inactive. To activate it, load or write an L4 rule (see details below).
-
-   You can also install the extension from the command line with `code --install-extension *.vsix`.
-
-### Configuring the Language Server
-
-The extension expects to find `jl4-lsp` on the `$PATH`. If you didn't install the extension before, you can do this via:
-
-```sh
-$ cabal install exe:jl4-lsp --overwrite-policy=always
-```
-
-and make sure `cabal`'s `/bin` directory is part of your `$PATH`.
-
-Alternatively, you can specify the location of the binary via `.vscode/settings.json` like this:
+Alternatively, specify the path manually in VS Code settings:
 
 ```json
 {
-  "jl4.serverExecutablePath": "<path-to-jl4-lsp>"
+  "jl4.serverExecutablePath": "/path/to/jl4-lsp"
 }
 ```
 
-### Development
+## Using the Visualization
 
-It can be faster for development to use a workflow as follows:
+1. Open an L4 file containing rules
+2. Look for "Visualize" or "Simplify and visualize" codelens above L4 expressions
+3. Click on the codelens to open the ladder diagram visualization
+4. The diagram will update automatically as you edit your code
 
-```sh
-cabal build exe:jl4-lsp
-cabal list-bin exe:jl4-lsp
+## Example L4 Code
+
+```l4
+DECLARE Person
+  HAS name    IS A STRING
+      age     IS A NUMBER
+      country IS A STRING
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `is adult` p IF p's age >= 18
+
+GIVEN p IS A Person
+GIVETH A BOOLEAN
+DECIDE `can vote` p IF
+  `is adult` p
+  AND p's country = "UK"
 ```
 
-and use the obtained path for `"jl4.serverExecutablePath": "<path-to-jl4-lsp>"`.
-Running `cabal build exe:jl4-lsp` and restarting the `Extension Development Host` Editor is sufficient to use the latest version of the JL4 Language Server.
+## Requirements
 
-## Features and Functionalities
+- VS Code 1.94.0 or higher
+- `jl4-lsp` language server (see setup instructions above)
 
-### Ladder Diagram
+## Configuration
 
-The extension uses a VSCode webview to render L4 rules as ladder diagrams, displaying them in a panel next to the editor. This setup enables the extension to update the visualisation dynamically, reflecting any changes made to the rules in real time.
+The extension provides several configuration options:
 
-### Displaying the Diagram
+- `jl4.serverExecutablePath`: Path to the jl4-lsp executable
+- `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
 
-After opening a .l4 file, to visualize an eligible rule as a ladder diagram, click on the "Visualize" or "Simplify and visualize" codelens above the L4 expression you want to visualize.
+## Contributing
 
-## More build / config notes
+This extension is part of the L4 IDE project. For issues, feature requests, or contributions, please visit the project repository.
 
-### lib, DOM
+## License
 
-Jan 20 2025, tsconfig.json: `"DOM"` had to be added to the value for `lib` to avoid issues like the following
+Apache 2.0 - See LICENSE file for details.
 
-```bash
-┌ l4-vscode#build > cache miss, executing a18c902b9c9c2a55
-│
-│
-│ > l4-vscode@1.0.0 build
-│ > tsc -b tsconfig.json && npm run esbuild-base
-│
-│ ../../node_modules/@types/d3-drag/index.d.ts:14:38 - error TS2304: Cannot find name 'Element'.
-│
-│ 14 export type DraggedElementBaseType = Element;
-│                                         ~~~~~~~
-│
-│ ../../node_modules/@types/d3-drag/index.d.ts:19:36 - error TS2304: Cannot find name 'HTMLElement'.
-│
-│ 19 export type DragContainerElement = HTMLElement | SVGSVGElement | SVGGElement; // HTMLElement inclu
-│ des HTMLCanvasElement
-```
+## Support
+
+For support and documentation, please refer to the L4 project documentation and community resources.

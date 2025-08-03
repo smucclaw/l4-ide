@@ -1,10 +1,9 @@
 {
   "name": "l4-vscode",
-  "displayName": "L4 Rules-as-code",
-  "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and ladder diagram visualization",
-  "readme": "MARKETPLACE_README.md",
+  "displayName": "L4 - Rules as Code",
+  "description": "Language support for L4 rules-as-code with syntax highlighting, IntelliSense, and logic diagram visualization",
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "legalese",
   "categories": [
     "Programming Languages",
@@ -128,9 +127,10 @@
   },
   "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run lint && npm run bundle-esbuild",
-    "build": "npm run clean && npm run prepare:webview && tsc -b tsconfig.json && npm run bundle-esbuild",
+    "vscode:prepublish": "npm run lint && npm run build-stripped && npm run bundle-esbuild",
+    "build": "npm run clean && npm run prepare:webview && npm run build-stripped && tsc -b tsconfig.json && npm run bundle-esbuild",
     "prepare:webview": "mkdir -p ./static/webview && cp -r ../webview/build/* ./static/webview/",
+    "build-stripped": "node scripts/build-stripped.mjs",
     "bundle-esbuild": "node scripts/build.mjs",
     "package": "npm run lint && npx vsce package",
     "dev": "npm run build --watch",

@@ -1,0 +1,21 @@
+{
+  "version": "1.1.0",
+  "buildInfo": {
+    "buildDate": "2025-08-03T02:35:30.000Z",
+    "hostPlatform": "darwin-arm64",
+    "totalPlatforms": 4,
+    "successfulBuilds": 2
+  },
+  "binaries": [
+    {
+      "platform": "darwin-arm64",
+      "target": "aarch64-apple-darwin",
+      "binary": "jl4-lsp"
+    },
+    {
+      "platform": "win32-x64",
+      "target": "x86_64-pc-windows-msvc",
+      "binary": "jl4-lsp.exe"
+    }
+  ]
+}

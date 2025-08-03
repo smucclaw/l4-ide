@@ -11,6 +11,7 @@ import type { PanelConfig } from './webview-panel.js'
 import { PanelManager } from './webview-panel.js'
 
 import { VSCodeL4LanguageClient } from './vscode-l4-language-client.js'
+import { BinaryManager } from './binary-manager.js'
 
 import { RenderAsLadderInfo, VersionedDocId } from '@repo/viz-expr'
 import { Schema } from 'effect'
@@ -105,15 +106,37 @@ export async function activate(context: ExtensionContext) {
     langId
   )
 
-  const serverCmd: string =
-    workspace.getConfiguration('jl4').get('serverExecutablePath') ?? 'jl4-lsp'
-  // If the extension is launched in debug mode then the debug server options are used
-  // Otherwise the run options are used
-  const serverOptions: ServerOptions = {
-    run: { command: serverCmd },
-    debug: {
-      command: serverCmd,
-    },
+  // Initialize binary manager with output channel for better logging
+  const binaryManager = new BinaryManager(context, outputChannel)
+  
+  // Determine server command
+  let serverCmd: string
+  
+  // First check for user configuration
+  const configuredPath = workspace.getConfiguration('jl4').get('serverExecutablePath') as string | undefined
+  
+  if (configuredPath) {
+    // Use explicitly configured path
+    serverCmd = configuredPath
+    outputChannel.appendLine(`Using configured server path: ${serverCmd}`)
+  } else {
+    // Try to get bundled binary path from BinaryManager
+    const bundledBinaryPath = await binaryManager.getBinaryPath()
+    
+    if (bundledBinaryPath) {
+      // Use bundled binary
+      serverCmd = bundledBinaryPath
+      outputChannel.appendLine(`Using bundled binary: ${serverCmd}`)
+    } else {
+      // Fallback to system binary
+      serverCmd = 'jl4-lsp'
+      outputChannel.appendLine(`Using system binary: ${serverCmd}`)
+      
+      // Warn the user
+      window.showWarningMessage(
+        `The jl4-lsp binary was not found bundled with the extension. If the extension fails to activate, please install the binary or configure its path in settings.`
+      )
+    }
   }
 
   // Initialize panelManager and webviewMessenger
@@ -122,6 +145,12 @@ export async function activate(context: ExtensionContext) {
     outputChannel,
     panelManager
   )
+  
+  // Define server options
+  const serverOptions: ServerOptions = {
+    run: { command: serverCmd },
+    debug: { command: serverCmd },
+  }
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: langId, pattern: '**/*' }],
@@ -207,13 +236,21 @@ export async function activate(context: ExtensionContext) {
     `[client] Starting server from the client: ${serverCmd}`
   )
 
-  // Create the language client and start the client.
-  client = new VSCodeL4LanguageClient(
-    new LanguageClient(langId, langName, serverOptions, clientOptions)
-  )
+  try {
+    // Create the language client and start the client.
+    client = new VSCodeL4LanguageClient(
+      new LanguageClient(langId, langName, serverOptions, clientOptions)
+    )
 
-  // Start the client. This will also launch the server
-  await client.start()
+    // Start the client. This will also launch the server
+    await client.start()
+    outputChannel.appendLine(`Language server started successfully`)
+  } catch (error) {
+    outputChannel.appendLine(`Failed to start language server: ${error}`)
+    window.showErrorMessage(
+      `Failed to start jl4 language server: ${error}. Please check the binary path in settings.`
+    )
+  }
 }
 
 export async function deactivate(): Promise<void> {

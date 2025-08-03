@@ -19,6 +19,9 @@ node_modules/**
 out/**
 !out/*.js
 
+# Include binaries in the package
+!static/binaries/**
+
 # this is a short-term hack. 
 # Better solution is to use something like webpack
 .../../../
