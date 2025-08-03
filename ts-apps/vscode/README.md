@@ -3,7 +3,12 @@
 Language support for L4 rules-as-code functional programming language with syntax highlighting, IntelliSense, and ladder diagram visualization.
 
 Documentation: https://l4.legalese.com
-Language Server: https://github.com/legalese/l4-ide
+Language Server Source: https://github.com/legalese/l4-ide
+
+Included Binary Platform Support:
+  - Apple Silicon `darwin-arm64`
+  - Windows 10+ `win32-x64`
+
 
 ## Features
 
@@ -18,6 +23,7 @@ Language Server: https://github.com/legalese/l4-ide
   - Visual representation of logical relationships
   - Interactive exploration of rule structures
 
+
 ## What is L4?
 
 L4 is a domain-specific language designed for expressing legal logic and rules in a formal, computable way. It allows legal professionals and developers to:
@@ -27,15 +33,17 @@ L4 is a domain-specific language designed for expressing legal logic and rules i
 - Validate legal reasoning through formal methods
 - Generate executable code from legal specifications
 
+
 ## Getting Started
 
 1. **Install the Extension**: Install this extension from the VS Code marketplace
-2. **Clone and run the Language Server**: Follow the the instructions in [here](https://github.com/legalese/l4-ide/blob/main/README.md).
+2. **FOR UNSUPPORTED PLATFORMS: Clone and setup the Language Server**: Follow the the instructions in [here](https://github.com/legalese/l4-ide/blob/main/README.md).
 3. **Open an L4 File**: Create or open a file with the `.l4` extension
+
 
 ### Language Server Setup
 
-The extension expects to find `jl4-lsp` on your system PATH. You can install it via:
+On unsupported platforms this extension expects to find `jl4-lsp` on your system PATH. You can install it via:
 
 ```bash
 cabal install exe:jl4-lsp --overwrite-policy=always
@@ -49,12 +57,14 @@ Alternatively, specify the path manually in VS Code settings:
 }
 ```
 
+
 ## Using the Visualization
 
 1. Open an L4 file containing rules
 2. Look for "Visualize" or "Simplify and visualize" codelens above L4 expressions
 3. Click on the codelens to open the ladder diagram visualization
 4. The diagram will update automatically as you edit your code
+
 
 ## Example L4 Code
 
@@ -75,10 +85,12 @@ DECIDE `can vote` p IF
   AND p's country = "UK"
 ```
 
+
 ## Requirements
 
 - VS Code 1.94.0 or higher
 - `jl4-lsp` language server (see setup instructions above)
+
 
 ## Configuration
 
@@ -87,14 +99,17 @@ The extension provides several configuration options:
 - `jl4.serverExecutablePath`: Path to the jl4-lsp executable
 - `jl4.trace.server`: Enable server communication tracing (off/messages/verbose)
 
+
 ## Contributing
 
 This extension is part of the L4 IDE project. For issues, feature requests, or contributions, please visit the project repository.
+
 
 ## License
 
 Apache 2.0 - See LICENSE file for details.
 
+
 ## Support
 
-For support and documentation, please refer to the L4 project documentation and community resources.
+For support and documentation, please refer to the L4 project documentation and community resources and join our Discord.
