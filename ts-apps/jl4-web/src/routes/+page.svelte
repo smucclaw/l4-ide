@@ -516,7 +516,6 @@
         aria-label="Toggle sidebar"
       >
         <svg
-          style="opacity: .7"
           width="22"
           height="22"
           viewBox="0 0 24 24"
@@ -537,40 +536,42 @@
       </button>
     {/if}
     <div class="spacer"></div>
-    <button
-      class="fab fab-logic {showVisualizer ? 'selected' : ''}"
-      onclick={handleVizualiser}
-      aria-label="Toggle Visualizer"
-      title="Toggle Visualizer"
-    >
-      <svg
-        style="font-size: 24px; vertical-align: middle; margin-right: .5rem"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.3"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        focusable="false"
+    {#if window.innerWidth > 1023}
+      <button
+        class="fab fab-logic {showVisualizer ? 'selected' : ''}"
+        onclick={handleVizualiser}
+        aria-label="Toggle Visualizer"
+        title="Toggle Visualizer"
       >
-        <!-- Top node -->
-        <circle cx="12" cy="5" r="2.2" />
-        <!-- Bottom left node -->
-        <circle cx="7" cy="18" r="2.2" />
-        <!-- Bottom right node -->
-        <circle cx="17" cy="18" r="2.2" />
-        <!-- Line from top node down to split point -->
-        <line x1="12" y1="7.2" x2="12" y2="12" />
-        <!-- Curved line from split to left node -->
-        <path d="M12 12 Q9 15 7 18" />
-        <!-- Curved line from split to right node -->
-        <path d="M12 12 Q15 15 17 18" />
-      </svg>
-      Logic Viz
-    </button>
+        <svg
+          style="font-size: 24px; vertical-align: middle; margin-right: .5rem"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <!-- Top node -->
+          <circle cx="12" cy="5" r="2.2" />
+          <!-- Bottom left node -->
+          <circle cx="7" cy="18" r="2.2" />
+          <!-- Bottom right node -->
+          <circle cx="17" cy="18" r="2.2" />
+          <!-- Line from top node down to split point -->
+          <line x1="12" y1="7.2" x2="12" y2="12" />
+          <!-- Curved line from split to left node -->
+          <path d="M12 12 Q9 15 7 18" />
+          <!-- Curved line from split to right node -->
+          <path d="M12 12 Q15 15 17 18" />
+        </svg>
+        Logic Viz
+      </button>
+    {/if}
     <button
       class="fab fab-share"
       onclick={handleShare}
@@ -662,7 +663,7 @@
     color: rgb(30, 29, 28);
     background: rgba(250, 250, 249, 0.88);
     display: flex;
-    gap: 1em;
+    gap: 0.5rem;
     align-items: center;
     padding-right: 1em;
   }
@@ -690,7 +691,7 @@
   h3 {
     font-size: 1.4rem;
     font-weight: bold;
-    padding: 0.4rem 1rem;
+    padding: 0.4rem 0.5rem 0.4rem 1rem;
   }
   .fab {
     border-radius: 2px;
@@ -721,7 +722,6 @@
   }
   .fab-sidebar.open {
     position: absolute;
-    top: 10px;
     left: calc(max(20%, 250px) + 0.5rem);
   }
   .fab-sidebar.open .arrow-right,
