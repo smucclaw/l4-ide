@@ -50,7 +50,7 @@ ts-apps/jl4-web/src/generated/
 ## Built Visual Studio Code Extensions
 *.vsix
 
-*/vscode/static/binaries/*/jl4-lsp
+*/vscode/static/binaries/
 
 # Debug
 npm-debug.log*
