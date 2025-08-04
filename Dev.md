@@ -25,6 +25,9 @@ cabal install exe:jl4-lsp --overwrite-policy=always
 - on your system
   - pkgconfig
   - xz (or liblzma dev libraries)
+  - upx (if you want to build the VS Code extension for distribution)
+
+UPX is https://upx.github.io/
 
 After ghcup is installed, run `ghcup tui` and set `ghc` to version `9.6.6`; press `i` to install and then `s` to set that as the default.
 

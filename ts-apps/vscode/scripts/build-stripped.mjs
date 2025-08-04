@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync } from 'fs'
+import { writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -15,6 +15,8 @@ const platforms = [
   { os: 'darwin', arch: 'arm64', target: 'aarch64-apple-darwin' },
   { os: 'win32', arch: 'x64', target: 'x86_64-pc-windows-msvc' }
 ]
+
+const strip = "upx" || "strip";
 
 // Output directory for binaries
 const binariesDir = join(__dirname, '..', 'static', 'binaries')
@@ -93,7 +95,7 @@ async function buildForPlatform(projectRoot, platform, platformName, currentPlat
   // Strategy 1: Native build (if current platform matches)
   if (platformName === currentPlatform) {
     console.log(`Using native build for current platform`)
-    return await buildNative(projectRoot, targetPath)
+    return await buildNative(projectRoot, platformDir, targetPath)
   }
   
   // Strategy 2: Cross-compilation attempts
@@ -103,7 +105,13 @@ async function buildForPlatform(projectRoot, platform, platformName, currentPlat
   const strategies = [
     () => buildWithCrossCompilation(projectRoot, platform, targetPath),
     () => buildWithDocker(projectRoot, platform, targetPath),
-    () => buildWithRosetta(projectRoot, platform, targetPath, currentPlatform)
+    () => buildWithRosetta(projectRoot, platform, targetPath, currentPlatform),
+    () => {
+      // Fallback Strategy: Create a placeholder/script for manual building
+      console.log(`Fallback: Creating build script for manual compilation`)
+      createBuildScript(platformDir, platform)
+      return false
+    }
   ]
   
   for (let i = 0; i < strategies.length; i++) {
@@ -117,31 +125,24 @@ async function buildForPlatform(projectRoot, platform, platformName, currentPlat
       console.log(`  Strategy ${i + 1} failed: ${error.message}`)
     }
   }
-  
-  // Fallback Strategy: Create a placeholder/script for manual building
-  console.log(`Fallback: Creating build script for manual compilation`)
-  createBuildScript(platformDir, platform)
-  return false
+  return false;
 }
 
-async function buildNative(projectRoot, targetPath) {
+async function buildNative(projectRoot, platformDir, targetPath) {
   try {
     console.log(`Building natively...`)
     
     // Build with cabal
-    execSync('cabal build exe:jl4-lsp', { 
-      cwd: join(projectRoot, 'jl4-lsp'),
+    execSync(`cabal install exe:jl4-lsp --install-method=copy --installdir=${platformDir} --overwrite-policy=always`, { 
+      cwd: join(projectRoot),
       stdio: 'inherit'
     })
     
     // Find the built binary
-    const binaryPath = await findBinary(projectRoot)
-    if (!binaryPath) {
+    if (! existsSync(targetPath)) {
       throw new Error('Could not find built binary')
     }
     
-    // Copy and process the binary
-    execSync(`cp "${binaryPath}" "${targetPath}"`)
     await processBinary(targetPath)
     
     return true
@@ -275,7 +276,7 @@ echo ""
 echo "Commands to run:"
 echo "cabal build exe:jl4-lsp"
 echo "cp \$(cabal list-bin exe:jl4-lsp) ${binaryName}"
-echo "strip ${binaryName}"
+echo "${strip} ${binaryName}"
 echo "chmod +x ${binaryName}"
 `
   }
@@ -297,24 +298,23 @@ async function processBinary(targetPath) {
   
   // Show original size
   try {
-    const originalSize = execSync(`ls -lh "${targetPath}"`, { encoding: 'utf8' }).split(/\s+/)[4]
-    console.log(`  Original size: ${originalSize}`)
-  } catch (error) {
-    // Size check failed, continue
+    const original = statSync(targetPath)
+    console.log(`  Original size: ${original.size}`)
+
+    execSync(`${strip} "${targetPath}"`)
+
+    const stripped = statSync(targetPath);
+    console.log(`  Stripped size: ${stripped.size}`)
   }
-  
-  // Strip the binary to reduce size
-  try {
-    execSync(`strip "${targetPath}"`)
-    const strippedSize = execSync(`ls -lh "${targetPath}"`, { encoding: 'utf8' }).split(/\s+/)[4]
-    console.log(`  Stripped size: ${strippedSize}`)
-  } catch (error) {
+  catch (error) {
     console.log(`  Could not strip binary: ${error.message}`)
   }
 }
 
+
 async function findBinary(projectRoot) {
   try {
+    console.log('Looking for jl4-lsp output binary ... trying cabal list-bin first')
     // Use cabal to get the exact path
     const output = execSync('cabal list-bin exe:jl4-lsp', { 
       cwd: join(projectRoot, 'jl4-lsp'),
@@ -322,6 +322,7 @@ async function findBinary(projectRoot) {
     }).trim()
     
     if (existsSync(output)) {
+      console.log(`found ${output}`)
       return output
     }
   } catch (error) {
@@ -330,7 +331,7 @@ async function findBinary(projectRoot) {
   
   // Fallback to find command
   const distDir = join(projectRoot, 'jl4-lsp', 'dist-newstyle')
-  const findCmd = `find "${distDir}" -name "jl4-lsp" -type f -perm +111 | head -1`
+  const findCmd = `find "${distDir}" -name "jl4-lsp" -type f -perm -u+x -print -quit`
   try {
     return execSync(findCmd, { encoding: 'utf8' }).trim()
   } catch (error) {

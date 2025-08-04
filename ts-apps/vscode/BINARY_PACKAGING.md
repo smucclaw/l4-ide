@@ -22,11 +22,15 @@ The extension supports attempt building for the following platforms:
 
 ## Build Process
 
+### Prerequisites
+
+Install the `upx` package. We use UPX to reduce the size of the compiled binary. See https://upx.github.io/ 
+
 ### Local Development
 For local development, the extension builds the binary for the current platform:
 
 ```bash
-npm run build-stripped-binary
+npm run build-stripped
 ```
 
 This script:
@@ -41,6 +45,8 @@ For broader platform support, it'll be better to use a GitHub Actions workflow:
 
 
 ## File Structure
+
+We output to `static/binaries/`:
 
 ```
 ts-apps/vscode/
