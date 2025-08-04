@@ -485,7 +485,7 @@
     const sessionId = await handlePersist()
     if (sessionId) {
       const shareUrl = `${window.location.origin}${window.location.pathname}?id=${sessionId}`
-      await navigator.clipboard.writeText(shareUrl)
+      navigator.clipboard.writeText(shareUrl)
       toast.push('Session persisted and share link copied to clipboard')
       window.history.pushState(null, '', shareUrl)
     } else {
