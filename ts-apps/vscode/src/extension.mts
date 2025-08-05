@@ -108,13 +108,15 @@ export async function activate(context: ExtensionContext) {
 
   // Initialize binary manager with output channel for better logging
   const binaryManager = new BinaryManager(context, outputChannel)
-  
+
   // Determine server command
   let serverCmd: string
-  
+
   // First check for user configuration
-  const configuredPath = workspace.getConfiguration('jl4').get('serverExecutablePath') as string | undefined
-  
+  const configuredPath = workspace
+    .getConfiguration('jl4')
+    .get('serverExecutablePath') as string | undefined
+
   if (configuredPath) {
     // Use explicitly configured path
     serverCmd = configuredPath
@@ -122,7 +124,7 @@ export async function activate(context: ExtensionContext) {
   } else {
     // Try to get bundled binary path from BinaryManager
     const bundledBinaryPath = await binaryManager.getBinaryPath()
-    
+
     if (bundledBinaryPath) {
       // Use bundled binary
       serverCmd = bundledBinaryPath
@@ -131,7 +133,7 @@ export async function activate(context: ExtensionContext) {
       // Fallback to system binary
       serverCmd = 'jl4-lsp'
       outputChannel.appendLine(`Using system binary: ${serverCmd}`)
-      
+
       // Warn the user
       window.showWarningMessage(
         `The jl4-lsp binary was not found bundled with the extension. If the extension fails to activate, please install the binary or configure its path in settings.`
@@ -145,7 +147,7 @@ export async function activate(context: ExtensionContext) {
     outputChannel,
     panelManager
   )
-  
+
   // Define server options
   const serverOptions: ServerOptions = {
     run: { command: serverCmd },

@@ -2,17 +2,17 @@ name: Build Multi-Platform Binaries
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
-      - 'jl4-lsp/**'
-      - 'jl4-core/**'
-      - '.github/workflows/build-binaries.yml'
+      - "jl4-lsp/**"
+      - "jl4-core/**"
+      - ".github/workflows/build-binaries.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'jl4-lsp/**'
-      - 'jl4-core/**'
-      - '.github/workflows/build-binaries.yml'
+      - "jl4-lsp/**"
+      - "jl4-core/**"
+      - ".github/workflows/build-binaries.yml"
   workflow_dispatch:
 
 jobs:
@@ -34,126 +34,126 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Haskell
-      uses: haskell/actions/setup@v2
-      with:
-        ghc-version: '9.6.6'
-        cabal-version: '3.10.2.0'
+      - name: Setup Haskell
+        uses: haskell/actions/setup@v2
+        with:
+          ghc-version: "9.6.6"
+          cabal-version: "3.10.2.0"
 
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cabal/packages
-          ~/.cabal/store
-          dist-newstyle
-        key: ${{ runner.os }}-${{ matrix.platform }}-${{ hashFiles('**/*.cabal') }}
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-${{ matrix.platform }}-${{ hashFiles('**/*.cabal') }}
 
-    - name: Build jl4-lsp (static)
-      run: |
-        cd jl4-lsp
-        # Platform-specific static linking options
-        if [ "${{ matrix.platform }}" = "linux-x64" ]; then
-          cabal build exe:jl4-lsp --ghc-options="-static -optl-static -optl-pthread"
-        elif [ "${{ matrix.platform }}" = "win32-x64" ]; then
-          cabal build exe:jl4-lsp --ghc-options="-static"
-        else
-          # macOS (both x64 and arm64)
-          cabal build exe:jl4-lsp --ghc-options="-static -optl-static"
-        fi
+      - name: Build jl4-lsp (static)
+        run: |
+          cd jl4-lsp
+          # Platform-specific static linking options
+          if [ "${{ matrix.platform }}" = "linux-x64" ]; then
+            cabal build exe:jl4-lsp --ghc-options="-static -optl-static -optl-pthread"
+          elif [ "${{ matrix.platform }}" = "win32-x64" ]; then
+            cabal build exe:jl4-lsp --ghc-options="-static"
+          else
+            # macOS (both x64 and arm64)
+            cabal build exe:jl4-lsp --ghc-options="-static -optl-static"
+          fi
 
-    - name: Find and prepare binary
-      run: |
-        cd jl4-lsp
-        # Find the built binary
-        BINARY_PATH=$(find dist-newstyle -name "jl4-lsp" -type f -executable | head -1)
-        if [ -z "$BINARY_PATH" ]; then
-          echo "Error: Could not find jl4-lsp binary"
-          exit 1
-        fi
-        
-        # Create output directory
-        mkdir -p ../ts-apps/vscode/static/binaries/${{ matrix.platform }}
-        
-        # Copy binary with appropriate name
-        if [ "${{ matrix.platform }}" = "win32-x64" ]; then
-          cp "$BINARY_PATH" "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp.exe"
-        else
-          cp "$BINARY_PATH" "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp"
-          # Strip the binary to reduce size
-          strip "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp" || echo "Warning: Could not strip binary"
-          chmod +x "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp"
-        fi
+      - name: Find and prepare binary
+        run: |
+          cd jl4-lsp
+          # Find the built binary
+          BINARY_PATH=$(find dist-newstyle -name "jl4-lsp" -type f -executable | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "Error: Could not find jl4-lsp binary"
+            exit 1
+          fi
 
-    - name: Upload binary artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: jl4-lsp-${{ matrix.platform }}
-        path: ts-apps/vscode/static/binaries/${{ matrix.platform }}/
+          # Create output directory
+          mkdir -p ../ts-apps/vscode/static/binaries/${{ matrix.platform }}
+
+          # Copy binary with appropriate name
+          if [ "${{ matrix.platform }}" = "win32-x64" ]; then
+            cp "$BINARY_PATH" "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp.exe"
+          else
+            cp "$BINARY_PATH" "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp"
+            # Strip the binary to reduce size
+            strip "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp" || echo "Warning: Could not strip binary"
+            chmod +x "../ts-apps/vscode/static/binaries/${{ matrix.platform }}/jl4-lsp"
+          fi
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jl4-lsp-${{ matrix.platform }}
+          path: ts-apps/vscode/static/binaries/${{ matrix.platform }}/
 
   create-manifest:
     needs: build-binaries
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download all binary artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: binaries/
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries/
 
-    - name: Create binary manifest
-      run: |
-        mkdir -p ts-apps/vscode/static/binaries
-        
-        # Create manifest with all available binaries
-        cat > ts-apps/vscode/static/binaries/manifest.json << EOF
-        {
-          "version": "1.0.0",
-          "binaries": [
-        EOF
-        
-        # Add each binary to manifest
-        for artifact in binaries/*; do
-          platform=$(basename $artifact | sed 's/jl4-lsp-//')
-          if [ "$platform" = "win32-x64" ]; then
-            binary="jl4-lsp.exe"
-          else
-            binary="jl4-lsp"
-          fi
-          
-          target=""
-          case $platform in
-            "linux-x64") target="x86_64-unknown-linux-gnu" ;;
-            "darwin-x64") target="x86_64-apple-darwin" ;;
-            "darwin-arm64") target="aarch64-apple-darwin" ;;
-            "win32-x64") target="x86_64-pc-windows-msvc" ;;
-          esac
-          
-          echo "    {" >> ts-apps/vscode/static/binaries/manifest.json
-          echo "      \"platform\": \"$platform\"," >> ts-apps/vscode/static/binaries/manifest.json
-          echo "      \"target\": \"$target\"," >> ts-apps/vscode/static/binaries/manifest.json
-          echo "      \"binary\": \"$binary\"" >> ts-apps/vscode/static/binaries/manifest.json
-          echo "    }," >> ts-apps/vscode/static/binaries/manifest.json
-          
-          # Copy binary to final location
-          cp -r $artifact/* ts-apps/vscode/static/binaries/$platform/
-        done
-        
-        # Remove trailing comma and close JSON
-        sed -i '$ s/,$//' ts-apps/vscode/static/binaries/manifest.json
-        echo "  ]" >> ts-apps/vscode/static/binaries/manifest.json
-        echo "}" >> ts-apps/vscode/static/binaries/manifest.json
+      - name: Create binary manifest
+        run: |
+          mkdir -p ts-apps/vscode/static/binaries
 
-    - name: Upload final binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: vscode-binaries
-        path: ts-apps/vscode/static/binaries/ 
+          # Create manifest with all available binaries
+          cat > ts-apps/vscode/static/binaries/manifest.json << EOF
+          {
+            "version": "1.0.0",
+            "binaries": [
+          EOF
+
+          # Add each binary to manifest
+          for artifact in binaries/*; do
+            platform=$(basename $artifact | sed 's/jl4-lsp-//')
+            if [ "$platform" = "win32-x64" ]; then
+              binary="jl4-lsp.exe"
+            else
+              binary="jl4-lsp"
+            fi
+            
+            target=""
+            case $platform in
+              "linux-x64") target="x86_64-unknown-linux-gnu" ;;
+              "darwin-x64") target="x86_64-apple-darwin" ;;
+              "darwin-arm64") target="aarch64-apple-darwin" ;;
+              "win32-x64") target="x86_64-pc-windows-msvc" ;;
+            esac
+            
+            echo "    {" >> ts-apps/vscode/static/binaries/manifest.json
+            echo "      \"platform\": \"$platform\"," >> ts-apps/vscode/static/binaries/manifest.json
+            echo "      \"target\": \"$target\"," >> ts-apps/vscode/static/binaries/manifest.json
+            echo "      \"binary\": \"$binary\"" >> ts-apps/vscode/static/binaries/manifest.json
+            echo "    }," >> ts-apps/vscode/static/binaries/manifest.json
+            
+            # Copy binary to final location
+            cp -r $artifact/* ts-apps/vscode/static/binaries/$platform/
+          done
+
+          # Remove trailing comma and close JSON
+          sed -i '$ s/,$//' ts-apps/vscode/static/binaries/manifest.json
+          echo "  ]" >> ts-apps/vscode/static/binaries/manifest.json
+          echo "}" >> ts-apps/vscode/static/binaries/manifest.json
+
+      - name: Upload final binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-binaries
+          path: ts-apps/vscode/static/binaries/

@@ -34,23 +34,29 @@ export class BinaryManager {
 
     const currentPlatform = this.getCurrentPlatform()
     this.log(`Looking for binary for platform: ${currentPlatform}`)
-    
+
     // Log available platforms for debugging
-    const availablePlatforms = manifest.binaries.map(b => b.platform)
-    this.log(`Available platforms in manifest: ${availablePlatforms.join(', ')}`)
-    
-    const binaryInfo = manifest.binaries.find(b => b.platform === currentPlatform)
-    
+    const availablePlatforms = manifest.binaries.map((b) => b.platform)
+    this.log(
+      `Available platforms in manifest: ${availablePlatforms.join(', ')}`
+    )
+
+    const binaryInfo = manifest.binaries.find(
+      (b) => b.platform === currentPlatform
+    )
+
     if (!binaryInfo) {
       this.log(`No binary found for platform: ${currentPlatform}`)
-      
+
       // Try to find a fallback binary
       const fallbackBinary = this.findFallbackBinary(manifest, currentPlatform)
       if (fallbackBinary) {
-        this.log(`Using fallback binary for platform: ${fallbackBinary.platform}`)
+        this.log(
+          `Using fallback binary for platform: ${fallbackBinary.platform}`
+        )
         return this.validateAndReturnBinaryPath(fallbackBinary)
       }
-      
+
       return null
     }
 
@@ -60,7 +66,11 @@ export class BinaryManager {
   /**
    * Validate and return the binary path
    */
-  private async validateAndReturnBinaryPath(binaryInfo: { platform: string; target: string; binary: string }): Promise<string | null> {
+  private async validateAndReturnBinaryPath(binaryInfo: {
+    platform: string
+    target: string
+    binary: string
+  }): Promise<string | null> {
     const binaryPath = join(
       this.context.extensionPath,
       'static',
@@ -73,7 +83,7 @@ export class BinaryManager {
 
     if (!existsSync(binaryPath)) {
       this.log(`Binary not found at path: ${binaryPath}`)
-      
+
       // Let's also check what's actually in the binaries directory
       await this.debugBinariesDirectory()
       return null
@@ -83,8 +93,10 @@ export class BinaryManager {
     try {
       await fsPromises.access(binaryPath, constants.X_OK)
     } catch (error) {
-      this.log(`Binary found but not executable: ${binaryPath} - Error: ${error}`)
-      
+      this.log(
+        `Binary found but not executable: ${binaryPath} - Error: ${error}`
+      )
+
       // Try to make it executable (works on Unix systems)
       if (platform() !== 'win32') {
         try {
@@ -108,16 +120,23 @@ export class BinaryManager {
   /**
    * Find a fallback binary for similar platforms
    */
-  private findFallbackBinary(manifest: BinaryManifest, currentPlatform: string): { platform: string; target: string; binary: string } | null {
+  private findFallbackBinary(
+    manifest: BinaryManifest,
+    currentPlatform: string
+  ): { platform: string; target: string; binary: string } | null {
     const [os] = currentPlatform.split('-')
-    
+
     // Try to find a binary for the same OS but different architecture
-    const sameOsBinaries = manifest.binaries.filter(b => b.platform.startsWith(os + '-'))
+    const sameOsBinaries = manifest.binaries.filter((b) =>
+      b.platform.startsWith(os + '-')
+    )
     if (sameOsBinaries.length > 0) {
-      this.log(`Found ${sameOsBinaries.length} binaries for OS ${os}: ${sameOsBinaries.map(b => b.platform).join(', ')}`)
+      this.log(
+        `Found ${sameOsBinaries.length} binaries for OS ${os}: ${sameOsBinaries.map((b) => b.platform).join(', ')}`
+      )
       return sameOsBinaries[0] // Return the first match
     }
-    
+
     return null
   }
 
@@ -126,19 +145,25 @@ export class BinaryManager {
    */
   private async debugBinariesDirectory(): Promise<void> {
     try {
-      const binariesPath = join(this.context.extensionPath, 'static', 'binaries')
+      const binariesPath = join(
+        this.context.extensionPath,
+        'static',
+        'binaries'
+      )
       this.log(`Checking binaries directory: ${binariesPath}`)
-      
+
       if (!existsSync(binariesPath)) {
         this.log(`Binaries directory does not exist: ${binariesPath}`)
-        
+
         // Check if static directory exists
         const staticPath = join(this.context.extensionPath, 'static')
         if (!existsSync(staticPath)) {
           this.log(`Static directory does not exist: ${staticPath}`)
-          
+
           // List what's in the extension path
-          const extensionContents = await fsPromises.readdir(this.context.extensionPath)
+          const extensionContents = await fsPromises.readdir(
+            this.context.extensionPath
+          )
           this.log(`Extension root contains: ${extensionContents.join(', ')}`)
         } else {
           const staticContents = await fsPromises.readdir(staticPath)
@@ -149,7 +174,7 @@ export class BinaryManager {
 
       const contents = await fsPromises.readdir(binariesPath)
       this.log(`Binaries directory contains: ${contents.join(', ')}`)
-      
+
       // Check subdirectories
       for (const item of contents) {
         const itemPath = join(binariesPath, item)
@@ -189,7 +214,7 @@ export class BinaryManager {
       }
 
       const manifestContent = await fsPromises.readFile(manifestPath, 'utf8')
-      
+
       this.manifest = JSON.parse(manifestContent) as BinaryManifest
       this.log(`Loaded manifest with ${this.manifest.binaries.length} binaries`)
       this.log(`Manifest version: ${this.manifest.version}`)
@@ -206,29 +231,31 @@ export class BinaryManager {
   private getCurrentPlatform(): string {
     const os = platform()
     const architecture = arch()
-    
+
     // Map Node.js platform names to our binary naming convention
     const platformMap: Record<string, string> = {
-      'linux': 'linux',
-      'darwin': 'darwin',
-      'win32': 'win32'
+      linux: 'linux',
+      darwin: 'darwin',
+      win32: 'win32',
     }
-    
+
     const mappedOs = platformMap[os] || os
-    
+
     // For macOS, we need to distinguish between x64 and arm64
     if (mappedOs === 'darwin') {
       return architecture === 'arm64' ? 'darwin-arm64' : 'darwin-x64'
     }
-    
+
     // For Linux, also check ARM architecture
     if (mappedOs === 'linux' && architecture === 'arm64') {
       return 'linux-arm64'
     }
-    
+
     // For other platforms, assume x64
     const platformId = `${mappedOs}-x64`
-    this.log(`Detected platform: ${platformId} (OS: ${os}, Arch: ${architecture})`)
+    this.log(
+      `Detected platform: ${platformId} (OS: ${os}, Arch: ${architecture})`
+    )
     return platformId
   }
 
@@ -245,7 +272,7 @@ export class BinaryManager {
    */
   async getAvailablePlatforms(): Promise<string[]> {
     const manifest = await this.getManifest()
-    return manifest?.binaries.map(b => b.platform) || []
+    return manifest?.binaries.map((b) => b.platform) || []
   }
 
   /**

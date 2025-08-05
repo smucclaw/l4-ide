@@ -9,12 +9,15 @@ The VSCode extension includes bundled binaries of the jl4-lsp language server to
 ## Architecture
 
 ### Binary Management
+
 - **BinaryManager**: A TypeScript class that handles binary selection and platform detection
 - **Manifest-based**: Binaries are organized with a JSON manifest file that describes available platforms
 - **Fallback Strategy**: If bundled binaries aren't available, falls back to system-installed binaries
 
 ### Platform Support
+
 The extension supports attempt building for the following platforms:
+
 - `linux-x64`: Linux x86_64
 - `darwin-x64`: macOS Intel
 - `darwin-arm64`: macOS Apple Silicon
@@ -24,9 +27,10 @@ The extension supports attempt building for the following platforms:
 
 ### Prerequisites
 
-Install the `upx` package. We use UPX to reduce the size of the compiled binary. See https://upx.github.io/ 
+Install the `upx` package. We use UPX to reduce the size of the compiled binary. See https://upx.github.io/
 
 ### Local Development
+
 For local development, the extension builds the binary for the current platform:
 
 ```bash
@@ -34,6 +38,7 @@ npm run build-stripped
 ```
 
 This script:
+
 1. Detects the current platform
 2. Builds jl4-lsp using cabal
 3. Strips the binary to reduce size
@@ -41,8 +46,8 @@ This script:
 5. Creates a manifest file
 
 ### Multi-Platform Builds
-For broader platform support, it'll be better to use a GitHub Actions workflow:
 
+For broader platform support, it'll be better to use a GitHub Actions workflow:
 
 ## File Structure
 
@@ -136,6 +141,7 @@ code --install-extension l4-vscode-1.1.0.vsix
 ## Troubleshooting
 
 ### Binary Not Found
+
 - Check that the binary was built successfully
 - Verify the manifest.json file exists and is valid
 - Ensure the binary has execute permissions
