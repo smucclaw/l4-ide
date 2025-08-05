@@ -490,7 +490,7 @@
       if (navigator.share) {
         navigator.share({
           url: shareUrl,
-          text : 'L4 document'
+          text: 'L4 document',
         })
       }
 
