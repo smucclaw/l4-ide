@@ -1,4 +1,4 @@
-DECLARE `count of fruit in my bag` IS A NUMBER
+
 
 § `fruit part 1`
 GIVEN apples        IS A `count of fruit in my bag`
@@ -22,7 +22,7 @@ GIVEN apples        IS A `count of fruit in my bag`
   WHERE
     `bananas per bunch` MEANS 5
 
-
+DECLARE `count of fruit in my bag` IS A NUMBER
 
 § `fruit part 3 - WHERE syntax`
 GIVEN apples        IS A `count of fruit in my bag`
