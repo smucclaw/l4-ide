@@ -523,7 +523,7 @@
         const reader = new FileReader()
         reader.onload = (e) => {
           const content = e.target?.result as string
-          if (content) {
+          if (content && editor) {
             editor.setValue(content)
             // Clear any URL parameters since we're loading a new file
             const ownUrl = new URL(window.location.href)
