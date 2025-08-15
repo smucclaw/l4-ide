@@ -564,7 +564,15 @@
     if ('showSaveFilePicker' in window) {
       try {
         // Show the save dialog
-        const fileHandle = await (window as any).showSaveFilePicker({
+        const fileHandle = await (window as typeof window & {
+          showSaveFilePicker: (options: {
+            suggestedName: string;
+            types: Array<{
+              description: string;
+              accept: Record<string, string[]>;
+            }>;
+          }) => Promise<FileSystemFileHandle>;
+        }).showSaveFilePicker({
           suggestedName: `${filename}.l4`,
           types: [
             {
@@ -583,17 +591,16 @@
 
         // Success feedback
         toast.push('File saved successfully!')
-        return
-      } catch (error: any) {
-        // User cancelled the dialog or other error
-        if (error.name !== 'AbortError') {
-          console.error('Error saving file:', error)
-          toast.push('Error saving file. Falling back to download.')
-        } else {
-          // User cancelled - don't show error
-          return
+        return} catch (error: unknown) {
+          // User cancelled the dialog or other error
+          if (error instanceof Error && error.name !== 'AbortError') {
+            console.error('Error saving file:', error)
+            toast.push('Error saving file. Falling back to download.')
+          } else {
+            // User cancelled - don't show error
+            return
+          }
         }
-      }
     }
 
     // Fallback for browsers that don't support File System Access API
@@ -822,11 +829,10 @@
 
 <style>
   :root {
-    --toastColor: rgb(96, 56, 19);
+    --toastColor: rgba(30, 29, 28, 0.698);
     --toastBackground: white;
-    --toastBorderRadius: 4px;
+    --toastBorderRadius: 3px;
   }
-
   :global(._toastContainer) {
     position: fixed !important;
     bottom: 1rem !important;
@@ -836,6 +842,8 @@
     transform: none !important;
     max-width: 300px;
     z-index: 9999;
+    font-family: 'Merriweather', Times, serif;
+    font-size: 0.85em;
   }
 
   :global(._toastItem) {
