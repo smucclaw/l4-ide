@@ -509,6 +509,122 @@
       }
     }
   }
+
+  function handleLoadFile() {
+    // Create a hidden file input
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.l4'
+    input.style.display = 'none'
+
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0]
+      if (file && editor) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const content = e.target?.result as string
+          if (content && editor) {
+            editor.setValue(content)
+            // Clear any URL parameters since we're loading a new file
+            const ownUrl = new URL(window.location.href)
+            if (ownUrl.searchParams.has('id')) {
+              ownUrl.searchParams.delete('id')
+              history.pushState(null, '', ownUrl)
+            }
+          }
+        }
+        reader.readAsText(file)
+      }
+      // Clean up the input element
+      document.body.removeChild(input)
+    }
+
+    // Add to DOM, click, and it will be cleaned up in the onchange handler
+    document.body.appendChild(input)
+    input.click()
+  }
+
+  async function handleSaveFile() {
+    if (!editor) return
+
+    const content = editor.getValue()
+
+    // Extract filename from first section if available
+    let filename = 'Rules as Code'
+    const sectionMatch = content.match(/^\u00a7\s*`([^`]+)`/m)
+    if (sectionMatch && sectionMatch[1]) {
+      // Clean the section name for use as filename
+      filename = sectionMatch[1].trim().replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+    } else {
+      // Fallback to timestamp-based name if no section found
+      filename = `Rules as Code ${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}`
+    }
+
+    // Check if the File System Access API is supported
+    if ('showSaveFilePicker' in window) {
+      try {
+        // Show the save dialog
+        const fileHandle = await (
+          window as typeof window & {
+            showSaveFilePicker: (options: {
+              suggestedName: string
+              types: Array<{
+                description: string
+                accept: Record<string, string[]>
+              }>
+            }) => Promise<FileSystemFileHandle>
+          }
+        ).showSaveFilePicker({
+          suggestedName: `${filename}.l4`,
+          types: [
+            {
+              description: 'L4 files',
+              accept: {
+                'text/plain': ['.l4'],
+              },
+            },
+          ],
+        })
+
+        // Create a writable stream and write the content
+        const writable = await fileHandle.createWritable()
+        await writable.write(content)
+        await writable.close()
+
+        // Success feedback
+        toast.push('File saved successfully!')
+        return
+      } catch (error: unknown) {
+        // User cancelled the dialog or other error
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error saving file:', error)
+          toast.push('Error saving file. Falling back to download.')
+        } else {
+          // User cancelled - don't show error
+          return
+        }
+      }
+    }
+
+    // Fallback for browsers that don't support File System Access API
+    // or if the modern API failed
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+
+    // Create a temporary download link
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${filename}.l4`
+    link.style.display = 'none'
+
+    // Trigger download
+    document.body.appendChild(link)
+    link.click()
+
+    // Clean up
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 </script>
 
 {#if showFrame}
@@ -543,6 +659,62 @@
       </button>
     {/if}
     <div class="spacer"></div>
+    <button
+      class="fab fab-load-file"
+      onclick={handleLoadFile}
+      aria-label="Load .l4 file"
+      title="Load .l4 file"
+    >
+      <svg
+        width="20"
+        height="20"
+        style="font-size: 24px; vertical-align: middle; margin-right: 0.3em;"
+        viewBox="-4 0 28 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Folder -->
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14,2 14,8 20,8" />
+        <!-- Arrow pointing up into folder -->
+        <polyline points="12,11 12,17" />
+        <polyline points="9,14 12,11 15,14" />
+      </svg>
+      Load file
+    </button>
+    <button
+      class="fab fab-save-file"
+      onclick={handleSaveFile}
+      aria-label="Save .l4 file"
+      title="Save .l4 file"
+    >
+      <svg
+        width="20"
+        height="20"
+        style="font-size: 24px; vertical-align: middle; margin-right: 0.3em;"
+        viewBox="-4 0 28 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Folder -->
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14,2 14,8 20,8" />
+        <!-- Arrow pointing down from folder -->
+        <polyline points="12,17 12,11" />
+        <polyline points="9,14 12,17 15,14" />
+      </svg>
+      Save file
+    </button>
     {#if window.innerWidth > 1023}
       <button
         class="fab fab-logic {showVisualizer ? 'selected' : ''}"
@@ -660,9 +832,25 @@
 
 <style>
   :root {
-    --toastColor: rgb(96, 56, 19);
+    --toastColor: rgba(30, 29, 28, 0.698);
     --toastBackground: white;
-    --toastBorderRadius: 4px;
+    --toastBorderRadius: 3px;
+  }
+  :global(._toastContainer) {
+    position: fixed !important;
+    bottom: 1rem !important;
+    right: 1rem !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    max-width: 300px;
+    z-index: 9999;
+    font-family: 'Merriweather', Times, serif;
+    font-size: 0.85em;
+  }
+
+  :global(._toastItem) {
+    margin: 0.5rem 0 !important;
   }
   .top-bar {
     height: 42px;
@@ -757,6 +945,11 @@
     .fab-sidebar {
       position: relative !important;
       left: auto !important;
+    }
+    .fab-load-file,
+    .fab-save-file,
+    .fab-logic {
+      display: none;
     }
   }
 </style>
