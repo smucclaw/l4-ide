@@ -1,0 +1,279 @@
+IMPORT prelude
+IMPORT daydate
+
+§ `New York Codes, Rules and Regulations`
+
+§§ `Title 16 - DEPARTMENT OF PUBLIC SERVICE`
+
+§§§ `Chapter I - RULES OF PROCEDURE`
+
+§§§§ `Subchapter A - GENERAL`
+
+§§§§§ `Part 7 - Implementation Of State Environmental Quality Review Act`
+
+§§§§§§ `Section 7.3 - Environmental review procedures`
+@ref url https://regulations.justia.com/states/new-york/title-16/chapter-i/subchapter-a/part-7/section-7-3/
+@ref 16 NY Comp Codes Rules and Regs § 7.3
+
+-- Current through Register Vol. 47, No. 12, March 26, 2025
+
+
+§§§§§§§ `Section 7.3 (a)`
+
+DECLARE Commission HAS
+    Name IS A STRING
+
+DECLARE Newspaper HAS
+    Name                       IS A STRING
+    `General circulation area` IS A STRING
+
+DECLARE Notice HAS
+    `Publish date`      IS A DATE
+    `Scheduled date`    IS A DATE
+    `Publishing medium` IS A Newspaper
+    `Is in accordance with the requirements of 6 NYCRR 617.10` IS A BOOLEAN
+
+DECLARE Applicant HAS
+    Name IS A STRING
+
+DECLARE `File draft copy of EIS and cause notice of hearing to be published` HAS
+    `Hearing Notice`             IS A Notice
+    `Notice of EIS Completion`   IS A Notice
+    `Prepared draft copy of EIS` IS A MAYBE `Environmental Impact Statement`
+
+DECLARE `Action that may have a significant adverse effect on the environment` HAS
+    `Proposed by`                     IS AN Applicant
+    `Lead agency`                     IS A Commission
+    `Potential effect area`           IS A STRING
+    `Has hearing required by statute` IS A BOOLEAN
+    `Has been withdrawn`              IS A BOOLEAN
+    EIS                               IS A `Environmental Impact Statement`
+
+DECLARE `Environmental Impact Statement` HAS
+    `Draft filing date` IS A DATE
+    `Final filing date` IS A MAYBE DATE
+
+GIVEN `The commission`  IS A Commission
+      `The action`      IS AN `Action that may have a significant adverse effect on the environment`
+`Filing of draft copy of EIS and causing notice of hearing to be published` MEANS
+    IF    `The commission` EQUALS `The action`'s `Lead agency`
+              AND `The action`'s `Has hearing required by statute`
+    THEN  PARTY `The commission`
+          MUST  `File draft copy of EIS and cause notice of hearing to be published` 
+                    `Hearing Notice` `Notice of EIS Completion` `Prepared draft copy of EIS` PROVIDED
+                            `Hearing Notice`'s `Scheduled date` AT LEAST `Hearing Notice`'s `Publish date` PLUS 14
+                        AND `Hearing Notice`'s `Scheduled date` AT MOST  `Hearing Notice`'s `Publish date` PLUS 60
+                        AND CONSIDER `Prepared draft copy of EIS`
+                                WHEN NOTHING  THEN FALSE
+                                WHEN JUST EIS THEN 
+                                        `Hearing Notice`'s `Scheduled date` AT LEAST EIS's `Draft filing date` PLUS 15
+                                    AND `Hearing Notice`'s `Scheduled date` AT MOST  EIS's `Draft filing date` PLUS 60
+                        AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
+                        AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+                        AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+          WITHIN `the week after` (March 2 2028)
+          HENCE FULFILLED
+    ELSE  FULFILLED
+
+
+
+
+-- TESTING
+
+`Example Commission` MEANS Commission WITH
+                            Name IS "A commission"
+
+`Example EIS` MEANS `Environmental Impact Statement` WITH
+                            `Draft filing date` IS Date Jul 19 2025
+                            `Final filing date` IS None
+
+`Example Action` MEANS `Action that may have a significant adverse effect on the environment` WITH
+                            `Proposed by` IS (Applicant WITH
+                                                Name IS "An applicant")
+                            `Lead agency` IS `Example Commission`
+                            `Potential effect area` IS "Brooklyn"
+                            `Has hearing required by statute` IS TRUE
+                            `Has been withdrawn` IS FALSE
+                            EIS IS `Example EIS`
+
+`Example Filing` MEANS `Filing of draft copy of EIS and causing notice of hearing to be published`
+                            `Example Commission`
+                            `Example Action`
+
+`Example Newspaper` MEANS Newspaper OF "New York Times", "Brooklyn"
+
+`Example Hearing Notice` MEANS Notice WITH
+                                    `Publish date`      IS Date Jul 20 2025
+                                    `Scheduled date`    IS Date Aug 1 2025
+                                    `Publishing medium` IS `Example Newspaper`
+                                    `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
+
+`Example Notice of EIS Completion` MEANS Notice WITH
+                                            `Publish date`      IS Date Jul 20 2025
+                                            `Scheduled date`    IS Date Aug 8 2025
+                                            `Publishing medium` IS `Example Newspaper`
+                                            `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
+
+#EVAL `Example Filing`
+
+#TRACE `Example Filing` AT Jul 19 2025 WITH
+    PARTY Jul 20 2025
+
+
+
+DOES `Example Commission`
+    AT `File draft copy of EIS and cause notice of hearing to be published`
+            `Example Hearing Notice`
+            `Example Notice of EIS Completion`
+            (JUST `Example EIS`)
+    §§§§§§§ `Section 7.3 (b)`
+
+§§§§§§§§ `Section 7.3 (b) (1)`
+
+DECLARE `Proceeding Record` HAS
+    `Closing date` IS A DATE
+
+DECLARE `Tentative or recommended decision` HAS
+    Action                                  IS AN `Action that may have a significant adverse effect on the environment`
+    `Proceeding Record`                     IS A `Proceeding Record`
+    `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment` IS A BOOLEAN
+
+GIVEN `The decision` IS A `Tentative or recommended decision`
+`Tentative or recommended decision will contain a final EIS` MEANS
+    IF   NOT `The decision`'s Action's `Has been withdrawn`
+         AND NOT `The decision`'s `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment`
+    THEN TRUE
+    ELSE FALSE
+
+
+-- TESTING
+
+`Example Proceeding Record` MEANS `Proceeding Record` WITH
+    `Closing date` IS Date Aug 20 2025
+
+`Example Decision` MEANS `Tentative or recommended decision` WITH
+    Action IS `Example Action`
+    `Proceeding Record` IS `Example Proceeding Record`
+    `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment`
+        IS TRUE
+
+#EVAL `Tentative or recommended decision will contain a final EIS` `Example Decision`
+
+
+
+§§§§§§§§ `Section 7.3 (b) (2)`
+
+DECLARE `Final EIS Issuance Extension Cause` IS ONE OF
+    `(i) Additional time is necessary to prepare the EIS adequately`
+    `(ii) Problems have been identified which require the material reconsideration or modification of the action`
+    `(iii) Other good cause`
+
+DECLARE `Final EIS Issuance` IS ONE OF
+    `No issuance`
+    `Issued within 45 days of the close of the record`
+    `Issued extended beyond 45 days of the close of the record`
+
+GIVEN `The decision`        IS A `Tentative or recommended decision`
+      `Cause for extension` IS A MAYBE `Final EIS Issuance Extension Cause`
+GIVETH A `Final EIS Issuance`
+`Determining issuance for final EIS` MEANS
+    IF    NOT `Tentative or recommended decision will contain a final EIS` `The decision`
+    THEN  `No issuance`
+    ELSE  CONSIDER `Cause for extension`
+              WHEN NOTHING    THEN `Issued within 45 days of the close of the record` 
+              WHEN JUST cause THEN `Issued extended beyond 45 days of the close of the record`
+
+-- Below I implemented the clause in such a way that it can be used with the WITHIN keyword as part of a PROVISION definition in the future.
+-- In order to do that the function below returns a number of days. This is just as an example.
+
+GIVEN `The decision`          IS A `Tentative or recommended decision`
+      `Cause for extension`   IS A MAYBE `Final EIS Issuance Extension Cause`
+      `Days of extension`     IS A NUMBER
+GIVETH A NUMBER
+`Determining days till issuance for final EIS` MEANS
+    IF    `Tentative or recommended decision will contain a final EIS` `The decision`
+    THEN  Never
+    ELSE  CONSIDER `Cause for extension`
+              WHEN NOTHING    THEN `Closing date` 
+              WHEN JUST cause THEN `Closing date` PLUS (45 PLUS `Days of extension`)
+    WHERE
+        `Closing date` MEANS `The decision`'s `Proceeding Record`'s `Closing date`
+                                PLUS 45
+
+-- TESTING
+
+#EVAL `Determining issuance for final EIS` `Example Decision` NOTHING
+
+
+
+§§§§§§§§ `Section 7.3 (b) (3)`
+
+-- The following two functions are implemented as passive evaluations as no actor is defined in the text.
+-- It might be an implied obligation of the commission to act, but it is not written as such. 
+-- Hence the clauses are now functions that determine if the correct filing of these notices/copies can be safely assumed to happen.
+
+GIVEN `The decision` IS A `Tentative or recommended decision`
+`Notice of no significant adverse effect on the environment determination will be filed in accordance with 6 NYCRR 617.10` MEANS
+    IF   `The decision`'s `On the basis of the record of the proceeding (including the draft EIS and any comments received thereon), the Administrative Law Judge issuing this decision determined that the action will not have a significant adverse effect on the environment`
+    THEN TRUE
+    ELSE FALSE
+
+GIVEN `The decision` IS A `Tentative or recommended decision`
+`Copies of the decision (together with a notice of its completion) will be filed in accordance with 6 NYCRR 617.10.` MEANS
+    IF   `Tentative or recommended decision will contain a final EIS` `The decision`
+    THEN TRUE
+    ELSE FALSE
+
+
+
+
+§§§§§§§§ `Section 7.3 (c)`
+
+DECLARE `Render decision on whether or not to approve action` HAS
+    Action IS AN `Action that may have a significant adverse effect on the environment`
+
+GIVEN `The action`          IS AN `Action that may have a significant adverse effect on the environment`
+      `Good cause to delay` IS A BOOLEAN
+`Rendering of the decision on whether or not to approve action proposed by applicant` MEANS
+    IF    `Good cause to delay`
+    THEN  FULFILLED
+    ELSE  CONSIDER `The action`'s EIS's `Final filing date`
+          WHEN NOTHING   THEN FULFILLED
+          WHEN JUST date THEN PARTY   Commission
+                              MUST    `Render decision on whether or not to approve action`
+                                          EXACTLY `The action`
+                              WITHIN  date PLUS 30
+
+-- TESTING
+
+#EVAL `Rendering of the decision on whether or not to approve action proposed by applicant` `Example Action` FALSE
+
+
+
+
+
+
+
+
+-- Helpers functions. Some that should really be part of the date library
+
+None  MEANS NOTHING
+Never MEANS -1
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    Day a AT LEAST Day b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    Day a AT MOST Day b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A NUMBER
+`__PLUS__` MEANS
+    Day a PLUS b
