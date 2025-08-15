@@ -564,15 +564,17 @@
     if ('showSaveFilePicker' in window) {
       try {
         // Show the save dialog
-        const fileHandle = await (window as typeof window & {
-          showSaveFilePicker: (options: {
-            suggestedName: string;
-            types: Array<{
-              description: string;
-              accept: Record<string, string[]>;
-            }>;
-          }) => Promise<FileSystemFileHandle>;
-        }).showSaveFilePicker({
+        const fileHandle = await (
+          window as typeof window & {
+            showSaveFilePicker: (options: {
+              suggestedName: string
+              types: Array<{
+                description: string
+                accept: Record<string, string[]>
+              }>
+            }) => Promise<FileSystemFileHandle>
+          }
+        ).showSaveFilePicker({
           suggestedName: `${filename}.l4`,
           types: [
             {
@@ -591,16 +593,17 @@
 
         // Success feedback
         toast.push('File saved successfully!')
-        return} catch (error: unknown) {
-          // User cancelled the dialog or other error
-          if (error instanceof Error && error.name !== 'AbortError') {
-            console.error('Error saving file:', error)
-            toast.push('Error saving file. Falling back to download.')
-          } else {
-            // User cancelled - don't show error
-            return
-          }
+        return
+      } catch (error: unknown) {
+        // User cancelled the dialog or other error
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error saving file:', error)
+          toast.push('Error saving file. Falling back to download.')
+        } else {
+          // User cancelled - don't show error
+          return
         }
+      }
     }
 
     // Fallback for browsers that don't support File System Access API
