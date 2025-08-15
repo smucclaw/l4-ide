@@ -1,0 +1,326 @@
+IMPORT daydate
+
+§ `Promissory Note`
+
+-- The actual contract with example parties and terms. I hope this contract helps to understand the capabilities of L4 quite well.
+
+§§ `Basic Definitions`
+
+`Note Date` MEANS February 4 2024                           -- using the daydate function February to get a number of days
+
+`Principal Amount` MEANS USD 25000                          -- Using the USD helper function to make it look super neat
+
+`Interest Rate Per Annum` MEANS 15%                         -- Native support for % numbers!
+
+`Security Collateral` MEANS NOTHING                         -- Just to mention this explicitly. The contract evaluation doesn't require or mention
+                                                            -- it, but the underlying jurisdictional laws might allow the claim of collateral if
+                                                            -- not explicitly undefined.
+
+`Monthly Installments` MEANS 12
+
+`Default After Days Not Paid Beyond Due` MEANS 30
+
+`Late Payment Penalty` MEANS Penalty WITH                   -- Notice the importance of intendation below Penalty. Intendation is important
+                                `Interest Rate`     IS 5%   -- in L4 to indicate that we're defining properties of the type Penalty.
+                                `Grace Period Days` IS 10
+
+`Governing Law` MEANS "The laws of The Republic of Singapore" -- Well, ideally this would be an IMPORT statement on the top of the file so
+                                                              -- you can hard reference the terms and definitions of Singapore law.
+                                                              -- Sadly it might still take a moment for Singapore to make all their laws available in L4 :)
+
+§§ `Parties`
+
+`The Borrower` MEANS
+  `Commercial Borrower` OF                                   -- This defines an object of type Borrower that is specifically a `Commercial Borrower`.
+    Company WITH                                             -- `Commercial Borrower` has an attribute Entity of type Company. (See prelude)
+      `Name`           IS "Jane Dough Pte Ltd"               -- This kind of pattern is useful to classify different things as a same thing in some cases.
+      `Address`        IS "42 Jane Doe Rd #04-20, Singapore 420000"
+      `Jurisdiction`   IS "Singapore"
+      `Company Number` IS "UEN 200424242N"
+      `Account`        IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "Jane Dough Pte Ltd"
+                              `Account Number` IS "242-242424-9"
+                              `SWIFT`          IS "DBSSSGSG"
+
+`The Lender` MEANS
+  `Individual Lender` OF                                    -- Here we don't use `Commercial Lender` but `Individual Lender` with the attribute
+    `Natural Person` WITH                                   -- Individual of type `Natural Person`. This is just to show how the pattern can work.
+      `Name`          IS "John Doe"
+      `Address`       IS "42 The Lender Rd, Singapore 424242"
+      `Jurisdiction`  IS "Singapore"
+      `ID Number`     IS "G5301960D"
+      `Account`       IS `Bank Account` WITH
+                              `Bank Name`      IS "DBS Bank Ltd"
+                              `Account Name`   IS "The Lender"
+                              `Account Number` IS "120-643240-1"
+                              `SWIFT`          IS "DBSSSGSG"
+
+
+§§ `Repayment Terms`
+
+`Monthly Interest Rate` MEANS                               -- How to do simple math in a function
+    `Interest Rate Per Annum` DIVIDED BY `Months in a year` -- `Months in a year` is 12 (import from daydate)
+
+`Monthly Installment Amount` MEANS                          -- Here we implement a basic Loan Amortization Formula or PMT
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency          -- Installment Amount =
+        Value     IS `Principal Amount`'s Value             --    Principal * (Rate * Compound Factor) / (Compound Factor - 1)
+                        TIMES (`Monthly Interest Rate` TIMES `Compound Factor`)
+                            DIVIDED BY (`Compound Factor` MINUS 1)
+    WHERE
+        `Compound Factor` MEANS                             -- Compound Factor =
+            `Base to the power of`                          --    (1 + Rate) ^ Number of Installments
+                (1 PLUS `Monthly Interest Rate`)
+                `Monthly Installments`
+
+`Total Repayment Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Value     IS `Monthly Installment Amount`'s Value TIMES `Monthly Installments`
+
+`Total Interest Amount` MEANS
+    Money WITH
+        Currency  IS `Principal Amount`'s Currency
+        Value     IS `Total Repayment Amount`'s Value MINUS `Principal Amount`'s Value
+
+GIVEN `Outstanding Payment Amount` IS A Money               
+`Payment Obligations` MEANS                                 -- This function implements the obligation for `The Borrower`.
+    IF `Outstanding Payment Amount`'s Value GREATER THAN 0  -- As long as there is still money owed
+        THEN  PARTY   `The Borrower`                        -- These keywords create the next obligations
+              MUST    `pay monthly installment to`          -- This function/action is defined in the prelude and expects an object of type Lender and a Money
+                          EXACTLY `The Lender`              -- The keyword EXACTLY sets the expectation that the payee must be `The Lender` object, not any other Lender
+                          `Amount Transferred` PROVIDED     -- This is the alternative syntax to EXACTLY. It allows you to define your own conditional requirement
+                             `is money at least equal within error` -- This function is also defined in the prelude. It returns true or false to fulfill the obligation.
+                                `Amount Transferred`
+                                (`Next Payment Due`'s Amount)
+              WITHIN  `Next Payment Due Date`               -- WITHIN defines the timeframe in days as number. Without a good deadline, there is no obligation.
+              HENCE   `Payment Obligations`                 -- HENCE describes what happens when `The Borrower` pays. In this case we call this same function
+                          (Money WITH                       -- `Payment Obligations` again recursively until all debts are paid.
+                              Currency  IS `Monthly Installment Amount`'s Currency
+                              Value     IS `Outstanding Payment Amount`'s Value         -- Here we subtract what was paid and pass it back into `Payment Obligations`
+                                                MINUS `Amount Transferred`'s Value)
+              LEST     PARTY   `The Borrower`               -- LEST describes what happens when `The Borrower` doesn't pay.
+                       MUST    `pay monthly installment to`
+                                  EXACTLY `The Lender`
+                                  `Amount Transferred` PROVIDED
+                                      `is money at least equal within error`
+                                          `Amount Transferred`
+                                          `Next Payment Due Amount With Penalty` -- Now `The Borrower` gets the installment amount with Penalty
+                       WITHIN  `Default After Days Beyond Commencement`
+                       LEST    PARTY  `The Borrower`
+                               MUST   `pay monthly installment to`
+                                          EXACTLY `The Lender`
+                                          `Amount Transferred` PROVIDED
+                                              `is money at least equal within error`
+                                                  `Amount Transferred`
+                                                  `All Outstanding Debts`
+        ELSE  FULFILLED
+    WHERE                                                   -- After WHERE we can define private variables and functions only available within the `Payment Obligation` function.
+        `Installments Covered Since Commencement` MEANS     -- We'll need this value to figure out what Payment is next.
+            (`Total Repayment Amount`'s Value               -- In the case `The Borrower` generously paid back too much, we can maybe skip an installment.
+                MINUS `Outstanding Payment Amount`'s Value) -- Unlikely, but in reality this happens, so calculating the next installment due based on the amount already paid is best.
+                    DIVIDED BY `Monthly Installment Amount`'s Value
+
+        `Next Payment Due` MEANS
+            Payment WITH
+                Amount IS
+                    Money WITH
+                        Currency  IS `Monthly Installment Amount`'s Currency
+                        Value     IS `The lesser of`
+                                         (`Monthly Installment Amount`'s Value)
+                                         (`Outstanding Payment Amount`'s Value)
+                `Days Beyond Commencement` IS              -- Here we calculate the next due date based on how many installments worth have already been paid
+                    (`Installments Covered Since Commencement` PLUS 1) TIMES `Days in a month` -- `Days in a month` is a convenience number from the daydate import. 30.4375
+
+        `Next Payment Due Date` MEANS                      -- It's curious that the ACTUAL due date is the due date + grace period.
+            CEILING (`Next Payment Due`'s `Days Beyond Commencement`) -- We round this up to not be too anal in the lenders favor
+                PLUS `Late Payment Penalty`'s `Grace Period Days`
+
+        `Next Payment Due Amount With Penalty` MEANS       -- Adding the penalty interest rate to the payment amount
+            Money WITH
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Value     IS `Next Payment Due`'s Amount's Value
+                                 PLUS `Next Payment Due`'s Amount's Value
+                                      TIMES `Late Payment Penalty`'s `Interest Rate`
+
+        `Default After Days Beyond Commencement` MEANS      -- Calculating the day at which payment default kicks in
+            CEILING (`Next Payment Due`'s `Days Beyond Commencement`) -- I hope this example shows the importance of great variable naming
+                PLUS `Default After Days Not Paid Beyond Due`
+
+        `All Outstanding Debts` MEANS                       -- This is technically only considering one penalty application of the missed payment
+            Money WITH                                      -- Technically if multiple installments have been missed, penalties should pile up. Feel free to improve this.
+                Currency  IS `Next Payment Due`'s Amount's Currency
+                Value     IS `Outstanding Payment Amount`'s Value 
+                                 PLUS `Next Payment Due Amount With Penalty`'s Value
+                                    MINUS `Next Payment Due`'s Amount's Value
+
+§ `Promissory Note Tests`
+
+{-
+    This file holds some evaluations against the promissory_note.l4
+    Technically these test don't need to be in a separate file, but putting them into the note file feels like scribbling onto your 
+    perfectly formatted, printed and signed note agreement to check how the terms actually work out... just a little wrong. :)
+-}
+
+
+#EVAL `Total Interest Amount` -- Hover the blue scribbled #EVAL to see what they return. This one should be [Money OF "USD", 2077.49370354708]
+
+#EVAL `Total Repayment Amount` -- [Money OF "USD", 27077.49370354708]
+
+#EVAL `Monthly Interest Rate` -- [0.0125]
+
+#EVAL `Monthly Installment Amount` -- [Money OF "USD", 2256.4578086289234]
+
+
+-- The following #TRACE runs the `Payment Obligation` function that returns the state of the current contract
+-- after a set of actions have been completed at a certain amount of days.
+
+#TRACE `Payment Obligations` `Total Repayment Amount` AT February 4 2025 WITH
+    PARTY March 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY April 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY May 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY June 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY July 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY August 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY September 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY October 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY November 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY December 4 2025
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY January 4 2026
+    DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) PARTY February 4 2026
+
+-- The #TRACE above is the happy case. Borrower pays everything on time, hence the contract is [FULFILLED]
+
+DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) #TRACE `Payment Obligations` `Total Repayment Amount` AT February 4 2025 WITH
+    PARTY April 3 2025
+
+-- In this last #TRACE you see the state after just one event where Borrower pays once and late.
+-- The #TRACE returns the next obligation definition:
+--
+-- PARTY `The Borrower`
+-- MUST `pay monthly installment to` EXACTLY `The Lender`
+--                                    `Amount Transferred` PROVIDED `is money at least equal within error` OF `Amount Transferred`, `Next Payment Due Amount With Penalty`
+-- WITHIN `Default After Days Beyond Commencement`
+-- HENCE FULFILLED
+-- LEST PARTY `The Borrower`
+-- MUST `pay monthly installment to` EXACTLY `The Lender`
+--                                   `Amount Transferred` PROVIDED `is money at least equal within error` OF `Amount Transferred`, `All Outstanding Debts`
+
+
+DOES `The Borrower` AT `pay monthly installment to` `The Lender` (USD 2256.46) § `Promissory Appendix`
+
+-- This file contains definitions and helper functions that are used in the note
+-- to help destructure more complex types and relationships or make the note
+-- use syntax that is more readable for humans.
+
+
+§§ `Type Definitions`
+
+ASSUME NaN IS A NUMBER                      -- JS coders rejoice :D
+
+ASSUME NOTHING IS A STRING
+
+DECLARE Money                               -- Defining a Money Type might actually only be helpful for multi-currency constracts.
+    HAS Currency            IS A STRING     -- In this case it is probably too much detail and it could've been solved easier by
+        Value               IS A NUMBER     -- just specifying a variable that declares all monetary amounts in this note to be USD
+
+DECLARE Company
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `Company Number`    IS A STRING
+        `Account`           IS A `Bank Account` -- Example of nested objects
+
+DECLARE `Natural Person`
+    HAS `Name`              IS A STRING
+        `Address`           IS A STRING
+        `Jurisdiction`      IS A STRING
+        `ID Number`         IS A STRING
+        `Account`           IS A `Bank Account`
+
+DECLARE Borrower IS ONE OF                  -- IS ONE OF can be useful to define types that are alike sometimes,
+   `Individual Borrower`                    -- but differ in some detailed terms later
+        HAS Individual      IS A `Natural Person`
+   `Commercial Borrower`
+        HAS Entity          IS A Company
+
+DECLARE Lender IS ONE OF
+   `Individual Lender`
+        HAS Individual      IS A `Natural Person`
+   `Commercial Lender`
+        HAS Entity          IS A Company
+
+DECLARE `Bank Account`
+    HAS `Bank Name`         IS A STRING
+        `Account Name`      IS A STRING
+        `Account Number`    IS A STRING
+        `SWIFT`             IS A STRING
+
+DECLARE Payment                              -- A payment in this note has an expected payment due date.
+    HAS Amount                       IS A Money
+        `Days Beyond Commencement`   IS A NUMBER
+
+DECLARE Penalty
+    HAS `Interest Rate`     IS A NUMBER
+        `Grace Period Days` IS A NUMBER
+
+DECLARE `pay monthly installment to`        -- It's useful to have variables that define actions as part of
+    HAS Recipient           IS A Lender     -- obligations to contain verbs and start lower case. It's not a
+        Amount              IS A Money      -- hard language requirement, but good practice.
+
+
+§§ `Useful Functions`
+
+GIVEN a IS A NUMBER                         -- At some point in the future, there'll probably be a bunch of libraries
+      b IS A NUMBER                         -- With all kinds of helper functions like this that can be seen as generally
+`The lesser of` MEANS                       -- accepted definitions of phrases or terms
+    IF a GREATER THAN b
+        THEN b
+        ELSE a
+
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+`The greater of` MEANS
+    IF a GREATER THAN b
+        THEN a
+        ELSE b
+
+GIVEN base  IS A NUMBER                     -- One day L4 will have native support for power and root functions and much
+      exp   IS A NUMBER                     -- more math, I'm sure ...
+`Base to the power of` MEANS
+    IF      exp EQUALS 0
+    THEN    1
+    ELSE    IF      base EQUALS 0
+            THEN    IF      exp LESS THAN 0
+                    THEN    NaN
+                    ELSE    0
+            ELSE    IF      exp EQUALS 1
+                    THEN    base
+                    ELSE    IF      exp GREATER THAN 0
+                            THEN    base TIMES `Base to the power of` base (exp MINUS 1)
+                            ELSE    1 DIVIDED BY `Base to the power of` base (0 MINUS exp)
+
+GIVEN a IS A Money                           -- Software comparisons are really hard. In reality a Lender would not really care
+      b IS A Money                           -- if a payment is a few cents short. This can even happen due to rounding errors
+`is money at least equal within error` MEANS -- and oddities in computer math alone.
+    a's Currency EQUALS b's Currency
+        AND a's Value AT LEAST (b's Value MINUS 0.05)
+
+GIVEN a IS A NUMBER                         -- This function just enables more readable writing of Money amounts. e.g. USD 2500
+USD MEANS                                   -- It looks much cleaner in the note and in the tests instead of always having to write
+   Money WITH                               -- Money WITH ...
+      Currency IS "USD"
+      Value    IS a
+
+GIVEN a IS A NUMBER
+EUR MEANS
+   Money WITH
+      Currency IS "EUR"
+      Value    IS a
+
+GIVEN a IS A NUMBER
+SGD MEANS
+   Money WITH
+      Currency IS "SGD"
+      Value    IS a

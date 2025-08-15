@@ -1,4 +1,6 @@
-§ `Assumptions`
+§ `British Citizen Act`
+
+§§ `Assumptions`
 
 ASSUME Person IS A TYPE
 ASSUME `mother of` IS A FUNCTION FROM Person TO Person
@@ -9,7 +11,8 @@ ASSUME `is born in a qualifying territory after the appointed day` IS A FUNCTION
 ASSUME `is settled in the United Kingdom` IS A FUNCTION FROM Person TO BOOLEAN
 ASSUME `is settled in the qualifying territory in which the person is born` IS A FUNCTION FROM Person TO BOOLEAN
 
-§ `Improved Readability`
+§§ `Improved Readability Version`
+
 DECLARE Place
   HAS `English name` IS A STRING
 
@@ -98,7 +101,7 @@ GIVEN a IS A NUMBER
       b IS A NUMBER
 `plus` a b MEANS a + b
 
-§ `Expanded version`
+§§ `Expanded version`
 
 GIVEN p IS A Person
 GIVETH A BOOLEAN
@@ -113,7 +116,7 @@ DECIDE `is a British citizen` IF
       OR    `is settled in the qualifying territory in which the person is born` OF `father of` p
          OR `is settled in the qualifying territory in which the person is born` OF `mother of` p
 
-§ `Version using a local auxiliary declaration`
+§§ `Version using a local auxiliary declaration`
 
 GIVEN p IS A Person
 GIVETH A BOOLEAN
@@ -129,7 +132,7 @@ DECIDE `is a British citizen (local)` IS
              property OF `father of` p
           OR property OF `mother of` p
 
-§ `Version using a global auxiliary declaration`
+§§ `Version using a global auxiliary declaration`
 
 `for father or mother of` person property MEANS
       property OF `father of` person
