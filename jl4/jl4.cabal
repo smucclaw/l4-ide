@@ -33,6 +33,7 @@ executable jl4-cli
     directory,
     lsp-types,
     optparse-applicative,
+    pretty-simple,
   main-is: Main.hs
 
 test-suite jl4-test
