@@ -272,7 +272,7 @@
             if (trimmedContent === '') continue
 
             if (allCommented) {
-              // Uncomment: remove '//' and following space if present
+              // Uncomment: remove '--' and following space if present
               const match = lineContent.match(/^(\s*)--\s?/)
               if (match) {
                 edits.push({
@@ -282,20 +282,13 @@
                     lineNumber,
                     match[0].length + 1
                   ),
-                  text: match[1], // Keep the original indentation
+                  text: match[1], // Remove the comment prefix
                 })
               }
             } else {
-              // Comment: add '//' at the beginning of the line content (after indentation)
-              const leadingWhitespace = lineContent.match(/^\s*/)?.[0] || ''
-              const insertPosition = leadingWhitespace.length + 1
+              // Comment: add '--' at the beginning of the line
               edits.push({
-                range: new monaco.Range(
-                  lineNumber,
-                  insertPosition,
-                  lineNumber,
-                  insertPosition
-                ),
+                range: new monaco.Range(lineNumber, 1, lineNumber, 1),
                 text: '-- ',
               })
             }
