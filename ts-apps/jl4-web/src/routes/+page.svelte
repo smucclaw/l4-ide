@@ -226,6 +226,80 @@
         glyphMargin: true, // Required for gutter icons
       })
 
+      // Add comment/uncomment action to context menu
+      editor.addAction({
+        id: 'toggle-line-comment',
+        label: 'Toggle Line Comment',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash],
+        contextMenuGroupId: 'modification',
+        contextMenuOrder: 1.5,
+        run: (ed) => {
+          const selection = ed.getSelection()
+          if (!selection) return
+
+          const model = ed.getModel()
+          if (!model) return
+
+          const startLineNumber = selection.startLineNumber
+          const endLineNumber = selection.endLineNumber
+
+          // Check if all selected lines are commented
+          let allCommented = true
+          for (
+            let lineNumber = startLineNumber;
+            lineNumber <= endLineNumber;
+            lineNumber++
+          ) {
+            const lineContent = model.getLineContent(lineNumber)
+            const trimmedContent = lineContent.trim()
+            if (trimmedContent !== '' && !trimmedContent.startsWith('--')) {
+              allCommented = false
+              break
+            }
+          }
+
+          const edits: monaco.editor.IIdentifiedSingleEditOperation[] = []
+
+          for (
+            let lineNumber = startLineNumber;
+            lineNumber <= endLineNumber;
+            lineNumber++
+          ) {
+            const lineContent = model.getLineContent(lineNumber)
+            const trimmedContent = lineContent.trim()
+
+            // Skip empty lines
+            if (trimmedContent === '') continue
+
+            if (allCommented) {
+              // Uncomment: remove '--' and following space if present
+              const match = lineContent.match(/^(\s*)--\s?/)
+              if (match) {
+                edits.push({
+                  range: new monaco.Range(
+                    lineNumber,
+                    1,
+                    lineNumber,
+                    match[0].length + 1
+                  ),
+                  text: match[1], // Remove the comment prefix
+                })
+              }
+            } else {
+              // Comment: add '--' at the beginning of the line
+              edits.push({
+                range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+                text: '-- ',
+              })
+            }
+          }
+
+          if (edits.length > 0) {
+            ed.executeEdits('toggle-comment', edits)
+          }
+        },
+      })
+
       // Set up Monaco Error Lens
       monacoErrorLens = new MonacoErrorLens(
         editor,
