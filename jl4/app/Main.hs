@@ -1,12 +1,13 @@
 module Main where
 
-import Base (NonEmpty, for_)
+import Base (NonEmpty, for_, when, unless)
 import Base.Text (Text)
 import Data.List.NonEmpty (some1)
 import Options.Applicative (fullDesc, header, footer, helper, info, metavar, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
+import Text.Pretty.Simple (pShow)
 
 import qualified LSP.Core.Shake as Shake
 import LSP.Logger
@@ -16,10 +17,13 @@ import qualified LSP.L4.Rules as Rules
 import LSP.L4.Oneshot (oneshotL4Action)
 import qualified LSP.L4.Oneshot as Oneshot
 
+import L4.Syntax (Module, Name)
+
 data Log
   = IdeLog Oneshot.Log
   | CheckFailed !NormalizedUri
   | ExactPrint !Text
+  | ShowAst !(Module Name)
   | SuccessOnly
 
 instance Pretty Log where
@@ -27,6 +31,7 @@ instance Pretty Log where
     IdeLog l -> "Ide:" <+> pretty l
     CheckFailed uri -> "Checking" <+> pretty uri <+> "failed."
     ExactPrint ep -> nest 2 $ vsep [pretty SuccessOnly, pretty ep]
+    ShowAst ast -> pretty $ pShow ast
     SuccessOnly -> "Checking succeeded."
 
 main :: IO ()
@@ -47,9 +52,14 @@ main = do
       mep <- Shake.use Rules.ExactPrint uri
       case (mtc, mep) of
         (Just tcRes, Just ep)
-          | tcRes.success -> logWith recorder Info  $ if options.verbose
-                                                      then ExactPrint ep
-                                                      else SuccessOnly
+          | tcRes.success -> do
+              when options.verbose $ logWith recorder Info $ ExactPrint ep
+              when options.showAst $ do
+                mast <- Shake.use Rules.GetParsedAst uri
+                case mast of
+                  Just ast -> logWith recorder Info $ ShowAst ast
+                  Nothing -> pure ()
+              unless (options.verbose || options.showAst) $ logWith recorder Info SuccessOnly
         (_, _)            -> do
           logWith    recorder Error $ CheckFailed uri
           logWith errRecorder Error $ CheckFailed uri
@@ -61,12 +71,14 @@ main = do
 
 data Options = MkOptions
   { files :: NonEmpty FilePath
-  , verbose :: Bool }
+  , verbose :: Bool
+  , showAst :: Bool }
 
 optionsDescription :: Options.Parser Options
 optionsDescription = MkOptions
   <$> some1 (strArgument (metavar "L4FILE"))
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
+  <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
 
 
 optionsConfig :: Options.ParserInfo Options
