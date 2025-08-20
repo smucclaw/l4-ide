@@ -85,7 +85,7 @@ GIVEN `The commission`  IS A Commission
 
 `Example EIS` MEANS `Environmental Impact Statement` WITH
                             `Draft filing date` IS Date Jul 19 2025
-                            `Final filing date` IS None
+                            `Final filing date` IS NOTHING
 
 `Example Action` MEANS `Action that may have a significant adverse effect on the environment` WITH
                             `Proposed by` IS (Applicant WITH
@@ -117,16 +117,16 @@ GIVEN `The commission`  IS A Commission
 #EVAL `Example Filing`
 
 #TRACE `Example Filing` AT Jul 19 2025 WITH
-    PARTY Jul 20 2025
-
-
-
-DOES `Example Commission`
-    AT `File draft copy of EIS and cause notice of hearing to be published`
+    PARTY `Example Commission`
+    DOES `File draft copy of EIS and cause notice of hearing to be published`
             `Example Hearing Notice`
             `Example Notice of EIS Completion`
             (JUST `Example EIS`)
-    §§§§§§§ `Section 7.3 (b)`
+    AT Jul 20 2025
+
+
+
+§§§§§§§ `Section 7.3 (b)`
 
 §§§§§§§§ `Section 7.3 (b) (1)`
 
@@ -250,30 +250,6 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
 
 
 
+-- Helpers
 
-
-
-
-
--- Helpers functions. Some that should really be part of the date library
-
-None  MEANS NOTHING
 Never MEANS -1
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__GEQ__` MEANS
-    Day a AT LEAST Day b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__LEQ__` MEANS
-    Day a AT MOST Day b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A NUMBER
-`__PLUS__` MEANS
-    Day a PLUS b
