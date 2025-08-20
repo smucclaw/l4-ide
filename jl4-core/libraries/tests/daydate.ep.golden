@@ -727,3 +727,123 @@ GIVEN date   IS A DATE
 GIVETH A STRING
 `Name of weekday` MEANS
     `Name of weekday` (`Date to days` date)
+
+
+
+§§ `Native overloads`
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__EQUALS__` MEANS
+    Day a EQUALS b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    Day a AT LEAST b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    Day a AT MOST b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__GT__` AKA `is after` MEANS
+    Day a GREATER THAN b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A BOOLEAN
+`__LT__` AKA `is before` MEANS
+    Day a LESS THAN b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A NUMBER
+`__PLUS__` MEANS
+    Day a PLUS b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A NUMBER
+`__MINUS__` MEANS
+    Day a MINUS b
+
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A BOOLEAN
+`__EQUALS__` MEANS
+    a EQUALS Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    a AT LEAST Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    a AT MOST Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A BOOLEAN
+`__GT__` AKA `is after` MEANS
+    a GREATER THAN Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A BOOLEAN
+`__LT__` AKA `is before` MEANS
+    a LESS THAN Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A NUMBER
+`__PLUS__` MEANS
+    a PLUS Day b
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A NUMBER
+`__MINUS__` MEANS
+    a MINUS Day b
+
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+`__EQUALS__` MEANS
+    Day a EQUALS Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+`__GEQ__` MEANS
+    Day a AT LEAST Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+`__LEQ__` MEANS
+    Day a AT MOST Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+`__GT__` AKA `is after` MEANS
+    Day a GREATER THAN Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A BOOLEAN
+`__LT__` AKA `is before` MEANS
+    Day a LESS THAN Day b

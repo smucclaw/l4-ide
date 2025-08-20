@@ -71,6 +71,8 @@ GIVEN `The commission`  IS A Commission
                         AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
                         AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
                         AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
+          WITHIN `the week after` (March 2 2028)
+          HENCE FULFILLED
     ELSE  FULFILLED
 
 
@@ -83,7 +85,7 @@ GIVEN `The commission`  IS A Commission
 
 `Example EIS` MEANS `Environmental Impact Statement` WITH
                             `Draft filing date` IS Date Jul 19 2025
-                            `Final filing date` IS None
+                            `Final filing date` IS NOTHING
 
 `Example Action` MEANS `Action that may have a significant adverse effect on the environment` WITH
                             `Proposed by` IS (Applicant WITH
@@ -236,7 +238,7 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
     IF    `Good cause to delay`
     THEN  FULFILLED
     ELSE  CONSIDER `The action`'s EIS's `Final filing date`
-          WHEN None      THEN FULFILLED
+          WHEN NOTHING   THEN FULFILLED
           WHEN JUST date THEN PARTY   Commission
                               MUST    `Render decision on whether or not to approve action`
                                           EXACTLY `The action`
@@ -248,27 +250,6 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
 
 
 
+-- Helpers
 
-
--- Helpers functions. Some that should really be part of the date library
-
-None  MEANS NOTHING
 Never MEANS -1
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__GEQ__` MEANS
-    Day a AT LEAST Day b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__LEQ__` MEANS
-    Day a AT MOST Day b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A NUMBER
-`__PLUS__` MEANS
-    Day a PLUS b
