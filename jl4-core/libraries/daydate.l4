@@ -614,7 +614,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the earlier of` MEANS
+`the earlier of` AKA `is before` MEANS
     IF    day1 LESS THAN day2
     THEN  day1
     ELSE  day2
@@ -622,7 +622,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       date2  IS A DATE
 GIVETH A NUMBER
-`the earlier of` MEANS
+`the earlier of` AKA `is before` MEANS
     `the earlier of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -631,7 +631,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the earlier of` MEANS
+`the earlier of` AKA `is before` MEANS
     `the earlier of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -639,7 +639,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
 GIVETH A NUMBER
-`the earlier of` MEANS
+`the earlier of` AKA `is before` MEANS
     `the earlier of` day1 day2
     WHERE
         day2 MEANS `Date to days` date2
@@ -647,7 +647,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the later of` MEANS
+`the later of` AKA `is after` MEANS
     IF    day1 LESS THAN day2
     THEN  day2
     ELSE  day1
@@ -655,7 +655,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       date2  IS A DATE
 GIVETH A NUMBER
-`the later of` MEANS
+`the later of` AKA `is after` MEANS
     `the later of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -665,7 +665,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the later of` MEANS
+`the later of` AKA `is after` MEANS
     `the later of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -673,7 +673,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
 GIVETH A NUMBER
-`the later of` MEANS
+`the later of` AKA `is after` MEANS
     `the later of` day1 day2
     WHERE
         day2 MEANS `Date to days` date2
