@@ -614,7 +614,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the earlier of` AKA `is before` MEANS
+`the earlier of` MEANS
     IF    day1 LESS THAN day2
     THEN  day1
     ELSE  day2
@@ -622,7 +622,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       date2  IS A DATE
 GIVETH A NUMBER
-`the earlier of` AKA `is before` MEANS
+`the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -631,7 +631,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the earlier of` AKA `is before` MEANS
+`the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -639,7 +639,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
 GIVETH A NUMBER
-`the earlier of` AKA `is before` MEANS
+`the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
         day2 MEANS `Date to days` date2
@@ -647,7 +647,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the later of` AKA `is after` MEANS
+`the later of` MEANS
     IF    day1 LESS THAN day2
     THEN  day2
     ELSE  day1
@@ -655,7 +655,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       date2  IS A DATE
 GIVETH A NUMBER
-`the later of` AKA `is after` MEANS
+`the later of` MEANS
     `the later of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -665,7 +665,7 @@ GIVETH A NUMBER
 GIVEN date1  IS A DATE
       day2   IS A NUMBER
 GIVETH A NUMBER
-`the later of` AKA `is after` MEANS
+`the later of` MEANS
     `the later of` day1 day2
     WHERE
         day1 MEANS `Date to days` date1
@@ -673,7 +673,7 @@ GIVETH A NUMBER
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
 GIVETH A NUMBER
-`the later of` AKA `is after` MEANS
+`the later of` MEANS
     `the later of` day1 day2
     WHERE
         day2 MEANS `Date to days` date2
@@ -753,13 +753,13 @@ GIVETH A BOOLEAN
 GIVEN a IS A DATE
       b IS A NUMBER
 GIVETH A BOOLEAN
-`__GT__` MEANS
+`__GT__` AKA `is after` MEANS
     Day a GREATER THAN b
 
 GIVEN a IS A DATE
       b IS A NUMBER
 GIVETH A BOOLEAN
-`__LT__` MEANS
+`__LT__` AKA `is before` MEANS
     Day a LESS THAN b
 
 GIVEN a IS A DATE
@@ -796,13 +796,13 @@ GIVETH A BOOLEAN
 GIVEN a IS A NUMBER
       b IS A DATE
 GIVETH A BOOLEAN
-`__GT__` MEANS
+`__GT__` AKA `is after` MEANS
     a GREATER THAN Day b
 
 GIVEN a IS A NUMBER
       b IS A DATE
 GIVETH A BOOLEAN
-`__LT__` MEANS
+`__LT__` AKA `is before` MEANS
     a LESS THAN Day b
 
 GIVEN a IS A NUMBER
@@ -839,13 +839,13 @@ GIVETH A BOOLEAN
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__GT__` MEANS
+`__GT__` AKA `is after` MEANS
     Day a GREATER THAN Day b
 
 GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
-`__LT__` MEANS
+`__LT__` AKA `is before` MEANS
     Day a LESS THAN Day b
 
 GIVEN a IS A DATE
