@@ -117,16 +117,16 @@ GIVEN `The commission`  IS A Commission
 #EVAL `Example Filing`
 
 #TRACE `Example Filing` AT Jul 19 2025 WITH
-    PARTY `Example Commission`
-    DOES `File draft copy of EIS and cause notice of hearing to be published`
-            `Example Hearing Notice`
-            `Example Notice of EIS Completion`
-            (JUST `Example EIS`)
-    AT Jul 20 2025
+    PARTY   Jul 20 2025
 
 
 
-§§§§§§§ `Section 7.3 (b)`
+DOES    `Example Commission`
+    AT      (`File draft copy of EIS and cause notice of hearing to be published`
+                `Example Hearing Notice`
+                `Example Notice of EIS Completion`
+                (JUST `Example EIS`))
+    §§§§§§§ `Section 7.3 (b)`
 
 §§§§§§§§ `Section 7.3 (b) (1)`
 
