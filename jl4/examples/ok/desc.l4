@@ -1,0 +1,29 @@
+-- This file tests the @desc annotation feature
+
+@desc This function calculates the factorial of a number
+DECIDE factorial x IS
+  IF x EQUALS 0 
+  THEN 1
+  ELSE x * factorial (x - 1)
+
+@desc This function tests if a number is positive
+GIVEN n IS A NUMBER @desc some number
+DECIDE isPositive IF
+  n > 0
+
+@desc This function combines factorial and positivity check
+GIVEN m IS A NUMBER @desc m is a number
+factorialIfPositive m MEANS
+  IF isPositive m
+  THEN factorial m
+  ELSE 0
+
+@desc Here we have a simple class declaration
+DECLARE Person
+    HAS name    IS A STRING @desc The name of the person
+        age     IS A NUMBER @desc The age of the person
+        address IS A STRING @desc The address of the person
+
+#EVAL Person WITH name IS "Alice"
+                  age IS 30
+                  address IS "123 Main St"

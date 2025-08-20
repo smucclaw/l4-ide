@@ -1,0 +1,5 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+desc.l4:27:1-29:43:
+  Person OF "Alice", 30, "123 Main St"
