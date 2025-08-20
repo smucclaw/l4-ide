@@ -847,15 +847,3 @@ GIVEN a IS A DATE
 GIVETH A BOOLEAN
 `__LT__` AKA `is before` MEANS
     Day a LESS THAN Day b
-
-GIVEN a IS A DATE
-      b IS A DATE
-GIVETH A NUMBER
-`__PLUS__` MEANS
-    Day a PLUS Day b
-
-GIVEN a IS A DATE
-      b IS A DATE
-GIVETH A NUMBER
-`__MINUS__` MEANS
-    Day a MINUS Day b
