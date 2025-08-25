@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, 'mengwong/build*']
   pull_request:
     branches: [main]
 
@@ -16,21 +16,23 @@ jobs:
   build-haskell:
     name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    container:
-      image: ubuntu:24.04
+    container: ${{ (matrix.os == 'ubuntu-latest' && fromJSON('{"image":"ubuntu:24.04"}')) || null }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macOS]
         ghc-version: ["9.6"]
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
 
     steps:
-      - name: Update repositories
+      - name: Update repositories (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: apt update
-      - name: Install deps
+        
+      - name: Install deps (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: >
           apt install -y
           git
@@ -47,6 +49,16 @@ jobs:
           zlib1g-dev
           liblzma-dev
           xz-utils
+
+      - name: Install deps (macOS)
+        if: matrix.os == 'macOS'
+        run: |
+          brew install \
+            pkg-config \
+            libffi \
+            gmp \
+            ncurses \
+            xz
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
@@ -106,18 +118,22 @@ jobs:
   build-ts-monorepo:
     name: TS Monorepo (including VSCode Extension) ${{ matrix.node-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    container:
-      image: ubuntu:24.04
+    container: ${{ (matrix.os == 'ubuntu-latest' && fromJSON('{"image":"ubuntu:24.04"}')) || null }}
     strategy:
       matrix:
         node-version: ["20.x"]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macOS]
 
     steps:
-      - name: Update repositories
+      - name: Update repositories (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: apt update
-      - name: Install deps
+      - name: Install deps (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: apt install -y git sudo software-properties-common curl xvfb
+      - name: Install deps (macOS)
+        if: matrix.os == 'macOS'
+        run: brew install xquartz
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
