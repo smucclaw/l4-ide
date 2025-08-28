@@ -58,10 +58,9 @@ jobs:
       - name: Install deps (macOS, x86_64)
         if: contains(matrix.runner, 'X64') && contains(matrix.runner, 'macOS')
         env:
-          PATH: "/usr/local/homebrew/bin:${{ env.PATH }}"
           HOMEBREW_PREFIX: "/usr/local/homebrew"
         run: |
-          echo $PATH
+          PATH="/usr/local/homebrew/bin:$PATH"
           arch -x86_64 brew install \
             pkg-config \
             libffi \
