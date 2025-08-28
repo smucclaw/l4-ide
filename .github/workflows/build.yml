@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-haskell:
-    name: GHC ${{ matrix.ghc-version }} on ${{ matrix.runner }}
+    name: GHC ${{ matrix.ghc-version }} on ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     container: ${{ (matrix.runner == 'ubuntu-latest' && fromJSON('{"image":"ubuntu:24.04"}')) || null }}
     strategy:
