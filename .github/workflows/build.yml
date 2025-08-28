@@ -61,6 +61,7 @@ jobs:
           PATH: "/usr/local/homebrew/bin:${{ env.PATH }}"
           HOMEBREW_PREFIX: "/usr/local/homebrew"
         run: |
+          echo $PATH
           arch -x86_64 brew install \
             pkg-config \
             libffi \
