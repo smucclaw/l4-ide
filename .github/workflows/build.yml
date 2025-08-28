@@ -108,7 +108,7 @@ jobs:
         # The last step generates dist-newstyle/cache/plan.json for the cache key.
 
       - name: Restore cached dependencies
-        if: ! contains(matrix.runner, 'self-hosted')
+        if: "contains(matrix.runner, 'self-hosted') == false"
         uses: actions/cache/restore@v4
         id: cache
         env:
@@ -127,7 +127,7 @@ jobs:
       - name: Save cached dependencies
         uses: actions/cache/save@v4
         # If we had an exact cache hit, trying to save the cache would error because of key clash.
-        if: steps.cache.outputs.cache-hit != 'true' && ! contains(matrix.runner, 'self-hosted')
+        if: "steps.cache.outputs.cache-hit != 'true' && ! contains(matrix.runner, 'self-hosted')"
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
