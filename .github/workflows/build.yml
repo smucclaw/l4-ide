@@ -5,12 +5,7 @@ on:
   pull_request:
     branches: [main]
 
-# INFO: The following configuration block ensures that only one build runs per branch,
-# which may be desirable for projects with a costly build process.
-# Remove this block from the CI workflow to let each CI job run to completion.
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+
 
 jobs:
   build-haskell:
@@ -24,15 +19,15 @@ jobs:
           - runner: ubuntu-latest
             name: "Ubuntu Latest with docker"
             ghc-version: "9.6"
-            concurrency-group: "ubuntu-${{ github.run_id }}"
+            concurrency-group: "ubuntu-${{ github.ref }}"
             - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
             ghc-version: "9.6"
-            concurrency-group: "nye"
+            concurrency-group: "nye-${{ github.ref }}"
           - runner: [self-hosted, macOS, X64]
             name: "rosetta intel"
             ghc-version: "9.6"
-            concurrency-group: "nye"
+            concurrency-group: "nye${{ github.ref }}"
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
