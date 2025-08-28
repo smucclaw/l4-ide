@@ -20,10 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner:
-          - ubuntu-latest
-          - [self-hosted, macOS, ARM64]
-          - [self-hosted, macOS, X64]
+        include:
+          - runner: ubuntu-latest
+          - runner: [self-hosted, macOS, ARM64]
+            name: "apple silicon"
+          - runner: [self-hosted, macOS, X64]
+            name: "rosetta intel"
         ghc-version: ["9.6"]
     env:
       LC_ALL: C.UTF-8
