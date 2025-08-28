@@ -23,11 +23,13 @@ jobs:
         include:
           - runner: ubuntu-latest
             name: "Ubuntu Latest with docker"
+            ghc-version: "9.6"
           - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
+            ghc-version: "9.6"
           - runner: [self-hosted, macOS, X64]
             name: "rosetta intel"
-        ghc-version: ["9.6"]
+            ghc-version: "9.6"
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
