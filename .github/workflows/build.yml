@@ -9,7 +9,8 @@ on:
 # which may be desirable for projects with a costly build process.
 # Remove this block from the CI workflow to let each CI job run to completion.
 concurrency:
-  group: build-${{ github.ref }}
+  # group: build-${{ github.ref }}
+  group: ${{ contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'nye') && format('macos-m4-{0}', github.head_ref || github.ref) || github.run_id }}
   cancel-in-progress: true
 
 jobs:
