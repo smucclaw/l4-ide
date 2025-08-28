@@ -9,8 +9,7 @@ on:
 # which may be desirable for projects with a costly build process.
 # Remove this block from the CI workflow to let each CI job run to completion.
 concurrency:
-  # group: build-${{ github.ref }}
-  group: ${{ contains(matrix.runner, 'self-hosted') && contains(matrix.runner, 'nye') && format('macos-m4-{0}', github.head_ref || github.ref) || github.run_id }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,12 +24,15 @@ jobs:
           - runner: ubuntu-latest
             name: "Ubuntu Latest with docker"
             ghc-version: "9.6"
-          - runner: [self-hosted, macOS, ARM64]
+            concurrency-group: "ubuntu-${{ github.run_id }}"
+            - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
             ghc-version: "9.6"
+            concurrency-group: "nye"
           - runner: [self-hosted, macOS, X64]
             name: "rosetta intel"
             ghc-version: "9.6"
+            concurrency-group: "nye"
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
