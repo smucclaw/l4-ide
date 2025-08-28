@@ -58,7 +58,8 @@ jobs:
       - name: Install deps (macOS, x86_64)
         if: contains(matrix.runner, 'X64') && contains(matrix.runner, 'macOS')
         env:
-          HOMEBREW_PREFIX: "/usr/local/homebrew"
+          HOMEBREW_PREFIX: "/usr/local"
+          HOMEBREW_CELLAR: "/usr/local/homebrew/Cellar"
         run: |
           PATH="/usr/local/homebrew/bin:$PATH"
           arch -x86_64 brew install \
