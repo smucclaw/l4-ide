@@ -14,13 +14,16 @@ concurrency:
 
 jobs:
   build-haskell:
-    name: GHC ${{ matrix.ghc-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    container: ${{ (matrix.os == 'ubuntu-latest' && fromJSON('{"image":"ubuntu:24.04"}')) || null }}
+    name: GHC ${{ matrix.ghc-version }} on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ (matrix.runner == 'ubuntu-latest' && fromJSON('{"image":"ubuntu:24.04"}')) || null }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macOS]
+        runner:
+          - ubuntu-latest
+          - [self-hosted, macOS, ARM64]
+          - [self-hosted, macOS, X64]
         ghc-version: ["9.6"]
     env:
       LC_ALL: C.UTF-8
@@ -28,11 +31,11 @@ jobs:
 
     steps:
       - name: Update repositories (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.runner == 'ubuntu-latest'
         run: apt update
 
       - name: Install deps (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.runner == 'ubuntu-latest'
         run: >
           apt install -y
           git
@@ -50,15 +53,29 @@ jobs:
           liblzma-dev
           xz-utils
 
-      - name: Install deps (macOS)
-        if: matrix.os == 'macOS'
+      - name: Install deps (macOS, x86_64)
+        if: contains(matrix.runner, 'X64') && contains(matrix.runner, 'macOS')
+        env:
+          PATH: "/usr/local/homebrew/bin:${{ env.PATH }}"
+          HOMEBREW_PREFIX: "/usr/local/homebrew"
         run: |
-          brew install \
+          arch -x86_64 brew install \
             pkg-config \
             libffi \
             gmp \
             ncurses \
             xz
+
+      - name: Install deps (macOS, arm64)
+        if: contains(matrix.runner, 'ARM64') && contains(matrix.runner, 'macOS')
+        run: |
+          arch -arm64 brew install \
+            pkg-config \
+            libffi \
+            gmp \
+            ncurses \
+            xz
+
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
@@ -86,7 +103,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: cache
         env:
-          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
+          key: ${{ runner.name }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
@@ -125,7 +142,7 @@ jobs:
     strategy:
       matrix:
         node-version: ["20.x"]
-        os: [ubuntu-latest, macOS]
+        os: [ubuntu-latest, ARM64, X64]
 
     steps:
       - name: Update repositories (Ubuntu)
@@ -134,9 +151,18 @@ jobs:
       - name: Install deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: apt install -y git sudo software-properties-common curl xvfb
+
       - name: Install deps (macOS)
-        if: matrix.os == 'macOS'
+        if: matrix.os == 'ARM64'
         run: brew install xquartz
+
+      - name: Install deps (macOS)
+        if: matrix.os == 'X64'
+        env:
+          PATH: "/usr/local/homebrew/bin:${{ env.PATH }}"
+          HOMEBREW_PREFIX: "/usr/local/homebrew"
+        run: brew install xquartz
+
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
