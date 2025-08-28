@@ -22,6 +22,7 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-latest
+            name: "Ubuntu Latest with docker"
           - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
           - runner: [self-hosted, macOS, X64]
