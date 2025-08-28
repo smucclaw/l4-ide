@@ -100,6 +100,8 @@ jobs:
 
       - name: Configure the build
         run: |
+          echo $PATH
+          which cabal
           cabal update
           cabal configure --enable-tests --enable-benchmarks --disable-documentation
           cabal build all --dry-run
