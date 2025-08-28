@@ -27,7 +27,7 @@ jobs:
           - runner: [self-hosted, macOS, X64]
             name: "rosetta intel"
             ghc-version: "9.6"
-            concurrency-group: "nye${{ github.ref }}"
+            concurrency-group: "nye-${{ github.ref }}"
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
