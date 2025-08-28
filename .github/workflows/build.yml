@@ -132,7 +132,7 @@ jobs:
         run: cabal test all
 
       - name: Install
-        run: cabal install jl4-lsp
+        run: cabal install jl4-lsp --overwrite-policy=always
 
       # - name: Build documentation
       #   run: cabal haddock all
