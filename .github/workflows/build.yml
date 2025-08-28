@@ -20,7 +20,7 @@ jobs:
             name: "Ubuntu Latest with docker"
             ghc-version: "9.6"
             concurrency-group: "ubuntu-${{ github.ref }}"
-            - runner: [self-hosted, macOS, ARM64]
+          - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
             ghc-version: "9.6"
             concurrency-group: "nye-${{ github.ref }}"
