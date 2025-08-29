@@ -18,20 +18,10 @@ jobs:
             name: "Ubuntu Latest with docker"
             ghc-version: "9.6"
             concurrency-group: "ubuntu-${{ github.ref }}"
-            archPrefix: ""
           - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
             ghc-version: "9.6"
             concurrency-group: "nye-${{ github.ref }}"
-            archPrefix: "arch -arm64"
-          - runner: [self-hosted, macOS, X64]
-            name: "rosetta intel"
-            ghc-version: "9.6"
-            concurrency-group: "nye-${{ github.ref }}"
-            env:
-              gHOMEBREW_PREFIX: "/usr/local/Homebrew"
-              HOMEBREW_CELLAR: "/usr/local/Cellar"
-            archPrefix: PATH="/usr/local/bin:$PATH" arch -x86_64
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -63,9 +53,7 @@ jobs:
       - name: Install deps (macOS)
         if: contains(matrix.runner, 'macOS')
         run: |
-          echo "which brew?"
-          ${{ matrix.archPrefix }} which brew
-          ${{ matrix.archPrefix }} brew install \
+          brew install \
             pkg-config \
             libffi \
             gmp \
@@ -111,7 +99,7 @@ jobs:
       - name: Install dependencies
         # If we had an exact cache hit, the dependencies will be up to date.
         if: steps.cache.outputs.cache-hit != 'true'
-        run: ${{ matrix.archPrefix }} cabal build all --only-dependencies
+        run: cabal build all --only-dependencies
 
       # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
       - name: Save cached dependencies
@@ -123,15 +111,15 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - name: Build
-        run: ${{ matrix.archPrefix }} cabal build all
+        run: cabal build all
 
       - name: Run tests
-        run: ${{ matrix.archPrefix }} cabal test all
+        run: cabal test all
 
       - name: Install
         run: |
           mkdir -p "out"
-          ${{ matrix.archPrefix }} cabal install jl4-lsp \
+          cabal install jl4-lsp \
                 --overwrite-policy=always \
                 --install-method=copy \
                 --installdir=out
