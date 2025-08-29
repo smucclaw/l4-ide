@@ -132,11 +132,11 @@ jobs:
 
       - name: Install
         run: |
-          mkdir -p "out/${{ matrix.name }}"
+          mkdir -p "out"
           ${{ matrix.archPrefix }} cabal install jl4-lsp \
                 --overwrite-policy=always \
                 --install-method=copy \
-                --installdir="out/${{ matrix.name }}"
+                --installdir=out
 
       # - name: Build documentation
       #   run: cabal haddock all
