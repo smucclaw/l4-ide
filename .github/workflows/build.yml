@@ -1,11 +1,9 @@
 name: CI
 on:
   push:
-    branches: [main, 'mengwong/build*']
+    branches: [main, "mengwong/build*"]
   pull_request:
     branches: [main]
-
-
 
 jobs:
   build-haskell:
