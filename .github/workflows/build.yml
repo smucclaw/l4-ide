@@ -29,7 +29,7 @@ jobs:
             ghc-version: "9.6"
             concurrency-group: "nye-${{ github.ref }}"
             env:
-              HOMEBREW_PREFIX: "/usr/local"
+              gHOMEBREW_PREFIX: "/usr/local/Homebrew"
               HOMEBREW_CELLAR: "/usr/local/Cellar"
             archPrefix: PATH="/usr/local/bin:$PATH" arch -x86_64
     env:

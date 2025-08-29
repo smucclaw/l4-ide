@@ -81,6 +81,7 @@ Click on "visualize" to see a rendering of the decision logic.
 The general overview is as follows:
 
 - the webpage is served as a javascript bundle
+
   - it directly connects to the language server provided by the `jl4-lsp` binary via websocket
   - it directly connects to the session persistance service provided by `jl4-websessions` via http
 
