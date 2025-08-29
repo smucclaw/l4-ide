@@ -148,7 +148,7 @@ jobs:
     strategy:
       matrix:
         node-version: ["20.x"]
-        os: pubuntu-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Update repositories (Ubuntu)
