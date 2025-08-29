@@ -32,7 +32,7 @@ jobs:
             concurrency-group: "nye-${{ github.ref }}"
             env:
               HOMEBREW_PREFIX: "/usr/local"
-              HOMEBREW_CELLAR: "/usr/local/homebrew/Cellar"
+              HOMEBREW_CELLAR: "/usr/local/Cellar"
             archPrefix: PATH="/usr/local/bin:$PATH" arch -x86_64
     env:
       LC_ALL: C.UTF-8
