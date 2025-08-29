@@ -20,14 +20,20 @@ jobs:
             name: "Ubuntu Latest with docker"
             ghc-version: "9.6"
             concurrency-group: "ubuntu-${{ github.ref }}"
+            archPrefix: ""
           - runner: [self-hosted, macOS, ARM64]
             name: "apple silicon"
             ghc-version: "9.6"
             concurrency-group: "nye-${{ github.ref }}"
+            archPrefix: "arch -arm64"
           - runner: [self-hosted, macOS, X64]
             name: "rosetta intel"
             ghc-version: "9.6"
             concurrency-group: "nye-${{ github.ref }}"
+            env:
+              HOMEBREW_PREFIX: "/usr/local"
+              HOMEBREW_CELLAR: "/usr/local/homebrew/Cellar"
+            archPrefix: PATH="/usr/local/bin:$PATH" arch -x86_64
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -56,24 +62,12 @@ jobs:
           liblzma-dev
           xz-utils
 
-      - name: Install deps (macOS, x86_64)
-        if: contains(matrix.runner, 'X64') && contains(matrix.runner, 'macOS')
-        env:
-          HOMEBREW_PREFIX: "/usr/local"
-          HOMEBREW_CELLAR: "/usr/local/homebrew/Cellar"
+      - name: Install deps (macOS)
+        if: contains(matrix.runner, 'macOS')
         run: |
-          PATH="/usr/local/homebrew/bin:$PATH"
-          arch -x86_64 brew install \
-            pkg-config \
-            libffi \
-            gmp \
-            ncurses \
-            xz
-
-      - name: Install deps (macOS, arm64)
-        if: contains(matrix.runner, 'ARM64') && contains(matrix.runner, 'macOS')
-        run: |
-          arch -arm64 brew install \
+          echo "which brew?"
+          ${{ matrix.archPrefix }} which brew
+          ${{ matrix.archPrefix }} brew install \
             pkg-config \
             libffi \
             gmp \
@@ -100,9 +94,9 @@ jobs:
         run: |
           echo $PATH
           which cabal
-          cabal update
-          cabal configure --enable-tests --enable-benchmarks --disable-documentation
-          cabal build all --dry-run
+          ${{ matrix.archPrefix }} cabal update
+          ${{ matrix.archPrefix }} cabal configure --enable-tests --enable-benchmarks --disable-documentation
+          ${{ matrix.archPrefix }} cabal build all --dry-run
         # The last step generates dist-newstyle/cache/plan.json for the cache key.
 
       - name: Restore cached dependencies
@@ -119,7 +113,7 @@ jobs:
       - name: Install dependencies
         # If we had an exact cache hit, the dependencies will be up to date.
         if: steps.cache.outputs.cache-hit != 'true'
-        run: cabal build all --only-dependencies
+        run: ${{ matrix.archPrefix }} cabal build all --only-dependencies
 
       # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
       - name: Save cached dependencies
@@ -131,13 +125,18 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - name: Build
-        run: cabal build all
+        run: ${{ matrix.archPrefix }} cabal build all
 
       - name: Run tests
-        run: cabal test all
+        run: ${{ matrix.archPrefix }} cabal test all
 
       - name: Install
-        run: cabal install jl4-lsp --overwrite-policy=always
+        run: |
+          mkdir -p out/${{ matrix.name }}
+          ${{ matrix.archPrefix }} cabal install jl4-lsp \
+                --overwrite-policy=always \
+                --install-method=copy \
+                --installdir=out/${{ matrix.name }}
 
       # - name: Build documentation
       #   run: cabal haddock all
@@ -149,7 +148,7 @@ jobs:
     strategy:
       matrix:
         node-version: ["20.x"]
-        os: [ubuntu-latest, ARM64, X64]
+        os: pubuntu-latest]
 
     steps:
       - name: Update repositories (Ubuntu)
@@ -158,17 +157,6 @@ jobs:
       - name: Install deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: apt install -y git sudo software-properties-common curl xvfb
-
-      - name: Install deps (macOS)
-        if: matrix.os == 'ARM64'
-        run: brew install xquartz
-
-      - name: Install deps (macOS)
-        if: matrix.os == 'X64'
-        env:
-          PATH: "/usr/local/homebrew/bin:${{ env.PATH }}"
-          HOMEBREW_PREFIX: "/usr/local/homebrew"
-        run: brew install xquartz
 
       - name: Update git config
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
