@@ -1,0 +1,741 @@
+IMPORT prelude
+IMPORT daydate
+
+§ `2025 CEO Performance Award - Complete Implementation`
+
+§§ `Core Constants`
+
+`Grant Date` MEANS DATE OF 3, 9, 2025
+`Performance Period Years` MEANS 10
+`Performance End Date` MEANS `years after` `Performance Period Years` `Grant Date`
+`Reference Stock Price` MEANS 334.09
+`Total Award Shares` MEANS 423743904
+`Shares Per Tranche` MEANS 35311992
+`Number Of Tranches` MEANS 12
+`Third Anniversary` MEANS `years after` 3 `Grant Date`
+`Fifth Anniversary` MEANS `years after` 5 `Grant Date`
+`Seventh And Half Anniversary` MEANS `years after` 7.5 `Grant Date`
+`Acquisition Threshold` MEANS Billion 20
+`EBITDA Threshold` MEANS Billion 2
+
+
+§§ `Type Definitions`
+
+DECLARE `Tesla Performance Metrics` HAS
+    `Current Market Cap`            IS A NUMBER
+    `Six Month Avg Market Cap`      IS A NUMBER
+    `Thirty Day Avg Market Cap`     IS A NUMBER
+    `One Year Avg Market Cap`       IS A NUMBER
+    `Tesla Vehicles Delivered`      IS A NUMBER
+    `Active FSD Subscriptions`      IS A NUMBER
+    `Bots Delivered`                IS A NUMBER
+    `Robotaxis In Operation`        IS A NUMBER
+    `Current Adjusted EBITDA`       IS A NUMBER
+    `Outstanding Shares`            IS A NUMBER
+    `Last Closing Price`            IS A NUMBER
+    `Per Share Consideration`       IS A MAYBE NUMBER
+
+DECLARE `Service Status` IS ONE OF
+    `Chief Executive Officer`
+    `Executive Officer Product Development`
+    `Not In Eligible Service`
+
+DECLARE `Termination Reason` IS ONE OF
+    `Without Cause`
+    `For Cause`
+    `Death`
+    `Disability`
+    `Change In Control`
+    `Voluntary Resignation`
+
+DECLARE `Covered Event Type` IS ONE OF
+    `External Event Affecting Product Goals`
+    `Other External Event`
+
+DECLARE `CEO Award State` HAS
+    `Musk Service Status`           IS A `Service Status`
+    `Current Date`                  IS A DATE
+    `Performance Metrics`           IS A `Tesla Performance Metrics`
+    `Earned Tranches`               IS A LIST OF NUMBER
+    `Earned Dates`                  IS A LIST OF DATE
+    `CEO Succession Framework`      IS A BOOLEAN
+    `Termination Reason`            IS A MAYBE `Termination Reason`
+    `Covered Event Occurred`        IS A BOOLEAN
+    `Covered Event Type`            IS A MAYBE `Covered Event Type`
+    `HSR Waiting Period Expired`    IS A BOOLEAN
+    `Shareholder Approval Received` IS A BOOLEAN
+
+DECLARE `Vesting Category` IS ONE OF
+    `Seven And Half Year Earned Shares`
+    `Ten Year Earned Shares`
+
+DECLARE `Tranche Status` HAS
+    `Tranche Number`        IS A NUMBER
+    `Is Earned`             IS A BOOLEAN
+    `Earn Date`             IS A MAYBE DATE
+    `Vesting Category`      IS A MAYBE `Vesting Category`
+    `Vesting Date`          IS A MAYBE DATE
+    `Is Vested`             IS A BOOLEAN
+    `Market Cap Met`        IS A BOOLEAN
+    `Operational Met`       IS A BOOLEAN
+
+DECLARE `Award Participant` HAS
+    `Name`                  IS A STRING
+    `Birthdate`             IS A DATE
+
+DECLARE `Award Action` IS ONE OF
+    `maintain eligible service status` HAS
+        `Service Status`    IS A `Service Status`
+    `achieve market cap milestone` HAS
+        `Tranche Number`    IS A NUMBER
+        `Market Cap`        IS A NUMBER
+    `achieve operational milestone` HAS
+        `Tranche Number`    IS A NUMBER
+        `Milestone Type`    IS A STRING
+    `vest earned shares` HAS
+        `Tranche Number`    IS A NUMBER
+        `Vesting Date`      IS A DATE
+    `forfeit unvested shares` HAS
+        `Reason`            IS A STRING
+    `vest immediately` HAS
+        `Reason`            IS A STRING
+    `pay offset amount` HAS
+        `Amount`            IS A NUMBER
+    `hold shares for period` HAS
+        `Years`             IS A NUMBER
+
+§§ `Market Cap Milestone Functions`
+
+GIVEN `tranche number` IS A NUMBER
+GIVETH A NUMBER
+`Required Market Cap For Tranche` MEANS
+    IF      `tranche number` EQUALS 1
+    THEN    Trillion 2
+    ELSE    IF      `tranche number` AT LEAST 2 AND `tranche number` AT MOST 10
+            THEN    Trillion 2 PLUS (`tranche number` MINUS 1) TIMES Billion 500
+            ELSE    IF      `tranche number` EQUALS 11
+                    THEN    Trillion 7.5
+                    ELSE    IF      `tranche number` EQUALS 12
+                            THEN    Trillion 8.5
+                            ELSE    0
+
+§§ `Market Cap Achievement Functions`
+
+GIVEN `tranche number` IS A NUMBER
+      `metrics` IS A `Tesla Performance Metrics`
+GIVETH A BOOLEAN
+`Market Cap Milestone Met` MEANS
+    `Required Market Cap` AT MOST `metrics`'s `Six Month Avg Market Cap`
+        AND `Required Market Cap` AT MOST `metrics`'s `Thirty Day Avg Market Cap`
+    WHERE
+        `Required Market Cap` MEANS `Required Market Cap For Tranche` `tranche number`
+
+GIVEN `tranche number` IS A NUMBER
+      `metrics` IS A `Tesla Performance Metrics`
+GIVETH A BOOLEAN
+`Market Cap Milestone Met For Change In Control` MEANS
+    `Required Market Cap` AT MOST `Change In Control Market Cap`
+    WHERE
+        `Required Market Cap` MEANS `Required Market Cap For Tranche` `tranche number`
+        `Change In Control Market Cap` MEANS
+            `metrics`'s `Outstanding Shares` TIMES `Higher Price`
+        `Higher Price` MEANS
+            IF      `metrics`'s `Per Share Consideration` EQUALS NOTHING
+            THEN    `metrics`'s `Last Closing Price`
+            ELSE    CONSIDER `metrics`'s `Per Share Consideration`
+                    WHEN JUST `consideration` THEN
+                        IF      `consideration` GREATER THAN `metrics`'s `Last Closing Price`
+                        THEN    `consideration`
+                        ELSE    `metrics`'s `Last Closing Price`
+                    WHEN NOTHING THEN `metrics`'s `Last Closing Price`
+
+§§ `Operational Milestone Functions`
+
+GIVEN `tranche number` IS A NUMBER
+      `metrics` IS A `Tesla Performance Metrics`
+GIVETH A BOOLEAN
+`Operational Milestone Met` MEANS
+    IF      `tranche number` EQUALS 1
+    THEN    `metrics`'s `Tesla Vehicles Delivered` AT LEAST Million 20
+    ELSE    IF      `tranche number` EQUALS 2
+            THEN    `metrics`'s `Active FSD Subscriptions` AT LEAST Million 10
+            ELSE    IF      `tranche number` EQUALS 3
+                    THEN    `metrics`'s `Bots Delivered` AT LEAST Million 1
+                    ELSE    IF      `tranche number` EQUALS 4
+                            THEN    `metrics`'s `Robotaxis In Operation` AT LEAST Million 1
+                            ELSE    IF      `tranche number` AT LEAST 5 AND `tranche number` AT MOST 12
+                                    THEN    `EBITDA Milestone Met` `tranche number` `metrics`
+                                    ELSE    FALSE
+
+GIVEN `tranche number` IS A NUMBER
+      `metrics` IS A `Tesla Performance Metrics`
+GIVETH A BOOLEAN
+`EBITDA Milestone Met` MEANS
+    IF      `tranche number` EQUALS 5
+    THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 50
+    ELSE    IF      `tranche number` EQUALS 6
+            THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 80
+            ELSE    IF      `tranche number` EQUALS 7
+                    THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 130
+                    ELSE    IF      `tranche number` EQUALS 8
+                            THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 210
+                            ELSE    IF      `tranche number` EQUALS 9
+                                    THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 300
+                                    ELSE    IF      `tranche number` AT LEAST 10 AND `tranche number` AT MOST 12
+                                            THEN    `metrics`'s `Current Adjusted EBITDA` AT LEAST Billion 400
+                                            ELSE    FALSE
+
+§§ `Deemed Achievement Logic`
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Deemed Achievement Applies` MEANS
+    (`award state`'s `Current Date`) AT LEAST `Third Anniversary`
+        AND `award state`'s `Covered Event Occurred`
+        AND `Covered Event Affects Product Goals` `tranche number` `award state`
+        AND `All Market Cap Averages Met` `tranche number` (`award state`'s `Performance Metrics`)
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Covered Event Affects Product Goals` MEANS
+    `tranche number` AT LEAST 2 AND `tranche number` AT MOST 4
+        AND `award state`'s `Covered Event Type` EQUALS JUST `External Event Affecting Product Goals`
+
+GIVEN `tranche number` IS A NUMBER
+      `metrics` IS A `Tesla Performance Metrics`
+GIVETH A BOOLEAN
+`All Market Cap Averages Met` MEANS
+    `Required Market Cap` AT LEAST `metrics`'s `Thirty Day Avg Market Cap`
+        AND `Required Market Cap` AT LEAST `metrics`'s `Six Month Avg Market Cap`
+        AND `Required Market Cap` AT LEAST `metrics`'s `One Year Avg Market Cap`
+    WHERE
+        `Required Market Cap` MEANS `Required Market Cap For Tranche` `tranche number`
+
+§§ `Earning Logic`
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Tranche Can Be Earned` MEANS
+    (`Market Cap Milestone Met` `tranche number` (`award state`'s `Performance Metrics`)
+        OR (`Deemed Achievement Applies` `tranche number` `award state`
+            AND `Market Cap Milestone Met For Change In Control` `tranche number` (`award state`'s `Performance Metrics`)))
+        AND (`Operational Milestone Met` `tranche number` (`award state`'s `Performance Metrics`)
+            OR `Deemed Achievement Applies` `tranche number` `award state`)
+        AND `Musk In Eligible Service` `award state`
+        AND `CEO Succession Framework Required Met` `tranche number` `award state`
+        AND NOT `Tranche Already Earned` `tranche number` `award state`
+        AND NOT `Operational Milestone Already Used` `tranche number` `award state`
+        AND `Issuance Conditions Met` `award state`
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Musk In Eligible Service` MEANS
+    `award state`'s `Musk Service Status` EQUALS `Chief Executive Officer`
+        OR `award state`'s `Musk Service Status` EQUALS `Executive Officer Product Development`
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`CEO Succession Framework Required Met` MEANS
+    IF      `tranche number` AT LEAST 11
+    THEN    `award state`'s `CEO Succession Framework`
+    ELSE    TRUE
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Tranche Already Earned` MEANS
+    `Number In List` `tranche number` (`award state`'s `Earned Tranches`)
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Operational Milestone Already Used` MEANS
+    IF      `tranche number` AT LEAST 1 AND `tranche number` AT MOST 4
+    THEN    `Product Goal Already Used` `tranche number` `award state`
+    ELSE    FALSE
+
+GIVEN `tranche number` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Product Goal Already Used` MEANS
+    `Any Earned Tranche Uses Same Product Goal` `tranche number` (`award state`'s `Earned Tranches`)
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Issuance Conditions Met` MEANS
+    `award state`'s `HSR Waiting Period Expired`
+        AND `award state`'s `Shareholder Approval Received`
+
+§§ `Vesting Logic`
+
+GIVEN `earn date` IS A DATE
+GIVETH A `Vesting Category`
+`Determine Vesting Category` MEANS
+    IF      `earn date` AT MOST `Fifth Anniversary`
+    THEN    `Seven And Half Year Earned Shares`
+    ELSE    `Ten Year Earned Shares`
+
+GIVEN `vesting category` IS A `Vesting Category`
+GIVETH A DATE
+`Determine Vesting Date` MEANS
+    IF      `vesting category` EQUALS `Seven And Half Year Earned Shares`
+    THEN    `Seventh And Half Anniversary`
+    ELSE    `Performance End Date`
+
+GIVEN `tranche number` IS A NUMBER
+      `current date` IS A DATE
+      `earn date` IS A DATE
+GIVETH A BOOLEAN
+`Tranche Is Vested` MEANS
+    `current date` AT LEAST `vesting date`
+    WHERE
+        `vesting category` MEANS `Determine Vesting Category` `earn date`
+        `vesting date` MEANS `Determine Vesting Date` `vesting category`
+
+§§ `Termination and Change in Control Logic`
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Immediate Vesting Applies` MEANS
+    CONSIDER `award state`'s `Termination Reason`
+    WHEN JUST `Without Cause` THEN TRUE
+    WHEN JUST `Death` THEN TRUE
+    WHEN JUST `Disability` THEN TRUE
+    WHEN JUST `Change In Control` THEN TRUE
+    WHEN JUST `For Cause` THEN FALSE
+    WHEN JUST `Voluntary Resignation` THEN FALSE
+    WHEN NOTHING THEN FALSE
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Forfeiture Applies` MEANS
+    CONSIDER `award state`'s `Termination Reason`
+    WHEN JUST `For Cause` THEN TRUE
+    WHEN JUST `Voluntary Resignation` THEN TRUE
+    WHEN NOTHING THEN
+        IF      NOT `Musk In Eligible Service` `award state`
+        THEN    TRUE
+        ELSE    IF      `award state`'s `Current Date` GREATER THAN `Performance End Date`
+                THEN    TRUE
+                ELSE    FALSE
+    WHEN JUST `Without Cause` THEN FALSE
+    WHEN JUST `Death` THEN FALSE
+    WHEN JUST `Disability` THEN FALSE
+    WHEN JUST `Change In Control` THEN FALSE
+
+§§ `Offset Amount Calculations`
+
+GIVEN `tranche number` IS A NUMBER
+GIVETH A NUMBER
+`Offset Amount For Tranche` MEANS
+    `Reference Stock Price` TIMES `Shares Per Tranche`
+
+§§ `Holding Period Requirements`
+
+GIVEN `earn date` IS A DATE
+      `current date` IS A DATE
+GIVETH A BOOLEAN
+`Holding Period Met` MEANS
+    `current date` AT LEAST `holding period end`
+    WHERE
+        `holding period end` MEANS `years after` 5 `earn date`
+
+§§ `Regulative Provisions`
+
+`Elon Musk` MEANS `Award Participant` WITH
+                    `Name` IS "Elon Reeve Musk"
+                    `Birthdate` IS DATE OF 28, 6, 1971
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A PROVISION OF `Award Participant`, `Award Action`
+`Eligible Service Requirement` MEANS
+    IF      `Forfeiture Applies` `award state`
+    THEN    PARTY   `Elon Musk`
+            MUST    `forfeit unvested shares`
+                        EXACTLY `Forfeiture Reason` `award state`
+    ELSE    IF      `Immediate Vesting Applies` `award state`
+            THEN    PARTY   `Elon Musk`
+                    MAY     `vest immediately`
+                                EXACTLY `Immediate Vesting Reason` `award state`
+            ELSE    PARTY   `Elon Musk`
+                    MUST    `maintain eligible service status` `Service Status` PROVIDED
+                                `Service Status` EQUALS `Chief Executive Officer`
+                                    OR `Service Status` EQUALS `Executive Officer Product Development`
+                    WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+                    LEST    PARTY   `Elon Musk`
+                            MUST    `forfeit unvested shares`
+                                        EXACTLY "Cessation of Eligible Service"
+
+GIVEN `tranche` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A PROVISION OF `Award Participant`, `Award Action`
+`Milestone Achievement Requirement` MEANS
+    IF      `Tranche Can Be Earned` `tranche` `award state`
+    THEN    PARTY   `Elon Musk`
+            MAY     `achieve market cap milestone` `tranche no` `mkt cap` PROVIDED
+                        (`mkt cap` GREATER THAN `Required Market Cap For Tranche` `tranche no`)
+                        AND (`Market Cap Milestone Met`
+                                `tranche no`
+                                (`award state`'s `Performance Metrics`)
+                            OR `Market Cap Milestone Met For Change In Control`
+                                    `tranche no`
+                                    (`award state`'s `Performance Metrics`)
+                            )
+            WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+            HENCE   PARTY   `Elon Musk`
+                    MAY     `achieve operational milestone` `tranche n` `Milestone Type` PROVIDED
+                                `Operational Milestone Met` `tranche n` (`award state`'s `Performance Metrics`)
+                                    OR `Deemed Achievement Applies` `tranche n` `award state`
+                    WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+                    WHERE
+                        `Milestone Type` MEANS
+                            IF      `tranche` AT LEAST 1 AND `tranche` AT MOST 4
+                            THEN    "Product Goal"
+                            ELSE    "EBITDA Goal"
+    ELSE    FULFILLED
+
+GIVEN `tranche` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A PROVISION OF `Award Participant`, `Award Action`
+`Vesting Requirement` MEANS
+    IF      `Tranche Is Earned` `tranche` `award state`
+            AND `award state`'s `Current Date` AT LEAST `vesting date`
+    THEN    PARTY   `Elon Musk`
+            MUST    `vest earned shares` `tranche no` `date` PROVIDED
+                            `tranche no` EQUALS `tranche`
+                        AND `date` AT LEAST `vesting date`
+            WITHIN  1
+            HENCE   PARTY   `Elon Musk`
+                    MUST    `pay offset amount`
+                                EXACTLY (`Offset Amount For Tranche` `tranche`)
+                    WITHIN  30
+                    HENCE   PARTY   `Elon Musk`
+                            MUST    `hold shares for period`
+                                        EXACTLY 5
+                            WITHIN  `Date to days` `holding period end` MINUS `award state`'s `Current Date`
+                            WHERE
+                                `holding period end` MEANS `years after` 5 `earn date`
+    ELSE    FULFILLED
+    WHERE
+        `earn date` MEANS `Get Earn Date For Tranche` `tranche` `award state`
+        `vesting category` MEANS `Determine Vesting Category` `earn date`
+        `vesting date` MEANS `Determine Vesting Date` `vesting category`
+
+§§ `Date Tracking Functions`
+
+GIVEN `tranche` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A BOOLEAN
+`Tranche Is Earned` MEANS
+    `Number In List` `tranche` (`award state`'s `Earned Tranches`)
+
+GIVEN `tranche` IS A NUMBER
+      `award state` IS A `CEO Award State`
+GIVETH A DATE
+`Get Earn Date For Tranche` MEANS
+    `Get Date At Index` (`Get Index Of Tranche` `tranche` (`award state`'s `Earned Tranches`) 0) (`award state`'s `Earned Dates`)
+
+GIVEN `tranche` IS A NUMBER
+      `tranche list` IS A LIST OF NUMBER
+      `index` IS A NUMBER
+GIVETH A NUMBER
+`Get Index Of Tranche` MEANS
+    CONSIDER `tranche list`
+    WHEN EMPTY THEN 0
+    WHEN `head` FOLLOWED BY `tail` THEN
+        IF `tranche` EQUALS `head`
+        THEN `index`
+        ELSE `Get Index Of Tranche` `tranche` `tail` (`index` PLUS 1)
+
+GIVEN `index` IS A NUMBER
+      `date list` IS A LIST OF DATE
+GIVETH A DATE
+`Get Date At Index` MEANS
+    CONSIDER `date list`
+    WHEN EMPTY THEN `Grant Date`
+    WHEN `head` FOLLOWED BY `tail` THEN
+        IF `index` EQUALS 0
+        THEN `head`
+        ELSE `Get Date At Index` (`index` MINUS 1) `tail`
+
+
+
+§§ `Helper Functions`
+
+GIVEN a IS A NUMBER
+GIVETH A NUMBER
+Million MEANS
+    a TIMES 1000000
+
+GIVEN a IS A NUMBER
+GIVETH A NUMBER
+Billion MEANS
+    Million a TIMES 1000
+
+GIVEN a IS A NUMBER
+GIVETH A NUMBER
+Trillion MEANS
+    Billion a TIMES 1000
+
+GIVEN n IS A NUMBER
+      d IS A DATE
+GIVETH A DATE
+`years after` MEANS
+    Date WITH
+        day IS d's day PLUS FLOOR days
+        month IS d's month
+        year IS year
+    WHERE
+        year MEANS d's year PLUS FLOOR n
+        days MEANS `Days in year` year 
+                        TIMES (n MINUS FLOOR n)
+
+GIVEN `item` IS A NUMBER
+      `list` IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+`Number In List` MEANS
+    CONSIDER `list`
+    WHEN EMPTY THEN FALSE
+    WHEN `head` FOLLOWED BY `tail` THEN
+        IF `item` EQUALS `head`
+        THEN TRUE
+        ELSE `Number In List` `item` `tail`
+
+GIVEN `tranche number` IS A NUMBER
+      `earned tranches` IS A LIST OF NUMBER
+GIVETH A BOOLEAN
+`Any Earned Tranche Uses Same Product Goal` MEANS
+    CONSIDER `earned tranches`
+    WHEN EMPTY THEN FALSE
+    WHEN `head` FOLLOWED BY `tail` THEN
+        IF `Product Goals Are Same` `tranche number` `head`
+        THEN TRUE
+        ELSE `Any Earned Tranche Uses Same Product Goal` `tranche number` `tail`
+
+GIVEN `tranche1` IS A NUMBER
+      `tranche2` IS A NUMBER
+GIVETH A BOOLEAN
+`Product Goals Are Same` MEANS
+    (`tranche1` AT LEAST 1 AND `tranche1` AT MOST 4)
+        AND (`tranche2` AT LEAST 1 AND `tranche2` AT MOST 4)
+        AND `tranche1` EQUALS `tranche2`
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A STRING
+`Forfeiture Reason` MEANS
+    CONSIDER `award state`'s `Termination Reason`
+    WHEN JUST `For Cause` THEN "Termination For Cause"
+    WHEN JUST `Voluntary Resignation` THEN "Voluntary Resignation"
+    WHEN NOTHING THEN
+        IF      NOT `Musk In Eligible Service` `award state`
+        THEN    "Cessation of Eligible Service"
+        ELSE    "Performance Period Expired"
+    WHEN JUST `Without Cause` THEN "Should Not Forfeit"
+    WHEN JUST `Death` THEN "Should Not Forfeit"
+    WHEN JUST `Disability` THEN "Should Not Forfeit"
+    WHEN JUST `Change In Control` THEN "Should Not Forfeit"
+
+GIVEN `award state` IS A `CEO Award State`
+GIVETH A STRING
+`Immediate Vesting Reason` MEANS
+    CONSIDER `award state`'s `Termination Reason`
+    WHEN JUST `Without Cause` THEN "Termination Without Cause"
+    WHEN JUST `Death` THEN "Death"
+    WHEN JUST `Disability` THEN "Disability"
+    WHEN JUST `Change In Control` THEN "Change In Control"
+    WHEN JUST `For Cause` THEN "Should Not Vest Immediately"
+    WHEN JUST `Voluntary Resignation` THEN "Should Not Vest Immediately"
+    WHEN NOTHING THEN "Should Not Vest Immediately"
+
+§§ `Testing Examples`
+
+`Example Metrics High Performance` MEANS `Tesla Performance Metrics` WITH
+    `Current Market Cap`            IS Trillion 3
+    `Six Month Avg Market Cap`      IS Billion 2800
+    `Thirty Day Avg Market Cap`     IS Billion 2900
+    `One Year Avg Market Cap`       IS Billion 2700
+    `Tesla Vehicles Delivered`      IS Million 25
+    `Active FSD Subscriptions`      IS Million 12
+    `Bots Delivered`                IS Million 1.8
+    `Robotaxis In Operation`        IS Million 1.1
+    `Current Adjusted EBITDA`       IS Billion 60
+    `Outstanding Shares`            IS Billion 3
+    `Last Closing Price`            IS 400.00
+    `Per Share Consideration`       IS JUST 450.00
+
+`Example Metrics Medium Performance` MEANS `Tesla Performance Metrics` WITH
+    `Current Market Cap`            IS Billion 2500
+    `Six Month Avg Market Cap`      IS Billion 2200
+    `Thirty Day Avg Market Cap`     IS Billion 2300
+    `One Year Avg Market Cap`       IS Billion 2100
+    `Tesla Vehicles Delivered`      IS Million 22
+    `Active FSD Subscriptions`      IS Million 8
+    `Bots Delivered`                IS Million 0.8
+    `Robotaxis In Operation`        IS Million 0.6
+    `Current Adjusted EBITDA`       IS Billion 55
+    `Outstanding Shares`            IS Billion 3
+    `Last Closing Price`            IS 350.00
+    `Per Share Consideration`       IS NOTHING
+
+`Example Metrics Low Performance` MEANS `Tesla Performance Metrics` WITH
+    `Current Market Cap`            IS Billion 1800
+    `Six Month Avg Market Cap`      IS Billion 1700
+    `Thirty Day Avg Market Cap`     IS Billion 1750
+    `One Year Avg Market Cap`       IS Billion 1600
+    `Tesla Vehicles Delivered`      IS Million 15
+    `Active FSD Subscriptions`      IS Million 5
+    `Bots Delivered`                IS Million 0.3
+    `Robotaxis In Operation`        IS Million 0.2
+    `Current Adjusted EBITDA`       IS Billion 25
+    `Outstanding Shares`            IS Billion 3
+    `Last Closing Price`            IS 280.00
+    `Per Share Consideration`       IS NOTHING
+
+`Example Award State Active` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Chief Executive Officer`
+    `Current Date`                  IS `Grant Date`
+    `Performance Metrics`           IS `Example Metrics High Performance`
+    `Earned Tranches`               IS EMPTY
+    `Earned Dates`                  IS EMPTY
+    `CEO Succession Framework`      IS TRUE
+    `Termination Reason`            IS NOTHING
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+`Example Award State Terminated` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Not In Eligible Service`
+    `Current Date`                  IS `years after` 2 `Grant Date`
+    `Performance Metrics`           IS `Example Metrics High Performance`
+    `Earned Tranches`               IS LIST 1, 2
+    `Earned Dates`                  IS LIST `years after` 1 `Grant Date`, Date (`Grant Date` PLUS 500)
+    `CEO Succession Framework`      IS TRUE
+    `Termination Reason`            IS JUST `Without Cause`
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+`Example Award State Change In Control` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Chief Executive Officer`
+    `Current Date`                  IS Date (`years after` 2 `Grant Date`)
+    `Performance Metrics`           IS `Example Metrics High Performance`
+    `Earned Tranches`               IS LIST 1
+    `Earned Dates`                  IS LIST `years after` 1 `Grant Date`
+    `CEO Succession Framework`      IS TRUE
+    `Termination Reason`            IS JUST `Change In Control`
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+`Example Award State Medium Performance` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Chief Executive Officer`
+    `Current Date`                  IS `Grant Date`
+    `Performance Metrics`           IS `Example Metrics Medium Performance`
+    `Earned Tranches`               IS EMPTY
+    `Earned Dates`                  IS EMPTY
+    `CEO Succession Framework`      IS TRUE
+    `Termination Reason`            IS NOTHING
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+`Example Award State Low Performance` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Chief Executive Officer`
+    `Current Date`                  IS `Grant Date`
+    `Performance Metrics`           IS `Example Metrics Low Performance`
+    `Earned Tranches`               IS EMPTY
+    `Earned Dates`                  IS EMPTY
+    `CEO Succession Framework`      IS FALSE
+    `Termination Reason`            IS NOTHING
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+§§ `Testing`
+
+-- Basic milestone calculations
+#EVAL `Required Market Cap For Tranche` 1
+#EVAL `Required Market Cap For Tranche` 5
+#EVAL `Required Market Cap For Tranche` 11
+#EVAL `Required Market Cap For Tranche` 12
+#EVAL `Offset Amount For Tranche` 1
+
+-- Vesting category determination
+#EVAL `Determine Vesting Category` `Fifth Anniversary`
+#EVAL `Determine Vesting Category` `Performance End Date`
+
+-- High Performance Scenario Tests
+#EVAL `Tranche Can Be Earned` 1 `Example Award State Active`
+#EVAL `Tranche Can Be Earned` 3 `Example Award State Active`
+#EVAL `Market Cap Milestone Met` 1 `Example Metrics High Performance`
+#EVAL `Operational Milestone Met` 1 `Example Metrics High Performance`
+#EVAL `Market Cap Milestone Met For Change In Control` 1 `Example Metrics High Performance`
+
+-- Medium Performance Scenario Tests
+#EVAL `Tranche Can Be Earned` 1 `Example Award State Medium Performance`
+#EVAL `Tranche Can Be Earned` 5 `Example Award State Medium Performance`
+#EVAL `Market Cap Milestone Met` 1 `Example Metrics Medium Performance`
+#EVAL `Operational Milestone Met` 1 `Example Metrics Medium Performance`
+#EVAL `Operational Milestone Met` 5 `Example Metrics Medium Performance`
+
+-- Low Performance Scenario Tests
+#EVAL `Tranche Can Be Earned` 1 `Example Award State Low Performance`
+#EVAL `Tranche Can Be Earned` 11 `Example Award State Low Performance`
+#EVAL `Market Cap Milestone Met` 1 `Example Metrics Low Performance`
+#EVAL `Operational Milestone Met` 1 `Example Metrics Low Performance`
+#EVAL `CEO Succession Framework Required Met` 11 `Example Award State Low Performance`
+
+-- Termination scenarios
+#EVAL `Immediate Vesting Applies` `Example Award State Terminated`
+#EVAL `Forfeiture Applies` `Example Award State Terminated`
+#EVAL `Holding Period Met` `Grant Date` (DATE OF 1, 1, 2032)
+
+-- Regulatory provision traces - High Performance
+#TRACE `Eligible Service Requirement` `Example Award State Active` AT 0 WITH
+    PARTY 365
+
+DOES `Elon Musk` AT `maintain eligible service status` `Chief Executive Officer` #TRACE `Milestone Achievement Requirement` 1 `Example Award State Active` AT 0 WITH
+    PARTY 365
+    DOES `Elon Musk` AT `achieve market cap milestone` 1 (Trillion 2) PARTY 730
+
+-- Regulatory provision traces - Medium Performance
+DOES `Elon Musk` AT `achieve operational milestone` 1 "Product Goal" #TRACE `Milestone Achievement Requirement` 1 `Example Award State Medium Performance` AT 0 WITH
+    PARTY 365
+
+-- Regulatory provision traces - Low Performance (should show FULFILLED due to conditions not met)
+DOES `Elon Musk` AT `achieve market cap milestone` 1 (Trillion 2) #TRACE `Milestone Achievement Requirement` 1 `Example Award State Low Performance` AT 0 WITH
+    PARTY 365
+
+-- Vesting traces - Create award state with tranche 1 earned 5 years ago
+DOES `Elon Musk` AT `maintain eligible service status` `Chief Executive Officer` `Example Award State With Earned Tranche` MEANS `CEO Award State` WITH
+    `Musk Service Status`           IS `Chief Executive Officer`
+    `Current Date`                  IS `Seventh And Half Anniversary`
+    `Performance Metrics`           IS `Example Metrics High Performance`
+    `Earned Tranches`               IS LIST 1
+    `Earned Dates`                  IS LIST `Fifth Anniversary`
+    `CEO Succession Framework`      IS TRUE
+    `Termination Reason`            IS NOTHING
+    `Covered Event Occurred`        IS FALSE
+    `Covered Event Type`            IS NOTHING
+    `HSR Waiting Period Expired`    IS TRUE
+    `Shareholder Approval Received` IS TRUE
+
+#TRACE `Vesting Requirement` 1 `Example Award State With Earned Tranche` AT 0 WITH
+    PARTY 1
+    DOES `Elon Musk` AT `vest earned shares` 1 `Seventh And Half Anniversary` PARTY 31
+    DOES `Elon Musk` AT `pay offset amount` (`Offset Amount For Tranche` 1) PARTY 61
+
+DOES `Elon Musk` AT `hold shares for period` 5 #TRACE `Eligible Service Requirement` `Example Award State Terminated` AT 0 WITH
+    PARTY 1
+
+DOES `Elon Musk` AT `vest immediately` "Termination Without Cause" #TRACE `Eligible Service Requirement` `Example Award State Change In Control` AT 0 WITH
+    PARTY 1DOES `Elon Musk` AT `vest immediately` "Change In Control" 

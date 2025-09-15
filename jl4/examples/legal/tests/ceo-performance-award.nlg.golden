@@ -1,0 +1,32 @@
+`Required Market Cap For Tranche` with 1
+`Required Market Cap For Tranche` with 5
+`Required Market Cap For Tranche` with 11
+`Required Market Cap For Tranche` with 12
+`Offset Amount For Tranche` with 1
+`Determine Vesting Category` with `Fifth Anniversary`
+`Determine Vesting Category` with `Performance End Date`
+`Tranche Can Be Earned` with 1 and `Example Award State Active`
+`Tranche Can Be Earned` with 3 and `Example Award State Active`
+`Market Cap Milestone Met` with 1 and `Example Metrics High Performance`
+`Operational Milestone Met` with 1 and `Example Metrics High Performance`
+`Market Cap Milestone Met For Change In Control` with 1 and `Example Metrics High Performance`
+`Tranche Can Be Earned` with 1 and `Example Award State Medium Performance`
+`Tranche Can Be Earned` with 5 and `Example Award State Medium Performance`
+`Market Cap Milestone Met` with 1 and `Example Metrics Medium Performance`
+`Operational Milestone Met` with 1 and `Example Metrics Medium Performance`
+`Operational Milestone Met` with 5 and `Example Metrics Medium Performance`
+`Tranche Can Be Earned` with 1 and `Example Award State Low Performance`
+`Tranche Can Be Earned` with 11 and `Example Award State Low Performance`
+`Market Cap Milestone Met` with 1 and `Example Metrics Low Performance`
+`Operational Milestone Met` with 1 and `Example Metrics Low Performance`
+`CEO Succession Framework Required Met` with 11 and `Example Award State Low Performance`
+`Immediate Vesting Applies` with `Example Award State Terminated`
+`Forfeiture Applies` with `Example Award State Terminated`
+`Holding Period Met` with `Grant Date` and `DATE` with 1, 1 and 2032
+executing contract `Eligible Service Requirement` with `Example Award State Active` at 0 with the following events:  party `Elon Musk` did `maintain eligible service status` with `Chief Executive Officer` at 365
+executing contract `Milestone Achievement Requirement` with 1 and `Example Award State Active` at 0 with the following events:  party `Elon Musk` did `achieve market cap milestone` with 1 and `Trillion` with 2 at 365 party `Elon Musk` did `achieve operational milestone` with 1 and Product Goal at 730
+executing contract `Milestone Achievement Requirement` with 1 and `Example Award State Medium Performance` at 0 with the following events:  party `Elon Musk` did `achieve market cap milestone` with 1 and `Trillion` with 2 at 365
+executing contract `Milestone Achievement Requirement` with 1 and `Example Award State Low Performance` at 0 with the following events:  party `Elon Musk` did `maintain eligible service status` with `Chief Executive Officer` at 365
+executing contract `Vesting Requirement` with 1 and `Example Award State With Earned Tranche` at 0 with the following events:  party `Elon Musk` did `vest earned shares` with 1 and `Seventh And Half Anniversary` at 1 party `Elon Musk` did `pay offset amount` with `Offset Amount For Tranche` with 1 at 31 party `Elon Musk` did `hold shares for period` with 5 at 61
+executing contract `Eligible Service Requirement` with `Example Award State Terminated` at 0 with the following events:  party `Elon Musk` did `vest immediately` with Termination Without Cause at 1
+executing contract `Eligible Service Requirement` with `Example Award State Change In Control` at 0 with the following events:  party `Elon Musk` did `vest immediately` with Change In Control at 1
