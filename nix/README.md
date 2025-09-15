@@ -1,8 +1,15 @@
 # nix support
 
-## redeploying
+## redeploying to aws (sg) production
 
 ```sh
+mengwong@lhs:~/src/smucclaw/l4-ide  main! 2025-09-15 11:46:32
+% nixos-rebuild switch --flake '.#jl4-aws-2505' --target-host nano
+```
+
+## redeploying to hetzner (eu) development
+
+```
 nixos-rebuild switch --flake .#jl4-demo --target-host root@example.com
 ```
 
