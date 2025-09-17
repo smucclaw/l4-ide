@@ -185,7 +185,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Week` MEANS
-    Week (`Date to days` date)
+    Week (Day date)
 
 
 
@@ -194,75 +194,76 @@ GIVETH A NUMBER
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `January` AKA `Jan` MEANS
-    Day day 1 year
+    DATE day 1 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `February` AKA `Feb` MEANS
-    Day day 2 year
+    DATE day 2 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `March` AKA `Mar` MEANS
-    Day day 3 year
+    DATE day 3 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `April` AKA `Apr` MEANS
-    Day day 4 year
+    DATE day 4 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `May` MEANS
-    Day day 5 year
+    DATE day 5 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `June` AKA `Jun` MEANS
-    Day day 6 year
+    DATE day 6 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `July` AKA `Jul` MEANS
-    Day day 7 year
+    DATE day 7 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `August` AKA `Aug` MEANS
-    Day day 8 year
+    DATE day 8 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `September` AKA `Sep` MEANS
-    Day day 9 year
+    DATE day 9 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `October` AKA `Oct` MEANS
-    Day day 10 year
+    DATE day 10 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `November` AKA `Nov` MEANS
-    Day day 11 year
+    DATE day 11 year
 
 GIVEN day   IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `December` AKA `Dec` MEANS
-    Day day 12 year
+    DATE day 12 year
+
 
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
@@ -383,7 +384,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE
 GIVETH A NUMBER
 `Weekday of` MEANS
-    `Weekday of` (`Date to days` date)
+    `Weekday of` (Day date)
 
 GIVEN month  IS A NUMBER
       year   IS A NUMBER
@@ -477,7 +478,7 @@ GIVETH A BOOLEAN
 GIVEN date  IS A DATE
 GIVETH A BOOLEAN
 `is weekend` MEANS
-    `is weekend` (`Date to days` date)
+    `is weekend` (Day date)
 
 
 GIVEN days  IS A NUMBER
@@ -488,7 +489,7 @@ GIVETH A BOOLEAN
 GIVEN date  IS A DATE
 GIVETH A BOOLEAN
 `is weekday` MEANS
-    `is weekday` (`Date to days` date)
+    `is weekday` (Day date)
 
 GIVEN year  IS A NUMBER
 GIVETH A BOOLEAN
@@ -518,9 +519,9 @@ GIVETH A NUMBER
 
 GIVEN day   IS A NUMBER
       date  IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `on day` MEANS
-    `Date to days` date PLUS day MINUS 1
+    Date (date PLUS day MINUS 1)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
@@ -528,9 +529,9 @@ GIVETH A NUMBER
     days PLUS 1
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the day after` MEANS
-    Day (date's day PLUS 1) (date's month) (date's year)
+    Date (date's day PLUS 1) (date's month) (date's year)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
@@ -538,9 +539,9 @@ GIVETH A NUMBER
     days MINUS 1
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the day before` MEANS
-    Day (date's day MINUS 1) (date's month) (date's year)
+    Date (date's day MINUS 1) (date's month) (date's year)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
@@ -552,9 +553,9 @@ GIVETH A NUMBER
         d MEANS `Days in a week` MINUS (`Weekday of` days) PLUS Monday
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the week after` MEANS
-    `the week after` (`Date to days` date)
+    Date (`the week after` (Day date))
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
@@ -563,49 +564,49 @@ GIVETH A NUMBER
         MINUS (`Days in a week` TIMES 2)
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the week before` MEANS
-    `the week before` (`Date to days` date)
+    Date (`the week before` (Day date))
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
 `the month after` MEANS
-    `the month after` (`Days to date` days)
+    Day (`the month after` (`Days to date` days))
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the month after` MEANS
-    Day 1 (date's month PLUS 1) (date's year)
+    Date 1 (date's month PLUS 1) (date's year)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
 `the month before` MEANS
-    `the month before` (`Days to date` days)
+    Day (`the month before` (`Days to date` days))
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the month before` MEANS
-    Day 1 (date's month MINUS 1) (date's year)
+    Date 1 (date's month MINUS 1) (date's year)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
 `the year after` MEANS
-    `the year after` (`Days to date` days)
+    Day (`the year after` (`Days to date` days))
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the year after` MEANS
-    Day 1 1 (date's year PLUS 1)
+    Date 1 1 (date's year PLUS 1)
 
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
 `the year before` MEANS
-    `the year before` (`Days to date` days)
+    Day (`the year before` (`Days to date` days))
 
 GIVEN date   IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `the year before` MEANS
-    Day 1 1 (date's year MINUS 1)
+    Date 1 1 (date's year MINUS 1)
 
 
 §§ `Comperators`
@@ -625,8 +626,8 @@ GIVETH A NUMBER
 `the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
-        day1 MEANS `Date to days` date1
-        day2 MEANS `Date to days` date2
+        day1 MEANS Day date1
+        day2 MEANS Day date2
 
 GIVEN date1  IS A DATE
       day2   IS A NUMBER
@@ -634,7 +635,7 @@ GIVETH A NUMBER
 `the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
-        day1 MEANS `Date to days` date1
+        day1 MEANS Day date1
 
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
@@ -642,7 +643,7 @@ GIVETH A NUMBER
 `the earlier of` MEANS
     `the earlier of` day1 day2
     WHERE
-        day2 MEANS `Date to days` date2
+        day2 MEANS Day date2
 
 GIVEN day1   IS A NUMBER
       day2   IS A NUMBER
@@ -658,8 +659,8 @@ GIVETH A NUMBER
 `the later of` MEANS
     `the later of` day1 day2
     WHERE
-        day1 MEANS `Date to days` date1
-        day2 MEANS `Date to days` date2
+        day1 MEANS Day date1
+        day2 MEANS Day date2
 
 
 GIVEN date1  IS A DATE
@@ -668,7 +669,7 @@ GIVETH A NUMBER
 `the later of` MEANS
     `the later of` day1 day2
     WHERE
-        day1 MEANS `Date to days` date1
+        day1 MEANS Day date1
 
 GIVEN day1   IS A NUMBER
       date2  IS A DATE
@@ -676,7 +677,7 @@ GIVETH A NUMBER
 `the later of` MEANS
     `the later of` day1 day2
     WHERE
-        day2 MEANS `Date to days` date2
+        day2 MEANS Day date2
 
 
 
@@ -687,7 +688,7 @@ GIVETH A NUMBER
 GIVEN date  IS A DATE 
 GIVETH A STRING
 `Name of month` MEANS
-    `Name of month` (`Date to days` date)
+    `Name of month` (Day date)
 
 GIVEN days  IS A NUMBER
 GIVETH A STRING
@@ -726,7 +727,7 @@ GIVETH A STRING
 GIVEN date   IS A DATE
 GIVETH A STRING
 `Name of weekday` MEANS
-    `Name of weekday` (`Date to days` date)
+    `Name of weekday` (Day date)
 
 
 

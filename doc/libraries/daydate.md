@@ -149,8 +149,8 @@ Creates a datestamp for the first day of a week (Monday) for a given date.
 
 ## Month Helpers
 
-The following functions create datestamps within specific months. Each takes a day and year and returns a datestamp.
-E.g. `January 1 2025 -> 20088`
+The following functions create datestamps within specific months. Each takes a day and year and returns a DATE object.
+E.g. `January 1 2025 -> DATE OF 1, 1, 2025`
 
 - `January` (AKA `Jan`)
 - `February` (AKA `Feb`)
@@ -168,7 +168,7 @@ E.g. `January 1 2025 -> 20088`
 - **Given**:
   - `day`: NUMBER (day of month)
   - `year`: NUMBER (4-digit year)
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Month of the year`
 
@@ -362,7 +362,7 @@ e.g. ``#EVAL Date (`on day` 2 (`the week after` (Jan 2 2026))) -> DATE OF 6, 1, 
 - **Given**:
   - `day`: NUMBER (nth day, 1 being the same day)
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the day after`
 
@@ -370,7 +370,7 @@ Gets the date for the day AFTER a given date.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the day before`
 
@@ -378,7 +378,7 @@ Gets the date for the day BEFORE a given date.
 
 - **Given**:
   - `days`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the week after`
 
@@ -386,7 +386,7 @@ Gets the date for Monday of NEXT week from a given date.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the week before`
 
@@ -394,7 +394,7 @@ Gets the date for Monday of the PREVIOUS week from a given date.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the month after`
 
@@ -402,7 +402,7 @@ Gets the date for the first day of NEXT month.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the month before`
 
@@ -410,7 +410,7 @@ Gets the date for the first day of the PREVIOUS month.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the year after`
 
@@ -418,7 +418,7 @@ Gets the date for the first day of NEXT year.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the year before`
 
@@ -426,7 +426,7 @@ Gets the date for the first day of the PREVIOUS year.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ## Comparators
 
@@ -437,7 +437,7 @@ Returns the earlier of two dates.
 - **Given**:
   - `date1`: NUMBER datestamp or DATE object
   - `date2`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ### `the later of`
 
@@ -446,7 +446,7 @@ Returns the later of two dates.
 - **Given**:
   - `date1`: NUMBER datestamp or DATE object
   - `date2`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: NUMBER datestamp or DATE object (based on Given)
 
 ## Stringify Functions
 
