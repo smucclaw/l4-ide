@@ -64,7 +64,7 @@ ceo-performance-award.l4:706:1-708:83:
           MUST `achieve operational milestone` `tranche n`
                                                 `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
           OR `Deemed Achievement Applies` OF `tranche n`, `award state`
-          WITHIN (`Date to days` OF `Performance End Date`) MINUS (`award state`'s `Current Date`)
+          WITHIN `Date to days` OF (`Performance End Date` MINUS (`award state`'s `Current Date`))
   WHERE
     
     DECIDE `Milestone Type` IS
@@ -83,7 +83,7 @@ ceo-performance-award.l4:711:1-712:80:
           MUST `achieve operational milestone` `tranche n`
                                                 `Milestone Type` PROVIDED    `Operational Milestone Met` OF `tranche n`, (`award state`'s `Performance Metrics`)
           OR `Deemed Achievement Applies` OF `tranche n`, `award state`
-          WITHIN (`Date to days` OF `Performance End Date`) MINUS (`award state`'s `Current Date`)
+          WITHIN `Date to days` OF (`Performance End Date` MINUS (`award state`'s `Current Date`))
   WHERE
     
     DECIDE `Milestone Type` IS

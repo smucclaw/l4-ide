@@ -71,7 +71,7 @@ GIVEN `The commission`  IS A Commission
                         AND `Hearing Notice`'s `Publishing medium`'s `General circulation area` EQUALS `The action`'s `Potential effect area`
                         AND `Hearing Notice`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
                         AND `Notice of EIS Completion`'s `Is in accordance with the requirements of 6 NYCRR 617.10`
-          WITHIN `the week after` (March 2 2028)
+          WITHIN Day (`the week after` (March 2 2028))
           HENCE FULFILLED
     ELSE  FULFILLED
 
@@ -84,7 +84,7 @@ GIVEN `The commission`  IS A Commission
                             Name IS "A commission"
 
 `Example EIS` MEANS `Environmental Impact Statement` WITH
-                            `Draft filing date` IS Date Jul 19 2025
+                            `Draft filing date` IS Jul 19 2025
                             `Final filing date` IS NOTHING
 
 `Example Action` MEANS `Action that may have a significant adverse effect on the environment` WITH
@@ -103,26 +103,26 @@ GIVEN `The commission`  IS A Commission
 `Example Newspaper` MEANS Newspaper OF "New York Times", "Brooklyn"
 
 `Example Hearing Notice` MEANS Notice WITH
-                                    `Publish date`      IS Date Jul 20 2025
-                                    `Scheduled date`    IS Date Aug 1 2025
+                                    `Publish date`      IS Jul 20 2025
+                                    `Scheduled date`    IS Aug 1 2025
                                     `Publishing medium` IS `Example Newspaper`
                                     `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
 
 `Example Notice of EIS Completion` MEANS Notice WITH
-                                            `Publish date`      IS Date Jul 20 2025
-                                            `Scheduled date`    IS Date Aug 8 2025
+                                            `Publish date`      IS Jul 20 2025
+                                            `Scheduled date`    IS Aug 8 2025
                                             `Publishing medium` IS `Example Newspaper`
                                             `Is in accordance with the requirements of 6 NYCRR 617.10` IS TRUE
 
 #EVAL `Example Filing`
 
-#TRACE `Example Filing` AT Jul 19 2025 WITH
+#TRACE `Example Filing` AT Day (Jul 19 2025) WITH
     PARTY   `Example Commission`
     DOES    (`File draft copy of EIS and cause notice of hearing to be published`
                 `Example Hearing Notice`
                 `Example Notice of EIS Completion`
                 (JUST `Example EIS`))
-    AT      Jul 20 2025
+    AT      Day (Jul 20 2025)
 
 
 
@@ -194,8 +194,8 @@ GIVETH A NUMBER
     IF    `Tentative or recommended decision will contain a final EIS` `The decision`
     THEN  Never
     ELSE  CONSIDER `Cause for extension`
-              WHEN NOTHING    THEN `Closing date` 
-              WHEN JUST cause THEN `Closing date` PLUS (45 PLUS `Days of extension`)
+              WHEN NOTHING    THEN Day `Closing date` 
+              WHEN JUST cause THEN Day (`Closing date` PLUS (45 PLUS `Days of extension`))
     WHERE
         `Closing date` MEANS `The decision`'s `Proceeding Record`'s `Closing date`
                                 PLUS 45
@@ -242,7 +242,7 @@ GIVEN `The action`          IS AN `Action that may have a significant adverse ef
           WHEN JUST date THEN PARTY   Commission
                               MUST    `Render decision on whether or not to approve action`
                                           EXACTLY `The action`
-                              WITHIN  date PLUS 30
+                              WITHIN  Day date PLUS 30
 
 -- TESTING
 
