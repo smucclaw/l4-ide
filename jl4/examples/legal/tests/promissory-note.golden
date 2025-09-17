@@ -9,9 +9,9 @@ promissory-note.l4:171:1-30:
   0.0125
 promissory-note.l4:173:1-35:
   Money OF "USD", 2256.4578086289234
-promissory-note.l4:179:1-191:105:
+promissory-note.l4:179:1-191:111:
   FULFILLED
-promissory-note.l4:195:1-196:102:
+promissory-note.l4:195:1-196:108:
   PARTY `The Borrower`
   MUST `pay monthly installment to` EXACTLY `The Lender`
                                      `Amount Transferred` PROVIDED `is money at least equal within error` OF `Amount Transferred`, `Next Payment Due Amount With Penalty`

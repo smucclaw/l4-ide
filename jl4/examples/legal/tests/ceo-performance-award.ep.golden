@@ -365,7 +365,7 @@ GIVETH A PROVISION OF `Award Participant`, `Award Action`
                     MUST    `maintain eligible service status` `Service Status` PROVIDED
                                 `Service Status` EQUALS `Chief Executive Officer`
                                     OR `Service Status` EQUALS `Executive Officer Product Development`
-                    WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+                    WITHIN  `Date to days` (`Performance End Date` MINUS `award state`'s `Current Date`)
                     LEST    PARTY   `Elon Musk`
                             MUST    `forfeit unvested shares`
                                         EXACTLY "Cessation of Eligible Service"
@@ -385,12 +385,12 @@ GIVETH A PROVISION OF `Award Participant`, `Award Action`
                                     `tranche no`
                                     (`award state`'s `Performance Metrics`)
                             )
-            WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+            WITHIN  `Date to days` (`Performance End Date` MINUS `award state`'s `Current Date`)
             HENCE   PARTY   `Elon Musk`
                     MAY     `achieve operational milestone` `tranche n` `Milestone Type` PROVIDED
                                 `Operational Milestone Met` `tranche n` (`award state`'s `Performance Metrics`)
                                     OR `Deemed Achievement Applies` `tranche n` `award state`
-                    WITHIN  `Date to days` `Performance End Date` MINUS `award state`'s `Current Date`
+                    WITHIN  `Date to days` (`Performance End Date` MINUS `award state`'s `Current Date`)
                     WHERE
                         `Milestone Type` MEANS
                             IF      `tranche` AT LEAST 1 AND `tranche` AT MOST 4
@@ -416,7 +416,7 @@ GIVETH A PROVISION OF `Award Participant`, `Award Action`
                     HENCE   PARTY   `Elon Musk`
                             MUST    `hold shares for period`
                                         EXACTLY 5
-                            WITHIN  `Date to days` `holding period end` MINUS `award state`'s `Current Date`
+                            WITHIN  `Date to days` (`holding period end` MINUS `award state`'s `Current Date`)
                             WHERE
                                 `holding period end` MEANS `years after` 5 `earn date`
     ELSE    FULFILLED
