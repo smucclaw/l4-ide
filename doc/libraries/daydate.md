@@ -12,11 +12,11 @@ Here are some example on how to use it:
 IMPORT daydate
 
 #EVAL `is leap year` 2400                                 -- TRUE - Century divisible by 400
-#EVAL Feb 29 2000 EQUALS Day (Date 29 2 2000)             -- TRUE - leap day
+#EVAL Feb 29 2000 EQUALS (Date 29 2 2000)                 -- TRUE - leap day
 #EVAL Week 53 2009 EQUALS Dec 28 2009                     -- TRUE - Last week of 53-week year
 #EVAL Jan 1 2000 MINUS 1 EQUALS Dec 31 1999               -- TRUE - Subtraction across millennium
 #EVAL `Weekday of 1st day of month` 3 2025 EQUALS Saturday-- TRUE - First day of month
-#EVAL `the earlier of` (Feb 29 2024) (Feb 28 2024)        -- 739308 - Earlier in leap month
+#EVAL `the earlier of` (Feb 29 2024) (Feb 28 2024)        -- DATE OF 28, 2, 2024 - Earlier in leap month
 ```
 
 ## Constants
@@ -103,7 +103,7 @@ Creates a datestamp for the first day of a given year.
 
 - **Given**:
   - `year`: NUMBER (4-digit year)
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Year` (from date)
 
@@ -111,7 +111,7 @@ Creates a datestamp for the first day of a year from a DATE object.
 
 - **Given**:
   - `date`: DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Month` (from components)
 
@@ -120,7 +120,7 @@ Creates a datestamp for the first day of a month.
 - **Given**:
   - `month`: NUMBER (month number 1-12)
   - `year`: NUMBER (4-digit year)
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Month` (from date)
 
@@ -128,7 +128,7 @@ Creates a datestamp for the first day of a month from a DATE object.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Week` (from components)
 
@@ -137,7 +137,7 @@ Creates a datestamp for the first day of a week a given week and year (Monday).
 - **Given**:
   - `week`: NUMBER (week number)
   - `year`: NUMBER (4-digit year)
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ### `Week` (from date)
 
@@ -145,7 +145,7 @@ Creates a datestamp for the first day of a week (Monday) for a given date.
 
 - **Given**:
   - `date`: NUMBER datestamp or DATE object
-- **Giveth**: NUMBER datestamp
+- **Giveth**: DATE object
 
 ## Month Helpers
 

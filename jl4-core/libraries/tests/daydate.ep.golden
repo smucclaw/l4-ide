@@ -58,7 +58,7 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A DATE
 `Date` AKA `Days to date` MEANS
-    `Days to date` (Day day month year)
+    Date (Day day month year)
 
 GIVEN days  IS A NUMBER
 GIVETH A DATE
@@ -117,52 +117,53 @@ GIVEN day   IS A NUMBER
       year  IS A NUMBER
 GIVETH A NUMBER
 `Day` AKA `Date to days` MEANS
-    Month month year PLUS (day MINUS 1)
+    IF    month LESS THAN 1
+    THEN  d PLUS (`Years to days` y                 -- negative month handling
+            PLUS `Months since year start to days`
+                    (month PLUS (`Months in a year` TIMES n))
+                    y)
+    ELSE  d PLUS (`Years to days` year
+            PLUS `Months since year start to days` month year)
+    WHERE
+        d MEANS FLOOR day MINUS 1
+        m MEANS FLOOR month MINUS 1
+        n MEANS FLOOR (1 MINUS (m DIVIDED BY `Months in a year`))
+        y MEANS FLOOR year MINUS n
 
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
-`Day`AKA `Date to days` MEANS
+`Day` AKA `Date to days` MEANS
     days
 
 GIVEN year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `Year` MEANS
     Month 1 year
 
 GIVEN date  IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `Year` MEANS
     Year (date's year)
 
 GIVEN month IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `Month` MEANS
-    IF    month LESS THAN 1
-    THEN  `Years to days` y                 -- negative month handling
-              PLUS `Months since year start to days`
-                      (month PLUS (`Months in a year` TIMES n))
-                      y
-    ELSE  `Years to days` year
-              PLUS `Months since year start to days` month year
-    WHERE
-        m MEANS FLOOR month MINUS 1
-        n MEANS FLOOR (1 MINUS (m DIVIDED BY `Months in a year`))
-        y MEANS FLOOR year MINUS n
+    Date (Day 1 month year)
             
 GIVEN days  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `Month` MEANS
-    Month (`Days to date` days)
+    Month (Date days)
 
 GIVEN date  IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `Month` MEANS
     Month (date's month) (date's year)
 
 GIVEN week  IS A NUMBER
       year  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `Week` MEANS
     Year year
         PLUS (3 MINUS `Days in a week`) MINUS o
@@ -174,16 +175,16 @@ GIVETH A NUMBER
                 MODULO `Days in a week`
 
 GIVEN days  IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `Week` MEANS
     IF   w EQUALS 0
-    THEN days MINUS (`Days in a week` MINUS 1)
-    ELSE days MINUS w PLUS 1
+    THEN Date (days MINUS (`Days in a week` MINUS 1))
+    ELSE Date (days MINUS w PLUS 1)
     WHERE
         w MEANS `Weekday of` days
 
 GIVEN date  IS A DATE
-GIVETH A NUMBER
+GIVETH A DATE
 `Week` MEANS
     Week (Day date)
 
@@ -268,7 +269,7 @@ GIVETH A DATE
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
 `Month of the year` MEANS 
-    `Month of the year` (`Days to date` days)
+    `Month of the year` (Date days)
 
 GIVEN date  IS A DATE
 GIVETH A NUMBER
@@ -304,7 +305,7 @@ GIVETH A NUMBER
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
 `Months since year start to days` MEANS
-    `Months since year start to days` (`Days to date` days)
+    `Months since year start to days` (Date days)
 
 GIVEN date  IS A DATE
 GIVETH A NUMBER
@@ -336,7 +337,7 @@ GIVETH A NUMBER
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
 `Days in month` MEANS
-    `Days in month` (`Days to date` days)
+    `Days in month` (Date days)
 
 GIVEN date  IS A DATE
 GIVETH A NUMBER
@@ -396,7 +397,7 @@ GIVETH A NUMBER
 GIVEN days   IS A NUMBER
 GIVETH A NUMBER
 `Weekday of 1st day of month` MEANS
-    `Weekday of 1st day of month` (`Days to date` days)
+    `Weekday of 1st day of month` (Date days)
 
 GIVEN date   IS A DATE
 GIVETH A NUMBER
@@ -421,7 +422,7 @@ GIVETH A NUMBER
 GIVEN days  IS A NUMBER
 GIVETH A NUMBER
 `Week of the year` MEANS 
-    `Week of the year` (`Days to date` days)
+    `Week of the year` (Date days)
 
 GIVEN date  IS A DATE
 GIVETH A NUMBER
@@ -512,96 +513,50 @@ GIVETH A BOOLEAN
 
 
 GIVEN day   IS A NUMBER
-      days  IS A NUMBER
-GIVETH A NUMBER
-`on day` MEANS
-    days PLUS day MINUS 1
-
-GIVEN day   IS A NUMBER
       date  IS A DATE
 GIVETH A DATE
 `on day` MEANS
-    Date (date PLUS day MINUS 1)
-
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the day after` MEANS
-    days PLUS 1
+    date PLUS day MINUS 1
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the day after` MEANS
-    Date (date's day PLUS 1) (date's month) (date's year)
-
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the day before` MEANS
-    days MINUS 1
+    date PLUS 1
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the day before` MEANS
-    Date (date's day MINUS 1) (date's month) (date's year)
+    date MINUS 1
 
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
+GIVEN date   IS A DATE
+GIVETH A DATE
 `the week after` MEANS
     IF    d GREATER THAN `Days in a week`
-    THEN  days PLUS d MINUS `Days in a week`
-    ELSE  days PLUS d 
+    THEN  Date (days PLUS d MINUS `Days in a week`)
+    ELSE  Date (days PLUS d)
     WHERE
+        days MEANS Day date
         d MEANS `Days in a week` MINUS (`Weekday of` days) PLUS Monday
 
 GIVEN date   IS A DATE
 GIVETH A DATE
-`the week after` MEANS
-    Date (`the week after` (Day date))
-
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
 `the week before` MEANS
-    `the week after` days
-        MINUS (`Days in a week` TIMES 2)
-
-GIVEN date   IS A DATE
-GIVETH A DATE
-`the week before` MEANS
-    Date (`the week before` (Day date))
-
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the month after` MEANS
-    Day (`the month after` (`Days to date` days))
+    `the week after` date MINUS (`Days in a week` TIMES 2)
 
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the month after` MEANS
     Date 1 (date's month PLUS 1) (date's year)
 
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the month before` MEANS
-    Day (`the month before` (`Days to date` days))
-
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the month before` MEANS
     Date 1 (date's month MINUS 1) (date's year)
 
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the year after` MEANS
-    Day (`the year after` (`Days to date` days))
-
 GIVEN date   IS A DATE
 GIVETH A DATE
 `the year after` MEANS
     Date 1 1 (date's year PLUS 1)
-
-GIVEN days   IS A NUMBER
-GIVETH A NUMBER
-`the year before` MEANS
-    Day (`the year before` (`Days to date` days))
 
 GIVEN date   IS A DATE
 GIVETH A DATE
@@ -611,75 +566,21 @@ GIVETH A DATE
 
 §§ `Comperators`
 
-
-GIVEN day1   IS A NUMBER
-      day2   IS A NUMBER
-GIVETH A NUMBER
+GIVEN date1  IS A DATE
+      date2  IS A DATE
+GIVETH A DATE
 `the earlier of` MEANS
-    IF    day1 LESS THAN day2
-    THEN  day1
-    ELSE  day2
+    IF   date1 AT MOST date2
+    THEN date1
+    ELSE date2
 
 GIVEN date1  IS A DATE
       date2  IS A DATE
-GIVETH A NUMBER
-`the earlier of` MEANS
-    `the earlier of` day1 day2
-    WHERE
-        day1 MEANS Day date1
-        day2 MEANS Day date2
-
-GIVEN date1  IS A DATE
-      day2   IS A NUMBER
-GIVETH A NUMBER
-`the earlier of` MEANS
-    `the earlier of` day1 day2
-    WHERE
-        day1 MEANS Day date1
-
-GIVEN day1   IS A NUMBER
-      date2  IS A DATE
-GIVETH A NUMBER
-`the earlier of` MEANS
-    `the earlier of` day1 day2
-    WHERE
-        day2 MEANS Day date2
-
-GIVEN day1   IS A NUMBER
-      day2   IS A NUMBER
-GIVETH A NUMBER
+GIVETH A DATE
 `the later of` MEANS
-    IF    day1 LESS THAN day2
-    THEN  day2
-    ELSE  day1
-
-GIVEN date1  IS A DATE
-      date2  IS A DATE
-GIVETH A NUMBER
-`the later of` MEANS
-    `the later of` day1 day2
-    WHERE
-        day1 MEANS Day date1
-        day2 MEANS Day date2
-
-
-GIVEN date1  IS A DATE
-      day2   IS A NUMBER
-GIVETH A NUMBER
-`the later of` MEANS
-    `the later of` day1 day2
-    WHERE
-        day1 MEANS Day date1
-
-GIVEN day1   IS A NUMBER
-      date2  IS A DATE
-GIVETH A NUMBER
-`the later of` MEANS
-    `the later of` day1 day2
-    WHERE
-        day2 MEANS Day date2
-
-
+    IF   date1 GREATER THAN date2
+    THEN date1
+    ELSE date2
 
 
 §§ `Stringify for months and weekdays`
@@ -709,7 +610,7 @@ GIVETH A STRING
         d MEANS FLOOR days
         m MEANS IF    d GREATER THAN 0 AND d LESS THAN 13
                 THEN  d MINUS 1
-                ELSE  FLOOR ((`Days to date` d)'s month MINUS 1)
+                ELSE  FLOOR ((Date d)'s month MINUS 1)
 
 GIVEN days   IS A NUMBER
 GIVETH A STRING
@@ -734,98 +635,6 @@ GIVETH A STRING
 §§ `Native overloads`
 
 GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__EQUALS__` MEANS
-    Day a EQUALS b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__GEQ__` MEANS
-    Day a AT LEAST b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__LEQ__` MEANS
-    Day a AT MOST b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__GT__` AKA `is after` MEANS
-    Day a GREATER THAN b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A BOOLEAN
-`__LT__` AKA `is before` MEANS
-    Day a LESS THAN b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A NUMBER
-`__PLUS__` MEANS
-    Day a PLUS b
-
-GIVEN a IS A DATE
-      b IS A NUMBER
-GIVETH A NUMBER
-`__MINUS__` MEANS
-    Day a MINUS b
-
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A BOOLEAN
-`__EQUALS__` MEANS
-    a EQUALS Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A BOOLEAN
-`__GEQ__` MEANS
-    a AT LEAST Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A BOOLEAN
-`__LEQ__` MEANS
-    a AT MOST Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A BOOLEAN
-`__GT__` AKA `is after` MEANS
-    a GREATER THAN Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A BOOLEAN
-`__LT__` AKA `is before` MEANS
-    a LESS THAN Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A NUMBER
-`__PLUS__` MEANS
-    a PLUS Day b
-
-GIVEN a IS A NUMBER
-      b IS A DATE
-GIVETH A NUMBER
-`__MINUS__` MEANS
-    a MINUS Day b
-
-
-GIVEN a IS A DATE
-      b IS A DATE
-GIVETH A BOOLEAN
-`__EQUALS__` MEANS
-    Day a EQUALS Day b
-
-GIVEN a IS A DATE
       b IS A DATE
 GIVETH A BOOLEAN
 `__GEQ__` MEANS
@@ -848,3 +657,39 @@ GIVEN a IS A DATE
 GIVETH A BOOLEAN
 `__LT__` AKA `is before` MEANS
     Day a LESS THAN Day b
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A DATE
+`__PLUS__` MEANS
+    Date (Day a PLUS b)
+
+GIVEN a IS A DATE
+      b IS A NUMBER
+GIVETH A DATE
+`__MINUS__` MEANS
+    Date (Day a MINUS b)
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A DATE
+`__PLUS__` MEANS
+    Date (a PLUS Day b)
+
+GIVEN a IS A NUMBER
+      b IS A DATE
+GIVETH A DATE
+`__MINUS__` MEANS
+    Date (a MINUS Day b)
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A NUMBER
+`__PLUS__` MEANS
+    Day a PLUS Day b
+
+GIVEN a IS A DATE
+      b IS A DATE
+GIVETH A NUMBER
+`__MINUS__` MEANS
+    Day a MINUS Day b
