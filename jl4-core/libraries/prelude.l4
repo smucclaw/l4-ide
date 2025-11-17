@@ -654,8 +654,10 @@ GIVETH A TYPE
 DECLARE Dictionary k v
     HAS contents IS A LIST OF PAIR OF k, v
 
-GIVEN  k IS A STRING
-       v IS A LIST OF NUMBER
+GIVEN  a IS A TYPE
+       b IS A TYPE
+       k IS AN a
+       v IS A  b 
 singleToDict MEANS  Dictionary WITH contents IS LIST (PAIR OF k, v)
 
 GIVEN k IS A TYPE
