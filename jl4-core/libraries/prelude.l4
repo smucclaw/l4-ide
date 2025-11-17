@@ -647,3 +647,27 @@ GIVETH A BOOLEAN
             WHEN NOTHING THEN FALSE
             WHEN JUST y THEN (x GREATER THAN y)
 
+-- a simple implementation of a Dictionary type
+GIVEN k IS A TYPE
+      v IS A TYPE
+GIVETH A TYPE
+DECLARE Dictionary k v
+    HAS contents IS A LIST OF PAIR OF k, v
+
+GIVEN  k IS A STRING
+       v IS A LIST OF NUMBER
+singleToDict MEANS  Dictionary WITH contents IS LIST (PAIR OF k, v)
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pair IS A PAIR OF k, v
+pairToDict MEANS  Dictionary WITH contents IS LIST pair
+
+GIVEN k IS A TYPE
+      v IS A TYPE
+      pairs IS A LIST OF PAIR OF k, v
+listToDict MEANS  Dictionary WITH contents IS pairs
+
+fromList MEANS listToDict
+
+
