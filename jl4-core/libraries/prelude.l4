@@ -514,7 +514,7 @@ GIVEN
   c    IS A TYPE
   f    IS A FUNCTION FROM b TO c
   list IS A LIST OF PAIR OF a, b
-GIVETH A LIST OF PAIR OF a, b
+GIVETH A LIST OF PAIR OF a, c
 fmap f list MEANS
   CONSIDER list
   WHEN EMPTY                       THEN EMPTY
