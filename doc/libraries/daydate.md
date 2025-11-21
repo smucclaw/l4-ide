@@ -6,7 +6,6 @@ A week begins on Monday.
 
 See examples or play around with it in our [online-editor](https://jl4.legalese.com/?id=6f9b3d0a-9afa-4c2d-9360-84a98e3bdb35).
 
-
 ### General use of the DATE type and constructing dates
 
 The type DATE is used throughout the library. It is important to not directly use the uppercase DATE type constructor but to use the following syntax to create DATE objects safely and to make sure the date actually exists in the calendar.
@@ -36,7 +35,6 @@ IMPORT daydate
 `The party` MEANS "Party name"    -- Boilerplate
 `act`       MEANS "Do something"
 ```
-
 
 Here are some example on how to use more advanced functions:
 
@@ -88,7 +86,6 @@ Following ISO standard with January 1, 0000 being a Sunday:
 | `October`   | `Oct` | 10    |
 | `November`  | `Nov` | 11    |
 | `December`  | `Dec` | 12    |
-
 
 ## Date Constructors
 
@@ -605,7 +602,7 @@ The library includes native operator overloads for DATE objects:
 ### Comparison Operators
 
 - `__GEQ__` (>=): Compares if first date is greater than or equal to second
-- `__LEQ__` (<=): Compares if first date is less than or equal to second  
+- `__LEQ__` (<=): Compares if first date is less than or equal to second
 - `__GT__` AKA `is after`: Compares if first date is after second
 - `__LT__` AKA `is before`: Compares if first date is before second
 
@@ -617,6 +614,7 @@ The library includes native operator overloads for DATE objects:
 - `__MINUS__`: Subtracts a DATE from a number (NUMBER - DATE)
 
 These allow natural operations like:
+
 ```l4
 Jan 1 2025 PLUS 30        -- Adds 30 days
 Feb 1 2025 MINUS Jan 1 2025 -- Returns difference in days
