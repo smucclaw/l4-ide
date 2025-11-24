@@ -742,7 +742,7 @@ expectInteger op n = do
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
   url <- expectString urlVal
-  headers <- expectString headersVal  -- For now, headers is just a string; we can parse it later
+  _headers <- expectString headersVal  -- For now, headers is just a string; TODO: parse and use headers
   body <- expectString bodyVal
   let (url', options) = Text.breakOn "?" url
       (protocol, _) = Text.breakOn "://" url'
