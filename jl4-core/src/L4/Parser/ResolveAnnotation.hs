@@ -431,6 +431,7 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
     Event ann e -> Event ann <$> addNlg e
+    Fetch ann e -> Fetch ann <$> addNlg e
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
   addNlg (MkObligation ann' party event deadline followup lest) = do

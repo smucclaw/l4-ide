@@ -34,6 +34,7 @@ mkBuiltins
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
   , "waitUntil" `rename`  "WAIT UNTIL"
+  , "fetch" `rename` "FETCH"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -94,6 +95,9 @@ ceilingBuiltin = fun_ [number] number
 
 floorBuiltin :: Type' Resolved
 floorBuiltin = fun_ [number] number
+
+fetchBuiltin :: Type' Resolved
+fetchBuiltin = fun_ [string] string
 
 -- Basic Arithmetic
 
@@ -221,6 +225,10 @@ floorInfo :: CheckEntity
 floorInfo =
   KnownTerm floorBuiltin Computable
 
+fetchInfo :: CheckEntity
+fetchInfo =
+  KnownTerm fetchBuiltin Computable
+
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -332,6 +340,7 @@ initialEnvironment =
     , (rawName roundName,        [roundUnique     ])
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
+    , (rawName fetchName,        [fetchUnique     ])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -370,6 +379,7 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

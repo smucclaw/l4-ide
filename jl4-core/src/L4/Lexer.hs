@@ -191,6 +191,7 @@ data TKeywords
   | TKAll
   | TKAka
   | TKImport
+  | TKFetch
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -261,6 +262,7 @@ keywords = Map.fromList
   , ("ALL"        , TKAll        )
   , ("AKA"        , TKAka        )
   , ("IMPORT"     , TKImport     )
+  , ("FETCH"      , TKFetch      )
   ]
 
 data TOperators

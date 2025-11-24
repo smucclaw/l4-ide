@@ -33,6 +33,10 @@ import qualified Base.Text as Text
 import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
+import           Network.HTTP.Req ((=:))
+import qualified Network.HTTP.Req as Req
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
@@ -104,6 +108,7 @@ data Machine a where
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
+  LiftIO :: IO a -> Machine a
   Bind :: Machine a -> (a -> Machine b) -> Machine b
 
 data Allocation t where
@@ -120,6 +125,9 @@ instance Applicative Machine where
 
 instance Monad Machine where
   (>>=) = Bind
+
+instance MonadIO Machine where
+  liftIO = LiftIO
 
 pattern Allocate :: Expr Resolved -> (Reference -> Environment) -> Machine (Reference, Environment)
 pattern Allocate expr k = Allocate' (Recursive expr k)
@@ -264,6 +272,9 @@ forwardExpr env = \ case
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
+  Fetch _ann e -> do
+    PushFrame (UnaryBuiltin0 UnaryFetch)
+    ForwardExpr env e
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -703,6 +714,11 @@ expectNumber = \ case
   ValNumber f -> pure f
   _ -> InternalException (RuntimeTypeError "Expected number.")
 
+expectString :: WHNF -> Machine Text
+expectString = \ case
+  ValString f -> pure f
+  _ -> InternalException (RuntimeTypeError "Expected string.")
+
 expectInteger :: BinOp -> Rational -> Machine Integer
 expectInteger op n = do
   case isInteger n of
@@ -711,13 +727,32 @@ expectInteger op n = do
 
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
 runBuiltin es op = do
-  val :: Rational <- expectNumber es
-  Backward case op of
-    UnaryIsInteger -> valBool $ isJust $ isInteger val
-    UnaryRound -> valInt $ round val
-    UnaryCeiling -> valInt $ ceiling val
-    UnaryFloor -> valInt $ floor val
-    UnaryPercent -> ValNumber (val / 100)
+  case op of
+    UnaryFetch -> do
+      url <- expectString es
+      let (url', options) = Text.breakOn "?" url
+          (protocol, _) = Text.breakOn "://" url'
+      case protocol of
+        "https" -> do
+          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+              reqBase = Req.https hostname
+              reqWithPath = foldl (Req./:) reqBase pathSegments
+              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+              req_options =
+                mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+            Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
+          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+        _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+    _ -> do
+      val :: Rational <- expectNumber es
+      Backward case op of
+        UnaryIsInteger -> valBool $ isJust $ isInteger val
+        UnaryRound -> valInt $ round val
+        UnaryCeiling -> valInt $ ceiling val
+        UnaryFloor -> valInt $ floor val
+        UnaryPercent -> ValNumber (val / 100)
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
@@ -1222,6 +1257,7 @@ initialEnvironment = do
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
+  fetchRef <- AllocateValue (ValUnaryBuiltinFun UnaryFetch)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -1251,6 +1287,7 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
+      , (TypeCheck.fetchUnique, fetchRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)

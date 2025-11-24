@@ -1155,6 +1155,9 @@ inferExpr' g =
     Percent ann e -> do
       e' <- checkExpr ExpectPercentArgumentContext e number
       pure (Percent ann e', number)
+    Fetch ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName fetchName) g ann e
+      inferExpr' dsFun
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do

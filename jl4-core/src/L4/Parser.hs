@@ -1019,6 +1019,7 @@ baseExpr' :: Parser (Expr Name)
 baseExpr' =
       try projection
   <|> negation
+  <|> fetchExpr
   <|> ifthenelse
   <|> multiWayIf
   <|> try event
@@ -1133,6 +1134,14 @@ namedExpr current =
       <*  annoLexeme separator
       <*  optional article
       <*> annoHole   (indentedExpr current)
+
+fetchExpr :: Parser (Expr Name)
+fetchExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Fetch emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKFetch)
+      <*> annoHole (indentedExpr current)
 
 negation :: Parser (Expr Name)
 negation = do

@@ -51,6 +51,7 @@ carameliseExpr = carameliseNode >>> \ case
   List       ann es -> List ann (fmap carameliseExpr es)
   Where      ann e ds -> Where ann (carameliseExpr e) (fmap carameliseLocalDecl ds)
   Event      ann ev -> Event ann (carameliseEvent ev)
+  Fetch      ann e -> Fetch ann (carameliseExpr e)
 
 carameliseLocalDecl :: HasName n => LocalDecl n -> LocalDecl n
 carameliseLocalDecl = \ case

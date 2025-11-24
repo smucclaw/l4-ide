@@ -171,6 +171,8 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ Event ann (MkEvent ann' e' e1' e2' atFirst)
+    Fetch ann e ->
+      Fetch ann <$> nlgExpr e
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case

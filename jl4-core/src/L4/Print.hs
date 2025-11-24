@@ -320,6 +320,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         , "DOES" <+> printWithLayout action
         , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
         ]
+    Fetch _ e ->
+      "FETCH" <+> printWithLayout e
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of

@@ -72,6 +72,7 @@ data UnaryBuiltinFun
   | UnaryCeiling
   | UnaryFloor
   | UnaryPercent
+  | UnaryFetch
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -106,3 +107,4 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
+  rnf UnaryFetch = ()

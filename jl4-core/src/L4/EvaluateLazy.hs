@@ -160,6 +160,7 @@ interpMachine = \ case
     conf <- lookupAndUpdateRef rf (k tid)
     interpMachine $ pure conf
   Bind act k -> interpMachine act >>= interpMachine . k
+  LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
     traceEval Push
     pushFrame (interpMachine . Exception) f

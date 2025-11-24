@@ -58,6 +58,7 @@ library
     tree-diff,
     vector,
     template-haskell,
+    req,
 
   autogen-modules:
     Paths_jl4_core

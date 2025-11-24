@@ -247,6 +247,7 @@ instance Linearize (Expr Resolved) where
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
       ]
     Event _ ev -> lin ev
+    Fetch _ e -> hcat [ text "fetch", lin e ]
 
 instance Linearize (Event Resolved) where
   linearize (MkEvent _ p a t _) = hcat
