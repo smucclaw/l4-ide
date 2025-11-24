@@ -1183,32 +1183,6 @@ waitUntilVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
       ]
     )
 
--- | Create a curried POST function value that takes 3 string arguments: url, headers, body
-postVal :: Machine (Value a)
-postVal = do
-  let mkName = MkName emptyAnno . NormalName
-      (url, headers, body) = (mkName "url", mkName "headers", mkName "body")
-  urlDef <- def url
-  headersDef <- def headers
-  bodyDef <- def body
-  urlRef <- ref url urlDef
-  headersRef <- ref headers headersDef
-  bodyRef <- ref body bodyDef
-
-  -- The innermost closure that actually performs the POST
-  let bodyExpr = Post emptyAnno (Var emptyAnno urlRef) (Var emptyAnno headersRef) (Var emptyAnno bodyRef)
-
-  -- Build curried closures: url -> (headers -> (body -> result))
-  let headersBody closure = ValClosure
-        (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno bodyDef Nothing])
-        bodyExpr
-        (Map.fromList [(urlDef ^. unique, urlRef), (headersDef ^. unique, headersRef)])
-
-  pure $ ValClosure
-    (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno urlDef Nothing])
-    (App emptyAnno (App emptyAnno (Var emptyAnno urlRef) []) [])
-    emptyEnvironment
-
 pattern ValNeverMatchesParty, ValNeverMatchesAct :: Value a
 pattern ValNeverMatchesParty <- (\case ValConstructor r [] -> r `sameResolved` TypeCheck.neverMatchesPartyRef; _ -> False -> True)
   where ValNeverMatchesParty = ValConstructor TypeCheck.neverMatchesPartyRef []
