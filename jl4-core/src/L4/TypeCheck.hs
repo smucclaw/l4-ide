@@ -1976,22 +1976,6 @@ desugarUnaryOpToFunction name g ann e  = do
         , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
         }
 
-desugarTernaryOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Expr Name -> Expr Name -> Check (Expr Name)
-desugarTernaryOpToFunction name g ann e1 e2 e3 = do
-  args1 <- rewriteUnaryOpAnno g e1
-  args2 <- rewriteUnaryOpAnno g e2
-  args3 <- rewriteUnaryOpAnno g e3
-  let args = args1 ++ args2 ++ args3
-  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
-  where
-  annoNoFunName a as =
-    fixAnnoSrcRange
-      Anno
-        { extra = a.extra
-        , range = a.range
-        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
-        }
-
 -- | Rewrite the 'Anno' of the given arguments @'NonEmpty' ('Expr' 'Name)'@ to
 -- include the concrete syntax nodes of the 'Anno' in the @'Expr' 'Name'@.
 --
@@ -2296,6 +2280,12 @@ prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
 prettyTypeMismatch ExpectPercentArgumentContext expected given =
   standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostUrlContext expected given =
+  standardTypeMismatch [ "The URL argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostHeadersContext expected given =
+  standardTypeMismatch [ "The headers argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostBodyContext expected given =
+  standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =
