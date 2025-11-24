@@ -1020,6 +1020,7 @@ baseExpr' =
       try projection
   <|> negation
   <|> fetchExpr
+  <|> postExpr
   <|> ifthenelse
   <|> multiWayIf
   <|> try event
@@ -1141,6 +1142,16 @@ fetchExpr = do
   attachAnno $
     Fetch emptyAnno
       <$  annoLexeme (spacedKeyword_ TKFetch)
+      <*> annoHole (indentedExpr current)
+
+postExpr :: Parser (Expr Name)
+postExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Post emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKPost)
+      <*> annoHole (indentedExpr current)
+      <*> annoHole (indentedExpr current)
       <*> annoHole (indentedExpr current)
 
 negation :: Parser (Expr Name)

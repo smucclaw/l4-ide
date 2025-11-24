@@ -227,6 +227,7 @@ data Expr n =
   | Where      Anno (Expr n) [LocalDecl n]
   | Event      Anno (Event n)
   | Fetch      Anno (Expr n)
+  | Post       Anno (Expr n) (Expr n) (Expr n)  -- url, headers, body
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

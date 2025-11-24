@@ -50,6 +50,9 @@ import L4.Utils.Ratio
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
   | BinOp2 BinOp WHNF {- -}
+  | Post1 {- -} (Expr Resolved) (Expr Resolved) Environment
+  | Post2 WHNF {- -} (Expr Resolved) Environment
+  | Post3 WHNF WHNF {- -}
   | App1 {- -} [Reference]
   | IfThenElse1 {- -} (Expr Resolved) (Expr Resolved) Environment
   | ConsiderWhen1 Reference {- -} (Expr Resolved) [Branch Resolved] Environment
@@ -275,6 +278,9 @@ forwardExpr env = \ case
   Fetch _ann e -> do
     PushFrame (UnaryBuiltin0 UnaryFetch)
     ForwardExpr env e
+  Post _ann e1 e2 e3 -> do
+    PushFrame (Post1 e2 e3 env)
+    ForwardExpr env e1
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -284,6 +290,14 @@ backward val = WithPoppedFrame $ \ case
     ForwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
+  Just (Post1 e2 e3 env) -> do
+    PushFrame (Post2 val e3 env)
+    ForwardExpr env e2
+  Just (Post2 val1 e3 env) -> do
+    PushFrame (Post3 val1 val)
+    ForwardExpr env e3
+  Just (Post3 val1 val2) -> do
+    runPost val1 val2 val
   Just (BinBuiltin1 binOp r) -> do
     PushFrame (BinBuiltin2 binOp val)
     EvalRef r
@@ -725,6 +739,27 @@ expectInteger op n = do
     Nothing -> UserException (NotAnInteger op n)
     Just i -> pure i
 
+runPost :: WHNF -> WHNF -> WHNF -> Machine Config
+runPost urlVal headersVal bodyVal = do
+  url <- expectString urlVal
+  headers <- expectString headersVal  -- For now, headers is just a string; we can parse it later
+  body <- expectString bodyVal
+  let (url', options) = Text.breakOn "?" url
+      (protocol, _) = Text.breakOn "://" url'
+  case protocol of
+    "https" -> do
+      let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+          pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+          reqBase = Req.https hostname
+          reqWithPath = foldl (Req./:) reqBase pathSegments
+          params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+          req_options =
+            mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+      res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+        Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
+      Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+    _ -> InternalException (RuntimeTypeError "POST only supports https")
+
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
 runBuiltin es op = do
   case op of
@@ -1147,6 +1182,32 @@ waitUntilVal eventcRef neverMatchesPartyRef neverMatchesActRef = do
       , (TypeCheck.neverMatchesActUnique, neverMatchesActRef)
       ]
     )
+
+-- | Create a curried POST function value that takes 3 string arguments: url, headers, body
+postVal :: Machine (Value a)
+postVal = do
+  let mkName = MkName emptyAnno . NormalName
+      (url, headers, body) = (mkName "url", mkName "headers", mkName "body")
+  urlDef <- def url
+  headersDef <- def headers
+  bodyDef <- def body
+  urlRef <- ref url urlDef
+  headersRef <- ref headers headersDef
+  bodyRef <- ref body bodyDef
+
+  -- The innermost closure that actually performs the POST
+  let bodyExpr = Post emptyAnno (Var emptyAnno urlRef) (Var emptyAnno headersRef) (Var emptyAnno bodyRef)
+
+  -- Build curried closures: url -> (headers -> (body -> result))
+  let headersBody closure = ValClosure
+        (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno bodyDef Nothing])
+        bodyExpr
+        (Map.fromList [(urlDef ^. unique, urlRef), (headersDef ^. unique, headersRef)])
+
+  pure $ ValClosure
+    (MkGivenSig emptyAnno [MkOptionallyTypedName emptyAnno urlDef Nothing])
+    (App emptyAnno (App emptyAnno (Var emptyAnno urlRef) []) [])
+    emptyEnvironment
 
 pattern ValNeverMatchesParty, ValNeverMatchesAct :: Value a
 pattern ValNeverMatchesParty <- (\case ValConstructor r [] -> r `sameResolved` TypeCheck.neverMatchesPartyRef; _ -> False -> True)

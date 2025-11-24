@@ -248,6 +248,7 @@ instance Linearize (Expr Resolved) where
       ]
     Event _ ev -> lin ev
     Fetch _ e -> hcat [ text "fetch", lin e ]
+    Post _ e1 e2 e3 -> hcat [ text "post", lin e1, lin e2, lin e3 ]
 
 instance Linearize (Event Resolved) where
   linearize (MkEvent _ p a t _) = hcat

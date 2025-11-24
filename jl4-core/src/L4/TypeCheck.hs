@@ -1158,6 +1158,11 @@ inferExpr' g =
     Fetch ann e -> do
       dsFun <- desugarUnaryOpToFunction (rawName fetchName) g ann e
       inferExpr' dsFun
+    Post ann e1 e2 e3 -> do
+      e1' <- checkExpr ExpectPostUrlContext e1 string
+      e2' <- checkExpr ExpectPostHeadersContext e2 string
+      e3' <- checkExpr ExpectPostBodyContext e3 string
+      pure (Post ann e1' e2' e3', string)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -1961,6 +1966,22 @@ desugarBinOpToFunction name g ann e1 e2 = do
 desugarUnaryOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Check (Expr Name)
 desugarUnaryOpToFunction name g ann e  = do
   args <- rewriteUnaryOpAnno g e
+  pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
+  where
+  annoNoFunName a as =
+    fixAnnoSrcRange
+      Anno
+        { extra = a.extra
+        , range = a.range
+        , payload = [mkHoleWithSrcRangeHint Nothing, mkHoleWithSrcRange as]
+        }
+
+desugarTernaryOpToFunction :: RawName -> Expr Name -> Anno -> Expr Name -> Expr Name -> Expr Name -> Check (Expr Name)
+desugarTernaryOpToFunction name g ann e1 e2 e3 = do
+  args1 <- rewriteUnaryOpAnno g e1
+  args2 <- rewriteUnaryOpAnno g e2
+  args3 <- rewriteUnaryOpAnno g e3
+  let args = args1 ++ args2 ++ args3
   pure $ App (annoNoFunName ann args) (MkName emptyAnno name) args
   where
   annoNoFunName a as =

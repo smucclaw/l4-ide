@@ -75,6 +75,10 @@ data UnaryBuiltinFun
   | UnaryFetch
   deriving stock (Show)
 
+data TernaryBuiltinFun
+  = TernaryPost
+  deriving stock (Show)
+
 -- | This is a non-standard instance because environments can be recursive, hence we must
 -- not actually force the environments ...
 instance NFData a => NFData (Value a) where
@@ -108,3 +112,7 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
   rnf UnaryFetch = ()
+
+instance NFData TernaryBuiltinFun where
+  rnf :: TernaryBuiltinFun -> ()
+  rnf TernaryPost = ()

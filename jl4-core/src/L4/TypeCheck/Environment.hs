@@ -35,6 +35,7 @@ mkBuiltins
   , "round" `rename` "ROUND"
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
+  , "post" `rename` "POST"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -98,6 +99,9 @@ floorBuiltin = fun_ [number] number
 
 fetchBuiltin :: Type' Resolved
 fetchBuiltin = fun_ [string] string
+
+postBuiltin :: Type' Resolved
+postBuiltin = fun_ [string, string, string] string
 
 -- Basic Arithmetic
 
@@ -228,6 +232,10 @@ floorInfo =
 fetchInfo :: CheckEntity
 fetchInfo =
   KnownTerm fetchBuiltin Computable
+
+postInfo :: CheckEntity
+postInfo =
+  KnownTerm postBuiltin Computable
 
 -- Basic Arithmetic
 
@@ -380,6 +388,7 @@ initialEntityInfo =
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
+    , (postUnique,         (postName,         postInfo        ))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))
