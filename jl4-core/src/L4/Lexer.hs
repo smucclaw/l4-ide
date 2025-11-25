@@ -193,6 +193,7 @@ data TKeywords
   | TKImport
   | TKFetch
   | TKPost
+  | TKEnv
   | TKConcat
   | TKAs
   deriving stock (Eq, Generic, Ord, Show)
@@ -267,6 +268,7 @@ keywords = Map.fromList
   , ("IMPORT"     , TKImport     )
   , ("FETCH"      , TKFetch      )
   , ("POST"       , TKPost       )
+  , ("ENV"        , TKEnv        )
   , ("CONCAT"     , TKConcat     )
   , ("AS"         , TKAs         )
   ]

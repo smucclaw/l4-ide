@@ -432,6 +432,7 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       pure $ Where ann e' lcl'
     Event ann e -> Event ann <$> addNlg e
     Fetch ann e -> Fetch ann <$> addNlg e
+    Env ann e -> Env ann <$> addNlg e
     Post ann e1 e2 e3 -> do
       e1' <- addNlg e1
       e2' <- addNlg e2

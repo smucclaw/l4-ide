@@ -38,6 +38,7 @@ mkBuiltins
   , "round" `rename` "ROUND"
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
+  , "env" `rename` "ENV"
   , "post" `rename` "POST"
   , "jsonEncode" `rename` "JSONENCODE"
   , "jsonDecode" `rename` "JSONDECODE"
@@ -109,6 +110,9 @@ floorBuiltin = fun_ [number] number
 
 fetchBuiltin :: Type' Resolved
 fetchBuiltin = fun_ [string] string
+
+envBuiltin :: Type' Resolved
+envBuiltin = fun_ [string] (maybeType string)
 
 postBuiltin :: Type' Resolved
 postBuiltin = fun_ [string, string, string] string
@@ -265,6 +269,10 @@ fetchInfo :: CheckEntity
 fetchInfo =
   KnownTerm fetchBuiltin Computable
 
+envInfo :: CheckEntity
+envInfo =
+  KnownTerm envBuiltin Computable
+
 postInfo :: CheckEntity
 postInfo =
   KnownTerm postBuiltin Computable
@@ -392,6 +400,7 @@ initialEnvironment =
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
     , (rawName fetchName,        [fetchUnique     ])
+    , (rawName envName,          [envUnique       ])
     , (rawName jsonEncodeName,   [jsonEncodeUnique])
     , (rawName jsonDecodeName,   [jsonDecodeUnique])
     , (rawName plusName,         [plusUnique      ])
@@ -436,6 +445,7 @@ initialEntityInfo =
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
+    , (envUnique,          (envName,          envInfo         ))
     , (postUnique,         (postName,         postInfo        ))
     , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
     , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))

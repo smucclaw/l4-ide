@@ -1159,6 +1159,9 @@ inferExpr' g =
     Fetch ann e -> do
       dsFun <- desugarUnaryOpToFunction (rawName fetchName) g ann e
       inferExpr' dsFun
+    Env ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName envName) g ann e
+      inferExpr' dsFun
     Post ann e1 e2 e3 -> do
       e1' <- checkExpr ExpectPostUrlContext e1 string
       e2' <- checkExpr ExpectPostHeadersContext e2 string

@@ -42,7 +42,8 @@ import L4.Annotation
 import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
-import L4.Syntax hiding (app, forall', fun)
+import L4.Syntax hiding (app, forall', fun, Env)
+import qualified L4.Syntax
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 import L4.Parser.Anno
@@ -1032,6 +1033,7 @@ baseExpr' =
       try projection
   <|> negation
   <|> fetchExpr
+  <|> envExpr
   <|> postExpr
   <|> concatExpr
   <|> ifthenelse
@@ -1163,6 +1165,14 @@ fetchExpr = do
   attachAnno $
     Fetch emptyAnno
       <$  annoLexeme (spacedKeyword_ TKFetch)
+      <*> annoHole (indentedExpr current)
+
+envExpr :: Parser (Expr Name)
+envExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    L4.Syntax.Env emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKEnv)
       <*> annoHole (indentedExpr current)
 
 postExpr :: Parser (Expr Name)

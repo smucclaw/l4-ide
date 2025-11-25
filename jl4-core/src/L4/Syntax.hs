@@ -227,6 +227,7 @@ data Expr n =
   | Where      Anno (Expr n) [LocalDecl n]
   | Event      Anno (Event n)
   | Fetch      Anno (Expr n)
+  | Env        Anno (Expr n)  -- environment variable name
   | Post       Anno (Expr n) (Expr n) (Expr n)  -- url, headers, body
   | Concat     Anno [Expr n] -- string concatenation
   | AsString   Anno (Expr n) -- type coercion to string

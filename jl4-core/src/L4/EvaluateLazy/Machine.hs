@@ -33,6 +33,7 @@ import qualified Base.Text as Text
 import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
+import System.Environment (lookupEnv)
 import           Network.HTTP.Req ((=:))
 import qualified Network.HTTP.Req as Req
 import qualified Data.Text.Encoding as TE
@@ -291,6 +292,9 @@ forwardExpr env = \ case
     ForwardExpr env (desugarEvent ev)
   Fetch _ann e -> do
     PushFrame (UnaryBuiltin0 UnaryFetch Nothing)
+    ForwardExpr env e
+  Env _ann e -> do
+    PushFrame (UnaryBuiltin0 UnaryEnv Nothing)
     ForwardExpr env e
   Post _ann e1 e2 e3 -> do
     PushFrame (Post1 e2 e3 env)
@@ -858,6 +862,24 @@ extractFieldNames ty = case ty of
     getFieldName (MkOptionallyNamedType _ maybeName _ty) =
       nameToText . TypeCheck.getName <$> maybeName
 
+-- | Extract both field names AND types from a constructor's function type
+-- This is needed for type-directed JSON decoding of nested structures
+extractFieldNamesAndTypes :: Type' Resolved -> Machine [(Text, Type' Resolved)]
+extractFieldNamesAndTypes ty = case ty of
+  -- Strip forall quantifier if present
+  Forall _ _ innerTy -> extractFieldNamesAndTypes innerTy
+  -- Extract field names and types from function arguments
+  Fun _ argTypes _resultTy -> do
+    pure $ mapMaybe getFieldNameAndType argTypes
+  -- Not a function type - might be a nullary constructor
+  _ -> pure []
+  where
+    getFieldNameAndType :: OptionallyNamedType Resolved -> Maybe (Text, Type' Resolved)
+    getFieldNameAndType (MkOptionallyNamedType _ maybeName fieldType) =
+      case maybeName of
+        Just name -> Just (nameToText (TypeCheck.getName name), fieldType)
+        Nothing -> Nothing
+
 -- | Encode an L4 value to JSON string
 encodeValueToJson :: WHNF -> Machine Text
 encodeValueToJson = \case
@@ -909,58 +931,117 @@ decodeJsonToValueTyped jsonStr ty = do
       pure $ ValConstructor TypeCheck.justRef [justVal]
 
 -- | Convert Aeson Value to L4 WHNF using type information
+-- This function recursively handles nested structures: lists of records, records containing records, etc.
 jsonValueToWHNFTyped :: Aeson.Value -> Type' Resolved -> Machine WHNF
 jsonValueToWHNFTyped jsonValue ty = do
   case ty of
-    -- Handle record types: TyApp conRef []
+    -- Handle LIST OF α
+    TyApp _anno listRef [elementType]
+      | nameToText (TypeCheck.getName listRef) == "LIST" -> do
+        case jsonValue of
+          Aeson.Array vec -> do
+            -- Recursively decode each element with the element type
+            let values = Vector.toList vec
+            jsonListToWHNFTyped values elementType
+          _ -> do
+            InternalException $ RuntimeTypeError $
+              "Expected JSON array to decode to LIST type, but got: " <> Text.pack (show jsonValue)
+
+    -- Handle MAYBE α
+    TyApp _anno maybeRef [innerType]
+      | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> do
+        case jsonValue of
+          Aeson.Null ->
+            -- JSON null maps to NOTHING
+            pure $ ValConstructor TypeCheck.nothingRef []
+          _ -> do
+            -- Non-null value: decode and wrap in JUST
+            innerVal <- jsonValueToWHNFTyped jsonValue innerType
+            innerRef <- AllocateValue innerVal
+            pure $ ValConstructor TypeCheck.justRef [innerRef]
+
+    -- Handle custom record types and primitives: TyApp conRef []
     TyApp _anno tyRef [] -> do
-      -- This is a nullary type application
-      -- For record types, we need to find the constructor with the same name
-      entityInfo <- GetEntityInfo
+      let typeName = nameToText (TypeCheck.getName tyRef)
 
-      -- First check if this is a type
-      case Map.lookup (getUnique tyRef) entityInfo of
-        Nothing ->
-          jsonValueToWHNF jsonValue
-        Just (typeName, _checkEntity) -> do
-          -- Now look for a constructor with the same name
-          let constructors = Map.toList entityInfo
-              matchingConstructor = listToMaybe
-                [ (unique, name, conType)
-                | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
-                , nameToText (TypeCheck.getName name) == nameToText (TypeCheck.getName typeName)
-                ]
+      -- Handle primitive types first
+      case typeName of
+        "STRING" -> do
+          case jsonValue of
+            Aeson.String s -> pure $ ValString s
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON string but got: " <> Text.pack (show jsonValue)
+        "NUMBER" -> do
+          case jsonValue of
+            Aeson.Number n -> pure $ ValNumber (toRational n)
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON number but got: " <> Text.pack (show jsonValue)
+        "BOOLEAN" -> do
+          case jsonValue of
+            Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON boolean but got: " <> Text.pack (show jsonValue)
 
-          case matchingConstructor of
+        -- Not a primitive, check if it's a custom record type
+        _ -> do
+          -- For record types, we need to find the constructor with the same name
+          entityInfo <- GetEntityInfo
+
+          -- First check if this is a type
+          case Map.lookup (getUnique tyRef) entityInfo of
             Nothing ->
               jsonValueToWHNF jsonValue
-            Just (conUnique, conName, conType) -> do
-              -- Construct a Resolved reference for the constructor
-              let conRef = Def conUnique conName
-              -- Extract field names from the constructor type
-              fieldNames <- extractFieldNames conType
-              case jsonValue of
-                Aeson.Object obj -> do
-                  -- Decode each field from the JSON object
-                  -- Note: We ignore extra fields in the JSON (Postel's Law)
-                  fieldRefs <- forM fieldNames $ \fieldName -> do
-                    case KeyMap.lookup (Key.fromText fieldName) obj of
-                      Nothing -> do
-                        -- Field missing in JSON, this is an error
-                        InternalException $ RuntimeTypeError $
-                          "Missing required field '" <> fieldName <> "' in JSON object"
-                      Just fieldValue -> do
-                        -- Decode the field value (recursive, but without type info for now)
-                        fieldWHNF <- jsonValueToWHNF fieldValue
-                        AllocateValue fieldWHNF
-                  -- Construct the record with the decoded fields
-                  pure $ ValConstructor conRef fieldRefs
-                _ -> do
-                  -- JSON value is not an object, can't decode to record
-                  InternalException $ RuntimeTypeError $
-                    "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
+            Just (typeNameRef, _checkEntity) -> do
+              -- Now look for a constructor with the same name
+              let constructors = Map.toList entityInfo
+                  matchingConstructor = listToMaybe
+                    [ (unique, name, conType)
+                    | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
+                    , nameToText (TypeCheck.getName name) == nameToText (TypeCheck.getName typeNameRef)
+                    ]
+
+              case matchingConstructor of
+                Nothing ->
+                  jsonValueToWHNF jsonValue
+                Just (conUnique, conName, conType) -> do
+                  -- Construct a Resolved reference for the constructor
+                  let conRef = Def conUnique conName
+                  -- Extract BOTH field names AND types from the constructor type
+                  fieldNamesAndTypes <- extractFieldNamesAndTypes conType
+                  case jsonValue of
+                    Aeson.Object obj -> do
+                      -- Decode each field from the JSON object WITH TYPE INFORMATION
+                      -- Note: We ignore extra fields in the JSON (Postel's Law)
+                      fieldRefs <- forM fieldNamesAndTypes $ \(fieldName, fieldType) -> do
+                        case KeyMap.lookup (Key.fromText fieldName) obj of
+                          Nothing -> do
+                            -- Field missing in JSON, this is an error
+                            InternalException $ RuntimeTypeError $
+                              "Missing required field '" <> fieldName <> "' in JSON object"
+                          Just fieldValue -> do
+                            -- RECURSIVELY decode the field value WITH TYPE INFORMATION
+                            fieldWHNF <- jsonValueToWHNFTyped fieldValue fieldType
+                            AllocateValue fieldWHNF
+                      -- Construct the record with the decoded fields
+                      pure $ ValConstructor conRef fieldRefs
+                    _ -> do
+                      -- JSON value is not an object, can't decode to record
+                      InternalException $ RuntimeTypeError $
+                        "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
+
     -- For other types, fall back to generic decoding
     _ -> jsonValueToWHNF jsonValue
+
+-- | Convert list of JSON values to L4 list (ValCons/ValNil) with type information
+-- This recursively decodes each element using the provided element type
+jsonListToWHNFTyped :: [Aeson.Value] -> Type' Resolved -> Machine WHNF
+jsonListToWHNFTyped [] _elementType = pure ValNil
+jsonListToWHNFTyped (x:xs) elementType = do
+  headVal <- jsonValueToWHNFTyped x elementType
+  headRef <- AllocateValue headVal
+  tailVal <- jsonListToWHNFTyped xs elementType
+  tailRef <- AllocateValue tailVal
+  pure $ ValCons headRef tailRef
 
 decodeJsonToValue :: Text -> Machine WHNF
 decodeJsonToValue jsonStr = do
@@ -1151,6 +1232,17 @@ runBuiltin es op mTy = do
             Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
           Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
         _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+    UnaryEnv -> do
+      varName <- expectString es
+      maybeValue <- liftIO $ lookupEnv (Text.unpack varName)
+      case maybeValue of
+        Just value -> do
+          -- Return JUST value
+          valueRef <- AllocateValue (ValString (Text.pack value))
+          Backward (ValConstructor TypeCheck.justRef [valueRef])
+        Nothing -> do
+          -- Return NOTHING
+          Backward (ValConstructor TypeCheck.nothingRef [])
     _ -> do
       val :: Rational <- expectNumber es
       Backward case op of
@@ -1666,6 +1758,7 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fetchRef <- AllocateValue (ValUnaryBuiltinFun UnaryFetch)
+  envRef <- AllocateValue (ValUnaryBuiltinFun UnaryEnv)
   jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
   fulfilRef <- AllocateValue ValFulfilled
@@ -1700,6 +1793,7 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.fetchUnique, fetchRef)
+      , (TypeCheck.envUnique, envRef)
       , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
