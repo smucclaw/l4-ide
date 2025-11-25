@@ -1,0 +1,11 @@
+// Test JSON encoding of records
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+testPerson MEANS Person WITH
+  name IS "Alice"
+  age IS 30
+
+#EVAL JSONENCODE testPerson

@@ -81,7 +81,7 @@ data Frame =
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
   | AsStringFrame -- AsString frame
   | JsonEncodeListFrame [Text] {- -} Reference Bool -- accumulated JSON strings, tail reference, expecting_tail (True = next value is tail, False = next value is element)
-  | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for nested list encoding to complete)
+  | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for element encoding to complete)
   | JsonEncodeConstructorFrame [(Text, Text)] Text [(Text, Reference)] -- accumulated (fieldName, encodedJson) pairs, current field name, remaining (fieldName, fieldRef) pairs to encode
   deriving stock Show
 
@@ -507,20 +507,22 @@ backward val = WithPoppedFrame $ \ case
             PushFrame (JsonEncodeListFrame [] elemTailRef False)  -- Encode the nested list
             EvalRef elemHeadRef
           _ -> do
-            -- Element is a primitive value
-            jsonStr <- encodeValueToJson val
-            PushFrame (JsonEncodeListFrame (jsonStr : acc) tailRef True)
-            EvalRef tailRef
+            -- Element needs encoding (could be constructor, primitive, etc.)
+            -- Allocate it and use frame-based encoding to handle all cases properly
+            elemRef <- AllocateValue val
+            PushFrame (JsonEncodeNestedFrame acc tailRef)  -- Will add result to acc and continue with tail
+            PushFrame (UnaryBuiltin0 UnaryJsonEncode Nothing)  -- Encode using proper frame-based logic
+            EvalRef elemRef
   Just (JsonEncodeNestedFrame acc tailRef) -> do
-    -- We just finished encoding a nested list, val should be a ValString with the JSON
+    -- We just finished encoding an element (nested list, constructor, or primitive), val should be a ValString with the JSON
     case val of
-      ValString nestedJson -> do
-        -- Add the nested JSON to accumulator and continue with the tail
-        PushFrame (JsonEncodeListFrame (nestedJson : acc) tailRef True)
+      ValString encodedJson -> do
+        -- Add the encoded JSON to accumulator and continue with the tail
+        PushFrame (JsonEncodeListFrame (encodedJson : acc) tailRef True)
         EvalRef tailRef
       _ ->
-        -- Should not happen - nested list encoding should return ValString
-        InternalException $ RuntimeTypeError "Expected ValString from nested list encoding"
+        -- Should not happen - encoding should return ValString
+        InternalException $ RuntimeTypeError "Expected ValString from element encoding"
   Just (JsonEncodeConstructorFrame acc currentFieldName remaining) -> do
     -- We just finished encoding a field value, val should be a ValString with the JSON
     case val of

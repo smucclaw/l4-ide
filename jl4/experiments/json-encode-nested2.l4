@@ -1,0 +1,5 @@
+// Direct nested list test
+
+DECIDE directNested IS LIST (LIST 1, 2)
+
+#EVAL JSONENCODE directNested

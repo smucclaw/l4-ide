@@ -5,11 +5,12 @@ DECLARE `Message` HAS
   `role`    IS A STRING
   `content` IS A STRING
 
-DECIDE createMessage (role IS A STRING) (content IS A STRING) IS
-  `Message` {
+GIVEN role IS A STRING
+      content IS A STRING
+createMessage MEANS
+  `Message` WITH
     `role` IS role
     `content` IS content
-  }
 
 DECIDE userMessage IS
   createMessage "user" "Does this cosmetic claim violate regulations: 'Treats acne permanently'?"
@@ -17,22 +18,23 @@ DECIDE userMessage IS
 // For now we'll encode just the message
 // In the future, we can build the full API request structure
 DECIDE encodeMessage IS
-  `JSON ENCODE` userMessage
+  JSONENCODE userMessage
 
 #EVAL encodeMessage
 
 // Once we have full record support, we can do:
-// DECLARE `API Request` HAS
-//   `model`      IS A STRING
-//   `max_tokens` IS A NUMBER
-//   `messages`   IS A LIST OF `Message`
-//
-// DECIDE apiRequest IS
-//   `API Request` {
-//     `model` IS "claude-sonnet-4-5-20250929"
-//     `max_tokens` IS 500
-//     `messages` IS LIST userMessage
-//   }
-//
-// DECIDE requestBody IS
-//   JSON ENCODE apiRequest
+DECLARE `API Request` HAS
+  `model`      IS A STRING
+  `max_tokens` IS A NUMBER
+  `messages`   IS A LIST OF `Message`
+
+DECIDE apiRequest IS
+  `API Request` WITH
+    `model`      IS "claude-sonnet-4-5-20250929"
+    `max_tokens` IS 500
+    `messages`   IS LIST userMessage
+
+requestBody MEANS
+  JSONENCODE apiRequest
+
+#EVAL requestBody

@@ -30,6 +30,7 @@ library
   import: defaults
   hs-source-dirs: src
   build-depends:
+    aeson,
     bytestring,
     placeholder,
     cassava,
