@@ -17,10 +17,12 @@ decodePerson jsonStr MEANS JSONDECODE jsonStr
 ```
 
 The type checker knows:
+
 - ✅ `decodePerson` has type `STRING -> MAYBE Person`
 - ✅ The return type is `MAYBE Person`
 
 But it **doesn't** propagate this expected type down to the expression `JSONDECODE jsonStr`. As a result:
+
 - ❌ `JSONDECODE` is evaluated without knowing it should produce `MAYBE Person`
 - ❌ Type-directed decoding can't use the Person type to decode JSON objects
 - ❌ Generic decoding returns `JUST OF NOTHING` instead of `JUST OF Person {...}`
@@ -28,6 +30,7 @@ But it **doesn't** propagate this expected type down to the expression `JSONDECO
 ### Desired Behavior
 
 With bidirectional type checking:
+
 - ✅ The expected return type `MAYBE Person` flows down to `JSONDECODE jsonStr`
 - ✅ JSONDECODE receives type information: "you should produce a MAYBE Person"
 - ✅ Evaluation uses this type to guide decoding: decode JSON object to Person record
@@ -40,6 +43,7 @@ With bidirectional type checking:
 Bidirectional type checking is a type checking approach with two modes:
 
 1. **Synthesis (↑)**: "What type does this expression have?"
+
    - Information flows upward from expression to context
    - Example: `5 + 3` synthesizes type `NUMBER`
 
@@ -50,12 +54,14 @@ Bidirectional type checking is a type checking approach with two modes:
 ### Why Bidirectional?
 
 Unidirectional (synthesis-only) type checking struggles with:
+
 - Polymorphic functions without enough context
 - Overloaded operators
 - Type-directed operations (like JSONDECODE)
 - Implicit conversions
 
 Bidirectional type checking provides:
+
 - Better type inference
 - More precise error messages
 - Type-directed code generation
@@ -79,6 +85,7 @@ Extend L4's type checker with two mutually recursive judgment forms:
 ```
 
 Where:
+
 - `Γ` is the typing context (environment)
 - `e` is an expression
 - `τ` is a type
@@ -104,12 +111,14 @@ These expressions **produce** a type:
 These expressions **consume** an expected type:
 
 - **Lambda abstractions**:
+
   ```
   If τ = τ₁ → τ₂ and Γ, x : τ₁ ⊢ e ⇐ τ₂
   Then Γ ⊢ (λx. e) ⇐ τ₁ → τ₂
   ```
 
 - **Record construction**:
+
   ```
   If τ = Record {f₁ : τ₁, ..., fₙ : τₙ}
   And Γ ⊢ e₁ ⇐ τ₁, ..., Γ ⊢ eₙ ⇐ τₙ
@@ -132,6 +141,7 @@ These expressions **consume** an expected type:
 ### 3. Function Definitions with GIVETH
 
 Current behavior:
+
 ```l4
 GIVEN x IS A τ₁
 GIVETH τ₂
@@ -139,11 +149,13 @@ f x MEANS e
 ```
 
 The type checker:
+
 1. ✅ Assigns `f : τ₁ → τ₂`
 2. ✅ Checks body `e` synthesizes some type
 3. ❌ **Doesn't** check `e` against expected type `τ₂`
 
 New behavior with bidirectional typing:
+
 1. ✅ Assigns `f : τ₁ → τ₂`
 2. ✅ Type checks body in checking mode: `Γ, x : τ₁ ⊢ e ⇐ τ₂`
 3. ✅ Expected type `τ₂` flows down into `e`
@@ -155,6 +167,7 @@ Certain operations benefit from expected type information:
 #### 4.1 JSONDECODE
 
 **Signature**:
+
 ```haskell
 JSONDECODE : STRING -> MAYBE α
 ```
@@ -162,18 +175,21 @@ JSONDECODE : STRING -> MAYBE α
 **Type-directed behavior**:
 
 When checking `JSONDECODE s ⇐ MAYBE Person`:
+
 1. Extract expected result type: `MAYBE Person`
 2. Extract inner type: `Person`
 3. Pass type information to evaluator via Anno
 4. Evaluator uses Person type to decode JSON object to record
 
 **Implementation approach**:
+
 - During type checking, store expected type in Anno's resolvedInfo
 - Evaluation reads this type from Anno to guide decoding
 
 #### 4.2 Future: Overloaded Literals
 
 Expected types could guide interpretation of numeric literals:
+
 ```l4
 -- Expected type disambiguates
 DECIDE x IS 42        -- Could be NUMBER
@@ -187,6 +203,7 @@ DECIDE y IS 42 :: Int32   -- Definitely Int32
 **File**: `jl4-core/src/L4/TypeCheck.hs`
 
 1. Add checking mode to Check monad:
+
    ```haskell
    data CheckMode = Synth | Check (Type' Resolved)
 
@@ -216,6 +233,7 @@ Update each expression form to support checking mode:
 **File**: `jl4-core/src/L4/TypeCheck/Decl.hs`
 
 Modify `checkDecl` for function definitions:
+
 ```haskell
 -- For: GIVEN x IS τ₁ GIVETH τ₂ f x MEANS e
 checkFunDecl name givenTypes returnType body = do
@@ -245,6 +263,7 @@ This makes the expected type available during evaluation.
 **File**: `jl4-core/src/L4/EvaluateLazy/Machine.hs`
 
 The infrastructure is already in place!
+
 - Type information flows through Frame constructors ✅
 - `runBuiltin` accepts `Maybe (Type' Resolved)` ✅
 - `decodeJsonToValueTyped` uses type information ✅
@@ -256,6 +275,7 @@ No evaluation changes needed - just need type checker to populate Anno.
 #### Example 1: JSONDECODE with Record Type
 
 **Input**:
+
 ```l4
 DECLARE Person HAS
   name IS A STRING
@@ -271,16 +291,19 @@ DECIDE result IS decodePerson json
 ```
 
 **Current behavior**:
+
 ```
 result = JUST OF NOTHING
 ```
 
 **With bidirectional typing**:
+
 ```
 result = JUST OF Person WITH name IS "Alice" age IS 30
 ```
 
 **Why it works**:
+
 1. Type checker sees `decodePerson : STRING -> MAYBE Person`
 2. When checking body `JSONDECODE jsonStr`, expected type is `MAYBE Person`
 3. Type checker stores `MAYBE Person` in Anno of JSONDECODE expression
@@ -289,6 +312,7 @@ result = JUST OF Person WITH name IS "Alice" age IS 30
 #### Example 2: Nested Function Calls
 
 **Input**:
+
 ```l4
 GIVEN x IS A NUMBER
 GIVETH A STRING
@@ -304,6 +328,7 @@ decodeAndFormat json MEANS
 ```
 
 **Analysis**:
+
 - Expected type of `decodeAndFormat` body: `MAYBE STRING`
 - Expected type of THEN branch: `STRING`
 - Expected type of `formatNumber n`: `STRING` ✅
@@ -312,6 +337,7 @@ decodeAndFormat json MEANS
 #### Example 3: Record Construction
 
 **Input**:
+
 ```l4
 DECLARE Response HAS
   status IS A STRING
@@ -326,6 +352,7 @@ makeError err MEANS
 ```
 
 **With bidirectional typing**:
+
 1. Expected return type: `Response`
 2. Check record construction against `Response` type
 3. Verify fields match: `status : STRING`, `code : NUMBER` ✅
@@ -446,11 +473,13 @@ DECIDE result IS decodePerson json
 Bidirectional type checking enables better error messages:
 
 #### Current (synthesis-only):
+
 ```
 Type error: Cannot unify expected type Person with inferred type α
 ```
 
 #### With bidirectional:
+
 ```
 Type error in function decodePerson:
   Expected: MAYBE Person
@@ -466,32 +495,38 @@ Type error in function decodePerson:
 ### 9. Related Work
 
 #### Haskell
+
 - Uses bidirectional typing for type class resolution
 - `TypeApplications` extension makes expected types explicit
 - Example: `read @Int "42"` supplies expected type explicitly
 
 #### Rust
+
 - Type inference flows in both directions
 - `let x: Vec<i32> = ...` provides expected type to RHS
 - Method calls guide type parameter inference
 
 #### TypeScript
+
 - Contextual typing: expected types guide inference
 - Example: `arr.map((x) => x * 2)` infers `x` type from `arr`
 
 #### Idris/Agda
+
 - Full bidirectional type checking for dependent types
 - Expected types essential for type-level computation
 
 ### 10. Implementation Checklist
 
 - [ ] **Phase 1**: Core infrastructure
+
   - [ ] Add `CheckMode` type
   - [ ] Split `inferExpr` into `synthExpr` and `checkExpr`
   - [ ] Implement subsumption rule
   - [ ] Add test: basic synthesis vs checking
 
 - [ ] **Phase 2**: Expression forms
+
   - [ ] Lambda/GIVEN: check body against return type
   - [ ] Application: check arguments
   - [ ] Record construction: check fields
@@ -499,16 +534,19 @@ Type error in function decodePerson:
   - [ ] Add tests for each form
 
 - [ ] **Phase 3**: Function definitions
+
   - [ ] Modify `checkDecl` for GIVETH functions
   - [ ] Check body against return type
   - [ ] Add test: function with explicit return type
 
 - [ ] **Phase 4**: Annotation storage
+
   - [ ] Store expected type in Anno during checking
   - [ ] Verify Anno propagates to evaluation
   - [ ] Add test: Anno contains expected type
 
 - [ ] **Phase 5**: Integration
+
   - [ ] Test JSONDECODE with Person type
   - [ ] Test nested records
   - [ ] Test extra fields ignored
@@ -526,11 +564,13 @@ Type error in function decodePerson:
 ✅ Implementation is complete when:
 
 1. **JSONDECODE works with typed functions**:
+
    ```l4
    GIVEN s IS A STRING
    GIVETH A MAYBE Person
    decode s MEANS JSONDECODE s
    ```
+
    Returns `JUST OF Person {...}` not `JUST OF NOTHING`
 
 2. **All existing tests pass** (375+ examples)
@@ -564,17 +604,20 @@ These could be future enhancements building on bidirectional infrastructure.
 ### 13. References
 
 **Academic Papers**:
+
 1. Pierce, B. C., & Turner, D. N. (2000). "Local type inference." ACM TOPLAS, 22(1), 1-44.
 2. Dunfield, J., & Krishnaswami, N. R. (2013). "Complete and easy bidirectional typechecking for higher-rank polymorphism." ICFP 2013.
 3. Löh, A., McBride, C., & Swierstra, W. (2015). "A tutorial implementation of a dependently typed lambda calculus."
 
 **Implementation Examples**:
+
 - GHC's bidirectional type checker
 - Agda's elaboration algorithm
 - TypeScript's contextual typing
 - Rust's inference engine
 
 **L4 Codebase**:
+
 - `jl4-core/src/L4/TypeCheck.hs` - Main type checker
 - `jl4-core/src/L4/TypeCheck/Decl.hs` - Declaration checking
 - `jl4-core/src/L4/EvaluateLazy/Machine.hs` - Evaluation (already has type-directed infrastructure!)

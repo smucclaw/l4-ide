@@ -24,6 +24,7 @@ The L4 language currently has a `FETCH` operator that performs HTTP GET requests
 **Signature**: `FETCH :: STRING -> STRING`
 
 **Example**:
+
 ```l4
 DECIDE fetchUUID IS
   FETCH "https://www.uuidtools.com/api/generate/v4"
@@ -33,6 +34,7 @@ DECIDE fetchUUID IS
 ```
 
 **Limitations**:
+
 - ✅ HTTP GET requests work
 - ❌ No way to specify HTTP method (POST, PUT, DELETE)
 - ❌ No way to add custom headers (Authorization, Content-Type)
@@ -51,6 +53,7 @@ We need to call the Anthropic Messages API to evaluate cosmetic advertising clai
 **API Endpoint**: `https://api.anthropic.com/v1/messages`
 
 **Required HTTP Headers**:
+
 ```
 x-api-key: sk-ant-api03-...
 anthropic-version: 2023-06-01
@@ -58,6 +61,7 @@ content-type: application/json
 ```
 
 **Required JSON Request Body**:
+
 ```json
 {
   "model": "claude-sonnet-4-5-20250929",
@@ -72,6 +76,7 @@ content-type: application/json
 ```
 
 **Expected JSON Response**:
+
 ```json
 {
   "id": "msg_...",
@@ -101,6 +106,7 @@ content-type: application/json
 Extend the existing `FETCH` operator to accept optional configuration:
 
 **Proposed Signature**:
+
 ```l4
 FETCH :: STRING -> STRING
 FETCH :: STRING -> HTTP Config -> STRING
@@ -113,6 +119,7 @@ TYPE `HTTP Config` HAS
 ```
 
 **Example Usage**:
+
 ```l4
 IMPORT prelude
 
@@ -143,12 +150,14 @@ DECIDE `make api call` IS
 Create a new operator specifically for POST requests:
 
 **Proposed Signature**:
+
 ```l4
 POST :: STRING -> LIST OF (PAIR OF STRING, STRING) -> STRING -> STRING
 //      URL        headers                              body     response
 ```
 
 **Example Usage**:
+
 ```l4
 DECIDE `api response` IS
   POST
@@ -180,6 +189,7 @@ TYPE `HTTP Body`    IS A STRING
 ### JSON Encoding Functions
 
 **Proposed Signatures**:
+
 ```l4
 // Encode L4 values to JSON STRING
 JSON ENCODE :: a -> STRING
@@ -219,6 +229,7 @@ DECIDE `request json` IS
 ### JSON Decoding Functions
 
 **Proposed Signatures**:
+
 ```l4
 // Parse JSON STRING to L4 value
 JSON DECODE :: STRING -> MAYBE a
@@ -287,12 +298,14 @@ POST :: STRING -> LIST OF (PAIR OF STRING, STRING) -> STRING -> STRING
 ```
 
 **Rationale**:
+
 - Minimal changes to existing `FETCH`
 - Clear separation of concerns (GET vs POST)
 - Simple signature easy to understand
 - Can implement quickly
 
 **Implementation Notes**:
+
 - Use same HTTP client library as `FETCH`
 - Add header support (key-value pairs)
 - Support arbitrary request body as STRING
@@ -308,6 +321,7 @@ JSON ENCODE :: a -> STRING
 ```
 
 **Must Support**:
+
 - STRING → JSON string (with escaping: `"hello"` → `"\"hello\""`)
 - NUMBER → JSON number (`42` → `"42"`, `3.14` → `"3.14"`)
 - BOOLEAN → JSON boolean (`TRUE` → `"true"`, `FALSE` → `"false"`)
@@ -316,6 +330,7 @@ JSON ENCODE :: a -> STRING
 - Records → JSON objects (field names become keys)
 
 **Implementation Notes**:
+
 - Use standard JSON encoding library (e.g., Aeson in Haskell)
 - Proper string escaping for special characters
 - Handle nested structures recursively
@@ -330,6 +345,7 @@ JSON DECODE :: STRING -> MAYBE a
 ```
 
 **Must Support**:
+
 - JSON string → STRING
 - JSON number → NUMBER
 - JSON boolean → BOOLEAN
@@ -338,12 +354,14 @@ JSON DECODE :: STRING -> MAYBE a
 - JSON object → Record type (requires type annotation/schema)
 
 **Implementation Notes**:
+
 - Return `NOTHING` on parse errors
 - Type-driven decoding (need target type specified)
 - Graceful handling of missing fields (use MAYBE)
 - Array/object nesting support
 
 **Challenges**:
+
 - L4 is statically typed; JSON objects need target type
 - May need schema/type annotation at call site
 - Consider simpler path-based accessors as alternative
@@ -351,6 +369,7 @@ JSON DECODE :: STRING -> MAYBE a
 ### Phase 4: Enhanced HTTP (Optional)
 
 If needed, add **Option A** (enhanced `FETCH` with config) or **Option C** (HTTP function family) for:
+
 - PUT, DELETE, PATCH methods
 - Timeout configuration
 - Response headers access
@@ -488,6 +507,7 @@ DECIDE `response text` IS
 **Requirement**: Handle HTTP error responses (4xx, 5xx) gracefully
 
 **Options**:
+
 1. Return error JSON in response STRING (caller parses)
 2. Return MAYBE STRING (NOTHING on error)
 3. Return EITHER STRING STRING (left = error, right = success)
@@ -501,6 +521,7 @@ DECIDE `response text` IS
 **Approach**: Return `NOTHING` from `JSON DECODE` on parse failures
 
 **Example**:
+
 ```l4
 DECIDE `parse bad json` IS
   JSON DECODE `Response` "{not valid json"
@@ -514,6 +535,7 @@ DECIDE `parse bad json` IS
 **Requirement**: Handle network failures (timeout, connection refused, DNS errors)
 
 **Options**:
+
 1. Return empty STRING on network error
 2. Return special error format: `"{\"error\": \"Network timeout\"}"`
 3. Throw L4 exception (if exception mechanism exists)
@@ -529,6 +551,7 @@ DECIDE `parse bad json` IS
 **Consideration**: HTTP requests are expensive and may be called multiple times during evaluation
 
 **Recommendation**:
+
 - Implement lazy evaluation (current behavior)
 - Consider memoization/caching for identical requests within single evaluation
 - Document caching behavior clearly
@@ -538,6 +561,7 @@ DECIDE `parse bad json` IS
 **Consideration**: HTTP calls block evaluation
 
 **Future Enhancement**:
+
 - Parallel evaluation of independent FETCH/POST calls
 - Async primitives (FETCH ASYNC, AWAIT, etc.)
 - Not required for MVP
@@ -547,6 +571,7 @@ DECIDE `parse bad json` IS
 **Consideration**: External APIs have rate limits
 
 **Recommendation**:
+
 - Document that rate limiting is caller's responsibility
 - Consider adding rate limiter as library function later
 - For Anthropic API: ~50 requests/min for Sonnet
@@ -560,6 +585,7 @@ DECIDE `parse bad json` IS
 **Issue**: API keys in L4 source code are visible
 
 **Mitigations**:
+
 - Document best practices (use environment variables)
 - Consider `ENV :: STRING -> MAYBE STRING` operator to read env vars
 - Example: `ENV "ANTHROPIC_API_KEY"`
@@ -569,6 +595,7 @@ DECIDE `parse bad json` IS
 **Issue**: User-supplied strings in HTTP requests could be malicious
 
 **Mitigations**:
+
 - Validate URLs (reject non-HTTP(S) schemes?)
 - Sanitize header values
 - Document security considerations
@@ -586,6 +613,7 @@ DECIDE `parse bad json` IS
 ### Function Documentation
 
 For each new operator, provide:
+
 - Type signature
 - Plain English description
 - Parameter descriptions
@@ -597,6 +625,7 @@ For each new operator, provide:
 ### Tutorial
 
 Create tutorial showing:
+
 1. Simple GET request (existing `FETCH`)
 2. POST request with headers
 3. JSON encoding basics
@@ -607,6 +636,7 @@ Create tutorial showing:
 ### Migration Guide
 
 If changing existing `FETCH`:
+
 - Document breaking changes
 - Provide migration examples
 - Deprecation timeline
@@ -616,6 +646,7 @@ If changing existing `FETCH`:
 ## Implementation Checklist
 
 ### Phase 1: POST Operator
+
 - [ ] Define `POST` function signature in prelude/standard library
 - [ ] Implement HTTP POST with headers and body
 - [ ] Add to type checker
@@ -625,6 +656,7 @@ If changing existing `FETCH`:
 - [ ] Integration test (real API call)
 
 ### Phase 2: JSON Encoding
+
 - [ ] Define `JSON ENCODE` function signature
 - [ ] Implement encoding for primitives (STRING, NUMBER, BOOLEAN)
 - [ ] Implement encoding for LIST
@@ -635,6 +667,7 @@ If changing existing `FETCH`:
 - [ ] Documentation
 
 ### Phase 3: JSON Decoding
+
 - [ ] Define `JSON DECODE` function signature
 - [ ] Implement decoding for primitives
 - [ ] Implement decoding for arrays → LIST
@@ -645,6 +678,7 @@ If changing existing `FETCH`:
 - [ ] Documentation
 
 ### Phase 4: Integration Testing
+
 - [ ] Test POST + JSON ENCODE + JSON DECODE together
 - [ ] Test with real Anthropic API
 - [ ] Test error conditions
@@ -652,6 +686,7 @@ If changing existing `FETCH`:
 - [ ] Security review
 
 ### Phase 5: Documentation & Examples
+
 - [ ] Update language reference
 - [ ] Create tutorial
 - [ ] Add example files
@@ -662,20 +697,24 @@ If changing existing `FETCH`:
 ## Questions for Implementation Team
 
 1. **Which option do you prefer for HTTP POST?**
+
    - Option A: Extend FETCH with config record
    - Option B: Separate POST operator (recommended)
    - Option C: HTTP function family (GET, POST, PUT, etc.)
 
 2. **For JSON decoding, how should we handle type specification?**
+
    - Type annotation at call site? `JSON DECODE `TargetType` json_string`
    - Infer from usage context?
    - Separate decoders per type? `JSON DECODE STRING`, `JSON DECODE NUMBER`, etc.
 
 3. **Should we support environment variables for API keys?**
+
    - Add `ENV :: STRING -> MAYBE STRING` operator?
    - Or handle externally?
 
 4. **Error handling strategy?**
+
    - HTTP errors: return error JSON, MAYBE STRING, or EITHER?
    - JSON parse errors: NOTHING sufficient?
 
