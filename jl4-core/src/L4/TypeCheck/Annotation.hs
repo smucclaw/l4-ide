@@ -171,6 +171,20 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ Event ann (MkEvent ann' e' e1' e2' atFirst)
+    Fetch ann e ->
+      Fetch ann <$> nlgExpr e
+    Env ann e ->
+      Env ann <$> nlgExpr e
+    Post ann e1 e2 e3 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      e3' <- nlgExpr e3
+      pure $ Post ann e1' e2' e3'
+    Concat ann es -> do
+      es' <- traverse nlgExpr es
+      pure $ Concat ann es'
+    AsString ann e ->
+      AsString ann <$> nlgExpr e
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case

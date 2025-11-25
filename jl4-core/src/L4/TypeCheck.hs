@@ -912,7 +912,8 @@ checkExpr ec (Where ann e ds) t = softprune $ do
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
-  pure re
+  -- Store the expected type in the annotation so it's available during evaluation
+  setAnnResolvedType t Nothing re
 
 checkIfThenElse :: ExpectationContext -> Anno -> Expr Name -> Expr Name -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkIfThenElse ec ann e1 e2 e3 t = do
@@ -1155,6 +1156,27 @@ inferExpr' g =
     Percent ann e -> do
       e' <- checkExpr ExpectPercentArgumentContext e number
       pure (Percent ann e', number)
+    Fetch ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName fetchName) g ann e
+      inferExpr' dsFun
+    Env ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName envName) g ann e
+      inferExpr' dsFun
+    Post ann e1 e2 e3 -> do
+      e1' <- checkExpr ExpectPostUrlContext e1 string
+      e2' <- checkExpr ExpectPostHeadersContext e2 string
+      e3' <- checkExpr ExpectPostBodyContext e3 string
+      pure (Post ann e1' e2' e3', string)
+    Concat ann es -> do
+      res <- traverse (\ e -> checkExpr ExpectConcatArgumentContext e string) es
+      pure (Concat ann res, string)
+    AsString ann e -> do
+      -- AsString can accept any primitive type and convert it to string
+      (re, te) <- inferExpr e
+      -- For now, we'll only allow NUMBER to be converted to STRING
+      -- Could extend this to other types in the future
+      expect ExpectAsStringArgumentContext number te
+      pure (AsString ann re, string)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -2272,6 +2294,16 @@ prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
 prettyTypeMismatch ExpectPercentArgumentContext expected given =
   standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostUrlContext expected given =
+  standardTypeMismatch [ "The URL argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostHeadersContext expected given =
+  standardTypeMismatch [ "The headers argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostBodyContext expected given =
+  standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectConcatArgumentContext expected given =
+  standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext expected given =
+  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =

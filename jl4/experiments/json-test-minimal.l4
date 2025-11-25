@@ -1,0 +1,2 @@
+DECIDE test IS JSONENCODE 42
+#EVAL test

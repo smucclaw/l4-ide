@@ -1,0 +1,5 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+json-encode-list-of-records.l4:18:1-26:
+  "[{\"role\":\"user\",\"content\":\"Hello\"},{\"role\":\"assistant\",\"content\":\"Hi there!\"}]"

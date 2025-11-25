@@ -72,6 +72,14 @@ data UnaryBuiltinFun
   | UnaryCeiling
   | UnaryFloor
   | UnaryPercent
+  | UnaryFetch
+  | UnaryEnv
+  | UnaryJsonEncode
+  | UnaryJsonDecode
+  deriving stock (Show)
+
+data TernaryBuiltinFun
+  = TernaryPost
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -106,3 +114,11 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
+  rnf UnaryFetch = ()
+  rnf UnaryEnv = ()
+  rnf UnaryJsonEncode = ()
+  rnf UnaryJsonDecode = ()
+
+instance NFData TernaryBuiltinFun where
+  rnf :: TernaryBuiltinFun -> ()
+  rnf TernaryPost = ()

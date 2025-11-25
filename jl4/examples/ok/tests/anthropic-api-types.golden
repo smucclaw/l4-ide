@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+anthropic-api-types.l4:82:1-25:
+  "{\"role\":\"user\",\"content\":\"Hello, Claude!\"}"
+anthropic-api-types.l4:83:1-30:
+  "{\"role\":\"assistant\",\"content\":\"Hello! How can I help you today?\"}"
+anthropic-api-types.l4:84:1-19:
+  "{\"input_tokens\":10,\"output_tokens\":25}"
+anthropic-api-types.l4:85:1-21:
+  "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":1024,\"temperature\":1}"
+anthropic-api-types.l4:86:1-22:
+  "{\"id\":\"msg_01XFDUDYJgAACzvnptvVoYEL\",\"type\":\"message\",\"role\":\"assistant\",\"content\":\"Hello! I'm Claude, an AI assistant created by Anthropic.\",\"model\":\"claude-sonnet-4-5-20250929\",\"stop_reason\":\"end_turn\"}"
+anthropic-api-types.l4:87:1-23:
+  "{\"type\":\"text\",\"text\":\"This is a content block.\"}"

@@ -1,0 +1,47 @@
+-- Test CONCAT operator for string concatenation
+
+-- Simple concatenation
+DECIDE greeting IS
+  CONCAT "Hello", " ", "World"
+
+-- Concatenation with variables
+DECIDE firstName IS "Alice"
+DECIDE lastName IS "Smith"
+
+DECIDE fullName IS
+  CONCAT firstName, " ", lastName
+
+-- Multiple parts
+DECIDE sentence IS
+  CONCAT "The", " ", "quick", " ", "brown", " ", "fox"
+
+-- Concatenation with numbers (using AS STRING)
+DECIDE age IS 25
+
+DECIDE ageMessage IS
+  CONCAT "Age: ", (age AS STRING)
+
+-- Empty CONCAT
+DECIDE empty IS
+  CONCAT
+
+-- Single element
+DECIDE single IS
+  CONCAT "alone"
+
+-- Nested CONCAT
+DECIDE nested IS
+  CONCAT "Start ", (CONCAT "middle ", "part"), " end"
+
+-- Building JSON manually
+DECIDE jsonString IS
+  CONCAT "{\"name\": \"", firstName, "\", \"age\": ", (age AS STRING), "}"
+
+#EVAL greeting
+#EVAL fullName
+#EVAL sentence
+#EVAL ageMessage
+#EVAL empty
+#EVAL single
+#EVAL nested
+#EVAL jsonString

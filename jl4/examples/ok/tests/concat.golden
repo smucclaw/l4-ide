@@ -1,0 +1,19 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+concat.l4:40:1-15:
+  "Hello World"
+concat.l4:41:1-15:
+  "Alice Smith"
+concat.l4:42:1-15:
+  "The quick brown fox"
+concat.l4:43:1-17:
+  "Age: 25"
+concat.l4:44:1-12:
+  ""
+concat.l4:45:1-13:
+  "alone"
+concat.l4:46:1-13:
+  "Start middle part end"
+concat.l4:47:1-17:
+  "{\"name\": \"Alice\", \"age\": 25}"

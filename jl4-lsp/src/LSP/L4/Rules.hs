@@ -433,7 +433,7 @@ jl4Rules rootDirectory recorder = do
     -- put the diagnostic on that IMPORT
     deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map (.moduleUri) imports
     let environment = mconcat (fst <$> deps)
-    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv environment tcRes.module')
+    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv tcRes.entityInfo environment tcRes.module')
     pure ([], Just (ownEnv <> environment, ownDirectives))
 
   define shakeRecorder $ \EvaluateLazy uri -> do

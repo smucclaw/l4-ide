@@ -226,6 +226,11 @@ data Expr n =
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
   | Event      Anno (Event n)
+  | Fetch      Anno (Expr n)
+  | Env        Anno (Expr n)  -- environment variable name
+  | Post       Anno (Expr n) (Expr n) (Expr n)  -- url, headers, body
+  | Concat     Anno [Expr n] -- string concatenation
+  | AsString   Anno (Expr n) -- type coercion to string
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

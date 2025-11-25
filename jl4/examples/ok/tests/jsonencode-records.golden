@@ -1,0 +1,9 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsonencode-records.l4:51:1-20:
+  "{\"name\":\"Alice\",\"age\":30}"
+jsonencode-records.l4:52:1-21:
+  "{\"companyName\":\"Acme Corp\",\"employees\":100,\"active\":true}"
+jsonencode-records.l4:53:1-22:
+  "{\"fullName\":\"Bob Smith\",\"contact\":{\"street\":\"123 Main St\",\"city\":\"Springfield\",\"zipCode\":12345}}"
