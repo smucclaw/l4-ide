@@ -129,6 +129,8 @@ data ExpectationContext =
   | ExpectPostUrlContext -- URL argument of POST
   | ExpectPostHeadersContext -- headers argument of POST
   | ExpectPostBodyContext -- body argument of POST
+  | ExpectConcatArgumentContext -- argument of CONCAT
+  | ExpectAsStringArgumentContext -- argument of AS STRING
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

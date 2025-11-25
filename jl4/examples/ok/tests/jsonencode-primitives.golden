@@ -1,0 +1,13 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsonencode-primitives.l4:18:1-19:
+  "\"Hello, World!\""
+jsonencode-primitives.l4:19:1-19:
+  "42"
+jsonencode-primitives.l4:20:1-26:
+  "3.14"
+jsonencode-primitives.l4:21:1-21:
+  "true"
+jsonencode-primitives.l4:22:1-22:
+  "false"

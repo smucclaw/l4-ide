@@ -1163,6 +1163,16 @@ inferExpr' g =
       e2' <- checkExpr ExpectPostHeadersContext e2 string
       e3' <- checkExpr ExpectPostBodyContext e3 string
       pure (Post ann e1' e2' e3', string)
+    Concat ann es -> do
+      res <- traverse (\ e -> checkExpr ExpectConcatArgumentContext e string) es
+      pure (Concat ann res, string)
+    AsString ann e -> do
+      -- AsString can accept any primitive type and convert it to string
+      (re, te) <- inferExpr e
+      -- For now, we'll only allow NUMBER to be converted to STRING
+      -- Could extend this to other types in the future
+      expect ExpectAsStringArgumentContext number te
+      pure (AsString ann re, string)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -2286,6 +2296,10 @@ prettyTypeMismatch ExpectPostHeadersContext expected given =
   standardTypeMismatch [ "The headers argument of POST is expected to be of type" ] expected given
 prettyTypeMismatch ExpectPostBodyContext expected given =
   standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectConcatArgumentContext expected given =
+  standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext expected given =
+  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =

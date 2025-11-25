@@ -324,6 +324,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       "FETCH" <+> printWithLayout e
     Post _ e1 e2 e3 ->
       "POST" <+> printWithLayout e1 <+> printWithLayout e2 <+> printWithLayout e3
+    Concat _ exprs ->
+      "CONCAT" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
+    AsString _ e ->
+      parensIfNeeded e <+> "AS STRING"
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of

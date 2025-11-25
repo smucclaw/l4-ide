@@ -73,6 +73,10 @@ data Frame =
   | BinBuiltin2 BinOp WHNF
   | UpdateThunk Reference
   | ContractFrame ContractFrame
+  | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
+  | AsStringFrame -- AsString frame
+  | JsonEncodeListFrame [Text] {- -} Reference Bool -- accumulated JSON strings, tail reference, expecting_tail (True = next value is tail, False = next value is element)
+  | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for nested list encoding to complete)
   deriving stock Show
 
 data EvalException =
@@ -281,6 +285,14 @@ forwardExpr env = \ case
   Post _ann e1 e2 e3 -> do
     PushFrame (Post1 e2 e3 env)
     ForwardExpr env e1
+  Concat _ann [] ->
+    Backward (ValString "")
+  Concat _ann (e : es) -> do
+    PushFrame (ConcatFrame [] es env)
+    ForwardExpr env e
+  AsString _ann e -> do
+    PushFrame AsStringFrame
+    ForwardExpr env e
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -444,6 +456,61 @@ backward val = WithPoppedFrame $ \ case
         "expected a BOOLEAN but found: " <> prettyLayout val <> " when testing equality"
   Just (UnaryBuiltin0 fn) -> do
     runBuiltin val fn
+  Just (ConcatFrame acc [] _env) -> do
+    -- All arguments evaluated, concatenate them
+    runConcat (reverse (val : acc))
+  Just (ConcatFrame acc (e : es) env) -> do
+    -- Evaluate next argument
+    PushFrame (ConcatFrame (val : acc) es env)
+    ForwardExpr env e
+  Just AsStringFrame -> do
+    -- Convert the value to string
+    runAsString val
+  Just (JsonEncodeListFrame acc tailRef expectingTail) -> do
+    -- Handle the value we got back
+    if expectingTail
+      then
+        -- We just evaluated the tail, so val is either ValNil or ValCons
+        case val of
+          ValNil -> do
+            -- We're done! Combine all accumulated JSON strings into an array
+            let jsonArray = "[" <> Text.intercalate "," (reverse acc) <> "]"
+            Backward $ ValString jsonArray
+          ValCons headRef nextTailRef -> do
+            -- More elements to process. Evaluate the head element first
+            PushFrame (JsonEncodeListFrame acc nextTailRef False)
+            EvalRef headRef
+          _ ->
+            -- Should not happen - tail should be ValNil or ValCons
+            InternalException $ RuntimeTypeError "Expected list (ValNil or ValCons) for tail"
+      else
+        -- We just evaluated an element, so encode it and continue with the tail
+        case val of
+          ValNil -> do
+            -- Element is an empty list
+            PushFrame (JsonEncodeListFrame ("[]" : acc) tailRef True)
+            EvalRef tailRef
+          ValCons elemHeadRef elemTailRef -> do
+            -- Element is a non-empty list, need to recursively encode it
+            -- Push a frame to wait for the nested encoding, then start encoding the nested list
+            PushFrame (JsonEncodeNestedFrame acc tailRef)  -- Will continue with tail after nested encoding
+            PushFrame (JsonEncodeListFrame [] elemTailRef False)  -- Encode the nested list
+            EvalRef elemHeadRef
+          _ -> do
+            -- Element is a primitive value
+            jsonStr <- encodeValueToJson val
+            PushFrame (JsonEncodeListFrame (jsonStr : acc) tailRef True)
+            EvalRef tailRef
+  Just (JsonEncodeNestedFrame acc tailRef) -> do
+    -- We just finished encoding a nested list, val should be a ValString with the JSON
+    case val of
+      ValString nestedJson -> do
+        -- Add the nested JSON to accumulator and continue with the tail
+        PushFrame (JsonEncodeListFrame (nestedJson : acc) tailRef True)
+        EvalRef tailRef
+      _ ->
+        -- Should not happen - nested list encoding should return ValString
+        InternalException $ RuntimeTypeError "Expected ValString from nested list encoding"
   Just (UpdateThunk rf) -> do
     updateThunkToWHNF rf val
     Backward val
@@ -750,8 +817,8 @@ encodeValueToJson = \case
   ValBool False -> pure "false"
   ValNil -> pure "[]"
   ValCons _x _xs ->
-    -- TODO: implement proper list encoding with recursive evaluation
-    InternalException $ RuntimeTypeError "JSON ENCODE does not yet support encoding lists with elements"
+    -- This should not be reached as lists are handled in runBuiltin with frames
+    InternalException $ RuntimeTypeError "Internal error: ValCons should be handled by frame-based evaluation in runBuiltin"
   ValConstructor conRef []
     | nameToText (TypeCheck.getName conRef) == "NOTHING" -> pure "null"
   ValConstructor conRef _fields
@@ -805,12 +872,45 @@ runPost urlVal headersVal bodyVal = do
       Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
     _ -> InternalException (RuntimeTypeError "POST only supports https")
 
+runConcat :: [WHNF] -> Machine Config
+runConcat vals = do
+  strings <- traverse expectString vals
+  Backward $ ValString (Text.concat strings)
+
+runAsString :: WHNF -> Machine Config
+runAsString val = do
+  case val of
+    ValNumber n ->
+      -- Convert number to string
+      -- If it's an integer, show without decimal point
+      -- Otherwise, show as decimal
+      let str = if denominator n == 1
+                then Text.pack $ show (numerator n)
+                else Text.pack $ show (fromRational n :: Double)
+      in Backward $ ValString str
+    ValString s ->
+      -- Already a string, just return it
+      Backward $ ValString s
+    _ -> InternalException $ RuntimeTypeError $
+      "AS STRING can only convert NUMBER or STRING to STRING, but found: " <> prettyLayout val
+
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
 runBuiltin es op = do
   case op of
     UnaryJsonEncode -> do
-      jsonStr <- encodeValueToJson es
-      Backward $ ValString jsonStr
+      case es of
+        ValCons headRef tailRef -> do
+          -- Start frame-based evaluation for non-empty lists
+          -- We're about to evaluate the head element (expectingTail = False)
+          PushFrame (JsonEncodeListFrame [] tailRef False)
+          EvalRef headRef
+        ValNil -> do
+          -- Empty list is simple
+          Backward $ ValString "[]"
+        _ -> do
+          -- For non-list values, use direct encoding
+          jsonStr <- encodeValueToJson es
+          Backward $ ValString jsonStr
     UnaryFetch -> do
       url <- expectString es
       let (url', options) = Text.breakOn "?" url

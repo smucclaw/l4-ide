@@ -228,6 +228,8 @@ data Expr n =
   | Event      Anno (Event n)
   | Fetch      Anno (Expr n)
   | Post       Anno (Expr n) (Expr n) (Expr n)  -- url, headers, body
+  | Concat     Anno [Expr n] -- string concatenation
+  | AsString   Anno (Expr n) -- type coercion to string
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

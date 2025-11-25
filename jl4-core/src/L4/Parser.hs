@@ -963,7 +963,7 @@ expressionCont = cont operator baseExpr
 postfixP :: Parser (a -> a) -> Parser a -> Parser a
 postfixP ops p = do
   a <- p
-  mf <- optional ops
+  mf <- optional (try ops)
   case mf of
     Nothing -> pure a
     Just f -> pure $ f a
@@ -995,6 +995,18 @@ operator =
 postfixOperator :: Parser (Expr Name -> Expr Name)
 postfixOperator =
       (\ op -> (postfix Percent   op)) <$> (spacedSymbol_ TPercent)
+  <|> hidden postfixAsType
+  where
+    postfixAsType = do
+      asAnno <- opToken (TKeywords TKAs)
+      -- Optional article: AS A STRING / AS AN STRING / AS STRING
+      articleLex <- optional (spacedKeyword_ TKA <|> spacedKeyword_ TKAn)
+      typename <- name
+      let articleAnno = maybe emptyAnno (mkSimpleEpaAnno . lexToEpa) articleLex
+          typenameAnno = getAnno typename
+          op = asAnno <> articleAnno <> typenameAnno
+      -- For now, we only support AS STRING, but parser accepts any type name
+      pure $ \ l -> AsString (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) l
 
 opToken :: TokenType -> Parser Anno
 opToken t =
@@ -1021,6 +1033,7 @@ baseExpr' =
   <|> negation
   <|> fetchExpr
   <|> postExpr
+  <|> concatExpr
   <|> ifthenelse
   <|> multiWayIf
   <|> try event
@@ -1086,6 +1099,14 @@ list = do
   attachAnno $
     List emptyAnno
       <$  annoLexeme (spacedKeyword_ TKList)
+      <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
+
+concatExpr :: Parser (Expr Name)
+concatExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Concat emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKConcat)
       <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
 
 intLit :: Parser Lit

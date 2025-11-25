@@ -193,6 +193,8 @@ data TKeywords
   | TKImport
   | TKFetch
   | TKPost
+  | TKConcat
+  | TKAs
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -265,6 +267,8 @@ keywords = Map.fromList
   , ("IMPORT"     , TKImport     )
   , ("FETCH"      , TKFetch      )
   , ("POST"       , TKPost       )
+  , ("CONCAT"     , TKConcat     )
+  , ("AS"         , TKAs         )
   ]
 
 data TOperators

@@ -178,6 +178,11 @@ nlgExpr = \ case
       e2' <- nlgExpr e2
       e3' <- nlgExpr e3
       pure $ Post ann e1' e2' e3'
+    Concat ann es -> do
+      es' <- traverse nlgExpr es
+      pure $ Concat ann es'
+    AsString ann e ->
+      AsString ann <$> nlgExpr e
 
 nlgPattern :: Pattern Resolved -> Check (Pattern Resolved)
 nlgPattern = \ case
