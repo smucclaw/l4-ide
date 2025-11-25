@@ -912,7 +912,8 @@ checkExpr ec (Where ann e ds) t = softprune $ do
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
-  pure re
+  -- Store the expected type in the annotation so it's available during evaluation
+  setAnnResolvedType t Nothing re
 
 checkIfThenElse :: ExpectationContext -> Anno -> Expr Name -> Expr Name -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkIfThenElse ec ann e1 e2 e3 t = do

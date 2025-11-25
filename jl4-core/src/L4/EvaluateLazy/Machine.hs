@@ -908,44 +908,57 @@ decodeJsonToValueTyped jsonStr ty = do
 
 -- | Convert Aeson Value to L4 WHNF using type information
 jsonValueToWHNFTyped :: Aeson.Value -> Type' Resolved -> Machine WHNF
-jsonValueToWHNFTyped jsonValue ty = case ty of
-  -- Handle record types: TyApp conRef []
-  TyApp _anno conRef [] -> do
-    -- This is a nullary type application, likely a record constructor
-    entityInfo <- GetEntityInfo
-    case Map.lookup (getUnique conRef) entityInfo of
-      Nothing -> do
-        -- Not a record, fall back to generic decoding
-        jsonValueToWHNF jsonValue
-      Just (_name, checkEntity) -> case checkEntity of
-        TypeCheck.KnownTerm conType Constructor -> do
-          -- This is a constructor, extract field names
-          fieldNames <- extractFieldNames conType
-          case jsonValue of
-            Aeson.Object obj -> do
-              -- Decode each field from the JSON object
-              -- Note: We ignore extra fields in the JSON (Postel's Law)
-              fieldRefs <- forM fieldNames $ \fieldName -> do
-                case KeyMap.lookup (Key.fromText fieldName) obj of
-                  Nothing -> do
-                    -- Field missing in JSON, this is an error
-                    InternalException $ RuntimeTypeError $
-                      "Missing required field '" <> fieldName <> "' in JSON object"
-                  Just fieldValue -> do
-                    -- Decode the field value (recursive, but without type info for now)
-                    fieldWHNF <- jsonValueToWHNF fieldValue
-                    AllocateValue fieldWHNF
-              -- Construct the record with the decoded fields
-              pure $ ValConstructor conRef fieldRefs
-            _ -> do
-              -- JSON value is not an object, can't decode to record
-              InternalException $ RuntimeTypeError $
-                "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
-        _ -> do
-          -- Not a constructor, fall back to generic decoding
+jsonValueToWHNFTyped jsonValue ty = do
+  case ty of
+    -- Handle record types: TyApp conRef []
+    TyApp _anno tyRef [] -> do
+      -- This is a nullary type application
+      -- For record types, we need to find the constructor with the same name
+      entityInfo <- GetEntityInfo
+
+      -- First check if this is a type
+      case Map.lookup (getUnique tyRef) entityInfo of
+        Nothing ->
           jsonValueToWHNF jsonValue
-  -- For other types, fall back to generic decoding
-  _ -> jsonValueToWHNF jsonValue
+        Just (typeName, _checkEntity) -> do
+          -- Now look for a constructor with the same name
+          let constructors = Map.toList entityInfo
+              matchingConstructor = listToMaybe
+                [ (unique, name, conType)
+                | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
+                , nameToText (TypeCheck.getName name) == nameToText (TypeCheck.getName typeName)
+                ]
+
+          case matchingConstructor of
+            Nothing ->
+              jsonValueToWHNF jsonValue
+            Just (conUnique, conName, conType) -> do
+              -- Construct a Resolved reference for the constructor
+              let conRef = Def conUnique conName
+              -- Extract field names from the constructor type
+              fieldNames <- extractFieldNames conType
+              case jsonValue of
+                Aeson.Object obj -> do
+                  -- Decode each field from the JSON object
+                  -- Note: We ignore extra fields in the JSON (Postel's Law)
+                  fieldRefs <- forM fieldNames $ \fieldName -> do
+                    case KeyMap.lookup (Key.fromText fieldName) obj of
+                      Nothing -> do
+                        -- Field missing in JSON, this is an error
+                        InternalException $ RuntimeTypeError $
+                          "Missing required field '" <> fieldName <> "' in JSON object"
+                      Just fieldValue -> do
+                        -- Decode the field value (recursive, but without type info for now)
+                        fieldWHNF <- jsonValueToWHNF fieldValue
+                        AllocateValue fieldWHNF
+                  -- Construct the record with the decoded fields
+                  pure $ ValConstructor conRef fieldRefs
+                _ -> do
+                  -- JSON value is not an object, can't decode to record
+                  InternalException $ RuntimeTypeError $
+                    "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
+    -- For other types, fall back to generic decoding
+    _ -> jsonValueToWHNF jsonValue
 
 decodeJsonToValue :: Text -> Machine WHNF
 decodeJsonToValue jsonStr = do
@@ -1108,8 +1121,16 @@ runBuiltin es op mTy = do
     UnaryJsonDecode -> do
       jsonStr <- expectString es
       result <- case mTy of
-        Just ty -> decodeJsonToValueTyped jsonStr ty
-        Nothing -> decodeJsonToValue jsonStr
+        Just ty -> do
+          -- Extract inner type from MAYBE if present
+          -- JSONDECODE returns MAYBE α, so if we have MAYBE Person, extract Person
+          let innerTy = case ty of
+                TyApp _ maybeRef [innerType]
+                  | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> innerType
+                _ -> ty
+          decodeJsonToValueTyped jsonStr innerTy
+        Nothing ->
+          decodeJsonToValue jsonStr
       Backward result
     UnaryFetch -> do
       url <- expectString es

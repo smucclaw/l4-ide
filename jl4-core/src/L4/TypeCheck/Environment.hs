@@ -24,6 +24,9 @@ mkBuiltins
   , "string"
   , "list"
   , "empty"
+  , "maybe" `rename` "MAYBE"
+  , "nothing" `rename` "NOTHING"
+  , "just" `rename` "JUST"
   , "contract" `rename` "PROVISION"
   , "fulfil" `rename` "FULFILLED"
   , "evalContract" `rename` "EVALTRACE"
@@ -37,6 +40,7 @@ mkBuiltins
   , "fetch" `rename` "FETCH"
   , "post" `rename` "POST"
   , "jsonEncode" `rename` "JSONENCODE"
+  , "jsonDecode" `rename` "JSONDECODE"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -79,6 +83,11 @@ string = TyApp emptyAnno stringRef []
 list :: Type' Resolved -> Type' Resolved
 list a = app listRef [a]
 
+-- MAYBE
+
+maybeType :: Type' Resolved -> Type' Resolved
+maybeType a = app maybeRef [a]
+
 -- PROVISION
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
@@ -106,6 +115,11 @@ postBuiltin = fun_ [string, string, string] string
 
 jsonEncodeBuiltin :: Type' Resolved
 jsonEncodeBuiltin = forall' [aDef] $ fun_ [a] string
+  where
+    a = app aRef []
+
+jsonDecodeBuiltin :: Type' Resolved
+jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (maybeType a)
   where
     a = app aRef []
 
@@ -217,6 +231,18 @@ emptyInfo :: CheckEntity
 emptyInfo =
   KnownTerm (forall' [aDef] (list (app aRef []))) Constructor
 
+maybeInfo :: CheckEntity
+maybeInfo =
+  KnownType 1 [aDef] Nothing
+
+nothingInfo :: CheckEntity
+nothingInfo =
+  KnownTerm (forall' [aDef] (maybeType (app aRef []))) Constructor
+
+justInfo :: CheckEntity
+justInfo =
+  KnownTerm (forall' [aDef] (fun_ [app aRef []] (maybeType (app aRef [])))) Constructor
+
 -- Number conversion
 
 isIntegerInfo :: CheckEntity
@@ -246,6 +272,10 @@ postInfo =
 jsonEncodeInfo :: CheckEntity
 jsonEncodeInfo =
   KnownTerm jsonEncodeBuiltin Computable
+
+jsonDecodeInfo :: CheckEntity
+jsonDecodeInfo =
+  KnownTerm jsonDecodeBuiltin Computable
 
 -- Basic Arithmetic
 
@@ -349,6 +379,9 @@ initialEnvironment =
     , (rawName stringName,       [stringUnique      ])
     , (rawName listName,         [listUnique        ])
     , (rawName emptyName,        [emptyUnique       ])
+    , (rawName maybeName,        [maybeUnique       ])
+    , (rawName nothingName,      [nothingUnique     ])
+    , (rawName justName,         [justUnique        ])
     , (rawName contractName,     [contractUnique    ])
     , (rawName eventName,        [eventUnique       ])
     , (rawName eventCName,       [eventCUnique      ])
@@ -360,6 +393,7 @@ initialEnvironment =
     , (rawName floorName,        [floorUnique     ])
     , (rawName fetchName,        [fetchUnique     ])
     , (rawName jsonEncodeName,   [jsonEncodeUnique])
+    , (rawName jsonDecodeName,   [jsonDecodeUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -389,6 +423,9 @@ initialEntityInfo =
     , (stringUnique,       (stringName,       stringInfo      ))
     , (listUnique,         (listName,         listInfo        ))
     , (emptyUnique,        (emptyName,        emptyInfo       ))
+    , (maybeUnique,        (maybeName,        maybeInfo       ))
+    , (nothingUnique,      (nothingName,      nothingInfo     ))
+    , (justUnique,         (justName,         justInfo        ))
     , (contractUnique,     (contractName,     contractInfo    ))
     , (eventUnique,        (eventName,        eventInfo       ))
     , (eventCUnique,       (eventCName,       eventCInfo      ))
@@ -401,6 +438,7 @@ initialEntityInfo =
     , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (postUnique,         (postName,         postInfo        ))
     , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
+    , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))
