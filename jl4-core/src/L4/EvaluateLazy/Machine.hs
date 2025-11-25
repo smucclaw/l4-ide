@@ -739,6 +739,39 @@ expectInteger op n = do
     Nothing -> UserException (NotAnInteger op n)
     Just i -> pure i
 
+-- | Encode an L4 value to JSON string
+encodeValueToJson :: WHNF -> Machine Text
+encodeValueToJson = \case
+  ValString s -> pure $ "\"" <> escapeJson s <> "\""
+  ValNumber n
+    | denominator n == 1 -> pure $ Text.pack $ show (numerator n)
+    | otherwise -> pure $ Text.pack $ show (fromRational n :: Double)
+  ValBool True -> pure "true"
+  ValBool False -> pure "false"
+  ValNil -> pure "[]"
+  ValCons _x _xs ->
+    -- TODO: implement proper list encoding with recursive evaluation
+    InternalException $ RuntimeTypeError "JSON ENCODE does not yet support encoding lists with elements"
+  ValConstructor conRef []
+    | nameToText (TypeCheck.getName conRef) == "NOTHING" -> pure "null"
+  ValConstructor conRef _fields
+    | nameToText (TypeCheck.getName conRef) == "JUST" ->
+      -- TODO: implement proper JUST encoding with recursive evaluation
+      InternalException $ RuntimeTypeError "JSON ENCODE does not yet support encoding JUST values"
+  ValConstructor _conRef _fields -> do
+    -- TODO: implement proper constructor encoding
+    InternalException $ RuntimeTypeError "JSON ENCODE does not yet support encoding constructor values"
+  val -> InternalException $ RuntimeTypeError $ "Cannot encode value to JSON: " <> prettyLayout val
+  where
+    escapeJson :: Text -> Text
+    escapeJson = Text.concatMap \case
+      '"' -> "\\\""
+      '\\' -> "\\\\"
+      '\n' -> "\\n"
+      '\r' -> "\\r"
+      '\t' -> "\\t"
+      c -> Text.singleton c
+
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
   url <- expectString urlVal
@@ -763,6 +796,9 @@ runPost urlVal headersVal bodyVal = do
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
 runBuiltin es op = do
   case op of
+    UnaryJsonEncode -> do
+      jsonStr <- encodeValueToJson es
+      Backward $ ValString jsonStr
     UnaryFetch -> do
       url <- expectString es
       let (url', options) = Text.breakOn "?" url
@@ -1293,6 +1329,7 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   fetchRef <- AllocateValue (ValUnaryBuiltinFun UnaryFetch)
+  jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -1323,6 +1360,7 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.fetchUnique, fetchRef)
+      , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)

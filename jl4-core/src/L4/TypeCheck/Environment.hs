@@ -36,6 +36,7 @@ mkBuiltins
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
   , "post" `rename` "POST"
+  , "jsonEncode" `rename` "JSONENCODE"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -102,6 +103,11 @@ fetchBuiltin = fun_ [string] string
 
 postBuiltin :: Type' Resolved
 postBuiltin = fun_ [string, string, string] string
+
+jsonEncodeBuiltin :: Type' Resolved
+jsonEncodeBuiltin = forall' [aDef] $ fun_ [a] string
+  where
+    a = app aRef []
 
 -- Basic Arithmetic
 
@@ -237,6 +243,10 @@ postInfo :: CheckEntity
 postInfo =
   KnownTerm postBuiltin Computable
 
+jsonEncodeInfo :: CheckEntity
+jsonEncodeInfo =
+  KnownTerm jsonEncodeBuiltin Computable
+
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -349,6 +359,7 @@ initialEnvironment =
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
     , (rawName fetchName,        [fetchUnique     ])
+    , (rawName jsonEncodeName,   [jsonEncodeUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -389,6 +400,7 @@ initialEntityInfo =
     , (floorUnique,        (floorName,        floorInfo       ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (postUnique,         (postName,         postInfo        ))
+    , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

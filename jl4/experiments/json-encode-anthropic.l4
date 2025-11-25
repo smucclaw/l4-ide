@@ -1,0 +1,38 @@
+// Example: Encoding a request for Anthropic Claude API
+// This demonstrates building a JSON request body for the Claude Messages API
+
+DECLARE `Message` HAS
+  `role`    IS A STRING
+  `content` IS A STRING
+
+DECIDE createMessage (role IS A STRING) (content IS A STRING) IS
+  `Message` {
+    `role` IS role
+    `content` IS content
+  }
+
+DECIDE userMessage IS
+  createMessage "user" "Does this cosmetic claim violate regulations: 'Treats acne permanently'?"
+
+// For now we'll encode just the message
+// In the future, we can build the full API request structure
+DECIDE encodeMessage IS
+  `JSON ENCODE` userMessage
+
+#EVAL encodeMessage
+
+// Once we have full record support, we can do:
+// DECLARE `API Request` HAS
+//   `model`      IS A STRING
+//   `max_tokens` IS A NUMBER
+//   `messages`   IS A LIST OF `Message`
+//
+// DECIDE apiRequest IS
+//   `API Request` {
+//     `model` IS "claude-sonnet-4-5-20250929"
+//     `max_tokens` IS 500
+//     `messages` IS LIST userMessage
+//   }
+//
+// DECIDE requestBody IS
+//   JSON ENCODE apiRequest

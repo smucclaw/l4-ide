@@ -73,6 +73,7 @@ data UnaryBuiltinFun
   | UnaryFloor
   | UnaryPercent
   | UnaryFetch
+  | UnaryJsonEncode
   deriving stock (Show)
 
 data TernaryBuiltinFun
@@ -112,6 +113,7 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
   rnf UnaryFetch = ()
+  rnf UnaryJsonEncode = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()
