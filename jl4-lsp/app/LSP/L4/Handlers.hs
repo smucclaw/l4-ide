@@ -345,7 +345,7 @@ handlers recorder =
                 , _xdata = Nothing
                 }
               Just (evalEnv, _) -> do
-                result <- MkVizHandler $ evalApp (evalEnv, tcRes.module') evalParams recentViz
+                result <- MkVizHandler $ evalApp tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
                   LogHandlingCustomRequest evalParams.verDocId._uri
                   ("Eval result: " <> Text.show result)

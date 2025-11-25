@@ -1,0 +1,70 @@
+-- Test JSONDECODE operator (JSON string to L4 values wrapped in MAYBE)
+
+-- Test 1: Decode JSON primitives
+DECIDE decodeString IS
+  JSONDECODE "\"hello\""
+
+DECIDE decodeNumber IS
+  JSONDECODE "42"
+
+DECIDE decodeDecimal IS
+  JSONDECODE "3.14"
+
+DECIDE decodeTrue IS
+  JSONDECODE "true"
+
+DECIDE decodeFalse IS
+  JSONDECODE "false"
+
+DECIDE decodeNull IS
+  JSONDECODE "null"
+
+-- Test 2: Decode JSON arrays to L4 lists
+DECIDE decodeEmptyArray IS
+  JSONDECODE "[]"
+
+DECIDE decodeNumberArray IS
+  JSONDECODE "[1, 2, 3, 4, 5]"
+
+DECIDE decodeStringArray IS
+  JSONDECODE "[\"apple\", \"banana\", \"cherry\"]"
+
+DECIDE decodeBooleanArray IS
+  JSONDECODE "[true, false, true]"
+
+DECIDE decodeNestedArray IS
+  JSONDECODE "[[1, 2], [3, 4], [5, 6]]"
+
+-- Test 3: Parse errors return NOTHING
+DECIDE decodeInvalidJson IS
+  JSONDECODE "{not valid json"
+
+DECIDE decodeMalformed IS
+  JSONDECODE "[1, 2, "
+
+-- Test 4: Extract values from MAYBE using CONSIDER
+DECIDE extractedString IS
+  CONSIDER decodeString
+    WHEN JUST value THEN value
+    WHEN NOTHING THEN "default"
+
+DECIDE extractedNumber IS
+  CONSIDER decodeNumber
+    WHEN JUST value THEN value
+    WHEN NOTHING THEN 0
+
+#EVAL decodeString
+#EVAL decodeNumber
+#EVAL decodeDecimal
+#EVAL decodeTrue
+#EVAL decodeFalse
+#EVAL decodeNull
+#EVAL decodeEmptyArray
+#EVAL decodeNumberArray
+#EVAL decodeStringArray
+#EVAL decodeBooleanArray
+#EVAL decodeNestedArray
+#EVAL decodeInvalidJson
+#EVAL decodeMalformed
+#EVAL extractedString
+#EVAL extractedNumber

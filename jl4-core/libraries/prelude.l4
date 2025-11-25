@@ -377,15 +377,6 @@ elem x list MEANS
   WHEN EMPTY THEN FALSE
   WHEN y FOLLOWED BY ys THEN x EQUALS y OR elem x ys
 
-GIVEN a IS A TYPE
-GIVETH A TYPE
-DECLARE MAYBE a AKA OPTIONAL
-  IS ONE OF
-    NOTHING
-    JUST
-      HAS
-        payload IS AN a
-
 GIVEN
   a       IS A TYPE
   default IS AN a

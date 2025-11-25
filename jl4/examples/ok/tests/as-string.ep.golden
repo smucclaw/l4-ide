@@ -1,0 +1,38 @@
+-- Test AS STRING operator (type coercion)
+
+-- Basic number to string conversion
+DECIDE age IS 25
+
+DECIDE ageAsString IS
+  age AS STRING
+
+DECIDE ageAsAString IS
+  age AS A STRING
+
+-- Conversion in expressions
+DECIDE message IS
+  CONCAT "Age is ", (age AS STRING)
+
+-- Multiple conversions
+DECIDE num1 IS 10
+DECIDE num2 IS 20
+
+DECIDE combined IS
+  CONCAT (num1 AS STRING), " + ", (num2 AS STRING), " = ", ((num1 + num2) AS STRING)
+
+-- Decimal numbers
+DECIDE pi IS 3.14159
+
+DECIDE piAsString IS
+  pi AS STRING
+
+-- Nested in operations
+DECIDE calculation IS
+  CONCAT "Result: ", ((5 * 10) AS STRING)
+
+#EVAL ageAsString
+#EVAL ageAsAString
+#EVAL message
+#EVAL combined
+#EVAL piAsString
+#EVAL calculation

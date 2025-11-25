@@ -1,0 +1,27 @@
+// Test POST with custom HTTP headers
+// This tests the header support implementation
+
+// Test 1: Single custom header
+DECIDE testSingleHeader IS
+  POST
+    "https://httpbin.org/post"
+    "X-Test-Header: test-value"
+    "{\"message\": \"single header test\"}"
+
+// Test 2: Multiple headers (newline-separated)
+DECIDE testMultipleHeaders IS
+  POST
+    "https://httpbin.org/post"
+    "X-Custom-Header: my-value\nX-Another-Header: another-value\nContent-Type: application/json"
+    "{\"message\": \"multiple headers test\"}"
+
+// Test 3: API-style headers (like Anthropic)
+DECIDE testAPIHeaders IS
+  POST
+    "https://httpbin.org/post"
+    "x-api-key: test-key-12345\nanthropic-version: 2023-06-01\ncontent-type: application/json"
+    "{\"model\": \"test\", \"max_tokens\": 100}"
+
+#EVAL testSingleHeader
+#EVAL testMultipleHeaders
+#EVAL testAPIHeaders

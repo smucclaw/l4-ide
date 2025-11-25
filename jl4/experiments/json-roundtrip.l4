@@ -1,0 +1,26 @@
+IMPORT prelude
+
+-- Define a simple record type
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+-- Type-directed JSON decoder for Person
+GIVEN  jsonStr IS A STRING
+GIVETH A MAYBE Person
+decodePerson jsonStr MEANS JSONDECODE jsonStr
+
+-- Create a Person value
+DECIDE alice IS Person WITH
+  name IS "Alice"
+  age IS 30
+
+-- Encode to JSON
+DECIDE aliceJson IS JSONENCODE alice
+
+-- Decode back using the typed decoder
+DECIDE decoded IS decodePerson aliceJson
+
+#EVAL alice
+#EVAL aliceJson
+#EVAL decoded

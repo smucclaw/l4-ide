@@ -1,0 +1,18 @@
+// Test JSON encoding of lists containing records/constructors
+// This ensures that constructors inside lists are properly encoded
+
+DECLARE Message HAS
+  role IS A STRING
+  content IS A STRING
+
+DECIDE msg1 IS Message WITH
+  role IS "user"
+  content IS "Hello"
+
+DECIDE msg2 IS Message WITH
+  role IS "assistant"
+  content IS "Hi there!"
+
+DECIDE messages IS LIST msg1, msg2
+
+#EVAL JSONENCODE messages

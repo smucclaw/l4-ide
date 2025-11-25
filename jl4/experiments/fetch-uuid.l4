@@ -1,0 +1,10 @@
+DECIDE fetchUUID IS
+  FETCH
+    "https://www.uuidtools.com/api/generate/v4"
+
+// you should get the same result for all three calls;
+// this demonstrates lazy evaluation.
+
+#EVAL fetchUUID
+#EVAL fetchUUID
+#EVAL fetchUUID

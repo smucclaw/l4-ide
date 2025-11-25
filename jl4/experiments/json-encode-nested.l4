@@ -1,0 +1,8 @@
+// Test nested list encoding
+
+DECIDE innerList IS LIST 1, 2, 3
+
+DECIDE nestedList IS LIST innerList
+
+#EVAL JSONENCODE innerList
+#EVAL JSONENCODE nestedList

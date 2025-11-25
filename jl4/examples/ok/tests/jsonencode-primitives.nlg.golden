@@ -1,0 +1,5 @@
+`encodeString`
+`encodeNumber`
+`encodeNumberDecimal`
+`encodeBoolTrue`
+`encodeBoolFalse`

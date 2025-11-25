@@ -1,0 +1,47 @@
+-- Test POST operator syntax with headers
+-- Note: These examples require network connectivity to evaluate
+-- They are included to validate syntax and type checking
+
+-- Simple POST without custom headers
+DECIDE postSimple IS
+  POST
+    "https://httpbin.org/post"
+    ""
+    "{\"test\": \"data\"}"
+
+-- POST with single custom header
+DECIDE postSingleHeader IS
+  POST
+    "https://httpbin.org/post"
+    "X-Custom-Header: test-value"
+    "{\"message\": \"hello\"}"
+
+-- POST with multiple headers (newline-separated)
+DECIDE postMultipleHeaders IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json\nX-API-Key: test-key-123\nX-Version: 1.0"
+    "{\"data\": \"test\", \"count\": 42}"
+
+-- POST with dynamic content (using CONCAT)
+DECIDE testMessage IS "Hello from L4"
+
+DECIDE postDynamic IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json"
+    (CONCAT "{\"message\": \"", testMessage, "\"}")
+
+-- POST with JSON-encoded payload
+DECIDE postWithJsonEncode IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json"
+    (JSONENCODE (LIST "item1", "item2", "item3"))
+
+-- Note: To actually evaluate these, uncomment the lines below:
+-- #EVAL postSimple
+-- #EVAL postSingleHeader
+-- #EVAL postMultipleHeaders
+-- #EVAL postDynamic
+-- #EVAL postWithJsonEncode

@@ -1,0 +1,18 @@
+// Test JSON round-trip: JSON -> L4 Value -> JSON
+
+IMPORT prelude
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+// Start with JSON string
+DECIDE originalJson IS "{\"name\":\"Alice\",\"age\":30}"
+
+// Decode from JSON to get L4 value
+GIVETH A MAYBE Person
+DECIDE decoded IS JSONDECODE originalJson
+
+// Show what we got
+#EVAL originalJson
+#EVAL decoded

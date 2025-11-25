@@ -1,0 +1,22 @@
+// Comprehensive JSON ENCODE tests
+
+// Test nested lists
+DECIDE encodeNestedList IS
+  JSONENCODE (LIST (LIST 1, 2), (LIST 3, 4))
+
+// Test list of strings
+DECIDE encodeStringList IS
+  JSONENCODE (LIST "apple", "banana", "cherry")
+
+// Test list of booleans
+DECIDE encodeBoolList IS
+  JSONENCODE (LIST TRUE, FALSE, TRUE)
+
+// Test mixed primitives (if supported)
+DECIDE encodeMixedList IS
+  JSONENCODE (LIST 1, 2, 3, 4, 5)
+
+#EVAL encodeNestedList
+#EVAL encodeStringList
+#EVAL encodeBoolList
+#EVAL encodeMixedList

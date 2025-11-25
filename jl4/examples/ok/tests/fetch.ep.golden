@@ -1,0 +1,20 @@
+-- Test FETCH operator syntax
+-- Note: These examples require network connectivity to evaluate
+-- They are included to validate syntax and type checking
+
+-- Simple FETCH example
+DECIDE fetchExample IS
+  FETCH "https://example.com/api"
+
+-- FETCH with query parameters in URL
+DECIDE fetchWithParams IS
+  FETCH "https://api.example.com/data?format=json&limit=10"
+
+-- FETCH UUID (common example from httpbin-style APIs)
+DECIDE fetchUUID IS
+  FETCH "https://www.uuidtools.com/api/generate/v4"
+
+-- Note: To actually evaluate these, uncomment the lines below:
+-- #EVAL fetchExample
+-- #EVAL fetchWithParams
+-- #EVAL fetchUUID

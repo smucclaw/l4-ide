@@ -1,0 +1,22 @@
+-- Test JSON encoding of primitive types
+
+DECIDE encodeString IS
+  JSONENCODE "Hello, World!"
+
+DECIDE encodeNumber IS
+  JSONENCODE 42
+
+DECIDE encodeNumberDecimal IS
+  JSONENCODE 3.14
+
+DECIDE encodeBoolTrue IS
+  JSONENCODE TRUE
+
+DECIDE encodeBoolFalse IS
+  JSONENCODE FALSE
+
+#EVAL encodeString
+#EVAL encodeNumber
+#EVAL encodeNumberDecimal
+#EVAL encodeBoolTrue
+#EVAL encodeBoolFalse
