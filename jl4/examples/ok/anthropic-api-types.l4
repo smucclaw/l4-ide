@@ -1,0 +1,87 @@
+-- Test JSONENCODE with Anthropic Claude API types
+-- These types match the Claude Messages API v1
+-- See: https://docs.anthropic.com/en/api/messages
+
+-- Content block for a message
+DECLARE TextContent HAS
+  type IS A STRING
+  text IS A STRING
+
+-- Message structure for requests
+DECLARE Message HAS
+  role IS A STRING
+  content IS A STRING
+
+-- Usage tracking
+DECLARE Usage HAS
+  input_tokens IS A NUMBER
+  output_tokens IS A NUMBER
+
+-- API Response structure
+DECLARE MessageResponse HAS
+  id IS A STRING
+  type IS A STRING
+  role IS A STRING
+  content IS A STRING
+  model IS A STRING
+  stop_reason IS A STRING
+
+-- Request to Claude API
+DECLARE MessagesRequest HAS
+  model IS A STRING
+  max_tokens IS A NUMBER
+  temperature IS A NUMBER
+
+-- Test 1: Simple user message
+DECIDE userMessage IS Message WITH
+  role IS "user"
+  content IS "Hello, Claude!"
+
+DECIDE encodedUserMessage IS JSONENCODE userMessage
+
+-- Test 2: Assistant message
+DECIDE assistantMessage IS Message WITH
+  role IS "assistant"
+  content IS "Hello! How can I help you today?"
+
+DECIDE encodedAssistantMessage IS JSONENCODE assistantMessage
+
+-- Test 3: Usage statistics
+DECIDE usageStats IS Usage WITH
+  input_tokens IS 10
+  output_tokens IS 25
+
+DECIDE encodedUsage IS JSONENCODE usageStats
+
+-- Test 4: API Request
+DECIDE apiRequest IS MessagesRequest WITH
+  model IS "claude-sonnet-4-5-20250929"
+  max_tokens IS 1024
+  temperature IS 1.0
+
+DECIDE encodedRequest IS JSONENCODE apiRequest
+
+-- Test 5: API Response
+DECIDE apiResponse IS MessageResponse WITH
+  id IS "msg_01XFDUDYJgAACzvnptvVoYEL"
+  type IS "message"
+  role IS "assistant"
+  content IS "Hello! I'm Claude, an AI assistant created by Anthropic."
+  model IS "claude-sonnet-4-5-20250929"
+  stop_reason IS "end_turn"
+
+DECIDE encodedResponse IS JSONENCODE apiResponse
+
+-- Test 6: Text content block
+DECIDE textBlock IS TextContent WITH
+  type IS "text"
+  text IS "This is a content block."
+
+DECIDE encodedTextBlock IS JSONENCODE textBlock
+
+#EVAL encodedUserMessage
+#EVAL encodedAssistantMessage
+#EVAL encodedUsage
+#EVAL encodedRequest
+#EVAL encodedResponse
+#EVAL encodedTextBlock

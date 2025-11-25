@@ -1,0 +1,53 @@
+-- Test JSONENCODE operator for records (to JSON objects)
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+DECLARE Company HAS
+  companyName IS A STRING
+  employees IS A NUMBER
+  active IS A BOOLEAN
+
+DECLARE Address HAS
+  street IS A STRING
+  city IS A STRING
+  zipCode IS A NUMBER
+
+DECLARE Employee HAS
+  fullName IS A STRING
+  contact IS AN Address
+
+-- Test 1: Simple record encoding
+DECIDE testPerson IS Person WITH
+  name IS "Alice"
+  age IS 30
+
+DECIDE encodedPerson IS JSONENCODE testPerson
+
+-- Test 2: Record with boolean
+DECIDE testCompany IS Company WITH
+  companyName IS "Acme Corp"
+  employees IS 100
+  active IS TRUE
+
+DECIDE encodedCompany IS JSONENCODE testCompany
+
+-- Test 3: Nested record encoding
+DECIDE testEmployee IS Employee WITH
+  fullName IS "Bob Smith"
+  contact IS Address WITH
+    street IS "123 Main St"
+    city IS "Springfield"
+    zipCode IS 12345
+
+DECIDE encodedEmployee IS JSONENCODE testEmployee
+
+-- Test 4: Record with MAYBE fields (after MAYBE encoding is implemented)
+-- DECIDE testPersonWithMaybeAge IS Person WITH
+--   name IS "Charlie"
+--   age IS NOTHING
+
+#EVAL encodedPerson
+#EVAL encodedCompany
+#EVAL encodedEmployee
