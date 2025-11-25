@@ -1,0 +1,70 @@
+// Minimal test case for JSONDECODE with nested structures
+// Tests: Can JSONDECODE handle lists of records and nested records?
+
+§ `Test JSONDECODE Nested Structures`
+
+// Test 1: Simple list of records
+DECLARE `Item` HAS
+  `name` IS A STRING
+  `value` IS A NUMBER
+
+DECIDE simpleListJson IS
+  "{\"items\":[{\"name\":\"first\",\"value\":1},{\"name\":\"second\",\"value\":2}]}"
+
+DECLARE `List Container` HAS
+  `items` IS A LIST OF `Item`
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `List Container`
+decodeListContainer json MEANS
+  JSONDECODE json
+
+DECIDE parsedList IS
+  decodeListContainer simpleListJson
+
+#EVAL simpleListJson
+#EVAL parsedList
+
+// Test 2: Nested record
+DECLARE `Inner` HAS
+  `field` IS A STRING
+
+DECLARE `Outer` HAS
+  `nested` IS A `Inner`
+  `value` IS A NUMBER
+
+DECIDE nestedJson IS
+  "{\"nested\":{\"field\":\"hello\"},\"value\":42}"
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `Outer`
+decodeOuter json MEANS
+  JSONDECODE json
+
+DECIDE parsedNested IS
+  decodeOuter nestedJson
+
+#EVAL nestedJson
+#EVAL parsedNested
+
+// Test 3: Content block specifically (matching Anthropic structure)
+DECLARE `Content Block` HAS
+  `type` IS A STRING
+  `text` IS A STRING
+
+DECIDE contentListJson IS
+  "{\"content\":[{\"type\":\"text\",\"text\":\"Hello world\"}]}"
+
+DECLARE `Content Container` HAS
+  `content` IS A LIST OF `Content Block`
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `Content Container`
+decodeContentContainer json MEANS
+  JSONDECODE json
+
+DECIDE parsedContent IS
+  decodeContentContainer contentListJson
+
+#EVAL contentListJson
+#EVAL parsedContent
