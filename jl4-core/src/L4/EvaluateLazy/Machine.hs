@@ -775,7 +775,7 @@ encodeValueToJson = \case
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
   url <- expectString urlVal
-  _headers <- expectString headersVal  -- For now, headers is just a string; TODO: parse and use headers
+  headersStr <- expectString headersVal
   body <- expectString bodyVal
   let (url', options) = Text.breakOn "?" url
       (protocol, _) = Text.breakOn "://" url'
@@ -786,8 +786,20 @@ runPost urlVal headersVal bodyVal = do
           reqBase = Req.https hostname
           reqWithPath = foldl (Req./:) reqBase pathSegments
           params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
-          req_options =
-            mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+
+          -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
+          headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
+          parseHeader line =
+            let (name, rest) = Text.breakOn ":" line
+                value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
+            in if Text.null rest
+               then Nothing  -- invalid header format
+               else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
+          headerOptions = mapMaybe parseHeader headerLines
+
+          queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
+          req_options = mconcat (headerOptions <> queryOptions)
+
       res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
         Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
       Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
