@@ -28,7 +28,7 @@ lazytrace2.l4:25:1-32:
   │┌ MkPair OF 1, 2
   │└ MkPair OF 1, 2
   │┌ addPair
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER p WHEN MkPair p1
   │                         p2 THEN p1 PLUS p2
   ├ p1 PLUS p2
@@ -54,25 +54,25 @@ lazytrace2.l4:27:1-32:
   ││└ LIST 2, 3
   │└ LIST 1, 2, 3
   │┌ sumList
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN 0,
   │                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   ├ z PLUS (sumList OF zs)
   │┌ sumList OF zs
   ││┌ sumList
-  ││└ <function>
+  ││└ <function: can't print a function -- are you calling it with enough arguments?>
   │├ CONSIDER list WHEN EMPTY THEN 0,
   ││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   │├ z PLUS (sumList OF zs)
   ││┌ sumList OF zs
   │││┌ sumList
-  │││└ <function>
+  │││└ <function: can't print a function -- are you calling it with enough arguments?>
   ││├ CONSIDER list WHEN EMPTY THEN 0,
   │││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   ││├ z PLUS (sumList OF zs)
   │││┌ sumList OF zs
   ││││┌ sumList
-  ││││└ <function>
+  ││││└ <function: can't print a function -- are you calling it with enough arguments?>
   │││├ CONSIDER list WHEN EMPTY THEN 0,
   ││││                 WHEN z FOLLOWED BY zs THEN z PLUS (sumList OF zs)
   │││├ 0

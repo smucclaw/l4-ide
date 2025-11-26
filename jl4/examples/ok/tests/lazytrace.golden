@@ -7,28 +7,28 @@ lazytrace.l4:23:1-36:
   ┌ sum OF (everyOther OF example)
   │┌ everyOther OF example
   ││┌ everyOther
-  ││└ <function>
+  ││└ <function: can't print a function -- are you calling it with enough arguments?>
   │├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   ││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   ││                 WHEN EMPTY THEN EMPTY
   │├ x FOLLOWED BY (everyOther OF ys)
   ││┌ everyOther OF ys
   │││┌ everyOther
-  │││└ <function>
+  │││└ <function: can't print a function -- are you calling it with enough arguments?>
   ││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   │││                 WHEN EMPTY THEN EMPTY
   ││├ x FOLLOWED BY (everyOther OF ys)
   │││┌ everyOther OF ys
   ││││┌ everyOther
-  ││││└ <function>
+  ││││└ <function: can't print a function -- are you calling it with enough arguments?>
   │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   ││││                 WHEN EMPTY THEN EMPTY
   │││├ x FOLLOWED BY (everyOther OF ys)
   ││││┌ everyOther OF ys
   │││││┌ everyOther
-  │││││└ <function>
+  │││││└ <function: can't print a function -- are you calling it with enough arguments?>
   ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   │││││                 WHEN EMPTY THEN EMPTY
@@ -38,7 +38,7 @@ lazytrace.l4:23:1-36:
   ││└ LIST 9, 1
   │└ LIST 25, 9, 1
   │┌ sum
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├   go OF 0, list
   │ WHERE
   │   GIVEN acc
@@ -48,28 +48,28 @@ lazytrace.l4:23:1-36:
   │                  WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF 0, list
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 25
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 34
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 35
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ acc

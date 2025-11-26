@@ -29,5 +29,5 @@ elem.l4:62:1-23:
 elem.l4:63:1-23:
   Trying to check equality on types that do not support it
   These were the values you tried to compare:
-    <function>
-    <function>
+    <function: can't print a function -- are you calling it with enough arguments?>
+    <function: can't print a function -- are you calling it with enough arguments?>

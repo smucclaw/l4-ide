@@ -35,7 +35,7 @@ lazytrace-exception.l4:10:1-66:
   ││└ LIST TRUE, TRUE, something, ...
   │└ LIST TRUE, TRUE, TRUE, something, ...
   │┌ and
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN TRUE,
   │                 WHEN x FOLLOWED BY xs THEN     x
   │                 AND and OF xs
@@ -43,7 +43,7 @@ lazytrace-exception.l4:10:1-66:
   │ AND and OF xs
   │┌ and OF xs
   ││┌ and
-  ││└ <function>
+  ││└ <function: can't print a function -- are you calling it with enough arguments?>
   │├ CONSIDER list WHEN EMPTY THEN TRUE,
   ││                 WHEN x FOLLOWED BY xs THEN     x
   ││                 AND and OF xs
@@ -51,7 +51,7 @@ lazytrace-exception.l4:10:1-66:
   ││ AND and OF xs
   ││┌ and OF xs
   │││┌ and
-  │││└ <function>
+  │││└ <function: can't print a function -- are you calling it with enough arguments?>
   ││├ CONSIDER list WHEN EMPTY THEN TRUE,
   │││                 WHEN x FOLLOWED BY xs THEN     x
   │││                 AND and OF xs
@@ -59,7 +59,7 @@ lazytrace-exception.l4:10:1-66:
   │││ AND and OF xs
   │││┌ and OF xs
   ││││┌ and
-  ││││└ <function>
+  ││││└ <function: can't print a function -- are you calling it with enough arguments?>
   │││├ CONSIDER list WHEN EMPTY THEN TRUE,
   ││││                 WHEN x FOLLOWED BY xs THEN     x
   ││││                 AND and OF xs
@@ -121,7 +121,7 @@ lazytrace-exception.l4:19:1-52:
   ││└ LIST 2, 3, ..., ..., ...
   │└ LIST 1, 2, 3, ..., ..., ...
   │┌ sum
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├   go OF 0, l
   │ WHERE
   │   GIVEN acc
@@ -131,28 +131,28 @@ lazytrace-exception.l4:19:1-52:
   │                     WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF 0, l
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 1
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 3
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
   │└ 6
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
@@ -160,7 +160,7 @@ lazytrace-exception.l4:19:1-52:
   ││• ↯ division by zero
   │└ ↯ division by zero
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
@@ -168,7 +168,7 @@ lazytrace-exception.l4:19:1-52:
   ││• ↯ division by zero
   │└ ↯ division by zero
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
@@ -176,7 +176,7 @@ lazytrace-exception.l4:19:1-52:
   ││• ↯ division by zero
   │└ ↯ division by zero
   │┌ go
-  │└ <function>
+  │└ <function: can't print a function -- are you calling it with enough arguments?>
   ├ CONSIDER list WHEN EMPTY THEN acc,
   │                 WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ acc
