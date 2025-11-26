@@ -120,7 +120,7 @@ All identifiers may use backticks (standard L4 syntax for identifiers with white
 
 ## Precedence and Disambiguation
 
-**No implicit precedence rules.** When multiple mixfix patterns could apply, require explicit grouping.
+**No implicit precedence rules.** When multiple mixfix patterns could apply, require explicit grouping. This is made easy by L4's indentation conventions.
 
 ### Use Parentheses
 ```l4
@@ -152,6 +152,8 @@ When type-checking a sequence of tokens `[t1, t2, ..., tn]`:
    - Zero matches → error: no function found
    - Multiple matches → error: ambiguous, need parentheses
 
+Given that either t1 or t2 will always be (the first part of) a function name, parsing lookahead is limited to +1.
+
 ### Pattern Matching Example
 
 **Definition**:
@@ -174,6 +176,13 @@ mummy `copulated with` daddy `to make` baby MEANS ...
    - After last keyword (index 4-5): `charlie`
 3. Type check: `alice : Person`, `bob : Person`, `charlie : Person` ✓
 4. Apply: `copulated_with_to_make alice bob charlie`
+
+Perhaps the internal representations will be some combination of the following, for lookup and matching purposes:
+
+- `"copulated with"` -- first function name index
+- `["copulated with", "to make"]` -- full function name index
+- `[P1, "copulated with", P2, "to make", P3]` -- with parameters
+- and then something even more comprehensive with type information.
 
 ### Integration with Existing Type Checker
 
@@ -227,34 +236,40 @@ L4 already has a multi-phase type checking process:
 
 ### Example 1: Simple Infix
 ```l4
-GIVEN a IS A Number, b IS A Number
-GIVETH Number
+GIVEN a IS A NUMBER
+      b IS A NUMBER
+GIVETH A NUMBER
 a `plus` b MEANS a + b
 
+// this may not actually be a thing just yet, but is here to illustrate type-directed name resolution / overloading
 GIVEN a IS A Text, b IS A Text
 GIVETH Text
 a `plus` b MEANS a ++ b
 
-#EVAL 3 `plus` 5 = 8
-#EVAL "hello" `plus` "world" = "helloworld"
+#EVAL 3 `plus` 5 EQUALS 8
+#EVAL "hello" `plus` "world" EQUALS "hello world"
 ```
 
 Type-directed name resolution picks the right version.
 
 ### Example 2: Eligibility Check
 ```l4
-DECLARE Person HAS name IS A String, age IS A Number
-DECLARE Program HAS minAge IS A Number
+DECLARE Person HAS
+   name IS A STRING
+   age IS A Number
+DECLARE Program HAS
+   minAge IS A Number
 
-GIVEN person IS A Person, program IS A Program
-GIVETH Bool
+GIVEN person IS A Person
+      program IS A Program
+GIVETH A BOOLEAN
 person `is eligible for` program MEANS
   person's age >= program's minAge
 
 alice MEANS Person WITH name IS "Alice", age IS 25
 healthcare MEANS Program WITH minAge IS 18
 
-#EVAL alice `is eligible for` healthcare = TRUE
+#EVAL alice `is eligible for` healthcare EQUALS TRUE
 ```
 
 ### Example 3: Range Check
@@ -262,7 +277,8 @@ healthcare MEANS Program WITH minAge IS 18
 GIVEN lower IS A Number, value IS A Number, upper IS A Number
 GIVETH Bool
 lower `<=` value `<=` upper MEANS
-  lower <= value AND value <= upper
+       lower <= value
+   AND          value <= upper
 
 #EVAL 0 `<=` 5 `<=` 10 = TRUE
 #EVAL 0 `<=` 15 `<=` 10 = FALSE
@@ -270,14 +286,16 @@ lower `<=` value `<=` upper MEANS
 
 ### Example 4: Complex Pattern
 ```l4
-GIVEN list IS A List OF A, start IS A Number, end IS A Number
-GIVETH List OF A
-list `from` start `to` end MEANS
+GIVEN mylist IS A LIST OF A
+      start IS A Number
+      end IS A Number
+GIVETH LIST OF A
+mylist `from` start `to` end MEANS
   -- implementation
 
 myList MEANS LIST 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 
-#EVAL myList `from` 3 `to` 7 = LIST 3, 4, 5, 6, 7
+#EVAL myList `from` 3 `to` 7 EQUALS LIST 3, 4, 5, 6, 7
 ```
 
 ## Backward Compatibility
@@ -315,6 +333,6 @@ L4's approach is unique in:
 
 ## References
 
-- GRAMMAR.md - L4 grammar specification
+- l4-ide/jl4/examples - sample code from which you may infer the grammar; this forms the test suite and is canonical
+- l4-ide/jl4/experiments - sample code from which you may infer the grammar; some of the syntax here is not 100% supported
 - TypeCheck.hs - L4 type checking implementation
-- british-citizen-act.l4 - Example usage patterns

@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+mixfix-basic.l4:62:1-17:
+  8
+mixfix-basic.l4:67:1-19:
+  0.5
+mixfix-basic.l4:72:1-17:
+  8
+mixfix-basic.l4:77:1-29:
+  10
+mixfix-basic.l4:82:1-43:
+  TRUE
+mixfix-basic.l4:88:1-23:
+  42
+mixfix-basic.l4:89:1-24:
+  0

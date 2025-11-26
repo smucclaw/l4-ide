@@ -52,7 +52,7 @@ rodentAndVerminFunction = do
       { fnImpl = fnDecl
       , fnEvaluator =
           Map.fromList
-            [ (JL4, Jl4.createFunction (toDecl fnDecl) rodentAndVerminJL4)
+            [ (JL4, Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentAndVerminJL4 Map.empty)
             ]
       }
 

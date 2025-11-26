@@ -126,6 +126,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declTypeSigs = Map.empty
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
+    , mixfixRegistry = Map.empty
     , moduleUri
     , sectionStack = []
     }
@@ -181,9 +182,23 @@ withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
+    , mixfixRegistry = buildMixfixRegistry rdecides
     }
   where
     topDecides = fmap (.name) rdecides
+
+-- | Build the mixfix registry from a list of FunTypeSigs.
+-- The registry maps from the first keyword of each mixfix function to the list
+-- of FunTypeSigs that have that keyword, enabling efficient lookup at call sites.
+buildMixfixRegistry :: [FunTypeSig] -> MixfixRegistry
+buildMixfixRegistry sigs = Map.fromListWith (++) $ mapMaybe toEntry sigs
+  where
+    toEntry :: FunTypeSig -> Maybe (RawName, [FunTypeSig])
+    toEntry sig = case sig.mixfixInfo of
+      Nothing -> Nothing
+      Just info -> case info.keywords of
+        []    -> Nothing  -- No keywords, shouldn't happen for valid mixfix
+        (k:_) -> Just (k, [sig])  -- Index by first keyword
 
 withDeclares :: [DeclChecked DeclareOrAssume] -> Check a -> Check a
 withDeclares rdecls =
@@ -488,8 +503,69 @@ checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _
   checkTermAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
     tysig
+-- NEW: Handle mixfix patterns where the AppForm contains GIVEN parameters
+-- mixed with keywords.
+--
+-- Case 1: Head is a GIVEN parameter
+--   Example: GIVEN a, b; a `plus` b MEANS ...
+--   AppForm is [a, plus, b] - restructure to function name: `plus`, args: [a, b]
+--
+-- Case 2: Head is a keyword, but args contain GIVEN params mixed with keywords
+--   Example: GIVEN cond, thenVal, elseVal; `myif` cond `mythen` thenVal `myelse` elseVal MEANS ...
+--   AppForm is [myif, cond, mythen, thenVal, myelse, elseVal]
+--   Keep head as function name, filter args to only GIVEN params: [cond, thenVal, elseVal]
+--
+checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ headName args maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _)
+  | isMixfixPatternHeadIsParam appForm tysig =
+      -- Case 1: Head is a GIVEN parameter - need to find the real function name
+      let
+        givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+        allTokens = headName : args
+
+        -- Find the first keyword (non-GIVEN name) to be the function name
+        keywords = filter (\n -> not (rawName n `Set.member` givenNames)) allTokens
+        params = filter (\n -> rawName n `Set.member` givenNames) allTokens
+
+        -- The function name is the first keyword
+        funcName = case keywords of
+          []    -> headName -- fallback, shouldn't happen for valid mixfix
+          (k:_) -> k
+
+        -- Restructure: function name as head, params as args
+        restructuredAppForm = MkAppForm (getAnno appForm) funcName params maka
+      in
+        checkTermAppFormTypeSigConsistency' restructuredAppForm tysig
+  | isMixfixPatternHeadIsKeyword appForm tysig =
+      -- Case 2: Head is a keyword - keep head, but filter args to only GIVEN params
+      let
+        givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+        params = filter (\n -> rawName n `Set.member` givenNames) args
+
+        -- Keep head as function name, filter args to only params
+        restructuredAppForm = MkAppForm (getAnno appForm) headName params maka
+      in
+        checkTermAppFormTypeSigConsistency' restructuredAppForm tysig
 checkTermAppFormTypeSigConsistency appForm tysig =
   checkTermAppFormTypeSigConsistency' appForm tysig
+
+-- | Check if an AppForm represents a mixfix pattern where the head is a GIVEN parameter.
+isMixfixPatternHeadIsParam :: AppForm Name -> TypeSig Name -> Bool
+isMixfixPatternHeadIsParam (MkAppForm _ headName _ _) (MkTypeSig _ (MkGivenSig _ otns) _) =
+  let givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+  in rawName headName `Set.member` givenNames
+
+-- | Check if an AppForm represents a mixfix pattern where the head is a keyword
+-- but args contain a mix of GIVEN params and keywords.
+isMixfixPatternHeadIsKeyword :: AppForm Name -> TypeSig Name -> Bool
+isMixfixPatternHeadIsKeyword (MkAppForm _ headName args _) (MkTypeSig _ (MkGivenSig _ otns) _) =
+  let
+    givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+    headIsKeyword = not (rawName headName `Set.member` givenNames)
+    -- Check if args contain both GIVEN params and non-GIVEN keywords
+    hasParams = any (\n -> rawName n `Set.member` givenNames) args
+    hasKeywords = any (\n -> not (rawName n `Set.member` givenNames)) args
+  in
+    headIsKeyword && hasParams && hasKeywords
 
 isTerm :: OptionallyTypedName Name -> Bool
 isTerm (MkOptionallyTypedName _ _ (Just (Type _))) = False
@@ -1874,6 +1950,78 @@ scanTyDeclAssume _ = do
 -- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
 -- ----------------------------------------------------------------------------
 
+-- | Extract mixfix pattern information by comparing the AppForm against
+-- the GIVEN parameters in the TypeSig.
+--
+-- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
+-- For example:
+--   GIVEN person IS A Person, program IS A Program
+--   person `is eligible for` program MEANS ...
+--
+-- Here the AppForm is [person, is eligible for, program], and the GIVEN params
+-- are [person, program]. Since 'person' and 'program' are GIVEN params, this
+-- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
+--
+extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
+extractMixfixInfo tysig appForm =
+  let
+    -- Get the GIVEN parameter names as a set for fast lookup
+    givenParams :: Set RawName
+    givenParams = Set.fromList $ givenParamNames tysig
+
+    -- Get all tokens from the AppForm (head + args)
+    appFormTokens :: [Name]
+    appFormTokens = appFormHead' : appFormArgs'
+      where
+        MkAppForm _ appFormHead' appFormArgs' _ = appForm
+
+    -- Classify each token as either a parameter or a keyword
+    classifyToken :: Name -> MixfixPatternToken
+    classifyToken n
+      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
+      | otherwise                          = MixfixKeyword (rawName n)
+
+    -- Build the pattern
+    patternTokens :: [MixfixPatternToken]
+    patternTokens = map classifyToken appFormTokens
+
+    -- Extract just the keywords
+    extractKeyword :: MixfixPatternToken -> Maybe RawName
+    extractKeyword (MixfixKeyword k) = Just k
+    extractKeyword (MixfixParam _)   = Nothing
+
+    keywordList :: [RawName]
+    keywordList = mapMaybe extractKeyword patternTokens
+
+    -- Count parameters
+    paramCount :: Int
+    paramCount = length $ filter isParam patternTokens
+
+    isParam :: MixfixPatternToken -> Bool
+    isParam (MixfixParam _)   = True
+    isParam (MixfixKeyword _) = False
+
+  in
+    -- Only return MixfixInfo if there's at least one param in non-head position
+    -- (i.e., if the first token is a param, this is mixfix)
+    -- OR if there are keywords between params
+    if paramCount > 0 && (isParam (head patternTokens) || paramCount < length patternTokens)
+       then Just MkMixfixInfo
+              { pattern = patternTokens
+              , keywords = keywordList
+              , arity = paramCount
+              }
+       else Nothing
+
+-- | Extract parameter names from a TypeSig's GIVEN clause.
+givenParamNames :: TypeSig Name -> [RawName]
+givenParamNames (MkTypeSig _ givenSig _) =
+  case givenSig of
+    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
+  where
+    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
+    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
+
 scanFunSigModule :: Module Name -> Check [FunTypeSig]
 scanFunSigModule (MkModule _ _ sects) =
   scanFunSigSection sects
@@ -1911,6 +2059,8 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       inferTermAppForm rappForm rtysig
     dty <- setAnnResolvedType rt (Just Computable) d
     name <- withQualified (appFormHeads rappForm) ce
+    -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
+    let mMixfix = extractMixfixInfo tysig appForm
     pure $ MkFunTypeSig
       { anno = getAnno dty
       , rtysig
@@ -1918,6 +2068,7 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       , resultType = result
       , name = name
       , arguments = extendsTySig <> extendsAppForm
+      , mixfixInfo = mMixfix
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
@@ -1930,6 +2081,8 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
     aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
+    -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
+    let mMixfix = extractMixfixInfo tysig' appForm
     pure $ Just $ MkFunTypeSig
       { anno = getAnno aty
       , rtysig
@@ -1937,6 +2090,7 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
       , resultType = result
       , name
       , arguments = extendsTySig <> extendsAppForm
+      , mixfixInfo = mMixfix
       }
   where
     -- In the specific case where we have no GIVETH, but a type for the ASSUME itself,

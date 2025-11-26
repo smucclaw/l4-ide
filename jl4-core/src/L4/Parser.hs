@@ -947,7 +947,11 @@ data Cont a =
 
 cont :: Parser (Prio, Assoc, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
-  withIndent GT p $ \ pos -> do
+  -- Use try so that if the right operand fails to parse, we backtrack.
+  -- This is needed for mixfix operators (backticked names) which can also
+  -- be standalone expressions - if followed by a keyword instead of an
+  -- expression, we backtrack and let the backticked name be parsed differently.
+  try $ withIndent GT p $ \ pos -> do
     (prio, assoc, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
     l <- currentLine
@@ -991,7 +995,19 @@ operator =
   <|> (\ op -> (7, AssocLeft,  infix2  Times     op)) <$> (spacedKeyword_ TKTimes  <|> spacedTokenOp_ TTimes )
   <|> (\ op -> (7, AssocLeft,  infix2' DividedBy op)) <$> (((<>) <$> opToken (TKeywords TKDivided) <*> opToken (TKeywords TKBy)) <|> opToken (TOperators TDividedBy))
   <|> (\ op -> (7, AssocLeft,  infix2  Modulo    op)) <$> spacedKeyword_ TKModulo
-  where spacedTokenOp_ = spacedToken_ . TOperators
+  -- Mixfix infix operators: backticked names as infix operators
+  -- e.g., `3 `plus` 5` becomes `App anno plus [3, 5]`
+  -- Priority 6 (same as PLUS/MINUS), left associative
+  <|> mixfixInfixOp
+  where
+    spacedTokenOp_ = spacedToken_ . TOperators
+    mixfixInfixOp = do
+      eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix operator"
+      pure (6, AssocLeft, mixfixInfix2 eN)
+    mixfixInfix2 eN l r =
+      let op = mkSimpleEpaAnno eN
+          funcName = eN.payload
+      in App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) funcName [l, r]
 
 postfixOperator :: Parser (Expr Name -> Expr Name)
 postfixOperator =

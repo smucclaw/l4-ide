@@ -175,6 +175,30 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
+-- | A token in a mixfix pattern, representing either a keyword (part of the function name)
+-- or a parameter slot.
+data MixfixPatternToken
+  = MixfixKeyword RawName
+    -- ^ A keyword part of the function name (e.g., "is eligible for")
+  | MixfixParam RawName
+    -- ^ A parameter slot, with the original parameter name for documentation
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
+-- | Information about a mixfix function pattern.
+-- A mixfix function is one where the function name is interspersed with parameters,
+-- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
+data MixfixInfo = MkMixfixInfo
+  { pattern :: [MixfixPatternToken]
+    -- ^ The complete pattern, e.g., [Param "person", Keyword "is eligible for", Param "program"]
+  , keywords :: [RawName]
+    -- ^ Just the keyword parts, for quick lookup (e.g., ["is eligible for"])
+  , arity :: Int
+    -- ^ Number of parameters (parameter slots in the pattern)
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
 -- | A checked function signature.
 data FunTypeSig = MkFunTypeSig
   { anno :: Anno
@@ -189,6 +213,8 @@ data FunTypeSig = MkFunTypeSig
   , arguments :: [CheckInfo]
   -- ^ Arguments to the function.
   -- Includes type variables.
+  , mixfixInfo :: Maybe MixfixInfo
+  -- ^ If this is a mixfix function, its pattern info. Nothing for prefix functions.
   }
   deriving (Show, Eq, Generic)
   deriving anyclass (SOP.Generic, NFData)
@@ -223,6 +249,10 @@ data DeclChecked a = MkDeclChecked
 
 type DeclareOrAssume = Either (Declare Resolved) (Assume Resolved)
 
+-- | Registry of mixfix functions, indexed by their first keyword.
+-- This enables efficient lookup when type-checking potential mixfix applications.
+type MixfixRegistry = Map RawName [FunTypeSig]
+
 data CheckEnv =
   MkCheckEnv
     { moduleUri            :: !NormalizedUri
@@ -232,6 +262,8 @@ data CheckEnv =
     , declTypeSigs         :: !(Map SrcRange DeclTypeSig)
     , declareDeclarations  :: !(Map SrcRange (DeclChecked (Declare Resolved)))
     , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
+    , mixfixRegistry       :: !MixfixRegistry
+    -- ^ Registry of mixfix functions indexed by their first keyword
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
@@ -760,6 +792,7 @@ extendEnv cis env =
     , declTypeSigs = e.declTypeSigs
     , declareDeclarations = e.declareDeclarations
     , assumeDeclarations = e.assumeDeclarations
+    , mixfixRegistry = e.mixfixRegistry
     , sectionStack = e.sectionStack
     }
     where

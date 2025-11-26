@@ -1,0 +1,89 @@
+§ `Basic Mixfix Tests`
+
+-- This file tests basic mixfix operator definitions.
+-- The goal is to verify that mixfix patterns are detected and type-checked correctly.
+
+-- Test 1: Simple infix operator
+-- Pattern: param `keyword` param
+-- The AppForm is [a, plus, b] which should be restructured to
+-- function name: `plus`, args: [a, b]
+
+GIVEN a IS A NUMBER, b IS A NUMBER
+GIVETH A NUMBER
+a `plus` b MEANS a + b
+
+-- Test 2: Simple postfix operator
+-- Pattern: param `keyword`
+-- The AppForm is [amount, percent] which should be restructured to
+-- function name: `percent`, args: [amount]
+
+GIVEN amount IS A NUMBER
+GIVETH NUMBER
+amount `percent` MEANS amount / 100
+
+-- Test 3: Multi-keyword infix
+-- Pattern: param `keyword keyword` param
+-- The AppForm is [person, is eligible for, program]
+
+GIVEN person IS A STRING, program IS A STRING
+GIVETH BOOLEAN
+person `is eligible for` program MEANS TRUE
+
+-- Test 4: Ternary mixfix operator
+-- Pattern: `keyword` param `keyword` param `keyword` param
+-- Note: This one starts with a keyword, so the AppForm head is a keyword
+
+GIVEN cond IS A BOOLEAN, thenVal IS A NUMBER, elseVal IS A NUMBER
+GIVETH NUMBER
+`myif` cond `mythen` thenVal `myelse` elseVal MEANS
+  IF cond THEN thenVal ELSE elseVal
+
+-- Test 5: Arity-4 mixfix (quaternary)
+-- Pattern: param `keyword` param `keyword` param `keyword` param
+
+GIVEN mummy IS A STRING, daddy IS A STRING, baby IS A STRING, nickname IS A STRING
+GIVETH STRING
+mummy `and` daddy `had` baby `called` nickname MEANS baby
+
+-- Test 6: Arity-5 mixfix
+-- Pattern with 5 parameters
+
+GIVEN a IS A NUMBER, b IS A NUMBER, c IS A NUMBER, d IS A NUMBER, e IS A NUMBER
+GIVETH NUMBER
+a `op1` b `op2` c `op3` d `op4` e MEANS a + b + c + d + e
+
+-- Simple test evaluations using existing operators
+testAddResult MEANS 3 + 5
+testDivResult MEANS 50 / 100
+
+-- Test calling mixfix functions with prefix syntax
+testPlusPrefix MEANS `plus` 3 5
+
+#EVAL `plus` 3 5
+
+-- Test postfix mixfix with prefix call
+testPercentPrefix MEANS `percent` 50
+
+#EVAL `percent` 50
+
+-- Test calling mixfix functions with infix syntax (same line only)
+testPlusInfix MEANS `plus` 3 5
+
+#EVAL `plus` 3 5
+
+-- Test with nested expressions
+testNestedInfix MEANS `plus` (1 + 2) (3 + 4)
+
+#EVAL `plus` (1 + 2) (3 + 4)
+
+-- Test multi-keyword infix call
+testEligible MEANS `is eligible for` "Alice" "Medicare"
+
+#EVAL `is eligible for` "Alice" "Medicare"
+
+-- NOTE: Ternary+ mixfix call syntax (e.g., `myif` x `mythen` y `myelse` z)
+-- is NOT yet supported at call site. Use prefix syntax instead:
+testTernaryPrefix MEANS `myif` TRUE 42 0
+
+#EVAL `myif` TRUE 42 0
+#EVAL `myif` FALSE 42 0
