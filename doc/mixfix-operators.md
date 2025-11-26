@@ -116,7 +116,7 @@ At call sites, use the same pattern as the definition:
 argument `keyword` argument `keyword` argument
 ```
 
-All identifiers use backticks (standard L4 syntax for identifiers with whitespace).
+All identifiers may use backticks (standard L4 syntax for identifiers with whitespace).
 
 ## Precedence and Disambiguation
 

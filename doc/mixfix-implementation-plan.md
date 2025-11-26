@@ -206,28 +206,28 @@ Create `jl4/examples/ok/mixfix-basic.l4`:
 -- Infix
 GIVEN a IS A Number, b IS A Number
 GIVETH Number
-_ `plus` _ MEANS a + b
+a `plus` b MEANS a + b
 
 #EVAL 3 `plus` 5 = 8
 
 -- Postfix
 GIVEN amount IS A Number
 GIVETH Number
-_ `percent` MEANS amount / 100
+amount `percent` MEANS amount / 100
 
 #EVAL 50 `percent` = 0.5
 
 -- Prefix
 GIVEN x IS A Number
 GIVETH Number
-`negate` _ MEANS -x
+`negate` x MEANS -x
 
 #EVAL `negate` 5 = -5
 
 -- Ternary
 GIVEN lower IS A Number, value IS A Number, upper IS A Number
 GIVETH Bool
-_ `<=` _ `<=` _ MEANS lower <= value AND value <= upper
+lower `<=` value `<=` upper MEANS lower <= value AND value <= upper
 
 #EVAL 0 `<=` 5 `<=` 10 = TRUE
 ```
@@ -236,18 +236,24 @@ _ `<=` _ `<=` _ MEANS lower <= value AND value <= upper
 Create `jl4/examples/not-ok/tc/mixfix-errors.l4`:
 
 ```l4
--- Arity mismatch
+-- Pattern doesn't match GIVEN params
 GIVEN a IS A Number
-_ `plus` _ MEANS a + a  -- ERROR: 2 underscores but only 1 GIVEN param
+a `plus` b MEANS a + b  -- ERROR: 'b' not in GIVEN
 
--- Ambiguous
+-- Ambiguous (same pattern structure, same types)
 GIVEN a IS A Number, b IS A Number
-_ `op` _ MEANS a + b
+a `op` b MEANS a + b
 
 GIVEN a IS A Number, b IS A Number
-_ `op` _ MEANS a * b
+a `op` b MEANS a * b
 
-#EVAL 3 `op` 5  -- ERROR: Ambiguous
+#EVAL 3 `op` 5  -- ERROR: Ambiguous - multiple definitions match
+
+-- Type mismatch at call site
+GIVEN person IS A Person, program IS A Program
+person `is eligible for` program MEANS ...
+
+#EVAL 123 `is eligible for` "healthcare"  -- ERROR: wrong types
 ```
 
 #### 6.3 Integration Tests
@@ -267,45 +273,48 @@ Test interaction with:
 
 ### Backward Compatibility
 - All existing code continues to work (prefix application unchanged)
-- Mixfix is opt-in (requires underscores in pattern)
+- Mixfix is opt-in (use parameter names in pattern)
 - No breaking changes to existing APIs
 
 ### Gradual Rollout
-1. Merge lexer changes (minimal risk)
-2. Merge AST changes with backward-compatible constructors
-3. Merge parser changes (new syntax only)
-4. Merge type checker changes
-5. Add tests progressively
-6. Update documentation
+1. Merge scanning phase changes (pattern extraction)
+2. Merge type checker changes (pattern matching)
+3. Add tests progressively
+4. Update user-facing documentation
+5. No AST/parser/lexer changes needed!
 
 ## Open Questions
 
 1. **Precedence**: Should we allow optional precedence annotations for common cases?
 2. **Partial application**: Should mixfix functions support partial application?
-3. **Overloading**: Can we have both `_ plus _` and `plus _ _` (same name, different patterns)?
+3. **Overloading**: Can we have multiple functions with the same pattern structure but different types?
 4. **Performance**: What's the overhead of pattern matching at every application site?
+5. **Ambiguity**: How to handle when both `a op b` and `op a b` are valid interpretations?
 
 ## Timeline Estimate
 
-- Phase 1 (AST): 2-3 days
-- Phase 2 (Parser): 2-3 days
+**Simplified due to no AST/parser/lexer changes needed!**
+
 - Phase 3 (Scanning): 1-2 days
-- Phase 4 (Type Checker): 3-4 days
+- Phase 4 (Type Checker): 2-3 days
 - Phase 5 (Errors): 1 day
-- Phase 6 (Testing): 2-3 days
+- Phase 6 (Testing): 1-2 days
 - Phase 7 (Docs): 1 day
 
-**Total**: ~2-3 weeks for full implementation
+**Total**: ~1-2 weeks for full implementation (down from 2-3 weeks!)
 
 ## Next Steps
 
-1. Decide on AST representation (new constructors vs extending existing)
-2. Update all pattern matchers for AppForm
-3. Implement parser for underscore patterns
-4. Add extraction logic in scanning phase
-5. Implement pattern matching in type checker
-6. Write comprehensive tests
-7. Update documentation
+1. Implement pattern extraction in scanning phase (`scanFunSigDecide`)
+   - Compare AppForm tokens against GIVEN parameters
+   - Build MixfixInfo structure
+   - Store in FunTypeSig
+2. Implement pattern matching in type checker (`inferExpr`)
+   - Find keywords in token sequences
+   - Extract arguments between keywords
+   - Type check and disambiguate
+3. Write comprehensive tests
+4. Update user-facing documentation
 
 ## References
 
