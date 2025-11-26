@@ -48,6 +48,7 @@ module Server (
 
   -- * utilities
   toDecl,
+  parametersOfDecide,
 ) where
 
 import Base
@@ -508,8 +509,10 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           hPutStrLn stderr "failed to retrieve function from CRUD backend"
           hPutStrLn stderr $ displayException err'
         err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
-      Right prog -> do
-        let fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
+      Right rawProg -> do
+        -- Strip directive lines (like #EVAL, #ASSERT) to prevent unintended execution
+        let prog = stripDirectives rawProg
+            fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
             fnDecl = toDecl fnImpl
 
         decide <- liftIO (runExceptT (Jl4.buildFunDecide prog fnDecl))
@@ -525,6 +528,15 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           }
   where
    (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
+
+-- | Strip or double-comment all lines beginning with # (directives like #EVAL, #ASSERT)
+-- This prevents unintended execution when programs are loaded from the CRUD backend.
+stripDirectives :: Text -> Text
+stripDirectives = Text.unlines . map processLine . Text.lines
+  where
+    processLine line
+      | Text.isPrefixOf "#" (Text.stripStart line) = "##" <> line  -- Double-comment directive lines
+      | otherwise = line
 
 parametersOfDecide :: Decide Resolved -> Parameters
 parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =

@@ -28,8 +28,14 @@ crudSmokeTest = do
   result <- withSystemTempDirectory "crud-smoke-test" \fp -> do
     let dbPath = fp </> "test.db"
     createDB dbPath
-    SQLite.withConnection dbPath \dbConn ->
-      testWithApplication (pure $ mkApp MkHandlerEnv {dbConn}) \port -> do
+    httpMgr <- newManager defaultManagerSettings
+    SQLite.withConnection dbPath \dbConn -> do
+      let env = MkHandlerEnv
+            { dbConn = dbConn
+            , httpManager = httpMgr
+            , decisionServiceUrl = Nothing  -- No decision service for tests
+            }
+      testWithApplication (pure $ mkApp env) \port -> do
         runC port do
           let prog = "add x y MEANS x + y"
           uuid <- apiClient.createSession prog
