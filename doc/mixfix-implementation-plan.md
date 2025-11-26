@@ -14,88 +14,43 @@
 
 ### Phase 1: AST and Lexer Changes
 
-#### 1.1 Lexer (DONE)
-- [x] Add `TUnderscore` to `TSymbols` enum
-- [x] Add `"_"` mapping in `symbols` map
+#### 1.1 Lexer (DONE - but may not be needed)
+- [x] Add `TUnderscore` to `TSymbols` enum (for internal use)
+- [x] Add `"_"` mapping in symbols map
+
+**Note**: Underscores are only used internally to represent patterns. Users write patterns using parameter names and keywords, not explicit underscores.
 
 #### 1.2 Syntax AST
-Add a new data type to represent mixfix patterns:
 
-```haskell
--- In Syntax.hs
-
--- Represents a token in a mixfix pattern
-data PatternToken n
-  = ParamHole      -- underscore (_)
-  | Keyword n      -- backticked identifier
-  deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
-  deriving anyclass (SOP.Generic, ToExpr, NFData)
-
--- Extend AppForm to support mixfix patterns
-data AppForm n
-  = PrefixAppForm Anno n [n] (Maybe (Aka n))      -- traditional: name args
-  | MixfixAppForm Anno [PatternToken n] (Maybe (Aka n))  -- mixfix: pattern
-  deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
-  deriving anyclass (SOP.Generic, ToExpr, NFData)
-```
-
-**Alternative (less invasive)**: Keep current `AppForm`, add optional mixfix info:
+The current `AppForm` structure is:
 ```haskell
 data AppForm n =
-  MkAppForm Anno n [n] (Maybe (Aka n)) (Maybe [PatternToken n])
+  MkAppForm Anno n [n] (Maybe (Aka n))
+  -- Anno, function name, args, optional aka
 ```
 
-#### 1.3 Update Pattern Matchers
-Files that need updates for new `AppForm` structure:
-- `L4/Parser.hs` - parsing
-- `L4/TypeCheck.hs` - type checking
-- `L4/Print.hs` - pretty printing
-- `L4/Desugar.hs` - desugaring
-- `L4/EvaluateLazy/Machine.hs` - evaluation
-- `L4/Names.hs` - name handling
-- `L4/TypeCheck/Annotation.hs` - annotations
-- `L4/Parser/ResolveAnnotation.hs` - annotation resolution
-- `jl4-lsp/src/LSP/L4/SemanticTokens.hs` - LSP support
-- `jl4-lsp/src/LSP/L4/Viz/Ladder.hs` - visualization
-- `jl4-decision-service/src/Backend/Jl4.hs` - decision service
+**No AST changes needed!** The existing structure already captures the pattern:
+- For `person `is eligible for` program`:
+  - Function name: `is eligible for`
+  - Args: `[person, program]`
+
+What we need is to recognize **which args are actually parameter placeholders vs which are keywords** in the pattern.
+
+**No file updates needed** - `AppForm` structure remains unchanged!
 
 ### Phase 2: Parser Changes
 
-#### 2.1 Parse Underscore Symbol
-In `Parser.hs`, add parser for underscore:
+**No parser changes needed!** The existing parser already handles patterns like:
 
-```haskell
-underscore :: Parser ()
-underscore = spacedSymbol_ TUnderscore
+```l4
+person `is eligible for` program MEANS ...
 ```
 
-#### 2.2 Parse Mixfix Pattern
-Update `appForm` parser to handle mixfix patterns:
+This is parsed as:
+- A sequence of names: `[person, is eligible for, program]`
+- Then structured as `AppForm` during parsing
 
-```haskell
-appForm :: Parser (AppForm Name)
-appForm = mixfixAppForm <|> prefixAppForm
-  where
-    prefixAppForm = do
-      -- existing logic
-      current <- Lexer.indentLevel
-      attachAnno $
-        PrefixAppForm emptyAnno  -- or MkAppForm with Nothing for mixfix
-          <$> annoHole name
-          <*> (...)
-          <*> annoHole (optional aka)
-
-    mixfixAppForm = do
-      -- Parse pattern: sequence of _ and `names`
-      pattern <- many1 (patternHole <|> patternKeyword)
-      -- Verify at least one underscore exists
-      guard (any isParamHole pattern)
-      aka <- optional aka
-      pure $ MixfixAppForm emptyAnno pattern aka
-
-    patternHole = ParamHole <$ underscore
-    patternKeyword = Keyword <$> name
-```
+The parser already supports this - it's just application syntax with backticked names.
 
 ### Phase 3: Scanning Phase Enhancement
 

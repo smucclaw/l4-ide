@@ -14,51 +14,55 @@ Key goals:
 
 ### Core Idea
 
-At **definition site**, use explicit underscores (`_`) to show where arguments go:
+At **definition site**, use parameter names in the pattern:
 ```l4
 GIVEN person IS A Person, program IS A Program
 GIVETH Bool
-_ `is eligible for` _ MEANS
+person `is eligible for` program MEANS
   person's age >= 18 AND ...
 ```
 
-At **call site**, use the same pattern:
+At **call site**, use the same pattern structure:
 ```l4
 `alice` `is eligible for` `healthcare`
 ```
 
-The parser/type-checker recognizes this as a mixfix application by matching the pattern against known function signatures.
+The parser recognizes this as a mixfix pattern by identifying which names in the pattern are GIVEN parameters (those become argument positions) versus backticked keywords (those become the function name parts).
+
+**Note**: Underscores (`_`) only appear in the **internal representation** of the function pattern (e.g., `_ copulated with _ to make _`). Users never write underscores - they write natural patterns using parameter names and keywords.
 
 ### Key Design Decisions
 
-1. **Explicit underscores** mark parameter positions (no inference from GIVEN)
-2. **No underscores = traditional prefix** (backward compatible)
+1. **Parameters in pattern** - Use actual parameter names from GIVEN clause in the pattern
+2. **Keyword identification** - Backticked names NOT in GIVEN are function name parts
 3. **No implicit precedence** - require parentheses or indentation for disambiguation
-4. **Type-directed matching** - types help select the right function
+4. **Type-directed matching** - types help select the right function at call sites
 5. **Leverages existing scanning phase** - all signatures collected before type checking
 
 ## Syntax
 
 ### Definition Site
 
-#### Mixfix Function (with underscores)
+#### Mixfix Function
 ```l4
 GIVEN param1 IS A Type1, param2 IS A Type2, ...
 GIVETH ResultType
-pattern with _ and _ MEANS body
+param1 `keyword` param2 MEANS body
 ```
 
 Where:
-- Underscores (`_`) mark parameter positions
-- Keywords (backticked identifiers) are between/around underscores
-- Parameters are matched to underscores by **position** (first `_` → first GIVEN param, etc.)
+- Parameter names from GIVEN appear in the pattern
+- Backticked names NOT in GIVEN are keywords (function name parts)
+- The pattern shows exactly how the function should be called
 
-#### Traditional Prefix Function (no underscores)
+#### Traditional Prefix Function
 ```l4
 GIVEN x IS A Number, y IS A Number
 GIVETH Number
 `add` MEANS x + y
 ```
+
+If the pattern contains no GIVEN parameters, it's treated as prefix application.
 Called as: `add` 5 3
 
 ### Pattern Forms
@@ -67,7 +71,7 @@ Called as: `add` 5 3
 ```l4
 GIVEN a IS A Number, b IS A Number
 GIVETH Number
-_ `plus` _ MEANS a + b
+a `plus` b MEANS a + b
 ```
 Call: `3 `plus` 5`
 
@@ -75,7 +79,7 @@ Call: `3 `plus` 5`
 ```l4
 GIVEN amount IS A Number
 GIVETH Number
-_ `percent` MEANS amount / 100
+amount `percent` MEANS amount / 100
 ```
 Call: `50 `percent``
 
@@ -83,7 +87,7 @@ Call: `50 `percent``
 ```l4
 GIVEN x IS A Number
 GIVETH Number
-`negate` _ MEANS -x
+`negate` x MEANS -x
 ```
 Call: `negate` `5`
 
@@ -91,7 +95,7 @@ Call: `negate` `5`
 ```l4
 GIVEN condition IS A Bool, thenBranch IS A Text, elseBranch IS A Text
 GIVETH Text
-`if` _ `then` _ `else` _ MEANS
+`if` condition `then` thenBranch `else` elseBranch MEANS
   -- body
 ```
 Call: `if` eligible `then` "approved" `else` "denied"
@@ -100,7 +104,7 @@ Call: `if` eligible `then` "approved" `else` "denied"
 ```l4
 GIVEN mummy IS A Person, daddy IS A Person, baby IS A Person
 GIVETH Person
-_ `copulated with` _ `to make` _ MEANS
+mummy `copulated with` daddy `to make` baby MEANS
   -- body
 ```
 Call: `alice` `copulated with` `bob` `to make` `charlie`
@@ -150,11 +154,18 @@ When type-checking a sequence of tokens `[t1, t2, ..., tn]`:
 
 ### Pattern Matching Example
 
-Pattern: `_ copulated with _ to make _`
-Keywords: `["copulated with", "to make"]`
-Arity: 3
+**Definition**:
+```l4
+GIVEN mummy IS A Person, daddy IS A Person, baby IS A Person
+mummy `copulated with` daddy `to make` baby MEANS ...
+```
 
-Token sequence: `[alice, copulated with, bob, to make, charlie]`
+**Internal representation**:
+- Pattern: `_ copulated with _ to make _`
+- Keywords: `["copulated with", "to make"]`
+- Arity: 3
+
+**Call site**: `[alice, copulated with, bob, to make, charlie]`
 
 1. Find keywords at indices [1, 3]
 2. Extract arguments:
@@ -218,11 +229,11 @@ L4 already has a multi-phase type checking process:
 ```l4
 GIVEN a IS A Number, b IS A Number
 GIVETH Number
-_ `plus` _ MEANS a + b
+a `plus` b MEANS a + b
 
 GIVEN a IS A Text, b IS A Text
 GIVETH Text
-_ `plus` _ MEANS a ++ b
+a `plus` b MEANS a ++ b
 
 #EVAL 3 `plus` 5 = 8
 #EVAL "hello" `plus` "world" = "helloworld"
@@ -237,7 +248,7 @@ DECLARE Program HAS minAge IS A Number
 
 GIVEN person IS A Person, program IS A Program
 GIVETH Bool
-_ `is eligible for` _ MEANS
+person `is eligible for` program MEANS
   person's age >= program's minAge
 
 alice MEANS Person WITH name IS "Alice", age IS 25
@@ -250,7 +261,7 @@ healthcare MEANS Program WITH minAge IS 18
 ```l4
 GIVEN lower IS A Number, value IS A Number, upper IS A Number
 GIVETH Bool
-_ `<=` _ `<=` _ MEANS
+lower `<=` value `<=` upper MEANS
   lower <= value AND value <= upper
 
 #EVAL 0 `<=` 5 `<=` 10 = TRUE
@@ -261,7 +272,7 @@ _ `<=` _ `<=` _ MEANS
 ```l4
 GIVEN list IS A List OF A, start IS A Number, end IS A Number
 GIVETH List OF A
-_ `from` _ `to` _ MEANS
+list `from` start `to` end MEANS
   -- implementation
 
 myList MEANS LIST 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
