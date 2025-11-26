@@ -5,7 +5,7 @@
 ### Completed
 - ✅ Written specification (doc/mixfix-operators.md)
 - ✅ Created branch `mengwong/mixfix`
-- ✅ Added `TUnderscore` token to lexer (Lexer.hs)
+- ✅ Added `TUnderscore` token to lexer (Lexer.hs) (subsequently reverted)
 
 ### In Progress
 - 🔄 Extending AST and parser to handle underscore patterns
@@ -14,11 +14,10 @@
 
 ### Phase 1: AST and Lexer Changes
 
-#### 1.1 Lexer (DONE - but may not be needed)
-- [x] Add `TUnderscore` to `TSymbols` enum (for internal use)
-- [x] Add `"_"` mapping in symbols map
+#### 1.1 Lexer (NO CHANGES NEEDED)
+- **No lexer changes required!**
 
-**Note**: Underscores are only used internally to represent patterns. Users write patterns using parameter names and keywords, not explicit underscores.
+Underscores (`_`) are purely conceptual - used to describe the internal pattern representation but never appear in source code. Users write `a plus b`, not `_ plus _`.
 
 #### 1.2 Syntax AST
 
@@ -51,6 +50,8 @@ This is parsed as:
 - Then structured as `AppForm` during parsing
 
 The parser already supports this - it's just application syntax with backticked names.
+
+However, we can't rely on an infix function name to be backticked, because all tokens and all identifiers are allowed to be backticked.
 
 ### Phase 3: Scanning Phase Enhancement
 

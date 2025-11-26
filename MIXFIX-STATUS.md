@@ -35,53 +35,16 @@ alice `is eligible for` healthcare
   - Open questions and design decisions
   - Migration strategy
 
-### 3. Lexer Changes (✅ Complete)
-- **File**: `jl4-core/src/L4/Lexer.hs`
-- Added `TUnderscore` token to `TSymbols` enum
-- Added `"_"` mapping in symbols map
-- **Status**: ✅ Compiles successfully
+### 3. Design Simplification (✅ Complete)
+- **No lexer changes needed!**
+- Underscores (`_`) are purely conceptual - never appear in source code
+- Users write `a plus b`, not `_ plus _`
+- Pattern extraction works by comparing tokens against GIVEN parameters
+- **Status**: ✅ Compiles successfully, all tests pass
 
 ## Remaining Work
 
-### Phase 1: AST Changes (🔲 Not Started)
-**Estimated**: 2-3 days
-
-Extend `AppForm` in `Syntax.hs` to represent mixfix patterns:
-
-```haskell
-data PatternToken n
-  = ParamHole      -- underscore (_)
-  | Keyword n      -- backticked identifier
-
-data AppForm n
-  = PrefixAppForm Anno n [n] (Maybe (Aka n))
-  | MixfixAppForm Anno [PatternToken n] (Maybe (Aka n))
-```
-
-**Files to update** (15 total):
-- `L4/Syntax.hs` - AST definition
-- `L4/Parser.hs` - parsing
-- `L4/TypeCheck.hs` - type checking
-- `L4/Print.hs` - pretty printing
-- `L4/Desugar.hs` - desugaring
-- `L4/EvaluateLazy/Machine.hs` - evaluation
-- `L4/Names.hs` - name handling
-- And 8 more...
-
-### Phase 2: Parser Extension (🔲 Not Started)
-**Estimated**: 2-3 days
-
-Update `appForm` parser to handle:
-- Underscore symbols
-- Mixed sequences of underscores and keywords
-- Validation (must have at least one underscore)
-
-```haskell
-appForm :: Parser (AppForm Name)
-appForm = mixfixAppForm <|> prefixAppForm
-```
-
-### Phase 3: Scanning Phase (🔲 Not Started)
+### Phase 1: Scanning Phase (🔲 Not Started)
 **Estimated**: 1-2 days
 
 Extract mixfix pattern info during `scanFunSigDecide`:
@@ -101,18 +64,16 @@ data FunTypeSig = MkFunTypeSig
   }
 ```
 
-### Phase 4: Type Checker (🔲 Not Started)
-**Estimated**: 3-4 days
+### Phase 2: Type Checker (🔲 Not Started)
+**Estimated**: 2-3 days
 
 Implement pattern matching at call sites:
+- Find keywords in token sequence
+- Extract arguments between keywords
+- Type check arguments
+- Disambiguate using types
 
-```haskell
-tryMixfixApplication :: [Name] -> Check [(Expr Resolved, Type' Resolved)]
--- Matches token sequences against registered mixfix patterns
--- Uses types to disambiguate when multiple patterns match
-```
-
-### Phase 5: Error Handling (🔲 Not Started)
+### Phase 3: Error Handling (🔲 Not Started)
 **Estimated**: 1 day
 
 Add new error types:
@@ -120,29 +81,27 @@ Add new error types:
 - `AmbiguousMixfix`
 - `MixfixArityMismatch`
 
-### Phase 6: Testing (🔲 Not Started)
-**Estimated**: 2-3 days
+### Phase 4: Testing (🔲 Not Started)
+**Estimated**: 1-2 days
 
 Create test files:
-- `jl4/examples/ok/mixfix-basic.l4` - basic functionality
-- `jl4/examples/ok/mixfix-complex.l4` - advanced patterns
-- `jl4/examples/not-ok/tc/mixfix-errors.l4` - error cases
+- `jl4/examples/ok/mixfix-basic.l4`
+- `jl4/examples/not-ok/tc/mixfix-errors.l4`
 
-### Phase 7: Documentation (🔲 Not Started)
+### Phase 5: Documentation (🔲 Not Started)
 **Estimated**: 1 day
 
-Update:
-- `GRAMMAR.md` - formal syntax
-- `doc/guide-index.md` - user guide
-- `doc/GLOSSARY.md` - terminology
+Update user-facing docs
 
 ## Design Decisions Made
 
-1. **Explicit underscores**: Required in patterns (not inferred from GIVEN)
-2. **No underscores = prefix**: Backward compatible with existing code
-3. **No implicit precedence**: Require parentheses/indentation for disambiguation
-4. **Type-directed resolution**: Types help select correct function at call sites
-5. **Leverages existing scanning**: Multi-pass infrastructure already in place
+1. **Parameter names in patterns**: Users write `a plus b`, not `_ plus _`
+2. **Underscores are conceptual**: Only used internally to represent pattern structure
+3. **Pattern extraction via comparison**: Compare AppForm tokens against GIVEN params
+4. **No AST/parser changes**: Existing structures already support this
+5. **No implicit precedence**: Require parentheses/indentation for disambiguation
+6. **Type-directed resolution**: Types help select correct function at call sites
+7. **Leverages existing scanning**: Multi-pass infrastructure already in place
 
 ## Key Insights from Discussion
 

@@ -101,7 +101,6 @@ data TSymbols
   | TDot
   | TColon
   | TPercent
-  | TUnderscore
   | TCopy (Maybe TokenType)
   | TOtherSymbolic !Text
   deriving stock (Eq, Generic, Ord, Show)
@@ -123,7 +122,6 @@ symbols = Map.fromList
   , (";" , TSemicolon)
   , ("." , TDot)
   , ("%" , TPercent)
-  , ("_" , TUnderscore)
   , (":" , TColon)
   ]
 
