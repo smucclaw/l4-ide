@@ -5,6 +5,7 @@
 When evaluating L4 functions through the decision service REST API, IMPORT statements fail to resolve, even when all source files are provided via `--sourcePaths`.
 
 **Error**:
+
 ```
 I could not find a module with this name: anthropicClient
 I have tried the following paths:
@@ -18,6 +19,7 @@ I have tried the following paths:
 **IDENTIFIED**: The module resolver in `jl4-lsp/src/LSP/L4/Rules.hs` (lines 304-308) uses `liftIO (doesFileExist pth)` to check if imported modules exist. This is a **direct filesystem check** that cannot find virtual files added via `Shake.addVirtualFile`.
 
 Specifically:
+
 1. Only the entrypoint file content is added as a virtual file
 2. The imported modules (anthropicClient.l4, promptLibrary.l4) are added as virtual files but...
 3. **The module resolver checks the filesystem with `doesFileExist`, not Shake's virtual file system**
@@ -32,17 +34,20 @@ This is a fundamental architectural limitation: module resolution happens outsid
 **Concept**: When typechecking/evaluating a function, add all source files from `--sourcePaths` as virtual files to the Shake system.
 
 **Implementation**:
+
 1. Modify `Examples.hs::loadL4File` to return file path along with content
 2. Store a mapping of `FilePath -> Text` content in `ValidatedFunction` or global context
 3. Modify `Backend/Jl4.hs::typecheckModule` to accept this mapping
 4. Before typechecking, add all files as virtual files using `Shake.addVirtualFile`
 
 **Changes Required**:
+
 - `Examples.hs`: Store file paths with content
 - `Backend/Jl4.hs`: Accept and use file content map
 - `Backend/Api.hs`: Update `RunFunction` to include module context
 
 **Benefits**:
+
 - Preserves modular code structure
 - Works with IMPORT statements as intended
 - No need for standalone files
@@ -53,6 +58,7 @@ This is a fundamental architectural limitation: module resolution happens outsid
 **Status**: Already implemented in `cosmetics-api-standalone.l4`
 
 **Drawbacks**:
+
 - Code duplication
 - Hard to maintain
 - Doesn't solve the root issue
@@ -182,6 +188,7 @@ defaultMain = do
 3. **Regression Test**: Ensure existing functionality still works
 
 **Test Case**:
+
 ```bash
 # Should succeed with modular files
 curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evaluation" \
@@ -206,11 +213,13 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 ### Changes Made
 
 1. **Backend/Jl4.hs**:
+
    - Updated `createFunction` signature to accept `FilePath` as first parameter
    - Changed `typecheckModule` and `evaluateModule` calls to use actual filepath
    - Removed fake filename generation from WHERE clause
 
 2. **Examples.hs**:
+
    - Modified `createValidatedFunction` to pass actual filepath to `Jl4.createFunction`
    - Updated builtin examples to pass fake filepaths ("compute_qualifies.l4", "vermin_and_rodent.l4")
 
@@ -250,6 +259,7 @@ By using the actual source file path (e.g., `/Users/mengwong/src/legalese/thaila
 **Concept**: Write all source files to a temporary directory and use real filesystem paths.
 
 **Rejected Because**:
+
 - More complex (temp file management)
 - Slower (filesystem I/O)
 - Virtual files are the intended mechanism in Shake
@@ -282,6 +292,7 @@ asum $ guardExists <$> paths
 ```
 
 This would require:
+
 1. Access to Shake's virtual file system from within the Rules
 2. Modifying the module resolution logic to check virtual files first
 3. Testing to ensure system libraries (prelude, daydate) still resolve correctly
@@ -366,6 +377,7 @@ discoverAllFiles discovered (path:paths)
 ```
 
 Key features:
+
 - Uses `Set.Set FilePath` to track discovered files and avoid duplicates
 - Recursively processes each discovered import
 - Resolves import paths relative to the importing file's directory
@@ -442,6 +454,7 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 ### Usage Examples
 
 **Before** (explicit dependency listing):
+
 ```bash
 cabal run jl4-decision-service-exe -- \
   --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/anthropicClient.l4 \
@@ -450,6 +463,7 @@ cabal run jl4-decision-service-exe -- \
 ```
 
 **After** (automatic discovery):
+
 ```bash
 cabal run jl4-decision-service-exe -- \
   --sourcePaths ~/src/legalese/thailand-cosmetics/l4-encodings/cosmetics-api.l4

@@ -3,11 +3,13 @@
 ## Current Status
 
 ### Completed
+
 - ✅ Written specification (doc/mixfix-operators.md)
 - ✅ Created branch `mengwong/mixfix`
 - ✅ Added `TUnderscore` token to lexer (Lexer.hs) (subsequently reverted)
 
 ### In Progress
+
 - 🔄 Extending AST and parser to handle underscore patterns
 
 ## Implementation Phases
@@ -15,6 +17,7 @@
 ### Phase 1: AST and Lexer Changes
 
 #### 1.1 Lexer (NO CHANGES NEEDED)
+
 - **No lexer changes required!**
 
 Underscores (`_`) are purely conceptual - used to describe the internal pattern representation but never appear in source code. Users write `a plus b`, not `_ plus _`.
@@ -22,6 +25,7 @@ Underscores (`_`) are purely conceptual - used to describe the internal pattern 
 #### 1.2 Syntax AST
 
 The current `AppForm` structure is:
+
 ```haskell
 data AppForm n =
   MkAppForm Anno n [n] (Maybe (Aka n))
@@ -29,6 +33,7 @@ data AppForm n =
 ```
 
 **No AST changes needed!** The existing structure already captures the pattern:
+
 - For `person `is eligible for` program`:
   - Function name: `is eligible for`
   - Args: `[person, program]`
@@ -46,6 +51,7 @@ person `is eligible for` program MEANS ...
 ```
 
 This is parsed as:
+
 - A sequence of names: `[person, is eligible for, program]`
 - Then structured as `AppForm` during parsing
 
@@ -56,6 +62,7 @@ However, we can't rely on an infix function name to be backticked, because all t
 ### Phase 3: Scanning Phase Enhancement
 
 #### 3.1 Extract Mixfix Pattern Information
+
 In `TypeCheck.hs`, enhance `scanFunSigDecide` and `scanFunSigAssume`:
 
 ```haskell
@@ -92,6 +99,7 @@ data FunTypeSig = MkFunTypeSig
 ```
 
 #### 3.2 Build Mixfix Registry
+
 During scanning, build a registry of all mixfix functions:
 
 ```haskell
@@ -122,6 +130,7 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = do
 ### Phase 4: Type Checker Pattern Matching
 
 #### 4.1 Mixfix Application Matcher
+
 Add pattern matching logic to `inferExpr`:
 
 ```haskell
@@ -163,6 +172,7 @@ matchPattern pattern tokens = do
 ```
 
 #### 4.2 Integrate with Expression Inference
+
 Modify `inferExpr` to try mixfix matching:
 
 ```haskell
@@ -198,6 +208,7 @@ data CheckError
 ### Phase 6: Testing
 
 #### 6.1 Unit Tests
+
 Create `jl4/examples/ok/mixfix-basic.l4`:
 
 ```l4
@@ -233,6 +244,7 @@ lower `<=` value `<=` upper MEANS lower <= value AND value <= upper
 ```
 
 #### 6.2 Error Tests
+
 Create `jl4/examples/not-ok/tc/mixfix-errors.l4`:
 
 ```l4
@@ -257,7 +269,9 @@ person `is eligible for` program MEANS ...
 ```
 
 #### 6.3 Integration Tests
+
 Test interaction with:
+
 - Existing operators
 - Type-directed name resolution
 - Indentation-sensitive parsing
@@ -272,11 +286,13 @@ Test interaction with:
 ## Migration Strategy
 
 ### Backward Compatibility
+
 - All existing code continues to work (prefix application unchanged)
 - Mixfix is opt-in (use parameter names in pattern)
 - No breaking changes to existing APIs
 
 ### Gradual Rollout
+
 1. Merge scanning phase changes (pattern extraction)
 2. Merge type checker changes (pattern matching)
 3. Add tests progressively

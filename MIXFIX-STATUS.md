@@ -19,6 +19,7 @@ alice `is eligible for` healthcare
 ## Completed Work
 
 ### 1. Specification (✅ Complete)
+
 - **File**: `doc/mixfix-operators.md`
 - Comprehensive design document covering:
   - Motivation and goals
@@ -28,6 +29,7 @@ alice `is eligible for` healthcare
   - Examples and use cases
 
 ### 2. Implementation Plan (✅ Complete)
+
 - **File**: `doc/mixfix-implementation-plan.md`
 - Detailed roadmap with:
   - Phase-by-phase breakdown
@@ -36,6 +38,7 @@ alice `is eligible for` healthcare
   - Migration strategy
 
 ### 3. Design Simplification (✅ Complete)
+
 - **No lexer changes needed!**
 - Underscores (`_`) are purely conceptual - never appear in source code
 - Users write `a plus b`, not `_ plus _`
@@ -45,6 +48,7 @@ alice `is eligible for` healthcare
 ## Remaining Work
 
 ### Phase 1: Scanning Phase (🔲 Not Started)
+
 **Estimated**: 1-2 days
 
 Extract mixfix pattern info during `scanFunSigDecide`:
@@ -65,30 +69,37 @@ data FunTypeSig = MkFunTypeSig
 ```
 
 ### Phase 2: Type Checker (🔲 Not Started)
+
 **Estimated**: 2-3 days
 
 Implement pattern matching at call sites:
+
 - Find keywords in token sequence
 - Extract arguments between keywords
 - Type check arguments
 - Disambiguate using types
 
 ### Phase 3: Error Handling (🔲 Not Started)
+
 **Estimated**: 1 day
 
 Add new error types:
+
 - `NoMatchingMixfixPattern`
 - `AmbiguousMixfix`
 - `MixfixArityMismatch`
 
 ### Phase 4: Testing (🔲 Not Started)
+
 **Estimated**: 1-2 days
 
 Create test files:
+
 - `jl4/examples/ok/mixfix-basic.l4`
 - `jl4/examples/not-ok/tc/mixfix-errors.l4`
 
 ### Phase 5: Documentation (🔲 Not Started)
+
 **Estimated**: 1 day
 
 Update user-facing docs
@@ -113,6 +124,7 @@ Update user-facing docs
 ## Example Use Cases
 
 ### Infix
+
 ```l4
 GIVEN a IS A Number, b IS A Number
 _ `plus` _ MEANS a + b
@@ -121,6 +133,7 @@ _ `plus` _ MEANS a + b
 ```
 
 ### Postfix
+
 ```l4
 GIVEN amount IS A Number
 _ `percent` MEANS amount / 100
@@ -129,6 +142,7 @@ _ `percent` MEANS amount / 100
 ```
 
 ### Ternary
+
 ```l4
 GIVEN lower IS A Number, value IS A Number, upper IS A Number
 _ `<=` _ `<=` _ MEANS lower <= value AND value <= upper
@@ -137,6 +151,7 @@ _ `<=` _ `<=` _ MEANS lower <= value AND value <= upper
 ```
 
 ### Complex Pattern
+
 ```l4
 GIVEN person1 IS A Person, person2 IS A Person, child IS A Person
 _ `copulated with` _ `to make` _ MEANS ...

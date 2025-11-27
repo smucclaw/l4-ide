@@ -5,6 +5,7 @@
 L4 aims to be a CNL (Controlled Natural Language) DSL for legal specifications. To achieve natural language readability, we need to support function application patterns that go beyond traditional prefix notation. This spec describes **mixfix operators** - user-defined functions that can be called with infix, postfix, or more complex patterns.
 
 Key goals:
+
 - **Natural readability**: `alice is eligible for healthcare` reads better than `isEligibleFor alice healthcare`
 - **Type safety**: Types disambiguate application patterns
 - **Low-code friendly**: No need to declare precedence or associativity explicitly
@@ -15,6 +16,7 @@ Key goals:
 ### Core Idea
 
 At **definition site**, use parameter names in the pattern:
+
 ```l4
 GIVEN person IS A Person, program IS A Program
 GIVETH Bool
@@ -23,6 +25,7 @@ person `is eligible for` program MEANS
 ```
 
 At **call site**, use the same pattern structure:
+
 ```l4
 `alice` `is eligible for` `healthcare`
 ```
@@ -44,6 +47,7 @@ The parser recognizes this as a mixfix pattern by identifying which names in the
 ### Definition Site
 
 #### Mixfix Function
+
 ```l4
 GIVEN param1 IS A Type1, param2 IS A Type2, ...
 GIVETH ResultType
@@ -51,11 +55,13 @@ param1 `keyword` param2 MEANS body
 ```
 
 Where:
+
 - Parameter names from GIVEN appear in the pattern
 - Backticked names NOT in GIVEN are keywords (function name parts)
 - The pattern shows exactly how the function should be called
 
 #### Traditional Prefix Function
+
 ```l4
 GIVEN x IS A Number, y IS A Number
 GIVETH Number
@@ -68,50 +74,61 @@ Called as: `add` 5 3
 ### Pattern Forms
 
 #### Infix (binary)
+
 ```l4
 GIVEN a IS A Number, b IS A Number
 GIVETH Number
 a `plus` b MEANS a + b
 ```
+
 Call: `3 `plus` 5`
 
 #### Postfix (unary)
+
 ```l4
 GIVEN amount IS A Number
 GIVETH Number
 amount `percent` MEANS amount / 100
 ```
+
 Call: `50 `percent``
 
 #### Prefix (unary)
+
 ```l4
 GIVEN x IS A Number
 GIVETH Number
 `negate` x MEANS -x
 ```
+
 Call: `negate` `5`
 
 #### Ternary Mixfix
+
 ```l4
 GIVEN condition IS A Bool, thenBranch IS A Text, elseBranch IS A Text
 GIVETH Text
 `if` condition `then` thenBranch `else` elseBranch MEANS
   -- body
 ```
+
 Call: `if` eligible `then` "approved" `else` "denied"
 
 #### N-ary Mixfix
+
 ```l4
 GIVEN mummy IS A Person, daddy IS A Person, baby IS A Person
 GIVETH Person
 mummy `copulated with` daddy `to make` baby MEANS
   -- body
 ```
+
 Call: `alice` `copulated with` `bob` `to make` `charlie`
 
 ### Call Site Syntax
 
 At call sites, use the same pattern as the definition:
+
 ```l4
 argument `keyword` argument `keyword` argument
 ```
@@ -123,11 +140,13 @@ All identifiers may use backticks (standard L4 syntax for identifiers with white
 **No implicit precedence rules.** When multiple mixfix patterns could apply, require explicit grouping. This is made easy by L4's indentation conventions.
 
 ### Use Parentheses
+
 ```l4
 (`alice` `married to` `bob`) `and has child` `charlie`
 ```
 
 ### Use Indentation
+
 ```l4
 result MEANS
     `alice` `married to` `bob`
@@ -157,12 +176,14 @@ Given that either t1 or t2 will always be (the first part of) a function name, p
 ### Pattern Matching Example
 
 **Definition**:
+
 ```l4
 GIVEN mummy IS A Person, daddy IS A Person, baby IS A Person
 mummy `copulated with` daddy `to make` baby MEANS ...
 ```
 
 **Internal representation**:
+
 - Pattern: `_ copulated with _ to make _`
 - Keywords: `["copulated with", "to make"]`
 - Arity: 3
@@ -189,11 +210,13 @@ Perhaps the internal representations will be some combination of the following, 
 L4 already has a multi-phase type checking process:
 
 **Phase 1 (Scanning)**: `scanFunSigModule`
+
 - Collect all function signatures
 - **NEW**: Extract mixfix patterns from function definitions
 - Store pattern info in `FunTypeSig`
 
 **Phase 2 (Type Checking)**: `inferProgram`
+
 - When encountering `expr = name+` (sequence of names)
 - **NEW**: Try mixfix pattern matching
 - Use types to verify correctness
@@ -235,6 +258,7 @@ L4 already has a multi-phase type checking process:
 ## Examples
 
 ### Example 1: Simple Infix
+
 ```l4
 GIVEN a IS A NUMBER
       b IS A NUMBER
@@ -253,6 +277,7 @@ a `plus` b MEANS a ++ b
 Type-directed name resolution picks the right version.
 
 ### Example 2: Eligibility Check
+
 ```l4
 DECLARE Person HAS
    name IS A STRING
@@ -273,6 +298,7 @@ healthcare MEANS Program WITH minAge IS 18
 ```
 
 ### Example 3: Range Check
+
 ```l4
 GIVEN lower IS A Number, value IS A Number, upper IS A Number
 GIVETH Bool
@@ -285,6 +311,7 @@ lower `<=` value `<=` upper MEANS
 ```
 
 ### Example 4: Complex Pattern
+
 ```l4
 GIVEN mylist IS A LIST OF A
       start IS A Number
@@ -327,6 +354,7 @@ myList MEANS LIST 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 - **Raku**: Comprehensive operator definition syntax
 
 L4's approach is unique in:
+
 - **Automatic inference** of patterns from definition
 - **Type-directed resolution** without explicit precedence
 - **CNL-oriented** design for legal domain
