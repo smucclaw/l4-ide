@@ -1,0 +1,81 @@
+§ `Infix Map (over) - Haskell <$> equivalent`
+
+-- This file demonstrates using mixfix to create an infix version of map,
+-- similar to Haskell's <$> operator.
+-- Instead of: map myfunction mylist
+-- We can write: myfunction `over` mylist
+
+-- First, define the standard map function for built-in lists
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a TO b
+      list IS A LIST OF a
+GIVETH A LIST OF b
+map f list MEANS
+  CONSIDER list
+    WHEN EMPTY THEN EMPTY
+    WHEN x FOLLOWED BY xs THEN f x FOLLOWED BY map f xs
+
+-- Now define `over` as a mixfix infix operator that aliases map
+-- Pattern: f `over` list
+-- This gives us Haskell's <$> semantics: f <$> xs = fmap f xs
+
+GIVEN a IS A TYPE
+      b IS A TYPE
+      f IS A FUNCTION FROM a TO b
+      list IS A LIST OF a
+GIVETH A LIST OF b
+f `over` list MEANS map f list
+
+-- Helper functions for testing
+GIVEN x IS A NUMBER
+GIVETH NUMBER
+double x MEANS x * 2
+
+GIVEN x IS A NUMBER
+GIVETH NUMBER
+square x MEANS x * x
+
+GIVEN x IS A NUMBER
+GIVETH NUMBER
+addOne x MEANS x + 1
+
+-- Test data
+testList MEANS LIST 1, 2, 3, 4, 5
+
+-- Test 1: Using map in prefix form (traditional)
+testMapPrefix MEANS map double testList
+
+#EVAL map double testList
+
+-- Test 2: Using over in infix form (new!)
+-- Note: Parentheses around the function prevent it from being parsed as a function application
+testOverInfix MEANS `over` (double) testList
+
+#EVAL `over` (double) testList
+
+-- Test 3: Chaining - since `over` returns a list, we can chain
+-- In Haskell: addOne <$> (double <$> [1,2,3])
+testChained MEANS `over` (addOne) (`over` (double) testList)
+
+#EVAL `over` (addOne) (`over` (double) testList)
+
+-- Test 4: With square function
+testSquare MEANS `over` (square) testList
+
+#EVAL `over` (square) testList
+
+-- Test 5: Empty list case
+testEmpty MEANS `over` (double) EMPTY
+
+#EVAL `over` (double) EMPTY
+
+-- Test 6: Single element list
+testSingle MEANS `over` (double) (LIST 42)
+
+#EVAL `over` (double) (LIST 42)
+
+-- Test 7: Prefix syntax still works
+testOverPrefix MEANS `over` square testList
+
+#EVAL `over` square testList

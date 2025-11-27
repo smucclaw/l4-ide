@@ -1,0 +1,128 @@
+§ `Basic Mixfix Tests`
+
+-- This file tests basic mixfix operator definitions.
+-- The goal is to verify that mixfix patterns are detected and type-checked correctly.
+
+-- Test 1: Simple infix operator
+-- Pattern: param `keyword` param
+-- The AppForm is [a, plus, b] which should be restructured to
+-- function name: `plus`, args: [a, b]
+
+GIVEN a IS A NUMBER, b IS A NUMBER
+GIVETH A NUMBER
+a `plus` b MEANS a + b
+
+-- Test 2: Simple postfix operator
+-- Pattern: param `keyword`
+-- The AppForm is [amount, percent] which should be restructured to
+-- function name: `percent`, args: [amount]
+
+GIVEN amount IS A NUMBER
+GIVETH NUMBER
+amount `percent` MEANS amount / 100
+
+-- Test 3: Multi-keyword infix
+-- Pattern: param `keyword keyword` param
+-- The AppForm is [person, is eligible for, program]
+
+GIVEN person IS A STRING, program IS A STRING
+GIVETH BOOLEAN
+person `is eligible for` program MEANS TRUE
+
+-- Test 4: Ternary mixfix operator
+-- Pattern: `keyword` param `keyword` param `keyword` param
+-- Note: This one starts with a keyword, so the AppForm head is a keyword
+
+GIVEN cond IS A BOOLEAN, thenVal IS A NUMBER, elseVal IS A NUMBER
+GIVETH NUMBER
+`myif` cond `mythen` thenVal `myelse` elseVal MEANS
+  IF cond THEN thenVal ELSE elseVal
+
+-- Test 5: Arity-4 mixfix (quaternary)
+-- Pattern: param `keyword` param `keyword` param `keyword` param
+
+GIVEN mummy IS A STRING, daddy IS A STRING, baby IS A STRING, nickname IS A STRING
+GIVETH STRING
+mummy `and` daddy `had` baby `called` nickname MEANS baby
+
+-- Test 6: Arity-5 mixfix
+-- Pattern with 5 parameters
+
+GIVEN a IS A NUMBER, b IS A NUMBER, c IS A NUMBER, d IS A NUMBER, e IS A NUMBER
+GIVETH NUMBER
+a `op1` b `op2` c `op3` d `op4` e MEANS a + b + c + d + e
+
+-- Simple test evaluations using existing operators
+testAddResult MEANS 3 + 5
+testDivResult MEANS 50 / 100
+
+-- Test calling mixfix functions with prefix syntax
+testPlusPrefix MEANS `plus` 3 5
+
+#EVAL `plus` 3 5
+
+-- Test postfix mixfix with prefix call
+testPercentPrefix MEANS `percent` 50
+
+#EVAL `percent` 50
+
+-- Test calling mixfix functions with infix syntax (same line only)
+testPlusInfix MEANS 3 `plus` 5
+
+#EVAL 3 `plus` 5
+
+-- Test with nested expressions
+testNestedInfix MEANS (1 + 2) `plus` (3 + 4)
+
+#EVAL (1 + 2) `plus` (3 + 4)
+
+-- Test multi-keyword infix call
+testEligible MEANS "Alice" `is eligible for` "Medicare"
+
+#EVAL "Alice" `is eligible for` "Medicare"
+
+-- Ternary mixfix call with full mixfix syntax at call site!
+testTernaryMixfix MEANS `myif` TRUE `mythen` 42 `myelse` 0
+
+#EVAL `myif` TRUE `mythen` 42 `myelse` 0
+#EVAL `myif` FALSE `mythen` 42 `myelse` 0
+
+-- Also works with complex sub-expressions
+#EVAL `myif` (1 = 1) `mythen` (10 + 5) `myelse` (20 - 5)
+#EVAL `myif` (2 > 3) `mythen` 100 `myelse` 200
+
+-- Prefix syntax still works as alternative
+testTernaryPrefix MEANS `myif` TRUE 42 0
+#EVAL `myif` TRUE 42 0
+
+-- ============================================================================
+-- Test param-first (infix-style) mixfix call sites
+-- These tests verify that expressions like:
+--   "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+-- are correctly matched to the quaternary definition.
+-- ============================================================================
+
+-- Quaternary mixfix call with full infix syntax at call site!
+testQuaternaryMixfix MEANS "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+
+#EVAL "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+
+-- Quaternary prefix still works
+#EVAL `and` "Mom" "Dad" "Kid" "Kiddo"
+
+-- Arity-5 mixfix call site
+testQuinaryMixfix MEANS 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
+
+#EVAL 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
+#EVAL (10 - 9) `op1` (1 + 1) `op2` 3 `op3` (2 * 2) `op4` 5
+
+-- ============================================================================
+-- Test postfix call-site syntax (at end of file to avoid parser issues)
+-- NOTE: Postfix #EVAL followed immediately by definitions can cause parse errors
+-- due to a known issue with how the parser handles whitespace after postfix.
+-- These tests are placed at the end of the file where they work correctly.
+-- ============================================================================
+#EVAL 50 `percent`
+#EVAL 75 `percent`
+#EVAL (33 `plus` 22) `percent`
+#EVAL (10 + 5) `percent`

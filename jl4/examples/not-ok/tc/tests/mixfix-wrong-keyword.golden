@@ -1,0 +1,57 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: mixfix-wrong-keyword.l4
+  Hidden:   no
+  Range:    12:22-12:55
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    Expected keyword `mythen` but found `myelse`
+    In expression involving: myif
+    Check that keywords are in the correct order.
+
+File: mixfix-wrong-keyword.l4
+  Hidden:   no
+  Range:    12:22-12:55
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    The function
+
+      myif (defined at mixfix-wrong-keyword.l4:8:1-7)
+
+    expects 3 arguments,
+    but you are applying it to 5 arguments here.
+
+File: mixfix-wrong-keyword.l4
+  Hidden:   no
+  Range:    12:34-12:42
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      myelse
+
+    which I have inferred to be of type: 
+
+      myelse9
+
+File: mixfix-wrong-keyword.l4
+  Hidden:   no
+  Range:    12:45-12:53
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    I could not find a definition for the identifier
+
+      mythen
+
+    which I have inferred to be of type: 
+
+      mythen11

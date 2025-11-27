@@ -370,6 +370,7 @@ jl4Rules rootDirectory recorder = do
             , declTypeSigs = Map.empty
             , declareDeclarations = Map.empty
             , assumeDeclarations = Map.empty
+            , mixfixRegistry = Map.empty
             , sectionStack = []
             }
         -- NOTE: we don't want to leak the inference variables from the substitution

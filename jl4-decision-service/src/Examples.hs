@@ -3,9 +3,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Examples (functionSpecs, loadL4File, loadL4Functions) where
+module Examples (functionSpecs, loadL4File, loadL4Functions, ModuleContext) where
 
-import Backend.Jl4 as Jl4
+import qualified Backend.Jl4 as Jl4
+import Backend.Jl4 (ModuleContext)
 import Control.Monad (unless, when)
 import Control.Monad.Trans.Except
 import qualified Data.Map.Strict as Map
@@ -18,13 +19,44 @@ import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
 import Server
 import System.Directory (doesFileExist)
-import System.FilePath (replaceExtension, takeBaseName)
+import System.FilePath (replaceExtension, takeBaseName, takeDirectory, (</>))
+import qualified Data.Set as Set
 
 -- ----------------------------------------------------------------------------
 -- load example L4 files and descriptions from disk.
 -- ----------------------------------------------------------------------------
 
-loadL4File :: FilePath -> IO (Maybe (Text, Text, Function))
+-- | Extract IMPORT statements from L4 file content
+extractImports :: Text -> [Text]
+extractImports content =
+  [ T.strip $ T.drop 6 line  -- Remove "IMPORT" prefix and trim
+  | line <- T.lines content
+  , T.strip line /= ""
+  , "IMPORT" `T.isPrefixOf` T.strip line
+  ]
+
+-- | Recursively discover all files needed (following IMPORT statements)
+discoverAllFiles :: Set.Set FilePath -> [FilePath] -> IO (Set.Set FilePath)
+discoverAllFiles discovered [] = return discovered
+discoverAllFiles discovered (path:paths)
+  | path `Set.member` discovered = discoverAllFiles discovered paths
+  | otherwise = do
+      putStrLn $ "* Discovering dependencies for: " <> path
+      fileExists <- doesFileExist path
+      if not fileExists
+        then do
+          putStrLn $ "  WARNING: File not found: " <> path
+          discoverAllFiles discovered paths
+        else do
+          content <- TIO.readFile path
+          let imports = extractImports content
+              dir = takeDirectory path
+              importPaths = [dir </> T.unpack imp <> ".l4" | imp <- imports]
+          putStrLn $ "  Found imports: " <> show imports
+          let newDiscovered = Set.insert path discovered
+          discoverAllFiles newDiscovered (importPaths ++ paths)
+
+loadL4File :: FilePath -> IO (Maybe (FilePath, Text, Text, Function))
 loadL4File path = do
   let
     yamlPath = replaceExtension path ".yaml"
@@ -44,28 +76,35 @@ loadL4File path = do
           let
             fnDeclWithName = if T.null (fnDecl.name) then fnDecl{name = T.pack $ takeBaseName path} else fnDecl
           print fnDeclWithName
-          return (Just (fnDecl.name, content, fnDeclWithName))
+          return (Just (path, fnDecl.name, content, fnDeclWithName))
 
-loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction)
+loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction, ModuleContext)
 loadL4Functions paths = do
-  files <- mapM loadL4File paths
   when (null paths) $ do
     putStrLn "* to load L4 functions from disk, run with --sourcePaths"
     putStrLn "  for example, --sourcePaths ../doc/tutorial-code/fruit.l4"
     putStrLn "  each .l4 file needs a matching .yaml definition"
+
+  -- Automatically discover all files including imports
+  allFiles <- discoverAllFiles Set.empty paths
+  let allFilePaths = Set.toList allFiles
+  putStrLn $ "* Auto-discovered " <> show (Set.size allFiles) <> " total files (including imports)"
+
+  files <- mapM loadL4File allFilePaths
   unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
   let
     validFiles = catMaybes files
-    functions = Map.fromList [(name, createValidatedFunction name content fn) | (name, content, fn) <- validFiles]
-  return functions
+    functions = Map.fromList [(name, createValidatedFunction path name content fn moduleContext) | (path, name, content, fn) <- validFiles]
+    moduleContext = Map.fromList [(path, content) | (path, _, content, _) <- validFiles]
+  return (functions, moduleContext)
 
-createValidatedFunction :: Text -> Text -> Function -> ValidatedFunction
-createValidatedFunction _filename content fnDecl =
+createValidatedFunction :: FilePath -> Text -> Text -> Function -> ModuleContext -> ValidatedFunction
+createValidatedFunction filepath _filename content fnDecl moduleContext =
   ValidatedFunction
     { fnImpl = fnDecl
     , fnEvaluator =
         Map.fromList
-          [ (JL4, Jl4.createFunction (toDecl fnDecl) content)
+          [ (JL4, Jl4.createFunction filepath (toDecl fnDecl) content moduleContext)
           ]
     }
 
@@ -118,7 +157,7 @@ personQualifiesFunction = do
       { fnImpl = fnDecl
       , fnEvaluator =
           Map.fromList
-            [ (JL4, Jl4.createFunction (toDecl fnDecl) computeQualifiesJL4NoInput)
+            [ (JL4, Jl4.createFunction "compute_qualifies.l4" (toDecl fnDecl) computeQualifiesJL4NoInput Map.empty)
             ]
       }
 
@@ -164,7 +203,7 @@ rodentsAndVerminFunction = do
       { fnImpl = fnDecl
       , fnEvaluator =
           Map.fromList
-            [ (JL4, Jl4.createFunction (toDecl fnDecl) rodentsAndVerminJL4)
+            [ (JL4, Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentsAndVerminJL4 Map.empty)
             ]
       }
 

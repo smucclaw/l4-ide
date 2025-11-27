@@ -56,6 +56,7 @@ data TDirectives
   | TCheckDirective
   | TContractDirective
   | TAssertDirective
+  | TDirectiveContinue  -- ^ '# ' at start of line continues a directive
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -421,9 +422,13 @@ quoted =
 directiveLiteral :: Lexer TDirectives
 directiveLiteral = do
   _herald <- "#"
-  getAlt $ foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toDescList directives
+  -- Try directive keywords first (e.g., EVAL, EVALTRACE, CHECK, etc.)
+  -- then fall back to continuation marker (just "# " with nothing else)
+  getAlt (foldMap (\(t, d) -> Alt $ d <$ chunk t) $ Map.toDescList directives)
     -- we use toDescList to make sure that longer tokens with common prefixes
     -- appear before shorter ones, in particular EVALTRACE before EVAL
+    <|> (TDirectiveContinue <$ lookAhead (char ' '))
+    -- "# " (hash-space) is a directive continuation marker
 
 integerLiteral :: Lexer (Text, Integer)
 integerLiteral =
@@ -973,7 +978,9 @@ displayTokenType = \case
     TGenitive         -> "'s"
     TIdentifier t     -> t
     TQuoted t         -> "`" <> t <> "`"
-  TDirectives dir -> ("#" <>) $ inverseCompleteLookup dir directives
+  TDirectives dir -> case dir of
+    TDirectiveContinue -> "#"  -- continuation marker is just "#"
+    _ -> "#" <> inverseCompleteLookup dir directives
   TKeywords kws -> inverseCompleteLookup kws keywords
   -- NOTE: we cannot look up TCopy (Just _) in the map - instead we just act as if it was
   -- TCopy Nothing, which is fine

@@ -472,7 +472,7 @@ validateFunction fn = do
       }
  where
   validateImplementation :: EvalBackend -> Text -> AppM RunFunction
-  validateImplementation JL4 program =  pure $ Jl4.createFunction (toDecl fn.declaration) program
+  validateImplementation JL4 program =  pure $ Jl4.createFunction (Text.unpack fn.declaration.name <> ".l4") (toDecl fn.declaration) program Map.empty
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
@@ -524,7 +524,7 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
 
         k ValidatedFunction
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
-          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction fnDecl prog
+          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction (Text.unpack funName <> ".l4") fnDecl prog Map.empty
           }
   where
    (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun

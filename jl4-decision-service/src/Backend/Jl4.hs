@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide) where
+module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -21,14 +21,17 @@ import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
 
-import Language.LSP.Protocol.Types (normalizedFilePathToUri)
-import System.FilePath ((<.>))
+import Language.LSP.Protocol.Types (normalizedFilePathToUri, toNormalizedFilePath)
+import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
 
+-- | Map from file path to file content for module resolution
+type ModuleContext = Map FilePath Text
+
 buildFunDecide :: Text -> FunctionDeclaration -> ExceptT EvaluatorError IO (Decide Resolved)
 buildFunDecide fnImpl fnDecl = do
-  (initErrs, mTcRes) <- typecheckModule file fnImpl
+  (initErrs, mTcRes) <- typecheckModule file fnImpl Map.empty
 
   tcRes <- case mTcRes of
     Nothing -> throwError $ InterpreterError (mconcat initErrs)
@@ -40,13 +43,15 @@ buildFunDecide fnImpl fnDecl = do
   funRawName = mkNormalName fnDecl.name
 
 createFunction ::
+  FilePath ->
   FunctionDeclaration ->
   Text ->
+  ModuleContext ->
   RunFunction
-createFunction fnDecl fnImpl =
+createFunction filepath fnDecl fnImpl moduleContext =
   RunFunction
     { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} -> do
-        (initErrs, mTcRes) <- typecheckModule file fnImpl
+        (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
         tcRes <- case mTcRes of
           Nothing -> throwError $ InterpreterError (mconcat initErrs)
@@ -66,7 +71,7 @@ createFunction fnDecl fnImpl =
               , prettyLayout $ mkTopDeclDirective $ mkEvalTrace appliedFunExpr
               ]
 
-        (errs, mEvalRes) <- evaluateModule file l4InputWithEval
+        (errs, mEvalRes) <- evaluateModule filepath l4InputWithEval moduleContext
 
         case mEvalRes of
           Nothing -> throwError $ InterpreterError (mconcat errs)
@@ -84,7 +89,6 @@ createFunction fnDecl fnImpl =
           Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
     }
  where
-  file = Text.unpack fnDecl.name <.> "l4"
   funRawName = mkNormalName fnDecl.name
 
 assumeNoUnknowns :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m [(Text, FnLiteral)]
@@ -357,19 +361,31 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 -- L4 helpers
 -- ----------------------------------------------------------------------------
 
-typecheckModule :: (MonadIO m) => FilePath -> Text -> m ([Text], Maybe Rules.TypeCheckResult)
-typecheckModule file input = do
+typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
+typecheckModule file input moduleContext = do
   liftIO $ oneshotL4ActionAndErrors file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
+    -- Add all module files as virtual files for IMPORT resolution
+    forM_ (Map.toList moduleContext) $ \(path, content) -> do
+      let modulePath = toNormalizedFilePath ("./" <> takeFileName path)
+      _ <- Shake.addVirtualFile modulePath content
+      pure ()
+    -- Add the main file
     _ <- Shake.addVirtualFile nfp input
     Shake.use Rules.TypeCheck uri
 
-evaluateModule :: (MonadIO m) => FilePath -> Text -> m ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateModule file input =
+evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
+evaluateModule file input moduleContext =
   liftIO $ oneshotL4ActionAndErrors file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
+    -- Add all module files as virtual files for IMPORT resolution
+    forM_ (Map.toList moduleContext) $ \(path, content) -> do
+      let modulePath = toNormalizedFilePath ("./" <> takeFileName path)
+      _ <- Shake.addVirtualFile modulePath content
+      pure ()
+    -- Add the main file
     _ <- Shake.addVirtualFile nfp input
     Shake.use Rules.EvaluateLazy uri
 
