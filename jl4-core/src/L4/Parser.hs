@@ -773,7 +773,8 @@ indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
   withIndent GT p $ \ _ -> do
     l <- currentLine
-    e <- baseExpr
+    -- Use mixfixChainExpr to collect linear mixfix chains before operator parsing
+    e <- mixfixChainExpr
     efs <- many (expressionCont p)
     mw <- optional (whereExpr p)
     pure ((maybe id id mw) (combine End l e efs))
@@ -812,8 +813,8 @@ whereExpr p =
 singleLineExpr :: Parser (Expr Name)
 singleLineExpr = do
   startLine <- currentLine
-  -- Use regular baseExpr for the initial expression (handles IF/THEN/ELSE, etc.)
-  e <- baseExpr
+  -- Use mixfixChainExpr for the initial expression to collect linear mixfix chains
+  e <- mixfixChainExpr
   -- Only apply line checking to expression continuations (operators)
   efs <- many (singleLineExpressionCont startLine)
   pure (combine End startLine e efs)
@@ -1052,19 +1053,10 @@ operator =
   <|> (\ op -> (7, AssocLeft,  infix2  Times     op)) <$> (spacedKeyword_ TKTimes  <|> spacedTokenOp_ TTimes )
   <|> (\ op -> (7, AssocLeft,  infix2' DividedBy op)) <$> (((<>) <$> opToken (TKeywords TKDivided) <*> opToken (TKeywords TKBy)) <|> opToken (TOperators TDividedBy))
   <|> (\ op -> (7, AssocLeft,  infix2  Modulo    op)) <$> spacedKeyword_ TKModulo
-  -- Mixfix infix operators: backticked names as infix operators
-  -- e.g., `3 `plus` 5` becomes `App anno plus [3, 5]`
-  -- Priority 6 (same as PLUS/MINUS), left associative
-  <|> mixfixInfixOp
+  -- NOTE: Mixfix infix operators are now handled by mixfixChainExpr, not here.
+  -- This allows collecting all mixfix tokens linearly rather than nesting binary ops.
   where
     spacedTokenOp_ = spacedToken_ . TOperators
-    mixfixInfixOp = do
-      eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix operator"
-      pure (6, AssocLeft, mixfixInfix2 eN)
-    mixfixInfix2 eN l r =
-      let op = mkSimpleEpaAnno eN
-          funcName = eN.payload
-      in App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) funcName [l, r]
 
 -- | Regular postfix operators (percent, AS type)
 regularPostfixOperator :: Parser (Expr Name -> Expr Name)
@@ -1127,6 +1119,78 @@ postfix f op l =
 
 baseExpr :: Parser (Expr Name)
 baseExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator baseExpr'
+
+-- | Parse a mixfix chain expression.
+-- After parsing a base expression, if it's followed by a backticked keyword,
+-- collect all (keyword, expression) pairs linearly.
+--
+-- Example: `a `op1` b `op2` c` becomes:
+--   App op1 [a, Var op2, b, c]
+--
+-- This representation allows the type checker to:
+-- 1. Look up `op1` in the mixfix registry
+-- 2. Validate that `op2` matches the expected keyword pattern
+-- 3. Extract the actual arguments [a, b, c]
+--
+-- The curried representation means partial application works naturally.
+mixfixChainExpr :: Parser (Expr Name)
+mixfixChainExpr = do
+  firstExpr <- baseExpr
+  -- Get the ending line of the first expression to enforce same-line constraint
+  let firstExprEndLine = maybe 0 (.end.line) (rangeOf firstExpr)
+  -- Try to parse a mixfix chain starting with a backticked keyword
+  -- The keyword must be on the same line as the first expression
+  mChain <- optional $ try (mixfixChainCont firstExprEndLine)
+  case mChain of
+    Nothing -> pure firstExpr
+    Just (firstKeyword, firstArg, moreKwArgs) ->
+      -- Build: App firstKeyword [firstExpr, firstArg, kw2, arg2, kw3, arg3, ...]
+      -- For binary: a `plus` b -> App plus [a, b]
+      -- For ternary+: a `f1` b `f2` c -> App f1 [a, b, Var f2, c]
+      let allArgs = firstExpr : firstArg : concatMap pairToArgs moreKwArgs
+          -- IMPORTANT: genericToNodes for App expects exactly 2 holes:
+          -- 1. One for the function name
+          -- 2. One for the args list
+          -- We combine all keyword tokens as CSNs and create just 2 holes
+          funcHole = mkAnno [AnnoHole Nothing]  -- Hole for function name
+          argsHole = mkAnno [AnnoHole Nothing]  -- Hole for args list (all args together)
+          -- Collect all CSN tokens for keywords (they don't need holes)
+          kwTokens = mkSimpleEpaAnno firstKeyword : concatMap pairToCsn moreKwArgs
+          combinedAnno = funcHole <> foldl' (<>) emptyAnno kwTokens <> argsHole
+      in pure $ App (fixAnnoSrcRange combinedAnno) firstKeyword.payload allArgs
+  where
+    -- Parse: `keyword` expr (`keyword` expr)*
+    -- Returns: (firstKeyword, firstArg, [(kw2, arg2), (kw3, arg3), ...])
+    -- The keyword MUST be on the given line (same line as previous expression)
+    mixfixChainCont :: Int -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
+    mixfixChainCont prevLine = do
+      firstKw <- mixfixKeywordOnLine prevLine
+      firstArg <- baseExpr
+      let firstArgEndLine = maybe prevLine (.end.line) (rangeOf firstArg)
+      rest <- many $ try $ do
+        kw <- mixfixKeywordOnLine firstArgEndLine
+        e <- baseExpr
+        pure (kw, e)
+      pure (firstKw, firstArg, rest)
+
+    -- Parse a backticked keyword only if it's on the specified line
+    mixfixKeywordOnLine :: Int -> Parser (Epa Name)
+    mixfixKeywordOnLine expectedLine = do
+      tok <- lookAhead anySingle
+      guard (tok.range.start.line == expectedLine)
+      (MkName emptyAnno . NormalName) <<$>>
+        spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
+
+    -- Convert (keyword, expr) pair to [Var keyword, expr]
+    -- These are the "additional" keywords beyond the first one
+    pairToArgs :: (Epa Name, Expr Name) -> [Expr Name]
+    pairToArgs (kw, e) =
+      let kwVar = App (mkSimpleEpaAnno kw) kw.payload []  -- Var keyword
+      in [kwVar, e]
+
+    -- Get CSN annotation from keyword (just the keyword tokens, no holes)
+    pairToCsn :: (Epa Name, Expr Name) -> [Anno]
+    pairToCsn (kw, _) = [mkSimpleEpaAnno kw]
 
 baseExpr' :: Parser (Expr Name)
 baseExpr' =

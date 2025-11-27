@@ -1178,13 +1178,16 @@ inferExpr' g =
       -- keywords, restructure the args to remove the keywords.
       -- For param-first patterns, this also returns the correct function name.
       mMixfixMatch <- tryMatchMixfixCall n es
-      let (actualFuncName, actualArgs) = case mMixfixMatch of
-            Nothing -> (n, es)  -- Not a mixfix call, use original
+      let (actualFuncName, actualArgs, needsAnnoRebuild) = case mMixfixMatch of
+            Nothing -> (n, es, False)  -- Not a mixfix call, use original
             Just (funcRawName, restructuredArgs) ->
               -- Create a Name with the correct function name, preserving the annotation
               let MkName nameAnno _ = n
                   newName = MkName nameAnno funcRawName
-              in (newName, restructuredArgs)
+                  -- We need to rebuild annotation if args were restructured
+                  -- (i.e., keyword placeholders were removed)
+                  argsChanged = length restructuredArgs /= length es
+              in (newName, restructuredArgs, argsChanged)
 
       -- 1.
       (rn, pt) <- resolveTerm actualFuncName
@@ -1195,7 +1198,12 @@ inferExpr' g =
       -- actually insist on the type t being a function.
       (res, rt) <- matchFunTy False rn t actualArgs
 
-      pure (App ann rn res, rt)
+      -- If mixfix args were restructured, rebuild annotation with correct holes
+      let finalAnn = if needsAnnoRebuild
+                     then rebuildMixfixAppAnno ann actualFuncName actualArgs
+                     else ann
+
+      pure (App finalAnn rn res, rt)
     AppNamed ann n nes _morder -> do
       (rn, pt) <- resolveTerm n
       t <- instantiate pt
@@ -2148,33 +2156,111 @@ tryMatchAnyPattern funcRawName args (sig:sigs) =
         Nothing -> tryMatchAnyPattern funcRawName args sigs
 
 -- | Match a list of expressions against a mixfix pattern.
--- The pattern starts with the function's first keyword (already matched by caller),
--- then alternates between params and keywords.
 --
--- Pattern: [Keyword "myif", Param "cond", Keyword "mythen", Param "thenVal", Keyword "myelse", Param "elseVal"]
--- Args:    [TRUE, mythen, 42, myelse, 0]
+-- Two cases:
+-- 1. Keyword-first patterns like `myif cond mythen thenVal myelse elseVal`
+--    Pattern: [Kw "myif", Param, Kw "mythen", Param, Kw "myelse", Param]
+--    Args:    [cond, mythen, thenVal, myelse, elseVal]  (old nested binary repr)
+--    OR Args: [cond, thenVal, Var myelse, elseVal]      (new linear repr - mythen absorbed)
 --
--- We need to check that:
--- 1. Args at keyword positions are Var nodes with the expected keyword name
--- 2. Args at param positions are expressions (can be anything)
+-- 2. Param-first patterns like `a op1 b op2 c`
+--    Pattern: [Param, Kw "op1", Param, Kw "op2", Param]
+--    funcName = op1 (first keyword)
+--    Args:    [a, b, Var op2, c]  (new linear repr)
+--    - args[0] = param before first keyword
+--    - args[1:] = rest, alternating [param, Var kw, param, ...]
 --
--- Returns: Just [TRUE, 42, 0] if matched, Nothing otherwise
+-- Returns: Just [extracted params] if matched, Nothing otherwise
 matchMixfixPattern :: RawName -> [Expr Name] -> MixfixInfo -> Maybe [Expr Name]
 matchMixfixPattern funcRawName args info =
-  -- The pattern includes the head keyword, but args doesn't include it
-  -- So pattern[0] is the head keyword (already matched), pattern[1:] should match args
   case info.pattern of
     [] -> Nothing  -- Empty pattern, shouldn't happen
     (headToken:restPattern) ->
-      -- Verify the head token is the keyword we expect
       case headToken of
-        MixfixKeyword k | k == funcRawName -> matchPatternTokens restPattern args
+        MixfixKeyword k | k == funcRawName ->
+          -- Keyword-first pattern: funcName is the head keyword
+          -- Try new linear format first, then fall back to old format
+          matchLinearAfterHeadKeyword restPattern args
+            <|> matchPatternTokens restPattern args
+
         MixfixParam _ ->
-          -- Pattern starts with a param. This case is handled by the binary flattening
-          -- logic in tryMatchMixfixCall. If we get here with a param-first pattern,
-          -- it means the call wasn't a binary app, so we can't match.
-          Nothing
+          -- Param-first pattern: funcName should be the FIRST KEYWORD in pattern
+          -- Find it and check args match
+          matchParamFirstPattern funcRawName args info.pattern
+
         _ -> Nothing
+
+-- | Match args for param-first patterns in the new linear representation.
+-- Pattern: [Param, Kw op1, Param, Kw op2, Param, ...]
+-- funcName: op1 (the first keyword)
+-- Args: [a, b, Var op2, c, ...] where a is before op1, rest alternates
+matchParamFirstPattern :: RawName -> [Expr Name] -> [MixfixPatternToken] -> Maybe [Expr Name]
+matchParamFirstPattern funcRawName args pattern =
+  case (splitAtFirstKeyword funcRawName pattern, args) of
+    (Just (paramsBefore, paramsAfter), firstArg:restArgs) ->
+      -- paramsBefore should be [Param] (the param before first keyword)
+      -- paramsAfter is pattern after first keyword: [Param, Kw op2, Param, ...]
+      if length paramsBefore == 1 && isParam (head paramsBefore)
+      then do
+        -- First arg is the param before keyword
+        -- Rest args should match paramsAfter pattern
+        restMatched <- matchLinearAfterHeadKeyword paramsAfter restArgs
+        Just (firstArg : restMatched)
+      else Nothing
+    _ -> Nothing
+  where
+    isParam (MixfixParam _) = True
+    isParam _ = False
+
+-- | Split pattern at the first occurrence of the given keyword.
+-- Returns (tokens before keyword, tokens after keyword)
+splitAtFirstKeyword :: RawName -> [MixfixPatternToken] -> Maybe ([MixfixPatternToken], [MixfixPatternToken])
+splitAtFirstKeyword _ [] = Nothing
+splitAtFirstKeyword kw (MixfixKeyword k : rest) | k == kw = Just ([], rest)
+splitAtFirstKeyword kw (t : rest) = do
+  (before, after) <- splitAtFirstKeyword kw rest
+  Just (t : before, after)
+
+-- | Match args in the new linear format after the head keyword.
+-- Pattern (after head kw): [Param, Kw op2, Param, Kw op3, Param, ...]
+-- Args: [val1, val2, Var op3, val3, ...] (interleaved params and keyword vars)
+--
+-- This handles the "curried" representation where keywords appear as Var nodes
+-- at their expected positions in the argument list.
+matchLinearAfterHeadKeyword :: [MixfixPatternToken] -> [Expr Name] -> Maybe [Expr Name]
+matchLinearAfterHeadKeyword [] [] = Just []
+matchLinearAfterHeadKeyword [] (_:_) = Nothing  -- Extra args
+matchLinearAfterHeadKeyword (_:_) [] = Nothing  -- Missing args
+matchLinearAfterHeadKeyword (token:tokens) (arg:args) =
+  case token of
+    MixfixParam _ ->
+      -- Expect a value argument - keep it in result
+      (arg :) <$> matchLinearAfterHeadKeyword tokens args
+    MixfixKeyword expectedKw ->
+      -- Expect either a Var with the keyword name (new format)
+      -- or we're in old format and should skip checking here
+      case arg of
+        Var _ n | rawName n == expectedKw ->
+          -- New format: keyword marker present, skip it
+          matchLinearAfterHeadKeyword tokens args
+        _ ->
+          -- Old format or mismatch - try treating this as old format
+          -- where keyword was already consumed by parser
+          -- This means arg is actually the next param value
+          matchLinearAfterHeadKeyword tokens (arg:args)
+
+-- | Rebuild the annotation for a mixfix App when args have been restructured.
+-- The original annotation has holes for all parsed args (including keyword placeholders),
+-- but the restructured args only contain the actual data args.
+-- We create a new annotation with holes for only the actual args.
+rebuildMixfixAppAnno :: Anno -> Name -> [Expr Name] -> Anno
+rebuildMixfixAppAnno origAnn funcName args =
+  -- Keep the original source range from the annotation
+  -- but rebuild the payload with just holes for the actual args
+  let funcHole = mkHoleWithSrcRange funcName
+      argHoles = map mkHoleWithSrcRange args
+      newPayload = funcHole : argHoles
+  in fixAnnoSrcRange $ set #payload newPayload origAnn
 
 -- | Flatten a binary mixfix application into a list of (Either Expr Keyword).
 -- Given: App had [App and [a, b], c]

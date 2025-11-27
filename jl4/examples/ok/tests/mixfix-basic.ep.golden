@@ -103,18 +103,18 @@ testTernaryPrefix MEANS `myif` TRUE 42 0
 -- ============================================================================
 
 -- Quaternary mixfix call with full infix syntax at call site!
-testQuaternaryMixfix MEANS `called` `had` `and` "Alice" "Bob" "Charlie" "Chuck"
+testQuaternaryMixfix MEANS `and` `had` `called` "Alice" "Bob" `had` "Charlie" `called` "Chuck"
 
-#EVAL `called` `had` `and` "Alice" "Bob" "Charlie" "Chuck"
+#EVAL `and` `had` `called` "Alice" "Bob" `had` "Charlie" `called` "Chuck"
 
 -- Quaternary prefix still works
 #EVAL `and` "Mom" "Dad" "Kid" "Kiddo"
 
 -- Arity-5 mixfix call site
-testQuinaryMixfix MEANS `op4` `op3` `op2` `op1` 1 2 3 4 5
+testQuinaryMixfix MEANS `op1` `op2` `op3` `op4` 1 2 `op2` 3 `op3` 4 `op4` 5
 
-#EVAL `op4` `op3` `op2` `op1` 1 2 3 4 5
-#EVAL `op4` `op3` `op2` `op1` (10 - 9) (1 + 1) 3 (2 * 2) 5
+#EVAL `op1` `op2` `op3` `op4` 1 2 `op2` 3 `op3` 4 `op4` 5
+#EVAL `op1` `op2` `op3` `op4` (10 - 9) (1 + 1) `op2` 3 `op3` (2 * 2) `op4` 5
 
 -- ============================================================================
 -- Test postfix call-site syntax (at end of file to avoid parser issues)
