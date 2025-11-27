@@ -81,9 +81,37 @@ testEligible MEANS "Alice" `is eligible for` "Medicare"
 
 #EVAL "Alice" `is eligible for` "Medicare"
 
--- NOTE: Ternary+ mixfix call syntax (e.g., `myif` x `mythen` y `myelse` z)
--- is NOT yet supported at call site. Use prefix syntax instead:
-testTernaryPrefix MEANS `myif` TRUE 42 0
+-- Ternary mixfix call with full mixfix syntax at call site!
+testTernaryMixfix MEANS `myif` TRUE `mythen` 42 `myelse` 0
 
+#EVAL `myif` TRUE `mythen` 42 `myelse` 0
+#EVAL `myif` FALSE `mythen` 42 `myelse` 0
+
+-- Also works with complex sub-expressions
+#EVAL `myif` (1 = 1) `mythen` (10 + 5) `myelse` (20 - 5)
+#EVAL `myif` (2 > 3) `mythen` 100 `myelse` 200
+
+-- Prefix syntax still works as alternative
+testTernaryPrefix MEANS `myif` TRUE 42 0
 #EVAL `myif` TRUE 42 0
-#EVAL `myif` FALSE 42 0
+
+-- ============================================================================
+-- Test param-first (infix-style) mixfix call sites
+-- These tests verify that expressions like:
+--   "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+-- are correctly matched to the quaternary definition.
+-- ============================================================================
+
+-- Quaternary mixfix call with full infix syntax at call site!
+testQuaternaryMixfix MEANS "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+
+#EVAL "Alice" `and` "Bob" `had` "Charlie" `called` "Chuck"
+
+-- Quaternary prefix still works
+#EVAL `and` "Mom" "Dad" "Kid" "Kiddo"
+
+-- Arity-5 mixfix call site
+testQuinaryMixfix MEANS 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
+
+#EVAL 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
+#EVAL (10 - 9) `op1` (1 + 1) `op2` 3 `op3` (2 * 2) `op4` 5
