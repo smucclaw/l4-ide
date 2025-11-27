@@ -56,6 +56,19 @@ mkBuiltins
   -- for its timestamp
   , "neverMatchesParty", "neverMatchesAct"
   , "underscore" `rename` "_"
+  -- String functions (unary)
+  , "stringLength" `rename` "STRINGLENGTH"
+  , "toUpper" `rename` "TOUPPER"
+  , "toLower" `rename` "TOLOWER"
+  , "trim" `rename` "TRIM"
+  -- String functions (binary)
+  , "contains" `rename` "CONTAINS"
+  , "startsWith" `rename` "STARTSWITH"
+  , "endsWith" `rename` "ENDSWITH"
+  , "indexOf" `rename` "INDEXOF"
+  -- String functions (ternary)
+  , "substring" `rename` "SUBSTRING"
+  , "replace" `rename` "REPLACE"
   ]
 
 boolean :: Type' Resolved
@@ -169,6 +182,44 @@ equalsBuiltin = forall' [aDef] $ fun_ [a, a] boolean
   where
     a = app aRef []
 
+-- String functions
+
+-- Unary: STRING → NUMBER
+stringLengthBuiltin :: Type' Resolved
+stringLengthBuiltin = fun_ [string] number
+
+-- Unary: STRING → STRING
+toUpperBuiltin :: Type' Resolved
+toUpperBuiltin = fun_ [string] string
+
+toLowerBuiltin :: Type' Resolved
+toLowerBuiltin = fun_ [string] string
+
+trimBuiltin :: Type' Resolved
+trimBuiltin = fun_ [string] string
+
+-- Binary: STRING → STRING → BOOLEAN
+containsBuiltin :: Type' Resolved
+containsBuiltin = fun_ [string, string] boolean
+
+startsWithBuiltin :: Type' Resolved
+startsWithBuiltin = fun_ [string, string] boolean
+
+endsWithBuiltin :: Type' Resolved
+endsWithBuiltin = fun_ [string, string] boolean
+
+-- Binary: STRING → STRING → NUMBER
+indexOfBuiltin :: Type' Resolved
+indexOfBuiltin = fun_ [string, string] number
+
+-- Ternary: STRING → NUMBER → NUMBER → STRING
+substringBuiltin :: Type' Resolved
+substringBuiltin = fun_ [string, number, number] string
+
+-- Ternary: STRING → STRING → STRING → STRING
+replaceBuiltin :: Type' Resolved
+replaceBuiltin = fun_ [string, string, string] string
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -263,6 +314,38 @@ consInfo = KnownTerm consBuiltin Computable
 equalsInfo :: CheckEntity
 equalsInfo = KnownTerm equalsBuiltin Computable
 
+-- String functions
+
+stringLengthInfo :: CheckEntity
+stringLengthInfo = KnownTerm stringLengthBuiltin Computable
+
+toUpperInfo :: CheckEntity
+toUpperInfo = KnownTerm toUpperBuiltin Computable
+
+toLowerInfo :: CheckEntity
+toLowerInfo = KnownTerm toLowerBuiltin Computable
+
+trimInfo :: CheckEntity
+trimInfo = KnownTerm trimBuiltin Computable
+
+containsInfo :: CheckEntity
+containsInfo = KnownTerm containsBuiltin Computable
+
+startsWithInfo :: CheckEntity
+startsWithInfo = KnownTerm startsWithBuiltin Computable
+
+endsWithInfo :: CheckEntity
+endsWithInfo = KnownTerm endsWithBuiltin Computable
+
+indexOfInfo :: CheckEntity
+indexOfInfo = KnownTerm indexOfBuiltin Computable
+
+substringInfo :: CheckEntity
+substringInfo = KnownTerm substringBuiltin Computable
+
+replaceInfo :: CheckEntity
+replaceInfo = KnownTerm replaceBuiltin Computable
+
 -- Comparison
 
 ltInfos :: [CheckEntity]
@@ -348,6 +431,17 @@ initialEnvironment =
     , (rawName consName,         [consUnique      ])
     , (rawName equalsName,       [equalsUnique    ])
     , (rawName waitUntilName,    [waitUntilUnique])
+    -- String functions
+    , (rawName stringLengthName, [stringLengthUnique])
+    , (rawName toUpperName,      [toUpperUnique     ])
+    , (rawName toLowerName,      [toLowerUnique     ])
+    , (rawName trimName,         [trimUnique        ])
+    , (rawName containsName,     [containsUnique    ])
+    , (rawName startsWithName,   [startsWithUnique  ])
+    , (rawName endsWithName,     [endsWithUnique    ])
+    , (rawName indexOfName,      [indexOfUnique     ])
+    , (rawName substringName,    [substringUnique   ])
+    , (rawName replaceName,      [replaceUnique     ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -382,6 +476,17 @@ initialEntityInfo =
     , (consUnique,         (consName,         consInfo        ))
     , (equalsUnique,       (equalsName,       equalsInfo      ))
     , (waitUntilUnique,    (waitUntilName,    waitUntilInfo   ))
+    -- String functions
+    , (stringLengthUnique, (stringLengthName, stringLengthInfo))
+    , (toUpperUnique,      (toUpperName,      toUpperInfo     ))
+    , (toLowerUnique,      (toLowerName,      toLowerInfo     ))
+    , (trimUnique,         (trimName,         trimInfo        ))
+    , (containsUnique,     (containsName,     containsInfo    ))
+    , (startsWithUnique,   (startsWithName,   startsWithInfo  ))
+    , (endsWithUnique,     (endsWithName,     endsWithInfo    ))
+    , (indexOfUnique,      (indexOfName,      indexOfInfo     ))
+    , (substringUnique,    (substringName,    substringInfo   ))
+    , (replaceUnique,      (replaceName,      replaceInfo     ))
     ]
     <>
       [ (uniq, (name, info))

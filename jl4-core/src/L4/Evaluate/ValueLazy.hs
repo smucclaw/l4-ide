@@ -48,6 +48,9 @@ data Value a =
   | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValBinaryBuiltinFun BinOp
+  | ValTernaryBuiltinFun TernaryBuiltinFun
+  | ValPartialTernary TernaryBuiltinFun a             -- Ternary with 1 arg applied
+  | ValPartialTernary2 TernaryBuiltinFun a a          -- Ternary with 2 args applied
   | ValUnappliedConstructor Resolved
   | ValConstructor Resolved [a]
   | ValAssumed Resolved
@@ -72,6 +75,16 @@ data UnaryBuiltinFun
   | UnaryCeiling
   | UnaryFloor
   | UnaryPercent
+  -- String unary functions
+  | UnaryStringLength    -- STRING → NUMBER
+  | UnaryToUpper         -- STRING → STRING
+  | UnaryToLower         -- STRING → STRING
+  | UnaryTrim            -- STRING → STRING
+  deriving stock (Show)
+
+data TernaryBuiltinFun
+  = TernarySubstring     -- STRING → NUMBER → NUMBER → STRING
+  | TernaryReplace       -- STRING → STRING → STRING → STRING
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -86,6 +99,9 @@ instance NFData a => NFData (Value a) where
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
   rnf (ValUnaryBuiltinFun r)      = rnf r
   rnf (ValBinaryBuiltinFun r)     = rnf r
+  rnf (ValTernaryBuiltinFun r)    = rnf r
+  rnf (ValPartialTernary r a)     = rnf r `seq` rnf a
+  rnf (ValPartialTernary2 r a b)  = rnf r `seq` rnf a `seq` rnf b
   rnf (ValUnappliedConstructor r) = rnf r
   rnf (ValConstructor r vs)       = rnf r `seq` rnf vs
   rnf (ValAssumed r)              = rnf r
@@ -106,3 +122,12 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
+  rnf UnaryStringLength = ()
+  rnf UnaryToUpper = ()
+  rnf UnaryToLower = ()
+  rnf UnaryTrim = ()
+
+instance NFData TernaryBuiltinFun where
+  rnf :: TernaryBuiltinFun -> ()
+  rnf TernarySubstring = ()
+  rnf TernaryReplace = ()

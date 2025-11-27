@@ -414,6 +414,9 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValClosure{}              -> "<function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValBinaryBuiltinFun{}     -> "<function>"
+    Lazy.ValTernaryBuiltinFun{}    -> "<builtin-function>"
+    Lazy.ValPartialTernary{}       -> "<partial-function>"
+    Lazy.ValPartialTernary2{}      -> "<partial-function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -456,6 +459,10 @@ instance LayoutPrinter BinOp where
     BinOpGeq -> "AT LEAST"
     BinOpLt -> "LESS THAN"
     BinOpGt -> "GREATER THAN"
+    BinOpContains -> "CONTAINS"
+    BinOpStartsWith -> "STARTSWITH"
+    BinOpEndsWith -> "ENDSWITH"
+    BinOpIndexOf -> "INDEXOF"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case
