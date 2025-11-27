@@ -29,3 +29,11 @@ mixfix-basic.l4:116:1-40:
   15
 mixfix-basic.l4:117:1-59:
   15
+mixfix-basic.l4:125:1-19:
+  0.5
+mixfix-basic.l4:126:1-19:
+  0.75
+mixfix-basic.l4:127:1-31:
+  0.55
+mixfix-basic.l4:128:1-25:
+  0.15
