@@ -460,26 +460,28 @@ directive :: Parser (Directive Name)
 directive =
   attachAnno $
     choice
+      -- Use singleLineExpr for simple directives to make them line-oriented.
+      -- Continuation to next line requires '# ' prefix (like C preprocessor).
       [ LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , LazyEvalTrace emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalTraceDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TCheckDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , Contract emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TContractDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
           <* optional (annoLexeme (spacedKeyword_ TKStarting))
           <* annoLexeme (spacedKeyword_ TKAt)
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
           <* annoLexeme (spacedKeyword_ TKWith)
           <*> contractEvents
       , Assert emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TAssertDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       ]
 
 contractEvents :: AnnoParser [Expr Name]
@@ -783,6 +785,57 @@ whereExpr p =
     ds <- many (indented localdecl p)
     pure (\ e -> Where (mkHoleAnnoFor e <> ann <> mkHoleAnnoFor ds) e ds)
 
+-- | Parse a single-line expression for use in directives like #EVAL.
+-- This parser only continues parsing expression operators if the next token
+-- is on the same line OR if the next line starts with '# ' (continuation marker).
+--
+-- This makes directives line-oriented (like C preprocessor directives)
+-- while still allowing explicit multi-line continuation.
+--
+-- For example:
+--   #EVAL 1 + 2        -- parses "1 + 2" as one expression
+--   #EVAL 1 + 2 * 3    -- parses "1 + 2 * 3" as one expression
+--   #EVAL 1            -- parses just "1", next line is separate
+--     + 2              -- this is NOT part of the #EVAL (no # prefix)
+--   #EVAL 1            -- parses "1 + 2" as one expression
+--   # + 2              -- continuation line with # prefix
+--
+-- IMPORTANT: When stripping directives with grep (e.g., `grep -v '^#'`), be aware
+-- that L4 supports multiline strings with literal newlines. If a string literal
+-- contains a line starting with '#', that line would be incorrectly stripped.
+-- Example of problematic content:
+--   someString MEANS "This is a string
+--   # this looks like a directive but isn't
+--   end of string"
+-- In such cases, more sophisticated parsing is needed rather than simple grep.
+--
+singleLineExpr :: Parser (Expr Name)
+singleLineExpr = do
+  startLine <- currentLine
+  -- Use regular baseExpr for the initial expression (handles IF/THEN/ELSE, etc.)
+  e <- baseExpr
+  -- Only apply line checking to expression continuations (operators)
+  efs <- many (singleLineExpressionCont startLine)
+  pure (combine End startLine e efs)
+
+-- | Like 'expressionCont' but only parses if:
+--   1. The operator is on the same line as the expression started, OR
+--   2. There is a '# ' continuation marker at the start of the line
+singleLineExpressionCont :: Pos -> Parser (Cont Expr)
+singleLineExpressionCont startLine = try $ do
+  -- Check if we have a continuation marker or are on the same line
+  nextTok <- lookAhead anySingle
+  let sameLine = fromIntegral nextTok.range.start.line == unPos startLine
+  let isContinuation = nextTok.payload == TDirectives TDirectiveContinue
+  guard (sameLine || isContinuation)
+  -- If it's a continuation marker, consume it
+  when isContinuation $ void $ spacedToken_ (TDirectives TDirectiveContinue)
+  -- Now parse the operator and argument (use regular baseExpr)
+  (prio, assoc, op) <- operator
+  l <- currentLine
+  arg <- baseExpr
+  pure (MkCont op prio assoc l (mkPos 1) arg)
+
 data Stack a =
     Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Assoc !Pos !Pos
   | End
@@ -1043,11 +1096,18 @@ mixfixPostfixOp exprEndLine = hidden $ try $ do
   -- Only proceed if the backticked name is on the same line as where the expression ended
   guard (exprEndLine == nextTok.range.start.line)
   eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
-  -- Check that this is NOT followed by an expression (which would make it infix)
-  notFollowedBy baseExpr'
+  -- Check that this is NOT followed by an expression ON THE SAME LINE
+  -- (which would make it infix). Expressions on subsequent lines don't count.
+  notFollowedBy (sameLineExpr exprEndLine)
   let funcName = eN.payload
       op = mkSimpleEpaAnno eN
   pure $ \l -> App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) funcName [l]
+  where
+    -- A parser that only succeeds if there's a base expression on the same line
+    sameLineExpr line = do
+      tok <- lookAhead anySingle
+      guard (tok.range.start.line == line)
+      baseExpr'
 
 opToken :: TokenType -> Parser Anno
 opToken t =
