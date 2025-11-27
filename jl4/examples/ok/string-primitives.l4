@@ -1,0 +1,133 @@
+-- Test file for string primitives
+
+-- Test STRINGLENGTH
+#EVAL STRINGLENGTH "hello"
+-- Expected: 5
+
+#EVAL STRINGLENGTH ""
+-- Expected: 0
+
+#EVAL STRINGLENGTH "hello world"
+-- Expected: 11
+
+-- Test TOUPPER
+#EVAL TOUPPER "hello"
+-- Expected: "HELLO"
+
+#EVAL TOUPPER "Hello World"
+-- Expected: "HELLO WORLD"
+
+#EVAL TOUPPER ""
+-- Expected: ""
+
+-- Test TOLOWER
+#EVAL TOLOWER "HELLO"
+-- Expected: "hello"
+
+#EVAL TOLOWER "Hello World"
+-- Expected: "hello world"
+
+-- Test TRIM
+#EVAL TRIM "  hello  "
+-- Expected: "hello"
+
+#EVAL TRIM "hello"
+-- Expected: "hello"
+
+#EVAL TRIM "  "
+-- Expected: ""
+
+-- Test CONTAINS
+#EVAL CONTAINS "hello world" "world"
+-- Expected: TRUE
+
+#EVAL CONTAINS "hello world" "foo"
+-- Expected: FALSE
+
+#EVAL CONTAINS "hello" "hello"
+-- Expected: TRUE
+
+#EVAL CONTAINS "hello" ""
+-- Expected: TRUE (empty string is contained in any string)
+
+-- Test STARTSWITH
+#EVAL STARTSWITH "hello world" "hello"
+-- Expected: TRUE
+
+#EVAL STARTSWITH "hello world" "world"
+-- Expected: FALSE
+
+#EVAL STARTSWITH "hello" ""
+-- Expected: TRUE
+
+-- Test ENDSWITH
+#EVAL ENDSWITH "hello world" "world"
+-- Expected: TRUE
+
+#EVAL ENDSWITH "hello world" "hello"
+-- Expected: FALSE
+
+#EVAL ENDSWITH "hello" ""
+-- Expected: TRUE
+
+-- Test INDEXOF
+#EVAL INDEXOF "hello world" "world"
+-- Expected: 6
+
+#EVAL INDEXOF "hello world" "o"
+-- Expected: 4 (first occurrence)
+
+#EVAL INDEXOF "hello world" "foo"
+-- Expected: -1 (not found)
+
+#EVAL INDEXOF "hello" ""
+-- Expected: 0 (empty string found at start)
+
+-- Test SUBSTRING
+#EVAL SUBSTRING "hello world" 0 5
+-- Expected: "hello"
+
+#EVAL SUBSTRING "hello world" 6 5
+-- Expected: "world"
+
+#EVAL SUBSTRING "hello" 0 0
+-- Expected: ""
+
+#EVAL SUBSTRING "hello" 1 3
+-- Expected: "ell"
+
+-- Test REPLACE
+#EVAL REPLACE "hello world" "world" "there"
+-- Expected: "hello there"
+
+#EVAL REPLACE "hello hello" "hello" "hi"
+-- Expected: "hi hi" (replaces all occurrences)
+
+#EVAL REPLACE "hello" "x" "y"
+-- Expected: "hello" (no match, no change)
+
+-- Combined tests
+DECIDE greeting IS "  Hello World  "
+#EVAL TRIM greeting
+-- Expected: "Hello World"
+
+#EVAL TOUPPER (TRIM greeting)
+-- Expected: "HELLO WORLD"
+
+#EVAL STRINGLENGTH (TRIM greeting)
+-- Expected: 11
+
+-- Test with variable strings
+DECIDE message IS "The quick brown fox jumps over the lazy dog"
+
+#EVAL CONTAINS message "fox"
+-- Expected: TRUE
+
+#EVAL INDEXOF message "fox"
+-- Expected: 16
+
+#EVAL SUBSTRING message 16 3
+-- Expected: "fox"
+
+#EVAL REPLACE message "fox" "cat"
+-- Expected: "The quick brown cat jumps over the lazy dog"

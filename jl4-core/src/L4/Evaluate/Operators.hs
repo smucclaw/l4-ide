@@ -13,5 +13,10 @@ data BinOp =
   | BinOpGeq
   | BinOpLt
   | BinOpGt
+  -- String binary operations
+  | BinOpContains        -- STRING → STRING → BOOLEAN
+  | BinOpStartsWith      -- STRING → STRING → BOOLEAN
+  | BinOpEndsWith        -- STRING → STRING → BOOLEAN
+  | BinOpIndexOf         -- STRING → STRING → NUMBER
   deriving stock (Show, Generic)
   deriving anyclass (NFData)

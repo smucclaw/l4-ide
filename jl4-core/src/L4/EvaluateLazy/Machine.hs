@@ -77,6 +77,10 @@ data Frame =
   | UnaryBuiltin0 UnaryBuiltinFun (Maybe (Type' Resolved)) -- Added type for type-directed decoding
   | BinBuiltin1 BinOp Reference
   | BinBuiltin2 BinOp WHNF
+  -- Ternary builtin frames: accumulate evaluated args
+  | TernaryBuiltin1 TernaryBuiltinFun Reference Reference  -- evaluating 1st arg, has refs to 2nd and 3rd
+  | TernaryBuiltin2 TernaryBuiltinFun WHNF Reference       -- has 1st arg value, evaluating 2nd, has ref to 3rd
+  | TernaryBuiltin3 TernaryBuiltinFun WHNF WHNF            -- has 1st and 2nd arg values, evaluating 3rd
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
@@ -363,6 +367,23 @@ backward val = WithPoppedFrame $ \ case
           _ -> do
             PushFrame (BinBuiltin1 fn y)
             EvalRef x
+      ValTernaryBuiltinFun fn -> do
+        (x, y, z) <- expect3 rs
+        -- Push frame for when we have all 3 args, then evaluate args right-to-left
+        PushFrame (TernaryBuiltin1 fn y z)
+        EvalRef x
+      ValPartialTernary fn arg1 -> do
+        -- Already has 1 arg (as ref), need 2 more
+        (y, z) <- expect2 rs
+        -- We need to evaluate arg1, then y, then z
+        PushFrame (TernaryBuiltin1 fn y z)
+        EvalRef arg1
+      ValPartialTernary2 fn arg1 arg2 -> do
+        -- Already has 2 args (as refs), need 1 more
+        z <- expect1 rs
+        -- We need to evaluate arg1, then arg2, then z
+        PushFrame (TernaryBuiltin1 fn arg2 z)
+        EvalRef arg1
       ValFulfilled -> Backward ValFulfilled
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
@@ -470,6 +491,17 @@ backward val = WithPoppedFrame $ \ case
         "expected a BOOLEAN but found: " <> prettyLayout val <> " when testing equality"
   Just (UnaryBuiltin0 fn mTy) -> do
     runBuiltin val fn mTy
+  -- Ternary builtin handling: got 1st arg value, need to eval 2nd
+  Just (TernaryBuiltin1 fn refArg2 refArg3) -> do
+    PushFrame (TernaryBuiltin2 fn val refArg3)
+    EvalRef refArg2
+  -- Ternary builtin handling: got 2nd arg value, need to eval 3rd
+  Just (TernaryBuiltin2 fn val1 refArg3) -> do
+    PushFrame (TernaryBuiltin3 fn val1 val)
+    EvalRef refArg3
+  -- Ternary builtin handling: got all 3 args
+  Just (TernaryBuiltin3 fn val1 val2) -> do
+    runTernaryBuiltin fn val1 val2 val
   Just (ConcatFrame acc [] _env) -> do
     -- All arguments evaluated, concatenate them
     runConcat (reverse (val : acc))
@@ -828,7 +860,12 @@ expect1 = \ case
 expect2 :: [a] -> Machine (a, a)
 expect2 = \ case
   [x, y] -> pure (x, y)
-  xs -> InternalException (RuntimeTypeError $ "Expected 1 argument, but got " <> Text.show (length xs))
+  xs -> InternalException (RuntimeTypeError $ "Expected 2 arguments, but got " <> Text.show (length xs))
+
+expect3 :: [a] -> Machine (a, a, a)
+expect3 = \ case
+  [x, y, z] -> pure (x, y, z)
+  xs -> InternalException (RuntimeTypeError $ "Expected 3 arguments, but got " <> Text.show (length xs))
 
 expectNumber :: WHNF -> Machine Rational
 expectNumber = \ case
@@ -1243,6 +1280,20 @@ runBuiltin es op mTy = do
         Nothing -> do
           -- Return NOTHING
           Backward (ValConstructor TypeCheck.nothingRef [])
+    -- String unary operations
+    UnaryStringLength -> do
+      str <- expectString es
+      Backward $ ValNumber (fromIntegral $ Text.length str)
+    UnaryToUpper -> do
+      str <- expectString es
+      Backward $ ValString (Text.toUpper str)
+    UnaryToLower -> do
+      str <- expectString es
+      Backward $ ValString (Text.toLower str)
+    UnaryTrim -> do
+      str <- expectString es
+      Backward $ ValString (Text.strip str)
+    -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
       Backward case op of
@@ -1254,6 +1305,23 @@ runBuiltin es op mTy = do
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
+
+runTernaryBuiltin :: TernaryBuiltinFun -> WHNF -> WHNF -> WHNF -> Machine Config
+runTernaryBuiltin TernarySubstring val1 val2 val3 = do
+  str <- expectString val1
+  start <- expectNumber val2
+  len <- expectNumber val3
+  let startInt = floor start :: Int
+      lenInt = floor len :: Int
+  -- Use Text.take and Text.drop for substring
+  Backward $ ValString (Text.take lenInt (Text.drop startInt str))
+runTernaryBuiltin TernaryReplace val1 val2 val3 = do
+  str <- expectString val1
+  old <- expectString val2
+  new <- expectString val3
+  -- Use Text.replace: replace needle replacement haystack
+  Backward $ ValString (Text.replace old new str)
+runTernaryBuiltin TernaryPost val1 val2 val3 = runPost val1 val2 val3
 
 runBinOp :: BinOp -> WHNF -> WHNF -> Machine Config
 runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 + num2)
@@ -1282,6 +1350,17 @@ runBinOp BinOpLt     (ValBool b1)     (ValBool b2)               = Backward $ Va
 runBinOp BinOpGt     (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 > num2)
 runBinOp BinOpGt     (ValString str1) (ValString str2)           = Backward $ ValBool (str1 > str2)
 runBinOp BinOpGt     (ValBool b1)     (ValBool b2)               = Backward $ ValBool (b1 > b2)
+-- String binary operations
+runBinOp BinOpContains   (ValString haystack) (ValString needle) = Backward $ ValBool (needle `Text.isInfixOf` haystack)
+runBinOp BinOpStartsWith (ValString text) (ValString prefix)     = Backward $ ValBool (prefix `Text.isPrefixOf` text)
+runBinOp BinOpEndsWith   (ValString text) (ValString suffix)     = Backward $ ValBool (suffix `Text.isSuffixOf` text)
+runBinOp BinOpIndexOf    (ValString haystack) (ValString needle)
+  | Text.null needle = Backward $ ValNumber 0  -- empty string found at position 0
+  | otherwise =
+    let (before, match) = Text.breakOn needle haystack
+    in if Text.null match
+       then Backward $ ValNumber (-1)  -- not found
+       else Backward $ ValNumber (fromIntegral $ Text.length before)
 runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
 runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
@@ -1757,6 +1836,15 @@ initialEnvironment = do
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
+  -- String unary builtins
+  stringLengthRef <- AllocateValue (ValUnaryBuiltinFun UnaryStringLength)
+  toUpperRef <- AllocateValue (ValUnaryBuiltinFun UnaryToUpper)
+  toLowerRef <- AllocateValue (ValUnaryBuiltinFun UnaryToLower)
+  trimRef <- AllocateValue (ValUnaryBuiltinFun UnaryTrim)
+  -- Ternary string builtins
+  substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
+  replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
+  -- IO/JSON builtins from main
   fetchRef <- AllocateValue (ValUnaryBuiltinFun UnaryFetch)
   envRef <- AllocateValue (ValUnaryBuiltinFun UnaryEnv)
   jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
@@ -1801,6 +1889,14 @@ initialEnvironment = do
       , (TypeCheck.orUnique, orRef)
       , (TypeCheck.impliesUnique, impliesRef)
       , (TypeCheck.notUnique, notRef)
+      -- String unary builtins
+      , (TypeCheck.stringLengthUnique, stringLengthRef)
+      , (TypeCheck.toUpperUnique, toUpperRef)
+      , (TypeCheck.toLowerUnique, toLowerRef)
+      , (TypeCheck.trimUnique, trimRef)
+      -- Ternary string functions
+      , (TypeCheck.substringUnique, substringRef)
+      , (TypeCheck.replaceUnique, replaceRef)
       ]
       <> builtinBinOpRefs
 
@@ -1819,6 +1915,11 @@ builtinBinOps =
       , (BinOpModulo,    [TypeCheck.moduloUnique])
       , (BinOpCons,      [TypeCheck.consUnique])
       , (BinOpEquals,    [TypeCheck.equalsUnique])
+      -- String binary operations
+      , (BinOpContains,   [TypeCheck.containsUnique])
+      , (BinOpStartsWith, [TypeCheck.startsWithUnique])
+      , (BinOpEndsWith,   [TypeCheck.endsWithUnique])
+      , (BinOpIndexOf,    [TypeCheck.indexOfUnique])
       ]
   , unique <- uniques
   ]
