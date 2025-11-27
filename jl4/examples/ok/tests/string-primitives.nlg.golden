@@ -1,0 +1,39 @@
+`STRINGLENGTH` with hello
+`STRINGLENGTH` with 
+`STRINGLENGTH` with hello world
+`TOUPPER` with hello
+`TOUPPER` with Hello World
+`TOUPPER` with 
+`TOLOWER` with HELLO
+`TOLOWER` with Hello World
+`TRIM` with   hello  
+`TRIM` with hello
+`TRIM` with   
+`CONTAINS` with hello world and world
+`CONTAINS` with hello world and foo
+`CONTAINS` with hello and hello
+`CONTAINS` with hello and 
+`STARTSWITH` with hello world and hello
+`STARTSWITH` with hello world and world
+`STARTSWITH` with hello and 
+`ENDSWITH` with hello world and world
+`ENDSWITH` with hello world and hello
+`ENDSWITH` with hello and 
+`INDEXOF` with hello world and world
+`INDEXOF` with hello world and o
+`INDEXOF` with hello world and foo
+`INDEXOF` with hello and 
+`SUBSTRING` with hello world, 0 and 5
+`SUBSTRING` with hello world, 6 and 5
+`SUBSTRING` with hello, 0 and 0
+`SUBSTRING` with hello, 1 and 3
+`REPLACE` with hello world, world and there
+`REPLACE` with hello hello, hello and hi
+`REPLACE` with hello, x and y
+`TRIM` with `greeting`
+`TOUPPER` with `TRIM` with `greeting`
+`STRINGLENGTH` with `TRIM` with `greeting`
+`CONTAINS` with `message` and fox
+`INDEXOF` with `message` and fox
+`SUBSTRING` with `message`, 16 and 3
+`REPLACE` with `message`, fox and cat

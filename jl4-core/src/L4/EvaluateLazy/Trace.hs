@@ -439,6 +439,12 @@ nfFromTrace m = \ case
     MkNF (ValUnaryBuiltinFun b)
   ValBinaryBuiltinFun b ->
     MkNF (ValBinaryBuiltinFun b)
+  ValTernaryBuiltinFun b ->
+    MkNF (ValTernaryBuiltinFun b)
+  ValPartialTernary b r1 ->
+    MkNF (ValPartialTernary b (rec r1))
+  ValPartialTernary2 b r1 r2 ->
+    MkNF (ValPartialTernary2 b (rec r1) (rec r2))
   ValUnappliedConstructor n ->
     MkNF (ValUnappliedConstructor n)
   ValConstructor n rs ->
