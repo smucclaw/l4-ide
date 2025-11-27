@@ -965,10 +965,14 @@ currentLine = sourceLine <$> getSourcePos
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
 
-postfixP :: Parser (a -> a) -> Parser a -> Parser a
-postfixP ops p = do
+-- | Like 'postfixP' but passes the ending line of the parsed expression to
+-- a line-aware postfix parser. This is used for mixfix postfix operators
+-- which must be on the same line as the base expression.
+postfixPWithLine :: HasSrcRange a => (Int -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
+postfixPWithLine lineAwareOps regularOps p = do
   a <- p
-  mf <- optional (try ops)
+  let exprEndLine = maybe 0 (.end.line) (rangeOf a)
+  mf <- optional (try (lineAwareOps exprEndLine) <|> try regularOps)
   case mf of
     Nothing -> pure a
     Just f -> pure $ f a
@@ -1009,8 +1013,9 @@ operator =
           funcName = eN.payload
       in App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op <> mkHoleAnnoFor r) funcName [l, r]
 
-postfixOperator :: Parser (Expr Name -> Expr Name)
-postfixOperator =
+-- | Regular postfix operators (percent, AS type)
+regularPostfixOperator :: Parser (Expr Name -> Expr Name)
+regularPostfixOperator =
       (\ op -> (postfix Percent   op)) <$> (spacedSymbol_ TPercent)
   <|> hidden postfixAsType
   where
@@ -1024,6 +1029,25 @@ postfixOperator =
           op = asAnno <> articleAnno <> typenameAnno
       -- For now, we only support AS STRING, but parser accepts any type name
       pure $ \ l -> AsString (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) l
+
+-- | Line-aware mixfix postfix operator parser.
+-- Takes the ending line number of the base expression and only matches
+-- if the postfix operator is on the same line.
+-- e.g., `50 `percent`` becomes `App anno percent [50]`
+-- We use `try` because if this is actually a binary operator (followed by
+-- another expression), we want to backtrack and let the infix parser handle it.
+mixfixPostfixOp :: Int -> Parser (Expr Name -> Expr Name)
+mixfixPostfixOp exprEndLine = hidden $ try $ do
+  -- Peek at the next token to check its line number
+  nextTok <- lookAhead anySingle
+  -- Only proceed if the backticked name is on the same line as where the expression ended
+  guard (exprEndLine == nextTok.range.start.line)
+  eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
+  -- Check that this is NOT followed by an expression (which would make it infix)
+  notFollowedBy baseExpr'
+  let funcName = eN.payload
+      op = mkSimpleEpaAnno eN
+  pure $ \l -> App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) funcName [l]
 
 opToken :: TokenType -> Parser Anno
 opToken t =
@@ -1042,7 +1066,7 @@ postfix f op l =
   f (fixAnnoSrcRange $ mkHoleAnnoFor l <> mkSimpleEpaAnno (lexToEpa op)) l
 
 baseExpr :: Parser (Expr Name)
-baseExpr = postfixP postfixOperator baseExpr'
+baseExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator baseExpr'
 
 baseExpr' :: Parser (Expr Name)
 baseExpr' =
@@ -1089,7 +1113,7 @@ parseEvent =
       *> annoHole expr
 
 atomicExpr :: Parser (Expr Name)
-atomicExpr = postfixP postfixOperator atomicExpr'
+atomicExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator atomicExpr'
 
 atomicExpr' :: Parser (Expr Name)
 atomicExpr' =
@@ -1154,7 +1178,7 @@ app = do
     App emptyAnno
     <$> annoHole name
     <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
-        <|> annoHole (lmany (const (indented atomicExpr current)))
+        <|> annoHole (lmany (const (indented atomicExpr' current)))
         )
 
 namedApp :: Parser (Expr Name)
