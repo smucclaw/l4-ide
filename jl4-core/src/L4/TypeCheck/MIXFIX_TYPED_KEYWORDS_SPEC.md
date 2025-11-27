@@ -9,6 +9,7 @@ This document specifies enhancements to the mixfix expression handling in L4's t
 ### What Exists
 
 1. **`MixfixArgMatch` type** in `L4/TypeCheck/Types.hs`:
+
    ```haskell
    data MixfixArgMatch a
      = MixfixKeywordArg RawName   -- A validated keyword placeholder
@@ -51,6 +52,7 @@ In expression: `myif` cond `else` x `then` y
 The following has been implemented:
 
 1. **Created `MixfixMatchError` type** in `L4/TypeCheck/Types.hs`:
+
    ```haskell
    data MixfixMatchError
      = UnknownMixfixKeyword RawName [RawName]  -- unknown kw, suggestions
@@ -61,6 +63,7 @@ The following has been implemented:
    ```
 
 2. **Created `MixfixMatchResult` type** for three-way matching results:
+
    ```haskell
    data MixfixMatchResult a
      = MixfixNoMatch        -- Pattern doesn't match; try other patterns
@@ -69,20 +72,24 @@ The following has been implemented:
    ```
 
 3. **Modified `matchLinearAfterHeadKeyword`** to return `MixfixMatchResult`:
+
    - Returns `MixfixSuccess` on successful match
    - Returns `MixfixError (WrongKeyword expected actual)` when wrong keyword found
    - Returns `MixfixNoMatch` when pattern doesn't match at all
 
 4. **Propagated errors through**:
+
    - `matchMixfixPattern`
    - `matchParamFirstPattern`
    - `tryMatchAnyPattern`
    - `tryMatchMixfixCall`
 
 5. **Added error reporting in `inferExpr` App case** (line ~1180):
+
    - Reports `MixfixMatchErrorCheck` when mixfix pattern matching finds an error
 
 6. **Added `prettyMixfixMatchError`** for user-friendly error messages:
+
    - "Expected keyword `mythen` but found `myelse`"
    - "Check that keywords are in the correct order."
 
@@ -94,6 +101,7 @@ The following has been implemented:
 ### Test Case
 
 Added `jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4` which tests:
+
 - Defining a ternary mixfix function `myif cond mythen thenVal myelse elseVal`
 - Calling it with wrong keyword order: `myif TRUE myelse 1 mythen 2`
 - Produces error: "Expected keyword `mythen` but found `myelse`"
@@ -108,6 +116,7 @@ Added `jl4/examples/not-ok/tc/mixfix-wrong-keyword.l4` which tests:
 ### Goal
 
 Instead of discarding keyword placeholders after validation, keep them in the resolved AST with type `Keyword`. This enables:
+
 - Better debugging/inspection of AST
 - Accurate source mapping for IDE features
 - Foundation for keyword-aware transformations
@@ -115,12 +124,14 @@ Instead of discarding keyword placeholders after validation, keep them in the re
 ### Implementation Steps
 
 1. **Modify `tryMatchMixfixCall`** (line ~2071) to return the full `[MixfixArgMatch (Expr Name)]` instead of extracting params:
+
    ```haskell
    tryMatchMixfixCall :: Name -> [Expr Name]
      -> Check (Maybe (RawName, [MixfixArgMatch (Expr Name)]))
    ```
 
 2. **In the `App` case of `inferExpr`**, handle `MixfixArgMatch` specially:
+
    ```haskell
    App ann n es -> do
      mMixfixMatch <- tryMatchMixfixCall n es
@@ -142,6 +153,7 @@ Instead of discarding keyword placeholders after validation, keep them in the re
    ```
 
 3. **Add helper to type-check matched args**:
+
    ```haskell
    typeCheckMatchedArg
      :: MixfixArgMatch (Expr Name)  -- Original matched arg
@@ -188,16 +200,19 @@ Support partial application of mixfix functions where some arguments are provide
 ### Implementation Steps
 
 1. **Detect partial application** in `tryMatchMixfixCall`:
+
    - If pattern expects N params but only M < N are provided
    - Keywords must still all be present and in correct positions
 
 2. **Generate curried function type**:
+
    ```haskell
    -- For `is divisible by` 3 where full type is Number -> Number -> Boolean
    -- Result type is Number -> Boolean (first param missing)
    ```
 
 3. **Create lambda wrapper** in the AST for partial applications:
+
    ```haskell
    -- `is divisible by` 3 becomes:
    -- \d -> d `is divisible by` 3
@@ -210,6 +225,7 @@ Support partial application of mixfix functions where some arguments are provide
 ### Complexity Note
 
 This enhancement is more complex and may require:
+
 - Changes to how mixfix patterns are matched
 - New AST representation for partial mixfix applications
 - Careful handling of keyword positions in partial applications
@@ -235,6 +251,7 @@ test MEANS `myif` True `else` 1 `then` 2  -- Should error: expected `then` but f
 ### For Enhancement 2 (AST Keywords)
 
 Add tests that inspect the resolved AST:
+
 - Verify keyword nodes are present with type `Keyword`
 - Verify source ranges are preserved correctly
 - Test IDE features (hover, go-to-definition) work correctly near keywords
@@ -260,20 +277,20 @@ test2 MEANS sixDivBy 3  -- Should be True
 
 ## Related Code Locations
 
-| Component | File | Line (approx) |
-|-----------|------|---------------|
-| MixfixMatchError type | L4/TypeCheck/Types.hs | 190-204 |
-| MixfixMatchResult type | L4/TypeCheck/Types.hs | 206-226 |
-| MixfixArgMatch type | L4/TypeCheck/Types.hs | 228-234 |
-| matchLinearAfterHeadKeyword | L4/TypeCheck.hs | 2236 |
-| extractParamArgs | L4/TypeCheck.hs | 2291 |
-| tryMatchMixfixCall | L4/TypeCheck.hs | 2074 |
-| App case in inferExpr | L4/TypeCheck.hs | 1158-1211 |
-| prettyMixfixMatchError | L4/TypeCheck.hs | 2813-2845 |
-| Fuzzy matching utilities | L4/TypeCheck.hs | 2312-2347 |
-| Keyword built-in | L4/TypeCheck/Environment.hs | 25, 96-98, 282-285 |
-| MixfixInfo type | L4/TypeCheck/Types.hs | 240-250 |
-| MixfixPatternToken | L4/TypeCheck/Types.hs | 178-186 |
+| Component                   | File                        | Line (approx)      |
+| --------------------------- | --------------------------- | ------------------ |
+| MixfixMatchError type       | L4/TypeCheck/Types.hs       | 190-204            |
+| MixfixMatchResult type      | L4/TypeCheck/Types.hs       | 206-226            |
+| MixfixArgMatch type         | L4/TypeCheck/Types.hs       | 228-234            |
+| matchLinearAfterHeadKeyword | L4/TypeCheck.hs             | 2236               |
+| extractParamArgs            | L4/TypeCheck.hs             | 2291               |
+| tryMatchMixfixCall          | L4/TypeCheck.hs             | 2074               |
+| App case in inferExpr       | L4/TypeCheck.hs             | 1158-1211          |
+| prettyMixfixMatchError      | L4/TypeCheck.hs             | 2813-2845          |
+| Fuzzy matching utilities    | L4/TypeCheck.hs             | 2312-2347          |
+| Keyword built-in            | L4/TypeCheck/Environment.hs | 25, 96-98, 282-285 |
+| MixfixInfo type             | L4/TypeCheck/Types.hs       | 240-250            |
+| MixfixPatternToken          | L4/TypeCheck/Types.hs       | 178-186            |
 
 ## Notes for Implementer
 
