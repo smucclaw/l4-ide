@@ -22,6 +22,7 @@ mkBuiltins
   , "true"
   , "number"
   , "string"
+  , "keyword"  -- For mixfix keyword placeholders
   , "list"
   , "empty"
   , "maybe" `rename` "MAYBE"
@@ -91,6 +92,10 @@ number = app numberRef []
 
 string :: Type' Resolved
 string = TyApp emptyAnno stringRef []
+
+-- KEYWORD (for mixfix keyword placeholders)
+keyword :: Type' Resolved
+keyword = TyApp emptyAnno keywordRef []
 
 -- LIST
 
@@ -276,6 +281,11 @@ rationalInfo =
 
 stringInfo :: CheckEntity
 stringInfo =
+  KnownType 0 [] Nothing
+
+-- KEYWORD (for mixfix keyword placeholders)
+keywordInfo :: CheckEntity
+keywordInfo =
   KnownType 0 [] Nothing
 
 listInfo :: CheckEntity

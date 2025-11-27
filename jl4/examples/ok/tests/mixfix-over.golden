@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+mixfix-over.l4:49:1-26:
+  LIST 2, 4, 6, 8, 10
+mixfix-over.l4:55:1-22:
+  LIST 2, 4, 6, 8, 10
+mixfix-over.l4:61:1-22:
+  LIST 3, 5, 7, 9, 11
+mixfix-over.l4:66:1-22:
+  LIST 1, 4, 9, 16, 25
+mixfix-over.l4:71:1-22:
+  EMPTY
+mixfix-over.l4:76:1-22:
+  LIST 84
+mixfix-over.l4:81:1-29:
+  LIST 1, 4, 9, 16, 25

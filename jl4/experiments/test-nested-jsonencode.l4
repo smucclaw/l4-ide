@@ -1,0 +1,72 @@
+// Test case for nested record JSONENCODE issue
+// Expected: Should encode full API request with nested Message records
+// Actual: Internal error when encoding LIST OF Message
+
+DECLARE `Message` HAS
+  `role`    IS A STRING
+  `content` IS A STRING
+
+DECLARE `API Request` HAS
+  `model`      IS A STRING
+  `max_tokens` IS A NUMBER
+  `messages`   IS A LIST OF `Message`
+
+// Helper to create messages
+GIVEN role IS A STRING
+      content IS A STRING
+createMessage MEANS
+  `Message` WITH
+    `role` IS role
+    `content` IS content
+
+// Test 1: Single message encodes fine
+DECIDE msg1 IS
+  createMessage "user" "Hello"
+
+DECIDE encodedMsg1 IS
+  JSONENCODE msg1
+
+#EVAL encodedMsg1
+// Expected: {"role":"user","content":"Hello"}
+// Actual: ✅ WORKS
+
+// Test 2: List of messages
+DECIDE msgList IS
+  LIST msg1
+
+DECIDE msg2 IS
+  createMessage "assistant" "Hi there!"
+
+DECIDE msgList2 IS
+  LIST msg1, msg2
+
+// Test 3: Full API request with nested messages
+DECIDE fullRequest IS
+  `API Request` WITH
+    `model`      IS "claude-sonnet-4-5-20250929"
+    `max_tokens` IS 1000
+    `messages`   IS msgList
+
+#EVAL fullRequest
+// Shows the record structure
+
+DECIDE encodedRequest IS
+  JSONENCODE fullRequest
+
+#EVAL encodedRequest
+// Expected: {"model":"claude-sonnet-4-5-20250929","max_tokens":1000,"messages":[{"role":"user","content":"Hello"}]}
+// Actual: ❌ Internal error: Constructor encoding should be handled in runBuiltin, not encodeValueToJson: Message
+
+// Test 4: Try with multiple messages
+DECIDE fullRequest2 IS
+  `API Request` WITH
+    `model`      IS "test-model"
+    `max_tokens` IS 500
+    `messages`   IS msgList2
+
+DECIDE encodedRequest2 IS
+  JSONENCODE fullRequest2
+
+#EVAL encodedRequest2
+// Expected: Full JSON with array of two messages
+// Actual: ❌ Same internal error

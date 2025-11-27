@@ -1,0 +1,12 @@
+§ `Mixfix Wrong Keyword Test`
+
+-- This file tests error handling when mixfix keywords are in the wrong order.
+
+-- Define a ternary mixfix function
+GIVEN cond IS A BOOLEAN, thenVal IS A NUMBER, elseVal IS A NUMBER
+GIVETH NUMBER
+`myif` cond `mythen` thenVal `myelse` elseVal MEANS
+  IF cond THEN thenVal ELSE elseVal
+
+-- This should error: keywords in wrong order (`myelse` before `mythen`)
+testWrongOrder MEANS `myif` TRUE `myelse` 1 `mythen` 2

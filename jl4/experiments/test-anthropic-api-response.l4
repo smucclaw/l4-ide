@@ -1,0 +1,29 @@
+// Test decoding a real Anthropic Claude API response
+// This is the actual structure mentioned in the bug report
+
+DECLARE `Content Block` HAS
+  `type` IS A STRING
+  `text` IS A STRING
+
+DECLARE `Usage` HAS
+  `input_tokens` IS A NUMBER
+  `output_tokens` IS A NUMBER
+
+DECLARE `API Response` HAS
+  `id` IS A STRING
+  `content` IS A LIST OF `Content Block`
+  `usage` IS A `Usage`
+
+// Real API response from the bug report
+DECIDE realApiResponse IS
+  "{\"id\":\"msg_018cEZHkWRhKEXR7u5kGzMd2\",\"content\":[{\"type\":\"text\",\"text\":\"2+2 equals 4.\"}],\"usage\":{\"input_tokens\":20,\"output_tokens\":12}}"
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `API Response`
+decodeApiResponse json MEANS
+  JSONDECODE json
+
+DECIDE parsedResponse IS
+  decodeApiResponse realApiResponse
+
+#EVAL parsedResponse

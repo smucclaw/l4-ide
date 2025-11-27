@@ -1,0 +1,7 @@
+`map` with `double` and `testList`
+`over` with `double` and `testList`
+`over` with `addOne` and `over` with `double` and `testList`
+`over` with `square` and `testList`
+`over` with `double` and `EMPTY`
+`over` with `double` and list of 42
+`over` with `square` and `testList`

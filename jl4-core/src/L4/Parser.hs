@@ -460,26 +460,28 @@ directive :: Parser (Directive Name)
 directive =
   attachAnno $
     choice
+      -- Use singleLineExpr for simple directives to make them line-oriented.
+      -- Continuation to next line requires '# ' prefix (like C preprocessor).
       [ LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , LazyEvalTrace emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalTraceDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , Check emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TCheckDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       , Contract emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TContractDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
           <* optional (annoLexeme (spacedKeyword_ TKStarting))
           <* annoLexeme (spacedKeyword_ TKAt)
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
           <* annoLexeme (spacedKeyword_ TKWith)
           <*> contractEvents
       , Assert emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TAssertDirective))
-          <*> annoHole expr
+          <*> annoHole singleLineExpr
       ]
 
 contractEvents :: AnnoParser [Expr Name]
@@ -771,7 +773,8 @@ indentedExpr :: Pos -> Parser (Expr Name)
 indentedExpr p =
   withIndent GT p $ \ _ -> do
     l <- currentLine
-    e <- baseExpr
+    -- Use mixfixChainExpr to collect linear mixfix chains before operator parsing
+    e <- mixfixChainExpr
     efs <- many (expressionCont p)
     mw <- optional (whereExpr p)
     pure ((maybe id id mw) (combine End l e efs))
@@ -782,6 +785,57 @@ whereExpr p =
     ann <- opToken $ TKeywords TKWhere
     ds <- many (indented localdecl p)
     pure (\ e -> Where (mkHoleAnnoFor e <> ann <> mkHoleAnnoFor ds) e ds)
+
+-- | Parse a single-line expression for use in directives like #EVAL.
+-- This parser only continues parsing expression operators if the next token
+-- is on the same line OR if the next line starts with '# ' (continuation marker).
+--
+-- This makes directives line-oriented (like C preprocessor directives)
+-- while still allowing explicit multi-line continuation.
+--
+-- For example:
+--   #EVAL 1 + 2        -- parses "1 + 2" as one expression
+--   #EVAL 1 + 2 * 3    -- parses "1 + 2 * 3" as one expression
+--   #EVAL 1            -- parses just "1", next line is separate
+--     + 2              -- this is NOT part of the #EVAL (no # prefix)
+--   #EVAL 1            -- parses "1 + 2" as one expression
+--   # + 2              -- continuation line with # prefix
+--
+-- IMPORTANT: When stripping directives with grep (e.g., `grep -v '^#'`), be aware
+-- that L4 supports multiline strings with literal newlines. If a string literal
+-- contains a line starting with '#', that line would be incorrectly stripped.
+-- Example of problematic content:
+--   someString MEANS "This is a string
+--   # this looks like a directive but isn't
+--   end of string"
+-- In such cases, more sophisticated parsing is needed rather than simple grep.
+--
+singleLineExpr :: Parser (Expr Name)
+singleLineExpr = do
+  startLine <- currentLine
+  -- Use mixfixChainExpr for the initial expression to collect linear mixfix chains
+  e <- mixfixChainExpr
+  -- Only apply line checking to expression continuations (operators)
+  efs <- many (singleLineExpressionCont startLine)
+  pure (combine End startLine e efs)
+
+-- | Like 'expressionCont' but only parses if:
+--   1. The operator is on the same line as the expression started, OR
+--   2. There is a '# ' continuation marker at the start of the line
+singleLineExpressionCont :: Pos -> Parser (Cont Expr)
+singleLineExpressionCont startLine = try $ do
+  -- Check if we have a continuation marker or are on the same line
+  nextTok <- lookAhead anySingle
+  let sameLine = fromIntegral nextTok.range.start.line == unPos startLine
+  let isContinuation = nextTok.payload == TDirectives TDirectiveContinue
+  guard (sameLine || isContinuation)
+  -- If it's a continuation marker, consume it
+  when isContinuation $ void $ spacedToken_ (TDirectives TDirectiveContinue)
+  -- Now parse the operator and argument (use regular baseExpr)
+  (prio, assoc, op) <- operator
+  l <- currentLine
+  arg <- baseExpr
+  pure (MkCont op prio assoc l (mkPos 1) arg)
 
 data Stack a =
     Frame (Stack a) (a Name) (a Name -> a Name -> a Name) !Prio !Assoc !Pos !Pos
@@ -947,7 +1001,11 @@ data Cont a =
 
 cont :: Parser (Prio, Assoc, a Name -> a Name -> a Name) -> Parser (a Name) -> Pos -> Parser (Cont a)
 cont pop pbase p =
-  withIndent GT p $ \ pos -> do
+  -- Use try so that if the right operand fails to parse, we backtrack.
+  -- This is needed for mixfix operators (backticked names) which can also
+  -- be standalone expressions - if followed by a keyword instead of an
+  -- expression, we backtrack and let the backticked name be parsed differently.
+  try $ withIndent GT p $ \ pos -> do
     (prio, assoc, op) <- pop
     -- parg <- Lexer.indentGuard spaces GT p
     l <- currentLine
@@ -961,10 +1019,14 @@ currentLine = sourceLine <$> getSourcePos
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
 
-postfixP :: Parser (a -> a) -> Parser a -> Parser a
-postfixP ops p = do
+-- | Like 'postfixP' but passes the ending line of the parsed expression to
+-- a line-aware postfix parser. This is used for mixfix postfix operators
+-- which must be on the same line as the base expression.
+postfixPWithLine :: HasSrcRange a => (Int -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
+postfixPWithLine lineAwareOps regularOps p = do
   a <- p
-  mf <- optional (try ops)
+  let exprEndLine = maybe 0 (.end.line) (rangeOf a)
+  mf <- optional (try (lineAwareOps exprEndLine) <|> try regularOps)
   case mf of
     Nothing -> pure a
     Just f -> pure $ f a
@@ -991,10 +1053,14 @@ operator =
   <|> (\ op -> (7, AssocLeft,  infix2  Times     op)) <$> (spacedKeyword_ TKTimes  <|> spacedTokenOp_ TTimes )
   <|> (\ op -> (7, AssocLeft,  infix2' DividedBy op)) <$> (((<>) <$> opToken (TKeywords TKDivided) <*> opToken (TKeywords TKBy)) <|> opToken (TOperators TDividedBy))
   <|> (\ op -> (7, AssocLeft,  infix2  Modulo    op)) <$> spacedKeyword_ TKModulo
-  where spacedTokenOp_ = spacedToken_ . TOperators
+  -- NOTE: Mixfix infix operators are now handled by mixfixChainExpr, not here.
+  -- This allows collecting all mixfix tokens linearly rather than nesting binary ops.
+  where
+    spacedTokenOp_ = spacedToken_ . TOperators
 
-postfixOperator :: Parser (Expr Name -> Expr Name)
-postfixOperator =
+-- | Regular postfix operators (percent, AS type)
+regularPostfixOperator :: Parser (Expr Name -> Expr Name)
+regularPostfixOperator =
       (\ op -> (postfix Percent   op)) <$> (spacedSymbol_ TPercent)
   <|> hidden postfixAsType
   where
@@ -1008,6 +1074,32 @@ postfixOperator =
           op = asAnno <> articleAnno <> typenameAnno
       -- For now, we only support AS STRING, but parser accepts any type name
       pure $ \ l -> AsString (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) l
+
+-- | Line-aware mixfix postfix operator parser.
+-- Takes the ending line number of the base expression and only matches
+-- if the postfix operator is on the same line.
+-- e.g., `50 `percent`` becomes `App anno percent [50]`
+-- We use `try` because if this is actually a binary operator (followed by
+-- another expression), we want to backtrack and let the infix parser handle it.
+mixfixPostfixOp :: Int -> Parser (Expr Name -> Expr Name)
+mixfixPostfixOp exprEndLine = hidden $ try $ do
+  -- Peek at the next token to check its line number
+  nextTok <- lookAhead anySingle
+  -- Only proceed if the backticked name is on the same line as where the expression ended
+  guard (exprEndLine == nextTok.range.start.line)
+  eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
+  -- Check that this is NOT followed by an expression ON THE SAME LINE
+  -- (which would make it infix). Expressions on subsequent lines don't count.
+  notFollowedBy (sameLineExpr exprEndLine)
+  let funcName = eN.payload
+      op = mkSimpleEpaAnno eN
+  pure $ \l -> App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) funcName [l]
+  where
+    -- A parser that only succeeds if there's a base expression on the same line
+    sameLineExpr line = do
+      tok <- lookAhead anySingle
+      guard (tok.range.start.line == line)
+      baseExpr'
 
 opToken :: TokenType -> Parser Anno
 opToken t =
@@ -1026,7 +1118,79 @@ postfix f op l =
   f (fixAnnoSrcRange $ mkHoleAnnoFor l <> mkSimpleEpaAnno (lexToEpa op)) l
 
 baseExpr :: Parser (Expr Name)
-baseExpr = postfixP postfixOperator baseExpr'
+baseExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator baseExpr'
+
+-- | Parse a mixfix chain expression.
+-- After parsing a base expression, if it's followed by a backticked keyword,
+-- collect all (keyword, expression) pairs linearly.
+--
+-- Example: `a `op1` b `op2` c` becomes:
+--   App op1 [a, Var op2, b, c]
+--
+-- This representation allows the type checker to:
+-- 1. Look up `op1` in the mixfix registry
+-- 2. Validate that `op2` matches the expected keyword pattern
+-- 3. Extract the actual arguments [a, b, c]
+--
+-- The curried representation means partial application works naturally.
+mixfixChainExpr :: Parser (Expr Name)
+mixfixChainExpr = do
+  firstExpr <- baseExpr
+  -- Get the ending line of the first expression to enforce same-line constraint
+  let firstExprEndLine = maybe 0 (.end.line) (rangeOf firstExpr)
+  -- Try to parse a mixfix chain starting with a backticked keyword
+  -- The keyword must be on the same line as the first expression
+  mChain <- optional $ try (mixfixChainCont firstExprEndLine)
+  case mChain of
+    Nothing -> pure firstExpr
+    Just (firstKeyword, firstArg, moreKwArgs) ->
+      -- Build: App firstKeyword [firstExpr, firstArg, kw2, arg2, kw3, arg3, ...]
+      -- For binary: a `plus` b -> App plus [a, b]
+      -- For ternary+: a `f1` b `f2` c -> App f1 [a, b, Var f2, c]
+      let allArgs = firstExpr : firstArg : concatMap pairToArgs moreKwArgs
+          -- IMPORTANT: genericToNodes for App expects exactly 2 holes:
+          -- 1. One for the function name
+          -- 2. One for the args list
+          -- We combine all keyword tokens as CSNs and create just 2 holes
+          funcHole = mkAnno [AnnoHole Nothing]  -- Hole for function name
+          argsHole = mkAnno [AnnoHole Nothing]  -- Hole for args list (all args together)
+          -- Collect all CSN tokens for keywords (they don't need holes)
+          kwTokens = mkSimpleEpaAnno firstKeyword : concatMap pairToCsn moreKwArgs
+          combinedAnno = funcHole <> foldl' (<>) emptyAnno kwTokens <> argsHole
+      in pure $ App (fixAnnoSrcRange combinedAnno) firstKeyword.payload allArgs
+  where
+    -- Parse: `keyword` expr (`keyword` expr)*
+    -- Returns: (firstKeyword, firstArg, [(kw2, arg2), (kw3, arg3), ...])
+    -- The keyword MUST be on the given line (same line as previous expression)
+    mixfixChainCont :: Int -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
+    mixfixChainCont prevLine = do
+      firstKw <- mixfixKeywordOnLine prevLine
+      firstArg <- baseExpr
+      let firstArgEndLine = maybe prevLine (.end.line) (rangeOf firstArg)
+      rest <- many $ try $ do
+        kw <- mixfixKeywordOnLine firstArgEndLine
+        e <- baseExpr
+        pure (kw, e)
+      pure (firstKw, firstArg, rest)
+
+    -- Parse a backticked keyword only if it's on the specified line
+    mixfixKeywordOnLine :: Int -> Parser (Epa Name)
+    mixfixKeywordOnLine expectedLine = do
+      tok <- lookAhead anySingle
+      guard (tok.range.start.line == expectedLine)
+      (MkName emptyAnno . NormalName) <<$>>
+        spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
+
+    -- Convert (keyword, expr) pair to [Var keyword, expr]
+    -- These are the "additional" keywords beyond the first one
+    pairToArgs :: (Epa Name, Expr Name) -> [Expr Name]
+    pairToArgs (kw, e) =
+      let kwVar = App (mkSimpleEpaAnno kw) kw.payload []  -- Var keyword
+      in [kwVar, e]
+
+    -- Get CSN annotation from keyword (just the keyword tokens, no holes)
+    pairToCsn :: (Epa Name, Expr Name) -> [Anno]
+    pairToCsn (kw, _) = [mkSimpleEpaAnno kw]
 
 baseExpr' :: Parser (Expr Name)
 baseExpr' =
@@ -1073,7 +1237,7 @@ parseEvent =
       *> annoHole expr
 
 atomicExpr :: Parser (Expr Name)
-atomicExpr = postfixP postfixOperator atomicExpr'
+atomicExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator atomicExpr'
 
 atomicExpr' :: Parser (Expr Name)
 atomicExpr' =
@@ -1138,7 +1302,7 @@ app = do
     App emptyAnno
     <$> annoHole name
     <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
-        <|> annoHole (lmany (const (indented atomicExpr current)))
+        <|> annoHole (lmany (const (indented atomicExpr' current)))
         )
 
 namedApp :: Parser (Expr Name)

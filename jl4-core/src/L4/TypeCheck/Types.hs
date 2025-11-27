@@ -75,6 +75,8 @@ data CheckError =
   | IllegalTypeInKindSignature (Type' Resolved)
   | MissingEntityInfo Resolved
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
+  | MixfixMatchErrorCheck Name MixfixMatchError
+    -- ^ Error in mixfix pattern matching (function name, error details)
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -175,6 +177,78 @@ instance HasSrcRange CheckError where
   rangeOf (InconsistentNameInAppForm n _)   = rangeOf n
   rangeOf _                                 = Nothing
 
+-- | A token in a mixfix pattern, representing either a keyword (part of the function name)
+-- or a parameter slot.
+data MixfixPatternToken
+  = MixfixKeyword RawName
+    -- ^ A keyword part of the function name (e.g., "is eligible for")
+  | MixfixParam RawName
+    -- ^ A parameter slot, with the original parameter name for documentation
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
+-- | Errors that can occur during mixfix pattern matching.
+-- These provide detailed information for user-friendly error messages.
+data MixfixMatchError
+  = UnknownMixfixKeyword RawName [RawName]
+    -- ^ Unknown keyword encountered. First is the unknown keyword, second is list of suggestions.
+  | WrongKeyword RawName RawName
+    -- ^ Expected a keyword but found a different one. (expected, actual)
+  | MissingKeyword RawName
+    -- ^ Expected keyword not found in the expression.
+  | ExtraKeyword RawName
+    -- ^ Unexpected keyword appeared in arguments.
+  | ArityMismatch Int Int
+    -- ^ Wrong number of arguments. (expected, actual)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
+-- | Result of attempting to match a mixfix pattern.
+-- This three-way type allows us to distinguish between:
+-- 1. Pattern doesn't match at all (try next pattern or fall back)
+-- 2. Pattern matches but with errors (report error to user)
+-- 3. Pattern matches successfully
+data MixfixMatchResult a
+  = MixfixNoMatch
+    -- ^ Pattern doesn't match; try other patterns or non-mixfix interpretation
+  | MixfixError MixfixMatchError
+    -- ^ Pattern partially matches but has an error (report to user)
+  | MixfixSuccess a
+    -- ^ Pattern matches successfully
+  deriving stock (Show, Eq, Generic, Functor)
+  deriving anyclass (NFData)
+
+-- | Convert MixfixMatchResult to Maybe, discarding error details.
+-- Useful for backwards compatibility during transition.
+mixfixResultToMaybe :: MixfixMatchResult a -> Maybe a
+mixfixResultToMaybe MixfixNoMatch = Nothing
+mixfixResultToMaybe (MixfixError _) = Nothing
+mixfixResultToMaybe (MixfixSuccess a) = Just a
+
+-- | Result of matching a mixfix argument: either a keyword placeholder that was validated,
+-- or a real parameter argument.
+data MixfixArgMatch a
+  = MixfixKeywordArg RawName
+    -- ^ A keyword placeholder that matched. The RawName is the expected keyword.
+  | MixfixParamArg a
+    -- ^ A real parameter argument.
+  deriving stock (Show, Eq, Generic, Functor)
+  deriving anyclass (NFData)
+
+-- | Information about a mixfix function pattern.
+-- A mixfix function is one where the function name is interspersed with parameters,
+-- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
+data MixfixInfo = MkMixfixInfo
+  { pattern :: [MixfixPatternToken]
+    -- ^ The complete pattern, e.g., [Param "person", Keyword "is eligible for", Param "program"]
+  , keywords :: [RawName]
+    -- ^ Just the keyword parts, for quick lookup (e.g., ["is eligible for"])
+  , arity :: Int
+    -- ^ Number of parameters (parameter slots in the pattern)
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (NFData)
+
 -- | A checked function signature.
 data FunTypeSig = MkFunTypeSig
   { anno :: Anno
@@ -189,6 +263,8 @@ data FunTypeSig = MkFunTypeSig
   , arguments :: [CheckInfo]
   -- ^ Arguments to the function.
   -- Includes type variables.
+  , mixfixInfo :: Maybe MixfixInfo
+  -- ^ If this is a mixfix function, its pattern info. Nothing for prefix functions.
   }
   deriving (Show, Eq, Generic)
   deriving anyclass (SOP.Generic, NFData)
@@ -223,6 +299,10 @@ data DeclChecked a = MkDeclChecked
 
 type DeclareOrAssume = Either (Declare Resolved) (Assume Resolved)
 
+-- | Registry of mixfix functions, indexed by their first keyword.
+-- This enables efficient lookup when type-checking potential mixfix applications.
+type MixfixRegistry = Map RawName [FunTypeSig]
+
 data CheckEnv =
   MkCheckEnv
     { moduleUri            :: !NormalizedUri
@@ -232,6 +312,8 @@ data CheckEnv =
     , declTypeSigs         :: !(Map SrcRange DeclTypeSig)
     , declareDeclarations  :: !(Map SrcRange (DeclChecked (Declare Resolved)))
     , assumeDeclarations   :: !(Map SrcRange (DeclChecked (Assume Resolved)))
+    , mixfixRegistry       :: !MixfixRegistry
+    -- ^ Registry of mixfix functions indexed by their first keyword
     , errorContext         :: !CheckErrorContext
     , sectionStack         :: ![NonEmpty Text]
     }
@@ -760,6 +842,7 @@ extendEnv cis env =
     , declTypeSigs = e.declTypeSigs
     , declareDeclarations = e.declareDeclarations
     , assumeDeclarations = e.assumeDeclarations
+    , mixfixRegistry = e.mixfixRegistry
     , sectionStack = e.sectionStack
     }
     where
