@@ -1,0 +1,40 @@
+-- Test JSON encoding of lists
+
+-- Empty list
+DECIDE encodeEmptyList IS
+  JSONENCODE EMPTY
+
+-- List of numbers
+DECIDE encodeNumberList IS
+  JSONENCODE (LIST 1, 2, 3, 4, 5)
+
+-- List of strings
+DECIDE encodeStringList IS
+  JSONENCODE (LIST "apple", "banana", "cherry")
+
+-- List of booleans
+DECIDE encodeBoolList IS
+  JSONENCODE (LIST TRUE, FALSE, TRUE)
+
+-- Nested lists
+DECIDE innerList1 IS LIST 1, 2, 3
+DECIDE innerList2 IS LIST 4, 5, 6
+
+DECIDE encodeNestedList IS
+  JSONENCODE (LIST innerList1, innerList2)
+
+-- Direct nested list
+DECIDE encodeDirectNested IS
+  JSONENCODE (LIST (LIST 1, 2), (LIST 3, 4))
+
+-- Deeply nested lists
+DECIDE encodeDeeplyNested IS
+  JSONENCODE (LIST (LIST (LIST 1)))
+
+#EVAL encodeEmptyList
+#EVAL encodeNumberList
+#EVAL encodeStringList
+#EVAL encodeBoolList
+#EVAL encodeNestedList
+#EVAL encodeDirectNested
+#EVAL encodeDeeplyNested

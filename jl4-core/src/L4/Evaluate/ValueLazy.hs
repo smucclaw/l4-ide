@@ -80,11 +80,17 @@ data UnaryBuiltinFun
   | UnaryToUpper         -- STRING → STRING
   | UnaryToLower         -- STRING → STRING
   | UnaryTrim            -- STRING → STRING
+  -- IO/JSON functions from main
+  | UnaryFetch
+  | UnaryEnv
+  | UnaryJsonEncode
+  | UnaryJsonDecode
   deriving stock (Show)
 
 data TernaryBuiltinFun
   = TernarySubstring     -- STRING → NUMBER → NUMBER → STRING
   | TernaryReplace       -- STRING → STRING → STRING → STRING
+  | TernaryPost          -- from main
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -126,8 +132,13 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryToUpper = ()
   rnf UnaryToLower = ()
   rnf UnaryTrim = ()
+  rnf UnaryFetch = ()
+  rnf UnaryEnv = ()
+  rnf UnaryJsonEncode = ()
+  rnf UnaryJsonDecode = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()
   rnf TernarySubstring = ()
   rnf TernaryReplace = ()
+  rnf TernaryPost = ()

@@ -30,6 +30,7 @@ library
   import: defaults
   hs-source-dirs: src
   build-depends:
+    aeson,
     bytestring,
     placeholder,
     cassava,
@@ -58,6 +59,7 @@ library
     tree-diff,
     vector,
     template-haskell,
+    req,
 
   autogen-modules:
     Paths_jl4_core

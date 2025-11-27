@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+as-string.l4:33:1-18:
+  "25"
+as-string.l4:34:1-19:
+  "25"
+as-string.l4:35:1-14:
+  "Age is 25"
+as-string.l4:36:1-15:
+  "10 + 20 = 30"
+as-string.l4:37:1-17:
+  "3.14159"
+as-string.l4:38:1-18:
+  "Result: 50"

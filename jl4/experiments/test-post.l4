@@ -1,0 +1,10 @@
+// Simple test of POST functionality
+// We'll test with httpbin.org which echoes back POST requests
+
+DECIDE testPost IS
+  POST
+    "https://httpbin.org/post"
+    ""
+    "{\"test\": \"data from L4\"}"
+
+#EVAL testPost

@@ -42,7 +42,8 @@ import L4.Annotation
 import L4.Lexer as L
 import qualified L4.Parser.ResolveAnnotation as Resolve
 import qualified L4.ParserCombinators as P
-import L4.Syntax hiding (app, forall', fun)
+import L4.Syntax hiding (app, forall', fun, Env)
+import qualified L4.Syntax
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 import L4.Parser.Anno
@@ -963,7 +964,7 @@ expressionCont = cont operator baseExpr
 postfixP :: Parser (a -> a) -> Parser a -> Parser a
 postfixP ops p = do
   a <- p
-  mf <- optional ops
+  mf <- optional (try ops)
   case mf of
     Nothing -> pure a
     Just f -> pure $ f a
@@ -995,6 +996,18 @@ operator =
 postfixOperator :: Parser (Expr Name -> Expr Name)
 postfixOperator =
       (\ op -> (postfix Percent   op)) <$> (spacedSymbol_ TPercent)
+  <|> hidden postfixAsType
+  where
+    postfixAsType = do
+      asAnno <- opToken (TKeywords TKAs)
+      -- Optional article: AS A STRING / AS AN STRING / AS STRING
+      articleLex <- optional (spacedKeyword_ TKA <|> spacedKeyword_ TKAn)
+      typename <- name
+      let articleAnno = maybe emptyAnno (mkSimpleEpaAnno . lexToEpa) articleLex
+          typenameAnno = getAnno typename
+          op = asAnno <> articleAnno <> typenameAnno
+      -- For now, we only support AS STRING, but parser accepts any type name
+      pure $ \ l -> AsString (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) l
 
 opToken :: TokenType -> Parser Anno
 opToken t =
@@ -1019,6 +1032,10 @@ baseExpr' :: Parser (Expr Name)
 baseExpr' =
       try projection
   <|> negation
+  <|> fetchExpr
+  <|> envExpr
+  <|> postExpr
+  <|> concatExpr
   <|> ifthenelse
   <|> multiWayIf
   <|> try event
@@ -1086,6 +1103,14 @@ list = do
       <$  annoLexeme (spacedKeyword_ TKList)
       <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
 
+concatExpr :: Parser (Expr Name)
+concatExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Concat emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKConcat)
+      <*> annoHole (lsepBy (const (indentedExpr current)) (spacedSymbol_ TComma))
+
 intLit :: Parser Lit
 intLit =
   attachAnno $
@@ -1133,6 +1158,32 @@ namedExpr current =
       <*  annoLexeme separator
       <*  optional article
       <*> annoHole   (indentedExpr current)
+
+fetchExpr :: Parser (Expr Name)
+fetchExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Fetch emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKFetch)
+      <*> annoHole (indentedExpr current)
+
+envExpr :: Parser (Expr Name)
+envExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    L4.Syntax.Env emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKEnv)
+      <*> annoHole (indentedExpr current)
+
+postExpr :: Parser (Expr Name)
+postExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    Post emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKPost)
+      <*> annoHole (indentedExpr current)
+      <*> annoHole (indentedExpr current)
+      <*> annoHole (indentedExpr current)
 
 negation :: Parser (Expr Name)
 negation = do

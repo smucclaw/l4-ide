@@ -33,6 +33,15 @@ import qualified Base.Text as Text
 import qualified Base.Map as Map
 import qualified Base.Set as Set
 import Control.Concurrent
+import System.Environment (lookupEnv)
+import           Network.HTTP.Req ((=:))
+import qualified Network.HTTP.Req as Req
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Vector as Vector
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
@@ -40,13 +49,17 @@ import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
+import L4.TypeCheck.Types (EntityInfo)
 import L4.EvaluateLazy.ContractFrame
 import L4.Utils.Ratio
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
   | BinOp2 BinOp WHNF {- -}
-  | App1 {- -} [Reference]
+  | Post1 {- -} (Expr Resolved) (Expr Resolved) Environment
+  | Post2 WHNF {- -} (Expr Resolved) Environment
+  | Post3 WHNF WHNF {- -}
+  | App1 {- -} [Reference] (Maybe (Type' Resolved)) -- Added type for type-directed builtins
   | IfThenElse1 {- -} (Expr Resolved) (Expr Resolved) Environment
   | ConsiderWhen1 Reference {- -} (Expr Resolved) [Branch Resolved] Environment
   | PatNil0
@@ -61,7 +74,7 @@ data Frame =
   | EqConstructor1 {- -} Reference [(Reference, Reference)]
   | EqConstructor2 WHNF {- -} [(Reference, Reference)]
   | EqConstructor3 {- -} [(Reference, Reference)]
-  | UnaryBuiltin0 UnaryBuiltinFun
+  | UnaryBuiltin0 UnaryBuiltinFun (Maybe (Type' Resolved)) -- Added type for type-directed decoding
   | BinBuiltin1 BinOp Reference
   | BinBuiltin2 BinOp WHNF
   -- Ternary builtin frames: accumulate evaluated args
@@ -70,6 +83,11 @@ data Frame =
   | TernaryBuiltin3 TernaryBuiltinFun WHNF WHNF            -- has 1st and 2nd arg values, evaluating 3rd
   | UpdateThunk Reference
   | ContractFrame ContractFrame
+  | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
+  | AsStringFrame -- AsString frame
+  | JsonEncodeListFrame [Text] {- -} Reference Bool -- accumulated JSON strings, tail reference, expecting_tail (True = next value is tail, False = next value is element)
+  | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for element encoding to complete)
+  | JsonEncodeConstructorFrame [(Text, Text)] Text [(Text, Reference)] -- accumulated (fieldName, encodedJson) pairs, current field name, remaining (fieldName, fieldRef) pairs to encode
   deriving stock Show
 
 data EvalException =
@@ -105,9 +123,11 @@ data Machine a where
   PushFrame :: Frame -> Machine ()
   Allocate' :: Allocation t -> Machine t
   NewUnique :: Machine Unique
+  GetEntityInfo :: Machine EntityInfo
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
+  LiftIO :: IO a -> Machine a
   Bind :: Machine a -> (a -> Machine b) -> Machine b
 
 data Allocation t where
@@ -124,6 +144,9 @@ instance Applicative Machine where
 
 instance Monad Machine where
   (>>=) = Bind
+
+instance MonadIO Machine where
+  liftIO = LiftIO
 
 pattern Allocate :: Expr Resolved -> (Reference -> Environment) -> Machine (Reference, Environment)
 pattern Allocate expr k = Allocate' (Recursive expr k)
@@ -224,9 +247,12 @@ forwardExpr env = \ case
     Backward (ValClosure givens e env)
   App _ann n [] ->
     expectTerm env n >>= EvalRef
-  App _ann n es@(_ : _) -> do
+  App ann n es@(_ : _) -> do
+    let expectedType = case getAnno ann of
+          Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
+          _ -> Nothing
     rs <- traverse (`allocate_` env) es
-    PushFrame (App1 rs)
+    PushFrame (App1 rs expectedType)
     ForwardExpr env (Var emptyAnno n)
   AppNamed ann n [] _ ->
     ForwardExpr env (App ann n [])
@@ -254,7 +280,7 @@ forwardExpr env = \ case
     rval <- runLit lit
     Backward rval
   Percent _ann e -> do
-    PushFrame (UnaryBuiltin0 UnaryPercent)
+    PushFrame (UnaryBuiltin0 UnaryPercent Nothing)
     ForwardExpr env e
   List _ann [] ->
     Backward ValNil
@@ -268,6 +294,23 @@ forwardExpr env = \ case
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->
     ForwardExpr env (desugarEvent ev)
+  Fetch _ann e -> do
+    PushFrame (UnaryBuiltin0 UnaryFetch Nothing)
+    ForwardExpr env e
+  Env _ann e -> do
+    PushFrame (UnaryBuiltin0 UnaryEnv Nothing)
+    ForwardExpr env e
+  Post _ann e1 e2 e3 -> do
+    PushFrame (Post1 e2 e3 env)
+    ForwardExpr env e1
+  Concat _ann [] ->
+    Backward (ValString "")
+  Concat _ann (e : es) -> do
+    PushFrame (ConcatFrame [] es env)
+    ForwardExpr env e
+  AsString _ann e -> do
+    PushFrame AsStringFrame
+    ForwardExpr env e
 
 backward :: WHNF -> Machine Config
 backward val = WithPoppedFrame $ \ case
@@ -277,12 +320,20 @@ backward val = WithPoppedFrame $ \ case
     ForwardExpr env e2
   Just (BinOp2 binOp val1) -> do
     runBinOp binOp val1 val
+  Just (Post1 e2 e3 env) -> do
+    PushFrame (Post2 val e3 env)
+    ForwardExpr env e2
+  Just (Post2 val1 e3 env) -> do
+    PushFrame (Post3 val1 val)
+    ForwardExpr env e3
+  Just (Post3 val1 val2) -> do
+    runPost val1 val2 val
   Just (BinBuiltin1 binOp r) -> do
     PushFrame (BinBuiltin2 binOp val)
     EvalRef r
   Just (BinBuiltin2 binOp val1) ->
     runBinOp binOp val1 val
-  Just f@(App1 rs) -> do
+  Just f@(App1 rs mTy) -> do
     case val of
       ValClosure givens e env' -> do
         env'' <- matchGivens givens f rs
@@ -305,7 +356,7 @@ backward val = WithPoppedFrame $ \ case
         maybeEvaluate env rexpr1 -- TODO: build application
       ValUnaryBuiltinFun fn -> do
         r <- expect1 rs
-        PushFrame (UnaryBuiltin0 fn)
+        PushFrame (UnaryBuiltin0 fn mTy)
         EvalRef r
       ValBinaryBuiltinFun fn -> do
         (x, y) <- expect2 rs
@@ -438,8 +489,8 @@ backward val = WithPoppedFrame $ \ case
             EvalRef r1
       Nothing -> InternalException $ RuntimeTypeError $
         "expected a BOOLEAN but found: " <> prettyLayout val <> " when testing equality"
-  Just (UnaryBuiltin0 fn) -> do
-    runBuiltin val fn
+  Just (UnaryBuiltin0 fn mTy) -> do
+    runBuiltin val fn mTy
   -- Ternary builtin handling: got 1st arg value, need to eval 2nd
   Just (TernaryBuiltin1 fn refArg2 refArg3) -> do
     PushFrame (TernaryBuiltin2 fn val refArg3)
@@ -451,6 +502,87 @@ backward val = WithPoppedFrame $ \ case
   -- Ternary builtin handling: got all 3 args
   Just (TernaryBuiltin3 fn val1 val2) -> do
     runTernaryBuiltin fn val1 val2 val
+  Just (ConcatFrame acc [] _env) -> do
+    -- All arguments evaluated, concatenate them
+    runConcat (reverse (val : acc))
+  Just (ConcatFrame acc (e : es) env) -> do
+    -- Evaluate next argument
+    PushFrame (ConcatFrame (val : acc) es env)
+    ForwardExpr env e
+  Just AsStringFrame -> do
+    -- Convert the value to string
+    runAsString val
+  Just (JsonEncodeListFrame acc tailRef expectingTail) -> do
+    -- Handle the value we got back
+    if expectingTail
+      then
+        -- We just evaluated the tail, so val is either ValNil or ValCons
+        case val of
+          ValNil -> do
+            -- We're done! Combine all accumulated JSON strings into an array
+            let jsonArray = "[" <> Text.intercalate "," (reverse acc) <> "]"
+            Backward $ ValString jsonArray
+          ValCons headRef nextTailRef -> do
+            -- More elements to process. Evaluate the head element first
+            PushFrame (JsonEncodeListFrame acc nextTailRef False)
+            EvalRef headRef
+          _ ->
+            -- Should not happen - tail should be ValNil or ValCons
+            InternalException $ RuntimeTypeError "Expected list (ValNil or ValCons) for tail"
+      else
+        -- We just evaluated an element, so encode it and continue with the tail
+        case val of
+          ValNil -> do
+            -- Element is an empty list
+            PushFrame (JsonEncodeListFrame ("[]" : acc) tailRef True)
+            EvalRef tailRef
+          ValCons elemHeadRef elemTailRef -> do
+            -- Element is a non-empty list, need to recursively encode it
+            -- Push a frame to wait for the nested encoding, then start encoding the nested list
+            PushFrame (JsonEncodeNestedFrame acc tailRef)  -- Will continue with tail after nested encoding
+            PushFrame (JsonEncodeListFrame [] elemTailRef False)  -- Encode the nested list
+            EvalRef elemHeadRef
+          _ -> do
+            -- Element needs encoding (could be constructor, primitive, etc.)
+            -- Allocate it and use frame-based encoding to handle all cases properly
+            elemRef <- AllocateValue val
+            PushFrame (JsonEncodeNestedFrame acc tailRef)  -- Will add result to acc and continue with tail
+            PushFrame (UnaryBuiltin0 UnaryJsonEncode Nothing)  -- Encode using proper frame-based logic
+            EvalRef elemRef
+  Just (JsonEncodeNestedFrame acc tailRef) -> do
+    -- We just finished encoding an element (nested list, constructor, or primitive), val should be a ValString with the JSON
+    case val of
+      ValString encodedJson -> do
+        -- Add the encoded JSON to accumulator and continue with the tail
+        PushFrame (JsonEncodeListFrame (encodedJson : acc) tailRef True)
+        EvalRef tailRef
+      _ ->
+        -- Should not happen - encoding should return ValString
+        InternalException $ RuntimeTypeError "Expected ValString from element encoding"
+  Just (JsonEncodeConstructorFrame acc currentFieldName remaining) -> do
+    -- We just finished encoding a field value, val should be a ValString with the JSON
+    case val of
+      ValString encodedJson -> do
+        -- Pair the current field name with the encoded value
+        let newPair = (currentFieldName, encodedJson)
+            newAcc = newPair : acc
+        -- Check if there are more fields to encode
+        case remaining of
+          [] -> do
+            -- All fields encoded! Build the final JSON object
+            -- Note: acc is in reverse order, so reverse it
+            let allPairs = reverse newAcc
+                jsonFields = map (\(fname, fval) -> "\"" <> fname <> "\":" <> fval) allPairs
+                jsonObject = "{" <> Text.intercalate "," jsonFields <> "}"
+            Backward $ ValString jsonObject
+          ((nextFieldName, nextFieldRef):rest) -> do
+            -- More fields to encode
+            PushFrame (JsonEncodeConstructorFrame newAcc nextFieldName rest)
+            PushFrame (UnaryBuiltin0 UnaryJsonEncode Nothing)
+            EvalRef nextFieldRef
+      _ ->
+        -- Should not happen - field encoding should return ValString
+        InternalException $ RuntimeTypeError "Expected ValString from field encoding"
   Just (UpdateThunk rf) -> do
     updateThunkToWHNF rf val
     Backward val
@@ -569,7 +701,7 @@ backwardContractFrame val = \ case
     -- second argument has completed
     pushCFrame $ RBinOp2 MkRBinOp2 {rval1 = val, ..}
     -- pass the arguments to the regulative expression
-    PushFrame $ App1 args
+    PushFrame $ App1 args Nothing
     maybeEvaluate env rexpr2
 
   RBinOp2 MkRBinOp2 {..}
@@ -644,7 +776,7 @@ backwardContractFrame val = \ case
 
     continueWithFollowup :: Environment -> RExpr -> Reference -> Reference -> Machine Config
     continueWithFollowup env followup events time = do
-      PushFrame (App1 [time, events])
+      PushFrame (App1 [time, events] Nothing)
       ForwardExpr env followup
 
     assertTime = \ case
@@ -740,51 +872,439 @@ expectNumber = \ case
   ValNumber f -> pure f
   _ -> InternalException (RuntimeTypeError "Expected number.")
 
+expectString :: WHNF -> Machine Text
+expectString = \ case
+  ValString f -> pure f
+  _ -> InternalException (RuntimeTypeError "Expected string.")
+
 expectInteger :: BinOp -> Rational -> Machine Integer
 expectInteger op n = do
   case isInteger n of
     Nothing -> UserException (NotAnInteger op n)
     Just i -> pure i
 
-runBuiltin :: WHNF -> UnaryBuiltinFun -> Machine Config
-runBuiltin es op = case op of
-  -- Number operations
-  UnaryIsInteger -> do
-    val <- expectNumber es
-    Backward $ valBool $ isJust $ isInteger val
-  UnaryRound -> do
-    val <- expectNumber es
-    Backward $ valInt $ round val
-  UnaryCeiling -> do
-    val <- expectNumber es
-    Backward $ valInt $ ceiling val
-  UnaryFloor -> do
-    val <- expectNumber es
-    Backward $ valInt $ floor val
-  UnaryPercent -> do
-    val <- expectNumber es
-    Backward $ ValNumber (val / 100)
-  -- String operations
-  UnaryStringLength -> do
-    str <- expectString es
-    Backward $ ValNumber (fromIntegral $ Text.length str)
-  UnaryToUpper -> do
-    str <- expectString es
-    Backward $ ValString (Text.toUpper str)
-  UnaryToLower -> do
-    str <- expectString es
-    Backward $ ValString (Text.toLower str)
-  UnaryTrim -> do
-    str <- expectString es
-    Backward $ ValString (Text.strip str)
+-- | Extract field names from a constructor's function type
+-- The constructor type is typically: forall args. (field1: Type1, field2: Type2, ...) -> ResultType
+extractFieldNames :: Type' Resolved -> Machine [Text]
+extractFieldNames ty = case ty of
+  -- Strip forall quantifier if present
+  Forall _ _ innerTy -> extractFieldNames innerTy
+  -- Extract field names from function arguments
+  Fun _ argTypes _resultTy -> do
+    pure $ mapMaybe getFieldName argTypes
+  -- Not a function type - might be a nullary constructor
+  _ -> pure []
+  where
+    getFieldName :: OptionallyNamedType Resolved -> Maybe Text
+    getFieldName (MkOptionallyNamedType _ maybeName _ty) =
+      nameToText . TypeCheck.getName <$> maybeName
+
+-- | Extract both field names AND types from a constructor's function type
+-- This is needed for type-directed JSON decoding of nested structures
+extractFieldNamesAndTypes :: Type' Resolved -> Machine [(Text, Type' Resolved)]
+extractFieldNamesAndTypes ty = case ty of
+  -- Strip forall quantifier if present
+  Forall _ _ innerTy -> extractFieldNamesAndTypes innerTy
+  -- Extract field names and types from function arguments
+  Fun _ argTypes _resultTy -> do
+    pure $ mapMaybe getFieldNameAndType argTypes
+  -- Not a function type - might be a nullary constructor
+  _ -> pure []
+  where
+    getFieldNameAndType :: OptionallyNamedType Resolved -> Maybe (Text, Type' Resolved)
+    getFieldNameAndType (MkOptionallyNamedType _ maybeName fieldType) =
+      case maybeName of
+        Just name -> Just (nameToText (TypeCheck.getName name), fieldType)
+        Nothing -> Nothing
+
+-- | Encode an L4 value to JSON string
+encodeValueToJson :: WHNF -> Machine Text
+encodeValueToJson = \case
+  ValString s -> pure $ "\"" <> escapeJson s <> "\""
+  ValNumber n
+    | denominator n == 1 -> pure $ Text.pack $ show (numerator n)
+    | otherwise -> pure $ Text.pack $ show (fromRational n :: Double)
+  ValBool True -> pure "true"
+  ValBool False -> pure "false"
+  ValNil -> pure "[]"
+  ValCons _x _xs ->
+    -- This should not be reached as lists are handled in runBuiltin with frames
+    InternalException $ RuntimeTypeError "Internal error: ValCons should be handled by frame-based evaluation in runBuiltin"
+  ValConstructor conRef []
+    | nameToText (TypeCheck.getName conRef) == "NOTHING" -> pure "null"
+    | nameToText (TypeCheck.getName conRef) == "TRUE" -> pure "true"
+    | nameToText (TypeCheck.getName conRef) == "FALSE" -> pure "false"
+  -- Note: For constructors with fields, we can't encode them directly within encodeValueToJson
+  -- because we need to evaluate (force) each field reference. This requires frames.
+  -- So constructors are handled in runBuiltin where we can push frames.
+  ValConstructor conRef _fields -> do
+    InternalException $ RuntimeTypeError $
+      "Internal error: Constructor encoding should be handled in runBuiltin, not encodeValueToJson: " <>
+      nameToText (TypeCheck.getName conRef)
+  val -> InternalException $ RuntimeTypeError $ "Cannot encode value to JSON: " <> prettyLayout val
+  where
+    escapeJson :: Text -> Text
+    escapeJson = Text.concatMap \case
+      '"' -> "\\\""
+      '\\' -> "\\\\"
+      '\n' -> "\\n"
+      '\r' -> "\\r"
+      '\t' -> "\\t"
+      c -> Text.singleton c
+
+-- | Decode JSON string to L4 value wrapped in MAYBE
+-- Returns JUST value on success, NOTHING on parse error
+-- | Type-directed JSON decoding - uses type information to construct proper records
+decodeJsonToValueTyped :: Text -> Type' Resolved -> Machine WHNF
+decodeJsonToValueTyped jsonStr ty = do
+  case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
+    Left _err -> do
+      -- Parse error: return NOTHING
+      pure $ ValConstructor TypeCheck.nothingRef []
+    Right jsonValue -> do
+      -- Parse success: convert to L4 value using type information and wrap in JUST
+      l4Value <- jsonValueToWHNFTyped jsonValue ty
+      justVal <- AllocateValue l4Value
+      pure $ ValConstructor TypeCheck.justRef [justVal]
+
+-- | Convert Aeson Value to L4 WHNF using type information
+-- This function recursively handles nested structures: lists of records, records containing records, etc.
+jsonValueToWHNFTyped :: Aeson.Value -> Type' Resolved -> Machine WHNF
+jsonValueToWHNFTyped jsonValue ty = do
+  case ty of
+    -- Handle LIST OF α
+    TyApp _anno listRef [elementType]
+      | nameToText (TypeCheck.getName listRef) == "LIST" -> do
+        case jsonValue of
+          Aeson.Array vec -> do
+            -- Recursively decode each element with the element type
+            let values = Vector.toList vec
+            jsonListToWHNFTyped values elementType
+          _ -> do
+            InternalException $ RuntimeTypeError $
+              "Expected JSON array to decode to LIST type, but got: " <> Text.pack (show jsonValue)
+
+    -- Handle MAYBE α
+    TyApp _anno maybeRef [innerType]
+      | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> do
+        case jsonValue of
+          Aeson.Null ->
+            -- JSON null maps to NOTHING
+            pure $ ValConstructor TypeCheck.nothingRef []
+          _ -> do
+            -- Non-null value: decode and wrap in JUST
+            innerVal <- jsonValueToWHNFTyped jsonValue innerType
+            innerRef <- AllocateValue innerVal
+            pure $ ValConstructor TypeCheck.justRef [innerRef]
+
+    -- Handle custom record types and primitives: TyApp conRef []
+    TyApp _anno tyRef [] -> do
+      let typeName = nameToText (TypeCheck.getName tyRef)
+
+      -- Handle primitive types first
+      case typeName of
+        "STRING" -> do
+          case jsonValue of
+            Aeson.String s -> pure $ ValString s
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON string but got: " <> Text.pack (show jsonValue)
+        "NUMBER" -> do
+          case jsonValue of
+            Aeson.Number n -> pure $ ValNumber (toRational n)
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON number but got: " <> Text.pack (show jsonValue)
+        "BOOLEAN" -> do
+          case jsonValue of
+            Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
+            _ -> InternalException $ RuntimeTypeError $
+                  "Expected JSON boolean but got: " <> Text.pack (show jsonValue)
+
+        -- Not a primitive, check if it's a custom record type
+        _ -> do
+          -- For record types, we need to find the constructor with the same name
+          entityInfo <- GetEntityInfo
+
+          -- First check if this is a type
+          case Map.lookup (getUnique tyRef) entityInfo of
+            Nothing ->
+              jsonValueToWHNF jsonValue
+            Just (typeNameRef, _checkEntity) -> do
+              -- Now look for a constructor with the same name
+              let constructors = Map.toList entityInfo
+                  matchingConstructor = listToMaybe
+                    [ (unique, name, conType)
+                    | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
+                    , nameToText (TypeCheck.getName name) == nameToText (TypeCheck.getName typeNameRef)
+                    ]
+
+              case matchingConstructor of
+                Nothing ->
+                  jsonValueToWHNF jsonValue
+                Just (conUnique, conName, conType) -> do
+                  -- Construct a Resolved reference for the constructor
+                  let conRef = Def conUnique conName
+                  -- Extract BOTH field names AND types from the constructor type
+                  fieldNamesAndTypes <- extractFieldNamesAndTypes conType
+                  case jsonValue of
+                    Aeson.Object obj -> do
+                      -- Decode each field from the JSON object WITH TYPE INFORMATION
+                      -- Note: We ignore extra fields in the JSON (Postel's Law)
+                      fieldRefs <- forM fieldNamesAndTypes $ \(fieldName, fieldType) -> do
+                        case KeyMap.lookup (Key.fromText fieldName) obj of
+                          Nothing -> do
+                            -- Field missing in JSON, this is an error
+                            InternalException $ RuntimeTypeError $
+                              "Missing required field '" <> fieldName <> "' in JSON object"
+                          Just fieldValue -> do
+                            -- RECURSIVELY decode the field value WITH TYPE INFORMATION
+                            fieldWHNF <- jsonValueToWHNFTyped fieldValue fieldType
+                            AllocateValue fieldWHNF
+                      -- Construct the record with the decoded fields
+                      pure $ ValConstructor conRef fieldRefs
+                    _ -> do
+                      -- JSON value is not an object, can't decode to record
+                      InternalException $ RuntimeTypeError $
+                        "Expected JSON object to decode to record type, but got: " <> Text.pack (show jsonValue)
+
+    -- For other types, fall back to generic decoding
+    _ -> jsonValueToWHNF jsonValue
+
+-- | Convert list of JSON values to L4 list (ValCons/ValNil) with type information
+-- This recursively decodes each element using the provided element type
+jsonListToWHNFTyped :: [Aeson.Value] -> Type' Resolved -> Machine WHNF
+jsonListToWHNFTyped [] _elementType = pure ValNil
+jsonListToWHNFTyped (x:xs) elementType = do
+  headVal <- jsonValueToWHNFTyped x elementType
+  headRef <- AllocateValue headVal
+  tailVal <- jsonListToWHNFTyped xs elementType
+  tailRef <- AllocateValue tailVal
+  pure $ ValCons headRef tailRef
+
+decodeJsonToValue :: Text -> Machine WHNF
+decodeJsonToValue jsonStr = do
+  case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
+    Left _err -> do
+      -- Parse error: return NOTHING
+      pure $ ValConstructor TypeCheck.nothingRef []
+    Right jsonValue -> do
+      -- Parse success: convert to L4 value and wrap in JUST
+      l4Value <- jsonValueToWHNF jsonValue
+      justVal <- AllocateValue l4Value
+      pure $ ValConstructor TypeCheck.justRef [justVal]
+
+-- | Convert Aeson Value to L4 WHNF
+jsonValueToWHNF :: Aeson.Value -> Machine WHNF
+jsonValueToWHNF = \case
+  Aeson.Null -> pure $ ValConstructor TypeCheck.nothingRef []
+  Aeson.Bool b -> pure $ if b then ValBool True else ValBool False
+  Aeson.Number n -> pure $ ValNumber (toRational n)
+  Aeson.String s -> pure $ ValString s
+  Aeson.Array vec -> do
+    -- Convert array to L4 list (cons cells)
+    let values = Vector.toList vec
+    jsonListToWHNF values
+  Aeson.Object _obj -> do
+    -- Convert object to L4 constructor with named fields
+    -- Without type information, we can't properly construct typed records
+    -- Return NOTHING to indicate we can't decode this
+    pure $ ValConstructor TypeCheck.nothingRef []
+
+-- | Convert list of JSON values to L4 list (ValCons/ValNil)
+jsonListToWHNF :: [Aeson.Value] -> Machine WHNF
+jsonListToWHNF [] = pure ValNil
+jsonListToWHNF (x:xs) = do
+  headVal <- jsonValueToWHNF x
+  headRef <- AllocateValue headVal
+  tailVal <- jsonListToWHNF xs
+  tailRef <- AllocateValue tailVal
+  pure $ ValCons headRef tailRef
+
+runPost :: WHNF -> WHNF -> WHNF -> Machine Config
+runPost urlVal headersVal bodyVal = do
+  url <- expectString urlVal
+  headersStr <- expectString headersVal
+  body <- expectString bodyVal
+  let (url', options) = Text.breakOn "?" url
+      (protocol, _) = Text.breakOn "://" url'
+  case protocol of
+    "https" -> do
+      let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+          pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+          reqBase = Req.https hostname
+          reqWithPath = foldl (Req./:) reqBase pathSegments
+          params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+
+          -- Parse headers from newline-separated format: "Header-Name: value\nAnother-Header: value"
+          headerLines = filter (not . Text.null) $ Text.splitOn "\n" headersStr
+          parseHeader line =
+            let (name, rest) = Text.breakOn ":" line
+                value = Text.strip $ Text.drop 1 rest  -- drop the colon and strip whitespace
+            in if Text.null rest
+               then Nothing  -- invalid header format
+               else Just (Req.header (TE.encodeUtf8 name) (TE.encodeUtf8 value))
+          headerOptions = mapMaybe parseHeader headerLines
+
+          queryOptions = map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params
+          req_options = mconcat (headerOptions <> queryOptions)
+
+      res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+        Req.req Req.POST reqWithPath (Req.ReqBodyLbs $ LBS.fromStrict $ TE.encodeUtf8 body) Req.lbsResponse req_options
+      Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+    _ -> InternalException (RuntimeTypeError "POST only supports https")
+
+runConcat :: [WHNF] -> Machine Config
+runConcat vals = do
+  strings <- traverse expectString vals
+  Backward $ ValString (Text.concat strings)
+
+runAsString :: WHNF -> Machine Config
+runAsString val = do
+  case val of
+    ValNumber n ->
+      -- Convert number to string
+      -- If it's an integer, show without decimal point
+      -- Otherwise, show as decimal
+      let str = if denominator n == 1
+                then Text.pack $ show (numerator n)
+                else Text.pack $ show (fromRational n :: Double)
+      in Backward $ ValString str
+    ValString s ->
+      -- Already a string, just return it
+      Backward $ ValString s
+    _ -> InternalException $ RuntimeTypeError $
+      "AS STRING can only convert NUMBER or STRING to STRING, but found: " <> prettyLayout val
+
+runBuiltin :: WHNF -> UnaryBuiltinFun -> Maybe (Type' Resolved) -> Machine Config
+runBuiltin es op mTy = do
+  case op of
+    UnaryJsonEncode -> do
+      case es of
+        ValCons headRef tailRef -> do
+          -- Start frame-based evaluation for non-empty lists
+          -- We're about to evaluate the head element (expectingTail = False)
+          PushFrame (JsonEncodeListFrame [] tailRef False)
+          EvalRef headRef
+        ValNil -> do
+          -- Empty list is simple
+          Backward $ ValString "[]"
+        ValConstructor conRef []
+          | nameToText (TypeCheck.getName conRef) == "NOTHING" ->
+            -- NOTHING encodes to null
+            Backward $ ValString "null"
+          | nameToText (TypeCheck.getName conRef) == "TRUE" ->
+            -- TRUE encodes to true
+            Backward $ ValString "true"
+          | nameToText (TypeCheck.getName conRef) == "FALSE" ->
+            -- FALSE encodes to false
+            Backward $ ValString "false"
+        ValConstructor conRef [field]
+          | nameToText (TypeCheck.getName conRef) == "JUST" -> do
+            -- JUST wraps a single value, evaluate it and encode
+            PushFrame (UnaryBuiltin0 UnaryJsonEncode Nothing)
+            EvalRef field
+        ValConstructor conRef fields -> do
+          -- Encode record constructors as JSON objects with field names
+          entityInfo <- GetEntityInfo
+          case Map.lookup (getUnique conRef) entityInfo of
+            Nothing ->
+              InternalException $ RuntimeTypeError $ "Cannot find constructor in entity info: " <> nameToText (TypeCheck.getName conRef)
+            Just (_name, checkEntity) -> case checkEntity of
+              TypeCheck.KnownTerm conType Constructor -> do
+                -- Extract field names from the constructor's function type
+                fieldNames <- extractFieldNames conType
+                if length fieldNames /= length fields
+                  then InternalException $ RuntimeTypeError $
+                    "Field count mismatch for constructor " <> nameToText (TypeCheck.getName conRef) <>
+                    ": expected " <> Text.pack (show (length fieldNames)) <>
+                    " but got " <> Text.pack (show (length fields))
+                  else
+                    let fieldPairs = zip fieldNames fields
+                    in case fieldPairs of
+                      [] ->
+                        -- Nullary constructor (no fields)
+                        Backward $ ValString "{}"
+                      ((fn, fr):rest) -> do
+                        -- Start frame-based encoding of fields
+                        -- The frame stores: accumulated pairs, current field name being encoded, remaining pairs
+                        PushFrame (JsonEncodeConstructorFrame [] fn rest)
+                        -- Push frame to encode the first field value
+                        PushFrame (UnaryBuiltin0 UnaryJsonEncode Nothing)
+                        -- Evaluate the first field
+                        EvalRef fr
+              _ ->
+                InternalException $ RuntimeTypeError $
+                  "Expected constructor term but got different entity type for: " <> nameToText (TypeCheck.getName conRef)
+        _ -> do
+          -- For non-list, non-constructor values, use direct encoding
+          jsonStr <- encodeValueToJson es
+          Backward $ ValString jsonStr
+    UnaryJsonDecode -> do
+      jsonStr <- expectString es
+      result <- case mTy of
+        Just ty -> do
+          -- Extract inner type from MAYBE if present
+          -- JSONDECODE returns MAYBE α, so if we have MAYBE Person, extract Person
+          let innerTy = case ty of
+                TyApp _ maybeRef [innerType]
+                  | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> innerType
+                _ -> ty
+          decodeJsonToValueTyped jsonStr innerTy
+        Nothing ->
+          decodeJsonToValue jsonStr
+      Backward result
+    UnaryFetch -> do
+      url <- expectString es
+      let (url', options) = Text.breakOn "?" url
+          (protocol, _) = Text.breakOn "://" url'
+      case protocol of
+        "https" -> do
+          let (hostname, path) = Text.breakOn "/" (Text.drop (Text.length "https://") url')
+              pathSegments = filter (not . Text.null) $ Text.splitOn "/" path
+              reqBase = Req.https hostname
+              reqWithPath = foldl (Req./:) reqBase pathSegments
+              params = if Text.null options then [] else Text.splitOn "&" (Text.drop 1 options)
+              req_options =
+                mconcat (map (\p -> let (k,v) = Text.breakOn "=" p in k =: Text.drop 1 v) params)
+          res <- liftIO $ Req.runReq Req.defaultHttpConfig $ do
+            Req.req Req.GET reqWithPath Req.NoReqBody Req.lbsResponse req_options
+          Backward $ ValString (TE.decodeUtf8 . LBS.toStrict $ Req.responseBody res)
+        _ -> InternalException (RuntimeTypeError "FETCH only supports https")
+    UnaryEnv -> do
+      varName <- expectString es
+      maybeValue <- liftIO $ lookupEnv (Text.unpack varName)
+      case maybeValue of
+        Just value -> do
+          -- Return JUST value
+          valueRef <- AllocateValue (ValString (Text.pack value))
+          Backward (ValConstructor TypeCheck.justRef [valueRef])
+        Nothing -> do
+          -- Return NOTHING
+          Backward (ValConstructor TypeCheck.nothingRef [])
+    -- String unary operations
+    UnaryStringLength -> do
+      str <- expectString es
+      Backward $ ValNumber (fromIntegral $ Text.length str)
+    UnaryToUpper -> do
+      str <- expectString es
+      Backward $ ValString (Text.toUpper str)
+    UnaryToLower -> do
+      str <- expectString es
+      Backward $ ValString (Text.toLower str)
+    UnaryTrim -> do
+      str <- expectString es
+      Backward $ ValString (Text.strip str)
+    -- Numeric unary operations (catch-all)
+    _ -> do
+      val :: Rational <- expectNumber es
+      Backward case op of
+        UnaryIsInteger -> valBool $ isJust $ isInteger val
+        UnaryRound -> valInt $ round val
+        UnaryCeiling -> valInt $ ceiling val
+        UnaryFloor -> valInt $ floor val
+        UnaryPercent -> ValNumber (val / 100)
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
-
-expectString :: WHNF -> Machine Text
-expectString = \ case
-  ValString s -> pure s
-  _ -> InternalException (RuntimeTypeError "Expected string.")
 
 runTernaryBuiltin :: TernaryBuiltinFun -> WHNF -> WHNF -> WHNF -> Machine Config
 runTernaryBuiltin TernarySubstring val1 val2 val3 = do
@@ -801,6 +1321,7 @@ runTernaryBuiltin TernaryReplace val1 val2 val3 = do
   new <- expectString val3
   -- Use Text.replace: replace needle replacement haystack
   Backward $ ValString (Text.replace old new str)
+runTernaryBuiltin TernaryPost val1 val2 val3 = runPost val1 val2 val3
 
 runBinOp :: BinOp -> WHNF -> WHNF -> Machine Config
 runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 + num2)
@@ -1307,6 +1828,8 @@ initialEnvironment = do
   falseRef <- AllocateValue falseVal
   trueRef  <- AllocateValue trueVal
   nilRef   <- AllocateValue ValNil
+  nothingRef <- AllocateValue (ValConstructor TypeCheck.nothingRef [])
+  justRef <- AllocateValue (ValUnappliedConstructor TypeCheck.justRef)
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
@@ -1321,6 +1844,11 @@ initialEnvironment = do
   -- Ternary string builtins
   substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
   replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
+  -- IO/JSON builtins from main
+  fetchRef <- AllocateValue (ValUnaryBuiltinFun UnaryFetch)
+  envRef <- AllocateValue (ValUnaryBuiltinFun UnaryEnv)
+  jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
+  jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -1343,6 +1871,8 @@ initialEnvironment = do
       [ (TypeCheck.falseUnique, falseRef)
       , (TypeCheck.trueUnique,  trueRef)
       , (TypeCheck.emptyUnique, nilRef)
+      , (TypeCheck.nothingUnique, nothingRef)
+      , (TypeCheck.justUnique, justRef)
       , (TypeCheck.evalContractUnique, evalContractRef)
       , (TypeCheck.eventCUnique, eventCRef)
       , (TypeCheck.fulfilUnique, fulfilRef)
@@ -1350,6 +1880,10 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
+      , (TypeCheck.fetchUnique, fetchRef)
+      , (TypeCheck.envUnique, envRef)
+      , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
+      , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)

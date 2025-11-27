@@ -1,0 +1,68 @@
+-- Test integration of POST and JSON encoding
+-- Demonstrates building JSON payloads programmatically and sending via POST
+
+-- Example 1: Simple JSON payload with primitives
+DECIDE simplePayload IS
+  JSONENCODE (LIST "item1", "item2", "item3")
+
+DECIDE postSimpleJson IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json"
+    simplePayload
+
+-- Example 2: Building JSON with numbers and strings
+DECIDE count IS 42
+DECIDE status IS "active"
+
+DECIDE mixedPayload IS
+  CONCAT
+    "{\"count\": ", (count AS STRING),
+    ", \"status\": \"", status,
+    "\", \"items\": ", (JSONENCODE (LIST 1, 2, 3)),
+    "}"
+
+DECIDE postMixedJson IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json"
+    mixedPayload
+
+-- Example 3: Nested JSON structures
+DECIDE numbers IS LIST 10, 20, 30
+DECIDE words IS LIST "alpha", "beta", "gamma"
+
+DECIDE nestedPayload IS
+  CONCAT
+    "{\"numbers\": ", (JSONENCODE numbers),
+    ", \"words\": ", (JSONENCODE words),
+    "}"
+
+DECIDE postNestedJson IS
+  POST
+    "https://httpbin.org/post"
+    "Content-Type: application/json\nX-Test-Header: integration-test"
+    nestedPayload
+
+-- Example 4: Dynamic header construction
+DECIDE apiKey IS "test-key-12345"
+DECIDE apiVersion IS "2023-06-01"
+
+DECIDE authHeaders IS
+  CONCAT
+    "X-API-Key: ", apiKey, "\n",
+    "API-Version: ", apiVersion, "\n",
+    "Content-Type: application/json"
+
+DECIDE dynamicPost IS
+  POST
+    "https://httpbin.org/post"
+    authHeaders
+    "{\"request\": \"test\"}"
+
+-- Note: These demonstrate syntax but require network to evaluate
+-- Uncomment to test actual execution:
+-- #EVAL postSimpleJson
+-- #EVAL postMixedJson
+-- #EVAL postNestedJson
+-- #EVAL dynamicPost
