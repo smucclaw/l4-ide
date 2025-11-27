@@ -306,6 +306,14 @@ nfAux d (ValObligation env party act due followup lest) = do
   pure (MkNF (ValObligation env party' act due' followup lest))
 nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
 nfAux _d (ValBinaryBuiltinFun b)     = pure (MkNF (ValBinaryBuiltinFun b))
+nfAux _d (ValTernaryBuiltinFun b)    = pure (MkNF (ValTernaryBuiltinFun b))
+nfAux  d (ValPartialTernary b r1)    = do
+  v1 <- evalAndNF d r1
+  pure (MkNF (ValPartialTernary b v1))
+nfAux  d (ValPartialTernary2 b r1 r2) = do
+  v1 <- evalAndNF d r1
+  v2 <- evalAndNF d r2
+  pure (MkNF (ValPartialTernary2 b v1 v2))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
   vs <- traverse (evalAndNF d) rs
