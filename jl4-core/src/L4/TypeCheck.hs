@@ -2180,7 +2180,7 @@ matchMixfixPattern funcRawName args info =
         MixfixKeyword k | k == funcRawName ->
           -- Keyword-first pattern: funcName is the head keyword
           -- Try new linear format first, then fall back to old format
-          matchLinearAfterHeadKeyword restPattern args
+          (extractParamArgs <$> matchLinearAfterHeadKeyword restPattern args)
             <|> matchPatternTokens restPattern args
 
         MixfixParam _ ->
@@ -2205,7 +2205,7 @@ matchParamFirstPattern funcRawName args pattern =
         -- First arg is the param before keyword
         -- Rest args should match paramsAfter pattern
         restMatched <- matchLinearAfterHeadKeyword paramsAfter restArgs
-        Just (firstArg : restMatched)
+        Just (firstArg : extractParamArgs restMatched)
       else Nothing
     _ -> Nothing
   where
@@ -2227,27 +2227,53 @@ splitAtFirstKeyword kw (t : rest) = do
 --
 -- This handles the "curried" representation where keywords appear as Var nodes
 -- at their expected positions in the argument list.
-matchLinearAfterHeadKeyword :: [MixfixPatternToken] -> [Expr Name] -> Maybe [Expr Name]
+--
+-- Returns: Just [MixfixArgMatch] with info about which args are keywords vs params.
+-- This allows the caller to:
+-- 1. Extract only param args for type checking against function parameter types
+-- 2. Keep keyword args in the AST, typed as Keyword
+-- 3. Report better error messages if keywords don't match
+matchLinearAfterHeadKeyword :: [MixfixPatternToken] -> [Expr Name] -> Maybe [MixfixArgMatch (Expr Name)]
 matchLinearAfterHeadKeyword [] [] = Just []
 matchLinearAfterHeadKeyword [] (_:_) = Nothing  -- Extra args
 matchLinearAfterHeadKeyword (_:_) [] = Nothing  -- Missing args
 matchLinearAfterHeadKeyword (token:tokens) (arg:args) =
   case token of
     MixfixParam _ ->
-      -- Expect a value argument - keep it in result
-      (arg :) <$> matchLinearAfterHeadKeyword tokens args
+      -- Expect a value argument - keep it in result as a param
+      (MixfixParamArg arg :) <$> matchLinearAfterHeadKeyword tokens args
     MixfixKeyword expectedKw ->
       -- Expect either a Var with the keyword name (new format)
       -- or we're in old format and should skip checking here
       case arg of
         Var _ n | rawName n == expectedKw ->
-          -- New format: keyword marker present, skip it
-          matchLinearAfterHeadKeyword tokens args
+          -- New format: keyword marker present, keep it as validated keyword
+          (MixfixKeywordArg expectedKw :) <$> matchLinearAfterHeadKeyword tokens args
+        App _ n [] | rawName n == expectedKw ->
+          -- Also accept App with empty args (nullary application)
+          (MixfixKeywordArg expectedKw :) <$> matchLinearAfterHeadKeyword tokens args
         _ ->
           -- Old format or mismatch - try treating this as old format
           -- where keyword was already consumed by parser
           -- This means arg is actually the next param value
           matchLinearAfterHeadKeyword tokens (arg:args)
+
+-- | Extract only the param args from a mixfix match result.
+-- This is what gets passed to the function's type checking.
+extractParamArgs :: [MixfixArgMatch a] -> [a]
+extractParamArgs = mapMaybe getParam
+  where
+    getParam (MixfixParamArg a) = Just a
+    getParam (MixfixKeywordArg _) = Nothing
+
+-- | Check if any keywords were matched (new format).
+-- If so, the args list contains keyword placeholders that need special handling.
+-- NOTE: Currently unused but kept for future enhanced error reporting.
+_hasMatchedKeywords :: [MixfixArgMatch a] -> Bool
+_hasMatchedKeywords = any isKeyword
+  where
+    isKeyword (MixfixKeywordArg _) = True
+    isKeyword _ = False
 
 -- | Rebuild the annotation for a mixfix App when args have been restructured.
 -- The original annotation has holes for all parsed args (including keyword placeholders),

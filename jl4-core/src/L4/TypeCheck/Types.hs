@@ -185,6 +185,16 @@ data MixfixPatternToken
   deriving stock (Show, Eq, Generic)
   deriving anyclass (NFData)
 
+-- | Result of matching a mixfix argument: either a keyword placeholder that was validated,
+-- or a real parameter argument.
+data MixfixArgMatch a
+  = MixfixKeywordArg RawName
+    -- ^ A keyword placeholder that matched. The RawName is the expected keyword.
+  | MixfixParamArg a
+    -- ^ A real parameter argument.
+  deriving stock (Show, Eq, Generic, Functor)
+  deriving anyclass (NFData)
+
 -- | Information about a mixfix function pattern.
 -- A mixfix function is one where the function name is interspersed with parameters,
 -- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
