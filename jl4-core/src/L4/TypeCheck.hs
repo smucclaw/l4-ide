@@ -2068,8 +2068,39 @@ tryMatchMixfixCall funcName args = do
   -- This handles param-first patterns like `a `and` b `had` c`
   case args of
     [l, r] | isSimpleName funcName -> do
-      -- Binary application with quoted function name - try to flatten
-      let flattened = flattenBinaryMixfixApp funcName l r
+      -- Binary application with simple function name - could be:
+      -- 1. A real mixfix call like `and` applied to [a, b] (funcName is a keyword)
+      -- 2. A mis-parsed infix like x `plus` y -> App x [`plus`, y] (funcName is left operand)
+
+      -- Check case 2: is the first arg a potential keyword?
+      -- We only do this reinterpretation if funcName is NOT itself callable.
+      -- This prevents `elem == elem` from being reinterpreted as `elem` applied to [==, elem].
+      funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
+      let isCallable = any isCallableEntity funcNameInScope
+      case (not isCallable, getExprName l) of
+        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+          -- funcName is NOT a known function, but l is a registered mixfix keyword!
+          -- Reinterpret: App funcName [l, r] -> potentialOp applied to [funcName, r]
+          -- For infix: `plus` applied to [x, y]
+          let opRawName = rawName potentialOpName
+          case Map.lookup opRawName registry of
+            Just sigs -> do
+              -- Create args as [funcName-as-expr, r]
+              let funcAsExpr = App (getAnno funcName) funcName []
+                  newArgs = [funcAsExpr, r]
+              -- For reinterpreted infix, use matchParamPositions instead of tryMatchAnyPattern
+              -- because we've already identified the keyword and just need to match args to params
+              let result = tryMatchParamPositions newArgs sigs
+              case result of
+                Just restructuredArgs -> pure $ Just (opRawName, restructuredArgs)
+                Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
+            Nothing -> tryFlatteningApproach registry
+        _ -> tryFlatteningApproach registry
+    _ -> tryRegularMatch
+  where
+    tryFlatteningApproach registry = do
+      -- Original flattening logic for nested mixfix like `a `and` b `had` c`
+      let flattened = flattenBinaryMixfixApp funcName (head args) (args !! 1)
       case findFirstKeyword flattened of
         Just firstKw ->
           case Map.lookup firstKw registry of
@@ -2078,14 +2109,32 @@ tryMatchMixfixCall funcName args = do
               fmap (fmap (firstKw,)) $ tryMatchFlattenedPattern firstKw flattened sigs
             Nothing -> tryRegularMatch  -- First keyword not registered
         Nothing -> tryRegularMatch  -- No keywords found (shouldn't happen)
-    _ -> tryRegularMatch
-  where
+
     tryRegularMatch = do
       registry <- asks (.mixfixRegistry)
       let funcRawName = rawName funcName
       case Map.lookup funcRawName registry of
         Nothing -> pure Nothing  -- Not a registered mixfix function
         Just sigs -> fmap (fmap (funcRawName,)) $ tryMatchAnyPattern funcRawName args sigs
+
+-- | Extract a Name from an Expr if it's a simple variable or nullary application.
+-- Used to check if an expression could be a mixfix keyword.
+getExprName :: Expr Name -> Maybe Name
+getExprName (Var _ n) = Just n
+getExprName (App _ n []) = Just n
+getExprName _ = Nothing
+
+-- | Check if a CheckEntity is callable (function, constructor, etc.)
+-- This is used to determine if a name can be applied to arguments.
+isCallableEntity :: (Unique, Name, CheckEntity) -> Bool
+isCallableEntity (_, _, KnownTerm t _) = isFunctionType t
+isCallableEntity _ = False
+
+-- | Check if a type is a function type.
+isFunctionType :: Type' n -> Bool
+isFunctionType (Fun _ _ _) = True
+isFunctionType (Forall _ _ t) = isFunctionType t
+isFunctionType _ = False
 
 -- | Try to match against any of the registered patterns for this function name.
 tryMatchAnyPattern :: RawName -> [Expr Name] -> [FunTypeSig] -> Check (Maybe [Expr Name])
@@ -2204,6 +2253,28 @@ matchPatternTokens (token:tokens) (arg:args) =
           -- Keyword matches, don't include in result
           matchPatternTokens tokens args
         _ -> Nothing  -- Not a matching keyword
+
+-- | Match args against param positions only, for when we've already identified the keyword.
+-- Used for reinterpreted infix calls like `x `plus` y` where the keyword is already known.
+-- Pattern = [Param a, Keyword plus, Param b], args = [x, y], already know it's `plus`
+-- Returns Just [x, y] if the number of param positions matches the number of args.
+matchParamPositions :: [MixfixPatternToken] -> [Expr Name] -> Maybe [Expr Name]
+matchParamPositions pattern args =
+  let paramCount = length [() | MixfixParam _ <- pattern]
+  in if paramCount == length args
+     then Just args  -- Args line up with param positions
+     else Nothing
+
+-- | Try to match args against any signature's param positions.
+tryMatchParamPositions :: [Expr Name] -> [FunTypeSig] -> Maybe [Expr Name]
+tryMatchParamPositions _ [] = Nothing
+tryMatchParamPositions args (sig:sigs) =
+  case sig.mixfixInfo of
+    Nothing -> tryMatchParamPositions args sigs
+    Just info ->
+      case matchParamPositions info.pattern args of
+        Just result -> Just result
+        Nothing -> tryMatchParamPositions args sigs
 
 scanFunSigModule :: Module Name -> Check [FunTypeSig]
 scanFunSigModule (MkModule _ _ sects) =
