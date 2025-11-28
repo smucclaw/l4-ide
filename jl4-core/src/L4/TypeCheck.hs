@@ -2031,7 +2031,7 @@ extractMixfixInfo tysig appForm =
     -- Only return MixfixInfo if there's at least one param in non-head position
     -- (i.e., if the first token is a param, this is mixfix)
     -- OR if there are keywords between params
-    if paramCount > 0 && (isParam (head patternTokens) || paramCount < length patternTokens)
+    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
        then Just MkMixfixInfo
               { pattern = patternTokens
               , keywords = keywordList
@@ -2116,7 +2116,11 @@ tryMatchMixfixCall funcName args = do
   where
     tryFlatteningApproach registry = do
       -- Original flattening logic for nested mixfix like `a `and` b `had` c`
-      let flattened = flattenBinaryMixfixApp funcName (head args) (args !! 1)
+      -- args is guaranteed to have exactly 2 elements (binary application)
+      let (arg0, arg1) = case args of
+            [a, b] -> (a, b)
+            _ -> error "tryFlatteningApproach: expected exactly 2 args"
+          flattened = flattenBinaryMixfixApp funcName arg0 arg1
       case findFirstKeyword flattened of
         Just firstKw ->
           case Map.lookup firstKw registry of
@@ -2221,7 +2225,7 @@ matchParamFirstPattern funcRawName args pattern =
     (Just (paramsBefore, paramsAfter), firstArg:restArgs) ->
       -- paramsBefore should be [Param] (the param before first keyword)
       -- paramsAfter is pattern after first keyword: [Param, Kw op2, Param, ...]
-      if length paramsBefore == 1 && isParam (head paramsBefore)
+      if length paramsBefore == 1 && maybe False isParam (listToMaybe paramsBefore)
       then
         -- First arg is the param before keyword
         -- Rest args should match paramsAfter pattern

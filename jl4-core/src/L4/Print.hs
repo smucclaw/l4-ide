@@ -473,6 +473,8 @@ instance LayoutPrinter BinOp where
     BinOpStartsWith -> "STARTSWITH"
     BinOpEndsWith -> "ENDSWITH"
     BinOpIndexOf -> "INDEXOF"
+    BinOpSplit -> "SPLIT"
+    BinOpCharAt -> "CHARAT"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case

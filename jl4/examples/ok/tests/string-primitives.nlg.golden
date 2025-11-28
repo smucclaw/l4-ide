@@ -37,3 +37,16 @@
 `INDEXOF` with `message` and fox
 `SUBSTRING` with `message`, 16 and 3
 `REPLACE` with `message`, fox and cat
+`SPLIT` with hello,world,foo and ,
+`SPLIT` with one and ,
+`SPLIT` with  and ,
+`SPLIT` with a::b::c and ::
+`SPLIT` with hello world and  
+`CHARAT` with hello and 0
+`CHARAT` with hello and 4
+`CHARAT` with hello and 2
+`CHARAT` with hello and 5
+`CHARAT` with hello and -1
+`CHARAT` with  and 0
+`SPLIT` with `csv` and ,
+`CHARAT` with `TOUPPER` with hello and 0

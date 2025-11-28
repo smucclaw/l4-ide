@@ -1119,6 +1119,15 @@ jsonListToWHNF (x:xs) = do
   tailRef <- AllocateValue tailVal
   pure $ ValCons headRef tailRef
 
+-- | Convert list of Text values to L4 list (ValCons/ValNil)
+textListToWHNF :: [Text] -> Machine WHNF
+textListToWHNF [] = pure ValNil
+textListToWHNF (x:xs) = do
+  headRef <- AllocateValue (ValString x)
+  tailVal <- textListToWHNF xs
+  tailRef <- AllocateValue tailVal
+  pure $ ValCons headRef tailRef
+
 runPost :: WHNF -> WHNF -> WHNF -> Machine Config
 runPost urlVal headersVal bodyVal = do
   url <- expectString urlVal
@@ -1361,6 +1370,18 @@ runBinOp BinOpIndexOf    (ValString haystack) (ValString needle)
     in if Text.null match
        then Backward $ ValNumber (-1)  -- not found
        else Backward $ ValNumber (fromIntegral $ Text.length before)
+-- SPLIT: STRING → STRING → LIST OF STRING
+runBinOp BinOpSplit      (ValString text) (ValString delim) = do
+  -- Text.splitOn returns [Text], convert to ValCons/ValNil list with proper allocation
+  let parts = Text.splitOn delim text
+  listVal <- textListToWHNF parts
+  Backward listVal
+-- CHARAT: STRING → NUMBER → STRING
+runBinOp BinOpCharAt     (ValString text) (ValNumber idx) =
+  let i = floor idx :: Int
+  in if i < 0 || i >= Text.length text
+     then Backward $ ValString ""  -- Out of bounds returns empty string
+     else Backward $ ValString (Text.singleton (Text.index text i))
 runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
 runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
@@ -1920,6 +1941,8 @@ builtinBinOps =
       , (BinOpStartsWith, [TypeCheck.startsWithUnique])
       , (BinOpEndsWith,   [TypeCheck.endsWithUnique])
       , (BinOpIndexOf,    [TypeCheck.indexOfUnique])
+      , (BinOpSplit,      [TypeCheck.splitUnique])
+      , (BinOpCharAt,     [TypeCheck.charAtUnique])
       ]
   , unique <- uniques
   ]

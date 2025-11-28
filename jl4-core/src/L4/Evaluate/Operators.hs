@@ -18,5 +18,7 @@ data BinOp =
   | BinOpStartsWith      -- STRING → STRING → BOOLEAN
   | BinOpEndsWith        -- STRING → STRING → BOOLEAN
   | BinOpIndexOf         -- STRING → STRING → NUMBER
+  | BinOpSplit           -- STRING → STRING → LIST OF STRING
+  | BinOpCharAt          -- STRING → NUMBER → STRING
   deriving stock (Show, Generic)
   deriving anyclass (NFData)
