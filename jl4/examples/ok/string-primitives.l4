@@ -131,3 +131,46 @@ DECIDE message IS "The quick brown fox jumps over the lazy dog"
 
 #EVAL REPLACE message "fox" "cat"
 -- Expected: "The quick brown cat jumps over the lazy dog"
+
+-- Test SPLIT
+#EVAL SPLIT "hello,world,foo" ","
+-- Expected: ["hello", "world", "foo"]
+
+#EVAL SPLIT "one" ","
+-- Expected: ["one"]
+
+#EVAL SPLIT "" ","
+-- Expected: [""]
+
+#EVAL SPLIT "a::b::c" "::"
+-- Expected: ["a", "b", "c"]
+
+#EVAL SPLIT "hello world" " "
+-- Expected: ["hello", "world"]
+
+-- Test CHARAT
+#EVAL CHARAT "hello" 0
+-- Expected: "h"
+
+#EVAL CHARAT "hello" 4
+-- Expected: "o"
+
+#EVAL CHARAT "hello" 2
+-- Expected: "l"
+
+#EVAL CHARAT "hello" 5
+-- Expected: "" (out of bounds)
+
+#EVAL CHARAT "hello" -1
+-- Expected: "" (negative index)
+
+#EVAL CHARAT "" 0
+-- Expected: "" (empty string)
+
+-- Combined tests with SPLIT and CHARAT
+DECIDE csv IS "apple,banana,cherry"
+#EVAL SPLIT csv ","
+-- Expected: ["apple", "banana", "cherry"]
+
+#EVAL CHARAT (TOUPPER "hello") 0
+-- Expected: "H"

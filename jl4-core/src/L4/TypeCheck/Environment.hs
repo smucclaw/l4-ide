@@ -75,6 +75,8 @@ mkBuiltins
   , "startsWith" `rename` "STARTSWITH"
   , "endsWith" `rename` "ENDSWITH"
   , "indexOf" `rename` "INDEXOF"
+  , "split" `rename` "SPLIT"
+  , "charAt" `rename` "CHARAT"
   -- String functions (ternary)
   , "substring" `rename` "SUBSTRING"
   , "replace" `rename` "REPLACE"
@@ -249,6 +251,14 @@ endsWithBuiltin = fun_ [string, string] boolean
 indexOfBuiltin :: Type' Resolved
 indexOfBuiltin = fun_ [string, string] number
 
+-- Binary: STRING → STRING → LIST OF STRING
+splitBuiltin :: Type' Resolved
+splitBuiltin = fun_ [string, string] (list string)
+
+-- Binary: STRING → NUMBER → STRING
+charAtBuiltin :: Type' Resolved
+charAtBuiltin = fun_ [string, number] string
+
 -- Ternary: STRING → NUMBER → NUMBER → STRING
 substringBuiltin :: Type' Resolved
 substringBuiltin = fun_ [string, number, number] string
@@ -414,6 +424,12 @@ endsWithInfo = KnownTerm endsWithBuiltin Computable
 indexOfInfo :: CheckEntity
 indexOfInfo = KnownTerm indexOfBuiltin Computable
 
+splitInfo :: CheckEntity
+splitInfo = KnownTerm splitBuiltin Computable
+
+charAtInfo :: CheckEntity
+charAtInfo = KnownTerm charAtBuiltin Computable
+
 substringInfo :: CheckEntity
 substringInfo = KnownTerm substringBuiltin Computable
 
@@ -521,6 +537,8 @@ initialEnvironment =
     , (rawName startsWithName,   [startsWithUnique  ])
     , (rawName endsWithName,     [endsWithUnique    ])
     , (rawName indexOfName,      [indexOfUnique     ])
+    , (rawName splitName,        [splitUnique       ])
+    , (rawName charAtName,       [charAtUnique      ])
     , (rawName substringName,    [substringUnique   ])
     , (rawName replaceName,      [replaceUnique     ])
     ]
@@ -574,6 +592,8 @@ initialEntityInfo =
     , (startsWithUnique,   (startsWithName,   startsWithInfo  ))
     , (endsWithUnique,     (endsWithName,     endsWithInfo    ))
     , (indexOfUnique,      (indexOfName,      indexOfInfo     ))
+    , (splitUnique,        (splitName,        splitInfo       ))
+    , (charAtUnique,       (charAtName,       charAtInfo      ))
     , (substringUnique,    (substringName,    substringInfo   ))
     , (replaceUnique,      (replaceName,      replaceInfo     ))
     ]
