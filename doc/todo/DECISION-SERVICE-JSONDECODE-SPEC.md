@@ -715,4 +715,4 @@ No performance testing conducted. Code generation is simple text concatenation a
 - `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`: Type-directed JSONDECODE
 - `jl4-decision-service/src/Backend/Jl4.hs`: Current implementation
 - `jl4-decision-service/src/Server.hs`: REST API handlers
-- Commits: (to be added)
+- Commit: 00ea68b0 "Implement JSONDECODE-based query injection for decision service"
