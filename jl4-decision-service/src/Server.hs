@@ -168,6 +168,8 @@ data SingleFunctionApi' mode = SingleFunctionApi
       mode
         :- "evaluation"
           :> Summary "Evaluate a function with arguments"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
           :> ReqBody '[JSON] FnArguments
           :> OperationId "evalFunction"
           :> Post '[JSON] SimpleResponse
@@ -176,6 +178,8 @@ data SingleFunctionApi' mode = SingleFunctionApi
         :- "batch"
           :> Summary "Run a function using a batch of arguments"
           :> Description "Evaluate a function with a batch of arguments, conforming to Oracle Intelligent Advisor Batch API"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
           :> ReqBody '[JSON] BatchRequest
           :> Post '[JSON] BatchResponse
   -- ^ Run a function with a "batch" of parameters.
@@ -269,6 +273,21 @@ instance HasClient m api => HasClient m (OperationId desc :> api) where
 -- Web Service Handlers
 -- ----------------------------------------------------------------------------
 
+-- | Parse trace level from header value
+parseTraceHeader :: Maybe BS.ByteString -> Api.TraceLevel
+parseTraceHeader Nothing = Api.TraceFull  -- Default to full trace
+parseTraceHeader (Just bs) = case Text.toLower (Text.decodeUtf8 bs) of
+  "none" -> Api.TraceNone
+  "full" -> Api.TraceFull
+  _ -> Api.TraceFull  -- Default to full on invalid value
+
+-- | Determine trace level from header and query param
+-- Header takes precedence over query param
+determineTraceLevel :: Maybe Text -> Maybe Api.TraceLevel -> Api.TraceLevel
+determineTraceLevel (Just headerVal) _ = parseTraceHeader (Just $ Text.encodeUtf8 headerVal)
+determineTraceLevel Nothing (Just paramVal) = paramVal
+determineTraceLevel Nothing Nothing = Api.TraceFull  -- Default
+
 -- TODO: this has become redundant
 data EvalBackend
   = JL4
@@ -291,20 +310,21 @@ handler =
                     postFunctionHandler name
                 , deleteFunction =
                     deleteFunctionHandler name
-                , evalFunction =
-                    evalFunctionHandler name
-                , batchFunction =
-                    batchFunctionHandler name
+                , evalFunction = \mTraceHeader mTraceParam ->
+                    evalFunctionHandler name mTraceHeader mTraceParam
+                , batchFunction = \mTraceHeader mTraceParam ->
+                    batchFunctionHandler name mTraceHeader mTraceParam
                 }
           }
     }
 
-evalFunctionHandler :: String -> FnArguments -> AppM SimpleResponse
-evalFunctionHandler name' args = do
+evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM SimpleResponse
+evalFunctionHandler name' mTraceHeader mTraceParam args = do
+  let traceLevel = determineTraceLevel mTraceHeader mTraceParam
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
   let fnArgs = Map.assocs args.fnArguments
-      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing
+      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing traceLevel
   case Map.lookup name functions of
     Nothing -> withUUIDFunction
         name
@@ -314,8 +334,9 @@ evalFunctionHandler name' args = do
  where
   name = Text.pack name'
 
-batchFunctionHandler :: String -> BatchRequest -> AppM BatchResponse
-batchFunctionHandler name' batchArgs = do
+batchFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> BatchRequest -> AppM BatchResponse
+batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
+  let traceLevel = determineTraceLevel mTraceHeader mTraceParam
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
   case Map.lookup name functions of
@@ -325,7 +346,7 @@ batchFunctionHandler name' batchArgs = do
         let
           args = Map.assocs $ fmap Just inputCase.attributes
 
-        r <- runEvaluatorFor Nothing fnImpl args outputFilter
+        r <- runEvaluatorFor Nothing fnImpl args outputFilter traceLevel
         pure (inputCase.id, r)
 
       let
@@ -376,8 +397,8 @@ batchFunctionHandler name' batchArgs = do
   nsToS :: Chronos.Timespan -> Centi
   nsToS n = (realToFrac @Int @Centi $ fromIntegral @Int64 @Int (Chronos.getTimespan n)) / 10e9
 
-runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> AppM SimpleResponse
-runEvaluatorFor engine validatedFunc args outputFilter = do
+runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> Api.TraceLevel -> AppM SimpleResponse
+runEvaluatorFor engine validatedFunc args outputFilter traceLevel = do
   eval <- evaluationEngine evalBackend validatedFunc
   evaluationResult <-
     timeoutAction $
@@ -385,6 +406,7 @@ runEvaluatorFor engine validatedFunc args outputFilter = do
         ( eval.runFunction
             args
             outputFilter
+            traceLevel
         )
 
   case evaluationResult of

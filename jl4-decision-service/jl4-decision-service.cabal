@@ -47,6 +47,8 @@ library
   exposed-modules:
     Application
     Backend.Api
+    Backend.CodeGen
+    Backend.DirectiveFilter
     Backend.Jl4
     Examples
     Options
