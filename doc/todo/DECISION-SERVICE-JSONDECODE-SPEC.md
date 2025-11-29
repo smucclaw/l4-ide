@@ -6,7 +6,7 @@
 
 This document specifies replacing the current AST-building approach in the decision service with a JSONDECODE-based approach. Instead of constructing Haskell AST nodes that get pretty-printed to L4, we generate L4 wrapper code that uses `JSONDECODE` to deserialize the input JSON directly.
 
-**Implementation complete.** 16 of 18 tests passing. The 2 failing tests have pre-existing issues in test data unrelated to JSONDECODE.
+**Implementation complete.** All 18 tests passing (fixed in commit fc320987).
 
 This approach:
 1. Strips all IDE directives from the original L4 source
@@ -694,15 +694,22 @@ Successfully deleted ~200 lines of obsolete AST-building code:
 
 ### Test Results
 
-**Passing:** 16/18 tests (88.9%)
+**All 18 tests passing:** ✅ (as of commit fc320987)
 - All Schema tests (QuickCheck property tests) ✅
 - compute_qualifies boolean tests ✅
 - Function CRUD operations ✅
+- vermin_and_rodent insurance coverage tests ✅
 
-**Failing:** 2/18 tests
-- vermin_and_rodent insurance tests ✗ (pre-existing type inference bug in test data)
+**Note:** The vermin_and_rodent tests initially failed due to a type inference bug in the helper function `not covered if`. This was fixed by adding explicit type annotations:
 
-The failures are due to `GIVEN x YIELD x` at line 81 of TestData.hs lacking a type annotation, causing unresolved type variable `x25`. This is unrelated to JSONDECODE implementation.
+```l4
+WHERE
+    GIVEN x IS A BOOLEAN
+    GIVETH A BOOLEAN
+    `not covered if` x MEANS x
+```
+
+The issue was that `GIVEN x YIELD x` without type annotations caused the type checker to create unresolved type variable `x25`. The fix demonstrates proper L4 syntax for typed helper functions in WHERE clauses.
 
 ### Performance
 
