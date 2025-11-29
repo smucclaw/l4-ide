@@ -1259,12 +1259,144 @@ Show "hot paths" in the visualization:
 - Highlight which branches are still live given partial input
 - Gray out eliminated branches
 
+## External Libraries: What to Reuse vs. Implement
+
+**Recommendation:** Use existing BDD libraries rather than reimplementing. The algorithms are well-understood but tricky to get right efficiently.
+
+### Haskell BDD Libraries
+
+| Library | Type | Pros | Cons | Recommendation |
+|---------|------|------|------|----------------|
+| [**obdd**](https://hackage.haskell.org/package/obdd) | Pure Haskell | Simple API, no FFI, easy debugging, graphviz visualization | No node sharing (inefficient for large BDDs), "mostly educational" per author | ✅ **Start here** for MVP |
+| [**cudd**](https://hackage.haskell.org/package/cudd) | FFI to CUDD C library | Production-grade performance, dynamic variable reordering, complement edges | Requires C library installation, more complex API | ✅ **Use for production** if performance matters |
+| [**decision-diagrams**](https://hackage.haskell.org/package/decision-diagrams) | Pure Haskell | BDD + ZDD support, well-maintained | Less mature than CUDD | Consider for ZDD use cases |
+| [**hgoes/bdd**](https://github.com/hgoes/bdd) | Pure Haskell | Shared nodes (more efficient than obdd) | Less documentation | Alternative to obdd |
+
+### Recommended Approach
+
+**Phase 1 (MVP):** Use `obdd` for simplicity
+```haskell
+-- In cabal file:
+build-depends: obdd >= 0.8
+
+-- Usage:
+import OBDD (OBDD, unit, and, or, not, fold, satisfiable)
+
+exprToBDD :: Expr Resolved -> OBDD Text
+exprToBDD (Lit True)    = OBDD.constant True
+exprToBDD (Lit False)   = OBDD.constant False
+exprToBDD (Var name)    = OBDD.unit name True
+exprToBDD (And e1 e2)   = OBDD.and (exprToBDD e1) (exprToBDD e2)
+exprToBDD (Or e1 e2)    = OBDD.or (exprToBDD e1) (exprToBDD e2)
+exprToBDD (Not e)       = OBDD.not (exprToBDD e)
+```
+
+**Phase 2 (Performance):** Switch to `cudd` if needed
+```haskell
+-- In cabal file:
+build-depends: cudd >= 0.1
+
+-- Usage requires DDManager:
+import Cudd.Cudd (DDManager, bAnd, bOr, bNot, ...)
+```
+
+### SAT/SMT Solvers (Alternative Approach)
+
+Instead of BDDs, we could use SMT solving via [**sbv**](https://hackage.haskell.org/package/sbv):
+
+```haskell
+-- Check satisfiability with constraints
+import Data.SBV
+
+checkWithKnowns :: Expr -> [(Text, Bool)] -> IO (Maybe Bool)
+checkWithKnowns expr knowns = do
+  result <- sat $ do
+    vars <- mapM (sbool . unpack) (freeVars expr)
+    -- Add constraints for known values
+    forM_ knowns $ \(name, val) ->
+      constrain $ lookupVar name vars .== literal val
+    -- Return the expression
+    return $ exprToSBV expr vars
+  case result of
+    Unsatisfiable -> Just False  -- Can never be true
+    Satisfiable _ -> Nothing     -- Could be true, depends on unknowns
+```
+
+**Pros:** Very powerful, handles arithmetic constraints too (not just boolean)
+**Cons:** Requires external solver (Z3, CVC5), heavier dependency, overkill for pure boolean
+
+### Espresso Logic Minimizer
+
+[Espresso](https://en.wikipedia.org/wiki/Espresso_heuristic_logic_minimizer) is the classic two-level logic minimizer. Available as:
+
+- [**PyEDA**](https://pyeda.readthedocs.io/en/latest/2llm.html) - Python with C extension
+- [**espresso-logic-minimizer**](https://www.npmjs.com/package/espresso-logic-minimizer) - Node.js bridge
+- [**espresso-logic**](https://github.com/classabbyamp/espresso-logic) - Modern C rehost
+
+**No Haskell bindings exist**, so we'd need to either:
+1. Call via FFI to C library
+2. Use as subprocess (input/output PLA files)
+3. Reimplement in Haskell (not recommended - complex)
+
+**Our use case doesn't need Espresso.** Espresso minimizes to sum-of-products form for circuit synthesis. We need:
+- Partial evaluation (BDDs do this naturally via cofactoring)
+- Variable relevance detection (BDDs tell us remaining variables)
+- Impact analysis (BDDs via cofactoring both ways)
+
+### What We Need to Implement
+
+| Component | Reuse Library? | Notes |
+|-----------|---------------|-------|
+| BDD construction | ✅ Yes (obdd/cudd) | Don't reinvent |
+| Cofactoring | ✅ Yes (built into BDD libs) | Standard operation |
+| Variable ordering | ✅ Partial (cudd has dynamic reordering) | May need heuristics for initial order |
+| Three-valued eval | ❌ Implement | ~50 LOC, simple |
+| L4 Expr → BDD | ❌ Implement | ~100 LOC, straightforward |
+| Priority heuristics | ❌ Implement | ~100 LOC, our domain logic |
+| API endpoint | ❌ Implement | ~200 LOC, REST integration |
+| Impact analysis | ❌ Implement | ~100 LOC, calls cofactor |
+
+**Total new code:** ~550 LOC (excluding tests)
+**Library code reused:** ~10,000+ LOC in BDD implementation
+
+### Installation Notes
+
+**obdd:**
+```bash
+cabal install obdd
+# No external dependencies
+```
+
+**cudd:**
+```bash
+# First install CUDD C library
+brew install cudd  # macOS
+apt install libcudd-dev  # Ubuntu
+
+# Then Haskell bindings
+cabal install cudd
+```
+
+**sbv:**
+```bash
+# Install Z3 solver
+brew install z3  # macOS
+apt install z3  # Ubuntu
+
+# Then Haskell library
+cabal install sbv
+```
+
 ## References
 
 - Issue #638: Implement Interactive Boolean Minimization for Query Relevance Reduction
 - Issue #635: Critical L4 Decision Service Improvements (parent issue)
 - `L4.Transform`: Existing boolean simplification
 - `L4.EvaluateLazy.Trace`: Evaluation tracing infrastructure
-- [Espresso](https://en.wikipedia.org/wiki/Espresso_heuristic_logic_minimizer): Classic logic minimizer
-- [CUDD](https://github.com/ivmai/cudd): BDD library (C, with Haskell bindings)
-- [obdd](https://hackage.haskell.org/package/obdd): Pure Haskell OBDD library
+- [Espresso](https://en.wikipedia.org/wiki/Espresso_heuristic_logic_minimizer): Classic logic minimizer (not needed for our use case)
+- [CUDD](https://github.com/ivmai/cudd): Production BDD library (C)
+- [cudd Haskell bindings](https://hackage.haskell.org/package/cudd): High-performance Haskell interface
+- [obdd](https://hackage.haskell.org/package/obdd): Pure Haskell OBDD library (good for MVP)
+- [decision-diagrams](https://hackage.haskell.org/package/decision-diagrams): Pure Haskell BDD/ZDD
+- [sbv](https://hackage.haskell.org/package/sbv): SMT-based verification (alternative approach)
+- [PyEDA](https://pyeda.readthedocs.io/en/latest/2llm.html): Python Espresso bindings
