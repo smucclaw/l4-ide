@@ -269,15 +269,102 @@ Content-Type: application/json
 
 {
   "fnArguments": {
-    "age": 30,
-    "marital_status": null,      // unknown
-    "spousal_approval": null,
-    "beverage_type": null,
-    "parental_approval": null,
-    "legally_emancipated": null
+    "age": 30
+    // Other fields simply omitted - not provided yet
   }
 }
 ```
+
+#### Handling Partial Inputs: The MAYBE Layer
+
+**Problem:** How do we distinguish between:
+1. User provided a value: `age = 30`
+2. User hasn't been asked yet: field omitted
+3. User explicitly says "I don't know": `age = null`?
+4. User says "not applicable": different from unknown!
+
+**Solution:** The implementation wraps all inputs in `MAYBE` internally.
+
+**Option A: Omission = Unknown (Recommended for MVP)**
+
+Simply omit fields that aren't known yet:
+
+```json
+// User only knows their age
+{ "fnArguments": { "age": 30 } }
+
+// After learning marital status
+{ "fnArguments": { "age": 30, "married": false } }
+```
+
+The implementation treats missing fields as `NOTHING` (unknown):
+
+```l4
+-- Generated wrapper internally converts:
+-- { "age": 30 }
+-- into:
+-- age = JUST 30, married = NOTHING, spousal_approval = NOTHING, ...
+```
+
+**Option B: Explicit Unknown Marker**
+
+For cases where "I don't know" is different from "not asked yet":
+
+```json
+{
+  "fnArguments": {
+    "age": 30,
+    "married": { "_unknown": true },     // User says "I don't know"
+    "spousal_approval": null             // Treated same as omitted
+  }
+}
+```
+
+**Option C: Three-State Fields**
+
+Full explicit control:
+
+```json
+{
+  "fnArguments": {
+    "age": { "_value": 30 },                    // Known value
+    "married": { "_unknown": true },            // Explicitly unknown
+    "spousal_approval": { "_notAsked": true }   // Not yet queried
+    // beer_only omitted = not asked
+  }
+}
+```
+
+**Recommendation:** Start with Option A (omission = unknown). It's simplest and matches how conversational interfaces naturally work - you only send what you've learned so far.
+
+#### Internal Type Transformation
+
+The partial evaluation endpoint transforms the function signature:
+
+**Original L4:**
+```l4
+GIVEN
+  age IS A NUMBER
+  married IS A BOOLEAN
+  spousal_approval IS A BOOLEAN
+GIVETH A BOOLEAN
+`may purchase alcohol` ...
+```
+
+**Internal transformation for partial eval:**
+```l4
+GIVEN
+  age IS A MAYBE NUMBER
+  married IS A MAYBE BOOLEAN
+  spousal_approval IS A MAYBE BOOLEAN
+GIVETH A PartialResult  -- Either result or required params
+`may purchase alcohol partial` ...
+```
+
+This MAYBE wrapping enables:
+1. Three-valued evaluation (JUST True, JUST False, NOTHING)
+2. Tracking which inputs were provided vs omitted
+3. Clean propagation of "unknown" through boolean operations
 
 #### Response Schema
 
@@ -369,8 +456,26 @@ For `age=30, everything else unknown`:
 
 Extend the evaluator to handle a third value: `Unknown`.
 
+The MAYBE wrapper from the API layer maps naturally to three-valued logic:
+- `JUST True` → `TTrue`
+- `JUST False` → `TFalse`
+- `NOTHING` → `TUnknown`
+
 ```haskell
 data TriBool = TTrue | TFalse | TUnknown
+  deriving (Eq, Show)
+
+-- Convert from L4's MAYBE BOOLEAN
+fromMaybeBool :: Maybe Bool -> TriBool
+fromMaybeBool (Just True)  = TTrue
+fromMaybeBool (Just False) = TFalse
+fromMaybeBool Nothing      = TUnknown
+
+-- Convert back for results
+toMaybeBool :: TriBool -> Maybe Bool
+toMaybeBool TTrue    = Just True
+toMaybeBool TFalse   = Just False
+toMaybeBool TUnknown = Nothing
 
 evalTriBool :: Expr Resolved -> Env -> TriBool
 evalTriBool (And _ e1 e2) env =
@@ -386,6 +491,13 @@ evalTriBool (Or _ e1 e2) env =
     (_, TTrue)        -> TTrue
     (TFalse, TFalse)  -> TFalse
     _                 -> TUnknown
+
+-- Variables look up in env; missing = NOTHING = TUnknown
+evalTriBool (Var _ name) env =
+  case Map.lookup name env of
+    Just (Just b)  -> if b then TTrue else TFalse
+    Just Nothing   -> TUnknown  -- Explicitly NOTHING
+    Nothing        -> TUnknown  -- Field omitted from input
 ```
 
 **Pros:**
