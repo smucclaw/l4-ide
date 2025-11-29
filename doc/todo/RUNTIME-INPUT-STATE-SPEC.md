@@ -449,9 +449,9 @@ For non-boolean types, `null` still means "I don't know":
 
 ```json
 { "age": null }
-
-// User doesn't know their age
 ```
+
+_User doesn't know their age_
 
 This resolves to `Provided Nothing` regardless of type.
 
