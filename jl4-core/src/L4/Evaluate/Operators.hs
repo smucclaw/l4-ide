@@ -13,6 +13,7 @@ data BinOp =
   | BinOpGeq
   | BinOpLt
   | BinOpGt
+  | BinOpExponent        -- NUMBER → NUMBER → NUMBER (base ^ exponent)
   -- String binary operations
   | BinOpContains        -- STRING → STRING → BOOLEAN
   | BinOpStartsWith      -- STRING → STRING → BOOLEAN

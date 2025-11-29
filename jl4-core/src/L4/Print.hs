@@ -266,6 +266,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       parensIfNeeded e1 <+> "DIVIDED" <+> parensIfNeeded e2
     Modulo     _ e1 e2 ->
       parensIfNeeded e1 <+> "MODULO" <+> parensIfNeeded e2
+    Exponent   _ e1 e2 ->
+      parensIfNeeded e1 <+> "TO THE POWER OF" <+> parensIfNeeded e2
     Cons       _ e1 e2 ->
       parensIfNeeded e1 <+> "FOLLOWED BY" <+> parensIfNeeded e2
     Leq        _ e1 e2 ->
@@ -463,6 +465,7 @@ instance LayoutPrinter BinOp where
     BinOpTimes -> "TIMES"
     BinOpDividedBy -> "DIVIDED"
     BinOpModulo -> "MODULO"
+    BinOpExponent -> "TO THE POWER OF"
     BinOpCons -> "FOLLOWED BY"
     BinOpEquals -> "EQUALS"
     BinOpLeq -> "AT MOST"

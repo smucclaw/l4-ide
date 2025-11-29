@@ -146,6 +146,14 @@ instance Linearize (Expr Resolved) where
       , text "modulo"
       , lin e2
       ]
+    Exponent _ e1 e2 -> hcat
+      [ lin e1
+      , text "to"
+      , text "the"
+      , text "power"
+      , text "of"
+      , lin e2
+      ]
     Cons _ e1 e2 -> hcat
       [ lin e1
       , text "followed"

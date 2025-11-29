@@ -207,6 +207,7 @@ data Expr n =
   | Times      Anno (Expr n) (Expr n)
   | DividedBy  Anno (Expr n) (Expr n)
   | Modulo     Anno (Expr n) (Expr n)
+  | Exponent   Anno (Expr n) (Expr n)
   | Cons       Anno (Expr n) (Expr n)
   | Leq        Anno (Expr n) (Expr n)
   | Geq        Anno (Expr n) (Expr n)

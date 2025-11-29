@@ -40,6 +40,8 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "sqrt" `rename` "SQRT"
+  , "exponent" `rename` "EXPONENT"
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
   , "env" `rename` "ENV"
@@ -135,6 +137,12 @@ ceilingBuiltin = fun_ [number] number
 
 floorBuiltin :: Type' Resolved
 floorBuiltin = fun_ [number] number
+
+sqrtBuiltin :: Type' Resolved
+sqrtBuiltin = fun_ [number] number
+
+exponentBuiltin :: Type' Resolved
+exponentBuiltin = binOpFun
 
 fetchBuiltin :: Type' Resolved
 fetchBuiltin = fun_ [string] string
@@ -356,6 +364,14 @@ floorInfo :: CheckEntity
 floorInfo =
   KnownTerm floorBuiltin Computable
 
+sqrtInfo :: CheckEntity
+sqrtInfo =
+  KnownTerm sqrtBuiltin Computable
+
+exponentInfo :: CheckEntity
+exponentInfo =
+  KnownTerm exponentBuiltin Computable
+
 fetchInfo :: CheckEntity
 fetchInfo =
   KnownTerm fetchBuiltin Computable
@@ -531,6 +547,8 @@ initialEnvironment =
     , (rawName roundName,        [roundUnique     ])
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
+    , (rawName sqrtName,         [sqrtUnique      ])
+    , (rawName exponentName,     [exponentUnique  ])
     , (rawName fetchName,        [fetchUnique     ])
     , (rawName envName,          [envUnique       ])
     , (rawName jsonEncodeName,   [jsonEncodeUnique])
@@ -592,6 +610,8 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (sqrtUnique,         (sqrtName,         sqrtInfo        ))
+    , (exponentUnique,     (exponentName,     exponentInfo    ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (envUnique,          (envName,          envInfo         ))
     , (postUnique,         (postName,         postInfo        ))

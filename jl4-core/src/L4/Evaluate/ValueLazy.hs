@@ -75,6 +75,7 @@ data UnaryBuiltinFun
   | UnaryCeiling
   | UnaryFloor
   | UnaryPercent
+  | UnarySqrt            -- NUMBER → NUMBER (square root)
   -- String unary functions
   | UnaryStringLength    -- STRING → NUMBER
   | UnaryToUpper         -- STRING → STRING
@@ -128,6 +129,7 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryCeiling = ()
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
+  rnf UnarySqrt = ()
   rnf UnaryStringLength = ()
   rnf UnaryToUpper = ()
   rnf UnaryToLower = ()

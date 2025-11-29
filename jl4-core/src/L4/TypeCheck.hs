@@ -1119,6 +1119,9 @@ inferExpr' g =
     Modulo ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName moduloName) g ann e1 e2
       inferExpr' dsFun
+    Exponent ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName exponentName) g ann e1 e2
+      inferExpr' dsFun
     Cons ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun

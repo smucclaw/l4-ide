@@ -88,6 +88,10 @@ nlgExpr = \ case
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2
       pure $ Modulo ann e1' e2'
+    Exponent ann e1 e2 -> do
+      e1' <- nlgExpr e1
+      e2' <- nlgExpr e2
+      pure $ Exponent ann e1' e2'
     Cons ann e1 e2 -> do
       e1' <- nlgExpr e1
       e2' <- nlgExpr e2

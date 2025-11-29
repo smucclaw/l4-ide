@@ -223,6 +223,9 @@ forwardExpr env = \ case
   Modulo _ann e1 e2 -> do
     PushFrame (BinOp1 BinOpModulo e2 env)
     ForwardExpr env e1
+  Exponent _ann e1 e2 -> do
+    PushFrame (BinOp1 BinOpExponent e2 env)
+    ForwardExpr env e1
   Leq _ann e1 e2 -> do
     PushFrame (BinOp1 BinOpLeq e2 env)
     ForwardExpr env e1
@@ -1313,6 +1316,7 @@ runBuiltin es op mTy = do
         UnaryCeiling -> valInt $ ceiling val
         UnaryFloor -> valInt $ floor val
         UnaryPercent -> ValNumber (val / 100)
+        UnarySqrt -> ValNumber (toRational (sqrt (fromRational val :: Double)))
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
@@ -1348,6 +1352,7 @@ runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)      = do
   if n2 /= 0
     then Backward $ ValNumber (toRational $ n1 `mod` n2)
     else UserException (DivisionByZero BinOpModulo)
+runBinOp BinOpExponent  (ValNumber base) (ValNumber exp_)   = Backward $ ValNumber (toRational ((fromRational base :: Double) ** (fromRational exp_ :: Double)))
 runBinOp BinOpEquals val1             val2                       = runBinOpEquals val1 val2
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
@@ -1861,6 +1866,7 @@ initialEnvironment = do
   roundRef <- AllocateValue (ValUnaryBuiltinFun UnaryRound)
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
+  sqrtRef <- AllocateValue (ValUnaryBuiltinFun UnarySqrt)
   -- String unary builtins
   stringLengthRef <- AllocateValue (ValUnaryBuiltinFun UnaryStringLength)
   toUpperRef <- AllocateValue (ValUnaryBuiltinFun UnaryToUpper)
@@ -1907,6 +1913,7 @@ initialEnvironment = do
       , (TypeCheck.roundUnique, roundRef)
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
+      , (TypeCheck.sqrtUnique, sqrtRef)
       , (TypeCheck.fetchUnique, fetchRef)
       , (TypeCheck.envUnique, envRef)
       , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
@@ -1940,6 +1947,7 @@ builtinBinOps =
       , (BinOpTimes,     [TypeCheck.timesUnique])
       , (BinOpDividedBy, [TypeCheck.divideUnique])
       , (BinOpModulo,    [TypeCheck.moduloUnique])
+      , (BinOpExponent,  [TypeCheck.exponentUnique])
       , (BinOpCons,      [TypeCheck.consUnique])
       , (BinOpEquals,    [TypeCheck.equalsUnique])
       -- String binary operations

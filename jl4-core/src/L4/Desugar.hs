@@ -32,6 +32,7 @@ carameliseExpr = carameliseNode >>> \ case
   Times      ann e1 e2 -> Times     ann (carameliseExpr e1) (carameliseExpr e2)
   DividedBy  ann e1 e2 -> DividedBy ann (carameliseExpr e1) (carameliseExpr e2)
   Modulo     ann e1 e2 -> Modulo    ann (carameliseExpr e1) (carameliseExpr e2)
+  Exponent   ann e1 e2 -> Exponent  ann (carameliseExpr e1) (carameliseExpr e2)
   Cons       ann e1 e2 -> Cons      ann (carameliseExpr e1) (carameliseExpr e2)
   Leq        ann e1 e2 -> Leq       ann (carameliseExpr e1) (carameliseExpr e2)
   Geq        ann e1 e2 -> Geq       ann (carameliseExpr e1) (carameliseExpr e2)
