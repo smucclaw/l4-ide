@@ -12,7 +12,7 @@ This document tracks both specification writing and implementation progress for 
 | 1    | Conditional Decision Trace Returns     | ✅ Complete   | `CONDITIONAL-TRACE-SPEC.md`           | ✅ **Done** (commit 131dd4a0) | X-L4-Trace header and ?trace= param implemented |
 | 2    | IDE Directive Filtering                | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ✅ **Done** (commit fc320987) | JSONDECODE-based approach, all 18 tests pass    |
 | 3    | Enhanced YAML Support (nested objects) | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ✅ **Done** (commit fc320987) | Included in JSONDECODE implementation           |
-| 4    | Boolean Minimization                   | 📋 Needs spec | -                                     | ⏳ Todo                       | Larger feature - see Issue #638                 |
+| 4    | Boolean Minimization                   | ✅ Complete   | `BOOLEAN-MINIMIZATION-SPEC.md`        | ⏳ Todo                       | Larger feature - see Issue #638                 |
 | 5    | Dynamic File Management                | 📋 Needs spec | -                                     | 🔄 Partially done             | PR #649 addressed push; may need file watching  |
 | 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ⏳ Todo                       | Foundation for Item 7                           |
 | 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
