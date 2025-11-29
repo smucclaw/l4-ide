@@ -30,24 +30,39 @@ generateEvalWrapper
   -> TraceLevel                   -- ^ Whether to generate EVAL or EVALTRACE
   -> Either Text GeneratedCode
 generateEvalWrapper funName params inputJson traceLevel = do
-  when (null params) $
-    Left "Function has no parameters"
+  -- Handle zero-parameter functions: no wrapper needed, just eval directly
+  if null params
+    then Right GeneratedCode
+      { generatedWrapper = Text.unlines
+          [ ""
+          , "-- ========== GENERATED WRAPPER =========="
+          , ""
+          , generateSimpleEval funName traceLevel
+          ]
+      , decodeFailedSentinel = "DECODE_FAILED"
+      }
+    else Right GeneratedCode
+      { generatedWrapper = Text.unlines
+          [ ""
+          , "-- ========== GENERATED WRAPPER =========="
+          , ""
+          , generateInputRecord params
+          , ""
+          , generateDecoder
+          , ""
+          , generateJsonPayload inputJson
+          , ""
+          , generateEvalDirective funName params traceLevel
+          ]
+      , decodeFailedSentinel = "DECODE_FAILED"
+      }
 
-  Right GeneratedCode
-    { generatedWrapper = Text.unlines
-        [ ""
-        , "-- ========== GENERATED WRAPPER =========="
-        , ""
-        , generateInputRecord params
-        , ""
-        , generateDecoder
-        , ""
-        , generateJsonPayload inputJson
-        , ""
-        , generateEvalDirective funName params traceLevel
-        ]
-    , decodeFailedSentinel = "DECODE_FAILED"
-    }
+-- | Generate simple EVAL/EVALTRACE for zero-parameter functions
+generateSimpleEval :: Text -> TraceLevel -> Text
+generateSimpleEval funName traceLevel =
+  case traceLevel of
+    TraceNone -> "#EVAL " <> funName
+    TraceFull -> "#EVALTRACE " <> funName
 
 -- | Generate DECLARE for input record
 generateInputRecord :: [(Text, Type' Resolved)] -> Text
