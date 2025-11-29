@@ -41,6 +41,7 @@ data CompiledModule = CompiledModule
   , compiledEnvironment :: !Environment
   , compiledEntityInfo :: !EntityInfo
   , compiledDecide :: !(Decide Resolved)
+  , compiledModuleContext :: !ModuleContext  -- ^ Context needed for IMPORT resolution
   }
   deriving (Generic)
 
@@ -80,6 +81,7 @@ precompileModule filepath source moduleContext funName = runExceptT $ do
     , compiledEnvironment = tcRes.environment
     , compiledEntityInfo = tcRes.entityInfo
     , compiledDecide = decide
+    , compiledModuleContext = moduleContext  -- Store context for IMPORT resolution
     }
  where
   evalErrorToText :: EvaluatorError -> Text
@@ -137,9 +139,9 @@ evaluateWrapperInContext filepath wrapperCode compiled = do
       filteredSource = prettyLayout filteredModule
       combinedProgram = filteredSource <> wrapperCode
 
-  -- Evaluate the combined program
-  -- TODO: Optimize this further to use execEvalExprInContextOfModule
-  evaluateModule filepath combinedProgram Map.empty
+  -- Evaluate the combined program using the original module context
+  -- This ensures IMPORT statements can be resolved correctly
+  evaluateModule filepath combinedProgram compiled.compiledModuleContext
 
 createFunction ::
   FilePath ->
