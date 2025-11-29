@@ -6,6 +6,7 @@
 ## Executive Summary
 
 Add a `TYPICALLY` keyword to L4 that allows specifying default values for:
+
 1. **DECLARE fields** - default values for record type fields
 2. **GIVEN parameters** - default values for function parameters
 3. **ASSUME declarations** - default values for assumed external values
@@ -127,6 +128,7 @@ data TypedName n = MkTypedName
 ### Type Checking
 
 The TYPICALLY value must:
+
 1. Be a **literal** (compile-time constant)
 2. Match the declared type
 
@@ -145,6 +147,7 @@ x IS A BOOLEAN TYPICALLY (a AND b)
 ### Scope of This Spec
 
 This spec covers **compile-time concerns only**:
+
 - Syntax for declaring TYPICALLY values
 - AST representation
 - Type checking rules

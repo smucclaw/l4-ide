@@ -13,6 +13,7 @@ This document specifies a mechanism for clients to control whether the decision 
 ### Current Behavior
 
 Every evaluation request returns both:
+
 1. **Result value**: The computed answer (typically small)
 2. **Reasoning tree**: Full evaluation trace showing how the result was derived (potentially large)
 
@@ -27,10 +28,25 @@ Every evaluation request returns both:
       },
       "children": [
         {
-          "payload": { "exampleCode": ["25 >= 18"], "explanation": ["Result: TRUE"] },
+          "payload": {
+            "exampleCode": ["25 >= 18"],
+            "explanation": ["Result: TRUE"]
+          },
           "children": [
-            { "payload": { "exampleCode": ["25"], "explanation": ["Result: 25"] }, "children": [] },
-            { "payload": { "exampleCode": ["18"], "explanation": ["Result: 18"] }, "children": [] }
+            {
+              "payload": {
+                "exampleCode": ["25"],
+                "explanation": ["Result: 25"]
+              },
+              "children": []
+            },
+            {
+              "payload": {
+                "exampleCode": ["18"],
+                "explanation": ["Result: 18"]
+              },
+              "children": []
+            }
           ]
         }
       ]
@@ -42,10 +58,12 @@ Every evaluation request returns both:
 ### Problem
 
 For complex evaluations, the reasoning tree can be **orders of magnitude larger** than the result itself:
+
 - Simple boolean result: ~10 bytes
 - Reasoning tree for that result: 10KB - 1MB+
 
 Many use cases only need the result:
+
 - Batch processing thousands of cases
 - Real-time API calls where latency matters
 - Mobile clients on limited bandwidth
@@ -54,6 +72,7 @@ Many use cases only need the result:
 ### Desired Behavior
 
 Clients can request:
+
 1. **Result only** (no trace) - smallest, fastest
 2. **Result + trace** (current behavior) - full debugging/explanation capability
 
@@ -82,12 +101,14 @@ curl -X POST /functions/myFunc/evaluation \
 ```
 
 **Pros:**
+
 - Clean separation of control (header) from data (body)
 - Doesn't change the request body schema
 - Easy to add globally via API gateway/proxy
 - RESTful - headers are the standard place for request modifiers
 
 **Cons:**
+
 - Some clients make headers harder to set than body fields
 
 ### Option B: Query Parameter
@@ -98,10 +119,12 @@ POST /functions/myFunc/evaluation?trace=full
 ```
 
 **Pros:**
+
 - Very easy to use in browsers and simple clients
 - Visible in logs
 
 **Cons:**
+
 - Mixes control with resource identification
 - Can be cached incorrectly if not careful
 
@@ -109,16 +132,18 @@ POST /functions/myFunc/evaluation?trace=full
 
 ```json
 {
-  "fnArguments": {"x": 5},
+  "fnArguments": { "x": 5 },
   "trace": "none"
 }
 ```
 
 **Pros:**
+
 - Self-contained request
 - Works with any HTTP client
 
 **Cons:**
+
 - Changes the request schema
 - Mixes control with data
 
@@ -415,6 +440,7 @@ traceHeaderSchema = mempty
 ### Unit Tests
 
 1. **Header parsing**:
+
    ```haskell
    parseTraceHeader Nothing == TraceFull
    parseTraceHeader (Just "none") == TraceNone
@@ -433,15 +459,18 @@ traceHeaderSchema = mempty
 ### Integration Tests
 
 1. **Result-only response**:
+
    - Send request with `X-L4-Trace: none`
    - Verify response has empty reasoning tree
    - Verify result value is correct
 
 2. **Full trace response**:
+
    - Send request with `X-L4-Trace: full`
    - Verify response has populated reasoning tree
 
 3. **Default behavior**:
+
    - Send request without header
    - Verify response has full trace (backward compatible)
 
@@ -490,6 +519,7 @@ X-L4-Trace-Depth: 2
 ```
 
 This would give a summary of reasoning without the full depth, useful for:
+
 - Showing "here's why" without overwhelming detail
 - Debugging without full trace overhead
 
@@ -514,7 +544,7 @@ X-L4-Trace: stream
 ### ✅ Completed (2025-11-29, commit 131dd4a0)
 
 | Component                           | Status  | Location                                          | Notes                                      |
-|-------------------------------------|---------|---------------------------------------------------|--------------------------------------------|
+| ----------------------------------- | ------- | ------------------------------------------------- | ------------------------------------------ |
 | TraceLevel type definition          | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:71-81`   | Defines TraceNone and TraceFull            |
 | FromHttpApiData instance            | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:77-81`   | Parses "none" and "full" from query params |
 | X-L4-Trace header support           | ✅ Done | `jl4-decision-service/src/Server.hs:172`          | Added to evalFunction endpoint             |
@@ -533,7 +563,7 @@ X-L4-Trace: stream
 The following extensions were identified in the spec but are not yet implemented:
 
 | Feature                      | Status  | Priority | Notes                                             |
-|------------------------------|---------|----------|---------------------------------------------------|
+| ---------------------------- | ------- | -------- | ------------------------------------------------- |
 | Partial trace (top N levels) | ⏳ Todo | Low      | `X-L4-Trace: partial` + `X-L4-Trace-Depth: N`     |
 | Trace filtering by variable  | ⏳ Todo | Low      | `X-L4-Trace-Filter: variableName`                 |
 | Streaming trace              | ⏳ Todo | Low      | `X-L4-Trace: stream` for long-running evaluations |
