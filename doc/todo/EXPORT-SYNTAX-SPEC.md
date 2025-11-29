@@ -28,6 +28,7 @@ To expose a function via the decision service, you currently need:
    ```
 
 This creates several problems:
+
 - **Duplication**: Parameter names/types must match between L4 and YAML
 - **Synchronization**: Changes to L4 function signatures require YAML updates
 - **Discoverability**: Hard to see at a glance which functions are API-exposed
@@ -64,6 +65,7 @@ We extend the existing `@desc` annotation with keyword prefixes:
 ```
 
 Where:
+
 - **`export`**: This function should be exposed via the decision service API
 - **`default`**: This is the primary function when the module is called without specifying a function name (implies `export`)
 - **`<description text>`**: Human-readable description for API documentation
@@ -169,6 +171,7 @@ addDescCommentsToAst descs ast = ...
 ```
 
 The attachment rule is simpler than NLG:
+
 - Each `@desc` attaches to the **first declaration that starts after it**
 - Based on source positions (the `@desc` line should be immediately before the declaration)
 
@@ -361,6 +364,7 @@ helper x MEANS x * 2
 ```
 
 The decision service would expose:
+
 - `GET /functions` → returns `[checkPolicy, validateInput]`
 - `POST /functions/checkPolicy/evaluation` → evaluates checkPolicy
 - `POST /functions/validateInput/evaluation` → evaluates validateInput
@@ -386,6 +390,7 @@ When calling the module by UUID without specifying a function, the `default` fun
 ### Example Migration
 
 **Before** (`premium.yaml`):
+
 ```yaml
 name: calculatePremium
 description: Calculate insurance premium based on risk
@@ -403,6 +408,7 @@ supportedEvalBackend: [jl4]
 ```
 
 **Before** (`premium.l4`):
+
 ```l4
 GIVEN age IS A Number, riskScore IS A Number
 GIVETH A Number
@@ -412,6 +418,7 @@ calculatePremium age riskScore MEANS
 ```
 
 **After** (`premium.l4` only):
+
 ```l4
 @desc export Calculate insurance premium based on risk
 GIVEN
@@ -428,6 +435,7 @@ calculatePremium age riskScore MEANS
 ### Unit Tests
 
 1. **Parsing tests**: Verify `parseDescText` correctly extracts flags
+
    ```haskell
    parseDescText "export Do something"
      == ParsedDesc (DescFlags False True) "Do something"
@@ -451,6 +459,7 @@ calculatePremium age riskScore MEANS
 ### Golden Tests
 
 Add test files:
+
 - `jl4/examples/ok/export-single.l4` - Single export
 - `jl4/examples/ok/export-multiple.l4` - Multiple exports
 - `jl4/examples/ok/export-default.l4` - Default export
@@ -485,6 +494,7 @@ The export extractor would detect `Status` is an enum and populate `parameterEnu
 ### Visibility Modifiers
 
 Future syntax could include:
+
 ```l4
 @desc private  -- Explicitly not exported (default)
 @desc public   -- Alias for export

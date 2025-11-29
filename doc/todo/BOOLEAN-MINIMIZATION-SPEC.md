@@ -6,6 +6,7 @@
 ## Executive Summary
 
 When a user provides partial input to a boolean decision function, the system should:
+
 1. Determine which parameters are **relevant** given the known inputs
 2. Return a **prioritized list** of parameters still needed to reach a decision
 3. Support **iterative refinement** as the user provides more information
@@ -30,6 +31,7 @@ DECIDE `one may purchase alcohol` IF
 ```
 
 Naively, the decision function requires all 6 parameters:
+
 - age
 - marital status
 - spousal approval
@@ -97,11 +99,13 @@ triNot TUnknown = TUnknown
 ### Binary Decision Diagrams (BDDs)
 
 A BDD represents a boolean function as a directed acyclic graph where:
+
 - Each internal node represents a boolean variable
 - Each node has two outgoing edges (true/false)
 - Terminal nodes are 0 (false) or 1 (true)
 
 BDDs are **ordered** (OBDD) when variables appear in a fixed order on all paths. This enables efficient operations like:
+
 - Variable elimination (cofactoring)
 - Don't-care detection
 - Formula simplification
@@ -178,6 +182,7 @@ Full BDD:
 **Cofactoring** substitutes a variable with a constant value.
 
 For function `f(A,B,C)`:
+
 - `f|_{A=T}` means "f with A set to True" (positive cofactor)
 - `f|_{A=F}` means "f with A set to False" (negative cofactor)
 
@@ -196,6 +201,7 @@ cofactor (Node var lo hi) v b
 ```
 
 **Example:** For `f = (A ∧ B) ∨ C`
+
 - `f|_{A=T} = B ∨ C`
 - `f|_{A=F} = C`
 - `f|_{C=T} = T` (tautology!)
@@ -213,6 +219,7 @@ isDontCare bdd v = cofactor bdd v True == cofactor bdd v False
 ```
 
 **Example:** In `(A ∧ B) ∨ C` with `C=True`:
+
 - After cofactoring: `f|_{C=T} = T`
 - Both A and B become don't-cares (the function is constantly True)
 
@@ -226,6 +233,7 @@ BDD size is **extremely sensitive** to variable ordering.
 - Order `A₁ < A₂ < ... < B₁ < B₂ < ...`: BDD has O(2ⁿ) nodes!
 
 **Heuristics for good orderings:**
+
 1. Variables that appear together in clauses should be close in order
 2. Variables with more "influence" (appear in more clauses) should be earlier
 3. Use dynamic reordering (sifting algorithm)
@@ -235,16 +243,19 @@ BDD size is **extremely sensitive** to variable ordering.
 L4 already has:
 
 1. **Boolean expression representation** (`L4.Syntax`)
+
    - `And`, `Or`, `Not`, `Implies` constructors
    - `Expr Resolved` with full type information
 
 2. **Boolean transformations** (`L4.Transform`)
+
    - `simplify` - converts to CNF via NNF
    - `nnf` - negation normal form
    - `cnf` - conjunctive normal form
    - `neg` - push negation inward
 
 3. **Partial value handling** (`Backend/Api.hs`)
+
    - `FnUnknown` - missing/null value
    - `FnUncertain` - explicitly uncertain
 
@@ -278,6 +289,7 @@ Content-Type: application/json
 #### Handling Partial Inputs: The MAYBE Layer
 
 **Problem:** How do we distinguish between:
+
 1. User provided a value: `age = 30`
 2. User hasn't been asked yet: field omitted
 3. User explicitly says "I don't know": `age = null`?
@@ -314,8 +326,8 @@ For cases where "I don't know" is different from "not asked yet":
 {
   "fnArguments": {
     "age": 30,
-    "married": { "_unknown": true },     // User says "I don't know"
-    "spousal_approval": null             // Treated same as omitted
+    "married": { "_unknown": true }, // User says "I don't know"
+    "spousal_approval": null // Treated same as omitted
   }
 }
 ```
@@ -327,9 +339,9 @@ Full explicit control:
 ```json
 {
   "fnArguments": {
-    "age": { "_value": 30 },                    // Known value
-    "married": { "_unknown": true },            // Explicitly unknown
-    "spousal_approval": { "_notAsked": true }   // Not yet queried
+    "age": { "_value": 30 }, // Known value
+    "married": { "_unknown": true }, // Explicitly unknown
+    "spousal_approval": { "_notAsked": true } // Not yet queried
     // beer_only omitted = not asked
   }
 }
@@ -342,6 +354,7 @@ Full explicit control:
 The partial evaluation endpoint transforms the function signature:
 
 **Original L4:**
+
 ```l4
 GIVEN
   age IS A NUMBER
@@ -352,6 +365,7 @@ GIVETH A BOOLEAN
 ```
 
 **Internal transformation for partial eval:**
+
 ```l4
 GIVEN
   age IS A MAYBE NUMBER
@@ -362,6 +376,7 @@ GIVETH A PartialResult  -- Either result or required params
 ```
 
 This MAYBE wrapping enables:
+
 1. Three-valued evaluation (JUST True, JUST False, NOTHING)
 2. Tracking which inputs were provided vs omitted
 3. Clean propagation of "unknown" through boolean operations
@@ -457,6 +472,7 @@ For `age=30, everything else unknown`:
 Extend the evaluator to handle a third value: `Unknown`.
 
 The MAYBE wrapper from the API layer maps naturally to three-valued logic:
+
 - `JUST True` → `TTrue`
 - `JUST False` → `TFalse`
 - `NOTHING` → `TUnknown`
@@ -501,11 +517,13 @@ evalTriBool (Var _ name) env =
 ```
 
 **Pros:**
+
 - Simple to implement
 - Integrates with existing evaluator
 - Preserves short-circuit behavior
 
 **Cons:**
+
 - Doesn't naturally provide variable prioritization
 - Can't distinguish "don't care" from "needed"
 
@@ -539,11 +557,13 @@ partialEval bdd knowns =
 ```
 
 **Pros:**
+
 - Canonical representation
 - Efficient operations
 - Natural don't-care detection
 
 **Cons:**
+
 - BDD size can explode for some orderings
 - Need variable ordering heuristics
 - Additional dependency
@@ -564,11 +584,13 @@ evalWithTracking :: Expr Resolved -> Env -> IO (Either [Text] Bool)
 ```
 
 **Pros:**
+
 - Uses existing infrastructure
 - Handles arbitrary expressions (not just boolean)
 - Natural short-circuit behavior
 
 **Cons:**
+
 - Requires evaluation machinery changes
 - Multiple evaluation passes for full analysis
 - Order-dependent results
@@ -689,17 +711,20 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 #### Scenario 1: No inputs known
 
 **Request:**
+
 ```json
 { "fnArguments": {} }
 ```
 
 **Analysis:**
+
 - Three-valued eval: `Unknown` (need more info)
 - BDD analysis: `adult` appears at root → ask first
 - `adult=T` leads to subtree with {M,S,B}
 - `adult=F` leads to subtree with {P,E}
 
 **Expected Response:**
+
 ```json
 {
   "required": [
@@ -725,11 +750,13 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 #### Scenario 2: age=30 (adult=True)
 
 **Request:**
+
 ```json
 { "fnArguments": { "age": 30 } }
 ```
 
 **Analysis:**
+
 - Cofactor with adult=T: `f|_{adult=T} = ¬M ∨ S ∨ B`
 - P and E are now don't-cares
 - If M=F: result is True immediately
@@ -737,6 +764,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 - If S=T: result is True immediately
 
 **Expected Response:**
+
 ```json
 {
   "required": [
@@ -792,22 +820,30 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 #### Scenario 3: age=30, married=False
 
 **Request:**
+
 ```json
 { "fnArguments": { "age": 30, "married": false } }
 ```
 
 **Analysis:**
+
 - Cofactor: `f|_{adult=T, M=F} = T ∨ S ∨ B = T`
 - Result is determined! (tautology)
 
 **Expected Response:**
+
 ```json
 {
   "result": true,
   "reasoning": {
     "explanation": "Adults who are unmarried may purchase alcohol",
     "relevantInputs": ["age", "married"],
-    "irrelevantInputs": ["spousal_approval", "beer_only", "parental_approval", "emancipated"]
+    "irrelevantInputs": [
+      "spousal_approval",
+      "beer_only",
+      "parental_approval",
+      "emancipated"
+    ]
   }
 }
 ```
@@ -815,6 +851,7 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 #### Scenario 4: age=30, married=True, beer_only=False, spousal_approval=False
 
 **Request:**
+
 ```json
 {
   "fnArguments": {
@@ -827,10 +864,12 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 ```
 
 **Analysis:**
+
 - Cofactor: `f|_{adult=T, M=T, B=F, S=F} = F ∨ F ∨ F = F`
 - Result is determined! (contradiction under these conditions)
 
 **Expected Response:**
+
 ```json
 {
   "result": false,
@@ -845,16 +884,19 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
 #### Scenario 5: age=19 (adult=False)
 
 **Request:**
+
 ```json
 { "fnArguments": { "age": 19 } }
 ```
 
 **Analysis:**
+
 - Cofactor with adult=F: `f|_{adult=F} = P ∨ E`
 - M, S, B are now don't-cares
 - Either P=T or E=T gives True
 
 **Expected Response:**
+
 ```json
 {
   "required": [
@@ -871,7 +913,10 @@ f(adult,M,S,B,P,E) = (adult ∧ (¬M ∨ S ∨ B)) ∨ (¬adult ∧ (P ∨ E))
       "priority": 2,
       "impact": {
         "ifTrue": { "determinable": true, "result": true },
-        "ifFalse": { "determinable": false, "stillRequired": ["parental_approval"] }
+        "ifFalse": {
+          "determinable": false,
+          "stillRequired": ["parental_approval"]
+        }
       }
     }
   ]
@@ -896,12 +941,14 @@ DECIDE `insurance covered` i IF
 This is more complex because it has nested structure with WHERE clauses.
 
 **Variables:**
+
 - rodents, insects, vermin, birds (animal damage types)
 - to_contents (damage type)
 - ensuing_loss
 - other_exclusion, appliance, pool, plumbing (exclusion sources)
 
 **Key observation:** The structure is:
+
 ```
 covered = not_covered_if(
   animals AND NOT (contents_birds OR (ensuing AND NOT exclusions))
@@ -917,6 +964,7 @@ Equivalently: `covered = animals ∧ ¬contents_birds ∧ (¬ensuing ∨ exclusi
 #### Scenario: No animal damage
 
 **Request:**
+
 ```json
 {
   "fnArguments": {
@@ -931,11 +979,13 @@ Equivalently: `covered = animals ∧ ¬contents_birds ∧ (¬ensuing ∨ exclusi
 ```
 
 **Analysis:**
+
 - `animals = F ∨ F ∨ F ∨ F = F`
 - `covered = F ∧ ... = F`
 - Result determined immediately
 
 **Expected Response:**
+
 ```json
 {
   "result": false,
@@ -972,22 +1022,26 @@ Equivalently: `covered = animals ∧ ¬contents_birds ∧ (¬ensuing ∨ exclusi
 **L4:** `DECIDE identity x IF x`
 
 **No input:**
+
 ```json
 {
-  "required": [{
-    "name": "x",
-    "priority": 1,
-    "impact": {
-      "ifTrue": { "determinable": true, "result": true },
-      "ifFalse": { "determinable": true, "result": false }
+  "required": [
+    {
+      "name": "x",
+      "priority": 1,
+      "impact": {
+        "ifTrue": { "determinable": true, "result": true },
+        "ifFalse": { "determinable": true, "result": false }
+      }
     }
-  }]
+  ]
 }
 ```
 
 #### 3d: Deeply Nested
 
 **L4:**
+
 ```l4
 DECIDE deep IF
   a AND b AND c AND d AND e AND f AND g AND h
@@ -997,14 +1051,16 @@ DECIDE deep IF
 
 ```json
 {
-  "required": [{
-    "name": "h",
-    "priority": 1,
-    "impact": {
-      "ifTrue": { "determinable": true, "result": true },
-      "ifFalse": { "determinable": true, "result": false }
+  "required": [
+    {
+      "name": "h",
+      "priority": 1,
+      "impact": {
+        "ifTrue": { "determinable": true, "result": true },
+        "ifFalse": { "determinable": true, "result": false }
+      }
     }
-  }]
+  ]
 }
 ```
 
@@ -1013,6 +1069,7 @@ DECIDE deep IF
 **L4:** `DECIDE xor_example IF (a AND NOT b) OR (NOT a AND b)`
 
 **No input:**
+
 ```json
 {
   "required": [
@@ -1043,20 +1100,24 @@ Note: Both variables have equal priority since neither alone determines the resu
 **L4:** `DECIDE implication IF a IMPLIES b` (equivalent to `NOT a OR b`)
 
 **With a=False:**
+
 ```json
 { "result": true }
 ```
 
 **With a=True:**
+
 ```json
 {
-  "required": [{
-    "name": "b",
-    "impact": {
-      "ifTrue": { "determinable": true, "result": true },
-      "ifFalse": { "determinable": true, "result": false }
+  "required": [
+    {
+      "name": "b",
+      "impact": {
+        "ifTrue": { "determinable": true, "result": true },
+        "ifFalse": { "determinable": true, "result": false }
+      }
     }
-  }]
+  ]
 }
 ```
 
@@ -1354,6 +1415,7 @@ This is a new endpoint, so no backward compatibility concerns. However, we shoul
 **Status:** Conceptual design exists in `doc/default-values.md`, but `TYPICALLY` is not a keyword in the current L4 lexer.
 
 **Motivation:** When we talk about a "person" in legal contexts, we typically assume they are:
+
 - A natural person (not a corporation)
 - Over the age of majority
 - Have mental capacity
@@ -1381,13 +1443,14 @@ ASSUME `person has capacity` IS BOOLEAN TYPICALLY TRUE
 
 With TYPICALLY, the partial evaluation logic changes:
 
-| Input State | Without TYPICALLY | With TYPICALLY |
-|-------------|-------------------|----------------|
-| Field omitted | `NOTHING` (unknown) | Use default value |
-| Field = null | `NOTHING` (unknown) | `NOTHING` (unknown) |
-| Field = value | `JUST value` | `JUST value` |
+| Input State   | Without TYPICALLY   | With TYPICALLY      |
+| ------------- | ------------------- | ------------------- |
+| Field omitted | `NOTHING` (unknown) | Use default value   |
+| Field = null  | `NOTHING` (unknown) | `NOTHING` (unknown) |
+| Field = value | `JUST value`        | `JUST value`        |
 
 This means:
+
 1. **Fewer questions needed:** If defaults match common cases, many parameters become don't-cares
 2. **Explicit uncertainty:** User can still say "I don't know" (null) to override the default
 3. **Audit trail:** System can report "assumed X was true based on typical case"
@@ -1405,6 +1468,7 @@ GIVETH A BOOLEAN
 ```
 
 **Partial eval with age=30:**
+
 - Without TYPICALLY: asks about married, spousal_approval, beer_only
 - With TYPICALLY: assumes married=FALSE → result=TRUE immediately!
 - User can override by explicitly providing married=TRUE
@@ -1422,12 +1486,14 @@ GIVETH A BOOLEAN
 ### Non-Boolean Functions
 
 Extend to numeric and multi-valued functions:
+
 - "If salary > $100k, tax rate could be 30% or 35% depending on..."
 - Interval arithmetic for numeric unknowns
 
 ### Explanations
 
 Generate human-readable explanations:
+
 - "I need to know your age because if you're over 21, the rules are simpler"
 - "Your parental approval doesn't matter since you're already 30"
 
@@ -1438,6 +1504,7 @@ Cache BDDs for frequently-queried functions to avoid reconstruction.
 ### IDE Integration
 
 Show "hot paths" in the visualization:
+
 - Highlight which branches are still live given partial input
 - Gray out eliminated branches
 
@@ -1447,16 +1514,17 @@ Show "hot paths" in the visualization:
 
 ### Haskell BDD Libraries
 
-| Library | Type | Pros | Cons | Recommendation |
-|---------|------|------|------|----------------|
-| [**obdd**](https://hackage.haskell.org/package/obdd) | Pure Haskell | Simple API, no FFI, easy debugging, graphviz visualization | No node sharing (inefficient for large BDDs), "mostly educational" per author | ✅ **Start here** for MVP |
-| [**cudd**](https://hackage.haskell.org/package/cudd) | FFI to CUDD C library | Production-grade performance, dynamic variable reordering, complement edges | Requires C library installation, more complex API | ✅ **Use for production** if performance matters |
-| [**decision-diagrams**](https://hackage.haskell.org/package/decision-diagrams) | Pure Haskell | BDD + ZDD support, well-maintained | Less mature than CUDD | Consider for ZDD use cases |
-| [**hgoes/bdd**](https://github.com/hgoes/bdd) | Pure Haskell | Shared nodes (more efficient than obdd) | Less documentation | Alternative to obdd |
+| Library                                                                        | Type                  | Pros                                                                        | Cons                                                                          | Recommendation                                   |
+| ------------------------------------------------------------------------------ | --------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| [**obdd**](https://hackage.haskell.org/package/obdd)                           | Pure Haskell          | Simple API, no FFI, easy debugging, graphviz visualization                  | No node sharing (inefficient for large BDDs), "mostly educational" per author | ✅ **Start here** for MVP                        |
+| [**cudd**](https://hackage.haskell.org/package/cudd)                           | FFI to CUDD C library | Production-grade performance, dynamic variable reordering, complement edges | Requires C library installation, more complex API                             | ✅ **Use for production** if performance matters |
+| [**decision-diagrams**](https://hackage.haskell.org/package/decision-diagrams) | Pure Haskell          | BDD + ZDD support, well-maintained                                          | Less mature than CUDD                                                         | Consider for ZDD use cases                       |
+| [**hgoes/bdd**](https://github.com/hgoes/bdd)                                  | Pure Haskell          | Shared nodes (more efficient than obdd)                                     | Less documentation                                                            | Alternative to obdd                              |
 
 ### Recommended Approach
 
 **Phase 1 (MVP):** Use `obdd` for simplicity
+
 ```haskell
 -- In cabal file:
 build-depends: obdd >= 0.8
@@ -1474,6 +1542,7 @@ exprToBDD (Not e)       = OBDD.not (exprToBDD e)
 ```
 
 **Phase 2 (Performance):** Switch to `cudd` if needed
+
 ```haskell
 -- In cabal file:
 build-depends: cudd >= 0.1
@@ -1516,27 +1585,29 @@ checkWithKnowns expr knowns = do
 - [**espresso-logic**](https://github.com/classabbyamp/espresso-logic) - Modern C rehost
 
 **No Haskell bindings exist**, so we'd need to either:
+
 1. Call via FFI to C library
 2. Use as subprocess (input/output PLA files)
 3. Reimplement in Haskell (not recommended - complex)
 
 **Our use case doesn't need Espresso.** Espresso minimizes to sum-of-products form for circuit synthesis. We need:
+
 - Partial evaluation (BDDs do this naturally via cofactoring)
 - Variable relevance detection (BDDs tell us remaining variables)
 - Impact analysis (BDDs via cofactoring both ways)
 
 ### What We Need to Implement
 
-| Component | Reuse Library? | Notes |
-|-----------|---------------|-------|
-| BDD construction | ✅ Yes (obdd/cudd) | Don't reinvent |
-| Cofactoring | ✅ Yes (built into BDD libs) | Standard operation |
-| Variable ordering | ✅ Partial (cudd has dynamic reordering) | May need heuristics for initial order |
-| Three-valued eval | ❌ Implement | ~50 LOC, simple |
-| L4 Expr → BDD | ❌ Implement | ~100 LOC, straightforward |
-| Priority heuristics | ❌ Implement | ~100 LOC, our domain logic |
-| API endpoint | ❌ Implement | ~200 LOC, REST integration |
-| Impact analysis | ❌ Implement | ~100 LOC, calls cofactor |
+| Component           | Reuse Library?                           | Notes                                 |
+| ------------------- | ---------------------------------------- | ------------------------------------- |
+| BDD construction    | ✅ Yes (obdd/cudd)                       | Don't reinvent                        |
+| Cofactoring         | ✅ Yes (built into BDD libs)             | Standard operation                    |
+| Variable ordering   | ✅ Partial (cudd has dynamic reordering) | May need heuristics for initial order |
+| Three-valued eval   | ❌ Implement                             | ~50 LOC, simple                       |
+| L4 Expr → BDD       | ❌ Implement                             | ~100 LOC, straightforward             |
+| Priority heuristics | ❌ Implement                             | ~100 LOC, our domain logic            |
+| API endpoint        | ❌ Implement                             | ~200 LOC, REST integration            |
+| Impact analysis     | ❌ Implement                             | ~100 LOC, calls cofactor              |
 
 **Total new code:** ~550 LOC (excluding tests)
 **Library code reused:** ~10,000+ LOC in BDD implementation
@@ -1544,12 +1615,14 @@ checkWithKnowns expr knowns = do
 ### Installation Notes
 
 **obdd:**
+
 ```bash
 cabal install obdd
 # No external dependencies
 ```
 
 **cudd:**
+
 ```bash
 # First install CUDD C library
 brew install cudd  # macOS
@@ -1560,6 +1633,7 @@ cabal install cudd
 ```
 
 **sbv:**
+
 ```bash
 # Install Z3 solver
 brew install z3  # macOS

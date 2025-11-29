@@ -25,6 +25,7 @@ Chatbot: Are you married?
 ```
 
 The user might:
+
 1. Say "Yes" → we know they're married
 2. Say "No" → we know they're unmarried
 3. Say "I don't know" / "I'd rather not say" → explicit uncertainty
@@ -34,14 +35,15 @@ These are **four different states**, but a simple `Maybe Bool` only gives us two
 
 ### Why It Matters
 
-| State | With `Maybe Bool` | What Should Happen |
-|-------|-------------------|-------------------|
-| User says "Yes" | `Just True` ✓ | Use `True` |
-| User says "No" | `Just False` ✓ | Use `False` |
-| User says "I don't know" | `Nothing` ✗ | Propagate as Unknown in three-valued logic |
-| Not yet asked | `Nothing` ✗ | Use TYPICALLY default if available |
+| State                    | With `Maybe Bool` | What Should Happen                         |
+| ------------------------ | ----------------- | ------------------------------------------ |
+| User says "Yes"          | `Just True` ✓     | Use `True`                                 |
+| User says "No"           | `Just False` ✓    | Use `False`                                |
+| User says "I don't know" | `Nothing` ✗       | Propagate as Unknown in three-valued logic |
+| Not yet asked            | `Nothing` ✗       | Use TYPICALLY default if available         |
 
 With `Maybe Bool`, we can't distinguish "I don't know" from "not asked". This matters because:
+
 - "Not asked" → use TYPICALLY default → may resolve the decision
 - "I don't know" → truly Unknown → may require asking other questions
 
@@ -141,6 +143,7 @@ DECIDE foo IF ...
 ```
 
 Initial runtime state:
+
 ```haskell
 { "age"          -> Left Nothing        -- No default, not asked
 , "married"      -> Left (Just False)   -- TYPICALLY FALSE, not asked
@@ -149,6 +152,7 @@ Initial runtime state:
 ```
 
 After user says age=30:
+
 ```haskell
 { "age"          -> Right (Just 30)     -- User provided
 , "married"      -> Left (Just False)   -- Still using default
@@ -157,6 +161,7 @@ After user says age=30:
 ```
 
 After user says "I don't know" for married:
+
 ```haskell
 { "age"          -> Right (Just 30)     -- User provided
 , "married"      -> Right Nothing       -- User said "I don't know"
@@ -179,6 +184,7 @@ After user says "I don't know" for married:
 ```
 
 Interpretation:
+
 - `"age": 30` → `Right (Just 30)` - explicit value
 - `"married": null` → `Right Nothing` - explicit "I don't know"
 - `"has_approval": { "_notProvided": true }` → `Left _` - use default
@@ -209,7 +215,11 @@ For simpler integration, use field presence:
   "inputResolution": {
     "age": { "value": 30, "source": "explicit" },
     "married": { "value": false, "source": "typically", "default": false },
-    "has_approval": { "value": null, "source": "unknown", "reason": "no input, no default" }
+    "has_approval": {
+      "value": null,
+      "source": "unknown",
+      "reason": "no input, no default"
+    }
   }
 }
 ```
@@ -438,7 +448,8 @@ describe "API input parsing" $ do
 For non-boolean types, `null` still means "I don't know":
 
 ```json
-{ "age": null }  // User doesn't know their age
+{ "age": null }
+ // User doesn't know their age
 ```
 
 This resolves to `Provided Nothing` regardless of type.
@@ -451,13 +462,14 @@ For nested records like `Person.address.country`:
 {
   "person": {
     "address": {
-      "country": null  // "I don't know the country"
+      "country": null // "I don't know the country"
     }
   }
 }
 ```
 
 Each level can independently be:
+
 - Provided with value
 - Provided as unknown (null)
 - Not provided (use default)
@@ -475,6 +487,7 @@ For list inputs, `null` means "I don't know if there's a list":
 ### 4. Resetting vs. Not Asking
 
 UI should distinguish:
+
 - "Clear my answer" → reset to `NotProvided` (use default)
 - "I don't know" → set to `Provided Nothing`
 
@@ -507,6 +520,7 @@ Runtime (this spec):
 ### BOOLEAN-MINIMIZATION-SPEC.md
 
 Partial evaluation uses `InputState` to determine:
+
 - Which parameters are resolved (have effective values)
 - Which parameters need to be asked
 - Which parameters are explicitly unknown (can't be resolved by asking)

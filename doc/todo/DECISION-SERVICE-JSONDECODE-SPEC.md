@@ -9,6 +9,7 @@ This document specifies replacing the current AST-building approach in the decis
 **Implementation complete.** All 18 tests passing (fixed in commit fc320987).
 
 This approach:
+
 1. Strips all IDE directives from the original L4 source
 2. Generates a typed wrapper that decodes JSON input via `JSONDECODE`
 3. Injects a single `#EVALTRACE` that calls the target function with decoded arguments
@@ -45,6 +46,7 @@ This approach:
 L4 now supports bidirectional type checking (see `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`), which allows type information to flow from context to expressions. This enables `JSONDECODE` to decode JSON strings into typed L4 values when the expected type is known.
 
 Example:
+
 ```l4
 DECLARE Person HAS
   name IS A STRING
@@ -87,6 +89,7 @@ REST JSON
 #### Input
 
 **Function definition (user's L4 file):**
+
 ```l4
 DECLARE Person HAS
   name IS A STRING
@@ -102,6 +105,7 @@ isOlderThan p threshold MEANS p's age >= threshold
 ```
 
 **REST API call:**
+
 ```json
 POST /functions/isOlderThan/evaluation
 {
@@ -437,6 +441,7 @@ The following functions in `Backend/Jl4.hs` become obsolete and can be removed:
 **File:** `jl4-decision-service/jl4-decision-service.cabal`
 
 Add to `library` section under `exposed-modules`:
+
 ```cabal
     Backend.CodeGen
     Backend.DirectiveFilter
@@ -478,6 +483,7 @@ apply f x MEANS f x
 ```
 
 **Handling:** Functions cannot be JSON-encoded. Return an error:
+
 ```
 "Parameter 'f' has function type (Number -> Number) which cannot be provided via JSON"
 ```
@@ -522,9 +528,16 @@ getCity p MEANS p's address's city
 ```
 
 **Handling:** This is the main benefit of the JSONDECODE approach. The nested JSON:
+
 ```json
-{"p": {"name": "Alice", "address": {"street": "123 Main", "city": "Boston"}}}
+{
+  "p": {
+    "name": "Alice",
+    "address": { "street": "123 Main", "city": "Boston" }
+  }
+}
 ```
+
 decodes automatically because bidirectional typing guides JSONDECODE with the `Person` type, which includes `Address`.
 
 ## Error Handling
@@ -649,6 +662,7 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
 ### Key Deviations from Spec
 
 1. **Identifier Naming:** L4 lexer doesn't allow identifiers starting with underscore. Changed:
+
    - `__InputArgs` → `InputArgs`
    - `__decodeArgs` → `decodeArgs`
    - `__inputJson` → `inputJson`
@@ -656,15 +670,18 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
    - `__DECODE_FAILED__` → `"DECODE_FAILED"` (string literal)
 
 2. **MAYBE Return Type:** To handle type mismatches between decode failure and function return type, the wrapper returns `MAYBE T` instead of `T`:
+
    ```l4
    #EVALTRACE
      CONSIDER decodeArgs inputJson
        WHEN JUST args THEN JUST (compute_qualifies (args's walks) (args's drinks) (args's eats))
        WHEN NOTHING THEN NOTHING
    ```
+
    The Haskell handler unwraps the `JUST` constructor to extract the actual result.
 
 3. **Field Access Syntax:** Parentheses required around field access in function calls:
+
    - `args's walks` → `(args's walks)`
 
 4. **Conditional Trace Support:** Integrated with X-L4-Trace header and ?trace= query parameter from Item 1. The `TraceLevel` parameter controls whether `#EVAL` or `#EVALTRACE` is generated.
@@ -683,6 +700,7 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
 ### Code Removed
 
 Successfully deleted ~200 lines of obsolete AST-building code:
+
 - `buildEvalFunApp`
 - `matchFunctionArgs`, `matchFunctionArg`, `matchFunctionArg'`
 - `matchRecord`, `literalToExpr`
@@ -695,6 +713,7 @@ Successfully deleted ~200 lines of obsolete AST-building code:
 ### Test Results
 
 **All 18 tests passing:** ✅ (as of commit fc320987)
+
 - All Schema tests (QuickCheck property tests) ✅
 - compute_qualifies boolean tests ✅
 - Function CRUD operations ✅

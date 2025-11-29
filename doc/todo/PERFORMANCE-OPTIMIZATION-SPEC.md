@@ -223,6 +223,7 @@ batchFunctionHandler name' batchArgs = do
 ### What Gets Cached
 
 Per function:
+
 - `Module Resolved` - the full AST with resolved names (~100KB - 1MB depending on complexity)
 - `Environment` - evaluation environment (~10KB - 100KB)
 - `EntityInfo` - type information (~10KB - 50KB)
@@ -237,6 +238,7 @@ This is acceptable for a dedicated decision service.
 ### Cache Invalidation
 
 The compiled module cache should be invalidated when:
+
 1. The L4 source file changes (file watcher or explicit reload endpoint)
 2. Any imported module changes (dependency tracking)
 3. The function is deleted
@@ -274,11 +276,13 @@ data AppEnv = MkAppEnv
 Then use Shake's built-in caching for `TypeCheck` and `EvaluateLazy` rules.
 
 **Pros:**
+
 - Reuses existing Shake infrastructure
 - Automatic dependency tracking
 - Incremental recompilation
 
 **Cons:**
+
 - More complex integration
 - Shake session management
 - May need to modify rule definitions
@@ -328,12 +332,12 @@ Then use Shake's built-in caching for `TypeCheck` and `EvaluateLazy` rules.
 
 ### Expected Improvements
 
-| Scenario | Current | After Optimization | Improvement |
-|----------|---------|-------------------|-------------|
-| Single eval (simple) | ~50ms | ~5ms | 10x |
-| Single eval (complex) | ~200ms | ~20ms | 10x |
-| Batch 1000 cases | ~50s | ~5s (sequential) | 10x |
-| Batch 1000 cases | ~50s | ~0.5s (parallel) | 100x |
+| Scenario              | Current | After Optimization | Improvement |
+| --------------------- | ------- | ------------------ | ----------- |
+| Single eval (simple)  | ~50ms   | ~5ms               | 10x         |
+| Single eval (complex) | ~200ms  | ~20ms              | 10x         |
+| Batch 1000 cases      | ~50s    | ~5s (sequential)   | 10x         |
+| Batch 1000 cases      | ~50s    | ~0.5s (parallel)   | 100x        |
 
 ## Summary
 
