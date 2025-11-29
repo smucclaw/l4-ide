@@ -893,7 +893,14 @@ batchRequestEncoder :: BatchRequest -> Aeson.Value
 batchRequestEncoder br =
   Aeson.object
     [ "outcomes" .= fmap outcomesEncoder br.outcomes
+    , "cases" .= fmap inputCaseEncoder br.cases
     ]
+
+inputCaseEncoder :: InputCase -> Aeson.Value
+inputCaseEncoder ic =
+  Aeson.object $
+    [ "@id" .= ic.id
+    ] ++ [(Aeson.fromText k, Aeson.toJSON v) | (k, v) <- Map.toList ic.attributes]
 
 outcomesEncoder :: Outcomes -> Aeson.Value
 outcomesEncoder (OutcomeAttribute t) = Aeson.String t
