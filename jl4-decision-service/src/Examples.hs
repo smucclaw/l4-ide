@@ -245,7 +245,9 @@ DECIDE `vermin_and_rodent` i IF
                 OR         `ensuing covered loss`
                     AND NOT `exclusion apply`
  WHERE
-    `not covered if` MEANS GIVEN x YIELD x
+    GIVEN x IS A BOOLEAN
+    GIVETH A BOOLEAN
+    `not covered if` x MEANS x
 
     `loss or damage by animals` MEANS
         i's `Loss or Damage.caused by rodents`
