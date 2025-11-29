@@ -4,6 +4,7 @@
 
 module Backend.Api (
   module Backend.Api,
+  TraceLevel (..),
 ) where
 
 import Control.Monad.Trans.Except (ExceptT)
@@ -67,6 +68,18 @@ instance FromJSON FnLiteral where
           ps <- traverse (\(k, v) -> fmap (Aeson.toText k,) (parseJSON v)) (Aeson.toList o)
           pure $ FnObject ps
 
+-- | Control how much trace information to return
+data TraceLevel
+  = TraceNone  -- ^ No trace, result only
+  | TraceFull  -- ^ Full evaluation trace
+  deriving (Show, Eq, Ord, Enum, Bounded, Generic)
+
+instance FromHttpApiData TraceLevel where
+  parseQueryParam t = case Text.toLower t of
+    "none" -> Right TraceNone
+    "full" -> Right TraceFull
+    _ -> Left $ "Invalid trace level: " <> t <> ". Expected: none, full"
+
 newtype RunFunction = RunFunction
   { -- | Run a function with parameters
     runFunction ::
@@ -76,6 +89,8 @@ newtype RunFunction = RunFunction
       -- ^ Output filter, as the function may return a record of
       -- outputs.
       -- If this filter is 'Nothing', we do not filter anything.
+      TraceLevel ->
+      -- ^ Control whether to return full trace or just result
       ExceptT EvaluatorError IO ResponseWithReason
   }
 

@@ -44,6 +44,12 @@ instance (KnownSymbol desc, HasOpenApi api) => HasOpenApi (OperationId desc :> a
 -- Document and describe the Json schema using the OpenAPI standard
 -- ----------------------------------------------------------------------------
 
+instance ToParamSchema TraceLevel where
+  toParamSchema _ = mempty
+    & type_ ?~ OpenApiString
+    & enum_ ?~ ["none", "full"]
+    & description ?~ "Control evaluation trace detail level. 'none' returns only results, 'full' returns results with trace (default)."
+
 instance ToSchema SimpleFunction where
   declareNamedSchema _ = do
     textRef <- declareSchemaRef (Proxy @Text)

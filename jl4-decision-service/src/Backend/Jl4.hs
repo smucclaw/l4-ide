@@ -50,7 +50,7 @@ createFunction ::
   RunFunction
 createFunction filepath fnDecl fnImpl moduleContext =
   RunFunction
-    { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} -> do
+    { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
         (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
         tcRes <- case mTcRes of
@@ -65,10 +65,15 @@ createFunction filepath fnDecl fnImpl moduleContext =
         appliedFunExpr <- buildEvalFunApp funRawName funExpr recordMap params
 
         let
+          -- Choose directive based on trace level
+          directive = case traceLevel of
+            TraceNone -> mkEval appliedFunExpr      -- #EVAL (no trace)
+            TraceFull -> mkEvalTrace appliedFunExpr -- #EVALTRACE (with trace)
+
           l4InputWithEval =
             Text.unlines
               [ fnImpl
-              , prettyLayout $ mkTopDeclDirective $ mkEvalTrace appliedFunExpr
+              , prettyLayout $ mkTopDeclDirective directive
               ]
 
         (errs, mEvalRes) <- evaluateModule filepath l4InputWithEval moduleContext
@@ -83,7 +88,9 @@ createFunction filepath fnDecl fnImpl moduleContext =
               pure $
                 ResponseWithReason
                   { values = [("result", r)]
-                  , reasoning = buildReasoningTree trace
+                  , reasoning = case traceLevel of
+                      TraceNone -> emptyTree  -- Don't build tree
+                      TraceFull -> buildReasoningTree trace
                   }
           Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
           Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
@@ -396,6 +403,11 @@ evaluateModule file input moduleContext =
 mkTopDeclDirective :: Directive n -> TopDecl n
 mkTopDeclDirective = Directive emptyAnno
 
+-- | Create #EVAL directive (no trace)
+mkEval :: Expr n -> Directive n
+mkEval = LazyEval emptyAnno
+
+-- | Create #EVALTRACE directive (with trace)
 mkEvalTrace :: Expr n -> Directive n
 mkEvalTrace = LazyEvalTrace emptyAnno
 
