@@ -1349,6 +1349,76 @@ This is a new endpoint, so no backward compatibility concerns. However, we shoul
 
 ## Future Enhancements
 
+### TYPICALLY: Overrideable Defaults (Not Yet Implemented)
+
+**Status:** Conceptual design exists in `doc/default-values.md`, but `TYPICALLY` is not a keyword in the current L4 lexer.
+
+**Motivation:** When we talk about a "person" in legal contexts, we typically assume they are:
+- A natural person (not a corporation)
+- Over the age of majority
+- Have mental capacity
+- Not under duress
+
+These are **rebuttable presumptions** - defaults that hold unless explicitly overridden.
+
+**Proposed Syntax:**
+
+```l4
+DECLARE Person HAS
+  age IS A NUMBER
+  has_capacity IS A BOOLEAN TYPICALLY TRUE
+  is_natural_person IS A BOOLEAN TYPICALLY TRUE
+  is_under_duress IS A BOOLEAN TYPICALLY FALSE
+```
+
+Or at the ASSUME level:
+
+```l4
+ASSUME `person has capacity` IS BOOLEAN TYPICALLY TRUE
+```
+
+**Integration with Partial Evaluation:**
+
+With TYPICALLY, the partial evaluation logic changes:
+
+| Input State | Without TYPICALLY | With TYPICALLY |
+|-------------|-------------------|----------------|
+| Field omitted | `NOTHING` (unknown) | Use default value |
+| Field = null | `NOTHING` (unknown) | `NOTHING` (unknown) |
+| Field = value | `JUST value` | `JUST value` |
+
+This means:
+1. **Fewer questions needed:** If defaults match common cases, many parameters become don't-cares
+2. **Explicit uncertainty:** User can still say "I don't know" (null) to override the default
+3. **Audit trail:** System can report "assumed X was true based on typical case"
+
+**Example with Alcohol Purchase:**
+
+```l4
+GIVEN
+  age IS A NUMBER
+  married IS A BOOLEAN TYPICALLY FALSE  -- Most buyers are single
+  has_parental_approval IS A BOOLEAN TYPICALLY FALSE
+  is_emancipated IS A BOOLEAN TYPICALLY FALSE
+GIVETH A BOOLEAN
+`may purchase alcohol` ...
+```
+
+**Partial eval with age=30:**
+- Without TYPICALLY: asks about married, spousal_approval, beer_only
+- With TYPICALLY: assumes married=FALSE → result=TRUE immediately!
+- User can override by explicitly providing married=TRUE
+
+**Implementation Notes:**
+
+1. Add `TYPICALLY` keyword to lexer
+2. Extend `Assume` AST node to include optional default value
+3. Extend type declarations to include defaults per field
+4. Modify three-valued eval to use defaults for missing fields
+5. Track which defaults were used in reasoning trace
+
+**See Also:** `doc/default-values.md` for detailed design discussion of `WithDefault` types.
+
 ### Non-Boolean Functions
 
 Extend to numeric and multi-valued functions:
