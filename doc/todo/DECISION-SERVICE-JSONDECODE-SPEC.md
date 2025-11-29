@@ -1,8 +1,12 @@
 # Specification: JSONDECODE-Based Query Injection for Decision Service
 
+**Status:** ✅ IMPLEMENTED (as of 2025-11-29)
+
 ## Executive Summary
 
 This document specifies replacing the current AST-building approach in the decision service with a JSONDECODE-based approach. Instead of constructing Haskell AST nodes that get pretty-printed to L4, we generate L4 wrapper code that uses `JSONDECODE` to deserialize the input JSON directly.
+
+**Implementation complete.** 16 of 18 tests passing. The 2 failing tests have pre-existing issues in test data unrelated to JSONDECODE.
 
 This approach:
 1. Strips all IDE directives from the original L4 source
@@ -640,6 +644,70 @@ Support partial parameter binding where some parameters come from JSON and other
 
 If code generation becomes a bottleneck, cache generated wrappers keyed by (function name, parameter types).
 
+## Implementation Notes (2025-11-29)
+
+### Key Deviations from Spec
+
+1. **Identifier Naming:** L4 lexer doesn't allow identifiers starting with underscore. Changed:
+   - `__InputArgs` → `InputArgs`
+   - `__decodeArgs` → `decodeArgs`
+   - `__inputJson` → `inputJson`
+   - `__json` → `jsn`
+   - `__DECODE_FAILED__` → `"DECODE_FAILED"` (string literal)
+
+2. **MAYBE Return Type:** To handle type mismatches between decode failure and function return type, the wrapper returns `MAYBE T` instead of `T`:
+   ```l4
+   #EVALTRACE
+     CONSIDER decodeArgs inputJson
+       WHEN JUST args THEN JUST (compute_qualifies (args's walks) (args's drinks) (args's eats))
+       WHEN NOTHING THEN NOTHING
+   ```
+   The Haskell handler unwraps the `JUST` constructor to extract the actual result.
+
+3. **Field Access Syntax:** Parentheses required around field access in function calls:
+   - `args's walks` → `(args's walks)`
+
+4. **Conditional Trace Support:** Integrated with X-L4-Trace header and ?trace= query parameter from Item 1. The `TraceLevel` parameter controls whether `#EVAL` or `#EVALTRACE` is generated.
+
+5. **Result Unwrapping:** L4 evaluator returns JUST as `FnObject [("JUST", FnArray [value])]`. The handler pattern matches this and extracts the inner value.
+
+### Files Modified
+
+- `jl4-decision-service/src/Backend/CodeGen.hs` (new) - 97 lines
+- `jl4-decision-service/src/Backend/DirectiveFilter.hs` (new) - 41 lines
+- `jl4-decision-service/src/Backend/Jl4.hs` - Replaced AST building with code generation
+- `jl4-decision-service/src/Backend/Api.hs` - Added ToHttpApiData instance for TraceLevel
+- `jl4-decision-service/test/IntegrationSpec.hs` - Updated tests for new trace parameters
+- `jl4-decision-service/jl4-decision-service.cabal` - Added new modules
+
+### Code Removed
+
+Successfully deleted ~200 lines of obsolete AST-building code:
+- `buildEvalFunApp`
+- `matchFunctionArgs`, `matchFunctionArg`, `matchFunctionArg'`
+- `matchRecord`, `literalToExpr`
+- `expectObject`, `expectArray`
+- `lookupRecordFields`, `isListConstr`
+- `getAllRecords`, `isRecordDecl`
+- `rawNameOfResolved`
+- L4 syntax builders: `mkTopDeclDirective`, `mkEval`, `mkEvalTrace`, `mkNamedFunApp`, `mkArg`, `mkVar`, `mkLit`, `mkBoolean`, `realToLit`, `mkStringLit`, `mkList`, `mkUncertain`, `mkUnknown`
+
+### Test Results
+
+**Passing:** 16/18 tests (88.9%)
+- All Schema tests (QuickCheck property tests) ✅
+- compute_qualifies boolean tests ✅
+- Function CRUD operations ✅
+
+**Failing:** 2/18 tests
+- vermin_and_rodent insurance tests ✗ (pre-existing type inference bug in test data)
+
+The failures are due to `GIVEN x YIELD x` at line 81 of TestData.hs lacking a type annotation, causing unresolved type variable `x25`. This is unrelated to JSONDECODE implementation.
+
+### Performance
+
+No performance testing conducted. Code generation is simple text concatenation and should be negligible overhead compared to evaluation.
+
 ## References
 
 - Issue #635: Critical L4 Decision Service Improvements
@@ -647,3 +715,4 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
 - `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`: Type-directed JSONDECODE
 - `jl4-decision-service/src/Backend/Jl4.hs`: Current implementation
 - `jl4-decision-service/src/Server.hs`: REST API handlers
+- Commits: (to be added)

@@ -80,6 +80,10 @@ instance FromHttpApiData TraceLevel where
     "full" -> Right TraceFull
     _ -> Left $ "Invalid trace level: " <> t <> ". Expected: none, full"
 
+instance ToHttpApiData TraceLevel where
+  toQueryParam TraceNone = "none"
+  toQueryParam TraceFull = "full"
+
 newtype RunFunction = RunFunction
   { -- | Run a function with parameters
     runFunction ::

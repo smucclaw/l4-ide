@@ -15,16 +15,21 @@ import L4.Names
 import L4.Print
 import qualified L4.Print as Print
 import L4.Syntax
-import qualified L4.TypeCheck.Environment as TypeCheck
 import L4.Utils.Ratio
 import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
 import qualified LSP.L4.Rules as Rules
+import Optics ((^.), (%))
 
 import Language.LSP.Protocol.Types (normalizedFilePathToUri, toNormalizedFilePath)
 import System.FilePath ((<.>), takeFileName)
 
 import Backend.Api
+import Backend.CodeGen (generateEvalWrapper, GeneratedCode(..))
+import Backend.DirectiveFilter (filterIdeDirectives)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Aeson
+import qualified Data.Vector as Vector
 
 -- | Map from file path to file content for module resolution
 type ModuleContext = Map FilePath Text
@@ -51,171 +56,113 @@ createFunction ::
 createFunction filepath fnDecl fnImpl moduleContext =
   RunFunction
     { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
+        -- 1. Typecheck original source to get function signature
         (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
         tcRes <- case mTcRes of
           Nothing -> throwError $ InterpreterError (mconcat initErrs)
           Just tcRes -> pure tcRes
 
-        params <- assumeNoUnknowns params'
+        -- 2. Get function definition and extract parameter types
+        funDecide <- getFunctionDefinition funRawName tcRes.module'
+        let paramTypes = extractParamTypes funDecide
 
-        funExpr <- getFunctionDefinition funRawName tcRes.module'
+        -- 3. Filter IDE directives from the module
+        let filteredModule = filterIdeDirectives tcRes.module'
+            filteredSource = prettyLayout filteredModule
 
-        let recordMap = getAllRecords tcRes.module'
-        appliedFunExpr <- buildEvalFunApp funRawName funExpr recordMap params
+        -- 4. Convert input parameters to JSON
+        inputJson <- paramsToJson params'
 
-        let
-          -- Choose directive based on trace level
-          directive = case traceLevel of
-            TraceNone -> mkEval appliedFunExpr      -- #EVAL (no trace)
-            TraceFull -> mkEvalTrace appliedFunExpr -- #EVALTRACE (with trace)
+        -- 5. Generate wrapper code
+        genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+          Left err -> throwError $ InterpreterError err
+          Right gc -> pure gc
 
-          l4InputWithEval =
-            Text.unlines
-              [ fnImpl
-              , prettyLayout $ mkTopDeclDirective directive
-              ]
+        -- 6. Concatenate: filtered source + generated wrapper
+        let l4Program = filteredSource <> genCode.generatedWrapper
 
-        (errs, mEvalRes) <- evaluateModule filepath l4InputWithEval moduleContext
+        -- 7. Evaluate
+        (errs, mEvalRes) <- evaluateModule filepath l4Program moduleContext
 
+        -- 8. Handle result
         case mEvalRes of
           Nothing -> throwError $ InterpreterError (mconcat errs)
-          Just [Eval.MkEvalDirectiveResult{result, trace}] -> case result of
-            Eval.Assertion _ -> throwError $ InterpreterError $ "L4: Got an assertion instead of a normal result."
-            Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
-            Eval.Reduction (Right val) -> do
-              r <- nfToFnLiteral val
-              pure $
-                ResponseWithReason
-                  { values = [("result", r)]
-                  , reasoning = case traceLevel of
-                      TraceNone -> emptyTree  -- Don't build tree
-                      TraceFull -> buildReasoningTree trace
-                  }
+          Just [Eval.MkEvalDirectiveResult{result, trace}] ->
+            handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
           Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
           Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
     }
  where
   funRawName = mkNormalName fnDecl.name
 
-assumeNoUnknowns :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m [(Text, FnLiteral)]
-assumeNoUnknowns inputs = do
-  traverse assumeKnown inputs
+-- | Extract parameter names and types from a DECIDE's GIVEN clause
+extractParamTypes :: Decide Resolved -> [(Text, Type' Resolved)]
+extractParamTypes (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) _ _) =
+  mapMaybe extractTypedName typedNames
+  where
+    extractTypedName (MkOptionallyTypedName _ resolved (Just ty)) =
+      Just (rawNameToText (rawName $ getActual resolved), ty)
+    extractTypedName (MkOptionallyTypedName _ resolved Nothing) =
+      -- Try to get type from resolved info
+      case getAnno (getName resolved) ^. #extra % #resolvedInfo of
+        Just (TypeInfo ty _) -> Just (rawNameToText (rawName $ getActual resolved), ty)
+        _ -> Nothing
 
-assumeKnown :: (Monad m) => (Text, Maybe FnLiteral) -> ExceptT EvaluatorError m (Text, FnLiteral)
-assumeKnown (t, Just l) = pure (t, l)
-assumeKnown (t, Nothing) = throwError $ InterpreterError $ "L4: can't handle missing values for field: " <> t
+-- | Convert FnLiteral parameters to Aeson.Value
+paramsToJson :: (Monad m) => [(Text, Maybe FnLiteral)] -> ExceptT EvaluatorError m Aeson.Value
+paramsToJson params = do
+  pairs <- forM params $ \(name, mVal) -> case mVal of
+    Nothing -> throwError $ InterpreterError $ "Missing value for parameter: " <> name
+    Just val -> pure (name, fnLiteralToJson val)
+  pure $ Aeson.object [(Aeson.fromText k, v) | (k, v) <- pairs]
 
-type RecordMap = Map RawName [TypedName Resolved]
+-- | Convert FnLiteral to Aeson.Value
+fnLiteralToJson :: FnLiteral -> Aeson.Value
+fnLiteralToJson = \case
+  FnLitInt i -> Aeson.Number (fromIntegral i)
+  FnLitDouble d -> Aeson.Number (realToFrac d)
+  FnLitBool b -> Aeson.Bool b
+  FnLitString s -> Aeson.String s
+  FnArray arr -> Aeson.Array (Vector.fromList (map fnLiteralToJson arr))
+  FnObject fields -> Aeson.object [(Aeson.fromText k, fnLiteralToJson v) | (k, v) <- fields]
+  FnUncertain -> Aeson.Null
+  FnUnknown -> Aeson.Null
 
--- | Build the final function application for the given
---
--- See Note [Support for nested objects] for details.
-buildEvalFunApp ::
-  (Monad m) =>
-  RawName ->
-  Decide Resolved ->
-  RecordMap ->
-  [(Text, FnLiteral)] ->
-  ExceptT EvaluatorError m (Expr Name)
-buildEvalFunApp funName decide recordMap args = do
-  exprArgs <- matchFunctionArgs recordMap args funArgs
-  let name = mkName funName
-  -- NOTE: in case we have no arguments, we don't want to add a WITH clause.
-  pure case exprArgs of
-    [] -> App emptyAnno name []
-    _ -> mkNamedFunApp name exprArgs
- where
-  MkDecide _ (MkTypeSig _ given _) _ _ = decide
-  MkGivenSig _ ns = given
-  funArgs = mapMaybe typedNameToTuple ns
-  typedNameToTuple (MkOptionallyTypedName _ n (Just ty)) = decTy n ty
-  typedNameToTuple (MkOptionallyTypedName _ n@((.extra.resolvedInfo) . getAnno . getName -> Just (TypeInfo ty _)) Nothing) = decTy n ty
-  typedNameToTuple MkOptionallyTypedName {} = Nothing
-  decTy n ty = case ty of
-    Type{} -> Nothing -- We don't care about TYPE
-    TyApp{} -> Just (n, ty)
-    Fun{} -> Just (n, ty)
-    Forall{} -> Just (n, ty)
-    InfVar{} -> Nothing
+-- | Handle evaluation result, checking for decode failure sentinel
+handleEvalResult
+  :: Eval.EvalDirectiveValue
+  -> Maybe EvalTrace
+  -> Text
+  -> TraceLevel
+  -> ExceptT EvaluatorError IO ResponseWithReason
+handleEvalResult result trace _sentinel traceLevel = case result of
+  Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
+  Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
+  Eval.Reduction (Right val) -> do
+    r <- nfToFnLiteral val
+    -- Check if the result is NOTHING (decode failure) or JUST value
+    actualResult <- case r of
+      -- If result is NOTHING, it means JSON decode failed
+      FnUnknown ->
+        throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
+      -- If result is JUST x (represented as record/object with JUST constructor)
+      FnObject [("JUST", FnArray [val'])] ->
+        pure val'
+      -- For backwards compatibility, if result is an array with one element
+      FnArray [val'] ->
+        pure val'
+      -- For any other result, return as-is
+      _ ->
+        pure r
 
-matchFunctionArgs :: (Monad m) => RecordMap -> [(Text, FnLiteral)] -> [(Resolved, Type' Resolved)] -> ExceptT EvaluatorError m [NamedExpr Name]
-matchFunctionArgs recordMap input parameters =
-  zipWithM (matchFunctionArg recordMap) (sortOn fst input) (sortOn (resolvedRawName . fst) parameters)
- where
-  resolvedRawName = rawName . getActual
+    pure $ ResponseWithReason
+      { values = [("result", actualResult)]
+      , reasoning = case traceLevel of
+          TraceNone -> emptyTree
+          TraceFull -> buildReasoningTree trace
+      }
 
--- | Try to match the given argument 'FnLiteral' with the expected type of the argument.
---
--- See Note [Support for nested objects] for details.
-matchFunctionArg ::
-  (Monad m) =>
-  RecordMap ->
-  (Text, FnLiteral) ->
-  (Resolved, Type' Resolved) ->
-  ExceptT EvaluatorError m (NamedExpr Name)
-matchFunctionArg recordMap (inputName, inputValue) (r, ty)
-  | inputName /= rawNameToText (rawNameOfResolved r) =
-      throwError $ InterpreterError $ "L4: Unexpected parameter name, expected " <> rawNameToText (rawNameOfResolved r) <> ", but got " <> inputName
-  | otherwise = do
-      arguments <- matchFunctionArg' recordMap inputValue (r, ty)
-      pure $ mkArg (mkNormalNameText inputName) arguments
-
--- | Worker function of 'matchFunctionArg'. Match the 'FnLiteral' with the
--- expected type given by @'Type'' 'Resolved'@.
-matchFunctionArg' ::
-  (Monad m) =>
-  RecordMap ->
-  FnLiteral ->
-  (Resolved, Type' Resolved) ->
-  ExceptT EvaluatorError m (Expr Name)
-matchFunctionArg' recordMap inputValue (r, ty)
-  | Just (constrName, fieldNames) <- lookupRecordFields recordMap ty = do
-      matchRecord recordMap constrName fieldNames inputValue
-  | Just nty <- isListConstr r ty = do
-      -- We need to treat list of objects differently to
-      vals <- expectArray inputValue
-      case lookupRecordFields recordMap nty of
-        Just (constrName, fieldNames) -> do
-          l4Vals <- traverse (matchRecord recordMap constrName fieldNames) vals
-          pure $ mkList l4Vals
-        Nothing -> do
-          l4Vals <- traverse literalToExpr vals
-          pure $ mkList l4Vals
-  | otherwise =
-      literalToExpr inputValue
-
--- | Given the 'RawName' of a record and its fields, match the 'FnLiteral' with the
--- fields of the record.
--- The fields of the record may also be records, which we will recursively match.
-matchRecord :: (Monad m) => RecordMap -> RawName -> [TypedName Resolved] -> FnLiteral -> ExceptT EvaluatorError m (Expr Name)
-matchRecord recordMap constrName fieldNames inputValue = do
-  inputObj <- expectObject inputValue
-  arguments <- matchFunctionArgs recordMap inputObj (fmap toRecord fieldNames)
-  pure (mkNamedFunApp (mkName constrName) arguments)
- where
-  toRecord (MkTypedName _ n ns) = (n, ns)
-
-isListConstr :: Resolved -> Type' Resolved -> Maybe (Type' Resolved)
-isListConstr r ty
-  | r == TypeCheck.listRef = case ty of
-      TyApp _ _list [innerTy] -> Just innerTy
-      _ -> Nothing
-  | otherwise = Nothing
-
--- | Given a type, lookup the 'RawName' of the constructor and the fields of the record.
-lookupRecordFields :: RecordMap -> Type' Resolved -> Maybe (RawName, [TypedName Resolved])
-lookupRecordFields recordMap ty = do
-  tyName <- tyNameOf ty
-  fieldNames <- Map.lookup (rawNameOfResolved tyName) recordMap
-  pure (rawNameOfResolved tyName, fieldNames)
- where
-  tyNameOf = \case
-    Type{} -> Nothing
-    TyApp _ n _ -> Just n
-    Fun{} -> Nothing
-    Forall _ _ fty -> tyNameOf fty
-    InfVar{} -> Nothing
 
 -- | Find the first function with the given name in the module.
 getFunctionDefinition :: (Monad m) => RawName -> Module Resolved -> ExceptT EvaluatorError m (Decide Resolved)
@@ -241,82 +188,9 @@ getFunctionDefinition name (MkModule _ _ sect) = case goSection sect of
 
   nameOf (MkDecide _ _ (MkAppForm _ n _ _) _) = n
 
--- | Find all records defined in this module.
-getAllRecords :: Module Resolved -> RecordMap
-getAllRecords (MkModule _ _ sect) = Map.fromList $ goSection sect
- where
-  goSection (MkSection _ _ _ decls) =
-    Base.concatMap goDecl decls
-
-  goDecl = \case
-    Decide _ _ -> []
-    Declare _ decl -> goDeclare decl
-    Assume _ _ -> []
-    Directive _ _ -> []
-    Import _ _ -> []
-    Section _ s -> goSection s
-
-  goDeclare (MkDeclare _ _ _ tyDecl) = maybeToList $ isRecordDecl tyDecl
-
-isRecordDecl :: (HasName n) => TypeDecl n -> Maybe (RawName, [TypedName n])
-isRecordDecl = \case
-  RecordDecl _ (Just n) typedNames -> Just (rawName $ getName n, typedNames)
-  RecordDecl _ Nothing _ -> Nothing
-  EnumDecl{} -> Nothing
-  SynonymDecl{} -> Nothing
-
-{-
-Note [Support for nested objects]
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-We support nested function arguments, including objects, arrays, and arrays of objects.
-To support this, we perform type-directed deserialisation.
-
-1. Collect all record names and their fields defined in the module.
-2. Find the function that will be executed.
-3. Extract the arguments of the function from the 'GivenSig'.
-  * We ignore 'TYPE' variables, as we only generate an untyped AST node, it is up to the
-    later stages to reject ill-typed programs.
-4. Match the 'FnLiteral' with the arguments of the function.
-  * Essentially zipping the arguments with the expected arguments.
-5. For each 'FnLiteral' check whether the argument type matches.
-  * For objects, the type of the function argument needs to be a record.
-    We retrieve the fields of the record and match them with the fields of the object.
-    Then, repeat step (5)
-  * For arrays, we check whether a 'LIST ty' is expected.
-    If it is, we use the type information of 'ty'
-  * For all other types, L4 provides primitives to which we translate.
-6. Build the final function application.
--}
-
 -- ----------------------------------------------------------------------------
 -- Helpers and other non-generic functions
 -- ----------------------------------------------------------------------------
-
-rawNameOfResolved :: Resolved -> RawName
-rawNameOfResolved = rawName . getActual
-
-expectObject :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m [(Text, FnLiteral)]
-expectObject = \case
-  FnObject flds -> pure flds
-  _ -> throwError $ InterpreterError "L4: expected object but got something else."
-
-expectArray :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m [FnLiteral]
-expectArray = \case
-  FnArray arr -> pure arr
-  _ -> throwError $ InterpreterError "L4: expected list but got something else."
-
--- | Translate simple 'FnLiteral' to 'Expr Name'.
--- Does not work for nested objects, such as 'FnArray' and 'FnObject'.
-literalToExpr :: (Monad m) => FnLiteral -> ExceptT EvaluatorError m (Expr Name)
-literalToExpr = \case
-  FnLitInt i -> pure . mkLit $ realToLit i
-  FnLitDouble d -> pure . mkLit $ realToLit d
-  FnLitBool b -> pure . mkVar $ mkBoolean b
-  FnLitString s -> pure . mkLit $ mkStringLit s
-  FnArray arr -> throwError $ CannotHandleParameterType $ FnArray arr
-  FnObject obj -> throwError $ CannotHandleParameterType $ FnObject obj
-  FnUncertain -> pure $ mkVar mkUncertain
-  FnUnknown -> pure $ mkVar mkUnknown
 
 nfToFnLiteral :: (Monad m) => Eval.NF -> ExceptT EvaluatorError m FnLiteral
 nfToFnLiteral (Eval.MkNF v) = valueToFnLiteral v
@@ -400,74 +274,8 @@ evaluateModule file input moduleContext =
 -- L4 syntax builders
 -- ----------------------------------------------------------------------------
 
-mkTopDeclDirective :: Directive n -> TopDecl n
-mkTopDeclDirective = Directive emptyAnno
-
--- | Create #EVAL directive (no trace)
-mkEval :: Expr n -> Directive n
-mkEval = LazyEval emptyAnno
-
--- | Create #EVALTRACE directive (with trace)
-mkEvalTrace :: Expr n -> Directive n
-mkEvalTrace = LazyEvalTrace emptyAnno
-
-mkNamedFunApp :: n -> [NamedExpr n] -> Expr n
-mkNamedFunApp con args =
-  AppNamed emptyAnno con args Nothing
-
-mkArg :: n -> Expr n -> NamedExpr n
-mkArg =
-  MkNamedExpr emptyAnno
-
-mkName :: RawName -> Name
-mkName =
-  MkName emptyAnno
-
 mkNormalName :: Text -> RawName
 mkNormalName = NormalName
-
-mkNormalNameText :: Text -> Name
-mkNormalNameText = mkName . mkNormalName
-
-mkVar :: n -> Expr n
-mkVar =
-  Var emptyAnno
-
-mkLit :: Lit -> Expr n
-mkLit =
-  Lit emptyAnno
-
-l4True :: Name
-l4True =
-  MkName emptyAnno $ NormalName "TRUE"
-
-l4False :: Name
-l4False =
-  MkName emptyAnno $ NormalName "FALSE"
-
-mkBoolean :: Bool -> Name
-mkBoolean b =
-  case b of
-    True -> l4True
-    False -> l4False
-
-realToLit :: (Real a) => a -> Lit
-realToLit =
-  NumericLit emptyAnno . toRational
-
-mkStringLit :: Text -> Lit
-mkStringLit =
-  StringLit emptyAnno
-
-mkList :: [Expr n] -> Expr n
-mkList =
-  List emptyAnno
-
-mkUncertain :: Name
-mkUncertain = mkNormalNameText "uncertain"
-
-mkUnknown :: Name
-mkUnknown = mkNormalNameText "unknown"
 
 -- ----------------------------------------------------------------------------
 -- Trace builders

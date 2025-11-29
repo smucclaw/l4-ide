@@ -64,6 +64,8 @@ spec = describe "integration" do
       runDecisionService $ \api -> do
         r <-
           (api.functionRoutes.singleEntity "compute_qualifies").evalFunction
+            Nothing  -- X-L4-Trace header
+            Nothing  -- ?trace= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -80,6 +82,8 @@ spec = describe "integration" do
       runDecisionService $ \api -> do
         r <-
           (api.functionRoutes.singleEntity "compute_qualifies").evalFunction
+            Nothing  -- X-L4-Trace header
+            Nothing  -- ?trace= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -96,6 +100,8 @@ spec = describe "integration" do
       runDecisionService $ \api -> do
         r <-
           (api.functionRoutes.singleEntity "vermin_and_rodent").evalFunction
+            Nothing  -- X-L4-Trace header
+            Nothing  -- ?trace= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -126,6 +132,8 @@ spec = describe "integration" do
       runDecisionService $ \api -> do
         r <-
           (api.functionRoutes.singleEntity "vermin_and_rodent").evalFunction
+            Nothing  -- X-L4-Trace header
+            Nothing  -- ?trace= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
