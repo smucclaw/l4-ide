@@ -952,20 +952,21 @@ encodeValueToJson = \case
       '\t' -> "\\t"
       c -> Text.singleton c
 
--- | Decode JSON string to L4 value wrapped in MAYBE
--- Returns JUST value on success, NOTHING on parse error
+-- | Decode JSON string to L4 value wrapped in EITHER
+-- Returns LEFT errorMsg on parse error, RIGHT value on success
 -- | Type-directed JSON decoding - uses type information to construct proper records
 decodeJsonToValueTyped :: Text -> Type' Resolved -> Machine WHNF
 decodeJsonToValueTyped jsonStr ty = do
   case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
-    Left _err -> do
-      -- Parse error: return NOTHING
-      pure $ ValConstructor TypeCheck.nothingRef []
+    Left err -> do
+      -- Parse error: return LEFT errorMsg
+      errorRef <- AllocateValue (ValString (Text.pack err))
+      pure $ ValConstructor TypeCheck.leftRef [errorRef]
     Right jsonValue -> do
-      -- Parse success: convert to L4 value using type information and wrap in JUST
+      -- Parse success: convert to L4 value using type information and wrap in RIGHT
       l4Value <- jsonValueToWHNFTyped jsonValue ty
-      justVal <- AllocateValue l4Value
-      pure $ ValConstructor TypeCheck.justRef [justVal]
+      valueRef <- AllocateValue l4Value
+      pure $ ValConstructor TypeCheck.rightRef [valueRef]
 
 -- | Convert Aeson Value to L4 WHNF using type information
 -- This function recursively handles nested structures: lists of records, records containing records, etc.
@@ -1083,14 +1084,15 @@ jsonListToWHNFTyped (x:xs) elementType = do
 decodeJsonToValue :: Text -> Machine WHNF
 decodeJsonToValue jsonStr = do
   case Aeson.eitherDecodeStrict' (TE.encodeUtf8 jsonStr) of
-    Left _err -> do
-      -- Parse error: return NOTHING
-      pure $ ValConstructor TypeCheck.nothingRef []
+    Left err -> do
+      -- Parse error: return LEFT errorMsg
+      errorRef <- AllocateValue (ValString (Text.pack err))
+      pure $ ValConstructor TypeCheck.leftRef [errorRef]
     Right jsonValue -> do
-      -- Parse success: convert to L4 value and wrap in JUST
+      -- Parse success: convert to L4 value and wrap in RIGHT
       l4Value <- jsonValueToWHNF jsonValue
-      justVal <- AllocateValue l4Value
-      pure $ ValConstructor TypeCheck.justRef [justVal]
+      valueRef <- AllocateValue l4Value
+      pure $ ValConstructor TypeCheck.rightRef [valueRef]
 
 -- | Convert Aeson Value to L4 WHNF
 jsonValueToWHNF :: Aeson.Value -> Machine WHNF
@@ -1251,11 +1253,11 @@ runBuiltin es op mTy = do
       jsonStr <- expectString es
       result <- case mTy of
         Just ty -> do
-          -- Extract inner type from MAYBE if present
-          -- JSONDECODE returns MAYBE α, so if we have MAYBE Person, extract Person
+          -- Extract inner type from EITHER if present
+          -- JSONDECODE returns EITHER STRING α, so if we have EITHER STRING Person, extract Person
           let innerTy = case ty of
-                TyApp _ maybeRef [innerType]
-                  | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> innerType
+                TyApp _ eitherRef [_errorType, valueType]
+                  | nameToText (TypeCheck.getName eitherRef) == "EITHER" -> valueType
                 _ -> ty
           decodeJsonToValueTyped jsonStr innerTy
         Nothing ->
@@ -1851,6 +1853,8 @@ initialEnvironment = do
   nilRef   <- AllocateValue ValNil
   nothingRef <- AllocateValue (ValConstructor TypeCheck.nothingRef [])
   justRef <- AllocateValue (ValUnappliedConstructor TypeCheck.justRef)
+  leftRef <- AllocateValue (ValUnappliedConstructor TypeCheck.leftRef)
+  rightRef <- AllocateValue (ValUnappliedConstructor TypeCheck.rightRef)
   evalContractRef <- AllocateValue =<< evalContractVal
   eventCRef <- AllocateValue eventCVal
   isIntegerRef <- AllocateValue (ValUnaryBuiltinFun UnaryIsInteger)
@@ -1894,6 +1898,8 @@ initialEnvironment = do
       , (TypeCheck.emptyUnique, nilRef)
       , (TypeCheck.nothingUnique, nothingRef)
       , (TypeCheck.justUnique, justRef)
+      , (TypeCheck.leftUnique, leftRef)
+      , (TypeCheck.rightUnique, rightRef)
       , (TypeCheck.evalContractUnique, evalContractRef)
       , (TypeCheck.eventCUnique, eventCRef)
       , (TypeCheck.fulfilUnique, fulfilRef)

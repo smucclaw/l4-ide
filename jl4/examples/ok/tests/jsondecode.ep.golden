@@ -1,4 +1,4 @@
--- Test JSONDECODE operator (JSON string to L4 values wrapped in MAYBE)
+-- Test JSONDECODE operator (JSON string to L4 values wrapped in EITHER)
 
 -- Test 1: Decode JSON primitives
 DECIDE decodeString IS
@@ -35,23 +35,23 @@ DECIDE decodeBooleanArray IS
 DECIDE decodeNestedArray IS
   JSONDECODE "[[1, 2], [3, 4], [5, 6]]"
 
--- Test 3: Parse errors return NOTHING
+-- Test 3: Parse errors return LEFT with error message
 DECIDE decodeInvalidJson IS
   JSONDECODE "{not valid json"
 
 DECIDE decodeMalformed IS
   JSONDECODE "[1, 2, "
 
--- Test 4: Extract values from MAYBE using CONSIDER
+-- Test 4: Extract values from EITHER using CONSIDER
 DECIDE extractedString IS
   CONSIDER decodeString
-    WHEN JUST value THEN value
-    WHEN NOTHING THEN "default"
+    WHEN RIGHT value THEN value
+    WHEN LEFT error THEN error
 
 DECIDE extractedNumber IS
   CONSIDER decodeNumber
-    WHEN JUST value THEN value
-    WHEN NOTHING THEN 0
+    WHEN RIGHT value THEN value
+    WHEN LEFT error THEN 0
 
 #EVAL decodeString
 #EVAL decodeNumber

@@ -2,31 +2,31 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 jsondecode.l4:56:1-19:
-  JUST OF "hello"
+  RIGHT OF "hello"
 jsondecode.l4:57:1-19:
-  JUST OF 42
+  RIGHT OF 42
 jsondecode.l4:58:1-20:
-  JUST OF 3.14
+  RIGHT OF 3.14
 jsondecode.l4:59:1-17:
-  JUST OF TRUE
+  RIGHT OF TRUE
 jsondecode.l4:60:1-18:
-  JUST OF FALSE
+  RIGHT OF FALSE
 jsondecode.l4:61:1-17:
-  JUST OF NOTHING
+  RIGHT OF NOTHING
 jsondecode.l4:62:1-23:
-  JUST OF EMPTY
+  RIGHT OF EMPTY
 jsondecode.l4:63:1-24:
-  JUST OF (LIST 1, 2, 3, 4, 5)
+  RIGHT OF (LIST 1, 2, 3, 4, 5)
 jsondecode.l4:64:1-24:
-  JUST OF (LIST "apple", "banana", "cherry")
+  RIGHT OF (LIST "apple", "banana", "cherry")
 jsondecode.l4:65:1-25:
-  JUST OF (LIST TRUE, FALSE, TRUE)
+  RIGHT OF (LIST TRUE, FALSE, TRUE)
 jsondecode.l4:66:1-24:
-  JUST OF (LIST LIST 1, 2, LIST 3, 4, LIST 5, 6)
+  RIGHT OF (LIST LIST 1, 2, LIST 3, 4, LIST 5, 6)
 jsondecode.l4:67:1-24:
-  NOTHING
+  LEFT OF "Unexpected \"not valid json\", expecting record key literal or }"
 jsondecode.l4:68:1-22:
-  NOTHING
+  LEFT OF "Unexpected end-of-input, expecting JSON value"
 jsondecode.l4:69:1-22:
   "hello"
 jsondecode.l4:70:1-22:

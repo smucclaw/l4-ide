@@ -4,4 +4,4 @@ Evaluation successful
 json-roundtrip-basic.l4:17:1-19:
   "{\"name\":\"Alice\",\"age\":30}"
 json-roundtrip-basic.l4:18:1-14:
-  JUST OF (Person OF "Alice", 30)
+  RIGHT OF (Person OF "Alice", 30)

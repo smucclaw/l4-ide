@@ -44,6 +44,8 @@ This approach:
 
 L4 now supports bidirectional type checking (see `BIDIRECTIONAL-TYPE-CHECKING-SPEC.md`), which allows type information to flow from context to expressions. This enables `JSONDECODE` to decode JSON strings into typed L4 values when the expected type is known.
 
+**Note (2025-11-29):** JSONDECODE now returns `EITHER STRING α` instead of `MAYBE α` to provide better error reporting. The LEFT case contains the parse error message, while RIGHT contains the successfully decoded value.
+
 Example:
 ```l4
 DECLARE Person HAS
@@ -51,14 +53,15 @@ DECLARE Person HAS
   age IS A NUMBER
 
 GIVEN s IS A STRING
-GIVETH A MAYBE Person
+GIVETH AN EITHER STRING Person
 decodePerson s MEANS JSONDECODE s
 
 DECIDE result IS decodePerson "{\"name\":\"Bob\",\"age\":25}"
--- result evaluates to: JUST OF (Person OF "Bob", 25)
+-- result evaluates to: RIGHT (Person OF "Bob", 25)
+-- malformed JSON would return: LEFT "parse error: ..."
 ```
 
-The `GIVETH A MAYBE Person` annotation provides the type context that guides `JSONDECODE`.
+The `GIVETH AN EITHER STRING Person` annotation provides the type context that guides `JSONDECODE`.
 
 ## Design
 
@@ -135,7 +138,7 @@ DECLARE __InputArgs HAS
 
 -- 2. Typed decoder function (bidirectional typing guides JSONDECODE)
 GIVEN __json IS A STRING
-GIVETH A MAYBE __InputArgs
+GIVETH AN EITHER STRING __InputArgs
 __decodeArgs __json MEANS JSONDECODE __json
 
 -- 3. Runtime JSON payload from REST request
@@ -144,14 +147,14 @@ DECIDE __inputJson IS "{\"p\":{\"name\":\"Alice\",\"age\":25},\"threshold\":18}"
 -- 4. Decode, unwrap, and call target function
 #EVALTRACE
   CONSIDER __decodeArgs __inputJson
-    WHEN JUST args THEN isOlderThan args's p args's threshold
-    WHEN NOTHING THEN __DECODE_FAILED__
+    WHEN RIGHT args THEN JUST (isOlderThan args's p args's threshold)
+    WHEN LEFT error THEN NOTHING
 ```
 
 #### Output Handling
 
-- **Success:** `JUST args` branch executes, returns the function result with trace
-- **Decode Failure:** `NOTHING` branch returns `__DECODE_FAILED__` sentinel, which the Haskell layer detects and converts to an error response: `"JSON decoding failed, input needs to match schema"`
+- **Success:** `RIGHT args` branch executes, wraps result in JUST, returns the function result with trace
+- **Decode Failure:** `LEFT error` branch returns `NOTHING`, which the Haskell layer detects and converts to an error response: `"JSON decoding failed: input does not match expected schema"`
 
 ## Implementation
 
@@ -219,7 +222,7 @@ generateInputRecord params = Text.unlines $
 generateDecoder :: Text
 generateDecoder = Text.unlines
   [ "GIVEN __json IS A STRING"
-  , "GIVETH A MAYBE __InputArgs"
+  , "GIVETH AN EITHER STRING __InputArgs"
   , "__decodeArgs __json MEANS JSONDECODE __json"
   ]
 
@@ -242,8 +245,8 @@ generateEvalTrace :: Text -> [(Text, Type' Resolved)] -> Text
 generateEvalTrace funName params = Text.unlines
   [ "#EVALTRACE"
   , "  CONSIDER __decodeArgs __inputJson"
-  , "    WHEN JUST args THEN " <> functionCall
-  , "    WHEN NOTHING THEN __DECODE_FAILED__"
+  , "    WHEN RIGHT args THEN JUST (" <> functionCall <> ")"
+  , "    WHEN LEFT error THEN NOTHING"
   ]
   where
     functionCall = funName <> " " <> Text.unwords (map mkArgAccess params)
@@ -389,32 +392,44 @@ fnLiteralToJson = \case
   FnUncertain -> Aeson.Null  -- or special handling
   FnUnknown -> Aeson.Null
 
--- | Handle evaluation result, checking for decode failure sentinel
+-- | Handle evaluation result, checking for decode failure (NOTHING constructor)
 handleEvalResult
-  :: Eval.EvalResult
+  :: Eval.EvalDirectiveValue
   -> Maybe EvalTrace
   -> Text
+  -> TraceLevel
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace sentinel = case result of
+handleEvalResult result trace _sentinel traceLevel = case result of
   Eval.Assertion _ ->
     throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) ->
     throwError $ InterpreterError $ Text.show evalExc
-  Eval.Reduction (Right val)
-    | isDecodeSentinel val sentinel ->
-        throwError $ InterpreterError "JSON decoding failed, input needs to match schema"
-    | otherwise -> do
-        r <- nfToFnLiteral val
-        pure ResponseWithReason
-          { values = [("result", r)]
-          , reasoning = buildReasoningTree trace
-          }
+  Eval.Reduction (Right val) -> do
+    r <- nfToFnLiteral val
+    -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
+    actualResult <- case r of
+      -- If result is FnUnknown, it means evaluation produced undefined/unknown
+      FnUnknown ->
+        throwError $ InterpreterError "Evaluation produced unknown value"
+      -- If result is NOTHING constructor, it means JSONDECODE returned LEFT (JSON decode failed)
+      FnObject [("NOTHING", FnArray [])] ->
+        throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
+      -- If result is JUST x (wrapper returns JUST when JSONDECODE returns RIGHT)
+      FnObject [("JUST", FnArray [val'])] ->
+        pure val'
+      -- For backwards compatibility, if result is an array with one element
+      FnArray [val'] ->
+        pure val'
+      -- For any other result, return as-is
+      _ ->
+        pure r
 
--- | Check if the result is the decode failure sentinel
-isDecodeSentinel :: Eval.NF -> Text -> Bool
-isDecodeSentinel (Eval.MkNF (Eval.ValUnappliedConstructor name)) sentinel =
-  prettyLayout name == sentinel
-isDecodeSentinel _ _ = False
+    pure $ ResponseWithReason
+      { values = [("result", actualResult)]
+      , reasoning = case traceLevel of
+          TraceNone -> emptyTree
+          TraceFull -> buildReasoningTree trace
+      }
 ```
 
 ### Functions to Remove
@@ -655,21 +670,28 @@ If code generation becomes a bottleneck, cache generated wrappers keyed by (func
    - `__json` → `jsn`
    - `__DECODE_FAILED__` → `"DECODE_FAILED"` (string literal)
 
-2. **MAYBE Return Type:** To handle type mismatches between decode failure and function return type, the wrapper returns `MAYBE T` instead of `T`:
+2. **EITHER for JSONDECODE (2025-11-29):** JSONDECODE now returns `EITHER STRING α` instead of `MAYBE α` for better error reporting. The generated decoder signature is:
+   ```l4
+   GIVEN jsn IS A STRING
+   GIVETH AN EITHER STRING InputArgs
+   decodeArgs jsn MEANS JSONDECODE jsn
+   ```
+
+3. **MAYBE Wrapper Return Type:** To handle type mismatches between decode failure and function return type, the wrapper returns `MAYBE T` instead of `T`:
    ```l4
    #EVALTRACE
      CONSIDER decodeArgs inputJson
-       WHEN JUST args THEN JUST (compute_qualifies (args's walks) (args's drinks) (args's eats))
-       WHEN NOTHING THEN NOTHING
+       WHEN RIGHT args THEN JUST (compute_qualifies (args's walks) (args's drinks) (args's eats))
+       WHEN LEFT error THEN NOTHING
    ```
-   The Haskell handler unwraps the `JUST` constructor to extract the actual result.
+   The Haskell handler unwraps the `JUST` constructor to extract the actual result, or detects the `NOTHING` constructor as a decode error.
 
-3. **Field Access Syntax:** Parentheses required around field access in function calls:
+4. **Field Access Syntax:** Parentheses required around field access in function calls:
    - `args's walks` → `(args's walks)`
 
-4. **Conditional Trace Support:** Integrated with X-L4-Trace header and ?trace= query parameter from Item 1. The `TraceLevel` parameter controls whether `#EVAL` or `#EVALTRACE` is generated.
+5. **Conditional Trace Support:** Integrated with X-L4-Trace header and ?trace= query parameter from Item 1. The `TraceLevel` parameter controls whether `#EVAL` or `#EVALTRACE` is generated.
 
-5. **Result Unwrapping:** L4 evaluator returns JUST as `FnObject [("JUST", FnArray [value])]`. The handler pattern matches this and extracts the inner value.
+6. **Result Unwrapping:** L4 evaluator returns JUST as `FnObject [("JUST", FnArray [value])]`. The handler pattern matches this and extracts the inner value.
 
 ### Files Modified
 

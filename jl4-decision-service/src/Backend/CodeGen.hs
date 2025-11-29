@@ -63,7 +63,7 @@ generateInputRecord params = Text.unlines $
 generateDecoder :: Text
 generateDecoder = Text.unlines
   [ "GIVEN jsn IS A STRING"
-  , "GIVETH A MAYBE InputArgs"
+  , "GIVETH AN EITHER STRING InputArgs"
   , "decodeArgs jsn MEANS JSONDECODE jsn"
   ]
 
@@ -85,8 +85,8 @@ generateEvalDirective :: Text -> [(Text, Type' Resolved)] -> TraceLevel -> Text
 generateEvalDirective funName params traceLevel = Text.unlines $
   [ directive
   , "  CONSIDER decodeArgs inputJson"
-  , "    WHEN JUST args THEN JUST (" <> functionCall <> ")"
-  , "    WHEN NOTHING THEN NOTHING"
+  , "    WHEN RIGHT args THEN JUST (" <> functionCall <> ")"
+  , "    WHEN LEFT error THEN NOTHING"
   ]
   where
     directive = case traceLevel of

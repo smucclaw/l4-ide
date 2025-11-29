@@ -141,12 +141,15 @@ handleEvalResult result trace _sentinel traceLevel = case result of
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
   Eval.Reduction (Right val) -> do
     r <- nfToFnLiteral val
-    -- Check if the result is NOTHING (decode failure) or JUST value
+    -- Check if the result is NOTHING (decode failure from LEFT error) or JUST value
     actualResult <- case r of
-      -- If result is NOTHING, it means JSON decode failed
+      -- If result is FnUnknown, it means evaluation produced undefined/unknown
       FnUnknown ->
+        throwError $ InterpreterError "Evaluation produced unknown value"
+      -- If result is NOTHING constructor, it means JSONDECODE returned LEFT (JSON decode failed)
+      FnObject [("NOTHING", FnArray [])] ->
         throwError $ InterpreterError "JSON decoding failed: input does not match expected schema"
-      -- If result is JUST x (represented as record/object with JUST constructor)
+      -- If result is JUST x (wrapper returns JUST when JSONDECODE returns RIGHT)
       FnObject [("JUST", FnArray [val'])] ->
         pure val'
       -- For backwards compatibility, if result is an array with one element
