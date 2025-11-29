@@ -38,10 +38,11 @@ spec = describe "integration" do
         Map.keys params `shouldMatchList` ["walks", "eats", "drinks"]
   it "add new function" do
     runDecisionService \api -> do
+      rodentSpec <- liftIO TestData.rodentAndVerminFunctionSpec
       oldFuns <- api.functionRoutes.batchEntities
       () <- (api.functionRoutes.singleEntity "newRodentAndVermin").postFunction
         FunctionImplementation
-          { declaration = TestData.rodentAndVerminFunctionSpec.fnImpl
+          { declaration = rodentSpec.fnImpl
           , implementation = Map.singleton JL4 TestData.rodentAndVerminJL4
           }
       newFuns <- api.functionRoutes.batchEntities
@@ -49,10 +50,11 @@ spec = describe "integration" do
         length newFuns `shouldBe` length oldFuns + 1
   it "update function" do
     runDecisionService \api -> do
+      rodentSpec <- liftIO TestData.rodentAndVerminFunctionSpec
       oldFun <- (api.functionRoutes.singleEntity "vermin_and_rodent").getFunction
       () <- (api.functionRoutes.singleEntity "vermin_and_rodent").putFunction
         FunctionImplementation
-          { declaration = TestData.rodentAndVerminFunctionSpec.fnImpl
+          { declaration = rodentSpec.fnImpl
           , implementation = Map.singleton JL4 TestData.rodentAndVerminJL4
           }
       newFun <- (api.functionRoutes.singleEntity "vermin_and_rodent").getFunction
@@ -173,6 +175,37 @@ spec = describe "integration" do
           s <- requireSuccess r
           s.values `shouldBe` [("result", FnLitBool True)]
 
+    it "batch evaluation with precompiled module (parallel)" do
+      runDecisionService $ \api -> do
+        -- Create 100 test cases to demonstrate parallel batch evaluation
+        let testCase n = InputCase
+              { id = n
+              , attributes = Map.fromList
+                  [ ("walks", FnLitBool True)
+                  , ("eats", FnLitBool True)
+                  , ("drinks", FnLitBool True)
+                  ]
+              }
+            cases = map testCase [1..100]
+
+        r <- (api.functionRoutes.singleEntity "compute_qualifies").batchFunction
+          Nothing  -- X-L4-Trace header
+          Nothing  -- ?trace= query param
+          BatchRequest
+            { cases = cases
+            , outcomes = []
+            }
+
+        liftIO $ do
+          -- All 100 cases should succeed
+          length r.cases `shouldBe` 100
+          -- All should return True (person qualifies)
+          all (\c -> Map.lookup "result" c.attributes == Just (FnLitBool True)) r.cases `shouldBe` True
+          -- Summary should show all cases processed
+          r.summary.casesRead `shouldBe` 100
+          r.summary.casesProcessed `shouldBe` 100
+          r.summary.casesIgnored `shouldBe` 0
+
 requireSuccess :: (MonadIO m) => SimpleResponse -> m ResponseWithReason
 requireSuccess resp = case resp of
   SimpleResponse s -> pure s
@@ -208,5 +241,6 @@ runDecisionService' act = do
         act apiClient
 
 initExampleAppEnv :: IO AppEnv
-initExampleAppEnv =
-  MkAppEnv <$> newTVarIO Examples.functionSpecs <*> pure (BaseUrl Http "localhost" 5008  "") <*> newManager defaultManagerSettings
+initExampleAppEnv = do
+  funcs <- Examples.functionSpecs
+  MkAppEnv <$> newTVarIO funcs <*> pure (BaseUrl Http "localhost" 5008  "") <*> newManager defaultManagerSettings

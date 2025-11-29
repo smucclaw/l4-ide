@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext) where
+module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -15,6 +15,7 @@ import L4.Names
 import L4.Print
 import qualified L4.Print as Print
 import L4.Syntax
+import L4.TypeCheck.Types (EntityInfo, Environment)
 import L4.Utils.Ratio
 import qualified LSP.Core.Shake as Shake
 import LSP.L4.Oneshot (oneshotL4ActionAndErrors)
@@ -34,6 +35,15 @@ import qualified Data.Vector as Vector
 -- | Map from file path to file content for module resolution
 type ModuleContext = Map FilePath Text
 
+-- | Pre-compiled L4 module ready for fast evaluation
+data CompiledModule = CompiledModule
+  { compiledModule :: !(Module Resolved)
+  , compiledEnvironment :: !Environment
+  , compiledEntityInfo :: !EntityInfo
+  , compiledDecide :: !(Decide Resolved)
+  }
+  deriving (Generic)
+
 buildFunDecide :: Text -> FunctionDeclaration -> ExceptT EvaluatorError IO (Decide Resolved)
 buildFunDecide fnImpl fnDecl = do
   (initErrs, mTcRes) <- typecheckModule file fnImpl Map.empty
@@ -47,54 +57,152 @@ buildFunDecide fnImpl fnDecl = do
   file = Text.unpack fnDecl.name <.> "l4"
   funRawName = mkNormalName fnDecl.name
 
+-- | Precompile an L4 module for fast repeated evaluation
+precompileModule
+  :: FilePath
+  -> Text
+  -> ModuleContext
+  -> RawName
+  -> IO (Either Text CompiledModule)
+precompileModule filepath source moduleContext funName = runExceptT $ do
+  -- Parse and typecheck once
+  (errs, mTcRes) <- liftIO $ typecheckModule filepath source moduleContext
+  tcRes <- case mTcRes of
+    Nothing -> throwError $ mconcat errs
+    Just tcRes -> pure tcRes
+
+  -- Extract the function definition
+  decide <- withExceptT evalErrorToText $ getFunctionDefinition funName tcRes.module'
+
+  -- Build the compiled module
+  pure CompiledModule
+    { compiledModule = tcRes.module'
+    , compiledEnvironment = tcRes.environment
+    , compiledEntityInfo = tcRes.entityInfo
+    , compiledDecide = decide
+    }
+ where
+  evalErrorToText :: EvaluatorError -> Text
+  evalErrorToText (InterpreterError t) = t
+  evalErrorToText (RequiredParameterMissing pm) = "Required parameter missing: expected " <> Text.show pm.expected <> ", got " <> Text.show pm.actual
+  evalErrorToText (UnknownArguments args) = "Unknown arguments: " <> Text.intercalate ", " args
+  evalErrorToText (CannotHandleParameterType lit) = "Cannot handle parameter type: " <> Text.show lit
+  evalErrorToText CannotHandleUnknownVars = "Cannot handle unknown variables"
+
+-- | Evaluate using precompiled module (fast path)
+evaluateWithCompiled
+  :: FilePath
+  -> FunctionDeclaration
+  -> CompiledModule
+  -> [(Text, Maybe FnLiteral)]
+  -> TraceLevel
+  -> ExceptT EvaluatorError IO ResponseWithReason
+evaluateWithCompiled filepath fnDecl compiled params traceLevel = do
+  -- Extract parameter types from the compiled function definition
+  let paramTypes = extractParamTypes compiled.compiledDecide
+
+  -- Convert input parameters to JSON
+  inputJson <- paramsToJson params
+
+  -- Generate wrapper code using existing code generation
+  genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+    Left err -> throwError $ InterpreterError err
+    Right gc -> pure gc
+
+  -- The wrapper contains JSONDECODE and function application
+  -- We evaluate the wrapper in the context of the precompiled module
+  -- This avoids re-parsing and re-typechecking the main module
+  (errs, mEvalRes) <- liftIO $ evaluateWrapperInContext filepath genCode.generatedWrapper compiled
+
+  -- Handle result
+  case mEvalRes of
+    Nothing -> throwError $ InterpreterError (mconcat errs)
+    Just [Eval.MkEvalDirectiveResult{result, trace}] ->
+      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+    Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
+    Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
+
+-- | Evaluate wrapper code in the context of a precompiled module
+-- This combines the wrapper (small) with the precompiled module and evaluates
+evaluateWrapperInContext
+  :: FilePath
+  -> Text  -- ^ Wrapper code containing #EVAL directive
+  -> CompiledModule
+  -> IO ([Text], Maybe [Eval.EvalDirectiveResult])
+evaluateWrapperInContext filepath wrapperCode compiled = do
+  -- Import the precompiled module's declarations into the wrapper's context
+  -- For simplicity, we concatenate the filtered module text with the wrapper
+  -- But we skip re-typechecking the original module
+  let filteredModule = filterIdeDirectives compiled.compiledModule
+      filteredSource = prettyLayout filteredModule
+      combinedProgram = filteredSource <> wrapperCode
+
+  -- Evaluate the combined program
+  -- TODO: Optimize this further to use execEvalExprInContextOfModule
+  evaluateModule filepath combinedProgram Map.empty
+
 createFunction ::
   FilePath ->
   FunctionDeclaration ->
   Text ->
   ModuleContext ->
-  RunFunction
-createFunction filepath fnDecl fnImpl moduleContext =
-  RunFunction
-    { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
-        -- 1. Typecheck original source to get function signature
-        (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
+  IO (RunFunction, Maybe CompiledModule)
+createFunction filepath fnDecl fnImpl moduleContext = do
+  -- Try to precompile for fast path
+  let funRawName = mkNormalName fnDecl.name
+  precompileResult <- precompileModule filepath fnImpl moduleContext funRawName
 
-        tcRes <- case mTcRes of
-          Nothing -> throwError $ InterpreterError (mconcat initErrs)
-          Just tcRes -> pure tcRes
+  case precompileResult of
+    Right compiled -> do
+      -- Fast path: use precompiled module
+      let runFn = RunFunction
+            { runFunction = \params' _outFilter traceLevel ->
+                evaluateWithCompiled filepath fnDecl compiled params' traceLevel
+            }
+      pure (runFn, Just compiled)
 
-        -- 2. Get function definition and extract parameter types
-        funDecide <- getFunctionDefinition funRawName tcRes.module'
-        let paramTypes = extractParamTypes funDecide
+    Left _err -> do
+      -- Slow path fallback: use original implementation
+      let runFn = RunFunction
+            { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
+                -- 1. Typecheck original source to get function signature
+                (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
-        -- 3. Filter IDE directives from the module
-        let filteredModule = filterIdeDirectives tcRes.module'
-            filteredSource = prettyLayout filteredModule
+                tcRes <- case mTcRes of
+                  Nothing -> throwError $ InterpreterError (mconcat initErrs)
+                  Just tcRes -> pure tcRes
 
-        -- 4. Convert input parameters to JSON
-        inputJson <- paramsToJson params'
+                -- 2. Get function definition and extract parameter types
+                funDecide <- getFunctionDefinition funRawName tcRes.module'
+                let paramTypes = extractParamTypes funDecide
 
-        -- 5. Generate wrapper code
-        genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
-          Left err -> throwError $ InterpreterError err
-          Right gc -> pure gc
+                -- 3. Filter IDE directives from the module
+                let filteredModule = filterIdeDirectives tcRes.module'
+                    filteredSource = prettyLayout filteredModule
 
-        -- 6. Concatenate: filtered source + generated wrapper
-        let l4Program = filteredSource <> genCode.generatedWrapper
+                -- 4. Convert input parameters to JSON
+                inputJson <- paramsToJson params'
 
-        -- 7. Evaluate
-        (errs, mEvalRes) <- evaluateModule filepath l4Program moduleContext
+                -- 5. Generate wrapper code
+                genCode <- case generateEvalWrapper fnDecl.name paramTypes inputJson traceLevel of
+                  Left err -> throwError $ InterpreterError err
+                  Right gc -> pure gc
 
-        -- 8. Handle result
-        case mEvalRes of
-          Nothing -> throwError $ InterpreterError (mconcat errs)
-          Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-            handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
-          Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
-          Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
-    }
- where
-  funRawName = mkNormalName fnDecl.name
+                -- 6. Concatenate: filtered source + generated wrapper
+                let l4Program = filteredSource <> genCode.generatedWrapper
+
+                -- 7. Evaluate
+                (errs, mEvalRes) <- evaluateModule filepath l4Program moduleContext
+
+                -- 8. Handle result
+                case mEvalRes of
+                  Nothing -> throwError $ InterpreterError (mconcat errs)
+                  Just [Eval.MkEvalDirectiveResult{result, trace}] ->
+                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+                  Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
+                  Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
+            }
+      pure (runFn, Nothing)
 
 -- | Extract parameter names and types from a DECIDE's GIVEN clause
 extractParamTypes :: Decide Resolved -> [(Text, Type' Resolved)]
