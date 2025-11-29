@@ -63,6 +63,7 @@ library
     uuid,
     aeson,
     aeson-combinators,
+    async,
     bytestring,
     chronos,
     containers,

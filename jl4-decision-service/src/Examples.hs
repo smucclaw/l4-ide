@@ -7,7 +7,8 @@ module Examples (functionSpecs, loadL4File, loadL4Functions, ModuleContext) wher
 
 import qualified Backend.Jl4 as Jl4
 import Backend.Jl4 (ModuleContext)
-import Control.Monad (unless, when)
+import Control.Monad (unless, when, forM)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
@@ -94,38 +95,41 @@ loadL4Functions paths = do
   unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
   let
     validFiles = catMaybes files
-    functions = Map.fromList [(name, createValidatedFunction path name content fn moduleContext) | (path, name, content, fn) <- validFiles]
     moduleContext = Map.fromList [(path, content) | (path, _, content, _) <- validFiles]
+  -- Create validated functions (now IO actions)
+  validatedFunctions <- forM validFiles $ \(path, name, content, fn) ->
+    (name,) <$> createValidatedFunction path name content fn moduleContext
+  let functions = Map.fromList validatedFunctions
   return (functions, moduleContext)
 
-createValidatedFunction :: FilePath -> Text -> Text -> Function -> ModuleContext -> ValidatedFunction
-createValidatedFunction filepath _filename content fnDecl moduleContext =
-  ValidatedFunction
+createValidatedFunction :: FilePath -> Text -> Text -> Function -> ModuleContext -> IO ValidatedFunction
+createValidatedFunction filepath _filename content fnDecl moduleContext = do
+  (runFn, mCompiled) <- Jl4.createFunction filepath (toDecl fnDecl) content moduleContext
+  pure ValidatedFunction
     { fnImpl = fnDecl
-    , fnEvaluator =
-        Map.fromList
-          [ (JL4, Jl4.createFunction filepath (toDecl fnDecl) content moduleContext)
-          ]
+    , fnEvaluator = Map.fromList [(JL4, runFn)]
+    , fnCompiled = mCompiled
     }
 
 -- ----------------------------------------------------------------------------
 -- Example data, hardcoded
 -- ----------------------------------------------------------------------------
 
-functionSpecs :: Map.Map Text ValidatedFunction
-functionSpecs =
-  Map.fromList
+functionSpecs :: IO (Map.Map Text ValidatedFunction)
+functionSpecs = do
+  funcs <- sequence
+    [ runExceptT personQualifiesFunction
+    , runExceptT rodentsAndVerminFunction
+    , runExceptT constantFunction
+    ]
+  pure $ Map.fromList
     [ (f.fnImpl.name, f)
-    | f <-
-        [ builtinProgram personQualifiesFunction
-        , builtinProgram rodentsAndVerminFunction
-        , builtinProgram constantFunction
-        ]
+    | Right f <- funcs
     ]
 
 -- | Metadata about the function that the user might want to know.
 -- Further, an LLM could use this info to ask specific questions to the user.
-personQualifiesFunction :: Except EvaluatorError ValidatedFunction
+personQualifiesFunction :: ExceptT EvaluatorError IO ValidatedFunction
 personQualifiesFunction = do
   let
     fnDecl =
@@ -153,18 +157,17 @@ personQualifiesFunction = do
               }
         , supportedEvalBackend = [JL4]
         }
+  (runFn, mCompiled) <- liftIO $ Jl4.createFunction "compute_qualifies.l4" (toDecl fnDecl) computeQualifiesJL4NoInput Map.empty
   pure $
     ValidatedFunction
       { fnImpl = fnDecl
-      , fnEvaluator =
-          Map.fromList
-            [ (JL4, Jl4.createFunction "compute_qualifies.l4" (toDecl fnDecl) computeQualifiesJL4NoInput Map.empty)
-            ]
+      , fnEvaluator = Map.fromList [(JL4, runFn)]
+      , fnCompiled = mCompiled
       }
 
 -- | Metadata about the function that the user might want to know.
 -- Further, an LLM could use this info to ask specific questions to the user.
-rodentsAndVerminFunction :: Except EvaluatorError ValidatedFunction
+rodentsAndVerminFunction :: ExceptT EvaluatorError IO ValidatedFunction
 rodentsAndVerminFunction = do
   let
     fnDecl =
@@ -199,13 +202,12 @@ rodentsAndVerminFunction = do
                 }
         , supportedEvalBackend = [JL4]
         }
+  (runFn, mCompiled) <- liftIO $ Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentsAndVerminJL4 Map.empty
   pure $
     ValidatedFunction
       { fnImpl = fnDecl
-      , fnEvaluator =
-          Map.fromList
-            [ (JL4, Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentsAndVerminJL4 Map.empty)
-            ]
+      , fnEvaluator = Map.fromList [(JL4, runFn)]
+      , fnCompiled = mCompiled
       }
 
 computeQualifiesJL4NoInput :: Text
@@ -271,7 +273,7 @@ DECIDE `vermin_and_rodent` i IF
 |]
 
 -- | A zero-parameter constant function for testing
-constantFunction :: Except EvaluatorError ValidatedFunction
+constantFunction :: ExceptT EvaluatorError IO ValidatedFunction
 constantFunction = do
   let
     fnDecl =
@@ -285,13 +287,12 @@ constantFunction = do
               }
         , supportedEvalBackend = [JL4]
         }
+  (runFn, mCompiled) <- liftIO $ Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty
   pure $
     ValidatedFunction
       { fnImpl = fnDecl
-      , fnEvaluator =
-          Map.fromList
-            [ (JL4, Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty)
-            ]
+      , fnEvaluator = Map.fromList [(JL4, runFn)]
+      , fnCompiled = mCompiled
       }
 
 constantJL4 :: Text
@@ -300,8 +301,3 @@ constantJL4 =
 GIVETH A NUMBER
 DECIDE the_answer IS 42
 |]
-
-builtinProgram :: Except EvaluatorError a -> a
-builtinProgram m = case runExcept m of
-  Left err -> error $ "Builtin failed to load " <> show err
-  Right e -> e

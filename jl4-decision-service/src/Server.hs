@@ -57,6 +57,7 @@ import qualified Backend.Jl4 as Jl4
 
 import qualified Chronos
 import Control.Applicative
+import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Control.Exception (evaluate, displayException)
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
@@ -109,6 +110,7 @@ data AppEnv = MkAppEnv
 data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
   , fnEvaluator :: !(Map EvalBackend RunFunction)
+  , fnCompiled :: !(Maybe Jl4.CompiledModule)
   }
   deriving stock (Generic)
 
@@ -342,14 +344,26 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
   case Map.lookup name functions of
     Nothing -> throwError err404
     Just fnImpl -> do
-      (execTime, responses) <- stopwatchM $ forM batchArgs.cases $ \inputCase -> do
+      -- Capture the environment before going concurrent
+      env <- ask
+      -- Use parallel evaluation with forConcurrently for better performance
+      (execTime, evalResults) <- stopwatchM $ liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
         let
           args = Map.assocs $ fmap Just inputCase.attributes
 
-        r <- runEvaluatorFor Nothing fnImpl args outputFilter traceLevel
+        -- Note: runEvaluatorFor is now run concurrently across all cases
+        r <- runAppM env (runEvaluatorFor Nothing fnImpl args outputFilter traceLevel)
         pure (inputCase.id, r)
 
+      -- Check for fatal ServerError exceptions (timeout, missing backend) and propagate them
+      -- These should fail the entire batch, not be treated as per-case errors
+      case [err | (_, Left err) <- evalResults] of
+        (err:_) -> throwError err  -- Fail batch with first fatal error
+        [] -> pure ()
+
+      -- Only process successful responses and per-case evaluation errors
       let
+        responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
         nCases = length responses
 
         successfulRuns =
@@ -486,15 +500,24 @@ postFunctionHandler name' newFunctionImpl = do
 
 validateFunction :: FunctionImplementation -> AppM ValidatedFunction
 validateFunction fn = do
-  evaluators <- Map.traverseWithKey validateImplementation fn.implementation
+  (evaluators, mCompiled) <- Map.traverseWithKey validateImplementation fn.implementation
+    >>= \evalMap -> do
+      -- Extract the compiled module from any JL4 backend
+      -- Since we only have JL4 backend currently, we can just look it up
+      let mCompiled = case Map.lookup JL4 evalMap of
+            Just (_, compiled) -> compiled
+            Nothing -> Nothing
+      pure (Map.map fst evalMap, mCompiled)
+
   pure
     ValidatedFunction
       { fnImpl = fn.declaration
       , fnEvaluator = evaluators
+      , fnCompiled = mCompiled
       }
  where
-  validateImplementation :: EvalBackend -> Text -> AppM RunFunction
-  validateImplementation JL4 program =  pure $ Jl4.createFunction (Text.unpack fn.declaration.name <> ".l4") (toDecl fn.declaration) program Map.empty
+  validateImplementation :: EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
+  validateImplementation JL4 program = liftIO $ Jl4.createFunction (Text.unpack fn.declaration.name <> ".l4") (toDecl fn.declaration) program Map.empty
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
@@ -544,9 +567,12 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
             throwError err500 {errBody = "evaluator failed"}
             ) pure
 
+        (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack funName <> ".l4") fnDecl prog Map.empty
+
         k ValidatedFunction
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
-          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction (Text.unpack funName <> ".l4") fnDecl prog Map.empty
+          , fnEvaluator = Map.singleton JL4 runFn
+          , fnCompiled = mCompiled
           }
   where
    (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
@@ -577,6 +603,11 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
     _ -> acc
   sameResolved = (==) `on` getUnique
   argList = map prettyLayout args
+
+-- | Run an AppM action in IO with a given environment, returning Either
+-- Used for concurrent batch evaluation
+runAppM :: AppEnv -> AppM a -> IO (Either ServerError a)
+runAppM env action = runHandler $ runReaderT action env
 
 timeoutAction :: IO b -> AppM b
 timeoutAction act =
@@ -862,7 +893,14 @@ batchRequestEncoder :: BatchRequest -> Aeson.Value
 batchRequestEncoder br =
   Aeson.object
     [ "outcomes" .= fmap outcomesEncoder br.outcomes
+    , "cases" .= fmap inputCaseEncoder br.cases
     ]
+
+inputCaseEncoder :: InputCase -> Aeson.Value
+inputCaseEncoder ic =
+  Aeson.object $
+    [ "@id" .= ic.id
+    ] ++ [(Aeson.fromText k, Aeson.toJSON v) | (k, v) <- Map.toList ic.attributes]
 
 outcomesEncoder :: Outcomes -> Aeson.Value
 outcomesEncoder (OutcomeAttribute t) = Aeson.String t

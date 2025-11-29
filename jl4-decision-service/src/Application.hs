@@ -53,7 +53,8 @@ defaultMain = do
   unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
   unless (null l4Functions) $ print $ Map.keys l4Functions
 
-  dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
+  exampleFunctions <- Examples.functionSpecs
+  dbRef <- newTVarIO (exampleFunctions <> l4Functions)
   mgr <- newManager defaultManagerSettings
   putStrLn $ "will contact crud server on following base url: " <> show crudServerName
   let
