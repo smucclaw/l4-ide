@@ -347,15 +347,23 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
       -- Capture the environment before going concurrent
       env <- ask
       -- Use parallel evaluation with forConcurrently for better performance
-      (execTime, responses) <- stopwatchM $ liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
+      (execTime, evalResults) <- stopwatchM $ liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
         let
           args = Map.assocs $ fmap Just inputCase.attributes
 
         -- Note: runEvaluatorFor is now run concurrently across all cases
         r <- runAppM env (runEvaluatorFor Nothing fnImpl args outputFilter traceLevel)
-        pure (inputCase.id, either (SimpleError . InterpreterError . Text.pack . show) id r)
+        pure (inputCase.id, r)
 
+      -- Check for fatal ServerError exceptions (timeout, missing backend) and propagate them
+      -- These should fail the entire batch, not be treated as per-case errors
+      case [err | (_, Left err) <- evalResults] of
+        (err:_) -> throwError err  -- Fail batch with first fatal error
+        [] -> pure ()
+
+      -- Only process successful responses and per-case evaluation errors
       let
+        responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
         nCases = length responses
 
         successfulRuns =
