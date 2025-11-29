@@ -104,64 +104,66 @@ Literal ::= BoolLiteral | NumberLiteral | StringLiteral
 BoolLiteral ::= "TRUE" | "FALSE"
 ```
 
-## Semantics
+## Semantics (Compile-Time)
 
-### Three-State Value Model
+### What TYPICALLY Means
 
-Each value exists in one of three states:
+At the language level, TYPICALLY is simply **metadata attached to a type annotation**. It declares:
 
-```haskell
-data ValueState a
-  = Explicit a        -- User provided this value
-  | Default a         -- Using TYPICALLY value (no user input)
-  | Unknown           -- No TYPICALLY and no user input
-```
+> "If no value is provided at runtime, this default should be used."
 
-### Evaluation Priority
-
-When evaluating a parameter:
-
-1. **Explicit value** (user provided) → use it
-2. **No explicit value, has TYPICALLY** → use TYPICALLY value
-3. **No explicit value, no TYPICALLY** → Unknown (three-valued logic)
+The AST stores the default value, and downstream consumers (evaluator, decision service, form generators) decide how to use it.
 
 ```haskell
-resolve :: Maybe a -> Maybe a -> ValueState a
-resolve (Just explicit) _           = Explicit explicit
-resolve Nothing        (Just deflt) = Default deflt
-resolve Nothing        Nothing      = Unknown
+-- Compile-time: TYPICALLY is just an optional literal in the AST
+data TypedName n = MkTypedName
+  { tnAnno :: Anno
+  , tnName :: n
+  , tnType :: Type' n
+  , tnTypically :: Maybe (Expr n)  -- Nothing = no default, Just = has default
+  }
 ```
 
-### In Three-Valued Logic
+### Type Checking
 
-TYPICALLY values integrate with Kleene three-valued logic:
+The TYPICALLY value must:
+1. Be a **literal** (compile-time constant)
+2. Match the declared type
 
-| Input State | TYPICALLY | Resolved Value |
-|-------------|-----------|----------------|
-| Explicit TRUE | any | TTrue (Explicit) |
-| Explicit FALSE | any | TFalse (Explicit) |
-| null / omitted | TRUE | TTrue (Default) |
-| null / omitted | FALSE | TFalse (Default) |
-| null / omitted | none | TUnknown |
+```haskell
+-- OK
+x IS A BOOLEAN TYPICALLY TRUE
+age IS A NUMBER TYPICALLY 18
 
-### Audit Trail
+-- ERROR: type mismatch
+x IS A BOOLEAN TYPICALLY 42
 
-The evaluation trace must distinguish default values from explicit ones:
-
-```json
-{
-  "result": true,
-  "inputs": {
-    "age": { "value": 30, "source": "explicit" },
-    "married": { "value": false, "source": "default", "typically": "FALSE" },
-    "has_capacity": { "value": true, "source": "default", "typically": "TRUE" }
-  },
-  "assumptions_used": [
-    { "param": "married", "assumed": false, "reason": "TYPICALLY FALSE" },
-    { "param": "has_capacity", "assumed": true, "reason": "TYPICALLY TRUE" }
-  ]
-}
+-- ERROR: not a literal
+x IS A BOOLEAN TYPICALLY (a AND b)
 ```
+
+### Scope of This Spec
+
+This spec covers **compile-time concerns only**:
+- Syntax for declaring TYPICALLY values
+- AST representation
+- Type checking rules
+- Making defaults available to downstream consumers
+
+**Runtime concerns are separate.** How interactive applications track user input states (explicit value vs "I don't know" vs "not yet asked") is covered in `RUNTIME-INPUT-STATE-SPEC.md`.
+
+### Evaluation Semantics (Basic)
+
+The basic evaluation rule is simple:
+
+```haskell
+resolveParameter :: Maybe Value -> Maybe Value -> Value
+resolveParameter (Just v) _            = v        -- Input provided
+resolveParameter Nothing  (Just deflt) = deflt    -- Use TYPICALLY
+resolveParameter Nothing  Nothing      = VUnknown -- No input, no default
+```
+
+For richer runtime behavior (distinguishing "I don't know" from "not asked"), see `RUNTIME-INPUT-STATE-SPEC.md`.
 
 ## Implementation Plan
 
@@ -250,60 +252,26 @@ checkTypically expectedTy (Just expr) = do
   pure (Just expr')
 ```
 
-### Phase 4: Evaluation Integration
+### Phase 4: Expose Defaults to Consumers
 
-**File:** `jl4-core/src/L4/EvaluateLazy.hs`
+Make TYPICALLY values accessible to downstream code:
 
-Modify parameter binding to use defaults:
-
-```haskell
-bindParameter :: TypeSigItem Resolved -> Maybe Value -> Machine Value
-bindParameter tsi maybeVal = case maybeVal of
-  Just v  -> pure v  -- Explicit value provided
-  Nothing -> case tsiTypically tsi of
-    Just defaultExpr -> do
-      v <- eval defaultExpr
-      markAsDefault (tsiName tsi) v  -- Track for audit
-      pure v
-    Nothing -> pure VUnknown  -- No default, truly unknown
-```
-
-**File:** `jl4-core/src/L4/EvaluateLazy/Trace.hs`
-
-Track default value usage in trace:
+**File:** `jl4-core/src/L4/Syntax.hs` or new module
 
 ```haskell
-data ValueSource = Explicit | Default | Unknown
-  deriving (Eq, Show)
-
-data TracedValue = TracedValue
-  { tvValue :: Value
-  , tvSource :: ValueSource
-  , tvTypically :: Maybe Value  -- The TYPICALLY value if used
-  }
+-- Extract all TYPICALLY defaults from a function's type signature
+getDefaults :: Decide Resolved -> Map Text (Expr Resolved)
+getDefaults decide = Map.fromList
+  [ (name, expr)
+  | item <- typeSigItems (decideTypeSig decide)
+  , Just expr <- [tsiTypically item]
+  , let name = tsiName item
+  ]
 ```
 
-### Phase 5: Decision Service Integration
+This allows the decision service, form generators, and other consumers to query what defaults exist without duplicating parsing logic.
 
-**File:** `jl4-decision-service/src/Backend/Api.hs`
-
-Extend API response to include default information:
-
-```haskell
-data EvalResponse = EvalResponse
-  { result :: FnLiteral
-  , reasoning :: Maybe ReasoningTree
-  , defaultsUsed :: [DefaultUsage]  -- NEW
-  }
-
-data DefaultUsage = DefaultUsage
-  { paramName :: Text
-  , defaultValue :: FnLiteral
-  , reason :: Text  -- e.g., "TYPICALLY FALSE"
-  }
-```
-
-### Phase 6: IDE Support
+### Phase 5: IDE Support
 
 **File:** `jl4-lsp/src/...`
 
@@ -356,61 +324,56 @@ describe "TYPICALLY type checking" $ do
       `shouldFailWith` "TYPICALLY value must be a literal"
 ```
 
-### Unit Tests: Evaluation
+### Unit Tests: AST Extraction
 
 ```haskell
-describe "TYPICALLY evaluation" $ do
-  let func = parseAndCheck [l4|
-    GIVEN
-      x IS A BOOLEAN TYPICALLY TRUE
-      y IS A BOOLEAN TYPICALLY FALSE
-    GIVETH A BOOLEAN
-    DECIDE foo IF x AND NOT y
-    |]
+describe "TYPICALLY in AST" $ do
+  it "extracts defaults from parsed function" $ do
+    let ast = parse [l4|
+      GIVEN
+        x IS A BOOLEAN TYPICALLY TRUE
+        y IS A BOOLEAN TYPICALLY FALSE
+        z IS A NUMBER  -- no default
+      GIVETH A BOOLEAN
+      DECIDE foo IF x AND NOT y
+      |]
+    getDefaults ast `shouldBe` Map.fromList
+      [ ("x", Lit True)
+      , ("y", Lit False)
+      -- z not present (no TYPICALLY)
+      ]
 
-  it "uses defaults when no input provided" $ do
-    eval func Map.empty `shouldBe` Right True
-
-  it "explicit value overrides default" $ do
-    eval func (Map.singleton "x" False) `shouldBe` Right False
-
-  it "tracks which defaults were used" $ do
-    (_, trace) <- evalWithTrace func Map.empty
-    defaultsUsed trace `shouldContain`
-      [("x", True, "TYPICALLY TRUE"), ("y", False, "TYPICALLY FALSE")]
+  it "extracts defaults from DECLARE" $ do
+    let ast = parse [l4|
+      DECLARE Person HAS
+        has_capacity IS A BOOLEAN TYPICALLY TRUE
+        name IS A STRING  -- no default
+      |]
+    getFieldDefaults ast `shouldBe` Map.fromList
+      [ ("has_capacity", Lit True)
+      ]
 ```
 
-### Integration Tests: Decision Service
+### Golden Tests: Pretty Printing
 
 ```haskell
-describe "TYPICALLY in decision service" $ do
-  it "returns defaults used in response" $ do
-    resp <- postEval "/functions/foo/evaluation" "{}"
-    resp.defaultsUsed `shouldContain`
-      [DefaultUsage "x" (FnLitBool True) "TYPICALLY TRUE"]
+describe "TYPICALLY pretty printing" $ do
+  it "round-trips TYPICALLY in GIVEN" $
+    goldenPretty "typically_given" [l4|
+      GIVEN x IS A BOOLEAN TYPICALLY TRUE
+      GIVETH A BOOLEAN
+      DECIDE foo IF x
+      |]
 
-  it "explicit input not listed as default" $ do
-    resp <- postEval "/functions/foo/evaluation" "{\"x\": false}"
-    resp.defaultsUsed `shouldNotContain` "x"
-```
-
-### Golden Tests
-
-```haskell
-describe "TYPICALLY golden tests" $ do
-  it "person_with_defaults" $
-    goldenEval "person_with_defaults" [l4|
+  it "round-trips TYPICALLY in DECLARE" $
+    goldenPretty "typically_declare" [l4|
       DECLARE Person HAS
         has_capacity IS A BOOLEAN TYPICALLY TRUE
         is_under_duress IS A BOOLEAN TYPICALLY FALSE
-
-      GIVEN p IS A Person
-      GIVETH A BOOLEAN
-      DECIDE `can contract` p IF
-        p's has_capacity AND NOT p's is_under_duress
       |]
-      (Map.singleton "p" (FnObject []))  -- empty person, uses defaults
 ```
+
+**Note:** Runtime behavior tests (evaluation with defaults, decision service integration) belong in `RUNTIME-INPUT-STATE-SPEC.md`.
 
 ## Edge Cases
 
@@ -469,11 +432,13 @@ If `Person.address` is provided but `Person.address.country` is omitted, should 
 
 ### 4. TYPICALLY and Partial Evaluation
 
-TYPICALLY integrates with Boolean Minimization (see `BOOLEAN-MINIMIZATION-SPEC.md`):
+TYPICALLY integrates with Boolean Minimization (see `BOOLEAN-MINIMIZATION-SPEC.md`) and Runtime Input State (see `RUNTIME-INPUT-STATE-SPEC.md`):
 
-- With TYPICALLY, omitted fields resolve to default values (not Unknown)
+- With TYPICALLY, omitted fields can resolve to default values
 - This reduces the number of questions the chatbot needs to ask
-- User can explicitly provide `null` to indicate "I don't know" (overrides TYPICALLY)
+- The runtime state model distinguishes "not asked" from "I don't know"
+
+The compile-time TYPICALLY value is **metadata**. How it's used at runtime depends on the application's input state model.
 
 ### 5. Conflicting Defaults
 
@@ -516,6 +481,7 @@ Teams can add TYPICALLY to their codebase incrementally:
 ## References
 
 - `doc/default-values.md`: Original conceptual design
+- `RUNTIME-INPUT-STATE-SPEC.md`: Four-state runtime model for interactive applications
 - `BOOLEAN-MINIMIZATION-SPEC.md`: Integration with partial evaluation
 - [Negation as Failure](https://en.wikipedia.org/wiki/Negation_as_failure)
 - [Closed-world assumption](https://en.wikipedia.org/wiki/Closed-world_assumption)

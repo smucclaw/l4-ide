@@ -19,6 +19,7 @@ This document tracks both specification writing and implementation progress for 
 | 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
 | 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
 | 10   | TYPICALLY Defaults                     | ✅ Complete   | `TYPICALLY-DEFAULTS-SPEC.md`          | ⏳ Todo                       | Rebuttable presumptions, enhances Item 4        |
+| 11   | Runtime Input State                    | ✅ Complete   | `RUNTIME-INPUT-STATE-SPEC.md`         | ⏳ Todo                       | Four-state model for interactive apps           |
 
 **Legend:**
 - ✅ Complete
