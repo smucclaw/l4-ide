@@ -513,33 +513,33 @@ X-L4-Trace: stream
 
 ### ✅ Completed (2025-11-29, commit 131dd4a0)
 
-| Component | Status | Location | Notes |
-|-----------|--------|----------|-------|
-| TraceLevel type definition | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:71-81` | Defines TraceNone and TraceFull |
-| FromHttpApiData instance | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:77-81` | Parses "none" and "full" from query params |
-| X-L4-Trace header support | ✅ Done | `jl4-decision-service/src/Server.hs:172` | Added to evalFunction endpoint |
-| Query param fallback (?trace=) | ✅ Done | `jl4-decision-service/src/Server.hs:173` | Added to evalFunction endpoint |
-| Batch endpoint support | ✅ Done | `jl4-decision-service/src/Server.hs:182-183` | Both header and query param |
-| TraceLevel parameter in RunFunction | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:85-87` | Added to function signature |
-| Conditional directive selection | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:68-71` | Uses #EVAL or #EVALTRACE |
-| mkEval function (no trace) | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:407-408` | Creates LazyEval directive |
-| Empty tree response | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:91-93` | Returns emptyTree for TraceNone |
-| OpenAPI schema documentation | ✅ Done | `jl4-decision-service/src/Schema.hs:47-51` | ToParamSchema instance with enum |
-| Backward compatibility | ✅ Done | All | Default is TraceFull |
-| Header precedence over query | ✅ Done | `jl4-decision-service/src/Server.hs:293-296` | determineTraceLevel function |
+| Component                           | Status  | Location                                          | Notes                                      |
+|-------------------------------------|---------|---------------------------------------------------|--------------------------------------------|
+| TraceLevel type definition          | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:71-81`   | Defines TraceNone and TraceFull            |
+| FromHttpApiData instance            | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:77-81`   | Parses "none" and "full" from query params |
+| X-L4-Trace header support           | ✅ Done | `jl4-decision-service/src/Server.hs:172`          | Added to evalFunction endpoint             |
+| Query param fallback (?trace=)      | ✅ Done | `jl4-decision-service/src/Server.hs:173`          | Added to evalFunction endpoint             |
+| Batch endpoint support              | ✅ Done | `jl4-decision-service/src/Server.hs:182-183`      | Both header and query param                |
+| TraceLevel parameter in RunFunction | ✅ Done | `jl4-decision-service/src/Backend/Api.hs:85-87`   | Added to function signature                |
+| Conditional directive selection     | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:68-71`   | Uses #EVAL or #EVALTRACE                   |
+| mkEval function (no trace)          | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:407-408` | Creates LazyEval directive                 |
+| Empty tree response                 | ✅ Done | `jl4-decision-service/src/Backend/Jl4.hs:91-93`   | Returns emptyTree for TraceNone            |
+| OpenAPI schema documentation        | ✅ Done | `jl4-decision-service/src/Schema.hs:47-51`        | ToParamSchema instance with enum           |
+| Backward compatibility              | ✅ Done | All                                               | Default is TraceFull                       |
+| Header precedence over query        | ✅ Done | `jl4-decision-service/src/Server.hs:293-296`      | determineTraceLevel function               |
 
 ### 🔄 Future Extensions (Not Yet Implemented)
 
 The following extensions were identified in the spec but are not yet implemented:
 
-| Feature | Status | Priority | Notes |
-|---------|--------|----------|-------|
-| Partial trace (top N levels) | ⏳ Todo | Low | `X-L4-Trace: partial` + `X-L4-Trace-Depth: N` |
-| Trace filtering by variable | ⏳ Todo | Low | `X-L4-Trace-Filter: variableName` |
-| Streaming trace | ⏳ Todo | Low | `X-L4-Trace: stream` for long-running evaluations |
-| Unit tests | ⏳ Todo | Medium | Header parsing, precedence, response format tests |
-| Integration tests | ⏳ Todo | Medium | End-to-end API testing with various trace levels |
-| Performance benchmarks | ⏳ Todo | High | Measure response size and latency improvements |
+| Feature                      | Status  | Priority | Notes                                             |
+|------------------------------|---------|----------|---------------------------------------------------|
+| Partial trace (top N levels) | ⏳ Todo | Low      | `X-L4-Trace: partial` + `X-L4-Trace-Depth: N`     |
+| Trace filtering by variable  | ⏳ Todo | Low      | `X-L4-Trace-Filter: variableName`                 |
+| Streaming trace              | ⏳ Todo | Low      | `X-L4-Trace: stream` for long-running evaluations |
+| Unit tests                   | ⏳ Todo | Medium   | Header parsing, precedence, response format tests |
+| Integration tests            | ⏳ Todo | Medium   | End-to-end API testing with various trace levels  |
+| Performance benchmarks       | ⏳ Todo | High     | Measure response size and latency improvements    |
 
 ### Testing Notes
 

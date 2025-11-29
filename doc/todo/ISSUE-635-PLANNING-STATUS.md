@@ -7,17 +7,17 @@ Implementation started: 2025-11-29
 
 This document tracks both specification writing and implementation progress for Issue #635.
 
-| Item | Description | Spec Status | Spec File | Implementation Status | Notes |
-|------|-------------|-------------|-----------|----------------------|-------|
-| 1 | Conditional Decision Trace Returns | ✅ Complete | `CONDITIONAL-TRACE-SPEC.md` | ✅ **Done** (commit 131dd4a0) | X-L4-Trace header and ?trace= param implemented |
-| 2 | IDE Directive Filtering | ✅ Complete | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ⏳ Todo | JSONDECODE-based approach |
-| 3 | Enhanced YAML Support (nested objects) | ✅ Complete | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ⏳ Todo | Part of JSONDECODE solution |
-| 4 | Boolean Minimization | 📋 Needs spec | - | ⏳ Todo | Larger feature - see Issue #638 |
-| 5 | Dynamic File Management | 📋 Needs spec | - | 🔄 Partially done | PR #649 addressed push; may need file watching |
-| 6 | EXPORT API Syntax | ✅ Complete | `EXPORT-SYNTAX-SPEC.md` | ⏳ Todo | Foundation for Item 7 |
-| 7 | Import/Export Coordination | 📋 Needs spec | - | ⏳ Todo | Depends on Item 6 implementation |
-| 8 | Performance Optimization | ✅ Complete | `PERFORMANCE-OPTIMIZATION-SPEC.md` | ⏳ Todo | High impact, infrastructure exists |
-| 9 | ASSUME Parameter Requirements | 📋 Needs spec | - | ⏳ Todo | Can be done independently |
+| Item | Description                            | Spec Status   | Spec File                             | Implementation Status         | Notes                                           |
+|------|----------------------------------------|---------------|---------------------------------------|-------------------------------|-------------------------------------------------|
+| 1    | Conditional Decision Trace Returns     | ✅ Complete   | `CONDITIONAL-TRACE-SPEC.md`           | ✅ **Done** (commit 131dd4a0) | X-L4-Trace header and ?trace= param implemented |
+| 2    | IDE Directive Filtering                | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ⏳ Todo                       | JSONDECODE-based approach                       |
+| 3    | Enhanced YAML Support (nested objects) | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ⏳ Todo                       | Part of JSONDECODE solution                     |
+| 4    | Boolean Minimization                   | 📋 Needs spec | -                                     | ⏳ Todo                       | Larger feature - see Issue #638                 |
+| 5    | Dynamic File Management                | 📋 Needs spec | -                                     | 🔄 Partially done             | PR #649 addressed push; may need file watching  |
+| 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ⏳ Todo                       | Foundation for Item 7                           |
+| 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
+| 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
+| 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
 
 **Legend:**
 - ✅ Complete
