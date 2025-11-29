@@ -1,0 +1,14 @@
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+GIVEN jsn IS A STRING
+GIVETH AN EITHER STRING Person
+decodeArgs jsn MEANS JSONDECODE jsn
+
+DECIDE inputJson IS "{\"name\":\"Alice\",\"age\":30}"
+
+#EVAL
+  CONSIDER decodeArgs inputJson
+    WHEN RIGHT args THEN JUST args
+    WHEN LEFT error THEN NOTHING

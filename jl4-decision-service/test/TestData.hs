@@ -4,6 +4,9 @@ module TestData (
   rodentAndVerminFunctionSpec,
   rodentAndVerminFunction,
   rodentAndVerminJL4,
+  constantFunctionSpec,
+  constantFunction,
+  constantJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -98,6 +101,40 @@ DECIDE `vermin_and_rodent` IF
      OR `a household appliance`
      OR `a swimming pool`
      OR `a plumbing, heating, or air conditioning system`
+|]
+
+constantFunctionSpec :: ValidatedFunction
+constantFunctionSpec = builtinProgram constantFunction
+
+-- | A zero-parameter constant function for testing
+constantFunction :: Except EvaluatorError ValidatedFunction
+constantFunction = do
+  let
+    fnDecl =
+      Function
+        { name = "the_answer"
+        , description = "A constant function with no parameters that returns 42"
+        , parameters =
+            MkParameters
+              { parameterMap = Map.empty
+              , required = []
+              }
+        , supportedEvalBackend = [JL4]
+        }
+  pure $
+    ValidatedFunction
+      { fnImpl = fnDecl
+      , fnEvaluator =
+          Map.fromList
+            [ (JL4, Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty)
+            ]
+      }
+
+constantJL4 :: Text
+constantJL4 =
+  [i|
+GIVETH A NUMBER
+DECIDE the_answer IS 42
 |]
 
 builtinProgram :: Except EvaluatorError a -> a

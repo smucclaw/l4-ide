@@ -60,6 +60,19 @@ spec = describe "integration" do
         newFun.description `shouldNotBe` oldFun.description
         newFun.name `shouldBe` oldFun.name
   describe "evaluation" do
+    it "zero-parameter constant function" do
+      runDecisionService $ \api -> do
+        r <-
+          (api.functionRoutes.singleEntity "the_answer").evalFunction
+            Nothing  -- X-L4-Trace header
+            Nothing  -- ?trace= query param
+            FnArguments
+              { fnEvalBackend = Just JL4
+              , fnArguments = Map.empty  -- No parameters needed
+              }
+        liftIO do
+          s <- requireSuccess r
+          s.values `shouldBe` [("result", FnLitInt 42)]
     it "person qualifies" do
       runDecisionService $ \api -> do
         r <-

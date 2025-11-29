@@ -28,6 +28,9 @@ mkBuiltins
   , "maybe" `rename` "MAYBE"
   , "nothing" `rename` "NOTHING"
   , "just" `rename` "JUST"
+  , "either" `rename` "EITHER"
+  , "left" `rename` "LEFT"
+  , "right" `rename` "RIGHT"
   , "contract" `rename` "PROVISION"
   , "fulfil" `rename` "FULFILLED"
   , "evalContract" `rename` "EVALTRACE"
@@ -109,6 +112,11 @@ list a = app listRef [a]
 maybeType :: Type' Resolved -> Type' Resolved
 maybeType a = app maybeRef [a]
 
+-- EITHER
+
+eitherType :: Type' Resolved -> Type' Resolved -> Type' Resolved
+eitherType a b = app eitherRef [a, b]
+
 -- PROVISION
 
 contract :: Type' Resolved -> Type' Resolved -> Type' Resolved
@@ -143,7 +151,7 @@ jsonEncodeBuiltin = forall' [aDef] $ fun_ [a] string
     a = app aRef []
 
 jsonDecodeBuiltin :: Type' Resolved
-jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (maybeType a)
+jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (eitherType string a)
   where
     a = app aRef []
 
@@ -317,6 +325,18 @@ nothingInfo =
 justInfo :: CheckEntity
 justInfo =
   KnownTerm (forall' [aDef] (fun_ [app aRef []] (maybeType (app aRef [])))) Constructor
+
+eitherInfo :: CheckEntity
+eitherInfo =
+  KnownType 2 [aDef, bDef] Nothing
+
+leftInfo :: CheckEntity
+leftInfo =
+  KnownTerm (forall' [aDef, bDef] (fun_ [app aRef []] (eitherType (app aRef []) (app bRef [])))) Constructor
+
+rightInfo :: CheckEntity
+rightInfo =
+  KnownTerm (forall' [aDef, bDef] (fun_ [app bRef []] (eitherType (app aRef []) (app bRef [])))) Constructor
 
 -- Number conversion
 
@@ -499,6 +519,9 @@ initialEnvironment =
     , (rawName maybeName,        [maybeUnique       ])
     , (rawName nothingName,      [nothingUnique     ])
     , (rawName justName,         [justUnique        ])
+    , (rawName eitherName,       [eitherUnique      ])
+    , (rawName leftName,         [leftUnique        ])
+    , (rawName rightName,        [rightUnique       ])
     , (rawName contractName,     [contractUnique    ])
     , (rawName eventName,        [eventUnique       ])
     , (rawName eventCName,       [eventCUnique      ])
@@ -557,6 +580,9 @@ initialEntityInfo =
     , (maybeUnique,        (maybeName,        maybeInfo       ))
     , (nothingUnique,      (nothingName,      nothingInfo     ))
     , (justUnique,         (justName,         justInfo        ))
+    , (eitherUnique,       (eitherName,       eitherInfo      ))
+    , (leftUnique,         (leftName,         leftInfo        ))
+    , (rightUnique,        (rightName,        rightInfo       ))
     , (contractUnique,     (contractName,     contractInfo    ))
     , (eventUnique,        (eventName,        eventInfo       ))
     , (eventCUnique,       (eventCName,       eventCInfo      ))

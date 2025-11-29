@@ -2,4 +2,4 @@ Parsing successful
 Typechecking successful
 Evaluation successful
 bidirectional-jsondecode-basic.l4:12:1-13:
-  JUST OF (Person OF "Bob", 25)
+  RIGHT OF (Person OF "Bob", 25)
