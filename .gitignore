@@ -68,3 +68,5 @@ yarn-error.log*
 result*
 
 *.code-workspace
+
+doc/*/*.html
