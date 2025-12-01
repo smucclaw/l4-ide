@@ -7,6 +7,7 @@ module TestData (
   constantFunctionSpec,
   constantFunction,
   constantJL4,
+  annotationFallbackJL4,
 ) where
 
 import Backend.Jl4 as Jl4
@@ -136,3 +137,31 @@ GIVETH A NUMBER
 DECIDE the_answer IS 42
 |]
 
+annotationFallbackJL4 :: Text
+annotationFallbackJL4 =
+  [i|
+DECLARE ComplexRecord
+  HAS recordNumber IS A NUMBER
+      recordLabel IS A STRING
+
+DECLARE NestedRecord
+  HAS inner IS A ComplexRecord
+
+DECLARE RecordWithLists
+  HAS people IS A LIST OF ComplexRecord
+      wrappers IS A LIST OF NestedRecord
+
+@desc default export Complex metadata demo
+GIVEN
+  numberParam IS A NUMBER @desc Numeric input
+  textParam IS A STRING @desc Text input
+  boolParam IS A BOOLEAN @desc Flag input
+  recordParam IS A ComplexRecord @desc Record input
+  listParam IS A LIST OF STRING @desc List of strings
+  listOfListsParam IS A LIST OF LIST OF NUMBER @desc Matrix of numbers
+  nestedRecordParam IS A NestedRecord @desc Nested record
+  listOfRecordsParam IS A LIST OF ComplexRecord @desc Crew members
+  recordOfListsParam IS A RecordWithLists @desc Container of lists
+GIVETH A BOOLEAN
+annotatedEntry numberParam textParam boolParam recordParam listParam listOfListsParam nestedRecordParam listOfRecordsParam recordOfListsParam MEANS TRUE
+|]

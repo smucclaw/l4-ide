@@ -421,6 +421,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \ case
     Lazy.ValNumber i               -> pretty (prettyRatio i)
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
+    Lazy.ValDate day               -> pretty (Text.show day)
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
@@ -451,6 +452,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   parensIfNeeded v = case v of
     Lazy.ValNumber{}               -> printWithLayout v
     Lazy.ValString{}               -> printWithLayout v
+    Lazy.ValDate{}                 -> printWithLayout v
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValClosure{}              -> printWithLayout v
     Lazy.ValUnappliedConstructor{} -> printWithLayout v
