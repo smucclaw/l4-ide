@@ -6,6 +6,57 @@ This document specifies a mechanism for L4 files to declare which functions shou
 
 The approach uses the existing `@desc` annotation infrastructure with a simple convention: lines starting with `@desc default` or `@desc export` mark the following function as an API export.
 
+## Current Implementation Status
+
+**Issue**: #635 Item 6
+
+### What Already Exists
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Lexer recognizes `@desc` | ✅ | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` token |
+| Parser collects `@desc` | ✅ | `jl4-core/src/L4/Parser.hs:63` — `PState.descs` |
+| `Desc` type in AST | ✅ | `jl4-core/src/L4/Syntax.hs:646` |
+| `annDesc` lens | ✅ | `jl4-core/src/L4/Syntax.hs:427-428` |
+| Parameter `@desc` extraction | ✅ | `jl4-decision-service/src/Server.hs:601` — used in `parametersOfDecide` |
+
+### What Needs To Be Implemented
+
+#### Next Steps (in order)
+
+1. **Phase 1: Attach `@desc` to AST Nodes**
+   - Create `addDescCommentsToAst` in `jl4-core/src/L4/Parser/ResolveAnnotation.hs`
+   - Follow the existing `addNlgCommentsToAst` pattern
+   - Attach each `@desc` to the declaration that immediately follows it
+   - Wire it up in `Parser.hs` alongside NLG processing
+
+2. **Phase 2: Extract Export Information**
+   - Create new module `jl4-core/src/L4/Export.hs`
+   - Implement `parseDescText` to extract `export`/`default` flags from `@desc` text
+   - Implement `getExportedFunctions` to find all `@desc export` declarations
+   - Implement `getDefaultFunction` to find `@desc default export`
+
+3. **Phase 3: Decision Service Integration**
+   - Modify `jl4-decision-service/src/Examples.hs` `loadL4File` to:
+     - First try `tryLoadFromAnnotations` (new function)
+     - Fall back to YAML if no exports found
+   - Create `exportToFunction` to convert `ExportedFunction` to `Server.Function`
+
+4. **Phase 4: Multiple Exports per File**
+   - Support multiple `@desc export` in a single file
+   - Route to correct function based on name in API path
+
+### Quick Start for Implementation
+
+Start with Phase 1. The key insight is that `ResolveAnnotation.hs` already has the machinery for attaching annotations to AST nodes based on source position (see `addNlgCommentsToAst`). The `@desc` case is simpler because it attaches to declarations rather than names.
+
+```haskell
+-- Simplified approach for Phase 1:
+-- 1. Add HasDesc class similar to HasNlg
+-- 2. For TopDecl, check if any @desc is positioned just before it
+-- 3. Attach using setDesc
+```
+
 ## Motivation
 
 ### Current State
@@ -507,3 +558,4 @@ Future syntax could include:
 - PRs #626, #643: Initial `@desc` annotation implementation
 - `DECISION-SERVICE-JSONDECODE-SPEC.md`: Related decision service improvements
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs`: NLG attachment pattern to follow
+- `REF-ANNOTATION-SPEC.md`: Related `@ref` annotation attachment (attaches to any node)
