@@ -1,0 +1,143 @@
+IMPORT prelude
+IMPORT daydate
+
+-- Draft temporal prelude layer that complements the stock prelude/daydate combo.
+-- These helpers provide high-level mixfix combinators for sliding windows,
+-- rolling lookups, and natural-language styled temporal clauses.
+
+DECLARE InfinityDate IS A DATE
+InfinityDate MEANS December 31 9999
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`stamp of` date MEANS Day date
+
+GIVEN stamp IS A NUMBER
+GIVETH A DATE
+`date from stamp` stamp MEANS Date stamp
+
+GIVEN base IS A DATE
+      days IS A NUMBER
+GIVETH A DATE
+`add days` base days MEANS
+  `date from stamp` (`stamp of` base PLUS days)
+
+GIVEN date IS A DATE
+GIVETH A DATE
+`next day` date MEANS
+  `add days` date 1
+
+GIVEN startStamp IS A NUMBER
+      endStamp   IS A NUMBER
+      verdict    IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`ever between stamps` startStamp endStamp verdict MEANS
+  IF startStamp > endStamp
+    THEN FALSE
+    ELSE
+      LET currentDate IS `date from stamp` startStamp
+      IN IF verdict currentDate
+           THEN TRUE
+           ELSE `ever between stamps` (startStamp PLUS 1) endStamp verdict
+
+GIVEN startStamp IS A NUMBER
+      endStamp   IS A NUMBER
+      verdict    IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`always between stamps` startStamp endStamp verdict MEANS
+  IF startStamp > endStamp
+    THEN TRUE
+    ELSE
+      LET currentDate IS `date from stamp` startStamp
+      IN IF verdict currentDate
+           THEN `always between stamps` (startStamp PLUS 1) endStamp verdict
+           ELSE FALSE
+
+GIVEN startStamp IS A NUMBER
+      predicate  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`find last stamp` startStamp predicate MEANS
+  IF startStamp < 0
+    THEN NOTHING
+    ELSE
+      LET currentDate IS `date from stamp` startStamp
+      IN IF predicate currentDate
+           THEN JUST currentDate
+           ELSE `find last stamp` (startStamp MINUS 1) predicate
+
+GIVEN startStamp IS A NUMBER
+      endStamp   IS A NUMBER
+      predicate  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`find next stamp` startStamp endStamp predicate MEANS
+  IF startStamp > endStamp
+    THEN NOTHING
+    ELSE
+      LET currentDate IS `date from stamp` startStamp
+      IN IF predicate currentDate
+           THEN JUST currentDate
+           ELSE `find next stamp` (startStamp PLUS 1) endStamp predicate
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`EVER BETWEEN` startDate `AND` endDate `UNDER RULES EFFECTIVE AT EACH DATE` `EVALUATE` predicate MEANS
+  `ever between stamps` (`stamp of` startDate) (`stamp of` endDate) predicate
+
+GIVEN startDate IS A DATE
+      endDate   IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`ALWAYS BETWEEN` startDate `AND` endDate `UNDER RULES EFFECTIVE AT EACH DATE` `EVALUATE` predicate MEANS
+  `always between stamps` (`stamp of` startDate) (`stamp of` endDate) predicate
+
+GIVEN duration IS A NUMBER
+      anchor   IS A DATE
+      verdict  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`within` duration `days after` anchor `ever` verdict MEANS
+  LET endDate IS `add days` anchor duration
+  IN `EVER BETWEEN` anchor `AND` endDate
+       `UNDER RULES EFFECTIVE AT EACH DATE`
+       `EVALUATE` verdict
+
+GIVEN anchor IS A DATE
+      check  IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A BOOLEAN
+`strictly after` anchor `ever` check MEANS
+  `ever between stamps`
+    ((`stamp of` anchor) PLUS 1)
+    (`stamp of` InfinityDate)
+    check
+
+GIVEN
+  a        IS A TYPE
+  retroDate IS A DATE
+  expr      IS A FUNCTION FROM DATE TO a
+GIVETH AN a
+`retroactive to` retroDate `evaluate` expr MEANS
+  expr retroDate
+
+GIVEN
+  a      IS A TYPE
+  atDate IS A DATE
+  attr   IS A FUNCTION FROM DATE TO a
+GIVETH AN a
+`value-at` atDate attr MEANS
+  attr atDate
+
+GIVEN beforeDate IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`when-last` beforeDate `satisfying` predicate MEANS
+  `find last stamp` (`stamp of` beforeDate) predicate
+
+GIVEN afterDate IS A DATE
+      predicate IS A FUNCTION FROM DATE TO BOOLEAN
+GIVETH A MAYBE DATE
+`when-next` afterDate `satisfying` predicate MEANS
+  `find next stamp`
+    (`stamp of` afterDate)
+    (`stamp of` InfinityDate)
+    predicate
