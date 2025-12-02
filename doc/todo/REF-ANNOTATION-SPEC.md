@@ -6,12 +6,12 @@ This document specifies how `@ref` annotations should be attached to AST nodes. 
 
 ## Current Implementation Status
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Lexer recognizes `@ref` | ✅ | `jl4-core/src/L4/Lexer.hs:77` — `TRef !Text !AnnoType` |
-| Parser collects `@ref` | ✅ | `jl4-core/src/L4/Parser.hs:62` — `PState.refs` |
-| `Ref` type in AST | ✅ | `jl4-core/src/L4/Syntax.hs:639` |
-| Attachment to AST | ❌ | TODO in `Parser.hs:216-218` |
+| Component               | Status | Location                                               |
+| ----------------------- | ------ | ------------------------------------------------------ |
+| Lexer recognizes `@ref` | ✅     | `jl4-core/src/L4/Lexer.hs:77` — `TRef !Text !AnnoType` |
+| Parser collects `@ref`  | ✅     | `jl4-core/src/L4/Parser.hs:62` — `PState.refs`         |
+| `Ref` type in AST       | ✅     | `jl4-core/src/L4/Syntax.hs:639`                        |
+| Attachment to AST       | ❌     | TODO in `Parser.hs:216-218`                            |
 
 ### Parser TODO (existing)
 
@@ -24,11 +24,11 @@ This document specifies how `@ref` annotations should be attached to AST nodes. 
 
 ## Related Specifications
 
-| Annotation | Spec | Attachment Rule |
-|------------|------|-----------------|
-| `@nlg` | (implemented) | Attaches to `Name` nodes based on source position |
-| `@desc` | `doc/todo/EXPORT-SYNTAX-SPEC.md` | Attaches to immediately following `TopDecl` |
-| `@ref` | this document | Attaches to **any** immediately following AST node |
+| Annotation | Spec                             | Attachment Rule                                    |
+| ---------- | -------------------------------- | -------------------------------------------------- |
+| `@nlg`     | (implemented)                    | Attaches to `Name` nodes based on source position  |
+| `@desc`    | `doc/todo/EXPORT-SYNTAX-SPEC.md` | Attaches to immediately following `TopDecl`        |
+| `@ref`     | this document                    | Attaches to **any** immediately following AST node |
 
 ## Design
 
@@ -59,11 +59,11 @@ DECIDE
 
 The lexer recognizes three `@ref` variants:
 
-| Syntax | Token | Purpose |
-|--------|-------|---------|
+| Syntax              | Token                | Purpose                           |
+| ------------------- | -------------------- | --------------------------------- |
 | `@ref <url> [type]` | `TRef Text AnnoType` | Reference link with optional type |
-| `@ref-src <text>` | `TRefSrc Text` | Source reference |
-| `@ref-map <text>` | `TRefMap Text` | Reference mapping |
+| `@ref-src <text>`   | `TRefSrc Text`       | Source reference                  |
+| `@ref-map <text>`   | `TRefMap Text`       | Reference mapping                 |
 
 ## Implementation
 
@@ -100,6 +100,7 @@ addRefCommentsToAst refs ast = ...
 ```
 
 Key difference from `@nlg`:
+
 - `@nlg` only attaches to `Name` nodes (specific)
 - `@ref` attaches to any node (generic)
 
@@ -136,6 +137,7 @@ DECIDE premium calculation ...
 ### IDE Integration
 
 The LSP could use `@ref` annotations to:
+
 - Show hover tooltips with linked documentation
 - Provide "Go to Reference" navigation
 - Display reference links in code lenses
@@ -153,6 +155,7 @@ DECIDE financialControl ...
 ## Testing
 
 Add test files:
+
 - `jl4/examples/ok/ref-declaration.l4` — refs on declarations
 - `jl4/examples/ok/ref-expression.l4` — refs on expressions
 - `jl4/examples/ok/ref-nested.l4` — refs at multiple nesting levels

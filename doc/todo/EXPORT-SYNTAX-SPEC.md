@@ -12,13 +12,13 @@ The approach uses the existing `@desc` annotation infrastructure with a simple c
 
 ### What Already Exists
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Lexer recognizes `@desc` / `@export` | ✅ | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` / `TExport !Text` tokens |
-| Parser collects `@desc` | ✅ | `jl4-core/src/L4/Parser.hs:63` — `PState.descs` |
-| `Desc` type in AST | ✅ | `jl4-core/src/L4/Syntax.hs:646` |
-| `annDesc` lens | ✅ | `jl4-core/src/L4/Syntax.hs:427-428` |
-| Parameter `@desc` extraction | ✅ | `jl4-decision-service/src/Server.hs:601` — used in `parametersOfDecide` |
+| Component                            | Status | Location                                                                |
+| ------------------------------------ | ------ | ----------------------------------------------------------------------- |
+| Lexer recognizes `@desc` / `@export` | ✅     | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` / `TExport !Text` tokens  |
+| Parser collects `@desc`              | ✅     | `jl4-core/src/L4/Parser.hs:63` — `PState.descs`                         |
+| `Desc` type in AST                   | ✅     | `jl4-core/src/L4/Syntax.hs:646`                                         |
+| `annDesc` lens                       | ✅     | `jl4-core/src/L4/Syntax.hs:427-428`                                     |
+| Parameter `@desc` extraction         | ✅     | `jl4-decision-service/src/Server.hs:601` — used in `parametersOfDecide` |
 
 ### Implementation Summary (May 2025)
 
@@ -550,7 +550,7 @@ Future syntax could include:
 - `DECISION-SERVICE-JSONDECODE-SPEC.md`: Related decision service improvements
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs`: NLG attachment pattern to follow
 - `REF-ANNOTATION-SPEC.md`: Related `@ref` annotation attachment (attaches to any node)
--- Using the @export shorthand (export is implied, default optional)
-@export default Primary entry point for reporting
-GIVEN report IS A ReportInput
-generateReport report MEANS ...
+  -- Using the @export shorthand (export is implied, default optional)
+  @export default Primary entry point for reporting
+  GIVEN report IS A ReportInput
+  generateReport report MEANS ...
