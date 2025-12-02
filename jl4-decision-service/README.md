@@ -55,7 +55,16 @@ Other functions can be loaded at start time using the `--sourcePaths` command li
 
 The argument to the option is a directory or individual `.l4` files.
 
-This option looks for `.l4/.yaml` file pairs, containing additional functions to be exposed via the API. Files without `.yaml` metadata will be ignored.
+For each `.l4` file the loader first looks for in-source annotations. Functions are exposed when their leading comment uses the `@export` (or `@export default`) syntax:
+
+```l4
+@export default Demo entry point for the API
+GIVEN input IS A Number @desc Example numeric argument
+GIVETH A Number
+demo input MEANS input + 1
+```
+
+Parameter descriptions can still use inline `@desc` annotations as shown above. If no `@export` annotations are found, the loader falls back to a matching `.yaml` metadata file.
 
 The `.yaml` file describes the API of the `.l4` file. It mirrors the API of the `POST /functions/<name>`.
 
@@ -75,9 +84,10 @@ Multiple `--sourcePaths` can be given.
 
 ### Example
 
-For the `bignums.l4` program:
+Annotation-based metadata is preferred, but the legacy `.yaml` format is still supported for back-compatibility. For the `bignums.l4` program:
 
 ```jl4
+@export Determine whether the inputs are considered big
 GIVEN   x IS A NUMBER
         y IS A NUMBER
 DECIDE `numbers are big`
@@ -89,7 +99,7 @@ DECIDE `numbers are big`
     OR y ^       ^    20000
 ```
 
-To expose this program via the `jl4-decision-service`, we need to define a `.yaml` file which describes
+If you cannot yet annotate the source, continue to supply the accompanying `.yaml` file. The YAML describes
 the name of the function, and the parameters. Optionally, we can provide a description as well:
 
 ```yaml

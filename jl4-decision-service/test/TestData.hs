@@ -151,7 +151,7 @@ DECLARE RecordWithLists
   HAS people IS A LIST OF ComplexRecord
       wrappers IS A LIST OF NestedRecord
 
-@desc default export Complex metadata demo
+@export default Complex metadata demo
 GIVEN
   numberParam IS A NUMBER @desc Numeric input
   textParam IS A STRING @desc Text input
