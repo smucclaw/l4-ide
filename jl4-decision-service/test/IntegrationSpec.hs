@@ -11,6 +11,7 @@ import Servant.Client.Generic (genericClient)
 import Application (app)
 import Control.Concurrent.STM (newTVarIO)
 import qualified Data.Map.Strict as Map
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Examples
 import Server
@@ -61,6 +62,52 @@ spec = describe "integration" do
       liftIO do
         newFun.description `shouldNotBe` oldFun.description
         newFun.name `shouldBe` oldFun.name
+  it "fills metadata from annotations when omitted by client" do
+    runDecisionService \api -> do
+      let
+        emptyDeclaration =
+          Function
+            { name = ""
+            , description = ""
+            , parameters = MkParameters {parameterMap = Map.empty, required = []}
+            , supportedEvalBackend = [JL4]
+            }
+        impl =
+          FunctionImplementation
+            { declaration = emptyDeclaration
+            , implementation = Map.singleton JL4 TestData.annotationFallbackJL4
+            }
+      () <- (api.functionRoutes.singleEntity "annotatedUpload").postFunction impl
+      fun <- (api.functionRoutes.singleEntity "annotatedUpload").getFunction
+      liftIO do
+        fun.name `shouldBe` "annotatedEntry"
+        fun.description `shouldBe` "Complex metadata demo"
+        let params = fun.parameters.parameterMap
+            expectedNames =
+              fmap Text.pack
+                [ "numberParam"
+                , "textParam"
+                , "boolParam"
+                , "recordParam"
+                , "listParam"
+                , "listOfListsParam"
+                , "nestedRecordParam"
+                , "listOfRecordsParam"
+                , "recordOfListsParam"
+                ]
+        Map.keys params `shouldMatchList` expectedNames
+        mapM_ (uncurry3 (assertParam params))
+          [ (Text.pack "numberParam", "number", "Numeric input")
+          , (Text.pack "textParam", "string", "Text input")
+          , (Text.pack "boolParam", "boolean", "Flag input")
+          , (Text.pack "recordParam", "object", "Record input")
+          , (Text.pack "listParam", "array", "List of strings")
+          , (Text.pack "listOfListsParam", "array", "Matrix of numbers")
+          , (Text.pack "nestedRecordParam", "object", "Nested record")
+          , (Text.pack "listOfRecordsParam", "array", "Crew members")
+          , (Text.pack "recordOfListsParam", "object", "Container of lists")
+          ]
+        fun.parameters.required `shouldBe` expectedNames
   describe "evaluation" do
     it "zero-parameter constant function" do
       runDecisionService $ \api -> do
@@ -244,3 +291,18 @@ initExampleAppEnv :: IO AppEnv
 initExampleAppEnv = do
   funcs <- Examples.functionSpecs
   MkAppEnv <$> newTVarIO funcs <*> pure (BaseUrl Http "localhost" 5008  "") <*> newManager defaultManagerSettings
+assertParam ::
+  Map.Map Text Parameter ->
+  Text ->
+  Text ->
+  Text ->
+  Expectation
+assertParam params paramName expectedType expectedDesc =
+  case Map.lookup paramName params of
+    Nothing -> expectationFailure ("missing parameter: " <> Text.unpack paramName)
+    Just p -> do
+      p.parameterType `shouldBe` expectedType
+      p.parameterDescription `shouldBe` expectedDesc
+
+uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f (a, b, c) = f a b c

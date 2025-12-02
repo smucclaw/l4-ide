@@ -70,6 +70,7 @@ import qualified Data.ByteString as BS
 import Data.Fixed
 import Data.Int
 import qualified Data.Map.Strict as Map
+import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import Data.Scientific (Scientific)
 import qualified Data.Set as Set
@@ -89,11 +90,13 @@ import qualified L4.CRUD as CRUD
 import Servant.Client.Generic (genericClient)
 import Network.HTTP.Client (Manager)
 import qualified Base.Text as T
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
 import L4.Syntax
 import L4.Print (prettyLayout)
 import Data.Function
 import qualified Optics
 import L4.Lexer
+import qualified LSP.L4.Rules as Rules
 
 
 -- ----------------------------------------------------------------------------
@@ -500,7 +503,9 @@ postFunctionHandler name' newFunctionImpl = do
 
 validateFunction :: FunctionImplementation -> AppM ValidatedFunction
 validateFunction fn = do
-  (evaluators, mCompiled) <- Map.traverseWithKey validateImplementation fn.implementation
+  filledDeclaration <- fillMetadataFromAnnotations fn
+  let fnWithDeclaration = fn{declaration = filledDeclaration}
+  (evaluators, mCompiled) <- Map.traverseWithKey (validateImplementation fnWithDeclaration) fnWithDeclaration.implementation
     >>= \evalMap -> do
       -- Extract the compiled module from any JL4 backend
       -- Since we only have JL4 backend currently, we can just look it up
@@ -511,13 +516,132 @@ validateFunction fn = do
 
   pure
     ValidatedFunction
-      { fnImpl = fn.declaration
+      { fnImpl = fnWithDeclaration.declaration
       , fnEvaluator = evaluators
       , fnCompiled = mCompiled
       }
  where
-  validateImplementation :: EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
-  validateImplementation JL4 program = liftIO $ Jl4.createFunction (Text.unpack fn.declaration.name <> ".l4") (toDecl fn.declaration) program Map.empty
+  validateImplementation :: FunctionImplementation -> EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
+  validateImplementation fnImpl JL4 program =
+    liftIO $ Jl4.createFunction (Text.unpack fnImpl.declaration.name <> ".l4") (toDecl fnImpl.declaration) program Map.empty
+
+fillMetadataFromAnnotations :: FunctionImplementation -> AppM Function
+fillMetadataFromAnnotations fn =
+  case Map.lookup JL4 fn.implementation of
+    Nothing -> pure fn.declaration
+    Just source
+      | hasUserMetadata fn.declaration -> pure fn.declaration
+      | otherwise -> do
+          derived <- deriveFunctionFromSource fn.declaration source
+          pure (Maybe.fromMaybe fn.declaration derived)
+
+hasUserMetadata :: Function -> Bool
+hasUserMetadata decl =
+  let descPresent = not (Text.null (Text.strip decl.description))
+      paramsPresent = not (Map.null decl.parameters.parameterMap)
+  in descPresent && paramsPresent
+
+deriveFunctionFromSource :: Function -> Text -> AppM (Maybe Function)
+deriveFunctionFromSource existing source = do
+  let fileName =
+        if Text.null (Text.strip existing.name)
+          then "uploaded.l4"
+          else Text.unpack existing.name <> ".l4"
+  (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName source Map.empty
+  case mTcRes of
+    Nothing -> do
+      unless (null errs) $
+        liftIO $ putStrLn $ "Failed to derive metadata from annotations: " <> Text.unpack (Text.intercalate "; " errs)
+      pure Nothing
+    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+      let exports = getExportedFunctions resolvedModule
+      case selectExport existing exports of
+        Nothing -> pure Nothing
+        Just exported -> do
+          let derived = exportToFunction exported
+          pure $ Just Function
+            { name = chooseField existing.name derived.name
+            , description = chooseField existing.description derived.description
+            , parameters =
+                if Map.null existing.parameters.parameterMap
+                  then derived.parameters
+                  else existing.parameters
+            , supportedEvalBackend = existing.supportedEvalBackend
+            }
+ where
+  chooseField orig new =
+    if Text.null (Text.strip orig) then new else orig
+
+selectExport :: Function -> [ExportedFunction] -> Maybe ExportedFunction
+selectExport existing exports =
+  let byName = if Text.null (Text.strip existing.name)
+                  then Nothing
+                  else List.find (\e -> e.exportName == existing.name) exports
+      byDefault = List.find (.exportIsDefault) exports
+  in byName <|> byDefault <|> Maybe.listToMaybe exports
+
+exportToFunction :: ExportedFunction -> Function
+exportToFunction export =
+  Function
+    { name = export.exportName
+    , description = T.strip export.exportDescription
+    , parameters = parametersFromExport export.exportParams
+    , supportedEvalBackend = [JL4]
+    }
+
+parametersFromExport :: [ExportedParam] -> Parameters
+parametersFromExport params =
+  MkParameters
+    { parameterMap = Map.fromList [(param.paramName, paramToParameter param) | param <- params]
+    , required = [param.paramName | param <- params, param.paramRequired]
+    }
+
+paramToParameter :: ExportedParam -> Parameter
+paramToParameter param =
+  Parameter
+    { parameterType = typeToJsonType param.paramType
+    , parameterAlias = Nothing
+    , parameterEnum = []
+    , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
+    }
+
+typeToJsonType :: Maybe (Type' Resolved) -> Text
+typeToJsonType Nothing = "object"
+typeToJsonType (Just ty) =
+  case ty of
+    Type _ -> "object"
+    TyApp _ name [] -> baseType name
+    TyApp _ name [inner] ->
+      let lowered = Text.toLower (resolvedNameText name)
+      in  if lowered `elem` ["list", "listof"]
+            then "array"
+            else if lowered `elem` ["maybe", "optional"]
+              then typeToJsonType (Just inner)
+              else baseType name
+    TyApp _ name _ -> baseType name
+    Fun{} -> "object"
+    Forall{} -> "object"
+    InfVar{} -> "object"
+
+baseType :: Resolved -> Text
+baseType name =
+  case Text.toLower (resolvedNameText name) of
+    "number" -> "number"
+    "int" -> "number"
+    "integer" -> "number"
+    "float" -> "number"
+    "double" -> "number"
+    "boolean" -> "boolean"
+    "bool" -> "boolean"
+    "string" -> "string"
+    "text" -> "string"
+    "date" -> "string"
+    "datetime" -> "string"
+    _ -> "object"
+
+resolvedNameText :: Resolved -> Text
+resolvedNameText =
+  rawNameToText . rawName . getActual
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
@@ -598,7 +722,9 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
     Just tn@(MkOptionallyTypedName _ r' mt)
       | Just t <- mt
-      , let descriptions = mconcat $ nubOrd $ Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+      , let descTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+            exportTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TExport) tn
+            descriptions = mconcat $ nubOrd (descTokens <> exportTokens)
       -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
     _ -> acc
   sameResolved = (==) `on` getUnique
