@@ -4,7 +4,7 @@
 
 This document specifies a mechanism for L4 files to declare which functions should be exposed via the decision service REST API, eliminating the need for separate `.yaml` metadata files.
 
-The approach uses the existing `@desc` annotation infrastructure with a simple convention: lines starting with `@desc default` or `@desc export` mark the following function as an API export.
+The approach uses the existing `@desc` annotation infrastructure with a simple convention: lines starting with `@desc default`, `@desc export`, or the shorthand `@export` mark the following function as an API export.
 
 ## Current Implementation Status
 
@@ -14,7 +14,7 @@ The approach uses the existing `@desc` annotation infrastructure with a simple c
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| Lexer recognizes `@desc` | ✅ | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` token |
+| Lexer recognizes `@desc` / `@export` | ✅ | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` / `TExport !Text` tokens |
 | Parser collects `@desc` | ✅ | `jl4-core/src/L4/Parser.hs:63` — `PState.descs` |
 | `Desc` type in AST | ✅ | `jl4-core/src/L4/Syntax.hs:646` |
 | `annDesc` lens | ✅ | `jl4-core/src/L4/Syntax.hs:427-428` |
@@ -112,7 +112,8 @@ checkEligibility applicant MEANS ...
 We extend the existing `@desc` annotation with keyword prefixes:
 
 ```
-@desc [default] [export] <description text>
+@desc   [default] [export] <description text>
+@export [default]           <description text>   -- shorthand for @desc export
 ```
 
 Where:
@@ -559,3 +560,7 @@ Future syntax could include:
 - `DECISION-SERVICE-JSONDECODE-SPEC.md`: Related decision service improvements
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs`: NLG attachment pattern to follow
 - `REF-ANNOTATION-SPEC.md`: Related `@ref` annotation attachment (attaches to any node)
+-- Using the @export shorthand (export is implied, default optional)
+@export default Primary entry point for reporting
+GIVEN report IS A ReportInput
+generateReport report MEANS ...

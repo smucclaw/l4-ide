@@ -722,7 +722,9 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
     Just tn@(MkOptionallyTypedName _ r' mt)
       | Just t <- mt
-      , let descriptions = mconcat $ nubOrd $ Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+      , let descTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
+            exportTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TExport) tn
+            descriptions = mconcat $ nubOrd (descTokens <> exportTokens)
       -> (prettyLayout r', (prettyLayout t, descriptions)) : acc
     _ -> acc
   sameResolved = (==) `on` getUnique

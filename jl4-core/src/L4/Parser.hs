@@ -100,6 +100,7 @@ descP :: Parser (Epa Desc)
 descP = do
   e <- hidden $ spacedTokenWs (\ case
     TAnnotations (TDesc t) -> Just t
+    TAnnotations (TExport t) -> Just (" export" <> t)
     _ -> Nothing
     )
     "Description annotation"
