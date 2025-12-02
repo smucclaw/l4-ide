@@ -66,6 +66,8 @@ demo input MEANS input + 1
 
 Parameter descriptions can still use inline `@desc` annotations as shown above. If no `@export` annotations are found, the loader falls back to a matching `.yaml` metadata file.
 
+Use `@export default …` when you want a module-level “main” function. The decision service exposes every `@export` decide clause at `/functions/{name}`, but when a client loads a module without naming a function (for example by UUID or when uploading raw `.l4` code), the service chooses the decide marked `default`. If no default export exists, it falls back to the client-provided name or the first remaining export.
+
 The `.yaml` file describes the API of the `.l4` file. It mirrors the API of the `POST /functions/<name>`.
 
 The format of the `.yaml` is an object with the following keys:
