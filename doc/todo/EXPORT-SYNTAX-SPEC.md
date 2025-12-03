@@ -4,7 +4,48 @@
 
 This document specifies a mechanism for L4 files to declare which functions should be exposed via the decision service REST API, eliminating the need for separate `.yaml` metadata files.
 
-The approach uses the existing `@desc` annotation infrastructure with a simple convention: lines starting with `@desc default` or `@desc export` mark the following function as an API export.
+The approach uses the existing `@desc` annotation infrastructure with a simple convention: lines starting with `@export` (optionally `default`) mark the following function as an API export. Legacy `@desc default` / `@desc export` remain supported temporarily for backward compatibility.
+
+## Current Implementation Status
+
+**Issue**: #635 Item 6
+
+### What Already Exists
+
+| Component                            | Status | Location                                                                |
+| ------------------------------------ | ------ | ----------------------------------------------------------------------- |
+| Lexer recognizes `@desc` / `@export` | ✅     | `jl4-core/src/L4/Lexer.hs:79` — `TDesc !Text` / `TExport !Text` tokens  |
+| Parser collects `@desc`              | ✅     | `jl4-core/src/L4/Parser.hs:63` — `PState.descs`                         |
+| `Desc` type in AST                   | ✅     | `jl4-core/src/L4/Syntax.hs:646`                                         |
+| `annDesc` lens                       | ✅     | `jl4-core/src/L4/Syntax.hs:427-428`                                     |
+| Parameter `@desc` extraction         | ✅     | `jl4-decision-service/src/Server.hs:601` — used in `parametersOfDecide` |
+
+### Implementation Summary (May 2025)
+
+All of the originally proposed phases have landed. The notes below now document where each piece lives so future contributors can extend or debug the feature set.
+
+1. **Phase 1 — Attach `@desc` to AST nodes**  
+   `addDescCommentsToAst` plus the `HasDesc` class/instances sit in `jl4-core/src/L4/Parser/ResolveAnnotation.hs`, and `jl4-core/src/L4/Parser.hs` wires the pass in right after `addNlgCommentsToAst`. Leading annotations attach to `Declare`/`Decide`/`Assume`, while inline annotations attach to `Given` parameters, so parameter descriptions survive into the resolved AST.
+
+2. **Phase 2 — Export extraction utilities**  
+   `jl4-core/src/L4/Export.hs` defines `parseDescText`, `getExportedFunctions`, and `getDefaultFunction`, along with `ExportedFunction` / `ExportedParam`. The helpers read the attached annotations, parse `default` / `export` keywords, and preserve parameter-level metadata.
+
+3. **Phase 3 — Decision service integration**  
+   `jl4-decision-service/src/Examples.hs` now calls `tryLoadFromAnnotations` inside `loadL4File`, preferring annotation-derived metadata while falling back to YAML. `exportToFunction` and `parametersFromExport` convert exported decides into `Server.Function`s, and `jl4-decision-service/src/Server.hs` reuses the same helpers inside `deriveFunctionFromSource` when users upload bare `.l4` sources.
+
+4. **Phase 4 — Multiple exports per file**  
+   `Examples.loadL4File` returns one function tuple per exported decide clause (ordered with defaults first), and the REST layer holds each export under its own `/functions/{name}` route. `Server.selectExport` also honours explicit names and defaults when resolving ad‑hoc uploads, so multiple exports per module are fully supported.
+
+### Quick Start for Implementation
+
+Start with Phase 1. The key insight is that `ResolveAnnotation.hs` already has the machinery for attaching annotations to AST nodes based on source position (see `addNlgCommentsToAst`). The `@desc` case is simpler because it attaches to declarations rather than names.
+
+```haskell
+-- Simplified approach for Phase 1:
+-- 1. Add HasDesc class similar to HasNlg
+-- 2. For TopDecl, check if any @desc is positioned just before it
+-- 3. Attach using setDesc
+```
 
 ## Motivation
 
@@ -39,7 +80,7 @@ This creates several problems:
 A single L4 file declares everything:
 
 ```l4
-@desc export This function determines if a person is eligible
+@export This function determines if a person is eligible
 GIVEN age IS A Number @desc The person's age in years
 GIVETH A Boolean
 isEligible age MEANS age >= 18
@@ -48,7 +89,7 @@ isEligible age MEANS age >= 18
 Or for the primary/default function of a module:
 
 ```l4
-@desc default export Main eligibility checker for the application
+@export default Main eligibility checker for the application
 GIVEN applicant IS A Person @desc The applicant's details
 GIVETH A EligibilityResult
 checkEligibility applicant MEANS ...
@@ -61,7 +102,8 @@ checkEligibility applicant MEANS ...
 We extend the existing `@desc` annotation with keyword prefixes:
 
 ```
-@desc [default] [export] <description text>
+@export [default] <description text>           -- preferred syntax
+@desc   [default] [export] <description text> -- legacy compatibility
 ```
 
 Where:
@@ -74,13 +116,13 @@ Where:
 
 ```l4
 -- Export with description
-@desc export Calculate the premium based on risk factors
+@export Calculate the premium based on risk factors
 GIVEN risk IS A RiskProfile
 GIVETH A Number
 calculatePremium risk MEANS ...
 
 -- Default export (primary function of the module)
-@desc default export Main entry point for policy evaluation
+@export default Main entry point for policy evaluation
 GIVEN policy IS A Policy, claim IS A Claim
 GIVETH A ClaimResult
 evaluateClaim policy claim MEANS ...
@@ -91,7 +133,7 @@ GIVEN x IS A Number
 helper x MEANS x * 2
 
 -- Export without description text
-@desc export
+@export
 GIVEN x IS A Number
 GIVETH A Number
 publicFunction x MEANS ...
@@ -102,7 +144,7 @@ publicFunction x MEANS ...
 Parameter descriptions use inline `@desc` annotations on GIVEN clauses:
 
 ```l4
-@desc export Check if person qualifies for discount
+@export Check if person qualifies for discount
 GIVEN
   age IS A Number @desc Customer age in years
   memberSince IS A Date @desc Date of membership start
@@ -294,7 +336,7 @@ loadL4File path = do
         then return Nothing
         else loadFromYaml path yamlPath content
 
--- | Try to load function metadata from @desc export annotations
+-- | Try to load function metadata from @export annotations (legacy @desc export still supported)
 tryLoadFromAnnotations :: FilePath -> Text -> Maybe (FilePath, Text, Text, Function)
 tryLoadFromAnnotations path content = do
   -- Parse and typecheck to get resolved module
@@ -348,12 +390,12 @@ typeToJsonType ty = case ty of
 A single L4 file can export multiple functions:
 
 ```l4
-@desc default export Primary policy checker
+@export default Primary policy checker
 GIVEN policy IS A Policy
 GIVETH A Result
 checkPolicy policy MEANS ...
 
-@desc export Secondary validation function
+@export Secondary validation function
 GIVEN data IS A InputData
 GIVETH A Boolean
 validateInput data MEANS ...
@@ -376,13 +418,13 @@ When calling the module by UUID without specifying a function, the `default` fun
 ### Backward Compatibility
 
 - **YAML still works**: If a `.yaml` file exists, it takes precedence
-- **Gradual migration**: Convert files one at a time by adding `@desc export` and removing `.yaml`
+- **Gradual migration**: Convert files one at a time by adding `@export` and removing `.yaml`
 - **Mixed mode**: Some functions can use YAML, others can use annotations
 
 ### Migration Steps
 
 1. For each `.yaml` file:
-   - Add `@desc export <description>` above the main function in the `.l4` file
+   - Add `@export <description>` above the main function in the `.l4` file
    - Add `@desc` annotations to GIVEN parameters
    - Test that the function still works
    - Delete the `.yaml` file
@@ -420,7 +462,7 @@ calculatePremium age riskScore MEANS
 **After** (`premium.l4` only):
 
 ```l4
-@desc export Calculate insurance premium based on risk
+@export Calculate insurance premium based on risk
 GIVEN
   age IS A Number @desc Applicant age
   riskScore IS A Number @desc Risk assessment score
@@ -451,7 +493,7 @@ calculatePremium age riskScore MEANS
 
 ### Integration Tests
 
-1. **Decision service without YAML**: Load L4 file with `@desc export`, verify function appears in API
+1. **Decision service without YAML**: Load L4 file with `@export`, verify function appears in API
 2. **Multiple exports**: Verify all exported functions are available
 3. **Default function**: Verify default function is used when calling by UUID
 4. **Parameter descriptions**: Verify parameter descriptions appear in API schema
@@ -470,7 +512,7 @@ Add test files:
 ### Optional Parameters
 
 ```l4
-@desc export
+@export
 GIVEN
   required IS A Number @desc Required param
   optional IS A MAYBE Number @desc Optional param (can be null)
@@ -483,7 +525,7 @@ myFunction required optional MEANS ...
 ```l4
 DECLARE Status IS ONE OF Active, Inactive, Pending
 
-@desc export
+@export
 GIVEN status IS A Status @desc The current status
 GIVETH A Boolean
 isActive status MEANS status EQUALS Active
@@ -507,3 +549,8 @@ Future syntax could include:
 - PRs #626, #643: Initial `@desc` annotation implementation
 - `DECISION-SERVICE-JSONDECODE-SPEC.md`: Related decision service improvements
 - `jl4-core/src/L4/Parser/ResolveAnnotation.hs`: NLG attachment pattern to follow
+- `REF-ANNOTATION-SPEC.md`: Related `@ref` annotation attachment (attaches to any node)
+  -- Using the @export shorthand (export is implied, default optional)
+  @export default Primary entry point for reporting
+  GIVEN report IS A ReportInput
+  generateReport report MEANS ...

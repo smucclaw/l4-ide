@@ -1,0 +1,22 @@
+{
+  "$schema": "https://charm.land/crush.json",
+  "lsp": {
+    "l4": {
+      "command": "jl4-lsp"
+    }
+  },
+  "permissions": {
+    "allowed_tools": [
+      "view",
+      "ls",
+      "grep",
+      "rg",
+      "git",
+      "mv",
+      "rm",
+      "gh",
+      "edit",
+      "mcp_context7_get-library-doc"
+    ]
+  }
+}

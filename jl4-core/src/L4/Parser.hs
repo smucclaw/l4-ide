@@ -100,6 +100,7 @@ descP :: Parser (Epa Desc)
 descP = do
   e <- hidden $ spacedTokenWs (\ case
     TAnnotations (TDesc t) -> Just t
+    TAnnotations (TExport t) -> Just (" export" <> t)
     _ -> Nothing
     )
     "Description annotation"
@@ -1768,20 +1769,21 @@ execNlgParserForTokens p uri input ts =
 -- JL4 parsers
 -- ----------------------------------------------------------------------------
 
-execParser :: Resolve.HasNlg a => Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParser :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
 execParser p uri input =
   case execLexer uri input of
     Left errs -> Left errs
     -- TODO: we should probably push in the uri even further.
     Right ts -> execParserForTokens p uri input ts
 
-execParserForTokens :: Resolve.HasNlg a => Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserForTokens :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
 execParserForTokens p file input ts =
   case runJl4Parser env st p (showNormalizedUri file) stream  of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right (a, pstate)  ->
       let
-        (annotatedA, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs a
+        (withNlg, nlgS) = Resolve.addNlgCommentsToAst pstate.nlgs a
+        (annotatedA, _descS) = Resolve.addDescCommentsToAst pstate.descs withNlg
       in
         Right (annotatedA, nlgS.warnings, pstate)
   where
@@ -1821,7 +1823,7 @@ execProgramParserForTokens uri input ts =
 -- ----------------------------------------------------------------------------
 
 -- | Parse a source file and pretty-print the resulting syntax tree.
-parseFile :: (Show a, Resolve.HasNlg a) => Parser a -> NormalizedUri -> Text -> IO ()
+parseFile :: (Show a, Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> IO ()
 parseFile p uri input =
   case execParser p uri input of
     Left errs -> Text.putStr $ Text.unlines $ fmap (.message) (toList errs)

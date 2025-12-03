@@ -6,18 +6,22 @@
 module Examples (functionSpecs, loadL4File, loadL4Functions, ModuleContext) where
 
 import qualified Backend.Jl4 as Jl4
-import Backend.Jl4 (ModuleContext)
-import Control.Monad (unless, when, forM)
+import Backend.Jl4 (ModuleContext, typecheckModule)
+import Control.Monad (forM, unless, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (fromMaybe)
 import Data.String.Interpolate
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as TIO
 import qualified Data.Yaml as Yaml
+import L4.Export (ExportedFunction (..), ExportedParam (..), getExportedFunctions)
+import L4.Syntax (Resolved, Type' (..), getActual, rawName, rawNameToText)
+import qualified LSP.L4.Rules as Rules
 import Server
 import System.Directory (doesFileExist)
 import System.FilePath (replaceExtension, takeBaseName, takeDirectory, (</>))
@@ -57,27 +61,126 @@ discoverAllFiles discovered (path:paths)
           let newDiscovered = Set.insert path discovered
           discoverAllFiles newDiscovered (importPaths ++ paths)
 
-loadL4File :: FilePath -> IO (Maybe (FilePath, Text, Text, Function))
-loadL4File path = do
-  let
-    yamlPath = replaceExtension path ".yaml"
-  yamlExists <- doesFileExist yamlPath
-  if not yamlExists
-    then return Nothing
-    else do
-      content <- TIO.readFile path
-      yamlContent <- TIO.readFile yamlPath
-      putStrLn $ "- for " <> path <> " found yaml file " <> yamlPath
-      case Yaml.decodeEither' (encodeUtf8 yamlContent) of
-        Left err -> do
-          putStrLn "YAML decoding error: "
-          print err
-          return Nothing
-        Right (fnDecl :: Function) -> do
-          let
-            fnDeclWithName = if T.null (fnDecl.name) then fnDecl{name = T.pack $ takeBaseName path} else fnDecl
-          print fnDeclWithName
-          return (Just (path, fnDecl.name, content, fnDeclWithName))
+loadL4File :: Map.Map FilePath Text -> FilePath -> IO [(FilePath, Text, Text, Function)]
+loadL4File moduleContents path = do
+  case Map.lookup path moduleContents of
+    Nothing -> do
+      putStrLn $ "- skipping " <> path <> " (missing source content)"
+      pure []
+    Just content -> do
+      annotationResult <- tryLoadFromAnnotations moduleContents path content
+      case annotationResult of
+        [] -> loadFromYaml content
+        xs -> do
+          putStrLn $ "- loaded " <> show (length xs) <> " exported function(s) from annotations in " <> path
+          pure [ (path, fnName, content, fnDecl) | (fnName, fnDecl) <- xs ]
+ where
+  loadFromYaml content = do
+    let yamlPath = replaceExtension path ".yaml"
+    yamlExists <- doesFileExist yamlPath
+    if not yamlExists
+      then pure []
+      else do
+        yamlContent <- TIO.readFile yamlPath
+        putStrLn $ "- for " <> path <> " found yaml file " <> yamlPath
+        case Yaml.decodeEither' (encodeUtf8 yamlContent) of
+          Left err -> do
+            putStrLn "YAML decoding error: "
+            print err
+            pure []
+          Right (fnDecl :: Function) -> do
+            let fnDeclWithName =
+                  if T.null fnDecl.name
+                    then fnDecl{name = T.pack $ takeBaseName path}
+                    else fnDecl
+            print fnDeclWithName
+            pure [(path, fnDeclWithName.name, content, fnDeclWithName)]
+
+tryLoadFromAnnotations :: Map.Map FilePath Text -> FilePath -> Text -> IO [(Text, Function)]
+tryLoadFromAnnotations moduleContext path content = do
+  (errs, mTcRes) <- typecheckModule path content moduleContext
+  case mTcRes of
+    Nothing -> do
+      unless (null errs) $ do
+        putStrLn $ "- annotation load failed for " <> path <> " due to typecheck errors:"
+        mapM_ (putStrLn . ("    " <>) . T.unpack) errs
+      pure []
+    Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+      let exports = getExportedFunctions resolvedModule
+      case exports of
+        [] -> pure []
+        xs -> do
+          let ordered = orderExports xs
+          pure [ (export.exportName, exportToFunction export) | export <- ordered ]
+  where
+    orderExports xs =
+      let (defaults, rest) = List.partition (.exportIsDefault) xs
+      in defaults <> rest
+
+exportToFunction :: ExportedFunction -> Function
+exportToFunction export =
+  Function
+    { name = export.exportName
+    , description =
+        let desc = T.strip export.exportDescription
+        in if T.null desc then "Exported function" else desc
+    , parameters = parametersFromExport export.exportParams
+    , supportedEvalBackend = [JL4]
+    }
+
+parametersFromExport :: [ExportedParam] -> Parameters
+parametersFromExport params =
+  MkParameters
+    { parameterMap = Map.fromList [(param.paramName, paramToParameter param) | param <- params]
+    , required = [param.paramName | param <- params, param.paramRequired]
+    }
+
+paramToParameter :: ExportedParam -> Parameter
+paramToParameter param =
+  Parameter
+    { parameterType = typeToJsonType param.paramType
+    , parameterAlias = Nothing
+    , parameterEnum = []
+    , parameterDescription = T.strip $ fromMaybe "" param.paramDescription
+    }
+
+typeToJsonType :: Maybe (Type' Resolved) -> Text
+typeToJsonType Nothing = "object"
+typeToJsonType (Just ty) =
+  case ty of
+    Type _ -> "object"
+    TyApp _ name [] -> baseType name
+    TyApp _ name [inner] ->
+      let lowered = T.toLower (resolvedNameText name)
+      in  if lowered `elem` ["list", "listof"]
+            then "array"
+            else if lowered `elem` ["maybe", "optional"]
+              then typeToJsonType (Just inner)
+              else baseType name
+    TyApp _ name _ -> baseType name
+    Fun{} -> "object"
+    Forall{} -> "object"
+    InfVar{} -> "object"
+
+baseType :: Resolved -> Text
+baseType name =
+  case T.toLower (resolvedNameText name) of
+    "number" -> "number"
+    "int" -> "number"
+    "integer" -> "number"
+    "float" -> "number"
+    "double" -> "number"
+    "boolean" -> "boolean"
+    "bool" -> "boolean"
+    "string" -> "string"
+    "text" -> "string"
+    "date" -> "string"
+    "datetime" -> "string"
+    _ -> "object"
+
+resolvedNameText :: Resolved -> Text
+resolvedNameText =
+  rawNameToText . rawName . getActual
 
 loadL4Functions :: [FilePath] -> IO (Map.Map Text ValidatedFunction, ModuleContext)
 loadL4Functions paths = do
@@ -91,11 +194,15 @@ loadL4Functions paths = do
   let allFilePaths = Set.toList allFiles
   putStrLn $ "* Auto-discovered " <> show (Set.size allFiles) <> " total files (including imports)"
 
-  files <- mapM loadL4File allFilePaths
-  unless (null files) $ putStrLn $ "* Loaded " <> show (length files) <> " .l4 files"
+  moduleContents <- Map.fromList <$> forM allFilePaths \fp -> do
+    content <- TIO.readFile fp
+    pure (fp, content)
+
+  fileGroups <- mapM (loadL4File moduleContents) allFilePaths
+  let validFiles = concat fileGroups
+  unless (null validFiles) $ putStrLn $ "* Loaded " <> show (length validFiles) <> " exported function(s)"
   let
-    validFiles = catMaybes files
-    moduleContext = Map.fromList [(path, content) | (path, _, content, _) <- validFiles]
+    moduleContext = moduleContents
   -- Create validated functions (now IO actions)
   validatedFunctions <- forM validFiles $ \(path, name, content, fn) ->
     (name,) <$> createValidatedFunction path name content fn moduleContext

@@ -52,6 +52,7 @@ library
     pcre2,
     pretty-simple,
     prettyprinter,
+    time,
     safe-exceptions,
     scientific,
     split,
@@ -82,6 +83,7 @@ library
     L4.EvaluateLazy.ContractFrame
     L4.EvaluateLazy.Trace
     L4.ExactPrint
+    L4.Export
     L4.FindDefinition
     L4.Lexer
     L4.Names

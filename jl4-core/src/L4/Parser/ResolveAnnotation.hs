@@ -4,12 +4,17 @@ module L4.Parser.ResolveAnnotation (
   -- * main function
   HasNlg(..),
   addNlgCommentsToAst,
+  HasDesc(..),
+  addDescCommentsToAst,
   -- * Annotate Syntax Nodes with definite 'SrcSpan's.
   WithSpan (..),
   NlgWithSpan,
+  DescWithSpan,
   -- * Warnings and state
   NlgS(..),
   Warning (..),
+  DescS(..),
+  DescWarning(..),
   -- * NlgA / NlgM monad
   NlgA(..),
   NlgM(..),
@@ -30,6 +35,7 @@ where
 
 import Base
 
+import qualified Data.List as List
 import qualified Generics.SOP as SOP
 import L4.Annotation
 import L4.Syntax
@@ -44,6 +50,44 @@ data Warning
   deriving anyclass (SOP.Generic)
 
 type NlgWithSpan = WithSpan Nlg
+
+-- ----------------------------------------------------------------------------
+-- Desc attachment scaffolding
+-- ----------------------------------------------------------------------------
+
+type DescWithSpan = WithSpan Desc
+
+data DescWarning
+  = DescMissingLocation Desc
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (SOP.Generic)
+
+data DescS = DescS
+  { descs :: ![DescWithSpan]
+  , warnings :: ![DescWarning]
+  }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (SOP.Generic)
+
+addDescCommentsToAst :: HasDesc a => [Desc] -> a -> (a, DescS)
+addDescCommentsToAst descs ast =
+  let
+    (withSpan, missing) = preprocessDescs descs
+    initialS =
+      DescS
+        { descs = List.sortOn (.range.start) withSpan
+        , warnings = fmap DescMissingLocation missing
+        }
+  in
+    runState (addDesc ast) initialS
+
+preprocessDescs :: [Desc] -> ([DescWithSpan], [Desc])
+preprocessDescs = foldl' go ([], [])
+ where
+  go (located, missing) desc =
+    case rangeOf desc of
+      Nothing -> (located, desc : missing)
+      Just r -> (WithSpan (fromSrcRange r) desc : located, missing)
 
 -- | Attach any payload with a 'SrcSpan'.
 data WithSpan a = WithSpan
@@ -503,6 +547,172 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (LocalDecl n) where
     LocalAssume ann assume -> do
       assume' <- addNlg assume
       pure $ LocalAssume ann assume'
+
+-- ----------------------------------------------------------------------------
+-- HasDesc Class and Instances
+-- ----------------------------------------------------------------------------
+
+class HasDesc a where
+  addDesc :: a -> State DescS a
+
+instance HasDesc (Module n) where
+  addDesc (MkModule uri ann sect) =
+    MkModule uri ann <$> addDesc sect
+
+instance HasDesc (Section n) where
+  addDesc (MkSection ann lbl maka decls) = do
+    decls' <- traverse addDesc decls
+    pure $ MkSection ann lbl maka decls'
+
+instance HasDesc (TopDecl n) where
+  addDesc = \ case
+    Declare ann decl -> Declare ann <$> addDesc decl
+    Decide ann dec -> Decide ann <$> addDesc dec
+    Assume ann asm -> Assume ann <$> addDesc asm
+    Directive ann dir -> Directive ann <$> addDesc dir
+    Import ann imp -> Import ann <$> addDesc imp
+    Section ann sect -> Section ann <$> addDesc sect
+
+instance HasDesc (Declare n) where
+  addDesc decl@(MkDeclare ann tySig appForm tyDecl) = do
+    tySig' <- addDesc tySig
+    app' <- addDesc appForm
+    tyDecl' <- addDesc tyDecl
+    ann' <- attachLeadingDesc decl ann
+    pure $ MkDeclare ann' tySig' app' tyDecl'
+
+instance HasDesc (Decide n) where
+  addDesc dec@(MkDecide ann tySig appForm expr) = do
+    tySig' <- addDesc tySig
+    app' <- addDesc appForm
+    expr' <- addDesc expr
+    ann' <- attachLeadingDesc dec ann
+    pure $ MkDecide ann' tySig' app' expr'
+
+instance HasDesc (Assume n) where
+  addDesc asm@(MkAssume ann tySig appForm mType) = do
+    tySig' <- addDesc tySig
+    app' <- addDesc appForm
+    mType' <- traverse addDesc mType
+    ann' <- attachLeadingDesc asm ann
+    pure $ MkAssume ann' tySig' app' mType'
+
+instance HasDesc (Directive n) where
+  addDesc = \ case
+    LazyEval ann e -> LazyEval ann <$> addDesc e
+    LazyEvalTrace ann e -> LazyEvalTrace ann <$> addDesc e
+    Check ann e -> Check ann <$> addDesc e
+    Contract ann e t evs -> Contract ann <$> addDesc e <*> addDesc t <*> traverse addDesc evs
+    Assert ann e -> Assert ann <$> addDesc e
+
+instance HasDesc (Import n) where
+  addDesc a = pure a
+
+instance HasDesc (TypeSig n) where
+  addDesc (MkTypeSig ann given giveth) =
+    MkTypeSig ann <$> addDesc given <*> traverse addDesc giveth
+
+instance HasDesc (GivenSig n) where
+  addDesc (MkGivenSig ann names) =
+    MkGivenSig ann <$> traverse addDesc names
+
+instance HasDesc (OptionallyTypedName n) where
+  addDesc name@(MkOptionallyTypedName ann n mType) = do
+    mType' <- traverse addDesc mType
+    ann' <- attachInlineDesc name ann
+    pure $ MkOptionallyTypedName ann' n mType'
+
+instance HasDesc (GivethSig n) where
+  addDesc (MkGivethSig ann ty) = do
+    ty' <- addDesc ty
+    pure $ MkGivethSig ann ty'
+
+instance HasDesc (TypeDecl n) where
+  addDesc = \ case
+    RecordDecl ann mcon names ->
+      RecordDecl ann mcon <$> traverse addDesc names
+    EnumDecl ann cons ->
+      EnumDecl ann <$> traverse addDesc cons
+    SynonymDecl ann ty ->
+      SynonymDecl ann <$> addDesc ty
+
+instance HasDesc (ConDecl n) where
+  addDesc (MkConDecl ann name names) =
+    MkConDecl ann name <$> traverse addDesc names
+
+instance HasDesc (TypedName n) where
+  addDesc name@(MkTypedName ann n ty) = do
+    ty' <- addDesc ty
+    ann' <- attachInlineDesc name ann
+    pure $ MkTypedName ann' n ty'
+
+instance HasDesc (Type' n) where
+  addDesc = pure
+
+instance HasDesc (AppForm n) where
+  addDesc (MkAppForm ann name args maka) =
+    MkAppForm ann name args <$> traverse addDesc maka
+
+instance HasDesc (Aka n) where
+  addDesc (MkAka ann names) = pure (MkAka ann names)
+
+instance HasDesc (Expr n) where
+  addDesc = pure
+
+takeMatchingDescs :: (DescWithSpan -> Bool) -> State DescS [DescWithSpan]
+takeMatchingDescs predicate = do
+  s <- get
+  let (matches, rest) = List.partition predicate s.descs
+  put s{descs = rest}
+  pure matches
+
+attachLeadingDesc :: (HasSrcRange a) => a -> Anno -> State DescS Anno
+attachLeadingDesc node ann =
+  case nodeSpan node of
+    Nothing -> pure ann
+    Just nodeRange -> do
+      matches <- takeMatchingDescs (descPrecedesNode nodeRange)
+      pure $ maybe ann (\d -> setDesc d.payload ann) (lastMaybe matches)
+
+attachInlineDesc :: (HasSrcRange a) => a -> Anno -> State DescS Anno
+attachInlineDesc node ann =
+  case nodeSpan node of
+    Nothing -> pure ann
+    Just nodeRange -> do
+      matches <- takeMatchingDescs (descInlineFor nodeRange)
+      pure $ maybe ann (\d -> setDesc d.payload ann) (lastMaybe matches)
+
+nodeSpan :: (HasSrcRange a) => a -> Maybe SrcSpan
+nodeSpan = fmap fromSrcRange . rangeOf
+
+descPrecedesNode :: SrcSpan -> DescWithSpan -> Bool
+descPrecedesNode nodeRange desc =
+  let
+    nodeStart = nodeRange.start
+    descEnd = desc.range.end
+    descStart = desc.range.start
+    beforeNode =
+      descEnd.line < nodeStart.line
+        || (descEnd.line == nodeStart.line && descEnd.column <= nodeStart.column)
+    alignedWithNode =
+      descStart.column <= nodeStart.column + topLevelColumnSlack
+  in
+    beforeNode && alignedWithNode
+
+descInlineFor :: SrcSpan -> DescWithSpan -> Bool
+descInlineFor nodeRange desc =
+  let
+    nodeEnd = nodeRange.end
+    descStart = desc.range.start
+  in
+    descStart.line == nodeEnd.line && descStart.column >= nodeEnd.column
+
+topLevelColumnSlack :: Int
+topLevelColumnSlack = 8
+
+lastMaybe :: [a] -> Maybe a
+lastMaybe [] = Nothing
+lastMaybe xs = Just (last xs)
 
 -- ----------------------------------------------------------------------------
 -- NlgA Definition

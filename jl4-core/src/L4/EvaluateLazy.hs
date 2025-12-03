@@ -294,6 +294,7 @@ nfAux :: Int -> WHNF -> Eval NF
 nfAux  d _v | d < 0                  = pure Omitted
 nfAux _d (ValNumber i)               = pure (MkNF (ValNumber i))
 nfAux _d (ValString s)               = pure (MkNF (ValString s))
+nfAux _d (ValDate day)               = pure (MkNF (ValDate day))
 nfAux _d ValNil                      = pure (MkNF ValNil)
 nfAux  d (ValCons r1 r2)             = do
   v1 <- evalAndNF d r1
