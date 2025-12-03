@@ -186,6 +186,48 @@ After user says "I don't know" for married:
 
 ## API Design
 
+### Required: Explicit Default Handling Mode
+
+**Critical:** Runtime evaluators (decision service API, ladder diagram visualizer, chatbots) **MUST** operate in one of two explicit modes:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **honor-defaults** | Use TYPICALLY values when input not provided | Production chatbots, quick evaluations |
+| **ignore-defaults** | Treat missing inputs as Unknown, never use TYPICALLY | Formal verification, audit trails, "what-if" analysis |
+
+**Why this matters:**
+
+```l4
+GIVEN married IS A BOOLEAN TYPICALLY FALSE
+GIVETH A BOOLEAN
+DECIDE `may purchase alcohol` IF age >= 21 OR (age >= 18 AND NOT married)
+```
+
+- **honor-defaults mode**: User age 19, doesn't answer married question → uses `married = FALSE` → returns `TRUE`
+- **ignore-defaults mode**: User age 19, doesn't answer married question → `married = Unknown` → returns `Unknown`
+
+These are **different answers to the same query**. The API must make the mode explicit—never implicitly choose one.
+
+**API request example:**
+
+```json
+{
+  "function": "may purchase alcohol",
+  "defaultMode": "honor-defaults",  // REQUIRED field
+  "fnArguments": {
+    "age": 19
+  }
+}
+```
+
+**Ladder Diagram Visualizer:**
+
+Similarly, the ladder diagram must operate in:
+- **default-aware mode**: Shows simplified tree assuming defaults apply
+- **default-blind mode**: Shows full tree with all possible branches
+
+This affects which questions appear "relevant" in the visualization.
+
 ### Decision Service Request
 
 ```json
