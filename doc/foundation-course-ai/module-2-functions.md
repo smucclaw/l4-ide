@@ -280,6 +280,129 @@ annualIncome MEANS monthlySalary * 12
 
 But the word forms often read better in legal contexts.
 
+## Advanced Numeric Operations
+
+L4 also provides advanced mathematical functions:
+
+| L4 Syntax | Meaning | Example |
+|-----------|---------|---------|
+| `SQRT` | Square root | `SQRT 16` → `4` |
+| `EXPONENT` or `^` | Exponentiation | `2 EXPONENT 3` → `8` or `2 ^ 3` → `8` |
+
+```l4
+-- Calculate compound interest
+GIVEN principal IS A NUMBER
+      rate IS A NUMBER
+      years IS A NUMBER
+GIVETH A NUMBER
+`compound interest` principal rate years MEANS
+    principal TIMES ((1 PLUS rate) EXPONENT years)
+
+-- Calculate distance from area of circle
+GIVEN area IS A NUMBER
+GIVETH A NUMBER
+`radius from area` area MEANS
+    SQRT (area DIVIDED BY 3.14159)
+```
+
+## String Operations
+
+L4 provides comprehensive string manipulation functions for working with text:
+
+### Unary String Functions (STRING → STRING or NUMBER)
+
+| Function | Returns | Description | Example |
+|----------|---------|-------------|---------|
+| `STRINGLENGTH` | NUMBER | Length of string | `STRINGLENGTH "hello"` → `5` |
+| `TOUPPER` | STRING | Convert to uppercase | `TOUPPER "hello"` → `"HELLO"` |
+| `TOLOWER` | STRING | Convert to lowercase | `TOLOWER "HELLO"` → `"hello"` |
+| `TRIM` | STRING | Remove leading/trailing whitespace | `TRIM "  hello  "` → `"hello"` |
+
+### Binary String Functions (STRING → STRING → ...)
+
+| Function | Returns | Description | Example |
+|----------|---------|-------------|---------|
+| `CONTAINS` | BOOLEAN | Check if contains substring | `CONTAINS "hello world" "world"` → `TRUE` |
+| `STARTSWITH` | BOOLEAN | Check if starts with prefix | `STARTSWITH "hello world" "hello"` → `TRUE` |
+| `ENDSWITH` | BOOLEAN | Check if ends with suffix | `ENDSWITH "hello world" "world"` → `TRUE` |
+| `INDEXOF` | NUMBER | Find first occurrence (-1 if not found) | `INDEXOF "hello world" "o"` → `4` |
+| `SPLIT` | LIST OF STRING | Split by delimiter | `SPLIT "a,b,c" ","` → `["a", "b", "c"]` |
+
+### Ternary String Functions
+
+| Function | Returns | Description | Example |
+|----------|---------|-------------|---------|
+| `SUBSTRING` | STRING | Extract substring(string, start, length) | `SUBSTRING "hello world" 0 5` → `"hello"` |
+| `REPLACE` | STRING | Replace all occurrences | `REPLACE "hello hello" "hello" "hi"` → `"hi hi"` |
+
+### Character Access
+
+| Function | Returns | Description | Example |
+|----------|---------|-------------|---------|
+| `CHARAT` | STRING | Get character at index (empty if out of bounds) | `CHARAT "hello" 0` → `"h"` |
+
+### WPA String Examples
+
+```l4
+§§ `Document Name Validation`
+
+GIVEN docName IS A STRING
+GIVETH A BOOLEAN
+DECIDE `is valid document name` IF
+        STRINGLENGTH docName AT LEAST 5
+    AND NOT CONTAINS docName "/"
+    AND NOT CONTAINS docName "\\"
+    AND TRIM docName EQUALS docName  -- No leading/trailing spaces
+
+§§ `Passport Number Formatting`
+
+GIVEN passportNumber IS A STRING
+GIVETH A STRING
+`formatted passport number` passportNumber MEANS
+    TOUPPER (TRIM passportNumber)
+
+§§ `Name Parsing`
+
+GIVEN fullName IS A STRING
+GIVETH A MAYBE STRING
+`first name from` fullName MEANS
+    IF `length of` nameParts GREATER THAN 0
+    THEN JUST (at nameParts 0)
+    ELSE NOTHING
+    WHERE
+        nameParts MEANS SPLIT fullName " "
+
+GIVEN fullName IS A STRING
+GIVETH A MAYBE STRING
+`last name from` fullName MEANS
+    IF `length of` nameParts GREATER THAN 0
+    THEN JUST (at nameParts (lastIndex))
+    ELSE NOTHING
+    WHERE
+        nameParts MEANS SPLIT fullName " "
+        lastIndex MEANS (`length of` nameParts) MINUS 1
+
+§§ `Email Validation`
+
+GIVEN email IS A STRING
+GIVETH A BOOLEAN
+DECIDE `is valid email format` IF
+        CONTAINS email "@"
+    AND CONTAINS email "."
+    AND NOT STARTSWITH email "@"
+    AND NOT ENDSWITH email "@"
+    AND atSignIndex GREATER THAN 0
+    AND atSignIndex LESS THAN (STRINGLENGTH email MINUS 1)
+    WHERE
+        atSignIndex MEANS INDEXOF email "@"
+```
+
+These string operations are especially useful when:
+- Validating user input (passport numbers, names, emails)
+- Parsing structured text (CSV files, form data)
+- Formatting output for reports and documents
+- Cleaning and normalizing data
+
 ## WPA Functions: Complete Examples
 
 ### Eligibility Checks

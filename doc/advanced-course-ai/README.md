@@ -117,12 +117,15 @@ Before starting this course, you should:
 - Mapping L4 types to JSON schemas
 - Handling JSON input in decision service calls
 - Generating JSON output from L4 functions
+- Using JSONDECODE and JSONENCODE for type-safe JSON processing
+- Making HTTP requests with FETCH (GET) and POST operators
+- Accessing environment variables with ENV keyword
 - Schema evolution and versioning
 - Integration patterns: REST bridge, database sync, batch processing, event-driven
 - API discovery with Swagger endpoints (/swagger-ui, /swagger)
 - Performance optimization
 
-**Key takeaway:** Seamlessly integrate L4 with databases, web apps, and enterprise systems via JSON.
+**Key takeaway:** Seamlessly integrate L4 with databases, web apps, external APIs, and enterprise systems via JSON and HTTP.
 
 [Start Module A6 →](module-a6-json-integration.md)
 

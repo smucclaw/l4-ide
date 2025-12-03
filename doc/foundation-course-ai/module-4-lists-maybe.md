@@ -375,6 +375,232 @@ GIVETH A LIST OF Employee
 Converts `LIST JUST emp1, NOTHING, JUST emp2, NOTHING`
 to `LIST emp1, emp2`
 
+## Dictionaries: Key-Value Storage
+
+Dictionaries (also called maps or hash tables) let you store and look up values by key. They're useful for:
+- Storing configuration settings
+- Caching computed results
+- Grouping data by category
+- Fast lookups by ID or name
+
+### Dictionary Type
+
+```l4
+IMPORT prelude
+
+DECLARE Dictionary k v
+-- k is the key type
+-- v is the value type
+```
+
+Example types:
+- `Dictionary STRING NUMBER` — Map from names to counts
+- `Dictionary NUMBER Employee` — Map from IDs to employees
+- `Dictionary EmploymentCategory NUMBER` — Map from categories to quotas
+
+### Creating Dictionaries
+
+```l4
+IMPORT prelude
+
+-- Empty dictionary
+emptyDict
+
+-- Single entry
+singleToDict "Alice" 5000
+-- or
+singleton "Alice" 5000
+
+-- From list of pairs
+listToDict (LIST
+    PAIR OF "Alice", 5000,
+    PAIR OF "Bob", 6000,
+    PAIR OF "Charlie", 5500)
+
+-- Alternative syntax
+fromList (LIST
+    PAIR OF "Alice", 5000,
+    PAIR OF "Bob", 6000)
+```
+
+### Looking Up Values
+
+```l4
+IMPORT prelude
+
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A MAYBE NUMBER
+`salary of Alice` salaries MEANS
+    dictLookup "Alice" salaries
+
+-- With default value
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A NUMBER
+`salary of Alice or 0` salaries MEANS
+    dictFindWithDefault 0 "Alice" salaries
+
+-- Check if key exists
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A BOOLEAN
+`has Alice` salaries MEANS
+    dictMember "Alice" salaries
+```
+
+### Modifying Dictionaries
+
+```l4
+IMPORT prelude
+
+-- Insert or update
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A Dictionary STRING NUMBER
+`add Alice with 5000` salaries MEANS
+    dictInsert "Alice" 5000 salaries
+
+-- Delete an entry
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A Dictionary STRING NUMBER
+`remove Alice` salaries MEANS
+    dictDelete "Alice" salaries
+
+-- Update existing value
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A Dictionary STRING NUMBER
+`increase Alice by 500` salaries MEANS
+    dictAdjust increase "Alice" salaries
+    WHERE
+        increase salary MEANS salary PLUS 500
+```
+
+### Querying Dictionaries
+
+```l4
+IMPORT prelude
+
+-- Get all keys
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A LIST OF STRING
+`all names` salaries MEANS
+    dictKeys salaries
+
+-- Get all values
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A LIST OF NUMBER
+`all amounts` salaries MEANS
+    dictElems salaries
+
+-- Get size
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A NUMBER
+`count entries` salaries MEANS
+    dictSize salaries
+
+-- Check if empty
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A BOOLEAN
+`is empty` salaries MEANS
+    dictIsEmpty salaries
+```
+
+### Transforming Dictionaries
+
+```l4
+IMPORT prelude
+
+-- Map over values
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A Dictionary STRING NUMBER
+`increase all by 10 percent` salaries MEANS
+    mapDict increase salaries
+    WHERE
+        increase salary MEANS salary TIMES 1.1
+
+-- Filter entries
+GIVEN salaries IS A Dictionary STRING NUMBER
+GIVETH A Dictionary STRING NUMBER
+`high earners` salaries MEANS
+    filterDict isHigh salaries
+    WHERE
+        isHigh salary MEANS salary GREATER THAN 7000
+```
+
+### WPA Dictionary Examples
+
+```l4
+IMPORT prelude
+
+§§ `Category Quotas`
+
+-- Store quota limits by employment category
+DECLARE CategoryQuotas IS A Dictionary EmploymentCategory NUMBER
+
+`standard quotas` MEANS
+    fromList (LIST
+        PAIR OF TechProfessional, 100,
+        PAIR OF HealthcareWorker, 80,
+        PAIR OF Researcher, 50,
+        PAIR OF FinancialServices, 60,
+        PAIR OF EntertainmentArts, 40)
+
+GIVEN category IS AN EmploymentCategory
+      quotas IS A CategoryQuotas
+GIVETH A NUMBER
+`quota for` category `in` quotas MEANS
+    dictFindWithDefault 30 category quotas
+
+§§ `Employee Registry by ID`
+
+DECLARE EmployeeRegistry IS A Dictionary NUMBER Employee
+
+GIVEN registry IS AN EmployeeRegistry
+      employee IS AN Employee
+      id IS A NUMBER
+GIVETH AN EmployeeRegistry
+`register` employee `with id` id `in` registry MEANS
+    dictInsert id employee registry
+
+GIVEN registry IS AN EmployeeRegistry
+      id IS A NUMBER
+GIVETH A MAYBE Employee
+`find employee` id `in` registry MEANS
+    dictLookup id registry
+
+§§ `Application Count by Status`
+
+-- Track how many applications in each status
+DECLARE StatusCounts IS A Dictionary ApplicationStatus NUMBER
+
+GIVEN applications IS A LIST OF WorkPassApplication
+GIVETH A StatusCounts
+`count by status` applications MEANS
+    CONSIDER applications
+    WHEN EMPTY THEN emptyDict
+    WHEN app FOLLOWED BY rest THEN
+        dictInsertWith add (app's status) 1 (countsForRest)
+        WHERE
+            countsForRest MEANS `count by status` rest
+            add x y MEANS x PLUS y
+```
+
+### Common Dictionary Operations Summary
+
+| Operation | Function | Returns |
+|-----------|----------|---------|
+| Create empty | `emptyDict` | Dictionary |
+| Create single | `singleton k v` | Dictionary |
+| From list | `fromList pairs` | Dictionary |
+| Lookup | `dictLookup k dict` | MAYBE v |
+| Lookup with default | `dictFindWithDefault def k dict` | v |
+| Check membership | `dictMember k dict` | BOOLEAN |
+| Insert | `dictInsert k v dict` | Dictionary |
+| Delete | `dictDelete k dict` | Dictionary |
+| Get keys | `dictKeys dict` | LIST OF k |
+| Get values | `dictElems dict` | LIST OF v |
+| Size | `dictSize dict` | NUMBER |
+| Is empty | `dictIsEmpty dict` | BOOLEAN |
+| Map values | `mapDict f dict` | Dictionary |
+| Filter | `filterDict pred dict` | Dictionary |
+
 ## WPA Examples: Lists and MAYBE in Action
 
 ### Finding Employees by Category
@@ -538,6 +764,8 @@ GIVETH A MAYBE Employee
 6. **fromMaybe** extracts MAYBE values with a default
 7. **mapMaybe** transforms and filters in one pass
 8. **Recursive patterns** handle custom list processing
+9. **Dictionaries** provide key-value storage with O(log n) lookup
+10. **Dictionary functions** use `dict` prefix to avoid namespace conflicts
 
 ## Exercises
 

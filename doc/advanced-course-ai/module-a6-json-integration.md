@@ -828,6 +828,317 @@ def evaluate_eligibility(employee_id: str, salary: float) -> bool:
     return response.json()['result']
 ```
 
+## Part 10: Working with JSON in L4 Code
+
+L4 provides built-in functions for encoding and decoding JSON, allowing you to work with external APIs and data sources directly from your rules.
+
+### JSONDECODE: Type-Directed JSON Parsing
+
+The `JSONDECODE` builtin parses JSON strings into L4 values. It uses bidirectional type checking to understand what type to parse into:
+
+```l4
+IMPORT prelude
+
+-- Parse a simple number
+#EVAL JSONDECODE "42" : NUMBER
+-- Result: 42
+
+-- Parse a string
+#EVAL JSONDECODE "\"hello\"" : STRING
+-- Result: "hello"
+
+-- Parse a boolean
+#EVAL JSONDECODE "true" : BOOLEAN
+-- Result: TRUE
+```
+
+**Type-directed decoding for records:**
+
+```l4
+DECLARE Person HAS
+    name IS A STRING
+    age IS A NUMBER
+
+-- The type annotation tells JSONDECODE what structure to expect
+GIVEN jsonString IS A STRING
+GIVETH A MAYBE Person
+parsePerson jsonString MEANS
+    JSONDECODE jsonString : MAYBE Person
+
+-- Usage
+#EVAL parsePerson "{\"name\": \"Alice\", \"age\": 30}"
+-- Result: JUST (Person WITH name IS "Alice", age IS 30)
+```
+
+**Handling parse errors with EITHER:**
+
+```l4
+IMPORT prelude
+
+GIVEN jsonString IS A STRING
+GIVETH AN EITHER STRING Person
+parsePersonSafe jsonString MEANS
+    CONSIDER JSONDECODE jsonString : EITHER STRING Person
+    WHEN LEFT error THEN LEFT error
+    WHEN RIGHT person THEN RIGHT person
+```
+
+**Parsing lists:**
+
+```l4
+-- Parse a list of numbers
+#EVAL JSONDECODE "[1, 2, 3]" : LIST OF NUMBER
+-- Result: LIST 1, 2, 3
+
+-- Parse a list of records
+#EVAL JSONDECODE "[{\"name\":\"Alice\",\"age\":30},{\"name\":\"Bob\",\"age\":25}]"
+    : LIST OF Person
+-- Result: LIST (Person WITH...), (Person WITH...)
+```
+
+### JSONENCODE: Converting L4 Values to JSON
+
+The `JSONENCODE` builtin converts L4 values to JSON strings:
+
+```l4
+-- Encode primitive values
+#EVAL JSONENCODE 42
+-- Result: "42"
+
+#EVAL JSONENCODE "hello"
+-- Result: "\"hello\""
+
+#EVAL JSONENCODE TRUE
+-- Result: "true"
+
+-- Encode lists
+#EVAL JSONENCODE (LIST 1, 2, 3)
+-- Result: "[1,2,3]"
+
+-- Encode records
+DECIDE alice IS Person WITH name IS "Alice", age IS 30
+#EVAL JSONENCODE alice
+-- Result: "{\"name\":\"Alice\",\"age\":30}"
+```
+
+### FETCH: HTTP GET Requests
+
+The `FETCH` builtin performs HTTP GET requests and returns the response body as a STRING:
+
+```l4
+-- Simple GET request
+#EVAL FETCH "https://api.example.com/data"
+-- Result: Response body as STRING
+
+-- Parse JSON response
+GIVEN url IS A STRING
+GIVETH A MAYBE Person
+fetchPerson url MEANS
+    parsePerson (FETCH url)
+    WHERE
+        parsePerson jsonString MEANS
+            JSONDECODE jsonString : MAYBE Person
+```
+
+**Example: Fetching and parsing API data:**
+
+```l4
+IMPORT prelude
+
+§§ `UUID Service Integration`
+
+-- Fetch a random UUID
+`get random uuid` MEANS
+    TRIM (FETCH "https://httpbin.org/uuid")
+
+-- Parse UUID response
+DECLARE UuidResponse HAS
+    uuid IS A STRING
+
+GIVEN url IS A STRING
+GIVETH A MAYBE STRING
+`fetch uuid from` url MEANS
+    CONSIDER JSONDECODE responseBody : MAYBE UuidResponse
+    WHEN NOTHING THEN NOTHING
+    WHEN JUST response THEN JUST response's uuid
+    WHERE
+        responseBody MEANS FETCH url
+```
+
+### POST: HTTP POST Requests
+
+The `POST` operator sends HTTP POST requests with JSON payloads:
+
+```l4
+IMPORT prelude
+
+-- Simple POST request
+#EVAL POST "https://api.example.com/submit" JSONENCODE (Person WITH name IS "Alice", age IS 30)
+-- Sends POST request with JSON body
+
+-- POST with headers
+#EVAL POST "https://api.example.com/submit"
+    WITH HEADERS (LIST
+        PAIR OF "Authorization", "Bearer token123",
+        PAIR OF "Content-Type", "application/json")
+    JSONENCODE myData
+```
+
+**Example: Posting to external API:**
+
+```l4
+§§ `External Validation Service`
+
+DECLARE ValidationRequest HAS
+    employeeId IS A STRING
+    category IS AN EmploymentCategory
+
+DECLARE ValidationResponse HAS
+    valid IS A BOOLEAN
+    reason IS A STRING
+
+GIVEN employee IS AN Employee
+GIVETH A MAYBE ValidationResponse
+`validate externally` employee MEANS
+    JSONDECODE responseBody : MAYBE ValidationResponse
+    WHERE
+        request MEANS ValidationRequest WITH
+            employeeId IS employee's passportNumber
+            category IS employee's category
+
+        requestJson MEANS JSONENCODE request
+
+        responseBody MEANS
+            POST "https://validation.example.com/api/validate"
+            WITH HEADERS (LIST PAIR OF "Content-Type", "application/json")
+            requestJson
+```
+
+### ENV: Accessing Environment Variables
+
+The `ENV` keyword accesses environment variables at runtime:
+
+```l4
+-- Get API endpoint from environment
+DECIDE `api base url` IS ENV "API_BASE_URL"
+
+-- Get API key
+DECIDE `api key` IS ENV "API_KEY"
+
+-- Use in requests
+GIVEN employeeId IS A STRING
+GIVETH A STRING
+`fetch employee data` employeeId MEANS
+    FETCH (apiUrl APPEND "/employees/" APPEND employeeId)
+    WHERE
+        apiUrl MEANS ENV "API_BASE_URL"
+```
+
+**Example: Configuration-driven integration:**
+
+```l4
+§§ `External Service Configuration`
+
+-- Environment-based configuration
+`external api url` MEANS ENV "EXTERNAL_API_URL"
+`api timeout seconds` MEANS ENV "API_TIMEOUT"
+`api key` MEANS ENV "API_KEY"
+
+GIVEN request IS A ValidationRequest
+GIVETH A MAYBE ValidationResponse
+`call validation service` request MEANS
+    parseResponse (makeRequest)
+    WHERE
+        makeRequest MEANS
+            POST `external api url`
+            WITH HEADERS (LIST
+                PAIR OF "Authorization", ("Bearer " APPEND `api key`),
+                PAIR OF "Content-Type", "application/json")
+            JSONENCODE request
+
+        parseResponse body MEANS
+            JSONDECODE body : MAYBE ValidationResponse
+```
+
+### Combining JSON Operations: Real-World Example
+
+```l4
+IMPORT prelude
+
+§§ `Complete External API Integration`
+
+DECLARE ExternalEligibilityRequest HAS
+    passportNumber IS A STRING
+    nationality IS A STRING
+    category IS AN EmploymentCategory
+
+DECLARE ExternalEligibilityResponse HAS
+    eligible IS A BOOLEAN
+    score IS A NUMBER
+    reasons IS A LIST OF STRING
+
+GIVEN employee IS AN Employee
+GIVETH A MAYBE ExternalEligibilityResponse
+`check external eligibility` employee MEANS
+    sendAndParse
+    WHERE
+        -- 1. Build request object
+        request MEANS ExternalEligibilityRequest WITH
+            passportNumber IS employee's passportNumber
+            nationality IS employee's nationality
+            category IS employee's category
+
+        -- 2. Encode to JSON
+        requestJson MEANS JSONENCODE request
+
+        -- 3. Get configuration from environment
+        apiUrl MEANS ENV "ELIGIBILITY_API_URL"
+        apiKey MEANS ENV "ELIGIBILITY_API_KEY"
+
+        -- 4. Make POST request
+        responseBody MEANS
+            POST apiUrl
+            WITH HEADERS (LIST
+                PAIR OF "Authorization", ("Bearer " APPEND apiKey),
+                PAIR OF "Content-Type", "application/json")
+            requestJson
+
+        -- 5. Parse JSON response
+        sendAndParse MEANS
+            JSONDECODE responseBody : MAYBE ExternalEligibilityResponse
+
+-- Use the external check in decision logic
+GIVEN employee IS AN Employee
+GIVETH A BOOLEAN
+DECIDE `meets all requirements` IF
+        `meets local requirements` employee
+    AND externalCheck
+    WHERE
+        externalResult MEANS `check external eligibility` employee
+
+        externalCheck MEANS
+            CONSIDER externalResult
+            WHEN NOTHING THEN FALSE  -- API failure = reject
+            WHEN JUST response THEN response's eligible
+```
+
+### Error Handling with External Services
+
+```l4
+IMPORT prelude
+
+-- Graceful degradation pattern
+GIVEN employee IS AN Employee
+GIVETH A BOOLEAN
+`is eligible with fallback` employee MEANS
+    CONSIDER `check external eligibility` employee
+    WHEN NOTHING THEN
+        -- Fallback to local rules if API fails
+        `local eligibility check` employee
+    WHEN JUST response THEN
+        response's eligible AND `local eligibility check` employee
+```
+
 ## Key Takeaways
 
 1. **L4 types map naturally to JSON** (records→objects, enums→strings, lists→arrays)
@@ -839,6 +1150,10 @@ def evaluate_eligibility(employee_id: str, salary: float) -> bool:
 7. **Handle schema evolution** with optional fields and versioning
 8. **Cache results** when appropriate
 9. **Return minimal data** for performance
+10. **JSONDECODE** uses type-directed parsing for type safety
+11. **FETCH and POST** enable direct API integration from L4 rules
+12. **ENV** provides configuration without hardcoding values
+13. **Always handle MAYBE** results from external services for robustness
 
 ## Exercises
 

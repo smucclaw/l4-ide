@@ -27,13 +27,13 @@ What L4 is, why it exists, and how an L4 file is structured.
 Defining enums, records, lists, and optional types in the WorkPass Authority domain.
 
 ### [Module 2 — Functions Using GIVEN / GIVETH / MEANS](module-2-functions.md)
-Reusable logic, date arithmetic, Booleans, and numeric calculations with natural language syntax.
+Reusable logic, date arithmetic, Booleans, numeric calculations, string operations (SPLIT, TRIM, CONTAINS, etc.), and math functions (SQRT, EXPONENT) with natural language syntax.
 
 ### [Module 3 — Control Flow: CONSIDER, WHEN, BRANCH](module-3-control-flow.md)
 Decision tables, branching logic, and deterministic modeling patterns with pattern matching.
 
 ### [Module 4 — Lists, MAYBE, and Higher-Order Helpers](module-4-lists-maybe.md)
-Working with lists, MAYBE values, map, filter, any, JUST, NOTHING.
+Working with lists, MAYBE values, dictionaries (key-value storage), map, filter, any, JUST, NOTHING.
 
 ### [Module 5 — WPA Eligibility Pipeline](module-5-wpa-pipeline.md)
 Building a multi-step assessment rule using helper functions and WHERE clauses.
