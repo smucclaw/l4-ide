@@ -5,6 +5,7 @@
 In JavaScript or Python, you'd use `switch` or `if/elif/else` chains to handle different cases. L4 provides **pattern matching** with `CONSIDER/WHEN`, which is more powerful and safer than traditional control flow.
 
 Pattern matching lets you:
+
 - Handle different enum values
 - Destructure data
 - Ensure you've covered all cases (exhaustiveness checking)
@@ -14,22 +15,24 @@ Pattern matching lets you:
 ### JavaScript Switch Equivalent
 
 JavaScript:
+
 ```javascript
 function getRiskLevel(category) {
-    switch(category) {
-        case 'TechProfessional':
-            return 'Low';
-        case 'HealthcareWorker':
-            return 'Medium';
-        case 'Researcher':
-            return 'Low';
-        default:
-            return 'High';
-    }
+  switch (category) {
+    case "TechProfessional":
+      return "Low";
+    case "HealthcareWorker":
+      return "Medium";
+    case "Researcher":
+      return "Low";
+    default:
+      return "High";
+  }
 }
 ```
 
 L4:
+
 ```l4
 GIVEN category IS AN EmploymentCategory
 GIVETH A STRING
@@ -170,6 +173,7 @@ But often, it's clearer to use helper functions:
 ## Pattern Matching on Lists
 
 Lists have two patterns:
+
 - `EMPTY` — the empty list
 - `head FOLLOWED BY tail` — a list with at least one element
 
@@ -252,14 +256,14 @@ Legal and business rules often appear as decision tables. L4's pattern matching 
 
 ### Example: WPA Processing Fee
 
-| Category | Experience | Fee |
-|----------|-----------|------|
-| Tech | < 5 years | $200 |
-| Tech | >= 5 years | $150 |
-| Healthcare | Any | $175 |
-| Researcher | PhD | $100 |
-| Researcher | Other | $150 |
-| Other | Any | $200 |
+| Category   | Experience | Fee  |
+| ---------- | ---------- | ---- |
+| Tech       | < 5 years  | $200 |
+| Tech       | >= 5 years | $150 |
+| Healthcare | Any        | $175 |
+| Researcher | PhD        | $100 |
+| Researcher | Other      | $150 |
+| Other      | Any        | $200 |
 
 In L4:
 
@@ -307,7 +311,7 @@ GIVETH A STRING
 
 ## Pattern Guards: Adding Conditions to Patterns
 
-Sometimes you want to match a pattern *and* check a condition. Use `PROVIDED`:
+Sometimes you want to match a pattern _and_ check a condition. Use `PROVIDED`:
 
 ```l4
 DECLARE PaymentStatus IS ONE OF
@@ -328,7 +332,7 @@ GIVETH A BOOLEAN
         FALSE
 ```
 
-The pattern matches `Paid`, extracts `amount` and `date`, *then* checks if `amount AT LEAST minimumAmount`.
+The pattern matches `Paid`, extracts `amount` and `date`, _then_ checks if `amount AT LEAST minimumAmount`.
 
 ## Exhaustiveness Checking
 
@@ -460,12 +464,15 @@ GIVETH A LIST OF Document
 ## Exercises
 
 ### Exercise 1: Simple Pattern Match
+
 Write a function that takes an `EducationLevel` and returns years of study typically required.
 
 ### Exercise 2: Nested Patterns
+
 Write a function that determines application fee based on both category and years of experience (as a decision table).
 
 ### Exercise 3: List Patterns
+
 Write a function that checks if a list of employees has any TechProfessional in it (hint: use recursion with list patterns).
 
 ## Next Steps

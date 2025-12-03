@@ -5,6 +5,7 @@
 ## Overview
 
 Time is fundamental to law. Legal rules specify:
+
 - **When they come into effect** (commencement dates)
 - **When they cease to apply** (sunset clauses, repeal dates)
 - **Time-based conditions** ("within 30 days", "before age 65")
@@ -18,14 +19,17 @@ L4 provides temporal logic features to handle these scenarios correctly.
 Legal computation involves multiple temporal dimensions:
 
 1. **Valid Time (tcValidTime)** — When is something true in the real world?
+
    - "Alice's age on January 1, 2025"
    - "The company's revenue in Q4 2024"
 
 2. **System Time (tcSystemTime)** — When did the system learn about it?
+
    - "Document uploaded on March 15, 2025"
    - "Application submitted on February 1, 2025"
 
 3. **Rule Version Time (tcRuleVersionTime)** — When were the rules in effect?
+
    - "Under the 2015 amendment to the Act..."
    - "Before the 2020 regulations came into force..."
 
@@ -604,25 +608,33 @@ Be explicit about boundaries:
 ## Exercises
 
 ### Exercise 1: Date Arithmetic
+
 Write functions for:
+
 - "Is this person old enough to vote?" (18 years)
 - "How many days until their next birthday?"
 - "What is the third Tuesday of June 2025?"
 
 ### Exercise 2: Rolling Windows
+
 Model a professional certification that:
+
 - Is valid for 3 years from issue
 - Has a 6-month grace period after expiry
 - Can be renewed up to 3 months before expiry
 
 ### Exercise 3: Effective Dates
+
 Model legislation that:
+
 - Comes into force on July 1, 2025
 - Has different transitional rules for existing vs new applications
 - Contains a sunset clause (expires December 31, 2030)
 
 ### Exercise 4: Temporal EVAL (Once Implemented)
+
 Write tests that verify:
+
 - Minimum salary requirements changed between 2020 and 2023
 - A specific applicant would have been eligible in 2020 but not in 2023
 - Decision outcomes across 5 different Git commits

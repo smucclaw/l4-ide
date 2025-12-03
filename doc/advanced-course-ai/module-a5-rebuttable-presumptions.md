@@ -6,10 +6,10 @@
 
 Legal reasoning often relies on **rebuttable presumptions**—assumptions that hold true unless proven otherwise:
 
-- A person is *typically* of sound mind and has legal capacity
-- A contract party is *typically* not acting under duress
-- A transaction is *typically* conducted at arm's length
-- A taxpayer is *typically* a resident of their stated jurisdiction
+- A person is _typically_ of sound mind and has legal capacity
+- A contract party is _typically_ not acting under duress
+- A transaction is _typically_ conducted at arm's length
+- A taxpayer is _typically_ a resident of their stated jurisdiction
 
 The `TYPICALLY` keyword brings this legal concept into L4, providing:
 
@@ -44,6 +44,7 @@ DECIDE `may purchase alcohol` IF
 **Problem:** An interactive chatbot must ask 6 questions even for a simple case (30-year-old adult).
 
 **User experience:**
+
 ```
 Bot: How old are you?
 User: 30
@@ -76,6 +77,7 @@ DECIDE `may purchase alcohol` IF
 ```
 
 **Improved experience:**
+
 ```
 Bot: How old are you?
 User: 30
@@ -106,6 +108,7 @@ DECLARE Person HAS
 ```
 
 **Interpretation:**
+
 - Unless proven otherwise, a person has legal capacity
 - Unless proven otherwise, a person is a natural person (not a corporation)
 - Unless proven otherwise, a person is not acting under duress
@@ -125,6 +128,7 @@ DECLARE Contract HAS
 ```
 
 **Interpretation:**
+
 - Contracts typically have no termination date (perpetual or project-based)
 - Governed by Singapore law unless stated otherwise
 - Typically no arbitration clause
@@ -192,6 +196,7 @@ DECIDE `qualifies for loan` IF
 ```
 
 **Effect:**
+
 - If `currentDate` is omitted, uses today's date
 - Most applicants don't have collateral or co-signers (default FALSE)
 - Most applicants are citizens with good credit (default TRUE)
@@ -222,6 +227,7 @@ GIVETH A NUMBER
 ```
 
 **Effect:**
+
 - Most taxpayers don't have deductions or credits (default 0)
 - Most taxpayers are residents (default TRUE)
 - Most taxpayers have no dependents (default 0)
@@ -254,6 +260,7 @@ ASSUME `is business day` IS A FUNCTION FROM DATE TO BOOLEAN
 ```
 
 **Effect:**
+
 - Explicit about what the system assumes
 - Makes dependencies visible
 - Enables "what if" reasoning ("what if the credit bureau is down?")
@@ -287,6 +294,7 @@ DECIDE `eligible for family plan` IF
 ```
 
 **Smart questioning:**
+
 ```
 Bot: How old are you?
 User: 30
@@ -303,6 +311,7 @@ Bot: You qualify for the individual plan!
 ```
 
 **Vs. if user says "Yes" to married:**
+
 ```
 Bot: How old are you?
 User: 30
@@ -345,11 +354,13 @@ DECIDE `contract is valid` IF
 ```
 
 **When evaluating:**
+
 ```l4
 #EVAL `contract is valid` (ContractValidityCheck WITH {})
 ```
 
 **Output includes assumptions:**
+
 ```
 Result: TRUE
 
@@ -413,6 +424,7 @@ DECLARE Foo HAS
 ```
 
 **Workaround for complex defaults:**
+
 ```l4
 -- Define the default separately
 `default date` MEANS DATE OF 1, 1, 2025
@@ -437,6 +449,7 @@ DECLARE Document HAS
 ```
 
 **Interpretation:**
+
 - By default, documents don't expire
 - By default, no arbitration clause
 
@@ -449,6 +462,7 @@ DECLARE Config HAS
 ```
 
 **Interpretation:**
+
 - Debug mode defaults to explicitly disabled (not unknown)
 - Retries default to 3 (not unlimited or unknown)
 
@@ -471,6 +485,7 @@ DECLARE Person HAS
 ```
 
 **Creating a person:**
+
 ```l4
 `alice` MEANS Person WITH
     name IS "Alice"
@@ -483,6 +498,7 @@ DECLARE Person HAS
 ```
 
 **Result:**
+
 ```l4
 Person {
     name: "Alice",
@@ -669,15 +685,19 @@ DECLARE MedicalClaim HAS
 ## Exercises
 
 ### Exercise 1: Basic TYPICALLY
+
 Add TYPICALLY defaults to a Contract type with standard presumptions (arm's length, written, etc.).
 
 ### Exercise 2: Smart Questionnaire
+
 Design a multi-step eligibility checker that uses TYPICALLY to minimize questions for typical applicants.
 
 ### Exercise 3: Assumption Audit
+
 Create a function that reports all TYPICALLY defaults used in an evaluation (for compliance logging).
 
 ### Exercise 4: Override Patterns
+
 Write tests demonstrating the precedence rules when DECLARE, GIVEN, and explicit values all provide values for the same field.
 
 ## Future Developments

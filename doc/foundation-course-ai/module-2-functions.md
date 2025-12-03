@@ -21,6 +21,7 @@ functionName parameter1 parameter2 MEANS expression
 ```
 
 Think of it as:
+
 - **GIVEN**: Function parameters and their types (like function signature)
 - **GIVETH**: Return type
 - **MEANS**: Function body (the expression to evaluate)
@@ -35,9 +36,10 @@ GIVETH A NUMBER
 ```
 
 In JavaScript, this would be:
+
 ```javascript
 function annual_income(salary) {
-    return salary * 12;
+  return salary * 12;
 }
 ```
 
@@ -96,6 +98,7 @@ DECIDE `meets education requirement` IF
 ```
 
 This is shorthand for:
+
 ```l4
 `meets education requirement` employee MEANS
     (employee's educationLevel EQUALS Bachelor) OR ...
@@ -148,12 +151,13 @@ GIVETH A BOOLEAN
 ```
 
 Think of `WHERE` like `let` bindings in JavaScript:
+
 ```javascript
 function passes_salary_check(employee, employer) {
-    const salary = employee.monthlySalary;
-    const category = employee.category;
-    const minimumForCategory = minimum_salary_for(category);
-    return salary >= minimumForCategory;
+  const salary = employee.monthlySalary;
+  const category = employee.category;
+  const minimumForCategory = minimum_salary_for(category);
+  return salary >= minimumForCategory;
 }
 ```
 
@@ -201,11 +205,13 @@ GIVETH A NUMBER
 ### With OF for Single Arguments
 
 When a function takes one argument, you can use `OF`:
+
 ```l4
 `minimum salary for` OF TechProfessional
 ```
 
 Instead of:
+
 ```l4
 `minimum salary for` TechProfessional
 ```
@@ -226,11 +232,11 @@ WHERE
 
 L4 provides natural language operators:
 
-| L4 Syntax | Meaning | JavaScript |
-|-----------|---------|------------|
-| `AND` | Conjunction | `&&` |
-| `OR` | Disjunction | `\|\|` |
-| `NOT` | Negation | `!` |
+| L4 Syntax         | Meaning     | JavaScript  |
+| ----------------- | ----------- | ----------- |
+| `AND`             | Conjunction | `&&`        |
+| `OR`              | Disjunction | `\|\|`      |
+| `NOT`             | Negation    | `!`         |
 | `IMPLIES` or `=>` | Implication | `!a \|\| b` |
 
 ```l4
@@ -242,15 +248,16 @@ DECIDE eligible IF
 
 ## Comparison Operators
 
-| L4 Syntax | Meaning | JavaScript |
-|-----------|---------|------------|
-| `EQUALS` | Equality | `===` |
-| `GREATER THAN` | > | `>` |
-| `LESS THAN` | < | `<` |
-| `AT LEAST` | >= | `>=` |
-| `AT MOST` | <= | `<=` |
+| L4 Syntax      | Meaning  | JavaScript |
+| -------------- | -------- | ---------- |
+| `EQUALS`       | Equality | `===`      |
+| `GREATER THAN` | >        | `>`        |
+| `LESS THAN`    | <        | `<`        |
+| `AT LEAST`     | >=       | `>=`       |
+| `AT MOST`      | <=       | `<=`       |
 
 Natural language versions enhance readability:
+
 ```l4
 employee's age AT LEAST 18
 salary AT MOST 50000
@@ -258,13 +265,13 @@ salary AT MOST 50000
 
 ## Numeric Operations
 
-| L4 Syntax | JavaScript |
-|-----------|------------|
-| `PLUS` | `+` |
-| `MINUS` | `-` |
-| `TIMES` | `*` |
-| `DIVIDED BY` | `/` |
-| `MODULO` | `%` |
+| L4 Syntax    | JavaScript |
+| ------------ | ---------- |
+| `PLUS`       | `+`        |
+| `MINUS`      | `-`        |
+| `TIMES`      | `*`        |
+| `DIVIDED BY` | `/`        |
+| `MODULO`     | `%`        |
 
 ```l4
 netSalary MEANS grossSalary MINUS taxes
@@ -273,6 +280,7 @@ taxRate MEANS taxAmount DIVIDED BY income
 ```
 
 You can also use symbolic operators:
+
 ```l4
 netSalary MEANS grossSalary - taxes
 annualIncome MEANS monthlySalary * 12
@@ -284,9 +292,9 @@ But the word forms often read better in legal contexts.
 
 L4 also provides advanced mathematical functions:
 
-| L4 Syntax | Meaning | Example |
-|-----------|---------|---------|
-| `SQRT` | Square root | `SQRT 16` → `4` |
+| L4 Syntax         | Meaning        | Example                               |
+| ----------------- | -------------- | ------------------------------------- |
+| `SQRT`            | Square root    | `SQRT 16` → `4`                       |
 | `EXPONENT` or `^` | Exponentiation | `2 EXPONENT 3` → `8` or `2 ^ 3` → `8` |
 
 ```l4
@@ -311,35 +319,35 @@ L4 provides comprehensive string manipulation functions for working with text:
 
 ### Unary String Functions (STRING → STRING or NUMBER)
 
-| Function | Returns | Description | Example |
-|----------|---------|-------------|---------|
-| `STRINGLENGTH` | NUMBER | Length of string | `STRINGLENGTH "hello"` → `5` |
-| `TOUPPER` | STRING | Convert to uppercase | `TOUPPER "hello"` → `"HELLO"` |
-| `TOLOWER` | STRING | Convert to lowercase | `TOLOWER "HELLO"` → `"hello"` |
-| `TRIM` | STRING | Remove leading/trailing whitespace | `TRIM "  hello  "` → `"hello"` |
+| Function       | Returns | Description                        | Example                        |
+| -------------- | ------- | ---------------------------------- | ------------------------------ |
+| `STRINGLENGTH` | NUMBER  | Length of string                   | `STRINGLENGTH "hello"` → `5`   |
+| `TOUPPER`      | STRING  | Convert to uppercase               | `TOUPPER "hello"` → `"HELLO"`  |
+| `TOLOWER`      | STRING  | Convert to lowercase               | `TOLOWER "HELLO"` → `"hello"`  |
+| `TRIM`         | STRING  | Remove leading/trailing whitespace | `TRIM "  hello  "` → `"hello"` |
 
 ### Binary String Functions (STRING → STRING → ...)
 
-| Function | Returns | Description | Example |
-|----------|---------|-------------|---------|
-| `CONTAINS` | BOOLEAN | Check if contains substring | `CONTAINS "hello world" "world"` → `TRUE` |
-| `STARTSWITH` | BOOLEAN | Check if starts with prefix | `STARTSWITH "hello world" "hello"` → `TRUE` |
-| `ENDSWITH` | BOOLEAN | Check if ends with suffix | `ENDSWITH "hello world" "world"` → `TRUE` |
-| `INDEXOF` | NUMBER | Find first occurrence (-1 if not found) | `INDEXOF "hello world" "o"` → `4` |
-| `SPLIT` | LIST OF STRING | Split by delimiter | `SPLIT "a,b,c" ","` → `["a", "b", "c"]` |
+| Function     | Returns        | Description                             | Example                                     |
+| ------------ | -------------- | --------------------------------------- | ------------------------------------------- |
+| `CONTAINS`   | BOOLEAN        | Check if contains substring             | `CONTAINS "hello world" "world"` → `TRUE`   |
+| `STARTSWITH` | BOOLEAN        | Check if starts with prefix             | `STARTSWITH "hello world" "hello"` → `TRUE` |
+| `ENDSWITH`   | BOOLEAN        | Check if ends with suffix               | `ENDSWITH "hello world" "world"` → `TRUE`   |
+| `INDEXOF`    | NUMBER         | Find first occurrence (-1 if not found) | `INDEXOF "hello world" "o"` → `4`           |
+| `SPLIT`      | LIST OF STRING | Split by delimiter                      | `SPLIT "a,b,c" ","` → `["a", "b", "c"]`     |
 
 ### Ternary String Functions
 
-| Function | Returns | Description | Example |
-|----------|---------|-------------|---------|
-| `SUBSTRING` | STRING | Extract substring(string, start, length) | `SUBSTRING "hello world" 0 5` → `"hello"` |
-| `REPLACE` | STRING | Replace all occurrences | `REPLACE "hello hello" "hello" "hi"` → `"hi hi"` |
+| Function    | Returns | Description                              | Example                                          |
+| ----------- | ------- | ---------------------------------------- | ------------------------------------------------ |
+| `SUBSTRING` | STRING  | Extract substring(string, start, length) | `SUBSTRING "hello world" 0 5` → `"hello"`        |
+| `REPLACE`   | STRING  | Replace all occurrences                  | `REPLACE "hello hello" "hello" "hi"` → `"hi hi"` |
 
 ### Character Access
 
-| Function | Returns | Description | Example |
-|----------|---------|-------------|---------|
-| `CHARAT` | STRING | Get character at index (empty if out of bounds) | `CHARAT "hello" 0` → `"h"` |
+| Function | Returns | Description                                     | Example                    |
+| -------- | ------- | ----------------------------------------------- | -------------------------- |
+| `CHARAT` | STRING  | Get character at index (empty if out of bounds) | `CHARAT "hello" 0` → `"h"` |
 
 ### WPA String Examples
 
@@ -398,6 +406,7 @@ DECIDE `is valid email format` IF
 ```
 
 These string operations are especially useful when:
+
 - Validating user input (passport numbers, names, emails)
 - Parsing structured text (CSV files, form data)
 - Formatting output for reports and documents
@@ -522,13 +531,17 @@ DECIDE `employee` `eligible for work pass with` `employer` IF
 ## Exercises
 
 ### Exercise 1: Basic Function
+
 Write a function that calculates annual income from monthly salary with a bonus percentage.
 
 ### Exercise 2: Mixfix Function
+
 Write a function: `employee` `qualifies for` `category` that checks if an employee meets the requirements for a given employment category.
 
 ### Exercise 3: Complex WHERE
+
 Write a function that calculates a "company suitability score" based on:
+
 - Years in business (older = better)
 - Local vs foreign worker ratio (higher local = better)
 - Paid-up capital (higher = better)

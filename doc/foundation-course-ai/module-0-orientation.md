@@ -5,6 +5,7 @@
 L4 is a **programming language for law**. It brings the rigor and tooling of software engineering to legal work—contracts, regulations, policies, and compliance logic.
 
 Think of L4 as:
+
 - **PostScript for law**: Just as PostScript became the foundation for desktop publishing, L4 aims to be the foundational language for legal computation
 - **A compiler for legal rules**: It translates legal requirements into executable, testable, verifiable code
 - **A bridge between humans and machines**: Legal professionals can express rules clearly, while computers can reason about them formally
@@ -12,16 +13,20 @@ Think of L4 as:
 ## Why L4 Exists
 
 ### The Problem
+
 Legal work today faces significant challenges:
+
 - **Microsoft Word as the only tool**: Unlike programmers (who have IDEs, compilers, debuggers, test suites) or graphic designers (who have Adobe's creative suite), lawyers work in general-purpose word processors
 - **No systematic testing**: Contracts and regulations are rarely tested against edge cases before deployment
 - **Hidden ambiguities**: Legal documents often contain undetected contradictions, loopholes, and ambiguities that only emerge when disputes arise
 - **Fragmented LegalTech**: The 3,000+ LegalTech startups mostly focus on document management, not on making law computable
 
 ### The Vision
+
 L4 enables a paradigm shift from "contracts as documents" to "contracts as executable specifications":
 
 1. **Write rules once, deploy everywhere**: From the same L4 source, generate:
+
    - Human-readable documentation (Markdown, PDF)
    - Web applications for end-users
    - API services for integration
@@ -76,20 +81,25 @@ DECIDE `is adult` IF
 ### Key Syntax Elements
 
 #### Sections
+
 ```l4
 § `Top-Level Section`
 §§ `Subsection`
 ```
+
 Sections provide hierarchy and navigation. They're purely organizational—like markdown headers.
 
 #### Backticks for Multi-Word Names
+
 ```l4
 `can transfer ownership`  -- multi-word identifier
 canTransferOwnership      -- alternative style (no spaces)
 ```
+
 Use backticks when you want identifiers that read like natural language.
 
 #### Comments
+
 ```l4
 -- This is a single-line comment
 
@@ -100,6 +110,7 @@ multi-line comment
 ```
 
 #### Directives
+
 ```l4
 #EVAL expression           -- Evaluate and display result
 #ASSERT boolean_expr       -- Assert truth (for testing)
@@ -120,6 +131,7 @@ isPositive x MEANS
 ```
 
 Incorrect indentation will cause parse errors:
+
 ```l4
 -- WRONG:
 isPositive x MEANS
@@ -135,6 +147,7 @@ IMPORT daydate    -- Date arithmetic library
 ```
 
 Libraries provide reusable functions. The prelude includes:
+
 - List operations: `map`, `filter`, `fold`, `any`, `all`
 - Maybe/Optional handling: `JUST`, `NOTHING`, `fromMaybe`
 - Pair operations: `PAIR`, `fst`, `snd`
@@ -144,6 +157,7 @@ Libraries provide reusable functions. The prelude includes:
 L4 is **statically typed** (like Java, not like Python). Every expression has a type known at compile time.
 
 Common types:
+
 - `NUMBER` - integers and floating-point
 - `STRING` - text
 - `BOOLEAN` - TRUE or FALSE
@@ -155,11 +169,13 @@ Common types:
 ### Execution Model
 
 L4 is:
+
 - **Purely functional**: Functions have no side effects
 - **Lazy**: Expressions are evaluated only when needed
 - **Traceable**: Execution produces detailed audit trails (crucial for legal reasoning)
 
 When you run `#EVAL`, L4:
+
 1. Type-checks your expression
 2. Evaluates it lazily
 3. Produces a value and execution trace
@@ -180,6 +196,7 @@ In **Module 1**, we'll dive into declaring types—enums and records—using a c
 ## Exercise
 
 Create a file `hello.l4` with:
+
 ```l4
 § `Hello World in L4`
 
@@ -191,6 +208,7 @@ greet name MEANS "Hello, " APPEND name
 ```
 
 Run it with:
+
 ```bash
 cabal run jl4-cli -- hello.l4
 ```

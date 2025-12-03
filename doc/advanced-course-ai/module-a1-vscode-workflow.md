@@ -3,6 +3,7 @@
 ## Overview
 
 In the Foundation Course, you learned L4 basics through single-file examples. Real-world legal systems require **multi-file projects** with:
+
 - Modular organization
 - Shared libraries
 - Version control
@@ -51,6 +52,7 @@ my-l4-project/
 ### Splitting by Concern
 
 **core-types.l4**
+
 ```l4
 § `Core Type Definitions`
 
@@ -66,6 +68,7 @@ DECLARE Employee HAS
 ```
 
 **domain-rules.l4**
+
 ```l4
 IMPORT core-types
 
@@ -98,6 +101,7 @@ IMPORT daydate
 ### Installation
 
 1. Build the extension:
+
 ```bash
 cd ts-apps/vscode
 npm install
@@ -114,6 +118,7 @@ npm run compile
 #### 1. Syntax Highlighting
 
 The extension provides semantic highlighting for:
+
 - Keywords (`GIVEN`, `DECIDE`, `CONSIDER`)
 - Types (`Employee`, `NUMBER`, `STRING`)
 - Operators (`AND`, `OR`, `AT LEAST`)
@@ -123,6 +128,7 @@ The extension provides semantic highlighting for:
 #### 2. Type Checking on Save
 
 As you type, the extension:
+
 - Runs the L4 compiler in the background
 - Shows type errors inline
 - Highlights undefined references
@@ -131,6 +137,7 @@ As you type, the extension:
 #### 3. Inline Evaluation
 
 Hover over `#EVAL` directives to see:
+
 - Computed results
 - Type information
 - Execution traces
@@ -140,6 +147,7 @@ Or use CodeLens to execute evaluations inline.
 #### 4. Decision Logic Visualization
 
 For `DECIDE` rules, the extension can generate:
+
 - Ladder diagrams (Boolean circuit visualization)
 - Decision trees
 - Flowcharts
@@ -191,6 +199,7 @@ fswatch -o src/**/*.l4 | xargs -n1 -I{} cabal run jl4-cli -- src/main.l4
 Or use VSCode's built-in tasks:
 
 **.vscode/tasks.json**
+
 ```json
 {
   "version": "2.0.0",
@@ -219,6 +228,7 @@ Now: Cmd/Ctrl+Shift+B to run tests.
 ### Test File Organization
 
 **tests/fixtures/employees.l4**
+
 ```l4
 § `Test Fixtures - Employees`
 
@@ -230,6 +240,7 @@ Now: Cmd/Ctrl+Shift+B to run tests.
 ```
 
 **tests/unit-tests.l4**
+
 ```l4
 IMPORT ../src/types/core-types
 IMPORT ../src/rules/eligibility
@@ -256,6 +267,7 @@ cabal run jl4-cli -- tests/test-suites/eligibility-tests.l4
 Use a test runner script:
 
 **scripts/run-tests.sh**
+
 ```bash
 #!/bin/bash
 set -e
@@ -325,6 +337,7 @@ git push origin feature/healthcare-quota
 ### Pre-commit Hooks
 
 **.git/hooks/pre-commit**
+
 ```bash
 #!/bin/bash
 
@@ -408,6 +421,7 @@ Type mismatch:
 ```
 
 **Fix:**
+
 1. Check the field type in the DECLARE
 2. Verify you're accessing the right field
 3. Check if you need a type conversion
@@ -420,6 +434,7 @@ Missing case: Researcher
 ```
 
 **Fix:**
+
 1. Add the missing case
 2. Or add `OTHERWISE` clause
 
@@ -428,6 +443,7 @@ Missing case: Researcher
 When output is wrong but no errors:
 
 **Strategy:**
+
 1. Add `#EVAL` directives at intermediate steps
 2. Check helper function outputs
 3. Use `WHERE` clause values as checkpoints
@@ -444,15 +460,15 @@ If evaluation is slow:
 
 ## Keyboard Shortcuts (VSCode)
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
-| Go to Definition | Cmd+Click | Ctrl+Click |
-| Find References | Shift+F12 | Shift+F12 |
-| Rename Symbol | F2 | F2 |
-| Format Document | Shift+Opt+F | Shift+Alt+F |
-| Run Tests | Cmd+Shift+T | Ctrl+Shift+T |
-| Toggle Terminal | Ctrl+` | Ctrl+` |
-| Command Palette | Cmd+Shift+P | Ctrl+Shift+P |
+| Action           | macOS       | Windows/Linux |
+| ---------------- | ----------- | ------------- |
+| Go to Definition | Cmd+Click   | Ctrl+Click    |
+| Find References  | Shift+F12   | Shift+F12     |
+| Rename Symbol    | F2          | F2            |
+| Format Document  | Shift+Opt+F | Shift+Alt+F   |
+| Run Tests        | Cmd+Shift+T | Ctrl+Shift+T  |
+| Toggle Terminal  | Ctrl+`      | Ctrl+`        |
+| Command Palette  | Cmd+Shift+P | Ctrl+Shift+P  |
 
 ## Documentation Generation
 
@@ -491,15 +507,19 @@ DECIDE `meets minimum age` IF
 ## Exercises
 
 ### Exercise 1: Project Setup
+
 Create a new L4 project with the recommended directory structure. Set up Git and add a .gitignore.
 
 ### Exercise 2: Multi-File Refactoring
+
 Take your WPA pipeline from Module 5 and split it across multiple files (types, rules, helpers, tests).
 
 ### Exercise 3: Testing Infrastructure
+
 Create a test runner script that runs all test files in your tests/ directory.
 
 ### Exercise 4: Pre-Commit Hook
+
 Set up a pre-commit hook that runs type checking before allowing commits.
 
 ## Next Steps

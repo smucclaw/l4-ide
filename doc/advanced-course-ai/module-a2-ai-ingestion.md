@@ -3,12 +3,14 @@
 ## Overview
 
 One of L4's most powerful applications is **encoding existing legislation and regulations** into executable form. However, legal documents are often:
+
 - Written in dense, ambiguous language
 - Full of cross-references and implicit dependencies
 - Structured inconsistently across documents
 - Thousands of pages long
 
 **AI assistance** (particularly LLMs) can accelerate the ingestion process by:
+
 1. Extracting structured information from legal text
 2. Identifying definitions, rules, and conditions
 3. Suggesting L4 type and function structures
@@ -43,6 +45,7 @@ Formal L4 Model
 ### Example: Extracting from Legislative Text
 
 **Source Text** (fictional):
+
 ```
 Employment (Foreign Workforce) Regulations 2025
 
@@ -99,6 +102,7 @@ Format your response as:
 
 ```markdown
 ## Defined Terms
+
 - employee: A person applying for a work pass (source: implied throughout)
 - work pass: Authorization to work in the jurisdiction (source: section title)
 - recognized degree or diploma: Defined in Section 5(2)
@@ -106,6 +110,7 @@ Format your response as:
 - Director: The authority with discretionary powers (source: 5(3))
 
 ## Eligibility Conditions
+
 - Age requirement: employee.age >= 18 AND employee.age <= 65
 - Education requirement: employee has recognized degree or diploma
 - Experience requirement: employee.years_experience >= 2
@@ -113,12 +118,14 @@ Format your response as:
 - Quota requirement: company.foreign_workers < company.foreign_worker_quota
 
 ## Numeric Thresholds
+
 - Minimum age: 18 (years)
 - Maximum age: 65 (years)
 - Minimum experience: 2 (years)
 - Minimum salary: 5000 (dollars per month)
 
 ## Exceptions
+
 - Experience waiver: Director may waive 2-year requirement for exceptional skills
   (discretionary, case-by-case)
 ```
@@ -291,11 +298,13 @@ After AI generation, verify:
 ### Modeling Discretionary Powers
 
 The original text says:
+
 > "The Director may waive the requirement in subsection (1)(c)..."
 
 This introduces **discretion**—a human decision that can't be fully automated.
 
 **Approach 1: Model as Data**
+
 ```l4
 DECLARE Application HAS
     employee IS AN Employee
@@ -329,6 +338,7 @@ DECIDE `eligible for work pass` IF
 ```
 
 **Approach 2: External Decision Points**
+
 ```l4
 -- Mark as requiring human review
 DECLARE EligibilityResult IS ONE OF
@@ -353,6 +363,7 @@ GIVETH AN EligibilityResult
 ### Finding Ambiguities
 
 **AI Prompt:**
+
 ```
 Review this L4 code for potential ambiguities or edge cases:
 
@@ -366,22 +377,27 @@ Identify:
 ```
 
 **AI Response:**
+
 ```markdown
 Potential Issues:
 
 1. Age calculation: What if employee born on Feb 29? (leap year)
+
    - Current: Uses 365.25 average
    - Risk: Off-by-one errors near boundaries
 
 2. Salary: Currency not specified
+
    - Assumption: Local currency
    - Risk: Multi-currency companies
 
 3. "Recognized degree": Who recognizes?
+
    - Text says "Ministry" but Ministry not modeled
    - Need: List of recognized institutions or approval process
 
 4. Experience counting: Does part-time count?
+
    - Text says "relevant work experience"
    - Unclear: How to count overlapping positions, internships, etc.
 
@@ -488,6 +504,7 @@ Format as L4 test fixtures.
 ### Claude/GPT Integration
 
 **Recommended workflow:**
+
 1. Use Claude/GPT-4 for initial extraction and drafting
 2. Always review AI output for hallucinations
 3. Run type checker after each AI suggestion
@@ -497,12 +514,14 @@ Format as L4 test fixtures.
 ### Prompt Engineering Tips
 
 **Good prompts:**
+
 - Provide examples of desired output format
 - Be specific about what you want extracted
 - Ask for structured output (markdown, JSON, or L4 directly)
 - Request citations to source text
 
 **Avoid:**
+
 - Asking AI to "fully automate" complex legal reasoning
 - Trusting AI on numeric calculations without verification
 - Letting AI make policy decisions (stick to extraction)
@@ -531,6 +550,7 @@ git commit -m "test: Add comprehensive test coverage"
 ### Singapore's Personal Data Protection Act (Simplified)
 
 **Original Text:**
+
 ```
 Section 18. Consent for collection, use or disclosure of personal data
 
@@ -607,15 +627,19 @@ DECIDE `may perform action` IF
 ## Exercises
 
 ### Exercise 1: Extract and Model
+
 Take a 2-page excerpt from real legislation. Use AI to extract definitions and conditions, then write L4 types.
 
 ### Exercise 2: Ambiguity Detection
+
 Review AI-generated L4 code. Identify 5 potential ambiguities or edge cases.
 
 ### Exercise 3: Test Generation
+
 Use AI to generate 20 test cases for a complex eligibility function. Verify each one.
 
 ### Exercise 4: Discretion Modeling
+
 Model a regulation with discretionary powers. Create both approaches (data-based and review-required).
 
 ## Next Steps

@@ -10,6 +10,7 @@ Legal rules evolve: legislation is amended, case law develops, business policies
 4. **Rollback is possible if needed**
 
 This module covers:
+
 - Building regression test suites
 - Golden master testing
 - Change impact analysis
@@ -29,6 +30,7 @@ DECIDE `qualifies for leave` IF
 ```
 
 **Someone updates it:**
+
 ```l4
 -- Updated rule (2023)
 GIVEN employee IS AN Employee
@@ -39,11 +41,13 @@ DECIDE `qualifies for leave` IF
 ```
 
 **Impact:**
+
 - 1,000+ historical decisions need review
 - Employees with 1 year of service suddenly ineligible
 - Potential legal liability
 
 **With regression tests:**
+
 ```bash
 Running regression tests...
 FAILED: test_1year_employee
@@ -223,6 +227,7 @@ diff tests/golden/2020-baseline.txt tests/golden/current.txt
 ```
 
 **Output if changed:**
+
 ```diff
 === Test: Employee #12345 ===
 Input:
@@ -306,6 +311,7 @@ analyzeImpact cases MEANS
 ```
 
 **Output:**
+
 ```
 changed cases count: 127
 
@@ -415,9 +421,9 @@ name: L4 Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -429,8 +435,8 @@ jobs:
       - name: Setup Haskell
         uses: haskell/actions/setup@v2
         with:
-          ghc-version: '9.6'
-          cabal-version: '3.10'
+          ghc-version: "9.6"
+          cabal-version: "3.10"
 
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -611,18 +617,22 @@ WHERE l4_version = 'v1.9.0'
 ## [2.0.0] - 2023-06-15
 
 ### Breaking Changes
+
 - **Minimum years of service**: Increased from 1 to 2 years
 - **Employment type restriction**: Only "Permanent" employees qualify
 
 ### Impact
+
 - 127 historical cases now return different results
 - See `tests/regression/impact-2023-06-15.txt` for full list
 
 ### Migration
+
 - Review all cases with 1-2 years of service
 - Review all cases with non-Permanent employment
 
 ### References
+
 - Legal amendment: Employment Act 2023 Amendment
 - Approved by: Legal Department (2023-06-10)
 - Implementation: PR#123
@@ -630,10 +640,12 @@ WHERE l4_version = 'v1.9.0'
 ## [1.9.0] - 2022-12-01
 
 ### Added
+
 - Support for part-time employees
 - Prorated leave calculations
 
 ### Impact
+
 - No breaking changes
 - 15 new test cases added
 ```
@@ -652,15 +664,19 @@ WHERE l4_version = 'v1.9.0'
 ## Exercises
 
 ### Exercise 1: Build a Test Suite
+
 Create a comprehensive test suite for your WPA pipeline with unit, integration, and regression tests.
 
 ### Exercise 2: Golden Master
+
 Generate a golden master file for your current system, then intentionally break something and see if the diff catches it.
 
 ### Exercise 3: Impact Analysis
+
 Write a script that compares two git commits and reports how many test cases changed.
 
 ### Exercise 4: CI Pipeline
+
 Set up a GitHub Actions workflow that runs your L4 tests on every pull request.
 
 ## Next Steps

@@ -34,6 +34,7 @@ Before starting this course, you should:
 ### Module A1: L4 Development Workflow in VSCode
 
 **What you'll learn:**
+
 - Setting up a professional L4 development environment
 - Using the L4 VSCode extension for syntax highlighting and type checking
 - Organizing multi-file projects
@@ -49,6 +50,7 @@ Before starting this course, you should:
 ### Module A2: AI-Assisted Ingestion & Model Refinement
 
 **What you'll learn:**
+
 - Using LLMs (ChatGPT, Claude) to extract rules from legal documents
 - Prompt engineering for accurate extraction
 - Iterative refinement workflow: extract → draft → refine → test
@@ -64,6 +66,7 @@ Before starting this course, you should:
 ### Module A3: Temporal Logic in L4 [WIP]
 
 **What you'll learn:**
+
 - Four temporal dimensions: valid time, system time, rule version time, encoding time
 - Using the `daydate` library for date arithmetic
 - The EVAL construct for multi-temporal queries (under development)
@@ -81,6 +84,7 @@ Before starting this course, you should:
 ### Module A4: Decision Service & API Integration
 
 **What you'll learn:**
+
 - Using `@desc export` annotations to expose L4 functions as APIs
 - Automatic API deployment from the Web IDE
 - REST endpoint patterns for decision services
@@ -97,6 +101,7 @@ Before starting this course, you should:
 ### Module A5: Rebuttable Presumptions with TYPICALLY [WIP]
 
 **What you'll learn:**
+
 - The TYPICALLY keyword for default values
 - Legal concept of rebuttable presumptions
 - Reducing question burden in interactive applications
@@ -114,6 +119,7 @@ Before starting this course, you should:
 ### Module A6: JSON Integration (Input & Output)
 
 **What you'll learn:**
+
 - Mapping L4 types to JSON schemas
 - Handling JSON input in decision service calls
 - Generating JSON output from L4 functions
@@ -134,6 +140,7 @@ Before starting this course, you should:
 ### Module A7: Regression Testing & Change Control
 
 **What you'll learn:**
+
 - Building test suites: unit, integration, regression
 - Golden master testing for change detection
 - Automated change impact analysis
@@ -152,6 +159,7 @@ Before starting this course, you should:
 ### Module A8: Multi-File Pipelines & System Architecture
 
 **What you'll learn:**
+
 - When to split code into multiple files
 - Import and module dependency management
 - Module design patterns: type-first, validation layer, orchestration, API export
@@ -171,6 +179,7 @@ Before starting this course, you should:
 ### Module A9: Importing OPM/OIA Files
 
 **What you'll learn:**
+
 - Understanding Oracle Policy Modeling file formats
 - Using the opm2l4 command-line translator
 - Translation mapping from OPM to L4
@@ -242,6 +251,7 @@ After completing the course, build a complete system that demonstrates your skil
 Build a production-ready API for immigration eligibility assessment:
 
 **Requirements:**
+
 - Multi-file architecture (types, validation, eligibility, operations, API)
 - Decision service with @desc export annotations
 - JSON integration with external HR systems
@@ -251,6 +261,7 @@ Build a production-ready API for immigration eligibility assessment:
 - Error handling and logging
 
 **Deliverables:**
+
 1. L4 source code (well-organized, documented)
 2. Test suite with 90%+ coverage
 3. API documentation
@@ -266,6 +277,7 @@ Build a production-ready API for immigration eligibility assessment:
 ### Required Tools
 
 1. **L4 Compiler**
+
    ```bash
    cd l4-ide
    cabal build all
@@ -273,17 +285,20 @@ Build a production-ready API for immigration eligibility assessment:
    ```
 
 2. **VSCode with L4 Extension**
+
    ```bash
    code --install-extension l4-lang.l4-vscode
    ```
 
 3. **Git** for version control
+
    ```bash
    git config --global user.name "Your Name"
    git config --global user.email "your.email@example.com"
    ```
 
 4. **Node.js** (for opm2l4 and tooling)
+
    ```bash
    # Install Node.js 18+
    node --version  # Should be v18.0.0 or higher
@@ -335,6 +350,7 @@ cd l4-ide/doc/advanced-course-ai
 ```
 
 Each module includes:
+
 - Conceptual explanations
 - Code examples
 - Hands-on exercises
@@ -356,6 +372,7 @@ The capstone project demonstrates your ability to build production-grade L4 syst
 ### Certification (Coming Soon)
 
 Earn an L4 Advanced Developer Certificate by:
+
 1. Completing all module exercises
 2. Building and submitting the capstone project
 3. Passing a practical assessment
@@ -410,10 +427,12 @@ This course was developed by the L4 core team with contributions from:
 This course is licensed under Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
 
 You are free to:
+
 - **Share** — Copy and redistribute the material
 - **Adapt** — Remix, transform, and build upon the material
 
 Under the following terms:
+
 - **Attribution** — Give appropriate credit
 - **ShareAlike** — Distribute under the same license
 
@@ -422,6 +441,7 @@ Under the following terms:
 ## Changelog
 
 ### Version 1.0 (2024-12-01)
+
 - Initial release with 9 modules
 - Foundation Course prerequisites
 - Capstone project guidelines

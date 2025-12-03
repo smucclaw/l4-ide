@@ -3,6 +3,7 @@
 ## Overview
 
 Real-world L4 systems need to exchange data with:
+
 - **Databases** (PostgreSQL, MongoDB, etc.)
 - **External APIs** (REST, GraphQL)
 - **Web applications** (React, Vue, Angular)
@@ -10,6 +11,7 @@ Real-world L4 systems need to exchange data with:
 - **Enterprise systems** (ERPs, CRMs)
 
 JSON is the universal data interchange format. This module covers:
+
 1. Mapping L4 types to JSON schemas
 2. Handling JSON input in decision service calls
 3. Generating JSON output
@@ -20,16 +22,17 @@ JSON is the universal data interchange format. This module covers:
 
 ### Basic Types
 
-| L4 Type | JSON Type | Example |
-|---------|-----------|---------|
-| `NUMBER` | `number` | `42`, `3.14` |
-| `STRING` | `string` | `"hello"` |
-| `BOOLEAN` | `boolean` | `true`, `false` |
-| `DATE` | `string` (ISO 8601) | `"2025-12-01"` |
+| L4 Type   | JSON Type           | Example         |
+| --------- | ------------------- | --------------- |
+| `NUMBER`  | `number`            | `42`, `3.14`    |
+| `STRING`  | `string`            | `"hello"`       |
+| `BOOLEAN` | `boolean`           | `true`, `false` |
+| `DATE`    | `string` (ISO 8601) | `"2025-12-01"`  |
 
 ### Records → JSON Objects
 
 **L4:**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -38,6 +41,7 @@ DECLARE Employee HAS
 ```
 
 **JSON:**
+
 ```json
 {
   "name": "Alice",
@@ -49,6 +53,7 @@ DECLARE Employee HAS
 ### Enums → Strings
 
 **L4:**
+
 ```l4
 DECLARE EmploymentCategory IS ONE OF
     TechProfessional
@@ -57,6 +62,7 @@ DECLARE EmploymentCategory IS ONE OF
 ```
 
 **JSON:**
+
 ```json
 {
   "category": "TechProfessional"
@@ -66,12 +72,14 @@ DECLARE EmploymentCategory IS ONE OF
 ### Lists → JSON Arrays
 
 **L4:**
+
 ```l4
 DECLARE Team HAS
     members IS A LIST OF STRING
 ```
 
 **JSON:**
+
 ```json
 {
   "members": ["Alice", "Bob", "Charlie"]
@@ -81,6 +89,7 @@ DECLARE Team HAS
 ### MAYBE → Nullable Fields
 
 **L4:**
+
 ```l4
 DECLARE Document HAS
     title IS A STRING
@@ -88,6 +97,7 @@ DECLARE Document HAS
 ```
 
 **JSON with value:**
+
 ```json
 {
   "title": "Passport",
@@ -96,6 +106,7 @@ DECLARE Document HAS
 ```
 
 **JSON without value:**
+
 ```json
 {
   "title": "Birth Certificate",
@@ -117,6 +128,7 @@ cabal run jl4-cli -- --export-json-schema src/types.l4 > schema.json
 ### Example: Employee Type
 
 **L4 Input:**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -131,6 +143,7 @@ DECLARE EmploymentCategory IS ONE OF
 ```
 
 **Generated JSON Schema:**
+
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -162,14 +175,15 @@ DECLARE EmploymentCategory IS ONE OF
 ### Using Schemas for Validation
 
 **TypeScript (with Zod):**
+
 ```typescript
-import { z } from 'zod';
+import { z } from "zod";
 
 const EmployeeSchema = z.object({
   name: z.string(),
   age: z.number(),
   salary: z.number(),
-  category: z.enum(['TechProfessional', 'HealthcareWorker', 'Researcher']),
+  category: z.enum(["TechProfessional", "HealthcareWorker", "Researcher"]),
 });
 
 type Employee = z.infer<typeof EmployeeSchema>;
@@ -179,6 +193,7 @@ const employee = EmployeeSchema.parse(jsonData);
 ```
 
 **Python (with pydantic):**
+
 ```python
 from pydantic import BaseModel
 from enum import Enum
@@ -203,6 +218,7 @@ employee = Employee.parse_obj(json_data)
 ### Simple Function Call
 
 **L4 Function:**
+
 ```l4
 @desc export Check if employee qualifies for bonus
 GIVEN employee IS AN Employee @desc The employee to evaluate
@@ -213,6 +229,7 @@ qualifiesForBonus employee MEANS
 ```
 
 **API Call:**
+
 ```bash
 curl -X POST http://localhost:3000/api/functions/qualifiesForBonus/evaluation \
   -H "Content-Type: application/json" \
@@ -227,6 +244,7 @@ curl -X POST http://localhost:3000/api/functions/qualifiesForBonus/evaluation \
 ```
 
 **Response:**
+
 ```json
 {
   "result": true,
@@ -237,6 +255,7 @@ curl -X POST http://localhost:3000/api/functions/qualifiesForBonus/evaluation \
 ### Nested Objects
 
 **L4:**
+
 ```l4
 DECLARE Address HAS
     street IS A STRING
@@ -256,6 +275,7 @@ isLocalResident person MEANS
 ```
 
 **JSON Input:**
+
 ```json
 {
   "person": {
@@ -273,6 +293,7 @@ isLocalResident person MEANS
 ### Lists of Objects
 
 **L4:**
+
 ```l4
 IMPORT prelude
 
@@ -287,12 +308,23 @@ totalSalary employees MEANS
 ```
 
 **JSON Input:**
+
 ```json
 {
   "employees": [
-    {"name": "Alice", "age": 30, "salary": 60000, "category": "TechProfessional"},
-    {"name": "Bob", "age": 25, "salary": 50000, "category": "TechProfessional"},
-    {"name": "Charlie", "age": 35, "salary": 70000, "category": "Researcher"}
+    {
+      "name": "Alice",
+      "age": 30,
+      "salary": 60000,
+      "category": "TechProfessional"
+    },
+    {
+      "name": "Bob",
+      "age": 25,
+      "salary": 50000,
+      "category": "TechProfessional"
+    },
+    { "name": "Charlie", "age": 35, "salary": 70000, "category": "Researcher" }
   ]
 }
 ```
@@ -302,6 +334,7 @@ totalSalary employees MEANS
 ### Simple Return Values
 
 **L4:**
+
 ```l4
 @desc export Calculate employee bonus
 GIVEN employee IS AN Employee
@@ -313,6 +346,7 @@ calculateBonus employee MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": 9000.0
@@ -322,6 +356,7 @@ calculateBonus employee MEANS
 ### Record Return Values
 
 **L4:**
+
 ```l4
 DECLARE BonusCalculation HAS
     baseBonus IS A NUMBER
@@ -347,6 +382,7 @@ detailedBonus employee performanceScore MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": {
@@ -361,6 +397,7 @@ detailedBonus employee performanceScore MEANS
 ### List Return Values
 
 **L4:**
+
 ```l4
 IMPORT prelude
 
@@ -374,11 +411,17 @@ eligibleEmployees employees MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": [
-    {"name": "Alice", "age": 30, "salary": 60000, "category": "TechProfessional"},
-    {"name": "Charlie", "age": 35, "salary": 70000, "category": "Researcher"}
+    {
+      "name": "Alice",
+      "age": 30,
+      "salary": 60000,
+      "category": "TechProfessional"
+    },
+    { "name": "Charlie", "age": 35, "salary": 70000, "category": "Researcher" }
   ]
 }
 ```
@@ -390,6 +433,7 @@ eligibleEmployees employees MEANS
 L4 accepts ISO 8601 date strings:
 
 **Supported formats:**
+
 ```json
 {
   "birthDate": "2025-12-01",
@@ -399,6 +443,7 @@ L4 accepts ISO 8601 date strings:
 ```
 
 **L4:**
+
 ```l4
 IMPORT daydate
 
@@ -411,6 +456,7 @@ ageAsOf birthDate asOfDate MEANS
 ```
 
 **Request:**
+
 ```json
 {
   "birthDate": "1990-03-15",
@@ -419,6 +465,7 @@ ageAsOf birthDate asOfDate MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": 35
@@ -440,6 +487,7 @@ L4 dates are serialized as ISO 8601 strings:
 ### Type Mismatch Errors
 
 **Request (wrong type):**
+
 ```json
 {
   "age": "thirty"
@@ -447,6 +495,7 @@ L4 dates are serialized as ISO 8601 strings:
 ```
 
 **Response (400 Bad Request):**
+
 ```json
 {
   "error": "Type mismatch",
@@ -460,6 +509,7 @@ L4 dates are serialized as ISO 8601 strings:
 ### Missing Required Fields
 
 **Request (missing field):**
+
 ```json
 {
   "name": "Alice"
@@ -467,6 +517,7 @@ L4 dates are serialized as ISO 8601 strings:
 ```
 
 **Response (400 Bad Request):**
+
 ```json
 {
   "error": "Missing required field",
@@ -478,6 +529,7 @@ L4 dates are serialized as ISO 8601 strings:
 ### Enum Validation
 
 **Request (invalid enum value):**
+
 ```json
 {
   "category": "InvalidCategory"
@@ -485,6 +537,7 @@ L4 dates are serialized as ISO 8601 strings:
 ```
 
 **Response (400 Bad Request):**
+
 ```json
 {
   "error": "Invalid enum value",
@@ -501,16 +554,19 @@ L4 dates are serialized as ISO 8601 strings:
 The L4 decision service automatically generates Swagger/OpenAPI documentation for all exported functions:
 
 **Swagger UI** (interactive documentation):
+
 ```
 http://localhost:3000/swagger-ui
 ```
 
 **OpenAPI Specification** (JSON):
+
 ```
 http://localhost:3000/swagger
 ```
 
 The Swagger UI provides:
+
 - **Interactive API exploration** - Test endpoints directly from your browser
 - **Automatic schema documentation** - See request/response types for all functions
 - **Example requests** - Copy-paste ready API calls
@@ -522,6 +578,7 @@ The Swagger UI provides:
 2. Find the `qualifiesForBonus` endpoint
 3. Click "Try it out"
 4. Enter sample JSON:
+
 ```json
 {
   "employee": {
@@ -532,6 +589,7 @@ The Swagger UI provides:
   }
 }
 ```
+
 5. Click "Execute" to see the result
 
 **Generating Client Libraries**
@@ -568,10 +626,10 @@ class L4RestClient implements L4Client {
     const response = await fetch(
       `${this.baseUrl}/api/functions/${functionName}/evaluation`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -585,14 +643,14 @@ class L4RestClient implements L4Client {
 }
 
 // Usage
-const client = new L4RestClient('https://l4.example.com');
+const client = new L4RestClient("https://l4.example.com");
 
-const bonus = await client.evaluate<number>('calculateBonus', {
+const bonus = await client.evaluate<number>("calculateBonus", {
   employee: {
-    name: 'Alice',
+    name: "Alice",
     age: 30,
     salary: 60000,
-    category: 'TechProfessional',
+    category: "TechProfessional",
   },
 });
 
@@ -648,12 +706,12 @@ conn.commit()
 ```javascript
 // Node.js batch processor
 
-const axios = require('axios');
+const axios = require("axios");
 
 async function batchEvaluate(functionName, cases) {
   const response = await axios.post(
     `https://l4.example.com/api/functions/${functionName}/batch`,
-    { cases }
+    { cases },
   );
 
   return response.data.results;
@@ -666,9 +724,9 @@ const employees = loadEmployees();
 const batchSize = 100;
 for (let i = 0; i < employees.length; i += batchSize) {
   const batch = employees.slice(i, i + batchSize);
-  const cases = batch.map(emp => ({ employee: emp }));
+  const cases = batch.map((emp) => ({ employee: emp }));
 
-  const results = await batchEvaluate('qualifiesForBonus', cases);
+  const results = await batchEvaluate("qualifiesForBonus", cases);
 
   // Store results
   batch.forEach((emp, idx) => {
@@ -728,6 +786,7 @@ def lambda_handler(event, context):
 ### Handling Missing Optional Fields
 
 **Old L4 (v1):**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -735,6 +794,7 @@ DECLARE Employee HAS
 ```
 
 **New L4 (v2):**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -743,6 +803,7 @@ DECLARE Employee HAS
 ```
 
 **Old JSON still works:**
+
 ```json
 {
   "name": "Alice",
@@ -755,11 +816,13 @@ L4 treats missing `department` as `NOTHING`.
 ### Backward-Compatible Changes
 
 **Safe changes:**
+
 - Adding optional (MAYBE) fields
 - Adding new functions
 - Adding new enum values (if handled with OTHERWISE)
 
 **Breaking changes:**
+
 - Removing fields
 - Changing field types
 - Making optional fields required
@@ -1158,15 +1221,19 @@ GIVETH A BOOLEAN
 ## Exercises
 
 ### Exercise 1: Schema Generation
+
 Create an L4 type for a complex domain (e.g., insurance policy) and generate its JSON schema.
 
 ### Exercise 2: Integration Client
+
 Write a TypeScript client library that wraps L4 API calls with type safety.
 
 ### Exercise 3: Database Bridge
+
 Create a Python script that syncs a PostgreSQL database with L4 evaluation results.
 
 ### Exercise 4: Batch Processor
+
 Implement a batch processor that handles 1000+ records efficiently, with error handling and retry logic.
 
 ## Next Steps

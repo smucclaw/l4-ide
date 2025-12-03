@@ -5,6 +5,7 @@
 In this module, we bring together everything from Modules 1-4 to build a **complete, production-grade eligibility assessment pipeline** for the WorkPass Authority.
 
 You'll learn how to:
+
 - Structure complex multi-step assessments
 - Compose functions for maintainability
 - Generate detailed explanations for decisions
@@ -31,6 +32,7 @@ Final Decision + Explanation
 ```
 
 Each stage can:
+
 - **Pass** (proceed to next stage)
 - **Fail** (return rejection with reason)
 - **Flag** (note issue but continue)

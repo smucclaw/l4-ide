@@ -20,6 +20,7 @@ Rather than rewrite everything from scratch, you can **import existing OPM rules
 OPM allows business analysts and legal experts to author rules in natural language using familiar tools:
 
 **Word Documents** — Write rules in structured English:
+
 ```
 The applicant is eligible if
   the applicant's age >= 18 and
@@ -27,6 +28,7 @@ The applicant is eligible if
 ```
 
 **Excel Spreadsheets** — Create decision tables:
+
 ```
 | Group Code | Application Group |
 |------------|------------------|
@@ -48,14 +50,14 @@ These documents are compiled into **XGEN files** (XML format) that Oracle's Dete
 
 ### Why Migrate to L4?
 
-| OPM/OIA | L4 |
-|---------|---|
-| Vendor-locked | Open source |
-| Proprietary runtime | Multiple targets (Web, API, CLI) |
-| Natural language only | Code + natural language |
-| Limited verification | Formal verification with TLA+ style properties |
-| No LLM integration | AI-powered explanations |
-| License costs | Free |
+| OPM/OIA               | L4                                             |
+| --------------------- | ---------------------------------------------- |
+| Vendor-locked         | Open source                                    |
+| Proprietary runtime   | Multiple targets (Web, API, CLI)               |
+| Natural language only | Code + natural language                        |
+| Limited verification  | Formal verification with TLA+ style properties |
+| No LLM integration    | AI-powered explanations                        |
+| License costs         | Free                                           |
 
 ## Part 2: OPM File Formats
 
@@ -81,6 +83,7 @@ MyProject/
 ### Key File Types
 
 **projectDataModel.xml** — The data model
+
 ```xml
 <model>
   <entity name="the applicant">
@@ -93,6 +96,7 @@ MyProject/
 ```
 
 Maps to L4:
+
 ```l4
 DECLARE Applicant HAS
     age IS A NUMBER
@@ -100,6 +104,7 @@ DECLARE Applicant HAS
 ```
 
 **XGEN files** — Compiled rules
+
 ```xml
 <rule>
   <condition>
@@ -115,6 +120,7 @@ DECLARE Applicant HAS
 ```
 
 Maps to L4:
+
 ```l4
 GIVEN applicant IS An Applicant
 DECIDE `applicant is eligible`
@@ -145,11 +151,13 @@ npx opm2l4 --help
 ### Basic Usage
 
 **Translate an entire OPM project:**
+
 ```bash
 npx opm2l4 translate "./MyProject" -o ./output
 ```
 
 **Output:**
+
 ```
 Translating project: /path/to/MyProject
 Loaded data model: 5 entities
@@ -167,16 +175,19 @@ Output written to: ./output/MyProject.l4
 ```
 
 **Validate project structure:**
+
 ```bash
 npx opm2l4 validate "./MyProject"
 ```
 
 **Inspect project contents:**
+
 ```bash
 npx opm2l4 inspect "./MyProject" --show-entities --show-rules
 ```
 
 **Translate a single XGEN file:**
+
 ```bash
 npx opm2l4 translate-file "./MyProject/bin/eligibility.docx.xgen" -o eligibility.l4
 ```
@@ -185,19 +196,20 @@ npx opm2l4 translate-file "./MyProject/bin/eligibility.docx.xgen" -o eligibility
 
 ### Data Types
 
-| OPM Type | L4 Type | Example |
-|----------|---------|---------|
-| `boolean` | `BOOLEAN` | `TRUE`, `FALSE` |
-| `text` | `STRING` | `"Hello"` |
-| `number` | `NUMBER` | `42`, `3.14` |
-| `date` | `DATE` | `January 1 2024` |
-| `datetime` | `DATETIME` | `"2024-01-01T14:30:00"` |
-| `timeofday` | `TIME` | `"14:30:00"` |
-| `currency` | `NUMBER` | `50000` |
+| OPM Type    | L4 Type    | Example                 |
+| ----------- | ---------- | ----------------------- |
+| `boolean`   | `BOOLEAN`  | `TRUE`, `FALSE`         |
+| `text`      | `STRING`   | `"Hello"`               |
+| `number`    | `NUMBER`   | `42`, `3.14`            |
+| `date`      | `DATE`     | `January 1 2024`        |
+| `datetime`  | `DATETIME` | `"2024-01-01T14:30:00"` |
+| `timeofday` | `TIME`     | `"14:30:00"`            |
+| `currency`  | `NUMBER`   | `50000`                 |
 
 ### Entities and Attributes
 
 **OPM XML:**
+
 ```xml
 <entity name="the employee">
   <attributes>
@@ -209,6 +221,7 @@ npx opm2l4 translate-file "./MyProject/bin/eligibility.docx.xgen" -o eligibility
 ```
 
 **Generated L4:**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -221,12 +234,14 @@ DECLARE Employee HAS
 OPM uses string comparisons. L4 uses type-safe enumerations.
 
 **OPM:**
+
 ```
 the application type = "EME" or
 the application type = "ESE"
 ```
 
 **L4:**
+
 ```l4
 DECLARE ApplicationType IS ONE OF
     EME
@@ -242,6 +257,7 @@ GIVETH A BOOLEAN
 ### Boolean Rules
 
 **OPM:**
+
 ```
 the applicant is eligible if
   the applicant's age >= 18 and
@@ -249,6 +265,7 @@ the applicant is eligible if
 ```
 
 **L4:**
+
 ```l4
 GIVEN applicant IS An Applicant
 DECIDE `applicant is eligible`
@@ -259,6 +276,7 @@ DECIDE `applicant is eligible`
 ### Value Rules
 
 **OPM:**
+
 ```
 the applicant's category =
   "senior" if the applicant's age >= 65
@@ -267,6 +285,7 @@ the applicant's category =
 ```
 
 **L4:**
+
 ```l4
 GIVEN applicant IS An Applicant
 GIVETH A STRING
@@ -281,6 +300,7 @@ GIVETH A STRING
 ### Decision Tables
 
 **OPM Excel Table:**
+
 ```
 | Salary    | Category           | Minimum Salary |
 |-----------|-------------------|----------------|
@@ -290,6 +310,7 @@ GIVETH A STRING
 ```
 
 **L4:**
+
 ```l4
 GIVEN category IS An EmploymentCategory
 GIVETH A NUMBER
@@ -303,12 +324,14 @@ GIVETH A NUMBER
 ### Entity Collections
 
 **OPM:**
+
 ```
 for all the household's members
   the member's age >= 18
 ```
 
 **L4:**
+
 ```l4
 IMPORT prelude
 
@@ -323,6 +346,7 @@ GIVETH A BOOLEAN
 ### Date Arithmetic
 
 **OPM:**
+
 ```
 the applicant's years of service =
   number of years between
@@ -331,6 +355,7 @@ the applicant's years of service =
 ```
 
 **L4:**
+
 ```l4
 IMPORT daydate
 
@@ -417,6 +442,7 @@ After translation, review the generated code for:
 ### Common Refinements
 
 **Simplify verbose names:**
+
 ```l4
 -- Generated (verbose)
 `the application's existing group effective date`
@@ -426,6 +452,7 @@ After translation, review the generated code for:
 ```
 
 **Add MAYBE for optional values:**
+
 ```l4
 -- Generated (assumes always present)
 DECLARE Document HAS
@@ -437,6 +464,7 @@ DECLARE Document HAS
 ```
 
 **Improve enum names:**
+
 ```l4
 -- Generated (string-based)
 DECLARE StatusCode IS ONE OF
@@ -491,6 +519,7 @@ Convert these to L4 assertions:
 ### Compare OPM vs L4 Results
 
 **Run OPM tests:**
+
 ```bash
 # In Oracle Determinations Engine
 > run_tests MyProject
@@ -500,11 +529,13 @@ Test 3: PASS
 ```
 
 **Run L4 tests:**
+
 ```bash
 cabal run jl4-cli -- MyProject.l4
 ```
 
 If results differ, investigate:
+
 - Three-valued logic differences (OPM's "uncertain")
 - Date calculation differences
 - Rounding differences in numeric calculations
@@ -527,11 +558,13 @@ diff opm-results.json l4-results.json
 ### Strategy 1: Big Bang Migration
 
 **When to use:**
+
 - Small to medium projects (<100 rules)
 - No ongoing OPM development
 - Can afford downtime for testing
 
 **Process:**
+
 1. Translate entire project with opm2l4
 2. Review and refine all generated code
 3. Run comprehensive tests
@@ -542,11 +575,13 @@ diff opm-results.json l4-results.json
 ### Strategy 2: Incremental Migration
 
 **When to use:**
+
 - Large projects (>100 rules)
 - Active OPM development
 - Need continuous operation
 
 **Process:**
+
 1. Identify self-contained modules
 2. Translate one module at a time
 3. Run both OPM and L4 in parallel
@@ -557,11 +592,13 @@ diff opm-results.json l4-results.json
 ### Strategy 3: Hybrid Operation
 
 **When to use:**
+
 - Very large projects
 - Mission-critical systems
 - Need for gradual validation
 
 **Process:**
+
 1. Translate to L4 but keep OPM
 2. Run both engines side-by-side
 3. Compare results for every transaction
@@ -573,10 +610,12 @@ diff opm-results.json l4-results.json
 ### Strategy 4: New Development Only
 
 **When to use:**
+
 - Cannot migrate legacy rules
 - Want L4 for new features only
 
 **Process:**
+
 1. Keep existing OPM rules
 2. Develop new rules in L4
 3. Integrate both systems via API
@@ -592,11 +631,13 @@ diff opm-results.json l4-results.json
 OPM supports "uncertain" for unknown values. L4 uses MAYBE instead.
 
 **OPM:**
+
 ```
 the applicant is eligible = uncertain
 ```
 
 **L4 Solution:**
+
 ```l4
 DECLARE EligibilityResult IS ONE OF
     Eligible
@@ -613,11 +654,13 @@ GIVETH A MAYBE BOOLEAN
 OPM automatically converts types (e.g., number to text). L4 is strict.
 
 **OPM:**
+
 ```
 the label = "Age: " + the age  // Implicitly converts number to text
 ```
 
 **L4 Solution:**
+
 ```l4
 -- Explicit conversion needed
 `label` MEANS "Age: " APPEND toString age
@@ -629,12 +672,14 @@ the label = "Age: " + the age  // Implicitly converts number to text
 OPM rules can have side effects (set multiple values). L4 functions are pure.
 
 **OPM:**
+
 ```
 conclude the status = "approved"
 conclude the approval date = today
 ```
 
 **L4 Solution:**
+
 ```l4
 -- Return a record with both values
 DECLARE ApprovalResult HAS
@@ -653,12 +698,14 @@ approve MEANS ApprovalResult WITH
 OPM allows circular rule dependencies. L4 does not (lazy evaluation prevents infinite loops, but circular value definitions are rejected).
 
 **OPM:**
+
 ```
 A depends on B
 B depends on A
 ```
 
 **L4 Solution:**
+
 ```l4
 -- Refactor to eliminate circularity
 -- Identify base cases or add explicit recursion guards
@@ -672,12 +719,12 @@ Extend the translator for organization-specific needs:
 
 ```typescript
 // custom-transform.ts
-import { Rule, normalizeRule } from 'opm2l4';
+import { Rule, normalizeRule } from "opm2l4";
 
 function customNormalize(rule: Rule): L4Code {
-    // Your custom logic
-    // e.g., apply naming conventions, add annotations
-    return normalizeRule(rule);
+  // Your custom logic
+  // e.g., apply naming conventions, add annotations
+  return normalizeRule(rule);
 }
 ```
 
@@ -720,17 +767,20 @@ DECIDE `applicant is eligible`
 **Original:** 120-page Word document + 15 Excel spreadsheets in OPM
 
 **Translation process:**
+
 ```bash
 npx opm2l4 translate "./SG MOM UpdatedAPI Names" -o ./sg-mom.l4
 ```
 
 **Generated:**
+
 - 5 entity types
 - 12 eligibility rules
 - 4 decision tables
 - 112 lines of L4 code
 
 **Refinements:**
+
 1. Simplified verbose attribute names
 2. Added MAYBE types for optional fields
 3. Consolidated redundant rules
@@ -738,12 +788,14 @@ npx opm2l4 translate "./SG MOM UpdatedAPI Names" -o ./sg-mom.l4
 5. Added @desc annotations for API export
 
 **Result:**
+
 - Clean, maintainable L4 code
 - Formal verification found 2 edge cases
 - 30% reduction in total lines of code
 - Full API exposure via decision service
 
 **Before (OPM):**
+
 ```xml
 <rule>
   <condition>
@@ -759,6 +811,7 @@ npx opm2l4 translate "./SG MOM UpdatedAPI Names" -o ./sg-mom.l4
 ```
 
 **After (L4):**
+
 ```l4
 GIVEN groupCode IS A GroupCode
 GIVETH A MAYBE ApplicationGroup
@@ -783,15 +836,19 @@ codeToGroup groupCode MEANS
 ## Exercises
 
 ### Exercise 1: Translate a Sample OPM Project
+
 Download a sample OPM project and translate it to L4. Review the generated code and identify areas for improvement.
 
 ### Exercise 2: Test Comparison
+
 Create a test suite in both OPM and L4. Run both and compare results. Investigate any differences.
 
 ### Exercise 3: Hybrid Integration
+
 Create an L4 module that imports OPM-translated rules and extends them with new hand-written logic.
 
 ### Exercise 4: Migration Plan
+
 Given a hypothetical OPM project with 500 rules across 20 modules, create a detailed migration plan with timeline and risk assessment.
 
 ## Resources
@@ -804,6 +861,7 @@ Given a hypothetical OPM project with 500 rules across 20 modules, create a deta
 ## Next Steps
 
 You've now completed all advanced modules! You can:
+
 - Build production-grade L4 systems
 - Integrate with external systems
 - Migrate from existing rule engines
@@ -811,6 +869,7 @@ You've now completed all advanced modules! You can:
 - Architect large multi-file projects
 
 **Continue your journey:**
+
 - Contribute to L4 open source
 - Share your use cases with the community
 - Explore formal verification capabilities

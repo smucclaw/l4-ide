@@ -7,11 +7,12 @@ In this module, we'll learn how to define custom types in L4 using `DECLARE`. We
 ## Why Custom Types Matter
 
 Types serve as documentation and compile-time validation. When you declare:
+
 ```l4
 DECLARE EmploymentStatus IS ONE OF ...
 ```
 
-You're saying: "These are the *only* valid employment statuses." The compiler will reject any code that tries to use an invalid status.
+You're saying: "These are the _only_ valid employment statuses." The compiler will reject any code that tries to use an invalid status.
 
 This catches bugs at compile-time that would otherwise become runtime errors or, worse, legal disputes.
 
@@ -38,7 +39,7 @@ DECLARE EmploymentCategory IS ONE OF
     Other
 ```
 
-This defines a closed set. A position *must* be one of these categories—no other values allowed.
+This defines a closed set. A position _must_ be one of these categories—no other values allowed.
 
 ### Enums With Data (Algebraic Data Types)
 
@@ -56,6 +57,7 @@ DECLARE ApplicationOutcome IS ONE OF
 ```
 
 Now each outcome carries relevant data:
+
 - `Approved` includes a permit number and expiry date
 - `Rejected` includes a rejection reason
 - `Pending` includes days until decision deadline
@@ -116,12 +118,14 @@ DECLARE WorkPassApplication HAS
 ### Enum Values
 
 Simple enums are constructed by name:
+
 ```l4
 TechProfessional
 HealthcareWorker
 ```
 
 Enums with data use constructor syntax:
+
 ```l4
 Approved WITH
     permitNumber IS "WP-2025-001234"
@@ -131,6 +135,7 @@ Approved WITH
 ### Record Values
 
 Records use `WITH` syntax:
+
 ```l4
 `John Doe` MEANS Employee WITH
     name              IS "John Doe"
@@ -144,6 +149,7 @@ Records use `WITH` syntax:
 ```
 
 Order doesn't matter—field names identify the values:
+
 ```l4
 Employee WITH
     category IS TechProfessional
@@ -162,6 +168,7 @@ application's employee's nationality
 ```
 
 The possessive chains naturally:
+
 ```l4
 GIVEN app IS A WorkPassApplication
 GIVETH A STRING
@@ -188,7 +195,9 @@ DECLARE Country HAS
 ## Type Aliases vs New Types
 
 ### Type Alias (NOT in L4)
+
 Some languages let you alias existing types:
+
 ```
 type PermitNumber = String  -- NOT L4 syntax
 ```
@@ -207,6 +216,7 @@ Now you can't accidentally pass a `PermitNumber` where a `PassportNumber` is exp
 **Important:** L4 has no concept of default values or optional fields in records. Every field must be provided when constructing a record.
 
 For optional data, use `MAYBE` (covered in Module 4):
+
 ```l4
 DECLARE ApplicationDocument HAS
     title        IS A STRING
@@ -292,19 +302,25 @@ DECLARE QuotaCheckResult HAS
 ## Exercises
 
 ### Exercise 1: Define Your Domain
+
 Create enums and records for a library management system:
+
 - Book (with title, ISBN, author, yearPublished)
 - Member (with memberId, name, membershipType)
 - BookStatus (Available, CheckedOut, Reserved, Lost)
 
 ### Exercise 2: Nested Records
+
 Define a `Loan` record that includes a `Book` and a `Member`, plus:
+
 - checkoutDate
 - dueDate
 - status
 
 ### Exercise 3: Construct Values
+
 Create sample data:
+
 - At least 3 books
 - At least 2 members
 - At least 1 loan
