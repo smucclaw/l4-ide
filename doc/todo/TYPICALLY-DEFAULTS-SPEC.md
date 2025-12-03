@@ -468,10 +468,62 @@ There are three approaches to wrapper generation:
 - Users write: `DECIDE 'presumptive foo' ...` manually
 - Simpler implementation, more explicit
 
+**Decision: Implementing Option B (Compile-Time Generation)**
+
+Chosen approach: Generate presumptive wrappers during type checking as synthetic DECIDE statements.
+
+**Critical Requirement: Transitive Presumptive Propagation**
+
+When a presumptive wrapper calls another function, it MUST call the presumptive version (if it exists). This ensures TYPICALLY defaults apply at every level of the call stack.
+
+Example:
+```l4
+GIVEN age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+GIVEN age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can drive` IF `can vote` age AND age >= 16
+```
+
+Generated `'presumptive can drive'` must call `'presumptive can vote'`, not regular `'can vote'`:
+```l4
+DECIDE `presumptive can drive` IS
+  GIVEN age IS A MAYBE NUMBER
+  GIVETH A MAYBE BOOLEAN
+  CONSIDER age
+    WHEN NOTHING ->
+      -- Use default, call presumptive version
+      (`presumptive can vote` (JUST 18)) AND (18 >= 16)
+    WHEN (JUST a) ->
+      -- Explicit value, call presumptive version
+      (`presumptive can vote` (JUST a)) AND (a >= 16)
+```
+
+**Implementation: Two-Pass Transformation**
+
+**Pass 1: Generate Wrappers**
+1. Scan all DECIDE statements in the section
+2. For each with TYPICALLY defaults in GIVEN:
+   - Create `'presumptive <name>'` DECIDE
+   - Generate GIVEN with MAYBE-wrapped parameters
+   - Generate skeleton body (placeholder)
+3. Build map: `originalName -> presumptiveName`
+
+**Pass 2: Rewrite Function Calls**
+1. For each generated wrapper:
+   - Traverse expression tree in wrapper body
+   - Find all App nodes (function applications)
+   - If called function has presumptive version:
+     - Rewrite: `foo arg` → `presumptive foo (JUST arg)`
+     - Ensures transitive propagation of presumptive context
+2. This ensures defaults apply at ALL call levels
+
 **Current Status:**
-- Skeleton for Option A implemented (generatePresumptiveWrapper, generatePresumptiveName)
-- Need to decide on final approach before completing implementation
-- Option B (compile-time) may be more architecturally sound but requires more work
+- Architecture decided: Option B with two-pass transformation
+- Added transformation hook in `inferSection`
+- Next: Implement `generatePresumptiveWrappers` function
 
 **Implementation Options:**
 

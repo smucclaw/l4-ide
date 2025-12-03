@@ -430,7 +430,10 @@ inferSection (MkSection ann mn maka topdecls) = do
 
   (rtopdecls, topDeclExtends) <- unzip <$> traverse inferTopDecl topdecls
 
-  pure (MkSection ann rmn rmaka rtopdecls, concat topDeclExtends)
+  -- Generate presumptive wrappers for DECIDEs with TYPICALLY defaults
+  wrapperDecls <- generatePresumptiveWrappers rtopdecls
+
+  pure (MkSection ann rmn rmaka (rtopdecls ++ wrapperDecls), concat topDeclExtends)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -3210,3 +3213,38 @@ prettyNameWithRange n =
 --
 --    inferX :: X Name -> Check (X Resolved, Type' Resolved)
 --    checkX :: X Name -> Type' Resolved -> Check (X Resolved)
+
+-- ===========================================================================
+-- Presumptive Wrapper Generation for TYPICALLY Defaults
+-- ===========================================================================
+
+-- | Generate presumptive wrappers for all DECIDEs with TYPICALLY defaults.
+-- This implements a two-pass transformation:
+-- Pass 1: Generate wrapper DECIDEs with MAYBE-wrapped parameters
+-- Pass 2: Rewrite function calls in wrappers to call presumptive versions
+generatePresumptiveWrappers :: [TopDecl Resolved] -> Check [TopDecl Resolved]
+generatePresumptiveWrappers decls = do
+  -- Pass 1: Collect DECIDEs with TYPICALLY defaults
+  let decidesWithDefaults :: [(Anno, Decide Resolved)]
+      decidesWithDefaults =
+        [ (ann, decide)
+        | Decide ann decide <- decls
+        , hasTypicallyDefaults decide
+        ]
+
+  -- TODO: Generate wrapper DECIDEs for each decide in decidesWithDefaults
+  -- For now, return empty list
+  let _ = decidesWithDefaults  -- Suppress unused warning
+  pure []
+
+-- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause
+hasTypicallyDefaults :: Decide Resolved -> Bool
+hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) _ _) =
+  not $ null $ extractTypicallyDefaultsFromGiven givenSig
+
+-- | Extract TYPICALLY defaults from a GivenSig
+extractTypicallyDefaultsFromGiven :: GivenSig Resolved -> [(Resolved, Expr Resolved)]
+extractTypicallyDefaultsFromGiven (MkGivenSig _ otns) =
+  [ (n, expr)
+  | MkOptionallyTypedName _ n _ (Just expr) <- otns
+  ]

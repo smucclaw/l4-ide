@@ -801,6 +801,10 @@ extractTypicallyDefaults (MkGivenSig _ann otns) =
     | MkOptionallyTypedName _ann n _mty (Just expr) <- otns
     ]
 
+-- NOTE: The following functions were part of runtime wrapper generation (Option A).
+-- They are kept for reference but are not used since we're implementing
+-- compile-time wrapper generation (Option B) in TypeCheck.hs instead.
+{-
 -- | Generate a "presumptive" wrapper name for a function
 generatePresumptiveName :: Resolved -> Machine Resolved
 generatePresumptiveName original = do
@@ -811,49 +815,7 @@ generatePresumptiveName original = do
         QualifiedName mods t -> MkName emptyAnno (QualifiedName mods ("presumptive " <> t))
         PreDef t -> MkName emptyAnno (PreDef ("presumptive " <> t))
   def presumptiveName
-
--- | Generate a presumptive wrapper closure for a function with TYPICALLY defaults
--- The wrapper takes MAYBE-wrapped parameters and unwraps them, using TYPICALLY defaults for NOTHING
-generatePresumptiveWrapper
-  :: Resolved  -- ^ Original function name
-  -> GivenSig Resolved  -- ^ Original function signature
-  -> Expr Resolved  -- ^ Original function body
-  -> Map Unique (Expr Resolved)  -- ^ TYPICALLY defaults extracted from signature
-  -> Environment  -- ^ Environment for closure
-  -> Machine (ValClosure Resolved)
-generatePresumptiveWrapper origFnRef (MkGivenSig ann otns) origBody defaults env = do
-  -- Generate MAYBE-wrapped parameters for the wrapper signature
-  wrapperParams <- forM otns $ \(MkOptionallyTypedName pAnn pName mType _typically) -> do
-    -- Wrap the type in MAYBE
-    let maybeWrappedType = case mType of
-          Nothing -> Nothing
-          Just ty -> Just $ TypeCheck.maybeType ty
-    pure $ MkOptionallyTypedName pAnn pName maybeWrappedType Nothing  -- No TYPICALLY in wrapper
-
-  let wrapperGivenSig = MkGivenSig ann wrapperParams
-
-  -- Generate CONSIDER expression that unwraps MAYBE values
-  -- For a single parameter, the structure is:
-  --   CONSIDER param
-  --     WHEN NOTHING  -> origFn defaultValue
-  --     WHEN (JUST v) -> origFn v
-  --
-  -- For multiple parameters, we need nested CONSIDER expressions
-  wrapperBody <- generateConsiderChain origFnRef (NE.fromList otns) defaults
-
-  pure $ ValClosure wrapperGivenSig wrapperBody env
-
--- | Generate a nested CONSIDER expression chain for unwrapping MAYBE parameters
-generateConsiderChain
-  :: Resolved  -- ^ Original function reference
-  -> NonEmpty (OptionallyTypedName Resolved)  -- ^ Parameters (with TYPICALLY values)
-  -> Map Unique (Expr Resolved)  -- ^ TYPICALLY defaults map
-  -> Machine (Expr Resolved)
-generateConsiderChain origFnRef params defaults = do
-  -- For now, generate a simple placeholder that calls the original function
-  -- TODO: Generate proper CONSIDER/WHEN pattern matching
-  let paramRefs = [ Var emptyAnno pName | MkOptionallyTypedName _ pName _ _ <- NE.toList params ]
-  pure $ App emptyAnno origFnRef paramRefs
+-}
 
 matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Machine Environment
 matchGivens (MkGivenSig _ann otns) f es = do
@@ -1728,17 +1690,8 @@ evalDecide env (MkDecide _ann (MkTypeSig _ givenSig _) (MkAppForm _ n _args _mak
   let
     v = ValClosure givenSig expr env
   updateTerm env n (WHNF v)
-
-  -- Generate presumptive wrapper if function has TYPICALLY defaults
-  let defaults = extractTypicallyDefaults givenSig
-  unless (Map.null defaults) $ do
-    wrapperName <- generatePresumptiveName n
-    wrapperClosure <- generatePresumptiveWrapper n givenSig expr defaults env
-    -- Allocate a reference for the wrapper and store it in the environment
-    (wrapperRef, _) <- AllocateValue wrapperClosure
-    -- Note: The wrapper won't be accessible via normal name resolution since it's
-    -- generated dynamically. We'll need to modify PEVAL to look it up specially.
-    pure ()
+  -- Note: Presumptive wrapper generation now happens at compile-time in TypeCheck.hs
+  -- via generatePresumptiveWrappers function, not at runtime
 
 -- We are assuming that the environment already contains an entry with an address for us.
 evalDeclare :: Environment -> Declare Resolved -> Machine ()
