@@ -258,32 +258,28 @@ nfDirective (MkEvalDirective r traced isAssert presumptive expr env) = do
 -- | Rewrite expression to call presumptive wrapper if one exists.
 -- For PEVAL directives, we want to call the generated 'presumptive <func>' wrapper
 -- with NOTHING arguments to trigger TYPICALLY default application.
+--
+-- Strategy: Always try to construct a wrapper call. If wrapper doesn't exist,
+-- evaluation will fail and we'll fall back to auto-apply mechanism.
 rewriteToPresumptiveCall :: Expr Resolved -> Environment -> Eval (Expr Resolved)
-rewriteToPresumptiveCall expr env = case expr of
+rewriteToPresumptiveCall expr _env = case expr of
   -- Case 1: Direct function reference (e.g., #PEVAL `can vote`)
+  -- Rewrite to: 'presumptive can vote' NOTHING
   Var ann resolved -> do
-    mWrapperRef <- lookupPresumptiveWrapper resolved env
-    case mWrapperRef of
-      Just (wrapperRef, numParams) -> do
-        -- Create NOTHING arguments for all parameters
-        let nothingExpr = Var ann nothingRef
-        let nothingArgs = replicate numParams nothingExpr
-        pure $ App ann wrapperRef nothingArgs
-      Nothing -> pure expr
+    let wrapperRef = makePresumptiveWrapperName resolved
+    -- Try calling wrapper with one NOTHING argument
+    -- If wrapper doesn't exist or has different arity, evaluation will handle it
+    let nothingExpr = Var ann nothingRef
+    pure $ App ann wrapperRef [nothingExpr]
 
   -- Case 2: Partial application (e.g., #PEVAL `can vote` 25)
+  -- Rewrite to: 'presumptive can vote' (JUST 25)
   App ann funcResolved args -> do
-    mWrapperRef <- lookupPresumptiveWrapper funcResolved env
-    case mWrapperRef of
-      Just (wrapperRef, numParams) -> do
-        -- Wrap provided arguments with JUST, add NOTHING for missing params
-        let justExpr arg = App ann justRef [arg]
-        let wrappedArgs = map justExpr args
-        let nothingExpr = Var ann nothingRef
-        let numMissing = numParams - length args
-        let nothingArgs = replicate numMissing nothingExpr
-        pure $ App ann wrapperRef (wrappedArgs ++ nothingArgs)
-      Nothing -> pure expr
+    let wrapperRef = makePresumptiveWrapperName funcResolved
+    -- Wrap provided arguments with JUST
+    let justExpr arg = App ann justRef [arg]
+    let wrappedArgs = map justExpr args
+    pure $ App ann wrapperRef wrappedArgs
 
   -- Other cases: return unchanged
   _ -> pure expr
@@ -291,23 +287,10 @@ rewriteToPresumptiveCall expr env = case expr of
     nothingRef = Ref nothingName nothingUnique nothingName
     justRef = Ref justName justUnique justName
 
--- | Look up if a presumptive wrapper exists for a function.
--- Returns Just (wrapperRef, numParams) if wrapper exists, Nothing otherwise.
-lookupPresumptiveWrapper :: Resolved -> Environment -> Eval (Maybe (Resolved, Int))
-lookupPresumptiveWrapper funcResolved env = do
-  -- Construct the wrapper name: 'presumptive <func>'
-  let wrapperName = makePresumptiveWrapperName funcResolved
-
-  -- Look up the wrapper in the environment
-  case Map.lookup (getUnique funcResolved) env of
-    Just _ -> do
-      -- Function exists, check if wrapper exists
-      -- For now, assume wrapper exists if original has TYPICALLY defaults
-      -- TODO: Actually check if wrapper was generated
-      pure $ Just (wrapperName, 1)  -- Placeholder: assume 1 param
-    Nothing -> pure Nothing
-
--- | Construct presumptive wrapper name from original function name
+-- | Construct presumptive wrapper name from original function name.
+-- Creates an OutOfScope reference that will trigger name resolution during evaluation.
+-- The wrapper's actual unique is assigned during type checking, so we use OutOfScope
+-- to indicate that resolution is needed.
 makePresumptiveWrapperName :: Resolved -> Resolved
 makePresumptiveWrapperName resolved =
   let origName = getOriginal resolved
@@ -315,8 +298,11 @@ makePresumptiveWrapperName resolved =
       newText = "'presumptive " <> rawNameToText origRawName <> "'"
       newRawName = NormalName newText
       newName = MkName (getAnno origName) newRawName
-      u = getUnique resolved
-  in Ref newName u newName
+      -- Create a temporary unique for OutOfScope
+      -- Use the original function's unique components but mark as out of scope
+      MkUnique _origSort num uri = getUnique resolved
+      tempUnique = MkUnique 'P' (negate num - 1000000) uri  -- 'P' for Presumptive
+  in OutOfScope tempUnique newName
 
 -- | Apply TYPICALLY defaults to a closure when in presumptive mode.
 -- If the WHNF is a closure and presumptive=True, we apply defaults from
