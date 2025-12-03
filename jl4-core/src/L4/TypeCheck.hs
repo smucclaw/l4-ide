@@ -433,10 +433,9 @@ inferSection (MkSection ann mn maka topdecls) = do
   -- Generate presumptive wrappers for DECIDEs with TYPICALLY defaults
   wrapperDecls <- generatePresumptiveWrappers rtopdecls
 
-  -- Create CheckInfo for each wrapper to add to environment
-  let wrapperExtends = [makeWrapperCheckInfo wrapperName wrapperType
-                       | Decide _ (MkDecide _ (MkTypeSig _ _ mGivethSig) (MkAppForm _ wrapperName _ _) _) <- wrapperDecls
-                       , let wrapperType = extractWrapperType mGivethSig]
+  -- Create CheckInfo for each wrapper with proper function type
+  let wrapperExtends = [makeWrapperCheckInfo wrapperName givenSig mGivethSig
+                       | Decide _ (MkDecide _ (MkTypeSig _ givenSig mGivethSig) (MkAppForm _ wrapperName _ _) _) <- wrapperDecls]
 
   pure (MkSection ann rmn rmaka (rtopdecls ++ wrapperDecls), concat topDeclExtends ++ wrapperExtends)
 
@@ -3235,18 +3234,23 @@ generatePresumptiveWrappers decls = do
 
   pure (catMaybes wrappers)
 
--- | Extract type from a wrapper's GivethSig (return type)
-extractWrapperType :: Maybe (GivethSig Resolved) -> Type' Resolved
-extractWrapperType (Just (MkGivethSig _ ty)) = ty
-extractWrapperType Nothing = error "Wrapper should always have a return type"
-
 -- | Create CheckInfo for a wrapper function to add it to the environment
-makeWrapperCheckInfo :: Resolved -> Type' Resolved -> CheckInfo
-makeWrapperCheckInfo wrapperName wrapperType =
-  MkCheckInfo
-    { names = [wrapperName]
-    , checkEntity = KnownTerm wrapperType Computable  -- Wrappers are computable functions
-    }
+-- Builds the full function type from GIVEN parameters and GIVETH return type
+makeWrapperCheckInfo :: Resolved -> GivenSig Resolved -> Maybe (GivethSig Resolved) -> CheckInfo
+makeWrapperCheckInfo wrapperName givenSig mGivethSig =
+  let MkGivenSig _ otns = givenSig
+      -- Extract parameter types and names from OptionallyTypedName
+      namedParams = [MkOptionallyNamedType emptyAnno (Just name) ty
+                    | MkOptionallyTypedName _ name (Just ty) _ <- otns]
+      returnType = case mGivethSig of
+        Just (MkGivethSig _ ty) -> ty
+        Nothing -> error "Wrapper should always have a return type"
+      -- Build function type using Fun constructor
+      funcType = Fun emptyAnno namedParams returnType
+  in MkCheckInfo
+      { names = [wrapperName]
+      , checkEntity = KnownTerm funcType Computable  -- Wrappers are computable functions
+      }
 
 -- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause.
 -- Also ensures we don't generate wrappers for wrappers (infinite chain prevention).
