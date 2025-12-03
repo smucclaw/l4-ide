@@ -5,17 +5,17 @@
 
 ## Implementation Progress
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Lexer - add TYPICALLY keyword | ✅ Complete |
-| 2 | AST - extend TypedName, OptionallyTypedName, Assume | ✅ Complete |
-| 3 | Parser - parse TYPICALLY clauses | ✅ Complete |
-| 4 | Type Checking - validate TYPICALLY values | ✅ Complete |
-| 5a | IDE - Syntax highlighting | ✅ Complete (automatic) |
-| 5b | IDE - Autocomplete | ✅ Complete (automatic) |
-| 5c | IDE - Hover showing defaults | ⏳ Deferred (see note) |
-| 6 | Strict directive variants (#EVALSTRICT, #ASSERTSTRICT) | ✅ Complete |
-| 7 | Decision Service API - defaultMode parameter | ⏳ Not started |
+| Phase | Description                                            | Status                  |
+|-------|--------------------------------------------------------|-------------------------|
+| 1     | Lexer - add TYPICALLY keyword                          | ✅ Complete             |
+| 2     | AST - extend TypedName, OptionallyTypedName, Assume    | ✅ Complete             |
+| 3     | Parser - parse TYPICALLY clauses                       | ✅ Complete             |
+| 4     | Type Checking - validate TYPICALLY values              | ✅ Complete             |
+| 5a    | IDE - Syntax highlighting                              | ✅ Complete (automatic) |
+| 5b    | IDE - Autocomplete                                     | ✅ Complete (automatic) |
+| 5c    | IDE - Hover showing defaults                           | ⏳ Deferred (see note)  |
+| 6     | Strict directive variants (#EVALSTRICT, #ASSERTSTRICT) | ✅ Complete             |
+| 7     | Decision Service API - defaultMode parameter           | ⏳ Not started          |
 
 **Note on hover:** Extending the `Info` type to include TYPICALLY values conflicts with Optics generic traversals used in visualization code. Requires architectural changes to use a separate `TypicallyMap` instead of modifying `Info`. Deferred to future work.
 
@@ -390,7 +390,7 @@ DECIDE `can vote` IF age >= 18
 
 **Current Implementation Status:**
 
-The current implementation uses a **simplified approach** that automatically applies TYPICALLY defaults when a function evaluates to a closure:
+The current implementation uses a **simplified auto-apply approach** that automatically applies TYPICALLY defaults when a function evaluates to a closure:
 
 ```l4
 GIVEN
@@ -405,11 +405,13 @@ DECIDE `can vote` IF age >= 18
 #PEVAL `can vote`  -- Returns: TRUE (using age=18)
 ```
 
-**How it works:**
+**How auto-apply works:**
 1. `#PEVAL 'can vote'` evaluates to a `ValClosure` (since no arguments provided)
 2. `maybeApplyDefaults` detects the closure has TYPICALLY defaults in its GivenSig
 3. Defaults are automatically extracted and applied to evaluate the closure body
 4. Returns the final result
+
+This auto-apply behavior will remain as a convenience feature even after wrapper generation is implemented.
 
 **Future Design: Explicit MAYBE-Wrapped Parameters**
 
@@ -435,6 +437,40 @@ DECIDE `presumptive can vote` IS
 - Composable: can pass MAYBE values through multiple functions
 - Auditable: explicit about which defaults are being used
 - Type-safe: the Maybe wrapper makes optionality explicit in the type system
+
+**Runtime Semantics: Unknown Propagation**
+
+When a wrapper receives `NOTHING` for a parameter:
+- **Has TYPICALLY:** Use the default value
+- **No TYPICALLY:** Return `NOTHING` (Unknown), which propagates through computation
+
+This enables graceful handling in interactive applications:
+
+```l4
+GIVEN
+  `has spousal approval` IS A BOOLEAN TYPICALLY FALSE
+  `beer only` IS A BOOLEAN  -- No TYPICALLY!
+  `has parental approval` IS A BOOLEAN TYPICALLY FALSE
+GIVETH A BOOLEAN
+DECIDE `may purchase alcohol` ...
+
+-- Returns TRUE (beer only = TRUE, others use defaults)
+#PEVAL `may purchase alcohol` (JUST TRUE) NOTHING NOTHING
+
+-- Returns NOTHING (Unknown) because beer only has no default
+#PEVAL `may purchase alcohol` NOTHING NOTHING (JUST FALSE)
+```
+
+**UI can detect Unknown and prompt:**
+```
+Result: Unknown
+Missing inputs without defaults:
+  - beer only (required, no default value)
+
+Would you like to provide a value?
+```
+
+This is **not a compile-time error** - it's a runtime behavior that allows graceful degradation.
 
 **Implementation Gap & Architectural Challenge:**
 

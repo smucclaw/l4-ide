@@ -23,13 +23,34 @@ GIVETH A BOOLEAN
 DECIDE `can vote` IF age >= 18
 
 -- ASSUME without TYPICALLY (TYPICALLY not allowed on ASSUME)
-ASSUME `default jurisdiction` IS A STRING
+-- ASSUME `default jurisdiction` IS A STRING
+
+DECLARE Buyer
+  HAS `of age`           IS A BOOLEAN TYPICALLY TRUE
+      `is emancipated`   IS A BOOLEAN TYPICALLY FALSE
 
 -- Multiple TYPICALLY values in one GIVEN
 GIVEN
-  has_spousal_approval IS A BOOLEAN TYPICALLY FALSE
-  beer_only IS A BOOLEAN TYPICALLY FALSE
-  has_parental_approval IS A BOOLEAN TYPICALLY FALSE
-  is_emancipated IS A BOOLEAN TYPICALLY FALSE
+  b                     IS A Buyer
+  `has spousal approval`  IS A BOOLEAN TYPICALLY FALSE
+  `beer only`             IS A BOOLEAN
+  `has parental approval` IS A BOOLEAN TYPICALLY FALSE
 GIVETH A BOOLEAN
-DECIDE `may purchase alcohol` IF TRUE
+DECIDE b `may purchase alcohol` `has spousal approval` `beer only` `has parental approval` IF
+          (NOT b's `of age`) => `has parental approval`
+  AND     `beer only`
+      OR  `has spousal approval`
+
+GIVETH A Buyer
+alice MEANS Buyer WITH `of age` IS TRUE,  `is emancipated` IS FALSE
+bob   MEANS Buyer WITH `of age` IS TRUE,  `is emancipated` IS TRUE
+carol MEANS Buyer WITH `of age` IS FALSE, `is emancipated` IS TRUE
+dave  MEANS Buyer WITH `of age` IS FALSE, `is emancipated` IS FALSE
+
+#EVAL `may purchase alcohol` alice FALSE FALSE FALSE
+
+-- the following should return a Bool
+#PEVAL `may purchase alcohol` NOTHING (JUST FALSE) (JUST FALSE) NOTHING
+
+-- the following should error Unknown at runtime
+#PEVAL `may purchase alcohol` NOTHING (JUST FALSE) (NOTHING) (JUST FALSE)
