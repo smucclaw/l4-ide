@@ -436,12 +436,42 @@ DECIDE `presumptive can vote` IS
 - Auditable: explicit about which defaults are being used
 - Type-safe: the Maybe wrapper makes optionality explicit in the type system
 
-**Implementation Gap:**
+**Implementation Gap & Architectural Challenge:**
+
 The wrapper generation approach requires:
 1. Automatically generating `presumptive <fn>` wrappers for each DECIDE with TYPICALLY defaults
 2. Wrappers take `MAYBE T` parameters instead of `T`
 3. Wrappers unwrap NOTHING → use TYPICALLY default, JUST v → use v
 4. PEVAL would call the wrapper, not the original function
+
+**Key Architectural Decision:**
+
+There are three approaches to wrapper generation:
+
+**Option A: Runtime Generation (Current WIP)**
+- Generate wrappers during `evalDecide` (evaluation phase)
+- Store in a special runtime map
+- Challenge: Wrappers aren't available during type checking/name resolution
+- Users can't reference `presumptive foo` in their L4 code directly
+- Would need special lookup mechanism in PEVAL
+
+**Option B: Compile-Time Generation (Type Checking)**
+- Generate wrapper DECIDE statements during type checking
+- Add to AST as synthetic declarations
+- Wrappers become regular functions accessible by name
+- Benefit: Full integration with type system and name resolution
+- Challenge: Requires AST transformation pass during type checking
+
+**Option C: Hybrid - Manual Wrapper Pattern**
+- Don't auto-generate; provide tools for users to write wrappers
+- Document the pattern in spec
+- Users write: `DECIDE 'presumptive foo' ...` manually
+- Simpler implementation, more explicit
+
+**Current Status:**
+- Skeleton for Option A implemented (generatePresumptiveWrapper, generatePresumptiveName)
+- Need to decide on final approach before completing implementation
+- Option B (compile-time) may be more architecturally sound but requires more work
 
 **Implementation Options:**
 
