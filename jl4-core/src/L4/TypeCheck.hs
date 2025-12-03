@@ -433,7 +433,12 @@ inferSection (MkSection ann mn maka topdecls) = do
   -- Generate presumptive wrappers for DECIDEs with TYPICALLY defaults
   wrapperDecls <- generatePresumptiveWrappers rtopdecls
 
-  pure (MkSection ann rmn rmaka (rtopdecls ++ wrapperDecls), concat topDeclExtends)
+  -- Create CheckInfo for each wrapper to add to environment
+  let wrapperExtends = [makeWrapperCheckInfo wrapperName wrapperType
+                       | Decide _ (MkDecide _ (MkTypeSig _ _ mGivethSig) (MkAppForm _ wrapperName _ _) _) <- wrapperDecls
+                       , let wrapperType = extractWrapperType mGivethSig]
+
+  pure (MkSection ann rmn rmaka (rtopdecls ++ wrapperDecls), concat topDeclExtends ++ wrapperExtends)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -3221,27 +3226,54 @@ prettyNameWithRange n =
 -- | Generate presumptive wrappers for all DECIDEs with TYPICALLY defaults.
 -- This implements a two-pass transformation:
 -- Pass 1: Generate wrapper DECIDEs with MAYBE-wrapped parameters
--- Pass 2: Rewrite function calls in wrappers to call presumptive versions
+-- Pass 2: Build mapping from original functions to wrappers (for PEVAL rewriting)
 generatePresumptiveWrappers :: [TopDecl Resolved] -> Check [TopDecl Resolved]
 generatePresumptiveWrappers decls = do
-  -- Pass 1: Collect DECIDEs with TYPICALLY defaults
-  let decidesWithDefaults :: [(Anno, Decide Resolved)]
-      decidesWithDefaults =
-        [ (ann, decide)
-        | Decide ann decide <- decls
-        , hasTypicallyDefaults decide
-        ]
+  -- Pass 1: Collect DECIDEs with TYPICALLY defaults and generate wrappers
+  wrappersWithOriginals <- forM decls $ \case
+    Decide ann decide | hasTypicallyDefaults decide -> do
+      let MkDecide _ _ (MkAppForm _ origName _ _) _ = decide
+      wrapper <- generateWrapper ann decide
+      case wrapper of
+        Decide _ (MkDecide _ _ (MkAppForm _ wrapperName _ _) _) ->
+          pure (Just (origName, wrapperName, wrapper))
+        _ -> pure Nothing  -- Shouldn't happen, but handle for completeness
+    _ -> pure Nothing
 
-  -- Generate wrapper for each DECIDE with defaults
-  wrappers <- mapM (uncurry generateWrapper) decidesWithDefaults
+  let wrappers = [w | Just (_, _, w) <- wrappersWithOriginals]
 
-  -- TODO: Pass 2: Rewrite function calls in wrappers to call presumptive versions
+  -- TODO: Pass 2: Use the mapping to rewrite PEVAL directives
+  -- For now, wrappers are generated but PEVAL rewriting happens at eval time
+
   pure wrappers
 
--- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause
+-- | Extract type from a wrapper's GivethSig (return type)
+extractWrapperType :: Maybe (GivethSig Resolved) -> Type' Resolved
+extractWrapperType (Just (MkGivethSig _ ty)) = ty
+extractWrapperType Nothing = error "Wrapper should always have a return type"
+
+-- | Create CheckInfo for a wrapper function to add it to the environment
+makeWrapperCheckInfo :: Resolved -> Type' Resolved -> CheckInfo
+makeWrapperCheckInfo wrapperName wrapperType =
+  MkCheckInfo
+    { names = [wrapperName]
+    , checkEntity = KnownTerm wrapperType Computable  -- Wrappers are computable functions
+    }
+
+-- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause.
+-- Also ensures we don't generate wrappers for wrappers (infinite chain prevention).
 hasTypicallyDefaults :: Decide Resolved -> Bool
-hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) _ _) =
-  not $ null $ extractTypicallyDefaultsFromGiven givenSig
+hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funcName _ _) _) =
+  not (isPresumptiveWrapper funcName) && not (null (extractTypicallyDefaultsFromGiven givenSig))
+
+-- | Check if a function name is already a presumptive wrapper
+-- (starts with "'presumptive ")
+isPresumptiveWrapper :: Resolved -> Bool
+isPresumptiveWrapper resolved =
+  let origName = getOriginal resolved
+      origRawName = rawName (getName origName)
+      nameText = rawNameToText origRawName
+  in "'presumptive " `Text.isPrefixOf` nameText
 
 -- | Extract TYPICALLY defaults from a GivenSig
 extractTypicallyDefaultsFromGiven :: GivenSig Resolved -> [(Resolved, Expr Resolved)]
@@ -3255,8 +3287,8 @@ generateWrapper :: Anno -> Decide Resolved -> Check (TopDecl Resolved)
 generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appForm bodyExpr) = do
   let MkAppForm _ funcName _ _ = appForm
 
-  -- Create the wrapper function name: 'presumptive <original-name>'
-  let wrapperName = makePresumptiveName funcName
+  -- Create the wrapper function name: 'presumptive <original-name>' with fresh unique
+  wrapperName <- makePresumptiveName funcName
 
   -- Convert GIVEN parameters to MAYBE-wrapped versions with fresh Def nodes
   let MkGivenSig gsAnn otns = givenSig
@@ -3285,18 +3317,18 @@ generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appFo
 
   pure $ Decide ann wrapperDecide
 
--- | Create a presumptive wrapper name: 'presumptive <name>'
-makePresumptiveName :: Resolved -> Resolved
-makePresumptiveName resolved =
+-- | Create a presumptive wrapper name with a fresh unique
+-- This ensures the wrapper has a distinct identity from the original function
+makePresumptiveName :: Resolved -> Check Resolved
+makePresumptiveName resolved = do
   let origName = getOriginal resolved
       origRawName = rawName (getName origName)
       newText = "'presumptive " <> rawNameToText origRawName <> "'"
       newRawName = NormalName newText
       newName = MkName (getAnno origName) newRawName
-  in case resolved of
-    Def u _ -> Def u newName
-    Ref _ u _ -> Ref newName u newName
-    OutOfScope u _ -> OutOfScope u newName
+  -- Generate a fresh unique for the wrapper
+  freshU <- newUnique
+  pure $ Def freshU newName
 
 -- | Create a fresh Def node for a wrapper parameter
 -- This ensures parameters in the wrapper have proper scoping

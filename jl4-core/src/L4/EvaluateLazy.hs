@@ -288,9 +288,9 @@ rewriteToPresumptiveCall expr _env = case expr of
     justRef = Ref justName justUnique justName
 
 -- | Construct presumptive wrapper name from original function name.
--- Creates an OutOfScope reference that will trigger name resolution during evaluation.
--- The wrapper's actual unique is assigned during type checking, so we use OutOfScope
--- to indicate that resolution is needed.
+-- Creates an OutOfScope reference that will be resolved by name during evaluation.
+-- The wrapper has a fresh unique (generated during type checking), so we can't
+-- construct a direct Ref. Instead, we use OutOfScope to trigger name-based lookup.
 makePresumptiveWrapperName :: Resolved -> Resolved
 makePresumptiveWrapperName resolved =
   let origName = getOriginal resolved
@@ -298,9 +298,9 @@ makePresumptiveWrapperName resolved =
       newText = "'presumptive " <> rawNameToText origRawName <> "'"
       newRawName = NormalName newText
       newName = MkName (getAnno origName) newRawName
-      -- Create a temporary unique for OutOfScope
-      -- Use the original function's unique components but mark as out of scope
-      MkUnique _origSort num uri = getUnique resolved
+      -- Create a temporary unique for the OutOfScope reference
+      -- The actual unique will be resolved during evaluation
+      MkUnique _ num uri = getUnique resolved
       tempUnique = MkUnique 'P' (negate num - 1000000) uri  -- 'P' for Presumptive
   in OutOfScope tempUnique newName
 
