@@ -1,0 +1,28 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: typically-on-assume.l4
+  Hidden:   no
+  Range:    4:8-4:30
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    TYPICALLY defaults are not allowed on ASSUME declarations:
+      `default jurisdiction`
+    The ASSUME keyword is deprecated. Use GIVEN or DECLARE instead.
+
+File: typically-on-assume.l4
+  Hidden:   no
+  Range:    4:8-4:30
+  Source:   check
+  Severity: DiagnosticSeverity_Warning
+  Code:     <none>
+  Message: 
+    ASSUME is deprecated and will be removed in a future version.
+
+    The declaration of `default jurisdiction` uses ASSUME.
+
+    Consider using one of these alternatives:
+      - GIVEN: for function parameters
+      - DECLARE: for type declarations

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Backend.CodeGen
   ( generateEvalWrapper
+  , generateEvalWrapperWithDefaults
   , GeneratedCode(..)
   ) where
 
@@ -109,3 +110,72 @@ generateEvalDirective funName params traceLevel = Text.unlines $
       TraceFull -> "#EVALTRACE"
     functionCall = funName <> " " <> Text.unwords (map mkArgAccess params)
     mkArgAccess (name, _) = "(args's " <> name <> ")"
+
+-- | Generate L4 wrapper code with TYPICALLY defaults support
+-- When honorDefaults is True, parameters with defaults are substituted when missing from JSON
+generateEvalWrapperWithDefaults
+  :: Text                                      -- ^ Target function name
+  -> [(Text, Type' Resolved, Maybe Text)]      -- ^ Parameter names, types, and optional L4 default expressions
+  -> Aeson.Value                               -- ^ Input arguments as JSON object
+  -> TraceLevel                                -- ^ Whether to generate EVAL or EVALTRACE
+  -> Bool                                      -- ^ Whether to honor TYPICALLY defaults
+  -> Either Text GeneratedCode
+generateEvalWrapperWithDefaults funName paramsWithDefaults inputJson traceLevel honorDefaults = do
+  let params = [(name, ty) | (name, ty, _) <- paramsWithDefaults]
+      defaults = [(name, def) | (name, _, Just def) <- paramsWithDefaults]
+  
+  if null params
+    then Right GeneratedCode
+      { generatedWrapper = Text.unlines
+          [ ""
+          , "-- ========== GENERATED WRAPPER =========="
+          , ""
+          , generateSimpleEval funName traceLevel
+          ]
+      , decodeFailedSentinel = "DECODE_FAILED"
+      }
+    else if not honorDefaults || null defaults
+      then generateEvalWrapper funName params inputJson traceLevel
+      else Right GeneratedCode
+        { generatedWrapper = Text.unlines
+            [ ""
+            , "-- ========== GENERATED WRAPPER (presumptive) =========="
+            , ""
+            , generateInputRecordWithDefaults paramsWithDefaults
+            , ""
+            , generateDecoder
+            , ""
+            , generateJsonPayload inputJson
+            , ""
+            , generateEvalDirectiveWithDefaults funName paramsWithDefaults traceLevel
+            ]
+        , decodeFailedSentinel = "DECODE_FAILED"
+        }
+
+-- | Generate DECLARE for input record with TYPICALLY defaults
+generateInputRecordWithDefaults :: [(Text, Type' Resolved, Maybe Text)] -> Text
+generateInputRecordWithDefaults params = Text.unlines $
+  ["DECLARE InputArgs HAS"] ++
+  map formatField (zip [0::Int ..] params)
+  where
+    formatField (idx, (name, ty, mDefault)) =
+      let indent = if idx == 0 then "  " else ", "
+          defaultClause = case mDefault of
+            Just def -> " TYPICALLY " <> def
+            Nothing -> ""
+      in indent <> name <> " IS A " <> prettyLayout ty <> defaultClause
+
+-- | Generate EVAL with defaults-aware function call
+generateEvalDirectiveWithDefaults :: Text -> [(Text, Type' Resolved, Maybe Text)] -> TraceLevel -> Text
+generateEvalDirectiveWithDefaults funName params traceLevel = Text.unlines $
+  [ directive
+  , "  CONSIDER decodeArgs inputJson"
+  , "    WHEN RIGHT args THEN JUST (" <> functionCall <> ")"
+  , "    WHEN LEFT error THEN NOTHING"
+  ]
+  where
+    directive = case traceLevel of
+      TraceNone -> "#EVAL"
+      TraceFull -> "#EVALTRACE"
+    functionCall = funName <> " " <> Text.unwords (map mkArgAccess params)
+    mkArgAccess (name, _, _) = "(args's " <> name <> ")"

@@ -22,8 +22,8 @@ GIVEN
 GIVETH A BOOLEAN
 DECIDE `can vote` IF age >= 18
 
--- TYPICALLY in ASSUME (though discouraged)
-ASSUME `default jurisdiction` IS A STRING "Singapore"
+-- ASSUME without TYPICALLY (TYPICALLY not allowed on ASSUME)
+ASSUME `default jurisdiction` IS A STRING
 
 -- Multiple TYPICALLY values in one GIVEN
 GIVEN

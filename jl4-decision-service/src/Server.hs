@@ -236,6 +236,7 @@ data SimpleResponse
 data FnArguments = FnArguments
   { fnEvalBackend :: Maybe EvalBackend
   , fnArguments :: Map Text (Maybe FnLiteral)
+  , fnDefaultMode :: Maybe Api.DefaultMode
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)

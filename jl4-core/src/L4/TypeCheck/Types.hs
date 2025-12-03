@@ -77,6 +77,8 @@ data CheckError =
   | DesugarAnnoRewritingError (Expr Name) HoleInfo
   | MixfixMatchErrorCheck Name MixfixMatchError
     -- ^ Error in mixfix pattern matching (function name, error details)
+  | TypicallyNotAllowedOnAssume Name
+    -- ^ TYPICALLY defaults are not allowed on ASSUME declarations
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

@@ -14,12 +14,16 @@
 | 5a | IDE - Syntax highlighting | ✅ Complete (automatic) |
 | 5b | IDE - Autocomplete | ✅ Complete (automatic) |
 | 5c | IDE - Hover showing defaults | ⏳ Deferred (see note) |
+| 6 | Strict directive variants (#EVALSTRICT, #ASSERTSTRICT) | ✅ Complete |
+| 7 | Decision Service API - defaultMode parameter | ⏳ Not started |
 
 **Note on hover:** Extending the `Info` type to include TYPICALLY values conflicts with Optics generic traversals used in visualization code. Requires architectural changes to use a separate `TypicallyMap` instead of modifying `Info`. Deferred to future work.
 
 **Test files:**
 - `jl4/examples/ok/typically-basic.l4` - comprehensive examples
+- `jl4/examples/ok/evalstrict.l4` - strict directive variants
 - `jl4/examples/not-ok/tc/typically-type-mismatch.l4` - type error testing
+- `jl4/examples/not-ok/tc/typically-on-assume.l4` - TYPICALLY on ASSUME error
 
 **Bonus:** ASSUME deprecation warnings implemented (see `ASSUME-DEPRECATION-SPEC.md`)
 
@@ -107,13 +111,17 @@ DECIDE `may purchase alcohol` IF ...
 
 ### In ASSUME (External Declarations)
 
+**TYPICALLY is NOT allowed on ASSUME declarations.** This is a type checking error.
+
 ```l4
+-- ERROR: TYPICALLY not allowed on ASSUME
 ASSUME `person has capacity` IS A BOOLEAN TYPICALLY TRUE
-ASSUME `transaction is at arms length` IS A BOOLEAN TYPICALLY TRUE
-ASSUME `applicable law` IS A STRING TYPICALLY "Singapore"
+
+-- OK: ASSUME without TYPICALLY
+ASSUME `person has capacity` IS A BOOLEAN
 ```
 
-**Note:** TYPICALLY on ASSUME is supported but discouraged. The ASSUME keyword itself is slated for deprecation (see `RUNTIME-INPUT-STATE-SPEC.md`), and if someone goes to the trouble of specifying a default value, they should use DECLARE or GIVEN instead—constructs that properly belong in well-styled L4 programs.
+**Rationale:** The ASSUME keyword is deprecated (see `RUNTIME-INPUT-STATE-SPEC.md`). Supporting TYPICALLY on ASSUME would require complex runtime changes for strict/non-strict evaluation modes. Since ASSUME is being phased out, the simpler solution is to disallow the combination entirely. Use GIVEN or DECLARE with TYPICALLY instead.
 
 ### Grammar Extension
 
@@ -304,6 +312,51 @@ This allows the decision service, form generators, and other consumers to query 
 - Hover information showing default values
 - Autocomplete suggesting TYPICALLY after type annotations
 - Diagnostics for type mismatches in TYPICALLY values
+
+### Phase 6: Strict Directive Variants
+
+To support explicit control over whether TYPICALLY defaults are honored during evaluation, we added three new directive variants:
+
+| Directive | Description |
+|-----------|-------------|
+| `#EVALSTRICT expr` | Evaluate expression, treating missing values as Unknown (ignoring TYPICALLY defaults) |
+| `#EVALTRACESTRICT expr` | Same as #EVALSTRICT but with trace output |
+| `#ASSERTSTRICT expr` | Assert expression in strict mode |
+
+**Semantics:**
+
+- **Non-strict (default):** `#EVAL`, `#EVALTRACE`, `#ASSERT` honor TYPICALLY defaults. If a value is not provided but has a TYPICALLY annotation, the default is used.
+- **Strict:** `#EVALSTRICT`, `#EVALTRACESTRICT`, `#ASSERTSTRICT` ignore TYPICALLY defaults. Missing values remain Unknown, forcing the user to provide all values explicitly.
+
+**Use cases:**
+
+1. **Testing:** Verify behavior without assumptions
+2. **Audit:** See exactly what values are needed vs defaulted
+3. **Strict mode applications:** Some contexts require explicit confirmation of all facts
+
+**Implementation files:**
+
+- `jl4-core/src/L4/Lexer.hs` - Added `TLazyEvalStrictDirective`, `TLazyEvalTraceStrictDirective`, `TAssertStrictDirective` tokens
+- `jl4-core/src/L4/Syntax.hs` - Added `LazyEvalStrict`, `LazyEvalTraceStrict`, `AssertStrict` AST variants
+- `jl4-core/src/L4/Parser.hs` - Parser cases for new directives
+- `jl4-core/src/L4/EvaluateLazy/Machine.hs` - Added `strict :: !Bool` field to `EvalDirective`
+- `jl4-core/src/L4/Print.hs`, `L4/Nlg.hs`, `L4/TypeCheck.hs` - Pretty-printing, NLG, type checking support
+
+**Example:**
+
+```l4
+GIVEN x IS A BOOLEAN TYPICALLY TRUE
+GIVETH A BOOLEAN
+DECIDE foo IF x
+
+-- Honors default: evaluates to TRUE  
+#EVAL foo
+
+-- Ignores default: evaluates to Unknown
+#EVALSTRICT foo
+```
+
+**Note:** The `strict` flag is currently stored in `EvalDirective` but does not yet change evaluation behavior. The semantic implementation (actually using TYPICALLY values during evaluation) is future work.
 
 ## Test Cases
 

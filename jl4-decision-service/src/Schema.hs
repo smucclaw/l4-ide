@@ -101,6 +101,10 @@ instance ToSchema ReasonNode
 
 -- This is correct, since we don't overwrite the
 -- 'ToJSON' instance yet.
+instance ToSchema DefaultMode
+
+-- This is correct, since we don't overwrite the
+-- 'ToJSON' instance yet.
 instance ToSchema FnArguments
 
 instance ToSchema Function where

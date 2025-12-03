@@ -74,6 +74,37 @@ data TraceLevel
   | TraceFull  -- ^ Full evaluation trace
   deriving (Show, Eq, Ord, Enum, Bounded, Generic)
 
+-- | Control how TYPICALLY defaults are handled at runtime
+-- See RUNTIME-INPUT-STATE-SPEC.md for details
+data DefaultMode
+  = HonorDefaults    -- ^ Use TYPICALLY defaults when input not provided
+  | IgnoreDefaults   -- ^ Treat missing inputs as Unknown, never use TYPICALLY
+  deriving (Show, Read, Eq, Ord, Enum, Bounded, Generic)
+
+instance FromJSON DefaultMode where
+  parseJSON = withText "DefaultMode" $ \t -> case Text.toLower t of
+    "honor-defaults"  -> pure HonorDefaults
+    "ignore-defaults" -> pure IgnoreDefaults
+    "honor"           -> pure HonorDefaults
+    "ignore"          -> pure IgnoreDefaults
+    _ -> fail $ "Invalid defaultMode: " <> Text.unpack t <> ". Expected: honor-defaults, ignore-defaults"
+
+instance ToJSON DefaultMode where
+  toJSON HonorDefaults  = String "honor-defaults"
+  toJSON IgnoreDefaults = String "ignore-defaults"
+
+instance FromHttpApiData DefaultMode where
+  parseQueryParam t = case Text.toLower t of
+    "honor-defaults"  -> Right HonorDefaults
+    "ignore-defaults" -> Right IgnoreDefaults
+    "honor"           -> Right HonorDefaults
+    "ignore"          -> Right IgnoreDefaults
+    _ -> Left $ "Invalid defaultMode: " <> t <> ". Expected: honor-defaults, ignore-defaults"
+
+instance ToHttpApiData DefaultMode where
+  toQueryParam HonorDefaults  = "honor-defaults"
+  toQueryParam IgnoreDefaults = "ignore-defaults"
+
 instance FromHttpApiData TraceLevel where
   parseQueryParam t = case Text.toLower t of
     "none" -> Right TraceNone

@@ -1,0 +1,4 @@
+-- Test: TYPICALLY is not allowed on ASSUME declarations
+-- This should produce a type checking error
+
+ASSUME `default jurisdiction` IS A STRING TYPICALLY "Singapore"

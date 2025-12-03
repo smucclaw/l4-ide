@@ -3,6 +3,268 @@
 **Status:** 📋 Draft
 **Related:** `TYPICALLY-DEFAULTS-SPEC.md` (compile-time defaults), `BOOLEAN-MINIMIZATION-SPEC.md` (partial evaluation), `doc/default-values.md` (conceptual background)
 
+## Implementation Progress
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | TYPICALLY syntax (lexer, parser, AST) | ✅ Complete (see TYPICALLY-DEFAULTS-SPEC.md) |
+| 2 | TYPICALLY type checking | ✅ Complete |
+| 3 | Strict directive variants (#EVALSTRICT, etc.) | ✅ Parsed, ⏳ No runtime difference yet |
+| 4 | TYPICALLY on ASSUME is error | ✅ Complete |
+| 5 | Extract TYPICALLY defaults from AST | ✅ Complete (`extractTypicallyDefaults` in Machine.hs) |
+| 6 | Decision Service API defaultMode parameter | ⏳ In progress (`DefaultMode` type added, `FnArguments.fnDefaultMode` field added) |
+| 7 | Decision Service wrapper generation | ⏳ Not started |
+| 8 | Decision Service uses defaults based on defaultMode | ⏳ Not started |
+
+**Current State:** The evaluator exports `extractTypicallyDefaults` to extract TYPICALLY defaults from a `GivenSig`. The core evaluator requires all arguments when calling functions - it does NOT apply TYPICALLY defaults internally. Default handling is delegated to the Decision Service API layer.
+
+**Architecture Decision:** TYPICALLY defaults are applied at the **API layer** (Decision Service), not in the core evaluator. The evaluator always receives concrete values or produces `ValAssumed` for unknowns. The Decision Service translates the four-state input model into evaluator inputs based on `defaultMode`.
+
+**Test files:**
+- `jl4/examples/ok/typically-basic.l4` - TYPICALLY syntax
+- `jl4/examples/ok/evalstrict.l4` - strict directive parsing
+- `jl4/examples/not-ok/tc/typically-type-mismatch.l4` - type mismatch error
+- `jl4/examples/not-ok/tc/typically-on-assume.l4` - TYPICALLY on ASSUME error
+
+---
+
+## Implementation Roadmap
+
+This section provides detailed implementation guidance for the remaining phases.
+
+### Phase 5: Extract TYPICALLY Defaults from AST ✅
+
+**Status:** Complete
+
+**Implementation:** `extractTypicallyDefaults` function added to `L4/EvaluateLazy/Machine.hs`:
+
+```haskell
+-- | Extract TYPICALLY defaults from a GivenSig
+-- Returns a map from parameter Unique to the default expression
+extractTypicallyDefaults :: GivenSig Resolved -> Map Unique (Expr Resolved)
+extractTypicallyDefaults (MkGivenSig _ann otns) =
+  Map.fromList
+    [ (getUnique n, expr)
+    | MkOptionallyTypedName _ann n _mty (Just expr) <- otns
+    ]
+```
+
+This function is exported from `L4.EvaluateLazy.Machine` for use by wrapper generators.
+
+---
+
+### Phase 6: Wrapper-Based Default Handling (Chosen Approach)
+
+**Goal:** Generate wrapper functions that handle default substitution at the L4 level, keeping the core evaluator unchanged.
+
+> **DEPRECATED:** The earlier approach of threading `strictMode` through the evaluator has been abandoned in favor of this wrapper-based approach. The core evaluator remains strict (all arguments required) and does not distinguish between `#EVAL` and `#EVALSTRICT` at runtime.
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Input Sources                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Decision Service API    │    LSP/IDE    │    Direct L4 Code            │
+│  { age: 20 }             │    hover/eval │    #EVAL foo 20              │
+└──────────┬───────────────┴───────┬───────┴────────────┬─────────────────┘
+           │                       │                    │
+           ▼                       ▼                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Wrapper Generator (Compiler/API)                      │
+│  - Uses extractTypicallyDefaults to get defaults                        │
+│  - Generates wrapper that accepts Maybe inputs                          │
+│  - In honor-defaults mode: substitutes TYPICALLY for Nothing            │
+│  - In ignore-defaults mode: passes Nothing through as Unknown           │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Core Evaluator                                   │
+│  - Unchanged: requires all arguments                                    │
+│  - Receives concrete values or ValAssumed                               │
+│  - No knowledge of "defaultMode" or "strictness"                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Wrapper Pattern:**
+
+For a function with TYPICALLY defaults:
+
+```l4
+-- Original function
+GIVEN
+  age IS A NUMBER
+  married IS A BOOLEAN TYPICALLY FALSE
+GIVETH A BOOLEAN
+DECIDE `can marry` IF age >= 18 AND NOT married
+```
+
+**Naming Convention:**
+
+Wrappers use a consistent prefix naming pattern:
+- `presumptive <fn>` - honors TYPICALLY defaults (default behavior)
+- `strict <fn>` - ignores defaults, treats all missing inputs as Unknown
+
+This naming reflects legal terminology where "presumptive" means "based on assumed facts unless proven otherwise".
+
+**Honor-defaults wrapper** (generated):
+
+```l4
+GIVEN
+  age IS A Maybe NUMBER
+  married IS A Maybe BOOLEAN
+GIVETH A Maybe BOOLEAN
+DECIDE `presumptive can marry` IS
+  CONSIDER (age, married)
+    WHEN (Just a, Just m)  -> Just (`can marry` a m)
+    WHEN (Just a, Nothing) -> Just (`can marry` a FALSE)  -- TYPICALLY FALSE
+    WHEN (Nothing, _)      -> Nothing                     -- Required input missing
+```
+
+**Ignore-defaults wrapper** (strict mode):
+
+```l4
+GIVEN
+  age IS A Maybe NUMBER
+  married IS A Maybe BOOLEAN
+GIVETH A Maybe BOOLEAN  
+DECIDE `strict can marry` IS
+  CONSIDER (age, married)
+    WHEN (Just a, Just m)  -> Just (`can marry` a m)
+    WHEN _                 -> Nothing  -- Any missing input = Unknown
+```
+
+**Key Benefits:**
+
+1. **Core evaluator unchanged** - No threading of strict mode through evaluation
+2. **Defaults are explicit** - The wrapper makes default substitution visible in generated code
+3. **Composable** - Different wrappers for different behaviors
+4. **Auditable** - Easy to see which defaults were applied by examining wrapper logic
+5. **Works everywhere** - Same pattern for Decision Service, LSP, and userland code
+
+**Implementation Notes:**
+
+- The compiler can generate these wrappers automatically for exported functions
+- The Decision Service uses wrapper generation (already does similar code generation)
+- The LSP can invoke the appropriate wrapper based on user preference
+- Users can write their own wrappers for custom default behavior
+
+---
+
+### Phase 7: Four-State Input Model
+
+**Goal:** Extend the input model to distinguish all four states from the spec.
+
+The `Maybe a` type only gives us two states. For the full four-state model:
+
+```haskell
+-- | Runtime state for a single input parameter
+data InputState a
+  = Explicit a          -- User provided a concrete value
+  | ExplicitUnknown     -- User explicitly said "I don't know"  
+  | NotProvided         -- No input yet (may use TYPICALLY default)
+  | NotApplicable       -- Question doesn't apply in this context
+  deriving (Eq, Show, Functor)
+```
+
+**Wrapper with four states:**
+
+```l4
+GIVEN
+  age IS A InputState NUMBER
+  married IS A InputState BOOLEAN
+GIVETH A BOOLEAN
+DECIDE `can marry with full state` IS
+  CONSIDER (age, married)
+    WHEN (Explicit a, Explicit m)     -> `can marry` a m
+    WHEN (Explicit a, NotProvided)    -> `can marry` a FALSE  -- Use TYPICALLY
+    WHEN (Explicit a, ExplicitUnknown)-> UNKNOWN              -- User said "I don't know"
+    WHEN (NotProvided, _)             -> UNKNOWN              -- Required input missing
+    WHEN (NotApplicable, _)           -> ...                  -- Handle as appropriate
+```
+
+**Key distinction:**
+- `NotProvided` + has TYPICALLY → use the default
+- `ExplicitUnknown` → stay Unknown even if TYPICALLY exists (user explicitly doesn't know)
+
+---
+
+### Phase 8: Decision Service API Integration
+
+**Goal:** The Decision Service uses the wrapper pattern with `defaultMode` parameter.
+
+**API Request:**
+
+```json
+{
+  "function": "can marry",
+  "defaultMode": "honor-defaults",  // REQUIRED: "honor-defaults" or "ignore-defaults"
+  "fnArguments": {
+    "age": 20
+    // "married" omitted = NotProvided
+  },
+  "explicitUnknowns": []  // Optional: parameters user said "I don't know" for
+}
+```
+
+**API Behavior:**
+
+| defaultMode | Input State | Behavior |
+|-------------|-------------|----------|
+| honor-defaults | `NotProvided` + has TYPICALLY | Use TYPICALLY default |
+| honor-defaults | `NotProvided` + no TYPICALLY | Treat as Unknown |
+| honor-defaults | `ExplicitUnknown` | Treat as Unknown (don't use default) |
+| ignore-defaults | `NotProvided` | Treat as Unknown (never use defaults) |
+| ignore-defaults | `ExplicitUnknown` | Treat as Unknown |
+
+**Implementation:**
+
+The Decision Service:
+1. Extracts TYPICALLY defaults using `extractTypicallyDefaults`
+2. Based on `defaultMode`, generates or selects the appropriate wrapper
+3. Translates API inputs to `InputState` values
+4. Calls the wrapper with `InputState` arguments
+5. Returns result with audit trail of which defaults were used
+
+**Response:**
+
+```json
+{
+  "result": true,
+  "inputResolution": {
+    "age": { "value": 20, "source": "explicit" },
+    "married": { "value": false, "source": "typically-default" }
+  },
+  "usedDefaults": { "married": false }
+}
+```
+
+---
+
+## Deprecated Approaches
+
+The following approaches were considered but **deprecated** in favor of the wrapper-based approach:
+
+### ❌ Evaluator-Level Strict Mode (Deprecated)
+
+Threading `strictMode :: Bool` through the evaluator and having `#EVAL` vs `#EVALSTRICT` produce different runtime behavior was rejected because:
+
+1. Adds complexity to the core evaluator
+2. Makes default behavior implicit/hidden
+3. Harder to audit which defaults were applied
+4. Requires changes throughout the evaluation pipeline
+
+### ❌ TYPICALLY on ASSUME (Deprecated)
+
+Originally, TYPICALLY could appear on ASSUME declarations. This was removed because:
+
+1. ASSUME is being deprecated
+2. Confusing semantics (ASSUME suggests a value, TYPICALLY suggests a default)
+3. TYPICALLY on GIVEN parameters in DECIDE is clearer
+
+---
+
 ## Note on ASSUME Keyword Deprecation
 
 **Background:** The `ASSUME` keyword was originally introduced as a placeholder for explicit type declarations—essentially a visible delta between type inference and type checking. When the type checker inferred types for otherwise undefined expressions, the LSP would offer an automatic `ASSUME` reification.

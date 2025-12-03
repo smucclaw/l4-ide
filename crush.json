@@ -3,6 +3,12 @@
   "lsp": {
     "l4": {
       "command": "jl4-lsp"
+    },
+    "haskell": {
+      "command": "haskell-language-server-wrapper",
+      "args": [
+        "--lsp"
+      ]
     }
   },
   "permissions": {

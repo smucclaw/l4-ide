@@ -220,6 +220,10 @@ runConfig = \ case
 
 -- | Evaluate an EVAL directive. For this, we evaluate to normal form,
 -- not just WHNF.
+-- Note: The 'strict' field indicates whether TYPICALLY defaults should be ignored.
+-- When strict=True, missing inputs without explicit values should resolve to Unknown.
+-- This is currently tracked but the actual behavior change requires integration
+-- with how the environment is built (see TYPICALLY-DEFAULTS-SPEC.md).
 nfDirective :: EvalDirective -> Eval EvalDirectiveResult
 nfDirective (MkEvalDirective r traced isAssert expr env) = do
   (v, mt) <-

@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule) where
+module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule, extractParamTypesWithDefaults) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -7,7 +7,6 @@ import qualified Base.Map as Map
 import qualified Base.Text as Text
 
 import L4.Annotation
--- import qualified L4.Evaluate.Value as Eval
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Trace
@@ -217,6 +216,19 @@ extractParamTypes (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) _ _) =
       -- Try to get type from resolved info
       case getAnno (getName resolved) ^. #extra % #resolvedInfo of
         Just (TypeInfo ty _) -> Just (rawNameToText (rawName $ getActual resolved), ty)
+        _ -> Nothing
+
+-- | Extract parameter names, types, and TYPICALLY defaults from a DECIDE's GIVEN clause
+-- Returns (name, type, maybe default expression as L4 text)
+extractParamTypesWithDefaults :: Decide Resolved -> [(Text, Type' Resolved, Maybe Text)]
+extractParamTypesWithDefaults (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) _ _) =
+  mapMaybe extractTypedNameWithDefault typedNames
+  where
+    extractTypedNameWithDefault (MkOptionallyTypedName _ resolved (Just ty) mDefault) =
+      Just (rawNameToText (rawName $ getActual resolved), ty, prettyLayout <$> mDefault)
+    extractTypedNameWithDefault (MkOptionallyTypedName _ resolved Nothing mDefault) =
+      case getAnno (getName resolved) ^. #extra % #resolvedInfo of
+        Just (TypeInfo ty _) -> Just (rawNameToText (rawName $ getActual resolved), ty, prettyLayout <$> mDefault)
         _ -> Nothing
 
 -- | Convert FnLiteral parameters to Aeson.Value
