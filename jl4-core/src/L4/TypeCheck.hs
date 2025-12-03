@@ -3232,10 +3232,11 @@ generatePresumptiveWrappers decls = do
         , hasTypicallyDefaults decide
         ]
 
-  -- TODO: Generate wrapper DECIDEs for each decide in decidesWithDefaults
-  -- For now, return empty list
-  let _ = decidesWithDefaults  -- Suppress unused warning
-  pure []
+  -- Generate wrapper for each DECIDE with defaults
+  wrappers <- mapM (uncurry generateWrapper) decidesWithDefaults
+
+  -- TODO: Pass 2: Rewrite function calls in wrappers to call presumptive versions
+  pure wrappers
 
 -- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause
 hasTypicallyDefaults :: Decide Resolved -> Bool
@@ -3248,3 +3249,164 @@ extractTypicallyDefaultsFromGiven (MkGivenSig _ otns) =
   [ (n, expr)
   | MkOptionallyTypedName _ n _ (Just expr) <- otns
   ]
+
+-- | Generate a presumptive wrapper for a single DECIDE with TYPICALLY defaults
+generateWrapper :: Anno -> Decide Resolved -> Check (TopDecl Resolved)
+generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appForm bodyExpr) = do
+  let MkAppForm _ funcName _ _ = appForm
+
+  -- Create the wrapper function name: 'presumptive <original-name>'
+  let wrapperName = makePresumptiveName funcName
+
+  -- Convert GIVEN parameters to MAYBE-wrapped versions
+  let MkGivenSig gsAnn otns = givenSig
+  maybeOtns <- mapM wrapParameterWithMaybe otns
+  let maybeGivenSig = MkGivenSig gsAnn maybeOtns
+
+  -- Wrap return type with MAYBE (if it exists)
+  maybeReturnType <- case mReturnType of
+    Nothing -> pure Nothing
+    Just (MkGivethSig gsAnn' ty) -> do
+      wrappedType <- wrapTypeWithMaybe ty
+      pure $ Just (MkGivethSig gsAnn' wrappedType)
+
+  let maybeTypeSig = MkTypeSig (getAnno typeSig) maybeGivenSig maybeReturnType
+
+  -- Generate CONSIDER expression for each parameter
+  -- This will unwrap MAYBE values and apply TYPICALLY defaults
+  considerExpr <- generateConsiderChain funcName otns bodyExpr
+
+  -- Create wrapper DECIDE
+  let wrapperAppForm = MkAppForm (getAnno appForm) wrapperName [] Nothing
+  let wrapperDecide = MkDecide ann maybeTypeSig wrapperAppForm considerExpr
+
+  pure $ Decide ann wrapperDecide
+
+-- | Create a presumptive wrapper name: 'presumptive <name>'
+makePresumptiveName :: Resolved -> Resolved
+makePresumptiveName resolved =
+  let origName = getOriginal resolved
+      origRawName = rawName (getName origName)
+      newText = "'presumptive " <> rawNameToText origRawName <> "'"
+      newRawName = NormalName newText
+      newName = MkName (getAnno origName) newRawName
+  in case resolved of
+    Def u _ -> Def u newName
+    Ref _ u _ -> Ref newName u newName
+    OutOfScope u _ -> OutOfScope u newName
+
+-- | Wrap a parameter's type with MAYBE
+wrapParameterWithMaybe :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved)
+wrapParameterWithMaybe (MkOptionallyTypedName ann name mType _typically) = do
+  -- Remove TYPICALLY default (wrappers handle this explicitly)
+  case mType of
+    Nothing -> pure $ MkOptionallyTypedName ann name Nothing Nothing
+    Just ty -> do
+      wrappedType <- wrapTypeWithMaybe ty
+      pure $ MkOptionallyTypedName ann name (Just wrappedType) Nothing
+
+-- | Wrap a type with MAYBE
+wrapTypeWithMaybe :: Type' Resolved -> Check (Type' Resolved)
+wrapTypeWithMaybe ty = do
+  let ann = getAnno ty
+  let maybeTypeRef = Ref maybeName maybeUnique maybeName
+  pure $ TyApp ann maybeTypeRef [ty]
+
+-- | Generate nested CONSIDER expressions to unwrap parameters and apply defaults
+-- For each parameter:
+--   CONSIDER param
+--     WHEN NOTHING  -> (if has TYPICALLY: use default, else: return NOTHING)
+--     WHEN (JUST x) -> (continue with unwrapped x)
+generateConsiderChain :: Resolved -> [OptionallyTypedName Resolved] -> Expr Resolved -> Check (Expr Resolved)
+generateConsiderChain funcName otns bodyExpr = do
+  let ann = getAnno bodyExpr
+
+  -- Get JUST and NOTHING constructors
+  let justCtor = Ref justName justUnique justName
+  let nothingCtor = Ref nothingName nothingUnique nothingName
+
+  -- Build the innermost expression: JUST (funcName arg1 arg2 ...)
+  -- where argN are the unwrapped parameter variables
+  let paramVars = [n | MkOptionallyTypedName _ n _ _ <- otns]
+  let funcCall = case paramVars of
+        [] -> Var ann funcName
+        _  -> App ann funcName (map (Var ann) paramVars)
+  let innermostExpr = App ann justCtor [funcCall]
+
+  -- Build CONSIDER chain from innermost outward
+  -- Process parameters in reverse order so we build from inside out
+  considerExpr <- foldM (buildConsiderForParam ann justCtor nothingCtor) innermostExpr (reverse otns)
+
+  pure considerExpr
+
+-- | Build a CONSIDER expression for a single parameter
+buildConsiderForParam :: Anno -> Resolved -> Resolved -> Expr Resolved
+                      -> OptionallyTypedName Resolved -> Check (Expr Resolved)
+buildConsiderForParam ann justCtor nothingCtor innerExpr (MkOptionallyTypedName paramAnn paramName _mType mDefault) = do
+  -- Create a fresh variable name for the JUST pattern (unwrapped value)
+  let unwrappedName = makeUnwrappedVarName paramName
+
+  -- Build the NOTHING branch
+  nothingBranch <- case mDefault of
+    Just defaultExpr -> do
+      -- Has TYPICALLY default: use it
+      -- WHEN NOTHING -> (continue with default value substituted)
+      -- We need to substitute the default into innerExpr where paramName appears
+      let substitutedExpr = substituteVar paramName defaultExpr innerExpr
+      pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) substitutedExpr
+    Nothing -> do
+      -- No TYPICALLY default: return NOTHING (Unknown)
+      pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) (Var ann nothingCtor)
+
+  -- Build the JUST branch
+  -- WHEN (JUST x) -> innerExpr (with paramName bound to x)
+  let justPattern = PatApp ann justCtor [PatVar ann unwrappedName]
+  let substitutedInner = substituteVar paramName (Var ann unwrappedName) innerExpr
+  let justBranch = MkBranch ann (When ann justPattern) substitutedInner
+
+  -- Build CONSIDER expression
+  let scrutinee = Var ann paramName
+  pure $ Consider paramAnn scrutinee [nothingBranch, justBranch]
+
+-- | Create an unwrapped variable name from a Resolved name
+-- For a parameter 'age', create 'age_unwrapped' or similar
+makeUnwrappedVarName :: Resolved -> Resolved
+makeUnwrappedVarName resolved =
+  let origName = getOriginal resolved
+      origRawName = rawName (getName origName)
+      newText = rawNameToText origRawName <> "_unwrapped"
+      newRawName = NormalName newText
+      newName = MkName (getAnno origName) newRawName
+      -- Create a new Def with a fresh unique
+      -- For now, reuse the original unique with a marker
+      origUnique = getUnique resolved
+  in Def origUnique newName
+
+-- | Substitute a variable with an expression throughout an expression tree
+-- This is a simple substitution that doesn't handle capture-avoiding properly
+-- For our use case (fresh variable names), this should be sufficient
+substituteVar :: Resolved -> Expr Resolved -> Expr Resolved -> Expr Resolved
+substituteVar target replacement = go
+  where
+    go expr = case expr of
+      Var _ v | v == target -> replacement
+      Var ann v -> Var ann v
+      App ann f args -> App ann f (map go args)
+      Lam ann givens body -> Lam ann givens (go body)  -- TODO: check shadowing
+      And ann e1 e2 -> And ann (go e1) (go e2)
+      Or ann e1 e2 -> Or ann (go e1) (go e2)
+      Implies ann e1 e2 -> Implies ann (go e1) (go e2)
+      Plus ann e1 e2 -> Plus ann (go e1) (go e2)
+      Minus ann e1 e2 -> Minus ann (go e1) (go e2)
+      Times ann e1 e2 -> Times ann (go e1) (go e2)
+      DividedBy ann e1 e2 -> DividedBy ann (go e1) (go e2)
+      Equals ann e1 e2 -> Equals ann (go e1) (go e2)
+      Leq ann e1 e2 -> Leq ann (go e1) (go e2)
+      Geq ann e1 e2 -> Geq ann (go e1) (go e2)
+      Lt ann e1 e2 -> Lt ann (go e1) (go e2)
+      Gt ann e1 e2 -> Gt ann (go e1) (go e2)
+      IfThenElse ann cond then' else' -> IfThenElse ann (go cond) (go then') (go else')
+      Consider ann scrut branches -> Consider ann (go scrut) (map goBranch branches)
+      other -> other  -- For literals, etc.
+
+    goBranch (MkBranch ann lhs rhs) = MkBranch ann lhs (go rhs)

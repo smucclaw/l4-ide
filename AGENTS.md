@@ -97,6 +97,8 @@ To run the CLI tool:
 cabal run jl4-cli -- <file.l4>
 ```
 
+Note that the `eval` sub-command is NOT part of this syntax.
+
 To install the LSP tool:
 
 ```bash
