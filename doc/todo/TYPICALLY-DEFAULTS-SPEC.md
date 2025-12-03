@@ -93,6 +93,8 @@ ASSUME `transaction is at arms length` IS A BOOLEAN TYPICALLY TRUE
 ASSUME `applicable law` IS A STRING TYPICALLY "Singapore"
 ```
 
+**Note:** TYPICALLY on ASSUME is supported but discouraged. The ASSUME keyword itself is slated for deprecation (see `RUNTIME-INPUT-STATE-SPEC.md`), and if someone goes to the trouble of specifying a default value, they should use DECLARE or GIVEN instead—constructs that properly belong in well-styled L4 programs.
+
 ### Grammar Extension
 
 ```ebnf
@@ -472,6 +474,39 @@ Teams can add TYPICALLY to their codebase incrementally:
 2. Add TYPICALLY to ASSUME declarations for external facts
 3. Add TYPICALLY to GIVEN for function parameters
 4. Add TYPICALLY to DECLARE for record types
+
+## Future Work
+
+### Arbitrary Expressions as Defaults
+
+The current implementation restricts TYPICALLY values to **literals only** (TRUE, FALSE, numbers, strings). In a future iteration, we want to lift this restriction and allow **arbitrary value expressions** that may require function evaluation:
+
+```l4
+-- Future: computed defaults
+DECLARE Person HAS
+  birth_year IS A NUMBER
+  age IS A NUMBER TYPICALLY (currentYear - birth_year)
+
+-- Future: function call as default
+GIVEN
+  tax_rate IS A NUMBER TYPICALLY (lookupTaxRate jurisdiction)
+
+-- Future: conditional defaults
+DECLARE Contract HAS
+  governing_law IS A STRING TYPICALLY
+    IF jurisdiction == "US" THEN "Delaware"
+    ELSE "Singapore"
+```
+
+**Implications:**
+
+1. **Evaluation Required:** Non-literal defaults must be evaluated at runtime, not just stored as metadata
+2. **Dependency Ordering:** Default expressions may reference other fields/parameters, requiring careful evaluation order
+3. **Circular Dependencies:** Must detect and reject circular default dependencies
+4. **Performance:** Complex defaults may have runtime cost; consider caching or lazy evaluation
+5. **Error Handling:** Default evaluation can fail (e.g., `lookupTaxRate` throws); need error semantics
+
+This is deferred to a future iteration to keep the initial implementation simple and well-tested.
 
 ## Related Work
 

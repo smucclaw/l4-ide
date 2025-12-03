@@ -1,0 +1,35 @@
+-- Test file for TYPICALLY keyword basic functionality
+
+-- TYPICALLY with BOOLEAN in DECLARE fields
+DECLARE Person HAS
+  name IS A STRING
+  has_capacity IS A BOOLEAN TYPICALLY TRUE
+  is_under_duress IS A BOOLEAN TYPICALLY FALSE
+
+-- TYPICALLY with NUMBER in DECLARE fields
+DECLARE Config HAS
+  timeout IS A NUMBER TYPICALLY 30
+  max_retries IS A NUMBER TYPICALLY 3
+
+-- TYPICALLY with STRING in DECLARE fields
+DECLARE Contract HAS
+  governing_law IS A STRING TYPICALLY "Singapore"
+
+-- TYPICALLY in GIVEN parameters
+GIVEN
+  married IS A BOOLEAN TYPICALLY FALSE
+  age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+-- TYPICALLY in ASSUME (though discouraged)
+ASSUME `default jurisdiction` IS A STRING TYPICALLY "Singapore"
+
+-- Multiple TYPICALLY values in one GIVEN
+GIVEN
+  has_spousal_approval IS A BOOLEAN TYPICALLY FALSE
+  beer_only IS A BOOLEAN TYPICALLY FALSE
+  has_parental_approval IS A BOOLEAN TYPICALLY FALSE
+  is_emancipated IS A BOOLEAN TYPICALLY FALSE
+GIVETH A BOOLEAN
+DECIDE `may purchase alcohol` IF TRUE

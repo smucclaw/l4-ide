@@ -377,7 +377,8 @@ jl4Rules rootDirectory recorder = do
         initCheckState = set #substitution Map.empty $ foldl' unionCheckStates TypeCheck.initialCheckState dependencies
         initCheckEnv = foldl' unionCheckEnv (TypeCheck.initialCheckEnv uri) dependencies
         result = TypeCheck.doCheckProgramWithDependencies initCheckState initCheckEnv parsedAndAnnotated
-        (infos, errors) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
+        (infos, errorsAndWarnings) = partition ((== TypeCheck.SInfo) . TypeCheck.severity) result.errors
+        errors = filter ((== TypeCheck.SError) . TypeCheck.severity) errorsAndWarnings
     pure
       ( fmap (checkErrorToDiagnostic >>= mkFileDiagnosticWithSource uri) result.errors
       , Just TypeCheckResult

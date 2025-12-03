@@ -262,7 +262,7 @@ translateDecide (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funResolved _ 
         -- TODO: I imagine there will be functionality for this kind of thing in a more central place soon;
         -- this can be replaced with that when that happens.
         getResolved :: OptionallyTypedName Resolved -> Resolved
-        getResolved (MkOptionallyTypedName _ paramName _) = paramName
+        getResolved (MkOptionallyTypedName _ paramName _ _) = paramName
 
 translateExpr :: Bool -> Expr Resolved -> Viz IRExpr
 translateExpr True  =

@@ -100,12 +100,14 @@ data Type' n =
 type Kind = Int
 
 data TypedName n =
-  MkTypedName Anno n (Type' n)
+  MkTypedName Anno n (Type' n) (Maybe (Expr n))
+  -- ^ The optional (Maybe (Expr n)) is for TYPICALLY default values
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data OptionallyTypedName n =
-  MkOptionallyTypedName Anno n (Maybe (Type' n))
+  MkOptionallyTypedName Anno n (Maybe (Type' n)) (Maybe (Expr n))
+  -- ^ The optional (Maybe (Expr n)) is for TYPICALLY default values
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
@@ -150,7 +152,8 @@ data Declare n =
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 
 data Assume n =
-  MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n))
+  MkAssume Anno (TypeSig n) (AppForm n) (Maybe (Type' n)) (Maybe (Expr n))
+  -- ^ The optional (Maybe (Expr n)) is for TYPICALLY default values
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

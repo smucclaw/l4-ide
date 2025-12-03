@@ -343,13 +343,15 @@ inferDeclare (MkDeclare ann _tysig appForm _t) =
 -- which would currently not match the first case.
 --
 inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
-inferAssume (MkAssume ann _tysig appForm (Just (Type _tann))) = do
+inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) _typically) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
+    addWarning $ AssumeDeprecated (getName appForm)
     lookupAssumeCheckedByAnno ann >>= \ d -> pure (d.payload, d.publicNames)
-inferAssume (MkAssume ann _tysig appForm mt) = do
+inferAssume (MkAssume ann _tysig appForm mt _typically) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
+    addWarning $ AssumeDeprecated (getName appForm)
     lookupFunTypeSigByAnno ann >>= \ dHead -> do
         -- check that the given result type matches the result type in the type signature
         extendKnownMany dHead.arguments do
@@ -366,6 +368,7 @@ inferAssume (MkAssume ann _tysig appForm mt) = do
               <$> traverse resolvedType dHead.rtysig
               <*> traverse resolvedType dHead.rappForm
               <*> pure rmt
+              <*> pure Nothing
               >>= nlgAssume
           pure (assume, [dHead.name])
 
@@ -498,7 +501,7 @@ checkTermAppFormTypeSigConsistency :: AppForm Name -> TypeSig Name -> Check (App
 checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann (MkGivenSig gann []) mgiveth) =
   checkTermAppFormTypeSigConsistency'
     appForm
-    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing) <$> ns)) mgiveth)
+    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n Nothing Nothing) <$> ns)) mgiveth)
 checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTermAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
@@ -568,7 +571,7 @@ isMixfixPatternHeadIsKeyword (MkAppForm _ headName args _) (MkTypeSig _ (MkGiven
     headIsKeyword && hasParams && hasKeywords
 
 isTerm :: OptionallyTypedName Name -> Bool
-isTerm (MkOptionallyTypedName _ _ (Just (Type _))) = False
+isTerm (MkOptionallyTypedName _ _ (Just (Type _)) _) = False
 isTerm _                                           = True
 
 -- | Handles the third case described in 'checkTermAppFormTypeSigConsistency'.
@@ -600,7 +603,7 @@ checkTypeAppFormTypeSigConsistency :: AppForm Name -> TypeSig Name -> Check (App
 checkTypeAppFormTypeSigConsistency appForm@(MkAppForm _ _ ns _) (MkTypeSig tann (MkGivenSig gann []) mgiveth) =
   checkTypeAppFormTypeSigConsistency'
     appForm
-    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno))) <$> ns)) mgiveth)
+    (MkTypeSig tann (MkGivenSig gann ((\ n -> MkOptionallyTypedName emptyAnno n (Just (Type emptyAnno)) Nothing) <$> ns)) mgiveth)
 checkTypeAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _) =
   checkTypeAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> otns) maka)
@@ -641,11 +644,11 @@ inferTypeGiveth (MkGivethSig ann t) =
 --
 ensureNameConsistency :: [Name] -> [OptionallyTypedName Name] -> Check ([Resolved], [OptionallyTypedName Resolved], [CheckInfo])
 ensureNameConsistency [] [] = pure ([], [], [])
-ensureNameConsistency ns (MkOptionallyTypedName ann n (Just (Type tann)) : otns) = do
+ensureNameConsistency ns (MkOptionallyTypedName ann n (Just (Type tann)) _ : otns) = do
   rn <- def n
   extendKnown (makeKnown rn KnownTypeVariable) do
     (rns, rotns, extends) <- ensureNameConsistency ns otns
-    pure (rns, MkOptionallyTypedName ann rn (Just (Type tann)) : rotns, makeKnown rn KnownTypeVariable : extends)
+    pure (rns, MkOptionallyTypedName ann rn (Just (Type tann)) Nothing : rotns, makeKnown rn KnownTypeVariable : extends)
 ensureNameConsistency (n : ns) (otn : otns)
   | rawName n == rawName (getName otn) = do
       rn <- def n
@@ -664,12 +667,12 @@ ensureNameConsistency (n : ns) [] = do
   rn <- def n
   (rns, _, extends) <- ensureNameConsistency ns []
   pure (rn : rns, [], extends)
-ensureNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
+ensureNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
   addError (InconsistentNameInSignature n Nothing)
   rn <- def n
   rmt <- traverse inferType mt
   (_, rotns, extends) <- ensureNameConsistency [] otns
-  pure ([], MkOptionallyTypedName ann rn rmt : rotns, extends)
+  pure ([], MkOptionallyTypedName ann rn rmt Nothing : rotns, extends)
 
 -- | Checks that the names are consistent, and resolve the 'OptionallyTypedName's.
 --
@@ -678,18 +681,18 @@ ensureNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
 --
 ensureTypeNameConsistency :: [Name] -> [OptionallyTypedName Name] -> Check ([Resolved], [OptionallyTypedName Resolved], [CheckInfo])
 ensureTypeNameConsistency [] [] = pure ([], [], [])
-ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' (Just (Type tann)) : otns)
+ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' (Just (Type tann)) _ : otns)
   | rawName n == rawName n' = do
   rn <- def n
   rn' <- ref n' rn
   (rns, rotns, extends) <- ensureTypeNameConsistency ns otns
-  pure (rn : rns, MkOptionallyTypedName ann rn' (Just (Type tann)) : rotns, extends)
-ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' Nothing : otns)
+  pure (rn : rns, MkOptionallyTypedName ann rn' (Just (Type tann)) Nothing : rotns, extends)
+ensureTypeNameConsistency (n : ns) (MkOptionallyTypedName ann n' Nothing _ : otns)
   | rawName n == rawName n' = do
   rn <- def n
   rn' <- ref n' rn
   (rns, rotns, extends) <- ensureTypeNameConsistency ns otns
-  pure (rn : rns, MkOptionallyTypedName ann rn' Nothing : rotns, extends)
+  pure (rn : rns, MkOptionallyTypedName ann rn' Nothing Nothing : rotns, extends)
 ensureTypeNameConsistency (n : ns) (otn : otns) = do
   addError (InconsistentNameInAppForm n (Just (getName otn)))
   addError (InconsistentNameInSignature (getName otn) (Just n))
@@ -702,18 +705,18 @@ ensureTypeNameConsistency (n : ns) [] = do
   rn <- def n
   (rns, _, extends) <- ensureNameConsistency ns []
   pure (rn : rns, [], extends)
-ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt : otns) = do
+ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
   addError (InconsistentNameInSignature n Nothing)
   rn <- def n
   rmt <- traverse inferType mt
   (_, rotns, extends) <- ensureNameConsistency [] otns
-  pure ([], MkOptionallyTypedName ann rn rmt : rotns, extends)
+  pure ([], MkOptionallyTypedName ann rn rmt Nothing : rotns, extends)
 
 mkref :: Resolved -> OptionallyTypedName Name -> Check (OptionallyTypedName Resolved)
-mkref r (MkOptionallyTypedName ann n mt) = do
+mkref r (MkOptionallyTypedName ann n mt _) = do
   rn <- ref n r
   rmt <- traverse inferType mt
-  pure (MkOptionallyTypedName ann rn rmt)
+  pure (MkOptionallyTypedName ann rn rmt Nothing)
 
 appFormType :: AppForm Resolved -> Type' Resolved
 appFormType (MkAppForm _ann n args _maka) = app n (tyvar <$> args)
@@ -796,14 +799,14 @@ inferConDecl rappForm (MkConDecl ann n tns) = do
   pure (condecl, makeKnown dn conInfo : concat extends)
 
 typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
-typedNameOptionallyNamedType (MkTypedName _ n t) = MkOptionallyNamedType emptyAnno (Just n) t
+typedNameOptionallyNamedType (MkTypedName _ n t _) = MkOptionallyNamedType emptyAnno (Just n) t
 
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
-inferSelector rappForm (MkTypedName ann n t) = do
+inferSelector rappForm (MkTypedName ann n t _) = do
   rt <- inferType t
   dn <- def n
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
-  pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
+  pure (MkTypedName ann dn rt Nothing, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)
@@ -909,14 +912,14 @@ inferLamGivens (MkGivenSig ann otns) = do
     -- TODO: there is unfortunate overlap between this and optionallyTypedNameType,
     -- but perhaps it's ok ...
     inferOptionallyTypedName :: OptionallyTypedName Name -> Check (OptionallyTypedName Resolved, Type' Resolved, [CheckInfo])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing) = do
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing _) = do
       rn <- def n
       v <- fresh (rawName n)
-      pure (MkOptionallyTypedName ann' rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t)) = do
+      pure (MkOptionallyTypedName ann' rn (Just v) Nothing, v, [makeKnown rn (KnownTerm v Local)])
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t) _) = do
       rn <- def n
       rt <- inferType t
-      pure (MkOptionallyTypedName ann' rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
+      pure (MkOptionallyTypedName ann' rn (Just rt) Nothing, rt, [makeKnown rn (KnownTerm rt Local)])
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -947,8 +950,8 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
       [makeKnown n (KnownTerm t Local)]
 
 isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
-isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
-isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
+isQuantifier (MkOptionallyTypedName _ n (Just (Type _)) _) = Left n
+isQuantifier (MkOptionallyTypedName _ n mt             _) = Right (n, mt)
 
 maybeGivethType :: Maybe (GivethSig Resolved) -> Check (Type' Resolved)
 maybeGivethType Nothing                  = fresh (NormalName "r") -- we have no obvious prefix?
@@ -1892,18 +1895,18 @@ inferTyDeclDeclare (MkDeclare ann _tysig appForm t) = prune $
             }
 
 inferTyDeclAssume :: Assume Name -> Check (Maybe (DeclChecked (Assume Resolved)))
-inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann))) =
+inferTyDeclAssume (MkAssume ann _tysig appForm (Just (Type tann)) _) =
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
     lookupDeclTypeSigByAnno ann >>= \ declHead -> do
         assume <- extendKnownMany (declHead.name:declHead.tyVars) do
-          traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)))
+          traverse resolvedType (MkAssume ann declHead.rtysig declHead.rappForm (Just (Type tann)) Nothing)
             >>= nlgAssume
         pure $ Just $ MkDeclChecked
           { payload = assume
           , publicNames = [declHead.name]
           }
-inferTyDeclAssume (MkAssume _   _      _        _) = pure Nothing
+inferTyDeclAssume (MkAssume _   _      _        _ _) = pure Nothing
 
 scanTyDeclModule :: Module Name -> Check [DeclTypeSig]
 scanTyDeclModule (MkModule _ _ sects) =
@@ -1948,7 +1951,7 @@ scanTyDeclDeclare (MkDeclare ann tysig appForm decl) = prune $
       _ -> Nothing
 
 scanTyDeclAssume :: Assume Name -> Check (Maybe DeclTypeSig)
-scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
+scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann)) _) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
     (rappForm, rtysig) <- checkTypeAppFormTypeSigConsistency appForm tysig
@@ -2049,7 +2052,7 @@ givenParamNames (MkTypeSig _ givenSig _) =
     MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
   where
     optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
-    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
+    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _ _) = rawName n
 
 -- ----------------------------------------------------------------------------
 -- Call-site Mixfix Pattern Matching
@@ -2516,8 +2519,8 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
-scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann))) = pure Nothing
-scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
+scanFunSigAssume (MkAssume _ _     _       (Just (Type _tann)) _) = pure Nothing
+scanFunSigAssume a@(MkAssume _ tysig appForm mt _) = do
   -- declaration of a term
   let tysig' = mergeResultTypeInto tysig mt
   errorContext (WhileCheckingAssume (getName appForm)) do
@@ -2903,6 +2906,15 @@ prettyCheckWarning = \ case
     <>
     map (("  " <>) . prettyLayout) b
     <> [ "" ]
+  AssumeDeprecated name ->
+    [ "ASSUME is deprecated and will be removed in a future version."
+    , ""
+    , "The declaration of " <> quotedName name <> " uses ASSUME."
+    , ""
+    , "Consider using one of these alternatives:"
+    , "  - GIVEN: for function parameters"
+    , "  - DECLARE: for type declarations"
+    ]
 
 
 -- | Forms a plural when needed.

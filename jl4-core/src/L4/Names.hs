@@ -18,7 +18,7 @@ instance HasName a => HasName (ConDecl a) where
   getName (MkConDecl _ n _) = getName n
 
 instance HasName a => HasName (TypedName a) where
-  getName (MkTypedName _ann n _t) = getName n
+  getName (MkTypedName _ann n _t _typically) = getName n
 
 instance HasName a => HasName (OptionallyTypedName a) where
-  getName (MkOptionallyTypedName _ann n _mt) = getName n
+  getName (MkOptionallyTypedName _ann n _mt _typically) = getName n

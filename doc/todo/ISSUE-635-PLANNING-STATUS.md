@@ -14,9 +14,9 @@ This document tracks both specification writing and implementation progress for 
 | 3    | Enhanced YAML Support (nested objects) | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ✅ **Done** (commit fc320987) | Included in JSONDECODE implementation           |
 | 4    | Boolean Minimization                   | ✅ Complete   | `BOOLEAN-MINIMIZATION-SPEC.md`        | ⏳ Todo                       | Larger feature - see Issue #638                 |
 | 5    | Dynamic File Management                | 📋 Needs spec | -                                     | 🔄 Partially done             | PR #649 addressed push; may need file watching  |
-| 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ⏳ Todo                       | Foundation for Item 7                           |
-| 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
-| 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
+| 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ✅ **Done**                   | Lexer, parser, Export.hs, decision service      |
+| 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ✅ **Done** (commit 4e1c7cd1) | IMPORT support for decision service             |
+| 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ✅ **Done** (commit 43c1ee11) | 325x speedup achieved                           |
 | 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
 | 10   | TYPICALLY Defaults                     | ✅ Complete   | `TYPICALLY-DEFAULTS-SPEC.md`          | ⏳ Todo                       | Rebuttable presumptions, enhances Item 4        |
 | 11   | Runtime Input State                    | ✅ Complete   | `RUNTIME-INPUT-STATE-SPEC.md`         | ⏳ Todo                       | Four-state model for interactive apps           |

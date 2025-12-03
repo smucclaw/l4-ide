@@ -719,8 +719,8 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
      in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo))) argList, required = argList}
  where
   bestEffortArgInfo = foldr fn [] args
-  fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
-    Just tn@(MkOptionallyTypedName _ r' mt)
+  fn r acc = case find (\(MkOptionallyTypedName _ r' _ _) -> r `sameResolved` r') typedNames of
+    Just tn@(MkOptionallyTypedName _ r' mt _)
       | Just t <- mt
       , let descTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TDesc) tn
             exportTokens = Optics.toListOf (Optics.gplate @TAnnotations Optics.% #_TExport) tn

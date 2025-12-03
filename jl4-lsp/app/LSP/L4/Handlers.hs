@@ -423,6 +423,7 @@ outOfScopeAssumeQuickFix ide fd = case fd ^. messageOfL @CheckErrorWithContext o
                   (MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing)
                   (MkAppForm emptyAnno name [] Nothing)
                   (Just $ fmap getActual ty)
+                  Nothing
                 )
 
             topDecls = foldTopDecls (: []) typeCheck.module'

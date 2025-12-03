@@ -505,6 +505,7 @@ assume sig = do
       <*  annoLexeme (spacedKeyword_ TKAssume)
       <*> annoHole appForm
       <*> optional (annoLexeme (spacedKeyword_ TKIs) *> {- optional article *> -} annoHole (indented type' current))
+      <*> annoHole (optional typicallyClause)
 
 declare :: TypeSig Name -> Parser (Declare Name)
 declare sig =
@@ -750,6 +751,7 @@ reqParam =
       <*  annoLexeme separator
 --      <*  optional article
       <*> annoHole type'
+      <*> annoHole (optional typicallyClause)
 
 param :: Parser (OptionallyTypedName Name)
 param =
@@ -757,6 +759,13 @@ param =
     MkOptionallyTypedName emptyAnno
       <$> annoHole name
       <*> optional (annoLexeme separator *> {- optional article *> -} annoHole type')
+      <*> annoHole (optional typicallyClause)
+
+-- | Parse a TYPICALLY clause: TYPICALLY <literal>
+-- TYPICALLY values should be compile-time constants (literals or constructor names like TRUE/FALSE)
+typicallyClause :: Parser (Expr Name)
+typicallyClause =
+  spacedKeyword_ TKTypically *> atomicExpr'
 
 -- |
 -- An expression is a base expression followed by

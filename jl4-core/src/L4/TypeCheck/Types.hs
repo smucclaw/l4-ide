@@ -83,6 +83,7 @@ data CheckError =
 data CheckWarning
   = PatternMatchRedundant [Branch Resolved]
   | PatternMatchesMissing [BranchLhs Resolved]
+  | AssumeDeprecated Name
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 
@@ -541,7 +542,7 @@ isTopLevelBindingInSection u (MkSection _a  _mn _maka decls) = any (elem u . map
   relevantResolveds = \ case
     Declare _ (MkDeclare _ _ af _) -> appFormHeads af
     Decide _ (MkDecide _ _ af _) -> appFormHeads af
-    Assume _ (MkAssume _ _ af _) -> appFormHeads af
+    Assume _ (MkAssume _ _ af _ _) -> appFormHeads af
     Directive _ _ -> []
     Import _ _ -> []
     -- NOTE: Sections are a toplevel binding in the current section but can also contain further

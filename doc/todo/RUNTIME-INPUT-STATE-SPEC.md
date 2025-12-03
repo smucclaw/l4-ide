@@ -3,6 +3,21 @@
 **Status:** 📋 Draft
 **Related:** `TYPICALLY-DEFAULTS-SPEC.md` (compile-time defaults), `BOOLEAN-MINIMIZATION-SPEC.md` (partial evaluation), `doc/default-values.md` (conceptual background)
 
+## Note on ASSUME Keyword Deprecation
+
+**Background:** The `ASSUME` keyword was originally introduced as a placeholder for explicit type declarations—essentially a visible delta between type inference and type checking. When the type checker inferred types for otherwise undefined expressions, the LSP would offer an automatic `ASSUME` reification.
+
+**The Problem:** The keyword "ASSUME" is misleading to non-programmers. To a layperson, `ASSUME x IS A BOOLEAN` might suggest not just that `x` is typed as a boolean, but that `x` is _valued_ `TRUE`! This semantic confusion is problematic for a language designed to be accessible to legal professionals.
+
+**Long-term Direction:** We intend to deprecate explicit use of `ASSUME` in well-styled L4 programs. Alternative approaches under consideration:
+
+- Using `GIVEN` for function parameters (already standard)
+- Using `DECLARE` for module-level type declarations
+- Implicit type inference without visible ASSUME artifacts
+- A less ambiguous keyword if explicit declaration is needed
+
+**For this spec:** The runtime input state model applies to whatever mechanism provides external inputs to decisions—whether that's `ASSUME`, `GIVEN`, or a future alternative. The core four-state model (explicit value, explicit unknown, not yet asked, not applicable) is independent of the surface syntax.
+
 ## Executive Summary
 
 Interactive applications (chatbots, web forms, decision services) need to track **four distinct states** for each input parameter:

@@ -123,7 +123,7 @@ extractParams :: TypeSig Resolved -> [ExportedParam]
 extractParams (MkTypeSig _ (MkGivenSig _ names) _) =
   fmap toParam names
  where
-  toParam (MkOptionallyTypedName ann resolved mType) =
+  toParam (MkOptionallyTypedName ann resolved mType _typically) =
     ExportedParam
       { paramName = resolvedToText resolved
       , paramType = mType

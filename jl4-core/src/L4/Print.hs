@@ -76,14 +76,21 @@ instance LayoutPrinterWithName a => LayoutPrinter (OptionallyNamedType a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (OptionallyTypedName a) where
   printWithLayout = \ case
-    MkOptionallyTypedName _ a ty ->
+    MkOptionallyTypedName _ a ty typically ->
       printWithLayout a <> case ty of
         Nothing -> mempty
         Just ty' -> space <> "IS" <+> printWithLayout ty'
+      <> case typically of
+        Nothing -> mempty
+        Just e -> space <> "TYPICALLY" <+> printWithLayout e
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypedName a) where
   printWithLayout = \ case
-    MkTypedName _ a ty -> printWithLayout a <+> "IS" <+> printWithLayout ty
+    MkTypedName _ a ty typically ->
+      printWithLayout a <+> "IS" <+> printWithLayout ty
+      <> case typically of
+        Nothing -> mempty
+        Just e -> space <> "TYPICALLY" <+> printWithLayout e
 
 instance LayoutPrinterWithName a => LayoutPrinter (TypeSig a) where
   printWithLayout = \ case
@@ -161,12 +168,15 @@ instance LayoutPrinterWithName a => LayoutPrinter (ConDecl a) where
 
 instance LayoutPrinterWithName a => LayoutPrinter (Assume a) where
   printWithLayout = \ case
-    MkAssume _ tySig appForm ty ->
+    MkAssume _ tySig appForm ty typically ->
       fillCat
         [ printWithLayout tySig
         , "ASSUME" <+> printWithLayout appForm <> case ty of
             Nothing -> mempty
             Just ty' -> space <> "IS" <+> printWithLayout ty'
+          <> case typically of
+            Nothing -> mempty
+            Just e -> space <> "TYPICALLY" <+> printWithLayout e
         ]
 
 instance LayoutPrinterWithName a => LayoutPrinter (Decide a) where

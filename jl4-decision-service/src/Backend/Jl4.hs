@@ -211,9 +211,9 @@ extractParamTypes :: Decide Resolved -> [(Text, Type' Resolved)]
 extractParamTypes (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) _ _) =
   mapMaybe extractTypedName typedNames
   where
-    extractTypedName (MkOptionallyTypedName _ resolved (Just ty)) =
+    extractTypedName (MkOptionallyTypedName _ resolved (Just ty) _) =
       Just (rawNameToText (rawName $ getActual resolved), ty)
-    extractTypedName (MkOptionallyTypedName _ resolved Nothing) =
+    extractTypedName (MkOptionallyTypedName _ resolved Nothing _) =
       -- Try to get type from resolved info
       case getAnno (getName resolved) ^. #extra % #resolvedInfo of
         Just (TypeInfo ty _) -> Just (rawNameToText (rawName $ getActual resolved), ty)

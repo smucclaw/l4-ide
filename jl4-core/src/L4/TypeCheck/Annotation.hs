@@ -216,11 +216,12 @@ nlgLocalDecl = \ case
 
 nlgAssume :: Assume Resolved -> Check (Assume Resolved)
 nlgAssume = \ case
-  MkAssume ann tySig appForm mTy ->
+  MkAssume ann tySig appForm mTy typically ->
     MkAssume ann
       <$> nlgTypeSig tySig
       <*> nlgAppForm appForm
       <*> traverse nlgType mTy
+      <*> traverse nlgExpr typically
 
 nlgNamedExpr :: NamedExpr Resolved -> Check (NamedExpr Resolved)
 nlgNamedExpr = \ case
@@ -276,10 +277,11 @@ nlgGivenSig (MkGivenSig ann ns) =
     <$> traverse nlgOptionallyTypedName ns
 
 nlgOptionallyTypedName :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved)
-nlgOptionallyTypedName (MkOptionallyTypedName ann n mty) =
+nlgOptionallyTypedName (MkOptionallyTypedName ann n mty typically) =
   MkOptionallyTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> traverse nlgType mty
+    <*> traverse nlgExpr typically
 
 nlgDeclare :: Declare Resolved -> Check (Declare Resolved)
 nlgDeclare (MkDeclare ann tysig appForm tydecl) =
@@ -308,7 +310,8 @@ nlgConDecl (MkConDecl ann n typedName) =
     <*> traverse nlgTypedName typedName
 
 nlgTypedName :: TypedName Resolved -> Check (TypedName Resolved)
-nlgTypedName (MkTypedName ann n ty) =
+nlgTypedName (MkTypedName ann n ty typically) =
   MkTypedName ann
     <$> resolveNlgAnnotationInResolved n
     <*> nlgType ty
+    <*> traverse nlgExpr typically
