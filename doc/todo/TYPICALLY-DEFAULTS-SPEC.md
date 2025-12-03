@@ -11,7 +11,11 @@
 | 2 | AST - extend TypedName, OptionallyTypedName, Assume | ✅ Complete |
 | 3 | Parser - parse TYPICALLY clauses | ✅ Complete |
 | 4 | Type Checking - validate TYPICALLY values | ✅ Complete |
-| 5 | IDE Support - syntax highlighting, hover, autocomplete | ⏳ Not started |
+| 5a | IDE - Syntax highlighting | ✅ Complete (automatic) |
+| 5b | IDE - Autocomplete | ✅ Complete (automatic) |
+| 5c | IDE - Hover showing defaults | ⏳ Deferred (see note) |
+
+**Note on hover:** Extending the `Info` type to include TYPICALLY values conflicts with Optics generic traversals used in visualization code. Requires architectural changes to use a separate `TypicallyMap` instead of modifying `Info`. Deferred to future work.
 
 **Test files:**
 - `jl4/examples/ok/typically-basic.l4` - comprehensive examples
