@@ -1,0 +1,11 @@
+
+`multiline string` MEANS
+  "to do a multiline string in L4, just
+insert literal newlines between double quotes
+and keep going until you're done!
+apparently you can also \" backquote the delimiter
+and that just works. nice."
+
+// if you want to scrutinize the internal representation, run    jl4-cli -a    on this file
+
+#EVAL `multiline string`

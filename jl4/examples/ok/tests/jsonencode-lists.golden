@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsonencode-lists.l4:34:1-22:
+  "[]"
+jsonencode-lists.l4:35:1-23:
+  "[1,2,3,4,5]"
+jsonencode-lists.l4:36:1-23:
+  "[\"apple\",\"banana\",\"cherry\"]"
+jsonencode-lists.l4:37:1-21:
+  "[true,false,true]"
+jsonencode-lists.l4:38:1-23:
+  "[[1,2,3],[4,5,6]]"
+jsonencode-lists.l4:39:1-25:
+  "[[1,2],[3,4]]"
+jsonencode-lists.l4:40:1-25:
+  "[[[1]]]"

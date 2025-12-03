@@ -126,6 +126,7 @@ mkInitialCheckEnv moduleUri environment entityInfo =
     , declTypeSigs = Map.empty
     , declareDeclarations = Map.empty
     , assumeDeclarations = Map.empty
+    , mixfixRegistry = Map.empty
     , moduleUri
     , sectionStack = []
     }
@@ -181,9 +182,23 @@ withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
+    , mixfixRegistry = buildMixfixRegistry rdecides
     }
   where
     topDecides = fmap (.name) rdecides
+
+-- | Build the mixfix registry from a list of FunTypeSigs.
+-- The registry maps from the first keyword of each mixfix function to the list
+-- of FunTypeSigs that have that keyword, enabling efficient lookup at call sites.
+buildMixfixRegistry :: [FunTypeSig] -> MixfixRegistry
+buildMixfixRegistry sigs = Map.fromListWith (++) $ mapMaybe toEntry sigs
+  where
+    toEntry :: FunTypeSig -> Maybe (RawName, [FunTypeSig])
+    toEntry sig = case sig.mixfixInfo of
+      Nothing -> Nothing
+      Just info -> case info.keywords of
+        []    -> Nothing  -- No keywords, shouldn't happen for valid mixfix
+        (k:_) -> Just (k, [sig])  -- Index by first keyword
 
 withDeclares :: [DeclChecked DeclareOrAssume] -> Check a -> Check a
 withDeclares rdecls =
@@ -488,8 +503,69 @@ checkTermAppFormTypeSigConsistency (MkAppForm aann n [] maka) tysig@(MkTypeSig _
   checkTermAppFormTypeSigConsistency'
     (MkAppForm aann n (clearSourceAnno . getName <$> filter isTerm otns) maka)
     tysig
+-- NEW: Handle mixfix patterns where the AppForm contains GIVEN parameters
+-- mixed with keywords.
+--
+-- Case 1: Head is a GIVEN parameter
+--   Example: GIVEN a, b; a `plus` b MEANS ...
+--   AppForm is [a, plus, b] - restructure to function name: `plus`, args: [a, b]
+--
+-- Case 2: Head is a keyword, but args contain GIVEN params mixed with keywords
+--   Example: GIVEN cond, thenVal, elseVal; `myif` cond `mythen` thenVal `myelse` elseVal MEANS ...
+--   AppForm is [myif, cond, mythen, thenVal, myelse, elseVal]
+--   Keep head as function name, filter args to only GIVEN params: [cond, thenVal, elseVal]
+--
+checkTermAppFormTypeSigConsistency appForm@(MkAppForm _ headName args maka) tysig@(MkTypeSig _ (MkGivenSig _ otns) _)
+  | isMixfixPatternHeadIsParam appForm tysig =
+      -- Case 1: Head is a GIVEN parameter - need to find the real function name
+      let
+        givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+        allTokens = headName : args
+
+        -- Find the first keyword (non-GIVEN name) to be the function name
+        keywords = filter (\n -> not (rawName n `Set.member` givenNames)) allTokens
+        params = filter (\n -> rawName n `Set.member` givenNames) allTokens
+
+        -- The function name is the first keyword
+        funcName = case keywords of
+          []    -> headName -- fallback, shouldn't happen for valid mixfix
+          (k:_) -> k
+
+        -- Restructure: function name as head, params as args
+        restructuredAppForm = MkAppForm (getAnno appForm) funcName params maka
+      in
+        checkTermAppFormTypeSigConsistency' restructuredAppForm tysig
+  | isMixfixPatternHeadIsKeyword appForm tysig =
+      -- Case 2: Head is a keyword - keep head, but filter args to only GIVEN params
+      let
+        givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+        params = filter (\n -> rawName n `Set.member` givenNames) args
+
+        -- Keep head as function name, filter args to only params
+        restructuredAppForm = MkAppForm (getAnno appForm) headName params maka
+      in
+        checkTermAppFormTypeSigConsistency' restructuredAppForm tysig
 checkTermAppFormTypeSigConsistency appForm tysig =
   checkTermAppFormTypeSigConsistency' appForm tysig
+
+-- | Check if an AppForm represents a mixfix pattern where the head is a GIVEN parameter.
+isMixfixPatternHeadIsParam :: AppForm Name -> TypeSig Name -> Bool
+isMixfixPatternHeadIsParam (MkAppForm _ headName _ _) (MkTypeSig _ (MkGivenSig _ otns) _) =
+  let givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+  in rawName headName `Set.member` givenNames
+
+-- | Check if an AppForm represents a mixfix pattern where the head is a keyword
+-- but args contain a mix of GIVEN params and keywords.
+isMixfixPatternHeadIsKeyword :: AppForm Name -> TypeSig Name -> Bool
+isMixfixPatternHeadIsKeyword (MkAppForm _ headName args _) (MkTypeSig _ (MkGivenSig _ otns) _) =
+  let
+    givenNames = Set.fromList $ map (rawName . getName) (filter isTerm otns)
+    headIsKeyword = not (rawName headName `Set.member` givenNames)
+    -- Check if args contain both GIVEN params and non-GIVEN keywords
+    hasParams = any (\n -> rawName n `Set.member` givenNames) args
+    hasKeywords = any (\n -> not (rawName n `Set.member` givenNames)) args
+  in
+    headIsKeyword && hasParams && hasKeywords
 
 isTerm :: OptionallyTypedName Name -> Bool
 isTerm (MkOptionallyTypedName _ _ (Just (Type _))) = False
@@ -912,7 +988,8 @@ checkExpr ec (Where ann e ds) t = softprune $ do
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
-  pure re
+  -- Store the expected type in the annotation so it's available during evaluation
+  setAnnResolvedType t Nothing re
 
 checkIfThenElse :: ExpectationContext -> Anno -> Expr Name -> Expr Name -> Expr Name -> Type' Resolved -> Check (Expr Resolved)
 checkIfThenElse ec ann e1 e2 e3 t = do
@@ -1042,6 +1119,9 @@ inferExpr' g =
     Modulo ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName moduloName) g ann e1 e2
       inferExpr' dsFun
+    Exponent ann e1 e2 -> do
+      dsFun <- desugarBinOpToFunction (rawName exponentName) g ann e1 e2
+      inferExpr' dsFun
     Cons ann e1 e2 -> do
       dsFun <- desugarBinOpToFunction (rawName consName) g ann e1 e2
       inferExpr' dsFun
@@ -1096,16 +1176,42 @@ inferExpr' g =
       -- 5. If unification succeeds, we can now proceed by *checking* all
       -- arguments of the function against their expected result types.
 
+      -- First, try to match this as a mixfix call-site pattern.
+      -- If the function is a registered mixfix and the args contain the expected
+      -- keywords, restructure the args to remove the keywords.
+      -- For param-first patterns, this also returns the correct function name.
+      mMixfixMatch <- tryMatchMixfixCall n es
+      let (actualFuncName, actualArgs, needsAnnoRebuild, mMixfixError) = case mMixfixMatch of
+            Nothing -> (n, es, False, Nothing)  -- Not a mixfix call, use original
+            Just (funcRawName, restructuredArgs, mErr) ->
+              -- Create a Name with the correct function name, preserving the annotation
+              let MkName nameAnno _ = n
+                  newName = MkName nameAnno funcRawName
+                  -- We need to rebuild annotation if args were restructured
+                  -- (i.e., keyword placeholders were removed)
+                  argsChanged = length restructuredArgs /= length es
+              in (newName, restructuredArgs, argsChanged, mErr)
+
+      -- Report any mixfix matching errors (e.g., wrong keyword, typo)
+      case mMixfixError of
+        Just err -> addError (MixfixMatchErrorCheck n err)
+        Nothing -> pure ()
+
       -- 1.
-      (rn, pt) <- resolveTerm n
+      (rn, pt) <- resolveTerm actualFuncName
       t <- instantiate pt
 
       -- 2. - 5.
       -- Note that if there are no arguments, then matchFunTy does not
       -- actually insist on the type t being a function.
-      (res, rt) <- matchFunTy False rn t es
+      (res, rt) <- matchFunTy False rn t actualArgs
 
-      pure (App ann rn res, rt)
+      -- If mixfix args were restructured, rebuild annotation with correct holes
+      let finalAnn = if needsAnnoRebuild
+                     then rebuildMixfixAppAnno ann actualFuncName actualArgs
+                     else ann
+
+      pure (App finalAnn rn res, rt)
     AppNamed ann n nes _morder -> do
       (rn, pt) <- resolveTerm n
       t <- instantiate pt
@@ -1155,6 +1261,27 @@ inferExpr' g =
     Percent ann e -> do
       e' <- checkExpr ExpectPercentArgumentContext e number
       pure (Percent ann e', number)
+    Fetch ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName fetchName) g ann e
+      inferExpr' dsFun
+    Env ann e -> do
+      dsFun <- desugarUnaryOpToFunction (rawName envName) g ann e
+      inferExpr' dsFun
+    Post ann e1 e2 e3 -> do
+      e1' <- checkExpr ExpectPostUrlContext e1 string
+      e2' <- checkExpr ExpectPostHeadersContext e2 string
+      e3' <- checkExpr ExpectPostBodyContext e3 string
+      pure (Post ann e1' e2' e3', string)
+    Concat ann es -> do
+      res <- traverse (\ e -> checkExpr ExpectConcatArgumentContext e string) es
+      pure (Concat ann res, string)
+    AsString ann e -> do
+      -- AsString can accept any primitive type and convert it to string
+      (re, te) <- inferExpr e
+      -- For now, we'll only allow NUMBER to be converted to STRING
+      -- Could extend this to other types in the future
+      expect ExpectAsStringArgumentContext number te
+      pure (AsString ann re, string)
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -1852,6 +1979,493 @@ scanTyDeclAssume _ = do
 -- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
 -- ----------------------------------------------------------------------------
 
+-- | Extract mixfix pattern information by comparing the AppForm against
+-- the GIVEN parameters in the TypeSig.
+--
+-- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
+-- For example:
+--   GIVEN person IS A Person, program IS A Program
+--   person `is eligible for` program MEANS ...
+--
+-- Here the AppForm is [person, is eligible for, program], and the GIVEN params
+-- are [person, program]. Since 'person' and 'program' are GIVEN params, this
+-- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
+--
+extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
+extractMixfixInfo tysig appForm =
+  let
+    -- Get the GIVEN parameter names as a set for fast lookup
+    givenParams :: Set RawName
+    givenParams = Set.fromList $ givenParamNames tysig
+
+    -- Get all tokens from the AppForm (head + args)
+    appFormTokens :: [Name]
+    appFormTokens = appFormHead' : appFormArgs'
+      where
+        MkAppForm _ appFormHead' appFormArgs' _ = appForm
+
+    -- Classify each token as either a parameter or a keyword
+    classifyToken :: Name -> MixfixPatternToken
+    classifyToken n
+      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
+      | otherwise                          = MixfixKeyword (rawName n)
+
+    -- Build the pattern
+    patternTokens :: [MixfixPatternToken]
+    patternTokens = map classifyToken appFormTokens
+
+    -- Extract just the keywords
+    extractKeyword :: MixfixPatternToken -> Maybe RawName
+    extractKeyword (MixfixKeyword k) = Just k
+    extractKeyword (MixfixParam _)   = Nothing
+
+    keywordList :: [RawName]
+    keywordList = mapMaybe extractKeyword patternTokens
+
+    -- Count parameters
+    paramCount :: Int
+    paramCount = length $ filter isParam patternTokens
+
+    isParam :: MixfixPatternToken -> Bool
+    isParam (MixfixParam _)   = True
+    isParam (MixfixKeyword _) = False
+
+  in
+    -- Only return MixfixInfo if there's at least one param in non-head position
+    -- (i.e., if the first token is a param, this is mixfix)
+    -- OR if there are keywords between params
+    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
+       then Just MkMixfixInfo
+              { pattern = patternTokens
+              , keywords = keywordList
+              , arity = paramCount
+              }
+       else Nothing
+
+-- | Extract parameter names from a TypeSig's GIVEN clause.
+givenParamNames :: TypeSig Name -> [RawName]
+givenParamNames (MkTypeSig _ givenSig _) =
+  case givenSig of
+    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
+  where
+    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
+    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
+
+-- ----------------------------------------------------------------------------
+-- Call-site Mixfix Pattern Matching
+-- ----------------------------------------------------------------------------
+
+-- | Try to match a function application against registered mixfix patterns.
+-- Given a function name and its arguments, check if this could be a mixfix call.
+-- If so, return Just (function RawName, restructured arguments).
+-- The function RawName is needed because for param-first patterns like `a `and` b`,
+-- the first keyword (`and`) identifies the function, not the outermost operator.
+--
+-- For example, if we have:
+--   Definition: `myif` cond `mythen` thenVal `myelse` elseVal MEANS ...
+--   Call: `myif` TRUE `mythen` 42 `myelse` 0
+--
+-- The call parses as: App myif [TRUE, mythen, 42, myelse, 0]
+-- We return: Just (myif, [TRUE, 42, 0])
+--
+-- For patterns that start with a param (like `a `and` b `had` c`), the binary
+-- infix parsing creates nested applications:
+--   Call: "Alice" `and` "Bob" `had` "Charlie"
+--   Parses as: App had [App and ["Alice", "Bob"], "Charlie"]
+--
+-- We flatten this to find the first keyword, look up the pattern, and match.
+-- We return: Just (funcName, args, maybeError)
+-- - funcName: the resolved function name (may differ from input for param-first patterns)
+-- - args: restructured args (keywords removed) or original args if error
+-- - maybeError: Just error if a mixfix pattern partially matched but had issues
+--
+tryMatchMixfixCall :: Name -> [Expr Name] -> Check (Maybe (RawName, [Expr Name], Maybe MixfixMatchError))
+tryMatchMixfixCall funcName args = do
+  registry <- asks (.mixfixRegistry)
+
+  -- First, check if this is a binary mixfix application that needs flattening
+  -- This handles param-first patterns like `a `and` b `had` c`
+  case args of
+    [l, r] | isSimpleName funcName -> do
+      -- Binary application with simple function name - could be:
+      -- 1. A real mixfix call like `and` applied to [a, b] (funcName is a keyword)
+      -- 2. A mis-parsed infix like x `plus` y -> App x [`plus`, y] (funcName is left operand)
+
+      -- Check case 2: is the first arg a potential keyword?
+      -- We only do this reinterpretation if funcName is NOT itself callable.
+      -- This prevents `elem == elem` from being reinterpreted as `elem` applied to [==, elem].
+      funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
+      let isCallable = any isCallableEntity funcNameInScope
+      case (not isCallable, getExprName l) of
+        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+          -- funcName is NOT a known function, but l is a registered mixfix keyword!
+          -- Reinterpret: App funcName [l, r] -> potentialOp applied to [funcName, r]
+          -- For infix: `plus` applied to [x, y]
+          let opRawName = rawName potentialOpName
+          case Map.lookup opRawName registry of
+            Just sigs -> do
+              -- Create args as [funcName-as-expr, r]
+              let funcAsExpr = App (getAnno funcName) funcName []
+                  newArgs = [funcAsExpr, r]
+              -- For reinterpreted infix, use matchParamPositions instead of tryMatchAnyPattern
+              -- because we've already identified the keyword and just need to match args to params
+              let result = tryMatchParamPositions newArgs sigs
+              case result of
+                Just restructuredArgs -> pure $ Just (opRawName, restructuredArgs, Nothing)
+                Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
+            Nothing -> tryFlatteningApproach registry
+        _ -> tryFlatteningApproach registry
+    _ -> tryRegularMatch
+  where
+    tryFlatteningApproach registry = do
+      -- Original flattening logic for nested mixfix like `a `and` b `had` c`
+      -- args is guaranteed to have exactly 2 elements (binary application)
+      let (arg0, arg1) = case args of
+            [a, b] -> (a, b)
+            _ -> error "tryFlatteningApproach: expected exactly 2 args"
+          flattened = flattenBinaryMixfixApp funcName arg0 arg1
+      case findFirstKeyword flattened of
+        Just firstKw ->
+          case Map.lookup firstKw registry of
+            Just sigs ->
+              -- For param-first patterns, the firstKw IS the function name
+              fmap (fmap (\r -> (firstKw, r, Nothing))) $ tryMatchFlattenedPattern firstKw flattened sigs
+            Nothing -> tryRegularMatch  -- First keyword not registered
+        Nothing -> tryRegularMatch  -- No keywords found (shouldn't happen)
+
+    tryRegularMatch = do
+      registry <- asks (.mixfixRegistry)
+      let funcRawName = rawName funcName
+      case Map.lookup funcRawName registry of
+        Nothing -> pure Nothing  -- Not a registered mixfix function
+        Just sigs -> do
+          result <- tryMatchAnyPattern funcRawName args sigs
+          pure $ fmap (\(restructuredArgs, mErr) -> (funcRawName, restructuredArgs, mErr)) result
+
+-- | Extract a Name from an Expr if it's a simple variable or nullary application.
+-- Used to check if an expression could be a mixfix keyword.
+getExprName :: Expr Name -> Maybe Name
+getExprName (Var _ n) = Just n
+getExprName (App _ n []) = Just n
+getExprName _ = Nothing
+
+-- | Check if a CheckEntity is callable (function, constructor, etc.)
+-- This is used to determine if a name can be applied to arguments.
+isCallableEntity :: (Unique, Name, CheckEntity) -> Bool
+isCallableEntity (_, _, KnownTerm t _) = isFunctionType t
+isCallableEntity _ = False
+
+-- | Check if a type is a function type.
+isFunctionType :: Type' n -> Bool
+isFunctionType (Fun _ _ _) = True
+isFunctionType (Forall _ _ t) = isFunctionType t
+isFunctionType _ = False
+
+-- | Try to match against any of the registered patterns for this function name.
+-- Returns:
+-- - Just (restructuredArgs, Nothing) on successful match
+-- - Just (args, Just error) on partial match with error (use original args + report error)
+-- - Nothing if no pattern matches at all
+tryMatchAnyPattern :: RawName -> [Expr Name] -> [FunTypeSig] -> Check (Maybe ([Expr Name], Maybe MixfixMatchError))
+tryMatchAnyPattern _ _ [] = pure Nothing
+tryMatchAnyPattern funcRawName args (sig:sigs) =
+  case sig.mixfixInfo of
+    Nothing -> tryMatchAnyPattern funcRawName args sigs  -- Not actually mixfix
+    Just info ->
+      case matchMixfixPattern funcRawName args info of
+        MixfixSuccess restructuredArgs -> pure (Just (restructuredArgs, Nothing))
+        MixfixError err -> pure (Just (args, Just err))  -- Return error but keep original args
+        MixfixNoMatch -> tryMatchAnyPattern funcRawName args sigs
+
+-- | Match a list of expressions against a mixfix pattern.
+--
+-- Two cases:
+-- 1. Keyword-first patterns like `myif cond mythen thenVal myelse elseVal`
+--    Pattern: [Kw "myif", Param, Kw "mythen", Param, Kw "myelse", Param]
+--    Args:    [cond, mythen, thenVal, myelse, elseVal]  (old nested binary repr)
+--    OR Args: [cond, thenVal, Var myelse, elseVal]      (new linear repr - mythen absorbed)
+--
+-- 2. Param-first patterns like `a op1 b op2 c`
+--    Pattern: [Param, Kw "op1", Param, Kw "op2", Param]
+--    funcName = op1 (first keyword)
+--    Args:    [a, b, Var op2, c]  (new linear repr)
+--    - args[0] = param before first keyword
+--    - args[1:] = rest, alternating [param, Var kw, param, ...]
+--
+-- Returns: MixfixMatchResult with extracted params if matched
+matchMixfixPattern :: RawName -> [Expr Name] -> MixfixInfo -> MixfixMatchResult [Expr Name]
+matchMixfixPattern funcRawName args info =
+  case info.pattern of
+    [] -> MixfixNoMatch  -- Empty pattern, shouldn't happen
+    (headToken:restPattern) ->
+      case headToken of
+        MixfixKeyword k | k == funcRawName ->
+          -- Keyword-first pattern: funcName is the head keyword
+          -- Try new linear format first, then fall back to old format
+          case matchLinearAfterHeadKeyword restPattern args of
+            MixfixSuccess matched -> MixfixSuccess (extractParamArgs matched)
+            MixfixError err -> MixfixError err
+            MixfixNoMatch ->
+              -- Fall back to old format (matchPatternTokens returns Maybe)
+              case matchPatternTokens restPattern args of
+                Just params -> MixfixSuccess params
+                Nothing -> MixfixNoMatch
+
+        MixfixParam _ ->
+          -- Param-first pattern: funcName should be the FIRST KEYWORD in pattern
+          -- Find it and check args match
+          matchParamFirstPattern funcRawName args info.pattern
+
+        _ -> MixfixNoMatch
+
+-- | Match args for param-first patterns in the new linear representation.
+-- Pattern: [Param, Kw op1, Param, Kw op2, Param, ...]
+-- funcName: op1 (the first keyword)
+-- Args: [a, b, Var op2, c, ...] where a is before op1, rest alternates
+matchParamFirstPattern :: RawName -> [Expr Name] -> [MixfixPatternToken] -> MixfixMatchResult [Expr Name]
+matchParamFirstPattern funcRawName args pattern =
+  case (splitAtFirstKeyword funcRawName pattern, args) of
+    (Just (paramsBefore, paramsAfter), firstArg:restArgs) ->
+      -- paramsBefore should be [Param] (the param before first keyword)
+      -- paramsAfter is pattern after first keyword: [Param, Kw op2, Param, ...]
+      if length paramsBefore == 1 && maybe False isParam (listToMaybe paramsBefore)
+      then
+        -- First arg is the param before keyword
+        -- Rest args should match paramsAfter pattern
+        case matchLinearAfterHeadKeyword paramsAfter restArgs of
+          MixfixSuccess matched -> MixfixSuccess (firstArg : extractParamArgs matched)
+          MixfixError err -> MixfixError err
+          MixfixNoMatch -> MixfixNoMatch
+      else MixfixNoMatch
+    _ -> MixfixNoMatch
+  where
+    isParam (MixfixParam _) = True
+    isParam _ = False
+
+-- | Split pattern at the first occurrence of the given keyword.
+-- Returns (tokens before keyword, tokens after keyword)
+splitAtFirstKeyword :: RawName -> [MixfixPatternToken] -> Maybe ([MixfixPatternToken], [MixfixPatternToken])
+splitAtFirstKeyword _ [] = Nothing
+splitAtFirstKeyword kw (MixfixKeyword k : rest) | k == kw = Just ([], rest)
+splitAtFirstKeyword kw (t : rest) = do
+  (before, after) <- splitAtFirstKeyword kw rest
+  Just (t : before, after)
+
+-- | Match args in the new linear format after the head keyword.
+-- Pattern (after head kw): [Param, Kw op2, Param, Kw op3, Param, ...]
+-- Args: [val1, val2, Var op3, val3, ...] (interleaved params and keyword vars)
+--
+-- This handles the "curried" representation where keywords appear as Var nodes
+-- at their expected positions in the argument list.
+--
+-- Returns: MixfixMatchResult with info about which args are keywords vs params.
+-- This allows the caller to:
+-- 1. Extract only param args for type checking against function parameter types
+-- 2. Keep keyword args in the AST, typed as Keyword
+-- 3. Report better error messages if keywords don't match
+matchLinearAfterHeadKeyword :: [MixfixPatternToken] -> [Expr Name] -> MixfixMatchResult [MixfixArgMatch (Expr Name)]
+matchLinearAfterHeadKeyword [] [] = MixfixSuccess []
+matchLinearAfterHeadKeyword [] (_:_) = MixfixNoMatch  -- Extra args
+matchLinearAfterHeadKeyword (_:_) [] = MixfixNoMatch  -- Missing args
+matchLinearAfterHeadKeyword (token:tokens) (arg:args) =
+  case token of
+    MixfixParam _ ->
+      -- Expect a value argument - keep it in result as a param
+      (MixfixParamArg arg :) <$> matchLinearAfterHeadKeyword tokens args
+    MixfixKeyword expectedKw ->
+      -- Expect either a Var with the keyword name (new format)
+      -- or we're in old format and should skip checking here
+      case arg of
+        Var _ n | rawName n == expectedKw ->
+          -- New format: keyword marker present, keep it as validated keyword
+          (MixfixKeywordArg expectedKw :) <$> matchLinearAfterHeadKeyword tokens args
+        App _ n [] | rawName n == expectedKw ->
+          -- Also accept App with empty args (nullary application)
+          (MixfixKeywordArg expectedKw :) <$> matchLinearAfterHeadKeyword tokens args
+        Var _ n ->
+          -- Found a Var that doesn't match the expected keyword
+          -- This is likely a typo or wrong keyword - report as error
+          MixfixError (WrongKeyword expectedKw (rawName n))
+        App _ n [] ->
+          -- Found an App with wrong keyword name
+          MixfixError (WrongKeyword expectedKw (rawName n))
+        _ ->
+          -- Old format or mismatch - try treating this as old format
+          -- where keyword was already consumed by parser
+          -- This means arg is actually the next param value
+          matchLinearAfterHeadKeyword tokens (arg:args)
+
+-- | Extract only the param args from a mixfix match result.
+-- This is what gets passed to the function's type checking.
+extractParamArgs :: [MixfixArgMatch a] -> [a]
+extractParamArgs = mapMaybe getParam
+  where
+    getParam (MixfixParamArg a) = Just a
+    getParam (MixfixKeywordArg _) = Nothing
+
+-- | Check if any keywords were matched (new format).
+-- If so, the args list contains keyword placeholders that need special handling.
+-- NOTE: Currently unused but kept for future enhanced error reporting.
+_hasMatchedKeywords :: [MixfixArgMatch a] -> Bool
+_hasMatchedKeywords = any isKeyword
+  where
+    isKeyword (MixfixKeywordArg _) = True
+    isKeyword _ = False
+
+-- ----------------------------------------------------------------------------
+-- Fuzzy matching for keyword suggestions
+-- ----------------------------------------------------------------------------
+
+-- | Find similar keywords to a given unknown keyword.
+-- Returns keywords with edit distance <= threshold from the unknown one.
+-- NOTE: Prefixed with underscore as it's prepared for future use in enhanced error messages.
+_suggestKeywords :: RawName -> [RawName] -> [RawName]
+_suggestKeywords unknown knowns =
+  let unknownText = _rawNameText unknown
+      candidates = [(k, _editDistance unknownText (_rawNameText k)) | k <- knowns]
+      threshold = max 2 (Text.length unknownText `div` 3)  -- Adaptive threshold
+  in map fst $ filter ((<= threshold) . snd) candidates
+
+-- | Extract text from a RawName for comparison purposes.
+_rawNameText :: RawName -> Text
+_rawNameText (NormalName t) = t
+_rawNameText (QualifiedName _ t) = t  -- Use just the name part for comparison
+_rawNameText (PreDef t) = t
+
+-- | Compute Levenshtein edit distance between two texts.
+-- This is a simple O(m*n) implementation using dynamic programming with lists.
+_editDistance :: Text -> Text -> Int
+_editDistance s1 s2
+  | Text.null s1 = Text.length s2
+  | Text.null s2 = Text.length s1
+  | otherwise = editDistanceList (Text.unpack s1) (Text.unpack s2)
+  where
+    -- Simple DP implementation using list folding
+    editDistanceList :: String -> String -> Int
+    editDistanceList xs ys = last $ foldl transform [0..length xs] ys
+      where
+        transform :: [Int] -> Char -> [Int]
+        transform row@(prevDiag:prevRow) c =
+          scanl computeStep (prevDiag + 1) (zip3 xs row prevRow)
+          where
+            computeStep :: Int -> (Char, Int, Int) -> Int
+            computeStep left (xc, diag, up) =
+              minimum [left + 1, up + 1, diag + if xc == c then 0 else 1]
+        transform [] _ = []  -- Should never happen, pattern for exhaustiveness
+
+-- | Rebuild the annotation for a mixfix App when args have been restructured.
+-- The original annotation has holes for all parsed args (including keyword placeholders),
+-- but the restructured args only contain the actual data args.
+-- We create a new annotation with holes for only the actual args.
+rebuildMixfixAppAnno :: Anno -> Name -> [Expr Name] -> Anno
+rebuildMixfixAppAnno origAnn funcName args =
+  -- Keep the original source range from the annotation
+  -- but rebuild the payload with just holes for the actual args
+  let funcHole = mkHoleWithSrcRange funcName
+      argHoles = map mkHoleWithSrcRange args
+      newPayload = funcHole : argHoles
+  in fixAnnoSrcRange $ set #payload newPayload origAnn
+
+-- | Flatten a binary mixfix application into a list of (Either Expr Keyword).
+-- Given: App had [App and [a, b], c]
+-- Returns: [Left a, Right "and", Left b, Right "had", Left c]
+flattenBinaryMixfixApp :: Name -> Expr Name -> Expr Name -> [Either (Expr Name) RawName]
+flattenBinaryMixfixApp funcName l r =
+  flattenLeft l ++ [Right (rawName funcName)] ++ [Left r]
+  where
+    -- Recursively flatten left-nested binary mixfix apps
+    flattenLeft :: Expr Name -> [Either (Expr Name) RawName]
+    flattenLeft (App _ fn [ll, lr]) | isSimpleName fn =
+      flattenLeft ll ++ [Right (rawName fn), Left lr]
+    flattenLeft e = [Left e]
+
+-- | Find the first keyword (Right value) in a flattened list
+findFirstKeyword :: [Either (Expr Name) RawName] -> Maybe RawName
+findFirstKeyword [] = Nothing
+findFirstKeyword (Right kw : _) = Just kw
+findFirstKeyword (Left _ : rest) = findFirstKeyword rest
+
+-- | Try to match a flattened expression list against any registered pattern
+tryMatchFlattenedPattern :: RawName -> [Either (Expr Name) RawName] -> [FunTypeSig] -> Check (Maybe [Expr Name])
+tryMatchFlattenedPattern _ _ [] = pure Nothing
+tryMatchFlattenedPattern firstKw flattened (sig:sigs) =
+  case sig.mixfixInfo of
+    Nothing -> tryMatchFlattenedPattern firstKw flattened sigs
+    Just info ->
+      case matchFlattenedPattern info.pattern flattened of
+        Just args -> pure (Just args)
+        Nothing -> tryMatchFlattenedPattern firstKw flattened sigs
+
+-- | Check if a Name could be a mixfix keyword.
+-- Since quoted names become NormalName in the AST, we check if the name
+-- could be a keyword by looking at its structure. For simplicity, we
+-- check against the registry in the caller.
+-- Here we just check that it's not a qualified or predefined name.
+isSimpleName :: Name -> Bool
+isSimpleName n = case rawName n of
+  NormalName _ -> True
+  _ -> False
+
+-- | Match a flattened argument list against a full pattern.
+-- The flattened list alternates: Left Expr for params, Right RawName for keywords.
+matchFlattenedPattern :: [MixfixPatternToken] -> [Either (Expr Name) RawName] -> Maybe [Expr Name]
+matchFlattenedPattern [] [] = Just []
+matchFlattenedPattern [] (_:_) = Nothing  -- Extra elements
+matchFlattenedPattern (_:_) [] = Nothing  -- Missing elements
+matchFlattenedPattern (token:tokens) (arg:args) =
+  case (token, arg) of
+    (MixfixParam _, Left expr) ->
+      -- Pattern expects param, got expression - match!
+      (expr :) <$> matchFlattenedPattern tokens args
+    (MixfixKeyword expectedKw, Right actualKw) ->
+      -- Pattern expects keyword, got keyword - check if they match
+      if expectedKw == actualKw
+        then matchFlattenedPattern tokens args  -- Don't include keywords in result
+        else Nothing
+    _ -> Nothing  -- Mismatch: param vs keyword
+
+-- | Match a list of pattern tokens against a list of expressions.
+-- Returns the expressions at Param positions if all Keyword positions match.
+matchPatternTokens :: [MixfixPatternToken] -> [Expr Name] -> Maybe [Expr Name]
+matchPatternTokens [] [] = Just []
+matchPatternTokens [] (_:_) = Nothing  -- Extra args
+matchPatternTokens (_:_) [] = Nothing  -- Missing args
+matchPatternTokens (token:tokens) (arg:args) =
+  case token of
+    MixfixParam _ ->
+      -- This position should be an expression argument
+      -- Keep it in the result
+      (arg :) <$> matchPatternTokens tokens args
+    MixfixKeyword expectedKeyword ->
+      -- This position should be a Var with the expected keyword name
+      case arg of
+        Var _ n | rawName n == expectedKeyword ->
+          -- Keyword matches, don't include in result
+          matchPatternTokens tokens args
+        _ -> Nothing  -- Not a matching keyword
+
+-- | Match args against param positions only, for when we've already identified the keyword.
+-- Used for reinterpreted infix calls like `x `plus` y` where the keyword is already known.
+-- Pattern = [Param a, Keyword plus, Param b], args = [x, y], already know it's `plus`
+-- Returns Just [x, y] if the number of param positions matches the number of args.
+matchParamPositions :: [MixfixPatternToken] -> [Expr Name] -> Maybe [Expr Name]
+matchParamPositions pattern args =
+  let paramCount = length [() | MixfixParam _ <- pattern]
+  in if paramCount == length args
+     then Just args  -- Args line up with param positions
+     else Nothing
+
+-- | Try to match args against any signature's param positions.
+tryMatchParamPositions :: [Expr Name] -> [FunTypeSig] -> Maybe [Expr Name]
+tryMatchParamPositions _ [] = Nothing
+tryMatchParamPositions args (sig:sigs) =
+  case sig.mixfixInfo of
+    Nothing -> tryMatchParamPositions args sigs
+    Just info ->
+      case matchParamPositions info.pattern args of
+        Just result -> Just result
+        Nothing -> tryMatchParamPositions args sigs
+
 scanFunSigModule :: Module Name -> Check [FunTypeSig]
 scanFunSigModule (MkModule _ _ sects) =
   scanFunSigSection sects
@@ -1889,6 +2503,8 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       inferTermAppForm rappForm rtysig
     dty <- setAnnResolvedType rt (Just Computable) d
     name <- withQualified (appFormHeads rappForm) ce
+    -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
+    let mMixfix = extractMixfixInfo tysig appForm
     pure $ MkFunTypeSig
       { anno = getAnno dty
       , rtysig
@@ -1896,6 +2512,7 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = prune $
       , resultType = result
       , name = name
       , arguments = extendsTySig <> extendsAppForm
+      , mixfixInfo = mMixfix
       }
 
 scanFunSigAssume :: Assume Name -> Check (Maybe FunTypeSig)
@@ -1908,6 +2525,8 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
     (ce, rt, result, extendsAppForm) <- inferTermAppForm rappForm rtysig
     aty <- setAnnResolvedType rt (Just Assumed) a
     name <- withQualified (appFormHeads rappForm) ce
+    -- Extract mixfix pattern info by comparing AppForm against GIVEN parameters
+    let mMixfix = extractMixfixInfo tysig' appForm
     pure $ Just $ MkFunTypeSig
       { anno = getAnno aty
       , rtysig
@@ -1915,6 +2534,7 @@ scanFunSigAssume a@(MkAssume _ tysig appForm mt) = do
       , resultType = result
       , name
       , arguments = extendsTySig <> extendsAppForm
+      , mixfixInfo = mMixfix
       }
   where
     -- In the specific case where we have no GIVETH, but a type for the ASSUME itself,
@@ -2231,6 +2851,42 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
   , "Expected " <> Text.show (errorInfo.expected) <> " holes but got: " <> Text.show (errorInfo.got)
   ]
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
+prettyCheckError (MixfixMatchErrorCheck funcName err) =
+  prettyMixfixMatchError funcName err
+
+-- | Pretty print mixfix match errors with helpful suggestions.
+prettyMixfixMatchError :: Name -> MixfixMatchError -> [Text]
+prettyMixfixMatchError funcName = \case
+  UnknownMixfixKeyword unknown suggestions ->
+    [ "Unknown mixfix keyword `" <> prettyRawName unknown <> "`"
+    , "In expression involving: " <> prettyLayout funcName
+    ] <> case suggestions of
+      [] -> []
+      [s] -> ["Did you mean `" <> prettyRawName s <> "`?"]
+      ss -> ["Did you mean one of: " <> Text.intercalate ", " (map (\s -> "`" <> prettyRawName s <> "`") ss) <> "?"]
+  WrongKeyword expected actual ->
+    [ "Expected keyword `" <> prettyRawName expected <> "` but found `" <> prettyRawName actual <> "`"
+    , "In expression involving: " <> prettyLayout funcName
+    , "Check that keywords are in the correct order."
+    ]
+  MissingKeyword expected ->
+    [ "Missing keyword `" <> prettyRawName expected <> "`"
+    , "In expression involving: " <> prettyLayout funcName
+    ]
+  ExtraKeyword kw ->
+    [ "Unexpected keyword `" <> prettyRawName kw <> "`"
+    , "In expression involving: " <> prettyLayout funcName
+    ]
+  ArityMismatch expected actual ->
+    [ "Wrong number of arguments in mixfix expression"
+    , "Expected " <> Text.show expected <> " arguments but got " <> Text.show actual
+    , "In expression involving: " <> prettyLayout funcName
+    ]
+  where
+    prettyRawName :: RawName -> Text
+    prettyRawName (NormalName t) = t
+    prettyRawName (QualifiedName qs t) = Text.intercalate "." (toList qs) <> "." <> t
+    prettyRawName (PreDef predef) = predef
 
 prettyCheckWarning :: CheckWarning -> [Text]
 prettyCheckWarning = \ case
@@ -2272,6 +2928,16 @@ prettyTypeMismatch ExpectNotArgumentContext expected given =
   standardTypeMismatch [ "The argument of NOT is expected to be of type" ] expected given
 prettyTypeMismatch ExpectPercentArgumentContext expected given =
   standardTypeMismatch [ "The argument of '%' is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostUrlContext expected given =
+  standardTypeMismatch [ "The URL argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostHeadersContext expected given =
+  standardTypeMismatch [ "The headers argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectPostBodyContext expected given =
+  standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
+prettyTypeMismatch ExpectConcatArgumentContext expected given =
+  standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext expected given =
+  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =

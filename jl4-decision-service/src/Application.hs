@@ -49,11 +49,12 @@ defaultMain = do
   when (null sourcePaths) $ putStrLn $ "sourcePaths expanded to empty: " <> show sourcePaths
   unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
 
-  l4Functions <- Examples.loadL4Functions l4Files
+  (l4Functions, _moduleContext) <- Examples.loadL4Functions l4Files
   unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
   unless (null l4Functions) $ print $ Map.keys l4Functions
 
-  dbRef <- newTVarIO (Examples.functionSpecs <> l4Functions)
+  exampleFunctions <- Examples.functionSpecs
+  dbRef <- newTVarIO (exampleFunctions <> l4Functions)
   mgr <- newManager defaultManagerSettings
   putStrLn $ "will contact crud server on following base url: " <> show crudServerName
   let

@@ -48,6 +48,7 @@ module Server (
 
   -- * utilities
   toDecl,
+  parametersOfDecide,
 ) where
 
 import Base
@@ -56,6 +57,7 @@ import qualified Backend.Jl4 as Jl4
 
 import qualified Chronos
 import Control.Applicative
+import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
 import Control.Exception (evaluate, displayException)
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
@@ -108,6 +110,7 @@ data AppEnv = MkAppEnv
 data ValidatedFunction = ValidatedFunction
   { fnImpl :: !Function
   , fnEvaluator :: !(Map EvalBackend RunFunction)
+  , fnCompiled :: !(Maybe Jl4.CompiledModule)
   }
   deriving stock (Generic)
 
@@ -167,6 +170,8 @@ data SingleFunctionApi' mode = SingleFunctionApi
       mode
         :- "evaluation"
           :> Summary "Evaluate a function with arguments"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
           :> ReqBody '[JSON] FnArguments
           :> OperationId "evalFunction"
           :> Post '[JSON] SimpleResponse
@@ -175,6 +180,8 @@ data SingleFunctionApi' mode = SingleFunctionApi
         :- "batch"
           :> Summary "Run a function using a batch of arguments"
           :> Description "Evaluate a function with a batch of arguments, conforming to Oracle Intelligent Advisor Batch API"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
           :> ReqBody '[JSON] BatchRequest
           :> Post '[JSON] BatchResponse
   -- ^ Run a function with a "batch" of parameters.
@@ -268,6 +275,21 @@ instance HasClient m api => HasClient m (OperationId desc :> api) where
 -- Web Service Handlers
 -- ----------------------------------------------------------------------------
 
+-- | Parse trace level from header value
+parseTraceHeader :: Maybe BS.ByteString -> Api.TraceLevel
+parseTraceHeader Nothing = Api.TraceFull  -- Default to full trace
+parseTraceHeader (Just bs) = case Text.toLower (Text.decodeUtf8 bs) of
+  "none" -> Api.TraceNone
+  "full" -> Api.TraceFull
+  _ -> Api.TraceFull  -- Default to full on invalid value
+
+-- | Determine trace level from header and query param
+-- Header takes precedence over query param
+determineTraceLevel :: Maybe Text -> Maybe Api.TraceLevel -> Api.TraceLevel
+determineTraceLevel (Just headerVal) _ = parseTraceHeader (Just $ Text.encodeUtf8 headerVal)
+determineTraceLevel Nothing (Just paramVal) = paramVal
+determineTraceLevel Nothing Nothing = Api.TraceFull  -- Default
+
 -- TODO: this has become redundant
 data EvalBackend
   = JL4
@@ -290,20 +312,21 @@ handler =
                     postFunctionHandler name
                 , deleteFunction =
                     deleteFunctionHandler name
-                , evalFunction =
-                    evalFunctionHandler name
-                , batchFunction =
-                    batchFunctionHandler name
+                , evalFunction = \mTraceHeader mTraceParam ->
+                    evalFunctionHandler name mTraceHeader mTraceParam
+                , batchFunction = \mTraceHeader mTraceParam ->
+                    batchFunctionHandler name mTraceHeader mTraceParam
                 }
           }
     }
 
-evalFunctionHandler :: String -> FnArguments -> AppM SimpleResponse
-evalFunctionHandler name' args = do
+evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM SimpleResponse
+evalFunctionHandler name' mTraceHeader mTraceParam args = do
+  let traceLevel = determineTraceLevel mTraceHeader mTraceParam
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
   let fnArgs = Map.assocs args.fnArguments
-      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing
+      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing traceLevel
   case Map.lookup name functions of
     Nothing -> withUUIDFunction
         name
@@ -313,21 +336,34 @@ evalFunctionHandler name' args = do
  where
   name = Text.pack name'
 
-batchFunctionHandler :: String -> BatchRequest -> AppM BatchResponse
-batchFunctionHandler name' batchArgs = do
+batchFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> BatchRequest -> AppM BatchResponse
+batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
+  let traceLevel = determineTraceLevel mTraceHeader mTraceParam
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
   case Map.lookup name functions of
     Nothing -> throwError err404
     Just fnImpl -> do
-      (execTime, responses) <- stopwatchM $ forM batchArgs.cases $ \inputCase -> do
+      -- Capture the environment before going concurrent
+      env <- ask
+      -- Use parallel evaluation with forConcurrently for better performance
+      (execTime, evalResults) <- stopwatchM $ liftIO $ forConcurrently batchArgs.cases $ \inputCase -> do
         let
           args = Map.assocs $ fmap Just inputCase.attributes
 
-        r <- runEvaluatorFor Nothing fnImpl args outputFilter
+        -- Note: runEvaluatorFor is now run concurrently across all cases
+        r <- runAppM env (runEvaluatorFor Nothing fnImpl args outputFilter traceLevel)
         pure (inputCase.id, r)
 
+      -- Check for fatal ServerError exceptions (timeout, missing backend) and propagate them
+      -- These should fail the entire batch, not be treated as per-case errors
+      case [err | (_, Left err) <- evalResults] of
+        (err:_) -> throwError err  -- Fail batch with first fatal error
+        [] -> pure ()
+
+      -- Only process successful responses and per-case evaluation errors
       let
+        responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
         nCases = length responses
 
         successfulRuns =
@@ -375,8 +411,8 @@ batchFunctionHandler name' batchArgs = do
   nsToS :: Chronos.Timespan -> Centi
   nsToS n = (realToFrac @Int @Centi $ fromIntegral @Int64 @Int (Chronos.getTimespan n)) / 10e9
 
-runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> AppM SimpleResponse
-runEvaluatorFor engine validatedFunc args outputFilter = do
+runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> Api.TraceLevel -> AppM SimpleResponse
+runEvaluatorFor engine validatedFunc args outputFilter traceLevel = do
   eval <- evaluationEngine evalBackend validatedFunc
   evaluationResult <-
     timeoutAction $
@@ -384,6 +420,7 @@ runEvaluatorFor engine validatedFunc args outputFilter = do
         ( eval.runFunction
             args
             outputFilter
+            traceLevel
         )
 
   case evaluationResult of
@@ -463,15 +500,24 @@ postFunctionHandler name' newFunctionImpl = do
 
 validateFunction :: FunctionImplementation -> AppM ValidatedFunction
 validateFunction fn = do
-  evaluators <- Map.traverseWithKey validateImplementation fn.implementation
+  (evaluators, mCompiled) <- Map.traverseWithKey validateImplementation fn.implementation
+    >>= \evalMap -> do
+      -- Extract the compiled module from any JL4 backend
+      -- Since we only have JL4 backend currently, we can just look it up
+      let mCompiled = case Map.lookup JL4 evalMap of
+            Just (_, compiled) -> compiled
+            Nothing -> Nothing
+      pure (Map.map fst evalMap, mCompiled)
+
   pure
     ValidatedFunction
       { fnImpl = fn.declaration
       , fnEvaluator = evaluators
+      , fnCompiled = mCompiled
       }
  where
-  validateImplementation :: EvalBackend -> Text -> AppM RunFunction
-  validateImplementation JL4 program =  pure $ Jl4.createFunction (toDecl fn.declaration) program
+  validateImplementation :: EvalBackend -> Text -> AppM (RunFunction, Maybe Jl4.CompiledModule)
+  validateImplementation JL4 program = liftIO $ Jl4.createFunction (Text.unpack fn.declaration.name <> ".l4") (toDecl fn.declaration) program Map.empty
 
 getAllFunctions :: AppM [SimpleFunction]
 getAllFunctions = do
@@ -508,8 +554,10 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           hPutStrLn stderr "failed to retrieve function from CRUD backend"
           hPutStrLn stderr $ displayException err'
         err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
-      Right prog -> do
-        let fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
+      Right rawProg -> do
+        -- Strip directive lines (like #EVAL, #ASSERT) to prevent unintended execution
+        let prog = stripDirectives rawProg
+            fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
             fnDecl = toDecl fnImpl
 
         decide <- liftIO (runExceptT (Jl4.buildFunDecide prog fnDecl))
@@ -519,12 +567,24 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
             throwError err500 {errBody = "evaluator failed"}
             ) pure
 
+        (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack funName <> ".l4") fnDecl prog Map.empty
+
         k ValidatedFunction
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
-          , fnEvaluator = Map.singleton JL4 $ Jl4.createFunction fnDecl prog
+          , fnEvaluator = Map.singleton JL4 runFn
+          , fnCompiled = mCompiled
           }
   where
    (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
+
+-- | Strip or double-comment all lines beginning with # (directives like #EVAL, #ASSERT)
+-- This prevents unintended execution when programs are loaded from the CRUD backend.
+stripDirectives :: Text -> Text
+stripDirectives = Text.unlines . map processLine . Text.lines
+  where
+    processLine line
+      | Text.isPrefixOf "#" (Text.stripStart line) = "##" <> line  -- Double-comment directive lines
+      | otherwise = line
 
 parametersOfDecide :: Decide Resolved -> Parameters
 parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
@@ -543,6 +603,11 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
     _ -> acc
   sameResolved = (==) `on` getUnique
   argList = map prettyLayout args
+
+-- | Run an AppM action in IO with a given environment, returning Either
+-- Used for concurrent batch evaluation
+runAppM :: AppEnv -> AppM a -> IO (Either ServerError a)
+runAppM env action = runHandler $ runReaderT action env
 
 timeoutAction :: IO b -> AppM b
 timeoutAction act =
@@ -828,7 +893,14 @@ batchRequestEncoder :: BatchRequest -> Aeson.Value
 batchRequestEncoder br =
   Aeson.object
     [ "outcomes" .= fmap outcomesEncoder br.outcomes
+    , "cases" .= fmap inputCaseEncoder br.cases
     ]
+
+inputCaseEncoder :: InputCase -> Aeson.Value
+inputCaseEncoder ic =
+  Aeson.object $
+    [ "@id" .= ic.id
+    ] ++ [(Aeson.fromText k, Aeson.toJSON v) | (k, v) <- Map.toList ic.attributes]
 
 outcomesEncoder :: Outcomes -> Aeson.Value
 outcomesEncoder (OutcomeAttribute t) = Aeson.String t

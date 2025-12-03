@@ -4,21 +4,25 @@ module TestData (
   rodentAndVerminFunctionSpec,
   rodentAndVerminFunction,
   rodentAndVerminJL4,
+  constantFunctionSpec,
+  constantFunction,
+  constantJL4,
 ) where
 
 import Backend.Jl4 as Jl4
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except
 import qualified Data.Map.Strict as Map
 import Data.String.Interpolate
 import Data.Text (Text)
 import Server
 
-rodentAndVerminFunctionSpec :: ValidatedFunction
-rodentAndVerminFunctionSpec = builtinProgram rodentAndVerminFunction
+rodentAndVerminFunctionSpec :: IO ValidatedFunction
+rodentAndVerminFunctionSpec = either (error . show) id <$> runExceptT rodentAndVerminFunction
 
 -- | Metadata about the function that the user might want to know.
 -- Further, an LLM could use this info to ask specific questions to the user.
-rodentAndVerminFunction :: Except EvaluatorError ValidatedFunction
+rodentAndVerminFunction :: ExceptT EvaluatorError IO ValidatedFunction
 rodentAndVerminFunction = do
   let
     fnDecl =
@@ -47,13 +51,12 @@ rodentAndVerminFunction = do
                 }
         , supportedEvalBackend = [JL4]
         }
+  (runFn, mCompiled) <- liftIO $ Jl4.createFunction "vermin_and_rodent.l4" (toDecl fnDecl) rodentAndVerminJL4 Map.empty
   pure $
     ValidatedFunction
       { fnImpl = fnDecl
-      , fnEvaluator =
-          Map.fromList
-            [ (JL4, Jl4.createFunction (toDecl fnDecl) rodentAndVerminJL4)
-            ]
+      , fnEvaluator = Map.fromList [(JL4, runFn)]
+      , fnCompiled = mCompiled
       }
 
 rodentAndVerminJL4 :: Text
@@ -100,7 +103,36 @@ DECIDE `vermin_and_rodent` IF
      OR `a plumbing, heating, or air conditioning system`
 |]
 
-builtinProgram :: Except EvaluatorError a -> a
-builtinProgram m = case runExcept m of
-  Left err -> error $ "Builtin failed to load " <> show err
-  Right e -> e
+constantFunctionSpec :: IO ValidatedFunction
+constantFunctionSpec = either (error . show) id <$> runExceptT constantFunction
+
+-- | A zero-parameter constant function for testing
+constantFunction :: ExceptT EvaluatorError IO ValidatedFunction
+constantFunction = do
+  let
+    fnDecl =
+      Function
+        { name = "the_answer"
+        , description = "A constant function with no parameters that returns 42"
+        , parameters =
+            MkParameters
+              { parameterMap = Map.empty
+              , required = []
+              }
+        , supportedEvalBackend = [JL4]
+        }
+  (runFn, mCompiled) <- liftIO $ Jl4.createFunction "the_answer.l4" (toDecl fnDecl) constantJL4 Map.empty
+  pure $
+    ValidatedFunction
+      { fnImpl = fnDecl
+      , fnEvaluator = Map.fromList [(JL4, runFn)]
+      , fnCompiled = mCompiled
+      }
+
+constantJL4 :: Text
+constantJL4 =
+  [i|
+GIVETH A NUMBER
+DECIDE the_answer IS 42
+|]
+

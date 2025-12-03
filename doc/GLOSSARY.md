@@ -19,9 +19,11 @@
 
 ## C
 
+- [**CHARAT**](10-data-types.md#strings) - String function to get character at index (STRING → NUMBER → STRING)
 - [**Comments**](20-basic-syntax.md#comments) - Single-line comments `--` or block comments `{- ... -}`
 - [**Conditional Logic**](10-boolean-logic.md#boolean-logic) - IF/THEN/ELSE structures
 - [**CONSIDER**](10-data-types.md#destructuring-with-consider) - Pattern matching operator for type matching
+- [**CONTAINS**](10-data-types.md#strings) - String operator to check if string contains substring (STRING → STRING → BOOLEAN)
 - [**DECIDE**](25-functions.md#functions) - Keyword for defining decision functions
 - [**DIVIDED BY**](10-data-types.md#numbers) - Division operator for numbers `÷`
 
@@ -38,9 +40,12 @@
 
 ## E
 
+- [**EITHER**](30-algebraic-types.md#algebraic-types) - Algebraic data type for representing two possible types (LEFT/RIGHT)
 - [**ELSE**](10-boolean-logic.md#boolean-logic) - Alternative branch in conditional logic
+- [**ENDSWITH**](10-data-types.md#strings) - String operator to check if string ends with suffix (STRING → STRING → BOOLEAN)
 - [**EQUALS**](10-boolean-logic.md#boolean-logic) - Equality comparison operator
 - [**EXACTLY**](default-logic.md#default-reasoning) - Operator for exact matching conditions
+- [**EXPONENT**](10-data-types.md#numbers) - Exponentiation operator for numbers (base to the power of exponent)
 - [**#EVAL**](25-functions.md#functions) - Directive for evaluating expressions inline
 
 ## F
@@ -69,6 +74,7 @@
 - [**IF**](10-boolean-logic.md#boolean-logic) - Conditional operator
 - [**IMPLIES**](10-boolean-logic.md#boolean-logic) - Logical implication operator
 - [**IMPORT**](guide-index.md#import) - Keyword for importing external definitions
+- [**INDEXOF**](10-data-types.md#strings) - String operator to find index of substring (STRING → STRING → NUMBER)
 - [**IS**](10-data-types.md#user-defined-types) - Type assertion operator
 
 ## L
@@ -80,6 +86,7 @@
 
 ## M
 
+- [**MAYBE**](30-algebraic-types.md#algebraic-types) - Algebraic data type for representing optional values (JUST/NOTHING)
 - [**MEANS**](25-functions.md#functions) - Assignment operator for definitions
 - [**MINUS**](10-data-types.md#numbers) - Subtraction operator `-`
 - [**MODULO**](10-data-types.md#numbers) - Modulo operator for numbers `%`
@@ -109,6 +116,7 @@
 ## R
 
 - [**RAND**](10-boolean-logic.md#boolean-logic) - Random AND operator
+- [**REPLACE**](10-data-types.md#strings) - String function to replace all occurrences (STRING → STRING → STRING → STRING)
 - [**ROR**](10-boolean-logic.md#boolean-logic) - Random OR operator
 - [**Records**](10-data-types.md#records) - Composite data types that group related data together
 - [**References**](20-basic-syntax.md#references) - Citations using `@` symbol
@@ -122,8 +130,13 @@
 
 - [**#SEVAL**](25-functions.md#functions) - Directive for evaluating expressions in sections
 - [**Shall Statements**](regulative.md#shall-statements) - Mandatory requirements and obligations
+- [**SPLIT**](10-data-types.md#strings) - String operator to split by delimiter (STRING → STRING → LIST OF STRING)
+- [**SQRT**](10-data-types.md#numbers) - Square root function for numbers
+- [**STARTSWITH**](10-data-types.md#strings) - String operator to check if string starts with prefix (STRING → STRING → BOOLEAN)
 - [**STARTING**](regulative.md#temporal-operators) - Temporal operator for beginning
+- [**STRING LENGTH**](10-data-types.md#strings) - String function to get length (STRING → NUMBER)
 - [**Strings**](10-data-types.md#strings-and-terms) - Text values enclosed in double quotes
+- [**SUBSTRING**](10-data-types.md#strings) - String function to extract substring (STRING → NUMBER → NUMBER → STRING)
 
 ## T
 
@@ -133,6 +146,9 @@
 - [**Time-based Rules**](multitemporals.md#time-based-rules) - Rules that change over time
 - [**TIMES**](10-data-types.md#numbers) - Multiplication operator `*`
 - [**TO**](regulative.md#regulative-rules) - Destination or target operator
+- [**TO LOWER**](10-data-types.md#strings) - String function to convert to lowercase (STRING → STRING)
+- [**TO UPPER**](10-data-types.md#strings) - String function to convert to uppercase (STRING → STRING)
+- [**TRIM**](10-data-types.md#strings) - String function to remove leading and trailing whitespace (STRING → STRING)
 - [**TRUE**](10-data-types.md#booleans) - Boolean true value
 - [**Types**](30-algebraic-types.md#algebraic-types) - Ways to combine and structure data types
 - [**#TRACE**](25-functions.md#functions) - Directive for tracing execution

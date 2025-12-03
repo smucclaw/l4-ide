@@ -1,0 +1,22 @@
+// Test JSON ENCODE with simple primitives
+
+DECIDE encodeString IS
+  JSONENCODE "Hello, World!"
+
+DECIDE encodeNumber IS
+  JSONENCODE 42
+
+DECIDE encodeBool IS
+  JSONENCODE TRUE
+
+DECIDE encodeList IS
+  JSONENCODE (LIST 1, 2, 3)
+
+DECIDE encodeEmptyList IS
+  JSONENCODE EMPTY
+
+#EVAL encodeString
+#EVAL encodeNumber
+#EVAL encodeBool
+#EVAL encodeList
+#EVAL encodeEmptyList

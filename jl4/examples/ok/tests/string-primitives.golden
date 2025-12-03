@@ -1,0 +1,107 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+string-primitives.l4:4:1-27:
+  5
+string-primitives.l4:7:1-22:
+  0
+string-primitives.l4:10:1-33:
+  11
+string-primitives.l4:14:1-22:
+  "HELLO"
+string-primitives.l4:17:1-28:
+  "HELLO WORLD"
+string-primitives.l4:20:1-17:
+  ""
+string-primitives.l4:24:1-22:
+  "hello"
+string-primitives.l4:27:1-28:
+  "hello world"
+string-primitives.l4:31:1-23:
+  "hello"
+string-primitives.l4:34:1-19:
+  "hello"
+string-primitives.l4:37:1-16:
+  ""
+string-primitives.l4:41:1-37:
+  TRUE
+string-primitives.l4:44:1-35:
+  FALSE
+string-primitives.l4:47:1-31:
+  TRUE
+string-primitives.l4:50:1-26:
+  TRUE
+string-primitives.l4:54:1-39:
+  TRUE
+string-primitives.l4:57:1-39:
+  FALSE
+string-primitives.l4:60:1-28:
+  TRUE
+string-primitives.l4:64:1-37:
+  TRUE
+string-primitives.l4:67:1-37:
+  FALSE
+string-primitives.l4:70:1-26:
+  TRUE
+string-primitives.l4:74:1-36:
+  6
+string-primitives.l4:77:1-32:
+  4
+string-primitives.l4:80:1-34:
+  -1
+string-primitives.l4:83:1-25:
+  0
+string-primitives.l4:87:1-34:
+  "hello"
+string-primitives.l4:90:1-34:
+  "world"
+string-primitives.l4:93:1-28:
+  ""
+string-primitives.l4:96:1-28:
+  "ell"
+string-primitives.l4:100:1-44:
+  "hello there"
+string-primitives.l4:103:1-41:
+  "hi hi"
+string-primitives.l4:106:1-30:
+  "hello"
+string-primitives.l4:111:1-20:
+  "Hello World"
+string-primitives.l4:114:1-30:
+  "HELLO WORLD"
+string-primitives.l4:117:1-35:
+  11
+string-primitives.l4:123:1-29:
+  TRUE
+string-primitives.l4:126:1-28:
+  16
+string-primitives.l4:129:1-29:
+  "fox"
+string-primitives.l4:132:1-34:
+  "The quick brown cat jumps over the lazy dog"
+string-primitives.l4:136:1-34:
+  LIST "hello", "world", "foo"
+string-primitives.l4:139:1-22:
+  LIST "one"
+string-primitives.l4:142:1-19:
+  LIST ""
+string-primitives.l4:145:1-27:
+  LIST "a", "b", "c"
+string-primitives.l4:148:1-30:
+  LIST "hello", "world"
+string-primitives.l4:152:1-23:
+  "h"
+string-primitives.l4:155:1-23:
+  "o"
+string-primitives.l4:158:1-23:
+  "l"
+string-primitives.l4:161:1-23:
+  ""
+string-primitives.l4:164:1-24:
+  ""
+string-primitives.l4:167:1-18:
+  ""
+string-primitives.l4:172:1-20:
+  LIST "apple", "banana", "cherry"
+string-primitives.l4:175:1-33:
+  "H"

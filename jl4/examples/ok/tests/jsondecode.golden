@@ -1,0 +1,33 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jsondecode.l4:56:1-19:
+  RIGHT OF "hello"
+jsondecode.l4:57:1-19:
+  RIGHT OF 42
+jsondecode.l4:58:1-20:
+  RIGHT OF 3.14
+jsondecode.l4:59:1-17:
+  RIGHT OF TRUE
+jsondecode.l4:60:1-18:
+  RIGHT OF FALSE
+jsondecode.l4:61:1-17:
+  RIGHT OF NOTHING
+jsondecode.l4:62:1-23:
+  RIGHT OF EMPTY
+jsondecode.l4:63:1-24:
+  RIGHT OF (LIST 1, 2, 3, 4, 5)
+jsondecode.l4:64:1-24:
+  RIGHT OF (LIST "apple", "banana", "cherry")
+jsondecode.l4:65:1-25:
+  RIGHT OF (LIST TRUE, FALSE, TRUE)
+jsondecode.l4:66:1-24:
+  RIGHT OF (LIST LIST 1, 2, LIST 3, 4, LIST 5, 6)
+jsondecode.l4:67:1-24:
+  LEFT OF "Unexpected \"not valid json\", expecting record key literal or }"
+jsondecode.l4:68:1-22:
+  LEFT OF "Unexpected end-of-input, expecting JSON value"
+jsondecode.l4:69:1-22:
+  "hello"
+jsondecode.l4:70:1-22:
+  42

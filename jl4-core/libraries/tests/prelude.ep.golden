@@ -377,15 +377,6 @@ elem x list MEANS
   WHEN EMPTY THEN FALSE
   WHEN y FOLLOWED BY ys THEN x EQUALS y OR elem x ys
 
-GIVEN a IS A TYPE
-GIVETH A TYPE
-DECLARE MAYBE a AKA OPTIONAL
-  IS ONE OF
-    NOTHING
-    JUST
-      HAS
-        payload IS AN a
-
 GIVEN
   a       IS A TYPE
   default IS AN a
@@ -484,6 +475,44 @@ DECLARE PAIR OF a, b
   HAS fst IS AN a
       snd IS A  b
 
+
+// fmap for Pair
+// the type overloading isn't quite happy here
+// so we're going to call it pmap.
+// o for true typeclasses, then we could be proper functors.
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  c    IS A TYPE
+  f    IS A FUNCTION FROM b TO c
+  p    IS A PAIR OF a, b
+GIVETH PAIR OF a, c
+pmap f p MEANS
+  CONSIDER p
+    WHEN PAIR OF k,   v
+    THEN PAIR OF k, f v
+
+
+
+
+
+
+
+GIVEN
+  a    IS A TYPE
+  b    IS A TYPE
+  c    IS A TYPE
+  f    IS A FUNCTION FROM b TO c
+  list IS A LIST OF PAIR OF a, b
+GIVETH A LIST OF PAIR OF a, c
+fmap f list MEANS
+  CONSIDER list
+  WHEN EMPTY                       THEN EMPTY
+  WHEN PAIR OF k, v FOLLOWED BY xs THEN
+    (PAIR OF k, f OF v) FOLLOWED BY (fmap f xs)
+
+
 GIVEN
   a    IS A TYPE
   b    IS A TYPE
@@ -521,13 +550,7 @@ GIVETH A LIST OF PAIR a b
 zip list1 list2 MEANS
   zipWith PAIR list1 list2
 
-GIVEN
-  a IS A TYPE
-  b IS A TYPE
-GIVETH A TYPE
-DECLARE EITHER a b IS ONE OF
-  LEFT  HAS payload IS AN a
-  RIGHT HAS payload IS A  b
+-- EITHER type is now a builtin (like MAYBE)
 
 GIVEN
   a IS A TYPE

@@ -361,6 +361,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e1' <- addNlg e1
       e2' <- addNlg e2
       pure $ Modulo ann e1' e2'
+    Exponent ann e1 e2 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      pure $ Exponent ann e1' e2'
     Cons ann e1 e2 -> do
       e1' <- addNlg e1
       e2' <- addNlg e2
@@ -431,6 +435,17 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
     Event ann e -> Event ann <$> addNlg e
+    Fetch ann e -> Fetch ann <$> addNlg e
+    Env ann e -> Env ann <$> addNlg e
+    Post ann e1 e2 e3 -> do
+      e1' <- addNlg e1
+      e2' <- addNlg e2
+      e3' <- addNlg e3
+      pure $ Post ann e1' e2' e3'
+    Concat ann es -> do
+      es' <- traverse addNlg es
+      pure $ Concat ann es'
+    AsString ann e -> AsString ann <$> addNlg e
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Obligation n) where
   addNlg (MkObligation ann' party event deadline followup lest) = do

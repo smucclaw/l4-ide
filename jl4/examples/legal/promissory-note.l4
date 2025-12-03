@@ -12,7 +12,7 @@ IMPORT daydate
 
 `Interest Rate Per Annum` MEANS 15%                         -- Native support for % numbers!
 
-`Security Collateral` MEANS NOTHING                         -- Just to mention this explicitly. The contract evaluation doesn't require or mention
+`Security Collateral` MEANS NO_COLLATERAL                   -- Just to mention this explicitly. The contract evaluation doesn't require or mention
                                                             -- it, but the underlying jurisdictional laws might allow the claim of collateral if
                                                             -- not explicitly undefined.
 
@@ -219,7 +219,7 @@ GIVEN `Outstanding Payment Amount` IS A Money
 
 ASSUME NaN IS A NUMBER                      -- JS coders rejoice :D
 
-ASSUME NOTHING IS A STRING
+ASSUME NO_COLLATERAL IS A STRING
 
 DECLARE Money                               -- Defining a Money Type might actually only be helpful for multi-currency constracts.
     HAS Currency            IS A STRING     -- In this case it is probably too much detail and it could've been solved easier by

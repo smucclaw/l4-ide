@@ -1,0 +1,12 @@
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+
+GIVEN s IS A STRING
+GIVETH AN EITHER STRING Person
+decodePerson s MEANS JSONDECODE s
+
+DECIDE json IS "{\"name\":\"Bob\",\"age\":25}"
+DECIDE result IS decodePerson json
+
+#EVAL result

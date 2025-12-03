@@ -1,0 +1,21 @@
+// Example: Using POST with JSON ENCODE
+// This demonstrates manually building JSON and sending it via POST
+
+DECIDE createJsonPayload IS
+  // Manually construct JSON for now
+  "{\"test\": \"data from L4\", \"number\": 42, \"nested\": {\"value\": true}}"
+
+DECIDE sendPost IS
+  POST
+    "https://httpbin.org/post"
+    ""
+    createJsonPayload
+
+#EVAL sendPost
+
+// Future enhancement: build the payload with JSON ENCODE
+// DECIDE payload IS
+//   JSON ENCODE (SomeRecord { field1 IS "value", field2 IS 42 })
+//
+// DECIDE sendPostWithEncoding IS
+//   POST "https://httpbin.org/post" "" payload

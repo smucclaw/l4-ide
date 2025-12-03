@@ -1,0 +1,60 @@
+// Comprehensive test for JSON encoding of various nested structures
+// Tests: primitives, lists of primitives, lists of lists, lists of records,
+//        records with primitives, records with lists, records with records
+
+DECLARE Address HAS
+  street IS A STRING
+  city IS A STRING
+
+DECLARE Person HAS
+  name IS A STRING
+  age IS A NUMBER
+  address IS A Address
+
+DECLARE Team HAS
+  teamName IS A STRING
+  members IS A LIST OF Person
+
+// Test 1: List of primitives
+DECIDE numbers IS LIST 1, 2, 3
+#EVAL JSONENCODE numbers
+
+// Test 2: List of lists
+DECIDE matrix IS LIST (LIST 1, 2), (LIST 3, 4)
+#EVAL JSONENCODE matrix
+
+// Test 3: List of records
+DECIDE addr1 IS Address WITH street IS "Main St", city IS "NYC"
+DECIDE addr2 IS Address WITH street IS "Oak Ave", city IS "LA"
+DECIDE addresses IS LIST addr1, addr2
+#EVAL JSONENCODE addresses
+
+// Test 4: Record with primitives
+DECIDE simpleAddr IS Address WITH street IS "First St", city IS "Boston"
+#EVAL JSONENCODE simpleAddr
+
+// Test 5: Record containing a record
+DECIDE alice IS Person WITH
+  name IS "Alice"
+  age IS 30
+  address IS Address WITH street IS "Elm St", city IS "Seattle"
+#EVAL JSONENCODE alice
+
+// Test 6: Record containing a list of primitives
+DECLARE Stats HAS
+  name IS A STRING
+  scores IS A LIST OF NUMBER
+DECIDE stats IS Stats WITH
+  name IS "Player1"
+  scores IS LIST 100, 95, 88
+#EVAL JSONENCODE stats
+
+// Test 7: Record containing a list of records
+DECIDE bob IS Person WITH
+  name IS "Bob"
+  age IS 25
+  address IS Address WITH street IS "Pine Rd", city IS "Austin"
+DECIDE team IS Team WITH
+  teamName IS "Alpha"
+  members IS LIST alice, bob
+#EVAL JSONENCODE team

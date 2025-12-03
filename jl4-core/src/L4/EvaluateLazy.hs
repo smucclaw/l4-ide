@@ -2,6 +2,7 @@
 module L4.EvaluateLazy
 ( EvalDirectiveResult (..)
 , EvalDirectiveValue(..)
+, EntityInfo
 , execEvalModuleWithEnv
 , execEvalExprInContextOfModule
 , prettyEvalException
@@ -21,6 +22,7 @@ import L4.Parser.SrcSpan (SrcRange)
 import L4.Annotation
 import L4.Print
 import L4.Syntax
+import L4.TypeCheck.Types (EntityInfo)
 
 import Control.Concurrent
 
@@ -29,10 +31,11 @@ import Control.Concurrent
 -----------------------------------------------------------------------------
 data EvalState =
   MkEvalState
-    { moduleUri :: !NormalizedUri
-    , stack     :: !(IORef Stack)
-    , supply    :: !(IORef Int)   -- used for uniques and addresses
-    , evalTrace :: !(Maybe (IORef (DList EvalTraceAction)))
+    { moduleUri  :: !NormalizedUri
+    , stack      :: !(IORef Stack)
+    , supply     :: !(IORef Int)   -- used for uniques and addresses
+    , evalTrace  :: !(Maybe (IORef (DList EvalTraceAction)))
+    , entityInfo :: !EntityInfo    -- type information for constructors/records
     }
 
 newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
@@ -160,10 +163,12 @@ interpMachine = \ case
     conf <- lookupAndUpdateRef rf (k tid)
     interpMachine $ pure conf
   Bind act k -> interpMachine act >>= interpMachine . k
+  LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
     traceEval Push
     pushFrame (interpMachine . Exception) f
   NewUnique -> newUnique
+  GetEntityInfo -> asks (.entityInfo)
 
 traceEval :: EvalTraceAction -> Eval ()
 traceEval ta = do
@@ -301,6 +306,14 @@ nfAux d (ValObligation env party act due followup lest) = do
   pure (MkNF (ValObligation env party' act due' followup lest))
 nfAux _d (ValUnaryBuiltinFun b)      = pure (MkNF (ValUnaryBuiltinFun b))
 nfAux _d (ValBinaryBuiltinFun b)     = pure (MkNF (ValBinaryBuiltinFun b))
+nfAux _d (ValTernaryBuiltinFun b)    = pure (MkNF (ValTernaryBuiltinFun b))
+nfAux  d (ValPartialTernary b r1)    = do
+  v1 <- evalAndNF d r1
+  pure (MkNF (ValPartialTernary b v1))
+nfAux  d (ValPartialTernary2 b r1 r2) = do
+  v1 <- evalAndNF d r1
+  v2 <- evalAndNF d r2
+  pure (MkNF (ValPartialTernary2 b v1 v2))
 nfAux _d (ValUnappliedConstructor n) = pure (MkNF (ValUnappliedConstructor n))
 nfAux  d (ValConstructor n rs)       = do
   vs <- traverse (evalAndNF d) rs
@@ -336,14 +349,14 @@ evalAndNF d r = do
 -- Returns the environment of the entities defined in *this* module, and
 -- the results of the (L)EVAL directives in this module.
 --
-execEvalModuleWithEnv :: Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
-execEvalModuleWithEnv env m@(MkModule _ moduleUri _) = do
+execEvalModuleWithEnv :: EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
+execEvalModuleWithEnv entityInfo env m@(MkModule _ moduleUri _) = do
   case evalModuleAndDirectives env m of
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo}
       case r of
         Left _exc -> do
           -- exceptions at the top-level are unusual; after all, we don't actually
@@ -374,15 +387,15 @@ be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
 Also, it's not clear how much caching can actually be done,
 given that we won't be re-using the result from this.
  -}
-execEvalExprInContextOfModule :: Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
-execEvalExprInContextOfModule expr (env, m) = do
+execEvalExprInContextOfModule :: EntityInfo -> Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
+execEvalExprInContextOfModule entityInfo expr (env, m) = do
   let
     evalExprDirective =
       Directive emptyAnno $ LazyEval emptyAnno expr
     -- Didn't make a new module that imported the context module,
     -- because making the import requires a Resolved.
     moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
-  (_, res) <- execEvalModuleWithEnv env (evalExprDirective `prependToModule` moduleWithoutDirectives)
+  (_, res) <- execEvalModuleWithEnv entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
   case res of
     [result] -> pure (Just result)
     _        -> pure Nothing

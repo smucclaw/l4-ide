@@ -1,0 +1,86 @@
+// Test round-trip JSON encoding/decoding with nested structures
+// This ensures JSONENCODE and JSONDECODE work symmetrically
+
+§ `Test JSON Round-trip with Nested Structures`
+
+// Test 1: Nested record round-trip
+DECLARE `Inner` HAS
+  `field` IS A STRING
+
+DECLARE `Outer` HAS
+  `nested` IS A `Inner`
+  `value` IS A NUMBER
+
+DECIDE originalOuter IS
+  Outer OF (Inner OF "hello"), 42
+
+DECIDE encodedOuter IS
+  JSONENCODE originalOuter
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `Outer`
+decodeOuter json MEANS
+  JSONDECODE json
+
+DECIDE decodedOuter IS
+  decodeOuter encodedOuter
+
+#EVAL originalOuter
+#EVAL encodedOuter
+#EVAL decodedOuter
+
+// Test 2: List of records round-trip
+DECLARE `Item` HAS
+  `name` IS A STRING
+  `value` IS A NUMBER
+
+DECLARE `List Container` HAS
+  `items` IS A LIST OF `Item`
+
+DECIDE originalList IS
+  `List Container` OF (LIST (Item OF "first", 1), (Item OF "second", 2))
+
+DECIDE encodedList IS
+  JSONENCODE originalList
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `List Container`
+decodeListContainer json MEANS
+  JSONDECODE json
+
+DECIDE decodedList IS
+  decodeListContainer encodedList
+
+#EVAL originalList
+#EVAL encodedList
+#EVAL decodedList
+
+// Test 3: Deeply nested structure
+DECLARE `Leaf` HAS
+  `data` IS A STRING
+
+DECLARE `Branch` HAS
+  `leaf` IS A `Leaf`
+  `count` IS A NUMBER
+
+DECLARE `Tree` HAS
+  `branches` IS A LIST OF `Branch`
+  `name` IS A STRING
+
+DECIDE originalTree IS
+  Tree OF (LIST (Branch OF (Leaf OF "data1"), 1), (Branch OF (Leaf OF "data2"), 2)), "MyTree"
+
+DECIDE encodedTree IS
+  JSONENCODE originalTree
+
+GIVEN json IS A STRING
+GIVETH A MAYBE `Tree`
+decodeTree json MEANS
+  JSONDECODE json
+
+DECIDE decodedTree IS
+  decodeTree encodedTree
+
+#EVAL originalTree
+#EVAL encodedTree
+#EVAL decodedTree

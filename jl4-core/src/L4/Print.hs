@@ -266,6 +266,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
       parensIfNeeded e1 <+> "DIVIDED" <+> parensIfNeeded e2
     Modulo     _ e1 e2 ->
       parensIfNeeded e1 <+> "MODULO" <+> parensIfNeeded e2
+    Exponent   _ e1 e2 ->
+      parensIfNeeded e1 <+> "TO THE POWER OF" <+> parensIfNeeded e2
     Cons       _ e1 e2 ->
       parensIfNeeded e1 <+> "FOLLOWED BY" <+> parensIfNeeded e2
     Leq        _ e1 e2 ->
@@ -320,6 +322,16 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         , "DOES" <+> printWithLayout action
         , "AT" <+> printWithLayout timestamp -- TODO: better timestamp rendering
         ]
+    Fetch _ e ->
+      "FETCH" <+> printWithLayout e
+    Env _ e ->
+      "ENV" <+> printWithLayout e
+    Post _ e1 e2 e3 ->
+      "POST" <+> printWithLayout e1 <+> printWithLayout e2 <+> printWithLayout e3
+    Concat _ exprs ->
+      "CONCAT" <+> hsep (punctuate comma (fmap parensIfNeeded exprs))
+    AsString _ e ->
+      parensIfNeeded e <+> "AS STRING"
 
   parensIfNeeded :: LayoutPrinter a => Expr a -> Doc ann
   parensIfNeeded e = case e of
@@ -414,6 +426,9 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValClosure{}              -> "<function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValBinaryBuiltinFun{}     -> "<function>"
+    Lazy.ValTernaryBuiltinFun{}    -> "<builtin-function>"
+    Lazy.ValPartialTernary{}       -> "<partial-function>"
+    Lazy.ValPartialTernary2{}      -> "<partial-function>"
     Lazy.ValAssumed r              -> printWithLayout r
     Lazy.ValUnappliedConstructor r -> printWithLayout r
     Lazy.ValConstructor r vs       -> printWithLayout r <> case vs of
@@ -450,12 +465,19 @@ instance LayoutPrinter BinOp where
     BinOpTimes -> "TIMES"
     BinOpDividedBy -> "DIVIDED"
     BinOpModulo -> "MODULO"
+    BinOpExponent -> "TO THE POWER OF"
     BinOpCons -> "FOLLOWED BY"
     BinOpEquals -> "EQUALS"
     BinOpLeq -> "AT MOST"
     BinOpGeq -> "AT LEAST"
     BinOpLt -> "LESS THAN"
     BinOpGt -> "GREATER THAN"
+    BinOpContains -> "CONTAINS"
+    BinOpStartsWith -> "STARTSWITH"
+    BinOpEndsWith -> "ENDSWITH"
+    BinOpIndexOf -> "INDEXOF"
+    BinOpSplit -> "SPLIT"
+    BinOpCharAt -> "CHARAT"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case

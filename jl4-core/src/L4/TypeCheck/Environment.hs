@@ -22,8 +22,15 @@ mkBuiltins
   , "true"
   , "number"
   , "string"
+  , "keyword"  -- For mixfix keyword placeholders
   , "list"
   , "empty"
+  , "maybe" `rename` "MAYBE"
+  , "nothing" `rename` "NOTHING"
+  , "just" `rename` "JUST"
+  , "either" `rename` "EITHER"
+  , "left" `rename` "LEFT"
+  , "right" `rename` "RIGHT"
   , "contract" `rename` "PROVISION"
   , "fulfil" `rename` "FULFILLED"
   , "evalContract" `rename` "EVALTRACE"
@@ -33,7 +40,14 @@ mkBuiltins
   , "floor" `rename` "FLOOR"
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
+  , "sqrt" `rename` "SQRT"
+  , "exponent" `rename` "EXPONENT"
   , "waitUntil" `rename`  "WAIT UNTIL"
+  , "fetch" `rename` "FETCH"
+  , "env" `rename` "ENV"
+  , "post" `rename` "POST"
+  , "jsonEncode" `rename` "JSONENCODE"
+  , "jsonDecode" `rename` "JSONDECODE"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -56,6 +70,21 @@ mkBuiltins
   -- for its timestamp
   , "neverMatchesParty", "neverMatchesAct"
   , "underscore" `rename` "_"
+  -- String functions (unary)
+  , "stringLength" `rename` "STRINGLENGTH"
+  , "toUpper" `rename` "TOUPPER"
+  , "toLower" `rename` "TOLOWER"
+  , "trim" `rename` "TRIM"
+  -- String functions (binary)
+  , "contains" `rename` "CONTAINS"
+  , "startsWith" `rename` "STARTSWITH"
+  , "endsWith" `rename` "ENDSWITH"
+  , "indexOf" `rename` "INDEXOF"
+  , "split" `rename` "SPLIT"
+  , "charAt" `rename` "CHARAT"
+  -- String functions (ternary)
+  , "substring" `rename` "SUBSTRING"
+  , "replace" `rename` "REPLACE"
   ]
 
 boolean :: Type' Resolved
@@ -71,10 +100,24 @@ number = app numberRef []
 string :: Type' Resolved
 string = TyApp emptyAnno stringRef []
 
+-- KEYWORD (for mixfix keyword placeholders)
+keyword :: Type' Resolved
+keyword = TyApp emptyAnno keywordRef []
+
 -- LIST
 
 list :: Type' Resolved -> Type' Resolved
 list a = app listRef [a]
+
+-- MAYBE
+
+maybeType :: Type' Resolved -> Type' Resolved
+maybeType a = app maybeRef [a]
+
+-- EITHER
+
+eitherType :: Type' Resolved -> Type' Resolved -> Type' Resolved
+eitherType a b = app eitherRef [a, b]
 
 -- PROVISION
 
@@ -94,6 +137,31 @@ ceilingBuiltin = fun_ [number] number
 
 floorBuiltin :: Type' Resolved
 floorBuiltin = fun_ [number] number
+
+sqrtBuiltin :: Type' Resolved
+sqrtBuiltin = fun_ [number] number
+
+exponentBuiltin :: Type' Resolved
+exponentBuiltin = binOpFun
+
+fetchBuiltin :: Type' Resolved
+fetchBuiltin = fun_ [string] string
+
+envBuiltin :: Type' Resolved
+envBuiltin = fun_ [string] (maybeType string)
+
+postBuiltin :: Type' Resolved
+postBuiltin = fun_ [string, string, string] string
+
+jsonEncodeBuiltin :: Type' Resolved
+jsonEncodeBuiltin = forall' [aDef] $ fun_ [a] string
+  where
+    a = app aRef []
+
+jsonDecodeBuiltin :: Type' Resolved
+jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (eitherType string a)
+  where
+    a = app aRef []
 
 -- Basic Arithmetic
 
@@ -169,6 +237,52 @@ equalsBuiltin = forall' [aDef] $ fun_ [a, a] boolean
   where
     a = app aRef []
 
+-- String functions
+
+-- Unary: STRING → NUMBER
+stringLengthBuiltin :: Type' Resolved
+stringLengthBuiltin = fun_ [string] number
+
+-- Unary: STRING → STRING
+toUpperBuiltin :: Type' Resolved
+toUpperBuiltin = fun_ [string] string
+
+toLowerBuiltin :: Type' Resolved
+toLowerBuiltin = fun_ [string] string
+
+trimBuiltin :: Type' Resolved
+trimBuiltin = fun_ [string] string
+
+-- Binary: STRING → STRING → BOOLEAN
+containsBuiltin :: Type' Resolved
+containsBuiltin = fun_ [string, string] boolean
+
+startsWithBuiltin :: Type' Resolved
+startsWithBuiltin = fun_ [string, string] boolean
+
+endsWithBuiltin :: Type' Resolved
+endsWithBuiltin = fun_ [string, string] boolean
+
+-- Binary: STRING → STRING → NUMBER
+indexOfBuiltin :: Type' Resolved
+indexOfBuiltin = fun_ [string, string] number
+
+-- Binary: STRING → STRING → LIST OF STRING
+splitBuiltin :: Type' Resolved
+splitBuiltin = fun_ [string, string] (list string)
+
+-- Binary: STRING → NUMBER → STRING
+charAtBuiltin :: Type' Resolved
+charAtBuiltin = fun_ [string, number] string
+
+-- Ternary: STRING → NUMBER → NUMBER → STRING
+substringBuiltin :: Type' Resolved
+substringBuiltin = fun_ [string, number, number] string
+
+-- Ternary: STRING → STRING → STRING → STRING
+replaceBuiltin :: Type' Resolved
+replaceBuiltin = fun_ [string, string, string] string
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -195,6 +309,11 @@ stringInfo :: CheckEntity
 stringInfo =
   KnownType 0 [] Nothing
 
+-- KEYWORD (for mixfix keyword placeholders)
+keywordInfo :: CheckEntity
+keywordInfo =
+  KnownType 0 [] Nothing
+
 listInfo :: CheckEntity
 listInfo =
   KnownType 1 [aDef] Nothing
@@ -202,6 +321,30 @@ listInfo =
 emptyInfo :: CheckEntity
 emptyInfo =
   KnownTerm (forall' [aDef] (list (app aRef []))) Constructor
+
+maybeInfo :: CheckEntity
+maybeInfo =
+  KnownType 1 [aDef] Nothing
+
+nothingInfo :: CheckEntity
+nothingInfo =
+  KnownTerm (forall' [aDef] (maybeType (app aRef []))) Constructor
+
+justInfo :: CheckEntity
+justInfo =
+  KnownTerm (forall' [aDef] (fun_ [app aRef []] (maybeType (app aRef [])))) Constructor
+
+eitherInfo :: CheckEntity
+eitherInfo =
+  KnownType 2 [aDef, bDef] Nothing
+
+leftInfo :: CheckEntity
+leftInfo =
+  KnownTerm (forall' [aDef, bDef] (fun_ [app aRef []] (eitherType (app aRef []) (app bRef [])))) Constructor
+
+rightInfo :: CheckEntity
+rightInfo =
+  KnownTerm (forall' [aDef, bDef] (fun_ [app bRef []] (eitherType (app aRef []) (app bRef [])))) Constructor
 
 -- Number conversion
 
@@ -220,6 +363,34 @@ ceilingInfo =
 floorInfo :: CheckEntity
 floorInfo =
   KnownTerm floorBuiltin Computable
+
+sqrtInfo :: CheckEntity
+sqrtInfo =
+  KnownTerm sqrtBuiltin Computable
+
+exponentInfo :: CheckEntity
+exponentInfo =
+  KnownTerm exponentBuiltin Computable
+
+fetchInfo :: CheckEntity
+fetchInfo =
+  KnownTerm fetchBuiltin Computable
+
+envInfo :: CheckEntity
+envInfo =
+  KnownTerm envBuiltin Computable
+
+postInfo :: CheckEntity
+postInfo =
+  KnownTerm postBuiltin Computable
+
+jsonEncodeInfo :: CheckEntity
+jsonEncodeInfo =
+  KnownTerm jsonEncodeBuiltin Computable
+
+jsonDecodeInfo :: CheckEntity
+jsonDecodeInfo =
+  KnownTerm jsonDecodeBuiltin Computable
 
 -- Basic Arithmetic
 
@@ -262,6 +433,44 @@ consInfo = KnownTerm consBuiltin Computable
 
 equalsInfo :: CheckEntity
 equalsInfo = KnownTerm equalsBuiltin Computable
+
+-- String functions
+
+stringLengthInfo :: CheckEntity
+stringLengthInfo = KnownTerm stringLengthBuiltin Computable
+
+toUpperInfo :: CheckEntity
+toUpperInfo = KnownTerm toUpperBuiltin Computable
+
+toLowerInfo :: CheckEntity
+toLowerInfo = KnownTerm toLowerBuiltin Computable
+
+trimInfo :: CheckEntity
+trimInfo = KnownTerm trimBuiltin Computable
+
+containsInfo :: CheckEntity
+containsInfo = KnownTerm containsBuiltin Computable
+
+startsWithInfo :: CheckEntity
+startsWithInfo = KnownTerm startsWithBuiltin Computable
+
+endsWithInfo :: CheckEntity
+endsWithInfo = KnownTerm endsWithBuiltin Computable
+
+indexOfInfo :: CheckEntity
+indexOfInfo = KnownTerm indexOfBuiltin Computable
+
+splitInfo :: CheckEntity
+splitInfo = KnownTerm splitBuiltin Computable
+
+charAtInfo :: CheckEntity
+charAtInfo = KnownTerm charAtBuiltin Computable
+
+substringInfo :: CheckEntity
+substringInfo = KnownTerm substringBuiltin Computable
+
+replaceInfo :: CheckEntity
+replaceInfo = KnownTerm replaceBuiltin Computable
 
 -- Comparison
 
@@ -323,6 +532,12 @@ initialEnvironment =
     , (rawName stringName,       [stringUnique      ])
     , (rawName listName,         [listUnique        ])
     , (rawName emptyName,        [emptyUnique       ])
+    , (rawName maybeName,        [maybeUnique       ])
+    , (rawName nothingName,      [nothingUnique     ])
+    , (rawName justName,         [justUnique        ])
+    , (rawName eitherName,       [eitherUnique      ])
+    , (rawName leftName,         [leftUnique        ])
+    , (rawName rightName,        [rightUnique       ])
     , (rawName contractName,     [contractUnique    ])
     , (rawName eventName,        [eventUnique       ])
     , (rawName eventCName,       [eventCUnique      ])
@@ -332,6 +547,12 @@ initialEnvironment =
     , (rawName roundName,        [roundUnique     ])
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
+    , (rawName sqrtName,         [sqrtUnique      ])
+    , (rawName exponentName,     [exponentUnique  ])
+    , (rawName fetchName,        [fetchUnique     ])
+    , (rawName envName,          [envUnique       ])
+    , (rawName jsonEncodeName,   [jsonEncodeUnique])
+    , (rawName jsonDecodeName,   [jsonDecodeUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -348,6 +569,19 @@ initialEnvironment =
     , (rawName consName,         [consUnique      ])
     , (rawName equalsName,       [equalsUnique    ])
     , (rawName waitUntilName,    [waitUntilUnique])
+    -- String functions
+    , (rawName stringLengthName, [stringLengthUnique])
+    , (rawName toUpperName,      [toUpperUnique     ])
+    , (rawName toLowerName,      [toLowerUnique     ])
+    , (rawName trimName,         [trimUnique        ])
+    , (rawName containsName,     [containsUnique    ])
+    , (rawName startsWithName,   [startsWithUnique  ])
+    , (rawName endsWithName,     [endsWithUnique    ])
+    , (rawName indexOfName,      [indexOfUnique     ])
+    , (rawName splitName,        [splitUnique       ])
+    , (rawName charAtName,       [charAtUnique      ])
+    , (rawName substringName,    [substringUnique   ])
+    , (rawName replaceName,      [replaceUnique     ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -361,6 +595,12 @@ initialEntityInfo =
     , (stringUnique,       (stringName,       stringInfo      ))
     , (listUnique,         (listName,         listInfo        ))
     , (emptyUnique,        (emptyName,        emptyInfo       ))
+    , (maybeUnique,        (maybeName,        maybeInfo       ))
+    , (nothingUnique,      (nothingName,      nothingInfo     ))
+    , (justUnique,         (justName,         justInfo        ))
+    , (eitherUnique,       (eitherName,       eitherInfo      ))
+    , (leftUnique,         (leftName,         leftInfo        ))
+    , (rightUnique,        (rightName,        rightInfo       ))
     , (contractUnique,     (contractName,     contractInfo    ))
     , (eventUnique,        (eventName,        eventInfo       ))
     , (eventCUnique,       (eventCName,       eventCInfo      ))
@@ -370,6 +610,13 @@ initialEntityInfo =
     , (roundUnique,        (roundName,        roundInfo       ))
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
+    , (sqrtUnique,         (sqrtName,         sqrtInfo        ))
+    , (exponentUnique,     (exponentName,     exponentInfo    ))
+    , (fetchUnique,        (fetchName,        fetchInfo       ))
+    , (envUnique,          (envName,          envInfo         ))
+    , (postUnique,         (postName,         postInfo        ))
+    , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
+    , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))
@@ -382,6 +629,19 @@ initialEntityInfo =
     , (consUnique,         (consName,         consInfo        ))
     , (equalsUnique,       (equalsName,       equalsInfo      ))
     , (waitUntilUnique,    (waitUntilName,    waitUntilInfo   ))
+    -- String functions
+    , (stringLengthUnique, (stringLengthName, stringLengthInfo))
+    , (toUpperUnique,      (toUpperName,      toUpperInfo     ))
+    , (toLowerUnique,      (toLowerName,      toLowerInfo     ))
+    , (trimUnique,         (trimName,         trimInfo        ))
+    , (containsUnique,     (containsName,     containsInfo    ))
+    , (startsWithUnique,   (startsWithName,   startsWithInfo  ))
+    , (endsWithUnique,     (endsWithName,     endsWithInfo    ))
+    , (indexOfUnique,      (indexOfName,      indexOfInfo     ))
+    , (splitUnique,        (splitName,        splitInfo       ))
+    , (charAtUnique,       (charAtName,       charAtInfo      ))
+    , (substringUnique,    (substringName,    substringInfo   ))
+    , (replaceUnique,      (replaceName,      replaceInfo     ))
     ]
     <>
       [ (uniq, (name, info))
