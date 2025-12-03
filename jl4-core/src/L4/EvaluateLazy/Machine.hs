@@ -1617,21 +1617,21 @@ evalTopDecl _env (Import _ann _import_) =
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
 evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False False expr env]
+  pure [MkEvalDirective (rangeOf ann) False False False expr env]
 evalDirective env (LazyEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True False expr env]
+  pure [MkEvalDirective (rangeOf ann) True False False expr env]
 evalDirective env (PresumptiveEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False False expr env]
+  pure [MkEvalDirective (rangeOf ann) False False True expr env]
 evalDirective env (PresumptiveEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True False expr env]
+  pure [MkEvalDirective (rangeOf ann) True False True expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
 evalDirective env (Assert ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False True expr env]
+  pure [MkEvalDirective (rangeOf ann) False True False expr env]
 evalDirective env (PresumptiveAssert ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False True expr env]
+  pure [MkEvalDirective (rangeOf ann) False True True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do
@@ -1670,9 +1670,9 @@ updateTerm env n thunk = do
 evalDecide :: Environment -> Decide Resolved -> Machine ()
 evalDecide env (MkDecide _ann _tysig (MkAppForm _ n []   _maka) expr) =
   updateTerm env n (Unevaluated Set.empty expr env)
-evalDecide env (MkDecide _ann _tysig (MkAppForm _ n args _maka) expr) = do
+evalDecide env (MkDecide _ann (MkTypeSig _ givenSig _) (MkAppForm _ n _args _maka) expr) = do
   let
-    v = ValClosure (MkGivenSig emptyAnno ((\ r -> MkOptionallyTypedName emptyAnno r Nothing Nothing) <$> args)) expr env
+    v = ValClosure givenSig expr env
   updateTerm env n (WHNF v)
 
 -- We are assuming that the environment already contains an entry with an address for us.
@@ -1789,11 +1789,12 @@ emptyEnvironment = Map.empty
 
 data EvalDirective =
   MkEvalDirective
-    { range    :: Maybe SrcRange -- ^ of the (L)EVAL directive
-    , trace    :: !Bool -- ^ whether a trace is wanted
-    , isAssert :: !Bool -- ^ whether it is to be treated as an assertion
-    , expr     :: !(Expr Resolved) -- ^ expression to evaluate
-    , env      :: !Environment -- ^ environment to evaluate the expression in
+    { range       :: Maybe SrcRange -- ^ of the (L)EVAL directive
+    , trace       :: !Bool -- ^ whether a trace is wanted
+    , isAssert    :: !Bool -- ^ whether it is to be treated as an assertion
+    , presumptive :: !Bool -- ^ whether to honor TYPICALLY defaults (True for PEVAL, False for EVAL)
+    , expr        :: !(Expr Resolved) -- ^ expression to evaluate
+    , env         :: !Environment -- ^ environment to evaluate the expression in
     }
   deriving stock (Generic, Show)
 

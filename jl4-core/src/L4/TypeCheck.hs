@@ -728,10 +728,13 @@ ensureTypeNameConsistency [] (MkOptionallyTypedName ann n mt _ : otns) = do
   pure ([], MkOptionallyTypedName ann rn rmt Nothing : rotns, extends)
 
 mkref :: Resolved -> OptionallyTypedName Name -> Check (OptionallyTypedName Resolved)
-mkref r (MkOptionallyTypedName ann n mt _) = do
+mkref r (MkOptionallyTypedName ann n mt typically) = do
   rn <- ref n r
   rmt <- traverse inferType mt
-  pure (MkOptionallyTypedName ann rn rmt Nothing)
+  rTypically <- case (typically, rmt) of
+    (Just expr, Just ty) -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr ty
+    _ -> pure Nothing
+  pure (MkOptionallyTypedName ann rn rmt rTypically)
 
 appFormType :: AppForm Resolved -> Type' Resolved
 appFormType (MkAppForm _ann n args _maka) = app n (tyvar <$> args)

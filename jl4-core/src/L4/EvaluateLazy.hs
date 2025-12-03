@@ -220,21 +220,22 @@ runConfig = \ case
 
 -- | Evaluate an EVAL directive. For this, we evaluate to normal form,
 -- not just WHNF.
--- Note: The 'strict' field indicates whether TYPICALLY defaults should be ignored.
--- When strict=True, missing inputs without explicit values should resolve to Unknown.
--- This is currently tracked but the actual behavior change requires integration
--- with how the environment is built (see TYPICALLY-DEFAULTS-SPEC.md).
+-- When presumptive=True (PEVAL/PEVALTRACE/PASSERT), TYPICALLY defaults are applied
+-- to closures before evaluation. When presumptive=False (EVAL/EVALTRACE/ASSERT),
+-- closures with missing arguments remain as closures.
 nfDirective :: EvalDirective -> Eval EvalDirectiveResult
-nfDirective (MkEvalDirective r traced isAssert expr env) = do
+nfDirective (MkEvalDirective r traced isAssert presumptive expr env) = do
   (v, mt) <-
     if traced
       then second Just <$> do
         captureTrace $ tryEval $ do
           whnf <- runConfig $ ForwardMachine env expr
-          nf whnf
+          whnf' <- maybeApplyDefaults presumptive whnf
+          nf whnf'
       else fmap (, Nothing) $ tryEval $ do
         whnf <- runConfig $ ForwardMachine env expr
-        nf whnf
+        whnf' <- maybeApplyDefaults presumptive whnf
+        nf whnf'
   let
     finalTrace = postprocessTrace <$> mt
     v' =
@@ -245,6 +246,30 @@ nfDirective (MkEvalDirective r traced isAssert expr env) = do
             _                           -> False
         else Reduction v
   pure (MkEvalDirectiveResult r v' finalTrace)
+
+-- | Apply TYPICALLY defaults to a closure when in presumptive mode.
+-- If the WHNF is a closure and presumptive=True, we apply defaults from
+-- the GivenSig to evaluate the closure body.
+maybeApplyDefaults :: Bool -> WHNF -> Eval WHNF
+maybeApplyDefaults False whnf = pure whnf
+maybeApplyDefaults True whnf = case whnf of
+  ValClosure givens bodyExpr closureEnv -> do
+    let defaults = extractTypicallyDefaults givens
+    if Map.null defaults
+      then pure whnf
+      else do
+        defaultEnv <- allocateDefaults defaults closureEnv
+        let combinedEnv = Map.union defaultEnv closureEnv
+        runConfig $ ForwardMachine combinedEnv bodyExpr
+  _ -> pure whnf
+
+-- | Allocate references for default expressions and create an environment.
+allocateDefaults :: Map Unique (Expr Resolved) -> Environment -> Eval Environment
+allocateDefaults defaults closureEnv = do
+  pairs <- forM (Map.toList defaults) $ \(u, defaultExpr) -> do
+    (rf, _) <- interpMachine $ Allocate defaultExpr (const closureEnv)
+    pure (u, rf)
+  pure $ Map.fromList pairs
 
 postprocessTrace :: [EvalTraceAction] -> EvalTrace
 postprocessTrace actions =

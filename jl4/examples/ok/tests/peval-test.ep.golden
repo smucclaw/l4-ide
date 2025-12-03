@@ -1,0 +1,21 @@
+-- Test PEVAL vs EVAL with TYPICALLY defaults
+
+GIVEN
+  age IS A NUMBER 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+-- EVAL should return a closure (age not provided)
+#EVAL `can vote`
+
+-- PEVAL should apply the default (age=18) and return TRUE
+#PEVAL `can vote`
+
+GIVEN
+  x IS A NUMBER 10
+  y IS A NUMBER 20
+GIVETH A NUMBER
+DECIDE `sum` IS x + y
+
+-- PEVAL should return 30 (10 + 20)
+#PEVAL `sum`

@@ -1,0 +1,9 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+peval-test.l4:9:1-17:
+  <function>
+peval-test.l4:12:1-18:
+  TRUE
+peval-test.l4:21:1-13:
+  30

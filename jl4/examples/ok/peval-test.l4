@@ -1,0 +1,38 @@
+-- Test PEVAL vs EVAL with TYPICALLY defaults
+
+GIVEN
+  age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+-- EVAL with no arguments returns a closure (age not provided)
+#EVAL `can vote`
+
+-- PEVAL auto-applies defaults when the result is a closure
+-- Since 'can vote' has no arguments provided, it evaluates to a closure,
+-- and PEVAL detects the TYPICALLY defaults in the closure's GivenSig
+-- and automatically applies them.
+#PEVAL `can vote`
+
+GIVEN
+  x IS A NUMBER TYPICALLY 10
+  y IS A NUMBER TYPICALLY 20
+GIVETH A NUMBER
+DECIDE `sum` IS x + y
+
+-- PEVAL auto-applies both defaults: returns 30 (10 + 20)
+#PEVAL `sum`
+
+-- TODO: Implement wrapper generation for explicit MAYBE parameter control
+-- The following syntax is desired but not yet implemented:
+--
+-- GIVEN age IS A MAYBE NUMBER
+-- GIVETH A MAYBE BOOLEAN
+-- DECIDE `presumptive can vote` IS
+--   CONSIDER age
+--     WHEN NOTHING  -> JUST (`can vote` 18)   -- Use TYPICALLY default
+--     WHEN (JUST a) -> JUST (`can vote` a)    -- Use explicit value
+--
+-- Then we could call:
+-- #PEVAL `presumptive can vote` NOTHING       -- Uses default
+-- #PEVAL `presumptive can vote` (JUST 25)     -- Explicit value

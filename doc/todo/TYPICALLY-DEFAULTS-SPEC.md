@@ -358,6 +358,132 @@ DECIDE foo IF x
 
 **Note:** The `strict` flag is currently stored in `EvalDirective` but does not yet change evaluation behavior. The semantic implementation (actually using TYPICALLY values during evaluation) is future work.
 
+### Phase 7: Presumptive Evaluation (PEVAL/PASSERT)
+
+**Status:** 🚧 In Progress (Syntax Complete, Semantics Incomplete)
+
+The EVALSTRICT approach (Phase 6) subtracts defaults. PEVAL takes the opposite approach: it **presumes defaults** when explicit values are not provided, using a Maybe-wrapper pattern to distinguish "use default" from "use this explicit value."
+
+| Directive | Description |
+|-----------|-------------|
+| `#PEVAL expr args...` | Evaluate expression with presumptive defaults for Nothing arguments |
+| `#PEVALTRACE expr args...` | Same as #PEVAL but with trace output |
+| `#PASSERT expr args...` | Assert expression in presumptive mode |
+
+**Design Approach:**
+
+The compiler generates a "presumptive" wrapper for every function with TYPICALLY defaults. The wrapper has Maybe-wrapped parameter types:
+
+```l4
+-- Original function
+GIVEN age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+-- Generated presumptive wrapper (conceptual)
+-- Parameter becomes: Maybe NUMBER
+-- Logic:
+--   Nothing + TYPICALLY defined → use default (18)
+--   Nothing + no TYPICALLY → Unknown
+--   Just v → use v
+```
+
+**Current Implementation Status:**
+
+The current implementation uses a **simplified approach** that automatically applies TYPICALLY defaults when a function evaluates to a closure:
+
+```l4
+GIVEN
+  age IS A NUMBER TYPICALLY 18
+GIVETH A BOOLEAN
+DECIDE `can vote` IF age >= 18
+
+-- EVAL returns a closure (no automatic default application)
+#EVAL `can vote`  -- Returns: <function>
+
+-- PEVAL automatically applies the TYPICALLY default when result is a closure
+#PEVAL `can vote`  -- Returns: TRUE (using age=18)
+```
+
+**How it works:**
+1. `#PEVAL 'can vote'` evaluates to a `ValClosure` (since no arguments provided)
+2. `maybeApplyDefaults` detects the closure has TYPICALLY defaults in its GivenSig
+3. Defaults are automatically extracted and applied to evaluate the closure body
+4. Returns the final result
+
+**Future Design: Explicit MAYBE-Wrapped Parameters**
+
+The intended long-term design uses explicit MAYBE-wrapped parameters for fine-grained control. This requires wrapper function generation:
+
+```l4
+-- Desired syntax (not yet implemented):
+GIVEN age IS A MAYBE NUMBER
+GIVETH A MAYBE BOOLEAN
+DECIDE `presumptive can vote` IS
+  CONSIDER age
+    WHEN NOTHING  -> JUST (`can vote` 18)   -- Use TYPICALLY default
+    WHEN (JUST a) -> JUST (`can vote` a)    -- Use explicit value
+
+-- Then you could call with explicit control:
+#PEVAL `presumptive can vote` NOTHING       -- Use default: TRUE
+#PEVAL `presumptive can vote` (JUST 25)     -- Explicit age: TRUE
+#PEVAL `presumptive can vote` (JUST 15)     -- Explicit age: FALSE
+```
+
+**Why the explicit approach is better:**
+- Fine-grained control: choose which parameters use defaults
+- Composable: can pass MAYBE values through multiple functions
+- Auditable: explicit about which defaults are being used
+- Type-safe: the Maybe wrapper makes optionality explicit in the type system
+
+**Implementation Gap:**
+The wrapper generation approach requires:
+1. Automatically generating `presumptive <fn>` wrappers for each DECIDE with TYPICALLY defaults
+2. Wrappers take `MAYBE T` parameters instead of `T`
+3. Wrappers unwrap NOTHING → use TYPICALLY default, JUST v → use v
+4. PEVAL would call the wrapper, not the original function
+
+**Implementation Options:**
+
+1. **Option A: Compile-time wrapper generation**
+   - In `evalDecide`, for each function with TYPICALLY defaults, generate a "presumptive" version
+   - The presumptive version wraps params in Maybe types
+   - Body unwraps: `Just v → v`, `Nothing → TYPICALLY default or Unknown`
+   - Store with special name (e.g., prefix "presumptive ")
+   - PEVAL looks up and calls the presumptive version
+
+2. **Option B: Runtime transformation**
+   - When PEVAL evaluates a function application with `Nothing` arguments
+   - Check if the corresponding param has a TYPICALLY default
+   - Substitute the default value for `Nothing`
+   - Requires threading the `presumptive` flag through function application
+
+**Current Implementation Files:**
+
+- `jl4-core/src/L4/Lexer.hs:56-76` - `TPresumptiveEvalDirective`, `TPresumptiveEvalTraceDirective`, `TPresumptiveAssertDirective` tokens
+- `jl4-core/src/L4/Syntax.hs:163-168` - `PresumptiveEval`, `PresumptiveEvalTrace`, `PresumptiveAssert` AST constructors
+- `jl4-core/src/L4/Parser.hs:467-492` - Parser cases for PEVAL/PEVALTRACE/PASSERT
+- `jl4-core/src/L4/Print.hs:198-200` - Pretty-printing for `#PEVAL`, `#PEVALTRACE`
+- `jl4-core/src/L4/EvaluateLazy/Machine.hs:1618-1634` - `evalDirective` handlers setting `presumptive=True`
+- `jl4-core/src/L4/EvaluateLazy/Machine.hs:797-802` - `extractTypicallyDefaults` function
+
+**Implementation Status:**
+
+✅ **Working:** The current simplified approach successfully:
+- Parses TYPICALLY clauses in GIVEN parameters
+- Preserves TYPICALLY values through type checking
+- `extractTypicallyDefaults` correctly extracts defaults from GivenSig
+- `maybeApplyDefaults` auto-applies defaults when PEVAL encounters a closure
+- Test file `peval-test.l4` passes with expected behavior
+
+⏳ **TODO:** Wrapper generation for explicit MAYBE parameter control:
+- Generate `presumptive <fn>` wrappers automatically for each DECIDE with TYPICALLY defaults
+- Wrappers should take `MAYBE T` parameters and unwrap them
+- PEVAL should invoke wrappers to get explicit NOTHING/JUST parameter control
+- This allows fine-grained control: `#PEVAL fn NOTHING (JUST 5)` vs auto-apply-all
+
+**Test File:** `jl4/examples/ok/peval-test.l4` (uses current auto-apply approach)
+
 ## Test Cases
 
 ### Unit Tests: Parser
