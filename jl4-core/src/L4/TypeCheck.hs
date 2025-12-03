@@ -428,16 +428,27 @@ inferSection (MkSection ann mn maka topdecls) = do
       Nothing -> pure Nothing -- we do not support anonymous sections with AKAs
       Just rn -> traverse (inferAka rn) maka
 
+  -- First pass: Type-check all DECIDEs to get their resolved names
   (rtopdecls, topDeclExtends) <- unzip <$> traverse inferTopDecl topdecls
 
-  -- Generate presumptive wrappers for DECIDEs with TYPICALLY defaults
-  wrapperDecls <- generatePresumptiveWrappers rtopdecls
+  -- Second pass: Generate presumptive wrappers and get mapping
+  wrapperDeclsWithMapping <- generatePresumptiveWrappersWithMapping rtopdecls
+
+  let wrapperDecls = map snd wrapperDeclsWithMapping
+      -- Build mapping from original function name text to wrapper Resolved
+      wrapperNameMap = Map.fromList [(getNameText origName, wrapperName)
+                                     | (origName, Decide _ (MkDecide _ _ (MkAppForm _ wrapperName _ _) _)) <- wrapperDeclsWithMapping]
 
   -- Create CheckInfo for each wrapper with proper function type
   let wrapperExtends = [makeWrapperCheckInfo wrapperName givenSig mGivethSig
                        | Decide _ (MkDecide _ (MkTypeSig _ givenSig mGivethSig) (MkAppForm _ wrapperName _ _) _) <- wrapperDecls]
 
-  pure (MkSection ann rmn rmaka (rtopdecls ++ wrapperDecls), concat topDeclExtends ++ wrapperExtends)
+  -- Third pass: Add wrappers to environment, then rewrite and recheck PEVAL directives
+  topdeclsRewritten <- extendKnownMany wrapperExtends $
+    traverse (rewriteAndRecheckPEval wrapperNameMap) topdecls
+  let (rtopdeclsFinal, topDeclExtendsFinal) = unzip topdeclsRewritten
+
+  pure (MkSection ann rmn rmaka (rtopdeclsFinal ++ wrapperDecls), concat topDeclExtends ++ concat topDeclExtendsFinal ++ wrapperExtends)
 
 inferLocalDecl :: LocalDecl Name -> Check (LocalDecl Resolved, [CheckInfo])
 inferLocalDecl (LocalDecide ann decide) = do
@@ -3223,16 +3234,67 @@ prettyNameWithRange n =
 -- ===========================================================================
 
 -- | Generate presumptive wrappers for all DECIDEs with TYPICALLY defaults.
--- Returns ONLY the wrappers (not a mapping), since PEVAL rewriting happens at eval time.
-generatePresumptiveWrappers :: [TopDecl Resolved] -> Check [TopDecl Resolved]
-generatePresumptiveWrappers decls = do
+-- Returns wrappers with mapping from original function name to wrapper.
+generatePresumptiveWrappersWithMapping :: [TopDecl Resolved] -> Check [(Resolved, TopDecl Resolved)]
+generatePresumptiveWrappersWithMapping decls = do
   -- Collect DECIDEs with TYPICALLY defaults and generate wrappers
   wrappers <- forM decls $ \case
-    Decide ann decide | hasTypicallyDefaults decide ->
-      fmap Just (generateWrapper ann decide)
+    Decide ann decide | hasTypicallyDefaults decide -> do
+      let MkDecide _ _ (MkAppForm _ origName _ _) _ = decide
+      wrapper <- generateWrapper ann decide
+      pure (Just (origName, wrapper))
     _ -> pure Nothing
 
   pure (catMaybes wrappers)
+
+-- | Get the text of a function name
+getNameText :: Resolved -> Text
+getNameText resolved =
+  let origName = getOriginal resolved
+      origRawName = rawName (getName origName)
+  in rawNameToText origRawName
+
+-- | Rewrite PEVAL directives in Name-level TopDecl, then type-check them
+-- This allows the rewritten directives to be properly type-checked with wrapper signatures
+rewriteAndRecheckPEval :: Map Text Resolved -> TopDecl Name -> Check (TopDecl Resolved, [CheckInfo])
+rewriteAndRecheckPEval wrapperMap (Directive ann directive) = do
+  case directive of
+    PresumptiveEval _ expr -> do
+      -- Rewrite the Name-level expression, then type-check it
+      let exprRewritten = rewriteExprForPEvalName wrapperMap expr
+      rdirective <- inferDirective (PresumptiveEval ann exprRewritten)
+      pure (Directive ann rdirective, [])
+    _ -> do
+      -- Other directives: just type-check normally
+      rdirective <- inferDirective directive
+      pure (Directive ann rdirective, [])
+rewriteAndRecheckPEval _ other = inferTopDecl other
+
+-- | Rewrite Name-level expression to use wrapper name
+rewriteExprForPEvalName :: Map Text Resolved -> Expr Name -> Expr Name
+rewriteExprForPEvalName wrapperMap expr = case expr of
+  -- Case 1: Direct function reference - replace with wrapper name
+  Var ann name ->
+    let nameText = rawNameToText (rawName name)
+        wrapperName = case Map.lookup nameText wrapperMap of
+          Just wrapperResolved ->
+            let wrapperOrigName = getOriginal wrapperResolved
+            in getName wrapperOrigName
+          Nothing -> name
+    in Var ann wrapperName
+
+  -- Case 2: Function application - rewrite function name
+  App ann name args ->
+    let nameText = rawNameToText (rawName name)
+        wrapperName = case Map.lookup nameText wrapperMap of
+          Just wrapperResolved ->
+            let wrapperOrigName = getOriginal wrapperResolved
+            in getName wrapperOrigName
+          Nothing -> name
+    in App ann wrapperName args
+
+  -- Other cases: return unchanged
+  _ -> expr
 
 -- | Create CheckInfo for a wrapper function to add it to the environment
 -- Builds the full function type from GIVEN parameters and GIVETH return type
