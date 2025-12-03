@@ -1,0 +1,25 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+peval.l4:5:1-11:
+  TRUE
+peval.l4:6:1-12:
+  TRUE
+peval.l4:7:1-16:
+  TRUE
+  ─────
+  ┌ TRUE
+  └ TRUE
+peval.l4:8:1-17:
+  TRUE
+  ─────
+  ┌ TRUE
+  └ TRUE
+peval.l4:9:1-13:
+  assertion satisfied
+peval.l4:10:1-14:
+  assertion satisfied
+peval.l4:12:1-12:
+  3
+peval.l4:13:1-13:
+  3

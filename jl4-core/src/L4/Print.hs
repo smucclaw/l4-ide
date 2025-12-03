@@ -194,6 +194,10 @@ instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
       "#EVAL" <+> printWithLayout e
     LazyEvalTrace _ e ->
       "#EVALTRACE" <+> printWithLayout e
+    PresumptiveEval _ e ->
+      "#PEVAL" <+> printWithLayout e
+    PresumptiveEvalTrace _ e ->
+      "#PEVALTRACE" <+> printWithLayout e
     Check _ e ->
       "#CHECK" <+> printWithLayout e
     Contract _ e t stmts -> hsep $
@@ -201,6 +205,8 @@ instance LayoutPrinterWithName a => LayoutPrinter (Directive a) where
       map printWithLayout stmts
     Assert _ e ->
       "#ASSERT" <+> printWithLayout e
+    PresumptiveAssert _ e ->
+      "#PASSERT" <+> printWithLayout e
 
 instance LayoutPrinterWithName a => LayoutPrinter (Import a) where
   printWithLayout = \ case

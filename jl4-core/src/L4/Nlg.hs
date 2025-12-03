@@ -269,11 +269,14 @@ instance Linearize (Directive Resolved) where
   linearize = \ case
     LazyEval _ e -> linearize e
     LazyEvalTrace _ e -> linearize e
+    PresumptiveEval _ e -> linearize e
+    PresumptiveEvalTrace _ e -> linearize e
     Check _ e -> linearize e
     Contract _ e t es -> hcat $
       [ "executing contract", lin e, "at", lin t, "with the following events: " ]
       <> map lin es
     Assert _ e -> linearize e
+    PresumptiveAssert _ e -> linearize e
 
 
 instance Linearize (NamedExpr Resolved) where

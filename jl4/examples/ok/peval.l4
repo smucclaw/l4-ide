@@ -1,0 +1,13 @@
+-- Test for PEVAL/PASSERT directives (presumptive evaluation)
+-- Currently these behave identically to EVAL/ASSERT
+-- Future: will honor TYPICALLY defaults via Maybe-wrapped args
+
+#EVAL TRUE
+#PEVAL TRUE
+#EVALTRACE TRUE
+#PEVALTRACE TRUE
+#ASSERT TRUE
+#PASSERT TRUE
+
+#EVAL 1 + 2
+#PEVAL 1 + 2

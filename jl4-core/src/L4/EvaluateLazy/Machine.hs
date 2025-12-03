@@ -25,6 +25,8 @@ module L4.EvaluateLazy.Machine
 , pattern ValBool
 -- * Constants exposed for the eager evaluator
 , builtinBinOps
+-- * TYPICALLY defaults extraction (for Decision Service)
+, extractTypicallyDefaults
 )
 where
 
@@ -789,6 +791,15 @@ backwardContractFrame val = \ case
 
 maybeEvaluate :: Environment -> MaybeEvaluated -> Machine Config
 maybeEvaluate env = either (ForwardExpr env) Backward
+
+-- | Extract TYPICALLY defaults from a GivenSig
+-- Returns a map from parameter Unique to the default expression
+extractTypicallyDefaults :: GivenSig Resolved -> Map Unique (Expr Resolved)
+extractTypicallyDefaults (MkGivenSig _ann otns) =
+  Map.fromList
+    [ (getUnique n, expr)
+    | MkOptionallyTypedName _ann n _mty (Just expr) <- otns
+    ]
 
 matchGivens :: GivenSig Resolved -> Frame -> [Reference] -> Machine Environment
 matchGivens (MkGivenSig _ann otns) f es = do
@@ -1609,11 +1620,17 @@ evalDirective env (LazyEval ann expr) =
   pure [MkEvalDirective (rangeOf ann) False False expr env]
 evalDirective env (LazyEvalTrace ann expr) =
   pure [MkEvalDirective (rangeOf ann) True False expr env]
+evalDirective env (PresumptiveEval ann expr) =
+  pure [MkEvalDirective (rangeOf ann) False False expr env]
+evalDirective env (PresumptiveEvalTrace ann expr) =
+  pure [MkEvalDirective (rangeOf ann) True False expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
 evalDirective env (Assert ann expr) =
+  pure [MkEvalDirective (rangeOf ann) False True expr env]
+evalDirective env (PresumptiveAssert ann expr) =
   pure [MkEvalDirective (rangeOf ann) False True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)

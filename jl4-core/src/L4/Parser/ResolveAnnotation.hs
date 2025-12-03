@@ -223,6 +223,12 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     LazyEvalTrace ann e -> do
       e' <- addNlg e
       pure $ LazyEvalTrace ann e'
+    PresumptiveEval ann e -> do
+      e' <- addNlg e
+      pure $ PresumptiveEval ann e'
+    PresumptiveEvalTrace ann e -> do
+      e' <- addNlg e
+      pure $ PresumptiveEvalTrace ann e'
     Check ann e -> do
       e' <- addNlg e
       pure $ Check ann e'
@@ -234,6 +240,9 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Directive n) where
     Assert ann e -> do
       e' <- addNlg e
       pure $ Assert ann e'
+    PresumptiveAssert ann e -> do
+      e' <- addNlg e
+      pure $ PresumptiveAssert ann e'
 
 instance (HasSrcRange n, HasNlg n) => HasNlg (Event n) where
   addNlg a@(MkEvent ann party act timestamp atFirst) = extendNlgA a do
@@ -605,9 +614,12 @@ instance HasDesc (Directive n) where
   addDesc = \ case
     LazyEval ann e -> LazyEval ann <$> addDesc e
     LazyEvalTrace ann e -> LazyEvalTrace ann <$> addDesc e
+    PresumptiveEval ann e -> PresumptiveEval ann <$> addDesc e
+    PresumptiveEvalTrace ann e -> PresumptiveEvalTrace ann <$> addDesc e
     Check ann e -> Check ann <$> addDesc e
     Contract ann e t evs -> Contract ann <$> addDesc e <*> addDesc t <*> traverse addDesc evs
     Assert ann e -> Assert ann <$> addDesc e
+    PresumptiveAssert ann e -> PresumptiveAssert ann <$> addDesc e
 
 instance HasDesc (Import n) where
   addDesc a = pure a

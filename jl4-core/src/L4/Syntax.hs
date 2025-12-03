@@ -160,9 +160,12 @@ data Assume n =
 data Directive n =
     LazyEval Anno (Expr n)
   | LazyEvalTrace Anno (Expr n)
+  | PresumptiveEval Anno (Expr n)      -- ^ #PEVAL - honors TYPICALLY defaults via Maybe-wrapped args
+  | PresumptiveEvalTrace Anno (Expr n) -- ^ #PEVALTRACE - trace + honors defaults
   | Check Anno (Expr n)
   | Contract Anno (Expr n) (Expr n) [Expr n]
   | Assert Anno (Expr n)
+  | PresumptiveAssert Anno (Expr n)    -- ^ #PASSERT - assert with Maybe-wrapped args
   deriving stock (GHC.Generic, Eq, Ord, Show, Functor, Foldable, Traversable)
   deriving anyclass (SOP.Generic, ToExpr, NFData)
 

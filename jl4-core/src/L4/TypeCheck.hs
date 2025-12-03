@@ -343,15 +343,21 @@ inferDeclare (MkDeclare ann _tysig appForm _t) =
 -- which would currently not match the first case.
 --
 inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
-inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) _typically) = do
+inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) typically) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
     addWarning $ AssumeDeprecated (getName appForm)
+    case typically of
+      Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
+      Nothing -> pure ()
     lookupAssumeCheckedByAnno ann >>= \ d -> pure (d.payload, d.publicNames)
-inferAssume (MkAssume ann _tysig appForm mt _typically) = do
+inferAssume (MkAssume ann _tysig appForm mt typically) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
     addWarning $ AssumeDeprecated (getName appForm)
+    case typically of
+      Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
+      Nothing -> pure ()
     lookupFunTypeSigByAnno ann >>= \ dHead -> do
         -- check that the given result type matches the result type in the type signature
         extendKnownMany dHead.arguments do
@@ -379,6 +385,12 @@ inferDirective (LazyEval ann e) = errorContext (WhileCheckingExpression e) do
 inferDirective (LazyEvalTrace ann e) = errorContext (WhileCheckingExpression e) do
   (re, _) <- prune $ inferExpr e
   pure (LazyEvalTrace ann re)
+inferDirective (PresumptiveEval ann e) = errorContext (WhileCheckingExpression e) do
+  (re, _) <- prune $ inferExpr e
+  pure (PresumptiveEval ann re)
+inferDirective (PresumptiveEvalTrace ann e) = errorContext (WhileCheckingExpression e) do
+  (re, _) <- prune $ inferExpr e
+  pure (PresumptiveEvalTrace ann re)
 inferDirective (Check ann e) = errorContext (WhileCheckingExpression e) do
   (re, te) <- prune $ inferExpr e
   addError (CheckInfo te)
@@ -395,6 +407,9 @@ inferDirective (Contract ann e t evs) = errorContext (WhileCheckingExpression e)
 inferDirective (Assert ann e) = errorContext (WhileCheckingExpression e) do
   e' <- checkExpr ExpectAssertContext e boolean
   pure (Assert ann e')
+inferDirective (PresumptiveAssert ann e) = errorContext (WhileCheckingExpression e) do
+  e' <- checkExpr ExpectAssertContext e boolean
+  pure (PresumptiveAssert ann e')
 
 -- We process imports prior to normal scope- and type-checking. Therefore, this is trivial.
 inferImport :: Import Name -> Check (Import Resolved)
@@ -2868,6 +2883,11 @@ prettyCheckError (DesugarAnnoRewritingError context errorInfo) =
 prettyCheckError (CheckWarning warning) = prettyCheckWarning warning
 prettyCheckError (MixfixMatchErrorCheck funcName err) =
   prettyMixfixMatchError funcName err
+prettyCheckError (TypicallyNotAllowedOnAssume n) =
+  [ "TYPICALLY defaults are not allowed on ASSUME declarations:"
+  , "  " <> prettyLayout n
+  , "The ASSUME keyword is deprecated. Use GIVEN or DECLARE instead."
+  ]
 
 -- | Pretty print mixfix match errors with helpful suggestions.
 prettyMixfixMatchError :: Name -> MixfixMatchError -> [Text]

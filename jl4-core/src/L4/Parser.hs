@@ -463,7 +463,14 @@ directive =
     choice
       -- Use singleLineExpr for simple directives to make them line-oriented.
       -- Continuation to next line requires '# ' prefix (like C preprocessor).
-      [ LazyEval emptyAnno
+      -- Note: Longer names must come before shorter to avoid prefix matching issues
+      [ PresumptiveEvalTrace emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirectives TPresumptiveEvalTraceDirective))
+          <*> annoHole singleLineExpr
+      , PresumptiveEval emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirectives TPresumptiveEvalDirective))
+          <*> annoHole singleLineExpr
+      , LazyEval emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TLazyEvalDirective))
           <*> annoHole singleLineExpr
       , LazyEvalTrace emptyAnno
@@ -480,6 +487,9 @@ directive =
           <*> annoHole singleLineExpr
           <* annoLexeme (spacedKeyword_ TKWith)
           <*> contractEvents
+      , PresumptiveAssert emptyAnno
+          <$ annoLexeme (spacedToken_ (TDirectives TPresumptiveAssertDirective))
+          <*> annoHole singleLineExpr
       , Assert emptyAnno
           <$ annoLexeme (spacedToken_ (TDirectives TAssertDirective))
           <*> annoHole singleLineExpr

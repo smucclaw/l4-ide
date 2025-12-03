@@ -53,19 +53,25 @@ data AnnoType
 data TDirectives
   = TLazyEvalDirective
   | TLazyEvalTraceDirective
+  | TPresumptiveEvalDirective       -- ^ #PEVAL - honors TYPICALLY defaults via Maybe-wrapped args
+  | TPresumptiveEvalTraceDirective  -- ^ #PEVALTRACE - trace + honors defaults
   | TCheckDirective
   | TContractDirective
   | TAssertDirective
+  | TPresumptiveAssertDirective     -- ^ #PASSERT - assert with Maybe-wrapped args
   | TDirectiveContinue  -- ^ '# ' at start of line continues a directive
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
 directives :: Map Text TDirectives
 directives = Map.fromList
-  [ ("EVALTRACE", TLazyEvalTraceDirective)
+  [ ("PEVALTRACE", TPresumptiveEvalTraceDirective)
+  , ("PEVAL"     , TPresumptiveEvalDirective)
+  , ("EVALTRACE", TLazyEvalTraceDirective)
   , ("EVAL"     , TLazyEvalDirective)
   , ("CHECK"    , TCheckDirective)
   , ("TRACE"    , TContractDirective)
+  , ("PASSERT"  , TPresumptiveAssertDirective)
   , ("ASSERT"   , TAssertDirective)
   ]
 

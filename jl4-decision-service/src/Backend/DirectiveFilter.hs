@@ -33,8 +33,11 @@ filterTopDecl = \case
 
 isIdeDirective :: Directive n -> Bool
 isIdeDirective = \case
-  LazyEval{}      -> True   -- #EVAL
-  LazyEvalTrace{} -> True   -- #EVALTRACE
-  Check{}         -> True   -- #CHECK
-  Assert{}        -> True   -- #ASSERT
-  Contract{}      -> False  -- Keep #CONTRACT
+  LazyEval{}           -> True   -- #EVAL
+  LazyEvalTrace{}      -> True   -- #EVALTRACE
+  PresumptiveEval{}      -> True   -- #PEVAL
+  PresumptiveEvalTrace{} -> True   -- #PEVALTRACE
+  Check{}              -> True   -- #CHECK
+  Assert{}             -> True   -- #ASSERT
+  PresumptiveAssert{}    -> True   -- #PASSERT
+  Contract{}           -> False  -- Keep #CONTRACT
