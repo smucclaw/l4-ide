@@ -5,10 +5,12 @@
 ## Problem
 
 Dictionary support was duplicated across files:
+
 - `jl4-core/libraries/prelude.l4` had basic dictionary type and construction
 - `~/src/legalese/opm2l4/sample-l4/by-meng.l4` duplicated these and added grouping functions
 
 This caused:
+
 1. Code duplication
 2. Inconsistent naming (`fmap` vs `fmapl`, `pmap` vs `fmapp`)
 3. Missing standard operations that Haskell programmers expect
@@ -22,6 +24,7 @@ All dictionary functions use `dict` prefix to avoid namespace conflicts (L4 lack
 Functions implemented:
 
 **Construction:**
+
 - `emptyDict` - empty dictionary
 - `singleton` - alias for `singleToDict`
 - `singleToDict k v` - single entry
@@ -30,12 +33,14 @@ Functions implemented:
 - `fromListGrouped pairs` - from list, grouping values by key
 
 **Query:**
+
 - `dictLookup key dict` - lookup returning MAYBE
 - `dictMember key dict` - test if key exists
 - `dictNotMember key dict` - test if key doesn't exist
 - `dictFindWithDefault default key dict` - lookup with default
 
 **Conversion:**
+
 - `dictToList dict` - extract contents
 - `dictKeys dict` - list of keys
 - `dictElems dict` - list of values
@@ -43,6 +48,7 @@ Functions implemented:
 - `dictIsEmpty dict` - test if empty
 
 **Modification:**
+
 - `dictInsert key value dict` - add/replace entry
 - `dictInsertWith combiner key value dict` - insert with combining function
 - `dictDelete key dict` - remove entry
@@ -50,10 +56,12 @@ Functions implemented:
 - `dictUpdate f key dict` - modify or delete via MAYBE
 
 **Combination:**
+
 - `dictUnion dict1 dict2` - left-biased union
 - `dictUnionWith combiner dict1 dict2` - union with combining function
 
 **Higher-order:**
+
 - `mapDict f dict` - map over values
 - `dictMapWithKey f dict` - map with key access
 - `filterDict pred dict` - filter by value predicate
@@ -62,10 +70,12 @@ Functions implemented:
 - `dictFoldrWithKey f z dict` / `dictFoldlWithKey f z dict` - folds with keys
 
 **Grouping utilities:**
+
 - `insertValue key value pairs` - insert into grouped assoc list
 - `groupPairs pairs` - group `[(k,v)]` into `[(k,[v])]`
 
 **Pair operations:**
+
 - `pmap f pair` - map over second element of pair (Functor)
 - `fmap f pairs` - map over second element of each pair in list
 - `mapSnd` - alias for `pmap`
