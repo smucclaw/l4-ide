@@ -2,6 +2,7 @@ module L4.Evaluate.ValueLazy where
 
 import Base
 import Control.Concurrent (ThreadId)
+import Data.Time (Day)
 import L4.Syntax
 import L4.Evaluate.Operators (BinOp)
 
@@ -41,6 +42,7 @@ data NF = MkNF (Value NF) | Omitted
 data Value a =
     ValNumber Rational
   | ValString Text
+  | ValDate Day
   | ValNil
   | ValCons a a
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
@@ -99,6 +101,7 @@ data TernaryBuiltinFun
 instance NFData a => NFData (Value a) where
   rnf :: Value a -> ()
   rnf (ValNumber i)               = rnf i
+  rnf (ValDate d)                 = rnf d
   rnf (ValROp env op a b)     = env `seq` op `deepseq` a `deepseq` b `deepseq` ()
   rnf (ValString t)               = rnf t
   rnf ValNil                      = ()

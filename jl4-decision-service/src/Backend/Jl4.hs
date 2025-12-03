@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled) where
+module Backend.Jl4 (createFunction, getFunctionDefinition, buildFunDecide, ModuleContext, CompiledModule(..), precompileModule, evaluateWithCompiled, typecheckModule) where
 
 import Base hiding (trace)
 import qualified Base.DList as DList
@@ -315,6 +315,8 @@ valueToFnLiteral = \case
     pure $ case isInteger i of
       Just int -> FnLitInt int
       Nothing -> FnLitDouble $ fromRational i
+  Eval.ValDate day ->
+    pure $ FnLitString (Text.show day)
   Eval.ValString t -> pure $ FnLitString t
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2
@@ -434,4 +436,3 @@ toReasoningTree' (Trace [(expr, children)] val) =
     }
 toReasoningTree' (Trace ((expr, children) : rest) val) =
   toReasoningTree' (Trace [(expr, children ++ [Trace rest val])] val)
-

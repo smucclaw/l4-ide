@@ -1,6 +1,6 @@
 -- This file tests the @desc annotation feature
 
-@desc This function calculates the factorial of a number
+@export default Factorial entry point calculates the factorial of a number
 DECIDE factorial x IS
   IF x EQUALS 0 
   THEN 1

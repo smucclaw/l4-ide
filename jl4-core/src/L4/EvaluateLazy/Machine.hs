@@ -873,12 +873,12 @@ expect3 = \ case
 expectNumber :: WHNF -> Machine Rational
 expectNumber = \ case
   ValNumber f -> pure f
-  _ -> InternalException (RuntimeTypeError "Expected number.")
+  v -> InternalException $ RuntimeTypeError $ "expected a NUMBER but got: " <> prettyLayout v
 
 expectString :: WHNF -> Machine Text
 expectString = \ case
   ValString f -> pure f
-  _ -> InternalException (RuntimeTypeError "Expected string.")
+  v -> InternalException $ RuntimeTypeError $ "expected a STRING but got: " <> prettyLayout v
 
 expectInteger :: BinOp -> Rational -> Machine Integer
 expectInteger op n = do

@@ -428,6 +428,7 @@ nfFromTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> WHNF -> NF
 nfFromTrace m = \ case
   ValNumber i   -> MkNF (ValNumber i)
   ValString s   -> MkNF (ValString s)
+  ValDate day   -> MkNF (ValDate day)
   ValNil        -> MkNF ValNil
   ValCons r1 r2 ->
     MkNF (ValCons (rec r1) (rec r2))
@@ -493,4 +494,3 @@ debugEvalTraceActionsFromLevel = go
     go _ []            = ""
 
     showAt d a = show d <> " " <> prettyLayout' a <> "\n"
-
