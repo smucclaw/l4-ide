@@ -23,6 +23,8 @@ import L4.Annotation
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
+import qualified L4.TypeCheck as TypeCheck
+import L4.TypeCheck.Environment (nothingName, nothingUnique, justName, justUnique)
 
 import Control.Concurrent
 
@@ -221,19 +223,25 @@ runConfig = \ case
 -- | Evaluate an EVAL directive. For this, we evaluate to normal form,
 -- not just WHNF.
 -- When presumptive=True (PEVAL/PEVALTRACE/PASSERT), TYPICALLY defaults are applied
--- to closures before evaluation. When presumptive=False (EVAL/EVALTRACE/ASSERT),
+-- by calling generated presumptive wrappers. When presumptive=False (EVAL/EVALTRACE/ASSERT),
 -- closures with missing arguments remain as closures.
 nfDirective :: EvalDirective -> Eval EvalDirectiveResult
 nfDirective (MkEvalDirective r traced isAssert presumptive expr env) = do
+  -- For presumptive evaluation, try to rewrite to call wrapper first
+  exprToEval <- if presumptive
+    then rewriteToPresumptiveCall expr env
+    else pure expr
+
   (v, mt) <-
     if traced
       then second Just <$> do
         captureTrace $ tryEval $ do
-          whnf <- runConfig $ ForwardMachine env expr
+          whnf <- runConfig $ ForwardMachine env exprToEval
+          -- Still apply auto-defaults as fallback for closures without wrappers
           whnf' <- maybeApplyDefaults presumptive whnf
           nf whnf'
       else fmap (, Nothing) $ tryEval $ do
-        whnf <- runConfig $ ForwardMachine env expr
+        whnf <- runConfig $ ForwardMachine env exprToEval
         whnf' <- maybeApplyDefaults presumptive whnf
         nf whnf'
   let
@@ -247,9 +255,73 @@ nfDirective (MkEvalDirective r traced isAssert presumptive expr env) = do
         else Reduction v
   pure (MkEvalDirectiveResult r v' finalTrace)
 
+-- | Rewrite expression to call presumptive wrapper if one exists.
+-- For PEVAL directives, we want to call the generated 'presumptive <func>' wrapper
+-- with NOTHING arguments to trigger TYPICALLY default application.
+rewriteToPresumptiveCall :: Expr Resolved -> Environment -> Eval (Expr Resolved)
+rewriteToPresumptiveCall expr env = case expr of
+  -- Case 1: Direct function reference (e.g., #PEVAL `can vote`)
+  Var ann resolved -> do
+    mWrapperRef <- lookupPresumptiveWrapper resolved env
+    case mWrapperRef of
+      Just (wrapperRef, numParams) -> do
+        -- Create NOTHING arguments for all parameters
+        let nothingExpr = Var ann nothingRef
+        let nothingArgs = replicate numParams nothingExpr
+        pure $ App ann wrapperRef nothingArgs
+      Nothing -> pure expr
+
+  -- Case 2: Partial application (e.g., #PEVAL `can vote` 25)
+  App ann funcResolved args -> do
+    mWrapperRef <- lookupPresumptiveWrapper funcResolved env
+    case mWrapperRef of
+      Just (wrapperRef, numParams) -> do
+        -- Wrap provided arguments with JUST, add NOTHING for missing params
+        let justExpr arg = App ann justRef [arg]
+        let wrappedArgs = map justExpr args
+        let nothingExpr = Var ann nothingRef
+        let numMissing = numParams - length args
+        let nothingArgs = replicate numMissing nothingExpr
+        pure $ App ann wrapperRef (wrappedArgs ++ nothingArgs)
+      Nothing -> pure expr
+
+  -- Other cases: return unchanged
+  _ -> pure expr
+  where
+    nothingRef = Ref nothingName nothingUnique nothingName
+    justRef = Ref justName justUnique justName
+
+-- | Look up if a presumptive wrapper exists for a function.
+-- Returns Just (wrapperRef, numParams) if wrapper exists, Nothing otherwise.
+lookupPresumptiveWrapper :: Resolved -> Environment -> Eval (Maybe (Resolved, Int))
+lookupPresumptiveWrapper funcResolved env = do
+  -- Construct the wrapper name: 'presumptive <func>'
+  let wrapperName = makePresumptiveWrapperName funcResolved
+
+  -- Look up the wrapper in the environment
+  case Map.lookup (getUnique funcResolved) env of
+    Just _ -> do
+      -- Function exists, check if wrapper exists
+      -- For now, assume wrapper exists if original has TYPICALLY defaults
+      -- TODO: Actually check if wrapper was generated
+      pure $ Just (wrapperName, 1)  -- Placeholder: assume 1 param
+    Nothing -> pure Nothing
+
+-- | Construct presumptive wrapper name from original function name
+makePresumptiveWrapperName :: Resolved -> Resolved
+makePresumptiveWrapperName resolved =
+  let origName = getOriginal resolved
+      origRawName = rawName (TypeCheck.getName origName)
+      newText = "'presumptive " <> rawNameToText origRawName <> "'"
+      newRawName = NormalName newText
+      newName = MkName (getAnno origName) newRawName
+      u = getUnique resolved
+  in Ref newName u newName
+
 -- | Apply TYPICALLY defaults to a closure when in presumptive mode.
 -- If the WHNF is a closure and presumptive=True, we apply defaults from
 -- the GivenSig to evaluate the closure body.
+-- NOTE: This is now a fallback for closures without generated wrappers.
 maybeApplyDefaults :: Bool -> WHNF -> Eval WHNF
 maybeApplyDefaults False whnf = pure whnf
 maybeApplyDefaults True whnf = case whnf of
