@@ -3258,9 +3258,10 @@ generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appFo
   -- Create the wrapper function name: 'presumptive <original-name>'
   let wrapperName = makePresumptiveName funcName
 
-  -- Convert GIVEN parameters to MAYBE-wrapped versions
+  -- Convert GIVEN parameters to MAYBE-wrapped versions with fresh Def nodes
   let MkGivenSig gsAnn otns = givenSig
-  maybeOtns <- mapM wrapParameterWithMaybe otns
+  paramsWithMapping <- mapM wrapParameterWithFreshName otns
+  let (maybeOtns, paramMappings) = unzip paramsWithMapping
   let maybeGivenSig = MkGivenSig gsAnn maybeOtns
 
   -- Wrap return type with MAYBE (if it exists)
@@ -3273,8 +3274,10 @@ generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appFo
   let maybeTypeSig = MkTypeSig (getAnno typeSig) maybeGivenSig maybeReturnType
 
   -- Generate CONSIDER expression for each parameter
-  -- This will unwrap MAYBE values and apply TYPICALLY defaults
-  considerExpr <- generateConsiderChain funcName otns bodyExpr
+  -- paramMappings is [(wrapperParam, origParam)], otns is [OptionallyTypedName]
+  -- We need [(wrapperParam, OptionallyTypedName)]
+  let paramPairs = [(wrapperParam, otn) | ((wrapperParam, _origParam), otn) <- zip paramMappings otns]
+  considerExpr <- generateConsiderChain funcName paramPairs bodyExpr
 
   -- Create wrapper DECIDE
   let wrapperAppForm = MkAppForm (getAnno appForm) wrapperName [] Nothing
@@ -3295,15 +3298,28 @@ makePresumptiveName resolved =
     Ref _ u _ -> Ref newName u newName
     OutOfScope u _ -> OutOfScope u newName
 
--- | Wrap a parameter's type with MAYBE
-wrapParameterWithMaybe :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved)
-wrapParameterWithMaybe (MkOptionallyTypedName ann name mType _typically) = do
-  -- Remove TYPICALLY default (wrappers handle this explicitly)
-  case mType of
-    Nothing -> pure $ MkOptionallyTypedName ann name Nothing Nothing
-    Just ty -> do
-      wrappedType <- wrapTypeWithMaybe ty
-      pure $ MkOptionallyTypedName ann name (Just wrappedType) Nothing
+-- | Create a fresh Def node for a wrapper parameter
+-- This ensures parameters in the wrapper have proper scoping
+makeFreshParamName :: Resolved -> Resolved
+makeFreshParamName resolved =
+  let origName = getOriginal resolved
+      u = getUnique resolved
+  in Def u origName  -- Create a Def node with the same name and unique
+
+-- | Wrap a parameter with MAYBE type and create fresh Def node for wrapper
+-- Returns (wrapped parameter, mapping from new wrapper param to original param)
+wrapParameterWithFreshName :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved, (Resolved, Resolved))
+wrapParameterWithFreshName (MkOptionallyTypedName ann origName mType _typically) = do
+  -- Create a fresh Def node for this parameter in the wrapper's context
+  let freshName = makeFreshParamName origName
+
+  -- Wrap the type with MAYBE
+  wrappedType <- case mType of
+    Nothing -> pure Nothing
+    Just ty -> Just <$> wrapTypeWithMaybe ty
+
+  let wrappedParam = MkOptionallyTypedName ann freshName wrappedType Nothing
+  pure (wrappedParam, (freshName, origName))
 
 -- | Wrap a type with MAYBE
 wrapTypeWithMaybe :: Type' Resolved -> Check (Type' Resolved)
@@ -3317,55 +3333,59 @@ wrapTypeWithMaybe ty = do
 --   CONSIDER param
 --     WHEN NOTHING  -> (if has TYPICALLY: use default, else: return NOTHING)
 --     WHEN (JUST x) -> (continue with unwrapped x)
-generateConsiderChain :: Resolved -> [OptionallyTypedName Resolved] -> Expr Resolved -> Check (Expr Resolved)
-generateConsiderChain funcName otns bodyExpr = do
+-- Takes: funcName, [(wrapperParam, originalParam)], bodyExpr
+generateConsiderChain :: Resolved -> [(Resolved, OptionallyTypedName Resolved)] -> Expr Resolved -> Check (Expr Resolved)
+generateConsiderChain funcName paramPairs bodyExpr = do
   let ann = getAnno bodyExpr
 
   -- Get JUST and NOTHING constructors
   let justCtor = Ref justName justUnique justName
   let nothingCtor = Ref nothingName nothingUnique nothingName
 
-  -- Build the innermost expression: JUST (funcName arg1 arg2 ...)
-  -- where argN are the unwrapped parameter variables
-  let paramVars = [n | MkOptionallyTypedName _ n _ _ <- otns]
-  let funcCall = case paramVars of
+  -- Build the innermost expression: JUST (funcName arg1_unwrapped arg2_unwrapped ...)
+  -- The unwrapped variable names will be created in buildConsiderForParam
+  -- For now, collect the original parameter names to pass to the original function
+  let origParamVars = [origName | (_, MkOptionallyTypedName _ origName _ _) <- paramPairs]
+  let funcCall = case origParamVars of
         [] -> Var ann funcName
-        _  -> App ann funcName (map (Var ann) paramVars)
+        _  -> App ann funcName (map (Var ann) origParamVars)
   let innermostExpr = App ann justCtor [funcCall]
 
   -- Build CONSIDER chain from innermost outward
   -- Process parameters in reverse order so we build from inside out
-  considerExpr <- foldM (buildConsiderForParam ann justCtor nothingCtor) innermostExpr (reverse otns)
+  considerExpr <- foldM (buildConsiderForParam ann justCtor nothingCtor) innermostExpr (reverse paramPairs)
 
   pure considerExpr
 
 -- | Build a CONSIDER expression for a single parameter
+-- Takes (wrapperParam, originalParam) tuple
 buildConsiderForParam :: Anno -> Resolved -> Resolved -> Expr Resolved
-                      -> OptionallyTypedName Resolved -> Check (Expr Resolved)
-buildConsiderForParam ann justCtor nothingCtor innerExpr (MkOptionallyTypedName paramAnn paramName _mType mDefault) = do
+                      -> (Resolved, OptionallyTypedName Resolved) -> Check (Expr Resolved)
+buildConsiderForParam ann justCtor nothingCtor innerExpr (wrapperParam, MkOptionallyTypedName paramAnn origParamName _mType mDefault) = do
   -- Create a fresh variable name for the JUST pattern (unwrapped value)
-  let unwrappedName = makeUnwrappedVarName paramName
+  let unwrappedName = makeUnwrappedVarName origParamName
 
   -- Build the NOTHING branch
   nothingBranch <- case mDefault of
     Just defaultExpr -> do
       -- Has TYPICALLY default: use it
       -- WHEN NOTHING -> (continue with default value substituted)
-      -- We need to substitute the default into innerExpr where paramName appears
-      let substitutedExpr = substituteVar paramName defaultExpr innerExpr
+      -- Substitute the origParamName (used in innerExpr) with the default value
+      let substitutedExpr = substituteVar origParamName defaultExpr innerExpr
       pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) substitutedExpr
     Nothing -> do
       -- No TYPICALLY default: return NOTHING (Unknown)
       pure $ MkBranch ann (When ann (PatApp ann nothingCtor [])) (Var ann nothingCtor)
 
   -- Build the JUST branch
-  -- WHEN (JUST x) -> innerExpr (with paramName bound to x)
+  -- WHEN (JUST x) -> innerExpr (with origParamName bound to unwrapped x)
   let justPattern = PatApp ann justCtor [PatVar ann unwrappedName]
-  let substitutedInner = substituteVar paramName (Var ann unwrappedName) innerExpr
+  let substitutedInner = substituteVar origParamName (Var ann unwrappedName) innerExpr
   let justBranch = MkBranch ann (When ann justPattern) substitutedInner
 
   -- Build CONSIDER expression
-  let scrutinee = Var ann paramName
+  -- Scrutinize the wrapper parameter (the MAYBE-wrapped one from the GIVEN clause)
+  let scrutinee = Var ann wrapperParam
   pure $ Consider paramAnn scrutinee [nothingBranch, justBranch]
 
 -- | Create an unwrapped variable name from a Resolved name
