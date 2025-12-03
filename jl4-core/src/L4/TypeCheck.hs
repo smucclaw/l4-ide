@@ -3306,6 +3306,14 @@ makeFreshParamName resolved =
       u = getUnique resolved
   in Def u origName  -- Create a Def node with the same name and unique
 
+-- | Create an explicit Ref to the original function
+-- This ensures the wrapper calls the original function, not itself
+makeOriginalFuncRef :: Resolved -> Resolved
+makeOriginalFuncRef resolved =
+  let origName = getOriginal resolved
+      u = getUnique resolved
+  in Ref origName u origName  -- Create a Ref that explicitly points to the original
+
 -- | Wrap a parameter with MAYBE type and create fresh Def node for wrapper
 -- Returns (wrapped parameter, mapping from new wrapper param to original param)
 wrapParameterWithFreshName :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved, (Resolved, Resolved))
@@ -3342,13 +3350,17 @@ generateConsiderChain funcName paramPairs bodyExpr = do
   let justCtor = Ref justName justUnique justName
   let nothingCtor = Ref nothingName nothingUnique nothingName
 
-  -- Build the innermost expression: JUST (funcName arg1_unwrapped arg2_unwrapped ...)
+  -- Create an explicit Ref to the original function
+  -- This ensures we call the original, not the wrapper, even if both are in scope
+  let origFuncRef = makeOriginalFuncRef funcName
+
+  -- Build the innermost expression: JUST (origFunc arg1_unwrapped arg2_unwrapped ...)
   -- The unwrapped variable names will be created in buildConsiderForParam
   -- For now, collect the original parameter names to pass to the original function
   let origParamVars = [origName | (_, MkOptionallyTypedName _ origName _ _) <- paramPairs]
   let funcCall = case origParamVars of
-        [] -> Var ann funcName
-        _  -> App ann funcName (map (Var ann) origParamVars)
+        [] -> Var ann origFuncRef
+        _  -> App ann origFuncRef (map (Var ann) origParamVars)
   let innermostExpr = App ann justCtor [funcCall]
 
   -- Build CONSIDER chain from innermost outward
