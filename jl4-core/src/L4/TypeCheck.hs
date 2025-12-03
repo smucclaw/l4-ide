@@ -3224,28 +3224,16 @@ prettyNameWithRange n =
 -- ===========================================================================
 
 -- | Generate presumptive wrappers for all DECIDEs with TYPICALLY defaults.
--- This implements a two-pass transformation:
--- Pass 1: Generate wrapper DECIDEs with MAYBE-wrapped parameters
--- Pass 2: Build mapping from original functions to wrappers (for PEVAL rewriting)
+-- Returns ONLY the wrappers (not a mapping), since PEVAL rewriting happens at eval time.
 generatePresumptiveWrappers :: [TopDecl Resolved] -> Check [TopDecl Resolved]
 generatePresumptiveWrappers decls = do
-  -- Pass 1: Collect DECIDEs with TYPICALLY defaults and generate wrappers
-  wrappersWithOriginals <- forM decls $ \case
-    Decide ann decide | hasTypicallyDefaults decide -> do
-      let MkDecide _ _ (MkAppForm _ origName _ _) _ = decide
-      wrapper <- generateWrapper ann decide
-      case wrapper of
-        Decide _ (MkDecide _ _ (MkAppForm _ wrapperName _ _) _) ->
-          pure (Just (origName, wrapperName, wrapper))
-        _ -> pure Nothing  -- Shouldn't happen, but handle for completeness
+  -- Collect DECIDEs with TYPICALLY defaults and generate wrappers
+  wrappers <- forM decls $ \case
+    Decide ann decide | hasTypicallyDefaults decide ->
+      fmap Just (generateWrapper ann decide)
     _ -> pure Nothing
 
-  let wrappers = [w | Just (_, _, w) <- wrappersWithOriginals]
-
-  -- TODO: Pass 2: Use the mapping to rewrite PEVAL directives
-  -- For now, wrappers are generated but PEVAL rewriting happens at eval time
-
-  pure wrappers
+  pure (catMaybes wrappers)
 
 -- | Extract type from a wrapper's GivethSig (return type)
 extractWrapperType :: Maybe (GivethSig Resolved) -> Type' Resolved

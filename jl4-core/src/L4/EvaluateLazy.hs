@@ -23,8 +23,6 @@ import L4.Annotation
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
-import qualified L4.TypeCheck as TypeCheck
-import L4.TypeCheck.Environment (nothingName, nothingUnique, justName, justUnique)
 
 import Control.Concurrent
 
@@ -256,53 +254,14 @@ nfDirective (MkEvalDirective r traced isAssert presumptive expr env) = do
   pure (MkEvalDirectiveResult r v' finalTrace)
 
 -- | Rewrite expression to call presumptive wrapper if one exists.
--- For PEVAL directives, we want to call the generated 'presumptive <func>' wrapper
--- with NOTHING arguments to trigger TYPICALLY default application.
+-- For PEVAL directives, we want to call the generated 'presumptive <func>' wrapper.
 --
--- Strategy: Always try to construct a wrapper call. If wrapper doesn't exist,
--- evaluation will fail and we'll fall back to auto-apply mechanism.
+-- NOTE: Currently not performing rewriting - wrappers exist in the environment but
+-- require name-based lookup which isn't efficiently supported at eval time.
+-- Falls back to auto-apply mechanism for now.
+-- TODO: Implement type-checking-time PEVAL rewriting or add wrapper mapping to environment.
 rewriteToPresumptiveCall :: Expr Resolved -> Environment -> Eval (Expr Resolved)
-rewriteToPresumptiveCall expr _env = case expr of
-  -- Case 1: Direct function reference (e.g., #PEVAL `can vote`)
-  -- Rewrite to: 'presumptive can vote' NOTHING
-  Var ann resolved -> do
-    let wrapperRef = makePresumptiveWrapperName resolved
-    -- Try calling wrapper with one NOTHING argument
-    -- If wrapper doesn't exist or has different arity, evaluation will handle it
-    let nothingExpr = Var ann nothingRef
-    pure $ App ann wrapperRef [nothingExpr]
-
-  -- Case 2: Partial application (e.g., #PEVAL `can vote` 25)
-  -- Rewrite to: 'presumptive can vote' (JUST 25)
-  App ann funcResolved args -> do
-    let wrapperRef = makePresumptiveWrapperName funcResolved
-    -- Wrap provided arguments with JUST
-    let justExpr arg = App ann justRef [arg]
-    let wrappedArgs = map justExpr args
-    pure $ App ann wrapperRef wrappedArgs
-
-  -- Other cases: return unchanged
-  _ -> pure expr
-  where
-    nothingRef = Ref nothingName nothingUnique nothingName
-    justRef = Ref justName justUnique justName
-
--- | Construct presumptive wrapper name from original function name.
--- Creates an OutOfScope reference that will be resolved by name during evaluation.
--- The wrapper has a fresh unique (generated during type checking), so we can't
--- construct a direct Ref. Instead, we use OutOfScope to trigger name-based lookup.
-makePresumptiveWrapperName :: Resolved -> Resolved
-makePresumptiveWrapperName resolved =
-  let origName = getOriginal resolved
-      origRawName = rawName (TypeCheck.getName origName)
-      newText = "'presumptive " <> rawNameToText origRawName <> "'"
-      newRawName = NormalName newText
-      newName = MkName (getAnno origName) newRawName
-      -- Create a temporary unique for the OutOfScope reference
-      -- The actual unique will be resolved during evaluation
-      MkUnique _ num uri = getUnique resolved
-      tempUnique = MkUnique 'P' (negate num - 1000000) uri  -- 'P' for Presumptive
-  in OutOfScope tempUnique newName
+rewriteToPresumptiveCall expr _env = pure expr  -- No rewriting for now
 
 -- | Apply TYPICALLY defaults to a closure when in presumptive mode.
 -- If the WHNF is a closure and presumptive=True, we apply defaults from
