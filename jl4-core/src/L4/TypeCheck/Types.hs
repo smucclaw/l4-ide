@@ -134,6 +134,7 @@ data ExpectationContext =
   | ExpectPostBodyContext -- body argument of POST
   | ExpectConcatArgumentContext -- argument of CONCAT
   | ExpectAsStringArgumentContext -- argument of AS STRING
+  | ExpectTypicallyValueContext Name -- TYPICALLY value must match declared type (field/param name)
   deriving stock (Eq, Generic, Show)
   deriving anyclass NFData
 

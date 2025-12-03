@@ -802,11 +802,15 @@ typedNameOptionallyNamedType :: TypedName n -> OptionallyNamedType n
 typedNameOptionallyNamedType (MkTypedName _ n t _) = MkOptionallyNamedType emptyAnno (Just n) t
 
 inferSelector :: AppForm Resolved -> TypedName Name -> Check (TypedName Resolved, [CheckInfo])
-inferSelector rappForm (MkTypedName ann n t _) = do
+inferSelector rappForm (MkTypedName ann n t typically) = do
   rt <- inferType t
   dn <- def n
+  -- Check TYPICALLY value if present
+  rTypically <- case typically of
+    Nothing -> pure Nothing
+    Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr rt
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
-  pure (MkTypedName ann dn rt Nothing, [makeKnown dn selectorInfo])
+  pure (MkTypedName ann dn rt rTypically, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
 inferType :: Type' Name -> Check (Type' Resolved)
@@ -912,14 +916,22 @@ inferLamGivens (MkGivenSig ann otns) = do
     -- TODO: there is unfortunate overlap between this and optionallyTypedNameType,
     -- but perhaps it's ok ...
     inferOptionallyTypedName :: OptionallyTypedName Name -> Check (OptionallyTypedName Resolved, Type' Resolved, [CheckInfo])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing _) = do
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing typically) = do
       rn <- def n
       v <- fresh (rawName n)
-      pure (MkOptionallyTypedName ann' rn (Just v) Nothing, v, [makeKnown rn (KnownTerm v Local)])
-    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t) _) = do
+      -- Check TYPICALLY value if present
+      rTypically <- case typically of
+        Nothing -> pure Nothing
+        Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr v
+      pure (MkOptionallyTypedName ann' rn (Just v) rTypically, v, [makeKnown rn (KnownTerm v Local)])
+    inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t) typically) = do
       rn <- def n
       rt <- inferType t
-      pure (MkOptionallyTypedName ann' rn (Just rt) Nothing, rt, [makeKnown rn (KnownTerm rt Local)])
+      -- Check TYPICALLY value if present
+      rTypically <- case typically of
+        Nothing -> pure Nothing
+        Just expr -> Just <$> checkExpr (ExpectTypicallyValueContext n) expr rt
+      pure (MkOptionallyTypedName ann' rn (Just rt) rTypically, rt, [makeKnown rn (KnownTerm rt Local)])
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -3054,6 +3066,8 @@ prettyTypeMismatch ExpectRegulativeProvidedContext expected given =
   standardTypeMismatch [ "The PROVIDED clause for filtering the ACTION is expected to be of type" ] expected given
 prettyTypeMismatch ExpectAssertContext expected given =
   standardTypeMismatch [ "An ASSERT directive is expected to be of type" ] expected given
+prettyTypeMismatch (ExpectTypicallyValueContext n) expected given =
+  standardTypeMismatch [ "The TYPICALLY value for " <> quotedName n <> " is expected to be of type" ] expected given
 
 -- | Best effort, only small numbers will occur"
 prettyOrdinal :: Int -> Text

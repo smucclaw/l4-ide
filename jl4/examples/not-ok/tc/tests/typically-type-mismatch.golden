@@ -1,0 +1,17 @@
+Parsing successful
+Typechecking successful
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: typically-type-mismatch.l4
+  Hidden:   no
+  Range:    5:34-5:36
+  Source:   check
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+    The TYPICALLY value for `enabled` is expected to be of type
+
+      BOOLEAN
+
+    but is here of type
+
+      NUMBER

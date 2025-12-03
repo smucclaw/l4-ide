@@ -1,0 +1,5 @@
+-- Test file for TYPICALLY type mismatch errors
+
+-- ERROR: BOOLEAN field with NUMBER default
+DECLARE BadConfig HAS
+  enabled IS A BOOLEAN 42

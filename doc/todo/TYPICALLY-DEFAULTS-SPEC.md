@@ -1,7 +1,23 @@
 # Specification: TYPICALLY Keyword for Default Values
 
-**Status:** 📋 Draft
+**Status:** 🚧 In Progress (Core Implementation Complete)
 **Related:** `doc/default-values.md` (conceptual background), `BOOLEAN-MINIMIZATION-SPEC.md`
+
+## Implementation Progress
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Lexer - add TYPICALLY keyword | ✅ Complete |
+| 2 | AST - extend TypedName, OptionallyTypedName, Assume | ✅ Complete |
+| 3 | Parser - parse TYPICALLY clauses | ✅ Complete |
+| 4 | Type Checking - validate TYPICALLY values | ✅ Complete |
+| 5 | IDE Support - syntax highlighting, hover, autocomplete | ⏳ Not started |
+
+**Test files:**
+- `jl4/examples/ok/typically-basic.l4` - comprehensive examples
+- `jl4/examples/not-ok/tc/typically-type-mismatch.l4` - type error testing
+
+**Bonus:** ASSUME deprecation warnings implemented (see `ASSUME-DEPRECATION-SPEC.md`)
 
 ## Executive Summary
 
