@@ -27,6 +27,7 @@
 ### Project Goals
 
 The project aims to answer common legal questions computationally:
+
 - Current state given events
 - Immediate obligations
 - Paths to achieve/avoid outcomes
@@ -34,6 +35,7 @@ The project aims to answer common legal questions computationally:
 - Detect potential loopholes and ambiguities
 
 Key applications include:
+
 - IDE support for legal drafters
 - Automated generation of end-user web/mobile apps
 - Visualizations (ladder diagrams) for comprehension
