@@ -7,6 +7,7 @@ This guide explains how to run the L4 services locally for development and testi
 ### TL;DR - Quick Start
 
 **Option 1: Use the helper script**
+
 ```bash
 # Show all commands for full stack
 ./dev-start.sh full
@@ -17,6 +18,7 @@ This guide explains how to run the L4 services locally for development and testi
 ```
 
 **Option 2: Manual startup (3 terminals)**
+
 ```bash
 # Terminal 1: Decision service
 cd jl4-decision-service
@@ -36,11 +38,11 @@ Then open http://localhost:5173 in your browser.
 
 ### Development vs Production Bootstrapping
 
-| Environment | How to Start | Configuration | Domain |
-|-------------|--------------|---------------|--------|
-| **Local Dev** | `cabal run` commands | Command-line arguments | `localhost` |
-| **Dev Server** | `nixos-rebuild switch --flake .#jl4-dev` | `flake.nix` + `nix/*.nix` | `dev.jl4.legalese.com` |
-| **Production** | `nixos-rebuild switch --flake .#jl4-aws-2505` | `flake.nix` + `nix/*.nix` | `jl4.legalese.com` |
+| Environment    | How to Start                                  | Configuration             | Domain                 |
+| -------------- | --------------------------------------------- | ------------------------- | ---------------------- |
+| **Local Dev**  | `cabal run` commands                          | Command-line arguments    | `localhost`            |
+| **Dev Server** | `nixos-rebuild switch --flake .#jl4-dev`      | `flake.nix` + `nix/*.nix` | `dev.jl4.legalese.com` |
+| **Production** | `nixos-rebuild switch --flake .#jl4-aws-2505` | `flake.nix` + `nix/*.nix` | `jl4.legalese.com`     |
 
 **Local Development** uses `cabal` to build and run services with explicit command-line arguments for configuration (ports, URLs, paths).
 
@@ -49,6 +51,7 @@ Then open http://localhost:5173 in your browser.
 ### Deploying to Environments
 
 **Deploy to Dev Server (AWS EC2):**
+
 ```bash
 # SSH to dev server
 ssh root@dev.jl4.legalese.com
@@ -64,6 +67,7 @@ nixos-rebuild switch --flake .#jl4-dev
 ```
 
 **Deploy to Production (AWS EC2):**
+
 ```bash
 # SSH to production server
 ssh root@jl4.legalese.com
@@ -79,6 +83,7 @@ nixos-rebuild switch --flake .#jl4-aws-2505
 ```
 
 The flake configurations (`jl4-dev` vs `jl4-aws-2505`) set the appropriate domain, which propagates to:
+
 - nginx server name
 - ACME/Let's Encrypt certificate
 - Swagger API URLs
@@ -124,6 +129,7 @@ Development:
 ```
 
 **Key Points:**
+
 - Services bind to **0.0.0.0** (all interfaces) so nginx can reach them
 - Services communicate with each other via **localhost** (same machine, fast)
 - nginx proxies public traffic from **/session** → localhost:8002 and **/decision** → localhost:8001
@@ -132,11 +138,13 @@ Development:
 ### Port Configuration
 
 **Default Development Ports:**
+
 - `jl4-websessions`: `localhost:8002`
 - `jl4-decision-service`: `localhost:8001`
 - `jl4-web` (Svelte frontend): `localhost:5173`
 
 **Production Ports (NixOS):**
+
 - Both services communicate internally via localhost
 - External access via nginx on ports 80/443
 
@@ -185,21 +193,25 @@ npm run dev
 Once all services are running:
 
 1. **Save a program in the Web IDE:**
+
    ```
    http://localhost:5173/?id=new
    ```
 
 2. **The save will:**
+
    - Generate a UUID (e.g., `b52992ed-39fd-4226-bad2-2deee2473881`)
    - Store in SQLite (`/tmp/sessions.db`)
    - Push to decision service (if URL configured)
 
 3. **Test retrieval via websessions:**
+
    ```bash
    curl "http://localhost:8002?id=b52992ed-39fd-4226-bad2-2deee2473881"
    ```
 
 4. **Test retrieval via decision service:**
+
    ```bash
    # Get function metadata
    curl "http://localhost:8001/functions/b52992ed-39fd-4226-bad2-2deee2473881:functionName"
@@ -213,6 +225,7 @@ Once all services are running:
 ### Common Development Scenarios
 
 #### Scenario 1: Frontend Development Only
+
 ```bash
 # Start decision service with preloaded examples
 cd jl4-decision-service
@@ -224,6 +237,7 @@ npm run dev
 ```
 
 #### Scenario 2: Full Stack Testing
+
 ```bash
 # Terminal 1: Decision service
 cd jl4-decision-service
@@ -241,6 +255,7 @@ npm run dev
 ```
 
 #### Scenario 3: Testing Websessions Push
+
 ```bash
 # Start decision service first
 cd jl4-decision-service
@@ -274,33 +289,37 @@ export JL4_DB_PATH=/tmp/sessions.db
 ### Troubleshooting
 
 **Problem: Decision service can't reach websessions**
+
 - Check websessions is running: `curl http://localhost:8002`
 - Check the port number in decision service config
 - Ensure no firewall blocking localhost connections
 
 **Problem: Websessions not pushing to decision service**
+
 - Check decision service is running: `curl http://localhost:8001/functions`
 - Verify the decision service URL parameter was passed to websessions
 - Check websessions logs for HTTP errors
 
 **Problem: Functions not appearing in decision service**
+
 - Check `@export` annotations in your L4 code
 - Use `@export default` for a default function
 - Verify no #EVAL/#ASSERT directives (they're stripped)
 
 ### Production vs Development
 
-|                          | Development              | Production (NixOS)              |
-|--------------------------|--------------------------|---------------------------------|
-| Service binding          | `0.0.0.0:PORT`          | `0.0.0.0:PORT`                 |
-| websessions → decision   | `http://localhost:8001`  | `http://localhost:8001`         |
-| decision → websessions   | `http://localhost:8002`  | `http://localhost:8002`         |
-| Public access            | Direct to ports          | Via nginx → localhost           |
-| Swagger server URL       | `http://localhost:8001`  | `https://jl4.legalese.com/...` |
-| TLS                      | No                       | Yes (nginx terminates)          |
-| Database                 | `/tmp/sessions.db`       | `/var/lib/private/...`          |
+|                        | Development             | Production (NixOS)             |
+| ---------------------- | ----------------------- | ------------------------------ |
+| Service binding        | `0.0.0.0:PORT`          | `0.0.0.0:PORT`                 |
+| websessions → decision | `http://localhost:8001` | `http://localhost:8001`        |
+| decision → websessions | `http://localhost:8002` | `http://localhost:8002`        |
+| Public access          | Direct to ports         | Via nginx → localhost          |
+| Swagger server URL     | `http://localhost:8001` | `https://jl4.legalese.com/...` |
+| TLS                    | No                      | Yes (nginx terminates)         |
+| Database               | `/tmp/sessions.db`      | `/var/lib/private/...`         |
 
 **Key Architecture Points:**
+
 - Both environments: Services bind to **all interfaces** (0.0.0.0)
 - Both environments: Service-to-service communication uses **localhost** (fast, no TLS overhead)
 - Production only: nginx reverse proxy adds TLS and path routing (/session, /decision)
