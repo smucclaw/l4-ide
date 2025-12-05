@@ -133,6 +133,8 @@ jobs:
           npm install --ignore-scripts --package-lock-only --engine-strict
           git diff --exit-code package-lock.json
       - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check
