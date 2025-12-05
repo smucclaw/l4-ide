@@ -1,0 +1,240 @@
+<h1 id="ai-agent-development-notes-for-l4-ide">
+  AI Agent Development Notes for L4 IDE
+</h1>
+<h2 id="about-l4">About L4</h2>
+<p>
+  <strong>L4 is a domain-specific language (DSL) for law.</strong> It enables
+  computer-readable formalizations of contracts, legislation, and regulations,
+  translating legal documents into precise, executable code.
+</p>
+<h3 id="design-principles">Design Principles</h3>
+<ol type="1">
+  <li>
+    <strong>Optimized for editability and learnability</strong> - Most human
+    uses involve tweaking existing text rather than drafting from scratch
+  </li>
+  <li>
+    <strong>Machine-written, human-reviewed</strong> - LLMs can ingest legal
+    documents into L4; humans review and revise
+  </li>
+  <li>
+    <strong>Isomorphic to legal text</strong> - L4 encoding closely follows the
+    original legal document structure and verbiage
+  </li>
+  <li>
+    <strong>Layout-sensitive syntax</strong> - Uses indentation for grouping
+    (like Python), making it approachable for non-programmers
+  </li>
+  <li>
+    <strong>Strongly typed</strong> - Algebraic data types reduce ambiguity; L4
+    is written in, and inspired by, Haskell and functional programming.
+  </li>
+  <li>
+    <strong>Both specification and programming language</strong> - Can express
+    both “letter of the law” and “spirit of the law”
+  </li>
+</ol>
+<h3 id="target-users">Target Users</h3>
+<ol type="1">
+  <li>
+    <strong>Legal professionals</strong> - Lawyers and legal drafters (no
+    programming experience required)
+  </li>
+  <li>
+    <strong>Legal engineers</strong> - Those who translate legal text to L4 code
+  </li>
+  <li>
+    <strong>End-users of L4-based applications</strong> - People asking
+    questions like:
+    <ul>
+      <li>“Do I qualify? Why/Why not?”</li>
+      <li>“How much do I have to pay/get paid?”</li>
+      <li>“What do I need to do to achieve a goal?”</li>
+    </ul>
+  </li>
+  <li>
+    <strong>AI/LLMs</strong> - Copilot can automatically translate legal text
+    into L4
+  </li>
+  <li>
+    <strong>Developers</strong> - Improving the toolchain and IDE experience
+  </li>
+</ol>
+<h3 id="project-goals">Project Goals</h3>
+<p>The project aims to answer common legal questions computationally:</p>
+<ul>
+  <li>Current state given events</li>
+  <li>Immediate obligations</li>
+  <li>Paths to achieve/avoid outcomes</li>
+  <li>Basis for calculations (audit trails)</li>
+  <li>Detect potential loopholes and ambiguities</li>
+</ul>
+<p>Key applications include:</p>
+<ul>
+  <li>IDE support for legal drafters</li>
+  <li>Automated generation of end-user web/mobile apps</li>
+  <li>Visualizations (ladder diagrams) for comprehension</li>
+  <li>Chatbot interfaces for conversational engagement</li>
+  <li>SAT/SMT verification and formal reasoning</li>
+</ul>
+<hr />
+<h2 id="development-guide">Development Guide</h2>
+<h3 id="testing">Testing</h3>
+<p>Follow test-driven development (TDD) practices:</p>
+<ol type="1">
+  <li>
+    <strong>Write tests first</strong> when adding new features - define
+    expected behavior before implementation
+  </li>
+  <li>
+    <strong>Update tests</strong> when modifying existing behavior - tests
+    should reflect the current spec
+  </li>
+  <li>
+    <strong>Add regression tests</strong> when fixing bugs - prevent the same
+    bug from recurring
+  </li>
+</ol>
+<p>
+  Before committing changes, always run the full test suite to ensure nothing is
+  broken:
+</p>
+<div class="sourceCode" id="cb1">
+  <pre
+    class="sourceCode bash"
+  ><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1"></a><span class="ex">cabal</span> test all</span></code></pre>
+</div>
+<p>The test suite should pass before creating a git commit.</p>
+<p>
+  Also before committing changes, run <code>npm run format</code> so that
+  Github’s CI doesn’t fail PRs on formatting errors.
+</p>
+<h4 id="golden-files">Golden Files</h4>
+<p>
+  The test suite uses golden files for snapshot testing. Golden files capture
+  the expected output of tests.
+</p>
+<p><strong>Important behaviors:</strong></p>
+<ul>
+  <li>
+    <strong>First run</strong>: If a golden file doesn’t exist, it will be
+    created automatically on the first test run. The test will fail with “Failed
+    because failFirstTime is set to True”.
+  </li>
+  <li>
+    <strong>Second run</strong>: Running the test again will compare against the
+    newly created golden file and should pass.
+  </li>
+  <li>
+    <strong>When adding new test files</strong>: You typically need to run
+    <code>cabal test all</code> twice - once to create the golden files, and
+    once to verify they match.
+  </li>
+</ul>
+<p><strong>Updating golden files:</strong></p>
+<p>
+  If you’ve made intentional changes that affect test output and you’re
+  confident the new behavior is correct, you can:
+</p>
+<ol type="1">
+  <li>
+    Delete the relevant golden files (usually in
+    <code>.golden/</code> directories)
+  </li>
+  <li>
+    Run <code>cabal test all</code> twice to regenerate and verify the golden
+    files
+  </li>
+</ol>
+<p>
+  This is preferable to manually editing golden files, as it ensures the test
+  output exactly matches what the system produces.
+</p>
+<h3 id="building">Building</h3>
+<p>To build the entire project:</p>
+<div class="sourceCode" id="cb2">
+  <pre
+    class="sourceCode bash"
+  ><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1"></a><span class="ex">cabal</span> build all</span></code></pre>
+</div>
+<p>To run the CLI tool:</p>
+<div class="sourceCode" id="cb3">
+  <pre
+    class="sourceCode bash"
+  ><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1"></a><span class="ex">cabal</span> run jl4-cli -- <span class="op">&lt;</span>file.l4<span class="op">&gt;</span></span></code></pre>
+</div>
+<p>Note that the <code>eval</code> sub-command is NOT part of this syntax.</p>
+<p>To install the LSP tool:</p>
+<div class="sourceCode" id="cb4">
+  <pre
+    class="sourceCode bash"
+  ><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1"></a><span class="ex">cabal</span> install exe:jl4-lsp --overwrite-policy=always</span></code></pre>
+</div>
+<hr />
+<h2 id="task-management">Task Management</h2>
+<h3 id="specifications">Specifications</h3>
+<p>
+  Task specifications and feature designs are organized in the
+  <code>doc/</code> directory:
+</p>
+<ul>
+  <li>
+    <strong><code>doc/todo/</code></strong> - Specifications for planned
+    features and tasks in progress (e.g., <code>EXPORT-SYNTAX-SPEC.md</code>,
+    <code>BOOLEAN-MINIMIZATION-SPEC.md</code>)
+  </li>
+  <li>
+    <strong><code>doc/done/</code></strong> - Completed specifications for
+    reference (e.g., <code>BIDIRECTIONAL-TYPE-CHECKING-SPEC.md</code>,
+    <code>STRING-CONCAT-SPEC.md</code>)
+  </li>
+</ul>
+<p>
+  When working on a feature, check if there’s an existing spec in
+  <code>doc/todo/</code> that describes the requirements.
+</p>
+<h3 id="github-issues">GitHub Issues</h3>
+<p>
+  Consult the GitHub issues for bug reports, feature requests, and ongoing
+  discussions:
+</p>
+<p><strong>https://github.com/smucclaw/l4-ide/issues</strong></p>
+<p>
+  Issues often contain important context, design decisions, and acceptance
+  criteria that may not be fully captured in the spec documents.
+</p>
+<h3 id="pull-requests">Pull Requests</h3>
+<p>
+  To understand recent project activity and context, review recent pull
+  requests:
+</p>
+<p><strong>https://github.com/smucclaw/l4-ide/pulls</strong></p>
+<p>
+  Reviewing merged PRs helps understand what work has been done recently,
+  ongoing architectural decisions, and the current state of the codebase.
+</p>
+<h3 id="keeping-documentation-current">Keeping Documentation Current</h3>
+<p>
+  <strong>Always update documentation alongside code changes.</strong> When
+  completing work:
+</p>
+<ol type="1">
+  <li>
+    <strong>Update the relevant spec</strong> in <code>doc/todo/</code> to
+    reflect what was implemented, any deviations from the original plan, and
+    remaining work
+  </li>
+  <li>
+    <strong>Move completed specs</strong> from <code>doc/todo/</code> to
+    <code>doc/done/</code> when a feature is fully implemented
+  </li>
+  <li>
+    <strong>Update related docs</strong> (e.g., <code>doc/README.md</code>,
+    tutorials) if the change affects user-facing behavior
+  </li>
+  <li>
+    <strong>Note any new limitations or known issues</strong> discovered during
+    implementation
+  </li>
+</ol>
+<p>Documentation is a first-class deliverable, not an afterthought.</p>

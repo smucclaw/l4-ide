@@ -1,0 +1,94 @@
+<h1 id="peval-with-typically-defaults-current-status">
+  PEVAL with TYPICALLY Defaults – Current Status
+</h1>
+<h2 id="what-works-today">✅ What Works Today</h2>
+<ol type="1">
+  <li>
+    <strong>Directive rewriting to wrappers</strong> – <code>#PEVAL</code>,
+    <code>#PEVALTRACE</code>, and <code>#PASSERT</code> are rewritten during
+    type checking to call the generated <code>'presumptive …'</code> helpers.
+    Missing arguments are padded with <code>NOTHING</code>, user-provided
+    arguments become <code>JUST …</code>, and CLI output now surfaces the
+    explicit <code>Maybe</code> result (<code>JUST TRUE</code>,
+    <code>NOTHING</code>, etc.). For assertions, a <code>NOTHING</code> result
+    now fails the check.
+  </li>
+  <li>
+    <strong>Runtime auto-defaults as safety net</strong> – The evaluator still
+    falls back to <code>maybeApplyDefaults</code> if a presumptive wrapper is
+    missing, so old scripts continue to run while we finish migrating downstream
+    callers.
+  </li>
+  <li>
+    <strong>Wrapper generation for downstream callers</strong> – The type
+    checker synthesizes prefix-only <code>'presumptive …'</code> helpers with
+    <code>MAYBE</code>-wrapped parameters so the Decision Service, SDKs, and CLI
+    can all share the same default-aware entry points.
+  </li>
+  <li>
+    <strong>Mixfix guard rails</strong> – Mixfix interpretation remains
+    IDE-only. Resolver logic skips identifiers that already start with
+    <code>'presumptive</code>, guaranteeing that wrappers stay in canonical
+    prefix form for REST payloads, presumptive directives, and audit logs.
+  </li>
+</ol>
+<h2 id="temporarily-disabled">⚠️ Temporarily Disabled</h2>
+<ul>
+  <li>
+    <strong>Transitive wrapper propagation</strong> – Generated wrappers still
+    defer to the original DECIDE body, so calls that happen <em>inside</em> user
+    code only see defaults when the caller itself supplied the argument.
+    Propagating presumptive calls through nested DECIDEs is tracked in
+    <code>doc/todo/TYPICALLY-DEFAULTS-SPEC.md</code>.
+  </li>
+  <li>
+    <strong>Four-state inputs</strong> – The presumptive helpers still speak in
+    terms of <code>JUST</code>/<code>NOTHING</code>. The
+    <code>InputState</code> model from
+    <code>RUNTIME-INPUT-STATE-SPEC.md</code>
+    (explicit/unknown/not-provided/not-applicable) remains on the backlog.
+  </li>
+</ul>
+<h2 id="next-steps">Next Steps</h2>
+<ol type="1">
+  <li>
+    <strong>Propagate presumptions across nested decisions</strong> – Decide
+    whether we rewrite DECIDE bodies to call the
+    <code>'presumptive …'</code> helpers or thread an alternate evaluation mode
+    so inner calls inherit defaults automatically.
+  </li>
+  <li>
+    <strong>Move to the four-state runtime</strong> – Replace the current
+    <code>Maybe</code> plumbing with the <code>InputState</code> representation
+    so Decision Service clients can distinguish “not asked” from “explicit
+    unknown,” while keeping CLI defaults intuitive.
+  </li>
+</ol>
+<h3 id="recent-work-log">Recent Work Log</h3>
+<ul>
+  <li>
+    Revisited the TYPICALLY, runtime-input, and mixfix specs plus the newly
+    merged foundation/advanced “course” docs so documentation updates stay
+    consistent with the latest design voice.
+  </li>
+  <li>
+    Added a type-checking rewrite pass that wraps PEVAL/PEVALTRACE/PASSERT
+    arguments (<code>JUST</code> vs <code>NOTHING</code> padding), unwraps
+    PASSERT results, and blocks mixfix resolution on
+    <code>'presumptive …'</code> names. This proved out the approach but exposed
+    regressions (e.g. ok/foo.l4 ambiguity errors) so the code currently needs
+    further hardening before it can stay enabled.
+  </li>
+  <li>
+    Tried deduplicating <code>AmbiguousTermError</code> cases by comparing
+    canonical origin info (range + raw name). That fixed some duplicate warnings
+    but still left the CLI with “internal ambiguity” diagnostics when wrapper
+    generation emits multiple siblings; expect to revisit once the wrapper map
+    is threaded everywhere.
+  </li>
+  <li>
+    Documentation was partially updated (HELP.md, specs, mixfix doc, course
+    modules) to reflect the intended wrapper behavior and the “mixfix stays in
+    IDE” rule. Need follow-up to polish wording once the code path stabilizes.
+  </li>
+</ul>

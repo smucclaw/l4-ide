@@ -170,6 +170,7 @@ Development:
 **Bidirectional Communication:**
 
 1. **Flow 1 - Push (websessions → decision service):**
+
    - User saves L4 program in web IDE (hits "Share")
    - websessions stores in SQLite with UUID
    - websessions immediately POSTs to decision service `/functions/{uuid}`

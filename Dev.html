@@ -1,0 +1,167 @@
+<h1 id="developers-guide-to-building-the-l4-toolchain">
+  Developer’s Guide to Building the L4 Toolchain
+</h1>
+<p>
+  These instructions are intended for L4 internal developers with experience in
+  Typescript and/or Haskell.
+</p>
+<h2 id="quick-build-and-install">Quick build and install</h2>
+<div class="sourceCode" id="cb1">
+  <pre
+    class="sourceCode sh"
+  ><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1"></a><span class="ex">npm</span> install <span class="kw">&amp;&amp;</span> <span class="ex">npm</span> run build</span>
+<span id="cb1-2"><a href="#cb1-2"></a><span class="ex">cabal</span> update</span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="ex">cabal</span> install exe:jl4-lsp --overwrite-policy=always</span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="co"># Make sure the installation directory (usually `~/.cabal/bin/`) is on the `$PATH`</span></span></code></pre>
+</div>
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li>
+    Haskell
+    <ul>
+      <li><a href="https://www.haskell.org/ghcup/">GHCup</a></li>
+      <li>ghc 9.6.6</li>
+      <li>cabal 3.10 (or newer)</li>
+    </ul>
+  </li>
+  <li>
+    npm &gt;= 10.9.2
+    <ul>
+      <li>
+        installed via <code>corepack</code> or <code>nvm</code> or your package
+        manager
+      </li>
+      <li>
+        See the README in <code>ts-apps/vscode</code> for more details on
+        working with the VSCode extension.
+      </li>
+    </ul>
+  </li>
+  <li>
+    VS Code
+    <ul>
+      <li>
+        If running <code>code</code> from the command line does nothing, see
+        https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+      </li>
+    </ul>
+  </li>
+  <li>
+    on your system
+    <ul>
+      <li>pkgconfig</li>
+      <li>xz (or liblzma dev libraries)</li>
+    </ul>
+  </li>
+</ul>
+<p>
+  After ghcup is installed, run <code>ghcup tui</code> and set
+  <code>ghc</code> to version <code>9.6.6</code>; press <code>i</code> to
+  install and then <code>s</code> to set that as the default.
+</p>
+<p>
+  If you run into difficulty later with <code>npm</code>, you may benefit from
+  first running
+</p>
+<pre><code>nvm install --lts</code></pre>
+<p>
+  And if this is your first time doing any kind of development on your system,
+  on a Mac, you will need to install the Xcode command line tools:
+</p>
+<pre><code>xcode-select --install</code></pre>
+<p>Other prerequisites which pkgconfig needs to know about:</p>
+<pre><code>sudo apt install pkg-config liblzma-dev libgmp-dev</code></pre>
+<p>
+  Under Nix you can run <code>nix-shell nix/shell.nix</code> in the current
+  directory to pick up the above packages.
+</p>
+<h2 id="tests">Tests</h2>
+<div class="sourceCode" id="cb5">
+  <pre
+    class="sourceCode sh"
+  ><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1"></a><span class="ex">cabal</span> test test:jl4-test</span></code></pre>
+</div>
+<h2 id="run">Run</h2>
+<p>
+  After a successful build above, quit any running VS Code instances, and launch
+  one from the current directory:
+</p>
+<div class="sourceCode" id="cb6">
+  <pre
+    class="sourceCode sh"
+  ><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1"></a><span class="ex">code</span> .</span></code></pre>
+</div>
+<p>
+  Press <code>F5</code> from within VSCode. The JL4 extension should launch in a
+  new VS Code window.
+</p>
+<h2 id="examples">Examples</h2>
+<p>
+  Open folder <a href="./jl4/examples">./jl4/examples</a> to see the Language
+  Server in action
+</p>
+<h2 id="syntax-highlighting">Syntax Highlighting</h2>
+<figure>
+  <img src="./doc/images/doc-screenshot-1.png" alt="" />
+  <figcaption>Syntax Highlighting Example</figcaption>
+</figure>
+<h2 id="visualizer">Visualizer</h2>
+<p>Click on “visualize” to see a rendering of the decision logic.</p>
+<h2 id="running-the-web-ide-locally">Running the web IDE locally</h2>
+<p>The general overview is as follows:</p>
+<ul>
+  <li>
+    <p>the webpage is served as a javascript bundle</p>
+    <ul>
+      <li>
+        it directly connects to the language server provided by the
+        <code>jl4-lsp</code> binary via websocket
+      </li>
+      <li>
+        it directly connects to the session persistance service provided by
+        <code>jl4-websessions</code> via http
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p>
+      the decision service can serve examples from
+      <code>--sourcePaths</code> but also by directly contacting the
+      <code>jl4-websessions</code> service via http
+    </p>
+  </li>
+  <li>
+    <p>
+      to set up the CRUD service for saving files:
+      <code>cabal run exe:jl4-websessions -- 5008 test.db</code>
+    </p>
+  </li>
+  <li>
+    <p>
+      to set up the language server to talk to the frontend via websocket:
+      <code>cabal run exe:jl4-lsp -- ws --port 5007</code>
+    </p>
+  </li>
+  <li>
+    <p>
+      to run the frontend that connects to both:
+      <code>cd ts-apps/jl4-web; npm i; npm run dev</code>
+    </p>
+  </li>
+  <li>
+    <p>
+      check out <code>--help</code> for <code>jl4-websessions</code> and
+      <code>jl4-lsp</code>
+    </p>
+  </li>
+  <li>
+    <p>
+      to run the decision service locally:
+      <code
+        >cabal run jl4-decision-service-exe -- --port 8081 --serverName
+        http://localhost:8081/ --sourcePaths doc/tutorial-code/</code
+      >
+      The default is set to connect to the webessions service on port 5007
+    </p>
+  </li>
+</ul>

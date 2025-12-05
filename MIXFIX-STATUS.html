@@ -1,0 +1,229 @@
+<h1 id="mixfix-operators---current-status">
+  Mixfix Operators - Current Status
+</h1>
+<h2 id="what-weve-built">What We’ve Built</h2>
+<h3 id="branch-mengwongmixfix">Branch: <code>mengwong/mixfix</code></h3>
+<p>
+  This branch implements the foundation for user-defined mixfix operators in L4,
+  enabling natural language-style function definitions like:
+</p>
+<pre class="l4"><code>GIVEN person IS A Person, program IS A Program
+GIVETH Bool
+_ `is eligible for` _ MEANS
+  person&#39;s age &gt;= 18 AND ...
+
+-- Call site:
+alice `is eligible for` healthcare</code></pre>
+<h2 id="completed-work">Completed Work</h2>
+<h3 id="specification-complete">1. Specification (✅ Complete)</h3>
+<ul>
+  <li><strong>File</strong>: <code>doc/mixfix-operators.md</code></li>
+  <li>
+    Comprehensive design document covering:
+    <ul>
+      <li>Motivation and goals</li>
+      <li>Syntax at definition and call sites</li>
+      <li>Precedence and disambiguation strategy</li>
+      <li>Type checking approach</li>
+      <li>Examples and use cases</li>
+    </ul>
+  </li>
+</ul>
+<h3 id="implementation-plan-complete">2. Implementation Plan (✅ Complete)</h3>
+<ul>
+  <li><strong>File</strong>: <code>doc/mixfix-implementation-plan.md</code></li>
+  <li>
+    Detailed roadmap with:
+    <ul>
+      <li>Phase-by-phase breakdown</li>
+      <li>Timeline estimates (~2-3 weeks total)</li>
+      <li>Open questions and design decisions</li>
+      <li>Migration strategy</li>
+    </ul>
+  </li>
+</ul>
+<h3 id="design-simplification-complete">
+  3. Design Simplification (✅ Complete)
+</h3>
+<ul>
+  <li><strong>No lexer changes needed!</strong></li>
+  <li>
+    Underscores (<code>_</code>) are purely conceptual - never appear in source
+    code
+  </li>
+  <li>Users write <code>a plus b</code>, not <code>_ plus _</code></li>
+  <li>Pattern extraction works by comparing tokens against GIVEN parameters</li>
+  <li><strong>Status</strong>: ✅ Compiles successfully, all tests pass</li>
+</ul>
+<h2 id="remaining-work">Remaining Work</h2>
+<h3 id="phase-1-scanning-phase-not-started">
+  Phase 1: Scanning Phase (🔲 Not Started)
+</h3>
+<p><strong>Estimated</strong>: 1-2 days</p>
+<p>Extract mixfix pattern info during <code>scanFunSigDecide</code>:</p>
+<div class="sourceCode" id="cb2">
+  <pre
+    class="sourceCode haskell"
+  ><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">data</span> <span class="dt">MixfixInfo</span> <span class="ot">=</span> <span class="dt">MkMixfixInfo</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a>  {<span class="ot"> keywords ::</span> [<span class="dt">Name</span>]</span>
+<span id="cb2-3"><a href="#cb2-3"></a>  ,<span class="ot"> arity ::</span> <span class="dt">Int</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a>  ,<span class="ot"> keywordPositions ::</span> [<span class="dt">Int</span>]</span>
+<span id="cb2-5"><a href="#cb2-5"></a>  ,<span class="ot"> pattern ::</span> [<span class="dt">PatternToken</span> <span class="dt">Name</span>]</span>
+<span id="cb2-6"><a href="#cb2-6"></a>  }</span>
+<span id="cb2-7"><a href="#cb2-7"></a></span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="co">-- Add to FunTypeSig:</span></span>
+<span id="cb2-9"><a href="#cb2-9"></a><span class="kw">data</span> <span class="dt">FunTypeSig</span> <span class="ot">=</span> <span class="dt">MkFunTypeSig</span></span>
+<span id="cb2-10"><a href="#cb2-10"></a>  { <span class="op">...</span></span>
+<span id="cb2-11"><a href="#cb2-11"></a>  ,<span class="ot"> mixfixInfo ::</span> <span class="dt">Maybe</span> <span class="dt">MixfixInfo</span></span>
+<span id="cb2-12"><a href="#cb2-12"></a>  }</span></code></pre>
+</div>
+<h3 id="phase-2-type-checker-not-started">
+  Phase 2: Type Checker (🔲 Not Started)
+</h3>
+<p><strong>Estimated</strong>: 2-3 days</p>
+<p>Implement pattern matching at call sites:</p>
+<ul>
+  <li>Find keywords in token sequence</li>
+  <li>Extract arguments between keywords</li>
+  <li>Type check arguments</li>
+  <li>Disambiguate using types</li>
+</ul>
+<h3 id="phase-3-error-handling-not-started">
+  Phase 3: Error Handling (🔲 Not Started)
+</h3>
+<p><strong>Estimated</strong>: 1 day</p>
+<p>Add new error types:</p>
+<ul>
+  <li><code>NoMatchingMixfixPattern</code></li>
+  <li><code>AmbiguousMixfix</code></li>
+  <li><code>MixfixArityMismatch</code></li>
+</ul>
+<h3 id="phase-4-testing-not-started">Phase 4: Testing (🔲 Not Started)</h3>
+<p><strong>Estimated</strong>: 1-2 days</p>
+<p>Create test files:</p>
+<ul>
+  <li><code>jl4/examples/ok/mixfix-basic.l4</code></li>
+  <li><code>jl4/examples/not-ok/tc/mixfix-errors.l4</code></li>
+</ul>
+<h3 id="phase-5-documentation-not-started">
+  Phase 5: Documentation (🔲 Not Started)
+</h3>
+<p><strong>Estimated</strong>: 1 day</p>
+<p>Update user-facing docs</p>
+<h2 id="design-decisions-made">Design Decisions Made</h2>
+<ol type="1">
+  <li>
+    <strong>Parameter names in patterns</strong>: Users write
+    <code>a plus b</code>, not <code>_ plus _</code>
+  </li>
+  <li>
+    <strong>Underscores are conceptual</strong>: Only used internally to
+    represent pattern structure
+  </li>
+  <li>
+    <strong>Pattern extraction via comparison</strong>: Compare AppForm tokens
+    against GIVEN params
+  </li>
+  <li>
+    <strong>No AST/parser changes</strong>: Existing structures already support
+    this
+  </li>
+  <li>
+    <strong>No implicit precedence</strong>: Require parentheses/indentation for
+    disambiguation
+  </li>
+  <li>
+    <strong>Type-directed resolution</strong>: Types help select correct
+    function at call sites
+  </li>
+  <li>
+    <strong>Leverages existing scanning</strong>: Multi-pass infrastructure
+    already in place
+  </li>
+</ol>
+<h2 id="key-insights-from-discussion">Key Insights from Discussion</h2>
+<ol type="1">
+  <li>
+    <strong>Backticks are for whitespace</strong>: All identifiers can use
+    backticks, not just functions
+  </li>
+  <li>
+    <strong>Forward references work</strong>: L4’s scanning phase handles this
+    already
+  </li>
+  <li>
+    <strong>TDNR precedent</strong>: L4 already uses type-directed name
+    resolution
+  </li>
+  <li>
+    <strong>Compositional mixfix</strong>: Binary operators compose to create
+    complex patterns
+  </li>
+</ol>
+<h2 id="example-use-cases">Example Use Cases</h2>
+<h3 id="infix">Infix</h3>
+<pre class="l4"><code>GIVEN a IS A Number, b IS A Number
+_ `plus` _ MEANS a + b
+
+3 `plus` 5  -- Result: 8</code></pre>
+<h3 id="postfix">Postfix</h3>
+<pre class="l4"><code>GIVEN amount IS A Number
+_ `percent` MEANS amount / 100
+
+50 `percent`  -- Result: 0.5</code></pre>
+<h3 id="ternary">Ternary</h3>
+<pre
+  class="l4"
+><code>GIVEN lower IS A Number, value IS A Number, upper IS A Number
+_ `&lt;=` _ `&lt;=` _ MEANS lower &lt;= value AND value &lt;= upper
+
+0 `&lt;=` 5 `&lt;=` 10  -- Result: TRUE</code></pre>
+<h3 id="complex-pattern">Complex Pattern</h3>
+<pre
+  class="l4"
+><code>GIVEN person1 IS A Person, person2 IS A Person, child IS A Person
+_ `copulated with` _ `to make` _ MEANS ...
+
+alice `copulated with` bob `to make` charlie</code></pre>
+<h2 id="next-steps">Next Steps</h2>
+<ol type="1">
+  <li>
+    <strong>Decide on AST approach</strong>: New constructors vs extending
+    existing
+  </li>
+  <li>
+    <strong>Begin Phase 1</strong>: Update AppForm and all pattern matchers
+  </li>
+  <li><strong>Iterative testing</strong>: Add tests after each phase</li>
+  <li>
+    <strong>Get feedback</strong>: Share examples with legal domain experts
+  </li>
+</ol>
+<h2 id="how-to-continue">How to Continue</h2>
+<div class="sourceCode" id="cb7">
+  <pre
+    class="sourceCode bash"
+  ><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1"></a><span class="co"># Checkout the branch</span></span>
+<span id="cb7-2"><a href="#cb7-2"></a><span class="fu">git</span> checkout mengwong/mixfix</span>
+<span id="cb7-3"><a href="#cb7-3"></a></span>
+<span id="cb7-4"><a href="#cb7-4"></a><span class="co"># See current status</span></span>
+<span id="cb7-5"><a href="#cb7-5"></a><span class="fu">git</span> log --oneline</span>
+<span id="cb7-6"><a href="#cb7-6"></a></span>
+<span id="cb7-7"><a href="#cb7-7"></a><span class="co"># Continue with Phase 1 (AST changes)</span></span>
+<span id="cb7-8"><a href="#cb7-8"></a><span class="co"># Edit jl4-core/src/L4/Syntax.hs</span></span>
+<span id="cb7-9"><a href="#cb7-9"></a><span class="co"># Then update all 15 files that pattern match on AppForm</span></span></code></pre>
+</div>
+<h2 id="related-files">Related Files</h2>
+<ul>
+  <li>Spec: <code>doc/mixfix-operators.md</code></li>
+  <li>Implementation Plan: <code>doc/mixfix-implementation-plan.md</code></li>
+  <li>Lexer: <code>jl4-core/src/L4/Lexer.hs</code></li>
+  <li>Syntax: <code>jl4-core/src/L4/Syntax.hs</code></li>
+  <li>Parser: <code>jl4-core/src/L4/Parser.hs</code></li>
+  <li>Type Checker: <code>jl4-core/src/L4/TypeCheck.hs</code></li>
+</ul>
+<h2 id="questions-or-feedback">Questions or Feedback?</h2>
+<p>
+  See the spec and implementation plan for detailed design rationale. The
+  foundation is in place - ready for the next developer to continue!
+</p>

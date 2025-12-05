@@ -1,0 +1,120 @@
+<h1 id="l4-with-ide">L4 with IDE</h1>
+<p>
+  An implementation of the L4 language for law, with an emphasis on IDE
+  extensions for Visual Studio Code, and a web-only version of the L4 editor.
+</p>
+<p>
+  This repository includes language examples, a compiler toolchain, a
+  visualizer, and integrations with VS Code.
+</p>
+<h2 id="gallery">Gallery</h2>
+<p>Syntax Highlighting for Boolean-oriented decision logic</p>
+<figure>
+  <img src="./doc/images/bna-code.png" alt="" />
+  <figcaption>Syntax Highlighting Example</figcaption>
+</figure>
+<p>Decision Logic Visualization as a ladder diagram circuit</p>
+<figure>
+  <img src="./doc/images/bna-viz.png" alt="" />
+  <figcaption>Syntax Highlighting Example</figcaption>
+</figure>
+<h2 id="status-25-feb-2025">Status (25 Feb 2025)</h2>
+<ul>
+  <li>✅ Basic language features (functional core, layout parsing)</li>
+  <li>✅ Basic IDE features (highlighting, CHECK, EVAL)</li>
+  <li>✅ Decision logic visualizer (as ladder diagram)</li>
+  <li>🚧 resource libraries for Date, Place, Entity, Currency</li>
+  <li>🚧 Language support for state transition modals</li>
+  <li>🚧 State transition logic visualizer</li>
+  <li>🚧 Web App Auto-Generation for Decision Logic</li>
+  <li>
+    🚧 Web App Auto-Generation for State Transition Logic, abductive reasonign,
+    planning problems
+  </li>
+  <li>
+    🚧 Formal Verification Tooling, enhanced compiler error messages and
+    warnings
+  </li>
+</ul>
+<h2 id="the-web-editor">The Web Editor</h2>
+<p>
+  An experimental prototype offers a lightweight web-based alternative to VS
+  Code.
+</p>
+<p>https://jl4.legalese.com/</p>
+<h2 id="vs-code-extension-download-install-and-build">
+  VS Code Extension: Download, Install and Build
+</h2>
+<p>
+  <a href="Dev.md">Dev Build</a>: for Haskell and JS developers to improve the
+  toolchain and IDE developer experience. Requires Haskell and Typscript.
+</p>
+<p>
+  <a href="Quickstart.md">Quickstart for a local build</a>: for legal engineers
+  to experiment with writing L4 code locally. Download the VS Code extension and
+  get started.
+</p>
+<h2 id="language-tutorials">Language Tutorials</h2>
+<p>All this documentation is still under construction.</p>
+<ul>
+  <li>
+    <p>Tutorial: Hello, World</p>
+    <ul>
+      <li>The <code>DECIDE</code> stanza</li>
+      <li>The <code>ASSUME</code> environment</li>
+      <li>Term Substitution</li>
+      <li>Example: Must Sing</li>
+      <li>Example: <a href="jl4/experiments/dogs.l4">The Dog Act</a></li>
+      <li>Example: Vermin</li>
+    </ul>
+  </li>
+  <li>
+    <p>Tutorial: British Nationality Act</p>
+    <ul>
+      <li>
+        <a href="./doc/default-logic.md">Default Logic</a> and
+        <code>Optional</code> types with the <code>Maybe</code> monad
+      </li>
+      <li>References and Legal Citations</li>
+      <li>Temporals</li>
+    </ul>
+  </li>
+  <li>
+    <p>
+      <a href="doc/apps.md">Tutorial</a>: Automatically Building User-Facing
+      Apps
+    </p>
+  </li>
+  <li><p>Tutorial: Automatically Generating an AI Chatbot</p></li>
+  <li>
+    <p>Tutorial: Contracts involving Parties, Obligations, and Deadlines</p>
+    <ul>
+      <li>visualizing a contract</li>
+      <li>abductive reasoning and planning problems</li>
+    </ul>
+  </li>
+  <li>
+    <p>Tutorial: Automatically Finding Loopholes</p>
+    <ul>
+      <li>underspecification, vagueness, and ambiguity</li>
+    </ul>
+  </li>
+</ul>
+<h2 id="language-reference">Language Reference</h2>
+<ul>
+  <li><p>Decision Logic</p></li>
+  <li><p>State Transitions</p></li>
+  <li><p>Functional and Logical Paradigms</p></li>
+  <li><p>Source Citations and Versioning</p></li>
+  <li>
+    <p>Multi-Temporal Logic</p>
+    <ul>
+      <li>
+        a remark on “shall” as an unfortunate consequence of negotiation-time vs
+        run-time interpretation
+      </li>
+    </ul>
+  </li>
+  <li><p>Operationalization to Web and Mobile Apps</p></li>
+  <li><p>Natural Language Generation: exporting to Word and PDF</p></li>
+</ul>
