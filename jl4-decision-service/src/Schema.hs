@@ -99,9 +99,12 @@ instance ToSchema ReasoningTree
 -- 'ToJSON' instance yet.
 instance ToSchema ReasonNode
 
--- This is correct, since we don't overwrite the
--- 'ToJSON' instance yet.
-instance ToSchema DefaultMode
+instance ToSchema DefaultMode where
+  declareNamedSchema _ = do
+    return $ NamedSchema (Just "DefaultMode") $ mempty
+      & type_ ?~ OpenApiString
+      & enum_ ?~ ["honor-defaults", "ignore-defaults"]
+      & description ?~ "Control default value behavior. 'honor-defaults' uses TYPICALLY defaults when input not provided, 'ignore-defaults' treats missing inputs as Unknown."
 
 -- This is correct, since we don't overwrite the
 -- 'ToJSON' instance yet.
