@@ -21,6 +21,7 @@ functionName parameter1 parameter2 MEANS expression
 ```
 
 Think of it as:
+
 - **GIVEN**: Function parameters and their types (like function signature)
 - **GIVETH**: Return type
 - **MEANS**: Function body (the expression to evaluate)
@@ -35,9 +36,10 @@ GIVETH A NUMBER
 ```
 
 In JavaScript, this would be:
+
 ```javascript
 function annual_income(salary) {
-    return salary * 12;
+  return salary * 12;
 }
 ```
 
@@ -82,6 +84,10 @@ GIVETH A BOOLEAN
 
 The mixfix style creates **controlled natural language (CNL)**—code that could pass as a legal document's business rules section.
 
+> **Note on tooling:** Mixfix is a readability feature for authors inside the IDE. When the compiler exports your code (for presumptive wrappers or Decision Service calls) every function is ultimately addressed by a plain prefix name such as `'presumptive work pass eligibility'`. API clients and CLI presumptive directives therefore call those canonical names even if the original definition was written mixfix-style, and the CLI now prints `JUST …` / `NOTHING` to show which defaults were applied.
+>
+> **Defaults stay in that prefix world—but propagation is manual for now.** The wrapper generator already produces `'presumptive …'` helpers and PEVAL/PASSERT are rewritten to use them, yet inner DECIDE calls are not auto-lifted while the transitive rewrite pass is still on the backlog. Decision Service templates that need cascading presumptions should call the appropriate wrappers explicitly until that pass lands.
+
 ## Decision Functions
 
 Functions that return `BOOLEAN` often use the `DECIDE ... IF` syntax:
@@ -96,6 +102,7 @@ DECIDE `meets education requirement` IF
 ```
 
 This is shorthand for:
+
 ```l4
 `meets education requirement` employee MEANS
     (employee's educationLevel EQUALS Bachelor) OR ...
@@ -148,12 +155,13 @@ GIVETH A BOOLEAN
 ```
 
 Think of `WHERE` like `let` bindings in JavaScript:
+
 ```javascript
 function passes_salary_check(employee, employer) {
-    const salary = employee.monthlySalary;
-    const category = employee.category;
-    const minimumForCategory = minimum_salary_for(category);
-    return salary >= minimumForCategory;
+  const salary = employee.monthlySalary;
+  const category = employee.category;
+  const minimumForCategory = minimum_salary_for(category);
+  return salary >= minimumForCategory;
 }
 ```
 
@@ -201,11 +209,13 @@ GIVETH A NUMBER
 ### With OF for Single Arguments
 
 When a function takes one argument, you can use `OF`:
+
 ```l4
 `minimum salary for` OF TechProfessional
 ```
 
 Instead of:
+
 ```l4
 `minimum salary for` TechProfessional
 ```
@@ -226,11 +236,11 @@ WHERE
 
 L4 provides natural language operators:
 
-| L4 Syntax | Meaning | JavaScript |
-|-----------|---------|------------|
-| `AND` | Conjunction | `&&` |
-| `OR` | Disjunction | `\|\|` |
-| `NOT` | Negation | `!` |
+| L4 Syntax         | Meaning     | JavaScript  |
+| ----------------- | ----------- | ----------- |
+| `AND`             | Conjunction | `&&`        |
+| `OR`              | Disjunction | `\|\|`      |
+| `NOT`             | Negation    | `!`         |
 | `IMPLIES` or `=>` | Implication | `!a \|\| b` |
 
 ```l4
@@ -242,15 +252,16 @@ DECIDE eligible IF
 
 ## Comparison Operators
 
-| L4 Syntax | Meaning | JavaScript |
-|-----------|---------|------------|
-| `EQUALS` | Equality | `===` |
-| `GREATER THAN` | > | `>` |
-| `LESS THAN` | < | `<` |
-| `AT LEAST` | >= | `>=` |
-| `AT MOST` | <= | `<=` |
+| L4 Syntax      | Meaning  | JavaScript |
+| -------------- | -------- | ---------- |
+| `EQUALS`       | Equality | `===`      |
+| `GREATER THAN` | >        | `>`        |
+| `LESS THAN`    | <        | `<`        |
+| `AT LEAST`     | >=       | `>=`       |
+| `AT MOST`      | <=       | `<=`       |
 
 Natural language versions enhance readability:
+
 ```l4
 employee's age AT LEAST 18
 salary AT MOST 50000
@@ -258,13 +269,13 @@ salary AT MOST 50000
 
 ## Numeric Operations
 
-| L4 Syntax | JavaScript |
-|-----------|------------|
-| `PLUS` | `+` |
-| `MINUS` | `-` |
-| `TIMES` | `*` |
-| `DIVIDED BY` | `/` |
-| `MODULO` | `%` |
+| L4 Syntax    | JavaScript |
+| ------------ | ---------- |
+| `PLUS`       | `+`        |
+| `MINUS`      | `-`        |
+| `TIMES`      | `*`        |
+| `DIVIDED BY` | `/`        |
+| `MODULO`     | `%`        |
 
 ```l4
 netSalary MEANS grossSalary MINUS taxes
@@ -273,6 +284,7 @@ taxRate MEANS taxAmount DIVIDED BY income
 ```
 
 You can also use symbolic operators:
+
 ```l4
 netSalary MEANS grossSalary - taxes
 annualIncome MEANS monthlySalary * 12
@@ -399,13 +411,17 @@ DECIDE `employee` `eligible for work pass with` `employer` IF
 ## Exercises
 
 ### Exercise 1: Basic Function
+
 Write a function that calculates annual income from monthly salary with a bonus percentage.
 
 ### Exercise 2: Mixfix Function
+
 Write a function: `employee` `qualifies for` `category` that checks if an employee meets the requirements for a given employment category.
 
 ### Exercise 3: Complex WHERE
+
 Write a function that calculates a "company suitability score" based on:
+
 - Years in business (older = better)
 - Local vs foreign worker ratio (higher local = better)
 - Paid-up capital (higher = better)

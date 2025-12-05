@@ -434,12 +434,16 @@ inferSection (MkSection ann mn maka topdecls) = do
   -- Second pass: Generate presumptive wrappers and get mapping
   wrapperDeclsWithMapping <- generatePresumptiveWrappersWithMapping rtopdecls
 
-  let wrapperDecls = map snd wrapperDeclsWithMapping
-      -- Build mapping from original function name text to wrapper Resolved
-      wrapperPairs = [(getNameText origName, wrapperName)
-                     | (origName, Decide _ (MkDecide _ _ (MkAppForm _ wrapperName _ _) _)) <- wrapperDeclsWithMapping]
-      wrapperNameMap = trace ("WRAPPER MAP: " ++ show [(k, getNameText v) | (k, v) <- wrapperPairs]) $
-                       Map.fromList wrapperPairs
+  let wrapperDecls = [decl | (_, decl, _) <- wrapperDeclsWithMapping]
+      -- Build mapping from original function name text to wrapper arity
+      wrapperPairs =
+        [ (getNameText origName, arity)
+        | (origName, _, arity) <- wrapperDeclsWithMapping
+        ]
+      wrapperNameMap =
+        if enablePresumptiveDirectiveRewriting
+          then Map.fromList wrapperPairs
+          else Map.empty
 
   -- Create CheckInfo for each wrapper with proper function type
   let wrapperExtends = [makeWrapperCheckInfo wrapperName givenSig mGivethSig
@@ -449,25 +453,22 @@ inferSection (MkSection ann mn maka topdecls) = do
       forceList [] = []
       forceList (x:xs) = forceCheckInfo x `seq` (x : forceList xs)
       -- Force full evaluation of wrapperExtends before entering pass 3
-      !wrapperExtends' = trace ("FORCING WRAPPER EXTENDS: " ++ show (length wrapperExtends)) $ forceList wrapperExtends
+      !wrapperExtends' = forceList wrapperExtends
 
   -- Third pass: Add wrappers to environment, then rewrite and recheck ONLY directives
   --  For non-directives, reuse the results from pass 1 to avoid re-registering them
-  dirRewritten <- trace "PASS 3: Entering extended environment with wrappers" $
+  dirRewritten <-
     extendKnownMany wrapperExtends' $
     forM (zip topdecls (zip rtopdecls topDeclExtends)) $ \(nameDecl, (resolvedDecl, extends)) ->
       case nameDecl of
-        Directive dirAnn directive ->
-          case directive of
-            PresumptiveEval _ expr -> trace "PASS 3: Rewriting PEVAL directive" $ do
-              -- Rewrite and recheck PEVAL directives
-              let exprRewritten = trace ("REWRITTEN EXPR: " ++ take 200 (show (rewriteExprForPEvalName wrapperNameMap expr))) $
-                                  rewriteExprForPEvalName wrapperNameMap expr
-              rdirective <- trace "PASS 3: Type-checking rewritten PEVAL" $ inferDirective (PresumptiveEval dirAnn exprRewritten)
-              pure (Directive dirAnn rdirective, [])  -- No new CheckInfo from directives
-            _ -> do
-              -- Other directives: just use resolved version from pass 1
-              pure (resolvedDecl, extends)
+        Directive dirAnn directive
+          | enablePresumptiveDirectiveRewriting ->
+              case rewritePresumptiveDirective wrapperNameMap directive of
+                Nothing -> pure (resolvedDecl, extends)
+                Just rewrittenDirective -> do
+                  rdirective <- inferDirective rewrittenDirective
+                  pure (Directive dirAnn rdirective, [])
+          | otherwise -> pure (resolvedDecl, extends)
         _ ->
           -- Non-directives: use resolved version from pass 1
           pure (resolvedDecl, extends)
@@ -3258,16 +3259,20 @@ prettyNameWithRange n =
 -- Presumptive Wrapper Generation for TYPICALLY Defaults
 -- ===========================================================================
 
--- | Generate presumptive wrappers for all DECIDEs with TYPICALLY defaults.
--- Returns wrappers with mapping from original function name to wrapper.
-generatePresumptiveWrappersWithMapping :: [TopDecl Resolved] -> Check [(Resolved, TopDecl Resolved)]
+-- Returns wrappers along with original name and arity.
+generatePresumptiveWrappersWithMapping :: [TopDecl Resolved] -> Check [(Resolved, TopDecl Resolved, Int)]
 generatePresumptiveWrappersWithMapping decls = do
   -- Collect DECIDEs with TYPICALLY defaults and generate wrappers
   wrappers <- forM decls $ \case
-    Decide ann decide | hasTypicallyDefaults decide -> do
-      let MkDecide _ _ (MkAppForm _ origName _ _) _ = decide
-      wrapper <- generateWrapper ann decide
-      pure (Just (origName, wrapper))
+    Decide ann decide ->
+      let MkDecide _ (MkTypeSig _ (MkGivenSig _ otns) _) (MkAppForm _ origName _ _) _ = decide
+          arity = length otns
+      in do
+        if hasTypicallyDefaults decide
+           then do
+             wrapper <- generateWrapper ann decide
+             pure (Just (origName, wrapper, arity))
+           else pure Nothing
     _ -> pure Nothing
 
   pure (catMaybes wrappers)
@@ -3279,39 +3284,125 @@ getNameText resolved =
       origRawName = rawName (getName origName)
   in rawNameToText origRawName
 
+data PresumptiveExpr =
+  MkPresumptiveExpr
+    (Expr Name) -- ^ rewritten expression
+    Bool        -- ^ does it evaluate to Maybe?
+    Bool        -- ^ did anything change?
+
+mkUnchangedExpr :: Expr Name -> PresumptiveExpr
+mkUnchangedExpr e = MkPresumptiveExpr e False False
+
+presExpr :: PresumptiveExpr -> Expr Name
+presExpr (MkPresumptiveExpr e _ _) = e
+
+presProducesMaybe :: PresumptiveExpr -> Bool
+presProducesMaybe (MkPresumptiveExpr _ p _) = p
+
+presChanged :: PresumptiveExpr -> Bool
+presChanged (MkPresumptiveExpr _ _ c) = c
+
 -- | Rewrite Name-level expression to use wrapper name
-rewriteExprForPEvalName :: Map Text Resolved -> Expr Name -> Expr Name
-rewriteExprForPEvalName wrapperMap expr = trace ("REWRITE EXPR: " ++ take 200 (show expr)) $ case expr of
-  -- Case 1: Direct function reference - replace with wrapper name
-  Var ann name ->
-    let nameText = rawNameToText (rawName name)
-        wrapperName = case Map.lookup nameText wrapperMap of
-          Just _ ->
-            -- Construct wrapper name: 'presumptive <original>'
-            let wrapperText = "'presumptive " <> nameText <> "'"
-                wrapperRawName = NormalName wrapperText
-            in MkName (getAnno name) wrapperRawName
-          Nothing -> name
-    in Var ann wrapperName
+rewriteExprForPEvalName :: Map Text Int -> Expr Name -> PresumptiveExpr
+rewriteExprForPEvalName wrapperMap expr =
+  case expr of
+    -- Replace bare function reference (no args) with wrapper call filled with NOTHINGs
+    Var ann name ->
+      let nameText = rawNameToText (rawName name)
+      in case Map.lookup nameText wrapperMap of
+           Just arity -> buildWrapperCall ann name [] arity
+           Nothing    -> MkPresumptiveExpr (Var ann name) (isMaybeLikeName name) False
 
-  -- Case 2: Function application - rewrite function name
-  App ann name args ->
-    let origRawName = rawName name
-        nameText = rawNameToText origRawName
-        wrapperName = trace ("PEVAL APP: origRawName=" ++ show origRawName ++ ", text='" ++ Text.unpack nameText ++ "' -> " ++ show (Map.member nameText wrapperMap)) $
-                      case Map.lookup nameText wrapperMap of
-          Just _ ->
-            -- Construct wrapper name: 'presumptive <original>'
-            let wrapperText = "'presumptive " <> nameText <> "'"
-                wrapperRawName = NormalName wrapperText
-                newName = MkName (getAnno name) wrapperRawName
-            in trace ("REWRITING TO: text='" ++ Text.unpack wrapperText ++ "', newName raw=" ++ Text.unpack (rawNameToText (rawName newName))) $ newName
-          Nothing -> name
-        finalExpr = App ann wrapperName args
-    in trace ("FINAL APP NAME: " ++ Text.unpack (rawNameToText (rawName wrapperName))) finalExpr
+    -- Rewrite function application to call wrapper with JUST/NOTHING arguments
+    App ann name args ->
+      let rewrittenArgs = map (rewriteExprForPEvalName wrapperMap) args
+          nameText = rawNameToText (rawName name)
+      in case Map.lookup nameText wrapperMap of
+           Just arity -> buildWrapperCall ann name rewrittenArgs arity
+           Nothing    ->
+             let argExprs = map presExpr rewrittenArgs
+                 changed = or (map presChanged rewrittenArgs)
+             in MkPresumptiveExpr (App ann name argExprs) (isMaybeLikeName name) changed
 
-  -- Other cases: return unchanged
-  _ -> expr
+    -- Other cases: return unchanged. We intentionally do not descend further
+    -- because #PEVAL is scoped to decision/function invocations, and rewriting
+    -- inside arithmetic / logical nodes would produce invalid types.
+    _ -> mkUnchangedExpr expr
+  where
+    buildWrapperCall :: Anno -> Name -> [PresumptiveExpr] -> Int -> PresumptiveExpr
+    buildWrapperCall ann name providedArgs arity
+      | length providedArgs > arity =
+          let changed = or (map presChanged providedArgs)
+          in MkPresumptiveExpr (App ann name (map presExpr providedArgs)) False changed
+      | otherwise =
+          let wrapperText = "'presumptive " <> rawNameToText (rawName name) <> "'"
+              wrapperName = MkName (getAnno name) (NormalName wrapperText)
+              justCtorName = MkName ann (NormalName "JUST")
+              nothingCtorName = MkName ann (NormalName "NOTHING")
+              wrapArg argExpr =
+                if presProducesMaybe argExpr
+                  then presExpr argExpr
+                  else App ann justCtorName [presExpr argExpr]
+              wrappedProvided = map wrapArg providedArgs
+              missingCount = arity - length providedArgs
+              paddedMissing = replicate missingCount (Var ann nothingCtorName)
+              rewrittenApp = App ann wrapperName (wrappedProvided ++ paddedMissing)
+          in MkPresumptiveExpr rewrittenApp True True
+
+isMaybeLikeName :: Name -> Bool
+isMaybeLikeName name =
+  case rawNameToText (rawName name) of
+    "JUST"    -> True
+    "NOTHING" -> True
+    txt       -> "'presumptive " `Text.isPrefixOf` txt
+
+rewritePresumptiveDirective :: Map Text Int -> Directive Name -> Maybe (Directive Name)
+rewritePresumptiveDirective wrapperMap = \case
+  PresumptiveEval ann expr ->
+    let rewritten = rewriteExprForPEvalName wrapperMap expr
+    in if presChanged rewritten
+         then Just (PresumptiveEval ann (presExpr rewritten))
+         else Nothing
+  PresumptiveEvalTrace ann expr ->
+    let rewritten = rewriteExprForPEvalName wrapperMap expr
+    in if presChanged rewritten
+         then Just (PresumptiveEvalTrace ann (presExpr rewritten))
+         else Nothing
+  PresumptiveAssert ann expr ->
+    let rewritten = rewriteExprForPEvalName wrapperMap expr
+        needsWrap = presProducesMaybe rewritten
+        rewrittenExpr =
+          if needsWrap
+            then wrapPresumptiveResultForAssert (presExpr rewritten)
+            else presExpr rewritten
+    in if presChanged rewritten || needsWrap
+         then Just (PresumptiveAssert ann rewrittenExpr)
+         else Nothing
+  _ -> Nothing
+
+wrapPresumptiveResultForAssert :: Expr Name -> Expr Name
+wrapPresumptiveResultForAssert expr =
+  let ann = getAnno expr
+      nothingCtorName = MkName ann (NormalName "NOTHING")
+      justCtorName = MkName ann (NormalName "JUST")
+      falseCtorName = MkName ann (NormalName "FALSE")
+      resultName = MkName ann (NormalName "_presumptive_assert_value")
+      nothingBranch =
+        MkBranch ann
+          (When ann (PatApp ann nothingCtorName []))
+          (Var ann falseCtorName)
+      justBranch =
+        MkBranch ann
+          (When ann (PatApp ann justCtorName [PatVar ann resultName]))
+          (Var ann resultName)
+  in Consider ann expr [nothingBranch, justBranch]
+
+-- | Feature flag: keep compile-time directive rewriting disabled until wrappers
+-- are fully ready for end-to-end presumptive evaluation (tracked in
+-- doc/todo/TYPICALLY-DEFAULTS-SPEC.md). The runtime still honors defaults via
+-- maybeApplyDefaults when this flag is False.
+enablePresumptiveDirectiveRewriting :: Bool
+enablePresumptiveDirectiveRewriting = False
 
 -- | Create CheckInfo for a wrapper function to add it to the environment
 -- Builds the full function type from GIVEN parameters and GIVETH return type
@@ -3336,7 +3427,14 @@ makeWrapperCheckInfo wrapperName givenSig mGivethSig =
 -- Also ensures we don't generate wrappers for wrappers (infinite chain prevention).
 hasTypicallyDefaults :: Decide Resolved -> Bool
 hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funcName _ _) _) =
-  not (isPresumptiveWrapper funcName) && not (null (extractTypicallyDefaultsFromGiven givenSig))
+  let defaults = extractTypicallyDefaultsFromGiven givenSig
+      hasDefaults = not (null defaults)
+      debugSummaries =
+        [ Text.unpack (rawNameToText (rawName (getOriginal n)))
+        | (n, _) <- defaults
+        ]
+      result = not (isPresumptiveWrapper funcName) && hasDefaults
+  in trace ("HAS TYP " ++ show (length defaults) ++ " for " ++ Text.unpack (rawNameToText (rawName (getOriginal funcName))) ++ " defaults=" ++ show debugSummaries) result
 
 -- | Check if a function name is already a presumptive wrapper
 -- (starts with "'presumptive ")
@@ -3384,7 +3482,8 @@ generateWrapper ann (MkDecide _ typeSig@(MkTypeSig _ givenSig mReturnType) appFo
   considerExpr <- generateConsiderChain funcName paramPairs bodyExpr
 
   -- Create wrapper DECIDE
-  let wrapperAppForm = MkAppForm (getAnno appForm) wrapperName [] Nothing
+  let wrapperArgs = map fst paramMappings
+  let wrapperAppForm = MkAppForm (getAnno appForm) wrapperName wrapperArgs Nothing
   let wrapperDecide = MkDecide ann maybeTypeSig wrapperAppForm considerExpr
 
   pure $ Decide ann wrapperDecide
@@ -3404,11 +3503,11 @@ makePresumptiveName resolved = do
 
 -- | Create a fresh Def node for a wrapper parameter
 -- This ensures parameters in the wrapper have proper scoping
-makeFreshParamName :: Resolved -> Resolved
-makeFreshParamName resolved =
+makeFreshParamName :: Resolved -> Check Resolved
+makeFreshParamName resolved = do
   let origName = getOriginal resolved
-      u = getUnique resolved
-  in Def u origName  -- Create a Def node with the same name and unique
+  freshU <- newUnique
+  pure (Def freshU origName)  -- Give wrapper params their own uniques
 
 -- | Create an explicit Ref to the original function
 -- This ensures the wrapper calls the original function, not itself
@@ -3418,12 +3517,17 @@ makeOriginalFuncRef resolved =
       u = getUnique resolved
   in Ref origName u origName  -- Create a Ref that explicitly points to the original
 
+resolvedToRef :: Resolved -> Resolved
+resolvedToRef (Ref n u o) = Ref n u o
+resolvedToRef (Def u n) = Ref n u n
+resolvedToRef (OutOfScope u n) = OutOfScope u n
+
 -- | Wrap a parameter with MAYBE type and create fresh Def node for wrapper
 -- Returns (wrapped parameter, mapping from new wrapper param to original param)
 wrapParameterWithFreshName :: OptionallyTypedName Resolved -> Check (OptionallyTypedName Resolved, (Resolved, Resolved))
 wrapParameterWithFreshName (MkOptionallyTypedName ann origName mType _typically) = do
   -- Create a fresh Def node for this parameter in the wrapper's context
-  let freshName = makeFreshParamName origName
+  freshName <- makeFreshParamName origName
 
   -- Wrap the type with MAYBE
   wrappedType <- case mType of
@@ -3464,7 +3568,7 @@ generateConsiderChain funcName paramPairs bodyExpr = do
   let origParamVars = [origName | (_, MkOptionallyTypedName _ origName _ _) <- paramPairs]
   let funcCall = case origParamVars of
         [] -> Var ann origFuncRef
-        _  -> App ann origFuncRef (map (Var ann) origParamVars)
+        _  -> App ann origFuncRef (map (Var ann . resolvedToRef) origParamVars)
   let innermostExpr = App ann justCtor [funcCall]
 
   -- Build CONSIDER chain from innermost outward
@@ -3479,7 +3583,7 @@ buildConsiderForParam :: Anno -> Resolved -> Resolved -> Expr Resolved
                       -> (Resolved, OptionallyTypedName Resolved) -> Check (Expr Resolved)
 buildConsiderForParam ann justCtor nothingCtor innerExpr (wrapperParam, MkOptionallyTypedName paramAnn origParamName _mType mDefault) = do
   -- Create a fresh variable name for the JUST pattern (unwrapped value)
-  let unwrappedName = makeUnwrappedVarName origParamName
+  unwrappedName <- makeUnwrappedVarName origParamName
 
   -- Build the NOTHING branch
   nothingBranch <- case mDefault of
@@ -3496,27 +3600,25 @@ buildConsiderForParam ann justCtor nothingCtor innerExpr (wrapperParam, MkOption
   -- Build the JUST branch
   -- WHEN (JUST x) -> innerExpr (with origParamName bound to unwrapped x)
   let justPattern = PatApp ann justCtor [PatVar ann unwrappedName]
-  let substitutedInner = substituteVar origParamName (Var ann unwrappedName) innerExpr
+  let substitutedInner = substituteVar origParamName (Var ann (resolvedToRef unwrappedName)) innerExpr
   let justBranch = MkBranch ann (When ann justPattern) substitutedInner
 
   -- Build CONSIDER expression
   -- Scrutinize the wrapper parameter (the MAYBE-wrapped one from the GIVEN clause)
-  let scrutinee = Var ann wrapperParam
+  let scrutinee = Var ann (resolvedToRef wrapperParam)
   pure $ Consider paramAnn scrutinee [nothingBranch, justBranch]
 
 -- | Create an unwrapped variable name from a Resolved name
 -- For a parameter 'age', create 'age_unwrapped' or similar
-makeUnwrappedVarName :: Resolved -> Resolved
-makeUnwrappedVarName resolved =
+makeUnwrappedVarName :: Resolved -> Check Resolved
+makeUnwrappedVarName resolved = do
   let origName = getOriginal resolved
       origRawName = rawName (getName origName)
       newText = rawNameToText origRawName <> "_unwrapped"
       newRawName = NormalName newText
       newName = MkName (getAnno origName) newRawName
-      -- Create a new Def with a fresh unique
-      -- For now, reuse the original unique with a marker
-      origUnique = getUnique resolved
-  in Def origUnique newName
+  freshU <- newUnique
+  pure (Def freshU newName)
 
 -- | Substitute a variable with an expression throughout an expression tree
 -- This is a simple substitution that doesn't handle capture-avoiding properly
@@ -3524,8 +3626,9 @@ makeUnwrappedVarName resolved =
 substituteVar :: Resolved -> Expr Resolved -> Expr Resolved -> Expr Resolved
 substituteVar target replacement = go
   where
+    targetUnique = getUnique target
     go expr = case expr of
-      Var _ v | v == target -> replacement
+      Var _ v | getUnique v == targetUnique -> replacement
       Var ann v -> Var ann v
       App ann f args -> App ann f (map go args)
       Lam ann givens body -> Lam ann givens (go body)  -- TODO: check shadowing

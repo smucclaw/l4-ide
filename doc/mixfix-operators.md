@@ -198,6 +198,17 @@ mummy `copulated with` daddy `to make` baby MEANS ...
 3. Type check: `alice : Person`, `bob : Person`, `charlie : Person` ✓
 4. Apply: `copulated_with_to_make alice bob charlie`
 
+## Feature Interactions
+
+- **Presumptive wrappers are always prefix.** Mixfix is an authoring affordance inside the IDE. When the compiler generates `'presumptive …'` wrappers so that `#PEVAL`, `#PASSERT`, and the decision service can apply TYPICALLY defaults, those helper functions are plain prefix names. API clients must therefore call `'presumptive may purchase alcohol'` (for example) even if the source definition was mixfix such as ``buyer `may purchase alcohol` age``.
+- **Mixfix rewriting is disabled for wrapper names.** The type checker skips mixfix matching whenever a function name already starts with `'presumptive `. This prevents the resolver from folding wrapper calls back into their original mixfix definitions and guarantees that defaults flow through every stack frame.
+- **Wrapper propagation is temporarily manual.** The generated `'presumptive …'` helpers currently call the original functions; the transitive rewrite pass will come back once the wrapper invocation contract (automatic `NOTHING` injection, `JUST` wrapping, and result handling) is re-enabled. Until then, downstream code that wants cascading presumptions must call the relevant wrappers explicitly.
+- **PEVAL output is prefix + `Maybe`.** Because the presumptive directives are rewritten before mixfix resolution, `#PEVAL`/`#PEVALTRACE`/`#PASSERT` now surface results such as `JUST TRUE` or `NOTHING` under the wrapper’s prefix name. Treat that as the canonical spelling when writing tests, REST payloads, or Decision Service documentation.
+
+In practice this means: write mixfix code for readability, but expect downstream integrations (generated SDKs, presumptive wrapper calls, audit logs) to refer to the prefix spelling of each function.
+
+> **Feature interaction recap:** Mixfix stays in the IDE; anything that crosses into wrappers, Decision Service payloads, or CLI presumptive calls must use the prefix name (e.g. `'presumptive may purchase alcohol'`). Inner calls are not auto-lifted yet, so Decision Service templates should call the presumptive helpers explicitly until the transitive rewrite pass is reinstated.
+
 Perhaps the internal representations will be some combination of the following, for lookup and matching purposes:
 
 - `"copulated with"` -- first function name index
@@ -330,6 +341,24 @@ myList MEANS LIST 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 - **Existing code unaffected**: Functions without underscores work as before (prefix)
 - **Built-in operators unchanged**: `AND`, `OR`, `+`, etc. continue to work
 - **Gradual adoption**: Can mix prefix and mixfix styles
+
+## Feature Interactions
+
+### TYPICALLY Defaults and Presumptive Wrappers
+
+Mixfix definitions are intended for authoring-time readability. When the compiler
+generates presumptive wrappers for TYPICALLY defaults, those wrappers are always
+given plain prefix names like `'presumptive may purchase alcohol'` and they accept
+`Maybe`-wrapped parameters. The Decision Service API, PEVAL directives, and other
+downstream tools call those prefix wrappers directly, even if the original function
+was defined using mixfix syntax.
+
+To keep that contract explicit, the type checker skips mixfix pattern matching as
+soon as it sees a presumptive wrapper name. This avoids “helpful” rewrites that
+would otherwise send `#PEVAL 'presumptive foo'` back to the original mixfix form,
+which would in turn bypass the default-substitution logic. Mixfix therefore remains
+a human-facing affordance; everything past the IDE layer resolves to canonical
+prefix names.
 
 ## Limitations and Future Work
 

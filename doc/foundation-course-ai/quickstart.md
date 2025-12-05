@@ -199,6 +199,7 @@ GIVETH A NUMBER
 ## Key Syntax Patterns Demonstrated
 
 ### 1. Type Declarations
+
 ```l4
 DECLARE EnumType IS ONE OF Value1, Value2
 
@@ -208,6 +209,7 @@ DECLARE RecordType HAS
 ```
 
 ### 2. Function Definitions
+
 ```l4
 GIVEN param1 IS A Type1
       param2 IS A Type2
@@ -216,11 +218,13 @@ functionName param1 param2 MEANS expression
 ```
 
 ### 3. Decision Rules
+
 ```l4
 DECIDE ruleName IF condition1 AND condition2
 ```
 
 ### 4. Pattern Matching
+
 ```l4
 CONSIDER value
 WHEN Pattern1 THEN Result1
@@ -229,6 +233,7 @@ OTHERWISE DefaultResult
 ```
 
 ### 5. Lists
+
 ```l4
 EMPTY                      -- empty list
 LIST a, b, c              -- list literal
@@ -238,6 +243,7 @@ map function list         -- map function
 ```
 
 ### 6. Maybe (Optional Values)
+
 ```l4
 NOTHING                   -- no value
 JUST value               -- has value
@@ -247,6 +253,7 @@ WHEN JUST x THEN ...
 ```
 
 ### 7. Records
+
 ```l4
 RecordType WITH           -- construction
     field1 IS value1
@@ -256,6 +263,7 @@ record's fieldName        -- field access
 ```
 
 ### 8. WHERE Clauses
+
 ```l4
 mainExpression
 WHERE
@@ -264,6 +272,7 @@ WHERE
 ```
 
 ### 9. Boolean Logic
+
 ```l4
 condition1 AND condition2
 condition1 OR condition2
@@ -272,6 +281,7 @@ IF cond THEN expr1 ELSE expr2
 ```
 
 ### 10. Comparisons
+
 ```l4
 x EQUALS y
 x GREATER THAN y
@@ -287,12 +297,14 @@ cabal run jl4-cli -- insurance.l4
 ```
 
 The compiler will:
+
 1. **Type-check** all definitions
 2. **Execute** each #EVAL directive
 3. **Display** results
 4. **Verify** each #ASSERT directive
 
 Sample output:
+
 ```
 TRUE
 LowRisk
@@ -305,6 +317,7 @@ Quote { eligible = True, basePremium = Just 500.0, riskCategory = LowRisk, reaso
 ## Next Steps
 
 Now that you've seen L4 in action, dive deeper:
+
 - **Module 0**: Understanding L4's purpose and file structure
 - **Module 1**: Enums and Records in detail
 - **Module 2**: Functions and type signatures

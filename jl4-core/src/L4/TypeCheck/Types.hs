@@ -470,16 +470,64 @@ outOfScope n t = do
   pure (OutOfScope u n)
 
 ambiguousTerm :: Name -> [(Resolved, Type' Resolved)] -> Check Resolved
-ambiguousTerm n xs = do
-  addError (AmbiguousTermError n xs)
+ambiguousTerm n [] = do
+  addError InternalAmbiguityError
   u <- newUnique
   pure (OutOfScope u n)
+ambiguousTerm n xs@(x:_)
+  | allSameTermDescriptor xs = pure (fst x)
+  | otherwise =
+      let _debug = trace ("AMBIG term " ++ show (map termInfo xs)) ()
+      in _debug `seq`
+      case dedupByOrigin xs of
+        [(r, _)] -> pure r
+        xsDedup -> do
+          addError (AmbiguousTermError n xsDedup)
+          u <- newUnique
+          pure (OutOfScope u n)
+  where
+    termInfo (r, _) = (rawName (getOriginal r), rangeOf r, getUnique r)
 
 ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
-ambiguousType n xs = do
-  addError (AmbiguousTypeError n xs)
+ambiguousType n [] = do
+  addError InternalAmbiguityError
   u <- newUnique
   pure (OutOfScope u n)
+ambiguousType n xs@(x:_)
+  | allSameTypeDescriptor xs = pure (fst x)
+  | otherwise =
+      case dedupByOrigin xs of
+        [(r, _)] -> pure r
+        xsDedup -> do
+          addError (AmbiguousTypeError n xsDedup)
+          u <- newUnique
+          pure (OutOfScope u n)
+
+dedupByOrigin :: [(Resolved, a)] -> [(Resolved, a)]
+dedupByOrigin =
+  Map.elems
+  . Map.fromListWith const
+  . fmap (\rt@(r, _) -> (descriptor r, rt))
+  where
+    descriptor r =
+      let n' = getOriginal r
+      in (rawName n', rangeOf r)
+
+allSameTermDescriptor :: [(Resolved, Type' Resolved)] -> Bool
+allSameTermDescriptor [] = True
+allSameTermDescriptor (x:xs) = all ((== descriptor x) . descriptor) xs
+  where
+    descriptor (r, t) =
+      let n' = getOriginal r
+      in (rawName n', rangeOf r, t)
+
+allSameTypeDescriptor :: [(Resolved, Kind)] -> Bool
+allSameTypeDescriptor [] = True
+allSameTypeDescriptor (x:xs) = all ((== descriptor x) . descriptor) xs
+  where
+    descriptor (r, k) =
+      let n' = getOriginal r
+      in (rawName n', rangeOf r, k)
 
 -- ----------------------------------------------------------------------------
 -- Info Map
@@ -890,4 +938,3 @@ ref n a =
     (u, o) = getUniqueName a
   in
     pure (Ref n u o)
-

@@ -1,14 +1,17 @@
 # WITHIN Absolute Date Support Specification
 
 ## Status
+
 **Proposed** - Feature Request
 
 ## Overview
+
 Extend the `WITHIN` clause in regulative rules to support absolute DATE expressions in addition to relative NUMBER (day count) expressions.
 
 ## Motivation
 
 ### Current Limitation
+
 Currently, `WITHIN` clauses in L4 regulative rules only accept NUMBER types representing relative day counts from the present moment:
 
 ```l4
@@ -18,6 +21,7 @@ WITHIN 30  -- 30 days from now
 ```
 
 ### Real-World Need
+
 Many legal obligations have **absolute deadlines** specified as calendar dates, not relative day counts:
 
 - "Payment must be made by December 31, 2025"
@@ -25,14 +29,17 @@ Many legal obligations have **absolute deadlines** specified as calendar dates, 
 - "Representations must be true as of the effective date"
 
 ### Current Workaround Issues
+
 The IFEMA formalization revealed that developers must either:
 
 1. **Use arbitrary day counts** that don't reflect actual legal meaning:
+
    ```l4
    WITHIN 0  -- Really means "by the value date" but forced to use 0
    ```
 
 2. **Lose temporal precision** when deadlines are event-driven dates:
+
    ```l4
    -- Want: WITHIN transaction's `value date`
    -- Must use: WITHIN 0  -- Imprecise approximation
@@ -47,6 +54,7 @@ The IFEMA formalization revealed that developers must either:
 ## Proposed Solution
 
 ### Syntax Extension
+
 Allow `WITHIN` clauses to accept DATE expressions:
 
 ```l4
@@ -54,6 +62,7 @@ WITHIN <date-expression>
 ```
 
 Where `<date-expression>` can be:
+
 - Date literals: `DATE OF 31, 12, 2025`
 - Date fields: `transaction's `value date``
 - Date computations: `(`effective date` PLUS 30)`
@@ -62,6 +71,7 @@ Where `<date-expression>` can be:
 ### Semantics
 
 When `WITHIN` contains a DATE expression:
+
 1. **Runtime evaluation**: The date expression is evaluated in the current context
 2. **Deadline interpretation**: The obligation must be fulfilled by EOD (end of day) on that date
 3. **Comparison**: At runtime, check if current timestamp ≤ deadline date
@@ -70,6 +80,7 @@ When `WITHIN` contains a DATE expression:
 ### Examples
 
 #### Absolute Date Deadline
+
 ```l4
 PARTY borrower
 MUST repay_loan
@@ -79,6 +90,7 @@ LEST default_event
 ```
 
 #### Field-Based Deadline
+
 ```l4
 GIVEN transaction IS A Transaction
 `Seller Delivery Obligation` transaction MEANS
@@ -90,6 +102,7 @@ GIVEN transaction IS A Transaction
 ```
 
 #### Computed Deadline
+
 ```l4
 GIVEN event IS AN `Event Of Default`
       deadline IS A DATE
@@ -102,6 +115,7 @@ GIVEN event IS AN `Event Of Default`
 ```
 
 #### Mixed with PROVIDED (Business Day Check)
+
 ```l4
 PARTY seller
 MUST deliver_payment
@@ -116,14 +130,16 @@ LEST grace_period
 ### Type System Changes
 
 Currently:
+
 ```haskell
 -- Simplified
 type WithinClause = Number  -- Days from now
 ```
 
 Proposed:
+
 ```haskell
-data WithinClause 
+data WithinClause
   = RelativeDays Number      -- Existing: 30 (days from now)
   | AbsoluteDate Date        -- New: DATE OF 31, 12, 2025
   | DateExpression DateExpr  -- New: computed date expressions
@@ -132,11 +148,13 @@ data WithinClause
 ### Runtime Semantics
 
 For relative day counts (existing behavior):
+
 ```
 deadline_timestamp = current_time + (days * 24 * 3600)
 ```
 
 For absolute dates (new behavior):
+
 ```
 deadline_timestamp = end_of_day(evaluated_date)
 ```
@@ -144,16 +162,19 @@ deadline_timestamp = end_of_day(evaluated_date)
 ### Design Questions
 
 1. **Time zone handling**: What timezone should EOD be computed in?
+
    - Default to UTC?
    - Use jurisdiction-specific timezone from agreement metadata?
    - Allow explicit timezone in WITHIN clause?
 
 2. **Business day adjustment**: Should WITHIN dates auto-adjust for business days?
+
    - Option A: Literal interpretation (weekend deadline fails on weekend)
    - Option B: Auto-adjust to following business day (requires center parameter)
    - Option C: Let PROVIDED handle business day checks separately (current pattern)
 
 3. **Backward compatibility**: How to distinguish NUMBER vs DATE?
+
    - Type inference should handle this automatically
    - `WITHIN 30` → NUMBER → relative days
    - `WITHIN date_expr` → DATE → absolute deadline
@@ -165,15 +186,18 @@ deadline_timestamp = end_of_day(evaluated_date)
 ## Migration Path
 
 ### Phase 1: Type System Update
+
 - Extend `WITHIN` to accept `DATE | NUMBER`
 - Update type checker to infer which is being used
 - Update runtime to handle both interpretations
 
 ### Phase 2: Update Existing Code
+
 - Existing code using NUMBER continues to work (no breaking changes)
 - New code can use DATE expressions where semantically appropriate
 
 ### Phase 3: Documentation
+
 - Update language guide with absolute date examples
 - Add best practices for choosing relative vs absolute
 - Document timezone and business day considerations
@@ -183,17 +207,20 @@ deadline_timestamp = end_of_day(evaluated_date)
 ### Comparison to Other Temporal Logic Systems
 
 **CL (Symboleo)**: Uses explicit time constraints with calendar support:
+
 ```
 ObligationState(fulfilled_before(2025-12-31))
 ```
 
 **LegalRuleML**: Supports both relative and absolute temporal expressions:
+
 ```xml
 <deadline type="absolute">2025-12-31</deadline>
 <deadline type="relative" unit="days">30</deadline>
 ```
 
 **Accord Project (Ergo)**: DateTime types with moment.js-style operations:
+
 ```
 enforce before dateTime('2025-12-31T23:59:59Z')
 ```
@@ -224,6 +251,7 @@ This feature is successful when:
 - Related issue: WITHIN clauses in regulative rules (type error when using DATE)
 
 ## Author
+
 Generated during IFEMA formalization work (December 2025)
 
 ## Next Steps

@@ -5,22 +5,24 @@
 
 ## Implementation Progress
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | TYPICALLY syntax (lexer, parser, AST) | ✅ Complete (see TYPICALLY-DEFAULTS-SPEC.md) |
-| 2 | TYPICALLY type checking | ✅ Complete |
-| 3 | Strict directive variants (#EVALSTRICT, etc.) | ✅ Parsed, ⏳ No runtime difference yet |
-| 4 | TYPICALLY on ASSUME is error | ✅ Complete |
-| 5 | Extract TYPICALLY defaults from AST | ✅ Complete (`extractTypicallyDefaults` in Machine.hs) |
-| 6 | Decision Service API defaultMode parameter | ⏳ In progress (`DefaultMode` type added, `FnArguments.fnDefaultMode` field added) |
-| 7 | Decision Service wrapper generation | ⏳ Not started |
-| 8 | Decision Service uses defaults based on defaultMode | ⏳ Not started |
+| Phase | Description                                         | Status                                                                             |
+| ----- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 1     | TYPICALLY syntax (lexer, parser, AST)               | ✅ Complete (see TYPICALLY-DEFAULTS-SPEC.md)                                       |
+| 2     | TYPICALLY type checking                             | ✅ Complete                                                                        |
+| 3     | Strict directive variants (#EVALSTRICT, etc.)       | ✅ Parsed, ⏳ No runtime difference yet                                            |
+| 4     | TYPICALLY on ASSUME is error                        | ✅ Complete                                                                        |
+| 5     | Extract TYPICALLY defaults from AST                 | ✅ Complete (`extractTypicallyDefaults` in Machine.hs)                             |
+| 6     | Decision Service API defaultMode parameter          | ⏳ In progress (`DefaultMode` type added, `FnArguments.fnDefaultMode` field added) |
+| 7     | Decision Service wrapper generation                 | ⏳ Not started                                                                     |
+| 8     | Decision Service uses defaults based on defaultMode | ⏳ Not started                                                                     |
 
-**Current State:** The evaluator exports `extractTypicallyDefaults` to extract TYPICALLY defaults from a `GivenSig`. The core evaluator requires all arguments when calling functions - it does NOT apply TYPICALLY defaults internally. Default handling is delegated to the Decision Service API layer.
+> **Current CLI status:** The presumptive wrappers still expose `JUST`/`NOTHING`, and the CLI now surfaces those `Maybe` results after rewriting directives. The four-state model described below remains the target for the Decision Service.
+> **Current State:** The evaluator exports `extractTypicallyDefaults` to extract TYPICALLY defaults from a `GivenSig`. The core evaluator requires all arguments when calling functions - it does NOT apply TYPICALLY defaults internally. Default handling is delegated to the Decision Service API layer.
 
 **Architecture Decision:** TYPICALLY defaults are applied at the **API layer** (Decision Service), not in the core evaluator. The evaluator always receives concrete values or produces `ValAssumed` for unknowns. The Decision Service translates the four-state input model into evaluator inputs based on `defaultMode`.
 
 **Test files:**
+
 - `jl4/examples/ok/typically-basic.l4` - TYPICALLY syntax
 - `jl4/examples/ok/evalstrict.l4` - strict directive parsing
 - `jl4/examples/not-ok/tc/typically-type-mismatch.l4` - type mismatch error
@@ -103,6 +105,7 @@ DECIDE `can marry` IF age >= 18 AND NOT married
 **Naming Convention:**
 
 Wrappers use a consistent prefix naming pattern:
+
 - `presumptive <fn>` - honors TYPICALLY defaults (default behavior)
 - `strict <fn>` - ignores defaults, treats all missing inputs as Unknown
 
@@ -128,7 +131,7 @@ DECIDE `presumptive can marry` IS
 GIVEN
   age IS A Maybe NUMBER
   married IS A Maybe BOOLEAN
-GIVETH A Maybe BOOLEAN  
+GIVETH A Maybe BOOLEAN
 DECIDE `strict can marry` IS
   CONSIDER (age, married)
     WHEN (Just a, Just m)  -> Just (`can marry` a m)
@@ -162,7 +165,7 @@ The `Maybe a` type only gives us two states. For the full four-state model:
 -- | Runtime state for a single input parameter
 data InputState a
   = Explicit a          -- User provided a concrete value
-  | ExplicitUnknown     -- User explicitly said "I don't know"  
+  | ExplicitUnknown     -- User explicitly said "I don't know"
   | NotProvided         -- No input yet (may use TYPICALLY default)
   | NotApplicable       -- Question doesn't apply in this context
   deriving (Eq, Show, Functor)
@@ -185,6 +188,7 @@ DECIDE `can marry with full state` IS
 ```
 
 **Key distinction:**
+
 - `NotProvided` + has TYPICALLY → use the default
 - `ExplicitUnknown` → stay Unknown even if TYPICALLY exists (user explicitly doesn't know)
 
@@ -199,28 +203,29 @@ DECIDE `can marry with full state` IS
 ```json
 {
   "function": "can marry",
-  "defaultMode": "honor-defaults",  // REQUIRED: "honor-defaults" or "ignore-defaults"
+  "defaultMode": "honor-defaults", // REQUIRED: "honor-defaults" or "ignore-defaults"
   "fnArguments": {
     "age": 20
     // "married" omitted = NotProvided
   },
-  "explicitUnknowns": []  // Optional: parameters user said "I don't know" for
+  "explicitUnknowns": [] // Optional: parameters user said "I don't know" for
 }
 ```
 
 **API Behavior:**
 
-| defaultMode | Input State | Behavior |
-|-------------|-------------|----------|
-| honor-defaults | `NotProvided` + has TYPICALLY | Use TYPICALLY default |
-| honor-defaults | `NotProvided` + no TYPICALLY | Treat as Unknown |
-| honor-defaults | `ExplicitUnknown` | Treat as Unknown (don't use default) |
-| ignore-defaults | `NotProvided` | Treat as Unknown (never use defaults) |
-| ignore-defaults | `ExplicitUnknown` | Treat as Unknown |
+| defaultMode     | Input State                   | Behavior                              |
+| --------------- | ----------------------------- | ------------------------------------- |
+| honor-defaults  | `NotProvided` + has TYPICALLY | Use TYPICALLY default                 |
+| honor-defaults  | `NotProvided` + no TYPICALLY  | Treat as Unknown                      |
+| honor-defaults  | `ExplicitUnknown`             | Treat as Unknown (don't use default)  |
+| ignore-defaults | `NotProvided`                 | Treat as Unknown (never use defaults) |
+| ignore-defaults | `ExplicitUnknown`             | Treat as Unknown                      |
 
 **Implementation:**
 
 The Decision Service:
+
 1. Extracts TYPICALLY defaults using `extractTypicallyDefaults`
 2. Based on `defaultMode`, generates or selects the appropriate wrapper
 3. Translates API inputs to `InputState` values
@@ -452,9 +457,9 @@ After user says "I don't know" for married:
 
 **Critical:** Runtime evaluators (decision service API, ladder diagram visualizer, chatbots) **MUST** operate in one of two explicit modes:
 
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **honor-defaults** | Use TYPICALLY values when input not provided | Production chatbots, quick evaluations |
+| Mode                | Behavior                                             | Use Case                                              |
+| ------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
+| **honor-defaults**  | Use TYPICALLY values when input not provided         | Production chatbots, quick evaluations                |
 | **ignore-defaults** | Treat missing inputs as Unknown, never use TYPICALLY | Formal verification, audit trails, "what-if" analysis |
 
 **Why this matters:**
@@ -475,7 +480,7 @@ These are **different answers to the same query**. The API must make the mode ex
 ```json
 {
   "function": "may purchase alcohol",
-  "defaultMode": "honor-defaults",  // REQUIRED field
+  "defaultMode": "honor-defaults", // REQUIRED field
   "fnArguments": {
     "age": 19
   }
@@ -485,6 +490,7 @@ These are **different answers to the same query**. The API must make the mode ex
 **Ladder Diagram Visualizer:**
 
 Similarly, the ladder diagram must operate in:
+
 - **default-aware mode**: Shows simplified tree assuming defaults apply
 - **default-blind mode**: Shows full tree with all possible branches
 

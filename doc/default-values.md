@@ -121,6 +121,25 @@ When the end-user updates the form to say Actually I'm In A Motorcycle:
 
 Then that user-given value outweighs the default assumption about the car.
 
+### Calling default-aware wrappers
+
+When a DECIDE block with TYPICALLY annotations is compiled, the toolchain creates
+explicit prefix wrappers named `'presumptive <original name>'` (and strict variants)
+whose parameters are `Maybe`-wrapped. These wrappers are what the Decision Service,
+CLI `#PEVAL`/`#PEVALTRACE`/`#PASSERT`, and other downstream automation layers now
+call so that missing inputs can be filled with defaults. Each missing argument is
+padded with `NOTHING`, explicit arguments become `JUST value`, and CLI output shows
+the resulting `Maybe` (`JUST TRUE`, `NOTHING`, …). The runtime `maybeApplyDefaults`
+fallback remains in place as an escape hatch for any expressions that still bypass
+the wrappers.
+
+Because mixfix is a readability feature for authors, those downstream wrappers are
+always invoked using their prefix names—even if the original function was declared
+mixfix-style such as ``buyer `may purchase alcohol` permit``. API clients should
+therefore call `'presumptive may purchase alcohol'` with normal positional
+arguments. The type checker deliberately disables mixfix rewrites for wrapper names
+so that default-substitution logic cannot be bypassed accidentally.
+
 ## Parents Assignable
 
 The end-user can set values not just for leaf nodes, but parent nodes also.

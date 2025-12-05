@@ -5,6 +5,7 @@
 In software development, automated testing catches bugs before production. In legal computation, testing verifies that rules behave as intended across scenarios—including edge cases that might otherwise become courtroom disputes.
 
 This module covers:
+
 - Creating reusable test data (fixtures)
 - Using `#EVAL` to execute tests
 - Using `#ASSERT` for validation
@@ -16,6 +17,7 @@ This module covers:
 Consider an insurance policy that "leaks" millions due to an ambiguous payout formula (from the CLAUDE.md backstory). Comprehensive testing would catch this before deployment.
 
 Testing legal rules provides:
+
 1. **Verification**: Rules work as intended
 2. **Documentation**: Test cases serve as examples
 3. **Regression prevention**: Changes don't break existing behavior
@@ -559,23 +561,29 @@ Example debugging workflow:
 ## Exercises
 
 ### Exercise 1: Create Test Fixtures
+
 Define 3 employees and 2 companies covering different scenarios (approved, rejected for various reasons).
 
 ### Exercise 2: Write Unit Tests
+
 Write #ASSERT tests for at least 5 helper functions from Module 5.
 
 ### Exercise 3: Boundary Testing
+
 Create test cases for all boundary conditions in age requirements (17, 18, 65, 66).
 
 ### Exercise 4: Integration Testing
+
 Write end-to-end tests for at least 6 different application scenarios.
 
 ### Exercise 5: Debugging
+
 Intentionally create a failing test, then use #EVAL to diagnose the root cause.
 
 ## Congratulations!
 
 You've completed the **L4 Foundation Course**. You can now:
+
 - Define types with DECLARE
 - Write functions with GIVEN/GIVETH/MEANS
 - Use pattern matching and control flow
@@ -586,6 +594,7 @@ You've completed the **L4 Foundation Course**. You can now:
 ## Next Steps: Advanced Course
 
 The Advanced Course covers:
+
 - Multi-file project structure and imports
 - AI-assisted ingestion of legislation
 - Temporal logic for dates and time windows

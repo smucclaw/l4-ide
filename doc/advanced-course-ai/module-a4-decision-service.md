@@ -11,6 +11,7 @@ L4's **Decision Service** transforms your L4 functions into REST APIs that can b
 - **Real-time policy evaluation**
 
 This module covers:
+
 1. How to expose L4 functions as API endpoints
 2. Using `@desc export` annotations (replacing YAML files)
 3. Automatic exposure from the Web IDE
@@ -52,6 +53,7 @@ This module covers:
 Previously, you needed two files:
 
 **eligibility.l4:**
+
 ```l4
 GIVEN age IS A NUMBER
 GIVETH A BOOLEAN
@@ -59,6 +61,7 @@ isEligible age MEANS age >= 18
 ```
 
 **eligibility.yaml:**
+
 ```yaml
 name: isEligible
 description: "Check if person is eligible based on age"
@@ -73,6 +76,7 @@ supportedEvalBackend: [jl4]
 ```
 
 **Problems:**
+
 - Duplication between L4 and YAML
 - Synchronization burden (change function → update YAML)
 - Deployment friction (two files per function)
@@ -82,6 +86,7 @@ supportedEvalBackend: [jl4]
 Now, everything is in one L4 file:
 
 **eligibility.l4:**
+
 ```l4
 @desc export Check if person is eligible based on age
 GIVEN age IS A NUMBER @desc The person's age in years
@@ -170,6 +175,7 @@ helperFunction x MEANS x * 2
 ```
 
 This exposes three API endpoints:
+
 - `/functions/evaluateClaim/evaluation` (default)
 - `/functions/validatePolicy/evaluation`
 - `/functions/calculateAdjustment/evaluation`
@@ -198,6 +204,17 @@ isEligibleForLoan income creditScore requestedAmount hasCollateral MEANS
             ELSE creditScore AT LEAST 680
 ```
 
+### Mixfix Definitions vs. API Names
+
+Authoring mixfix functions keeps the `.l4` file readable, but every exported endpoint is ultimately addressed by its **prefix name**. This matters especially once you introduce TYPICALLY defaults:
+
+- The compiler generates helper functions named `'presumptive <original name>'` whose parameters are `MAYBE`-wrapped. These are what the decision service **and** the CLI presumptive directives now invoke in "presumptive" mode, and the CLI shows `JUST …` / `NOTHING` so you can see which defaults fired.
+- Mixfix rewriting is disabled for any name that already starts with `'presumptive `, so wrapper calls never get folded back into their original mixfix spelling.
+- Transitive rewriting is paused while the wrapper invocation contract is being finalized. For now, if a presumptive wrapper needs another defaulted function it should call that wrapper explicitly.
+- When documenting endpoints or sharing JSON payloads, always publish the prefix identifier (`'presumptive may purchase alcohol'`) even if the source reads ``buyer `may purchase alcohol` age``.
+
+Think of mixfix as an IDE-only surface syntax: downstream SDKs, presumptive wrappers, and audit logs all speak in canonical prefix names so they interoperate cleanly with non-L4 systems.
+
 ## Part 2: Automatic Exposure from Web IDE
 
 ### How It Works
@@ -223,6 +240,7 @@ canVote age MEANS age >= 18
 2. **Save the file** (Ctrl+S or Cmd+S)
 
 3. **API endpoint is live!**
+
    ```
    POST https://jl4.legalese.com/api/functions/canVote/evaluation
    ```
@@ -236,6 +254,7 @@ curl -X POST https://jl4.legalese.com/api/functions/canVote/evaluation \
 ```
 
 Response:
+
 ```json
 {
   "result": true,
@@ -246,6 +265,7 @@ Response:
 ### Finding Your Function's UUID
 
 After saving, the Web IDE shows:
+
 - **Function UUID**: Unique identifier for your function
 - **API Endpoint**: Full URL to call
 - **OpenAPI Schema**: JSON schema for parameters
@@ -261,11 +281,13 @@ POST /api/functions/{functionName}/evaluation
 ```
 
 Or with UUID:
+
 ```
 POST /api/uuid/{moduleUUID}/functions/{functionName}/evaluation
 ```
 
 Or call default function:
+
 ```
 POST /api/uuid/{moduleUUID}/evaluation
 ```
@@ -273,11 +295,13 @@ POST /api/uuid/{moduleUUID}/evaluation
 ### Request Format
 
 **Headers:**
+
 ```
 Content-Type: application/json
 ```
 
 **Body:**
+
 ```json
 {
   "paramName1": value1,
@@ -289,6 +313,7 @@ Content-Type: application/json
 ### Response Format
 
 **Success (200 OK):**
+
 ```json
 {
   "result": <evaluated_result>,
@@ -304,6 +329,7 @@ Content-Type: application/json
 ```
 
 **Error (400 Bad Request):**
+
 ```json
 {
   "error": "Type error: Expected NUMBER, got STRING",
@@ -318,14 +344,14 @@ Content-Type: application/json
 ```typescript
 async function checkEligibility(age: number): Promise<boolean> {
   const response = await fetch(
-    'https://jl4.legalese.com/api/functions/isEligible/evaluation',
+    "https://jl4.legalese.com/api/functions/isEligible/evaluation",
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ age }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -412,6 +438,7 @@ public class L4Client {
 ### Records as JSON Objects
 
 **L4:**
+
 ```l4
 DECLARE Employee HAS
     name IS A STRING
@@ -427,6 +454,7 @@ qualifiesForBonus employee MEANS
 ```
 
 **API Call:**
+
 ```json
 {
   "employee": {
@@ -440,6 +468,7 @@ qualifiesForBonus employee MEANS
 ### Enums as Strings
 
 **L4:**
+
 ```l4
 DECLARE EmploymentCategory IS ONE OF
     TechProfessional
@@ -457,6 +486,7 @@ minimumSalary category MEANS
 ```
 
 **API Call:**
+
 ```json
 {
   "category": "TechProfessional"
@@ -464,6 +494,7 @@ minimumSalary category MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": 5000
@@ -473,6 +504,7 @@ minimumSalary category MEANS
 ### Lists as JSON Arrays
 
 **L4:**
+
 ```l4
 IMPORT prelude
 
@@ -487,17 +519,19 @@ totalSalary employees MEANS
 ```
 
 **API Call:**
+
 ```json
 {
   "employees": [
-    {"name": "Alice", "age": 30, "salary": 60000},
-    {"name": "Bob", "age": 25, "salary": 50000},
-    {"name": "Charlie", "age": 35, "salary": 70000}
+    { "name": "Alice", "age": 30, "salary": 60000 },
+    { "name": "Bob", "age": 25, "salary": 50000 },
+    { "name": "Charlie", "age": 35, "salary": 70000 }
   ]
 }
 ```
 
 **Response:**
+
 ```json
 {
   "result": 180000
@@ -507,6 +541,7 @@ totalSalary employees MEANS
 ### MAYBE Types
 
 **L4:**
+
 ```l4
 IMPORT prelude
 
@@ -525,6 +560,7 @@ isExpired doc checkDate MEANS
 ```
 
 **API Call (with expiry):**
+
 ```json
 {
   "doc": {
@@ -536,6 +572,7 @@ isExpired doc checkDate MEANS
 ```
 
 **API Call (no expiry):**
+
 ```json
 {
   "doc": {
@@ -549,6 +586,7 @@ isExpired doc checkDate MEANS
 ### Dates as ISO 8601 Strings
 
 **L4:**
+
 ```l4
 IMPORT daydate
 
@@ -561,6 +599,7 @@ ageAsOf birthDate asOfDate MEANS
 ```
 
 **API Call:**
+
 ```json
 {
   "birthDate": "1990-03-15",
@@ -569,6 +608,7 @@ ageAsOf birthDate asOfDate MEANS
 ```
 
 **Response:**
+
 ```json
 {
   "result": 35
@@ -594,25 +634,27 @@ POST /api/functions/{functionName}/batch
 ```
 
 **Request:**
+
 ```json
 {
   "cases": [
-    {"age": 17, "salary": 45000},
-    {"age": 25, "salary": 55000},
-    {"age": 30, "salary": 60000},
-    {"age": 16, "salary": 40000}
+    { "age": 17, "salary": 45000 },
+    { "age": 25, "salary": 55000 },
+    { "age": 30, "salary": 60000 },
+    { "age": 16, "salary": 40000 }
   ]
 }
 ```
 
 **Response:**
+
 ```json
 {
   "results": [
-    {"result": false, "case": 0},
-    {"result": true, "case": 1},
-    {"result": true, "case": 2},
-    {"result": false, "case": 3}
+    { "result": false, "case": 0 },
+    { "result": true, "case": 1 },
+    { "result": true, "case": 2 },
+    { "result": false, "case": 3 }
   ],
   "totalProcessed": 4,
   "executionTime": 123
@@ -650,11 +692,13 @@ approved = [app for app, result in zip(applicants, results)
 #### 1. Type Mismatch
 
 **Request:**
+
 ```json
-{"age": "twenty-five"}
+{ "age": "twenty-five" }
 ```
 
 **Response (400):**
+
 ```json
 {
   "error": "Type error",
@@ -668,11 +712,13 @@ approved = [app for app, result in zip(applicants, results)
 #### 2. Missing Required Parameter
 
 **Request:**
+
 ```json
 {}
 ```
 
 **Response (400):**
+
 ```json
 {
   "error": "Missing parameter",
@@ -684,6 +730,7 @@ approved = [app for app, result in zip(applicants, results)
 #### 3. Runtime Error
 
 **Response (500):**
+
 ```json
 {
   "error": "Runtime error",
@@ -695,25 +742,26 @@ approved = [app for app, result in zip(applicants, results)
 ### Handling Errors in Code
 
 **JavaScript:**
+
 ```typescript
 async function safeEvaluate(params: any) {
   try {
     const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('API Error:', error.message);
+      console.error("API Error:", error.message);
       return null;
     }
 
     const data = await response.json();
     return data.result;
   } catch (error) {
-    console.error('Network error:', error);
+    console.error("Network error:", error);
     return null;
   }
 }
@@ -724,11 +772,13 @@ async function safeEvaluate(params: any) {
 The Decision Service automatically generates OpenAPI (Swagger) schemas for your functions.
 
 **Access the schema:**
+
 ```
 GET /api/functions/{functionName}/schema
 ```
 
 **Example Response:**
+
 ```json
 {
   "openapi": "3.0.0",
@@ -766,8 +816,8 @@ GET /api/functions/{functionName}/schema
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "result": {"type": "boolean"},
-                    "trace": {"type": "array"}
+                    "result": { "type": "boolean" },
+                    "trace": { "type": "array" }
                   }
                 }
               }
@@ -795,6 +845,8 @@ You can import this schema into **Postman** or **Swagger UI** for interactive te
 @desc export
 chkElg app cat
 ```
+
+Mixfix keeps exported functions readable in L4 files, but Decision Service clients still call them by their canonical prefix names (e.g. `'presumptive applicant is eligible for category'`). When documenting or sharing APIs, list those prefix forms so integrators can pass the exact string in their JSON payloads.
 
 ### 2. Comprehensive Descriptions
 
@@ -861,15 +913,19 @@ premiumMultiplier age MEANS
 ## Exercises
 
 ### Exercise 1: Simple Export
+
 Create an L4 function that calculates BMI, export it, and call it from curl.
 
 ### Exercise 2: Complex Types
+
 Create a function that takes an Employee record and returns a salary recommendation. Test with Postman.
 
 ### Exercise 3: Batch Processing
+
 Write a Python script that processes 100 loan applications in batch.
 
 ### Exercise 4: Error Handling
+
 Create a function with validation, intentionally trigger errors, and handle them gracefully in client code.
 
 ## Next Steps

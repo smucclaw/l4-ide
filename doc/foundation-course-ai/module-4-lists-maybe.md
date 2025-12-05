@@ -3,6 +3,7 @@
 ## Overview
 
 Coming from JavaScript or Python, you're familiar with arrays and null/undefined. L4 provides:
+
 - **Lists**: Like arrays, but homogeneous (all elements same type)
 - **MAYBE**: Like Optional in Java—explicitly represents "value or no value"
 - **Higher-order functions**: Like `map`, `filter`, `reduce` in JavaScript
@@ -41,6 +42,7 @@ LIST OF LIST OF NUMBER -- [[1,2], [3,4], [5,6]]
 ```
 
 This prevents bugs:
+
 ```l4
 -- ERROR: Can't mix types
 LIST 1, "hello", TRUE  -- Type error!
@@ -96,7 +98,7 @@ In JavaScript, you'd use `null` or `undefined` to represent missing values. This
 
 ```javascript
 const person = findPerson("John");
-console.log(person.name);  // Error if person is null!
+console.log(person.name); // Error if person is null!
 ```
 
 L4 makes optionality explicit with `MAYBE`:
@@ -163,6 +165,7 @@ GIVETH A NUMBER
 ```
 
 This returns:
+
 - The value inside `JUST x` → `x`
 - The default `0` if `NOTHING`
 
@@ -173,11 +176,13 @@ This returns:
 ### map: Transform Each Element
 
 JavaScript:
+
 ```javascript
-const salaries = employees.map(e => e.monthlySalary);
+const salaries = employees.map((e) => e.monthlySalary);
 ```
 
 L4:
+
 ```l4
 IMPORT prelude
 
@@ -190,6 +195,7 @@ GIVETH A LIST OF NUMBER
 ```
 
 Or more concisely:
+
 ```l4
 map (GIVEN emp YIELD emp's monthlySalary) employees
 ```
@@ -197,13 +203,13 @@ map (GIVEN emp YIELD emp's monthlySalary) employees
 ### filter: Select Elements
 
 JavaScript:
+
 ```javascript
-const techWorkers = employees.filter(e =>
-    e.category === 'TechProfessional'
-);
+const techWorkers = employees.filter((e) => e.category === "TechProfessional");
 ```
 
 L4:
+
 ```l4
 IMPORT prelude
 
@@ -219,13 +225,13 @@ GIVETH A LIST OF Employee
 ### any: Check if Any Element Satisfies Condition
 
 JavaScript:
+
 ```javascript
-const hasHighEarner = employees.some(e =>
-    e.monthlySalary > 10000
-);
+const hasHighEarner = employees.some((e) => e.monthlySalary > 10000);
 ```
 
 L4:
+
 ```l4
 IMPORT prelude
 
@@ -241,13 +247,13 @@ GIVETH A BOOLEAN
 ### all: Check if All Elements Satisfy Condition
 
 JavaScript:
+
 ```javascript
-const allEligible = employees.every(e =>
-    e.age >= 18
-);
+const allEligible = employees.every((e) => e.age >= 18);
 ```
 
 L4:
+
 ```l4
 IMPORT prelude
 
@@ -542,16 +548,21 @@ GIVETH A MAYBE Employee
 ## Exercises
 
 ### Exercise 1: List Operations
+
 Write a function that takes a list of employees and returns the total of all salaries over $5,000.
 
 ### Exercise 2: MAYBE Handling
+
 Write a function `find employee by passport` that returns `MAYBE Employee` given a passport number and list of employees.
 
 ### Exercise 3: Higher-Order Functions
-Write a function that checks if a company has *any* employees in a given category, using `any` from prelude.
+
+Write a function that checks if a company has _any_ employees in a given category, using `any` from prelude.
 
 ### Exercise 4: Combining Concepts
+
 Write a function that:
+
 1. Filters employees by category
 2. Extracts their salaries
 3. Calculates the average

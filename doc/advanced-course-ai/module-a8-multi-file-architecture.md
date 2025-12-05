@@ -3,6 +3,7 @@
 ## Overview
 
 Real-world legal systems are complex. A comprehensive immigration system might involve:
+
 - Eligibility rules across multiple visa categories
 - Quota management and allocation
 - Risk assessment frameworks
@@ -11,6 +12,7 @@ Real-world legal systems are complex. A comprehensive immigration system might i
 - Appeal processes
 
 Trying to maintain all of this in a single file quickly becomes unwieldy. This module covers:
+
 - Structuring large L4 projects across multiple files
 - Import and module dependency management
 - Orchestrating multi-stage workflows
@@ -54,6 +56,7 @@ DECLARE Company HAS ...
 ```
 
 **Problems:**
+
 - Hard to navigate (2,800 lines!)
 - Merge conflicts when multiple team members edit
 - Slow to compile/check
@@ -91,6 +94,7 @@ wpa-system/
 ```
 
 **Benefits:**
+
 - Each file has a clear purpose
 - Team members can work independently
 - Faster compilation (only changed files)
@@ -158,6 +162,7 @@ IMPORT validation/age-validation AS AgeVal
 ### Pattern 1: Type-First Architecture
 
 **core/types.l4** — Central type definitions
+
 ```l4
 § `WPA Core Types`
 
@@ -195,6 +200,7 @@ DECLARE CheckResult HAS
 ```
 
 **Why this works:**
+
 - All modules depend on types, so put them in one place
 - Single source of truth for data structures
 - Easy to evolve types (change propagates automatically)
@@ -204,6 +210,7 @@ DECLARE CheckResult HAS
 Each validator is independent and focused:
 
 **validation/age-validation.l4**
+
 ```l4
 § `Age Validation Rules`
 
@@ -229,6 +236,7 @@ GIVETH A CheckResult
 ```
 
 **validation/education-validation.l4**
+
 ```l4
 § `Education Validation Rules`
 
@@ -264,6 +272,7 @@ GIVETH A CheckResult
 ```
 
 **Benefits:**
+
 - Each validator is self-contained
 - Easy to test independently
 - Can be developed by different team members
@@ -272,6 +281,7 @@ GIVETH A CheckResult
 ### Pattern 3: Orchestration Layer
 
 **operations/application-pipeline.l4**
+
 ```l4
 § `Application Processing Pipeline`
 
@@ -328,6 +338,7 @@ GIVETH AN ApplicationResult
 ```
 
 **Why this pattern works:**
+
 - Orchestration logic is separate from business rules
 - Pipeline is easy to visualize and understand
 - Adding new checks doesn't require changing existing validators
@@ -336,6 +347,7 @@ GIVETH AN ApplicationResult
 ### Pattern 4: API Export Layer
 
 **integration/api-exports.l4**
+
 ```l4
 § `API Exports for Decision Service`
 
@@ -397,6 +409,7 @@ getRequirements category MEANS
 ### Avoiding Circular Dependencies
 
 **Bad: Circular dependency**
+
 ```
 module-a.l4  →  imports  →  module-b.l4
      ↑                           ↓
@@ -404,6 +417,7 @@ module-a.l4  →  imports  →  module-b.l4
 ```
 
 **Good: Layered architecture**
+
 ```
 Layer 1: core/types.l4
          ↓
@@ -417,6 +431,7 @@ Layer 4: integration/api-exports.l4
 ### Shared Utilities
 
 **core/prelude-extensions.l4**
+
 ```l4
 § `WPA Utility Functions`
 
@@ -488,21 +503,24 @@ tests/*.l4                             @qa-team
 When reviewing multi-file changes:
 
 1. **Type Changes** (core/types.l4):
+
    - Do all dependent modules still compile?
    - Are there breaking changes to API exports?
    - Do existing tests still pass?
 
-2. **Validation Changes** (validation/*.l4):
+2. **Validation Changes** (validation/\*.l4):
+
    - Are new validation rules properly tested?
    - Do they integrate correctly with the pipeline?
    - Are error messages clear and actionable?
 
-3. **Pipeline Changes** (operations/*.l4):
+3. **Pipeline Changes** (operations/\*.l4):
+
    - Does the orchestration logic make sense?
    - Are all validation steps included?
    - Is error handling comprehensive?
 
-4. **API Changes** (integration/*.l4):
+4. **API Changes** (integration/\*.l4):
    - Are @desc annotations clear and complete?
    - Are parameter types correctly mapped to JSON?
    - Is backward compatibility maintained?
@@ -512,6 +530,7 @@ When reviewing multi-file changes:
 ### Test Organization
 
 **tests/fixtures.l4**
+
 ```l4
 § `Test Fixtures`
 
@@ -552,6 +571,7 @@ IMPORT core/types
 ```
 
 **tests/unit-tests.l4**
+
 ```l4
 § `Unit Tests - Validation Modules`
 
@@ -574,6 +594,7 @@ IMPORT tests/fixtures
 ```
 
 **tests/integration-tests.l4**
+
 ```l4
 § `Integration Tests - Full Pipeline`
 
@@ -713,6 +734,7 @@ GIVETH AN ApplicationResult
 ### Module Compilation Caching
 
 When using multiple files:
+
 - Only changed files are recompiled
 - Unchanged dependencies use cached results
 - Speeds up development iteration
@@ -733,6 +755,7 @@ IMPORT validation/*  -- Imports all validation modules even if unused
 ### Module-Level Documentation
 
 **validation/age-validation.l4**
+
 ```l4
 § `Age Validation Rules`
 
@@ -761,36 +784,45 @@ IMPORT core/types
 ### Architecture Decision Records
 
 **docs/adr/001-split-validation-modules.md**
+
 ```markdown
 # ADR 001: Split Validation into Separate Modules
 
 ## Status
+
 Accepted
 
 ## Context
+
 Our WPA eligibility system has grown to 2,000+ lines in a single file.
 Multiple team members need to work on validation logic simultaneously.
 
 ## Decision
+
 Split validation logic into separate modules:
+
 - validation/age-validation.l4
 - validation/education-validation.l4
 - validation/salary-validation.l4
 - validation/risk-validation.l4
 
 ## Consequences
+
 Positive:
+
 - Reduced merge conflicts
 - Clearer code organization
 - Easier to test individual validators
 - Faster compilation
 
 Negative:
+
 - More files to manage
 - Need to understand import system
 - Slightly more boilerplate
 
 ## Implementation
+
 - Completed: 2024-11-15
 - Migration: All tests passing
 ```
@@ -810,6 +842,7 @@ cabal build all
 ```
 
 **Use when:**
+
 - Small team
 - Tightly coupled rules
 - Infrequent updates
@@ -830,6 +863,7 @@ cabal build jl4-decision-service
 ```
 
 **Use when:**
+
 - Large team
 - Independent rule domains
 - Frequent updates
@@ -869,7 +903,9 @@ Blue becomes new green for next deployment
 ## Exercises
 
 ### Exercise 1: Split Your Monolith
+
 Take your WPA pipeline from Module 5 and split it into:
+
 - core/types.l4
 - validation/age-validation.l4
 - validation/education-validation.l4
@@ -877,21 +913,26 @@ Take your WPA pipeline from Module 5 and split it into:
 - operations/application-pipeline.l4
 
 ### Exercise 2: Add a New Validator
+
 Create a new validation module for criminal background checks without modifying existing validators. Integrate it into the pipeline.
 
 ### Exercise 3: Team Simulation
+
 Simulate a team environment:
+
 - Person A: Update age validation rules
 - Person B: Update education validation rules
 - Both work in parallel on separate branches
 - Merge changes - should have no conflicts!
 
 ### Exercise 4: Design a Multi-Tenant System
+
 Design a file structure for a multi-country immigration system where each country has different rules but shares common infrastructure.
 
 ## Next Steps
 
 Congratulations! You've completed the Advanced Course. You now have the skills to:
+
 - Build production-grade L4 systems
 - Use AI assistance for legal text ingestion
 - Implement temporal logic and decision services
@@ -901,6 +942,7 @@ Congratulations! You've completed the Advanced Course. You now have the skills t
 - Architect large multi-file projects
 
 **Continue learning:**
+
 - Contribute to the L4 project on GitHub
 - Join the L4 community discussions
 - Build your own legal domain applications

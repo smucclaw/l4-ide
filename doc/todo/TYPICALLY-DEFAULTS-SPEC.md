@@ -6,7 +6,7 @@
 ## Implementation Progress
 
 | Phase | Description                                            | Status                  |
-|-------|--------------------------------------------------------|-------------------------|
+| ----- | ------------------------------------------------------ | ----------------------- |
 | 1     | Lexer - add TYPICALLY keyword                          | ✅ Complete             |
 | 2     | AST - extend TypedName, OptionallyTypedName, Assume    | ✅ Complete             |
 | 3     | Parser - parse TYPICALLY clauses                       | ✅ Complete             |
@@ -17,9 +17,12 @@
 | 6     | Strict directive variants (#EVALSTRICT, #ASSERTSTRICT) | ✅ Complete             |
 | 7     | Decision Service API - defaultMode parameter           | ⏳ Not started          |
 
+> **Note:** The presumptive wrappers currently expose `JUST`/`NOTHING` and will continue to do so until the runtime adopts the four-state `InputState` model described later in this document.
+
 **Note on hover:** Extending the `Info` type to include TYPICALLY values conflicts with Optics generic traversals used in visualization code. Requires architectural changes to use a separate `TypicallyMap` instead of modifying `Info`. Deferred to future work.
 
 **Test files:**
+
 - `jl4/examples/ok/typically-basic.l4` - comprehensive examples
 - `jl4/examples/ok/evalstrict.l4` - strict directive variants
 - `jl4/examples/not-ok/tc/typically-type-mismatch.l4` - type error testing
@@ -317,11 +320,11 @@ This allows the decision service, form generators, and other consumers to query 
 
 To support explicit control over whether TYPICALLY defaults are honored during evaluation, we added three new directive variants:
 
-| Directive | Description |
-|-----------|-------------|
-| `#EVALSTRICT expr` | Evaluate expression, treating missing values as Unknown (ignoring TYPICALLY defaults) |
-| `#EVALTRACESTRICT expr` | Same as #EVALSTRICT but with trace output |
-| `#ASSERTSTRICT expr` | Assert expression in strict mode |
+| Directive               | Description                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `#EVALSTRICT expr`      | Evaluate expression, treating missing values as Unknown (ignoring TYPICALLY defaults) |
+| `#EVALTRACESTRICT expr` | Same as #EVALSTRICT but with trace output                                             |
+| `#ASSERTSTRICT expr`    | Assert expression in strict mode                                                      |
 
 **Semantics:**
 
@@ -349,7 +352,7 @@ GIVEN x IS A BOOLEAN TYPICALLY TRUE
 GIVETH A BOOLEAN
 DECIDE foo IF x
 
--- Honors default: evaluates to TRUE  
+-- Honors default: evaluates to TRUE
 #EVAL foo
 
 -- Ignores default: evaluates to Unknown
@@ -364,11 +367,13 @@ DECIDE foo IF x
 
 The EVALSTRICT approach (Phase 6) subtracts defaults. PEVAL takes the opposite approach: it **presumes defaults** when explicit values are not provided, using a Maybe-wrapper pattern to distinguish "use default" from "use this explicit value."
 
-| Directive | Description |
-|-----------|-------------|
-| `#PEVAL expr args...` | Evaluate expression with presumptive defaults for Nothing arguments |
-| `#PEVALTRACE expr args...` | Same as #PEVAL but with trace output |
-| `#PASSERT expr args...` | Assert expression in presumptive mode |
+| Directive                  | Description                                                         |
+| -------------------------- | ------------------------------------------------------------------- |
+| `#PEVAL expr args...`      | Evaluate expression with presumptive defaults for Nothing arguments |
+| `#PEVALTRACE expr args...` | Same as #PEVAL but with trace output                                |
+| `#PASSERT expr args...`    | Assert expression in presumptive mode                               |
+
+`#PASSERT` now unwraps the `Maybe` result and treats `NOTHING` as a failed assertion, so a missing required input causes the directive to go red instead of silently passing.
 
 **Design Approach:**
 
@@ -388,6 +393,8 @@ DECIDE `can vote` IF age >= 18
 --   Just v → use v
 ```
 
+> **Implementation note (Jan 2026):** The type checker synthesizes `'presumptive …'` helpers and `inferSection` now rewrites `#PEVAL`, `#PEVALTRACE`, and `#PASSERT` directives to call them. CLI output therefore surfaces `Maybe` results (`JUST 30`, `NOTHING`, etc.), while the runtime `maybeApplyDefaults` fallback remains as a safety net for any expressions that still bypass the wrappers.
+
 **Current Implementation Status:**
 
 The current implementation uses a **simplified auto-apply approach** that automatically applies TYPICALLY defaults when a function evaluates to a closure:
@@ -406,6 +413,7 @@ DECIDE `can vote` IF age >= 18
 ```
 
 **How auto-apply works:**
+
 1. `#PEVAL 'can vote'` evaluates to a `ValClosure` (since no arguments provided)
 2. `maybeApplyDefaults` detects the closure has TYPICALLY defaults in its GivenSig
 3. Defaults are automatically extracted and applied to evaluate the closure body
@@ -432,7 +440,21 @@ DECIDE `presumptive can vote` IS
 #PEVAL `presumptive can vote` (JUST 15)     -- Explicit age: FALSE
 ```
 
+With directive rewriting enabled, the CLI now prints the `Maybe` wrapper explicitly:
+
+```
+#PEVAL `can vote`
+-- JUST TRUE  (default age = 18)
+
+#PEVAL `presumptive can vote` (NOTHING)
+-- JUST TRUE  (default age = 18)
+
+#PEVAL `presumptive can vote` (JUST 15)
+-- JUST FALSE
+```
+
 **Why the explicit approach is better:**
+
 - Fine-grained control: choose which parameters use defaults
 - Composable: can pass MAYBE values through multiple functions
 - Auditable: explicit about which defaults are being used
@@ -441,6 +463,7 @@ DECIDE `presumptive can vote` IS
 **Runtime Semantics: Unknown Propagation**
 
 When a wrapper receives `NOTHING` for a parameter:
+
 - **Has TYPICALLY:** Use the default value
 - **No TYPICALLY:** Return `NOTHING` (Unknown), which propagates through computation
 
@@ -462,6 +485,7 @@ DECIDE `may purchase alcohol` ...
 ```
 
 **UI can detect Unknown and prompt:**
+
 ```
 Result: Unknown
 Missing inputs without defaults:
@@ -475,6 +499,7 @@ This is **not a compile-time error** - it's a runtime behavior that allows grace
 **Implementation Gap & Architectural Challenge:**
 
 The wrapper generation approach requires:
+
 1. Automatically generating `presumptive <fn>` wrappers for each DECIDE with TYPICALLY defaults
 2. Wrappers take `MAYBE T` parameters instead of `T`
 3. Wrappers unwrap NOTHING → use TYPICALLY default, JUST v → use v
@@ -485,6 +510,7 @@ The wrapper generation approach requires:
 There are three approaches to wrapper generation:
 
 **Option A: Runtime Generation (Current WIP)**
+
 - Generate wrappers during `evalDecide` (evaluation phase)
 - Store in a special runtime map
 - Challenge: Wrappers aren't available during type checking/name resolution
@@ -492,6 +518,7 @@ There are three approaches to wrapper generation:
 - Would need special lookup mechanism in PEVAL
 
 **Option B: Compile-Time Generation (Type Checking)**
+
 - Generate wrapper DECIDE statements during type checking
 - Add to AST as synthetic declarations
 - Wrappers become regular functions accessible by name
@@ -499,6 +526,7 @@ There are three approaches to wrapper generation:
 - Challenge: Requires AST transformation pass during type checking
 
 **Option C: Hybrid - Manual Wrapper Pattern**
+
 - Don't auto-generate; provide tools for users to write wrappers
 - Document the pattern in spec
 - Users write: `DECIDE 'presumptive foo' ...` manually
@@ -513,6 +541,7 @@ Chosen approach: Generate presumptive wrappers during type checking as synthetic
 When a presumptive wrapper calls another function, it MUST call the presumptive version (if it exists). This ensures TYPICALLY defaults apply at every level of the call stack.
 
 Example:
+
 ```l4
 GIVEN age IS A NUMBER TYPICALLY 18
 GIVETH A BOOLEAN
@@ -524,6 +553,7 @@ DECIDE `can drive` IF `can vote` age AND age >= 16
 ```
 
 Generated `'presumptive can drive'` must call `'presumptive can vote'`, not regular `'can vote'`:
+
 ```l4
 DECIDE `presumptive can drive` IS
   GIVEN age IS A MAYBE NUMBER
@@ -537,9 +567,12 @@ DECIDE `presumptive can drive` IS
       (`presumptive can vote` (JUST a)) AND (a >= 16)
 ```
 
+> **Status:** Wrapper bodies are currently left untouched—the generated helpers still invoke the original functions. The transitive rewrite will be re-enabled once the wrapper invocation path (argument injection + result handling) is stable and protected by regression tests.
+
 **Implementation: Two-Pass Transformation**
 
 **Pass 1: Generate Wrappers**
+
 1. Scan all DECIDE statements in the section
 2. For each with TYPICALLY defaults in GIVEN:
    - Create `'presumptive <name>'` DECIDE
@@ -548,6 +581,7 @@ DECIDE `presumptive can drive` IS
 3. Build map: `originalName -> presumptiveName`
 
 **Pass 2: Rewrite Function Calls**
+
 1. For each generated wrapper:
    - Traverse expression tree in wrapper body
    - Find all App nodes (function applications)
@@ -556,14 +590,17 @@ DECIDE `presumptive can drive` IS
      - Ensures transitive propagation of presumptive context
 2. This ensures defaults apply at ALL call levels
 
-**Current Status:**
-- Architecture decided: Option B with two-pass transformation
-- Added transformation hook in `inferSection`
-- Next: Implement `generatePresumptiveWrappers` function
+**Current Status (Jan 2026):**
+
+- The type checker generates `'presumptive …'` DECIDEs for every function whose GIVEN clause includes TYPICALLY defaults (parameters are `MAYBE`-wrapped and the return type becomes `MAYBE <original>`), so downstream APIs can opt in to the prefix calling convention.
+- Wrapper bodies are presently left untouched—the generated helpers invoke the original definitions. Until the transitive rewrite pass lands, calling `'presumptive outer'` does **not** automatically lift the `inner` calls inside `outer`; only the arguments supplied through the wrapper participate in the presumptive contract.
+- `inferSection` now rewrites presumptive directives to call the wrappers. Each missing argument is padded with `NOTHING`, explicit arguments become `JUST <expr>`, and CLI output surfaces the resulting `Maybe`. `#PASSERT` unwraps the `Maybe` and treats `NOTHING` as a failing assertion.
+- Runtime auto-defaults remain as a fallback for legacy expressions, while the Decision Service and CLI share the same prefix-only wrapper contract. Migrating to the four-state `InputState` model is the next milestone once the API exposes the required metadata.
 
 **Implementation Options:**
 
 1. **Option A: Compile-time wrapper generation**
+
    - In `evalDecide`, for each function with TYPICALLY defaults, generate a "presumptive" version
    - The presumptive version wraps params in Maybe types
    - Body unwraps: `Just v → v`, `Nothing → TYPICALLY default or Unknown`
@@ -587,18 +624,20 @@ DECIDE `presumptive can drive` IS
 
 **Implementation Status:**
 
-✅ **Working:** The current simplified approach successfully:
-- Parses TYPICALLY clauses in GIVEN parameters
-- Preserves TYPICALLY values through type checking
-- `extractTypicallyDefaults` correctly extracts defaults from GivenSig
-- `maybeApplyDefaults` auto-applies defaults when PEVAL encounters a closure
-- Test file `peval-test.l4` passes with expected behavior
+✅ **Working (Dec 2025):**
 
-⏳ **TODO:** Wrapper generation for explicit MAYBE parameter control:
-- Generate `presumptive <fn>` wrappers automatically for each DECIDE with TYPICALLY defaults
-- Wrappers should take `MAYBE T` parameters and unwrap them
-- PEVAL should invoke wrappers to get explicit NOTHING/JUST parameter control
-- This allows fine-grained control: `#PEVAL fn NOTHING (JUST 5)` vs auto-apply-all
+- Parsing + type checking of TYPICALLY clauses in DECLARE / GIVEN / ASSUME
+- Compile-time generation of `'presumptive …'` wrappers with `MAYBE` parameters and return types (for Decision Service + future API clients)
+- Mixfix resolver skips any identifier that already starts with `'presumptive ` so wrappers stay in canonical prefix form
+- Runtime `maybeApplyDefaults` auto-applies defaults for CLI directives when evaluation yields a closure
+- Test file `jl4/examples/ok/peval-test.l4` exercises the runtime auto-default path
+
+🚧 **Paused:**
+
+- Directive rewriting to call wrappers (gated by `enablePresumptiveDirectiveRewriting`)
+- Wrapper-body rewriting / transitive `'presumptive …'` propagation
+
+⏳ **Next:** Move the decision-service input model from `Maybe` to the four-state `InputState` (per `doc/todo/RUNTIME-INPUT-STATE-SPEC.md`) so presumptions, explicit refusals, and unknown answers are distinguishable end-to-end.
 
 **Test File:** `jl4/examples/ok/peval-test.l4` (uses current auto-apply approach)
 

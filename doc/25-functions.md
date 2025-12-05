@@ -84,6 +84,26 @@ Maybe the bananas were counted by the bunch. To get the actual number of bananas
 In real-world L4, you will see that the definitions section of a legal
 text shows up as a long sequence of `MEANS` statements.
 
+## Mixfix Function Names
+
+Function names can be written in a mixfix style to mimic natural language. The
+name is interleaved with its parameters using backticks:
+
+```l4
+GIVEN buyer IS A Person
+      age   IS A NUMBER
+GIVETH A BOOLEAN
+buyer `may purchase alcohol` age MEANS
+  age >= 21 OR (age >= 18 AND buyer.`has parental approval`)
+```
+
+This syntax is purely for author-facing readability inside the IDE. When the
+compiler generates helper functions—such as the `'presumptive …'` wrappers that
+apply TYPICALLY defaults—the resulting symbols are always plain prefix names. The
+Decision Service API and the CLI presumptive directives call wrappers like
+`'presumptive may purchase alcohol'` with standard positional arguments (and CLI
+output now shows `JUST …` / `NOTHING`), even if the original definition was mixfix.
+
 ## WHERE syntax
 
 The fact that bananas come five to a bunch may not be relevant
