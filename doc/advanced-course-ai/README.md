@@ -98,7 +98,7 @@ Before starting this course, you should:
 
 ---
 
-### Module A5: Rebuttable Presumptions with TYPICALLY [WIP]
+### Module A5: Rebuttable Presumptions with TYPICALLY [ROADMAP]
 
 **What you'll learn:**
 
@@ -110,7 +110,7 @@ Before starting this course, you should:
 
 **Key takeaway:** Encode legal defaults explicitly rather than hardcoding assumptions.
 
-**Status:** Work in progress — TYPICALLY keyword is being specified
+**Status:** On roadmap — TYPICALLY keyword is not yet implemented. An initial implementation was attempted in December 2025 but was reverted due to technical issues. See [TYPICALLY-DEFAULTS-SPEC.md](../todo/TYPICALLY-DEFAULTS-SPEC.md) for details. This module describes the planned design and serves as a preview of what's coming.
 
 [Start Module A5 →](module-a5-rebuttable-presumptions.md)
 
