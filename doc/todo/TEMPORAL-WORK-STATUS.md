@@ -18,20 +18,22 @@ The temporal work introduces **runtime multi-temporal reasoning** to L4, allowin
 
 ### Active Branches
 
-| Branch | Purpose | Status | Commits Ahead of Main |
-|--------|---------|--------|----------------------|
-| `mengwong/temporals-2` | Main temporal work | Active | 1 commit (dfd1746a) |
-| `mengwong/eval-for-temporals` | Sub-branch | Active | - |
-| `mengwong/temporals` | Older approach | Stale? | - |
+| Branch                        | Purpose            | Status | Commits Ahead of Main |
+| ----------------------------- | ------------------ | ------ | --------------------- |
+| `mengwong/temporals-2`        | Main temporal work | Active | 1 commit (dfd1746a)   |
+| `mengwong/eval-for-temporals` | Sub-branch         | Active | -                     |
+| `mengwong/temporals`          | Older approach     | Stale? | -                     |
 
 ### Files Added (416 total lines)
 
 1. **`doc/todo/TEMPORAL_EVAL_SPEC.md`** (142 lines)
+
    - Specification for runtime `EVAL ... DO ...` construct
    - Multi-temporal reasoning semantics
    - Git commit integration
 
 2. **`doc/todo/TEMPORAL_PRELUDE_MACROS.md`** (131 lines)
+
    - High-level combinators for temporal operations
    - Prelude macros that desugar to runtime primitives
    - Examples: `within`, `strictly after`, `retroactive to`
@@ -48,6 +50,7 @@ The temporal work introduces **runtime multi-temporal reasoning** to L4, allowin
 ### What It Does
 
 `EVAL ... DO ...` is a **runtime meta-evaluation** construct that:
+
 1. Captures current temporal context
 2. Temporarily rewires time/rule context (including Git commits)
 3. Evaluates an expression in that modified context
@@ -57,6 +60,7 @@ The temporal work introduces **runtime multi-temporal reasoning** to L4, allowin
 ### Syntax
 
 **Canonical form:**
+
 ```l4
 EVAL
   UNDER VALID TIME January 1 2010
@@ -67,6 +71,7 @@ EVAL
 ```
 
 **Mixfix sugar (preferred):**
+
 ```l4
 EVAL `retroactive to` January 1 2010
      `under commit` "abc123"
@@ -78,18 +83,19 @@ EVAL `retroactive to` January 1 2010
 
 L4 now distinguishes **six temporal dimensions**:
 
-| Axis | Meaning | Example Use |
-|------|---------|-------------|
-| `tcValidTime` | When facts are true | "Alice's age on Jan 1, 2010" |
-| `tcSystemTime` | When system knew about facts | "Registry snapshot from July 2015" |
-| `tcRuleVersionTime` | When rules came into force | "Tax law effective Jan 1, 2010" |
-| `tcRuleValidTime` | Validity period of rules | "Rule valid from 2010-2020" |
-| `tcRuleEncodingTime` | When L4 code was written | "Git commit abc123 from 2015" |
-| `tcDecisionTime` | When decision was made | "Application processed today" |
+| Axis                 | Meaning                      | Example Use                        |
+| -------------------- | ---------------------------- | ---------------------------------- |
+| `tcValidTime`        | When facts are true          | "Alice's age on Jan 1, 2010"       |
+| `tcSystemTime`       | When system knew about facts | "Registry snapshot from July 2015" |
+| `tcRuleVersionTime`  | When rules came into force   | "Tax law effective Jan 1, 2010"    |
+| `tcRuleValidTime`    | Validity period of rules     | "Rule valid from 2010-2020"        |
+| `tcRuleEncodingTime` | When L4 code was written     | "Git commit abc123 from 2015"      |
+| `tcDecisionTime`     | When decision was made       | "Application processed today"      |
 
 ### Examples
 
 #### 1. Historic Eligibility Check
+
 ```l4
 DECIDE `historic injustice made good` applicant MEANS
   EVAL `retroactive to` January 13 2010
@@ -97,6 +103,7 @@ DECIDE `historic injustice made good` applicant MEANS
 ```
 
 #### 2. Compare Current vs Previous Regime
+
 ```l4
 DECIDE `decision changed since commit` commitHash applicant MEANS
   LET oldResult IS EVAL `under commit` commitHash `evaluate`
@@ -106,6 +113,7 @@ DECIDE `decision changed since commit` commitHash applicant MEANS
 ```
 
 #### 3. Sliding Window Query
+
 ```l4
 DECIDE `ever eligible in past year` applicant today MEANS
   EVAL `within` 365 `days before` today
@@ -119,6 +127,7 @@ DECIDE `ever eligible in past year` applicant today MEANS
 ### Core Combinators
 
 #### Sliding Windows
+
 ```l4
 GIVEN duration IS A NUMBER
       anchor   IS A DATE
@@ -132,6 +141,7 @@ GIVETH A BOOLEAN
 ```
 
 #### Strict Temporal Bounds
+
 ```l4
 GIVEN anchor IS A DATE
       test   IS A FUNCTION FROM DATE TO BOOLEAN
@@ -144,6 +154,7 @@ GIVETH A BOOLEAN
 ```
 
 #### Retroactive Evaluation
+
 ```l4
 GIVEN retroDate IS A DATE
       expr      IS A FUNCTION FROM UNIT TO a
@@ -155,6 +166,7 @@ GIVETH a
 ```
 
 ### Date Utilities
+
 ```l4
 -- Add days to a date
 `add days` baseDate numberOfDays
@@ -217,6 +229,7 @@ Key insight: **Git commits are first-class temporal snapshots**
 ## Use Cases
 
 ### 1. Regulatory Compliance - Retroactive Assessment
+
 ```l4
 -- "Would this transaction have been compliant under the old rules?"
 EVAL `under rules effective at` June 1 2020
@@ -224,6 +237,7 @@ EVAL `under rules effective at` June 1 2020
 ```
 
 ### 2. Legal Research - Rule Evolution
+
 ```l4
 -- "How did eligibility criteria change over time?"
 DECIDE `eligibility history` applicant MEANS
@@ -233,6 +247,7 @@ DECIDE `eligibility history` applicant MEANS
 ```
 
 ### 3. Policy Simulation - Counterfactuals
+
 ```l4
 -- "What if we had applied today's rules to historical cases?"
 DECIDE `would have qualified under new rules` oldApplicant MEANS
@@ -242,6 +257,7 @@ DECIDE `would have qualified under new rules` oldApplicant MEANS
 ```
 
 ### 4. Audit & Compliance - Decision Verification
+
 ```l4
 -- "Was this historical decision correct given the rules at that time?"
 DECIDE `decision was correct` historicCase MEANS
@@ -257,6 +273,7 @@ DECIDE `decision was correct` historicCase MEANS
 ## Relationship to Other L4 Features
 
 ### TYPICALLY Defaults
+
 **Status:** Independent but complementary
 
 TYPICALLY provides spatial defaults (values when not provided), while EVAL provides temporal context switching. They could interact:
@@ -271,6 +288,7 @@ EVAL `retroactive to` January 1 2010
 ```
 
 ### Decision Service
+
 **Status:** Could integrate with defaultMode
 
 The Decision Service could support temporal queries:
@@ -288,9 +306,11 @@ POST /functions/eligibility/evaluation
 ```
 
 ### Mixfix Notation
+
 **Status:** Already used in temporal specs
 
 The EVAL construct heavily uses mixfix for readability:
+
 - `` `retroactive to` date ``
 - `` `under commit` hash ``
 - `` `within` n `days after` date ``
@@ -302,11 +322,13 @@ The EVAL construct heavily uses mixfix for readability:
 ### Unit Tests Needed
 
 1. **Context switching:**
+
    - Save/restore temporal context
    - Nested EVAL calls
    - Error handling (invalid commit, bad date)
 
 2. **Temporal queries:**
+
    - `ever between` with various ranges
    - `always between` with edge cases
    - Date boundary conditions
@@ -319,10 +341,12 @@ The EVAL construct heavily uses mixfix for readability:
 ### Integration Tests Needed
 
 1. **Retroactive eligibility:**
+
    - Test historical rule application
    - Compare current vs past results
 
 2. **Rule evolution:**
+
    - Track changes across commits
    - Verify decision differences
 
@@ -333,6 +357,7 @@ The EVAL construct heavily uses mixfix for readability:
 ### Golden Tests
 
 Create test files in `jl4/examples/ok/`:
+
 - `temporal-eval-basic.l4` - Simple EVAL examples
 - `temporal-retroactive.l4` - Retroactive assessments
 - `temporal-sliding-window.l4` - Time range queries
@@ -345,10 +370,12 @@ Create test files in `jl4/examples/ok/`:
 ### Prerequisites
 
 1. **Clean up branches:**
+
    - Decide: Keep `temporals-2`, deprecate `temporals`?
    - Merge `eval-for-temporals` into `temporals-2`?
 
 2. **Rebase on latest main:**
+
    - Currently only 1 commit ahead
    - Should be straightforward
 
@@ -360,22 +387,26 @@ Create test files in `jl4/examples/ok/`:
 ### Migration Path
 
 **Phase 1: Merge specs (Low Risk)**
+
 - Bring spec files into main
 - Document temporal features
 - No runtime changes yet
 
 **Phase 2: Add prelude library (Medium Risk)**
+
 - Add `temporal-prelude.l4` to libraries
 - Make it importable
 - Test date utilities
 
 **Phase 3: Implement EVAL runtime (High Risk)**
+
 - Add `MonadTemporal` type class
 - Implement context switching
 - Add Git integration
 - Enable EVAL syntax
 
 **Phase 4: Decision Service Integration (Future)**
+
 - Add temporal query parameters
 - Expose historical evaluation
 - Audit temporal context switches
@@ -406,11 +437,13 @@ The temporal work appears to be self-contained and ready for review. The main qu
 ### Immediate (This Week)
 
 1. **Review specs:**
+
    - Read both TEMPORAL spec files fully
    - Identify any gaps or ambiguities
    - Check consistency with existing L4 semantics
 
 2. **Test library:**
+
    - Checkout `temporals-2` branch
    - Run `temporal-prelude.l4` through CLI
    - Verify date utilities work
@@ -423,10 +456,12 @@ The temporal work appears to be self-contained and ready for review. The main qu
 ### Short Term (This Month)
 
 1. **Rebase on latest main:**
+
    - Resolve any conflicts
    - Ensure compatibility with recent changes
 
 2. **Add comprehensive tests:**
+
    - Write unit tests
    - Create integration tests
    - Add golden test files
@@ -439,11 +474,13 @@ The temporal work appears to be self-contained and ready for review. The main qu
 ### Long Term (Next Quarter)
 
 1. **Implement runtime:**
+
    - Add `MonadTemporal` to evaluator
    - Implement Git integration
    - Enable EVAL syntax
 
 2. **Decision Service:**
+
    - Design temporal API
    - Add temporal query support
    - Document for users
@@ -459,11 +496,11 @@ The temporal work appears to be self-contained and ready for review. The main qu
 
 ### Code Locations
 
-| File | Location | Status |
-|------|----------|--------|
-| EVAL Spec | `doc/todo/TEMPORAL_EVAL_SPEC.md` | On `temporals-2` |
-| Prelude Macros Spec | `doc/todo/TEMPORAL_PRELUDE_MACROS.md` | On `temporals-2` |
-| Prelude Library | `jl4-core/libraries/temporal-prelude.l4` | On `temporals-2` |
+| File                | Location                                 | Status           |
+| ------------------- | ---------------------------------------- | ---------------- |
+| EVAL Spec           | `doc/todo/TEMPORAL_EVAL_SPEC.md`         | On `temporals-2` |
+| Prelude Macros Spec | `doc/todo/TEMPORAL_PRELUDE_MACROS.md`    | On `temporals-2` |
+| Prelude Library     | `jl4-core/libraries/temporal-prelude.l4` | On `temporals-2` |
 
 ### Related Documentation
 
@@ -497,6 +534,7 @@ Add to Technical Debt / Future Work:
 ### Medium Priority
 
 **Temporal Logic Integration**
+
 - **Status:** Specs complete, on `temporals-2` branch
 - **Specs:** `TEMPORAL_EVAL_SPEC.md`, `TEMPORAL_PRELUDE_MACROS.md`
 - **Features:** Runtime `EVAL ... DO ...` construct for multi-temporal reasoning

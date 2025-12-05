@@ -7,10 +7,12 @@ This repository includes language examples, a compiler toolchain, a visualizer, 
 ## Documentation
 
 ### For Developers
+
 - **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
 - **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
 
 ### For DevOps
+
 - **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
 - **[nix/README.md](./nix/README.md)** - NixOS configuration reference

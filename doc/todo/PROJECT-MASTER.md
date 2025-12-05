@@ -24,16 +24,17 @@ This document provides a high-level view of all active work streams in the L4 pr
 
 ## Active Work Streams - Summary
 
-| # | Work Stream | Status | Priority | Key Docs | Branch |
-|---|-------------|--------|----------|----------|--------|
-| 1 | **Issue #635: Decision Service** | 🔄 8/11 Done | High | [Status](./ISSUE-635-PLANNING-STATUS.md) | `mengwong/635` |
-| 2 | **TYPICALLY Defaults** | ❌ Blocked | **CRITICAL** | [Status](./TYPICALLY-STATUS-AND-NEXT-STEPS.md), [Spec](./TYPICALLY-DEFAULTS-SPEC.md) | `mengwong/635` |
-| 3 | **Language Features** | ✅ Done | - | Mixfix, Dictionary, Primitives | `main` |
-| 4 | **Foundation Course** | ✅ Done | - | [Course Docs](../foundation-course-ai/) | `main` |
-| 5 | **Developer Tooling** | ✅ Done | - | Agent support, Security fixes | `main` |
-| 6 | **Temporal Logic** | 📋 Specs Ready | Medium | [Status](./TEMPORAL-WORK-STATUS.md), [EVAL Spec](./TEMPORAL_EVAL_SPEC.md) | `mengwong/temporals-2` |
+| #   | Work Stream                      | Status         | Priority     | Key Docs                                                                             | Branch                 |
+| --- | -------------------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ | ---------------------- |
+| 1   | **Issue #635: Decision Service** | 🔄 8/11 Done   | High         | [Status](./ISSUE-635-PLANNING-STATUS.md)                                             | `mengwong/635`         |
+| 2   | **TYPICALLY Defaults**           | ❌ Blocked     | **CRITICAL** | [Status](./TYPICALLY-STATUS-AND-NEXT-STEPS.md), [Spec](./TYPICALLY-DEFAULTS-SPEC.md) | `mengwong/635`         |
+| 3   | **Language Features**            | ✅ Done        | -            | Mixfix, Dictionary, Primitives                                                       | `main`                 |
+| 4   | **Foundation Course**            | ✅ Done        | -            | [Course Docs](../foundation-course-ai/)                                              | `main`                 |
+| 5   | **Developer Tooling**            | ✅ Done        | -            | Agent support, Security fixes                                                        | `main`                 |
+| 6   | **Temporal Logic**               | 📋 Specs Ready | Medium       | [Status](./TEMPORAL-WORK-STATUS.md), [EVAL Spec](./TEMPORAL_EVAL_SPEC.md)            | `mengwong/temporals-2` |
 
 ### Quick Status Legend
+
 - ✅ **Done** - Merged and complete
 - 🔄 **In Progress** - Active development
 - ❌ **Blocked** - Has blockers (see status doc)
@@ -205,6 +206,7 @@ This document provides a high-level view of all active work streams in the L4 pr
 #### Overview
 
 Runtime `EVAL...DO` construct for multi-temporal reasoning:
+
 - Evaluate expressions under different temporal contexts
 - Git commits as first-class temporal snapshots
 - Six temporal axes: valid time, system time, rule version, rule validity, encoding time, decision time
@@ -212,6 +214,7 @@ Runtime `EVAL...DO` construct for multi-temporal reasoning:
 #### Key Features
 
 **EVAL Construct:**
+
 ```l4
 EVAL `retroactive to` January 1 2010
      `under commit` "abc123"
@@ -219,6 +222,7 @@ EVAL `retroactive to` January 1 2010
 ```
 
 **Temporal Combinators:**
+
 - `within N days after date ever predicate` - Sliding windows
 - `strictly after date ever test` - Temporal bounds
 - `retroactive to date evaluate expr` - Historic evaluation
