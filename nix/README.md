@@ -1,6 +1,7 @@
 # nix support
 
 For comprehensive provisioning and deployment instructions, see:
+
 - **[PROVISIONING.md](../PROVISIONING.md)** - Full guide for setting up new servers
 - **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Quick reference for deploying to existing servers
 
@@ -8,11 +9,11 @@ For comprehensive provisioning and deployment instructions, see:
 
 ### Available Flake Targets
 
-| Target | Domain | Environment |
-|--------|--------|-------------|
-| `jl4-demo` | `jl4.well-typed.com` | Original Hetzner demo |
-| `jl4-aws-2505` | `jl4.legalese.com` | Production AWS EC2 |
-| `jl4-dev` | `dev.jl4.legalese.com` | Dev/staging AWS EC2 |
+| Target         | Domain                 | Environment           |
+| -------------- | ---------------------- | --------------------- |
+| `jl4-demo`     | `jl4.well-typed.com`   | Original Hetzner demo |
+| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2    |
+| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2   |
 
 ### Redeploying to Existing Server
 

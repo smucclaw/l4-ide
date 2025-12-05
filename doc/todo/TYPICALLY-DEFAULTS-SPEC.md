@@ -9,12 +9,14 @@
 > reverted due to a critical heisenbug in the type checker's name disambiguation logic.
 >
 > **What was implemented:**
+>
 > - Lexer/Parser support for TYPICALLY keyword
 > - AST extensions for storing default values
 > - Type checking validation for TYPICALLY expressions
 > - PEVAL/PASSERT directives for presumptive evaluation
 >
 > **What went wrong:**
+>
 > - The TypeCheck.hs and TypeCheck/Types.hs changes introduced a heisenbug where
 >   removing debug `trace` statements caused "internal ambiguity errors" throughout
 >   the type checker. The bug was in `dedupByOrigin` / `allSameTermDescriptor` logic
@@ -23,12 +25,12 @@
 >   `seq`, `force`, and `unsafePerformIO` without I/O did not work.
 >
 > **Next steps for fresh implementation:**
+>
 > - Start fresh from a clean codebase without the buggy TypeCheck changes
 > - Consider a simpler approach that doesn't require complex name disambiguation
 > - The specification below remains valid as a design document
 >
-> **Reverted commits:** `6fea6b8e` through `afba20a0` on branch `mengwong/635`
-> **Reference:** See git history for commit `53f4e718` which bundled the buggy changes
+> **Reverted commits:** `6fea6b8e` through `afba20a0` on branch `mengwong/635` > **Reference:** See git history for commit `53f4e718` which bundled the buggy changes
 
 ## Executive Summary
 
