@@ -4,6 +4,17 @@ An implementation of the L4 language for law, with an emphasis on IDE extensions
 
 This repository includes language examples, a compiler toolchain, a visualizer, and integrations with VS Code.
 
+## Documentation
+
+### For Developers
+- **[dev-config.md](./dev-config.md)** - Local development guide (running with `cabal`)
+- **[dev-start.sh](./dev-start.sh)** - Helper script for starting services locally
+
+### For DevOps
+- **[PROVISIONING.md](./PROVISIONING.md)** - Setting up new servers from scratch (nixos-anywhere)
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploying to existing dev/prod servers
+- **[nix/README.md](./nix/README.md)** - NixOS configuration reference
+
 ## Gallery
 
 Syntax Highlighting for Boolean-oriented decision logic

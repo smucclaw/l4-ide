@@ -68,6 +68,36 @@
             ./nix/aws-vm.nix
           ];
         };
+
+        # dev/staging environment on AWS
+        nixosConfigurations.jl4-dev = inputs.nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+
+          modules = [
+            (let stateVer = "25.05"; in {
+              system.stateVersion = stateVer;
+              jl4-demo = {
+                domain = "dev.jl4.legalese.com";
+                acme-email = "mengwong@legalese.com";
+                root-ssh-keys = [
+                  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO2u9PR5FnBb8joGKHUVGqy9/cZu/iXIjgLpblkOF0H+ meng-and-ruslan"
+                ];
+              };
+              environment.etc."my-deploy-marker" = {
+                text = ''
+                deployed-from-flake-dev 2025-12-05
+                system.stateVersion = ${stateVer}
+                environment = development/staging
+                '';
+                mode = "0444";
+              };
+            })
+            inputs.disko.nixosModules.default
+            ./nix/configuration.nix
+            ./nix/aws-ec2.nix
+            ./nix/aws-vm.nix
+          ];
+        };
       };
     };
 }
