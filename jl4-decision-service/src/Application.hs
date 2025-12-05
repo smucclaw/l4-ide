@@ -20,7 +20,6 @@ import Servant.Swagger.UI (SwaggerSchemaUI, swaggerSchemaUIServer)
 import Server
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
-import qualified Data.Map as Map
 import Network.Wai.Middleware.Cors (cors, simpleCorsResourcePolicy, corsMethods, corsRequestHeaders)
 import Network.HTTP.Client (newManager, defaultManagerSettings)
 
