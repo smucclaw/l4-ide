@@ -477,12 +477,16 @@ ambiguousTerm n [] = do
 ambiguousTerm n xs@(x:_)
   | allSameTermDescriptor xs = pure (fst x)
   | otherwise =
+      let _debug = trace ("AMBIG term " ++ show (map termInfo xs)) ()
+      in _debug `seq`
       case dedupByOrigin xs of
         [(r, _)] -> pure r
         xsDedup -> do
           addError (AmbiguousTermError n xsDedup)
           u <- newUnique
           pure (OutOfScope u n)
+  where
+    termInfo (r, _) = (rawName (getOriginal r), rangeOf r, getUnique r)
 
 ambiguousType :: Name -> [(Resolved, Kind)] -> Check Resolved
 ambiguousType n [] = do

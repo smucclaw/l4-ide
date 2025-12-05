@@ -346,7 +346,7 @@ inferAssume :: Assume Name -> Check (Assume Resolved, [CheckInfo])
 inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) typically) = do
   -- declaration of a type
   errorContext (WhileCheckingAssume (getName appForm)) do
-    addWarning $ AssumeDeprecated (getName appForm)
+    -- addWarning $ AssumeDeprecated (getName appForm)
     case typically of
       Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
       Nothing -> pure ()
@@ -354,7 +354,7 @@ inferAssume (MkAssume ann _tysig appForm (Just (Type _tann)) typically) = do
 inferAssume (MkAssume ann _tysig appForm mt typically) = do
   -- declaration of a term
   errorContext (WhileCheckingAssume (getName appForm)) do
-    addWarning $ AssumeDeprecated (getName appForm)
+    -- addWarning $ AssumeDeprecated (getName appForm)
     case typically of
       Just _ -> addError $ TypicallyNotAllowedOnAssume (getName appForm)
       Nothing -> pure ()
