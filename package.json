@@ -29,5 +29,11 @@
   },
   "overrides": {
     "vite": "6.0.7"
+  },
+  "dependencies": {
+    "d3-drag": "^3.0.0",
+    "d3-interpolate": "^3.0.1",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0"
   }
 }
