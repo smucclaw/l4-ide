@@ -118,6 +118,7 @@ spec = describe "integration" do
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments = Map.empty  -- No parameters needed
+              , fnDefaultMode = Nothing
               }
         liftIO do
           s <- requireSuccess r
@@ -136,6 +137,7 @@ spec = describe "integration" do
                     , ("drinks", Just $ FnLitBool True)
                     , ("eats", Just $ FnLitBool True)
                     ]
+              , fnDefaultMode = Nothing
               }
         liftIO do
           s <- requireSuccess r
@@ -154,6 +156,7 @@ spec = describe "integration" do
                     , ("drinks", Just $ FnLitBool False)
                     , ("eats", Just $ FnLitBool False)
                     ]
+              , fnDefaultMode = Nothing
               }
         liftIO do
           s <- requireSuccess r
@@ -185,6 +188,7 @@ spec = describe "integration" do
                             ]
                       )
                     ]
+              , fnDefaultMode = Nothing
               }
         liftIO do
           s <- requireSuccess r
@@ -217,6 +221,7 @@ spec = describe "integration" do
                             ]
                       )
                     ]
+              , fnDefaultMode = Nothing
               }
         liftIO do
           s <- requireSuccess r

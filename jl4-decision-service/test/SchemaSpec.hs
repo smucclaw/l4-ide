@@ -113,9 +113,12 @@ instance Arbitrary FunctionImplementation where
   arbitrary =
     Server.FunctionImplementation <$> arbitrary <*> arbitrary
 
+instance Arbitrary DefaultMode where
+  arbitrary = Q.chooseEnum (HonorDefaults, IgnoreDefaults)
+
 instance Arbitrary FnArguments where
   arbitrary =
-    Server.FnArguments <$> arbitrary <*> arbitrary
+    Server.FnArguments <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary SimpleFunction where
   arbitrary = SimpleFunction <$> arbitrary <*> arbitrary
