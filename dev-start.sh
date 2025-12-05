@@ -38,7 +38,7 @@ case "$MODE" in
     echo "Terminal 1 - Decision Service:"
     echo "  cd jl4-decision-service && cabal run jl4-decision-service-exe -- \\"
     echo "    --port $DECISION_PORT --sourcePaths ../jl4/examples \\"
-    echo "    --crudServerName localhost --crudServerPort $WEBSESSIONS_PORT"
+    echo "    --websessionsHost localhost --websessionsPort $WEBSESSIONS_PORT"
     echo ""
     echo "Terminal 2 - Websessions (after decision service starts):"
     echo "  cd jl4-websessions && cabal run jl4-websessions -- \\"

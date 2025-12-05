@@ -11,7 +11,7 @@ data Options = Options
   { port :: Int
   , serverName :: Maybe Text.Text
   , sourcePaths :: [FilePath]  -- New field for source files or directories
-  , crudServerName :: BaseUrl
+  , websessionsUrl :: BaseUrl
   }
 
 optionsParser :: Parser Options
@@ -44,25 +44,25 @@ optionsParser = do
     <*> do
       BaseUrl
         <$> flag Http Https
-              ( long "crudServerSecure"
-                  <> help "Whether or not the server should be securely connected to."
+              ( long "websessionsSecure"
+                  <> help "Use HTTPS to connect to websessions service"
                   <> showDefault
               )
         <*> strOption
-              ( long "crudServerName"
-                  <> help "Name of the server for sessions"
+              ( long "websessionsHost"
+                  <> help "Hostname of websessions service (web IDE backend)"
                   <> value "localhost"
                   <> showDefault
               )
         <*> option auto
-              ( long "crudServerPort"
-                  <> help "Port of the server for sessions."
+              ( long "websessionsPort"
+                  <> help "Port of websessions service"
                   <> value 5008
                   <> showDefault
               )
         <*> strOption
-              ( long "crudServerPath"
-                  <> help "path on the server for sessions. When provided, assumes https"
+              ( long "websessionsPath"
+                  <> help "Path prefix for websessions service"
                   <> value mempty
                   <> showDefault
               )

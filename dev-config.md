@@ -23,7 +23,7 @@ This guide explains how to run the L4 services locally for development and testi
 # Terminal 1: Decision service
 cd jl4-decision-service
 cabal run jl4-decision-service-exe -- --port 8001 --sourcePaths ../jl4/examples \
-  --crudServerName localhost --crudServerPort 8002
+  --websessionsHost localhost --websessionsPort 8002
 
 # Terminal 2: Websessions (after decision service starts)
 cd jl4-websessions
@@ -164,9 +164,8 @@ cabal run jl4-decision-service-exe -- \
 cabal run jl4-decision-service-exe -- \
   --port 8001 \
   --sourcePaths ../jl4/examples \
-  --crudServerName localhost \
-  --crudServerPort 8002 \
-  --crudServerPath ""
+  --websessionsHost localhost \
+  --websessionsPort 8002
 ```
 
 #### 2. Start the Websessions Service
