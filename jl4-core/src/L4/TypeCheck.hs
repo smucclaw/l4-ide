@@ -3421,7 +3421,7 @@ makeWrapperCheckInfo wrapperName givenSig mGivethSig =
         { names = [wrapperName]
         , checkEntity = KnownTerm funcType Computable  -- Wrappers are computable functions
         }
-  in trace ("REGISTERING WRAPPER: " ++ Text.unpack (getNameText wrapperName)) checkInfo
+  in checkInfo
 
 -- | Check if a DECIDE has any TYPICALLY defaults in its GIVEN clause.
 -- Also ensures we don't generate wrappers for wrappers (infinite chain prevention).
@@ -3429,12 +3429,8 @@ hasTypicallyDefaults :: Decide Resolved -> Bool
 hasTypicallyDefaults (MkDecide _ (MkTypeSig _ givenSig _) (MkAppForm _ funcName _ _) _) =
   let defaults = extractTypicallyDefaultsFromGiven givenSig
       hasDefaults = not (null defaults)
-      debugSummaries =
-        [ Text.unpack (rawNameToText (rawName (getOriginal n)))
-        | (n, _) <- defaults
-        ]
       result = not (isPresumptiveWrapper funcName) && hasDefaults
-  in trace ("HAS TYP " ++ show (length defaults) ++ " for " ++ Text.unpack (rawNameToText (rawName (getOriginal funcName))) ++ " defaults=" ++ show debugSummaries) result
+  in result
 
 -- | Check if a function name is already a presumptive wrapper
 -- (starts with "'presumptive ")

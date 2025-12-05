@@ -477,6 +477,22 @@ ambiguousTerm n [] = do
 ambiguousTerm n xs@(x:_)
   | allSameTermDescriptor xs = pure (fst x)
   | otherwise =
+      -- HEISENBUG WARNING [2025-12-05]:
+      -- DO NOT REMOVE this trace! The `seq` here forces evaluation in a specific order
+      -- that is critical for correct operation. Removing this trace (commits 2fb292fe
+      -- and fc639ac0) caused widespread "internal ambiguity errors" throughout the
+      -- type checker, breaking the prelude.l4 library and all dependent code.
+      --
+      -- The bug manifests as:
+      --   - Type checker fails with "I've encountered an internal ambiguity error"
+      --   - Occurs in prelude.l4 at position 1:1 (start of file)
+      --   - Repeated ~20 times for different constructs
+      --   - Makes ceo-performance-award.l4 and other files unusable
+      --
+      -- Hypothesis: The trace's forced evaluation affects lazy evaluation order,
+      -- preventing some kind of race condition or evaluation loop in the type checker.
+      -- Further investigation needed to understand root cause before traces can be
+      -- safely removed.
       let _debug = trace ("AMBIG term " ++ show (map termInfo xs)) ()
       in _debug `seq`
       case dedupByOrigin xs of
