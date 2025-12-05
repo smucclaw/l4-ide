@@ -133,7 +133,7 @@ Ready for production-grade legal systems? The [Advanced Course](../advanced-cour
 **Advanced Language Features:**
 
 - **Module A3:** Temporal logic for multi-temporal reasoning [WIP]
-- **Module A5:** Rebuttable presumptions with TYPICALLY keyword [WIP]
+- **Module A5:** Rebuttable presumptions with TYPICALLY keyword [ROADMAP - not yet implemented]
 
 **Integration & Deployment:**
 
