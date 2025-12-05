@@ -50,8 +50,7 @@ defaultMain = do
   unless (null sourcePaths) $ putStrLn $ "Choosing .l4 + .yaml pairs from: " <> show l4Files
 
   (l4Functions, _moduleContext) <- Examples.loadL4Functions l4Files
-  unless (null sourcePaths) $ putStrLn $ "** Loaded l4 functions from disk: " <> show (length l4Functions)
-  unless (null l4Functions) $ print $ Map.keys l4Functions
+  unless (null sourcePaths) $ putStrLn $ "** Loaded " <> show (length l4Functions) <> " functions from disk"
 
   exampleFunctions <- Examples.functionSpecs
   dbRef <- newTVarIO (exampleFunctions <> l4Functions)
