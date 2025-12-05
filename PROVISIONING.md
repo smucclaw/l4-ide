@@ -7,6 +7,7 @@ This guide explains how to provision a new server (dev or production) from scrat
 The L4 infrastructure uses NixOS for reproducible server configuration. We use `nixos-anywhere` to install NixOS on cloud VMs that initially run Ubuntu.
 
 **Existing Servers:**
+
 - **Production:** `jl4.legalese.com` (AWS EC2, flake target: `jl4-aws-2505`)
 - **Dev/Staging:** `dev.jl4.legalese.com` (to be provisioned, flake target: `jl4-dev`)
 
@@ -30,12 +31,14 @@ nix run nixpkgs#nixos-anywhere -- --help
 ### Create the Instance
 
 1. **Launch EC2 instance:**
+
    - **AMI:** Ubuntu Server 22.04 LTS or later (e.g., `ami-0c55b159cbfafe1f0`)
    - **Instance type:** `t3.medium` or larger (minimum 2 vCPU, 4GB RAM)
    - **Storage:** 20GB+ EBS volume (NVMe)
    - **Security group:** Open ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
 
 2. **Create or update DNS record:**
+
    ```
    dev.jl4.legalese.com → [EC2 Public IP]
    ```
@@ -66,6 +69,7 @@ exit
 ```
 
 Test root access:
+
 ```bash
 ssh -i ~/.ssh/your-key.pem root@dev.jl4.legalese.com
 ```
@@ -106,6 +110,7 @@ nixos-anywhere --flake .#jl4-aws-2505 root@jl4.legalese.com
 ```
 
 **What this does:**
+
 1. Partitions the disk according to `nix/aws-ec2.nix` (disko configuration)
 2. Installs NixOS
 3. Applies the configuration from `flake.nix` and `nix/configuration.nix`
@@ -177,16 +182,19 @@ systemctl restart nginx
 ## Step 6: DNS and ACME Setup
 
 1. **Update DNS** to point to new server IP (if not done already)
+
    ```
    dev.jl4.legalese.com → [New EC2 IP]
    ```
 
 2. **Wait for DNS propagation** (5-30 minutes)
+
    ```bash
    dig dev.jl4.legalese.com
    ```
 
 3. **ACME will automatically request Let's Encrypt certificate**
+
    ```bash
    # Watch ACME certificate issuance
    journalctl -u acme-dev.jl4.legalese.com -f
@@ -236,6 +244,7 @@ nixos-rebuild switch --flake .#jl4-dev
 ```
 
 Or remote deployment:
+
 ```bash
 nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
 ```
@@ -244,30 +253,30 @@ nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
 
 ### Flake Targets
 
-| Target | Domain | Use Case |
-|--------|--------|----------|
-| `jl4-demo` | `jl4.well-typed.com` | Original Hetzner demo (deprecated?) |
-| `jl4-aws-2505` | `jl4.legalese.com` | Production AWS EC2 |
-| `jl4-dev` | `dev.jl4.legalese.com` | Dev/staging AWS EC2 |
+| Target         | Domain                 | Use Case                            |
+| -------------- | ---------------------- | ----------------------------------- |
+| `jl4-demo`     | `jl4.well-typed.com`   | Original Hetzner demo (deprecated?) |
+| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2                  |
+| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2                 |
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `flake.nix` | Defines nixosConfigurations (jl4-dev, jl4-aws-2505) |
-| `nix/configuration.nix` | Base system configuration (nginx, services) |
-| `nix/aws-ec2.nix` | AWS-specific hardware config (disk partitions, network) |
-| `nix/aws-vm.nix` | AWS VM-specific settings |
-| `nix/jl4-decision-service/configuration.nix` | Decision service systemd config |
-| `nix/jl4-websessions/configuration.nix` | Websessions systemd config |
+| File                                         | Purpose                                                 |
+| -------------------------------------------- | ------------------------------------------------------- |
+| `flake.nix`                                  | Defines nixosConfigurations (jl4-dev, jl4-aws-2505)     |
+| `nix/configuration.nix`                      | Base system configuration (nginx, services)             |
+| `nix/aws-ec2.nix`                            | AWS-specific hardware config (disk partitions, network) |
+| `nix/aws-vm.nix`                             | AWS VM-specific settings                                |
+| `nix/jl4-decision-service/configuration.nix` | Decision service systemd config                         |
+| `nix/jl4-websessions/configuration.nix`      | Websessions systemd config                              |
 
 ### Port Configuration
 
-| Service | Internal Port | External Access |
-|---------|---------------|-----------------|
-| jl4-decision-service | 8001 | https://DOMAIN/decision/ |
-| jl4-websessions | 8002 | https://DOMAIN/session |
-| nginx | 80, 443 | Direct |
+| Service              | Internal Port | External Access          |
+| -------------------- | ------------- | ------------------------ |
+| jl4-decision-service | 8001          | https://DOMAIN/decision/ |
+| jl4-websessions      | 8002          | https://DOMAIN/session   |
+| nginx                | 80, 443       | Direct                   |
 
 ## Security Considerations
 
@@ -280,6 +289,7 @@ nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
 ## Troubleshooting
 
 ### Services won't start
+
 ```bash
 # Check logs
 journalctl -u jl4-decision-service -n 100
@@ -295,6 +305,7 @@ cd /nix/store/...-jl4-decision-service/bin
 ```
 
 ### ACME certificate issues
+
 ```bash
 # Check ACME logs
 journalctl -u acme-dev.jl4.legalese.com
@@ -308,6 +319,7 @@ curl -I http://dev.jl4.legalese.com/.well-known/acme-challenge/test
 ```
 
 ### Disk space issues
+
 ```bash
 # Check disk usage
 df -h
