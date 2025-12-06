@@ -1,30 +1,48 @@
 # nix support
 
-## redeploying
+For comprehensive provisioning and deployment instructions, see:
+
+- **[PROVISIONING.md](../PROVISIONING.md)** - Full guide for setting up new servers
+- **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Quick reference for deploying to existing servers
+
+## Quick Reference
+
+### Available Flake Targets
+
+| Target         | Domain                 | Environment           |
+| -------------- | ---------------------- | --------------------- |
+| `jl4-demo`     | `jl4.well-typed.com`   | Original Hetzner demo |
+| `jl4-aws-2505` | `jl4.legalese.com`     | Production AWS EC2    |
+| `jl4-dev`      | `dev.jl4.legalese.com` | Dev/staging AWS EC2   |
+
+### Redeploying to Existing Server
 
 ```sh
-nixos-rebuild switch --flake .#jl4-demo --target-host root@example.com
+# Remote deployment
+nixos-rebuild switch --flake .#jl4-dev --target-host root@dev.jl4.legalese.com
+
+# Or on the server
+ssh root@dev.jl4.legalese.com
+cd /path/to/l4-ide && git pull
+nixos-rebuild switch --flake .#jl4-dev
 ```
 
-## deploying to a new machine
+### Provisioning a New Server
 
-If the machine is an x86_64 cloud machine on hetzner, then just run
+**For AWS EC2:**
 
 ```sh
-nixos-anywhere --flake .#jl4-demo --target-host root@example.com
+# 1. Launch Ubuntu EC2 instance
+# 2. Configure DNS: dev.jl4.legalese.com → [EC2 IP]
+# 3. Enable root SSH on the Ubuntu instance
+# 4. Run nixos-anywhere from your local machine:
+
+nixos-anywhere --flake .#jl4-dev root@dev.jl4.legalese.com
 ```
 
-`nixos-anywhere` is in `nixpkgs` and can be run directly from repo's flake.
+See **[PROVISIONING.md](../PROVISIONING.md)** for detailed step-by-step instructions.
 
-If you're deploying to a different machine type, create a new file like `hetzner.nix`, then
-create a new output in `flake.nixosModules` in the flake and import your new module as well
-as the application specific modules from there. Then use `nixos-anywhere` with the respective
-`target-host`.
+### State to Transfer When Migrating Servers
 
-Check the [documentation for `nixos-anywhere`](https://github.com/nix-community/nixos-anywhere)
-and the example `hetzner.nix` to figure out what you need to do.
-
-## transferring system and application state to a new machine
-
-- /var/lib/acme/
-- /var/lib/private/jl4-websessions/
+- `/var/lib/acme/` - Let's Encrypt certificates
+- `/var/lib/private/jl4-websessions/` - SQLite database with saved sessions

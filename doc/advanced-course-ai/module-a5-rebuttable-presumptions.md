@@ -1,6 +1,13 @@
-# Module A5 — Rebuttable Presumptions with TYPICALLY [WIP]
+# Module A5 — Rebuttable Presumptions with TYPICALLY [ROADMAP]
 
-> ⚠️ **Work in Progress**: The `TYPICALLY` keyword is under active development. See [TYPICALLY-DEFAULTS-SPEC.md](../todo/TYPICALLY-DEFAULTS-SPEC.md) for the latest specification. This module describes the design and intended usage.
+> **📋 ROADMAP FEATURE**: The `TYPICALLY` keyword is on the L4 roadmap but **not yet implemented**.
+>
+> An initial implementation was attempted in December 2025 but was reverted due to technical issues.
+> See [TYPICALLY-DEFAULTS-SPEC.md](../todo/TYPICALLY-DEFAULTS-SPEC.md) for the specification and implementation status.
+>
+> **This module describes the design and intended usage.** The syntax and examples shown are the planned API,
+> but you cannot use them in L4 code until the feature is implemented. This documentation serves as a preview
+> of what's coming and why it matters for legal computing.
 
 ## Overview
 

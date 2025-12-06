@@ -18,8 +18,8 @@ This document tracks both specification writing and implementation progress for 
 | 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
 | 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
 | 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
-| 10   | TYPICALLY Defaults                     | ✅ Complete   | `TYPICALLY-DEFAULTS-SPEC.md`          | ⏳ Todo                       | Rebuttable presumptions, enhances Item 4        |
-| 11   | Runtime Input State                    | ✅ Complete   | `RUNTIME-INPUT-STATE-SPEC.md`         | ⏳ Todo                       | Four-state model for interactive apps           |
+| 10   | TYPICALLY Defaults                     | ✅ Complete   | `TYPICALLY-DEFAULTS-SPEC.md`          | ⚠️ **Reverted**               | Initial impl had heisenbug - needs fresh start  |
+| 11   | Runtime Input State                    | ✅ Complete   | `RUNTIME-INPUT-STATE-SPEC.md`         | ⚠️ **Blocked**                | Depends on Item 10 (TYPICALLY)                  |
 
 **Legend:**
 
@@ -27,6 +27,7 @@ This document tracks both specification writing and implementation progress for 
 - 🔄 In Progress / Partially Done
 - ⏳ Todo / Not Started
 - 📋 Needs Specification
+- ⚠️ Reverted / Blocked
 
 ## Key Design Decisions
 
