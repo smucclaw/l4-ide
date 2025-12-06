@@ -16,7 +16,7 @@ This document tracks both specification writing and implementation progress for 
 | 5    | Dynamic File Management                | ✅ Complete   | See `jl4-websessions/README.md`       | ✅ **Done** (PR #664)         | Auto-push from websessions to decision service  |
 | 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ✅ **Done** (May 2025)        | All 4 phases implemented                        |
 | 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
-| 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
+| 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ✅ **Done**                   | Precompiled modules cached at load time         |
 | 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
 | 10   | TYPICALLY Defaults                     | ✅ Complete   | `TYPICALLY-DEFAULTS-SPEC.md`          | ⚠️ **Reverted**               | Initial impl had heisenbug - needs fresh start  |
 | 11   | Runtime Input State                    | ✅ Complete   | `RUNTIME-INPUT-STATE-SPEC.md`         | ⚠️ **Blocked**                | Depends on Item 10 (TYPICALLY)                  |
@@ -76,14 +76,14 @@ Add `X-L4-Trace: none | full` header. When `none`:
 - ~~Items 2+3 (JSONDECODE)~~ ✅
 - ~~Item 5 (Dynamic File Management)~~ ✅
 - ~~Item 6 (EXPORT syntax)~~ ✅
+- ~~Item 8 (Performance)~~ ✅
 
 **Remaining (suggested order):**
-1. **Item 8 (Performance)** - High impact, infrastructure exists
-2. **Item 7 (Import/Export)** - Now unblocked by Item 6
-3. **Item 9 (ASSUME)** - Can be done independently
-4. **Item 4 (Boolean Minimization)** - Larger project, separate epic
-5. **Item 10 (TYPICALLY)** - Needs fresh implementation approach
-6. **Item 11 (Runtime Input State)** - After Item 10
+1. **Item 7 (Import/Export)** - Now unblocked by Item 6
+2. **Item 9 (ASSUME)** - Can be done independently
+3. **Item 4 (Boolean Minimization)** - Larger project, separate epic
+4. **Item 10 (TYPICALLY)** - Needs fresh implementation approach
+5. **Item 11 (Runtime Input State)** - After Item 10
 
 ## Recent Related PRs
 
