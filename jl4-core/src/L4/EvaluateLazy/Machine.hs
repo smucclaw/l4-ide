@@ -42,6 +42,12 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Vector as Vector
+import qualified Data.Text.Read as TR
+import qualified Data.Char as Char
+import Data.Fixed (Pico)
+import Data.Time (UTCTime)
+import qualified Data.Time as Time
+import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
@@ -124,6 +130,7 @@ data Machine a where
   Allocate' :: Allocation t -> Machine t
   NewUnique :: Machine Unique
   GetEntityInfo :: Machine EntityInfo
+  GetEvalTime :: Machine UTCTime
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -1307,6 +1314,24 @@ runBuiltin es op mTy = do
     UnaryTrim -> do
       str <- expectString es
       Backward $ ValString (Text.strip str)
+    UnaryDateValue -> do
+      str <- expectString es
+      case parseDateValueText str of
+        Left err -> do
+          errRef <- AllocateValue (ValString err)
+          Backward $ ValConstructor TypeCheck.leftRef [errRef]
+        Right dayNumber -> do
+          valRef <- AllocateValue (ValNumber dayNumber)
+          Backward $ ValConstructor TypeCheck.rightRef [valRef]
+    UnaryTimeValue -> do
+      str <- expectString es
+      case parseTimeValueText str of
+        Left err -> do
+          errRef <- AllocateValue (ValString err)
+          Backward $ ValConstructor TypeCheck.leftRef [errRef]
+        Right fraction -> do
+          valRef <- AllocateValue (ValNumber fraction)
+          Backward $ ValConstructor TypeCheck.rightRef [valRef]
     -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
@@ -1497,7 +1522,15 @@ updateThunkToWHNF rf v =
 evalRef :: Reference -> Machine Config
 evalRef rf =
   join $ PokeThunk rf \tid -> \ case
-    thunk@(WHNF val) -> (thunk, Backward val)
+    thunk@(WHNF val) ->
+      case val of
+        ValNullaryBuiltinFun fn ->
+          (thunk, do
+              evaluated <- evalNullaryBuiltin fn
+              updateThunkToWHNF rf evaluated
+              Backward evaluated)
+        _ ->
+          (thunk, Backward val)
     thunk@(Unevaluated tids e env)
       | tid `Set.member` tids ->  (thunk, UserException (BlackholeForced e))
       | otherwise -> (Unevaluated (Set.insert tid tids) e env, PushFrame (UpdateThunk rf) *> ForwardExpr env e)
@@ -1880,6 +1913,10 @@ initialEnvironment = do
   envRef <- AllocateValue (ValUnaryBuiltinFun UnaryEnv)
   jsonEncodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonEncode)
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
+  todayRef <- AllocateValue (ValNullaryBuiltinFun NullaryTodaySerial)
+  nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
+  dateValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
+  timeValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeValue)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -1918,6 +1955,10 @@ initialEnvironment = do
       , (TypeCheck.envUnique, envRef)
       , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
+      , (TypeCheck.todaySerialUnique, todayRef)
+      , (TypeCheck.nowSerialUnique, nowRef)
+      , (TypeCheck.dateValueSerialUnique, dateValueRef)
+      , (TypeCheck.timeValueFractionUnique, timeValueRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -1960,6 +2001,163 @@ builtinBinOps =
       ]
   , unique <- uniques
   ]
+
+----------------------------------------------------------------------------
+-- Clock & parsing utilities
+----------------------------------------------------------------------------
+
+evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
+evalNullaryBuiltin = \case
+  NullaryTodaySerial -> do
+    time <- GetEvalTime
+    let dayNumber = dayNumberFromDay (Time.utctDay time)
+    pure $ ValNumber (fromIntegral dayNumber)
+  NullaryNowSerial -> do
+    time <- GetEvalTime
+    pure $ ValNumber (utcDatestamp time)
+
+utcDatestamp :: Time.UTCTime -> Rational
+utcDatestamp time =
+  fromIntegral (dayNumberFromDay (Time.utctDay time))
+    + diffTimeFraction (Time.utctDayTime time)
+
+diffTimeFraction :: Time.DiffTime -> Rational
+diffTimeFraction dt =
+  let seconds :: Pico
+      seconds = realToFrac dt
+  in toRational seconds / secondsPerDay
+
+dayNumberFromDay :: Time.Day -> Integer
+dayNumberFromDay day =
+  Time.diffDays day l4EpochDay - 1
+
+l4EpochDay :: Time.Day
+l4EpochDay = Time.fromGregorian 0 1 1
+
+secondsPerDay :: Rational
+secondsPerDay = 86400
+
+dateFormats :: [String]
+dateFormats =
+  [ "%Y-%m-%d"
+  , "%Y/%m/%d"
+  , "%Y.%m.%d"
+  , "%m/%d/%Y"
+  , "%m-%d-%Y"
+  , "%m/%d/%y"
+  , "%m-%d-%y"
+  , "%d/%m/%Y"
+  , "%d-%m-%Y"
+  , "%d.%m.%Y"
+  , "%d-%b-%Y"
+  , "%b %d, %Y"
+  , "%d %b %Y"
+  ]
+
+parseDateValueText :: Text -> Either Text Rational
+parseDateValueText rawInput =
+  let trimmed = Text.strip rawInput
+  in if Text.null trimmed
+        then Left "DATEVALUE: input is empty."
+        else
+          case firstSuccessful trimmed of
+            Nothing -> Left "DATEVALUE: could not parse date string."
+            Just day -> Right (fromIntegral (dayNumberFromDay day))
+  where
+    firstSuccessful :: Text -> Maybe Time.Day
+    firstSuccessful txt = go dateFormats
+      where
+        str = Text.unpack txt
+        go = \case
+          [] -> Nothing
+          fmt : rest ->
+            case TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt str of
+              Just day -> Just day
+              Nothing -> go rest
+
+data AmPm = AM | PM
+
+parseTimeValueText :: Text -> Either Text Rational
+parseTimeValueText rawInput =
+  let trimmed = Text.strip rawInput
+  in if Text.null trimmed
+        then Left "TIMEVALUE: input is empty."
+        else do
+          (timePortion, mSuffix) <- extractSuffix trimmed
+          let pieces = Text.splitOn ":" timePortion
+          case pieces of
+            [hTxt, mTxt] -> buildTime hTxt mTxt "0" mSuffix
+            [hTxt, mTxt, sTxt] -> buildTime hTxt mTxt sTxt mSuffix
+            _ -> Left "TIMEVALUE: expected HH:MM or HH:MM:SS."
+
+buildTime :: Text -> Text -> Text -> Maybe AmPm -> Either Text Rational
+buildTime hTxt mTxt sTxt mSuffix = do
+  hourRaw <- parseNatBound "hour" 0 99 hTxt
+  minute <- parseNatBound "minute" 0 59 mTxt
+  secondsVal <- parseSecondsPart sTxt
+  hour24 <- case mSuffix of
+    Nothing -> if hourRaw >= 0 && hourRaw < 24
+                  then Right hourRaw
+                  else Left "TIMEVALUE: hour must be between 0 and 23."
+    Just AM ->
+      if hourRaw >= 1 && hourRaw <= 12
+        then Right (if hourRaw == 12 then 0 else hourRaw)
+        else Left "TIMEVALUE: hour must be between 1 and 12 for AM."
+    Just PM ->
+      if hourRaw >= 1 && hourRaw <= 12
+        then Right (if hourRaw == 12 then 12 else hourRaw + 12)
+        else Left "TIMEVALUE: hour must be between 1 and 12 for PM."
+  let totalSeconds =
+        fromIntegral hour24 * 3600
+          + fromIntegral minute * 60
+          + secondsVal
+  if totalSeconds < 0 || totalSeconds >= fromRational secondsPerDay
+    then Left "TIMEVALUE: time must be less than 24 hours."
+    else Right (toRational totalSeconds / secondsPerDay)
+
+extractSuffix :: Text -> Either Text (Text, Maybe AmPm)
+extractSuffix input =
+  let trimmed = Text.dropWhileEnd Char.isSpace input
+      letters = Text.takeWhileEnd Char.isLetter trimmed
+      rest = Text.dropWhileEnd Char.isLetter trimmed
+      base = Text.stripEnd rest
+  in if Text.null letters
+        then Right (base, Nothing)
+        else case Text.toCaseFold letters of
+          "am" -> Right (base, Just AM)
+          "pm" -> Right (base, Just PM)
+          _ -> Left "TIMEVALUE: unknown suffix; only AM/PM are supported."
+
+parseNatBound :: Text -> Int -> Int -> Text -> Either Text Int
+parseNatBound label lo hi txt =
+  case TR.decimal txt of
+    Right (value, rest)
+      | Text.null rest && value >= lo && value <= hi -> Right value
+      | Text.null rest -> Left (label <> " out of range.")
+    _ -> Left ("TIMEVALUE: " <> label <> " must be numeric.")
+
+parseSecondsPart :: Text -> Either Text Rational
+parseSecondsPart txt =
+  let (wholePart, fractionalPart) = Text.breakOn "." txt
+  in do
+    sec <- parseNatBound "second" 0 59 wholePart
+    frac <-
+      if Text.null fractionalPart
+        then Right 0
+        else do
+          let digits = Text.drop 1 fractionalPart
+          when (Text.null digits) $
+            Left "TIMEVALUE: fractional seconds must have digits."
+          fracInt <- parseDigits digits
+          let denom = 10 ^ Text.length digits :: Integer
+          pure (toRational fracInt / toRational denom)
+    pure (fromIntegral sec + frac)
+
+parseDigits :: Text -> Either Text Integer
+parseDigits txt =
+  if Text.all Char.isDigit txt
+    then Right (Text.foldl' (\acc ch -> acc * 10 + toInteger (Char.digitToInt ch)) 0 txt)
+    else Left "TIMEVALUE: expected only digits in fractional part."
 
 boolBinOpClosure :: Reference -> Reference -> (Resolved -> Resolved -> Expr Resolved) -> Machine (Value a)
 boolBinOpClosure true false buildExpr = do

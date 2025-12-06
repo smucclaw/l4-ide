@@ -1,6 +1,10 @@
 {-# LANGUAGE GADTs #-}
 module L4.EvaluateLazy
-( EvalDirectiveResult (..)
+( EvalConfig(..)
+, resolveEvalConfig
+, parseFixedNow
+, readFixedNowEnv
+, EvalDirectiveResult (..)
 , EvalDirectiveValue(..)
 , EntityInfo
 , execEvalModuleWithEnv
@@ -25,6 +29,9 @@ import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
 
 import Control.Concurrent
+import Data.Time (UTCTime, getCurrentTime)
+import qualified Data.Time.Format.ISO8601 as ISO8601
+import System.Environment (lookupEnv)
 
 -----------------------------------------------------------------------------
 -- The Eval monad and the required types for the monad
@@ -36,7 +43,25 @@ data EvalState =
     , supply     :: !(IORef Int)   -- used for uniques and addresses
     , evalTrace  :: !(Maybe (IORef (DList EvalTraceAction)))
     , entityInfo :: !EntityInfo    -- type information for constructors/records
+    , evalTime   :: !UTCTime
     }
+
+data EvalConfig = EvalConfig
+  { evalTime :: !UTCTime
+  }
+
+resolveEvalConfig :: Maybe UTCTime -> IO EvalConfig
+resolveEvalConfig = \case
+  Nothing -> EvalConfig <$> getCurrentTime
+  Just t -> pure (EvalConfig t)
+
+parseFixedNow :: Text -> Maybe UTCTime
+parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
+
+readFixedNowEnv :: IO (Maybe UTCTime)
+readFixedNowEnv = do
+  menv <- lookupEnv "JL4_FIXED_NOW"
+  pure $ menv >>= parseFixedNow . Text.pack
 
 newtype Eval a = MkEval (EvalState -> IO (Either EvalException a))
   deriving (Functor, Applicative, Monad, MonadError EvalException, MonadReader EvalState, MonadIO)
@@ -162,6 +187,8 @@ interpMachine = \ case
     tid <- liftIO myThreadId
     conf <- lookupAndUpdateRef rf (k tid)
     interpMachine $ pure conf
+  GetEvalTime ->
+    asks (.evalTime)
   Bind act k -> interpMachine act >>= interpMachine . k
   LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
@@ -301,6 +328,7 @@ nfAux  d (ValCons r1 r2)             = do
   v2 <- evalAndNF d r2
   pure (MkNF (ValCons v1 v2))
 nfAux _d (ValClosure givens e env)   = pure (MkNF (ValClosure givens e env))
+nfAux _d (ValNullaryBuiltinFun b)    = pure (MkNF (ValNullaryBuiltinFun b))
 nfAux d (ValObligation env party act due followup lest) = do
   party' <- traverseAndNF d party
   due' <- traverseAndNF d due
@@ -350,14 +378,14 @@ evalAndNF d r = do
 -- Returns the environment of the entities defined in *this* module, and
 -- the results of the (L)EVAL directives in this module.
 --
-execEvalModuleWithEnv :: EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
-execEvalModuleWithEnv entityInfo env m@(MkModule _ moduleUri _) = do
+execEvalModuleWithEnv :: EvalConfig -> EntityInfo -> Environment -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
+execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
   case evalModuleAndDirectives env m of
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime}
       case r of
         Left _exc -> do
           -- exceptions at the top-level are unusual; after all, we don't actually
@@ -388,15 +416,15 @@ be Uri-focused, and so you'll emd up needing to pretty print and then re-parse.
 Also, it's not clear how much caching can actually be done,
 given that we won't be re-using the result from this.
  -}
-execEvalExprInContextOfModule :: EntityInfo -> Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
-execEvalExprInContextOfModule entityInfo expr (env, m) = do
+execEvalExprInContextOfModule :: EvalConfig -> EntityInfo -> Expr Resolved -> (Environment, Module Resolved) -> IO (Maybe EvalDirectiveResult)
+execEvalExprInContextOfModule evalConfig entityInfo expr (env, m) = do
   let
     evalExprDirective =
       Directive emptyAnno $ LazyEval emptyAnno expr
     -- Didn't make a new module that imported the context module,
     -- because making the import requires a Resolved.
     moduleWithoutDirectives = over moduleTopDecls (filter $ not . isDirective) m
-  (_, res) <- execEvalModuleWithEnv entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
+  (_, res) <- execEvalModuleWithEnv evalConfig entityInfo env (evalExprDirective `prependToModule` moduleWithoutDirectives)
   case res of
     [result] -> pure (Just result)
     _        -> pure Nothing

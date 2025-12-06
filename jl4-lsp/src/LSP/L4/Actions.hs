@@ -116,17 +116,18 @@ gotoDefinition pos m positionMapping = do
 evalApp
   :: forall m.
   (MonadIO m)
-  => EL.EntityInfo
+  => EL.EvalConfig
+  -> EL.EntityInfo
   -> (EL.Environment, Module Resolved)
   -> Ladder.EvalAppRequestParams
   -> RecentlyVisualised
   -> ExceptT (TResponseError ('Method_CustomMethod Ladder.EvalAppMethodName)) m Aeson.Value
-evalApp entityInfo contextModule evalParams recentViz =
+evalApp evalConfig entityInfo contextModule evalParams recentViz =
   case Ladder.lookupAppExprMaker recentViz.vizState evalParams.appExpr of
     Nothing -> defaultResponseError "No expr maker found" -- TODO: Improve error codehere
     Just evalAppMaker -> do
       let appExpr = evalAppMaker evalParams
-      res <- liftIO $ EL.execEvalExprInContextOfModule entityInfo appExpr contextModule
+      res <- liftIO $ EL.execEvalExprInContextOfModule evalConfig entityInfo appExpr contextModule
       case res of
         Just evalRes -> Aeson.toJSON <$> evalResultToLadderEvalAppResult evalRes
         Nothing -> defaultResponseError "No eval result found"

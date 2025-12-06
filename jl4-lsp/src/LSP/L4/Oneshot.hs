@@ -13,6 +13,8 @@ import Development.IDE.Graph.Database (shakeRunDatabase)
 import Language.LSP.Protocol.Types (NormalizedFilePath)
 import System.FilePath
 
+import L4.EvaluateLazy (EvalConfig)
+
 data Log
   = ShakeLog Shake.Log
   | RulesLog Rules.Log
@@ -24,19 +26,19 @@ instance Pretty Log where
     RulesLog l -> pretty l
     StoreLog l -> pretty l
 
-oneshotL4ActionAndErrors :: FilePath -> (NormalizedFilePath -> Action b) -> IO ([Text], b)
-oneshotL4ActionAndErrors fp act = do
+oneshotL4ActionAndErrors :: EvalConfig -> FilePath -> (NormalizedFilePath -> Action b) -> IO ([Text], b)
+oneshotL4ActionAndErrors evalConfig fp act = do
   (getLog, recorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
-  res <- oneshotL4Action recorder fp act
+  res <- oneshotL4Action recorder evalConfig fp act
   errs <- getLog
   pure (errs, res)
 
-oneshotL4Action :: Recorder (WithPriority Log) -> FilePath -> (NormalizedFilePath -> Action b) -> IO b
-oneshotL4Action recorder fp act = do
+oneshotL4Action :: Recorder (WithPriority Log) -> EvalConfig -> FilePath -> (NormalizedFilePath -> Action b) -> IO b
+oneshotL4Action recorder evalConfig fp act = do
   let curDir = takeDirectory fp
   state <- Shake.oneshotIdeState (cmapWithPrio ShakeLog recorder) curDir do
     Store.fileStoreRules (cmapWithPrio StoreLog recorder) (const $ pure False)
-    Rules.jl4Rules curDir (cmapWithPrio RulesLog recorder)
+    Rules.jl4Rules evalConfig curDir (cmapWithPrio RulesLog recorder)
 
   let nfp = normalizeFilePath fp
 

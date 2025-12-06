@@ -1,0 +1,33 @@
+`excelToday`
+`excelNow`
+`ExcelDateValue` with 2024-02-29
+`ExcelDateValue` with 31/12/2023
+`ExcelDateValue` with not-a-date
+`ExcelTimeValue` with 2:30 PM
+`ExcelTimeValue` with 23:59:59
+`ExcelTimeValue` with 24:00
+`excelSerial1900` with `Date` with 1, 3 and 1900
+`dateFromExcelSerial` with 61
+`dateFromExcelSerial` with 60
+`DATEDIF` with `Start 2012`, `Mid 2012` and Y
+`DATEDIF` with `Start 2012`, `Mid 2012` and M
+`DATEDIF` with `Start 2012`, `Mid 2012` and D
+`DATEDIF` with `Start 2012`, `Mid 2012` and YM
+`DATEDIF` with `Start 2012`, `Mid 2012` and YD
+`DATEDIF` with `Date` with 1, 1 and 2012, `Date` with 15, 7 and 2012 and MD
+`ExcelDays` with `US 30/360 end` and `US 30/360 start`
+`ExcelDays360` with `US 30/360 start` and `US 30/360 end`
+`ExcelDays360` with `US 30/360 start`, `US 30/360 end` and `TRUE`
+`ExcelYearFrac` with `Basis start`, `Basis end` and 0
+`ExcelYearFrac` with `Basis start`, `Basis end` and 1
+`ExcelYearFrac` with `Basis start`, `Basis end` and 2
+`ExcelEDate` with `Late Jan 24` and 1
+`ExcelEDate` with `Late Jan 24` and -1
+`ExcelEOMonth` with `Jan 2024` and 0
+`ExcelEOMonth` with `Jan 2024` and 1
+`ExcelWorkday` with `Jan 2024` and 10
+`ExcelWorkday` with `Late Jan 24` and -5
+`ExcelWorkday` with `Jan 2024`, 10 and `Holidays 24`
+`ExcelNetworkDays` with `Jan 2024` and `Late Jan 24`
+`ExcelNetworkDays` with `Late Jan 24` and `Jan 2024`
+`ExcelNetworkDays` with `Jan 2024`, `Late Jan 24` and `Holidays 24`

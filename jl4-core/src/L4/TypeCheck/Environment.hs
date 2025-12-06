@@ -48,6 +48,10 @@ mkBuiltins
   , "post" `rename` "POST"
   , "jsonEncode" `rename` "JSONENCODE"
   , "jsonDecode" `rename` "JSONDECODE"
+  , "todaySerial" `rename` "TODAY"
+  , "nowSerial" `rename` "NOW"
+  , "dateValueSerial" `rename` "DATEVALUE"
+  , "timeValueFraction" `rename` "TIMEVALUE"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -162,6 +166,18 @@ jsonDecodeBuiltin :: Type' Resolved
 jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (eitherType string a)
   where
     a = app aRef []
+
+todayBuiltin :: Type' Resolved
+todayBuiltin = number
+
+nowBuiltin :: Type' Resolved
+nowBuiltin = number
+
+dateValueBuiltin :: Type' Resolved
+dateValueBuiltin = fun_ [string] (eitherType string number)
+
+timeValueBuiltin :: Type' Resolved
+timeValueBuiltin = fun_ [string] (eitherType string number)
 
 -- Basic Arithmetic
 
@@ -392,6 +408,18 @@ jsonDecodeInfo :: CheckEntity
 jsonDecodeInfo =
   KnownTerm jsonDecodeBuiltin Computable
 
+todayInfo :: CheckEntity
+todayInfo = KnownTerm todayBuiltin Computable
+
+nowInfo :: CheckEntity
+nowInfo = KnownTerm nowBuiltin Computable
+
+dateValueInfo :: CheckEntity
+dateValueInfo = KnownTerm dateValueBuiltin Computable
+
+timeValueInfo :: CheckEntity
+timeValueInfo = KnownTerm timeValueBuiltin Computable
+
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -553,6 +581,10 @@ initialEnvironment =
     , (rawName envName,          [envUnique       ])
     , (rawName jsonEncodeName,   [jsonEncodeUnique])
     , (rawName jsonDecodeName,   [jsonDecodeUnique])
+    , (rawName todaySerialName,  [todaySerialUnique])
+    , (rawName nowSerialName,    [nowSerialUnique])
+    , (rawName dateValueSerialName, [dateValueSerialUnique])
+    , (rawName timeValueFractionName, [timeValueFractionUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -617,6 +649,10 @@ initialEntityInfo =
     , (postUnique,         (postName,         postInfo        ))
     , (jsonEncodeUnique,   (jsonEncodeName,   jsonEncodeInfo  ))
     , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
+    , (todaySerialUnique,  (todaySerialName,  todayInfo       ))
+    , (nowSerialUnique,    (nowSerialName,    nowInfo         ))
+    , (dateValueSerialUnique, (dateValueSerialName, dateValueInfo))
+    , (timeValueFractionUnique, (timeValueFractionName, timeValueInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

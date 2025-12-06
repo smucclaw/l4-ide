@@ -35,6 +35,12 @@ main :: IO ()
 main = do
   dataDir <- Paths_jl4.getDataDir
   dataDirCore <- Paths_jl4_core.getDataDir
+  envFixed <- JL4Lazy.readFixedNowEnv
+  let fallbackNow =
+        fromMaybe (error "Internal: invalid fallback timestamp for JL4 tests")
+                  (JL4Lazy.parseFixedNow "2025-01-31T15:45:30Z")
+  let chosenNow = maybe (Just fallbackNow) Just envFixed
+  evalConfig <- JL4Lazy.resolveEvalConfig chosenNow
   let examplesRoot = dataDir </> "examples"
   okFiles <- sort <$> globDir1 (compile "ok/**/*.l4") examplesRoot
   librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDirCore </> "libraries")
@@ -43,26 +49,26 @@ main = do
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
   semanticTokenFiles <- sort <$> globDir1 (compile "lsp/semantic-tokens/**/*.l4") examplesRoot
   hspec do
-    describe "ok files" $ tests (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
-    describe "tc fails" $ tests (False, True) tcFailsFiles examplesRoot
-    describe "nlg fails" $ tests (True, False) nlgFailsFiles examplesRoot
-    describe "lsp" $ SemanticTokens.semanticTokenTests semanticTokenFiles examplesRoot
+    describe "ok files" $ tests evalConfig (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
+    describe "tc fails" $ tests evalConfig (False, True) tcFailsFiles examplesRoot
+    describe "nlg fails" $ tests evalConfig (True, False) nlgFailsFiles examplesRoot
+    describe "lsp" $ SemanticTokens.semanticTokenTests evalConfig semanticTokenFiles examplesRoot
   where
-    tests (tcOk, nlgOk) files root =
+    tests evalConfig (tcOk, nlgOk) files root =
       forM_ files $ \inputFile -> do
         let testCase = makeRelative root inputFile
         let goldenDir = takeDirectory inputFile </> "tests"
         describe testCase $ do
           it "parses and checks" $
-            l4Golden tcOk goldenDir inputFile
+            l4Golden evalConfig tcOk goldenDir inputFile
           it "exactprints" $
-            jl4ExactPrintGolden goldenDir inputFile
+            jl4ExactPrintGolden evalConfig goldenDir inputFile
           it "natural language annotations" $
-            jl4NlgAnnotationsGolden nlgOk goldenDir inputFile
+            jl4NlgAnnotationsGolden evalConfig nlgOk goldenDir inputFile
 
-l4Golden :: Bool -> String -> String -> IO (Golden String)
-l4Golden isOk dir inputFile = do
-  (output, _) <- capture (checkFile isOk inputFile)
+l4Golden :: JL4Lazy.EvalConfig -> Bool -> String -> String -> IO (Golden String)
+l4Golden evalConfig isOk dir inputFile = do
+  (output, _) <- capture (checkFile evalConfig isOk inputFile)
   pure
     Golden
       { output
@@ -74,9 +80,9 @@ l4Golden isOk dir inputFile = do
       , failFirstTime = True
       }
 
-jl4ExactPrintGolden :: String -> String -> IO (Golden Text)
-jl4ExactPrintGolden dir inputFile = do
-  (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
+jl4ExactPrintGolden :: JL4Lazy.EvalConfig -> String -> String -> IO (Golden Text)
+jl4ExactPrintGolden evalConfig dir inputFile = do
+  (errs, moutput) <- oneshotL4ActionAndErrors evalConfig inputFile \nfp -> do
     let uri = normalizedFilePathToUri nfp
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.ExactPrint uri
@@ -95,9 +101,9 @@ jl4ExactPrintGolden dir inputFile = do
       , failFirstTime = True
       }
 
-jl4NlgAnnotationsGolden :: Bool -> String -> FilePath -> IO (Golden Text)
-jl4NlgAnnotationsGolden isOk dir inputFile = do
-  (errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
+jl4NlgAnnotationsGolden :: JL4Lazy.EvalConfig -> Bool -> String -> FilePath -> IO (Golden Text)
+jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
+  (errs, moutput) <- oneshotL4ActionAndErrors evalConfig inputFile \nfp -> do
     let uri = normalizedFilePathToUri nfp
     _ <- Shake.addVirtualFileFromFS nfp
     Shake.use Rules.SuccessfulTypeCheck uri
@@ -139,9 +145,9 @@ sanitizeFilePaths = RE.replaceAll regex
   regex = mkFileName <$> RE.manyTextOf CharSet.space <* RE.text "file://" <*>
       RE.manyTextOf (CharSet.not $ CharSet.space `CharSet.union` CharSet.singleton ':')
 
-checkFile :: Bool -> FilePath -> IO ()
-checkFile isOk file = do
-  (errs, isJust ->  success) <- oneshotL4ActionAndErrors file \nfp -> runMaybeT do
+checkFile :: JL4Lazy.EvalConfig -> Bool -> FilePath -> IO ()
+checkFile evalConfig isOk file = do
+  (errs, isJust ->  success) <- oneshotL4ActionAndErrors evalConfig file \nfp -> runMaybeT do
       let uri = normalizedFilePathToUri nfp
       _        <- lift   $ Shake.addVirtualFileFromFS nfp
       _        <- MaybeT $ Shake.use GetParsedAst uri        <* liftIO (Text.putStrLn "Parsing successful")

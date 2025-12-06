@@ -31,6 +31,7 @@ executable jl4-cli
     jl4-core,
     jl4-lsp,
     directory,
+    time,
     lsp-types,
     optparse-applicative,
     pretty-simple,

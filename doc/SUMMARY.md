@@ -38,6 +38,7 @@
 ## Libraries
 
 - [Days and Dates](libraries/daydate.md)
+- [Excel Date Compatibility](libraries/excel-date.md)
 
 ## Other
 

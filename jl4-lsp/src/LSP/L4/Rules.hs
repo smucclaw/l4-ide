@@ -240,8 +240,8 @@ instance Pretty Log where
             <> pretty (s.start._character + s.length)
             <+> pretty s.category
 
-jl4Rules :: FilePath -> Recorder (WithPriority Log) -> Rules ()
-jl4Rules rootDirectory recorder = do
+jl4Rules :: EvaluateLazy.EvalConfig -> FilePath -> Recorder (WithPriority Log) -> Rules ()
+jl4Rules evalConfig rootDirectory recorder = do
   define shakeRecorder $ \GetLexTokens uri -> do
     mRope <- runMaybeT $
       MaybeT (snd <$> use_ GetFileContents uri)
@@ -434,7 +434,7 @@ jl4Rules rootDirectory recorder = do
     -- put the diagnostic on that IMPORT
     deps    <- fmap catMaybes $ uses (AttachCallStack (f : cs) GetLazyEvaluationDependencies) $ map (.moduleUri) imports
     let environment = mconcat (fst <$> deps)
-    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv tcRes.entityInfo environment tcRes.module')
+    (ownEnv, ownDirectives) <- liftIO (EvaluateLazy.execEvalModuleWithEnv evalConfig tcRes.entityInfo environment tcRes.module')
     pure ([], Just (ownEnv <> environment, ownDirectives))
 
   define shakeRecorder $ \EvaluateLazy uri -> do
