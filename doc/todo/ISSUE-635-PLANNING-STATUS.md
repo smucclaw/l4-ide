@@ -13,8 +13,8 @@ This document tracks both specification writing and implementation progress for 
 | 2    | IDE Directive Filtering                | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ✅ **Done** (commit fc320987) | JSONDECODE-based approach, all 18 tests pass    |
 | 3    | Enhanced YAML Support (nested objects) | ✅ Complete   | `DECISION-SERVICE-JSONDECODE-SPEC.md` | ✅ **Done** (commit fc320987) | Included in JSONDECODE implementation           |
 | 4    | Boolean Minimization                   | ✅ Complete   | `BOOLEAN-MINIMIZATION-SPEC.md`        | ⏳ Todo                       | Larger feature - see Issue #638                 |
-| 5    | Dynamic File Management                | 📋 Needs spec | -                                     | 🔄 Partially done             | PR #649 addressed push; may need file watching  |
-| 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ⏳ Todo                       | Foundation for Item 7                           |
+| 5    | Dynamic File Management                | ✅ Complete   | See `jl4-websessions/README.md`       | ✅ **Done** (PR #664)         | Auto-push from websessions to decision service  |
+| 6    | EXPORT API Syntax                      | ✅ Complete   | `EXPORT-SYNTAX-SPEC.md`               | ✅ **Done** (May 2025)        | All 4 phases implemented                        |
 | 7    | Import/Export Coordination             | 📋 Needs spec | -                                     | ⏳ Todo                       | Depends on Item 6 implementation                |
 | 8    | Performance Optimization               | ✅ Complete   | `PERFORMANCE-OPTIMIZATION-SPEC.md`    | ⏳ Todo                       | High impact, infrastructure exists              |
 | 9    | ASSUME Parameter Requirements          | 📋 Needs spec | -                                     | ⏳ Todo                       | Can be done independently                       |
@@ -71,16 +71,24 @@ Add `X-L4-Trace: none | full` header. When `none`:
 
 ## Implementation Priority Suggestion
 
-1. **Item 1 (Conditional Trace)** - Quick win, bounded scope
-2. **Item 8 (Performance)** - High impact, infrastructure exists
-3. **Item 6 (EXPORT syntax)** - Foundation for Item 7
-4. **Items 2+3 (JSONDECODE)** - Clean solution, requires Item 6 first for full benefit
-5. **Item 7 (Import/Export)** - After Item 6
-6. **Item 9 (ASSUME)** - Can be done independently
-7. **Item 4 (Boolean Minimization)** - Larger project, separate epic
+**Completed:**
+- ~~Item 1 (Conditional Trace)~~ ✅
+- ~~Items 2+3 (JSONDECODE)~~ ✅
+- ~~Item 5 (Dynamic File Management)~~ ✅
+- ~~Item 6 (EXPORT syntax)~~ ✅
+
+**Remaining (suggested order):**
+1. **Item 8 (Performance)** - High impact, infrastructure exists
+2. **Item 7 (Import/Export)** - Now unblocked by Item 6
+3. **Item 9 (ASSUME)** - Can be done independently
+4. **Item 4 (Boolean Minimization)** - Larger project, separate epic
+5. **Item 10 (TYPICALLY)** - Needs fresh implementation approach
+6. **Item 11 (Runtime Input State)** - After Item 10
 
 ## Recent Related PRs
 
+- #664: Websessions-to-decision-service auto-push integration (completes Item 5)
+- #662: Selective security vulnerability fixes (build infrastructure)
 - #650: SPLIT and CHARAT string primitives
 - #649: Push saved programs from websessions to decision service
 - #647: Mixfix and postfix notation support
