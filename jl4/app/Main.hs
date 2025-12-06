@@ -3,6 +3,7 @@ module Main where
 import Base (NonEmpty, for_, when, unless)
 import Base.Text (Text)
 import qualified Base.Text as Text
+import Control.Applicative ((<|>))
 import Data.List.NonEmpty (some1)
 import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
@@ -19,7 +20,7 @@ import LSP.L4.Oneshot (oneshotL4Action)
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.Syntax (Module, Name)
-import L4.EvaluateLazy (EvalConfig, parseFixedNow, readFixedNowEnv, resolveEvalConfig)
+import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig)
 import Data.Time (UTCTime)
 
 data Log
