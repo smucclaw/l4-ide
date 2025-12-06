@@ -83,6 +83,8 @@ cabal run jl4-cli -- jl4/examples/ok/factorial.l4
 cabal run jl4-cli -- your-file.l4
 ```
 
+> Need reproducible outputs for functions such as `TODAY` or `NOW`? Pass `--fixed-now=YYYY-MM-DDTHH:MM:SSZ` to `jl4-cli` or set the `JL4_FIXED_NOW` environment variable before running the command to pin the evaluation clock.
+
 ### VS Code Extension
 
 For the best development experience, install the L4 VS Code extension:

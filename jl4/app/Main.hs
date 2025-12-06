@@ -2,8 +2,9 @@ module Main where
 
 import Base (NonEmpty, for_, when, unless)
 import Base.Text (Text)
+import qualified Base.Text as Text
 import Data.List.NonEmpty (some1)
-import Options.Applicative (fullDesc, header, footer, helper, info, metavar, strArgument, help, short, long, switch, progDesc)
+import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
@@ -18,6 +19,8 @@ import LSP.L4.Oneshot (oneshotL4Action)
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.Syntax (Module, Name)
+import L4.EvaluateLazy (EvalConfig, parseFixedNow, readFixedNowEnv, resolveEvalConfig)
+import Data.Time (UTCTime)
 
 data Log
   = IdeLog Oneshot.Log
@@ -39,10 +42,12 @@ main = do
   curDir   <- getCurrentDirectory
   recorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
   options  <- Options.execParser optionsConfig
+  envFixed <- readFixedNowEnv
+  evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
 
   (getErrs, errRecorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
 
-  oneshotL4Action (cmapWithPrio IdeLog recorder) curDir \_ ->
+  oneshotL4Action (cmapWithPrio IdeLog recorder) evalConfig curDir \_ ->
     for_ options.files \fp -> do
       let nfp = toNormalizedFilePath fp
           uri = normalizedFilePathToUri nfp
@@ -72,14 +77,23 @@ main = do
 data Options = MkOptions
   { files :: NonEmpty FilePath
   , verbose :: Bool
-  , showAst :: Bool }
+  , showAst :: Bool
+  , fixedNow :: Maybe UTCTime
+  }
 
 optionsDescription :: Options.Parser Options
 optionsDescription = MkOptions
   <$> some1 (strArgument (metavar "L4FILE"))
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
+  <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
 
+fixedNowReader :: ReadM UTCTime
+fixedNowReader =
+  eitherReader \s ->
+    maybe (Left "Unable to parse --fixed-now; expected ISO8601 UTC like 2025-01-31T15:45:30Z")
+          Right
+          (parseFixedNow (Text.pack s))
 
 optionsConfig :: Options.ParserInfo Options
 optionsConfig = info

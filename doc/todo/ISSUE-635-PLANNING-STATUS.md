@@ -72,6 +72,7 @@ Add `X-L4-Trace: none | full` header. When `none`:
 ## Implementation Priority Suggestion
 
 **Completed:**
+
 - ~~Item 1 (Conditional Trace)~~ ✅
 - ~~Items 2+3 (JSONDECODE)~~ ✅
 - ~~Item 5 (Dynamic File Management)~~ ✅
@@ -79,6 +80,7 @@ Add `X-L4-Trace: none | full` header. When `none`:
 - ~~Item 8 (Performance)~~ ✅
 
 **Remaining (suggested order):**
+
 1. **Item 7 (Import/Export)** - Now unblocked by Item 6
 2. **Item 9 (ASSUME)** - Can be done independently
 3. **Item 4 (Boolean Minimization)** - Larger project, separate epic

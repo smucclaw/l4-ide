@@ -359,7 +359,8 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 
 typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
 typecheckModule file input moduleContext = do
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution
@@ -372,8 +373,9 @@ typecheckModule file input moduleContext = do
     Shake.use Rules.TypeCheck uri
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateModule file input moduleContext =
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+evaluateModule file input moduleContext = do
+  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution

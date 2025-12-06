@@ -57,6 +57,7 @@ import Language.LSP.Server hiding (notificationHandler, requestHandler)
 import qualified Language.LSP.Server as LSP
 import Language.LSP.VFS (VFS)
 import LSP.L4.Actions
+import L4.EvaluateLazy (EvalConfig)
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -141,8 +142,8 @@ notificationHandler m k = LSP.notificationHandler m $ \TNotificationMessage{_par
 -- Handlers
 -- ----------------------------------------------------------------------------
 
-handlers :: Recorder (WithPriority Log) -> Handlers (ServerM Config)
-handlers recorder =
+handlers :: EvalConfig -> Recorder (WithPriority Log) -> Handlers (ServerM Config)
+handlers evalConfig recorder =
   mconcat
     [ -- We need these notifications handlers to declare that we handle these requests
       notificationHandler SMethod_Initialized $ \ide _ _ -> do
@@ -345,7 +346,7 @@ handlers recorder =
                 , _xdata = Nothing
                 }
               Just (evalEnv, _) -> do
-                result <- MkVizHandler $ evalApp tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
+                result <- MkVizHandler $ evalApp evalConfig tcRes.entityInfo (evalEnv, tcRes.module') evalParams recentViz
                 logWith recorder Debug $
                   LogHandlingCustomRequest evalParams.verDocId._uri
                   ("Eval result: " <> Text.show result)

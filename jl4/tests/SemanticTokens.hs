@@ -12,20 +12,21 @@ import Optics
 import System.FilePath
 import Test.Hspec
 import Test.Hspec.Golden
+import L4.EvaluateLazy (EvalConfig)
 
-semanticTokenTests :: [FilePath] -> FilePath -> Spec
-semanticTokenTests files root = do
+semanticTokenTests :: EvalConfig -> [FilePath] -> FilePath -> Spec
+semanticTokenTests evalConfig files root = do
   forM_ files $ \inputFile -> do
     let
       testCase = makeRelative root inputFile
     let
       goldenDir = takeDirectory inputFile </> "tests"
     it testCase $ do
-      semanticTokenGolden goldenDir inputFile
+      semanticTokenGolden evalConfig goldenDir inputFile
 
-semanticTokenGolden :: String -> FilePath -> IO (Golden Text)
-semanticTokenGolden dir inputFile = do
-  (_errs, moutput) <- oneshotL4ActionAndErrors inputFile \nfp -> do
+semanticTokenGolden :: EvalConfig -> String -> FilePath -> IO (Golden Text)
+semanticTokenGolden evalConfig dir inputFile = do
+  (_errs, moutput) <- oneshotL4ActionAndErrors evalConfig inputFile \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     _ <- Shake.addVirtualFileFromFS nfp
