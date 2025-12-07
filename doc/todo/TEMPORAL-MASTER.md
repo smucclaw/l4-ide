@@ -31,5 +31,6 @@ This note summarizes the current state of temporal support across l4-ide and opm
 ### WIP log
 - Added `L4.TemporalContext` scaffolding (context record + EvalClause, pure `applyEvalClauses`, default seeding) and threaded an IORef through `EvalState` to prepare evaluator wiring.
 - Extended the evaluation machine with `GetTemporalContext`/`PutTemporalContext` instructions and exported helpers (`getTemporalContext`, `setTemporalContext`, `withEvalClauses`) so future temporal builtins can snapshot/restore context during evaluation.
+- Pointed `TODAY/NOW` builtins at the new temporal context so future `EVAL AS OF SYSTEM TIME …` overrides will affect date/time builtins automatically.
 
 Owners: temporals-2 branch (l4-ide runtime & prelude), opm2l4 team (codegen/import), docs (advanced course).

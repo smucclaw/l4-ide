@@ -51,7 +51,7 @@ import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
-import L4.TemporalContext (TemporalContext)
+import L4.TemporalContext (TemporalContext (..))
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -2114,12 +2114,14 @@ builtinBinOps =
 evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
 evalNullaryBuiltin = \case
   NullaryTodaySerial -> do
-    time <- GetEvalTime
-    let dayNumber = dayNumberFromDay (Time.utctDay time)
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+        dayNumber = dayNumberFromDay (Time.utctDay systemTime)
     pure $ ValNumber (fromIntegral dayNumber)
   NullaryNowSerial -> do
-    time <- GetEvalTime
-    pure $ ValNumber (utcDatestamp time)
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+    pure $ ValNumber (utcDatestamp systemTime)
 
 utcDatestamp :: Time.UTCTime -> Rational
 utcDatestamp time =
