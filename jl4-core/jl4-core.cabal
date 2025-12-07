@@ -95,6 +95,7 @@ library
     L4.ParserCombinators
     L4.Print
     L4.Syntax
+    L4.TemporalContext
     L4.Transform
     L4.TypeCheck
     L4.TypeCheck.Annotation

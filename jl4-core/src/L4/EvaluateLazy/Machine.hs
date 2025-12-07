@@ -51,6 +51,7 @@ import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
+import L4.TemporalContext (TemporalContext)
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -136,6 +137,8 @@ data Machine a where
   NewUnique :: Machine Unique
   GetEntityInfo :: Machine EntityInfo
   GetEvalTime :: Machine UTCTime
+  GetTemporalContext :: Machine TemporalContext
+  PutTemporalContext :: TemporalContext -> Machine ()
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
