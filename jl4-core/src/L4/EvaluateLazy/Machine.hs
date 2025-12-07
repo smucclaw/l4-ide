@@ -93,6 +93,9 @@ data Frame =
   -- Temporal context scoping for EVAL AS OF SYSTEM TIME
   | EvalAsOfSystemTime1 Reference Environment
   | EvalAsOfSystemTime2 TemporalContext
+  -- Temporal context scoping for EVAL UNDER VALID TIME
+  | EvalUnderValidTime1 Reference Environment
+  | EvalUnderValidTime2 TemporalContext
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
@@ -277,6 +280,11 @@ forwardExpr env = \ case
                thunkRef <- allocate_ thunkExpr env
                PushFrame (EvalAsOfSystemTime1 thunkRef env)
                ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderValidTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderValidTime1 thunkRef env)
+               ForwardExpr env dateExpr
       _ -> do
         let expectedType = case getAnno ann of
               Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
@@ -426,6 +434,13 @@ backward val = WithPoppedFrame $ \ case
     PutTemporalContext newCtx
     PushFrame (EvalAsOfSystemTime2 originalCtx)
     EvalRef thunkRef
+  Just (EvalUnderValidTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderValidTime (Time.utctDay (serialToUTCTime serial))] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderValidTime2 originalCtx)
+    EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
       ValBool True -> ForwardExpr env e2
@@ -542,6 +557,9 @@ backward val = WithPoppedFrame $ \ case
     runTernaryBuiltin fn val1 val2 val
   -- Temporal context scoping: restore original context after thunk evaluation
   Just (EvalAsOfSystemTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderValidTime2 originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
   Just (ConcatFrame acc [] _env) -> do
@@ -2044,6 +2062,7 @@ initialEnvironment = do
   timeValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeValue)
   -- Temporal context switching entry (handled specially by the evaluator)
   evalAsOfSystemTimeRef <- AllocateValue (ValAssumed TypeCheck.evalAsOfSystemTimeRef)
+  evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2087,6 +2106,7 @@ initialEnvironment = do
       , (TypeCheck.dateValueSerialUnique, dateValueRef)
       , (TypeCheck.timeValueFractionUnique, timeValueRef)
       , (TypeCheck.evalAsOfSystemTimeUnique, evalAsOfSystemTimeRef)
+      , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)

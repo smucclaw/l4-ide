@@ -53,6 +53,7 @@ mkBuiltins
   , "dateValueSerial" `rename` "DATEVALUE"
   , "timeValueFraction" `rename` "TIMEVALUE"
   , "evalAsOfSystemTime" `rename` "EVAL AS OF SYSTEM TIME"
+  , "evalUnderValidTime" `rename` "EVAL UNDER VALID TIME"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -187,6 +188,12 @@ timeValueBuiltin = fun_ [string] (eitherType string number)
 -- EVAL under alternate system time (serial-based). Type: NUMBER -> a -> a
 evalAsOfSystemTimeBuiltin :: Type' Resolved
 evalAsOfSystemTimeBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under valid time (serial-based). Type: NUMBER -> a -> a
+evalUnderValidTimeBuiltin :: Type' Resolved
+evalUnderValidTimeBuiltin =
   forall' [aDef] $
     fun_ [number, app aRef []] (app aRef [])
 
@@ -446,6 +453,9 @@ timeValueInfo = KnownTerm timeValueBuiltin Computable
 evalAsOfSystemTimeInfo :: CheckEntity
 evalAsOfSystemTimeInfo = KnownTerm evalAsOfSystemTimeBuiltin Computable
 
+evalUnderValidTimeInfo :: CheckEntity
+evalUnderValidTimeInfo = KnownTerm evalUnderValidTimeBuiltin Computable
+
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -624,6 +634,7 @@ initialEnvironment =
     , (rawName dateValueSerialName, [dateValueSerialUnique])
     , (rawName timeValueFractionName, [timeValueFractionUnique])
     , (rawName evalAsOfSystemTimeName, [evalAsOfSystemTimeUnique])
+    , (rawName evalUnderValidTimeName, [evalUnderValidTimeUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -697,6 +708,7 @@ initialEntityInfo =
     , (dateValueSerialUnique, (dateValueSerialName, dateValueInfo))
     , (timeValueFractionUnique, (timeValueFractionName, timeValueInfo))
     , (evalAsOfSystemTimeUnique, (evalAsOfSystemTimeName, evalAsOfSystemTimeInfo))
+    , (evalUnderValidTimeUnique, (evalUnderValidTimeName, evalUnderValidTimeInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))
