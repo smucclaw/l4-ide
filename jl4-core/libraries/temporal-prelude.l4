@@ -117,7 +117,7 @@ GIVEN
   expr      IS A FUNCTION FROM DATE TO a
 GIVETH AN a
 `retroactive to` retroDate `evaluate` expr MEANS
-  expr retroDate
+  `EVAL AS OF SYSTEM TIME` (`stamp of` retroDate) (expr retroDate)
 
 GIVEN
   a      IS A TYPE
