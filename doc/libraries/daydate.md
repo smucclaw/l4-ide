@@ -6,6 +6,8 @@ A week begins on Monday.
 
 See examples or play around with it in our [online-editor](https://jl4.legalese.com/?id=6f9b3d0a-9afa-4c2d-9360-84a98e3bdb35).
 
+> **Need Excel parity?** Use [`excel-date`](excel-date.md) for helpers such as `DATEDIF`, `WORKDAY`, and serial conversions. That library builds on `daydate` but reproduces Excel’s quirks (1900 leap-year bug, 30/360 methods, etc.).
+
 ### General use of the DATE type and constructing dates
 
 The type DATE is used throughout the library. It is important to not directly use the uppercase DATE type constructor but to use the following syntax to create DATE objects safely and to make sure the date actually exists in the calendar.

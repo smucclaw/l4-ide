@@ -48,6 +48,7 @@ data Value a =
   | ValClosure (GivenSig Resolved) (Expr Resolved) Environment
   | ValObligation Environment (Either RExpr (Value a)) (RAction Resolved) (Either (Maybe RExpr) (Value a)) RExpr (Maybe RExpr)
   | ValROp Environment RBinOp (Either RExpr (Value a)) (Either RExpr (Value a))
+  | ValNullaryBuiltinFun NullaryBuiltinFun
   | ValUnaryBuiltinFun UnaryBuiltinFun
   | ValBinaryBuiltinFun BinOp
   | ValTernaryBuiltinFun TernaryBuiltinFun
@@ -71,6 +72,11 @@ data ReasonForBreach a = DeadlineMissed a a Rational a (RAction Resolved) Ration
   deriving stock (Generic, Show, Functor, Foldable, Traversable)
   deriving anyclass NFData
 
+data NullaryBuiltinFun
+  = NullaryTodaySerial
+  | NullaryNowSerial
+  deriving stock (Show)
+
 data UnaryBuiltinFun
   = UnaryIsInteger
   | UnaryRound
@@ -88,6 +94,8 @@ data UnaryBuiltinFun
   | UnaryEnv
   | UnaryJsonEncode
   | UnaryJsonDecode
+  | UnaryDateValue
+  | UnaryTimeValue
   deriving stock (Show)
 
 data TernaryBuiltinFun
@@ -107,6 +115,7 @@ instance NFData a => NFData (Value a) where
   rnf ValNil                      = ()
   rnf (ValCons r1 r2)             = rnf r1 `seq` rnf r2
   rnf (ValClosure given expr env) = env `seq` rnf given `seq` rnf expr
+  rnf (ValNullaryBuiltinFun r)    = rnf r
   rnf (ValUnaryBuiltinFun r)      = rnf r
   rnf (ValBinaryBuiltinFun r)     = rnf r
   rnf (ValTernaryBuiltinFun r)    = rnf r
@@ -125,6 +134,11 @@ type MaybeEvaluated' a = Either a WHNF
 
 type RExpr = Expr Resolved
 
+instance NFData NullaryBuiltinFun where
+  rnf :: NullaryBuiltinFun -> ()
+  rnf NullaryTodaySerial = ()
+  rnf NullaryNowSerial = ()
+
 instance NFData UnaryBuiltinFun where
   rnf :: UnaryBuiltinFun -> ()
   rnf UnaryIsInteger = ()
@@ -141,6 +155,8 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryEnv = ()
   rnf UnaryJsonEncode = ()
   rnf UnaryJsonDecode = ()
+  rnf UnaryDateValue = ()
+  rnf UnaryTimeValue = ()
 
 instance NFData TernaryBuiltinFun where
   rnf :: TernaryBuiltinFun -> ()

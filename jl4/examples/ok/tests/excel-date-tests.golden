@@ -1,0 +1,69 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+excel-date-tests.l4:18:1-17:
+  DATE OF 31, 1, 2025
+excel-date-tests.l4:19:1-15:
+  45688.65659722222
+excel-date-tests.l4:21:1-34:
+  RIGHT OF (DATE OF 29, 2, 2024)
+excel-date-tests.l4:22:1-34:
+  RIGHT OF (DATE OF 31, 12, 2023)
+excel-date-tests.l4:23:1-34:
+  LEFT OF "DATEVALUE: could not parse date string."
+excel-date-tests.l4:25:1-31:
+  RIGHT OF 0.6041666666666666
+excel-date-tests.l4:26:1-32:
+  RIGHT OF 0.999988425925926
+excel-date-tests.l4:27:1-29:
+  LEFT OF "TIMEVALUE: hour must be between 0 and 23."
+excel-date-tests.l4:29:1-38:
+  61
+excel-date-tests.l4:30:1-29:
+  RIGHT OF (DATE OF 1, 3, 1900)
+excel-date-tests.l4:31:1-29:
+  LEFT OF "Excel serial 60 corresponds to 1900-02-29, which is not representable in the Gregorian calendar."
+excel-date-tests.l4:33:1-42:
+  RIGHT OF 0
+excel-date-tests.l4:34:1-42:
+  RIGHT OF 6
+excel-date-tests.l4:35:1-42:
+  RIGHT OF 182
+excel-date-tests.l4:36:1-43:
+  RIGHT OF 6
+excel-date-tests.l4:37:1-43:
+  RIGHT OF 182
+excel-date-tests.l4:38:1-52:
+  RIGHT OF 14
+excel-date-tests.l4:40:1-50:
+  364
+excel-date-tests.l4:41:1-53:
+  RIGHT OF 360
+excel-date-tests.l4:42:1-58:
+  RIGHT OF 360
+excel-date-tests.l4:44:1-48:
+  RIGHT OF 0.5
+excel-date-tests.l4:45:1-48:
+  RIGHT OF 0.4958904109589041
+excel-date-tests.l4:46:1-48:
+  RIGHT OF 0.5027777777777778
+excel-date-tests.l4:48:1-33:
+  RIGHT OF (DATE OF 29, 2, 2024)
+excel-date-tests.l4:49:1-34:
+  RIGHT OF (DATE OF 31, 12, 2023)
+excel-date-tests.l4:50:1-32:
+  RIGHT OF (DATE OF 31, 1, 2024)
+excel-date-tests.l4:51:1-32:
+  RIGHT OF (DATE OF 29, 2, 2024)
+excel-date-tests.l4:53:1-33:
+  RIGHT OF (DATE OF 15, 1, 2024)
+excel-date-tests.l4:54:1-36:
+  RIGHT OF (DATE OF 24, 1, 2024)
+excel-date-tests.l4:55:1-47:
+  RIGHT OF (DATE OF 15, 1, 2024)
+excel-date-tests.l4:57:1-48:
+  RIGHT OF 23
+excel-date-tests.l4:58:1-48:
+  RIGHT OF -23
+excel-date-tests.l4:59:1-62:
+  RIGHT OF 23

@@ -1,0 +1,59 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `excel-date`
+
+`Start 2012` MEANS Date 1 1 2012
+`Mid 2012`   MEANS Date 1 7 2012
+
+`US 30/360 start` MEANS Date 31 1 2011
+`US 30/360 end`   MEANS Date 30 1 2012
+
+`Basis start` MEANS Date 1 1 2015
+`Basis end`   MEANS Date 1 7 2015
+
+`Jan 2024`     MEANS Date 1 1 2024
+`Late Jan 24`  MEANS Date 31 1 2024
+`Holidays 24`  MEANS Date 26 1 2024 FOLLOWED BY EMPTY
+
+#EVAL excelToday
+#EVAL excelNow
+
+#EVAL ExcelDateValue "2024-02-29"
+#EVAL ExcelDateValue "31/12/2023"
+#EVAL ExcelDateValue "not-a-date"
+
+#EVAL ExcelTimeValue "2:30 PM"
+#EVAL ExcelTimeValue "23:59:59"
+#EVAL ExcelTimeValue "24:00"
+
+#EVAL excelSerial1900 (Date 1 3 1900)
+#EVAL dateFromExcelSerial 61
+#EVAL dateFromExcelSerial 60
+
+#EVAL DATEDIF `Start 2012` `Mid 2012` "Y"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "M"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "D"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "YM"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "YD"
+#EVAL DATEDIF (Date 1 1 2012) (Date 15 7 2012) "MD"
+
+#EVAL ExcelDays `US 30/360 end` `US 30/360 start`
+#EVAL ExcelDays360 `US 30/360 start` `US 30/360 end`
+#EVAL ExcelDays360 `US 30/360 start` `US 30/360 end` TRUE
+
+#EVAL ExcelYearFrac `Basis start` `Basis end` 0
+#EVAL ExcelYearFrac `Basis start` `Basis end` 1
+#EVAL ExcelYearFrac `Basis start` `Basis end` 2
+
+#EVAL ExcelEDate `Late Jan 24` 1
+#EVAL ExcelEDate `Late Jan 24` -1
+#EVAL ExcelEOMonth `Jan 2024` 0
+#EVAL ExcelEOMonth `Jan 2024` 1
+
+#EVAL ExcelWorkday `Jan 2024` 10
+#EVAL ExcelWorkday `Late Jan 24` -5
+#EVAL ExcelWorkday `Jan 2024` 10 `Holidays 24`
+
+#EVAL ExcelNetworkDays `Jan 2024` `Late Jan 24`
+#EVAL ExcelNetworkDays `Late Jan 24` `Jan 2024`
+#EVAL ExcelNetworkDays `Jan 2024` `Late Jan 24` `Holidays 24`

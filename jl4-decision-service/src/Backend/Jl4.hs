@@ -321,6 +321,7 @@ valueToFnLiteral = \case
   Eval.ValNil -> pure $ FnArray []
   Eval.ValCons v1 v2 -> nfToFnLiteral v1 >>= \ l1 -> listToFnLiteral (DList.singleton l1) v2
   Eval.ValClosure{} -> throwError $ InterpreterError "#EVAL produced function closure."
+  Eval.ValNullaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValBinaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced function closure."
   Eval.ValUnaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
   Eval.ValTernaryBuiltinFun{} -> throwError $ InterpreterError "#EVAL produced builtin closure."
@@ -359,7 +360,8 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 
 typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
 typecheckModule file input moduleContext = do
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution
@@ -372,8 +374,9 @@ typecheckModule file input moduleContext = do
     Shake.use Rules.TypeCheck uri
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
-evaluateModule file input moduleContext =
-  liftIO $ oneshotL4ActionAndErrors file \nfp -> do
+evaluateModule file input moduleContext = do
+  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
     -- Add all module files as virtual files for IMPORT resolution

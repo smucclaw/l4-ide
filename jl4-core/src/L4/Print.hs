@@ -425,6 +425,7 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
+    Lazy.ValNullaryBuiltinFun{}    -> "<builtin-function>"
     Lazy.ValUnaryBuiltinFun{}      -> "<builtin-function>"
     Lazy.ValBinaryBuiltinFun{}     -> "<function>"
     Lazy.ValTernaryBuiltinFun{}    -> "<builtin-function>"
