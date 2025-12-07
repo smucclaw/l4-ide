@@ -54,6 +54,9 @@ mkBuiltins
   , "timeValueFraction" `rename` "TIMEVALUE"
   , "evalAsOfSystemTime" `rename` "EVAL AS OF SYSTEM TIME"
   , "evalUnderValidTime" `rename` "EVAL UNDER VALID TIME"
+  , "evalUnderRulesEffectiveAt" `rename` "EVAL UNDER RULES EFFECTIVE AT"
+  , "evalUnderRulesEncodedAt" `rename` "EVAL UNDER RULES ENCODED AT"
+  , "evalUnderCommit" `rename` "EVAL UNDER COMMIT"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -196,6 +199,24 @@ evalUnderValidTimeBuiltin :: Type' Resolved
 evalUnderValidTimeBuiltin =
   forall' [aDef] $
     fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules effective date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEffectiveAtBuiltin :: Type' Resolved
+evalUnderRulesEffectiveAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules encoded date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEncodedAtBuiltin :: Type' Resolved
+evalUnderRulesEncodedAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under commit hash. Type: STRING -> a -> a
+evalUnderCommitBuiltin :: Type' Resolved
+evalUnderCommitBuiltin =
+  forall' [aDef] $
+    fun_ [string, app aRef []] (app aRef [])
 
 -- Basic Arithmetic
 
@@ -456,6 +477,15 @@ evalAsOfSystemTimeInfo = KnownTerm evalAsOfSystemTimeBuiltin Computable
 evalUnderValidTimeInfo :: CheckEntity
 evalUnderValidTimeInfo = KnownTerm evalUnderValidTimeBuiltin Computable
 
+evalUnderRulesEffectiveAtInfo :: CheckEntity
+evalUnderRulesEffectiveAtInfo = KnownTerm evalUnderRulesEffectiveAtBuiltin Computable
+
+evalUnderRulesEncodedAtInfo :: CheckEntity
+evalUnderRulesEncodedAtInfo = KnownTerm evalUnderRulesEncodedAtBuiltin Computable
+
+evalUnderCommitInfo :: CheckEntity
+evalUnderCommitInfo = KnownTerm evalUnderCommitBuiltin Computable
+
 -- Basic Arithmetic
 
 plusInfo :: CheckEntity
@@ -635,6 +665,9 @@ initialEnvironment =
     , (rawName timeValueFractionName, [timeValueFractionUnique])
     , (rawName evalAsOfSystemTimeName, [evalAsOfSystemTimeUnique])
     , (rawName evalUnderValidTimeName, [evalUnderValidTimeUnique])
+    , (rawName evalUnderRulesEffectiveAtName, [evalUnderRulesEffectiveAtUnique])
+    , (rawName evalUnderRulesEncodedAtName, [evalUnderRulesEncodedAtUnique])
+    , (rawName evalUnderCommitName, [evalUnderCommitUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -709,6 +742,9 @@ initialEntityInfo =
     , (timeValueFractionUnique, (timeValueFractionName, timeValueInfo))
     , (evalAsOfSystemTimeUnique, (evalAsOfSystemTimeName, evalAsOfSystemTimeInfo))
     , (evalUnderValidTimeUnique, (evalUnderValidTimeName, evalUnderValidTimeInfo))
+    , (evalUnderRulesEffectiveAtUnique, (evalUnderRulesEffectiveAtName, evalUnderRulesEffectiveAtInfo))
+    , (evalUnderRulesEncodedAtUnique, (evalUnderRulesEncodedAtName, evalUnderRulesEncodedAtInfo))
+    , (evalUnderCommitUnique, (evalUnderCommitName, evalUnderCommitInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

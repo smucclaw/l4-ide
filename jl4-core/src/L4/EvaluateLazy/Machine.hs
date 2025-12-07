@@ -96,6 +96,15 @@ data Frame =
   -- Temporal context scoping for EVAL UNDER VALID TIME
   | EvalUnderValidTime1 Reference Environment
   | EvalUnderValidTime2 TemporalContext
+  -- Temporal context scoping for rules effective time
+  | EvalUnderRulesEffectiveAt1 Reference Environment
+  | EvalUnderRulesEffectiveAt2 TemporalContext
+  -- Temporal context scoping for rules encoded time
+  | EvalUnderRulesEncodedAt1 Reference Environment
+  | EvalUnderRulesEncodedAt2 TemporalContext
+  -- Temporal context scoping for commit override
+  | EvalUnderCommit1 Reference Environment
+  | EvalUnderCommit2 TemporalContext
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
@@ -285,6 +294,21 @@ forwardExpr env = \ case
                thunkRef <- allocate_ thunkExpr env
                PushFrame (EvalUnderValidTime1 thunkRef env)
                ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEffectiveAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEffectiveAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEncodedAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEncodedAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderCommitUnique
+           , [commitExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderCommit1 thunkRef env)
+               ForwardExpr env commitExpr
       _ -> do
         let expectedType = case getAnno ann of
               Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
@@ -441,6 +465,27 @@ backward val = WithPoppedFrame $ \ case
     PutTemporalContext newCtx
     PushFrame (EvalUnderValidTime2 originalCtx)
     EvalRef thunkRef
+  Just (EvalUnderRulesEffectiveAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderRulesEffectiveAt (Time.utctDay (serialToUTCTime serial))] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEffectiveAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderRulesEncodedAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderRulesEncodedAt (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEncodedAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderCommit1 thunkRef _env) -> do
+    commitTxt <- expectString val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderCommit commitTxt] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderCommit2 originalCtx)
+    EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
       ValBool True -> ForwardExpr env e2
@@ -560,6 +605,15 @@ backward val = WithPoppedFrame $ \ case
     PutTemporalContext originalCtx
     Backward val
   Just (EvalUnderValidTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEffectiveAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEncodedAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderCommit2 originalCtx) -> do
     PutTemporalContext originalCtx
     Backward val
   Just (ConcatFrame acc [] _env) -> do
@@ -2063,6 +2117,9 @@ initialEnvironment = do
   -- Temporal context switching entry (handled specially by the evaluator)
   evalAsOfSystemTimeRef <- AllocateValue (ValAssumed TypeCheck.evalAsOfSystemTimeRef)
   evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
+  evalUnderRulesEffectiveAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEffectiveAtRef)
+  evalUnderRulesEncodedAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEncodedAtRef)
+  evalUnderCommitRef <- AllocateValue (ValAssumed TypeCheck.evalUnderCommitRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2107,6 +2164,9 @@ initialEnvironment = do
       , (TypeCheck.timeValueFractionUnique, timeValueRef)
       , (TypeCheck.evalAsOfSystemTimeUnique, evalAsOfSystemTimeRef)
       , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
+      , (TypeCheck.evalUnderRulesEffectiveAtUnique, evalUnderRulesEffectiveAtRef)
+      , (TypeCheck.evalUnderRulesEncodedAtUnique, evalUnderRulesEncodedAtRef)
+      , (TypeCheck.evalUnderCommitUnique, evalUnderCommitRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)

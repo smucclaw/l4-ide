@@ -21,6 +21,7 @@ data TemporalContext = TemporalContext
   , tcRuleVersionTime :: !(Maybe Day)
   , tcRuleValidTime :: !(Maybe Day)
   , tcRuleEncodingTime :: !(Maybe UTCTime)
+  , tcRuleCommit :: !(Maybe Text.Text)
   , tcDecisionTime :: !(Maybe UTCTime)
   }
   deriving stock (Eq, Show, Generic)
@@ -31,6 +32,7 @@ data EvalClause
   | AsOfSystemTime UTCTime
   | UnderRulesEffectiveAt Day
   | UnderCommit Text.Text
+  | UnderRulesEncodedAt UTCTime
   | RetroactiveTo Day
   deriving stock (Eq, Show, Generic)
 
@@ -44,6 +46,7 @@ initialTemporalContext now =
     , tcRuleVersionTime = Nothing
     , tcRuleValidTime = Nothing
     , tcRuleEncodingTime = Nothing
+    , tcRuleCommit = Nothing
     , tcDecisionTime = Just now
     }
 
@@ -69,8 +72,9 @@ applyEvalClauses clauses ctx0 =
           coerceDay day = UTCTime day (secondsToDiffTime 0)
           t = utctDay ctx.tcSystemTime
       UnderCommit _commit ->
-        -- Placeholder: actual implementation will resolve commit to encoding time.
-        ctx
+        ctx { tcRuleCommit = Just _commit }
+      UnderRulesEncodedAt t ->
+        ctx { tcRuleEncodingTime = Just t }
       RetroactiveTo d ->
         applyClause
           (applyClause ctx (UnderRulesEffectiveAt d))
