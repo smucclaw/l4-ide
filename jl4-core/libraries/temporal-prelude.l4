@@ -1,5 +1,6 @@
 IMPORT prelude
 IMPORT daydate
+IMPORT prelude  -- for EVAL builtin exposed as `EVAL AS OF SYSTEM TIME`
 
 -- Draft temporal prelude layer that complements the stock prelude/daydate combo.
 -- These helpers provide high-level mixfix combinators for sliding windows,
