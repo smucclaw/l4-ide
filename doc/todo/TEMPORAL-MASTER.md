@@ -36,5 +36,6 @@ This note summarizes the current state of temporal support across l4-ide and opm
 - Updated `temporal-prelude.l4` retroactivity macro to delegate to the new builtin (`EVAL AS OF SYSTEM TIME`) instead of simulating retroactivity in pure L4.
 - Parser/builtin naming note: `#EVAL` (directive with `#`) and `EVAL AS OF SYSTEM TIME` (expression-level builtin) currently coexist; keep an eye on lexer/parser handling to ensure `EVAL` without `#` is treated as a term, not a directive. Rename option: `EVALAT` internal name while preserving mixfix surface.
 - Added more clause hooks: `EVAL UNDER VALID TIME`, `EVAL UNDER RULES EFFECTIVE AT`, `EVAL UNDER RULES ENCODED AT`, and `EVAL UNDER COMMIT` builtins now set the corresponding `TemporalContext` fields around thunk evaluation (no git checkout yet; commit is stored in context for future wiring).
+- Fixed `temporal-prelude.l4` to use `WHERE` bindings (no `LET/IN` in L4), unblocking parser/typecheck of the library.
 
 Owners: temporals-2 branch (l4-ide runtime & prelude), opm2l4 team (codegen/import), docs (advanced course).

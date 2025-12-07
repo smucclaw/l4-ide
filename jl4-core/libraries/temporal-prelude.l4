@@ -36,10 +36,11 @@ GIVETH A BOOLEAN
   IF startStamp > endStamp
     THEN FALSE
     ELSE
-      LET currentDate IS `date from stamp` startStamp
-      IN IF verdict currentDate
-           THEN TRUE
-           ELSE `ever between stamps` (startStamp PLUS 1) endStamp verdict
+      IF verdict currentDate
+        THEN TRUE
+        ELSE `ever between stamps` (startStamp PLUS 1) endStamp verdict
+      WHERE
+        currentDate MEANS `date from stamp` startStamp
 
 GIVEN startStamp IS A NUMBER
       endStamp   IS A NUMBER
@@ -49,10 +50,11 @@ GIVETH A BOOLEAN
   IF startStamp > endStamp
     THEN TRUE
     ELSE
-      LET currentDate IS `date from stamp` startStamp
-      IN IF verdict currentDate
-           THEN `always between stamps` (startStamp PLUS 1) endStamp verdict
-           ELSE FALSE
+      IF verdict currentDate
+        THEN `always between stamps` (startStamp PLUS 1) endStamp verdict
+        ELSE FALSE
+      WHERE
+        currentDate MEANS `date from stamp` startStamp
 
 GIVEN startStamp IS A NUMBER
       predicate  IS A FUNCTION FROM DATE TO BOOLEAN
@@ -61,10 +63,11 @@ GIVETH A MAYBE DATE
   IF startStamp < 0
     THEN NOTHING
     ELSE
-      LET currentDate IS `date from stamp` startStamp
-      IN IF predicate currentDate
-           THEN JUST currentDate
-           ELSE `find last stamp` (startStamp MINUS 1) predicate
+      IF predicate currentDate
+        THEN JUST currentDate
+        ELSE `find last stamp` (startStamp MINUS 1) predicate
+      WHERE
+        currentDate MEANS `date from stamp` startStamp
 
 GIVEN startStamp IS A NUMBER
       endStamp   IS A NUMBER
@@ -74,10 +77,11 @@ GIVETH A MAYBE DATE
   IF startStamp > endStamp
     THEN NOTHING
     ELSE
-      LET currentDate IS `date from stamp` startStamp
-      IN IF predicate currentDate
-           THEN JUST currentDate
-           ELSE `find next stamp` (startStamp PLUS 1) endStamp predicate
+      IF predicate currentDate
+        THEN JUST currentDate
+        ELSE `find next stamp` (startStamp PLUS 1) endStamp predicate
+      WHERE
+        currentDate MEANS `date from stamp` startStamp
 
 GIVEN startDate IS A DATE
       endDate   IS A DATE
@@ -98,10 +102,11 @@ GIVEN duration IS A NUMBER
       verdict  IS A FUNCTION FROM DATE TO BOOLEAN
 GIVETH A BOOLEAN
 `within` duration `days after` anchor `ever` verdict MEANS
-  LET endDate IS `add days` anchor duration
-  IN `EVER BETWEEN` anchor `AND` endDate
-       `UNDER RULES EFFECTIVE AT EACH DATE`
-       `EVALUATE` verdict
+  `EVER BETWEEN` anchor `AND` endDate
+    `UNDER RULES EFFECTIVE AT EACH DATE`
+    `EVALUATE` verdict
+  WHERE
+    endDate MEANS `add days` anchor duration
 
 GIVEN anchor IS A DATE
       check  IS A FUNCTION FROM DATE TO BOOLEAN
