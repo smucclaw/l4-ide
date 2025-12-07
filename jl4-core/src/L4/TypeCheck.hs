@@ -1278,10 +1278,17 @@ inferExpr' g =
     AsString ann e -> do
       -- AsString can accept any primitive type and convert it to string
       (re, te) <- inferExpr e
-      -- For now, we'll only allow NUMBER to be converted to STRING
-      -- Could extend this to other types in the future
-      expect ExpectAsStringArgumentContext number te
+      unless (isStringCoercible te) $
+        addError (TypeMismatch ExpectAsStringArgumentContext string te)
       pure (AsString ann re, string)
+
+isStringCoercible :: Type' Resolved -> Bool
+isStringCoercible ty = case ty of
+  InfVar{} -> True
+  TyApp _ tyRef [] ->
+    let t = nameToText (getName tyRef)
+    in t `elem` ["NUMBER", "STRING", "BOOLEAN", "DATE"]
+  _ -> False
 
 inferEvent :: Event Name -> Check (Event Resolved, Type' Resolved)
 inferEvent (MkEvent ann party action timestamp atFirst) = do
@@ -2936,8 +2943,10 @@ prettyTypeMismatch ExpectPostBodyContext expected given =
   standardTypeMismatch [ "The body argument of POST is expected to be of type" ] expected given
 prettyTypeMismatch ExpectConcatArgumentContext expected given =
   standardTypeMismatch [ "The argument of CONCAT is expected to be of type" ] expected given
-prettyTypeMismatch ExpectAsStringArgumentContext expected given =
-  standardTypeMismatch [ "The argument of AS STRING is expected to be of type" ] expected given
+prettyTypeMismatch ExpectAsStringArgumentContext _expected given =
+  [ "The argument of AS STRING is expected to be NUMBER, BOOLEAN, DATE, or STRING."
+  , "I inferred the argument to have type " <> prettyLayout given
+  ]
 prettyTypeMismatch ExpectConsArgument2Context expected given =
   standardTypeMismatch [ "The second argument of FOLLOWED BY is expected to be of type" ] expected given
 prettyTypeMismatch (ExpectPatternScrutineeContext scrutinee) expected given =

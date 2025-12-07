@@ -21,5 +21,6 @@ data BinOp =
   | BinOpIndexOf         -- STRING → STRING → NUMBER
   | BinOpSplit           -- STRING → STRING → LIST OF STRING
   | BinOpCharAt          -- STRING → NUMBER → STRING
+  | BinOpTrunc           -- NUMBER → NUMBER → NUMBER (truncate with digits)
   deriving stock (Show, Generic)
   deriving anyclass (NFData)

@@ -96,6 +96,9 @@ data UnaryBuiltinFun
   | UnaryJsonDecode
   | UnaryDateValue
   | UnaryTimeValue
+  | UnaryToString        -- α → STRING (runtime-restricted to supported types)
+  | UnaryToNumber        -- STRING → MAYBE NUMBER
+  | UnaryToDate          -- STRING → MAYBE DATE (uses runtime type info)
   deriving stock (Show)
 
 data TernaryBuiltinFun
@@ -151,6 +154,9 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryToUpper = ()
   rnf UnaryToLower = ()
   rnf UnaryTrim = ()
+  rnf UnaryToString = ()
+  rnf UnaryToNumber = ()
+  rnf UnaryToDate = ()
   rnf UnaryFetch = ()
   rnf UnaryEnv = ()
   rnf UnaryJsonEncode = ()

@@ -89,6 +89,10 @@ mkBuiltins
   -- String functions (ternary)
   , "substring" `rename` "SUBSTRING"
   , "replace" `rename` "REPLACE"
+  , "toString" `rename` "TOSTRING"
+  , "toNumber" `rename` "TONUMBER"
+  , "toDate" `rename` "TODATE"
+  , "trunc" `rename` "TRUNC"
   ]
 
 boolean :: Type' Resolved
@@ -299,6 +303,18 @@ substringBuiltin = fun_ [string, number, number] string
 replaceBuiltin :: Type' Resolved
 replaceBuiltin = fun_ [string, string, string] string
 
+toStringBuiltin :: Type' Resolved
+toStringBuiltin = forall' [aDef] $ fun_ [app aRef []] string
+
+toNumberBuiltin :: Type' Resolved
+toNumberBuiltin = fun_ [string] (maybeType number)
+
+toDateBuiltin :: Type' Resolved
+toDateBuiltin = forall' [aDef] $ fun_ [string] (maybeType (app aRef []))
+
+truncBuiltin :: Type' Resolved
+truncBuiltin = fun_ [number, number] number
+
 -- infos
 
 booleanInfo :: CheckEntity
@@ -500,6 +516,18 @@ substringInfo = KnownTerm substringBuiltin Computable
 replaceInfo :: CheckEntity
 replaceInfo = KnownTerm replaceBuiltin Computable
 
+toStringInfo :: CheckEntity
+toStringInfo = KnownTerm toStringBuiltin Computable
+
+toNumberInfo :: CheckEntity
+toNumberInfo = KnownTerm toNumberBuiltin Computable
+
+toDateInfo :: CheckEntity
+toDateInfo = KnownTerm toDateBuiltin Computable
+
+truncInfo :: CheckEntity
+truncInfo = KnownTerm truncBuiltin Computable
+
 -- Comparison
 
 ltInfos :: [CheckEntity]
@@ -614,6 +642,10 @@ initialEnvironment =
     , (rawName charAtName,       [charAtUnique      ])
     , (rawName substringName,    [substringUnique   ])
     , (rawName replaceName,      [replaceUnique     ])
+    , (rawName toStringName,     [toStringUnique    ])
+    , (rawName toNumberName,     [toNumberUnique    ])
+    , (rawName toDateName,       [toDateUnique      ])
+    , (rawName truncName,        [truncUnique       ])
     ]
       -- NOTE: we currently do not include the Cons constructor because it has special syntax
 
@@ -678,6 +710,10 @@ initialEntityInfo =
     , (charAtUnique,       (charAtName,       charAtInfo      ))
     , (substringUnique,    (substringName,    substringInfo   ))
     , (replaceUnique,      (replaceName,      replaceInfo     ))
+    , (toStringUnique,     (toStringName,     toStringInfo    ))
+    , (toNumberUnique,     (toNumberName,     toNumberInfo    ))
+    , (toDateUnique,       (toDateName,       toDateInfo      ))
+    , (truncUnique,        (truncName,        truncInfo       ))
     ]
     <>
       [ (uniq, (name, info))

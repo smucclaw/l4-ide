@@ -1,0 +1,39 @@
+IMPORT prelude
+IMPORT daydate
+
+DECIDE numberText IS TOSTRING 1.20
+DECIDE boolText IS TOSTRING TRUE
+DECIDE dateText IS TOSTRING (Date 29 2 2024)
+DECIDE boolAsString IS TRUE AS STRING
+DECIDE dateAsString IS (Date 1 1 2024) AS STRING
+
+DECIDE parsedGoodNumber IS TONUMBER "  -12.50 "
+DECIDE parsedSciNumber IS TONUMBER "1.2E3"
+DECIDE parsedBadNumber IS TONUMBER "oops"
+
+DECIDE parsedGoodDate IS TODATE "2024-02-29"
+DECIDE parsedSlashDate IS TODATE "15/01/2024"
+DECIDE parsedNamedDate IS TODATE "Feb 01, 2024"
+DECIDE parsedBadDate IS TODATE "31/02/2024"
+
+DECIDE truncWhole IS TRUNC 12.987 0
+DECIDE truncDecimals IS TRUNC 12.987 2
+DECIDE truncNegativeDigits IS TRUNC 123.45 (-1)
+DECIDE truncNegativeNumber IS TRUNC (-123.45) 1
+
+#EVAL numberText
+#EVAL boolText
+#EVAL dateText
+#EVAL boolAsString
+#EVAL dateAsString
+#EVAL parsedGoodNumber
+#EVAL parsedSciNumber
+#EVAL parsedBadNumber
+#EVAL parsedGoodDate
+#EVAL parsedSlashDate
+#EVAL parsedNamedDate
+#EVAL parsedBadDate
+#EVAL truncWhole
+#EVAL truncDecimals
+#EVAL truncNegativeDigits
+#EVAL truncNegativeNumber

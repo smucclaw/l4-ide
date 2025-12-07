@@ -1,0 +1,16 @@
+`numberText`
+`boolText`
+`dateText`
+`boolAsString`
+`dateAsString`
+`parsedGoodNumber`
+`parsedSciNumber`
+`parsedBadNumber`
+`parsedGoodDate`
+`parsedSlashDate`
+`parsedNamedDate`
+`parsedBadDate`
+`truncWhole`
+`truncDecimals`
+`truncNegativeDigits`
+`truncNegativeNumber`

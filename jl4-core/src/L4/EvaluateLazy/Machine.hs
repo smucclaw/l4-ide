@@ -58,6 +58,8 @@ import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)
 import L4.EvaluateLazy.ContractFrame
 import L4.Utils.Ratio
+import Text.Read (readMaybe)
+import qualified Data.Scientific as Sci
 
 data Frame =
     BinOp1 BinOp {- -} (Expr Resolved) Environment
@@ -91,6 +93,9 @@ data Frame =
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
   | AsStringFrame -- AsString frame
+  | ToStringDate1 Reference Reference -- evaluating DATE day, have month & year refs
+  | ToStringDate2 Rational Reference  -- have day, evaluating month, have year ref
+  | ToStringDate3 Rational Rational   -- have day & month, evaluating year
   | JsonEncodeListFrame [Text] {- -} Reference Bool -- accumulated JSON strings, tail reference, expecting_tail (True = next value is tail, False = next value is element)
   | JsonEncodeNestedFrame [Text] {- -} Reference -- accumulated JSON strings, tail reference (waiting for element encoding to complete)
   | JsonEncodeConstructorFrame [(Text, Text)] Text [(Text, Reference)] -- accumulated (fieldName, encodedJson) pairs, current field name, remaining (fieldName, fieldRef) pairs to encode
@@ -522,6 +527,17 @@ backward val = WithPoppedFrame $ \ case
   Just AsStringFrame -> do
     -- Convert the value to string
     runAsString val
+  Just (ToStringDate1 monthRef yearRef) -> do
+    dayNum <- expectNumber val
+    PushFrame (ToStringDate2 dayNum yearRef)
+    EvalRef monthRef
+  Just (ToStringDate2 dayNum yearRef) -> do
+    monthNum <- expectNumber val
+    PushFrame (ToStringDate3 dayNum monthNum)
+    EvalRef yearRef
+  Just (ToStringDate3 dayNum monthNum) -> do
+    yearNum <- expectNumber val
+    runDateToString dayNum monthNum yearNum
   Just (JsonEncodeListFrame acc tailRef expectingTail) -> do
     -- Handle the value we got back
     if expectingTail
@@ -1179,21 +1195,68 @@ runConcat vals = do
   Backward $ ValString (Text.concat strings)
 
 runAsString :: WHNF -> Machine Config
-runAsString val = do
-  case val of
-    ValNumber n ->
-      -- Convert number to string
-      -- If it's an integer, show without decimal point
-      -- Otherwise, show as decimal
-      let str = if denominator n == 1
-                then Text.pack $ show (numerator n)
-                else Text.pack $ show (fromRational n :: Double)
-      in Backward $ ValString str
-    ValString s ->
-      -- Already a string, just return it
-      Backward $ ValString s
-    _ -> InternalException $ RuntimeTypeError $
-      "AS STRING can only convert NUMBER or STRING to STRING, but found: " <> prettyLayout val
+runAsString = coerceToString
+
+coerceToString :: WHNF -> Machine Config
+coerceToString val = case val of
+  ValNumber n ->
+    Backward $ ValString (prettyRatio n)
+  ValString s ->
+    Backward $ ValString s
+  ValBool b ->
+    Backward $ ValString (if b then "TRUE" else "FALSE")
+  ValDate day ->
+    Backward $ ValString (formatDateIso day)
+  ValConstructor con fields
+    | isDateConstructor con -> do
+        case fields of
+          [dayRef, monthRef, yearRef] -> do
+            PushFrame (ToStringDate1 monthRef yearRef)
+            EvalRef dayRef
+          _ ->
+            InternalException $ RuntimeTypeError "DATE values must have three fields (day, month, year) for string conversion"
+    | otherwise ->
+        incompatible
+  _ ->
+    incompatible
+  where
+    incompatible =
+      InternalException $ RuntimeTypeError $
+        "AS STRING/TOSTRING can only convert NUMBER, BOOLEAN, DATE, or STRING to STRING, but found: " <> prettyLayout val
+
+formatDateIso :: Time.Day -> Text
+formatDateIso day =
+  let (year, month, dayOfMonth) = Time.toGregorian day
+  in formatDateParts (fromIntegral year) (fromIntegral month) (fromIntegral dayOfMonth)
+
+isDateConstructor :: Resolved -> Bool
+isDateConstructor con =
+  Text.toUpper (nameToText (TypeCheck.getName con)) == "DATE"
+
+runDateToString :: Rational -> Rational -> Rational -> Machine Config
+runDateToString dayNum monthNum yearNum = do
+  dayInt <- expectIntegerNamed "day" dayNum
+  monthInt <- expectIntegerNamed "month" monthNum
+  yearInt <- expectIntegerNamed "year" yearNum
+  Backward $ ValString (formatDateParts yearInt monthInt dayInt)
+
+expectIntegerNamed :: Text -> Rational -> Machine Integer
+expectIntegerNamed label n =
+  case isInteger n of
+    Just i -> pure i
+    Nothing ->
+      InternalException $ RuntimeTypeError $
+        "Expected an integer " <> label <> " but got: " <> prettyRatio n
+
+formatDateParts :: Integer -> Integer -> Integer -> Text
+formatDateParts year month day =
+  pad 4 year <> "-" <> pad 2 month <> "-" <> pad 2 day
+  where
+    pad width v =
+      let raw = Text.show v
+      in if Text.length raw >= width
+           then raw
+           else Text.replicate (width - Text.length raw) "0" <> raw
 
 runBuiltin :: WHNF -> UnaryBuiltinFun -> Maybe (Type' Resolved) -> Machine Config
 runBuiltin es op mTy = do
@@ -1301,6 +1364,26 @@ runBuiltin es op mTy = do
         Nothing -> do
           -- Return NOTHING
           Backward (ValConstructor TypeCheck.nothingRef [])
+    UnaryToString -> do
+      coerceToString es
+    UnaryToNumber -> do
+      str <- expectString es
+      case parseNumberText str of
+        Just num -> do
+          numRef <- AllocateValue (ValNumber num)
+          Backward $ ValConstructor TypeCheck.justRef [numRef]
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+    UnaryToDate -> do
+      str <- expectString es
+      case parseDateText str of
+        Nothing ->
+          Backward $ ValConstructor TypeCheck.nothingRef []
+        Just parsedDay -> do
+          maybeInner <- resolveMaybeInnerType mTy
+          dateVal <- buildDateValue parsedDay maybeInner
+          dateRef <- AllocateValue dateVal
+          Backward $ ValConstructor TypeCheck.justRef [dateRef]
     -- String unary operations
     UnaryStringLength -> do
       str <- expectString es
@@ -1378,6 +1461,18 @@ runBinOp BinOpModulo    (ValNumber num1) (ValNumber num2)      = do
     then Backward $ ValNumber (toRational $ n1 `mod` n2)
     else UserException (DivisionByZero BinOpModulo)
 runBinOp BinOpExponent  (ValNumber base) (ValNumber exp_)   = Backward $ ValNumber (toRational ((fromRational base :: Double) ** (fromRational exp_ :: Double)))
+runBinOp BinOpTrunc (ValNumber value) (ValNumber digits) =
+  let digitsInt = round digits :: Integer
+      scale k = (10 :: Rational) ^^ k
+      truncated =
+        if digitsInt >= 0
+          then
+            let factor = scale digitsInt
+            in fromInteger (truncate (value * factor)) / factor
+          else
+            let factor = scale (abs digitsInt)
+            in fromInteger (truncate (value / factor)) * factor
+  in Backward $ ValNumber truncated
 runBinOp BinOpEquals val1             val2                       = runBinOpEquals val1 val2
 runBinOp BinOpLeq    (ValNumber num1) (ValNumber num2)           = Backward $ ValBool (num1 <= num2)
 runBinOp BinOpLeq    (ValString str1) (ValString str2)           = Backward $ ValBool (str1 <= str2)
@@ -1905,6 +2000,9 @@ initialEnvironment = do
   toUpperRef <- AllocateValue (ValUnaryBuiltinFun UnaryToUpper)
   toLowerRef <- AllocateValue (ValUnaryBuiltinFun UnaryToLower)
   trimRef <- AllocateValue (ValUnaryBuiltinFun UnaryTrim)
+  toStringRef <- AllocateValue (ValUnaryBuiltinFun UnaryToString)
+  toNumberRef <- AllocateValue (ValUnaryBuiltinFun UnaryToNumber)
+  toDateRef <- AllocateValue (ValUnaryBuiltinFun UnaryToDate)
   -- Ternary string builtins
   substringRef <- AllocateValue (ValTernaryBuiltinFun TernarySubstring)
   replaceRef <- AllocateValue (ValTernaryBuiltinFun TernaryReplace)
@@ -1969,6 +2067,9 @@ initialEnvironment = do
       , (TypeCheck.toUpperUnique, toUpperRef)
       , (TypeCheck.toLowerUnique, toLowerRef)
       , (TypeCheck.trimUnique, trimRef)
+      , (TypeCheck.toStringUnique, toStringRef)
+      , (TypeCheck.toNumberUnique, toNumberRef)
+      , (TypeCheck.toDateUnique, toDateRef)
       -- Ternary string functions
       , (TypeCheck.substringUnique, substringRef)
       , (TypeCheck.replaceUnique, replaceRef)
@@ -1989,6 +2090,7 @@ builtinBinOps =
       , (BinOpDividedBy, [TypeCheck.divideUnique])
       , (BinOpModulo,    [TypeCheck.moduloUnique])
       , (BinOpExponent,  [TypeCheck.exponentUnique])
+      , (BinOpTrunc,     [TypeCheck.truncUnique])
       , (BinOpCons,      [TypeCheck.consUnique])
       , (BinOpEquals,    [TypeCheck.equalsUnique])
       -- String binary operations
@@ -2054,11 +2156,103 @@ dateFormats =
   , "%d %b %Y"
   ]
 
+toDateFormats :: [String]
+toDateFormats =
+  [ "%Y-%m-%d"
+  , "%Y/%m/%d"
+  , "%d-%b-%Y"
+  , "%d/%m/%Y"
+  , "%b %e, %Y"
+  ]
+
+parseNumberText :: Text -> Maybe Rational
+parseNumberText raw =
+  let trimmed = Text.strip raw
+  in if Text.null trimmed
+       then Nothing
+       else do
+         sci :: Sci.Scientific <- readMaybe (Text.unpack trimmed)
+         pure (toRational sci)
+
+parseDateText :: Text -> Maybe Time.Day
+parseDateText raw =
+  let trimmed = Text.strip raw
+      variants = [trimmed, Text.toUpper trimmed, Text.toLower trimmed]
+  in listToMaybe
+       [ day
+       | candidate <- variants
+       , fmt <- toDateFormats
+       , Just day <- [TimeFormat.parseTimeM True TimeFormat.defaultTimeLocale fmt (Text.unpack candidate)]
+       , let (year, _, _) = Time.toGregorian day
+       , year >= 1
+       , year <= 9999
+       ]
+
+resolveMaybeInnerType :: Maybe (Type' Resolved) -> Machine (Maybe (Type' Resolved))
+resolveMaybeInnerType Nothing = pure Nothing
+resolveMaybeInnerType (Just ty) =
+  case ty of
+    TyApp _ maybeRef [inner]
+      | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> pure (Just inner)
+    _ -> pure Nothing
+
+buildDateValue :: Time.Day -> Maybe (Type' Resolved) -> Machine WHNF
+buildDateValue day mInner = do
+  targetTy <- case mInner of
+    Just ty -> pure ty
+    Nothing -> findDateTypeByName
+
+  case targetTy of
+    TyApp _ tyRef [] -> do
+      let typeName = nameToText (TypeCheck.getName tyRef)
+      if Text.toUpper typeName /= "DATE"
+        then InternalException $ RuntimeTypeError $
+          "TODATE can only construct DATE values, but was asked to build " <> typeName
+        else do
+          entityInfo <- GetEntityInfo
+          let constructorMatch =
+                listToMaybe
+                  [ (conRef, conType)
+                  | (uniq, (name, TypeCheck.KnownTerm conType Constructor)) <- Map.toList entityInfo
+                  , nameToText (TypeCheck.getName name) == typeName
+                  , let conRef = Def uniq name
+                  ]
+          (constructorRef, constructorType) <- case constructorMatch of
+            Just found -> pure found
+            Nothing -> InternalException $ RuntimeTypeError "TODATE could not find DATE constructor at runtime"
+
+          let (year, month, dayOfMonth) = Time.toGregorian day
+              parts =
+                Map.fromList
+                  [ ("day", fromIntegral dayOfMonth)
+                  , ("month", fromIntegral month)
+                  , ("year", fromIntegral year)
+                  ]
+          fieldNames <- extractFieldNames constructorType
+          refs <- forM fieldNames \fname -> case Map.lookup (Text.toLower fname) parts of
+            Just v -> AllocateValue (ValNumber v)
+            Nothing -> InternalException $ RuntimeTypeError $ "DATE constructor has unexpected field: " <> fname
+
+          pure $ ValConstructor constructorRef refs
+    _ ->
+      InternalException $ RuntimeTypeError "TODATE expects a concrete DATE type"
+
+findDateTypeByName :: Machine (Type' Resolved)
+findDateTypeByName = do
+  entityInfo <- GetEntityInfo
+  case listToMaybe
+         [ Def uniq name
+         | (uniq, (name, TypeCheck.KnownType _ _ _)) <- Map.toList entityInfo
+         , Text.toUpper (nameToText (TypeCheck.getName name)) == "DATE"
+         ] of
+    Just tyRef -> pure (TyApp emptyAnno tyRef [])
+    Nothing -> InternalException $ RuntimeTypeError "TODATE requires DATE type to be in scope"
+
 parseDateValueText :: Text -> Either Text Rational
 parseDateValueText rawInput =
   let trimmed = Text.strip rawInput
   in if Text.null trimmed
-        then Left "DATEVALUE: input is empty."
+       then Left "DATEVALUE: input is empty."
         else
           case firstSuccessful trimmed of
             Nothing -> Left "DATEVALUE: could not parse date string."

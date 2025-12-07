@@ -469,6 +469,7 @@ instance LayoutPrinter BinOp where
     BinOpDividedBy -> "DIVIDED"
     BinOpModulo -> "MODULO"
     BinOpExponent -> "TO THE POWER OF"
+    BinOpTrunc -> "TRUNC"
     BinOpCons -> "FOLLOWED BY"
     BinOpEquals -> "EQUALS"
     BinOpLeq -> "AT MOST"
