@@ -51,7 +51,7 @@ import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
-import L4.TemporalContext (TemporalContext (..))
+import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -90,6 +90,9 @@ data Frame =
   | TernaryBuiltin1 TernaryBuiltinFun Reference Reference  -- evaluating 1st arg, has refs to 2nd and 3rd
   | TernaryBuiltin2 TernaryBuiltinFun WHNF Reference       -- has 1st arg value, evaluating 2nd, has ref to 3rd
   | TernaryBuiltin3 TernaryBuiltinFun WHNF WHNF            -- has 1st and 2nd arg values, evaluating 3rd
+  -- Temporal context scoping for EVAL AS OF SYSTEM TIME
+  | EvalAsOfSystemTime1 Reference Environment
+  | EvalAsOfSystemTime2 TemporalContext
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
@@ -266,12 +269,21 @@ forwardExpr env = \ case
   App _ann n [] ->
     expectTerm env n >>= EvalRef
   App ann n es@(_ : _) -> do
-    let expectedType = case getAnno ann of
-          Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
-          _ -> Nothing
-    rs <- traverse (`allocate_` env) es
-    PushFrame (App1 rs expectedType)
-    ForwardExpr env (Var emptyAnno n)
+    -- Handle temporal context override: EVAL AS OF SYSTEM TIME <serial> <thunk>
+    -- The second argument is evaluated under the mutated temporal context.
+    case getUnique n of
+      uniq | uniq == TypeCheck.evalAsOfSystemTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalAsOfSystemTime1 thunkRef env)
+               ForwardExpr env dateExpr
+      _ -> do
+        let expectedType = case getAnno ann of
+              Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
+              _ -> Nothing
+        rs <- traverse (`allocate_` env) es
+        PushFrame (App1 rs expectedType)
+        ForwardExpr env (Var emptyAnno n)
   AppNamed ann n [] _ ->
     ForwardExpr env (App ann n [])
   AppNamed _ann _n _nes Nothing ->
@@ -406,6 +418,14 @@ backward val = WithPoppedFrame $ \ case
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
+  -- Evaluate thunk under overridden system time (serial number)
+  Just (EvalAsOfSystemTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [AsOfSystemTime (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalAsOfSystemTime2 originalCtx)
+    EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
       ValBool True -> ForwardExpr env e2
@@ -520,6 +540,10 @@ backward val = WithPoppedFrame $ \ case
   -- Ternary builtin handling: got all 3 args
   Just (TernaryBuiltin3 fn val1 val2) -> do
     runTernaryBuiltin fn val1 val2 val
+  -- Temporal context scoping: restore original context after thunk evaluation
+  Just (EvalAsOfSystemTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
   Just (ConcatFrame acc [] _env) -> do
     -- All arguments evaluated, concatenate them
     runConcat (reverse (val : acc))
@@ -2018,6 +2042,8 @@ initialEnvironment = do
   nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
   dateValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
   timeValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeValue)
+  -- Temporal context switching entry (handled specially by the evaluator)
+  evalAsOfSystemTimeRef <- AllocateValue (ValAssumed TypeCheck.evalAsOfSystemTimeRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2060,6 +2086,7 @@ initialEnvironment = do
       , (TypeCheck.nowSerialUnique, nowRef)
       , (TypeCheck.dateValueSerialUnique, dateValueRef)
       , (TypeCheck.timeValueFractionUnique, timeValueRef)
+      , (TypeCheck.evalAsOfSystemTimeUnique, evalAsOfSystemTimeRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -2143,6 +2170,14 @@ l4EpochDay = Time.fromGregorian 0 1 1
 
 secondsPerDay :: Rational
 secondsPerDay = 86400
+
+serialToUTCTime :: Rational -> Time.UTCTime
+serialToUTCTime serial =
+  let (wholeDays, fraction) = properFraction serial :: (Integer, Rational)
+      day = Time.addDays (wholeDays + 1) l4EpochDay
+      seconds :: Pico
+      seconds = realToFrac (fraction * secondsPerDay)
+  in Time.UTCTime day (realToFrac seconds)
 
 dateFormats :: [String]
 dateFormats =
