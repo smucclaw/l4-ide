@@ -1,0 +1,13 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: temporal-prelude.l4
+  Hidden:   no
+  Range:    39:23-39:23
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+       |
+    39 |       LET currentDate IS `date from stamp` startStamp
+       |                       ^^
+    unexpected IS
+    expecting %, &&, (, *, +, -, /, ;, <, <=, =, =>, >, >=, ABOVE, AND, AT, BELOW, DIVIDED, EQUALS, FOLLOWED, Float Literal, GREATER, IMPLIES, LESS, MINUS, MODULO, Numeric Literal, OR, PLUS, RAND, ROR, String Literal, TIMES, WHERE, end of input, identifier, mixfix keyword, space token, or ||
