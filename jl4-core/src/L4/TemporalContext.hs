@@ -10,7 +10,7 @@ where
 
 import Base
 import qualified Base.Text as Text
-import Data.Time (Day, UTCTime (..), secondsToDiffTime, utctDay)
+import Data.Time (Day, UTCTime (..), secondsToDiffTime)
 
 -- | Multi-axis temporal context carried during evaluation.
 -- Currently this is a lightweight container; evaluator wiring will
@@ -65,12 +65,14 @@ applyEvalClauses clauses ctx0 =
         ctx
           { tcRuleValidTime = Just d
           , tcRuleVersionTime = Just d
-          , tcRuleEncodingTime = fmap (const (coerceDay t)) ctx.tcRuleEncodingTime
+          , tcRuleEncodingTime =
+              case ctx.tcRuleEncodingTime of
+                Just t -> Just t
+                Nothing -> Just (coerceDay d)
           }
         where
-          -- default encoding snapshot to the same day when unspecified
+          -- default encoding snapshot to the target day when unspecified
           coerceDay day = UTCTime day (secondsToDiffTime 0)
-          t = utctDay ctx.tcSystemTime
       UnderCommit _commit ->
         ctx { tcRuleCommit = Just _commit }
       UnderRulesEncodedAt t ->
