@@ -1,0 +1,65 @@
+§ `Date Compatibility Library`
+
+-- This library provides backwards-compatible aliases for date functions
+-- after the DATE type was moved from userland records to builtins.
+--
+-- MIGRATION GUIDE:
+-- Old syntax                    → New syntax
+-- ────────────────────────────────────────────────────
+-- DATE OF d, m, y               → Date d m y
+-- DATE WITH day IS d ...        → Date d m y  (construct directly)
+-- someDate's day                → DATE_DAY someDate
+-- someDate's month              → DATE_MONTH someDate
+-- someDate's year               → DATE_YEAR someDate
+--
+-- If you need the old field accessor style, use the helpers below.
+
+IMPORT prelude
+IMPORT daydate
+
+§§ `DATE Constructor Alias`
+
+-- Provides DATE as an alias for Date for backwards compatibility
+-- Usage: DATE 28 6 1971  (instead of Date 28 6 1971)
+GIVEN day   IS A NUMBER
+      month IS A NUMBER
+      year  IS A NUMBER
+GIVETH A DATE
+`DATE` MEANS DATE_FROM_DMY day month year
+
+-- Single-argument version for serial numbers
+GIVEN days IS A NUMBER
+GIVETH A DATE
+`DATE` MEANS DATE_FROM_SERIAL days
+
+§§ `Field Accessor Helpers`
+
+-- These provide named functions to replace the old field accessor syntax
+-- Usage: `day of` someDate  (instead of someDate's day)
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`day of` MEANS DATE_DAY date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`month of` MEANS DATE_MONTH date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`year of` MEANS DATE_YEAR date
+
+-- Alternative postfix style accessors
+-- Usage: someDate's `the day`
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`the day` date MEANS DATE_DAY date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`the month` date MEANS DATE_MONTH date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+`the year` date MEANS DATE_YEAR date

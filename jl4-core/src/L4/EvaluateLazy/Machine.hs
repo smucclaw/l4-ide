@@ -2588,57 +2588,10 @@ resolveMaybeInnerType (Just ty) =
       | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> pure (Just inner)
     _ -> pure Nothing
 
+-- | Build a DATE value from a Time.Day. Since DATE is now a builtin type,
+-- we simply wrap the day in ValDate.
 buildDateValue :: Time.Day -> Maybe (Type' Resolved) -> Machine WHNF
-buildDateValue day mInner = do
-  targetTy <- case mInner of
-    Just ty -> pure ty
-    Nothing -> findDateTypeByName
-
-  case targetTy of
-    TyApp _ tyRef [] -> do
-      let typeName = nameToText (TypeCheck.getName tyRef)
-      if Text.toUpper typeName /= "DATE"
-        then InternalException $ RuntimeTypeError $
-          "TODATE can only construct DATE values, but was asked to build " <> typeName
-        else do
-          entityInfo <- GetEntityInfo
-          let constructorMatch =
-                listToMaybe
-                  [ (conRef, conType)
-                  | (uniq, (name, TypeCheck.KnownTerm conType Constructor)) <- Map.toList entityInfo
-                  , nameToText (TypeCheck.getName name) == typeName
-                  , let conRef = Def uniq name
-                  ]
-          (constructorRef, constructorType) <- case constructorMatch of
-            Just found -> pure found
-            Nothing -> InternalException $ RuntimeTypeError "TODATE could not find DATE constructor at runtime"
-
-          let (year, month, dayOfMonth) = Time.toGregorian day
-              parts =
-                Map.fromList
-                  [ ("day", fromIntegral dayOfMonth)
-                  , ("month", fromIntegral month)
-                  , ("year", fromIntegral year)
-                  ]
-          fieldNames <- extractFieldNames constructorType
-          refs <- forM fieldNames \fname -> case Map.lookup (Text.toLower fname) parts of
-            Just v -> AllocateValue (ValNumber v)
-            Nothing -> InternalException $ RuntimeTypeError $ "DATE constructor has unexpected field: " <> fname
-
-          pure $ ValConstructor constructorRef refs
-    _ ->
-      InternalException $ RuntimeTypeError "TODATE expects a concrete DATE type"
-
-findDateTypeByName :: Machine (Type' Resolved)
-findDateTypeByName = do
-  entityInfo <- GetEntityInfo
-  case listToMaybe
-         [ Def uniq name
-         | (uniq, (name, TypeCheck.KnownType _ _ _)) <- Map.toList entityInfo
-         , Text.toUpper (nameToText (TypeCheck.getName name)) == "DATE"
-         ] of
-    Just tyRef -> pure (TyApp emptyAnno tyRef [])
-    Nothing -> InternalException $ RuntimeTypeError "TODATE requires DATE type to be in scope"
+buildDateValue day _mInner = pure $ ValDate day
 
 parseDateValueText :: Text -> Either Text Time.Day
 parseDateValueText rawInput =

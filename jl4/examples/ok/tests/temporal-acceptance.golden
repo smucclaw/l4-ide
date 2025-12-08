@@ -8,10 +8,10 @@ temporal-acceptance.l4:8:1-66:
 temporal-acceptance.l4:9:1-81:
   TRUE
 temporal-acceptance.l4:10:1-46:
-  JUST OF (2024-01-07)
+  JUST OF (DATE OF 7, 1, 2024)
 temporal-acceptance.l4:11:1-46:
-  JUST OF (2024-01-13)
+  JUST OF (DATE OF 13, 1, 2024)
 temporal-acceptance.l4:12:1-51:
-  1776-07-04
+  DATE OF 4, 7, 1776
 temporal-acceptance.l4:13:1-66:
-  2000-12-25
+  DATE OF 25, 12, 2000
