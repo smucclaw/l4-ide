@@ -1,0 +1,11 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `excel-date`
+
+`Jan 2024`     MEANS Date 1 1 2024
+`Late Jan 24`  MEANS Date 31 1 2024
+
+#EVAL ExcelEDate `Late Jan 24` 1
+#EVAL ExcelEDate `Late Jan 24` -1
+#EVAL ExcelEOMonth `Jan 2024` 0
+#EVAL ExcelEOMonth `Jan 2024` 1

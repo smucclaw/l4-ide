@@ -6,6 +6,7 @@ import L4.Evaluate.ValueLazy as Lazy
 import L4.Syntax
 
 import Data.Char
+import Data.Time (toGregorian)
 import Prettyprinter
 import Prettyprinter.Render.Text
 import qualified Data.List.NonEmpty as NE
@@ -421,7 +422,9 @@ instance LayoutPrinter a => LayoutPrinter (Lazy.Value a) where
   printWithLayout = \ case
     Lazy.ValNumber i               -> pretty (prettyRatio i)
     Lazy.ValString t               -> surround (pretty $ escapeStringLiteral t) "\"" "\""
-    Lazy.ValDate day               -> pretty (Text.show day)
+    Lazy.ValDate day               ->
+      let (y, m, d) = toGregorian day
+      in "DATE OF" <+> hsep [pretty d <> ",", pretty m <> ",", pretty y]
     Lazy.ValNil                    -> "EMPTY"
     Lazy.ValCons v1 v2             -> "(" <> printWithLayout v1 <> " FOLLOWED BY " <> printWithLayout v2 <> ")" -- TODO: parens
     Lazy.ValClosure{}              -> "<function>"
@@ -482,6 +485,9 @@ instance LayoutPrinter BinOp where
     BinOpIndexOf -> "INDEXOF"
     BinOpSplit -> "SPLIT"
     BinOpCharAt -> "CHARAT"
+    BinOpWhenLast -> "WHEN LAST"
+    BinOpWhenNext -> "WHEN NEXT"
+    BinOpValueAt -> "VALUE AT"
 
 instance LayoutPrinter a => LayoutPrinter (ReasonForBreach a) where
   printWithLayout = \ case

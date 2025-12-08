@@ -1,0 +1,15 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+datedif.l4:8:1-42:
+  RIGHT OF 0
+datedif.l4:9:1-42:
+  RIGHT OF 6
+datedif.l4:10:1-42:
+  RIGHT OF 182
+datedif.l4:11:1-43:
+  RIGHT OF 6
+datedif.l4:12:1-43:
+  RIGHT OF 182
+datedif.l4:13:1-52:
+  RIGHT OF 14

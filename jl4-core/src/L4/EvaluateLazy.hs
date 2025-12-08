@@ -7,6 +7,9 @@ module L4.EvaluateLazy
 , EvalDirectiveResult (..)
 , EvalDirectiveValue(..)
 , EntityInfo
+, getTemporalContext
+, setTemporalContext
+, withEvalClauses
 , execEvalModuleWithEnv
 , execEvalExprInContextOfModule
 , prettyEvalException
@@ -27,6 +30,7 @@ import L4.Annotation
 import L4.Print
 import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
+import L4.TemporalContext (EvalClause, TemporalContext, applyEvalClauses, initialTemporalContext)
 
 import Control.Concurrent
 import Data.Time (UTCTime, getCurrentTime)
@@ -44,6 +48,7 @@ data EvalState =
     , evalTrace  :: !(Maybe (IORef (DList EvalTraceAction)))
     , entityInfo :: !EntityInfo    -- type information for constructors/records
     , evalTime   :: !UTCTime
+    , temporalContext :: !(IORef TemporalContext)
     }
 
 data EvalConfig = EvalConfig
@@ -88,6 +93,25 @@ readRef r = asks r >>= liftIO . readIORef
 
 writeRef :: (EvalState -> IORef a) -> a -> Eval ()
 writeRef r !x = asks r >>= liftIO . flip writeIORef x
+
+getTemporalContext :: Eval TemporalContext
+getTemporalContext = readRef (.temporalContext)
+
+setTemporalContext :: TemporalContext -> Eval ()
+setTemporalContext = writeRef (.temporalContext)
+
+-- | Apply runtime EVAL clauses for the duration of an action,
+-- restoring the previous temporal context afterwards.
+withEvalClauses :: [EvalClause] -> Eval a -> Eval a
+withEvalClauses clauses action = do
+  original <- getTemporalContext
+  setTemporalContext (applyEvalClauses clauses original)
+  result <-
+    action `catchError` \e -> do
+      setTemporalContext original
+      throwError e
+  setTemporalContext original
+  pure result
 
 pushFrame :: (EvalException -> Eval ()) -> Frame -> Eval ()
 pushFrame k frame = do
@@ -196,6 +220,9 @@ interpMachine = \ case
     pushFrame (interpMachine . Exception) f
   NewUnique -> newUnique
   GetEntityInfo -> asks (.entityInfo)
+  GetTemporalContext -> getTemporalContext
+  PutTemporalContext ctx -> setTemporalContext ctx
+  GetModuleUri -> asks (.moduleUri)
 
 traceEval :: EvalTraceAction -> Eval ()
 traceEval ta = do
@@ -384,15 +411,18 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
     MkEval f -> do
       stack     <- newIORef emptyStack
       supply    <- newIORef 0
+      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext}
       case r of
-        Left _exc -> do
+        Left exc -> do
+          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
           -- exceptions at the top-level are unusual; after all, we don't actually
           -- force any evaluation here, and we catch exceptions for eval directives
           pure (emptyEnvironment, [])
-        Right result -> do
-          pure result
+        Right result -> pure result
 
 -- TODO: This currently allocates the initial environment once per module.
 -- This isn't a big deal, but can we somehow do this only once per program,

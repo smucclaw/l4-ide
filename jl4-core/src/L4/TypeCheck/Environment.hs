@@ -21,6 +21,7 @@ mkBuiltins
   , "false"
   , "true"
   , "number"
+  , "date" `rename` "DATE"
   , "string"
   , "keyword"  -- For mixfix keyword placeholders
   , "list"
@@ -50,8 +51,25 @@ mkBuiltins
   , "jsonDecode" `rename` "JSONDECODE"
   , "todaySerial" `rename` "TODAY"
   , "nowSerial" `rename` "NOW"
-  , "dateValueSerial" `rename` "DATEVALUE"
+  , "dateFromText" `rename` "DATEVALUE"
+  , "dateSerial" `rename` "DATE_SERIAL"
+  , "dateFromSerial" `rename` "DATE_FROM_SERIAL"
+  , "dateFromDMY" `rename` "DATE_FROM_DMY"
+  , "dateDay" `rename` "DATE_DAY"
+  , "dateMonth" `rename` "DATE_MONTH"
+  , "dateYear" `rename` "DATE_YEAR"
   , "timeValueFraction" `rename` "TIMEVALUE"
+  , "everBetween" `rename` "EVER BETWEEN"
+  , "alwaysBetween" `rename` "ALWAYS BETWEEN"
+  , "whenLast" `rename` "WHEN LAST"
+  , "whenNext" `rename` "WHEN NEXT"
+  , "valueAt" `rename` "VALUE AT"
+  , "evalAsOfSystemTime" `rename` "EVAL AS OF SYSTEM TIME"
+  , "evalUnderValidTime" `rename` "EVAL UNDER VALID TIME"
+  , "evalUnderRulesEffectiveAt" `rename` "EVAL UNDER RULES EFFECTIVE AT"
+  , "evalUnderRulesEncodedAt" `rename` "EVAL UNDER RULES ENCODED AT"
+  , "evalUnderCommit" `rename` "EVAL UNDER COMMIT"
+  , "evalRetroactiveTo" `rename` "EVAL RETROACTIVE TO"
   , "a'" `rename` "a", "b'" `rename` "b"
   , "plus" `rename` "__PLUS__"
   , "minus" `rename` "__MINUS__"
@@ -102,6 +120,11 @@ boolean = app booleanRef []
 
 number :: Type' Resolved
 number = app numberRef []
+
+-- DATE
+
+date :: Type' Resolved
+date = app dateRef []
 
 -- STRING
 
@@ -172,16 +195,82 @@ jsonDecodeBuiltin = forall' [aDef] $ fun_ [string] (eitherType string a)
     a = app aRef []
 
 todayBuiltin :: Type' Resolved
-todayBuiltin = number
+todayBuiltin = date
 
 nowBuiltin :: Type' Resolved
 nowBuiltin = number
 
 dateValueBuiltin :: Type' Resolved
-dateValueBuiltin = fun_ [string] (eitherType string number)
+dateValueBuiltin = fun_ [string] (eitherType string date)
+
+dateSerialBuiltin :: Type' Resolved
+dateSerialBuiltin = fun_ [date] number
+
+dateFromSerialBuiltin :: Type' Resolved
+dateFromSerialBuiltin = fun_ [number] date
+
+dateFromDmyBuiltin :: Type' Resolved
+dateFromDmyBuiltin = fun_ [number, number, number] date
+
+dateDayBuiltin, dateMonthBuiltin, dateYearBuiltin :: Type' Resolved
+dateDayBuiltin = fun_ [date] number
+dateMonthBuiltin = fun_ [date] number
+dateYearBuiltin = fun_ [date] number
 
 timeValueBuiltin :: Type' Resolved
 timeValueBuiltin = fun_ [string] (eitherType string number)
+
+datePredicate :: Type' Resolved
+datePredicate = fun_ [date] boolean
+
+everBetweenBuiltin, alwaysBetweenBuiltin :: Type' Resolved
+everBetweenBuiltin = fun_ [date, date, datePredicate] boolean
+alwaysBetweenBuiltin = fun_ [date, date, datePredicate] boolean
+
+whenLastBuiltin, whenNextBuiltin :: Type' Resolved
+whenLastBuiltin = fun_ [date, datePredicate] (maybeType date)
+whenNextBuiltin = fun_ [date, datePredicate] (maybeType date)
+
+valueAtBuiltin :: Type' Resolved
+valueAtBuiltin =
+  forall' [aDef] $
+    fun_ [date, fun_ [date] (app aRef [])] (app aRef [])
+
+-- EVAL under alternate system time (serial-based). Type: NUMBER -> a -> a
+evalAsOfSystemTimeBuiltin :: Type' Resolved
+evalAsOfSystemTimeBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under valid time (serial-based). Type: NUMBER -> a -> a
+evalUnderValidTimeBuiltin :: Type' Resolved
+evalUnderValidTimeBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules effective date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEffectiveAtBuiltin :: Type' Resolved
+evalUnderRulesEffectiveAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under rules encoded date. Type: DATE SERIAL -> a -> a
+evalUnderRulesEncodedAtBuiltin :: Type' Resolved
+evalUnderRulesEncodedAtBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
+
+-- EVAL under commit hash. Type: STRING -> a -> a
+evalUnderCommitBuiltin :: Type' Resolved
+evalUnderCommitBuiltin =
+  forall' [aDef] $
+    fun_ [string, app aRef []] (app aRef [])
+
+-- EVAL retroactive convenience (sets rules and system time). Type: NUMBER -> a -> a
+evalRetroactiveToBuiltin :: Type' Resolved
+evalRetroactiveToBuiltin =
+  forall' [aDef] $
+    fun_ [number, app aRef []] (app aRef [])
 
 -- Basic Arithmetic
 
@@ -337,6 +426,10 @@ rationalInfo :: CheckEntity
 rationalInfo =
   KnownType 0 [] Nothing
 
+dateInfo :: CheckEntity
+dateInfo =
+  KnownType 0 [] Nothing
+
 stringInfo :: CheckEntity
 stringInfo =
   KnownType 0 [] Nothing
@@ -430,11 +523,50 @@ todayInfo = KnownTerm todayBuiltin Computable
 nowInfo :: CheckEntity
 nowInfo = KnownTerm nowBuiltin Computable
 
-dateValueInfo :: CheckEntity
-dateValueInfo = KnownTerm dateValueBuiltin Computable
+dateFromTextInfo :: CheckEntity
+dateFromTextInfo = KnownTerm dateValueBuiltin Computable
+
+dateSerialInfo, dateFromSerialInfo, dateFromDmyInfo :: CheckEntity
+dateSerialInfo = KnownTerm dateSerialBuiltin Computable
+dateFromSerialInfo = KnownTerm dateFromSerialBuiltin Computable
+dateFromDmyInfo = KnownTerm dateFromDmyBuiltin Computable
+
+dateDayInfo, dateMonthInfo, dateYearInfo :: CheckEntity
+dateDayInfo = KnownTerm dateDayBuiltin Computable
+dateMonthInfo = KnownTerm dateMonthBuiltin Computable
+dateYearInfo = KnownTerm dateYearBuiltin Computable
 
 timeValueInfo :: CheckEntity
 timeValueInfo = KnownTerm timeValueBuiltin Computable
+
+everBetweenInfo, alwaysBetweenInfo :: CheckEntity
+everBetweenInfo = KnownTerm everBetweenBuiltin Computable
+alwaysBetweenInfo = KnownTerm alwaysBetweenBuiltin Computable
+
+whenLastInfo, whenNextInfo :: CheckEntity
+whenLastInfo = KnownTerm whenLastBuiltin Computable
+whenNextInfo = KnownTerm whenNextBuiltin Computable
+
+valueAtInfo :: CheckEntity
+valueAtInfo = KnownTerm valueAtBuiltin Computable
+
+evalAsOfSystemTimeInfo :: CheckEntity
+evalAsOfSystemTimeInfo = KnownTerm evalAsOfSystemTimeBuiltin Computable
+
+evalUnderValidTimeInfo :: CheckEntity
+evalUnderValidTimeInfo = KnownTerm evalUnderValidTimeBuiltin Computable
+
+evalUnderRulesEffectiveAtInfo :: CheckEntity
+evalUnderRulesEffectiveAtInfo = KnownTerm evalUnderRulesEffectiveAtBuiltin Computable
+
+evalUnderRulesEncodedAtInfo :: CheckEntity
+evalUnderRulesEncodedAtInfo = KnownTerm evalUnderRulesEncodedAtBuiltin Computable
+
+evalUnderCommitInfo :: CheckEntity
+evalUnderCommitInfo = KnownTerm evalUnderCommitBuiltin Computable
+
+evalRetroactiveToInfo :: CheckEntity
+evalRetroactiveToInfo = KnownTerm evalRetroactiveToBuiltin Computable
 
 -- Basic Arithmetic
 
@@ -585,6 +717,7 @@ initialEnvironment =
     , (rawName falseName,        [falseUnique       ])
     , (rawName trueName,         [trueUnique        ])
     , (rawName numberName,       [numberUnique      ])
+    , (rawName dateName,         [dateUnique        ])
     , (rawName stringName,       [stringUnique      ])
     , (rawName listName,         [listUnique        ])
     , (rawName emptyName,        [emptyUnique       ])
@@ -611,8 +744,25 @@ initialEnvironment =
     , (rawName jsonDecodeName,   [jsonDecodeUnique])
     , (rawName todaySerialName,  [todaySerialUnique])
     , (rawName nowSerialName,    [nowSerialUnique])
-    , (rawName dateValueSerialName, [dateValueSerialUnique])
+    , (rawName dateFromTextName, [dateFromTextUnique])
+    , (rawName dateSerialName,   [dateSerialUnique])
+    , (rawName dateFromSerialName, [dateFromSerialUnique])
+    , (rawName dateFromDMYName,  [dateFromDMYUnique])
+    , (rawName dateDayName,      [dateDayUnique])
+    , (rawName dateMonthName,    [dateMonthUnique])
+    , (rawName dateYearName,     [dateYearUnique])
     , (rawName timeValueFractionName, [timeValueFractionUnique])
+    , (rawName everBetweenName,  [everBetweenUnique])
+    , (rawName alwaysBetweenName, [alwaysBetweenUnique])
+    , (rawName whenLastName,     [whenLastUnique])
+    , (rawName whenNextName,     [whenNextUnique])
+    , (rawName valueAtName,      [valueAtUnique])
+    , (rawName evalAsOfSystemTimeName, [evalAsOfSystemTimeUnique])
+    , (rawName evalUnderValidTimeName, [evalUnderValidTimeUnique])
+    , (rawName evalUnderRulesEffectiveAtName, [evalUnderRulesEffectiveAtUnique])
+    , (rawName evalUnderRulesEncodedAtName, [evalUnderRulesEncodedAtUnique])
+    , (rawName evalUnderCommitName, [evalUnderCommitUnique])
+    , (rawName evalRetroactiveToName, [evalRetroactiveToUnique])
     , (rawName plusName,         [plusUnique      ])
     , (rawName minusName,        [minusUnique     ])
     , (rawName timesName,        [timesUnique     ])
@@ -656,6 +806,7 @@ initialEntityInfo =
     , (falseUnique,        (falseName,        falseInfo       ))
     , (trueUnique,         (trueName,         trueInfo        ))
     , (numberUnique,       (numberName,       numberInfo      ))
+    , (dateUnique,         (dateName,         dateInfo        ))
     , (stringUnique,       (stringName,       stringInfo      ))
     , (listUnique,         (listName,         listInfo        ))
     , (emptyUnique,        (emptyName,        emptyInfo       ))
@@ -683,8 +834,25 @@ initialEntityInfo =
     , (jsonDecodeUnique,   (jsonDecodeName,   jsonDecodeInfo  ))
     , (todaySerialUnique,  (todaySerialName,  todayInfo       ))
     , (nowSerialUnique,    (nowSerialName,    nowInfo         ))
-    , (dateValueSerialUnique, (dateValueSerialName, dateValueInfo))
+    , (dateFromTextUnique, (dateFromTextName, dateFromTextInfo))
+    , (dateSerialUnique,   (dateSerialName,   dateSerialInfo  ))
+    , (dateFromSerialUnique, (dateFromSerialName, dateFromSerialInfo))
+    , (dateFromDMYUnique,  (dateFromDMYName,  dateFromDmyInfo))
+    , (dateDayUnique,      (dateDayName,      dateDayInfo))
+    , (dateMonthUnique,    (dateMonthName,    dateMonthInfo))
+    , (dateYearUnique,     (dateYearName,     dateYearInfo))
     , (timeValueFractionUnique, (timeValueFractionName, timeValueInfo))
+    , (everBetweenUnique,  (everBetweenName,  everBetweenInfo))
+    , (alwaysBetweenUnique, (alwaysBetweenName, alwaysBetweenInfo))
+    , (whenLastUnique,     (whenLastName,     whenLastInfo))
+    , (whenNextUnique,     (whenNextName,     whenNextInfo))
+    , (valueAtUnique,      (valueAtName,      valueAtInfo))
+    , (evalAsOfSystemTimeUnique, (evalAsOfSystemTimeName, evalAsOfSystemTimeInfo))
+    , (evalUnderValidTimeUnique, (evalUnderValidTimeName, evalUnderValidTimeInfo))
+    , (evalUnderRulesEffectiveAtUnique, (evalUnderRulesEffectiveAtName, evalUnderRulesEffectiveAtInfo))
+    , (evalUnderRulesEncodedAtUnique, (evalUnderRulesEncodedAtName, evalUnderRulesEncodedAtInfo))
+    , (evalUnderCommitUnique, (evalUnderCommitName, evalUnderCommitInfo))
+    , (evalRetroactiveToUnique, (evalRetroactiveToName, evalRetroactiveToInfo))
     , (plusUnique,         (plusName,         plusInfo        ))
     , (minusUnique,        (minusName,        minusInfo       ))
     , (timesUnique,        (timesName,        timesInfo       ))

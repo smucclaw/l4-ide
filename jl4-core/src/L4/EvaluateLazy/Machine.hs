@@ -51,6 +51,9 @@ import qualified Data.Time.Format as TimeFormat
 import L4.Annotation
 import L4.Evaluate.Operators
 import L4.Evaluate.ValueLazy
+import L4.TemporalContext (EvalClause (..), TemporalContext (..), applyEvalClauses)
+import L4.TemporalGit
+import Language.LSP.Protocol.Types (uriToFilePath)
 import L4.Parser.SrcSpan (SrcRange)
 import L4.Print
 import L4.Syntax
@@ -89,6 +92,30 @@ data Frame =
   | TernaryBuiltin1 TernaryBuiltinFun Reference Reference  -- evaluating 1st arg, has refs to 2nd and 3rd
   | TernaryBuiltin2 TernaryBuiltinFun WHNF Reference       -- has 1st arg value, evaluating 2nd, has ref to 3rd
   | TernaryBuiltin3 TernaryBuiltinFun WHNF WHNF            -- has 1st and 2nd arg values, evaluating 3rd
+  -- Temporal context scoping for EVAL AS OF SYSTEM TIME
+  | EvalAsOfSystemTime1 Reference Environment
+  | EvalAsOfSystemTime2 TemporalContext
+  -- Temporal context scoping for EVAL UNDER VALID TIME
+  | EvalUnderValidTime1 Reference Environment
+  | EvalUnderValidTime2 TemporalContext
+  -- Temporal context scoping for rules effective time
+  | EvalUnderRulesEffectiveAt1 Reference Environment
+  | EvalUnderRulesEffectiveAt2 TemporalContext
+  -- Temporal context scoping for rules encoded time
+  | EvalUnderRulesEncodedAt1 Reference Environment
+  | EvalUnderRulesEncodedAt2 TemporalContext
+  -- Temporal context scoping for commit override
+  | EvalUnderCommit1 Reference Environment
+  | EvalUnderCommit2 TemporalContext
+  -- Temporal context scoping for retroactive shorthand
+  | EvalRetroactiveTo1 Reference Environment
+  | EvalRetroactiveTo2 TemporalContext
+  -- Temporal iteration frames
+  | EverBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
+  | AlwaysBetweenFrame TemporalContext WHNF Time.Day Time.Day Integer
+  | WhenLastFrame TemporalContext WHNF Time.Day
+  | WhenNextFrame TemporalContext WHNF Time.Day Time.Day
+  | ValueAtFrame TemporalContext
   | UpdateThunk Reference
   | ContractFrame ContractFrame
   | ConcatFrame [WHNF] {- -} [Expr Resolved] Environment -- accumulated values, remaining exprs, env
@@ -136,6 +163,9 @@ data Machine a where
   NewUnique :: Machine Unique
   GetEntityInfo :: Machine EntityInfo
   GetEvalTime :: Machine UTCTime
+  GetTemporalContext :: Machine TemporalContext
+  PutTemporalContext :: TemporalContext -> Machine ()
+  GetModuleUri :: Machine NormalizedUri
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -263,12 +293,46 @@ forwardExpr env = \ case
   App _ann n [] ->
     expectTerm env n >>= EvalRef
   App ann n es@(_ : _) -> do
-    let expectedType = case getAnno ann of
-          Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
-          _ -> Nothing
-    rs <- traverse (`allocate_` env) es
-    PushFrame (App1 rs expectedType)
-    ForwardExpr env (Var emptyAnno n)
+    -- Handle temporal context override: EVAL AS OF SYSTEM TIME <serial> <thunk>
+    -- The second argument is evaluated under the mutated temporal context.
+    case getUnique n of
+      uniq | uniq == TypeCheck.evalAsOfSystemTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalAsOfSystemTime1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderValidTimeUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderValidTime1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEffectiveAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEffectiveAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderRulesEncodedAtUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderRulesEncodedAt1 thunkRef env)
+               ForwardExpr env dateExpr
+      uniq | uniq == TypeCheck.evalUnderCommitUnique
+           , [commitExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalUnderCommit1 thunkRef env)
+               ForwardExpr env commitExpr
+      uniq | uniq == TypeCheck.evalRetroactiveToUnique
+           , [dateExpr, thunkExpr] <- es -> do
+               thunkRef <- allocate_ thunkExpr env
+               PushFrame (EvalRetroactiveTo1 thunkRef env)
+               ForwardExpr env dateExpr
+      _ -> do
+        let expectedType = case getAnno ann of
+              Anno {extra = Extension {resolvedInfo = Just (TypeInfo ty _)}} -> Just ty
+              _ -> Nothing
+        rs <- traverse (`allocate_` env) es
+        PushFrame (App1 rs expectedType)
+        ForwardExpr env (Var emptyAnno n)
   AppNamed ann n [] _ ->
     ForwardExpr env (App ann n [])
   AppNamed _ann _n _nes Nothing ->
@@ -403,6 +467,52 @@ backward val = WithPoppedFrame $ \ case
       ValAssumed r ->
         StuckOnAssumed r -- TODO: we can do better here
       res -> InternalException (RuntimeTypeError $ "expected a function but found: " <> prettyLayout res)
+  -- Evaluate thunk under overridden system time (serial number)
+  Just (EvalAsOfSystemTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [AsOfSystemTime (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalAsOfSystemTime2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderValidTime1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderValidTime (Time.utctDay (serialToUTCTime serial))] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderValidTime2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderRulesEffectiveAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let retroDay = Time.utctDay (serialToUTCTime serial)
+    newCtx <- resolveRulesEffectiveContext originalCtx retroDay
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEffectiveAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderRulesEncodedAt1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let newCtx = applyEvalClauses [UnderRulesEncodedAt (serialToUTCTime serial)] originalCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderRulesEncodedAt2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalUnderCommit1 thunkRef _env) -> do
+    commitTxt <- expectString val
+    originalCtx <- GetTemporalContext
+    newCtx <- resolveCommitContext originalCtx commitTxt
+    PutTemporalContext newCtx
+    PushFrame (EvalUnderCommit2 originalCtx)
+    EvalRef thunkRef
+  Just (EvalRetroactiveTo1 thunkRef _env) -> do
+    serial <- expectNumber val
+    originalCtx <- GetTemporalContext
+    let retroDay = Time.utctDay (serialToUTCTime serial)
+    retroCtx <- resolveRulesEffectiveContext originalCtx retroDay
+    let newCtx = applyEvalClauses [AsOfSystemTime (Time.UTCTime retroDay (Time.secondsToDiffTime 0))] retroCtx
+    PutTemporalContext newCtx
+    PushFrame (EvalRetroactiveTo2 originalCtx)
+    EvalRef thunkRef
   Just (IfThenElse1 e2 e3 env) ->
     case val of
       ValBool True -> ForwardExpr env e2
@@ -517,6 +627,92 @@ backward val = WithPoppedFrame $ \ case
   -- Ternary builtin handling: got all 3 args
   Just (TernaryBuiltin3 fn val1 val2) -> do
     runTernaryBuiltin fn val1 val2 val
+  -- Temporal context scoping: restore original context after thunk evaluation
+  Just (EvalAsOfSystemTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderValidTime2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEffectiveAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderRulesEncodedAt2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalUnderCommit2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EvalRetroactiveTo2 originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
+  Just (EverBetweenFrame originalCtx predicate endDay currentDay step) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> Backward (valBool True)
+      Just False ->
+        if currentDay == endDay
+          then Backward (valBool False)
+          else do
+            let nextDay = Time.addDays (fromIntegral step) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (EverBetweenFrame originalCtx predicate endDay nextDay step)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "EVER BETWEEN expects predicate returning BOOLEAN"
+  Just (AlwaysBetweenFrame originalCtx predicate endDay currentDay step) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just False -> Backward (valBool False)
+      Just True ->
+        if currentDay == endDay
+          then Backward (valBool True)
+          else do
+            let nextDay = Time.addDays (fromIntegral step) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (AlwaysBetweenFrame originalCtx predicate endDay nextDay step)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "ALWAYS BETWEEN expects predicate returning BOOLEAN"
+  Just (WhenLastFrame originalCtx predicate currentDay) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> do
+        dateRef <- AllocateValue (ValDate currentDay)
+        Backward $ ValConstructor TypeCheck.justRef [dateRef]
+      Just False -> do
+        if dayNumberFromDay currentDay <= 0
+          then Backward $ ValConstructor TypeCheck.nothingRef []
+          else do
+            let nextDay = Time.addDays (-1) currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (WhenLastFrame originalCtx predicate nextDay)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "WHEN LAST expects predicate returning BOOLEAN"
+  Just (WhenNextFrame originalCtx predicate currentDay limitDay) -> do
+    PutTemporalContext originalCtx
+    case boolView val of
+      Just True -> do
+        dateRef <- AllocateValue (ValDate currentDay)
+        Backward $ ValConstructor TypeCheck.justRef [dateRef]
+      Just False -> do
+        if currentDay >= limitDay
+          then Backward $ ValConstructor TypeCheck.nothingRef []
+          else do
+            let nextDay = Time.addDays 1 currentDay
+            let ctxForDay = applyEvalClauses [UnderValidTime nextDay, UnderRulesEffectiveAt nextDay] originalCtx
+            PutTemporalContext ctxForDay
+            PushFrame (WhenNextFrame originalCtx predicate nextDay limitDay)
+            applyDatePredicate predicate nextDay
+      Nothing ->
+        InternalException $ RuntimeTypeError "WHEN NEXT expects predicate returning BOOLEAN"
+  Just (ValueAtFrame originalCtx) -> do
+    PutTemporalContext originalCtx
+    Backward val
   Just (ConcatFrame acc [] _env) -> do
     -- All arguments evaluated, concatenate them
     runConcat (reverse (val : acc))
@@ -903,10 +1099,22 @@ expectString = \ case
   ValString f -> pure f
   v -> InternalException $ RuntimeTypeError $ "expected a STRING but got: " <> prettyLayout v
 
+expectDateValue :: WHNF -> Machine Time.Day
+expectDateValue = \ case
+  ValDate d -> pure d
+  ValNumber serial -> pure (Time.utctDay (serialToUTCTime serial))
+  v -> InternalException $ RuntimeTypeError $ "expected a DATE but got: " <> prettyLayout v
+
 expectInteger :: BinOp -> Rational -> Machine Integer
 expectInteger op n = do
   case isInteger n of
     Nothing -> UserException (NotAnInteger op n)
+    Just i -> pure i
+
+expectWhole :: Text -> Rational -> Machine Integer
+expectWhole label n =
+  case isInteger n of
+    Nothing -> InternalException $ RuntimeTypeError label
     Just i -> pure i
 
 -- | Extract field names from a constructor's function type
@@ -1403,9 +1611,27 @@ runBuiltin es op mTy = do
         Left err -> do
           errRef <- AllocateValue (ValString err)
           Backward $ ValConstructor TypeCheck.leftRef [errRef]
-        Right dayNumber -> do
-          valRef <- AllocateValue (ValNumber dayNumber)
+        Right dayVal -> do
+          valRef <- AllocateValue (ValDate dayVal)
           Backward $ ValConstructor TypeCheck.rightRef [valRef]
+    UnaryDateSerial -> do
+      day <- expectDateValue es
+      Backward $ ValNumber (fromIntegral (dayNumberFromDay day))
+    UnaryDateFromSerial -> do
+      serial <- expectNumber es
+      Backward $ ValDate (Time.utctDay (serialToUTCTime serial))
+    UnaryDateDay -> do
+      day <- expectDateValue es
+      let (_, _, d) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral d)
+    UnaryDateMonth -> do
+      day <- expectDateValue es
+      let (_, m, _) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral m)
+    UnaryDateYear -> do
+      day <- expectDateValue es
+      let (y, _, _) = Time.toGregorian day
+      Backward $ ValNumber (fromIntegral y)
     UnaryTimeValue -> do
       str <- expectString es
       case parseTimeValueText str of
@@ -1445,6 +1671,21 @@ runTernaryBuiltin TernaryReplace val1 val2 val3 = do
   -- Use Text.replace: replace needle replacement haystack
   Backward $ ValString (Text.replace old new str)
 runTernaryBuiltin TernaryPost val1 val2 val3 = runPost val1 val2 val3
+runTernaryBuiltin TernaryDateFromDMY dVal mVal yVal = do
+  dNum <- expectNumber dVal
+  mNum <- expectNumber mVal
+  yNum <- expectNumber yVal
+  dInt <- expectWhole "DATE_FROM_DMY expects integer day" dNum
+  mInt <- expectWhole "DATE_FROM_DMY expects integer month" mNum
+  yInt <- expectWhole "DATE_FROM_DMY expects integer year" yNum
+  case Time.fromGregorianValid yInt (fromInteger mInt) (fromInteger dInt) of
+    Just day -> Backward (ValDate day)
+    Nothing ->
+      InternalException $ RuntimeTypeError "DATE_FROM_DMY produced an invalid date"
+runTernaryBuiltin TernaryEverBetween startVal endVal predicate =
+  startEverBetween startVal endVal predicate
+runTernaryBuiltin TernaryAlwaysBetween startVal endVal predicate =
+  startAlwaysBetween startVal endVal predicate
 
 runBinOp :: BinOp -> WHNF -> WHNF -> Machine Config
 runBinOp BinOpPlus   (ValNumber num1) (ValNumber num2)           = Backward $ ValNumber (num1 + num2)
@@ -1509,6 +1750,9 @@ runBinOp BinOpCharAt     (ValString text) (ValNumber idx) =
   in if i < 0 || i >= Text.length text
      then Backward $ ValString ""  -- Out of bounds returns empty string
      else Backward $ ValString (Text.singleton (Text.index text i))
+runBinOp BinOpWhenLast startVal predicateVal = startWhenLast startVal predicateVal
+runBinOp BinOpWhenNext startVal predicateVal = startWhenNext startVal predicateVal
+runBinOp BinOpValueAt dateVal attrVal = startValueAt dateVal attrVal
 runBinOp _op         (ValAssumed r) _e2                          = StuckOnAssumed r
 runBinOp _op         _e1 (ValAssumed r)                          = StuckOnAssumed r
 runBinOp _           _                _                          = InternalException (RuntimeTypeError "running bin op with invalid operation / value combination")
@@ -1516,6 +1760,7 @@ runBinOp _           _                _                          = InternalExcep
 runBinOpEquals :: WHNF -> WHNF -> Machine Config
 runBinOpEquals (ValNumber num1)        (ValNumber num2) = Backward $ valBool $ num1 == num2
 runBinOpEquals (ValString str1)        (ValString str2) = Backward $ valBool $ str1 == str2
+runBinOpEquals (ValDate d1)            (ValDate d2) = Backward $ valBool $ d1 == d2
 runBinOpEquals ValNil                  ValNil           = Backward $ valBool True
 runBinOpEquals (ValCons r1 rs1)        (ValCons r2 rs2) = do
   PushFrame (EqConstructor1 r2 [(rs1, rs2)])
@@ -1534,6 +1779,70 @@ runBinOpEquals (ValConstructor n1 rs1) (ValConstructor n2 rs2)
 -- TODO: we probably also want to check ValObligations for equality
 runBinOpEquals (ValAssumed r)          _                = StuckOnAssumed r
 runBinOpEquals v1                       v2              = UserException (EqualityOnUnsupportedType v1 v2)
+
+infinityDay :: Time.Day
+infinityDay = Time.fromGregorian 9999 12 31
+
+applyDatePredicate :: WHNF -> Time.Day -> Machine Config
+applyDatePredicate predicate day = do
+  argRef <- AllocateValue (ValDate day)
+  PushFrame (App1 [argRef] Nothing)
+  Backward predicate
+
+startEverBetween :: WHNF -> WHNF -> WHNF -> Machine Config
+startEverBetween startVal endVal predicate = do
+  startDay <- expectDateValue startVal
+  endDay <- expectDateValue endVal
+  case compare startDay endDay of
+    GT -> Backward (valBool False)
+    _ -> do
+      originalCtx <- GetTemporalContext
+      let step = if startDay <= endDay then 1 else -1
+          ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+      PutTemporalContext ctxForDay
+      PushFrame (EverBetweenFrame originalCtx predicate endDay startDay step)
+      applyDatePredicate predicate startDay
+
+startAlwaysBetween :: WHNF -> WHNF -> WHNF -> Machine Config
+startAlwaysBetween startVal endVal predicate = do
+  startDay <- expectDateValue startVal
+  endDay <- expectDateValue endVal
+  case compare startDay endDay of
+    GT -> Backward (valBool True)
+    _ -> do
+      originalCtx <- GetTemporalContext
+      let step = if startDay <= endDay then 1 else -1
+          ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+      PutTemporalContext ctxForDay
+      PushFrame (AlwaysBetweenFrame originalCtx predicate endDay startDay step)
+      applyDatePredicate predicate startDay
+
+startWhenLast :: WHNF -> WHNF -> Machine Config
+startWhenLast startVal predicate = do
+  startDay <- expectDateValue startVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (WhenLastFrame originalCtx predicate startDay)
+  applyDatePredicate predicate startDay
+
+startWhenNext :: WHNF -> WHNF -> Machine Config
+startWhenNext startVal predicate = do
+  startDay <- expectDateValue startVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime startDay, UnderRulesEffectiveAt startDay] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (WhenNextFrame originalCtx predicate startDay infinityDay)
+  applyDatePredicate predicate startDay
+
+startValueAt :: WHNF -> WHNF -> Machine Config
+startValueAt dateVal attrVal = do
+  day <- expectDateValue dateVal
+  originalCtx <- GetTemporalContext
+  let ctxForDay = applyEvalClauses [UnderValidTime day, UnderRulesEffectiveAt day] originalCtx
+  PutTemporalContext ctxForDay
+  PushFrame (ValueAtFrame originalCtx)
+  applyDatePredicate attrVal day
 
 pattern ValFulfilled :: Value a
 pattern ValFulfilled <- (fulfilView -> True)
@@ -2013,8 +2322,23 @@ initialEnvironment = do
   jsonDecodeRef <- AllocateValue (ValUnaryBuiltinFun UnaryJsonDecode)
   todayRef <- AllocateValue (ValNullaryBuiltinFun NullaryTodaySerial)
   nowRef <- AllocateValue (ValNullaryBuiltinFun NullaryNowSerial)
-  dateValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
+  dateFromTextRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateValue)
+  dateSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateSerial)
+  dateFromSerialRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateFromSerial)
+  dateFromDMYRef <- AllocateValue (ValTernaryBuiltinFun TernaryDateFromDMY)
+  dateDayRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateDay)
+  dateMonthRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateMonth)
+  dateYearRef <- AllocateValue (ValUnaryBuiltinFun UnaryDateYear)
   timeValueRef <- AllocateValue (ValUnaryBuiltinFun UnaryTimeValue)
+  everBetweenRef <- AllocateValue (ValTernaryBuiltinFun TernaryEverBetween)
+  alwaysBetweenRef <- AllocateValue (ValTernaryBuiltinFun TernaryAlwaysBetween)
+  -- Temporal context switching entry (handled specially by the evaluator)
+  evalAsOfSystemTimeRef <- AllocateValue (ValAssumed TypeCheck.evalAsOfSystemTimeRef)
+  evalUnderValidTimeRef <- AllocateValue (ValAssumed TypeCheck.evalUnderValidTimeRef)
+  evalUnderRulesEffectiveAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEffectiveAtRef)
+  evalUnderRulesEncodedAtRef <- AllocateValue (ValAssumed TypeCheck.evalUnderRulesEncodedAtRef)
+  evalUnderCommitRef <- AllocateValue (ValAssumed TypeCheck.evalUnderCommitRef)
+  evalRetroactiveToRef <- AllocateValue (ValAssumed TypeCheck.evalRetroactiveToRef)
   fulfilRef <- AllocateValue ValFulfilled
   neverMatchesPartyRef <- AllocateValue ValNeverMatchesParty
   neverMatchesActRef <- AllocateValue ValNeverMatchesAct
@@ -2055,8 +2379,22 @@ initialEnvironment = do
       , (TypeCheck.jsonDecodeUnique, jsonDecodeRef)
       , (TypeCheck.todaySerialUnique, todayRef)
       , (TypeCheck.nowSerialUnique, nowRef)
-      , (TypeCheck.dateValueSerialUnique, dateValueRef)
+      , (TypeCheck.dateFromTextUnique, dateFromTextRef)
+      , (TypeCheck.dateSerialUnique, dateSerialRef)
+      , (TypeCheck.dateFromSerialUnique, dateFromSerialRef)
+      , (TypeCheck.dateFromDMYUnique, dateFromDMYRef)
+      , (TypeCheck.dateDayUnique, dateDayRef)
+      , (TypeCheck.dateMonthUnique, dateMonthRef)
+      , (TypeCheck.dateYearUnique, dateYearRef)
       , (TypeCheck.timeValueFractionUnique, timeValueRef)
+      , (TypeCheck.everBetweenUnique, everBetweenRef)
+      , (TypeCheck.alwaysBetweenUnique, alwaysBetweenRef)
+      , (TypeCheck.evalAsOfSystemTimeUnique, evalAsOfSystemTimeRef)
+      , (TypeCheck.evalUnderValidTimeUnique, evalUnderValidTimeRef)
+      , (TypeCheck.evalUnderRulesEffectiveAtUnique, evalUnderRulesEffectiveAtRef)
+      , (TypeCheck.evalUnderRulesEncodedAtUnique, evalUnderRulesEncodedAtRef)
+      , (TypeCheck.evalUnderCommitUnique, evalUnderCommitRef)
+      , (TypeCheck.evalRetroactiveToUnique, evalRetroactiveToRef)
       , (TypeCheck.waitUntilUnique, waitUntilRef)
       , (TypeCheck.andUnique, andRef)
       , (TypeCheck.orUnique, orRef)
@@ -2100,6 +2438,9 @@ builtinBinOps =
       , (BinOpIndexOf,    [TypeCheck.indexOfUnique])
       , (BinOpSplit,      [TypeCheck.splitUnique])
       , (BinOpCharAt,     [TypeCheck.charAtUnique])
+      , (BinOpWhenLast,   [TypeCheck.whenLastUnique])
+      , (BinOpWhenNext,   [TypeCheck.whenNextUnique])
+      , (BinOpValueAt,    [TypeCheck.valueAtUnique])
       ]
   , unique <- uniques
   ]
@@ -2111,12 +2452,14 @@ builtinBinOps =
 evalNullaryBuiltin :: NullaryBuiltinFun -> Machine WHNF
 evalNullaryBuiltin = \case
   NullaryTodaySerial -> do
-    time <- GetEvalTime
-    let dayNumber = dayNumberFromDay (Time.utctDay time)
-    pure $ ValNumber (fromIntegral dayNumber)
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+        todayDay = Time.utctDay systemTime
+    pure $ ValDate todayDay
   NullaryNowSerial -> do
-    time <- GetEvalTime
-    pure $ ValNumber (utcDatestamp time)
+    tc <- GetTemporalContext
+    let TemporalContext { tcSystemTime = systemTime } = tc
+    pure $ ValNumber (utcDatestamp systemTime)
 
 utcDatestamp :: Time.UTCTime -> Rational
 utcDatestamp time =
@@ -2138,6 +2481,55 @@ l4EpochDay = Time.fromGregorian 0 1 1
 
 secondsPerDay :: Rational
 secondsPerDay = 86400
+
+serialToUTCTime :: Rational -> Time.UTCTime
+serialToUTCTime serial =
+  let (wholeDays, fraction) = properFraction serial :: (Integer, Rational)
+      day = Time.addDays (wholeDays + 1) l4EpochDay
+      seconds :: Pico
+      seconds = realToFrac (fraction * secondsPerDay)
+  in Time.UTCTime day (realToFrac seconds)
+
+requireModulePath :: Machine FilePath
+requireModulePath = do
+  uri <- GetModuleUri
+  case uriToFilePath (fromNormalizedUri uri) of
+    Nothing -> InternalException $ RuntimeTypeError "Temporal evaluation requires a file-backed module"
+    Just fp -> pure fp
+
+liftEitherIO :: IO (Either Text a) -> Machine a
+liftEitherIO action = do
+  res <- liftIO action
+  case res of
+    Left err -> InternalException $ RuntimeTypeError err
+    Right v -> pure v
+
+resolveCommitContext :: TemporalContext -> Text -> Machine TemporalContext
+resolveCommitContext originalCtx commitTxt = do
+  modulePath <- requireModulePath
+  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
+  commitInfo <- liftEitherIO (resolveCommitHash repoRoot commitTxt)
+  let withCommit = applyEvalClauses [UnderCommit commitInfo.commitHash] originalCtx
+      commitDay = Time.utctDay commitInfo.commitTime
+  pure
+    withCommit
+      { tcRuleEncodingTime = Just commitInfo.commitTime
+      , tcRuleVersionTime = case withCommit.tcRuleVersionTime of
+          Nothing -> Just commitDay
+          justDay -> justDay
+      }
+
+resolveRulesEffectiveContext :: TemporalContext -> Time.Day -> Machine TemporalContext
+resolveRulesEffectiveContext originalCtx day = do
+  modulePath <- requireModulePath
+  repoRoot <- liftEitherIO (resolveRepoRoot modulePath)
+  commitInfo <- liftEitherIO (resolveRulesCommitByDate repoRoot modulePath day)
+  let baseCtx = applyEvalClauses [UnderRulesEffectiveAt day] originalCtx
+  pure
+    baseCtx
+      { tcRuleCommit = Just commitInfo.commitHash
+      , tcRuleEncodingTime = Just commitInfo.commitTime
+      }
 
 dateFormats :: [String]
 dateFormats =
@@ -2196,59 +2588,12 @@ resolveMaybeInnerType (Just ty) =
       | nameToText (TypeCheck.getName maybeRef) == "MAYBE" -> pure (Just inner)
     _ -> pure Nothing
 
+-- | Build a DATE value from a Time.Day. Since DATE is now a builtin type,
+-- we simply wrap the day in ValDate.
 buildDateValue :: Time.Day -> Maybe (Type' Resolved) -> Machine WHNF
-buildDateValue day mInner = do
-  targetTy <- case mInner of
-    Just ty -> pure ty
-    Nothing -> findDateTypeByName
+buildDateValue day _mInner = pure $ ValDate day
 
-  case targetTy of
-    TyApp _ tyRef [] -> do
-      let typeName = nameToText (TypeCheck.getName tyRef)
-      if Text.toUpper typeName /= "DATE"
-        then InternalException $ RuntimeTypeError $
-          "TODATE can only construct DATE values, but was asked to build " <> typeName
-        else do
-          entityInfo <- GetEntityInfo
-          let constructorMatch =
-                listToMaybe
-                  [ (conRef, conType)
-                  | (uniq, (name, TypeCheck.KnownTerm conType Constructor)) <- Map.toList entityInfo
-                  , nameToText (TypeCheck.getName name) == typeName
-                  , let conRef = Def uniq name
-                  ]
-          (constructorRef, constructorType) <- case constructorMatch of
-            Just found -> pure found
-            Nothing -> InternalException $ RuntimeTypeError "TODATE could not find DATE constructor at runtime"
-
-          let (year, month, dayOfMonth) = Time.toGregorian day
-              parts =
-                Map.fromList
-                  [ ("day", fromIntegral dayOfMonth)
-                  , ("month", fromIntegral month)
-                  , ("year", fromIntegral year)
-                  ]
-          fieldNames <- extractFieldNames constructorType
-          refs <- forM fieldNames \fname -> case Map.lookup (Text.toLower fname) parts of
-            Just v -> AllocateValue (ValNumber v)
-            Nothing -> InternalException $ RuntimeTypeError $ "DATE constructor has unexpected field: " <> fname
-
-          pure $ ValConstructor constructorRef refs
-    _ ->
-      InternalException $ RuntimeTypeError "TODATE expects a concrete DATE type"
-
-findDateTypeByName :: Machine (Type' Resolved)
-findDateTypeByName = do
-  entityInfo <- GetEntityInfo
-  case listToMaybe
-         [ Def uniq name
-         | (uniq, (name, TypeCheck.KnownType _ _ _)) <- Map.toList entityInfo
-         , Text.toUpper (nameToText (TypeCheck.getName name)) == "DATE"
-         ] of
-    Just tyRef -> pure (TyApp emptyAnno tyRef [])
-    Nothing -> InternalException $ RuntimeTypeError "TODATE requires DATE type to be in scope"
-
-parseDateValueText :: Text -> Either Text Rational
+parseDateValueText :: Text -> Either Text Time.Day
 parseDateValueText rawInput =
   let trimmed = Text.strip rawInput
   in if Text.null trimmed
@@ -2256,7 +2601,7 @@ parseDateValueText rawInput =
         else
           case firstSuccessful trimmed of
             Nothing -> Left "DATEVALUE: could not parse date string."
-            Just day -> Right (fromIntegral (dayNumberFromDay day))
+            Just day -> Right day
   where
     firstSuccessful :: Text -> Maybe Time.Day
     firstSuccessful txt = go dateFormats
