@@ -4,7 +4,7 @@
 
 SSG relies heavily on OPM’s type-conversion helpers and Excel-style rounding. The OPM2L4 translator cannot faithfully emit these constructs until L4 ships first-class primitives. This spec requests four additions to the L4 surface area:
 
-**Implementation status:** `TOSTRING`, `TONUMBER`, `TODATE`, `TRUNC`, and expanded `AS STRING` semantics are implemented in `jl4-core` (see `doc/libraries/coercions.md`). The initial release focuses on deterministic formatting/parsing and DATE construction via the existing `daydate` type.
+**Implementation status:** `TOSTRING`, `TONUMBER`, `TODATE`, `TRUNC`, and expanded `AS STRING` semantics are implemented in `jl4-core` (see `doc/libraries/coercions.md`). DATE is now a builtin type (not a userland record), so `TODATE` directly constructs a `ValDate` value without needing the `daydate` library's constructor.
 
 | Feature            | OPM Function(s)             | Proposed L4 Surface               | Notes                                                                    |
 | ------------------ | --------------------------- | --------------------------------- | ------------------------------------------------------------------------ |
