@@ -95,6 +95,11 @@ data UnaryBuiltinFun
   | UnaryJsonEncode
   | UnaryJsonDecode
   | UnaryDateValue
+  | UnaryDateSerial
+  | UnaryDateFromSerial
+  | UnaryDateDay
+  | UnaryDateMonth
+  | UnaryDateYear
   | UnaryTimeValue
   | UnaryToString        -- α → STRING (runtime-restricted to supported types)
   | UnaryToNumber        -- STRING → MAYBE NUMBER
@@ -105,6 +110,9 @@ data TernaryBuiltinFun
   = TernarySubstring     -- STRING → NUMBER → NUMBER → STRING
   | TernaryReplace       -- STRING → STRING → STRING → STRING
   | TernaryPost          -- from main
+  | TernaryDateFromDMY   -- NUMBER → NUMBER → NUMBER → DATE
+  | TernaryEverBetween
+  | TernaryAlwaysBetween
   deriving stock (Show)
 
 -- | This is a non-standard instance because environments can be recursive, hence we must
@@ -162,6 +170,11 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryJsonEncode = ()
   rnf UnaryJsonDecode = ()
   rnf UnaryDateValue = ()
+  rnf UnaryDateSerial = ()
+  rnf UnaryDateFromSerial = ()
+  rnf UnaryDateDay = ()
+  rnf UnaryDateMonth = ()
+  rnf UnaryDateYear = ()
   rnf UnaryTimeValue = ()
 
 instance NFData TernaryBuiltinFun where
@@ -169,3 +182,7 @@ instance NFData TernaryBuiltinFun where
   rnf TernarySubstring = ()
   rnf TernaryReplace = ()
   rnf TernaryPost = ()
+  -- new temporals
+  rnf TernaryDateFromDMY = ()
+  rnf TernaryEverBetween = ()
+  rnf TernaryAlwaysBetween = ()

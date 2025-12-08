@@ -222,6 +222,7 @@ interpMachine = \ case
   GetEntityInfo -> asks (.entityInfo)
   GetTemporalContext -> getTemporalContext
   PutTemporalContext ctx -> setTemporalContext ctx
+  GetModuleUri -> asks (.moduleUri)
 
 traceEval :: EvalTraceAction -> Eval ()
 traceEval ta = do
@@ -415,12 +416,13 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
       let evalTrace = Nothing
       r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext}
       case r of
-        Left _exc -> do
+        Left exc -> do
+          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
           -- exceptions at the top-level are unusual; after all, we don't actually
           -- force any evaluation here, and we catch exceptions for eval directives
           pure (emptyEnvironment, [])
-        Right result -> do
-          pure result
+        Right result -> pure result
 
 -- TODO: This currently allocates the initial environment once per module.
 -- This isn't a big deal, but can we somehow do this only once per program,

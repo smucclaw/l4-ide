@@ -1,0 +1,13 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `temporal-prelude`
+
+`weekend?` date MEANS `is weekend` (DATE_SERIAL date)
+
+#EVAL `EVER BETWEEN` (Date 5 1 2024) (Date 7 1 2024) `weekend?`
+#EVAL `ALWAYS BETWEEN` (Date 6 1 2024) (Date 7 1 2024) `weekend?`
+#EVAL `EVER BETWEEN` (Date 12 1 2024) (`add days` (Date 12 1 2024) 2) `weekend?`
+#EVAL `WHEN LAST` (Date 10 1 2024) `weekend?`
+#EVAL `WHEN NEXT` (Date 10 1 2024) `weekend?`
+#EVAL `VALUE AT` (Date 4 7 1776) (GIVEN d YIELD d)
+#EVAL `EVAL RETROACTIVE TO` (DATE_SERIAL (Date 25 12 2000)) TODAY
