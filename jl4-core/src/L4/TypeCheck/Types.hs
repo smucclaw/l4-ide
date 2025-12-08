@@ -733,6 +733,12 @@ orElse m1 m2 = do
 
 -- | Allow the subcomputation to have at most one result.
 --
+-- NOTE: This backtracking search is type-directed and prunes only after it
+-- sees a second success. If surface code leaves obvious disambiguators out
+-- (e.g. missing `day/month/year` helpers while overloading `+/-/<` on DATE
+-- and NUMBER) the candidate space can balloon and appear to “hang” before we
+-- finally report ambiguity/out-of-scope. Keep cheap, unambiguous helpers in
+-- libraries to keep this search from going quadratic in practice.
 prune :: forall a. Check a -> Check a
 prune m = do
   ctx <- asks (.errorContext)
@@ -886,4 +892,3 @@ ref n a =
     (u, o) = getUniqueName a
   in
     pure (Ref n u o)
-

@@ -3,12 +3,15 @@ IMPORT daydate
 
 §§ `Runtime Bridges`
 
-`Today serial` MEANS TODAY
+`Today serial` MEANS DATE_SERIAL TODAY
 `Now serial` MEANS NOW
 
 GIVEN text IS A STRING
 GIVETH AN EITHER STRING NUMBER
-`DateValue serial` text MEANS DATEVALUE text
+`DateValue serial` text MEANS
+    CONSIDER DATEVALUE text
+    WHEN LEFT err THEN LEFT err
+    WHEN RIGHT d THEN RIGHT (DATE_SERIAL d)
 
 GIVEN text IS A STRING
 GIVETH AN EITHER STRING NUMBER
@@ -34,6 +37,18 @@ GIVETH AN EITHER STRING NUMBER
 
 
 §§ `Serial Conversion Helpers`
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+day date MEANS DATE_DAY date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+month date MEANS DATE_MONTH date
+
+GIVEN date IS A DATE
+GIVETH A NUMBER
+year date MEANS DATE_YEAR date
 
 GIVEN date IS A DATE
 GIVETH A NUMBER
@@ -76,7 +91,7 @@ dateFromExcelSerial1904 serial MEANS
 
 GIVETH A DATE
 excelToday MEANS
-    Date `Today serial`
+    TODAY
 
 GIVETH A NUMBER
 excelNow MEANS
@@ -254,21 +269,21 @@ ExcelDays360 startDate endDate european MEANS
         adjustStartDay date MEANS
             IF european
             THEN adjustEuropean date
-            ELSE  IF date's day EQUALS 31
+            ELSE  IF DATE_DAY date EQUALS 31
                   THEN 30
-                  ELSE date's day
+                  ELSE DATE_DAY date
 
         adjustEndDay date startDay MEANS
             IF european
             THEN adjustEuropean date
-            ELSE  IF date's day EQUALS 31 AND startDay AT LEAST 30
+            ELSE  IF DATE_DAY date EQUALS 31 AND startDay AT LEAST 30
                   THEN 30
-                  ELSE date's day
+                  ELSE DATE_DAY date
 
         adjustEuropean date MEANS
-            IF date's day EQUALS 31
+            IF DATE_DAY date EQUALS 31
             THEN 30
-            ELSE date's day
+            ELSE DATE_DAY date
 
 
 

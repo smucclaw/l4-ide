@@ -1,0 +1,11 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+monthmath.l4:8:1-33:
+  RIGHT OF (DATE OF 29, 2, 2024)
+monthmath.l4:9:1-34:
+  RIGHT OF (DATE OF 31, 12, 2023)
+monthmath.l4:10:1-32:
+  RIGHT OF (DATE OF 31, 1, 2024)
+monthmath.l4:11:1-32:
+  RIGHT OF (DATE OF 29, 2, 2024)

@@ -1,0 +1,13 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT `excel-date`
+
+`Start 2012` MEANS Date 1 1 2012
+`Mid 2012`   MEANS Date 1 7 2012
+
+#EVAL DATEDIF `Start 2012` `Mid 2012` "Y"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "M"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "D"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "YM"
+#EVAL DATEDIF `Start 2012` `Mid 2012` "YD"
+#EVAL DATEDIF (Date 1 1 2012) (Date 15 7 2012) "MD"
