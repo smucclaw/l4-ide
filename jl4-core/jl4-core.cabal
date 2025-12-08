@@ -109,3 +109,19 @@ library
     L4.Utils.IntervalMap
     L4.Utils.RevList
     L4.Utils.Ratio
+
+test-suite jl4-core-test
+  import: defaults
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  other-modules:
+    Paths_jl4_core
+    TemporalContextSpec
+  build-tool-depends:
+    hspec-discover:hspec-discover
+  build-depends:
+    base,
+    hspec,
+    jl4-core,
+    time
