@@ -54,6 +54,12 @@ Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick
 cabal test test:jl4-test
 ```
 
+### Test performance note
+
+- The post-temporals `jl4-test` runtime roughly doubled because of new Excel/temporal acceptance files (`ok/excel-date/*.l4`, `ok/temporal-acceptance.l4`, `jl4-core/libraries/temporal-prelude.l4`). Each runs three golden checks and repeatedly loads the large `excel-date`/`daydate` libraries.
+- TDNR-focused cases (`ok/tdnr.l4`, `not-ok/tc/tdnr-ambiguous.l4`, `ok/type-coercion.l4`) show no slowdown; some got faster.
+- If you need faster iterations while working on typechecker changes, temporarily filter tests, e.g. `cabal test jl4-test --test-options='--match "tdnr|type-coercion"'`, or batch the heavy Excel files in a single run to reuse the Shake cache.
+
 ## Run
 
 After a successful build above, quit any running VS Code instances, and launch one from the current directory:
