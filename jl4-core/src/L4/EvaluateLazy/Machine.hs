@@ -1168,6 +1168,7 @@ encodeValueToJson = \case
     | nameToText (TypeCheck.getName conRef) == "NOTHING" -> pure "null"
     | nameToText (TypeCheck.getName conRef) == "TRUE" -> pure "true"
     | nameToText (TypeCheck.getName conRef) == "FALSE" -> pure "false"
+    | otherwise -> pure $ "\"" <> escapeJson (nameToText (TypeCheck.getName conRef)) <> "\""
   -- Note: For constructors with fields, we can't encode them directly within encodeValueToJson
   -- because we need to evaluate (force) each field reference. This requires frames.
   -- So constructors are handled in runBuiltin where we can push frames.
@@ -1512,9 +1513,12 @@ runBuiltin es op mTy = do
                   else
                     let fieldPairs = zip fieldNames fields
                     in case fieldPairs of
-                      [] ->
-                        -- Nullary constructor (no fields)
-                        Backward $ ValString "{}"
+                      [] -> do
+                        -- Nullary constructor (no fields) - encode as JSON string with constructor name
+                        -- This handles enum (ONE OF) values
+                        let conName = nameToText (TypeCheck.getName conRef)
+                        jsonStr <- encodeValueToJson (ValString conName)
+                        Backward $ ValString jsonStr
                       ((fn, fr):rest) -> do
                         -- Start frame-based encoding of fields
                         -- The frame stores: accumulated pairs, current field name being encoded, remaining pairs
