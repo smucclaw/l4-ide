@@ -280,18 +280,18 @@ instance HasClient m api => HasClient m (OperationId desc :> api) where
 
 -- | Parse trace level from header value
 parseTraceHeader :: Maybe BS.ByteString -> Api.TraceLevel
-parseTraceHeader Nothing = Api.TraceFull  -- Default to full trace
+parseTraceHeader Nothing = Api.TraceNone  -- Default to no trace
 parseTraceHeader (Just bs) = case Text.toLower (Text.decodeUtf8 bs) of
   "none" -> Api.TraceNone
   "full" -> Api.TraceFull
-  _ -> Api.TraceFull  -- Default to full on invalid value
+  _ -> Api.TraceNone  -- Default to no trace on invalid value
 
 -- | Determine trace level from header and query param
 -- Header takes precedence over query param
 determineTraceLevel :: Maybe Text -> Maybe Api.TraceLevel -> Api.TraceLevel
 determineTraceLevel (Just headerVal) _ = parseTraceHeader (Just $ Text.encodeUtf8 headerVal)
 determineTraceLevel Nothing (Just paramVal) = paramVal
-determineTraceLevel Nothing Nothing = Api.TraceFull  -- Default
+determineTraceLevel Nothing Nothing = Api.TraceNone  -- Default to no trace
 
 -- TODO: this has become redundant
 data EvalBackend
