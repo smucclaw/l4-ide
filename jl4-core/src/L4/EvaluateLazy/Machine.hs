@@ -1151,6 +1151,19 @@ extractFieldNamesAndTypes ty = case ty of
         Just name -> Just (nameToText (TypeCheck.getName name), fieldType)
         Nothing -> Nothing
 
+-- | Check if a constructor type is nullary (no arguments) and returns the given type
+-- Used for enum (ONE OF) type detection
+isNullaryConstructorReturning :: Type' Resolved -> Resolved -> Bool
+isNullaryConstructorReturning conType targetTypeRef = case conType of
+  -- Strip forall quantifier if present
+  Forall _ _ innerTy -> isNullaryConstructorReturning innerTy targetTypeRef
+  -- If it's a function type, it's not nullary
+  Fun {} -> False
+  -- If it's directly a type application, check if it matches our target
+  TyApp _ tyRef [] -> getUnique tyRef == getUnique targetTypeRef
+  -- Other cases: not a match
+  _ -> False
+
 -- | Encode an L4 value to JSON string
 encodeValueToJson :: WHNF -> Machine Text
 encodeValueToJson = \case
@@ -1274,8 +1287,29 @@ jsonValueToWHNFTyped jsonValue ty = do
                     ]
 
               case matchingConstructor of
-                Nothing ->
-                  jsonValueToWHNF jsonValue
+                Nothing -> do
+                  -- No record constructor found. Check if this is an enum type
+                  -- by looking for nullary constructors that return this type.
+                  case jsonValue of
+                    Aeson.String enumName -> do
+                      -- Look for a nullary constructor with this name that returns tyRef
+                      let enumConstructor = listToMaybe
+                            [ (unique, name)
+                            | (unique, (name, TypeCheck.KnownTerm conType Constructor)) <- constructors
+                            , nameToText (TypeCheck.getName name) == enumName
+                            , isNullaryConstructorReturning conType tyRef
+                            ]
+                      case enumConstructor of
+                        Just (enumUnique, enumConName) -> do
+                          -- Found a matching enum constructor
+                          let enumRef = Def enumUnique enumConName
+                          pure $ ValConstructor enumRef []
+                        Nothing ->
+                          -- No matching enum constructor, fall back to generic decoding
+                          jsonValueToWHNF jsonValue
+                    _ ->
+                      -- Not a string, fall back to generic decoding
+                      jsonValueToWHNF jsonValue
                 Just (conUnique, conName, conType) -> do
                   -- Construct a Resolved reference for the constructor
                   let conRef = Def conUnique conName
