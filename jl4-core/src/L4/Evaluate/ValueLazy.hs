@@ -84,6 +84,14 @@ data UnaryBuiltinFun
   | UnaryFloor
   | UnaryPercent
   | UnarySqrt            -- NUMBER → NUMBER (square root)
+  | UnaryLn              -- NUMBER → NUMBER (natural log, positive domain)
+  | UnaryLog10           -- NUMBER → NUMBER (base-10 log, positive domain)
+  | UnarySin             -- NUMBER → NUMBER (sine)
+  | UnaryCos             -- NUMBER → NUMBER (cosine)
+  | UnaryTan             -- NUMBER → NUMBER (tangent)
+  | UnaryAsin            -- NUMBER → NUMBER (arcsine, [-1,1] domain)
+  | UnaryAcos            -- NUMBER → NUMBER (arccosine, [-1,1] domain)
+  | UnaryAtan            -- NUMBER → NUMBER (arctangent)
   -- String unary functions
   | UnaryStringLength    -- STRING → NUMBER
   | UnaryToUpper         -- STRING → STRING
@@ -158,6 +166,14 @@ instance NFData UnaryBuiltinFun where
   rnf UnaryFloor = ()
   rnf UnaryPercent = ()
   rnf UnarySqrt = ()
+  rnf UnaryLn = ()
+  rnf UnaryLog10 = ()
+  rnf UnarySin = ()
+  rnf UnaryCos = ()
+  rnf UnaryTan = ()
+  rnf UnaryAsin = ()
+  rnf UnaryAcos = ()
+  rnf UnaryAtan = ()
   rnf UnaryStringLength = ()
   rnf UnaryToUpper = ()
   rnf UnaryToLower = ()
