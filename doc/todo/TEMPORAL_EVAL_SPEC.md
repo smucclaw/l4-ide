@@ -182,7 +182,7 @@ mechanical application suffices. But he'd warn:
 He might critique the transformation approach:
 
 > "You allow humans to declare transformations, but you provide no theory of which
-> transformations are *correct*. Without a theory of political morality underlying
+> transformations are _correct_. Without a theory of political morality underlying
 > the law, you're just delegating the hard question."
 
 #### Legal Realism (Holmes, Llewellyn)
@@ -216,13 +216,13 @@ A seasoned **legislative drafter** would nod knowingly:
 
 They might point to specific mechanisms:
 
-| Legislative Device | L4 Equivalent |
-|-------------------|---------------|
-| Interpretation Acts | Standing SemanticTransformations |
-| "For the purposes of this Act" definitions | `tcInterpretivePurpose` |
-| "Notwithstanding any other provision" | Override clauses in EVAL |
-| "Subject to section X" | Dependency/priority ordering |
-| Henry VIII clauses | Runtime transformation authority |
+| Legislative Device                         | L4 Equivalent                    |
+| ------------------------------------------ | -------------------------------- |
+| Interpretation Acts                        | Standing SemanticTransformations |
+| "For the purposes of this Act" definitions | `tcInterpretivePurpose`          |
+| "Notwithstanding any other provision"      | Override clauses in EVAL         |
+| "Subject to section X"                     | Dependency/priority ordering     |
+| Henry VIII clauses                         | Runtime transformation authority |
 
 But they'd also warn:
 
@@ -256,10 +256,10 @@ A **senior appellate judge** might say:
 But they'd raise concerns:
 
 > "The transformation must have **authority**. I can declare that 'spouse' includes
-> same-sex partners because *Parliament* said so in the Marriage Act, or because
-> the *Supreme Court* said so in a binding precedent. Your system tracks which
-> transformation was applied, but does it verify the transformation is *legally
-> authorized* in this jurisdiction, for this purpose, at this time?"
+> same-sex partners because _Parliament_ said so in the Marriage Act, or because
+> the _Supreme Court_ said so in a binding precedent. Your system tracks which
+> transformation was applied, but does it verify the transformation is _legally
+> authorized_ in this jurisdiction, for this purpose, at this time?"
 
 #### Canons of Construction
 
@@ -267,19 +267,20 @@ They'd recognize the "interpretive purpose" pattern:
 
 > "We call this **purposive interpretation** or the **mischief rule** — what problem
 > was Parliament trying to solve? But we also have competing canons:
-> - *Expressio unius est exclusio alterius* (expressing one thing excludes others)
-> - *Ejusdem generis* (general words limited by specific ones)
-> - *In pari materia* (statutes on same subject interpreted together)
+>
+> - _Expressio unius est exclusio alterius_ (expressing one thing excludes others)
+> - _Ejusdem generis_ (general words limited by specific ones)
+> - _In pari materia_ (statutes on same subject interpreted together)
 >
 > Your system assumes a single 'purpose' in the evaluation context. But canons
-> often conflict, and choosing between them *is* the judicial function."
+> often conflict, and choosing between them _is_ the judicial function."
 
 #### The Living Tree vs Originalism Debate
 
 A **Canadian jurist** might invoke the "living tree" doctrine:
 
 > "The constitution must be interpreted as a 'living tree capable of growth within
-> its natural limits.' Your transformations formalize this — we *expect* meaning
+> its natural limits.' Your transformations formalize this — we _expect_ meaning
 > to evolve. The question is whether growth is within 'natural limits.'"
 
 An **American originalist** might object:
@@ -308,8 +309,8 @@ An **American originalist** might object:
 **Catharine MacKinnon** might observe:
 
 > "The 'husband/wife' example is telling. The 'spirit' of those old rules often
-> *was* to exclude women from economic independence. Retrofitting 'spouse' may
-> perpetuate structural biases that were *features*, not bugs, of the original
+> _was_ to exclude women from economic independence. Retrofitting 'spouse' may
+> perpetuate structural biases that were _features_, not bugs, of the original
 > design. Sometimes the correct transformation is to **reject** the old rule's
 > spirit entirely, not to extend it."
 
@@ -334,8 +335,8 @@ If we brought these perspectives together, they might agree on several points:
 1. **The gap is real**: Letter and spirit genuinely diverge, and pretending otherwise
    is naive.
 
-2. **Mechanization has limits**: Formal systems can *apply* transformations but cannot
-   *generate* or *validate* them without normative input.
+2. **Mechanization has limits**: Formal systems can _apply_ transformations but cannot
+   _generate_ or _validate_ them without normative input.
 
 3. **Authority matters**: A transformation must be legally authorized — by statute,
    precedent, or legitimate interpretive method.
@@ -348,12 +349,12 @@ If we brought these perspectives together, they might agree on several points:
 
 #### Points of Disagreement
 
-| Issue | Progressive View | Conservative View |
-|-------|-----------------|-------------------|
-| Default behavior | Apply spirit-preserving transformations | Stick to letter; require explicit authorization |
-| Who decides transformations | Courts, evolving with society | Legislature, democratically accountable |
-| Historical rules | Interpret charitably | Apply as written; let legislature fix |
-| Ambiguity | Resolve in favor of purpose | Resolve in favor of rule-of-law predictability |
+| Issue                       | Progressive View                        | Conservative View                               |
+| --------------------------- | --------------------------------------- | ----------------------------------------------- |
+| Default behavior            | Apply spirit-preserving transformations | Stick to letter; require explicit authorization |
+| Who decides transformations | Courts, evolving with society           | Legislature, democratically accountable         |
+| Historical rules            | Interpret charitably                    | Apply as written; let legislature fix           |
+| Ambiguity                   | Resolve in favor of purpose             | Resolve in favor of rule-of-law predictability  |
 
 ---
 
@@ -379,10 +380,10 @@ The jurisprudential perspectives suggest L4 should:
 
 ### References for Further Reading
 
-- Hart, H.L.A. (1961). *The Concept of Law*. Oxford University Press. (esp. Ch. VII on open texture)
-- Dworkin, R. (1986). *Law's Empire*. Harvard University Press. (constructive interpretation)
-- Llewellyn, K. (1950). "Remarks on the Theory of Appellate Decision." *Vanderbilt Law Review*.
-- Fuller, L. (1958). "Positivism and Fidelity to Law." *Harvard Law Review*.
-- Scalia, A. (1997). *A Matter of Interpretation*. Princeton University Press. (textualism)
-- Kennedy, D. (1976). "Form and Substance in Private Law Adjudication." *Harvard Law Review*.
-- Eskridge, W. (1994). *Dynamic Statutory Interpretation*. Harvard University Press.
+- Hart, H.L.A. (1961). _The Concept of Law_. Oxford University Press. (esp. Ch. VII on open texture)
+- Dworkin, R. (1986). _Law's Empire_. Harvard University Press. (constructive interpretation)
+- Llewellyn, K. (1950). "Remarks on the Theory of Appellate Decision." _Vanderbilt Law Review_.
+- Fuller, L. (1958). "Positivism and Fidelity to Law." _Harvard Law Review_.
+- Scalia, A. (1997). _A Matter of Interpretation_. Princeton University Press. (textualism)
+- Kennedy, D. (1976). "Form and Substance in Private Law Adjudication." _Harvard Law Review_.
+- Eskridge, W. (1994). _Dynamic Statutory Interpretation_. Harvard University Press.
