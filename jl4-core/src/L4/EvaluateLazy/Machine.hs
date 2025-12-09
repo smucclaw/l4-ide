@@ -1648,13 +1648,39 @@ runBuiltin es op mTy = do
     -- Numeric unary operations (catch-all)
     _ -> do
       val :: Rational <- expectNumber es
-      Backward case op of
-        UnaryIsInteger -> valBool $ isJust $ isInteger val
-        UnaryRound -> valInt $ round val
-        UnaryCeiling -> valInt $ ceiling val
-        UnaryFloor -> valInt $ floor val
-        UnaryPercent -> ValNumber (val / 100)
-        UnarySqrt -> ValNumber (toRational (sqrt (fromRational val :: Double)))
+      let valDouble :: Double
+          valDouble = fromRational val
+      case op of
+        UnaryLn ->
+          if val <= 0
+            then InternalException $ RuntimeTypeError "LN expects input greater than 0"
+            else Backward $ ValNumber (toRational (log valDouble))
+        UnaryLog10 ->
+          if val <= 0
+            then InternalException $ RuntimeTypeError "LOG10 expects input greater than 0"
+            else Backward $ ValNumber (toRational (logBase 10 valDouble))
+        UnarySin ->
+          Backward $ ValNumber (toRational (sin valDouble))
+        UnaryCos ->
+          Backward $ ValNumber (toRational (cos valDouble))
+        UnaryTan ->
+          Backward $ ValNumber (toRational (tan valDouble))
+        UnaryAsin ->
+          if val < (-1) || val > 1
+            then InternalException $ RuntimeTypeError "ASIN expects input between -1 and 1"
+            else Backward $ ValNumber (toRational (asin valDouble))
+        UnaryAcos ->
+          if val < (-1) || val > 1
+            then InternalException $ RuntimeTypeError "ACOS expects input between -1 and 1"
+            else Backward $ ValNumber (toRational (acos valDouble))
+        UnaryAtan ->
+          Backward $ ValNumber (toRational (atan valDouble))
+        UnaryIsInteger -> Backward $ valBool $ isJust $ isInteger val
+        UnaryRound -> Backward $ valInt $ round val
+        UnaryCeiling -> Backward $ valInt $ ceiling val
+        UnaryFloor -> Backward $ valInt $ floor val
+        UnaryPercent -> Backward $ ValNumber (val / 100)
+        UnarySqrt -> Backward $ ValNumber (toRational (sqrt valDouble))
   where
     valInt :: Integer -> WHNF
     valInt = ValNumber . toRational
@@ -2308,6 +2334,14 @@ initialEnvironment = do
   ceilingRef <- AllocateValue (ValUnaryBuiltinFun UnaryCeiling)
   floorRef <- AllocateValue (ValUnaryBuiltinFun UnaryFloor)
   sqrtRef <- AllocateValue (ValUnaryBuiltinFun UnarySqrt)
+  lnRef <- AllocateValue (ValUnaryBuiltinFun UnaryLn)
+  log10Ref <- AllocateValue (ValUnaryBuiltinFun UnaryLog10)
+  sinRef <- AllocateValue (ValUnaryBuiltinFun UnarySin)
+  cosRef <- AllocateValue (ValUnaryBuiltinFun UnaryCos)
+  tanRef <- AllocateValue (ValUnaryBuiltinFun UnaryTan)
+  asinRef <- AllocateValue (ValUnaryBuiltinFun UnaryAsin)
+  acosRef <- AllocateValue (ValUnaryBuiltinFun UnaryAcos)
+  atanRef <- AllocateValue (ValUnaryBuiltinFun UnaryAtan)
   -- String unary builtins
   stringLengthRef <- AllocateValue (ValUnaryBuiltinFun UnaryStringLength)
   toUpperRef <- AllocateValue (ValUnaryBuiltinFun UnaryToUpper)
@@ -2377,6 +2411,14 @@ initialEnvironment = do
       , (TypeCheck.ceilingUnique, ceilingRef)
       , (TypeCheck.floorUnique, floorRef)
       , (TypeCheck.sqrtUnique, sqrtRef)
+      , (TypeCheck.lnUnique, lnRef)
+      , (TypeCheck.log10Unique, log10Ref)
+      , (TypeCheck.sinUnique, sinRef)
+      , (TypeCheck.cosUnique, cosRef)
+      , (TypeCheck.tanUnique, tanRef)
+      , (TypeCheck.asinUnique, asinRef)
+      , (TypeCheck.acosUnique, acosRef)
+      , (TypeCheck.atanUnique, atanRef)
       , (TypeCheck.fetchUnique, fetchRef)
       , (TypeCheck.envUnique, envRef)
       , (TypeCheck.jsonEncodeUnique, jsonEncodeRef)
