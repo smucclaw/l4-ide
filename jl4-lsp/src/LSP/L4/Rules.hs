@@ -285,8 +285,8 @@ jl4Rules evalConfig rootDirectory recorder = do
         -- Generate candidate URIs to check in VFS
         mkCandidateVfsUris :: String -> [NormalizedUri]
         mkCandidateVfsUris modName =
-          let -- Standard project:/// URI scheme used by Monaco
-              projectUri = toNormalizedUri $ Uri $ Text.pack $ "project:///" <> modName <.> "l4"
+          let -- Standard project:/ URI scheme used by Monaco
+              projectUri = toNormalizedUri $ Uri $ Text.pack $ "project:/" <> modName <.> "l4"
               -- file:/// URI relative to current file's directory (if applicable)
               relativeUri = do
                 nfp <- uriToNormalizedFilePath uri
