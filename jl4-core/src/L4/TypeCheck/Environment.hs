@@ -42,6 +42,14 @@ mkBuiltins
   , "ceiling" `rename` "CEILING"
   , "round" `rename` "ROUND"
   , "sqrt" `rename` "SQRT"
+  , "ln" `rename` "LN"
+  , "log10" `rename` "LOG10"
+  , "sin" `rename` "SIN"
+  , "cos" `rename` "COS"
+  , "tan" `rename` "TAN"
+  , "asin" `rename` "ASIN"
+  , "acos" `rename` "ACOS"
+  , "atan" `rename` "ATAN"
   , "exponent" `rename` "EXPONENT"
   , "waitUntil" `rename`  "WAIT UNTIL"
   , "fetch" `rename` "FETCH"
@@ -171,6 +179,30 @@ floorBuiltin = fun_ [number] number
 
 sqrtBuiltin :: Type' Resolved
 sqrtBuiltin = fun_ [number] number
+
+lnBuiltin :: Type' Resolved
+lnBuiltin = fun_ [number] number
+
+log10Builtin :: Type' Resolved
+log10Builtin = fun_ [number] number
+
+sinBuiltin :: Type' Resolved
+sinBuiltin = fun_ [number] number
+
+cosBuiltin :: Type' Resolved
+cosBuiltin = fun_ [number] number
+
+tanBuiltin :: Type' Resolved
+tanBuiltin = fun_ [number] number
+
+asinBuiltin :: Type' Resolved
+asinBuiltin = fun_ [number] number
+
+acosBuiltin :: Type' Resolved
+acosBuiltin = fun_ [number] number
+
+atanBuiltin :: Type' Resolved
+atanBuiltin = fun_ [number] number
 
 exponentBuiltin :: Type' Resolved
 exponentBuiltin = binOpFun
@@ -493,6 +525,38 @@ sqrtInfo :: CheckEntity
 sqrtInfo =
   KnownTerm sqrtBuiltin Computable
 
+lnInfo :: CheckEntity
+lnInfo =
+  KnownTerm lnBuiltin Computable
+
+log10Info :: CheckEntity
+log10Info =
+  KnownTerm log10Builtin Computable
+
+sinInfo :: CheckEntity
+sinInfo =
+  KnownTerm sinBuiltin Computable
+
+cosInfo :: CheckEntity
+cosInfo =
+  KnownTerm cosBuiltin Computable
+
+tanInfo :: CheckEntity
+tanInfo =
+  KnownTerm tanBuiltin Computable
+
+asinInfo :: CheckEntity
+asinInfo =
+  KnownTerm asinBuiltin Computable
+
+acosInfo :: CheckEntity
+acosInfo =
+  KnownTerm acosBuiltin Computable
+
+atanInfo :: CheckEntity
+atanInfo =
+  KnownTerm atanBuiltin Computable
+
 exponentInfo :: CheckEntity
 exponentInfo =
   KnownTerm exponentBuiltin Computable
@@ -737,6 +801,14 @@ initialEnvironment =
     , (rawName ceilingName,      [ceilingUnique   ])
     , (rawName floorName,        [floorUnique     ])
     , (rawName sqrtName,         [sqrtUnique      ])
+    , (rawName lnName,           [lnUnique        ])
+    , (rawName log10Name,        [log10Unique     ])
+    , (rawName sinName,          [sinUnique       ])
+    , (rawName cosName,          [cosUnique       ])
+    , (rawName tanName,          [tanUnique       ])
+    , (rawName asinName,         [asinUnique      ])
+    , (rawName acosName,         [acosUnique      ])
+    , (rawName atanName,         [atanUnique      ])
     , (rawName exponentName,     [exponentUnique  ])
     , (rawName fetchName,        [fetchUnique     ])
     , (rawName envName,          [envUnique       ])
@@ -826,6 +898,14 @@ initialEntityInfo =
     , (ceilingUnique,      (ceilingName,      ceilingInfo     ))
     , (floorUnique,        (floorName,        floorInfo       ))
     , (sqrtUnique,         (sqrtName,         sqrtInfo        ))
+    , (lnUnique,           (lnName,           lnInfo          ))
+    , (log10Unique,        (log10Name,        log10Info       ))
+    , (sinUnique,          (sinName,          sinInfo         ))
+    , (cosUnique,          (cosName,          cosInfo         ))
+    , (tanUnique,          (tanName,          tanInfo         ))
+    , (asinUnique,         (asinName,         asinInfo        ))
+    , (acosUnique,         (acosName,         acosInfo        ))
+    , (atanUnique,         (atanName,         atanInfo        ))
     , (exponentUnique,     (exponentName,     exponentInfo    ))
     , (fetchUnique,        (fetchName,        fetchInfo       ))
     , (envUnique,          (envName,          envInfo         ))
