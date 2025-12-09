@@ -7,6 +7,7 @@ This directory contains Emacs configuration for L4 language support with LSP int
 1. **Emacs Prelude** - This guide assumes you're using [Emacs Prelude](https://github.com/bbatsov/prelude)
 
 2. **Install jl4-lsp**:
+
    ```bash
    cabal install exe:jl4-lsp --overwrite-policy=always
    ```
@@ -49,6 +50,7 @@ Once configured, you'll have access to:
 ### LSP server not starting
 
 Check that `jl4-lsp` is on your PATH:
+
 ```bash
 which jl4-lsp
 ```
@@ -88,6 +90,7 @@ If you're not using Prelude, or prefer eglot (built into Emacs 29+), add to your
 ```
 
 For eglot debugging:
+
 - View events: `M-x eglot-events-buffer`
 - View stderr: `M-x eglot-stderr-buffer`
 
