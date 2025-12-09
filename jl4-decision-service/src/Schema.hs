@@ -48,7 +48,7 @@ instance ToParamSchema TraceLevel where
   toParamSchema _ = mempty
     & type_ ?~ OpenApiString
     & enum_ ?~ ["none", "full"]
-    & description ?~ "Control evaluation trace detail level. 'none' returns only results, 'full' returns results with trace (default)."
+    & description ?~ "Control evaluation trace detail level. 'none' (default) returns only results, 'full' returns results with trace."
 
 instance ToSchema SimpleFunction where
   declareNamedSchema _ = do
