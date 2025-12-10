@@ -142,6 +142,7 @@ paramToParameter param =
     , parameterAlias = Nothing
     , parameterEnum = []
     , parameterDescription = T.strip $ fromMaybe "" param.paramDescription
+    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
     }
 
 typeToJsonType :: Maybe (Type' Resolved) -> Text

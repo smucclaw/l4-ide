@@ -101,7 +101,7 @@ instance Arbitrary Parameters where
     pure $ MkParameters params (Map.keys params)
 
 instance Arbitrary Parameter where
-  arbitrary = Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Parameter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary Function where
   arbitrary = Server.Function <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
