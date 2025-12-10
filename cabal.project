@@ -2,6 +2,7 @@ packages:
   ./jl4
   ./jl4-core
   ./jl4-lsp
+  ./jl4-repl
   ./jl4-decision-service
   ./jl4-websessions
 
