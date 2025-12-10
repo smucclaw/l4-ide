@@ -718,7 +718,7 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
   -- need to change the description of the parameters as soon as we have it in the Decide
   MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
     let argInfo = lookup x bestEffortArgInfo
-     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo))) argList, required = argList}
+     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo) Nothing)) argList, required = argList}
  where
   bestEffortArgInfo = foldr fn [] args
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
