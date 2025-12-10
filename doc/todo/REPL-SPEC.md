@@ -9,6 +9,7 @@
 ## Implementation Status
 
 ### Completed (Phase 1 MVP + Phase 2 enhancements)
+
 - ✅ `jl4-repl` package created in `jl4-repl/`
 - ✅ Basic REPL loop with `haskeline`
 - ✅ `:quit`, `:help`, `:load`, `:reload` commands
@@ -26,6 +27,7 @@
 - ✅ `:import` / `:i` and `IMPORT <lib>` for session imports
 
 ### Working Demo
+
 ```bash
 # Build and run (no stderr spam!)
 cabal build jl4-repl
@@ -55,11 +57,13 @@ Goodbye!
 ```
 
 ### Known Issues
+
 - Multi-line input not handled
 - Tab completion not implemented
 - Session-defined bindings not yet supported
 
 ### Next Steps (Phase 3)
+
 - Add session-defined bindings (`DECIDE foo IS 42` at prompt)
 - Tab completion for names in scope
 - Multi-line input handling
@@ -72,11 +76,11 @@ We propose adding an interactive REPL to the L4 toolchain. The REPL keeps loaded
 
 ### Current Pain Points
 
-| Interaction Mode | Startup Cost | Use Case |
-|------------------|--------------|----------|
-| `jl4-cli` | High (reloads all imports) | Batch processing, CI |
-| LSP/IDE | Medium (initial load) | Full editing experience |
-| Decision Service | High (per-request) | API endpoints |
+| Interaction Mode | Startup Cost               | Use Case                |
+| ---------------- | -------------------------- | ----------------------- |
+| `jl4-cli`        | High (reloads all imports) | Batch processing, CI    |
+| LSP/IDE          | Medium (initial load)      | Full editing experience |
+| Decision Service | High (per-request)         | API endpoints           |
 
 **Problem**: When iterating on L4 expressions—testing a function with different inputs, exploring type behavior, or debugging—the overhead of reloading standard libraries on every invocation creates friction.
 
@@ -131,6 +135,7 @@ jl4> premium GIVEN age IS 30 AND smoker IS FALSE
 The REPL accepts:
 
 1. **Bare expressions** (most common):
+
    ```
    jl4> 2 + 3
    jl4> foo GIVEN x IS 42
@@ -138,12 +143,14 @@ The REPL accepts:
    ```
 
 2. **Explicit #EVAL** (for consistency with .l4 files):
+
    ```
    jl4> #EVAL 2 + 3
    jl4> #EVALTRACE factorial 5
    ```
 
 3. **Multi-line input** (using `# ` continuation, matching directive syntax):
+
    ```
    jl4> someComplexExpression
    # > AND anotherPart
@@ -152,6 +159,7 @@ The REPL accepts:
    ```
 
 4. **Top-level definitions** (session-local):
+
    ```
    jl4> DECIDE myDouble x IS x * 2
    Defined: myDouble :: NUMBER -> NUMBER
@@ -161,13 +169,14 @@ The REPL accepts:
    ```
 
 5. **Pasted program text** (mixed definitions and directives):
+
    ```
    jl4> DECIDE triple x IS x * 3
    Defined: triple :: NUMBER -> NUMBER
-   
+
    jl4> #EVAL triple 10
    30
-   
+
    jl4> #CHECK triple 7 EQUALS 21
    PASS: triple 7 EQUALS 21
    ```
@@ -177,6 +186,7 @@ The REPL accepts:
 L4 expressions and definitions often span multiple lines. The REPL must handle this gracefully, especially for pasted content where newlines shouldn't trigger premature submission.
 
 **The problem:**
+
 ```l4
 -- This is common L4 code that spans multiple lines:
 #EVAL computePremium
@@ -186,7 +196,7 @@ L4 expressions and definitions often span multiple lines. The REPL must handle t
 
 -- Or definitions:
 GIVEN n IS A NUMBER
-GIVETH A NUMBER  
+GIVETH A NUMBER
 DECIDE factorial IS
   IF n EQUALS 0
   THEN 1
@@ -205,12 +215,12 @@ Modern terminal UI frameworks distinguish between keyboard input and paste opera
 
 **Framework options for Haskell:**
 
-| Framework | Paste Support | Notes |
-|-----------|---------------|-------|
-| `haskeline` | Bracketed paste mode | Escape-sequence based, widely supported |
-| `brick` | `EvPaste` event type | Direct paste detection via vty |
-| `vty` (low-level) | `EvPaste ByteString` | Raw paste events |
-| Custom (via FFI) | Platform-specific | macOS/Linux clipboard APIs |
+| Framework         | Paste Support        | Notes                                   |
+| ----------------- | -------------------- | --------------------------------------- |
+| `haskeline`       | Bracketed paste mode | Escape-sequence based, widely supported |
+| `brick`           | `EvPaste` event type | Direct paste detection via vty          |
+| `vty` (low-level) | `EvPaste ByteString` | Raw paste events                        |
+| Custom (via FFI)  | Platform-specific    | macOS/Linux clipboard APIs              |
 
 **Recommended: `brick` or `vty`**
 
@@ -225,14 +235,14 @@ handleEvent event state = case event of
   EvPaste bytes -> do
     let text = decodeUtf8 bytes
     processPastedContent state text
-  
+
   -- Regular key press
-  EvKey KEnter [] -> 
+  EvKey KEnter [] ->
     submitCurrentLine state
-  
+
   EvKey (KChar c) [] ->
     appendChar state c
-  
+
   _ -> pure state
 
 -- Pasted content is processed as a unit, not line-by-line
@@ -250,7 +260,7 @@ If using `haskeline` (simpler but less control), enable bracketed paste mode:
 import System.Console.Haskeline
 
 settings :: Settings IO
-settings = defaultSettings 
+settings = defaultSettings
   { historyFile = Just "~/.jl4_history"
   , autoAddHistory = True
   }
@@ -261,13 +271,14 @@ settings = defaultSettings
 
 **Why this matters:**
 
-| Input Method | What Happens |
-|--------------|--------------|
-| Type `foo` + Enter | `EvKey KEnter` → submit "foo" immediately |
-| Paste `foo\nbar\nbaz` | `EvPaste "foo\nbar\nbaz"` → process as unit |
+| Input Method            | What Happens                                         |
+| ----------------------- | ---------------------------------------------------- |
+| Type `foo` + Enter      | `EvKey KEnter` → submit "foo" immediately            |
+| Paste `foo\nbar\nbaz`   | `EvPaste "foo\nbar\nbaz"` → process as unit          |
 | Type `foo`, paste `bar` | `EvKey` × 3, then `EvPaste "bar"` → correct handling |
 
 This means:
+
 - **Typed newlines** = submit immediately
 - **Pasted newlines** = soft line breaks within a block
 
@@ -276,6 +287,7 @@ This means:
 For interactive (non-pasted) input, the REPL detects incomplete expressions and prompts for continuation:
 
 **Incomplete indicators:**
+
 - Unclosed brackets: `(`, `[`, `{`
 - Trailing operators: `AND`, `OR`, `+`, etc.
 - Continuation marker: line starting with `# `
@@ -300,10 +312,10 @@ data ContinuationReason
   | TrailingOperator Text            -- AND, OR, +, etc.
   | ContinuationMarker               -- Line starts with #
   | IndentedBlock                    -- Definition with indented body
-  | ExplicitContinuation             -- User typed :{ 
+  | ExplicitContinuation             -- User typed :{
 
 detectIncomplete :: Text -> InputState
-detectIncomplete input = 
+detectIncomplete input =
   case (hasUnclosedBrackets input, hasTrailingOperator input, endsWithContinuation input) of
     (Just c, _, _)     -> Incomplete input (UnclosedBracket c)
     (_, Just op, _)    -> Incomplete input (TrailingOperator op)
@@ -344,6 +356,7 @@ DECIDE bar IS foo * 2
 ```
 
 This is processed as four separate blocks:
+
 1. Definition of `foo`
 2. Evaluation of `foo + 1`
 3. Definition of `bar`
@@ -352,8 +365,8 @@ This is processed as four separate blocks:
 ```haskell
 -- Split pasted content into blocks
 splitOnBlankLines :: Text -> [Text]
-splitOnBlankLines = 
-  filter (not . Text.null . Text.strip) 
+splitOnBlankLines =
+  filter (not . Text.null . Text.strip)
   . Text.splitOn "\n\n"
 
 -- Process blocks sequentially, accumulating state
@@ -382,7 +395,7 @@ Terminal Event
     │   │
     │   ├─ Current input incomplete?
     │   │   ├─ Unclosed bracket → Show "...>" prompt, accumulate
-    │   │   ├─ Trailing operator → Show "...>" prompt, accumulate  
+    │   │   ├─ Trailing operator → Show "...>" prompt, accumulate
     │   │   ├─ Next line starts with "# " → Append, continue
     │   │   └─ Indented (for defs) → Show "...>" prompt, accumulate
     │   │
@@ -396,6 +409,7 @@ Terminal Event
 **Key insight:** The distinction between "paste" and "type Enter" is made at the **event level**, not by timing heuristics or escape sequences. Modern terminal libraries provide this directly.
 
 **Cross-platform note:** This event-based approach works consistently across:
+
 - macOS Terminal, iTerm2
 - Linux (GNOME Terminal, Konsole, Alacritty)
 - Windows Terminal, ConEmu
@@ -427,13 +441,13 @@ Input                          → Classification      → Action
 
 **Examples of equivalence:**
 
-| REPL input | Treated as |
-|------------|------------|
-| `2 + 3` | `#EVAL 2 + 3` |
-| `#EVAL 2 + 3` | `#EVAL 2 + 3` |
-| `foo GIVEN x IS 5` | `#EVAL foo GIVEN x IS 5` |
-| `#CHECK foo GIVEN x IS 5 EQUALS 10` | (check directive) |
-| `DECIDE bar IS 42` | (session definition) |
+| REPL input                          | Treated as               |
+| ----------------------------------- | ------------------------ |
+| `2 + 3`                             | `#EVAL 2 + 3`            |
+| `#EVAL 2 + 3`                       | `#EVAL 2 + 3`            |
+| `foo GIVEN x IS 5`                  | `#EVAL foo GIVEN x IS 5` |
+| `#CHECK foo GIVEN x IS 5 EQUALS 10` | (check directive)        |
+| `DECIDE bar IS 42`                  | (session definition)     |
 
 **Preprocessing function:**
 
@@ -452,12 +466,12 @@ classifyInput input
   | otherwise                      = ReplBareExpr <$> parseExpr input
   where
     stripped = Text.strip input
-    
+
 startsWithDirective :: Text -> Bool
 startsWithDirective t = any (`Text.isPrefixOf` Text.toUpper (Text.strip t))
   ["#EVAL", "#EVALTRACE", "#CHECK", "#ASSERT", "#CONTRACT"]
 
-startsWithDefinition :: Text -> Bool  
+startsWithDefinition :: Text -> Bool
 startsWithDefinition t = any (`Text.isPrefixOf` Text.toUpper (Text.strip t))
   ["DECIDE", "MEANS", "ASSUME", "DECLARE", "GIVEN"]
 ```
@@ -466,12 +480,12 @@ startsWithDefinition t = any (`Text.isPrefixOf` Text.toUpper (Text.strip t))
 
 The `#EVAL` family of directives are "both program text and expressions" - they appear in `.l4` files but their purpose is evaluation. The REPL treats them uniformly:
 
-| Directive | REPL behavior |
-|-----------|---------------|
-| `#EVAL <expr>` | Evaluate `<expr>`, print result |
-| `#EVALTRACE <expr>` | Evaluate with step-by-step trace |
-| `#CHECK <expr>` | Evaluate, print `PASS` if truthy, `FAIL` if falsy |
-| `#ASSERT <expr>` | Evaluate, silent if truthy, error message if falsy |
+| Directive           | REPL behavior                                      |
+| ------------------- | -------------------------------------------------- |
+| `#EVAL <expr>`      | Evaluate `<expr>`, print result                    |
+| `#EVALTRACE <expr>` | Evaluate with step-by-step trace                   |
+| `#CHECK <expr>`     | Evaluate, print `PASS` if truthy, `FAIL` if falsy  |
+| `#ASSERT <expr>`    | Evaluate, silent if truthy, error message if falsy |
 
 This means you can copy an entire block from a `.l4` file:
 
@@ -479,7 +493,7 @@ This means you can copy an entire block from a `.l4` file:
 -- Paste this whole block into the REPL:
 DECIDE factorial n IS
   IF n EQUALS 0
-  THEN 1  
+  THEN 1
   ELSE n * factorial (n - 1)
 
 #EVAL factorial 5
@@ -487,10 +501,11 @@ DECIDE factorial n IS
 ```
 
 And the REPL processes each piece appropriately:
+
 ```
 jl4> DECIDE factorial n IS
    >   IF n EQUALS 0
-   >   THEN 1  
+   >   THEN 1
    >   ELSE n * factorial (n - 1)
 Defined: factorial :: NUMBER -> NUMBER
 
@@ -505,21 +520,22 @@ PASS: factorial 5 EQUALS 120
 
 Commands start with `:` (colon) to distinguish from L4 expressions:
 
-| Command | Short | Description |
-|---------|-------|-------------|
-| `:help` | `:h` | Show help |
-| `:quit` | `:q` | Exit REPL |
-| `:load <file>` | `:l` | Load a file into context |
-| `:reload` | `:r` | Reload all loaded files |
-| `:type <expr>` | `:t` | Show type of expression (don't evaluate) |
-| `:info <name>` | `:i` | Show definition/type of a name |
-| `:env` | `:e` | List names in scope |
-| `:clear` | | Clear session-defined bindings |
-| `:reset` | | Reset to initial state (reload everything) |
-| `:set <option>` | | Set REPL options |
-| `:trace` | | Toggle evaluation tracing |
+| Command         | Short | Description                                |
+| --------------- | ----- | ------------------------------------------ |
+| `:help`         | `:h`  | Show help                                  |
+| `:quit`         | `:q`  | Exit REPL                                  |
+| `:load <file>`  | `:l`  | Load a file into context                   |
+| `:reload`       | `:r`  | Reload all loaded files                    |
+| `:type <expr>`  | `:t`  | Show type of expression (don't evaluate)   |
+| `:info <name>`  | `:i`  | Show definition/type of a name             |
+| `:env`          | `:e`  | List names in scope                        |
+| `:clear`        |       | Clear session-defined bindings             |
+| `:reset`        |       | Reset to initial state (reload everything) |
+| `:set <option>` |       | Set REPL options                           |
+| `:trace`        |       | Toggle evaluation tracing                  |
 
 Example session:
+
 ```
 jl4> :load examples/insurance.l4
 Loading examples/insurance.l4... done
@@ -728,7 +744,7 @@ handleDefinition state section = runExceptT do
 
 -- Handle bare expressions (implicit #EVAL)
 handleBareExpr :: ReplState -> Expr Name -> IO ReplResult
-handleBareExpr state expr = 
+handleBareExpr state expr =
   handleDirective state (LazyEval emptyAnno expr)
 ```
 
@@ -742,11 +758,11 @@ evalAndShow :: ReplState -> Context -> Expr Name -> Bool -> ExceptT ReplError IO
 evalAndShow state ctx expr showTrace = do
   -- 1. Typecheck expression in context
   (resolvedExpr, exprType) <- typecheckExprInContext ctx expr
-  
+
   -- 2. Evaluate (with optional trace)
   let config = state.evalConfig { evalTrace = showTrace }
   result <- evaluateExpr config ctx resolvedExpr
-  
+
   -- 3. Format output
   let output = renderResult result
       typeAnnotation = if state.options.showType
@@ -840,19 +856,19 @@ Currently, `L4/TypeCheck.hs` typechecks entire modules. We need a function to ty
 -- L4/TypeCheck.hs (addition)
 
 -- | Typecheck a standalone expression in an existing environment.
-typecheckExprInContext 
-  :: NormalizedUri 
-  -> Environment 
-  -> EntityInfo 
+typecheckExprInContext
+  :: NormalizedUri
+  -> Environment
+  -> EntityInfo
   -> Substitution
-  -> Expr Name 
+  -> Expr Name
   -> Either [CheckErrorWithContext] (Expr Resolved, Type' Resolved)
 typecheckExprInContext uri env entityInfo subst expr = do
   let checkEnv = mkInitialCheckEnv uri env entityInfo
       checkState = mkInitialCheckState subst
   case runCheck (inferExpr expr) checkEnv checkState of
     [] -> Left [internalError "No typecheck result"]
-    ((With errs result, _) : _) 
+    ((With errs result, _) : _)
       | any isError errs -> Left errs
       | otherwise -> Right result
 ```
@@ -866,6 +882,7 @@ jl4> DECIDE double x IS x * 2
 ```
 
 We need to:
+
 1. Parse as a `Decide` declaration
 2. Typecheck in current context
 3. Add to session bindings (not persisted to any file)
@@ -876,15 +893,15 @@ processDefinition :: ReplState -> Text -> IO (Either ReplError (Text, ReplState)
 processDefinition state input = runExceptT do
   decide <- parseDecide input
   ctx <- getMergedContext state.ideState state.loadedFiles
-  
+
   -- Typecheck the definition
   (resolvedDecide, defType) <- typecheckDecideInContext ctx decide
-  
+
   -- Add to session
   let name = decideName resolvedDecide
       binding = (name, decideBody resolvedDecide, defType)
       state' = state { sessionBindings = binding : state.sessionBindings }
-  
+
   pure ("Defined: " <> renderName name <> " :: " <> renderType defType, state')
 ```
 
@@ -895,15 +912,17 @@ processDefinition state input = runExceptT do
 **Goal**: Basic expression evaluation with loaded modules.
 
 **Tasks**:
+
 1. Create `jl4-repl` package in cabal
 2. Add `haskeline` dependency
 3. Implement basic REPL loop (no commands except `:quit`)
-4. Implement `parseReplExpr` 
+4. Implement `parseReplExpr`
 5. Implement `typecheckExprInContext`
 6. Wire up evaluation using existing `execEvalExprInContextOfModule`
 7. Basic error display
 
 **Acceptance criteria**:
+
 ```bash
 $ jl4-repl
 jl4> 2 + 3
@@ -919,12 +938,14 @@ $
 **Goal**: Load `.l4` files and evaluate in their context.
 
 **Tasks**:
+
 1. Implement `:load` command
 2. Implement `:reload` command
 3. Handle import resolution
 4. Show loading progress
 
 **Acceptance criteria**:
+
 ```bash
 $ jl4-repl
 jl4> :load examples/insurance.l4
@@ -940,6 +961,7 @@ jl4> premium GIVEN age IS 30
 **Goal**: Full command set for exploration.
 
 **Tasks**:
+
 1. `:type` - type query without evaluation
 2. `:info` - show definition
 3. `:env` - list bindings
@@ -953,6 +975,7 @@ jl4> premium GIVEN age IS 30
 **Goal**: Define bindings during REPL session.
 
 **Tasks**:
+
 1. Parse `DECIDE`/`MEANS` at REPL prompt
 2. Add to session context
 3. `:clear` to reset session bindings
@@ -965,6 +988,7 @@ jl4> premium GIVEN age IS 30
 **Goal**: Production-quality UX.
 
 **Tasks**:
+
 1. Tab completion (names in scope)
 2. History (persistent across sessions)
 3. Syntax highlighting (if terminal supports)
@@ -983,7 +1007,7 @@ jl4> 2 + + 3
 Parse error at column 5: unexpected '+'
        2 + + 3
            ^
-jl4> 
+jl4>
 ```
 
 The session continues; bad input doesn't crash.
@@ -1088,6 +1112,7 @@ A browser-based interface like Try Haskell.
 4. **Property tests** for expression parsing (roundtrip: parse → print → parse)
 
 Example golden test:
+
 ```
 # test/repl/basic.session
 > 2 + 3
@@ -1103,15 +1128,16 @@ NUMBER
 
 **Terminal UI options** (choose one):
 
-| Library | Level | Paste Detection | Notes |
-|---------|-------|-----------------|-------|
-| `repline` | High | Via haskeline | **Recommended.** GHCi-style REPL wrapper. Built-in command parsing, tab completion, multiline support. |
-| `haskeline` | Medium | Bracketed paste | Standard choice. More boilerplate but more control. |
-| `brick` + `vty` | Low | `EvPaste` events | Full TUI framework. Overkill for simple REPL, but best paste detection. |
+| Library         | Level  | Paste Detection  | Notes                                                                                                  |
+| --------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------ |
+| `repline`       | High   | Via haskeline    | **Recommended.** GHCi-style REPL wrapper. Built-in command parsing, tab completion, multiline support. |
+| `haskeline`     | Medium | Bracketed paste  | Standard choice. More boilerplate but more control.                                                    |
+| `brick` + `vty` | Low    | `EvPaste` events | Full TUI framework. Overkill for simple REPL, but best paste detection.                                |
 
 **Recommendation: `repline`**
 
 `repline` is purpose-built for GHCi-style REPLs and provides:
+
 - Built-in `:command` parsing
 - Tab completion (word, prefix, file, stateful)
 - Multiline input with customizable banners
@@ -1123,7 +1149,7 @@ NUMBER
 type Repl a = HaskelineT (StateT ReplState IO) a
 
 repl :: Repl ()
-repl = evalRepl 
+repl = evalRepl
   (const $ pure "jl4> ")     -- Prompt
   cmd                         -- Command handler
   options                     -- :commands
@@ -1145,6 +1171,7 @@ options =
 **For advanced paste handling**, consider `brick`/`vty` which provide `EvPaste` events at the terminal level. This could be a Phase 5 enhancement if `repline`'s paste handling proves insufficient.
 
 **Existing dependencies** (already available):
+
 - `megaparsec` - Parsing
 - `mtl` - Monad transformers
 - `prettyprinter` - Output formatting
@@ -1173,16 +1200,20 @@ jl4-core/src/L4/
 ## Open Questions
 
 1. **Should `:load` replace or augment the current context?**
+
    - GHCi uses replace semantics by default
    - Could offer both: `:load` replaces, `:add` augments
 
 2. **How to handle name collisions between session and file bindings?**
+
    - Session shadows file? File shadows session? Error?
 
 3. **Should we support `:browse` for listing module contents?**
+
    - Useful for exploration, but adds complexity
 
 4. **Multi-line input: use `# >` continuation or detect incomplete expressions?**
+
    - `# >` is consistent with L4's existing directive continuation syntax
    - Auto-detection is more user-friendly but harder to implement correctly
 
