@@ -1023,10 +1023,11 @@ expressionCont = cont operator baseExpr
 -- | Like 'postfixP' but passes the ending line of the parsed expression to
 -- a line-aware postfix parser. This is used for mixfix postfix operators
 -- which must be on the same line as the base expression.
-postfixPWithLine :: HasSrcRange a => (Int -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
+postfixPWithLine :: (HasAnno a, HasSrcRange a) => (Int -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
 postfixPWithLine lineAwareOps regularOps p = do
   a <- p
-  let exprEndLine = maybe 0 (.end.line) (rangeOf a)
+  let exprRange = rangeOf a <|> (getAnno a).range
+      exprEndLine = maybe 0 (.end.line) exprRange
   mf <- optional (try (lineAwareOps exprEndLine) <|> try regularOps)
   case mf of
     Nothing -> pure a
@@ -1138,7 +1139,12 @@ mixfixChainExpr :: Parser (Expr Name)
 mixfixChainExpr = do
   firstExpr <- baseExpr
   -- Get the ending line of the first expression to enforce same-line constraint
-  let firstExprEndLine = maybe 0 (.end.line) (rangeOf firstExpr)
+  -- Try multiple fallbacks because rangeOf can return Nothing for some expression types:
+  -- 1. rangeOf firstExpr - standard approach (fails for App with empty args)
+  -- 2. (getAnno firstExpr).range - direct access to cached range
+  -- 3. exprNameRange - extract range from name inside App/Var
+  let exprRange = rangeOf firstExpr <|> (getAnno firstExpr).range <|> exprNameRange firstExpr
+      firstExprEndLine = maybe 0 (.end.line) exprRange
   -- Try to parse a mixfix chain starting with a backticked keyword
   -- The keyword must be on the same line as the first expression
   mChain <- optional $ try (mixfixChainCont firstExprEndLine)
@@ -1192,6 +1198,14 @@ mixfixChainExpr = do
     -- Get CSN annotation from keyword (just the keyword tokens, no holes)
     pairToCsn :: (Epa Name, Expr Name) -> [Anno]
     pairToCsn (kw, _) = [mkSimpleEpaAnno kw]
+
+    -- Extract range from name inside App/Var expressions
+    -- Used as fallback when rangeOf on the App itself returns Nothing
+    -- Uses .range directly to bypass visibility filtering in rangeOf
+    exprNameRange :: Expr Name -> Maybe SrcRange
+    exprNameRange (App _ n _) = (getAnno n).range
+    exprNameRange (AppNamed _ n _ _) = (getAnno n).range
+    exprNameRange _ = Nothing
 
 baseExpr' :: Parser (Expr Name)
 baseExpr' =

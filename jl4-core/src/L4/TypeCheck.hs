@@ -2122,6 +2122,33 @@ tryMatchMixfixCall funcName args = do
                 Nothing -> tryFlatteningApproach registry  -- Fall through to original logic
             Nothing -> tryFlatteningApproach registry
         _ -> tryFlatteningApproach registry
+
+    -- Multi-arg case: App funcName [kw1, arg1, kw2, arg2, ...]
+    -- This handles cases like: alice `copulated with` bob `to make` charlie
+    -- which parses as: App alice [`copulated with`, bob, `to make`, charlie]
+    (firstArg:restArgs) | isSimpleName funcName && length args >= 2 -> do
+      funcNameInScope <- lookupRawNameInEnvironment (rawName funcName)
+      let isCallable = any isCallableEntity funcNameInScope
+      case (not isCallable, getExprName firstArg) of
+        (True, Just potentialOpName) | Map.member (rawName potentialOpName) registry -> do
+          -- funcName is NOT callable, and firstArg is a registered mixfix keyword
+          -- Reinterpret as mixfix: funcName becomes first param, firstArg is the function
+          let opRawName = rawName potentialOpName
+          case Map.lookup opRawName registry of
+            Just sigs -> do
+              -- funcName is the first param, restArgs are [arg1, kw2, arg2, ...]
+              let funcAsExpr = App (getAnno funcName) funcName []
+                  -- Build the new args: [funcAsExpr, arg1, Var kw2, arg2, ...]
+                  -- which is [funcAsExpr] ++ restArgs
+                  newArgs = funcAsExpr : restArgs
+              -- Try to match against the mixfix pattern
+              result <- tryMatchAnyPattern opRawName newArgs sigs
+              case result of
+                Just (restructuredArgs, mErr) -> pure $ Just (opRawName, restructuredArgs, mErr)
+                Nothing -> tryRegularMatch
+            Nothing -> tryRegularMatch
+        _ -> tryRegularMatch
+
     _ -> tryRegularMatch
   where
     tryFlatteningApproach registry = do
