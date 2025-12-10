@@ -6,9 +6,7 @@
     },
     "haskell": {
       "command": "haskell-language-server-wrapper",
-      "args": [
-        "--lsp"
-      ]
+      "args": ["--lsp"]
     }
   },
   "permissions": {
