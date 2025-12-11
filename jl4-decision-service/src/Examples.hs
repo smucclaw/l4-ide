@@ -142,6 +142,7 @@ paramToParameter param =
     , parameterAlias = Nothing
     , parameterEnum = []
     , parameterDescription = T.strip $ fromMaybe "" param.paramDescription
+    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
     }
 
 typeToJsonType :: Maybe (Type' Resolved) -> Text
@@ -256,9 +257,9 @@ personQualifiesFunction = do
             MkParameters
               { parameterMap =
                   Map.fromList
-                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?")
-                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?")
-                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?")
+                    [ ("walks", Parameter "string" Nothing ["true", "false"] "Did the person walk?" Nothing)
+                    , ("eats", Parameter "string" Nothing ["true", "false"] "Did the person eat?" Nothing)
+                    , ("drinks", Parameter "string" Nothing ["true", "false"] "Did the person drink?" Nothing)
                     ]
               , required = ["walks", "eats", "drinks"]
               }
@@ -291,16 +292,16 @@ rodentsAndVerminFunction = do
             let
               params =
                 Map.fromList
-                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?")
-                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?")
-                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?")
-                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?")
-                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?")
-                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss")
-                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?")
-                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?")
-                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?")
-                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?")
+                  [ ("Loss or Damage.caused by insects", Parameter "string" Nothing ["true", "false"] "Was the damage caused by insects?" Nothing)
+                  , ("Loss or Damage.caused by birds", Parameter "string" Nothing ["true", "false"] "Was the damage caused by birds?" Nothing)
+                  , ("Loss or Damage.caused by vermin", Parameter "string" Nothing ["true", "false"] "Was the damage caused by vermin?" Nothing)
+                  , ("Loss or Damage.caused by rodents", Parameter "string" Nothing ["true", "false"] "Was the damage caused by rodents?" Nothing)
+                  , ("Loss or Damage.to Contents", Parameter "string" Nothing ["true", "false"] "Is the damage to your contents?" Nothing)
+                  , ("Loss or Damage.ensuing covered loss", Parameter "string" Nothing ["true", "false"] "Is the damage ensuing covered loss" Nothing)
+                  , ("any other exclusion applies", Parameter "string" Nothing ["true", "false"] "Are any other exclusions besides mentioned ones?" Nothing)
+                  , ("a household appliance", Parameter "string" Nothing ["true", "false"] "Did water escape from a household appliance due to an animal?" Nothing)
+                  , ("a swimming pool", Parameter "string" Nothing ["true", "false"] "Did water escape from a swimming pool due to an animal?" Nothing)
+                  , ("a plumbing, heating, or air conditioning system", Parameter "string" Nothing ["true", "false"] "Did water escape from a plumbing, heating or conditioning system due to an animal?" Nothing)
                   ]
             in
               MkParameters

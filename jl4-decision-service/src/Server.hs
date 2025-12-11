@@ -224,6 +224,7 @@ data Parameter = Parameter
   , parameterAlias :: !(Maybe Text)
   , parameterEnum :: ![Text]
   , parameterDescription :: !Text
+  , parameterProperties :: !(Maybe (Map Text Parameter))  -- Nested properties for object types
   }
   deriving stock (Show, Read, Ord, Eq, Generic)
 
@@ -603,6 +604,7 @@ paramToParameter param =
     , parameterAlias = Nothing
     , parameterEnum = []
     , parameterDescription = T.strip $ Maybe.fromMaybe "" param.paramDescription
+    , parameterProperties = Nothing  -- TODO: Extract nested properties from type
     }
 
 typeToJsonType :: Maybe (Type' Resolved) -> Text
@@ -716,7 +718,7 @@ parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppF
   -- need to change the description of the parameters as soon as we have it in the Decide
   MkParameters {parameterMap = Map.fromList $ map (\x -> (x ,
     let argInfo = lookup x bestEffortArgInfo
-     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo))) argList, required = argList}
+     in Parameter (maybe "object" fst argInfo) Nothing [] (maybe "" snd argInfo) Nothing)) argList, required = argList}
  where
   bestEffortArgInfo = foldr fn [] args
   fn r acc = case find (\(MkOptionallyTypedName _ r' _) -> r `sameResolved` r') typedNames of
@@ -855,12 +857,14 @@ instance FromJSON Parameters where
 
 instance ToJSON Parameter where
   toJSON p =
-    Aeson.object
+    Aeson.object $
       [ "type" .= p.parameterType
       , "alias" .= p.parameterAlias -- omitNothingFields?
       , "enum" .= p.parameterEnum
       , "description" .= p.parameterDescription
-      ]
+      ] ++ case p.parameterProperties of
+            Nothing -> []
+            Just props -> ["properties" .= props]
 
 instance FromJSON Parameter where
   parseJSON = Aeson.withObject "Parameter" $ \p ->
@@ -869,6 +873,7 @@ instance FromJSON Parameter where
       <*> p .:? "alias"
       <*> p .:? "enum" .!= []
       <*> p .: "description"
+      <*> p .:? "properties"
 
 instance FromHttpApiData EvalBackend where
   parseQueryParam t = case Text.toLower t of
