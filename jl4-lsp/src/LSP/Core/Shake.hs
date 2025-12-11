@@ -55,7 +55,7 @@ module LSP.Core.Shake(
     GlobalIdeOptions(..),
     ideLogger,
     actionLogger,
-    getVirtualFile, addVirtualFile, addVirtualFileFromFS,
+    getVirtualFile, addVirtualFile, addVirtualFileFromFS, getVirtualFileText,
     FileVersion(..),
     updatePositionMapping,
     updatePositionMappingHelper,
@@ -347,7 +347,14 @@ addVirtualFile nfp t = do
 
 addVirtualFileFromFS :: NormalizedFilePath -> Action Rope.Rope
 addVirtualFileFromFS nfp = do
-  addVirtualFile nfp =<< liftIO (Text.readFile (fromNormalizedFilePath nfp))
+  fileContent <- liftIO (Text.readFile (fromNormalizedFilePath nfp))
+  addVirtualFile nfp fileContent
+
+-- | Get the text content of a virtual file from the IdeState (in IO)
+getVirtualFileText :: IdeState -> NormalizedUri -> IO (Maybe Text)
+getVirtualFileText st uri = do
+  vfs <- fmap _vfsMap . readTVarIO . vfsVar $ st.shakeExtras
+  pure $ fmap (Rope.toText . _file_text) (Map.lookup uri vfs)
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe LspSink -> IO VFS
