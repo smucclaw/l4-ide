@@ -56,10 +56,38 @@ Added a new case in `tryMatchMixfixCall` after the existing `[l, r]` case:
     _ -> tryRegularMatch
 ```
 
+## Phase 2: Bare Single-Word Operators (2024-12)
+
+**Enhancement**: Single-word mixfix operators can now omit backticks.
+
+```l4
+-- Both work now:
+#EVAL 3 `plus` 5  -- backticked (original)
+#EVAL 3  plus  5  -- bare identifier (new)
+```
+
+**Implementation**: Modified `mixfixKeywordOnLine` in `Parser.hs` (~line 1184) to accept both `TQuoted` and `TIdentifier` tokens:
+
+```haskell
+(spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
+ <|> spacedToken (#_TIdentifiers % #_TIdentifier) "infix identifier")
+```
+
+**Limitation**: Multi-word keywords still require backticks:
+
+```l4
+-- This works:
+alice `copulated with` bob `to make` charlie
+
+-- This does NOT work (parser can't match multi-token keywords):
+-- alice copulated with bob to make charlie
+```
+
 ## Testing
 
 - ✅ `alice \`copulated with\` bob \`to make\` charlie` now works
 - ✅ Simple binary infix `3 \`plus\` 5` still works
+- ✅ Bare single-word infix `3 plus 5` now works
 - ✅ Parenthesized versions still work
 - ✅ All 441 existing tests pass (no regressions)
 
@@ -73,6 +101,7 @@ Added a new case in `tryMatchMixfixCall` after the existing `[l, r]` case:
 ## Files Changed
 
 - `jl4-core/src/L4/TypeCheck.hs` (~line 2095): Added multi-arg mixfix reinterpretation case
+- `jl4-core/src/L4/Parser.hs` (~line 1184): Accept bare identifiers as mixfix keywords
 
 ## Test File
 

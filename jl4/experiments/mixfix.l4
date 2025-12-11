@@ -29,3 +29,7 @@ a `plus` b MEANS
   a + b
 
 #EVAL 3 `plus` 5
+#EVAL 3  plus  5
+
+-- Note: Single-word mixfix operators can omit backticks (e.g., `plus` → plus)
+-- Multi-word keywords still require backticks (e.g., `copulated with`)
