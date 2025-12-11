@@ -1180,13 +1180,16 @@ mixfixChainExpr = do
         pure (kw, e)
       pure (firstKw, firstArg, rest)
 
-    -- Parse a backticked keyword only if it's on the specified line
+    -- Parse a mixfix keyword only if it's on the specified line
+    -- Accepts both backticked names (`plus`) and bare identifiers (plus)
+    -- The typechecker will validate if the identifier is a registered mixfix
     mixfixKeywordOnLine :: Int -> Parser (Epa Name)
     mixfixKeywordOnLine expectedLine = do
       tok <- lookAhead anySingle
       guard (tok.range.start.line == expectedLine)
       (MkName emptyAnno . NormalName) <<$>>
-        spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
+        (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
+         <|> spacedToken (#_TIdentifiers % #_TIdentifier) "infix identifier")
 
     -- Convert (keyword, expr) pair to [Var keyword, expr]
     -- These are the "additional" keywords beyond the first one
