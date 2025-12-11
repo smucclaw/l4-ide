@@ -11,6 +11,7 @@ The decision service's YAML sidecar files could only represent flat parameter st
 ### Example of the Problem
 
 For an L4 type like:
+
 ```l4
 DECLARE Address HAS
   street IS A STRING
@@ -22,10 +23,11 @@ DECLARE Person HAS
 ```
 
 The old YAML structure could only represent:
+
 ```yaml
 properties:
   person:
-    type: "object"  # No way to specify nested fields!
+    type: "object" # No way to specify nested fields!
     description: "A person with address"
 ```
 
@@ -58,14 +60,13 @@ data Parameter = Parameter
 ### 4. Updated Code
 
 **Files Modified**:
-- `jl4-decision-service/src/Server.hs`: 
+
+- `jl4-decision-service/src/Server.hs`:
   - Extended `Parameter` type
   - Updated `ToJSON`/`FromJSON` instances
   - Added `parameterProperties = Nothing` to `paramToParameter`
-  
 - `jl4-decision-service/src/Examples.hs`:
   - Added `parameterProperties = Nothing` to `paramToParameter`
-  
 - `jl4-decision-service/test/SchemaSpec.hs`:
   - Updated `Arbitrary` instance for `Parameter`
 
@@ -77,7 +78,7 @@ data Parameter = Parameter
 
 ## What Still Needs Work
 
-###  Priority 1: Extract Nested Properties from L4 Types
+### Priority 1: Extract Nested Properties from L4 Types
 
 The `paramToParameter` functions currently set `parameterProperties = Nothing`. They need to:
 
@@ -95,6 +96,7 @@ Update `Schema.hs` to generate OpenAPI schemas with nested object properties whe
 ### Priority 3: Integration Tests
 
 Add tests that:
+
 - Load `.yaml` files with nested properties
 - Verify OpenAPI schema includes nested structure
 - Test evaluation with deeply nested JSON input
