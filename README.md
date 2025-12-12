@@ -56,7 +56,6 @@ https://jl4.legalese.com/
 All this documentation is still under construction.
 
 - Tutorial: Hello, World
-
   - The `DECIDE` stanza
   - The `ASSUME` environment
   - Term Substitution
@@ -65,7 +64,6 @@ All this documentation is still under construction.
   - Example: Vermin
 
 - Tutorial: British Nationality Act
-
   - [Default Logic](./doc/default-logic.md) and `Optional` types with the `Maybe` monad
   - References and Legal Citations
   - Temporals
@@ -75,7 +73,6 @@ All this documentation is still under construction.
 - Tutorial: Automatically Generating an AI Chatbot
 
 - Tutorial: Contracts involving Parties, Obligations, and Deadlines
-
   - visualizing a contract
   - abductive reasoning and planning problems
 
@@ -93,7 +90,6 @@ All this documentation is still under construction.
 - Source Citations and Versioning
 
 - Multi-Temporal Logic
-
   - a remark on "shall" as an unfortunate consequence of negotiation-time vs run-time interpretation
 
 - Operationalization to Web and Mobile Apps

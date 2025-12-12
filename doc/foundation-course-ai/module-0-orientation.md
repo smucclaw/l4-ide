@@ -26,7 +26,6 @@ Legal work today faces significant challenges:
 L4 enables a paradigm shift from "contracts as documents" to "contracts as executable specifications":
 
 1. **Write rules once, deploy everywhere**: From the same L4 source, generate:
-
    - Human-readable documentation (Markdown, PDF)
    - Web applications for end-users
    - API services for integration

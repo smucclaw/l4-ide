@@ -382,22 +382,18 @@ Identify:
 Potential Issues:
 
 1. Age calculation: What if employee born on Feb 29? (leap year)
-
    - Current: Uses 365.25 average
    - Risk: Off-by-one errors near boundaries
 
 2. Salary: Currency not specified
-
    - Assumption: Local currency
    - Risk: Multi-currency companies
 
 3. "Recognized degree": Who recognizes?
-
    - Text says "Ministry" but Ministry not modeled
    - Need: List of recognized institutions or approval process
 
 4. Experience counting: Does part-time count?
-
    - Text says "relevant work experience"
    - Unclear: How to count overlapping positions, internships, etc.
 
