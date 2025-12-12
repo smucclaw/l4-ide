@@ -213,11 +213,13 @@ curl -X POST "http://localhost:8080/functions/evaluate%20cosmetics%20claim/evalu
 ### Changes Made
 
 1. **Backend/Jl4.hs**:
+
    - Updated `createFunction` signature to accept `FilePath` as first parameter
    - Changed `typecheckModule` and `evaluateModule` calls to use actual filepath
    - Removed fake filename generation from WHERE clause
 
 2. **Examples.hs**:
+
    - Modified `createValidatedFunction` to pass actual filepath to `Jl4.createFunction`
    - Updated builtin examples to pass fake filepaths ("compute_qualifies.l4", "vermin_and_rodent.l4")
 
