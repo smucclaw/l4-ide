@@ -43,7 +43,6 @@ With bidirectional type checking:
 Bidirectional type checking is a type checking approach with two modes:
 
 1. **Synthesis (↑)**: "What type does this expression have?"
-
    - Information flows upward from expression to context
    - Example: `5 + 3` synthesizes type `NUMBER`
 
@@ -519,14 +518,12 @@ Type error in function decodePerson:
 ### 10. Implementation Checklist
 
 - [ ] **Phase 1**: Core infrastructure
-
   - [ ] Add `CheckMode` type
   - [ ] Split `inferExpr` into `synthExpr` and `checkExpr`
   - [ ] Implement subsumption rule
   - [ ] Add test: basic synthesis vs checking
 
 - [ ] **Phase 2**: Expression forms
-
   - [ ] Lambda/GIVEN: check body against return type
   - [ ] Application: check arguments
   - [ ] Record construction: check fields
@@ -534,19 +531,16 @@ Type error in function decodePerson:
   - [ ] Add tests for each form
 
 - [ ] **Phase 3**: Function definitions
-
   - [ ] Modify `checkDecl` for GIVETH functions
   - [ ] Check body against return type
   - [ ] Add test: function with explicit return type
 
 - [ ] **Phase 4**: Annotation storage
-
   - [ ] Store expected type in Anno during checking
   - [ ] Verify Anno propagates to evaluation
   - [ ] Add test: Anno contains expected type
 
 - [ ] **Phase 5**: Integration
-
   - [ ] Test JSONDECODE with Person type
   - [ ] Test nested records
   - [ ] Test extra fields ignored

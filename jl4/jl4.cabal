@@ -59,6 +59,7 @@ test-suite jl4-test
   hs-source-dirs: tests
   main-is: Main.hs
   other-modules:
+    Hover
     SemanticTokens
     Paths_jl4
   autogen-modules:

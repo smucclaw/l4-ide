@@ -1201,20 +1201,16 @@ jl4-core/src/L4/
 ## Open Questions
 
 1. **Should `:load` replace or augment the current context?**
-
    - GHCi uses replace semantics by default
    - Could offer both: `:load` replaces, `:add` augments
 
 2. **How to handle name collisions between session and file bindings?**
-
    - Session shadows file? File shadows session? Error?
 
 3. **Should we support `:browse` for listing module contents?**
-
    - Useful for exploration, but adds complexity
 
 4. **Multi-line input: use `# >` continuation or detect incomplete expressions?**
-
    - `# >` is consistent with L4's existing directive continuation syntax
    - Auto-detection is more user-friendly but harder to implement correctly
 
