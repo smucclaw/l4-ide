@@ -1,15 +1,17 @@
 module Main where
 
-import Base (NonEmpty, for_, when, unless)
+import Base (NonEmpty, for_, when, unless, liftIO)
 import Base.Text (Text)
 import qualified Base.Text as Text
+import qualified Data.Text.Lazy as Text.Lazy
 import Control.Applicative ((<|>))
 import Data.List.NonEmpty (some1)
 import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
-import Text.Pretty.Simple (pShow)
+import System.IO (stdout, hIsTerminalDevice)
+import Text.Pretty.Simple (pShow, pShowNoColor)
 
 import qualified LSP.Core.Shake as Shake
 import LSP.Logger
@@ -19,7 +21,6 @@ import qualified LSP.L4.Rules as Rules
 import LSP.L4.Oneshot (oneshotL4Action)
 import qualified LSP.L4.Oneshot as Oneshot
 
-import L4.Syntax (Module, Name)
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig)
 import Data.Time (UTCTime)
 
@@ -27,7 +28,7 @@ data Log
   = IdeLog Oneshot.Log
   | CheckFailed !NormalizedUri
   | ExactPrint !Text
-  | ShowAst !(Module Name)
+  | ShowAst !Text.Lazy.Text
   | SuccessOnly
 
 instance Pretty Log where
@@ -35,7 +36,7 @@ instance Pretty Log where
     IdeLog l -> "Ide:" <+> pretty l
     CheckFailed uri -> "Checking" <+> pretty uri <+> "failed."
     ExactPrint ep -> nest 2 $ vsep [pretty SuccessOnly, pretty ep]
-    ShowAst ast -> pretty $ pShow ast
+    ShowAst ast -> pretty ast
     SuccessOnly -> "Checking succeeded."
 
 main :: IO ()
@@ -63,7 +64,10 @@ main = do
               when options.showAst $ do
                 mast <- Shake.use Rules.GetParsedAst uri
                 case mast of
-                  Just ast -> logWith recorder Info $ ShowAst ast
+                  Just ast -> do
+                    isTTY <- liftIO $ hIsTerminalDevice stdout
+                    let showFn = if isTTY then pShow else pShowNoColor
+                    logWith recorder Info $ ShowAst (showFn ast)
                   Nothing -> pure ()
               unless (options.verbose || options.showAst) $ logWith recorder Info SuccessOnly
         (_, _)            -> do
