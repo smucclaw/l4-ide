@@ -349,12 +349,13 @@ typeHover pos nuri tcRes positionMapping = do
   let oldLspPos = lspPositionToSrcPos oldPos
   (range, i) <- IV.smallestContaining nuri oldLspPos tcRes.infoMap
   let mNlg = IV.smallestContaining nuri oldLspPos tcRes.nlgMap
+  let mDesc = IV.smallestContaining nuri oldLspPos tcRes.descMap
   let lspRange = srcRangeToLspRange (Just range)
   newLspRange <- toCurrentRange positionMapping lspRange
-  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg))
+  pure (infoToHover nuri tcRes.substitution newLspRange i (fmap snd mNlg) (fmap snd mDesc))
 
-infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Hover
-infoToHover nuri subst r i mNlg =
+infoToHover :: NormalizedUri -> Substitution -> Range -> Info -> Maybe Nlg -> Maybe Text -> Hover
+infoToHover nuri subst r i mNlg mDesc =
   Hover (InL (mkMarkdown x)) (Just r)
   where
     x =
@@ -364,6 +365,10 @@ infoToHover nuri subst r i mNlg =
             case mNlg of
               Nothing -> mempty
               Just nlg -> mdSeparator <> mdCodeBlock (simpleLinearizer nlg)
+            <>
+            case mDesc of
+              Nothing -> mempty
+              Just desc -> mdSeparator <> desc
         KindInfo k -> mdCodeBlock $ prettyLayout $ typeFunction k
         TypeVariable -> "TYPE VAR"
 

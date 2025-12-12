@@ -118,6 +118,7 @@ data TypeCheckResult = TypeCheckResult
   , infoMap :: TypeCheck.InfoMap
   , nlgMap :: TypeCheck.NlgMap
   , scopeMap :: TypeCheck.ScopeMap
+  , descMap :: TypeCheck.DescMap
   , success :: Bool
   , environment :: TypeCheck.Environment
   , entityInfo :: TypeCheck.EntityInfo
@@ -134,6 +135,7 @@ instance NFData TypeCheckResult where
     `seq` infoMap
     `seq` nlgMap
     `seq` scopeMap
+    `seq` descMap
     `seq` rnf success
     `seq` rnf environment
     `seq` rnf entityInfo
@@ -422,6 +424,7 @@ jl4Rules evalConfig rootDirectory recorder = do
           , infoMap = IV.empty
           , nlgMap = IV.empty
           , scopeMap = IV.empty
+          , descMap = IV.empty
           }
         unionCheckEnv cEnv tcRes =
           TypeCheck.MkCheckEnv
@@ -456,6 +459,7 @@ jl4Rules evalConfig rootDirectory recorder = do
         , infoMap = result.infoMap
         , nlgMap = result.nlgMap
         , scopeMap = result.scopeMap
+        , descMap = result.descMap
         , dependencies = dependencies <> foldMap (.dependencies) dependencies
         }
       )

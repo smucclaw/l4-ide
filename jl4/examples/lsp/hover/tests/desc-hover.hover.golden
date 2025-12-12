@@ -1,0 +1,6 @@
+age: ``` | NUMBER | ``` |  | --- |  |  The age of the claimant in years
+income: ``` | NUMBER | ``` |  | --- |  |  Annual income in dollars
+hasInsurance: ``` | BOOLEAN | ``` | 
+name: ``` | FUNCTION FROM Person TO STRING | ``` |  | --- |  |  The person's full legal name
+salary: ``` | FUNCTION FROM Person TO NUMBER | ``` |  | --- |  |  Annual salary in USD
+name-ref: ``` | STRING | ``` | 

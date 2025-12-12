@@ -87,6 +87,7 @@ library
     L4.ExactPrint
     L4.Export
     L4.FindDefinition
+    L4.JsonSchema
     L4.Lexer
     L4.Names
     L4.Nlg
