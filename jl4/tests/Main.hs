@@ -3,8 +3,16 @@ module Main (main) where
 
 import Base
 import Control.Monad.Trans.Maybe
+import qualified Data.Aeson.Encode.Pretty as AP
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import qualified L4.Annotation as JL4
 import qualified L4.EvaluateLazy as JL4Lazy
+import L4.Export (ExportedFunction (..))
+import qualified L4.Export as Export
+import L4.JsonSchema (SchemaContext (..))
+import qualified L4.JsonSchema as JsonSchema
 import qualified L4.Nlg as Nlg
 import qualified L4.Parser.SrcSpan as JL4
 import L4.Syntax
@@ -65,6 +73,8 @@ main = do
             jl4ExactPrintGolden evalConfig goldenDir inputFile
           it "natural language annotations" $
             jl4NlgAnnotationsGolden evalConfig nlgOk goldenDir inputFile
+          it "json schema" $
+            jl4JsonSchemaGolden evalConfig goldenDir inputFile
 
 l4Golden :: JL4Lazy.EvalConfig -> Bool -> String -> String -> IO (Golden String)
 l4Golden evalConfig isOk dir inputFile = do
@@ -129,6 +139,57 @@ jl4NlgAnnotationsGolden evalConfig isOk dir inputFile = do
       , actualFile = Just (dir </> takeFileName inputFile -<.> "nlg.actual")
       , failFirstTime = True
       }
+
+jl4JsonSchemaGolden :: JL4Lazy.EvalConfig -> String -> FilePath -> IO (Golden String)
+jl4JsonSchemaGolden evalConfig dir inputFile = do
+  (_, moutput) <- oneshotL4ActionAndErrors evalConfig inputFile \nfp -> do
+    let uri = normalizedFilePathToUri nfp
+    _ <- Shake.addVirtualFileFromFS nfp
+    Shake.use Rules.SuccessfulTypeCheck uri
+  let output = case moutput of
+        Nothing -> "Cannot generate schema for module that doesn't typecheck\n"
+        Just checkResult ->
+          let exports = Export.getExportedFunctions checkResult.module'
+              defaultExport = selectDefaultExport exports
+          in case defaultExport of
+               Nothing -> "No @export annotations found in file\n"
+               Just export ->
+                 let ctx = buildSchemaContext checkResult.module'
+                     schema = JsonSchema.generateJsonSchema ctx export
+                 in BL.unpack (AP.encodePretty schema) ++ "\n"
+  pure
+    Golden
+      { output
+      , encodePretty = id
+      , writeToFile = writeFile
+      , readFromFile = readFile
+      , goldenFile = dir </> takeFileName inputFile -<.> "schema.golden"
+      , actualFile = Just (dir </> takeFileName inputFile -<.> "schema.actual")
+      , failFirstTime = True
+      }
+
+selectDefaultExport :: [ExportedFunction] -> Maybe ExportedFunction
+selectDefaultExport exports =
+  case List.find (.exportIsDefault) exports of
+    Just e -> Just e
+    Nothing -> listToMaybe exports
+
+buildSchemaContext :: Module Resolved -> SchemaContext
+buildSchemaContext (MkModule _ _ section) =
+  JsonSchema.emptyContext{ctxDeclares = collectDeclares section}
+ where
+  collectDeclares :: Section Resolved -> Map.Map Text (Declare Resolved)
+  collectDeclares (MkSection _ _ _ decls) =
+    Map.fromList $ concatMap collectDecl decls
+
+  collectDecl :: TopDecl Resolved -> [(Text, Declare Resolved)]
+  collectDecl = \case
+    Declare _ decl@(MkDeclare _ _ appForm _) ->
+      [(getDeclName appForm, decl)]
+    Section _ sub -> Map.toList $ collectDeclares sub
+    _ -> []
+
+  getDeclName (MkAppForm _ name _ _) = rawNameToText (rawName (getActual name))
 
 -- ----------------------------------------------------------------------------
 -- Test helpers
