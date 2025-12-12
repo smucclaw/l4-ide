@@ -576,26 +576,29 @@ instance HasDesc (TopDecl n) where
 
 instance HasDesc (Declare n) where
   addDesc decl@(MkDeclare ann tySig appForm tyDecl) = do
+    ann' <- attachLeadingDesc decl ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     tyDecl' <- addDesc tyDecl
-    ann' <- attachLeadingDesc decl ann
     pure $ MkDeclare ann' tySig' app' tyDecl'
 
 instance HasDesc (Decide n) where
   addDesc dec@(MkDecide ann tySig appForm expr) = do
+    -- Attach leading desc to Decide FIRST, before processing children.
+    -- This ensures @export annotations are claimed by Decide before
+    -- parameters in the tySig can consume them.
+    ann' <- attachLeadingDesc dec ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     expr' <- addDesc expr
-    ann' <- attachLeadingDesc dec ann
     pure $ MkDecide ann' tySig' app' expr'
 
 instance HasDesc (Assume n) where
   addDesc asm@(MkAssume ann tySig appForm mType) = do
+    ann' <- attachLeadingDesc asm ann
     tySig' <- addDesc tySig
     app' <- addDesc appForm
     mType' <- traverse addDesc mType
-    ann' <- attachLeadingDesc asm ann
     pure $ MkAssume ann' tySig' app' mType'
 
 instance HasDesc (Directive n) where

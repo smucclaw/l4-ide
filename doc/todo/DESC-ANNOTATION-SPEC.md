@@ -25,6 +25,7 @@ DECIDE calculateTax IS income * 0.2
 Parameters (`GIVEN x IS A type`) can have descriptions attached in two ways:
 
 **1. Leading desc (on preceding line):**
+
 ```l4
 GIVEN
   @desc The user's income amount
@@ -33,6 +34,7 @@ DECIDE ...
 ```
 
 **2. Inline desc (after the type):**
+
 ```l4
 GIVEN income IS A NUMBER @desc The user's income amount
 DECIDE ...
@@ -46,6 +48,7 @@ When both leading and inline `@desc` exist for the same parameter:
 2. **Warning emitted** - `DescDuplicatePreferInline` warning alerts that the leading desc is ignored
 
 Example that triggers warning:
+
 ```l4
 GIVEN
   @desc This will be ignored (leading)
@@ -58,6 +61,7 @@ DECIDE ...
 Similar rules apply to `DECLARE` record fields:
 
 **Leading desc:**
+
 ```l4
 DECLARE Person HAS
   @desc The person's full name
@@ -65,6 +69,7 @@ DECLARE Person HAS
 ```
 
 **Inline desc:**
+
 ```l4
 DECLARE Person HAS
   name IS A STRING @desc The person's full name
