@@ -11,6 +11,7 @@ module L4.EvaluateLazy
 , setTemporalContext
 , withEvalClauses
 , execEvalModuleWithEnv
+, execEvalModuleWithJSON
 , execEvalExprInContextOfModule
 , prettyEvalException
 , prettyEvalDirectiveResult
@@ -36,6 +37,7 @@ import Control.Concurrent
 import Data.Time (UTCTime, getCurrentTime)
 import qualified Data.Time.Format.ISO8601 as ISO8601
 import System.Environment (lookupEnv)
+import qualified Data.Aeson as Aeson
 
 -----------------------------------------------------------------------------
 -- The Eval monad and the required types for the monad
@@ -437,6 +439,39 @@ evalModuleAndDirectives env m = do
   -- Depending on future export semantics, this may have to change.
   pure (env', results)
 
+-- | Evaluate module with JSON input bindings for batch processing.
+-- JSON keys are matched to ASSUME'd L4 variables by name.
+-- The approach: first evaluate the module normally (which pre-allocates References),
+-- then write JSON values into the References for ASSUME'd variables.
+evalModuleAndDirectivesWithJSON :: Aeson.Value -> Environment -> Module Resolved -> Eval (Environment, [EvalDirectiveResult])
+evalModuleAndDirectivesWithJSON json env m = do
+  (env', directives) <- interpMachine do
+    ienv <- initialEnvironment
+    (moduleEnv, dirs) <- evalModule (env <> ienv) m
+    -- Now write JSON values into the pre-allocated References
+    -- The combined environment includes both the initial env and the moduleEnv
+    let combinedEnv = moduleEnv <> env <> ienv
+    writeJSONToReferences json combinedEnv
+    pure (moduleEnv, dirs)
+  results <- traverse nfDirective directives
+  pure (env', results)
+
+execEvalModuleWithJSON :: EvalConfig -> EntityInfo -> Aeson.Value -> Module Resolved -> IO (Environment, [EvalDirectiveResult])
+execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = do
+  case evalModuleAndDirectivesWithJSON json emptyEnvironment m of
+    MkEval f -> do
+      stack <- newIORef emptyStack
+      supply <- newIORef 0
+      let temporalCtx = initialTemporalContext evalConfig.evalTime
+      temporalContext <- newIORef temporalCtx
+      let evalTrace = Nothing
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext}
+      case r of
+        Left exc -> do
+          hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
+          traverse_ (hPutStrLn stderr . Text.unpack) (prettyEvalException exc)
+          pure (emptyEnvironment, [])
+        Right result -> pure result
 
 {- | Evaluate an expression in the context of a module and initial environment.
 

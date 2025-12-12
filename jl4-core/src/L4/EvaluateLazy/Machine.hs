@@ -25,6 +25,7 @@ module L4.EvaluateLazy.Machine
 , pattern ValBool
 -- * Constants exposed for the eager evaluator
 , builtinBinOps
+, writeJSONToReferences
 )
 where
 
@@ -2857,3 +2858,33 @@ impliesValClosure true false =
         (Var emptyAnno bRef)
         trueExpr
     )
+
+----------------------------------------------------------------------------
+-- JSON to Environment conversion for batch processing
+----------------------------------------------------------------------------
+
+-- | Write JSON values into existing References in the environment.
+-- This should be called after preAllocate has created References for ASSUME'd variables.
+-- The function looks up ASSUME'd variables by name from EntityInfo,
+-- finds their References in the provided environment, and writes JSON values into them.
+writeJSONToReferences :: Aeson.Value -> Environment -> Machine ()
+writeJSONToReferences json env = case json of
+  Aeson.Object obj -> do
+    entityInfo <- GetEntityInfo
+    let assumedVars =
+          [ (u, n, ty)
+          | (u, (n, TypeCheck.KnownTerm ty Assumed)) <- Map.toList entityInfo
+          ]
+    forM_ assumedVars $ \(unique, name, ty) -> do
+      let key = nameToText (TypeCheck.getName name)
+      case KeyMap.lookup (Key.fromText key) obj of
+        Nothing -> pure ()  -- No JSON value for this variable
+        Just val -> do
+          -- Look up the existing Reference for this variable
+          case Map.lookup unique env of
+            Nothing -> pure ()  -- No Reference found (shouldn't happen after preAllocate)
+            Just existingRef -> do
+              -- Convert JSON to WHNF and write into the existing Reference
+              whnf <- jsonValueToWHNFTyped val ty
+              updateThunkToWHNF existingRef whnf
+  _ -> pure ()
