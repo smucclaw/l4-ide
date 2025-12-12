@@ -25,6 +25,7 @@ import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
+import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
 
 -- | Command line options
@@ -250,8 +251,17 @@ evalExpression st contextFile exprText = do
   -- Get any accumulated imports
   importPreamble <- getImportPreamble st
   
-  -- Read the original file content and append the expression
-  originalContent <- Text.IO.readFile contextFile
+  -- Get filtered source from typechecked module (AST-level filtering)
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  originalContent <- case mTc of
+    Just tc -> pure $ Print.prettyLayout (filterIdeDirectives tc.module')
+    Nothing -> do
+      -- Fallback to raw text if typecheck failed
+      mContent <- Shake.getVirtualFileText st.ideState contextUri
+      case mContent of
+        Just content -> pure content
+        Nothing -> Text.IO.readFile contextFile
   let replContent = importPreamble <> originalContent <> "\n\n-- REPL expression " <> Text.pack (show evalNum) <> "\n" <> actualExpr <> "\n"
   
   -- Create a unique virtual file for REPL evaluation
@@ -302,8 +312,17 @@ getExpressionType st contextFile exprText = do
   -- Get any accumulated imports
   importPreamble <- getImportPreamble st
   
-  -- Read the original file content
-  originalContent <- Text.IO.readFile contextFile
+  -- Get filtered source from typechecked module (AST-level filtering)
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  originalContent <- case mTc of
+    Just tc -> pure $ Print.prettyLayout (filterIdeDirectives tc.module')
+    Nothing -> do
+      -- Fallback to raw text if typecheck failed
+      mContent <- Shake.getVirtualFileText st.ideState contextUri
+      case mContent of
+        Just content -> pure content
+        Nothing -> Text.IO.readFile contextFile
   -- Build the virtual file content with #CHECK directive
   let replContent = importPreamble <> originalContent <> "\n\n-- REPL type query " <> Text.pack (show evalNum) <> "\n#CHECK " <> exprText <> "\n"
   
@@ -355,3 +374,5 @@ helpText = Text.unlines
   , ""
   , "Use -v/--verbose for debug output."
   ]
+
+
