@@ -48,11 +48,13 @@ Key applications include:
 
 ### Testing
 
-Follow test-driven development (TDD) practices:
+**We aspire to follow Test-Driven Development (TDD) practices.** This means:
 
 1. **Write tests first** when adding new features - define expected behavior before implementation
 2. **Update tests** when modifying existing behavior - tests should reflect the current spec
 3. **Add regression tests** when fixing bugs - prevent the same bug from recurring
+
+TDD helps us catch issues early and ensures our code meets specifications before we consider a feature complete.
 
 Before committing changes, always run the full test suite to ensure nothing is broken:
 

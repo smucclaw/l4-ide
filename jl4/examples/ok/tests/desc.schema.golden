@@ -1,0 +1,14 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Factorial entry point calculates the factorial of a number",
+    "properties": {
+        "x": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "x"
+    ],
+    "title": "factorial",
+    "type": "object"
+}
