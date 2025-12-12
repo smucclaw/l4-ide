@@ -3,19 +3,25 @@ module L4.Export (
   ExportedParam (..),
   DescFlags (..),
   ParsedDesc (..),
+  TypeDescMap,
   parseDescText,
   getExportedFunctions,
   getDefaultFunction,
+  buildTypeDescMap,
 ) where
 
 import Base
 
+import Control.Applicative ((<|>))
 import qualified Base.Text as Text
 import Data.Char (isSpace)
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import L4.Annotation (getAnno)
 import L4.Syntax
 import Optics
+
+type TypeDescMap = Map.Map Unique Text
 
 data ExportedFunction = ExportedFunction
   { exportName :: !Text
@@ -84,15 +90,16 @@ parseDescText txt =
           _ -> (flagsAcc, current)
 
 getExportedFunctions :: Module Resolved -> [ExportedFunction]
-getExportedFunctions (MkModule _ _ section) =
-  collectSection section
+getExportedFunctions mod'@(MkModule _ _ section) =
+  let typeDescMap = buildTypeDescMap mod'
+  in collectSection typeDescMap section
  where
-  collectSection (MkSection _ _ _ decls) =
-    decls >>= collectDecl
+  collectSection tdm (MkSection _ _ _ decls) =
+    decls >>= collectDecl tdm
 
-  collectDecl = \ case
-    Decide _ dec -> maybeToList (buildExportedFunction dec)
-    Section _ sub -> collectSection sub
+  collectDecl tdm = \ case
+    Decide _ dec -> maybeToList (buildExportedFunction tdm dec)
+    Section _ sub -> collectSection tdm sub
     _ -> []
 
 getDefaultFunction :: Module Resolved -> Maybe ExportedFunction
@@ -101,8 +108,8 @@ getDefaultFunction =
  where
   isDefaultExport ExportedFunction{exportIsDefault = flag} = flag
 
-buildExportedFunction :: Decide Resolved -> Maybe ExportedFunction
-buildExportedFunction decide@(MkDecide _ tySig appForm _) = do
+buildExportedFunction :: TypeDescMap -> Decide Resolved -> Maybe ExportedFunction
+buildExportedFunction typeDescMap decide@(MkDecide _ tySig appForm _) = do
   desc <- getAnno decide ^. annDesc
   let parsed = parseDescText (getDesc desc)
   guard (parsed.flags.isExport)
@@ -111,7 +118,7 @@ buildExportedFunction decide@(MkDecide _ tySig appForm _) = do
       { exportName = resolvedToText (extractAppFormName appForm)
       , exportDescription = parsed.description
       , exportIsDefault = parsed.flags.isDefault
-      , exportParams = extractParams tySig
+      , exportParams = extractParams typeDescMap tySig
       , exportReturnType = extractReturnType tySig
       , exportDecide = decide
       }
@@ -119,15 +126,17 @@ buildExportedFunction decide@(MkDecide _ tySig appForm _) = do
 extractAppFormName :: AppForm Resolved -> Resolved
 extractAppFormName (MkAppForm _ name _ _) = name
 
-extractParams :: TypeSig Resolved -> [ExportedParam]
-extractParams (MkTypeSig _ (MkGivenSig _ names) _) =
+extractParams :: TypeDescMap -> TypeSig Resolved -> [ExportedParam]
+extractParams typeDescMap (MkTypeSig _ (MkGivenSig _ names) _) =
   fmap toParam names
  where
   toParam (MkOptionallyTypedName ann resolved mType) =
-    ExportedParam
+    let paramDesc = fmap getDesc (ann ^. annDesc)
+        fallbackDesc = mType >>= getTypeDesc typeDescMap
+    in ExportedParam
       { paramName = resolvedToText resolved
       , paramType = mType
-      , paramDescription = fmap getDesc (ann ^. annDesc)
+      , paramDescription = paramDesc <|> fallbackDesc
       , paramRequired = True
       }
 
@@ -138,3 +147,23 @@ extractReturnType (MkTypeSig _ _ giveth) =
 resolvedToText :: Resolved -> Text
 resolvedToText =
   rawNameToText . rawName . getActual
+
+buildTypeDescMap :: Module Resolved -> TypeDescMap
+buildTypeDescMap (MkModule _ _ section) =
+  Map.fromList (collectSection section)
+ where
+  collectSection (MkSection _ _ _ decls) =
+    decls >>= collectDecl
+
+  collectDecl = \ case
+    Declare _ (MkDeclare ann _ (MkAppForm _ name _ _) _) ->
+      case ann ^. annDesc of
+        Just desc -> [(getUnique name, getDesc desc)]
+        Nothing -> []
+    Section _ sub -> collectSection sub
+    _ -> []
+
+getTypeDesc :: TypeDescMap -> Type' Resolved -> Maybe Text
+getTypeDesc typeDescMap = \ case
+  TyApp _ name _ -> Map.lookup (getUnique name) typeDescMap
+  _ -> Nothing

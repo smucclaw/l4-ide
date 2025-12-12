@@ -103,10 +103,45 @@ DECLARE Person HAS
 
 The `L4.Export` module extracts param descriptions via `extractParams`, which is used by the decision service to generate JSON schema.
 
+### Parameter Description Fallback (Dec 2025)
+
+When a parameter has no explicit `@desc`, the system now falls back to the `@desc` on the parameter's declared type:
+
+```l4
+@desc a natural person assumed to have capacity
+DECLARE Person HAS name IS A STRING
+
+@desc export Check if person is adult
+GIVEN p IS A Person        -- No @desc here, falls back to "a natural person..."
+DECIDE isAdult IS p's age >= 18
+```
+
+Implementation in `L4.Export`:
+
+- `buildTypeDescMap :: Module Resolved -> Map Unique Text` - Collects `@desc` from all DECLARE statements
+- `extractParams` uses `paramDesc <|> fallbackDesc` - Prefers explicit param `@desc`, falls back to type's `@desc`
+- `getTypeDesc` looks up the type's Unique in the map
+
 ## Test Files
 
 - `jl4/examples/ok/desc.l4` - Original test cases (inline only)
 - `jl4/examples/ok/desc-extended.l4` - Extended test cases (leading + mixed styles)
+
+## Known Test Gaps
+
+The following functionality lacks dedicated unit tests:
+
+1. **`buildTypeDescMap`** - No tests verify the map is correctly built from DECLARE statements
+2. **Parameter → Type fallback** - No tests verify that parameters without explicit `@desc` fall back to their type's `@desc`
+3. **End-to-end swagger output** - No integration tests verify the fallback descriptions appear in generated OpenAPI/swagger.json
+
+**Suggested test cases:**
+
+- Parameter with explicit `@desc` → uses param desc (existing behavior)
+- Parameter without `@desc`, type has `@desc` → uses type desc (fallback)
+- Parameter without `@desc`, type has no `@desc` → no description
+- Multiple parameters of same type → all get the type's desc
+- Primitive types (NUMBER, STRING, BOOLEAN) → no fallback (no DECLARE)
 
 ## Future Work
 
