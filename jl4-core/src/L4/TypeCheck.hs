@@ -101,7 +101,7 @@ import Data.Either (partitionEithers)
 import qualified Data.List as List
 import Data.Tuple.Extra (firstM)
 import Data.List.Split (splitWhen)
-import Optics ((%~))
+import Optics ((%~), (^.))
 import qualified Base.Set as Set
 import Data.Function (on)
 import Control.Exception (assert)
@@ -114,6 +114,7 @@ mkInitialCheckState substitution =
     , infoMap      = IV.empty
     , nlgMap       = IV.empty
     , scopeMap     = IV.empty
+    , descMap      = IV.empty
     }
 
 mkInitialCheckEnv :: NormalizedUri -> Environment -> EntityInfo -> CheckEnv
@@ -171,6 +172,7 @@ doCheckProgramWithDependencies checkState checkEnv program =
               , infoMap = s'.infoMap
               , nlgMap = s'.nlgMap
               , scopeMap = s'.scopeMap
+              , descMap = s'.descMap
               }
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
@@ -803,6 +805,11 @@ inferSelector rappForm (MkTypedName ann n t) = do
   rt <- inferType t
   dn <- def n
   let selectorInfo = KnownTerm (forall' (view appFormArgs rappForm) (fun_ [appFormType rappForm] rt)) Selector
+  -- Record @desc annotation for LSP hover
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf dn) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
   pure (MkTypedName ann dn rt, [makeKnown dn selectorInfo])
 
 -- | Infers / checks a type to be of kind TYPE.
@@ -912,11 +919,21 @@ inferLamGivens (MkGivenSig ann otns) = do
     inferOptionallyTypedName (MkOptionallyTypedName ann' n Nothing) = do
       rn <- def n
       v <- fresh (rawName n)
+      recordDescForParam ann' rn
       pure (MkOptionallyTypedName ann' rn (Just v), v, [makeKnown rn (KnownTerm v Local)])
     inferOptionallyTypedName (MkOptionallyTypedName ann' n (Just t)) = do
       rn <- def n
       rt <- inferType t
+      recordDescForParam ann' rn
       pure (MkOptionallyTypedName ann' rn (Just rt), rt, [makeKnown rn (KnownTerm rt Local)])
+
+    -- | Record @desc annotation for a parameter in the descMap for LSP hover
+    recordDescForParam :: Anno -> Resolved -> Check ()
+    recordDescForParam paramAnno resolved =
+      case paramAnno ^. annDesc of
+        Just desc -> for_ (rangeOf resolved) $ \srcRange ->
+          addDescForSrcRange srcRange (getDesc desc)
+        Nothing -> pure ()
 
 -- | Turn a type signature into a type, introducing inference variables for
 -- unknown types. Also returns the result type.
@@ -929,6 +946,8 @@ inferLamGivens (MkGivenSig ann otns) = do
 typeSigType :: TypeSig Resolved -> Check (Type' Resolved, Type' Resolved, [CheckInfo])
 typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
   let (tyvars, others) = partitionEithers (isQuantifier <$> otns)
+  -- Record @desc annotations for LSP hover (must iterate over original otns to get annotations)
+  traverse_ recordDescForTypedName otns
   ronts <- traverse mkOptionallyNamedType others
   rt <- extendKnownMany (foldMap proc ronts) $
     maybeGivethType mgiveth
@@ -949,6 +968,14 @@ typeSigType (MkTypeSig _ (MkGivenSig _ otns) mgiveth) = do
 isQuantifier :: OptionallyTypedName Resolved -> Either Resolved (Resolved, Maybe (Type' Resolved))
 isQuantifier (MkOptionallyTypedName _ n (Just (Type _))) = Left n
 isQuantifier (MkOptionallyTypedName _ n mt             ) = Right (n, mt)
+
+-- | Record @desc annotation for a parameter in the descMap for LSP hover
+recordDescForTypedName :: OptionallyTypedName Resolved -> Check ()
+recordDescForTypedName (MkOptionallyTypedName ann n _) =
+  case ann ^. annDesc of
+    Just desc -> for_ (rangeOf n) $ \srcRange ->
+      addDescForSrcRange srcRange (getDesc desc)
+    Nothing -> pure ()
 
 maybeGivethType :: Maybe (GivethSig Resolved) -> Check (Type' Resolved)
 maybeGivethType Nothing                  = fresh (NormalName "r") -- we have no obvious prefix?

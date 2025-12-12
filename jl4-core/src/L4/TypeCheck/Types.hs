@@ -24,6 +24,7 @@ type RangeMap     = IV.IntervalMap SrcPos
 type InfoMap      = RangeMap Info
 type ScopeMap     = RangeMap (Environment, EntityInfo)
 type NlgMap       = RangeMap Nlg
+type DescMap      = RangeMap Text
 
 -- | Note that 'KnownType' does not imply this is a new generative type on its own,
 -- because it includes type synonyms now. For type synonyms primarily, we also store
@@ -44,6 +45,7 @@ data CheckState =
     , infoMap      :: !InfoMap
     , scopeMap     :: !ScopeMap
     , nlgMap       :: !NlgMap
+    , descMap      :: !DescMap
     }
   deriving stock (Generic)
 
@@ -371,6 +373,7 @@ data CheckResult =
     , infoMap      :: !InfoMap
     , nlgMap       :: !NlgMap
     , scopeMap     :: !ScopeMap
+    , descMap      :: !DescMap
     }
 
 -- -------------------
@@ -495,6 +498,11 @@ addNlgForSrcRange :: SrcRange -> Nlg -> Check ()
 addNlgForSrcRange srcRange i =
   modifying' #nlgMap $
     IV.insert (IV.srcRangeToInterval srcRange) i
+
+addDescForSrcRange :: SrcRange -> Text -> Check ()
+addDescForSrcRange srcRange t =
+  modifying' #descMap $
+    IV.insert (IV.srcRangeToInterval srcRange) t
 
 -- ----------------------------------------------------------------------------
 -- JL4 specific primitives for resolving names

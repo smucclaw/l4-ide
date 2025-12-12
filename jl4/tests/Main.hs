@@ -37,6 +37,7 @@ import qualified Data.CharSet as CharSet
 import qualified System.OsPath as OsPath
 import LSP.L4.Rules
 
+import qualified Hover
 import qualified SemanticTokens
 
 main :: IO ()
@@ -56,11 +57,13 @@ main = do
   tcFailsFiles <- sort <$> globDir1 (compile "not-ok/tc/**/*.l4") examplesRoot
   nlgFailsFiles <- sort <$> globDir1 (compile "not-ok/nlg/**/*.l4") examplesRoot
   semanticTokenFiles <- sort <$> globDir1 (compile "lsp/semantic-tokens/**/*.l4") examplesRoot
+  hoverFiles <- sort <$> globDir1 (compile "lsp/hover/**/*.l4") examplesRoot
   hspec do
     describe "ok files" $ tests evalConfig (True, True) (okFiles <> legalFiles <> librariesFiles) examplesRoot
     describe "tc fails" $ tests evalConfig (False, True) tcFailsFiles examplesRoot
     describe "nlg fails" $ tests evalConfig (True, False) nlgFailsFiles examplesRoot
     describe "lsp" $ SemanticTokens.semanticTokenTests evalConfig semanticTokenFiles examplesRoot
+    describe "lsp hover" $ Hover.hoverTests evalConfig hoverFiles examplesRoot
   where
     tests evalConfig (tcOk, nlgOk) files root =
       forM_ files $ \inputFile -> do
