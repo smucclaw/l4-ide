@@ -25,6 +25,7 @@
 - ✅ Helpful message for `#CHECK` (type-checking only, not evaluation)
 - ✅ `:type` / `:t` command for type inference (uses `#CHECK` directive internally)
 - ✅ `:import` / `:i` and `IMPORT <lib>` for session imports
+- ✅ Directive filtering on file load (comments out `#EVAL`/`#ASSERT` to prevent auto-execution)
 
 ### Working Demo
 
