@@ -162,7 +162,8 @@ getFileContentsImpl
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe Rope))
 getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
-    time <- use_ GetModificationTime file
+    -- Don't emit error diagnostics for missing files - they might not be in VFS yet
+    time <- use_ (GetModificationTime_ False) file
     res <- do
       mbVirtual <- getVirtualFile file
       pure $ _file_text <$> mbVirtual
