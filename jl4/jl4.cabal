@@ -37,6 +37,20 @@ executable jl4-cli
     pretty-simple,
   main-is: Main.hs
 
+executable jl4-schema
+  import: defaults
+  hs-source-dirs: app
+  build-depends:
+    jl4-core,
+    jl4-lsp,
+    aeson-pretty,
+    bytestring,
+    containers,
+    directory,
+    lsp-types,
+    optparse-applicative,
+  main-is: Schema.hs
+
 test-suite jl4-test
   import: defaults
   ghc-options: -threaded -rtsopts
@@ -49,6 +63,9 @@ test-suite jl4-test
   autogen-modules:
     Paths_jl4
   build-depends:
+    aeson-pretty,
+    bytestring,
+    containers,
     Glob,
     filepath,
     hspec,
