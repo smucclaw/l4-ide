@@ -697,20 +697,24 @@ If changing existing `FETCH`:
 ## Questions for Implementation Team
 
 1. **Which option do you prefer for HTTP POST?**
+
    - Option A: Extend FETCH with config record
    - Option B: Separate POST operator (recommended)
    - Option C: HTTP function family (GET, POST, PUT, etc.)
 
 2. **For JSON decoding, how should we handle type specification?**
+
    - Type annotation at call site? `JSON DECODE `TargetType` json_string`
    - Infer from usage context?
    - Separate decoders per type? `JSON DECODE STRING`, `JSON DECODE NUMBER`, etc.
 
 3. **Should we support environment variables for API keys?**
+
    - Add `ENV :: STRING -> MAYBE STRING` operator?
    - Or handle externally?
 
 4. **Error handling strategy?**
+
    - HTTP errors: return error JSON, MAYBE STRING, or EITHER?
    - JSON parse errors: NOTHING sufficient?
 
