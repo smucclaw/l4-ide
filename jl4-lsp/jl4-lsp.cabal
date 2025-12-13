@@ -125,6 +125,7 @@ executable jl4-lsp
     containers,
     directory,
     extra,
+    filepath,
     hls-graph ^>=2.9.0.0,
     jl4-core,
     jl4-lsp,
