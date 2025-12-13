@@ -112,9 +112,11 @@ instance Pretty Log where
 -- Helper Functions
 -- ----------------------------------------------------------------------------
 
--- | Check if a URI represents an L4 file
+-- | Check if a URI represents an L4 file (.l4 or .jl4 extension, or no extension for in-memory models)
 isL4File :: Uri -> Bool
-isL4File uri = takeExtension (Text.unpack $ getUri uri) == ".l4"
+isL4File uri = 
+  let ext = takeExtension (Text.unpack $ getUri uri)
+  in ext `elem` [".l4", ".jl4", ""]
 
 -- ----------------------------------------------------------------------------
 -- Reactor
