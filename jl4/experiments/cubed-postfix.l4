@@ -1,0 +1,9 @@
+
+@desc a sample function
+GIVEN n IS A NUMBER   @desc preferably a whole number
+n `cubed` MEANS n * n * n
+
+#EVAL 5 `cubed`
+
+#EVAL 5 cubed
+
