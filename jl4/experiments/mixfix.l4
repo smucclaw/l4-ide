@@ -31,5 +31,7 @@ a `plus` b MEANS
 #EVAL 3 `plus` 5
 #EVAL 3  plus  5
 
--- Note: Single-word mixfix operators can omit backticks (e.g., `plus` → plus)
+-- Note: Single-word mixfix operators can omit backticks
+-- Examples: `plus` → plus, `percent` → percent
 -- Multi-word keywords still require backticks (e.g., `copulated with`)
+-- This works for infix and postfix operators
