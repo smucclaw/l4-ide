@@ -47,6 +47,8 @@ executable jl4-websessions
   hs-source-dirs: app
   build-depends:
     jl4-websessions,
+    wai,
+    wai-cors,
     warp,
   ghc-options: -threaded -rtsopts
   main-is: Main.hs
