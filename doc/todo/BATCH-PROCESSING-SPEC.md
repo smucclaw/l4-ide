@@ -19,7 +19,7 @@ This document specifies a batch processing capability for L4 programs that allow
 ### What Already Exists
 
 | Component                       | Status | Location                                     |
-|---------------------------------|--------|----------------------------------------------|
+| ------------------------------- | ------ | -------------------------------------------- |
 | `jl4-cli` tool                  | ✅     | `jl4/app/Main.hs`                            |
 | `@export` annotation parsing    | ✅     | `jl4-core/src/L4/Export.hs`                  |
 | `@desc` parameter annotations   | ✅     | PR #682 (leading + inline styles)            |
@@ -53,11 +53,13 @@ This document specifies a batch processing capability for L4 programs that allow
 ### Example Scenario
 
 A legal team wants to check 1000 insurance applicants for eligibility. Instead of:
+
 - Running `jl4-cli` 1000 times
 - Manually invoking the decision service API 1000 times
 - Writing custom scripts to loop through data
 
 They can:
+
 ```bash
 jl4-cli --batch applicants.json eligibility.l4
 ```
@@ -75,9 +77,11 @@ jl4-cli [OPTIONS] --batch BATCH_FILE L4FILE
 ```
 
 **Required flags:**
+
 - `--batch FILE` or `-b FILE`: Path to batch input file (JSON/YAML/CSV)
 
 **Optional flags:**
+
 - `--output FILE` or `-o FILE`: Output file path (default: stdout)
 - `--format FORMAT` or `-f FORMAT`: Output format (json|yaml|csv, default: same as input)
 - `--entrypoint NAME` or `-e NAME`: Specific function to call (default: find `@export default`)
@@ -86,6 +90,7 @@ jl4-cli [OPTIONS] --batch BATCH_FILE L4FILE
 - `--parallel N`: Process N inputs in parallel (default: 1, sequential)
 
 **Existing flags still supported:**
+
 - `--verbose` or `-v`: Show detailed output
 - `--fixed-now ISO8601`: Pin evaluation clock
 
@@ -118,6 +123,7 @@ jl4-cli --batch data.json --parallel 4 myprogram.l4
 #### JSON Format
 
 **Array of objects:**
+
 ```json
 [
   {
@@ -134,6 +140,7 @@ jl4-cli --batch data.json --parallel 4 myprogram.l4
 ```
 
 **Single object (treated as batch of 1):**
+
 ```json
 {
   "age": 25,
@@ -145,6 +152,7 @@ jl4-cli --batch data.json --parallel 4 myprogram.l4
 #### YAML Format
 
 **Array of objects:**
+
 ```yaml
 - age: 25
   income: 50000
@@ -155,6 +163,7 @@ jl4-cli --batch data.json --parallel 4 myprogram.l4
 ```
 
 **Single object:**
+
 ```yaml
 age: 25
 income: 50000
@@ -164,6 +173,7 @@ hasViolations: false
 #### CSV Format
 
 **Header row required:**
+
 ```csv
 age,income,hasViolations
 25,50000,false
@@ -171,6 +181,7 @@ age,income,hasViolations
 ```
 
 **Type inference rules for CSV:**
+
 - Numbers without decimals → `NUMBER` (Int or Integer)
 - Numbers with decimals → `NUMBER` (Double)
 - `true`/`false` (case-insensitive) → `BOOLEAN`
@@ -178,6 +189,7 @@ age,income,hasViolations
 - Everything else → `STRING`
 
 **Special considerations:**
+
 - We support MAYBE types as a special case; when a value is given, it becomes a (JUST x). Empty cells → `NOTHING`.
 - Nested objects not supported directly in CSV (use JSON/YAML for complex structures)
 - Arrays encoded as JSON strings in cells (e.g., `"[1,2,3]"`)
@@ -196,6 +208,7 @@ age,income,hasViolations
 #### Example L4 Programs
 
 **Single export (implicit):**
+
 ```l4
 @export This function checks if a person is eligible
 GIVEN age IS A Number @desc The applicant's age
@@ -207,6 +220,7 @@ checkEligibility age income hasViolations MEANS
 ```
 
 **Multiple exports with default:**
+
 ```l4
 @export default Main eligibility check
 GIVEN applicant IS A Person
@@ -231,7 +245,7 @@ For a given entrypoint function, `L4.Export.extractParams` already extracts para
 
 ```l4
 @export default Check eligibility for insurance
-GIVEN 
+GIVEN
   @desc The applicant's age in years
   age IS A NUMBER
   @desc The applicant's full name
@@ -243,6 +257,7 @@ checkEligibility age name isActive MEANS ...
 ```
 
 The `extractParams` function returns `[ExportedParam]` where each parameter contains:
+
 ```haskell
 data ExportedParam = ExportedParam
   { paramName :: Text             -- "age", "name", "isActive"
@@ -253,6 +268,7 @@ data ExportedParam = ExportedParam
 ```
 
 **Key improvements from PR #682:**
+
 - Both **leading** (`@desc` before parameter) and **inline** (`@desc` after type) styles supported
 - Parameter descriptions extracted and available for validation error messages
 - Inline descriptions take priority when both exist
@@ -267,6 +283,7 @@ data ExportedParam = ExportedParam
 4. **Missing fields**: Error if required, skip if optional (`Maybe`)
 
 **Type coercion (following L4's existing rules):**
+
 - String → Number (if parseable)
 - Number → String (always allowed)
 - Number → Boolean (0 = false, non-zero = true)
@@ -275,16 +292,17 @@ data ExportedParam = ExportedParam
 #### Error Messages
 
 **Format:**
+
 ```
 Error in input record #3:
   Missing required field: 'age'
     Description: The applicant's age in years
   Expected type Number for field 'income', got String: "not-a-number"
     Description: Annual income in dollars
-  
+
 Input was:
   {"name": "Alice", "income": "not-a-number"}
-  
+
 Expected schema (from @desc annotations):
   { age :: Number      -- The applicant's age in years
   , name :: String     -- The applicant's full name
@@ -301,6 +319,7 @@ Expected schema (from @desc annotations):
 #### Processing Model
 
 **Sequential (default):**
+
 ```
 For each input in batch:
   1. Validate input against schema
@@ -315,6 +334,7 @@ For each input in batch:
 ```
 
 **Parallel (with `--parallel N`):**
+
 - Process up to N inputs concurrently
 - Maintain input order in output
 - Aggregate validation errors at the end
@@ -333,15 +353,16 @@ For each input in batch:
 #### Structure
 
 **Success case:**
+
 ```json
 [
   {
-    "input": {"age": 25, "income": 50000, "hasViolations": false},
+    "input": { "age": 25, "income": 50000, "hasViolations": false },
     "output": true,
     "status": "success"
   },
   {
-    "input": {"age": 17, "income": 30000, "hasViolations": true},
+    "input": { "age": 17, "income": 30000, "hasViolations": true },
     "output": false,
     "status": "success"
   }
@@ -349,15 +370,16 @@ For each input in batch:
 ```
 
 **With errors (when `--continue-on-error` is set):**
+
 ```json
 [
   {
-    "input": {"age": 25, "income": 50000, "hasViolations": false},
+    "input": { "age": 25, "income": 50000, "hasViolations": false },
     "output": true,
     "status": "success"
   },
   {
-    "input": {"name": "Bob"},
+    "input": { "name": "Bob" },
     "error": "Missing required field: 'age'",
     "status": "error"
   }
@@ -365,6 +387,7 @@ For each input in batch:
 ```
 
 **Simplified output (if `--simple` flag is added):**
+
 ```json
 [true, false, true, true, false]
 ```
@@ -372,6 +395,7 @@ For each input in batch:
 #### Format Conversion
 
 **JSON → YAML:**
+
 ```yaml
 - input:
     age: 25
@@ -382,6 +406,7 @@ For each input in batch:
 ```
 
 **JSON → CSV:**
+
 ```csv
 input_age,input_income,input_hasViolations,output,status
 25,50000,false,true,success
@@ -389,6 +414,7 @@ input_age,input_income,input_hasViolations,output,status
 ```
 
 **CSV → JSON/YAML:**
+
 - Read CSV as records
 - Output as structured JSON/YAML
 
@@ -401,6 +427,7 @@ input_age,input_income,input_hasViolations,output,status
 **Goal**: Basic JSON batch processing without validation
 
 **Tasks:**
+
 1. Add command-line option parsing for `--batch`
 2. Implement JSON array parser
 3. Wire up `getExportedFunctions` to find entrypoint
@@ -408,6 +435,7 @@ input_age,input_income,input_hasViolations,output,status
 5. Output JSON results to stdout
 
 **Acceptance criteria:**
+
 - `jl4-cli --batch inputs.json program.l4` works for simple programs
 - Output is JSON array of results
 
@@ -416,6 +444,7 @@ input_age,input_income,input_hasViolations,output,status
 **Goal**: Validate inputs against L4 function signatures
 
 **Tasks:**
+
 1. Use `L4.Export.extractParams` to get parameter schema from entrypoint
 2. Map JSON/YAML/CSV field names to `ExportedParam.paramName`
 3. Implement type validation logic (reuse existing coercion rules from `L4.TypeCheck`)
@@ -424,6 +453,7 @@ input_age,input_income,input_hasViolations,output,status
 6. Add `--continue-on-error` flag
 
 **Acceptance criteria:**
+
 - Validation errors include parameter descriptions from `@desc` annotations
 - Validation errors are reported clearly with record numbers
 - `--validate-only` checks inputs without executing
@@ -434,6 +464,7 @@ input_age,input_income,input_hasViolations,output,status
 **Goal**: Support multiple input/output formats
 
 **Tasks:**
+
 1. Add YAML parser (use existing `yaml` library)
 2. Add CSV parser (use `cassava` library)
 3. Implement CSV type inference
@@ -441,6 +472,7 @@ input_age,input_income,input_hasViolations,output,status
 5. Implement format converters (JSON↔YAML↔CSV)
 
 **Acceptance criteria:**
+
 - `--batch inputs.yaml` works
 - `--batch inputs.csv` works
 - `--format yaml` converts JSON input to YAML output
@@ -450,12 +482,14 @@ input_age,input_income,input_hasViolations,output,status
 **Goal**: Parallel processing and output options
 
 **Tasks:**
+
 1. Add `--simple` flag for minimal output
 2. Add `--output FILE` for writing results to file
 3. Add progress indicator for large batches
 4. Support `--trace` to dump the EVALTRACE workings of how an answer was achieved to a companion output file, or inilne alongside the usual responses. For example, a special JSON attribute in each response object could have the name "TRACE" and contain a JSON represenation of the evaluation trace.
 
 **Acceptance criteria:**
+
 - Large batches show progress (e.g., "Processed 500/1000")
 - Output file writing works
 
@@ -480,6 +514,7 @@ input_age,input_income,input_hasViolations,output,status
 ### Golden File Tests
 
 Create golden files for:
+
 - Batch processing outputs for various input formats
 - Error messages for validation failures
 - Schema extraction for different L4 function signatures
@@ -487,6 +522,7 @@ Create golden files for:
 ### Test Data
 
 Create sample files:
+
 - `test/batch/simple-inputs.json`
 - `test/batch/simple-inputs.yaml`
 - `test/batch/simple-inputs.csv`
@@ -494,6 +530,7 @@ Create sample files:
 - `test/batch/nested-inputs.json` (complex types)
 
 Sample L4 programs:
+
 - `test/batch/simple-eligibility.l4` (Boolean output)
 - `test/batch/detailed-check.l4` (Record output)
 - `test/batch/multi-export.l4` (multiple entrypoints)
@@ -505,16 +542,19 @@ Sample L4 programs:
 ### Categories of Errors
 
 1. **File errors**:
+
    - Batch file not found
    - L4 file not found
    - Unable to parse batch file (malformed JSON/YAML/CSV)
 
 2. **Schema errors**:
+
    - No entrypoint found
    - Multiple entrypoints without default
    - Ambiguous entrypoint specification
 
 3. **Validation errors**:
+
    - Missing required field
    - Type mismatch
    - Coercion failure
@@ -619,6 +659,7 @@ For production use, consider tracking:
 - **Memory usage**: Peak memory for large batches
 
 **Logging levels:**
+
 - `ERROR`: Fatal errors (file not found, parse failures)
 - `WARN`: Validation errors (when `--continue-on-error` is set)
 - `INFO`: Progress updates (every N records)
@@ -631,6 +672,7 @@ For production use, consider tracking:
 In a future version, consider:
 
 1. **Resource limits**: Prevent DOS by limiting:
+
    - Maximum file size (e.g., 100MB)
    - Maximum records per batch (e.g., 100,000)
    - Maximum execution time per record (e.g., 10 seconds)
@@ -667,4 +709,3 @@ In a future version, consider:
 - [ ] Phases 1 and 2 complete (JSON batch processing with validation)
 - [ ] Basic error handling and reporting
 - [ ] At least 3 golden file tests
-
