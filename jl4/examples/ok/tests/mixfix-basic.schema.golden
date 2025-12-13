@@ -1,1 +1,17 @@
-No @export annotations found in file
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "a": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "b": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "a",
+        "b"
+    ],
+    "title": "plus",
+    "type": "object"
+}

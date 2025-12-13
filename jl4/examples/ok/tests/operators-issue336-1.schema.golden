@@ -1,1 +1,37 @@
-No @export annotations found in file
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "alpha": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "beta": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "dodo": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "donkey": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "dove": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "durian": {
+            "$ref": "#/$defs/BOOLEAN"
+        },
+        "gamma": {
+            "$ref": "#/$defs/BOOLEAN"
+        }
+    },
+    "required": [
+        "alpha",
+        "beta",
+        "gamma",
+        "donkey",
+        "durian",
+        "dodo",
+        "dove"
+    ],
+    "title": "issue336a",
+    "type": "object"
+}
