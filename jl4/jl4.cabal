@@ -30,12 +30,18 @@ executable jl4-cli
   build-depends:
     jl4-core,
     jl4-lsp,
+    aeson,
+    bytestring,
+    cassava,
     directory,
     text,
     time,
     lsp-types,
     optparse-applicative,
     pretty-simple,
+    unordered-containers,
+    vector,
+    yaml,
   main-is: Main.hs
 
 executable jl4-schema

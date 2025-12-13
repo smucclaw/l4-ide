@@ -1,16 +1,28 @@
 module Main where
 
-import Base (NonEmpty, for_, when, unless, liftIO)
+import Base (NonEmpty, for_, when, unless, liftIO, forM)
 import Base.Text (Text)
 import qualified Base.Text as Text
+import qualified Data.Text.IO as Text.IO
 import qualified Data.Text.Lazy as Text.Lazy
+import qualified Data.Text.Lazy.Encoding as Text.Lazy.Encoding
 import Control.Applicative ((<|>))
+import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (some1)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Csv as Csv
+import qualified Data.Yaml as Yaml
+import qualified Data.Vector as Vector
+import qualified Data.HashMap.Strict as HashMap
+import Data.Text.Encoding (decodeUtf8)
 import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
-import System.IO (stdout, hIsTerminalDevice)
+import System.IO (stdin, stdout, hIsTerminalDevice)
 import Text.Pretty.Simple (pShow, pShowNoColor)
 
 import qualified LSP.Core.Shake as Shake
@@ -18,11 +30,138 @@ import LSP.Logger
 import Language.LSP.Protocol.Types
 
 import qualified LSP.L4.Rules as Rules
-import LSP.L4.Oneshot (oneshotL4Action)
+import LSP.L4.Oneshot (oneshotL4Action, oneshotL4ActionAndErrors)
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig)
+import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
+import L4.Syntax (Type'(..), Resolved, Module(..))
+import L4.Print (prettyLayout)
+import L4.DirectiveFilter (filterIdeDirectives)
 import Data.Time (UTCTime)
+import qualified Data.List as List
+
+-- | Parse batch input based on format (json, yaml, or csv)
+parseBatchInput :: Text -> BSL.ByteString -> Either String [Aeson.Value]
+parseBatchInput fmt bytes = case Text.toLower fmt of
+  "json" -> Aeson.eitherDecode' bytes
+  
+  "yaml" -> case Yaml.decodeEither' (BSL.toStrict bytes) of
+    Left err -> Left (Yaml.prettyPrintParseException err)
+    Right val -> case val of
+      Aeson.Array arr -> Right $ Vector.toList arr
+      single -> Right [single]
+  
+  "csv" -> case Csv.decodeByName bytes of
+    Left err -> Left err
+    Right (_, rows) -> Right $ map rowToJson $ Vector.toList rows
+      where
+        rowToJson :: Csv.NamedRecord -> Aeson.Value
+        rowToJson record = Aeson.Object $ KeyMap.fromList $ 
+          map (\(k, v) -> (Key.fromText $ decodeUtf8 k, Aeson.String $ decodeUtf8 v)) $
+          HashMap.toList record
+  
+  _ -> Left $ "Unsupported format: " ++ Text.unpack fmt
+
+----------------------------------------------------------------------------
+-- Wrapper code generation (adapted from jl4-decision-service/Backend/CodeGen.hs)
+----------------------------------------------------------------------------
+
+-- | Generate L4 wrapper code for JSONDECODE-based batch evaluation
+generateBatchWrapper
+  :: Text                                -- ^ Target function name
+  -> [(Text, Maybe (Type' Resolved))]    -- ^ Parameter names and types
+  -> Aeson.Value                         -- ^ Input arguments as JSON object
+  -> Text                                -- ^ Generated L4 wrapper code
+generateBatchWrapper funName params inputJson =
+  if null params
+    then Text.unlines
+      [ ""
+      , "-- ========== GENERATED WRAPPER =========="
+      , ""
+      , "#EVAL " <> funName
+      ]
+    else Text.unlines
+      [ ""
+      , "-- ========== GENERATED WRAPPER =========="
+      , ""
+      , generateInputRecord params
+      , ""
+      , generateDecoder
+      , ""
+      , generateJsonPayload inputJson
+      , ""
+      , generateEvalDirective funName params
+      ]
+
+-- | Generate DECLARE for input record
+generateInputRecord :: [(Text, Maybe (Type' Resolved))] -> Text
+generateInputRecord params = Text.unlines $
+  ["DECLARE InputArgs HAS"] ++
+  map formatField (zip [0::Int ..] params)
+  where
+    formatField (idx, (name, mty)) =
+      let fieldIndent = if idx == 0 then "  " else ", "
+          tyText = maybe "A NUMBER" prettyLayout mty
+      in fieldIndent <> name <> " IS " <> tyText
+
+-- | Generate typed decoder function
+generateDecoder :: Text
+generateDecoder = Text.unlines
+  [ "GIVEN jsn IS A STRING"
+  , "GIVETH AN EITHER STRING InputArgs"
+  , "decodeArgs jsn MEANS JSONDECODE jsn"
+  ]
+
+-- | Generate JSON payload as L4 string literal
+generateJsonPayload :: Aeson.Value -> Text
+generateJsonPayload json =
+  "DECIDE inputJson IS " <> escapeAsL4String json
+
+-- | Escape JSON value as an L4 string literal
+escapeAsL4String :: Aeson.Value -> Text
+escapeAsL4String val =
+  let jsonText = Text.Lazy.toStrict $ Text.Lazy.Encoding.decodeUtf8 $ Aeson.encode val
+      escaped = Text.replace "\"" "\\\"" jsonText
+  in "\"" <> escaped <> "\""
+
+-- | Generate EVAL with CONSIDER/WHEN unwrapper
+generateEvalDirective :: Text -> [(Text, Maybe (Type' Resolved))] -> Text
+generateEvalDirective funName params = Text.unlines $
+  [ "#EVAL"
+  , "  CONSIDER decodeArgs inputJson"
+  , "    WHEN RIGHT args THEN JUST (" <> functionCall <> ")"
+  , "    WHEN LEFT error THEN NOTHING"
+  ]
+  where
+    functionCall = funName <> " " <> Text.unwords (map mkArgAccess params)
+    mkArgAccess (name, _) = "(args's " <> name <> ")"
+
+-- | Extract parameter info from ExportedFunction
+extractParamsFromExport :: ExportedFunction -> [(Text, Maybe (Type' Resolved))]
+extractParamsFromExport ef = 
+  [(p.paramName, p.paramType) | p <- ef.exportParams]
+
+-- | Find export function by name or default
+findExportFunction :: Maybe Text -> Module Resolved -> Either Text ExportedFunction
+findExportFunction mName m = 
+  let exports = getExportedFunctions m
+  in case mName of
+    Just name -> 
+      case List.find (\e -> e.exportName == name) exports of
+        Just ef -> Right ef
+        Nothing -> Left $ "No @export function named '" <> name <> "' found"
+    Nothing ->
+      case getDefaultFunction m of
+        Just ef -> Right ef
+        Nothing -> 
+          case exports of
+            (ef:_) -> Right ef
+            [] -> Left "No @export functions found in module"
+
+----------------------------------------------------------------------------
+-- Logging
+----------------------------------------------------------------------------
 
 data Log
   = IdeLog Oneshot.Log
@@ -30,6 +169,7 @@ data Log
   | ExactPrint !Text
   | ShowAst !Text.Lazy.Text
   | SuccessOnly
+  | BatchProcessing !Text
 
 instance Pretty Log where
   pretty = \ case
@@ -38,6 +178,11 @@ instance Pretty Log where
     ExactPrint ep -> nest 2 $ vsep [pretty SuccessOnly, pretty ep]
     ShowAst ast -> pretty ast
     SuccessOnly -> "Checking succeeded."
+    BatchProcessing msg -> "Batch:" <+> pretty msg
+
+----------------------------------------------------------------------------
+-- Main
+----------------------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -49,41 +194,143 @@ main = do
 
   (getErrs, errRecorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
 
-  oneshotL4Action (cmapWithPrio IdeLog recorder) evalConfig curDir \_ ->
-    for_ options.files \fp -> do
-      let nfp = toNormalizedFilePath fp
-          uri = normalizedFilePathToUri nfp
-      _ <- Shake.addVirtualFileFromFS nfp
-      mtc <- Shake.use Rules.SuccessfulTypeCheck  uri
-      _ <- Shake.use Rules.EvaluateLazy uri
-      mep <- Shake.use Rules.ExactPrint uri
-      case (mtc, mep) of
-        (Just tcRes, Just ep)
-          | tcRes.success -> do
-              when options.verbose $ logWith recorder Info $ ExactPrint ep
-              when options.showAst $ do
-                mast <- Shake.use Rules.GetParsedAst uri
-                case mast of
-                  Just ast -> do
-                    isTTY <- liftIO $ hIsTerminalDevice stdout
-                    let showFn = if isTTY then pShow else pShowNoColor
-                    logWith recorder Info $ ShowAst (showFn ast)
-                  Nothing -> pure ()
-              unless (options.verbose || options.showAst) $ logWith recorder Info SuccessOnly
-        (_, _)            -> do
-          logWith    recorder Error $ CheckFailed uri
-          logWith errRecorder Error $ CheckFailed uri
+  case options.batchFile of
+    Just batchPath -> do
+      -- Batch processing mode
+      when (batchPath == "-" && options.batchFormat == Nothing) $ do
+        logWith recorder Error $ BatchProcessing "Error: --format is required when reading from stdin (--batch -)"  
+        exitFailure
+      
+      let inferredFormat = case batchPath of
+            "-" -> Nothing
+            path
+              | ".json" `Text.isSuffixOf` Text.pack path -> Just "json"
+              | ".yaml" `Text.isSuffixOf` Text.pack path -> Just "yaml"
+              | ".yml" `Text.isSuffixOf` Text.pack path -> Just "yaml"
+              | ".csv" `Text.isSuffixOf` Text.pack path -> Just "csv"
+              | otherwise -> Nothing
+          format = options.batchFormat <|> inferredFormat
+      
+      batchBytes <- if batchPath == "-"
+        then BSL.hGetContents stdin
+        else BSL.readFile batchPath
+      
+      case format of
+        Nothing -> do
+          logWith recorder Error $ BatchProcessing "Error: Could not determine input format. Use --format to specify."
+          exitFailure
+        Just fmt -> do
+          let parseResult = parseBatchInput fmt batchBytes
+          case parseResult of
+            Left err -> do
+              logWith recorder Error $ BatchProcessing $ Text.pack $ "Failed to parse batch file: " ++ err
+              exitFailure
+            Right inputs -> do
+              logWith recorder Info $ BatchProcessing $ Text.pack $ "Processing " ++ show (length inputs) ++ " inputs"
+              
+              let l4File = NE.head options.files
+              
+              -- Read source file (need for combining with wrapper)
+              _sourceText <- Text.IO.readFile l4File
+              
+              -- Phase 1: Parse and typecheck to get exports
+              (initErrs, mTcRes) <- oneshotL4ActionAndErrors evalConfig l4File $ \_ -> do
+                let nfp = toNormalizedFilePath l4File
+                let uri = normalizedFilePathToUri nfp
+                _ <- Shake.addVirtualFileFromFS nfp
+                Shake.use Rules.SuccessfulTypeCheck uri
+              
+              case mTcRes of
+                Nothing -> do
+                  logWith recorder Error $ BatchProcessing $ "Type checking failed: " <> Text.concat initErrs
+                  exitFailure
+                Just tcRes | not tcRes.success -> do
+                  logWith recorder Error $ BatchProcessing "Type checking failed"
+                  exitFailure
+                Just tcRes -> do
+                  -- Phase 2: Find target export function
+                  case findExportFunction options.entrypoint tcRes.module' of
+                    Left err -> do
+                      logWith recorder Error $ BatchProcessing err
+                      exitFailure
+                    Right exportFn -> do
+                      logWith recorder Info $ BatchProcessing $ "Using @export function: " <> exportFn.exportName
+                      
+                      -- Phase 3: Filter IDE directives from source module
+                      let filteredModule = filterIdeDirectives tcRes.module'
+                          filteredSource = prettyLayout filteredModule
+                          params = extractParamsFromExport exportFn
+                      
+                      -- Phase 4: For each input, generate wrapper and evaluate
+                      results <- forM (zip [1::Int ..] inputs) $ \(idx, input) -> do
+                        let wrapperCode = generateBatchWrapper exportFn.exportName params input
+                            combinedProgram = filteredSource <> wrapperCode
+                        
+                        -- Evaluate combined program
+                        let virtualPath = l4File ++ ".batch" ++ show idx ++ ".l4"
+                        (evalErrs, mEvalRes) <- oneshotL4ActionAndErrors evalConfig virtualPath $ \_ -> do
+                          let nfp = toNormalizedFilePath virtualPath
+                          let uri = normalizedFilePathToUri nfp
+                          _ <- Shake.addVirtualFile nfp combinedProgram
+                          mEval <- Shake.use Rules.EvaluateLazy uri
+                          pure mEval
+                        
+                        let (status, output, diagnostics) = case mEvalRes of
+                              Nothing -> 
+                                ("error" :: Text, Aeson.Null, Aeson.toJSON evalErrs)
+                              Just evalResults ->
+                                ("success", Aeson.toJSON (map (Text.pack . show) evalResults), Aeson.Array mempty)
+                        
+                        pure $ Aeson.object
+                          [ "input" Aeson..= input
+                          , "output" Aeson..= output
+                          , "status" Aeson..= status
+                          , "diagnostics" Aeson..= diagnostics
+                          ]
+                      
+                      BSL.putStr $ Aeson.encode results
+                      exitSuccess
 
-  errs <- getErrs
-  if null errs
-  then exitSuccess
-  else exitFailure
+    Nothing -> do
+      -- Normal oneshot processing mode
+      oneshotL4Action (cmapWithPrio IdeLog recorder) evalConfig curDir \_ ->
+        for_ options.files \fp -> do
+          let nfp = toNormalizedFilePath fp
+              uri = normalizedFilePathToUri nfp
+          _ <- Shake.addVirtualFileFromFS nfp
+          mtc <- Shake.use Rules.SuccessfulTypeCheck  uri
+          _ <- Shake.use Rules.EvaluateLazy uri
+          mep <- Shake.use Rules.ExactPrint uri
+          case (mtc, mep) of
+            (Just tcRes, Just ep)
+              | tcRes.success -> do
+                  when options.verbose $ logWith recorder Info $ ExactPrint ep
+                  when options.showAst $ do
+                    mast <- Shake.use Rules.GetParsedAst uri
+                    case mast of
+                      Just ast -> do
+                        isTTY <- liftIO $ hIsTerminalDevice stdout
+                        let showFn = if isTTY then pShow else pShowNoColor
+                        logWith recorder Info $ ShowAst (showFn ast)
+                      Nothing -> pure ()
+                  unless (options.verbose || options.showAst) $ logWith recorder Info SuccessOnly
+            (_, _)            -> do
+              logWith    recorder Error $ CheckFailed uri
+              logWith errRecorder Error $ CheckFailed uri
+
+      errs <- getErrs
+      if null errs
+      then exitSuccess
+      else exitFailure
 
 data Options = MkOptions
   { files :: NonEmpty FilePath
   , verbose :: Bool
   , showAst :: Bool
   , fixedNow :: Maybe UTCTime
+  , batchFile :: Maybe FilePath
+  , batchFormat :: Maybe Text
+  , entrypoint :: Maybe Text
   }
 
 optionsDescription :: Options.Parser Options
@@ -92,6 +339,9 @@ optionsDescription = MkOptions
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
+  <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
+  <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
+  <*> optional (Options.strOption (long "entrypoint" <> short 'e' <> metavar "FUNCTION" <> help "Name of @export function to call (defaults to @export default or first @export)"))
 
 fixedNowReader :: ReadM UTCTime
 fixedNowReader =
