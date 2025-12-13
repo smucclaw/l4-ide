@@ -1,1 +1,62 @@
-No @export annotations found in file
+{
+    "$defs": {
+        "Inputs": {
+            "properties": {
+                "Loss or Damage.caused by birds": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Loss or Damage.caused by insects": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Loss or Damage.caused by rodents": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Loss or Damage.caused by vermin": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Loss or Damage.ensuing covered loss": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "Loss or Damage.to Contents": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "a household appliance": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "a plumbing, heating, or air conditioning system": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "a swimming pool": {
+                    "$ref": "#/$defs/BOOLEAN"
+                },
+                "any other exclusion applies": {
+                    "$ref": "#/$defs/BOOLEAN"
+                }
+            },
+            "required": [
+                "Loss or Damage.caused by rodents",
+                "Loss or Damage.caused by insects",
+                "Loss or Damage.caused by vermin",
+                "Loss or Damage.caused by birds",
+                "Loss or Damage.to Contents",
+                "any other exclusion applies",
+                "a household appliance",
+                "a swimming pool",
+                "a plumbing, heating, or air conditioning system",
+                "Loss or Damage.ensuing covered loss"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "i": {
+            "$ref": "#/$defs/Inputs"
+        }
+    },
+    "required": [
+        "i"
+    ],
+    "title": "insurance covered",
+    "type": "object"
+}
