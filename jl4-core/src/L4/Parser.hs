@@ -1089,7 +1089,11 @@ mixfixPostfixOp exprEndLine = hidden $ try $ do
   nextTok <- lookAhead anySingle
   -- Only proceed if the backticked name is on the same line as where the expression ended
   guard (exprEndLine == nextTok.range.start.line)
-  eN <- (MkName emptyAnno . NormalName) <<$>> spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
+  -- Accept both backticked names (`cubed`) and bare identifiers (cubed)
+  -- The typechecker will validate if the identifier is a registered mixfix operator
+  eN <- (MkName emptyAnno . NormalName) <<$>>
+    (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
+     <|> spacedToken (#_TIdentifiers % #_TIdentifier) "postfix identifier")
   -- Check that this is NOT followed by an expression ON THE SAME LINE
   -- (which would make it infix). Expressions on subsequent lines don't count.
   notFollowedBy (sameLineExpr exprEndLine)

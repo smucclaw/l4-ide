@@ -28,6 +28,7 @@
     "eslint-config-prettier": "^9.1.0",
     "lucide-svelte": "^0.479.0",
     "paneforge": "^1.0.0-next.4",
+    "playwright": "^1.57.0",
     "prettier": "^3.4.1",
     "prettier-plugin-svelte": "^3.3.3",
     "svelte": "^5.25.0",

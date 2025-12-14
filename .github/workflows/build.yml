@@ -127,11 +127,10 @@ jobs:
           cache-dependency-path: package-lock.json
           node-version: ${{ matrix.node-version }}
           cache: npm
+      # Note: We rely on `npm ci` to validate package-lock.json integrity.
+      # Explicit sync checks are fragile due to npm version differences changing
+      # peer dependency metadata flags, causing false positives.
       - run: npm ci
-      - name: Check if package.json in sync with lockfile
-        run: |
-          npm install --ignore-scripts --package-lock-only --engine-strict
-          git diff --exit-code package-lock.json
       - run: npm run build
       - run: npm run lint
       - run: npm run format:check

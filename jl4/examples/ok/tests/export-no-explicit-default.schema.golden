@@ -1,0 +1,15 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Calculate the square of a number",
+    "properties": {
+        "x": {
+            "$ref": "#/$defs/NUMBER",
+            "description": " The input number"
+        }
+    },
+    "required": [
+        "x"
+    ],
+    "title": "squared",
+    "type": "object"
+}

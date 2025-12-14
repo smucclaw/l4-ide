@@ -122,7 +122,15 @@ testQuinaryMixfix MEANS 1 `op1` 2 `op2` 3 `op3` 4 `op4` 5
 -- due to a known issue with how the parser handles whitespace after postfix.
 -- These tests are placed at the end of the file where they work correctly.
 -- ============================================================================
+
+-- Postfix with backticks
 #EVAL 50 `percent`
 #EVAL 75 `percent`
 #EVAL (33 `plus` 22) `percent`
 #EVAL (10 + 5) `percent`
+
+-- Postfix without backticks (single-word operators can omit backticks)
+#EVAL 50 percent
+#EVAL 75 percent
+#EVAL (33 plus 22) percent
+#EVAL (10 + 5) percent

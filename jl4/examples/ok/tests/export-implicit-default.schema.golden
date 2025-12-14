@@ -1,0 +1,15 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": " a simple sample function",
+    "properties": {
+        "n": {
+            "$ref": "#/$defs/NUMBER",
+            "description": " preferably a whole number"
+        }
+    },
+    "required": [
+        "n"
+    ],
+    "title": "cubed",
+    "type": "object"
+}

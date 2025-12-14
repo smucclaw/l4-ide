@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Build artifacts
+dist-newstyle
+.stack-work
+node_modules
+build
+.svelte-kit
+.turbo
+
+# Documentation
+*.md
+!README.md
+doc/images
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test files
+*.test
+test-output
+.golden
+
+# Development
+.env
+.env.local
+*.log
+tmp
+*.tmp
+
+# CI/CD
+.github
+.claude
+
+# Nix
+result
+result-*
+
+# Editor config
+.editorconfig
+.prettierignore
+.prettierrc

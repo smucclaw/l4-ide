@@ -1,1 +1,30 @@
-No @export annotations found in file
+{
+    "$defs": {
+        "PAIR": {
+            "properties": {
+                "fst": {
+                    "$ref": "#/$defs/a"
+                },
+                "snd": {
+                    "$ref": "#/$defs/b"
+                }
+            },
+            "required": [
+                "fst",
+                "snd"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "x": {
+            "$ref": "#/$defs/PAIR"
+        }
+    },
+    "required": [
+        "x"
+    ],
+    "title": "sumPairs1",
+    "type": "object"
+}

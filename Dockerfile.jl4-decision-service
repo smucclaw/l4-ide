@@ -1,0 +1,59 @@
+# Multi-stage build for jl4-decision-service
+FROM haskell:9.8.4 AS builder
+
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy cabal project files
+COPY cabal.project .
+COPY jl4-core/jl4-core.cabal jl4-core/
+COPY jl4/jl4.cabal jl4/
+COPY jl4-lsp/jl4-lsp.cabal jl4-lsp/
+COPY jl4-websessions/jl4-websessions.cabal jl4-websessions/
+COPY jl4-decision-service/jl4-decision-service.cabal jl4-decision-service/
+
+# Build dependencies
+RUN cabal update && cabal build --only-dependencies jl4-decision-service
+
+# Copy source code
+COPY jl4-core jl4-core
+COPY jl4 jl4
+COPY jl4-lsp jl4-lsp
+COPY jl4-websessions jl4-websessions
+COPY jl4-decision-service jl4-decision-service
+
+# Build the project
+RUN cabal build jl4-decision-service && \
+    cabal install jl4-decision-service:exe:jl4-decision-service-exe \
+      --installdir=/opt/jl4-decision-service --install-method=copy
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libgmp10 \
+    libffi8 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /opt/jl4-decision-service/jl4-decision-service-exe /usr/local/bin/
+
+# Copy example L4 files
+COPY jl4/examples /app/examples
+COPY doc/tutorial-code /app/tutorial-code
+
+EXPOSE 8001
+
+CMD ["jl4-decision-service-exe", \
+     "--port", "8001", \
+     "--serverName", "http://localhost:8001", \
+     "--sourcePaths", "/app/examples", \
+     "--sourcePaths", "/app/tutorial-code", \
+     "--crudServerName", "jl4-websessions", \
+     "--crudServerPort", "8002"]

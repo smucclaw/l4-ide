@@ -1,0 +1,9 @@
+-- Test: File with exports but no explicit default should mark topmost export as default
+
+@export Calculate the square of a number
+GIVEN x IS A NUMBER @desc The input number
+squared x MEANS x * x
+
+@export Calculate the cube of a number
+GIVEN n IS A NUMBER @desc The input number
+cubed n MEANS n * n * n

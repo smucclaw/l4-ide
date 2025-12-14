@@ -1,0 +1,15 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Calculate the cube of a number",
+    "properties": {
+        "n": {
+            "$ref": "#/$defs/NUMBER",
+            "description": " The input number"
+        }
+    },
+    "required": [
+        "n"
+    ],
+    "title": "cubed",
+    "type": "object"
+}

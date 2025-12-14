@@ -1,0 +1,94 @@
+services:
+  # LSP WebSocket Server
+  jl4-lsp:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-lsp
+    container_name: jl4-lsp
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./jl4-core/libraries:/app/libraries:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Decision Service API
+  jl4-decision-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-decision-service
+    container_name: jl4-decision-service
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./jl4/examples:/app/examples:ro
+      - ./doc/tutorial-code:/app/tutorial-code:ro
+    depends_on:
+      jl4-websessions:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "wget --spider http://localhost:8001/functions || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Websessions Service
+  jl4-websessions:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-websessions
+    container_name: jl4-websessions
+    ports:
+      - "8002:8002"
+    volumes:
+      - websessions-data:/data
+    healthcheck:
+      test:
+        ["CMD", "sh", "-c", "wget --spider http://localhost:8002/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # Web Frontend
+  jl4-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.jl4-web
+    container_name: jl4-web
+    ports:
+      - "5173:5173"
+    depends_on:
+      jl4-lsp:
+        condition: service_healthy
+      jl4-websessions:
+        condition: service_healthy
+      jl4-decision-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:5173"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  websessions-data:
+    driver: local
+
+networks:
+  default:
+    name: jl4-network

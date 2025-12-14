@@ -4,15 +4,28 @@ Quick reference for deploying L4 services to different environments.
 
 ## Environments
 
-| Environment    | URL                                | Flake Target          | Use Case                      |
-| -------------- | ---------------------------------- | --------------------- | ----------------------------- |
-| **Local Dev**  | `localhost:8001`, `localhost:8002` | N/A (use `cabal run`) | Local development and testing |
-| **Dev Server** | `https://dev.jl4.legalese.com`     | `jl4-dev`             | Cloud-based testing, staging  |
-| **Production** | `https://jl4.legalese.com`         | `jl4-aws-2505`        | Live production environment   |
+| Environment    | URL                                | Deployment Method            | Use Case                      |
+| -------------- | ---------------------------------- | ---------------------------- | ----------------------------- |
+| **Local Dev**  | `localhost:8001`, `localhost:8002` | Docker (`./jl4-dev start`)   | Local development and testing |
+| **Dev Server** | `https://dev.jl4.legalese.com`     | NixOS flake (`jl4-dev`)      | Cloud-based testing, staging  |
+| **Production** | `https://jl4.legalese.com`         | NixOS flake (`jl4-aws-2505`) | Live production environment   |
 
 ## Quick Deploy Commands
 
 ### Local Development
+
+**Docker (Recommended - One Command Start):**
+
+```bash
+# See doc/DOCKER.md for detailed instructions
+./jl4-dev start        # Production build
+./jl4-dev start-dev    # Development mode with hot reload
+./jl4-dev logs         # View logs
+./jl4-dev test         # Test all services
+./jl4-dev stop         # Stop everything
+```
+
+**Manual Cabal (Legacy):**
 
 ```bash
 # See dev-config.md for detailed instructions
