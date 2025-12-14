@@ -503,19 +503,16 @@ tests/*.l4                             @qa-team
 When reviewing multi-file changes:
 
 1. **Type Changes** (core/types.l4):
-
    - Do all dependent modules still compile?
    - Are there breaking changes to API exports?
    - Do existing tests still pass?
 
 2. **Validation Changes** (validation/\*.l4):
-
    - Are new validation rules properly tested?
    - Do they integrate correctly with the pipeline?
    - Are error messages clear and actionable?
 
 3. **Pipeline Changes** (operations/\*.l4):
-
    - Does the orchestration logic make sense?
    - Are all validation steps included?
    - Is error handling comprehensive?
