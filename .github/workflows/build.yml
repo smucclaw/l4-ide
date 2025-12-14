@@ -127,6 +127,8 @@ jobs:
           cache-dependency-path: package-lock.json
           node-version: ${{ matrix.node-version }}
           cache: npm
+      - name: Install specific npm version
+        run: npm install -g npm@10.8.2
       - run: npm ci
       - name: Check if package.json in sync with lockfile
         run: |
