@@ -8,9 +8,9 @@ module L4.EvaluateLazy.GraphViz (
 import Base
 import qualified Base.Text as Text
 import L4.EvaluateLazy.Trace (EvalTrace(..))
-import L4.EvaluateLazy.Machine (EvalException)
-import L4.Evaluate.ValueLazy (NF)
-import L4.Syntax (Expr, Resolved)
+import L4.EvaluateLazy.Machine (EvalException, boolView)
+import L4.Evaluate.ValueLazy (NF(..))
+import L4.Syntax (Expr(..), Resolved)
 import L4.Print (prettyLayout)
 
 -- | Options for controlling GraphViz output
@@ -76,32 +76,37 @@ renderTrace opts@(GraphVizOptions {maxDepth, simplifyTrivial}) depth nodeId (Tra
 -- | Render all child steps
 renderChildren :: GraphVizOptions -> Int -> Int -> Int -> [(Expr Resolved, [EvalTrace])] -> (Text, Int)
 renderChildren _opts _depth _parentNode nodeId [] = ("", nodeId)
-renderChildren opts depth parentNode nodeId ((_, subtraces):rest) =
+renderChildren opts depth parentNode nodeId ((expr, subtraces):rest) =
   let parentNodeId = "node" <> Text.pack (show parentNode)
-      
+
       -- Render each subtrace
-      (childTexts, nextId) = renderSubtraces opts (depth + 1) nodeId subtraces
-      
-      -- Create edges from parent to children
-      edges = foldl' (\acc childIdx ->
-                       let edgeDef = "  " <> parentNodeId <> " -> node" <> Text.pack (show childIdx) 
-                                   <> " [color=\"#2ca02c\", penwidth=2];\n"
-                       in acc <> edgeDef)
-                     ""
-                     (take (length subtraces) [nodeId..])
-      
+      (childTexts, childRootIds, nextId) = renderSubtraces opts (depth + 1) nodeId subtraces
+
+      edgeLabels = edgeLabelsFor expr subtraces
+
+      mkEdge childIdx mLabel =
+        let attrs =
+              "[color=\"#2ca02c\", penwidth=2"
+                <> maybe "" (\lbl -> ", label=\"" <> escapeLabel lbl <> "\"") mLabel
+                <> "]"
+        in "  " <> parentNodeId <> " -> node" <> Text.pack (show childIdx) <> " " <> attrs <> ";\n"
+
+      edges =
+        mconcat $
+          zipWith mkEdge childRootIds (edgeLabels ++ repeat Nothing)
+
       -- Render remaining siblings
       (restTexts, finalId) = renderChildren opts depth parentNode nextId rest
       
   in (childTexts <> edges <> restTexts, finalId)
 
 -- | Render a list of subtraces
-renderSubtraces :: GraphVizOptions -> Int -> Int -> [EvalTrace] -> (Text, Int)
-renderSubtraces _opts _depth nodeId [] = ("", nodeId)
+renderSubtraces :: GraphVizOptions -> Int -> Int -> [EvalTrace] -> (Text, [Int], Int)
+renderSubtraces _opts _depth nodeId [] = ("", [], nodeId)
 renderSubtraces opts depth nodeId (tr:traces) =
   let (thisText, nextId) = renderTrace opts depth nodeId tr
-      (restText, finalId) = renderSubtraces opts depth nextId traces
-  in (thisText <> restText, finalId)
+      (restText, restIds, finalId) = renderSubtraces opts depth nextId traces
+  in (thisText <> restText, nodeId : restIds, finalId)
 
 -- | Format a node's label and styling based on its content
 formatNode :: GraphVizOptions -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> (Text, Text)
@@ -137,3 +142,25 @@ escapeLabel :: Text -> Text
 escapeLabel = Text.replace "\"" "\\\"" 
             . Text.replace "\n" "\\n"
             . Text.replace "\\" "\\\\"
+
+-- | Determine edge labels for specific expression forms.
+edgeLabelsFor :: Expr Resolved -> [EvalTrace] -> [Maybe Text]
+edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
+  where
+    labelIf [] = []
+    labelIf [_] = [Nothing]
+    labelIf (condTrace:_:rest) =
+      let branchLabel = case traceBoolValue condTrace of
+                          Just True -> Just "then"
+                          Just False -> Just "else"
+                          _ -> Nothing
+      in Nothing : branchLabel : replicate (length rest) Nothing
+edgeLabelsFor _ subtraces = replicate (length subtraces) Nothing
+
+traceBoolValue :: EvalTrace -> Maybe Bool
+traceBoolValue (Trace _ (Right nf)) = nfToBool nf
+traceBoolValue _ = Nothing
+
+nfToBool :: NF -> Maybe Bool
+nfToBool (MkNF val) = boolView val
+nfToBool Omitted = Nothing
