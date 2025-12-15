@@ -326,6 +326,17 @@ Content-Type: application/json
 }
 ```
 
+### Visual Traces via GraphViz
+
+Want more than plain JSON? Add `?trace=full&graphviz=true` to any evaluation call and the response includes a `graphviz` field containing DOT text you can send straight to `dot -Tsvg`. When you need ready-made images, call the companion endpoints:
+
+```
+POST /functions/{name}/evaluation/trace.png?trace=full
+POST /functions/{name}/evaluation/trace.svg?trace=full
+```
+
+Each one reruns the evaluation with tracing enabled and streams back a PNG or SVG—perfect for design reviews or slide decks. Batch runs get the same option: append `graphviz=true` to `/functions/{name}/batch?trace=full` and every case shows an `@graphviz` attribute alongside the usual outputs. Install GraphViz’ `dot` binary (e.g. `brew install graphviz` or `apt-get install graphviz`) to take advantage of the PNG/SVG routes locally.
+
 ## Part 4: Calling from Different Languages
 
 ### JavaScript / TypeScript

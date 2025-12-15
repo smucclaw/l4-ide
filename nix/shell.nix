@@ -16,5 +16,6 @@ pkgs.mkShell {
     pkgs.nixos-anywhere
     pkgs.sqlite
     pkgs.nodePackages.prettier
+    pkgs.graphviz
   ];
 }

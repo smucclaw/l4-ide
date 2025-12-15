@@ -22,6 +22,9 @@ cabal install exe:jl4-lsp --overwrite-policy=always
   - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+- GraphViz (`dot`)
+  - Required for `jl4-cli --graphviz`, REPL `:trace` / `:tracefile`, and the decision-service PNG/SVG endpoints
+  - `brew install graphviz` on macOS, `apt-get install graphviz` on Debian/Ubuntu (or use your distro’s package)
 - on your system
   - pkgconfig
   - xz (or liblzma dev libraries)
@@ -46,7 +49,7 @@ Other prerequisites which pkgconfig needs to know about:
 sudo apt install pkg-config liblzma-dev libgmp-dev
 ```
 
-Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages.
+Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages (GraphViz included).
 
 ## Tests
 
@@ -87,6 +90,7 @@ Click on "visualize" to see a rendering of the decision logic.
 The general overview is as follows:
 
 - the webpage is served as a javascript bundle
+
   - it directly connects to the language server provided by the `jl4-lsp` binary via websocket
   - it directly connects to the session persistance service provided by `jl4-websessions` via http
 

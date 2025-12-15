@@ -83,7 +83,7 @@ instance Arbitrary ReasoningTree where
         Q.shuffle (first : rest)
 
 instance Arbitrary ResponseWithReason where
-  arbitrary = ResponseWithReason <$> arbitrary <*> pure emptyTree
+  arbitrary = ResponseWithReason <$> arbitrary <*> pure emptyTree <*> arbitrary
 
 instance Arbitrary EvaluatorError where
   arbitrary = Q.oneof [InterpreterError <$> arbitrary]
@@ -158,6 +158,7 @@ instance Arbitrary OutputCase where
   arbitrary =
     OutputCase
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
 
 instance Arbitrary OutputSummary where

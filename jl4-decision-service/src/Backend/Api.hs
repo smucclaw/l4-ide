@@ -8,6 +8,8 @@ module Backend.Api (
 ) where
 
 import Control.Monad.Trans.Except (ExceptT)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.KeyMap as Aeson
@@ -95,6 +97,8 @@ newtype RunFunction = RunFunction
       -- If this filter is 'Nothing', we do not filter anything.
       TraceLevel ->
       -- ^ Control whether to return full trace or just result
+      Bool ->
+      -- ^ Include GraphViz DOT output (only meaningful when trace level is full)
       ExceptT EvaluatorError IO ResponseWithReason
   }
 
@@ -115,9 +119,18 @@ data FunctionDeclaration = FunctionDeclaration
 data ResponseWithReason = ResponseWithReason
   { values :: [(Text, FnLiteral)]
   , reasoning :: Reasoning
+  , graphviz :: Maybe Text
   }
   deriving (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+newtype PngImage = PngImage {unPngImage :: BS.ByteString}
+
+instance MimeRender OctetStream PngImage where
+  mimeRender _ (PngImage bs) = BL.fromStrict bs
+
+instance MimeUnrender OctetStream PngImage where
+  mimeUnrender _ lbs = Right $ PngImage (BL.toStrict lbs)
 
 -- | Wrap our reasoning into a top-level field.
 newtype Reasoning = Reasoning

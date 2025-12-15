@@ -47,6 +47,50 @@ Function evaluation is provided via the endpoints:
 - `POST  /functions/<name>/evaluation`: Evaluate the function `<name>` with given arguments.
 - `POST  /functions/<name>/batch`: Evaluate the function `<name>` with an array of arguments.
 
+### Visualizing Evaluation Traces
+
+New to L4? You can now see how your logic flows by asking the decision service for a GraphViz trace. Start with `trace=full` so the engine records every lazy step, then toggle `graphviz=true` to include DOT output in the JSON response:
+
+```bash
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true, "drinks": true, "eats": true}}' \
+  | jq '.contents.graphviz'
+```
+
+If you prefer pictures, the service can render the same trace as PNG or SVG when GraphViz’ `dot` binary is on your path (e.g. `brew install graphviz` or `apt-get install graphviz`). Use the dedicated image endpoints and pipe the response straight into a file:
+
+```bash
+# PNG
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation/trace.png?trace=full' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.png
+
+# SVG (easy to open in a browser)
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/evaluation/trace.svg?trace=full' \
+  -H 'Content-Type: application/json' \
+  -d '{"fnEvalBackend":"JL4","fnArguments":{"walks": true}}' > qualifies.svg
+```
+
+Batch runs get the same treatment. When you add `graphviz=true` to `/functions/<name>/batch?trace=full`, each case in the response includes an `@graphviz` field alongside its usual outputs. That makes it easy to loop over results and stash every trace for later inspection:
+
+```bash
+curl -s \
+  'http://localhost:8081/functions/compute_qualifies/batch?trace=full&graphviz=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"outcomes":["result"],"cases":[{"@id":1,"walks":true,"drinks":true,"eats":true}]}' \
+  | jq '.cases[0]["@graphviz"]'
+```
+
+Pro tip: feed the DOT text into `dot -Tsvg -o trace.svg` or tools like `xdot` whenever you want an interactive walkthrough of the evaluation tree.
+
+#### What am I Looking At?
+
+An evaluation trace is a play-by-play of the lazy evaluator. Each node represents an expression that actually ran, annotated with its final value (or error). Edges connect parents to the sub-expressions they forced, so you can read the graph top-down like a conversation: “we were evaluating `qualifies` → we needed `walks`, `drinks`, `eats` → that led to these conditionals…”. Because L4 is lazy, branches that never execute simply don’t appear—great for spotting short-circuit behavior or skipped `CONSIDER` branches. When the trace exporter adds metadata (expression text, timestamp, active file, result) you can match a dot file back to the exact REPL command or API call that produced it. If you’ve seen function-call graphs or data-flow diagrams before, think of this as a trimmed, execution-order version focused only on the choices the interpreter actually had to make. In other words, it’s explainable AI for deterministic rule systems: the graph is the receipt for every conclusion the engine reached.
+
 ## Loading L4 Functions
 
 Two functions are hardcoded by default; see [src/Backend/Examples.hs](src/Backend/Examples.hs) for details.

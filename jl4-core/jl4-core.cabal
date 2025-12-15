@@ -83,6 +83,7 @@ library
     L4.EvaluateLazy
     L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
+    L4.EvaluateLazy.GraphViz
     L4.EvaluateLazy.Trace
     L4.ExactPrint
     L4.Export

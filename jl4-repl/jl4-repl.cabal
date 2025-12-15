@@ -53,5 +53,7 @@ executable jl4-repl
     hls-graph,
     lsp-types,
     optparse-applicative,
+    filepath,
     text,
+    time,
   ghc-options: -threaded -rtsopts

@@ -27,6 +27,16 @@ Decision Logic Visualization as a ladder diagram circuit
 
 ![Syntax Highlighting Example](./doc/images/bna-viz.png)
 
+## Trace Visualization
+
+Curious how an L4 decision actually unfolded? Every tool in this repo can show you the evaluation trace as a GraphViz diagram:
+
+- **CLI:** `jl4-cli --graphviz myfile.l4 > trace.dot`, then render with `dot -Tsvg trace.dot > trace.svg`.
+- **REPL:** Load a file, run `:trace your expression`, or turn on `:tracefile traces/session` to capture numbered `.dot` files with timestamps, imports, and the final result right in the header.
+- **Decision Service:** Call `POST /functions/<name>/evaluation?trace=full&graphviz=true` for DOT in the JSON response, or hit `/evaluation/trace.png` / `/trace.svg` for ready-to-share images. Batch requests set `graphviz=true` to attach an `@graphviz` blob per case.
+
+These traces act like explainability receipts for deterministic logic: you can follow each node from the top-level question down to the exact condition or branch that determined the answer. Install GraphViz (`brew install graphviz` or `apt-get install graphviz`) to unlock the PNG/SVG outputs.
+
 ## Status (25 Feb 2025)
 
 - ✅ Basic language features (functional core, layout parsing)
@@ -56,6 +66,7 @@ https://jl4.legalese.com/
 All this documentation is still under construction.
 
 - Tutorial: Hello, World
+
   - The `DECIDE` stanza
   - The `ASSUME` environment
   - Term Substitution
@@ -64,6 +75,7 @@ All this documentation is still under construction.
   - Example: Vermin
 
 - Tutorial: British Nationality Act
+
   - [Default Logic](./doc/default-logic.md) and `Optional` types with the `Maybe` monad
   - References and Legal Citations
   - Temporals
@@ -73,6 +85,7 @@ All this documentation is still under construction.
 - Tutorial: Automatically Generating an AI Chatbot
 
 - Tutorial: Contracts involving Parties, Obligations, and Deadlines
+
   - visualizing a contract
   - abductive reasoning and planning problems
 
@@ -90,6 +103,7 @@ All this documentation is still under construction.
 - Source Citations and Versioning
 
 - Multi-Temporal Logic
+
   - a remark on "shall" as an unfortunate consequence of negotiation-time vs run-time interpretation
 
 - Operationalization to Web and Mobile Apps

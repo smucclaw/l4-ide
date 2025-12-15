@@ -68,5 +68,6 @@
     cloud-utils
     lsof
     inetutils
+    graphviz
   ];
 }

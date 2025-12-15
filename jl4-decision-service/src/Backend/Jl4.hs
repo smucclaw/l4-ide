@@ -11,6 +11,7 @@ import L4.Annotation
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Trace
+import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
@@ -98,8 +99,9 @@ evaluateWithCompiled
   -> CompiledModule
   -> [(Text, Maybe FnLiteral)]
   -> TraceLevel
+  -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-evaluateWithCompiled filepath fnDecl compiled params traceLevel = do
+evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz = do
   -- Extract parameter types from the compiled function definition
   let paramTypes = extractParamTypes compiled.compiledDecide
 
@@ -120,7 +122,7 @@ evaluateWithCompiled filepath fnDecl compiled params traceLevel = do
   case mEvalRes of
     Nothing -> throwError $ InterpreterError (mconcat errs)
     Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz
     Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
     Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
@@ -158,15 +160,16 @@ createFunction filepath fnDecl fnImpl moduleContext = do
     Right compiled -> do
       -- Fast path: use precompiled module
       let runFn = RunFunction
-            { runFunction = \params' _outFilter traceLevel ->
-                evaluateWithCompiled filepath fnDecl compiled params' traceLevel
+            { runFunction = \params' _outFilter traceLevel includeGraphViz ->
+                evaluateWithCompiled filepath fnDecl compiled params' traceLevel includeGraphViz
             }
       pure (runFn, Just compiled)
 
     Left _err -> do
       -- Slow path fallback: use original implementation
       let runFn = RunFunction
-            { runFunction = \params' _outFilter {- TODO: how to handle the outFilter? -} traceLevel -> do
+            { runFunction = \params' _outFilter traceLevel includeGraphViz -> do
+                -- TODO: consider supporting output filters in slow path
                 -- 1. Typecheck original source to get function signature
                 (initErrs, mTcRes) <- typecheckModule filepath fnImpl moduleContext
 
@@ -200,7 +203,7 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 case mEvalRes of
                   Nothing -> throwError $ InterpreterError (mconcat errs)
                   Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel
+                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz
                   Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
                   Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
             }
@@ -245,8 +248,9 @@ handleEvalResult
   -> Maybe EvalTrace
   -> Text
   -> TraceLevel
+  -> Bool
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace _sentinel traceLevel = case result of
+handleEvalResult result trace _sentinel traceLevel includeGraphViz = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
   Eval.Reduction (Right val) -> do
@@ -274,6 +278,10 @@ handleEvalResult result trace _sentinel traceLevel = case result of
       , reasoning = case traceLevel of
           TraceNone -> emptyTree
           TraceFull -> buildReasoningTree trace
+      , graphviz =
+          if includeGraphViz && traceLevel == TraceFull
+            then fmap (GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions) trace
+            else Nothing
       }
 
 

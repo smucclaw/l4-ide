@@ -1,6 +1,6 @@
 module Main where
 
-import Base (NonEmpty, for_, when, unless, liftIO, forM)
+import Base (NonEmpty, for_, forM_, when, unless, liftIO, forM)
 import Base.Text (Text)
 import qualified Base.Text as Text
 import qualified Data.Text.IO as Text.IO
@@ -33,7 +33,8 @@ import qualified LSP.L4.Rules as Rules
 import LSP.L4.Oneshot (oneshotL4Action, oneshotL4ActionAndErrors)
 import qualified LSP.L4.Oneshot as Oneshot
 
-import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig)
+import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..))
+import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
 import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
@@ -299,8 +300,16 @@ main = do
               uri = normalizedFilePathToUri nfp
           _ <- Shake.addVirtualFileFromFS nfp
           mtc <- Shake.use Rules.SuccessfulTypeCheck  uri
-          _ <- Shake.use Rules.EvaluateLazy uri
+          mEval <- Shake.use Rules.EvaluateLazy uri
           mep <- Shake.use Rules.ExactPrint uri
+          -- Output GraphViz if requested
+          when options.outputGraphViz $
+            forM_ mEval $ \evalResults ->
+              forM_ evalResults $ \result ->
+                let MkEvalDirectiveResult {trace = mtrace} = result
+                in case mtrace of
+                  Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+                  Nothing -> pure ()
           case (mtc, mep) of
             (Just tcRes, Just ep)
               | tcRes.success -> do
@@ -327,6 +336,7 @@ data Options = MkOptions
   { files :: NonEmpty FilePath
   , verbose :: Bool
   , showAst :: Bool
+  , outputGraphViz :: Bool
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
@@ -338,6 +348,7 @@ optionsDescription = MkOptions
   <$> some1 (strArgument (metavar "L4FILE"))
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
+  <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format")
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
