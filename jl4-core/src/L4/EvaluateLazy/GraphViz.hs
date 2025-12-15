@@ -155,6 +155,12 @@ edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
                           Just False -> Just "no"
                           _ -> Nothing
       in Nothing : branchLabel : replicate (length rest) Nothing
+edgeLabelsFor (MultiWayIf _ _ _) subtraces = labelMulti subtraces
+  where
+    labelMulti [] = []
+    labelMulti [_] = [Just "guard"]
+    labelMulti (_:_:rest) =
+      Just "guard" : Just "branch" : replicate (length rest) Nothing
 edgeLabelsFor (Consider _ _ branches) subtraces = labelConsider subtraces
   where
     branchLookup =
