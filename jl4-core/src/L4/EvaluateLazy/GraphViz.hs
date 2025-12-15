@@ -158,9 +158,9 @@ edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
 edgeLabelsFor (MultiWayIf _ _ _) subtraces = labelMulti subtraces
   where
     labelMulti [] = []
-    labelMulti [_] = [Just "guard"]
+    labelMulti [_] = [Just "if"]
     labelMulti (_:_:rest) =
-      Just "guard" : Just "branch" : replicate (length rest) Nothing
+      Just "if" : Just "then" : replicate (length rest) Nothing
 edgeLabelsFor (Consider _ _ branches) subtraces = labelConsider subtraces
   where
     branchLookup =
