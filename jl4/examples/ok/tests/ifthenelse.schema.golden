@@ -1,1 +1,21 @@
-No @export annotations found in file
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "b1": {
+            "type": "string"
+        },
+        "b2": {
+            "type": "string"
+        },
+        "b3": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "b1",
+        "b2",
+        "b3"
+    ],
+    "title": "x",
+    "type": "object"
+}

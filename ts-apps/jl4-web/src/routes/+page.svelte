@@ -172,6 +172,7 @@
       import.meta.env.VITE_SOCKET_URL || 'ws://localhost:5007'
 
     const runClient = async () => {
+      console.log('🚀 runClient() STARTING - LSP client initialization')
       const logger = new ConsoleLogger(LogLevel.Debug)
 
       await initServices(
@@ -511,7 +512,9 @@
         },
       }
     }
+    console.log('📍 About to call runClient()')
     await runClient()
+    console.log('✅ runClient() completed')
   })
 
   onDestroy(() => {

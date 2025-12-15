@@ -1,1 +1,15 @@
-No @export annotations found in file
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": " Function with leading param desc",
+    "properties": {
+        "x": {
+            "$ref": "#/$defs/NUMBER",
+            "description": " Leading description for x"
+        }
+    },
+    "required": [
+        "x"
+    ],
+    "title": "test1",
+    "type": "object"
+}
