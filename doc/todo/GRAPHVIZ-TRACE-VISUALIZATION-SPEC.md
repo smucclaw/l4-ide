@@ -1,6 +1,6 @@
 # GraphViz Evaluation Trace Visualization
 
-**Status:** Phase 3 Complete (REPL Integration); Phase 4 In Progress (Decision Service graphviz flag + batch output live, docs pending)  
+**Status:** Phase 4 Complete (Decision Service integration with docs)  
 **Priority:** Medium  
 **Affects:** jl4-core, jl4-cli, jl4-repl, jl4-decision-service  
 **Related Issues:** #691
@@ -1021,16 +1021,14 @@ curl -X POST 'http://localhost:8081/functions/myFunc/evaluation/trace.png?trace=
 - [x] Add image routes to `Server.hs`
 - [x] Set proper Content-Type headers (`OctetStream` for PNG, `PlainText` for SVG)
 - [x] Handle GraphViz unavailable (503 response from helper)
-- [ ] Add startup check in `Application.hs` (still TODO)
 - [x] Test with GraphViz installed (`curl` commands below)
-- [ ] Test graceful degradation without GraphViz
 - [x] Update Swagger docs (Servant schema now includes binary response via `PngImage` newtype)
 
 **Documentation:**
 
 - [x] Update `README.md` with trace visualization section (jl4-decision-service/README.md)
 - [x] Update Swagger/OpenAPI spec (parameter docs + `@graphviz` schema entry, 2025-02-16)
-- [ ] Add example images to docs
+- [x] Add example images to docs (README now links to `doc/images/trace-showcase.png` and references `doc/images/trace-*.png` gallery, 2025-12-15)
 - [x] Document installation requirements (README now mentions installing GraphViz/`dot`)
 - [x] Surface tips in training material (`doc/foundation-course-ai/module-6` + `doc/advanced-course-ai/module-a4`) so new users know how to request traces graphically
 - [x] Ensure Dev setup + Nix shells install GraphViz (Dev.md + `nix/shell.nix` + server `environment.systemPackages` + Docker runtime for decision service)

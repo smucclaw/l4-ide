@@ -29,6 +29,24 @@ data GraphVizOptions = GraphVizOptions
   }
   deriving stock (Eq, Show)
 
+-- | Edge configuration for customizing edge appearance and direction
+data EdgeConfig = EdgeConfig
+  { edgeLabel :: Maybe Text
+    -- ^ Optional label for the edge
+  , edgeReversed :: Bool
+    -- ^ If True, edge goes from child to parent (for IF conditions)
+  }
+  deriving stock (Eq, Show)
+
+defaultEdgeConfig :: EdgeConfig
+defaultEdgeConfig = EdgeConfig { edgeLabel = Nothing, edgeReversed = False }
+
+getEdgeLabel :: EdgeConfig -> Maybe Text
+getEdgeLabel (EdgeConfig lbl _) = lbl
+
+getEdgeReversed :: EdgeConfig -> Bool
+getEdgeReversed (EdgeConfig _ rev) = rev
+
 defaultGraphVizOptions :: GraphVizOptions
 defaultGraphVizOptions = GraphVizOptions
   { includeValues = True
@@ -160,54 +178,245 @@ renderChildren _opts _depth _parentNode nodeId [] = ("", nodeId)
 renderChildren opts depth parentNode nodeId ((expr, subtraces):rest) =
   let parentNodeId = "node" <> Text.pack (show parentNode)
 
-      -- Render each subtrace
-      edgeLabels = edgeLabelsFor expr subtraces
-      zippedSubtraces = zip subtraces (edgeLabels ++ repeat Nothing)
-      limitedSubtraces = limitListLiteralSubtraces expr zippedSubtraces
+      -- Get edge configs for this expression type
+      edgeConfigs = edgeConfigsFor expr subtraces
+      zippedSubtraces = zip subtraces (edgeConfigs ++ repeat defaultEdgeConfig)
+      limitedSubtraces = limitListLiteralSubtracesWithConfig expr zippedSubtraces
       filteredSubtraces =
-        [ (subtrace, lbl)
-        | (subtrace, lbl) <- limitedSubtraces
+        [ (subtrace, cfg)
+        | (subtrace, cfg) <- limitedSubtraces
         , not (shouldHideStructuralSubtrace expr subtrace)
+        , not (shouldHideRecursiveFoldSubtrace expr subtrace)
         ]
-      keptLabels = map snd filteredSubtraces
+      keptConfigs = map snd filteredSubtraces
       keptSubtraces = map fst filteredSubtraces
       forceIndices =
         Set.fromList
           [ idx
-          | (idx, Just _) <- zip [0..] keptLabels
+          | (idx, cfg) <- zip [0..] keptConfigs
+          , isJust (getEdgeLabel cfg)
           ]
-      (childTexts, childRootIds, nextId) =
-        renderSubtraces opts (depth + 1) nodeId keptSubtraces forceIndices
 
-      mkEdge childIdx mLabel =
-        let attrs =
-              "[color=\"#2ca02c\", penwidth=2"
-                <> maybe "" (\lbl -> ", label=\"" <> escapeLabel lbl <> "\"") mLabel
+      -- Render evaluated subtraces
+      (childTexts, childRootIds, nextId) =
+        renderSubtracesWithConfig opts (depth + 1) nodeId parentNode keptSubtraces keptConfigs forceIndices
+
+      -- Handle IF/THEN/ELSE and CONSIDER: add stub nodes for unevaluated branches
+      (stubDefs, stubEdges, finalStubId) = 
+        if opts.showUnevaluated
+        then case expr of
+          IfThenElse _ _cond thenE elseE ->
+            let condResult = case subtraces of
+                  (condTrace:_) -> traceBoolValue condTrace
+                  _ -> Nothing
+            in mkIfStubs opts parentNodeId nextId condResult thenE elseE
+          Consider _ _scrutinee branches ->
+            mkConsiderStubs opts parentNodeId nextId branches subtraces
+          _ -> ("", "", nextId)
+        else ("", "", nextId)
+
+      -- Generate edges for evaluated subtraces
+      mkEdge childIdx cfg =
+        let dirAttr = if getEdgeReversed cfg then ", dir=back" else ""
+            attrs =
+              "[color=\"#2ca02c\", penwidth=2, fontsize=10"
+                <> maybe "" (\lbl -> ", label=\"" <> escapeLabel lbl <> "\"") (getEdgeLabel cfg)
+                <> dirAttr
                 <> "]"
         in "  " <> parentNodeId <> " -> node" <> Text.pack (show childIdx) <> " " <> attrs <> ";\n"
 
       edges =
         mconcat
-          [ mkEdge childIdx lbl
-          | (Just childIdx, lbl) <- zip childRootIds keptLabels
+          [ mkEdge childIdx cfg
+          | (Just childIdx, cfg) <- zip childRootIds keptConfigs
           ]
 
       -- Render remaining siblings
-      (restTexts, finalId) = renderChildren opts depth parentNode nextId rest
+      (restTexts, finalId) = renderChildren opts depth parentNode finalStubId rest
       
-  in (childTexts <> edges <> restTexts, finalId)
+  in (childTexts <> stubDefs <> edges <> stubEdges <> restTexts, finalId)
 
--- | Render a list of subtraces
-renderSubtraces :: GraphVizOptions -> Int -> Int -> [EvalTrace] -> Set.Set Int -> (Text, [Maybe Int], Int)
-renderSubtraces opts depth nodeId traces forceIdxs = go 0 nodeId traces
+-- | Create stub nodes for unevaluated IF branches
+mkIfStubs :: GraphVizOptions -> Text -> Int -> Maybe Bool -> Expr Resolved -> Expr Resolved -> (Text, Text, Int)
+mkIfStubs opts parentNodeId nodeId condResult thenE elseE =
+  case condResult of
+    Just True ->
+      -- THEN was taken, ELSE is unevaluated - create ELSE stub
+      let stubLabel = escapeLabel (firstLine (prettyLayout elseE))
+          stubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> stubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+          stubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+      in if opts.showUnevaluated
+           then (stubDef, stubEdge, nodeId + 1)
+           else ("", "", nodeId)
+    Just False ->
+      -- ELSE was taken, THEN is unevaluated - create THEN stub
+      let stubLabel = escapeLabel (firstLine (prettyLayout thenE))
+          stubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> stubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+          stubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"THEN\"];\n"
+      in if opts.showUnevaluated
+           then (stubDef, stubEdge, nodeId + 1)
+           else ("", "", nodeId)
+    Nothing ->
+      -- Unknown condition result, no stubs
+      ("", "", nodeId)
+
+-- | Create stub nodes for unmatched CONSIDER branches
+mkConsiderStubs :: GraphVizOptions -> Text -> Int -> [Branch Resolved] -> [EvalTrace] -> (Text, Text, Int)
+mkConsiderStubs opts parentNodeId nodeId branches subtraces
+  | not opts.showUnevaluated = ("", "", nodeId)
+  | otherwise =
+      let -- Find which branch was taken by matching the evaluated body expression by text
+          matchedBranchText = case subtraces of
+            (_scrutinee : bodyTrace : _) -> 
+              fmap (prettyLayout :: Expr Resolved -> Text) (traceHeadExpr bodyTrace)
+            _ -> Nothing
+          
+          -- All branch body expressions by text for lookup
+          branchBodiesByText = 
+            [ (prettyLayout branchBodyExpr, branch) 
+            | branch@(MkBranch _ _ branchBodyExpr) <- branches
+            ]
+          
+          -- Find the matched branch by comparing pretty-printed text
+          matchedBranch = matchedBranchText >>= \txt -> lookup txt branchBodiesByText
+          
+          -- Get unmatched branches (those not taken)
+          unmatchedBranches = case matchedBranch of
+            Nothing -> []
+            Just matched -> filter (/= matched) branches
+          
+          -- Generate stub node for each unmatched branch
+          mkStub curId (MkBranch _ lhs bodyExpr) =
+            let stubLabel = escapeLabel (firstLine (prettyLayout bodyExpr))
+                branchLabel = case lhs of
+                  When _ pat -> "when " <> escapeLabel (prettyLayout pat)
+                  Otherwise _ -> "otherwise"
+                stubDef = "  node" <> Text.pack (show curId) <> " [label=\"" <> stubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+                stubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show curId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"" <> branchLabel <> "\"];\n"
+            in (stubDef, stubEdge, curId + 1)
+          
+          -- Generate all stub nodes
+          (stubDefs, stubEdges, finalId) = foldl' go ("", "", nodeId) unmatchedBranches
+            where
+              go (accDefs, accEdges, curId) branch =
+                let (def, edge, nextId) = mkStub curId branch
+                in (accDefs <> def, accEdges <> edge, nextId)
+      in (stubDefs, stubEdges, finalId)
+
+-- | Render a list of subtraces with edge configuration
+renderSubtracesWithConfig :: GraphVizOptions -> Int -> Int -> Int -> [EvalTrace] -> [EdgeConfig] -> Set.Set Int -> (Text, [Maybe Int], Int)
+renderSubtracesWithConfig opts depth nodeId parentNode traces configs forceIdxs = go 0 nodeId traces configs
   where
-    go _ curId [] = ("", [], curId)
-    go idx curId (tr:trs) =
+    go _ curId [] _ = ("", [], curId)
+    go idx curId (tr:trs) (cfg:cfgs) =
       let forceChild = Set.member idx forceIdxs
-          (thisText, emitted, nextId) = renderTrace opts depth curId forceChild tr
-          (restText, restIds, finalId) = go (idx + 1) nextId trs
+          -- For IF condition subtraces (reversed edges), render children with reversed edges too
+          (thisText, emitted, nextId) = renderTraceWithConfig opts depth curId forceChild (getEdgeReversed cfg) parentNode tr
+          (restText, restIds, finalId) = go (idx + 1) nextId trs cfgs
           thisIds = if emitted then [Just curId] else [Nothing]
       in (thisText <> restText, thisIds <> restIds, finalId)
+    go idx curId (tr:trs) [] =
+      let forceChild = Set.member idx forceIdxs
+          (thisText, emitted, nextId) = renderTraceWithConfig opts depth curId forceChild False parentNode tr
+          (restText, restIds, finalId) = go (idx + 1) nextId trs []
+          thisIds = if emitted then [Just curId] else [Nothing]
+      in (thisText <> restText, thisIds <> restIds, finalId)
+
+-- | Render a trace, optionally with reversed edge direction for its children
+renderTraceWithConfig :: GraphVizOptions -> Int -> Int -> Bool -> Bool -> Int -> EvalTrace -> (Text, Bool, Int)
+renderTraceWithConfig opts@(GraphVizOptions {maxDepth, simplifyTrivial}) depth nodeId forceRender reverseChildEdges parentNode (Trace mlabel steps result) =
+  case maxDepth of
+    Just maxD | depth >= maxD ->
+      -- Hit depth limit, render stub
+      let nodeLabel = escapeLabel "... (max depth reached)"
+          nodeDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> nodeLabel <> "\", style=dashed, color=gray];\n"
+      in (nodeDef, True, nodeId + 1)
+    _ ->
+      let currentNode = nodeId
+          currentNodeId = "node" <> Text.pack (show currentNode)
+          
+          -- Determine node label and styling
+          (_nodeLabel, nodeStyle) = formatNode opts depth mlabel steps result
+          
+          -- Skip this node if it's trivial and simplification is enabled
+          shouldSkip = not forceRender && simplifyTrivial && isTrivialNode steps result
+
+          -- Generate node definition
+          nodeDef = if shouldSkip
+                      then ""
+                      else "  " <> currentNodeId <> " " <> nodeStyle <> ";\n"
+
+          -- Render child nodes with potentially reversed edges
+          (childDefs, finalNodeId) = renderChildrenWithReverse opts depth currentNode (currentNode + 1) reverseChildEdges parentNode steps
+
+      in (nodeDef <> childDefs, not shouldSkip, finalNodeId)
+
+-- | Render children with option to reverse all edges (for IF condition subtrees)
+renderChildrenWithReverse :: GraphVizOptions -> Int -> Int -> Int -> Bool -> Int -> [(Expr Resolved, [EvalTrace])] -> (Text, Int)
+renderChildrenWithReverse _opts _depth _parentNode nodeId _reverse _grandParent [] = ("", nodeId)
+renderChildrenWithReverse opts depth parentNode nodeId reverseAll grandParent ((expr, subtraces):rest) =
+  let parentNodeId = "node" <> Text.pack (show parentNode)
+
+      -- Get edge configs, but if we're in a reversed subtree, reverse all edges
+      baseConfigs = edgeConfigsFor expr subtraces
+      edgeConfigs = if reverseAll
+                      then map (\cfg -> cfg { edgeReversed = True }) baseConfigs
+                      else baseConfigs
+      zippedSubtraces = zip subtraces (edgeConfigs ++ repeat (defaultEdgeConfig { edgeReversed = reverseAll }))
+      limitedSubtraces = limitListLiteralSubtracesWithConfig expr zippedSubtraces
+      filteredSubtraces =
+        [ (subtrace, cfg)
+        | (subtrace, cfg) <- limitedSubtraces
+        , not (shouldHideStructuralSubtrace expr subtrace)
+        , not (shouldHideRecursiveFoldSubtrace expr subtrace)
+        ]
+      keptConfigs = map snd filteredSubtraces
+      keptSubtraces = map fst filteredSubtraces
+      forceIndices =
+        Set.fromList
+          [ idx
+          | (idx, cfg) <- zip [0..] keptConfigs
+          , isJust (getEdgeLabel cfg)
+          ]
+
+      -- Render evaluated subtraces
+      (childTexts, childRootIds, nextId) =
+        renderSubtracesWithConfig opts (depth + 1) nodeId parentNode keptSubtraces keptConfigs forceIndices
+
+      -- Handle IF/THEN/ELSE and CONSIDER: add stub nodes for unevaluated branches
+      (stubDefs, stubEdges, finalStubId) = 
+        if opts.showUnevaluated
+        then case expr of
+          IfThenElse _ _cond thenE elseE ->
+            let condResult = case subtraces of
+                  (condTrace:_) -> traceBoolValue condTrace
+                  _ -> Nothing
+            in mkIfStubs opts parentNodeId nextId condResult thenE elseE
+          Consider _ _scrutinee branches ->
+            mkConsiderStubs opts parentNodeId nextId branches subtraces
+          _ -> ("", "", nextId)
+        else ("", "", nextId)
+
+      -- Generate edges
+      mkEdge childIdx (EdgeConfig mLabel isReversed) =
+        let dirAttr = if isReversed then ", dir=back" else ""
+            attrs =
+              "[color=\"#2ca02c\", penwidth=2, fontsize=10"
+                <> maybe "" (\lbl -> ", label=\"" <> escapeLabel lbl <> "\"") mLabel
+                <> dirAttr
+                <> "]"
+        in "  " <> parentNodeId <> " -> node" <> Text.pack (show childIdx) <> " " <> attrs <> ";\n"
+
+      edges =
+        mconcat
+          [ mkEdge childIdx cfg
+          | (Just childIdx, cfg) <- zip childRootIds keptConfigs
+          ]
+
+      -- Render remaining siblings
+      (restTexts, finalId) = renderChildrenWithReverse opts depth parentNode finalStubId reverseAll grandParent rest
+      
+  in (childTexts <> stubDefs <> edges <> stubEdges <> restTexts, finalId)
 
 formatNode :: GraphVizOptions -> Int -> Maybe Resolved -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> (Text, Text)
 formatNode (GraphVizOptions {includeValues}) depth mlabel steps result =
@@ -299,24 +508,28 @@ nfIsFunction (MkNF val) = case val of
 nfIsFunction Omitted = False
 
 -- | Determine edge labels for specific expression forms.
-edgeLabelsFor :: Expr Resolved -> [EvalTrace] -> [Maybe Text]
-edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
+edgeConfigsFor :: Expr Resolved -> [EvalTrace] -> [EdgeConfig]
+edgeConfigsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
   where
     labelIf [] = []
-    labelIf [_] = [Nothing]
+    labelIf [_] = [EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }]
     labelIf (condTrace:_:rest) =
       let branchLabel = case traceBoolValue condTrace of
-                          Just True -> Just "yes"
-                          Just False -> Just "no"
-                          _ -> Nothing
-      in Nothing : branchLabel : replicate (length rest) Nothing
-edgeLabelsFor (MultiWayIf _ _ _) subtraces = labelMulti subtraces
+                          Just True -> "THEN"
+                          Just False -> "ELSE"
+                          _ -> "branch"
+      in EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }
+         : EdgeConfig { edgeLabel = Just branchLabel, edgeReversed = False }
+         : replicate (length rest) defaultEdgeConfig
+edgeConfigsFor (MultiWayIf _ _ _) subtraces = labelMulti subtraces
   where
     labelMulti [] = []
-    labelMulti [_] = [Just "if"]
+    labelMulti [_] = [EdgeConfig { edgeLabel = Just "if", edgeReversed = False }]
     labelMulti (_:_:rest) =
-      Just "if" : Just "then" : replicate (length rest) Nothing
-edgeLabelsFor (Consider _ _ branches) subtraces = labelConsider subtraces
+      EdgeConfig { edgeLabel = Just "if", edgeReversed = False }
+      : EdgeConfig { edgeLabel = Just "then", edgeReversed = False }
+      : replicate (length rest) defaultEdgeConfig
+edgeConfigsFor (Consider _ _ branches) subtraces = labelConsider subtraces
   where
     branchLookup =
       [ (expr, branchLabelText branch)
@@ -325,21 +538,32 @@ edgeLabelsFor (Consider _ _ branches) subtraces = labelConsider subtraces
 
     labelConsider [] = []
     labelConsider (_:rest) =
-      Nothing : map labelBranch rest
+      defaultEdgeConfig : map labelBranch rest
 
     labelBranch subTrace =
       case traceHeadExpr subTrace >>= (\expr -> lookup expr branchLookup) of
-        Just lbl -> Just lbl
-        Nothing -> Nothing
-edgeLabelsFor _ subtraces = replicate (length subtraces) Nothing
+        Just lbl -> EdgeConfig { edgeLabel = Just lbl, edgeReversed = False }
+        Nothing -> defaultEdgeConfig
+edgeConfigsFor _ subtraces = replicate (length subtraces) defaultEdgeConfig
 
 traceBoolValue :: EvalTrace -> Maybe Bool
-traceBoolValue (Trace _ _ (Right nf)) = nfToBool nf
+traceBoolValue (Trace _ _ (Right nf)) = 
+  case nfToBool nf of
+    Just b -> Just b
+    Nothing -> nfToBoolFromText nf
 traceBoolValue _ = Nothing
 
 nfToBool :: NF -> Maybe Bool
 nfToBool (MkNF val) = boolView val
 nfToBool Omitted = Nothing
+
+-- | Fallback: check the text representation of the normal form for TRUE/FALSE
+nfToBoolFromText :: NF -> Maybe Bool
+nfToBoolFromText nf =
+  let txt = Text.toUpper (prettyLayout nf)
+  in if "TRUE" `Text.isInfixOf` txt then Just True
+     else if "FALSE" `Text.isInfixOf` txt then Just False
+     else Nothing
 
 traceHeadExpr :: EvalTrace -> Maybe (Expr Resolved)
 traceHeadExpr (Trace _ ((expr, _):_) _) = Just expr
@@ -350,39 +574,89 @@ shouldHideStructuralSubtrace (Cons _ _ tailExpr) subtrace =
   isListLiteralExpr tailExpr && traceMatchesExpr tailExpr subtrace
 shouldHideStructuralSubtrace _ _ = False
 
+-- | Hide recursive fold subtraces like "sumList OF zs" where the argument
+-- is a pattern variable from list deconstruction. These are implementation
+-- details that clutter the visualization for laypeople.
+-- We detect this by checking if the subtrace's head expression is a function
+-- application where the sole argument is a pattern variable (short name).
+shouldHideRecursiveFoldSubtrace :: Expr Resolved -> EvalTrace -> Bool
+shouldHideRecursiveFoldSubtrace _parentExpr subtrace =
+  case traceHeadExpr subtrace of
+    Just childExpr -> isRecursiveFoldCall childExpr
+    Nothing -> False
+
+-- | Check if an expression looks like a recursive fold call: funcName OF patternVar
+-- where patternVar is a short name like "zs", "xs", "list", "rest", etc.
+isRecursiveFoldCall :: Expr Resolved -> Bool
+isRecursiveFoldCall (App _ _ [Var _ argName]) =
+  let argText = nameToText (getOriginal argName)
+  in isPatternVarName argText
+isRecursiveFoldCall _ = False
+
+-- | Check if a name looks like a pattern variable from list deconstruction
+isPatternVarName :: Text -> Bool
+isPatternVarName name =
+  Text.length name <= 3  -- Short names like "zs", "xs", "n"
+  || name `elem` ["list", "rest", "tail", "xs", "ys", "zs"]
+
 data SubtraceKey
   = KeyLabel Resolved
   | KeyExpr (Expr Resolved)
   deriving stock (Eq)
 
-limitListLiteralSubtraces :: Expr Resolved -> [(EvalTrace, Maybe Text)] -> [(EvalTrace, Maybe Text)]
-limitListLiteralSubtraces (List _ items) subtraces =
+_limitListLiteralSubtraces :: Expr Resolved -> [(EvalTrace, Maybe Text)] -> [(EvalTrace, Maybe Text)]
+_limitListLiteralSubtraces (List _ items) subtraces =
   -- NOTE: We intentionally flatten synthetic CONS chains so every list element
   -- becomes a direct child of the LIST node. This improves readability but it
   -- also means DOT no longer preserves the original left-to-right ordering.
   -- If ordering ever matters for a visualization, revisit this resugaring step
   -- and consider emitting a DOT subgraph that forces LR rank just for those
   -- children while leaving the rest of the diagram in TB mode.
-  matchKeys (map exprKeyForItem items) subtraces
-limitListLiteralSubtraces _ subtraces = subtraces
+  _matchKeys (map exprKeyForItem items) subtraces
+_limitListLiteralSubtraces _ subtraces = subtraces
 
-matchKeys :: [SubtraceKey] -> [(EvalTrace, Maybe Text)] -> [(EvalTrace, Maybe Text)]
-matchKeys [] _ = []
-matchKeys _ [] = []
-matchKeys (k:ks) subtraces =
-  let (match, remaining) = pickMatchingSubtrace k subtraces
-      rest = matchKeys ks remaining
+-- | Version of limitListLiteralSubtraces that works with EdgeConfig
+limitListLiteralSubtracesWithConfig :: Expr Resolved -> [(EvalTrace, EdgeConfig)] -> [(EvalTrace, EdgeConfig)]
+limitListLiteralSubtracesWithConfig (List _ items) subtraces =
+  matchKeysWithConfig (map exprKeyForItem items) subtraces
+limitListLiteralSubtracesWithConfig _ subtraces = subtraces
+
+_matchKeys :: [SubtraceKey] -> [(EvalTrace, Maybe Text)] -> [(EvalTrace, Maybe Text)]
+_matchKeys [] _ = []
+_matchKeys _ [] = []
+_matchKeys (k:ks) subtraces =
+  let (match, remaining) = _pickMatchingSubtrace k subtraces
+      rest = _matchKeys ks remaining
   in case match of
        Just pair -> pair : rest
        Nothing -> rest
 
-pickMatchingSubtrace :: SubtraceKey -> [(EvalTrace, Maybe Text)] -> (Maybe (EvalTrace, Maybe Text), [(EvalTrace, Maybe Text)])
-pickMatchingSubtrace _ [] = (Nothing, [])
-pickMatchingSubtrace key (pair@(tr, _):rest) =
+_pickMatchingSubtrace :: SubtraceKey -> [(EvalTrace, Maybe Text)] -> (Maybe (EvalTrace, Maybe Text), [(EvalTrace, Maybe Text)])
+_pickMatchingSubtrace _ [] = (Nothing, [])
+_pickMatchingSubtrace key (pair@(tr, _):rest) =
   case subtraceKey tr of
     Just k | k == key -> (Just pair, rest)
     _ ->
-      let (found, rest') = pickMatchingSubtrace key rest
+      let (found, rest') = _pickMatchingSubtrace key rest
+      in (found, pair : rest')
+
+matchKeysWithConfig :: [SubtraceKey] -> [(EvalTrace, EdgeConfig)] -> [(EvalTrace, EdgeConfig)]
+matchKeysWithConfig [] _ = []
+matchKeysWithConfig _ [] = []
+matchKeysWithConfig (k:ks) subtraces =
+  let (match, remaining) = pickMatchingSubtraceWithConfig k subtraces
+      rest = matchKeysWithConfig ks remaining
+  in case match of
+       Just pair -> pair : rest
+       Nothing -> rest
+
+pickMatchingSubtraceWithConfig :: SubtraceKey -> [(EvalTrace, EdgeConfig)] -> (Maybe (EvalTrace, EdgeConfig), [(EvalTrace, EdgeConfig)])
+pickMatchingSubtraceWithConfig _ [] = (Nothing, [])
+pickMatchingSubtraceWithConfig key (pair@(tr, _):rest) =
+  case subtraceKey tr of
+    Just k | k == key -> (Just pair, rest)
+    _ ->
+      let (found, rest') = pickMatchingSubtraceWithConfig key rest
       in (found, pair : rest')
 
 exprKeyForItem :: Expr Resolved -> SubtraceKey
