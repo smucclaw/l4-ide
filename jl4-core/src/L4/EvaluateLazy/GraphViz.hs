@@ -113,7 +113,11 @@ formatNode :: GraphVizOptions -> [(Expr Resolved, [EvalTrace])] -> Either EvalEx
 formatNode (GraphVizOptions {includeValues}) steps result =
   let exprText = case steps of
                    [] -> "<no steps>"
-                   _  -> Text.intercalate "\\n" (map (prettyLayout . fst) steps)
+                   (firstExpr, _) : rest ->
+                     let base = firstLine (summarizeExpr firstExpr)
+                     in if null rest
+                           then base
+                           else base <> "\\n(+ " <> Text.pack (show (length rest)) <> " more)"
       
       resultText = if includeValues
                      then case result of
@@ -142,6 +146,13 @@ escapeLabel :: Text -> Text
 escapeLabel = Text.replace "\"" "\\\"" 
             . Text.replace "\n" "\\n"
             . Text.replace "\\" "\\\\"
+
+summarizeExpr :: Expr Resolved -> Text
+summarizeExpr (Where _ body _) = summarizeExpr body
+summarizeExpr expr = prettyLayout expr
+
+firstLine :: Text -> Text
+firstLine = Text.takeWhile (/= '\n')
 
 -- | Determine edge labels for specific expression forms.
 edgeLabelsFor :: Expr Resolved -> [EvalTrace] -> [Maybe Text]
