@@ -22,7 +22,7 @@
     },
     "test": {
       "dependsOn": ["^check"],
-      "passThroughEnv": ["XAUTHORITY", "DISPLAY", "URL", "TIMEOUT"]
+      "passThroughEnv": ["XAUTHORITY", "DISPLAY"]
     },
     "dev": {
       "cache": false,
