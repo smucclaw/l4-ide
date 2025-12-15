@@ -151,8 +151,8 @@ edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
     labelIf [_] = [Nothing]
     labelIf (condTrace:_:rest) =
       let branchLabel = case traceBoolValue condTrace of
-                          Just True -> Just "then"
-                          Just False -> Just "else"
+                          Just True -> Just "yes"
+                          Just False -> Just "no"
                           _ -> Nothing
       in Nothing : branchLabel : replicate (length rest) Nothing
 edgeLabelsFor _ subtraces = replicate (length subtraces) Nothing
