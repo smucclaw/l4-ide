@@ -349,7 +349,7 @@ instance ToSchema BatchResponse where
             & default_ ?~ Aeson.Number 0
             & example ?~ Aeson.Number 0
     doubleRef <- declareSchemaRef (Proxy @Double)
-    textRef <- declareSchemaRef (Proxy @Text)
+    graphvizRef <- declareSchemaRef (Proxy @GraphVizResponse)
     pure $
       NamedSchema (Just "BatchResponse") $
         mempty
@@ -369,7 +369,7 @@ instance ToSchema BatchResponse where
                                     & additionalProperties ?~ AdditionalPropertiesAllowed True
                                     & properties
                                       .~ [ ("@id", intRef)
-                                         , ("@graphviz", textRef)
+                                         , ("@graphviz", graphvizRef)
                                          ]
                           )
                  )

@@ -10,6 +10,7 @@ import L4.Annotation
 -- import qualified L4.Evaluate.Value as Eval
 import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
+import L4.EvaluateLazy.Machine (EvalException)
 import L4.EvaluateLazy.Trace
 import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import L4.Names
@@ -280,7 +281,16 @@ handleEvalResult result trace _sentinel traceLevel includeGraphViz = case result
           TraceFull -> buildReasoningTree trace
       , graphviz =
           if includeGraphViz && traceLevel == TraceFull
-            then fmap (GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions) trace
+            then
+              fmap
+                ( \tr ->
+                    GraphVizResponse
+                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+                      , png = Nothing
+                      , svg = Nothing
+                      }
+                )
+                trace
             else Nothing
       }
 
@@ -418,32 +428,32 @@ toReasoningTree Nothing  = ReasoningTree (ReasonNode [] []) []
 toReasoningTree (Just t) = toReasoningTree' t
 
 toReasoningTree' :: EvalTrace -> ReasoningTree
-toReasoningTree' (Trace [] val) =
+toReasoningTree' (Trace lbl [] val) =
   ReasoningTree
     { payload =
         ReasonNode
-          { exampleCode = []
-          , explanation =
-              [ "Result: " <> case val of
-                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
-                  Right v -> Print.prettyLayout v
-              ]
+          { exampleCode = labelExample lbl
+          , explanation = [resultLine val]
           }
     , children = []
     }
-toReasoningTree' (Trace [(expr, children)] val) =
+toReasoningTree' (Trace lbl [(expr, children)] val) =
   ReasoningTree
     { payload =
         ReasonNode
-          { exampleCode =
-              [Print.prettyLayout expr]
-          , explanation =
-              [ "Result: " <> case val of
-                  Left exc -> Text.unlines (Eval.prettyEvalException exc)
-                  Right v -> Print.prettyLayout v
-              ]
+          { exampleCode = labelExample lbl <> [Print.prettyLayout expr]
+          , explanation = [resultLine val]
           }
     , children = fmap toReasoningTree' children
     }
-toReasoningTree' (Trace ((expr, children) : rest) val) =
-  toReasoningTree' (Trace [(expr, children ++ [Trace rest val])] val)
+toReasoningTree' (Trace lbl ((expr, children) : rest) val) =
+  toReasoningTree' (Trace lbl [(expr, children ++ [Trace lbl rest val])] val)
+
+labelExample :: Maybe Resolved -> [Text]
+labelExample = maybe [] (\resolved -> [nameToText (getOriginal resolved)])
+
+resultLine :: Either EvalException Eval.NF -> Text
+resultLine val =
+  "Result: " <> case val of
+    Left exc -> Text.unlines (Eval.prettyEvalException exc)
+    Right v -> Print.prettyLayout v

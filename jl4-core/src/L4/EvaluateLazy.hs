@@ -301,13 +301,15 @@ nfDirective (MkEvalDirective r traced isAssert expr env) = do
 postprocessTrace :: [EvalTraceAction] -> EvalTrace
 postprocessTrace actions =
   let
+    labels = collectTraceLabels actions
     splitActions = splitEvalTraceActions actions
     tracedHeap = buildEvalPreTraces splitActions
     mainTrace = case Map.lookup Nothing tracedHeap of
                   Nothing -> err
                   Just t  -> t
     err = error "postprocessTrace: no trace for main value"
-    finalTrace = simplifyEvalTrace (buildEvalTrace tracedHeap (either err id mainTrace))
+    mainPreTrace = either err id mainTrace
+    finalTrace = simplifyEvalTrace (buildEvalTrace labels tracedHeap Nothing mainPreTrace)
   in
     finalTrace
 

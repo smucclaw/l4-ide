@@ -27,16 +27,23 @@ Currently, EVALTRACE produces text output with box-drawing characters. GraphViz 
 
 ### EvalTrace Data Structure
 
-**Location:** `jl4-core/src/L4/EvaluateLazy/Trace.hs:119-121`
+**Location:** `jl4-core/src/L4/EvaluateLazy/Trace.hs`
 
 ```haskell
-data EvalTrace = Trace [(Expr Resolved, [EvalTrace])] (Either EvalException NF)
+data EvalTrace =
+    Trace
+      (Maybe Resolved)                     -- optional binder label
+      [(Expr Resolved, [EvalTrace])]       -- steps and their sub-traces
+      (Either EvalException NF)           -- final result (or exception)
 ```
 
 Each trace node contains:
 
+- Optional binding metadata (top-level `DECIDE`, `WHERE` function, etc.)
 - List of expressions evaluated with their sub-traces
 - Final result (either exception or normal form value)
+
+The recorder tags nodes with binder names by watching `AllocPre` events (which fire when we reserve heap slots for named definitions). That metadata now flows all the way to the GraphViz renderer so a node shows `finalScore`, `tierBonus`, etc., instead of only the body expression.
 
 ### Current Text Rendering
 
@@ -76,6 +83,10 @@ This differs from eager evaluation, which would show all branches.
 3. **Function applications**: Shows arguments and recursive calls
 4. **Binary operations**: Shows left-to-right evaluation with short-circuiting
 5. **List operations**: Shows cons cells and recursive processing
+
+### Evaluation Trace Primer (2025-02-17)
+
+Think of an evaluation trace as a call graph that only captures the _path actually taken_. Each node is the precise expression that ran, annotated with its final value (or exception) and, when available, the name of the binder (`finalScore`, `tierBonus`, etc.). Edges point to the sub-expressions the interpreter forced, so you can replay the computation top-down: “we were evaluating `qualifies` → that forced `walks`, `drinks`, `eats` → the `CONSIDER` picked branch 2…”. Compared to traditional function-call graphs or data-flow diagrams, traces are execution-order snapshots—no speculative branches, no unforced thunks—so short-circuits, lazy skips, and pattern failures pop out visually. That makes them a friendly on-ramp for people who already understand flowcharts: the boxes and arrows here are the literal proof of how a legal rule fired. In that sense, these diagrams are our version of explainable AI: deterministic, reproducible, and easy to narrate to a policy stakeholder or auditor.
 
 ## Architecture
 
@@ -120,6 +131,15 @@ defaultGraphVizOptions :: GraphVizOptions
 - Gray nodes (`lightgray`) - Depth-limited truncated nodes
 - Green edges (`darkgreen`) - Evaluation dependencies
 - Rounded rectangles for better readability
+
+**Binder-aware labels (2025-02-15)**
+
+- `EvalTrace` now carries the `Resolved` name for every thunk that corresponds to a `DECIDE`/`WHERE` binding. Graph construction reads those labels, so each node headline shows the function name (e.g., `finalScore`, `tierBonus`, `metrics`) before the expression summary.
+- The trace builder gathers these names from `AllocPre` actions, so no runtime heuristics are required; it is literally the definition the interpreter forced.
+- Result: the showcase diagrams finally read like call graphs instead of anonymous `sumList OF metrics` recursion ladders. See `doc/images/trace-showcase.{png,svg}` for the updated screenshots.
+- The decision service piggy-backs on the same metadata—`reasoning.exampleCode` now includes the binder name as the first line, so API consumers see “finalScore” / “tierBonus” in the JSON tree without having to guess from the expression text.
+- Root nodes now inherit the label of the first forced binder when we evaluate a top-level directive such as `#EVALTRACE evaluation alice`. That means “evaluation OF alice” immediately calls out `finalScore` in the label, and the graph edges start at the meaningful definition instead of an opaque “(+ 2 more)” placeholder.
+- List literals are rendered as true variadic nodes: we hide the internal `FOLLOWED BY` scaffolding that the lazy evaluator produces and attach the trace edges directly to each list element. Inline list expressions authored by users still appear as their own boxes; only the synthetic suffix nodes created by the desugarer disappear. The net effect is that `metrics` now has exactly four children (`baseScore`, `experienceBonus`, `roleBonus`, `dependentPenalty`) and no longer sprouts a distracting staircase of partial `LIST ...` suffixes.
 
 ### CLI Integration (Phase 2) ✅ COMPLETE
 
@@ -547,6 +567,13 @@ echo ":trace 5 cubed" \
 cabal run jl4-cli -- --graphviz test.l4 | dot -Tsvg > trace.svg
 ```
 
+#### Trace Output Gating (2025-12-15)
+
+- Added `--trace MODE` flag to `jl4-cli` where `MODE ∈ {full, none}` (default `full`). The flag controls whether textual `#EVALTRACE` output is embedded in the new evaluation summaries.
+- `--graphviz/-g` still streams DOT snapshots. Users can now combine the flags (e.g. `--trace=none --graphviz`) to keep machine-friendly DOT output without duplicating the ASCII trace in terminal logs.
+- Evaluation summaries are rendered explicitly (result header + optional trace block) instead of relying on Shake logger side-effects, so future consumers (batch tooling, scripting) can pick the format they need.
+- Known limitation: the Shake diagnostics that power IDE/LSP scenarios still emit their own `Source: eval` entries. Those remain visible for now even when `--trace=none`, and we have a follow-up task to hide them once the logger grows per-source filtering.
+
 ### ✅ Phase 3: REPL Integration (COMPLETE)
 
 **Implementation PR/branch:** `visualize-logic-graph`
@@ -572,8 +599,8 @@ cabal run jl4-cli -- --graphviz test.l4 | dot -Tsvg > trace.svg
 
 ### 📋 Phase 4: Decision Service Integration (IN PROGRESS)
 
-**Status (2025-02-16):**  
-`POST /functions/<name>/evaluation` accepts `?trace=full&graphviz=true` and returns DOT text in the `graphviz :: Maybe Text` field on `ResponseWithReason`. Batch requests now honor the same flag (when paired with `trace=full`) and include an `@graphviz` pseudo-attribute per case containing DOT text. PNG/SVG rendering endpoints (`/evaluation/trace.png` and `/evaluation/trace.svg`) remain available via `Backend.GraphVizRender`. Remaining Phase‑4 work is primarily documentation polish, GraphViz availability warnings, and future ideas like caching and additional imagery formats.
+**Status (2025-02-17):**  
+`POST /functions/<name>/evaluation` accepts `?trace=full&graphviz=true` and now returns a `graphviz :: Maybe GraphVizResponse` payload. Each response includes the DOT source plus relative URLs for the PNG/SVG endpoints (`/functions/<name>/evaluation/trace.{png,svg}`), keeping the main evaluation endpoint pure while still pointing callers at ready-made images. Batch requests mirror the same contract: when paired with `trace=full`, every case gains an `@graphviz` object with `{dot,png,svg}` so downstream systems can archive traces or fetch screenshots lazily. The dedicated PNG/SVG endpoints (`/evaluation/trace.png` and `/evaluation/trace.svg`) still rerun the evaluation on demand via `Backend.GraphVizRender`. Remaining Phase‑4 work is documentation polish plus future ideas like caching and richer styling presets.
 
 **Example:**
 
@@ -617,13 +644,21 @@ _Status (2025-02-16):_
 
 ```haskell
 -- Backend/Api.hs
+data GraphVizResponse = GraphVizResponse
+  { dot :: Text           -- original DOT program
+  , png :: Maybe Text     -- relative URL to /functions/<name>/evaluation/trace.png
+  , svg :: Maybe Text     -- relative URL to /functions/<name>/evaluation/trace.svg
+  }
+  deriving (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 data ResponseWithReason = ResponseWithReason
   { values :: [(Text, FnLiteral)]
   , reasoning :: Reasoning
-  , graphviz :: Maybe Text  -- DOT format when graphviz=true
+  , graphviz :: Maybe GraphVizResponse
   }
   deriving (Show, Read, Ord, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)
 ```
 
 **Example Request/Response:**
@@ -637,9 +672,15 @@ curl -X POST 'http://localhost:8081/functions/myFunc/evaluation?trace=full&graph
 {
   "values": [["result", "15"]],
   "reasoning": { ... },
-  "graphviz": "digraph evaluation_trace {\n  rankdir=TB;\n  node [shape=box, style=rounded];\n  ...\n}"
+  "graphviz": {
+    "dot": "digraph evaluation_trace {\n  rankdir=TB;\n  node [shape=box, style=rounded];\n  ...\n}",
+    "png": "/functions/myFunc/evaluation/trace.png",
+    "svg": "/functions/myFunc/evaluation/trace.svg"
+  }
 }
 ```
+
+The `png`/`svg` URLs are intentionally _relative_ and stateless: every fetch simply reruns the same evaluation to produce a fresh image, keeping the primary `/evaluation` call pure (no mutable caches or shared blobs for clients to invalidate).
 
 **Implementation Notes (2025-02-15):**
 
@@ -701,12 +742,20 @@ POST /functions/myFunc/batch?trace=full&graphviz=true
     {
       "@id": 1,
       "result": "25",
-      "@graphviz": "digraph evaluation_trace { ... }"
+      "@graphviz": {
+        "dot": "digraph evaluation_trace { ... }",
+        "png": "/functions/myFunc/evaluation/trace.png",
+        "svg": "/functions/myFunc/evaluation/trace.svg"
+      }
     },
     {
       "@id": 2,
       "result": "100",
-      "@graphviz": "digraph evaluation_trace { ... }"
+      "@graphviz": {
+        "dot": "digraph evaluation_trace { ... }",
+        "png": "/functions/myFunc/evaluation/trace.png",
+        "svg": "/functions/myFunc/evaluation/trace.svg"
+      }
     }
   ],
   "summary": {
@@ -734,7 +783,7 @@ POST /functions/myFunc/batch?trace=full&graphviz=true
 
 1. **`jl4-decision-service/src/Backend/Api.hs`**
 
-   - Add `graphviz :: Maybe Text` field to `ResponseWithReason`
+   - Add `graphviz :: Maybe GraphVizResponse` field to `ResponseWithReason`
    - Update JSON instances (automatic via deriving)
 
 2. **`jl4-decision-service/src/Backend/Jl4.hs`**
@@ -1003,7 +1052,7 @@ cabal run jl4-decision-service-exe -- --port 8081
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=full&graphviz=true' \
   -H 'Content-Type: application/json' \
   -d '{"fnEvalBackend":"JL4","fnArguments":{"walks":true,"eats":true,"drinks":true}}' \
-  | jq '.contents.graphviz | length'
+  | jq '.contents.graphviz.dot | length'
 
 # GraphViz suppressed when trace=none
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/evaluation?trace=none&graphviz=true' \
@@ -1027,15 +1076,15 @@ curl -s -o /tmp/trace.svg \
 curl -s -X POST 'http://localhost:8081/functions/compute_qualifies/batch?trace=full&graphviz=true' \
   -H 'Content-Type: application/json' \
   -d '{"outcomes":["result"],"cases":[{"@id":1,"walks":true,"eats":true,"drinks":true}]}' \
-  | jq '.cases[0]["@graphviz"] | length'
+  | jq '.cases[0]["@graphviz"].dot | length'
 ```
 
 #### Backward Compatibility
 
 **JSON Response:**
 
-- `graphviz` field is optional (`Maybe Text`)
-- Existing clients ignore unknown fields
+- `graphviz` field is optional (`Maybe GraphVizResponse`)
+- Existing clients that only care about DOT can read `.graphviz.dot` (or the legacy string) and ignore new keys
 - Only present when `?graphviz=true` parameter used
 - Default behavior unchanged (no graphviz field)
 

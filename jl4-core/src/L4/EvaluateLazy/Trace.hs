@@ -117,7 +117,7 @@ data EvalPreTrace =
   | PrePlaceholder Address
 
 data EvalTrace =
-    Trace [(Expr Resolved, [EvalTrace])] (Either EvalException NF)
+    Trace (Maybe Resolved) [(Expr Resolved, [EvalTrace])] (Either EvalException NF)
   deriving stock (Generic, Show)
   deriving anyclass NFData
 
@@ -125,7 +125,7 @@ pattern PreValue :: WHNF -> EvalPreTrace
 pattern PreValue v = PreTrace [] (Right v)
 
 pattern TraceValue :: NF -> EvalTrace
-pattern TraceValue v = Trace [] (Right v)
+pattern TraceValue v = Trace Nothing [] (Right v)
 
 -- | Implements step 2 of Note [Lazy evaluation tracing]
 splitEvalTraceActions :: [EvalTraceAction] -> Map (Maybe Address) (Either WHNF [EvalTraceAction])
@@ -246,9 +246,9 @@ instance LayoutPrinter EvalTrace where
 -- | Shows a lazy evaluation trace. Keeps track of the level.
 printEvalTrace :: forall ann. Int -> EvalTrace -> Doc ann
 printEvalTrace lvl = \ case
-  Trace [] v ->
+  Trace _ [] v ->
     pre lvl <> "•" <> " " <> printExceptionOrNF v
-  Trace (esubs : otheresubs) v ->
+  Trace mlabel (esubs : otheresubs) v ->
     let
       proc :: Doc ann -> Doc ann -> Doc ann -> [Doc ann]
       proc firstd followd x =
@@ -266,10 +266,12 @@ printEvalTrace lvl = \ case
       otheresubsd = proc' "├" "│" <$> otheresubs
       vd          = proc "└" " " (printExceptionOrNF v)
     in
-      vcat $
-           esubsd
-        <> concat otheresubsd
-        <> vd
+      vcat
+        (   esubsd
+         <> concat otheresubsd
+         <> vd
+        )
+      <> printEvalTrace lvl (Trace mlabel otheresubs v)
   where
     pre :: Int -> Doc ann
     pre i = pretty (replicate i '│')
@@ -384,29 +386,44 @@ buildEvalPreTrace as = case as of
 buildEvalPreTraces :: Map (Maybe Address) (Either WHNF [EvalTraceAction]) -> Map (Maybe Address) (Either WHNF EvalPreTrace)
 buildEvalPreTraces = Map.map (bimap id buildEvalPreTrace)
 
+collectTraceLabels :: [EvalTraceAction] -> Map Address Resolved
+collectTraceLabels = foldl' go Map.empty
+  where
+    go acc (AllocPre name ref) = Map.insert ref.address name acc
+    go acc _ = acc
+
 -- | Implements step 4 of Note [Lazy evaluation tracing]
-buildEvalTrace :: Map (Maybe Address) (Either WHNF EvalPreTrace) -> EvalPreTrace -> EvalTrace
-buildEvalTrace m (PreTrace esubs w)  = Trace (second (fmap (buildEvalTrace m)) <$> esubs) (second (nfFromTrace m) w)
-buildEvalTrace m (PrePlaceholder a)  = maybe (TraceValue Omitted) (either (TraceValue . nfFromTrace m) (buildEvalTrace m)) (Map.lookup (Just a) m)
+buildEvalTrace :: Map Address Resolved -> Map (Maybe Address) (Either WHNF EvalPreTrace) -> Maybe Resolved -> EvalPreTrace -> EvalTrace
+buildEvalTrace labels m label (PreTrace esubs w) =
+  Trace label (second (fmap (buildEvalTrace labels m Nothing)) <$> esubs) (second (nfFromTrace m) w)
+buildEvalTrace labels m label (PrePlaceholder a) =
+  let label' =
+        case label of
+          Just existing -> Just existing
+          Nothing -> Map.lookup a labels
+  in case Map.lookup (Just a) m of
+       Nothing -> Trace label' [] (Right Omitted)
+       Just (Left whnf) -> Trace label' [] (Right (nfFromTrace m whnf))
+       Just (Right preTrace) -> buildEvalTrace labels m label' preTrace
 
 -- | Implements step 5 of Note [Lazy evaluation tracing]
 simplifyEvalTrace :: EvalTrace -> EvalTrace
-simplifyEvalTrace (Trace children v) = Trace (second (concatMap go) <$> children) v
+simplifyEvalTrace (Trace lbl children v) = Trace lbl (second (concatMap go) <$> children) v
   where
     go :: EvalTrace -> [EvalTrace]
-    go (Trace [] (Right _))              = []   -- eliminate trivial successful trace nodes
-    go (Trace [(Lit _ _, [])] (Right _)) = []   -- eliminate trivial literal evaluations
-    go (Trace [(Var _ n, [])] (Right (MkNF (ValConstructor n' []))))
+    go (Trace _ [] (Right _))              = []   -- eliminate trivial successful trace nodes
+    go (Trace _ [(Lit _ _, [])] (Right _)) = []   -- eliminate trivial literal evaluations
+    go (Trace _ [(Var _ n, [])] (Right (MkNF (ValConstructor n' []))))
       | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
-    go (Trace [(Var _ n, [])] (Right (MkNF (ValUnappliedConstructor n'))))
+    go (Trace _ [(Var _ n, [])] (Right (MkNF (ValUnappliedConstructor n'))))
       | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
-    go (Trace [(App _ n [], [])] (Right (MkNF (ValConstructor n' []))))
+    go (Trace _ [(App _ n [], [])] (Right (MkNF (ValConstructor n' []))))
       | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
-    go (Trace [(App _ n [], [])] (Right (MkNF (ValUnappliedConstructor n'))))
+    go (Trace _ [(App _ n [], [])] (Right (MkNF (ValUnappliedConstructor n'))))
       | getUnique n == getUnique n'      = []   -- eliminate trivial constructor evaluations
-    go (Trace [(Var _ n, [])] _)
+    go (Trace _ [(Var _ n, [])] _)
       | isInternalName n                 = []   -- eliminate internal function applications
-    go (Trace [(App _ n _xs, [])] _)
+    go (Trace _ [(App _ n _xs, [])] _)
       | isInternalName n                 = []   -- eliminate internal function applications
     go t                                 = [simplifyEvalTrace t]
 

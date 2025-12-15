@@ -328,14 +328,28 @@ Content-Type: application/json
 
 ### Visual Traces via GraphViz
 
-Want more than plain JSON? Add `?trace=full&graphviz=true` to any evaluation call and the response includes a `graphviz` field containing DOT text you can send straight to `dot -Tsvg`. When you need ready-made images, call the companion endpoints:
+Want more than plain JSON? Add `?trace=full&graphviz=true` to any evaluation call and the response includes a `graphviz` object:
+
+```jsonc
+"graphviz": {
+  "dot": "digraph evaluation_trace { ... }",
+  "png": "/functions/isEligible/evaluation/trace.png",
+  "svg": "/functions/isEligible/evaluation/trace.svg"
+}
+```
+
+`dot` is the literal GraphViz program—pipe it to `dot -Tsvg` or `xdot` for instant diagrams. The `png`/`svg` fields are relative URLs that rerun the same evaluation and stream back an image when you fetch them:
 
 ```
 POST /functions/{name}/evaluation/trace.png?trace=full
 POST /functions/{name}/evaluation/trace.svg?trace=full
 ```
 
-Each one reruns the evaluation with tracing enabled and streams back a PNG or SVG—perfect for design reviews or slide decks. Batch runs get the same option: append `graphviz=true` to `/functions/{name}/batch?trace=full` and every case shows an `@graphviz` attribute alongside the usual outputs. Install GraphViz’ `dot` binary (e.g. `brew install graphviz` or `apt-get install graphviz`) to take advantage of the PNG/SVG routes locally.
+That “render-on-demand” design keeps the main evaluation endpoint pure—no cached blobs to expire, no state to coordinate across replicas. Batch runs get the same option: append `graphviz=true` to `/functions/{name}/batch?trace=full` and every case shows an `@graphviz` object with the same `{dot,png,svg}` shape alongside the usual outputs. Install GraphViz’ `dot` binary (e.g. `brew install graphviz` or `apt-get install graphviz`) to take advantage of the PNG/SVG routes locally.
+
+#### Reading the Trace
+
+An evaluation trace is the interpreter’s travelogue: every node is an expression that truly executed, annotated with the value (or exception) it produced. Edges point to the sub-expressions that were forced, so you can literally follow the reasoning path—“the API asked for `isEligible` → we needed the `age` guard → that required the nested CONSIDER…”. Because the evaluator is lazy you never see branches that were skipped, which makes short-circuits and pattern-selection obvious at a glance. If you’ve used function-call graphs or data-flow diagrams, think of this as the execution-order version tuned for laws and policies. It’s explainable AI the old-fashioned way: deterministic, inspectable, and easy to narrate to stakeholders.
 
 ## Part 4: Calling from Different Languages
 

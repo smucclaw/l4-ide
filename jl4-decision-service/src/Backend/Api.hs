@@ -26,6 +26,7 @@ import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Optics.Cons
 import Servant.API
+import Data.OpenApi (ToSchema)
 
 type FunctionName = Text
 
@@ -116,10 +117,22 @@ data FunctionDeclaration = FunctionDeclaration
   -- ^ How to translate 'short' names to their 'long' counter part.
   }
 
+data GraphVizResponse = GraphVizResponse
+  { dot :: Text
+    -- ^ Raw DOT text for callers who want to render or post-process traces themselves.
+  , png :: Maybe Text
+    -- ^ Relative URL to the PNG endpoint (e.g. @/functions/foo/evaluation/trace.png@).
+    --   The server regenerates the image on every request so evaluation responses stay pure.
+  , svg :: Maybe Text
+    -- ^ Relative URL to the SVG endpoint (same contract as 'png').
+  }
+  deriving (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 data ResponseWithReason = ResponseWithReason
   { values :: [(Text, FnLiteral)]
   , reasoning :: Reasoning
-  , graphviz :: Maybe Text
+  , graphviz :: Maybe GraphVizResponse
   }
   deriving (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)

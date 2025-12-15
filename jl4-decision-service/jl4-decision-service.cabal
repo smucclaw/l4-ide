@@ -71,6 +71,7 @@ library
     extra,
     directory,
     http-client,
+    http-types,
     filepath,
     jl4-core,
     jl4-lsp,

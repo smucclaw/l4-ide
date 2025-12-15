@@ -81,6 +81,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Tuple.Extra as Tuple
 import qualified GHC.Clock as Clock
 import GHC.TypeLits
+import qualified Network.HTTP.Types.URI as URI
 import Servant
 import System.Timeout (timeout)
 import Servant.Client.Core.HasClient
@@ -406,7 +407,8 @@ batchFunctionHandler name' mTraceHeader mTraceParam mGraphViz batchArgs = do
 
       -- Only process successful responses and per-case evaluation errors
       let
-        responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
+        attachLinks = tagGraphVizPaths name
+        responses = [(rid, attachLinks simpleResp) | (rid, Right simpleResp) <- evalResults]
         nCases = length responses
 
         successfulRuns =
@@ -483,9 +485,45 @@ runFunctionEval name engine fnArgs traceLevel includeGraphViz = do
     Nothing ->
       withUUIDFunction
         name
-        evalFn
+        (\fnImpl -> do
+            resp <- evalFn fnImpl
+            pure (tagGraphVizPaths name resp)
+        )
         (\k -> throwError (k err404))
-    Just fnImpl -> evalFn fnImpl
+    Just fnImpl -> do
+      resp <- evalFn fnImpl
+      pure (tagGraphVizPaths name resp)
+
+-- | Stamp relative PNG/SVG URLs onto a GraphViz payload so the client knows
+-- where to fetch ready-made images. We intentionally keep these as URLs
+-- instead of embedding image bytes so the main evaluation endpoint stays
+-- side-effect-free; the PNG/SVG routes simply rerun the same evaluation via
+-- their own handlers whenever the client follows the link.
+tagGraphVizPaths :: Text -> SimpleResponse -> SimpleResponse
+tagGraphVizPaths name = \ case
+  SimpleResponse ResponseWithReason{values = vals, reasoning = rsn, graphviz = mGraphViz} ->
+    SimpleResponse
+      ResponseWithReason
+        { values = vals
+        , reasoning = rsn
+        , graphviz = graphVizLinksFor name <$> mGraphViz
+        }
+  err -> err
+
+graphVizLinksFor :: Text -> Api.GraphVizResponse -> Api.GraphVizResponse
+graphVizLinksFor name resp =
+  resp
+    { png = Just (graphVizRelativeLink name "trace.png")
+    , svg = Just (graphVizRelativeLink name "trace.svg")
+    }
+
+graphVizRelativeLink :: Text -> Text -> Text
+graphVizRelativeLink name suffix =
+  "/functions/" <> encodePathSegment name <> "/evaluation/" <> suffix
+
+encodePathSegment :: Text -> Text
+encodePathSegment =
+  Text.decodeUtf8 . URI.urlEncode False . Text.encodeUtf8
 
 prepareTraceForImage :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM Text
 prepareTraceForImage name' mTraceHeader mTraceParam args = do
@@ -499,7 +537,7 @@ prepareTraceForImage name' mTraceHeader mTraceParam args = do
     SimpleResponse resp ->
       case resp.graphviz of
         Nothing -> throwError err500 {errBody = encodeTextLBS "Trace data unavailable"}
-        Just dot -> pure dot
+        Just gv -> pure gv.dot
 
 requireFullTrace :: Api.TraceLevel -> AppM ()
 requireFullTrace lvl =
@@ -1023,7 +1061,7 @@ data InputCase = InputCase
 data OutputCase = OutputCase
   { id :: Id
   , attributes :: Map Text FnLiteral
-  , graphviz :: Maybe Text
+  , graphviz :: Maybe Api.GraphVizResponse
   }
   deriving stock (Show, Eq, Ord)
 
@@ -1147,8 +1185,28 @@ casesDecoder = do
  where
   parseGraphviz attrs = case Map.lookup "@graphviz" attrs of
     Nothing -> pure Nothing
-    Just (FnLitString dot) -> pure (Just dot)
-    Just other -> fail $ "Expected @graphviz to be a string literal, but got " <> show other
+    Just literal -> parseGraphvizLiteral literal
+
+  parseGraphvizLiteral (FnLitString dot) =
+    pure $ Just Api.GraphVizResponse {dot, png = Nothing, svg = Nothing}
+  parseGraphvizLiteral (FnObject fields) = do
+    dotText <- requireTextField "dot" fields
+    let pngText = optionalTextField "png" fields
+        svgText = optionalTextField "svg" fields
+    pure $ Just Api.GraphVizResponse {dot = dotText, png = pngText, svg = svgText}
+  parseGraphvizLiteral other =
+    fail $ "Expected @graphviz to be an object, but got " <> show other
+
+  requireTextField label fields =
+    case lookup label fields of
+      Just (FnLitString t) -> pure t
+      Just v -> fail $ "Expected @graphviz." <> Text.unpack label <> " to be a string, but got " <> show v
+      Nothing -> fail $ "Missing @graphviz." <> Text.unpack label
+
+  optionalTextField label fields =
+    case lookup label fields of
+      Just (FnLitString t) -> Just t
+      _ -> Nothing
 
 summaryDecoder :: Decoder OutputSummary
 summaryDecoder =

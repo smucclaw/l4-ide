@@ -18,7 +18,8 @@ import qualified Data.Yaml as Yaml
 import qualified Data.Vector as Vector
 import qualified Data.HashMap.Strict as HashMap
 import Data.Text.Encoding (decodeUtf8)
-import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc)
+import Data.Maybe (catMaybes)
+import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc, value, showDefaultWith)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory)
 import System.Exit (exitSuccess, exitFailure)
@@ -33,12 +34,13 @@ import qualified LSP.L4.Rules as Rules
 import LSP.L4.Oneshot (oneshotL4Action, oneshotL4ActionAndErrors)
 import qualified LSP.L4.Oneshot as Oneshot
 
-import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..))
+import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
 import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
 import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
 import L4.DirectiveFilter (filterIdeDirectives)
+import L4.Parser.SrcSpan (prettySrcRange)
 import Data.Time (UTCTime)
 import qualified Data.List as List
 
@@ -171,6 +173,7 @@ data Log
   | ShowAst !Text.Lazy.Text
   | SuccessOnly
   | BatchProcessing !Text
+  | EvalOutput !Text
 
 instance Pretty Log where
   pretty = \ case
@@ -180,6 +183,7 @@ instance Pretty Log where
     ShowAst ast -> pretty ast
     SuccessOnly -> "Checking succeeded."
     BatchProcessing msg -> "Batch:" <+> pretty msg
+    EvalOutput txt -> pretty txt
 
 ----------------------------------------------------------------------------
 -- Main
@@ -188,8 +192,10 @@ instance Pretty Log where
 main :: IO ()
 main = do
   curDir   <- getCurrentDirectory
-  recorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
   options  <- Options.execParser optionsConfig
+  baseRecorder <- makeDefaultStderrRecorder Nothing
+  let recorder = cmapWithPrio pretty baseRecorder
+      oneshotRecorder = cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
   evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
 
@@ -294,7 +300,7 @@ main = do
 
     Nothing -> do
       -- Normal oneshot processing mode
-      oneshotL4Action (cmapWithPrio IdeLog recorder) evalConfig curDir \_ ->
+      oneshotL4Action oneshotRecorder evalConfig curDir \_ ->
         for_ options.files \fp -> do
           let nfp = toNormalizedFilePath fp
               uri = normalizedFilePathToUri nfp
@@ -302,14 +308,15 @@ main = do
           mtc <- Shake.use Rules.SuccessfulTypeCheck  uri
           mEval <- Shake.use Rules.EvaluateLazy uri
           mep <- Shake.use Rules.ExactPrint uri
-          -- Output GraphViz if requested
-          when options.outputGraphViz $
-            forM_ mEval $ \evalResults ->
-              forM_ evalResults $ \result ->
-                let MkEvalDirectiveResult {trace = mtrace} = result
-                in case mtrace of
+          forM_ mEval $ \evalResults -> do
+            when options.outputGraphViz $
+              for_ evalResults $ \result ->
+                case result.trace of
                   Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
                   Nothing -> pure ()
+            for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
+              let rendered = renderEvalOutput options.traceText idx evalResult
+              logWith recorder Info $ EvalOutput rendered
           case (mtc, mep) of
             (Just tcRes, Just ep)
               | tcRes.success -> do
@@ -332,10 +339,31 @@ main = do
       then exitSuccess
       else exitFailure
 
+data TraceTextMode
+  = TraceTextNone
+  | TraceTextFull
+  deriving (Eq, Show)
+
+renderTraceTextMode :: TraceTextMode -> String
+renderTraceTextMode mode = case mode of
+  TraceTextNone -> "none"
+  TraceTextFull -> "full"
+
+traceTextModeReader :: ReadM TraceTextMode
+traceTextModeReader = eitherReader \input ->
+  case Text.toLower (Text.pack input) of
+    "none" -> Right TraceTextNone
+    "off"  -> Right TraceTextNone
+    "full" -> Right TraceTextFull
+    "text" -> Right TraceTextFull
+    "ascii" -> Right TraceTextFull
+    other -> Left $ "Invalid trace MODE: " <> Text.unpack other <> " (expected none|full)"
+
 data Options = MkOptions
   { files :: NonEmpty FilePath
   , verbose :: Bool
   , showAst :: Bool
+  , traceText :: TraceTextMode
   , outputGraphViz :: Bool
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
@@ -348,6 +376,7 @@ optionsDescription = MkOptions
   <$> some1 (strArgument (metavar "L4FILE"))
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
+  <*> option traceTextModeReader (long "trace" <> short 't' <> metavar "MODE" <> value TraceTextFull <> showDefaultWith renderTraceTextMode <> help "Trace text output: none | full (default full)")
   <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format")
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
@@ -360,6 +389,38 @@ fixedNowReader =
     maybe (Left "Unable to parse --fixed-now; expected ISO8601 UTC like 2025-01-31T15:45:30Z")
           Right
           (parseFixedNow (Text.pack s))
+
+renderEvalOutput :: TraceTextMode -> Int -> EvalDirectiveResult -> Text
+renderEvalOutput traceMode idx MkEvalDirectiveResult{range = mRange, result, trace = mTrace} =
+  Text.intercalate "\n\n" $ catMaybes
+    [ Just headerLine
+    , Just ("Result:\n" <> indentBlockText (renderEvalValue result))
+    , traceSection
+    ]
+  where
+    headerLine =
+      let idxText = Text.pack (show idx)
+          rangeText = maybe "" (\rng -> " @ " <> prettySrcRange rng) mRange
+      in "Evaluation[" <> idxText <> "]" <> rangeText
+    traceSection = case traceMode of
+      TraceTextNone -> Nothing
+      TraceTextFull ->
+        let traceBody = maybe "(no trace captured; add #EVALTRACE to the directive)" prettyLayout mTrace
+        in Just ("Trace:\n" <> indentBlockText traceBody)
+
+renderEvalValue :: EvalDirectiveValue -> Text
+renderEvalValue = \case
+  Assertion True -> "assertion satisfied"
+  Assertion False -> "assertion failed"
+  Reduction (Left exc) -> Text.unlines (prettyEvalException exc)
+  Reduction (Right val) -> prettyLayout val
+
+indentBlockText :: Text -> Text
+indentBlockText txt =
+  let ls = case Text.lines txt of
+             [] -> [""]
+             xs -> xs
+  in Text.unlines (map ("  " <>) ls)
 
 optionsConfig :: Options.ParserInfo Options
 optionsConfig = info

@@ -25,6 +25,7 @@ cabal install exe:jl4-lsp --overwrite-policy=always
 - GraphViz (`dot`) + xdot
   - Required for `jl4-cli --graphviz`, REPL `:trace` / `:tracefile`, decision-service PNG/SVG endpoints, and interactive viewing with `xdot`
   - `brew install graphviz xdot` on macOS, `apt-get install graphviz xdot` on Debian/Ubuntu (or your package manager of choice)
+  - The Nix shell (`nix/shell.nix`), flake-based hosts (`nix/configuration.nix`), and the Docker `jl4-decision-service` image all install `graphviz`/`xdot` automatically so containerized builds can render traces, too.
 - on your system
   - pkgconfig
   - xz (or liblzma dev libraries)
