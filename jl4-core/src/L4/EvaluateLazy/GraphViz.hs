@@ -117,7 +117,7 @@ formatNode (GraphVizOptions {includeValues}) steps result =
                      let base = firstLine (summarizeExpr firstExpr)
                      in if null rest
                            then base
-                           else base <> "\\n(+ " <> Text.pack (show (length rest)) <> " more)"
+                           else base <> "\n(+ " <> Text.pack (show (length rest)) <> " more)"
       
       resultText = if includeValues
                      then case result of
