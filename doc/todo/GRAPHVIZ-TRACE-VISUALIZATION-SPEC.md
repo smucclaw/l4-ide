@@ -195,6 +195,19 @@ jl4-cli --graphviz example.l4 | dot -Tpng > trace.png
 jl4-cli --graphviz example.l4 | xdot -
 ```
 
+**Note:** The CLI emits diagnostic messages to stdout which can interleave with DOT output. To get clean DOT output, redirect stderr and extract the digraph:
+
+```bash
+# Clean DOT extraction (suppresses diagnostic noise)
+jl4-cli --graphviz --trace none example.l4 2>/dev/null \
+  | sed -n '/^digraph/,/^}/p' > trace.dot
+
+# One-liner to PNG
+jl4-cli --graphviz --trace none example.l4 2>/dev/null \
+  | sed -n '/^digraph/,/^}/p' \
+  | dot -Tpng > trace.png
+```
+
 ### REPL Integration (Phase 3) ✅ COMPLETE
 
 **Status:** `jl4-repl/app/Main.hs` now exposes `:trace` / `:tr`, trace-aware evaluation helpers, DOT formatting utilities, and the new `:tracefile` command that redirects traces into numbered `.dot` files with metadata headers on branch `visualize-logic-graph`.
