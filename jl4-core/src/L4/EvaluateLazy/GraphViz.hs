@@ -10,7 +10,7 @@ import qualified Base.Text as Text
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
 import L4.Evaluate.ValueLazy (NF(..))
-import L4.Syntax (Expr(..), Resolved)
+import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..))
 import L4.Print (prettyLayout)
 
 -- | Options for controlling GraphViz output
@@ -155,6 +155,21 @@ edgeLabelsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
                           Just False -> Just "no"
                           _ -> Nothing
       in Nothing : branchLabel : replicate (length rest) Nothing
+edgeLabelsFor (Consider _ _ branches) subtraces = labelConsider subtraces
+  where
+    branchLookup =
+      [ (expr, branchLabelText branch)
+      | branch@(MkBranch _ _ expr) <- branches
+      ]
+
+    labelConsider [] = []
+    labelConsider (_:rest) =
+      Nothing : map labelBranch rest
+
+    labelBranch subTrace =
+      case traceHeadExpr subTrace >>= (\expr -> lookup expr branchLookup) of
+        Just lbl -> Just lbl
+        Nothing -> Nothing
 edgeLabelsFor _ subtraces = replicate (length subtraces) Nothing
 
 traceBoolValue :: EvalTrace -> Maybe Bool
@@ -164,3 +179,13 @@ traceBoolValue _ = Nothing
 nfToBool :: NF -> Maybe Bool
 nfToBool (MkNF val) = boolView val
 nfToBool Omitted = Nothing
+
+traceHeadExpr :: EvalTrace -> Maybe (Expr Resolved)
+traceHeadExpr (Trace ((expr, _):_) _) = Just expr
+traceHeadExpr _ = Nothing
+
+branchLabelText :: Branch Resolved -> Text
+branchLabelText (MkBranch _ lhs _) =
+  case lhs of
+    When _ pat -> "when " <> prettyLayout pat
+    Otherwise _ -> "otherwise"
