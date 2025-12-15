@@ -112,8 +112,8 @@ renderSubtraces opts depth nodeId (tr:traces) =
 formatNode :: GraphVizOptions -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> (Text, Text)
 formatNode (GraphVizOptions {includeValues}) steps result =
   let exprText = case steps of
-                   [(expr, _)] -> prettyLayout expr
-                   _ -> "<multiple steps>"
+                   [] -> "<no steps>"
+                   _  -> Text.intercalate "\\n" (map (prettyLayout . fst) steps)
       
       resultText = if includeValues
                      then case result of
