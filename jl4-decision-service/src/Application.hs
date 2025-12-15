@@ -66,10 +66,10 @@ defaultMain = do
     runSettings settings (corsMiddleware $ app initialState serverName)
 
 corsMiddleware :: Middleware
-corsMiddleware = cors (const $ Just (simpleCorsResourcePolicy
-  { corsMethods = corsMethods simpleCorsResourcePolicy <> ["OPTIONS"]
-  , corsRequestHeaders = ["content-type"] -- Allow Content-Type header
-  }))
+corsMiddleware = cors (const $ Just simpleCorsResourcePolicy
+  { corsMethods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+  , corsRequestHeaders = ["content-type", "authorization"]
+  })
 
 expandSourcePaths :: [FilePath] -> IO [FilePath]
 expandSourcePaths paths = do

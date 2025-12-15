@@ -1,1 +1,34 @@
-No @export annotations found in file
+{
+    "$defs": {
+        "Person": {
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "the amount": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "the buyer": {
+            "$ref": "#/$defs/Person"
+        },
+        "the seller": {
+            "$ref": "#/$defs/Person"
+        }
+    },
+    "required": [
+        "the buyer",
+        "the seller",
+        "the amount"
+    ],
+    "title": "can purchase car",
+    "type": "object"
+}

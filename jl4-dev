@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# jl4-dev - One-button control for local JL4 development environment
+# Usage: ./jl4-dev [command]
+
+set -euo pipefail
+
+COMPOSE_FILE="docker-compose.yml"
+DEV_COMPOSE_FILE="docker-compose.dev.yml"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+show_help() {
+    cat << EOF
+jl4-dev - Control the JL4 development environment
+
+USAGE:
+    ./jl4-dev [COMMAND]
+
+COMMANDS:
+    start           Start all services (production build)
+    start-dev       Start all services in development mode (hot reload)
+    stop            Stop all services
+    restart         Restart all services
+    status          Show status of all services
+    logs [service]  Show logs (optionally for specific service)
+    ps              Show running containers
+    build           Build all Docker images
+    rebuild         Rebuild all Docker images from scratch
+    clean           Stop services and remove volumes
+    shell [service] Open a shell in a running service
+    test            Test that all services are responding
+    help            Show this help message
+
+SERVICES:
+    jl4-lsp                LSP WebSocket server (port 8000)
+    jl4-decision-service   Decision API (port 8001)
+    jl4-websessions        Session management (port 8002)
+    jl4-web                Web frontend (port 5173)
+
+EXAMPLES:
+    ./jl4-dev start              # Start all services
+    ./jl4-dev start-dev          # Start with hot reload
+    ./jl4-dev logs               # Tail all logs
+    ./jl4-dev logs jl4-web       # Tail frontend logs
+    ./jl4-dev shell jl4-lsp      # Open shell in LSP container
+    ./jl4-dev test               # Test all endpoints
+
+URLS:
+    Web Frontend:      http://localhost:5173
+    Decision Service:  http://localhost:8001
+    Websessions:       http://localhost:8002
+    LSP WebSocket:     ws://localhost:8000
+
+EOF
+}
+
+cmd_start() {
+    log_info "Starting JL4 services..."
+    docker compose -f "$COMPOSE_FILE" up -d
+    log_success "Services started!"
+    echo ""
+    cmd_status
+    echo ""
+    log_info "Run './jl4-dev logs' to see logs"
+    log_info "Run './jl4-dev test' to verify all services"
+}
+
+cmd_start_dev() {
+    log_info "Starting JL4 services in development mode..."
+    docker compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" up -d
+    log_success "Services started in dev mode!"
+    echo ""
+    cmd_status
+    echo ""
+    log_info "Run './jl4-dev logs' to see logs"
+}
+
+cmd_stop() {
+    log_info "Stopping JL4 services..."
+    docker compose -f "$COMPOSE_FILE" down
+    log_success "Services stopped!"
+}
+
+cmd_restart() {
+    log_info "Restarting JL4 services..."
+    docker compose -f "$COMPOSE_FILE" restart
+    log_success "Services restarted!"
+}
+
+cmd_status() {
+    docker compose -f "$COMPOSE_FILE" ps
+}
+
+cmd_logs() {
+    local service="${1:-}"
+    if [ -z "$service" ]; then
+        docker compose -f "$COMPOSE_FILE" logs -f
+    else
+        docker compose -f "$COMPOSE_FILE" logs -f "$service"
+    fi
+}
+
+cmd_ps() {
+    docker compose -f "$COMPOSE_FILE" ps -a
+}
+
+cmd_build() {
+    log_info "Building Docker images..."
+    docker compose -f "$COMPOSE_FILE" build
+    log_success "Build complete!"
+}
+
+cmd_rebuild() {
+    log_info "Rebuilding Docker images from scratch..."
+    docker compose -f "$COMPOSE_FILE" build --no-cache
+    log_success "Rebuild complete!"
+}
+
+cmd_clean() {
+    log_warn "This will stop all services and remove volumes (including the database)"
+    read -p "Are you sure? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Cleaning up..."
+        docker compose -f "$COMPOSE_FILE" down -v
+        log_success "Cleanup complete!"
+    else
+        log_info "Cancelled"
+    fi
+}
+
+cmd_shell() {
+    local service="${1:-jl4-lsp}"
+    log_info "Opening shell in $service..."
+    docker compose -f "$COMPOSE_FILE" exec "$service" /bin/bash || \
+        docker compose -f "$COMPOSE_FILE" exec "$service" /bin/sh
+}
+
+cmd_test() {
+    log_info "Testing JL4 services..."
+    echo ""
+
+    # Test LSP
+    if nc -z localhost 8000 2>/dev/null; then
+        log_success "✓ LSP server responding on port 8000"
+    else
+        log_error "✗ LSP server not responding on port 8000"
+    fi
+
+    # Test Decision Service
+    if curl -sf http://localhost:8001/functions > /dev/null 2>&1; then
+        log_success "✓ Decision service responding on port 8001"
+    else
+        log_error "✗ Decision service not responding on port 8001"
+    fi
+
+    # Test Websessions
+    if curl -sf http://localhost:8002/ > /dev/null 2>&1; then
+        log_success "✓ Websessions responding on port 8002"
+    else
+        log_error "✗ Websessions not responding on port 8002"
+    fi
+
+    # Test Web Frontend
+    if curl -sf http://localhost:5173 > /dev/null 2>&1; then
+        log_success "✓ Web frontend responding on port 5173"
+    else
+        log_error "✗ Web frontend not responding on port 5173"
+    fi
+
+    echo ""
+    log_info "Integration test: Save and retrieve via websessions..."
+    
+    # Save a test program
+    UUID=$(curl -s -X POST http://localhost:8002 \
+        -H "Content-Type: application/json" \
+        -d '"DECIDE test MEANS TRUE"' | tr -d '"')
+    
+    if [ -n "$UUID" ]; then
+        log_success "✓ Saved test program with UUID: $UUID"
+        
+        # Try to retrieve it
+        if curl -sf "http://localhost:8002?id=$UUID" > /dev/null 2>&1; then
+            log_success "✓ Retrieved program from websessions"
+        else
+            log_error "✗ Could not retrieve program from websessions"
+        fi
+    else
+        log_error "✗ Failed to save test program"
+    fi
+
+    echo ""
+    log_info "All tests complete!"
+}
+
+# Main command dispatcher
+COMMAND="${1:-help}"
+shift || true
+
+case "$COMMAND" in
+    start)
+        cmd_start "$@"
+        ;;
+    start-dev|dev)
+        cmd_start_dev "$@"
+        ;;
+    stop)
+        cmd_stop "$@"
+        ;;
+    restart)
+        cmd_restart "$@"
+        ;;
+    status)
+        cmd_status "$@"
+        ;;
+    logs)
+        cmd_logs "$@"
+        ;;
+    ps)
+        cmd_ps "$@"
+        ;;
+    build)
+        cmd_build "$@"
+        ;;
+    rebuild)
+        cmd_rebuild "$@"
+        ;;
+    clean)
+        cmd_clean "$@"
+        ;;
+    shell|sh)
+        cmd_shell "$@"
+        ;;
+    test)
+        cmd_test "$@"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    *)
+        log_error "Unknown command: $COMMAND"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

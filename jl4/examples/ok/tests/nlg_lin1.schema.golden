@@ -1,1 +1,26 @@
-No @export annotations found in file
+{
+    "$defs": {
+        "Person": {
+            "properties": {
+                "name": {
+                    "$ref": "#/$defs/STRING"
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "type": "object"
+        }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "p": {
+            "$ref": "#/$defs/Person"
+        }
+    },
+    "required": [
+        "p"
+    ],
+    "title": "must sing",
+    "type": "object"
+}

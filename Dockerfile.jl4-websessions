@@ -1,0 +1,48 @@
+# Multi-stage build for jl4-websessions
+FROM haskell:9.8.4 AS builder
+
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy cabal project files
+COPY cabal.project .
+COPY jl4-core/jl4-core.cabal jl4-core/
+COPY jl4/jl4.cabal jl4/
+COPY jl4-websessions/jl4-websessions.cabal jl4-websessions/
+
+# Build dependencies
+RUN cabal update && cabal build --only-dependencies jl4-websessions
+
+# Copy source code
+COPY jl4-core jl4-core
+COPY jl4 jl4
+COPY jl4-websessions jl4-websessions
+
+# Build the project
+RUN cabal build jl4-websessions && \
+    cabal install jl4-websessions:exe:jl4-websessions \
+      --installdir=/opt/jl4-websessions --install-method=copy
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libgmp10 \
+    libffi8 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /opt/jl4-websessions/jl4-websessions /usr/local/bin/
+
+# Create directory for SQLite database
+RUN mkdir -p /data
+
+EXPOSE 8002
+
+CMD ["jl4-websessions", "8002", "/data/sessions.db", "http://jl4-decision-service:8001"]
