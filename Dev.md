@@ -22,9 +22,9 @@ cabal install exe:jl4-lsp --overwrite-policy=always
   - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
-- GraphViz (`dot`)
-  - Required for `jl4-cli --graphviz`, REPL `:trace` / `:tracefile`, and the decision-service PNG/SVG endpoints
-  - `brew install graphviz` on macOS, `apt-get install graphviz` on Debian/Ubuntu (or use your distro’s package)
+- GraphViz (`dot`) + xdot
+  - Required for `jl4-cli --graphviz`, REPL `:trace` / `:tracefile`, decision-service PNG/SVG endpoints, and interactive viewing with `xdot`
+  - `brew install graphviz xdot` on macOS, `apt-get install graphviz xdot` on Debian/Ubuntu (or your package manager of choice)
 - on your system
   - pkgconfig
   - xz (or liblzma dev libraries)

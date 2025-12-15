@@ -17,5 +17,6 @@ pkgs.mkShell {
     pkgs.sqlite
     pkgs.nodePackages.prettier
     pkgs.graphviz
+    pkgs.xdot
   ];
 }

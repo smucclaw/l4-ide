@@ -69,5 +69,6 @@
     lsof
     inetutils
     graphviz
+    xdot
   ];
 }
