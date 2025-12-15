@@ -14,12 +14,14 @@ cabal install exe:jl4-lsp --overwrite-policy=always
 ### npm ci vs npm install
 
 **Use `npm ci` for regular development:**
+
 - Installs exactly what's in package-lock.json
 - Faster and matches CI behavior
 - Never modifies package-lock.json
 - Fails if package.json and lock file are out of sync (catches real problems)
 
 **Only use `npm install` when:**
+
 - Adding a new package: `npm install some-package`
 - Updating dependencies intentionally
 - The package-lock.json needs regeneration
