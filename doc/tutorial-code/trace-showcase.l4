@@ -1,0 +1,53 @@
+DECLARE Role
+  IS ONE OF
+    Manager
+    Staff
+    Contractor
+
+DECLARE Person
+  HAS name IS A STRING
+      age  IS A NUMBER
+      role IS A Role
+      dependents IS A NUMBER
+
+alice MEANS
+  Person WITH name IS "Alice Analyst"
+              age  IS 58
+              role IS Manager
+              dependents IS 2
+
+bob MEANS
+  Person WITH name IS "Bob Builder"
+              age  IS 34
+              role IS Staff
+              dependents IS 4
+
+DECIDE sumList list
+  IS
+    CONSIDER list
+    WHEN EMPTY THEN 0
+    WHEN z FOLLOWED BY zs THEN z + sumList zs
+
+DECIDE evaluation applicant
+  IS finalScore
+  WHERE
+    baseScore MEANS IF applicant's age GREATER THAN 60 THEN 30 ELSE 10
+    experienceBonus MEANS tierBonus (applicant's age / 10)
+    roleBonus MEANS roleWeight (applicant's role)
+    dependentPenalty MEANS penalty (applicant's dependents)
+    metrics MEANS LIST baseScore, experienceBonus, roleBonus, dependentPenalty
+    finalScore MEANS sumList metrics
+
+    tierBonus tier MEANS
+      IF tier AT MOST 3 THEN 5 ELSE tier * 2
+
+    roleWeight role MEANS
+      CONSIDER role
+      WHEN Manager THEN 25
+      WHEN Staff THEN 10
+      WHEN Contractor THEN 0
+
+    penalty count MEANS
+      IF count AT MOST 0 THEN 0 ELSE 0 - (count * 3)
+
+#EVALTRACE evaluation alice
