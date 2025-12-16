@@ -209,7 +209,7 @@ renderChildren opts depth parentNode nodeId ((expr, subtraces):rest) =
             let condResult = case subtraces of
                   (condTrace:_) -> traceBoolValue condTrace
                   _ -> Nothing
-            in mkIfStubs opts parentNodeId nextId condResult thenE elseE
+            in mkIfStubs opts parentNodeId nextId condResult thenE elseE subtraces
           Consider _ _scrutinee branches ->
             mkConsiderStubs opts parentNodeId nextId branches subtraces
           _ -> ("", "", nextId)
@@ -236,25 +236,46 @@ renderChildren opts depth parentNode nodeId ((expr, subtraces):rest) =
       
   in (childTexts <> stubDefs <> edges <> stubEdges <> restTexts, finalId)
 
--- | Create stub nodes for unevaluated IF branches
-mkIfStubs :: GraphVizOptions -> Text -> Int -> Maybe Bool -> Expr Resolved -> Expr Resolved -> (Text, Text, Int)
-mkIfStubs opts parentNodeId nodeId condResult thenE elseE =
-  case condResult of
+-- | Create stub nodes for unevaluated IF branches and evaluated branch nodes when no trace exists
+mkIfStubs :: GraphVizOptions -> Text -> Int -> Maybe Bool -> Expr Resolved -> Expr Resolved -> [EvalTrace] -> (Text, Text, Int)
+mkIfStubs opts parentNodeId nodeId condResult thenE elseE subtraces =
+  let hasBranchTrace = length subtraces >= 2
+  in case condResult of
     Just True ->
-      -- THEN was taken, ELSE is unevaluated - create ELSE stub
-      let stubLabel = escapeLabel (firstLine (prettyLayout elseE))
-          stubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> stubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
-          stubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+      -- THEN was taken, ELSE is unevaluated
+      let -- Stub for unevaluated ELSE
+          elseStubLabel = escapeLabel (firstLine (prettyLayout elseE))
+          elseStubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> elseStubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+          elseStubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+          nextId = nodeId + 1
+          -- Node for evaluated THEN (only if no trace exists for branch)
+          (thenDef, thenEdge, finalId) =
+            if hasBranchTrace
+            then ("", "", nextId)  -- Trace provides the branch node
+            else let thenLabel = escapeLabel (firstLine (prettyLayout thenE))
+                     thenDef' = "  node" <> Text.pack (show nextId) <> " [label=\"" <> thenLabel <> "\", fillcolor=\"#d0e8f2\", style=filled];\n"
+                     thenEdge' = "  " <> parentNodeId <> " -> node" <> Text.pack (show nextId) <> " [color=\"#2ca02c\", penwidth=2, fontsize=10, label=\"THEN\"];\n"
+                 in (thenDef', thenEdge', nextId + 1)
       in if opts.showUnevaluated
-           then (stubDef, stubEdge, nodeId + 1)
+           then (elseStubDef <> thenDef, elseStubEdge <> thenEdge, finalId)
            else ("", "", nodeId)
     Just False ->
-      -- ELSE was taken, THEN is unevaluated - create THEN stub
-      let stubLabel = escapeLabel (firstLine (prettyLayout thenE))
-          stubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> stubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
-          stubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"THEN\"];\n"
+      -- ELSE was taken, THEN is unevaluated
+      let -- Stub for unevaluated THEN
+          thenStubLabel = escapeLabel (firstLine (prettyLayout thenE))
+          thenStubDef = "  node" <> Text.pack (show nodeId) <> " [label=\"" <> thenStubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+          thenStubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show nodeId) <> " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"THEN\"];\n"
+          nextId = nodeId + 1
+          -- Node for evaluated ELSE (only if no trace exists for branch)
+          (elseDef, elseEdge, finalId) =
+            if hasBranchTrace
+            then ("", "", nextId)  -- Trace provides the branch node
+            else let elseLabel = escapeLabel (firstLine (prettyLayout elseE))
+                     elseDef' = "  node" <> Text.pack (show nextId) <> " [label=\"" <> elseLabel <> "\", fillcolor=\"#d0e8f2\", style=filled];\n"
+                     elseEdge' = "  " <> parentNodeId <> " -> node" <> Text.pack (show nextId) <> " [color=\"#2ca02c\", penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+                 in (elseDef', elseEdge', nextId + 1)
       in if opts.showUnevaluated
-           then (stubDef, stubEdge, nodeId + 1)
+           then (thenStubDef <> elseDef, thenStubEdge <> elseEdge, finalId)
            else ("", "", nodeId)
     Nothing ->
       -- Unknown condition result, no stubs
@@ -347,14 +368,123 @@ renderTraceWithConfig opts@(GraphVizOptions {maxDepth, simplifyTrivial}) depth n
                       else "  " <> currentNodeId <> " " <> nodeStyle <> ";\n"
 
           -- Render child nodes with potentially reversed edges
-          (childDefs, finalNodeId) = renderChildrenWithReverse opts depth currentNode (currentNode + 1) reverseChildEdges parentNode steps
+          (childDefs, finalNodeId) = renderChildrenWithReverse opts depth currentNode (currentNode + 1) reverseChildEdges parentNode result steps
 
       in (nodeDef <> childDefs, not shouldSkip, finalNodeId)
 
 -- | Render children with option to reverse all edges (for IF condition subtrees)
-renderChildrenWithReverse :: GraphVizOptions -> Int -> Int -> Int -> Bool -> Int -> [(Expr Resolved, [EvalTrace])] -> (Text, Int)
-renderChildrenWithReverse _opts _depth _parentNode nodeId _reverse _grandParent [] = ("", nodeId)
-renderChildrenWithReverse opts depth parentNode nodeId reverseAll grandParent ((expr, subtraces):rest) =
+renderChildrenWithReverse :: GraphVizOptions -> Int -> Int -> Int -> Bool -> Int -> Either EvalException NF -> [(Expr Resolved, [EvalTrace])] -> (Text, Int)
+renderChildrenWithReverse _opts _depth _parentNode nodeId _reverse _grandParent _result [] = ("", nodeId)
+renderChildrenWithReverse opts depth parentNode nodeId reverseAll grandParent result ((expr, subtraces):rest) =
+  -- Special handling for IF expressions with compound branches
+  -- When an IF has only the condition subtrace, the next step is the evaluated branch
+  case (expr, rest) of
+    (IfThenElse _ _ _ _, (branchExpr, branchSubtraces):restAfterBranch)
+      | length subtraces == 1 ->  -- Only condition trace, branch is in next step
+        renderIfWithCompoundBranch opts depth parentNode nodeId reverseAll grandParent result
+          expr subtraces branchExpr branchSubtraces restAfterBranch
+    _ -> renderChildStep opts depth parentNode nodeId reverseAll grandParent result expr subtraces rest
+
+-- | Special handling for IF expressions where the branch is a compound expression in the next step
+renderIfWithCompoundBranch :: GraphVizOptions -> Int -> Int -> Int -> Bool -> Int -> Either EvalException NF
+                           -> Expr Resolved -> [EvalTrace] -> Expr Resolved -> [EvalTrace] -> [(Expr Resolved, [EvalTrace])]
+                           -> (Text, Int)
+renderIfWithCompoundBranch opts depth parentNode nodeId reverseAll grandParent result
+                           (IfThenElse _ _ thenE elseE) condTraces branchExpr branchSubtraces restAfterBranch =
+  let parentNodeId = "node" <> Text.pack (show parentNode)
+
+      -- Determine which branch was taken
+      condResult = case condTraces of
+        (condTrace:_) -> traceBoolValue condTrace
+        _ -> Nothing
+
+      -- Render the condition subtrace
+      condConfig = EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }
+      forceIndices = Set.fromList [0]  -- Force render condition since it has label
+      (condText, condRootIds, afterCondId) =
+        renderSubtracesWithConfig opts (depth + 1) nodeId parentNode condTraces [condConfig] forceIndices
+
+      -- Create edges for condition
+      condEdges = mconcat
+        [ "  " <> parentNodeId <> " -> node" <> Text.pack (show childIdx) <>
+          " [color=\"#2ca02c\", penwidth=2, fontsize=10, label=\"IF\", dir=back];\n"
+        | Just childIdx <- condRootIds
+        ]
+
+      -- Create unevaluated branch stub and evaluated branch node with result
+      (branchNodeId, branchText, branchEdges, afterBranchId) =
+        case condResult of
+          Just True ->
+            -- THEN was taken
+            let -- Create ELSE stub (unevaluated)
+                elseStubId = afterCondId
+                elseStubLabel = escapeLabel (firstLine (prettyLayout elseE))
+                elseStubDef = "  node" <> Text.pack (show elseStubId) <>
+                              " [label=\"" <> elseStubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+                elseStubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show elseStubId) <>
+                               " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+
+                -- Create THEN node with branch expression and result
+                thenNodeId = elseStubId + 1
+                branchLabel = escapeLabel (firstLine (prettyLayout branchExpr))
+                resultText = case result of
+                               Right nf -> "\n────────────────\n" <> escapeLabel (firstLine (prettyLayout nf))
+                               Left _ -> ""
+                thenNodeDef = "  node" <> Text.pack (show thenNodeId) <>
+                              " [label=\"" <> branchLabel <> resultText <> "\", fillcolor=\"#d0e8f2\", style=filled];\n"
+                thenEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show thenNodeId) <>
+                           " [color=\"#2ca02c\", penwidth=2, fontsize=10, label=\"THEN\"];\n"
+            in (thenNodeId, elseStubDef <> thenNodeDef, elseStubEdge <> thenEdge, thenNodeId + 1)
+
+          Just False ->
+            -- ELSE was taken
+            let -- Create THEN stub (unevaluated)
+                thenStubId = afterCondId
+                thenStubLabel = escapeLabel (firstLine (prettyLayout thenE))
+                thenStubDef = "  node" <> Text.pack (show thenStubId) <>
+                              " [label=\"" <> thenStubLabel <> "\", fillcolor=\"#e0e0e0\", style=\"filled,dashed\"];\n"
+                thenStubEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show thenStubId) <>
+                               " [color=\"#999999\", style=dashed, penwidth=2, fontsize=10, label=\"THEN\"];\n"
+
+                -- Create ELSE node with branch expression and result
+                elseNodeId = thenStubId + 1
+                branchLabel = escapeLabel (firstLine (prettyLayout branchExpr))
+                resultText = case result of
+                               Right nf -> "\n────────────────\n" <> escapeLabel (firstLine (prettyLayout nf))
+                               Left _ -> ""
+                elseNodeDef = "  node" <> Text.pack (show elseNodeId) <>
+                              " [label=\"" <> branchLabel <> resultText <> "\", fillcolor=\"#d0e8f2\", style=filled];\n"
+                elseEdge = "  " <> parentNodeId <> " -> node" <> Text.pack (show elseNodeId) <>
+                           " [color=\"#2ca02c\", penwidth=2, fontsize=10, label=\"ELSE\"];\n"
+            in (elseNodeId, thenStubDef <> elseNodeDef, thenStubEdge <> elseEdge, elseNodeId + 1)
+
+          Nothing ->
+            -- Unknown condition, don't create stubs
+            (afterCondId, "", "", afterCondId)
+
+      -- Render the branch subtraces as children of the branch node
+      branchNodeIdText = "node" <> Text.pack (show branchNodeId)
+      branchConfigs = edgeConfigsFor branchExpr branchSubtraces
+      (branchChildText, branchChildRootIds, afterBranchChildId) =
+        renderSubtracesWithConfig opts (depth + 1) afterBranchId branchNodeId branchSubtraces branchConfigs Set.empty
+
+      -- Create edges from branch node to its children
+      branchChildEdges = mconcat
+        [ "  " <> branchNodeIdText <> " -> node" <> Text.pack (show childIdx) <>
+          " [color=\"#2ca02c\", penwidth=2, fontsize=10];\n"
+        | Just childIdx <- branchChildRootIds
+        ]
+
+      -- Render remaining siblings
+      (restText, finalId) = renderChildrenWithReverse opts depth parentNode afterBranchChildId reverseAll grandParent result restAfterBranch
+
+  in (condText <> branchText <> condEdges <> branchEdges <> branchChildText <> branchChildEdges <> restText, finalId)
+
+renderIfWithCompoundBranch _ _ _ _ _ _ _ _ _ _ _ _ = error "renderIfWithCompoundBranch called with non-IF expression"
+
+-- | Helper to render a single child step (the original renderChildrenWithReverse logic)
+renderChildStep :: GraphVizOptions -> Int -> Int -> Int -> Bool -> Int -> Either EvalException NF -> Expr Resolved -> [EvalTrace] -> [(Expr Resolved, [EvalTrace])] -> (Text, Int)
+renderChildStep opts depth parentNode nodeId reverseAll grandParent result expr subtraces rest =
   let parentNodeId = "node" <> Text.pack (show parentNode)
 
       -- Get edge configs, but if we're in a reversed subtree, reverse all edges
@@ -391,7 +521,7 @@ renderChildrenWithReverse opts depth parentNode nodeId reverseAll grandParent ((
             let condResult = case subtraces of
                   (condTrace:_) -> traceBoolValue condTrace
                   _ -> Nothing
-            in mkIfStubs opts parentNodeId nextId condResult thenE elseE
+            in mkIfStubs opts parentNodeId nextId condResult thenE elseE subtraces
           Consider _ _scrutinee branches ->
             mkConsiderStubs opts parentNodeId nextId branches subtraces
           _ -> ("", "", nextId)
@@ -414,8 +544,8 @@ renderChildrenWithReverse opts depth parentNode nodeId reverseAll grandParent ((
           ]
 
       -- Render remaining siblings
-      (restTexts, finalId) = renderChildrenWithReverse opts depth parentNode finalStubId reverseAll grandParent rest
-      
+      (restTexts, finalId) = renderChildrenWithReverse opts depth parentNode finalStubId reverseAll grandParent result rest
+
   in (childTexts <> stubDefs <> edges <> stubEdges <> restTexts, finalId)
 
 formatNode :: GraphVizOptions -> Int -> Maybe Resolved -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> (Text, Text)
@@ -513,14 +643,13 @@ edgeConfigsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
   where
     labelIf [] = []
     labelIf [_] = [EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }]
-    labelIf (condTrace:_:rest) =
+    labelIf (condTrace:branchTraces) =
       let branchLabel = case traceBoolValue condTrace of
                           Just True -> "THEN"
                           Just False -> "ELSE"
                           _ -> "branch"
       in EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }
-         : EdgeConfig { edgeLabel = Just branchLabel, edgeReversed = False }
-         : replicate (length rest) defaultEdgeConfig
+         : replicate (length branchTraces) (EdgeConfig { edgeLabel = Just branchLabel, edgeReversed = False })
 edgeConfigsFor (MultiWayIf _ _ _) subtraces = labelMulti subtraces
   where
     labelMulti [] = []
@@ -598,7 +727,6 @@ isPatternVarName :: Text -> Bool
 isPatternVarName name =
   Text.length name <= 3  -- Short names like "zs", "xs", "n"
   || name `elem` ["list", "rest", "tail", "xs", "ys", "zs"]
-
 data SubtraceKey
   = KeyLabel Resolved
   | KeyExpr (Expr Resolved)

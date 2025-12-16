@@ -195,7 +195,10 @@ main = do
   options  <- Options.execParser optionsConfig
   baseRecorder <- makeDefaultStderrRecorder Nothing
   let recorder = cmapWithPrio pretty baseRecorder
-      oneshotRecorder = cmapWithPrio IdeLog recorder
+      -- In graphviz mode, suppress LSP diagnostics to keep output clean
+      oneshotRecorder = if options.outputGraphViz
+                          then cmapWithPrio IdeLog mempty  -- Null recorder
+                          else cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
   evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
 
@@ -309,14 +312,18 @@ main = do
           mEval <- Shake.use Rules.EvaluateLazy uri
           mep <- Shake.use Rules.ExactPrint uri
           forM_ mEval $ \evalResults -> do
-            when options.outputGraphViz $
-              for_ evalResults $ \result ->
-                case result.trace of
-                  Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
-                  Nothing -> pure ()
-            for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
-              let rendered = renderEvalOutput options.traceText idx evalResult
-              logWith recorder Info $ EvalOutput rendered
+            if options.outputGraphViz
+              then do
+                -- In graphviz mode, only output DOT format to stdout
+                for_ evalResults $ \result ->
+                  case result.trace of
+                    Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+                    Nothing -> pure ()
+              else do
+                -- In normal mode, log evaluation results
+                for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
+                  let rendered = renderEvalOutput options.traceText idx evalResult
+                  logWith recorder Info $ EvalOutput rendered
           case (mtc, mep) of
             (Just tcRes, Just ep)
               | tcRes.success -> do
@@ -329,7 +336,9 @@ main = do
                         let showFn = if isTTY then pShow else pShowNoColor
                         logWith recorder Info $ ShowAst (showFn ast)
                       Nothing -> pure ()
-                  unless (options.verbose || options.showAst) $ logWith recorder Info SuccessOnly
+                  -- Don't log success message in graphviz mode (keeps output clean)
+                  unless (options.verbose || options.showAst || options.outputGraphViz) $
+                    logWith recorder Info SuccessOnly
             (_, _)            -> do
               logWith    recorder Error $ CheckFailed uri
               logWith errRecorder Error $ CheckFailed uri

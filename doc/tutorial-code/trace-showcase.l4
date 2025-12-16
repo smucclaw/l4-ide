@@ -31,12 +31,15 @@ DECIDE sumList list
 DECIDE evaluation applicant
   IS finalScore
   WHERE
-    baseScore MEANS IF applicant's age GREATER THAN 60 THEN 30 ELSE 10
+    baseScore MEANS IF applicant's age GREATER THAN 60 THEN 30 ELSE youngBonus applicant
     experienceBonus MEANS tierBonus (applicant's age / 10)
     roleBonus MEANS roleWeight (applicant's role)
     dependentPenalty MEANS penalty (applicant's dependents)
     metrics MEANS LIST baseScore, experienceBonus, roleBonus, dependentPenalty
     finalScore MEANS sumList metrics
+
+    youngBonus person MEANS
+      IF person's age GREATER THAN 30 THEN 10 ELSE 5
 
     tierBonus tier MEANS
       IF tier AT MOST 3 THEN 5 ELSE tier * 2
@@ -50,4 +53,16 @@ DECIDE evaluation applicant
     penalty count MEANS
       IF count AT MOST 0 THEN 0 ELSE 0 - (count * 3)
 
+-- Complex nested ELSE branch test case
+DECIDE evaluationComplex applicant
+  IS complexScore
+  WHERE
+    complexScore MEANS IF applicant's age GREATER THAN 60 THEN 30 ELSE 2 * ageSquared applicant
+
+    ageSquared person MEANS
+      IF person's age GREATER THAN 20
+        THEN person's age * person's age
+        ELSE person's age + 2
+
 #EVALTRACE evaluation alice
+#EVALTRACE evaluationComplex alice
