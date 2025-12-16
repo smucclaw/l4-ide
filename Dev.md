@@ -5,11 +5,28 @@ These instructions are intended for L4 internal developers with experience in Ty
 ## Quick build and install
 
 ```sh
-npm install && npm run build
+npm ci && npm run build
 cabal update
 cabal install exe:jl4-lsp --overwrite-policy=always
 # Make sure the installation directory (usually `~/.cabal/bin/`) is on the `$PATH`
 ```
+
+### npm ci vs npm install
+
+**Use `npm ci` for regular development:**
+
+- Installs exactly what's in package-lock.json
+- Faster and matches CI behavior
+- Never modifies package-lock.json
+- Fails if package.json and lock file are out of sync (catches real problems)
+
+**Only use `npm install` when:**
+
+- Adding a new package: `npm install some-package`
+- Updating dependencies intentionally
+- The package-lock.json needs regeneration
+
+If `npm ci` fails with sync errors, investigate before running `npm install` - something is actually wrong.
 
 ## Requirements
 
@@ -103,7 +120,7 @@ The general overview is as follows:
 - to set up the language server to talk to the frontend via websocket:
   `cabal run exe:jl4-lsp -- ws --port 5007`
 - to run the frontend that connects to both:
-  `cd ts-apps/jl4-web; npm i; npm run dev`
+  `cd ts-apps/jl4-web; npm ci; npm run dev`
 - check out `--help` for `jl4-websessions` and `jl4-lsp`
 - to run the decision service locally:
   `cabal run jl4-decision-service-exe -- --port 8081 --serverName http://localhost:8081/ --sourcePaths doc/tutorial-code/`
