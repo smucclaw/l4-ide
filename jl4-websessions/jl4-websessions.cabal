@@ -60,12 +60,15 @@ test-suite jl4-websessions-test
   main-is: Main.hs
 
   build-depends:
+    aeson,
     filepath,
     hspec,
     http-client,
+    http-types,
     jl4-websessions,
-    servant-client,
-    servant-client-core,
     sqlite-simple,
     temporary,
-    warp,
+    text,
+    uuid,
+    wai,
+    wai-extra,

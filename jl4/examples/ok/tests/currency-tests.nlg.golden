@@ -1,1 +1,75 @@
-Cannot linearize module that doesn't typecheck
+`US Dollar code`
+`Euro code`
+`British Pound code`
+`Japanese Yen code`
+`Swiss Franc code`
+`Canadian Dollar code`
+`Australian Dollar code`
+`Singapore Dollar code`
+`US Dollar decimals`
+`Euro decimals`
+`Japanese Yen decimals`
+`South Korean Won decimals`
+`decimal places for currency` with USD
+`decimal places for currency` with EUR
+`decimal places for currency` with GBP
+`decimal places for currency` with JPY
+`decimal places for currency` with CHF
+`decimal places for currency` with XXX
+`Money` with 10000 and USD
+`Money` with 5000 and EUR
+`Money` with 1000 and JPY
+`Money` with 123456 and GBP
+`Money` with 99 and USD
+`Money` with 1 and USD
+`Money` with 0 and USD
+`Money` with 10000 and XXX
+`Money` with 100.5 and USD
+`major to minor units` with 100 and USD
+`major to minor units` with 50.5 and USD
+`major to minor units` with 1000 and JPY
+`major to minor units` with 123.45 and EUR
+`minor to major units` with 10000 and USD
+`minor to major units` with 5050 and USD
+`minor to major units` with 1000 and JPY
+`minor to major units` with 12345 and EUR
+`add money` with 10000, 5000 and USD
+`add money` with 1000, 2000 and JPY
+`add money` with 99, 1 and USD
+`subtract money` with 10000, 5000 and USD
+`subtract money` with 5000, 10000 and USD
+`subtract money` with 100, 99 and USD
+`multiply money` with 10000, 2 and USD
+`multiply money` with 10000, 1.5 and USD
+`multiply money` with 10000, 0.1 and USD
+`multiply money` with 10000, 1.15 and USD
+`multiply money` with 1000, 1.5 and JPY
+`divide money` with 10000, 2 and USD
+`divide money` with 10000, 3 and USD
+`divide money` with 100, 3 and USD
+`divide money` with 10000, 0 and USD
+`divide money` with 1000, 2 and JPY
+`money equal` with 10000 and 10000
+`money equal` with 10000 and 5000
+`money greater than` with 10000 and 5000
+`money greater than` with 5000 and 10000
+`money less than` with 5000 and 10000
+`money less than` with 10000 and 5000
+`money at least` with 10000 and 10000
+`money at least` with 10000 and 5000
+`money at least` with 5000 and 10000
+`money at most` with 10000 and 10000
+`money at most` with 5000 and 10000
+`money at most` with 10000 and 5000
+`is valid currency code` with USD
+`is valid currency code` with EUR
+`is valid currency code` with usd
+`is valid currency code` with US
+`is valid currency code` with USDT
+`is non-negative` with 10000
+`is non-negative` with 0
+`is non-negative` with -10000
+`is positive` with 10000
+`is positive` with 1
+`is positive` with 0
+`is positive` with -10000

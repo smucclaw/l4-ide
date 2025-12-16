@@ -1,1 +1,61 @@
-Cannot linearize module that doesn't typecheck
+`United States alpha-2`
+`United Kingdom alpha-2`
+`Canada alpha-2`
+`Japan alpha-2`
+`Singapore alpha-2`
+`United States alpha-3`
+`Germany alpha-3`
+`Australia alpha-3`
+`United States numeric`
+`United Kingdom numeric`
+`Japan numeric`
+`European Union code`
+`ASEAN code`
+`California code`
+`New York code`
+`Delaware code`
+`Texas code`
+`Ontario code`
+`Quebec code`
+`British Columbia code`
+`England code`
+`Scotland code`
+`Wales code`
+`is valid ISO 3166-1 alpha-2` with US
+`is valid ISO 3166-1 alpha-2` with USA
+`is valid ISO 3166-1 alpha-2` with us
+`is valid ISO 3166-1 alpha-3` with USA
+`is valid ISO 3166-1 alpha-3` with US
+`is valid ISO 3166-1 alpha-3` with usa
+`is valid ISO 3166-2` with US-CA
+`is valid ISO 3166-2` with CA-ON
+`is valid ISO 3166-2` with GB-ENG
+`is valid ISO 3166-2` with INVALID
+`country name from alpha-2` with US
+`country name from alpha-2` with GB
+`country name from alpha-2` with CA
+`country name from alpha-2` with JP
+`country name from alpha-2` with SG
+`country name from alpha-2` with DE
+`country name from alpha-2` with ZZ
+`country name from alpha-3` with USA
+`country name from alpha-3` with GBR
+`country name from alpha-3` with CAN
+`country name from alpha-3` with JPN
+`country name from alpha-3` with ZZZ
+`alpha-2 to alpha-3` with US
+`alpha-2 to alpha-3` with GB
+`alpha-2 to alpha-3` with CA
+`alpha-2 to alpha-3` with JP
+`alpha-2 to alpha-3` with SG
+`alpha-2 to alpha-3` with DE
+`alpha-2 to alpha-3` with FR
+`alpha-2 to alpha-3` with ZZ
+`alpha-3 to alpha-2` with USA
+`alpha-3 to alpha-2` with GBR
+`alpha-3 to alpha-2` with CAN
+`alpha-3 to alpha-2` with JPN
+`alpha-3 to alpha-2` with SGP
+`alpha-3 to alpha-2` with DEU
+`alpha-3 to alpha-2` with FRA
+`alpha-3 to alpha-2` with ZZZ

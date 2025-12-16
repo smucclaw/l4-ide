@@ -1,1 +1,6 @@
-Cannot generate schema for module that doesn't typecheck
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {},
+    "title": "John birth",
+    "type": "object"
+}

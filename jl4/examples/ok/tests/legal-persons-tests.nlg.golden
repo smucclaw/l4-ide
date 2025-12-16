@@ -1,1 +1,111 @@
-Cannot linearize module that doesn't typecheck
+`full name` with John and Smith
+`full name` with Jane and Doe
+`full name with middle` with John, William and Smith
+`full name with middle` with Jane, Marie and Doe
+`formal name` with Dr., John and Smith
+`formal name` with Ms., Jane and Doe
+`format address` with 123 Main St, New York, NY, 10001 and US
+`format address` with 456 High St, London, England, SW1A 1AA and GB
+`format address` with 789 Rue de la Paix, Paris, Île-de-France, 75001 and FR
+`is valid US zip code` with 12345
+`is valid US zip code` with 12345-6789
+`is valid US zip code` with 1234
+`is valid US zip code` with ABCDE
+`is valid UK postcode` with SW1A 1AA
+`is valid UK postcode` with AB1 2CD
+`is valid UK postcode` with ABC
+`is valid Canadian postal code` with A1A 1A1
+`is valid Canadian postal code` with K1A0B1
+`is valid US SSN format` with 123-45-6789
+`is valid US SSN format` with 123456789
+`is valid US SSN format` with 12-345-6789
+`is valid Canadian SIN format` with 123-456-789
+`is valid Canadian SIN format` with 123456789
+`is valid UK NINO format` with AB123456C
+`is valid UK NINO format` with AB123456
+`age in years` with `John birth` and `Fixed ref`
+`age in years` with `Jane birth` and `Fixed ref`
+`age in years` with `Minor birth` and `Fixed ref`
+`age in years` with `Senior birth` and `Fixed ref`
+`is at least age` with `John birth`, 18 and `Fixed ref`
+`is at least age` with `Jane birth`, 18 and `Fixed ref`
+`is at least age` with `Minor birth`, 18 and `Fixed ref`
+`is at least age` with `Senior birth`, 65 and `Fixed ref`
+`is adult` with `John birth` and US
+`is adult` with `Jane birth` and US
+`is adult` with `Minor birth` and US
+`is adult` with `Japan adult birth` and JP
+`is adult` with `Jane birth` and JP
+`is adult` with `John birth` and KR
+`is minor` with `Minor birth` and US
+`is minor` with `John birth` and US
+`can enter contract` with `John birth` and US
+`can enter contract` with `Minor birth` and US
+`can vote` with `John birth` and US
+`can vote` with `Jane birth` and US
+`can vote` with `Minor birth` and US
+`is citizen of` with US and US
+`is citizen of` with US and GB
+`has citizenship in` with `Single citizenship` and US
+`has citizenship in` with `Single citizenship` and GB
+`has citizenship in` with `Dual citizenship` and US
+`has citizenship in` with `Dual citizenship` and GB
+`has citizenship in` with `Dual citizenship` and CA
+`has multiple citizenships` with `Single citizenship`
+`has multiple citizenships` with `Dual citizenship`
+`has multiple citizenships` with `Triple citizenship`
+`citizenship count` with `Single citizenship`
+`citizenship count` with `Dual citizenship`
+`citizenship count` with `Triple citizenship`
+`is valid US EIN format` with 12-3456789
+`is valid US EIN format` with 123456789
+`is valid US EIN format` with 12-34567890
+`is valid UK CRN format` with 12345678
+`is valid UK CRN format` with AB123456
+`is valid UK CRN format` with 1234567
+`is valid Canadian BN format` with 123456789
+`is valid Canadian BN format` with 12345678
+`years since incorporation` with `Acme Inc date`
+`years since incorporation` with `Startup date`
+`years since incorporation` with `Old Corp date`
+`established for at least` with `Acme Inc date` and 5
+`established for at least` with `Acme Inc date` and 20
+`established for at least` with `Old Corp date` and 50
+`is active corporation` with `Acme Inc date`
+`is active corporation` with `Startup date`
+`is active corporation` with `Old Corp date`
+`is beneficial owner` with 25
+`is beneficial owner` with 30
+`is beneficial owner` with 24
+`is beneficial owner` with 0
+`is majority owner` with 51
+`is majority owner` with 60
+`is majority owner` with 50
+`is majority owner` with 40
+`is controlling owner` with 51
+`is controlling owner` with 100
+`is controlling owner` with 50
+`has significant control` with 25
+`has significant control` with 50
+`has significant control` with 24
+`is Delaware corporation` with `Delaware code`
+`is Delaware corporation` with `California code`
+`is Delaware corporation` with US-DE
+`is Delaware corporation` with US-CA
+`is UK corporation` with GB
+`is UK corporation` with `England code`
+`is UK corporation` with `Scotland code`
+`is UK corporation` with US
+`is Canadian corporation` with CA-ON
+`is Canadian corporation` with CA-QC
+`is Canadian corporation` with US-CA
+`is US corporation` with US-DE
+`is US corporation` with US-CA
+`is US corporation` with CA-ON
+`requires registered agent` with US-DE
+`requires registered agent` with GB
+`requires registered agent` with CA-ON
+`requires registered agent` with SG
+`is foreign qualification required` with US-DE and US-CA
+`is foreign qualification required` with US-CA and US-CA
+`is foreign qualification required` with US-DE and CA-ON
