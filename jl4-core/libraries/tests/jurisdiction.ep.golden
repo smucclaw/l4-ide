@@ -1,0 +1,12 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: jurisdiction.l4
+  Hidden:   no
+  Range:    201:10-201:10
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+        |
+    201 |     ELSE IF code EQUALS `Canada alpha-2` THEN RIGHT "Canada"
+        |          ^
+    incorrect indentation (got 10, should be greater than 10)

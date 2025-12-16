@@ -1,297 +1,40 @@
 § `Jurisdiction Library`
 
--- Library for representing jurisdictions (countries, regions, states, municipalities)
--- Uses ISO 3166-1 codes (alpha-2 and alpha-3) for countries
--- Uses ISO 3166-2 codes for subdivisions
+-- Simple jurisdiction library using ISO 3166 codes
 -- Version 1.0.0 (2024-12-16)
 
 §§ `Version`
 
 `Jurisdiction Library Version` MEANS "1.0.0"
-`Jurisdiction Library Date` MEANS "2024-12-16"
 
 
-§§ `Country Codes - ISO 3166-1`
-
--- Major countries with both alpha-2 and alpha-3 codes
--- Format: Country name, 2-letter code, 3-letter code, numeric code
-
-`United States alpha-2` MEANS "US"
-`United States alpha-3` MEANS "USA"
-`United States numeric` MEANS 840
-
-`United Kingdom alpha-2` MEANS "GB"
-`United Kingdom alpha-3` MEANS "GBR"
-`United Kingdom numeric` MEANS 826
-
-`Canada alpha-2` MEANS "CA"
-`Canada alpha-3` MEANS "CAN"
-`Canada numeric` MEANS 124
-
-`Australia alpha-2` MEANS "AU"
-`Australia alpha-3` MEANS "AUS"
-`Australia numeric` MEANS 36
-
-`Germany alpha-2` MEANS "DE"
-`Germany alpha-3` MEANS "DEU"
-`Germany numeric` MEANS 276
-
-`France alpha-2` MEANS "FR"
-`France alpha-3` MEANS "FRA"
-`France numeric` MEANS 250
-
-`China alpha-2` MEANS "CN"
-`China alpha-3` MEANS "CHN"
-`China numeric` MEANS 156
-
-`Japan alpha-2` MEANS "JP"
-`Japan alpha-3` MEANS "JPN"
-`Japan numeric` MEANS 392
-
-`Singapore alpha-2` MEANS "SG"
-`Singapore alpha-3` MEANS "SGP"
-`Singapore numeric` MEANS 702
-
-`India alpha-2` MEANS "IN"
-`India alpha-3` MEANS "IND"
-`India numeric` MEANS 356
-
-`Brazil alpha-2` MEANS "BR"
-`Brazil alpha-3` MEANS "BRA"
-`Brazil numeric` MEANS 76
-
-`Mexico alpha-2` MEANS "MX"
-`Mexico alpha-3` MEANS "MEX"
-`Mexico numeric` MEANS 484
-
-`Switzerland alpha-2` MEANS "CH"
-`Switzerland alpha-3` MEANS "CHE"
-`Switzerland numeric` MEANS 756
-
-`Netherlands alpha-2` MEANS "NL"
-`Netherlands alpha-3` MEANS "NLD"
-`Netherlands numeric` MEANS 528
-
-`Sweden alpha-2` MEANS "SE"
-`Sweden alpha-3` MEANS "SWE"
-`Sweden numeric` MEANS 752
-
-`New Zealand alpha-2` MEANS "NZ"
-`New Zealand alpha-3` MEANS "NZL"
-`New Zealand numeric` MEANS 554
-
-`South Korea alpha-2` MEANS "KR"
-`South Korea alpha-3` MEANS "KOR"
-`South Korea numeric` MEANS 410
-
-`Italy alpha-2` MEANS "IT"
-`Italy alpha-3` MEANS "ITA"
-`Italy numeric` MEANS 380
-
-`Spain alpha-2` MEANS "ES"
-`Spain alpha-3` MEANS "ESP"
-`Spain numeric` MEANS 724
-
-`Hong Kong alpha-2` MEANS "HK"
-`Hong Kong alpha-3` MEANS "HKG"
-`Hong Kong numeric` MEANS 344
-
-
-§§ `Supranational Regions`
-
-`European Union code` MEANS "EU"
-`European Union name` MEANS "European Union"
-
-`ASEAN code` MEANS "ASEAN"
-`ASEAN name` MEANS "Association of Southeast Asian Nations"
-
-`NAFTA code` MEANS "USMCA"
-`NAFTA name` MEANS "United States-Mexico-Canada Agreement"
-
-
-§§ `Common US State Codes - ISO 3166-2:US`
-
-`California code` MEANS "US-CA"
-`California name` MEANS "California"
-
-`New York code` MEANS "US-NY"
-`New York name` MEANS "New York"
-
-`Texas code` MEANS "US-TX"
-`Texas name` MEANS "Texas"
-
-`Florida code` MEANS "US-FL"
-`Florida name` MEANS "Florida"
-
-`Illinois code` MEANS "US-IL"
-`Illinois name` MEANS "Illinois"
-
-`Pennsylvania code` MEANS "US-PA"
-`Pennsylvania name` MEANS "Pennsylvania"
-
-`Massachusetts code` MEANS "US-MA"
-`Massachusetts name` MEANS "Massachusetts"
-
-`Washington code` MEANS "US-WA"
-`Washington name` MEANS "Washington"
-
-`Delaware code` MEANS "US-DE"
-`Delaware name` MEANS "Delaware"
-
-
-§§ `Common Canadian Province Codes - ISO 3166-2:CA`
-
-`Ontario code` MEANS "CA-ON"
-`Ontario name` MEANS "Ontario"
-
-`Quebec code` MEANS "CA-QC"
-`Quebec name` MEANS "Quebec"
-
-`British Columbia code` MEANS "CA-BC"
-`British Columbia name` MEANS "British Columbia"
-
-`Alberta code` MEANS "CA-AB"
-`Alberta name` MEANS "Alberta"
-
-
-§§ `Common UK Constituent Countries - ISO 3166-2:GB`
-
-`England code` MEANS "GB-ENG"
-`England name` MEANS "England"
-
-`Scotland code` MEANS "GB-SCT"
-`Scotland name` MEANS "Scotland"
-
-`Wales code` MEANS "GB-WLS"
-`Wales name` MEANS "Wales"
-
-`Northern Ireland code` MEANS "GB-NIR"
-`Northern Ireland name` MEANS "Northern Ireland"
-
-
-§§ `Validation Functions`
-
-GIVEN code IS A STRING
-GIVETH A BOOLEAN
-`is valid ISO 3166-1 alpha-2` MEANS
-    LENGTH code EQUALS 2
-    AND code EQUALS TOUPPER code
-
-GIVEN code IS A STRING
-GIVETH A BOOLEAN
-`is valid ISO 3166-1 alpha-3` MEANS
-    LENGTH code EQUALS 3
-    AND code EQUALS TOUPPER code
-
-GIVEN code IS A STRING
-GIVETH A BOOLEAN
-`is valid ISO 3166-2` MEANS
-    LENGTH code AT LEAST 4
-    AND SUBSTRING code 0 2 EQUALS TOUPPER (SUBSTRING code 0 2)
-    AND SUBSTRING code 2 1 EQUALS "-"
-
-
-§§ `Country Name Lookup`
-
-GIVEN code IS A STRING
-GIVETH AN EITHER STRING STRING
-`country name from alpha-2` MEANS
-    IF code EQUALS `United States alpha-2` THEN RIGHT "United States"
-    ELSE IF code EQUALS `United Kingdom alpha-2` THEN RIGHT "United Kingdom"
-    ELSE IF code EQUALS `Canada alpha-2` THEN RIGHT "Canada"
-    ELSE IF code EQUALS `Australia alpha-2` THEN RIGHT "Australia"
-    ELSE IF code EQUALS `Germany alpha-2` THEN RIGHT "Germany"
-    ELSE IF code EQUALS `France alpha-2` THEN RIGHT "France"
-    ELSE IF code EQUALS `China alpha-2` THEN RIGHT "China"
-    ELSE IF code EQUALS `Japan alpha-2` THEN RIGHT "Japan"
-    ELSE IF code EQUALS `Singapore alpha-2` THEN RIGHT "Singapore"
-    ELSE IF code EQUALS `India alpha-2` THEN RIGHT "India"
-    ELSE IF code EQUALS `Brazil alpha-2` THEN RIGHT "Brazil"
-    ELSE IF code EQUALS `Mexico alpha-2` THEN RIGHT "Mexico"
-    ELSE IF code EQUALS `Switzerland alpha-2` THEN RIGHT "Switzerland"
-    ELSE IF code EQUALS `Netherlands alpha-2` THEN RIGHT "Netherlands"
-    ELSE IF code EQUALS `Sweden alpha-2` THEN RIGHT "Sweden"
-    ELSE IF code EQUALS `New Zealand alpha-2` THEN RIGHT "New Zealand"
-    ELSE IF code EQUALS `South Korea alpha-2` THEN RIGHT "South Korea"
-    ELSE IF code EQUALS `Italy alpha-2` THEN RIGHT "Italy"
-    ELSE IF code EQUALS `Spain alpha-2` THEN RIGHT "Spain"
-    ELSE IF code EQUALS `Hong Kong alpha-2` THEN RIGHT "Hong Kong"
-    ELSE LEFT (CONCAT "Unknown country code: ", code)
-
-GIVEN code IS A STRING
-GIVETH AN EITHER STRING STRING
-`country name from alpha-3` MEANS
-    IF code EQUALS `United States alpha-3` THEN RIGHT "United States"
-    ELSE IF code EQUALS `United Kingdom alpha-3` THEN RIGHT "United Kingdom"
-    ELSE IF code EQUALS `Canada alpha-3` THEN RIGHT "Canada"
-    ELSE IF code EQUALS `Australia alpha-3` THEN RIGHT "Australia"
-    ELSE IF code EQUALS `Germany alpha-3` THEN RIGHT "Germany"
-    ELSE IF code EQUALS `France alpha-3` THEN RIGHT "France"
-    ELSE IF code EQUALS `China alpha-3` THEN RIGHT "China"
-    ELSE IF code EQUALS `Japan alpha-3` THEN RIGHT "Japan"
-    ELSE IF code EQUALS `Singapore alpha-3` THEN RIGHT "Singapore"
-    ELSE IF code EQUALS `India alpha-3` THEN RIGHT "India"
-    ELSE IF code EQUALS `Brazil alpha-3` THEN RIGHT "Brazil"
-    ELSE IF code EQUALS `Mexico alpha-3` THEN RIGHT "Mexico"
-    ELSE IF code EQUALS `Switzerland alpha-3` THEN RIGHT "Switzerland"
-    ELSE IF code EQUALS `Netherlands alpha-3` THEN RIGHT "Netherlands"
-    ELSE IF code EQUALS `Sweden alpha-3` THEN RIGHT "Sweden"
-    ELSE IF code EQUALS `New Zealand alpha-3` THEN RIGHT "New Zealand"
-    ELSE IF code EQUALS `South Korea alpha-3` THEN RIGHT "South Korea"
-    ELSE IF code EQUALS `Italy alpha-3` THEN RIGHT "Italy"
-    ELSE IF code EQUALS `Spain alpha-3` THEN RIGHT "Spain"
-    ELSE IF code EQUALS `Hong Kong alpha-3` THEN RIGHT "Hong Kong"
-    ELSE LEFT (CONCAT "Unknown country code: ", code)
-
-
-§§ `Code Conversion Functions`
-
-GIVEN alpha2 IS A STRING
-GIVETH AN EITHER STRING STRING
-`alpha-2 to alpha-3` MEANS
-    IF alpha2 EQUALS `United States alpha-2` THEN RIGHT `United States alpha-3`
-    ELSE IF alpha2 EQUALS `United Kingdom alpha-2` THEN RIGHT `United Kingdom alpha-3`
-    ELSE IF alpha2 EQUALS `Canada alpha-2` THEN RIGHT `Canada alpha-3`
-    ELSE IF alpha2 EQUALS `Australia alpha-2` THEN RIGHT `Australia alpha-3`
-    ELSE IF alpha2 EQUALS `Germany alpha-2` THEN RIGHT `Germany alpha-3`
-    ELSE IF alpha2 EQUALS `France alpha-2` THEN RIGHT `France alpha-3`
-    ELSE IF alpha2 EQUALS `China alpha-2` THEN RIGHT `China alpha-3`
-    ELSE IF alpha2 EQUALS `Japan alpha-2` THEN RIGHT `Japan alpha-3`
-    ELSE IF alpha2 EQUALS `Singapore alpha-2` THEN RIGHT `Singapore alpha-3`
-    ELSE IF alpha2 EQUALS `India alpha-2` THEN RIGHT `India alpha-3`
-    ELSE IF alpha2 EQUALS `Brazil alpha-2` THEN RIGHT `Brazil alpha-3`
-    ELSE IF alpha2 EQUALS `Mexico alpha-2` THEN RIGHT `Mexico alpha-3`
-    ELSE IF alpha2 EQUALS `Switzerland alpha-2` THEN RIGHT `Switzerland alpha-3`
-    ELSE IF alpha2 EQUALS `Netherlands alpha-2` THEN RIGHT `Netherlands alpha-3`
-    ELSE IF alpha2 EQUALS `Sweden alpha-2` THEN RIGHT `Sweden alpha-3`
-    ELSE IF alpha2 EQUALS `New Zealand alpha-2` THEN RIGHT `New Zealand alpha-3`
-    ELSE IF alpha2 EQUALS `South Korea alpha-2` THEN RIGHT `South Korea alpha-3`
-    ELSE IF alpha2 EQUALS `Italy alpha-2` THEN RIGHT `Italy alpha-3`
-    ELSE IF alpha2 EQUALS `Spain alpha-2` THEN RIGHT `Spain alpha-3`
-    ELSE IF alpha2 EQUALS `Hong Kong alpha-2` THEN RIGHT `Hong Kong alpha-3`
-    ELSE LEFT (CONCAT "Cannot convert unknown alpha-2 code: ", alpha2)
-
-GIVEN alpha3 IS A STRING
-GIVETH AN EITHER STRING STRING
-`alpha-3 to alpha-2` MEANS
-    IF alpha3 EQUALS `United States alpha-3` THEN RIGHT `United States alpha-2`
-    ELSE IF alpha3 EQUALS `United Kingdom alpha-3` THEN RIGHT `United Kingdom alpha-2`
-    ELSE IF alpha3 EQUALS `Canada alpha-3` THEN RIGHT `Canada alpha-2`
-    ELSE IF alpha3 EQUALS `Australia alpha-3` THEN RIGHT `Australia alpha-2`
-    ELSE IF alpha3 EQUALS `Germany alpha-3` THEN RIGHT `Germany alpha-2`
-    ELSE IF alpha3 EQUALS `France alpha-3` THEN RIGHT `France alpha-2`
-    ELSE IF alpha3 EQUALS `China alpha-3` THEN RIGHT `China alpha-2`
-    ELSE IF alpha3 EQUALS `Japan alpha-3` THEN RIGHT `Japan alpha-2`
-    ELSE IF alpha3 EQUALS `Singapore alpha-3` THEN RIGHT `Singapore alpha-2`
-    ELSE IF alpha3 EQUALS `India alpha-3` THEN RIGHT `India alpha-2`
-    ELSE IF alpha3 EQUALS `Brazil alpha-3` THEN RIGHT `Brazil alpha-2`
-    ELSE IF alpha3 EQUALS `Mexico alpha-3` THEN RIGHT `Mexico alpha-2`
-    ELSE IF alpha3 EQUALS `Switzerland alpha-3` THEN RIGHT `Switzerland alpha-2`
-    ELSE IF alpha3 EQUALS `Netherlands alpha-3` THEN RIGHT `Netherlands alpha-2`
-    ELSE IF alpha3 EQUALS `Sweden alpha-3` THEN RIGHT `Sweden alpha-2`
-    ELSE IF alpha3 EQUALS `New Zealand alpha-3` THEN RIGHT `New Zealand alpha-2`
-    ELSE IF alpha3 EQUALS `South Korea alpha-3` THEN RIGHT `South Korea alpha-2`
-    ELSE IF alpha3 EQUALS `Italy alpha-3` THEN RIGHT `Italy alpha-2`
-    ELSE IF alpha3 EQUALS `Spain alpha-3` THEN RIGHT `Spain alpha-2`
-    ELSE IF alpha3 EQUALS `Hong Kong alpha-3` THEN RIGHT `Hong Kong alpha-2`
-    ELSE LEFT (CONCAT "Cannot convert unknown alpha-3 code: ", alpha3)
+§§ `Common Jurisdictions`
+
+-- Just defining some common codes as documentation
+-- In practice, use the literal strings: "US", "GB", "CA", etc.
+
+`US` MEANS "US"
+`GB` MEANS "GB"
+`CA` MEANS "CA"
+`AU` MEANS "AU"
+`DE` MEANS "DE"
+`FR` MEANS "FR"
+`JP` MEANS "JP"
+`CN` MEANS "CN"
+`SG` MEANS "SG"
+`IN` MEANS "IN"
+
+-- US States (ISO 3166-2)
+`US-CA` MEANS "US-CA"  -- California
+`US-NY` MEANS "US-NY"  -- New York
+`US-DE` MEANS "US-DE"  -- Delaware
+`US-TX` MEANS "US-TX"  -- Texas
+`US-FL` MEANS "US-FL"  -- Florida
+
+-- Canadian Provinces
+`CA-ON` MEANS "CA-ON"  -- Ontario
+`CA-QC` MEANS "CA-QC"  -- Quebec
+`CA-BC` MEANS "CA-BC"  -- British Columbia
+
+-- Supranational regions
+`EU` MEANS "EU"

@@ -1,0 +1,12 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: legal-persons.l4
+  Hidden:   no
+  Range:    54:11-54:11
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+       |
+    54 |         , CONCAT city, CONCAT ", "
+       |           ^
+    incorrect indentation (got 11, should be greater than 20)

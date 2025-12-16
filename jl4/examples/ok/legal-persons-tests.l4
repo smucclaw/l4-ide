@@ -1,0 +1,190 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT jurisdiction
+IMPORT `legal-persons`
+
+§ `Legal Persons Library Tests`
+
+-- Test data: birth dates
+`John birth` MEANS Date 15 6 1985
+`Jane birth` MEANS Date 1 1 2000
+`Minor birth` MEANS Date 1 1 2010
+`Senior birth` MEANS Date 1 1 1950
+`Japan adult birth` MEANS Date 1 1 2003  -- Just turned 21 (adult in Japan at 20)
+
+-- Test data: incorporation dates
+`Acme Inc date` MEANS Date 1 1 2010
+`Startup date` MEANS Date 1 6 2023
+`Old Corp date` MEANS Date 15 3 1950
+
+-- Test data: reference dates
+`Today ref` MEANS TODAY
+`Fixed ref` MEANS Date 1 1 2024
+
+-- Test name formatting
+#EVAL `full name` "John" "Smith"
+#EVAL `full name` "Jane" "Doe"
+#EVAL `full name with middle` "John" "William" "Smith"
+#EVAL `full name with middle` "Jane" "Marie" "Doe"
+#EVAL `formal name` "Dr." "John" "Smith"
+#EVAL `formal name` "Ms." "Jane" "Doe"
+
+-- Test address formatting
+#EVAL `format address` "123 Main St" "New York" "NY" "10001" "US"
+#EVAL `format address` "456 High St" "London" "England" "SW1A 1AA" "GB"
+#EVAL `format address` "789 Rue de la Paix" "Paris" "Île-de-France" "75001" "FR"
+
+-- Test postal code validation
+#EVAL `is valid US zip code` "12345"
+#EVAL `is valid US zip code` "12345-6789"
+#EVAL `is valid US zip code` "1234"      -- Should be FALSE
+#EVAL `is valid US zip code` "ABCDE"     -- Should be FALSE
+
+#EVAL `is valid UK postcode` "SW1A 1AA"
+#EVAL `is valid UK postcode` "AB1 2CD"
+#EVAL `is valid UK postcode` "ABC"       -- Should be FALSE
+
+#EVAL `is valid Canadian postal code` "A1A 1A1"
+#EVAL `is valid Canadian postal code` "K1A0B1"  -- Should be FALSE (no space)
+
+-- Test identity document validation
+#EVAL `is valid US SSN format` "123-45-6789"
+#EVAL `is valid US SSN format` "123456789"     -- Should be FALSE (no dashes)
+#EVAL `is valid US SSN format` "12-345-6789"   -- Should be FALSE (wrong format)
+
+#EVAL `is valid Canadian SIN format` "123-456-789"
+#EVAL `is valid Canadian SIN format` "123456789"  -- Should be FALSE
+
+#EVAL `is valid UK NINO format` "AB123456C"
+#EVAL `is valid UK NINO format` "AB123456"  -- Should be FALSE
+
+-- Test age calculations
+#EVAL `age in years` `John birth` `Fixed ref`
+#EVAL `age in years` `Jane birth` `Fixed ref`
+#EVAL `age in years` `Minor birth` `Fixed ref`
+#EVAL `age in years` `Senior birth` `Fixed ref`
+
+-- Test age thresholds
+#EVAL `is at least age` `John birth` 18 `Fixed ref`
+#EVAL `is at least age` `Jane birth` 18 `Fixed ref`
+#EVAL `is at least age` `Minor birth` 18 `Fixed ref`  -- Should be FALSE
+#EVAL `is at least age` `Senior birth` 65 `Fixed ref`
+
+-- Test legal capacity: adult status by jurisdiction
+#EVAL `is adult` `John birth` "US"
+#EVAL `is adult` `Jane birth` "US"
+#EVAL `is adult` `Minor birth` "US"  -- Should be FALSE
+#EVAL `is adult` `Japan adult birth` "JP"
+#EVAL `is adult` `Jane birth` "JP"   -- Should be FALSE (need to be 20 in Japan)
+#EVAL `is adult` `John birth` "KR"
+
+-- Test minor status
+#EVAL `is minor` `Minor birth` "US"
+#EVAL `is minor` `John birth` "US"  -- Should be FALSE
+
+-- Test contract capacity
+#EVAL `can enter contract` `John birth` "US"
+#EVAL `can enter contract` `Minor birth` "US"  -- Should be FALSE
+
+-- Test voting eligibility
+#EVAL `can vote` `John birth` "US"
+#EVAL `can vote` `Jane birth` "US"
+#EVAL `can vote` `Minor birth` "US"  -- Should be FALSE
+
+-- Test citizenship functions
+`Single citizenship` MEANS "US" FOLLOWED BY EMPTY
+`Dual citizenship` MEANS "US" FOLLOWED BY "GB" FOLLOWED BY EMPTY
+`Triple citizenship` MEANS "US" FOLLOWED BY "GB" FOLLOWED BY "CA" FOLLOWED BY EMPTY
+
+#EVAL `is citizen of` "US" "US"
+#EVAL `is citizen of` "US" "GB"  -- Should be FALSE
+
+#EVAL `has citizenship in` `Single citizenship` "US"
+#EVAL `has citizenship in` `Single citizenship` "GB"  -- Should be FALSE
+
+#EVAL `has citizenship in` `Dual citizenship` "US"
+#EVAL `has citizenship in` `Dual citizenship` "GB"
+#EVAL `has citizenship in` `Dual citizenship` "CA"  -- Should be FALSE
+
+#EVAL `has multiple citizenships` `Single citizenship`  -- Should be FALSE
+#EVAL `has multiple citizenships` `Dual citizenship`
+#EVAL `has multiple citizenships` `Triple citizenship`
+
+#EVAL `citizenship count` `Single citizenship`
+#EVAL `citizenship count` `Dual citizenship`
+#EVAL `citizenship count` `Triple citizenship`
+
+-- Test corporate identifier validation
+#EVAL `is valid US EIN format` "12-3456789"
+#EVAL `is valid US EIN format` "123456789"    -- Should be FALSE (no dash)
+#EVAL `is valid US EIN format` "12-34567890"  -- Should be FALSE (too long)
+
+#EVAL `is valid UK CRN format` "12345678"
+#EVAL `is valid UK CRN format` "AB123456"
+#EVAL `is valid UK CRN format` "1234567"      -- Should be FALSE
+
+#EVAL `is valid Canadian BN format` "123456789"
+#EVAL `is valid Canadian BN format` "12345678"  -- Should be FALSE
+
+-- Test corporate age calculations
+#EVAL `years since incorporation` `Acme Inc date`
+#EVAL `years since incorporation` `Startup date`
+#EVAL `years since incorporation` `Old Corp date`
+
+#EVAL `established for at least` `Acme Inc date` 5
+#EVAL `established for at least` `Acme Inc date` 20  -- Should be FALSE
+#EVAL `established for at least` `Old Corp date` 50
+
+-- Test corporate status
+#EVAL `is active corporation` `Acme Inc date`
+#EVAL `is active corporation` `Startup date`
+#EVAL `is active corporation` `Old Corp date`
+
+-- Test ownership thresholds
+#EVAL `is beneficial owner` 25
+#EVAL `is beneficial owner` 30
+#EVAL `is beneficial owner` 24  -- Should be FALSE
+#EVAL `is beneficial owner` 0   -- Should be FALSE
+
+#EVAL `is majority owner` 51
+#EVAL `is majority owner` 60
+#EVAL `is majority owner` 50  -- Should be FALSE
+#EVAL `is majority owner` 40  -- Should be FALSE
+
+#EVAL `is controlling owner` 51
+#EVAL `is controlling owner` 100
+#EVAL `is controlling owner` 50  -- Should be FALSE
+
+#EVAL `has significant control` 25
+#EVAL `has significant control` 50
+#EVAL `has significant control` 24  -- Should be FALSE
+
+-- Test corporate jurisdiction functions
+#EVAL `is Delaware corporation` `Delaware code`
+#EVAL `is Delaware corporation` `California code`  -- Should be FALSE
+#EVAL `is Delaware corporation` "US-DE"
+#EVAL `is Delaware corporation` "US-CA"  -- Should be FALSE
+
+#EVAL `is UK corporation` "GB"
+#EVAL `is UK corporation` `England code`
+#EVAL `is UK corporation` `Scotland code`
+#EVAL `is UK corporation` "US"  -- Should be FALSE
+
+#EVAL `is Canadian corporation` "CA-ON"
+#EVAL `is Canadian corporation` "CA-QC"
+#EVAL `is Canadian corporation` "US-CA"  -- Should be FALSE
+
+#EVAL `is US corporation` "US-DE"
+#EVAL `is US corporation` "US-CA"
+#EVAL `is US corporation` "CA-ON"  -- Should be FALSE
+
+-- Test registered agent requirements
+#EVAL `requires registered agent` "US-DE"
+#EVAL `requires registered agent` "GB"
+#EVAL `requires registered agent` "CA-ON"
+#EVAL `requires registered agent` "SG"  -- Might be FALSE depending on jurisdiction
+
+-- Test foreign qualification
+#EVAL `is foreign qualification required` "US-DE" "US-CA"  -- TRUE (Delaware corp operating in California)
+#EVAL `is foreign qualification required` "US-CA" "US-CA"  -- FALSE (same state)
+#EVAL `is foreign qualification required` "US-DE" "CA-ON"  -- FALSE (different countries)

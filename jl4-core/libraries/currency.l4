@@ -1,287 +1,126 @@
-IMPORT jurisdiction
-
 § `Currency Library`
 
--- Library for representing monetary amounts and currency codes
--- Uses ISO 4217 currency codes
--- Stores amounts as integer cents/minor units to avoid floating point errors
+-- Simple currency library with ISO 4217 codes
+-- Amounts stored as integer minor units (cents) to avoid floating point errors
 -- Version 1.0.0 (2024-12-16)
 
 §§ `Version`
 
 `Currency Library Version` MEANS "1.0.0"
-`Currency Library Date` MEANS "2024-12-16"
 
 
-§§ `ISO 4217 Currency Codes`
+§§ `Common Currency Codes`
 
--- Format: Currency name, code, numeric code, decimal places (minor units)
-
-`US Dollar code` MEANS "USD"
-`US Dollar numeric` MEANS 840
-`US Dollar decimals` MEANS 2
-`US Dollar country` MEANS `United States alpha-2`
-
-`Euro code` MEANS "EUR"
-`Euro numeric` MEANS 978
-`Euro decimals` MEANS 2
-`Euro region` MEANS `European Union code`
-
-`British Pound code` MEANS "GBP"
-`British Pound numeric` MEANS 826
-`British Pound decimals` MEANS 2
-`British Pound country` MEANS `United Kingdom alpha-2`
-
-`Japanese Yen code` MEANS "JPY"
-`Japanese Yen numeric` MEANS 392
-`Japanese Yen decimals` MEANS 0
-`Japanese Yen country` MEANS `Japan alpha-2`
-
-`Swiss Franc code` MEANS "CHF"
-`Swiss Franc numeric` MEANS 756
-`Swiss Franc decimals` MEANS 2
-`Swiss Franc country` MEANS `Switzerland alpha-2`
-
-`Canadian Dollar code` MEANS "CAD"
-`Canadian Dollar numeric` MEANS 124
-`Canadian Dollar decimals` MEANS 2
-`Canadian Dollar country` MEANS `Canada alpha-2`
-
-`Australian Dollar code` MEANS "AUD"
-`Australian Dollar numeric` MEANS 36
-`Australian Dollar decimals` MEANS 2
-`Australian Dollar country` MEANS `Australia alpha-2`
-
-`Chinese Yuan code` MEANS "CNY"
-`Chinese Yuan numeric` MEANS 156
-`Chinese Yuan decimals` MEANS 2
-`Chinese Yuan country` MEANS `China alpha-2`
-
-`Hong Kong Dollar code` MEANS "HKD"
-`Hong Kong Dollar numeric` MEANS 344
-`Hong Kong Dollar decimals` MEANS 2
-`Hong Kong Dollar country` MEANS `Hong Kong alpha-2`
-
-`Singapore Dollar code` MEANS "SGD"
-`Singapore Dollar numeric` MEANS 702
-`Singapore Dollar decimals` MEANS 2
-`Singapore Dollar country` MEANS `Singapore alpha-2`
-
-`Indian Rupee code` MEANS "INR"
-`Indian Rupee numeric` MEANS 356
-`Indian Rupee decimals` MEANS 2
-`Indian Rupee country` MEANS `India alpha-2`
-
-`Brazilian Real code` MEANS "BRL"
-`Brazilian Real numeric` MEANS 986
-`Brazilian Real decimals` MEANS 2
-`Brazilian Real country` MEANS `Brazil alpha-2`
-
-`Mexican Peso code` MEANS "MXN"
-`Mexican Peso numeric` MEANS 484
-`Mexican Peso decimals` MEANS 2
-`Mexican Peso country` MEANS `Mexico alpha-2`
-
-`Swedish Krona code` MEANS "SEK"
-`Swedish Krona numeric` MEANS 752
-`Swedish Krona decimals` MEANS 2
-`Swedish Krona country` MEANS `Sweden alpha-2`
-
-`New Zealand Dollar code` MEANS "NZD"
-`New Zealand Dollar numeric` MEANS 554
-`New Zealand Dollar decimals` MEANS 2
-`New Zealand Dollar country` MEANS `New Zealand alpha-2`
-
-`South Korean Won code` MEANS "KRW"
-`South Korean Won numeric` MEANS 410
-`South Korean Won decimals` MEANS 0
-`South Korean Won country` MEANS `South Korea alpha-2`
+`USD` MEANS "USD"
+`EUR` MEANS "EUR"
+`GBP` MEANS "GBP"
+`JPY` MEANS "JPY"
+`CHF` MEANS "CHF"
+`CAD` MEANS "CAD"
+`AUD` MEANS "AUD"
+`CNY` MEANS "CNY"
+`SGD` MEANS "SGD"
+`INR` MEANS "INR"
 
 
-§§ `Decimal Places Lookup`
+§§ `Decimal Places`
+
+-- How many decimal places each currency uses
+-- Most currencies use 2, some like JPY and KRW use 0
 
 GIVEN currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`decimal places for currency` MEANS
-    IF currencyCode EQUALS `US Dollar code` THEN RIGHT `US Dollar decimals`
-    ELSE IF currencyCode EQUALS `Euro code` THEN RIGHT `Euro decimals`
-    ELSE IF currencyCode EQUALS `British Pound code` THEN RIGHT `British Pound decimals`
-    ELSE IF currencyCode EQUALS `Japanese Yen code` THEN RIGHT `Japanese Yen decimals`
-    ELSE IF currencyCode EQUALS `Swiss Franc code` THEN RIGHT `Swiss Franc decimals`
-    ELSE IF currencyCode EQUALS `Canadian Dollar code` THEN RIGHT `Canadian Dollar decimals`
-    ELSE IF currencyCode EQUALS `Australian Dollar code` THEN RIGHT `Australian Dollar decimals`
-    ELSE IF currencyCode EQUALS `Chinese Yuan code` THEN RIGHT `Chinese Yuan decimals`
-    ELSE IF currencyCode EQUALS `Hong Kong Dollar code` THEN RIGHT `Hong Kong Dollar decimals`
-    ELSE IF currencyCode EQUALS `Singapore Dollar code` THEN RIGHT `Singapore Dollar decimals`
-    ELSE IF currencyCode EQUALS `Indian Rupee code` THEN RIGHT `Indian Rupee decimals`
-    ELSE IF currencyCode EQUALS `Brazilian Real code` THEN RIGHT `Brazilian Real decimals`
-    ELSE IF currencyCode EQUALS `Mexican Peso code` THEN RIGHT `Mexican Peso decimals`
-    ELSE IF currencyCode EQUALS `Swedish Krona code` THEN RIGHT `Swedish Krona decimals`
-    ELSE IF currencyCode EQUALS `New Zealand Dollar code` THEN RIGHT `New Zealand Dollar decimals`
-    ELSE IF currencyCode EQUALS `South Korean Won code` THEN RIGHT `South Korean Won decimals`
-    ELSE LEFT (CONCAT "Unknown currency code: ", currencyCode)
+GIVETH A NUMBER
+`decimal places` MEANS
+    BRANCH
+        IF currencyCode EQUALS "USD" THEN 2
+        IF currencyCode EQUALS "EUR" THEN 2
+        IF currencyCode EQUALS "GBP" THEN 2
+        IF currencyCode EQUALS "JPY" THEN 0
+        IF currencyCode EQUALS "CHF" THEN 2
+        IF currencyCode EQUALS "CAD" THEN 2
+        IF currencyCode EQUALS "AUD" THEN 2
+        IF currencyCode EQUALS "CNY" THEN 2
+        IF currencyCode EQUALS "SGD" THEN 2
+        IF currencyCode EQUALS "INR" THEN 2
+        IF currencyCode EQUALS "KRW" THEN 0
+        OTHERWISE 2  -- Default
 
 
-§§ `Currency Amount Constructor`
+§§ `Power of 10`
 
--- Creates a monetary amount from integer minor units (cents)
--- Example: Money 12345 "USD" represents $123.45
-
-GIVEN minorUnits IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING STRING
-`Money` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN
-        IF NOT minorUnits EQUALS FLOOR minorUnits
-        THEN LEFT "Minor units must be an integer"
-        ELSE RIGHT (formatAmount minorUnits decimals currencyCode)
-    WHERE
-        formatAmount units decs code MEANS
-            CONCAT
-                CONCAT (formatNumber units decs), " "
-                , code
-
-        formatNumber units decs MEANS
-            IF decs EQUALS 0
-            THEN numberToString units
-            ELSE
-                CONCAT
-                    CONCAT (numberToString majorUnits), "."
-                    , paddedMinor
-                WHERE
-                    divisor MEANS 10 RAISED TO decs
-                    majorUnits MEANS FLOOR (units DIVIDED BY divisor)
-                    minorPart MEANS units MODULO divisor
-                    paddedMinor MEANS padLeft (numberToString minorPart) decs "0"
-
-        numberToString n MEANS TOSTRING n
-
-        padLeft str targetLen padChar MEANS
-            IF LENGTH str AT LEAST targetLen
-            THEN str
-            ELSE padLeft (CONCAT padChar, str) targetLen padChar
+GIVEN exponent IS A NUMBER
+GIVETH A NUMBER
+`power of 10` MEANS
+    BRANCH
+        IF exponent EQUALS 0 THEN 1
+        IF exponent EQUALS 1 THEN 10
+        IF exponent EQUALS 2 THEN 100
+        IF exponent EQUALS 3 THEN 1000
+        OTHERWISE 100  -- Default to 2 decimals
 
 
-§§ `Amount Conversion Functions`
+§§ `Conversions`
 
 -- Convert from major units (dollars) to minor units (cents)
 GIVEN majorUnits IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`major to minor units` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN
-        RIGHT (FLOOR (majorUnits TIMES (10 RAISED TO decimals)))
+      decimals IS A NUMBER
+GIVETH A NUMBER
+`major to minor` MEANS
+    FLOOR (majorUnits TIMES `power of 10` decimals)
 
 -- Convert from minor units (cents) to major units (dollars)
 GIVEN minorUnits IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`minor to major units` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN
-        RIGHT (minorUnits DIVIDED BY (10 RAISED TO decimals))
+      decimals IS A NUMBER
+GIVETH A NUMBER
+`minor to major` MEANS
+    minorUnits DIVIDED BY `power of 10` decimals
 
 
-§§ `Arithmetic Operations on Money`
+§§ `Arithmetic`
 
--- Add two amounts in the same currency
+-- All amounts assumed to be in same currency, in minor units
+
 GIVEN amount1 IS A NUMBER
       amount2 IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`add money` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN RIGHT (amount1 PLUS amount2)
+GIVETH A NUMBER
+`add amounts` MEANS
+    amount1 PLUS amount2
 
--- Subtract two amounts in the same currency
 GIVEN amount1 IS A NUMBER
       amount2 IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`subtract money` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN RIGHT (amount1 MINUS amount2)
+GIVETH A NUMBER
+`subtract amounts` MEANS
+    amount1 MINUS amount2
 
--- Multiply amount by a factor (for percentages, etc.)
 GIVEN amount IS A NUMBER
       factor IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`multiply money` MEANS
-    CONSIDER `decimal places for currency` currencyCode
-    WHEN LEFT err THEN LEFT err
-    WHEN RIGHT decimals THEN
-        RIGHT (FLOOR (amount TIMES factor))
+GIVETH A NUMBER
+`multiply amount` MEANS
+    FLOOR (amount TIMES factor)
 
--- Divide amount by a divisor
 GIVEN amount IS A NUMBER
       divisor IS A NUMBER
-      currencyCode IS A STRING
-GIVETH AN EITHER STRING NUMBER
-`divide money` MEANS
-    IF divisor EQUALS 0
-    THEN LEFT "Cannot divide by zero"
-    ELSE
-        CONSIDER `decimal places for currency` currencyCode
-        WHEN LEFT err THEN LEFT err
-        WHEN RIGHT decimals THEN
-            RIGHT (FLOOR (amount DIVIDED BY divisor))
+GIVETH A NUMBER
+`divide amount` MEANS
+    FLOOR (amount DIVIDED BY divisor)
 
 
-§§ `Comparison Operations`
+§§ `Comparisons`
 
 GIVEN amount1 IS A NUMBER
       amount2 IS A NUMBER
 GIVETH A BOOLEAN
-`money equal` MEANS
+`amounts equal` MEANS
     amount1 EQUALS amount2
 
 GIVEN amount1 IS A NUMBER
       amount2 IS A NUMBER
 GIVETH A BOOLEAN
-`money greater than` MEANS
+`amount greater` MEANS
     amount1 GREATER THAN amount2
 
 GIVEN amount1 IS A NUMBER
       amount2 IS A NUMBER
 GIVETH A BOOLEAN
-`money less than` MEANS
+`amount less` MEANS
     amount1 LESS THAN amount2
-
-GIVEN amount1 IS A NUMBER
-      amount2 IS A NUMBER
-GIVETH A BOOLEAN
-`money at least` MEANS
-    amount1 AT LEAST amount2
-
-GIVEN amount1 IS A NUMBER
-      amount2 IS A NUMBER
-GIVETH A BOOLEAN
-`money at most` MEANS
-    amount1 AT MOST amount2
-
-
-§§ `Validation Functions`
-
-GIVEN code IS A STRING
-GIVETH A BOOLEAN
-`is valid currency code` MEANS
-    LENGTH code EQUALS 3
-    AND code EQUALS TOUPPER code
-
-GIVEN amount IS A NUMBER
-GIVETH A BOOLEAN
-`is non-negative` MEANS
-    amount AT LEAST 0
-
-GIVEN amount IS A NUMBER
-GIVETH A BOOLEAN
-`is positive` MEANS
-    amount GREATER THAN 0

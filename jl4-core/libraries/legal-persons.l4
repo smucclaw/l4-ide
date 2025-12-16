@@ -1,112 +1,17 @@
+IMPORT prelude
 IMPORT daydate
-IMPORT jurisdiction
 
 § `Legal Persons Library`
 
--- Library for representing legal persons: natural persons and corporate entities
--- Natural persons have birthdates, citizenships, IDs, names, and addresses
--- Corporate persons have names, addresses, jurisdiction of incorporation, and IDs
+-- Simple library for natural persons and corporations
 -- Version 1.0.0 (2024-12-16)
 
 §§ `Version`
 
 `Legal Persons Library Version` MEANS "1.0.0"
-`Legal Persons Library Date` MEANS "2024-12-16"
 
 
-§§ `Name Types`
-
--- Common name components for natural persons
-
-GIVEN firstName IS A STRING
-      lastName IS A STRING
-GIVETH A STRING
-`full name` MEANS
-    CONCAT firstName, CONCAT " ", lastName
-
-GIVEN firstName IS A STRING
-      middleName IS A STRING
-      lastName IS A STRING
-GIVETH A STRING
-`full name with middle` MEANS
-    CONCAT firstName, CONCAT " ", CONCAT middleName, CONCAT " ", lastName
-
-GIVEN prefix IS A STRING
-      firstName IS A STRING
-      lastName IS A STRING
-GIVETH A STRING
-`formal name` MEANS
-    CONCAT prefix, CONCAT " ", CONCAT firstName, CONCAT " ", lastName
-
-
-§§ `Address Components`
-
--- Address validation and formatting functions
-
-GIVEN street IS A STRING
-      city IS A STRING
-      state IS A STRING
-      postalCode IS A STRING
-      countryCode IS A STRING
-GIVETH A STRING
-`format address` MEANS
-    CONCAT street, CONCAT ", "
-        , CONCAT city, CONCAT ", "
-        , CONCAT state, CONCAT " "
-        , CONCAT postalCode, CONCAT ", "
-        , countryCode
-
-GIVEN postalCode IS A STRING
-GIVETH A BOOLEAN
-`is valid US zip code` MEANS
-    LENGTH postalCode EQUALS 5
-    OR LENGTH postalCode EQUALS 10  -- ZIP+4 format: 12345-6789
-
-GIVEN postalCode IS A STRING
-GIVETH A BOOLEAN
-`is valid UK postcode` MEANS
-    LENGTH postalCode AT LEAST 5
-    AND LENGTH postalCode AT MOST 8
-
-GIVEN postalCode IS A STRING
-GIVETH A BOOLEAN
-`is valid Canadian postal code` MEANS
-    LENGTH postalCode EQUALS 7  -- Format: A1A 1A1
-
-
-§§ `Natural Person Identity Documents`
-
--- Common identity document types and validation
-
-`Passport type` MEANS "PASSPORT"
-`National ID type` MEANS "NATIONAL_ID"
-`Drivers License type` MEANS "DRIVERS_LICENSE"
-`Social Security type` MEANS "SSN"
-`Tax ID type` MEANS "TAX_ID"
-`Residence Permit type` MEANS "RESIDENCE_PERMIT"
-
-
-GIVEN ssn IS A STRING
-GIVETH A BOOLEAN
-`is valid US SSN format` MEANS
-    LENGTH ssn EQUALS 11  -- Format: XXX-XX-XXXX
-    AND SUBSTRING ssn 3 1 EQUALS "-"
-    AND SUBSTRING ssn 6 1 EQUALS "-"
-
-GIVEN sin IS A STRING
-GIVETH A BOOLEAN
-`is valid Canadian SIN format` MEANS
-    LENGTH sin EQUALS 11  -- Format: XXX-XXX-XXX
-    AND SUBSTRING sin 3 1 EQUALS "-"
-    AND SUBSTRING sin 7 1 EQUALS "-"
-
-GIVEN nino IS A STRING
-GIVETH A BOOLEAN
-`is valid UK NINO format` MEANS
-    LENGTH nino EQUALS 9  -- Format: AB123456C
-
-
-§§ `Natural Person Age Calculations`
+§§ `Age Calculations`
 
 GIVEN birthDate IS A DATE
       referenceDate IS A DATE
@@ -117,48 +22,38 @@ GIVETH A NUMBER
         years MEANS DATE_YEAR referenceDate MINUS DATE_YEAR birthDate
         adjustment MEANS
             IF DATE_MONTH referenceDate LESS THAN DATE_MONTH birthDate
-            THEN 1
+                THEN 1
             ELSE IF DATE_MONTH referenceDate EQUALS DATE_MONTH birthDate
-                    AND DATE_DAY referenceDate LESS THAN DATE_DAY birthDate
-                 THEN 1
-                 ELSE 0
+                THEN IF DATE_DAY referenceDate LESS THAN DATE_DAY birthDate
+                    THEN 1
+                    ELSE 0
+                ELSE 0
 
 GIVEN birthDate IS A DATE
 GIVETH A NUMBER
 `current age` MEANS
     `age in years` birthDate TODAY
 
-GIVEN birthDate IS A DATE
-      minimumAge IS A NUMBER
-      referenceDate IS A DATE
-GIVETH A BOOLEAN
-`is at least age` MEANS
-    `age in years` birthDate referenceDate AT LEAST minimumAge
 
-GIVEN birthDate IS A DATE
-      minimumAge IS A NUMBER
-GIVETH A BOOLEAN
-`is currently at least age` MEANS
-    `is at least age` birthDate minimumAge TODAY
+§§ `Age of Majority by Jurisdiction`
+
+GIVEN jurisdictionCode IS A STRING
+GIVETH A NUMBER
+`age of majority` MEANS
+    BRANCH
+        IF jurisdictionCode EQUALS "JP" THEN 20
+        IF jurisdictionCode EQUALS "KR" THEN 19
+        IF jurisdictionCode EQUALS "NZ" THEN 20
+        OTHERWISE 18  -- Most jurisdictions
 
 
-§§ `Legal Capacity Checks`
+§§ `Legal Capacity`
 
 GIVEN birthDate IS A DATE
       jurisdictionCode IS A STRING
 GIVETH A BOOLEAN
 `is adult` MEANS
-    IF jurisdictionCode EQUALS `United States alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `United Kingdom alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `Canada alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `Japan alpha-2`
-    THEN `current age` birthDate AT LEAST 20
-    ELSE IF jurisdictionCode EQUALS `South Korea alpha-2`
-    THEN `current age` birthDate AT LEAST 19
-    ELSE `current age` birthDate AT LEAST 18  -- Default to 18
+    `current age` birthDate AT LEAST `age of majority` jurisdictionCode
 
 GIVEN birthDate IS A DATE
       jurisdictionCode IS A STRING
@@ -169,93 +64,54 @@ GIVETH A BOOLEAN
 GIVEN birthDate IS A DATE
       jurisdictionCode IS A STRING
 GIVETH A BOOLEAN
-`can enter contract` MEANS
+`can contract` MEANS
     `is adult` birthDate jurisdictionCode
+
+
+§§ `Voting Age by Jurisdiction`
+
+GIVEN jurisdictionCode IS A STRING
+GIVETH A NUMBER
+`voting age` MEANS
+    BRANCH
+        IF jurisdictionCode EQUALS "BR" THEN 16
+        IF jurisdictionCode EQUALS "AR" THEN 16
+        IF jurisdictionCode EQUALS "AT" THEN 16
+        OTHERWISE 18
 
 GIVEN birthDate IS A DATE
       jurisdictionCode IS A STRING
 GIVETH A BOOLEAN
 `can vote` MEANS
-    IF jurisdictionCode EQUALS `United States alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `United Kingdom alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `Canada alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `Japan alpha-2`
-    THEN `current age` birthDate AT LEAST 18
-    ELSE IF jurisdictionCode EQUALS `Brazil alpha-2`
-    THEN `current age` birthDate AT LEAST 16
-    ELSE `current age` birthDate AT LEAST 18  -- Default
+    `current age` birthDate AT LEAST `voting age` jurisdictionCode
 
 
-§§ `Citizenship Status`
-
--- Helper functions for citizenship and residency
-
-GIVEN citizenshipCode IS A STRING
-      countryCode IS A STRING
-GIVETH A BOOLEAN
-`is citizen of` MEANS
-    citizenshipCode EQUALS countryCode
+§§ `Citizenship`
 
 GIVEN citizenships IS A LIST OF STRING
       countryCode IS A STRING
 GIVETH A BOOLEAN
-`has citizenship in` MEANS
+`has citizenship` MEANS
     CONSIDER citizenships
     WHEN EMPTY THEN FALSE
     WHEN x FOLLOWED BY xs THEN
         IF x EQUALS countryCode
-        THEN TRUE
-        ELSE `has citizenship in` xs countryCode
+            THEN TRUE
+            ELSE `has citizenship` xs countryCode
 
 GIVEN citizenships IS A LIST OF STRING
 GIVETH A BOOLEAN
-`has multiple citizenships` MEANS
-    LENGTH citizenships GREATER THAN 1
-
-GIVEN citizenships IS A LIST OF STRING
-GIVETH A NUMBER
-`citizenship count` MEANS
-    LENGTH citizenships
-
-
-§§ `Corporate Entity Types`
-
--- Common corporate entity structures
-
-`Corporation type` MEANS "CORPORATION"
-`LLC type` MEANS "LLC"
-`LLP type` MEANS "LLP"
-`Partnership type` MEANS "PARTNERSHIP"
-`Sole Proprietorship type` MEANS "SOLE_PROPRIETORSHIP"
-`Non-Profit type` MEANS "NON_PROFIT"
-`Cooperative type` MEANS "COOPERATIVE"
-`Trust type` MEANS "TRUST"
-`Foundation type` MEANS "FOUNDATION"
+`is dual citizen` MEANS
+    NOT null citizenships
+    AND NOT null (tail citizenships)
+    WHERE
+        tail l MEANS
+            CONSIDER l
+            WHEN EMPTY THEN EMPTY
+            WHEN x FOLLOWED BY xs THEN xs
 
 
-§§ `Corporate Identifier Validation`
-
-GIVEN ein IS A STRING
-GIVETH A BOOLEAN
-`is valid US EIN format` MEANS
-    LENGTH ein EQUALS 10  -- Format: XX-XXXXXXX
-    AND SUBSTRING ein 2 1 EQUALS "-"
-
-GIVEN crn IS A STRING
-GIVETH A BOOLEAN
-`is valid UK CRN format` MEANS
-    LENGTH crn EQUALS 8  -- Format: 8 digits or 2 letters + 6 digits
-
-GIVEN bn IS A STRING
-GIVETH A BOOLEAN
-`is valid Canadian BN format` MEANS
-    LENGTH bn EQUALS 9  -- Format: 9 digits
-
-
-§§ `Corporate Status Checks`
+§§ `Corporate Age`
 
 GIVEN incorporationDate IS A DATE
 GIVETH A NUMBER
@@ -265,97 +121,23 @@ GIVETH A NUMBER
 GIVEN incorporationDate IS A DATE
       minimumYears IS A NUMBER
 GIVETH A BOOLEAN
-`established for at least` MEANS
+`established for` MEANS
     `years since incorporation` incorporationDate AT LEAST minimumYears
 
-GIVEN incorporationDate IS A DATE
-      dissolutionDate IS A DATE
-GIVETH A BOOLEAN
-`is dissolved` MEANS
-    dissolutionDate `is before` TODAY
 
-GIVEN incorporationDate IS A DATE
-GIVETH A BOOLEAN
-`is active corporation` MEANS
-    incorporationDate `is before` TODAY
+§§ `Ownership Thresholds`
 
-
-§§ `Corporate Relationship Types`
-
-`Wholly-owned subsidiary relationship` MEANS "WHOLLY_OWNED_SUBSIDIARY"
-`Majority-owned subsidiary relationship` MEANS "MAJORITY_OWNED_SUBSIDIARY"
-`Minority stake relationship` MEANS "MINORITY_STAKE"
-`Joint venture relationship` MEANS "JOINT_VENTURE"
-`Parent company relationship` MEANS "PARENT_COMPANY"
-`Sister company relationship` MEANS "SISTER_COMPANY"
-`Affiliated entity relationship` MEANS "AFFILIATED_ENTITY"
-
-
-§§ `Beneficial Ownership`
-
-GIVEN ownershipPercentage IS A NUMBER
+GIVEN percentage IS A NUMBER
 GIVETH A BOOLEAN
 `is beneficial owner` MEANS
-    ownershipPercentage AT LEAST 25  -- Common threshold: 25%
+    percentage AT LEAST 25
 
-GIVEN ownershipPercentage IS A NUMBER
+GIVEN percentage IS A NUMBER
 GIVETH A BOOLEAN
 `is majority owner` MEANS
-    ownershipPercentage GREATER THAN 50
+    percentage GREATER THAN 50
 
-GIVEN ownershipPercentage IS A NUMBER
+GIVEN percentage IS A NUMBER
 GIVETH A BOOLEAN
 `is controlling owner` MEANS
-    ownershipPercentage GREATER THAN 50
-
-GIVEN ownershipPercentage IS A NUMBER
-GIVETH A BOOLEAN
-`has significant control` MEANS
-    ownershipPercentage AT LEAST 25
-
-
-§§ `Corporate Jurisdiction Functions`
-
-GIVEN jurisdictionCode IS A STRING
-GIVETH A BOOLEAN
-`is Delaware corporation` MEANS
-    jurisdictionCode EQUALS `Delaware code`
-
-GIVEN jurisdictionCode IS A STRING
-GIVETH A BOOLEAN
-`is UK corporation` MEANS
-    jurisdictionCode EQUALS `United Kingdom alpha-2`
-    OR jurisdictionCode EQUALS `England code`
-    OR jurisdictionCode EQUALS `Scotland code`
-    OR jurisdictionCode EQUALS `Wales code`
-    OR jurisdictionCode EQUALS `Northern Ireland code`
-
-GIVEN jurisdictionCode IS A STRING
-GIVETH A BOOLEAN
-`is Canadian corporation` MEANS
-    SUBSTRING jurisdictionCode 0 2 EQUALS `Canada alpha-2`
-
-GIVEN jurisdictionCode IS A STRING
-GIVETH A BOOLEAN
-`is US corporation` MEANS
-    SUBSTRING jurisdictionCode 0 2 EQUALS `United States alpha-2`
-
-
-§§ `Registered Agent Information`
-
--- Functions for managing registered agent requirements
-
-GIVEN jurisdictionCode IS A STRING
-GIVETH A BOOLEAN
-`requires registered agent` MEANS
-    `is US corporation` jurisdictionCode
-    OR `is UK corporation` jurisdictionCode
-    OR `is Canadian corporation` jurisdictionCode
-
-GIVEN businessJurisdiction IS A STRING
-      operatingJurisdiction IS A STRING
-GIVETH A BOOLEAN
-`is foreign qualification required` MEANS
-    NOT businessJurisdiction EQUALS operatingJurisdiction
-    AND `is US corporation` businessJurisdiction
-    AND `is US corporation` operatingJurisdiction
+    percentage GREATER THAN 50

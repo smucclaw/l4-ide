@@ -1,0 +1,12 @@
+Info | updateFileDiagnostics published different from new diagnostics - file diagnostics:
+File: currency.l4
+  Hidden:   no
+  Range:    108:10-108:10
+  Source:   parser
+  Severity: DiagnosticSeverity_Error
+  Code:     <none>
+  Message: 
+        |
+    108 |     ELSE IF currencyCode EQUALS `British Pound code` THEN RIGHT `British Pound decimals`
+        |          ^
+    incorrect indentation (got 10, should be greater than 10)

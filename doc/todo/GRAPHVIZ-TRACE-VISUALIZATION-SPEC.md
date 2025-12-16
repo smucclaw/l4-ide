@@ -1728,6 +1728,7 @@ cabal run jl4-cli -- --graphviz2 --optimize-graph --hide-function-bodies file.l4
 ### Architecture
 
 **Pure Combinator Pipeline:**
+
 ```
 buildGraph (recursive)
   → applyOptimizations (Graph → Graph transformations)
@@ -1737,6 +1738,7 @@ buildGraph (recursive)
 ```
 
 **Optimizations Available:**
+
 - `collapseFunctionLookups`: Remove `<function>` leaf nodes
 - `collapseSimplePaths`: Bridge trivial intermediate nodes
 - `showFunctionBodies`: Display implementation from AST (default on)
@@ -1759,6 +1761,7 @@ buildGraph (recursive)
 ### Migration Path
 
 Both GraphViz (original) and GraphViz2 (FGL-based) coexist:
+
 - `--graphviz` uses original implementation
 - `--graphviz2` uses FGL-based implementation
 

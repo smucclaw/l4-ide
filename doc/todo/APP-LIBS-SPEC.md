@@ -17,19 +17,24 @@ These libraries provide standard, versioned ontologies that can be imported and 
 ## Design Principles
 
 ### Versioning
+
 Each library includes version information to allow evolution of the ontology over time. As new countries emerge, currencies change, or legal requirements evolve, the libraries can be updated with new versions while maintaining backward compatibility.
 
 ### Standards-Based
+
 All libraries lean heavily on existing international standards:
+
 - **ISO 3166-1** (alpha-2, alpha-3) for country codes
 - **ISO 3166-2** for subdivision codes (states, provinces)
 - **ISO 4217** for currency codes and decimal places
 - Common identity document formats (SSN, NINO, EIN, etc.)
 
 ### Extensibility
+
 While the libraries include common jurisdictions and currencies, they are designed to be extended with new entries as needed. The validation functions allow custom codes to be added following the same standards.
 
 ### Type Safety
+
 Following L4's functional programming roots, all functions return `EITHER STRING result` types for operations that might fail, enabling proper error handling in contracts and rules.
 
 ## Library Details
@@ -41,6 +46,7 @@ Following L4's functional programming roots, all functions return `EITHER STRING
 **Purpose:** Represent geographic and political jurisdictions for use in citizenship, residency, incorporation, and regulatory compliance contexts.
 
 **Key Features:**
+
 - ISO 3166-1 alpha-2 and alpha-3 country codes for 20+ major countries
 - Numeric country codes for machine processing
 - Supranational regions (EU, ASEAN, USMCA)
@@ -52,12 +58,14 @@ Following L4's functional programming roots, all functions return `EITHER STRING
 - Country name lookup from codes
 
 **Included Jurisdictions:**
+
 - Countries: US, UK, Canada, Australia, Germany, France, China, Japan, Singapore, India, Brazil, Mexico, Switzerland, Netherlands, Sweden, New Zealand, South Korea, Italy, Spain, Hong Kong
 - US States: California, New York, Texas, Florida, Illinois, Pennsylvania, Massachusetts, Washington, Delaware
 - Canadian Provinces: Ontario, Quebec, British Columbia, Alberta
 - UK Countries: England, Scotland, Wales, Northern Ireland
 
 **Example Usage:**
+
 ```l4
 IMPORT jurisdiction
 
@@ -77,6 +85,7 @@ IMPORT jurisdiction
 **Purpose:** Represent monetary amounts correctly using integer arithmetic to avoid floating-point rounding errors, following the pattern used in financial systems.
 
 **Key Features:**
+
 - ISO 4217 currency codes (16 major currencies included)
 - Integer-based storage in minor units (cents, pence, yen)
 - Automatic decimal place handling (0 for JPY/KRW, 2 for most others)
@@ -88,6 +97,7 @@ IMPORT jurisdiction
 - Link to jurisdiction library for currency-country relationships
 
 **Included Currencies:**
+
 - USD (United States Dollar, 2 decimals)
 - EUR (Euro, 2 decimals)
 - GBP (British Pound, 2 decimals)
@@ -106,6 +116,7 @@ IMPORT jurisdiction
 - KRW (South Korean Won, 0 decimals)
 
 **Example Usage:**
+
 ```l4
 IMPORT currency
 
@@ -129,6 +140,7 @@ IMPORT currency
 **Why Integer Storage?**
 
 Storing monetary amounts as floating-point numbers leads to rounding errors:
+
 ```
 0.1 + 0.2 = 0.30000000000000004  ❌
 10 + 20 = 30  ✅
@@ -145,6 +157,7 @@ This is why financial systems store amounts as integer cents. The currency libra
 **Key Features:**
 
 #### Natural Persons
+
 - Name formatting (full name, middle name, formal titles)
 - Birth date and age calculations
 - Age of majority checks by jurisdiction
@@ -155,6 +168,7 @@ This is why financial systems store amounts as integer cents. The currency libra
 - Address formatting and validation
 
 #### Corporate Entities
+
 - Entity type definitions (Corporation, LLC, LLP, Partnership, etc.)
 - Incorporation date and jurisdiction
 - Corporate identifier validation (US EIN, UK CRN, Canadian BN)
@@ -205,6 +219,7 @@ These libraries integrate with the existing L4 standard libraries:
 ## Use Cases
 
 ### Natural Person Example: Age-Restricted Contract
+
 ```l4
 IMPORT legal-persons
 IMPORT daydate
@@ -215,6 +230,7 @@ DECIDE `can sign contract` IF
 ```
 
 ### Currency Example: Insurance Premium Calculation
+
 ```l4
 IMPORT currency
 
@@ -225,6 +241,7 @@ IMPORT currency
 ```
 
 ### Jurisdiction Example: Multi-National Compliance
+
 ```l4
 IMPORT jurisdiction
 
@@ -239,12 +256,14 @@ DECIDE `requires GDPR compliance` IF
 Each library should have comprehensive tests covering:
 
 1. **Jurisdiction Library**
+
    - Code validation (alpha-2, alpha-3, ISO 3166-2 format)
    - Code conversion (alpha-2 ↔ alpha-3)
    - Country name lookup
    - Error handling for unknown codes
 
 2. **Currency Library**
+
    - Amount formatting with correct decimal places
    - Arithmetic operations (add, subtract, multiply, divide)
    - Comparison operations
@@ -263,6 +282,7 @@ Each library should have comprehensive tests covering:
 ## Future Enhancements
 
 ### Jurisdiction Library
+
 - Full ISO 3166-1 coverage (all 249 countries)
 - ISO 3166-2 codes for all subdivisions
 - Historical jurisdiction tracking (USSR → Russia, etc.)
@@ -270,6 +290,7 @@ Each library should have comprehensive tests covering:
 - Timezone associations
 
 ### Currency Library
+
 - Historical exchange rates
 - Currency conversion functions
 - Special rounding modes (banker's rounding)
@@ -277,6 +298,7 @@ Each library should have comprehensive tests covering:
 - Three-decimal currencies (BHD, JOD, KWD)
 
 ### Legal Persons Library
+
 - Gender and pronoun handling
 - Multiple name formats (Eastern vs. Western order)
 - Corporate beneficial ownership chains
@@ -288,6 +310,7 @@ Each library should have comprehensive tests covering:
 ## Implementation Notes
 
 ### File Locations
+
 ```
 jl4-core/libraries/
 ├── jurisdiction.l4
@@ -300,6 +323,7 @@ jl4-core/libraries/
 ```
 
 ### Import Dependencies
+
 ```
 legal-persons.l4
   ├── IMPORT daydate
@@ -313,13 +337,16 @@ jurisdiction.l4
 ```
 
 ### Versioning Scheme
+
 Each library includes version constants:
+
 ```l4
 `Library Name Version` MEANS "1.0.0"
 `Library Name Date` MEANS "2024-12-16"
 ```
 
 Version numbers follow semantic versioning:
+
 - **Major**: Breaking changes to function signatures
 - **Minor**: New jurisdictions, currencies, or functions (backward compatible)
 - **Patch**: Bug fixes and documentation updates
@@ -327,6 +354,7 @@ Version numbers follow semantic versioning:
 ## Related Work
 
 These libraries draw inspiration from:
+
 - **ISO Standards**: 3166 (countries), 4217 (currencies)
 - **Financial Systems**: Integer cent storage pattern used in Stripe, banking systems
 - **Legal Ontologies**: LegalRuleML, LKIF (Estrella project)
