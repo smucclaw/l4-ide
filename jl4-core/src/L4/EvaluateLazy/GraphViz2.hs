@@ -387,18 +387,23 @@ edgeConfigsFor _ subtraces =
 -- ============================================================================
 
 -- | Enhance node label with function body from AST (if applicable)
---   Since mlabel is often Nothing, we extract the function name from the base label
+--   Skip if function body would be redundant with what's already shown
 enhanceLabelWithFunctionBody :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
 enhanceLabelWithFunctionBody Nothing _ baseLabel = baseLabel
 enhanceLabelWithFunctionBody _ Nothing baseLabel = baseLabel
 enhanceLabelWithFunctionBody (Just module') (Just resolved) baseLabel =
   case lookupFunctionBodyAnywhere module' resolved of
     Just body ->
-      -- Append function body to label (limit to first 2 lines for readability)
-      let bodyLines = take 2 $ Text.lines (prettyLayout body)
-          bodyPreview = Text.intercalate "\n  " bodyLines
-          suffix = if length (Text.lines (prettyLayout body)) > 2 then "\n  ..." else ""
-      in baseLabel <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyPreview <> suffix
+      let bodyPreview = prettyLayout body
+          bodyLines = take 2 $ Text.lines bodyPreview
+          bodyShort = Text.intercalate "\n  " bodyLines
+          suffix = if length (Text.lines bodyPreview) > 2 then "\n  ..." else ""
+          -- Check if body would be redundant with what's already in the label
+          bodyFirstLine = firstLine bodyPreview
+          isDuplicate = bodyFirstLine `Text.isInfixOf` baseLabel
+      in if isDuplicate
+           then baseLabel  -- Skip redundant function body
+           else baseLabel <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyShort <> suffix
     Nothing -> baseLabel
 
 -- | Look up function body searching both top-level and WHERE clauses

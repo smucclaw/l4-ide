@@ -4,7 +4,7 @@ digraph {
     0 [label="evaluationComplex OF alice\n────────────────\n6728"
       ,fillcolor="#d0e8f2"
       ,style=filled];
-    2 [label="complexScore\nIF (applicant's age) GREATER THAN 60\n────────────────\n6728\n┄┄┄┄┄┄┄┄\n  IF (applicant's age) GREATER THAN 60\n  THEN 30\n  ..."
+    2 [label="complexScore\nIF (applicant's age) GREATER THAN 60\n────────────────\n6728"
       ,fillcolor="#d0e8f2"
       ,style=filled];
     3 [label="(applicant's age) GREATER THAN 60\n────────────────\nFALSE"

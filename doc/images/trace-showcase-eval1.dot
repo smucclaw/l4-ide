@@ -4,7 +4,7 @@ digraph {
     0 [label="evaluation OF alice\n────────────────\n40.6"
       ,fillcolor="#d0e8f2"
       ,style=filled];
-    2 [label="baseScore\nIF (applicant's age) GREATER THAN 60\n────────────────\n10\n┄┄┄┄┄┄┄┄\n  IF (applicant's age) GREATER THAN 60\n  THEN 30\n  ..."
+    2 [label="baseScore\nIF (applicant's age) GREATER THAN 60\n────────────────\n10"
       ,fillcolor="#d0e8f2"
       ,style=filled];
     3 [label="(applicant's age) GREATER THAN 60\n────────────────\nFALSE"
@@ -25,7 +25,7 @@ digraph {
     11 [label=5
        ,fillcolor="#e0e0e0"
        ,style=filled];
-    12 [label="experienceBonus\ntierBonus OF ((applicant's age) DIVIDED 10)\n────────────────\n11.6\n┄┄┄┄┄┄┄┄\n  tierBonus OF ((applicant's age) DIVIDED 10)"
+    12 [label="experienceBonus\ntierBonus OF ((applicant's age) DIVIDED 10)\n────────────────\n11.6"
        ,fillcolor="#d0e8f2"
        ,style=filled];
     13 [label="(applicant's age) DIVIDED 10\n────────────────\n5.8"
@@ -40,13 +40,13 @@ digraph {
     18 [label=5
        ,fillcolor="#e0e0e0"
        ,style=filled];
-    19 [label="roleBonus\nroleWeight OF (applicant's role)\n────────────────\n25\n┄┄┄┄┄┄┄┄\n  roleWeight OF (applicant's role)"
+    19 [label="roleBonus\nroleWeight OF (applicant's role)\n────────────────\n25"
        ,fillcolor="#d0e8f2"
        ,style=filled];
     20 [label="applicant's role\n────────────────\nManager"
        ,fillcolor="#d0e8f2"
        ,style=filled];
-    23 [label="dependentPenalty\npenalty OF (applicant's dependents)\n────────────────\n-6\n┄┄┄┄┄┄┄┄\n  penalty OF (applicant's dependents)"
+    23 [label="dependentPenalty\npenalty OF (applicant's dependents)\n────────────────\n-6"
        ,fillcolor="#d0e8f2"
        ,style=filled];
     24 [label="applicant's dependents\n────────────────\n2"
@@ -61,7 +61,7 @@ digraph {
     29 [label="count TIMES 3\n────────────────\n6"
        ,fillcolor="#d0e8f2"
        ,style=filled];
-    30 [label="metrics\nLIST baseScore, experienceBonus, roleBonus, dependentPenalty\n────────────────\nLIST 10, 11.6, 25, -6\n┄┄┄┄┄┄┄┄\n  LIST baseScore, experienceBonus, roleBonus, dependentPenalty"
+    30 [label="metrics\nLIST baseScore, experienceBonus, roleBonus, dependentPenalty\n────────────────\nLIST 10, 11.6, 25, -6"
        ,fillcolor="#d0e8f2"
        ,style=filled];
     31 [label="LIST experienceBonus, roleBonus, dependentPenalty\n────────────────\nLIST 11.6, 25, -6"
@@ -76,7 +76,7 @@ digraph {
     34 [label="LIST \n────────────────\nEMPTY"
        ,fillcolor="#d0e8f2"
        ,style=filled];
-    35 [label="finalScore\nsumList OF metrics\n────────────────\n40.6\n┄┄┄┄┄┄┄┄\n  sumList OF metrics"
+    35 [label="finalScore\nsumList OF metrics\n────────────────\n40.6"
        ,fillcolor="#d0e8f2"
        ,style=filled];
     37 [label="sumList OF zs\n────────────────\n30.6"
