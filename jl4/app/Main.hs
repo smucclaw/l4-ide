@@ -21,9 +21,11 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Maybe (catMaybes)
 import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc, value, showDefaultWith)
 import qualified Options.Applicative as Options
-import System.Directory (getCurrentDirectory)
+import System.Directory (getCurrentDirectory, createDirectoryIfMissing)
 import System.Exit (exitSuccess, exitFailure)
 import System.IO (stdin, stdout, hIsTerminalDevice)
+import System.FilePath (takeBaseName, (</>))
+import System.Process (callCommand)
 import Text.Pretty.Simple (pShow, pShowNoColor)
 
 import qualified LSP.Core.Shake as Shake
@@ -322,15 +324,35 @@ main = do
                     Nothing -> pure ()
               else if options.outputGraphViz2
                 then do
-                  -- In graphviz2 mode (new FGL-based), only output DOT format to stdout
+                  -- In graphviz2 mode (new FGL-based)
                   let gvOpts = GraphViz2.defaultGraphVizOptions
                         { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
                         , GraphViz2.collapseSimplePaths = options.graphVizOptimize
                         }
-                  for_ evalResults $ \result ->
-                    case result.trace of
-                      Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts tr
-                      Nothing -> pure ()
+                  case options.outputDir of
+                    Nothing ->
+                      -- No output dir: write to stdout (original behavior)
+                      for_ evalResults $ \result ->
+                        case result.trace of
+                          Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts tr
+                          Nothing -> pure ()
+                    Just outDir -> do
+                      -- Output dir specified: auto-split to separate files
+                      liftIO $ createDirectoryIfMissing True outDir
+                      let baseName = takeBaseName fp
+                      for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
+                        case result.trace of
+                          Just tr -> liftIO $ do
+                            let dotContent = GraphViz2.traceToGraphViz gvOpts tr
+                                dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
+                                pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
+                            -- Write .dot file
+                            Text.IO.writeFile dotFile dotContent
+                            -- Generate .png using dot command
+                            callCommand $ "dot -Tpng " <> dotFile <> " > " <> pngFile
+                            logWith recorder Info $ BatchProcessing $
+                              "Generated: " <> Text.pack dotFile <> " and " <> Text.pack pngFile
+                          Nothing -> pure ()
                 else do
                   -- In normal mode, log evaluation results
                   for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
@@ -388,6 +410,7 @@ data Options = MkOptions
   , outputGraphViz :: Bool
   , outputGraphViz2 :: Bool
   , graphVizOptimize :: Bool  -- Enable all GraphViz2 optimizations
+  , outputDir :: Maybe FilePath  -- Directory for auto-split graph files
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
@@ -403,6 +426,7 @@ optionsDescription = MkOptions
   <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
   <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
   <*> switch (long "optimize-graph" <> help "Enable GraphViz2 optimizations (collapse function lookups and simple paths)")
+  <*> optional (Options.strOption (long "output-dir" <> short 'o' <> metavar "DIR" <> help "Output directory for graph files (auto-splits multiple graphs, generates .dot and .png)"))
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
