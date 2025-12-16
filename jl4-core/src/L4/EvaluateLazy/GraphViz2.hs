@@ -15,6 +15,7 @@ module L4.EvaluateLazy.GraphViz2 (
 import Base
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
+import Control.Applicative ((<|>))
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
 import L4.Evaluate.ValueLazy (NF(..))
@@ -34,6 +35,9 @@ data GraphVizOptions = GraphVizOptions
   , showUnevaluated :: Bool
   , simplifyTrivial :: Bool
   , maxDepth :: Maybe Int
+  -- Optimization flags
+  , collapseFunctionLookups :: Bool
+  , collapseSimplePaths :: Bool
   } deriving (Eq, Show)
 
 defaultGraphVizOptions :: GraphVizOptions
@@ -42,6 +46,9 @@ defaultGraphVizOptions = GraphVizOptions
   , showUnevaluated = True
   , simplifyTrivial = False
   , maxDepth = Nothing
+  -- Optimizations disabled by default (show full trace)
+  , collapseFunctionLookups = False
+  , collapseSimplePaths = False
   }
 
 -- | Node attributes for rendering
@@ -66,10 +73,107 @@ traceToGraphViz :: GraphVizOptions -> EvalTrace -> Text
 traceToGraphViz opts evalTrace =
   let (nodes, edges, _) = buildGraph opts 0 0 evalTrace
       graph = FGL.mkGraph nodes edges
+
+      -- Apply local optimizations (graph-to-graph transformations)
+      optimizedGraph = applyOptimizations opts graph
+
       -- Identify IF patterns and add invisible ordering edges
-      ifPatterns = identifyIFPatterns graph
-      dotGraph = graphToDot graph ifPatterns
+      ifPatterns = identifyIFPatterns optimizedGraph
+      dotGraph = graphToDot optimizedGraph ifPatterns
   in Text.Lazy.toStrict $ GV.printDotGraph dotGraph
+
+-- ============================================================================
+-- Phase 2: Local optimization combinators
+-- ============================================================================
+
+-- | Apply all enabled optimizations in sequence
+applyOptimizations :: GraphVizOptions -> EvalGraph -> EvalGraph
+applyOptimizations opts graph =
+  graph
+    |> applyIf opts.collapseFunctionLookups collapseFunctionLookupsPass
+    |> applyIf opts.collapseSimplePaths collapseSimplePathsPass
+  where
+    applyIf :: Bool -> (a -> a) -> (a -> a)
+    applyIf True f = f
+    applyIf False _ = id
+
+    (|>) :: a -> (a -> a) -> a
+    x |> f = f x
+
+-- | Optimization: Remove function lookup leaf nodes
+--   Pattern: A (with result) -> age (<function>) [leaf]
+--   Result:  A (with result)  [no edge to function]
+--
+--   Function lookup nodes just show "<function>" and don't add semantic value.
+--   They're typically leaf nodes representing the act of looking up a function.
+collapseFunctionLookupsPass :: EvalGraph -> EvalGraph
+collapseFunctionLookupsPass graph =
+  let -- Find all <function> leaf nodes (no children)
+      functionLeaves =
+        [ n
+        | (n, attrs) <- FGL.labNodes graph
+        , isFunctionNode attrs
+        , null (FGL.suc graph n)  -- No children = leaf
+        ]
+      -- Delete each function leaf node
+      collapsedGraph = foldl' (flip FGL.delNode) graph functionLeaves
+  in collapsedGraph
+  where
+    isFunctionNode :: NodeAttrs -> Bool
+    isFunctionNode attrs =
+      -- Check if label ends with <function>
+      "<function>" `Text.isSuffixOf` attrs.nodeLabel
+
+-- | Optimization: Collapse trivial single-parent/single-child nodes
+--   Pattern: A -> trivial -> B where trivial adds no value
+--   Result:  A -> B
+collapseSimplePathsPass :: EvalGraph -> EvalGraph
+collapseSimplePathsPass graph =
+  let -- Find collapsible nodes (trivial + single parent + single child)
+      collapsibleNodes =
+        [ n
+        | (n, attrs) <- FGL.labNodes graph
+        , isTrivialNode attrs
+        , length (FGL.pre graph n) == 1
+        , length (FGL.suc graph n) == 1
+        ]
+      -- Collapse each node
+      collapsedGraph = foldl' collapseNode graph collapsibleNodes
+  in collapsedGraph
+  where
+    isTrivialNode :: NodeAttrs -> Bool
+    isTrivialNode attrs =
+      -- Heuristic: Node is trivial if it has a short label and no result shown
+      let hasResult = "────────────────" `Text.isInfixOf` attrs.nodeLabel
+          isShort = Text.length attrs.nodeLabel < 25
+          -- Don't collapse stub nodes or important semantic nodes
+          isStub = attrs.nodeStyle == "filled,dashed"
+      in isShort && not hasResult && not isStub
+
+    -- Bridge a trivial node: connect its parent directly to its child
+    collapseNode :: EvalGraph -> Node -> EvalGraph
+    collapseNode gr trivialNode =
+      case (FGL.pre gr trivialNode, FGL.suc gr trivialNode) of
+        ([parent], [child]) ->
+          let -- Get edge attributes from parent->trivial and trivial->child
+              parentEdges = filter (\(s,t,_) -> s == parent && t == trivialNode) (FGL.labEdges gr)
+              childEdges = filter (\(s,t,_) -> s == trivialNode && t == child) (FGL.labEdges gr)
+              -- Merge edge attributes (prefer parent's label, child's other attrs)
+              newEdgeAttrs = case (parentEdges, childEdges) of
+                ((_,_,pAttrs):_, (_,_,cAttrs):_) ->
+                  EdgeAttrs
+                    { edgeLabel = pAttrs.edgeLabel <|> cAttrs.edgeLabel
+                    , edgeColor = cAttrs.edgeColor
+                    , edgeStyle = cAttrs.edgeStyle
+                    , edgeDir = pAttrs.edgeDir <|> cAttrs.edgeDir
+                    }
+                (_, (_,_,cAttrs):_) -> cAttrs
+                _ -> EdgeAttrs Nothing "#2ca02c" "solid" Nothing
+              newEdge = (parent, child, newEdgeAttrs)
+              -- Delete trivial node and add direct edge
+              grWithoutTrivial = FGL.delNode trivialNode gr
+          in FGL.insEdge newEdge grWithoutTrivial
+        _ -> gr  -- Not a simple path, don't collapse
 
 -- ============================================================================
 -- Pure recursive graph building - follows inductive structure

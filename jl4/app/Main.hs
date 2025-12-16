@@ -323,9 +323,13 @@ main = do
               else if options.outputGraphViz2
                 then do
                   -- In graphviz2 mode (new FGL-based), only output DOT format to stdout
+                  let gvOpts = GraphViz2.defaultGraphVizOptions
+                        { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
+                        , GraphViz2.collapseSimplePaths = options.graphVizOptimize
+                        }
                   for_ evalResults $ \result ->
                     case result.trace of
-                      Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz GraphViz2.defaultGraphVizOptions tr
+                      Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts tr
                       Nothing -> pure ()
                 else do
                   -- In normal mode, log evaluation results
@@ -383,6 +387,7 @@ data Options = MkOptions
   , traceText :: TraceTextMode
   , outputGraphViz :: Bool
   , outputGraphViz2 :: Bool
+  , graphVizOptimize :: Bool  -- Enable all GraphViz2 optimizations
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
@@ -397,6 +402,7 @@ optionsDescription = MkOptions
   <*> option traceTextModeReader (long "trace" <> short 't' <> metavar "MODE" <> value TraceTextFull <> showDefaultWith renderTraceTextMode <> help "Trace text output: none | full (default full)")
   <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
   <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
+  <*> switch (long "optimize-graph" <> help "Enable GraphViz2 optimizations (collapse function lookups and simple paths)")
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
