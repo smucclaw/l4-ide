@@ -19,8 +19,9 @@ import Control.Applicative ((<|>))
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
 import L4.Evaluate.ValueLazy (NF(..))
-import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Module(..), TopDecl(..), Decide(..), Section(..), AppForm(..), LocalDecl(..), Unique, getUnique)
+import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Module(..), TopDecl(..), Decide(..), Section(..), AppForm(..), LocalDecl(..), Unique, getUnique, Desc, getDesc, annDesc)
 import L4.Print (prettyLayout)
+import Optics ((^.))
 
 -- FGL and GraphViz imports
 import Data.Graph.Inductive.Graph (Node, LNode, LEdge)
@@ -392,35 +393,50 @@ enhanceLabelWithFunctionBody :: Maybe (Module Resolved) -> Maybe Resolved -> Tex
 enhanceLabelWithFunctionBody Nothing _ baseLabel = baseLabel
 enhanceLabelWithFunctionBody _ Nothing baseLabel = baseLabel
 enhanceLabelWithFunctionBody (Just module') (Just resolved) baseLabel =
-  case lookupFunctionBodyAnywhere module' resolved of
-    Just body ->
-      let bodyPreview = prettyLayout body
+  case lookupFunctionInfo module' resolved of
+    Just (mDesc, body) ->
+      let -- If @desc exists, show it instead of the expression line
+          baseLabelWithDesc = case mDesc of
+            Just desc ->
+              let descText = getDesc desc
+                  wrapped = wrapText 60 descText
+                  -- Replace the expression line with @desc
+                  lines' = Text.lines baseLabel
+              in case lines' of
+                   (nameLine:_exprLine:rest) ->
+                     -- Replace expr line with @desc
+                     Text.unlines (nameLine : ("@desc: " <> wrapped) : rest)
+                   _ -> baseLabel  -- Keep as-is if structure unexpected
+            Nothing -> baseLabel
+
+          -- Check if we should show function body
+          bodyPreview = prettyLayout body
           bodyLines = take 2 $ Text.lines bodyPreview
           bodyShort = Text.intercalate "\n  " bodyLines
           suffix = if length (Text.lines bodyPreview) > 2 then "\n  ..." else ""
-          -- Check if body would be redundant with what's already in the label
           bodyFirstLine = firstLine bodyPreview
-          isDuplicate = bodyFirstLine `Text.isInfixOf` baseLabel
+          isDuplicate = bodyFirstLine `Text.isInfixOf` baseLabelWithDesc
+
       in if isDuplicate
-           then baseLabel  -- Skip redundant function body
-           else baseLabel <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyShort <> suffix
+           then baseLabelWithDesc  -- Skip redundant function body
+           else baseLabelWithDesc <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyShort <> suffix
     Nothing -> baseLabel
 
--- | Look up function body searching both top-level and WHERE clauses
-lookupFunctionBodyAnywhere :: Module Resolved -> Resolved -> Maybe (Expr Resolved)
-lookupFunctionBodyAnywhere (MkModule _ _ (MkSection _ _ _ topDecls)) resolved =
+-- | Look up function @desc and body searching both top-level and WHERE clauses
+lookupFunctionInfo :: Module Resolved -> Resolved -> Maybe (Maybe Desc, Expr Resolved)
+lookupFunctionInfo (MkModule _ _ (MkSection _ _ _ topDecls)) resolved =
   let targetUnique = getUnique resolved
-  in findBodyByUnique targetUnique topDecls
+  in findInfoByUnique targetUnique topDecls
 
--- | Recursively search for function body by unique ID
-findBodyByUnique :: Unique -> [TopDecl Resolved] -> Maybe (Expr Resolved)
-findBodyByUnique targetUnique topDecls =
+-- | Recursively search for function @desc and body by unique ID
+findInfoByUnique :: Unique -> [TopDecl Resolved] -> Maybe (Maybe Desc, Expr Resolved)
+findInfoByUnique targetUnique topDecls =
   listToMaybe $ catMaybes
     [ -- Search top-level Decide
       case topDecl of
-        Decide _ (MkDecide _ _ appForm body) ->
+        Decide declAnno (MkDecide _ _ appForm body) ->
           if matchesAppForm targetUnique appForm
-            then Just body
+            then Just (declAnno ^. annDesc, body)
             else searchInExpr targetUnique body
         _ -> Nothing
     | topDecl <- topDecls
@@ -430,16 +446,19 @@ findBodyByUnique targetUnique topDecls =
     matchesAppForm target (MkAppForm _ name _ _) = getUnique name == target
 
 -- | Recursively search for WHERE bindings in an expression
-searchInExpr :: Unique -> Expr Resolved -> Maybe (Expr Resolved)
+searchInExpr :: Unique -> Expr Resolved -> Maybe (Maybe Desc, Expr Resolved)
 searchInExpr targetUnique expr =
   case expr of
     Where _ _body localDecls ->
       -- Search local declarations
       listToMaybe $ catMaybes
         [ case localDecl of
-            LocalDecide _ (MkDecide _ _ appForm body) ->
+            LocalDecide localAnno (MkDecide decideAnno _ appForm body) ->
               if matchesAppForm targetUnique appForm
-                then Just body
+                then
+                  -- Check both LocalDecide's Anno and inner Decide's Anno for @desc
+                  let desc = (localAnno ^. annDesc) <|> (decideAnno ^. annDesc)
+                  in Just (desc, body)
                 else searchInExpr targetUnique body
             _ -> Nothing
         | localDecl <- localDecls
@@ -457,9 +476,13 @@ searchInExpr targetUnique expr =
 formatTraceLabel :: GraphVizOptions -> Maybe Resolved -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> Text
 formatTraceLabel opts mlabel steps result =
   let labelText = maybe "" (\lbl -> prettyLayout lbl <> "\n") mlabel
+
+      -- Show @desc (looked up from function definition in AST, not from name annotation)
+      -- This is handled in enhanceLabelWithFunctionBody, so here we just show the expression
       exprText = case steps of
         [] -> ""
         (expr, _):_ -> firstLine (prettyLayout expr)
+
       resultText = if opts.includeValues
         then case result of
           Right nf -> "\n────────────────\n" <> firstLine (prettyLayout nf)
@@ -469,6 +492,21 @@ formatTraceLabel opts mlabel steps result =
 
 firstLine :: Text -> Text
 firstLine = Text.takeWhile (/= '\n')
+
+-- | Wrap text at specified width (simple word-aware wrapping)
+wrapText :: Int -> Text -> Text
+wrapText width txt
+  | Text.length txt <= width = txt
+  | otherwise =
+      case Text.findIndex (== ' ') (Text.drop width txt) of
+        Nothing -> txt  -- No space found after width, don't wrap
+        Just relIdx ->
+          let breakIdx = width + relIdx
+              line = Text.take breakIdx txt
+              rest = Text.drop (breakIdx + 1) txt
+          in if Text.null rest
+               then line
+               else line <> "\n       " <> wrapText width rest
 
 traceBoolValue :: EvalTrace -> Maybe Bool
 traceBoolValue (Trace _ _ (Right nf)) = nfToBool nf
