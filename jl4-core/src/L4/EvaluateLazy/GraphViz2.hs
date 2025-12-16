@@ -1,14 +1,11 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
--- | New FGL-based GraphViz trace visualization
+-- | Clean FGL-based GraphViz trace visualization
 --
--- This module provides a cleaner architecture for rendering evaluation traces
--- using the FGL (Functional Graph Library) and graphviz packages.
---
--- Architecture:
---   1. Analyze: Consume flat trace steps and build intermediate tree structure
---   2. Build: Convert tree to FGL graph
---   3. Render: Use graphviz library to generate DOT format
+-- Architecture: Pure recursion following inductive structure
+--   1. Recursively build FGL graph from trace
+--   2. Apply local visual optimizations
+--   3. Render to DOT using graphviz library
 module L4.EvaluateLazy.GraphViz2 (
   traceToGraphViz,
   GraphVizOptions(..),
@@ -16,17 +13,16 @@ module L4.EvaluateLazy.GraphViz2 (
 ) where
 
 import Base
-import qualified Base.Map as Map
-import qualified Base.Set as Set
 import qualified Base.Text as Text
+import qualified Data.Text.Lazy as Text.Lazy
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
 import L4.Evaluate.ValueLazy (NF(..), Value(..))
-import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Unique(..), getOriginal, getUnique, nameToText, pattern Var)
+import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Unique(..), nameToText, pattern Var)
 import L4.Print (prettyLayout)
 
 -- FGL and GraphViz imports
-import Data.Graph.Inductive.Graph (Graph, Node, LNode, LEdge)
+import Data.Graph.Inductive.Graph (Node, LNode, LEdge)
 import qualified Data.Graph.Inductive.Graph as FGL
 import qualified Data.Graph.Inductive.PatriciaTree as FGL
 import qualified Data.GraphViz as GV
@@ -49,311 +45,261 @@ defaultGraphVizOptions = GraphVizOptions
   , maxDepth = Nothing
   }
 
--- | Node in the intermediate render tree
-data RenderNode = RenderNode
-  { nodeId :: Int
-  , nodeLabel :: Text
-  , nodeResult :: Maybe Text
-  , nodeColor :: Text
+-- | Node attributes for rendering
+data NodeAttrs = NodeAttrs
+  { nodeLabel :: Text
+  , fillColor :: Text
   , nodeStyle :: Text
-  , children :: [(EdgeInfo, RenderNode)]
-  }
+  } deriving (Eq, Show)
 
-data EdgeInfo = EdgeInfo
+-- | Edge attributes for rendering
+data EdgeAttrs = EdgeAttrs
   { edgeLabel :: Maybe Text
-  , edgeReversed :: Bool
-  , edgeStyle :: Text
   , edgeColor :: Text
-  }
+  , edgeStyle :: Text
+  , edgeDir :: Maybe Text  -- "back" for reversed
+  } deriving (Eq, Show)
 
--- | Rendering context carried through tree building
-data RenderContext = RenderContext
-  { nextNodeId :: Int
-  , options :: GraphVizOptions
-  , depth :: Int
-  , reverseEdges :: Bool  -- For IF conditions
-  , parentResult :: Either EvalException NF  -- Parent trace result
-  }
-
-defaultEdge :: EdgeInfo
-defaultEdge = EdgeInfo
-  { edgeLabel = Nothing
-  , edgeReversed = False
-  , edgeStyle = "solid"
-  , edgeColor = "#2ca02c"
-  }
+type EvalGraph = FGL.Gr NodeAttrs EdgeAttrs
 
 -- | Main entry point: convert trace to GraphViz DOT format
 traceToGraphViz :: GraphVizOptions -> EvalTrace -> Text
 traceToGraphViz opts trace =
-  let ctx = RenderContext 0 opts 0 False (Left undefined)
-      (tree, _) = buildRenderTree ctx trace
-      graph = treeToFGL tree
+  let (graph, _) = buildGraph opts 0 0 trace
       dotGraph = graphToDot graph
-  in GV.renderDot $ GV.toDot dotGraph
+  in Text.Lazy.toStrict $ GV.printDotGraph dotGraph
 
 -- ============================================================================
--- Pass 1: Build intermediate tree from flat trace
+-- Pure recursive graph building - follows inductive structure
 -- ============================================================================
 
--- | Build render tree from evaluation trace
-buildRenderTree :: RenderContext -> EvalTrace -> (RenderNode, RenderContext)
-buildRenderTree ctx (Trace mlabel steps result) =
-  let nodeLabel = formatNodeLabel mlabel steps
-      nodeResult = if ctx.options.includeValues
-                     then Just (formatResult result)
-                     else Nothing
-      (nodeStyle, nodeColor) = getNodeStyle steps result
-
-      -- Build children from steps
-      childCtx = ctx { nextNodeId = ctx.nextNodeId + 1
-                     , depth = ctx.depth + 1
-                     , parentResult = result
-                     }
-      (children, finalCtx) = buildChildren childCtx steps
-
-      node = RenderNode
-        { nodeId = ctx.nextNodeId
-        , nodeLabel = nodeLabel
-        , nodeResult = nodeResult
-        , nodeColor = nodeColor
-        , nodeStyle = nodeStyle
-        , children = children
-        }
-  in (node, finalCtx)
-
--- | Build children, handling special cases like IF with compound branches
-buildChildren :: RenderContext -> [(Expr Resolved, [EvalTrace])] -> ([(EdgeInfo, RenderNode)], RenderContext)
-buildChildren ctx [] = ([], ctx)
-buildChildren ctx steps@((expr, subtraces):rest) =
-  case (expr, rest) of
-    -- IF expression with compound branch (next step is the branch evaluation)
-    (IfThenElse _ _ thenE elseE, (branchExpr, branchSubtraces):restAfterBranch)
-      | length subtraces == 1 ->
-        buildIfWithCompoundBranch ctx expr subtraces thenE elseE branchExpr branchSubtraces restAfterBranch
-
-    -- Normal expression
-    _ -> buildNormalChildren ctx expr subtraces rest
-
--- | Handle IF expression where branch is compound (appears as next step)
-buildIfWithCompoundBranch :: RenderContext
-                          -> Expr Resolved
-                          -> [EvalTrace]
-                          -> Expr Resolved  -- THEN
-                          -> Expr Resolved  -- ELSE
-                          -> Expr Resolved  -- Branch expr
-                          -> [EvalTrace]     -- Branch subtraces
-                          -> [(Expr Resolved, [EvalTrace])]  -- Remaining steps
-                          -> ([(EdgeInfo, RenderNode)], RenderContext)
-buildIfWithCompoundBranch ctx _ifExpr condTraces thenE elseE branchExpr branchSubtraces restSteps =
-  let -- Get condition result
-      condResult = case condTraces of
-        (condTrace:_) -> traceBoolValue condTrace
-        _ -> Nothing
-
-      -- Build condition node
-      condCtx = ctx { reverseEdges = True }
-      (condNodes, afterCondCtx) = buildSubtraces condCtx condTraces
-      condEdges = [(defaultEdge { edgeLabel = Just "IF", edgeReversed = True }, node) | node <- condNodes]
-
-      -- Build stub for unevaluated branch
-      (stubNode, afterStubCtx) = case condResult of
-        Just True  -> buildStubNode afterCondCtx elseE "ELSE"
-        Just False -> buildStubNode afterCondCtx thenE "THEN"
-        Nothing    -> (Nothing, afterCondCtx)
-
-      -- Build evaluated branch node with result from parent
-      branchLabel = Text.take 50 (prettyLayout branchExpr)
-      branchResultText = case ctx.parentResult of
-        Right nf -> Just (Text.take 50 (prettyLayout nf))
-        Left _ -> Nothing
-
-      -- Build branch subtraces as children of branch node
-      branchChildCtx = afterStubCtx { reverseEdges = False }
-      (branchChildren, afterBranchCtx) = buildSubtraces branchChildCtx branchSubtraces
-
-      branchNode = RenderNode
-        { nodeId = afterStubCtx.nextNodeId
-        , nodeLabel = branchLabel
-        , nodeResult = branchResultText
-        , nodeColor = "#d0e8f2"
+-- | Build FGL graph from trace
+-- Returns (graph, next available node ID)
+buildGraph :: GraphVizOptions -> Int -> Node -> EvalTrace
+           -> (EvalGraph, Node)
+buildGraph opts depth nodeId (Trace mlabel steps result) =
+  let -- Create node for this trace
+      nodeAttrs = NodeAttrs
+        { nodeLabel = formatTraceLabel opts mlabel steps result
+        , fillColor = if isRight result then "#d0e8f2" else "#ffcccc"
         , nodeStyle = "filled"
-        , children = [(defaultEdge, child) | child <- branchChildren]
         }
+      thisNode = (nodeId, nodeAttrs)
 
-      branchEdgeLabel = case condResult of
-        Just True -> "THEN"
-        Just False -> "ELSE"
-        Nothing -> "branch"
+      -- Recursively build subgraphs for each step
+      (childGraphs, childEdges, nextId) =
+        buildSteps opts (depth + 1) (nodeId + 1) nodeId steps
 
-      branchEdge = (defaultEdge { edgeLabel = Just branchEdgeLabel }, branchNode)
+      -- Combine this node with all child graphs
+      graph = FGL.mkGraph [thisNode] [] `FGL.ufold` childGraphs
+      graphWithEdges = FGL.insEdges childEdges graph
 
-      -- Process remaining steps
-      restCtx = afterBranchCtx { nextNodeId = afterBranchCtx.nextNodeId + 1 }
-      (restChildren, finalCtx) = buildChildren restCtx restSteps
+  in (graphWithEdges, nextId)
 
-      allChildren = condEdges ++ maybeToList (fmap (\n -> (defaultEdge { edgeLabel = Just (if condResult == Just True then "ELSE" else "THEN"), edgeStyle = "dashed", edgeColor = "#999999" }, n)) stubNode) ++ [branchEdge] ++ restChildren
-  in (allChildren, finalCtx)
-
--- | Build normal children (non-IF special case)
-buildNormalChildren :: RenderContext -> Expr Resolved -> [EvalTrace] -> [(Expr Resolved, [EvalTrace])] -> ([(EdgeInfo, RenderNode)], RenderContext)
-buildNormalChildren ctx expr subtraces rest =
-  let -- Get edge configs for this expression
+-- | Build graphs for all steps
+buildSteps :: GraphVizOptions -> Int -> Node -> Node
+           -> [(Expr Resolved, [EvalTrace])]
+           -> ([EvalGraph], [LEdge EdgeAttrs], Node)
+buildSteps _opts _depth nextId _parentId [] = ([], [], nextId)
+buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
+  let -- Get edge configurations for this expression type
       edgeConfigs = edgeConfigsFor expr subtraces
 
-      -- Build subtrace nodes
-      (subNodes, afterSubCtx) = buildSubtracesWithConfigs ctx subtraces edgeConfigs
+      -- Build subgraphs for each subtrace
+      (subGraphs, subEdges, afterSubId) =
+        buildSubtraces opts depth nodeId parentId subtraces edgeConfigs
 
-      -- Process remaining siblings
-      (restChildren, finalCtx) = buildChildren afterSubCtx rest
+      -- Add stub nodes for IF unevaluated branches if needed
+      (stubNodes, stubEdges, afterStubId) =
+        if opts.showUnevaluated
+          then buildStubs opts afterSubId parentId expr subtraces
+          else ([], [], afterSubId)
 
-  in (subNodes ++ restChildren, finalCtx)
+      -- Build remaining sibling steps
+      (restGraphs, restEdges, finalId) =
+        buildSteps opts depth afterStubId parentId rest
 
--- | Build nodes from subtraces
-buildSubtraces :: RenderContext -> [EvalTrace] -> ([RenderNode], RenderContext)
-buildSubtraces ctx traces = go ctx traces []
-  where
-    go curCtx [] acc = (reverse acc, curCtx)
-    go curCtx (tr:trs) acc =
-      let (node, nextCtx) = buildRenderTree curCtx tr
-      in go nextCtx trs (node:acc)
+      -- Combine everything
+      stubGraph = FGL.mkGraph stubNodes []
+      allGraphs = subGraphs ++ [stubGraph | not (null stubNodes)] ++ restGraphs
+      allEdges = subEdges ++ stubEdges ++ restEdges
 
--- | Build nodes from subtraces with edge configs
-buildSubtracesWithConfigs :: RenderContext -> [EvalTrace] -> [EdgeConfig] -> ([(EdgeInfo, RenderNode)], RenderContext)
-buildSubtracesWithConfigs ctx traces configs = go ctx (zip traces configs) []
-  where
-    go curCtx [] acc = (reverse acc, curCtx)
-    go curCtx ((tr, cfg):rest) acc =
-      let (node, nextCtx) = buildRenderTree curCtx tr
-          edge = EdgeInfo
-            { edgeLabel = getEdgeLabel cfg
-            , edgeReversed = getEdgeReversed cfg
-            , edgeStyle = "solid"
-            , edgeColor = "#2ca02c"
-            }
-      in go nextCtx rest ((edge, node):acc)
+  in (allGraphs, allEdges, finalId)
 
--- | Build stub node for unevaluated branch
-buildStubNode :: RenderContext -> Expr Resolved -> Text -> (Maybe RenderNode, RenderContext)
-buildStubNode ctx expr label =
-  if not ctx.options.showUnevaluated
-    then (Nothing, ctx)
-    else
-      let nodeLabel = Text.take 50 (prettyLayout expr)
-          node = RenderNode
-            { nodeId = ctx.nextNodeId
-            , nodeLabel = nodeLabel
-            , nodeResult = Nothing
-            , nodeColor = "#e0e0e0"
+-- | Build subgraphs for subtraces with edge labels
+buildSubtraces :: GraphVizOptions -> Int -> Node -> Node
+               -> [EvalTrace] -> [EdgeConfig]
+               -> ([EvalGraph], [LEdge EdgeAttrs], Node)
+buildSubtraces _opts _depth nodeId _parentId [] _configs = ([], [], nodeId)
+buildSubtraces opts depth nodeId parentId (tr:trs) (cfg:cfgs) =
+  let -- Build graph for this subtrace
+      (subGraph, nextId) = buildGraph opts depth nodeId tr
+
+      -- Create edge from parent to this subtrace's root
+      edgeAttrs = EdgeAttrs
+        { edgeLabel = cfg.edgeLabel
+        , edgeColor = "#2ca02c"
+        , edgeStyle = "solid"
+        , edgeDir = if cfg.edgeReversed then Just "back" else Nothing
+        }
+      edge = (parentId, nodeId, edgeAttrs)
+
+      -- Build remaining subtraces
+      (restGraphs, restEdges, finalId) =
+        buildSubtraces opts depth nextId parentId trs cfgs
+
+  in (subGraph : restGraphs, edge : restEdges, finalId)
+buildSubtraces opts depth nodeId parentId (tr:trs) [] =
+  -- No more configs, use default
+  buildSubtraces opts depth nodeId parentId (tr:trs) [defaultEdgeConfig]
+
+-- | Build stub nodes for unevaluated branches
+buildStubs :: GraphVizOptions -> Node -> Node -> Expr Resolved -> [EvalTrace]
+           -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
+buildStubs opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
+  case (traceBoolValue <$> listToMaybe subtraces) of
+    Just (Just True) ->
+      -- THEN taken, stub ELSE
+      let elseNode = (nodeId, NodeAttrs
+            { nodeLabel = Text.take 50 (prettyLayout elseE)
+            , fillColor = "#e0e0e0"
             , nodeStyle = "filled,dashed"
-            , children = []
-            }
-      in (Just node, ctx { nextNodeId = ctx.nextNodeId + 1 })
+            })
+          elseEdge = (parentId, nodeId, EdgeAttrs
+            { edgeLabel = Just "ELSE"
+            , edgeColor = "#999999"
+            , edgeStyle = "dashed"
+            , edgeDir = Nothing
+            })
+      in ([elseNode], [elseEdge], nodeId + 1)
+
+    Just (Just False) ->
+      -- ELSE taken, stub THEN
+      let thenNode = (nodeId, NodeAttrs
+            { nodeLabel = Text.take 50 (prettyLayout thenE)
+            , fillColor = "#e0e0e0"
+            , nodeStyle = "filled,dashed"
+            })
+          thenEdge = (parentId, nodeId, EdgeAttrs
+            { edgeLabel = Just "THEN"
+            , edgeColor = "#999999"
+            , edgeStyle = "dashed"
+            , edgeDir = Nothing
+            })
+      in ([thenNode], [thenEdge], nodeId + 1)
+
+    _ -> ([], [], nodeId)
+
+buildStubs _opts nodeId _parentId _expr _subtraces = ([], [], nodeId)
 
 -- ============================================================================
--- Pass 2: Convert tree to FGL graph
--- ============================================================================
-
-type EvalGraph = FGL.Gr Text Text
-
--- | Convert render tree to FGL graph
-treeToFGL :: RenderNode -> EvalGraph
-treeToFGL root =
-  let (nodes, edges) = collectNodesAndEdges root
-  in FGL.mkGraph nodes edges
-
--- | Collect all nodes and edges from tree
-collectNodesAndEdges :: RenderNode -> ([LNode Text], [LEdge Text])
-collectNodesAndEdges node =
-  let thisNode = (node.nodeId, formatNodeForFGL node)
-      (childNodes, childEdges) = unzip [collectNodesAndEdges child | (_, child) <- node.children]
-      allChildNodes = concat childNodes
-      allChildEdges = concat childEdges
-      edgesToChildren = [(node.nodeId, child.nodeId, fromMaybe "" edge.edgeLabel) | (edge, child) <- node.children]
-  in (thisNode : allChildNodes, edgesToChildren ++ allChildEdges)
-
-formatNodeForFGL :: RenderNode -> Text
-formatNodeForFGL node =
-  case node.nodeResult of
-    Just result -> node.nodeLabel <> "\n────────────────\n" <> result
-    Nothing -> node.nodeLabel
-
--- ============================================================================
--- Pass 3: Convert FGL graph to GraphViz DOT
--- ============================================================================
-
-graphToDot :: EvalGraph -> GV.DotGraph Node
-graphToDot graph = GV.graphToDot params graph
-  where
-    params = GV.nonClusteredParams
-      { GV.globalAttributes =
-          [ GV.GraphAttrs [GV.RankDir GV.FromTop]
-          , GV.NodeAttrs [GV.Shape GV.BoxShape, GV.Style [GV.SItem GV.Rounded []]]
-          ]
-      , GV.fmtNode = \(_, l) -> [GV.Label (GV.StrLabel l)]
-      , GV.fmtEdge = \(_, _, l) -> [GV.Label (GV.StrLabel l), GV.Color [GV.toWColor GV.Green]]
-      }
-
--- ============================================================================
--- Helper functions (from original module)
+-- Edge configuration helpers
 -- ============================================================================
 
 data EdgeConfig = EdgeConfig
   { edgeLabel :: Maybe Text
   , edgeReversed :: Bool
-  }
-  deriving stock (Eq, Show)
+  } deriving stock (Eq, Show)
 
-getEdgeLabel :: EdgeConfig -> Maybe Text
-getEdgeLabel = (.edgeLabel)
-
-getEdgeReversed :: EdgeConfig -> Bool
-getEdgeReversed = (.edgeReversed)
+defaultEdgeConfig :: EdgeConfig
+defaultEdgeConfig = EdgeConfig Nothing False
 
 edgeConfigsFor :: Expr Resolved -> [EvalTrace] -> [EdgeConfig]
 edgeConfigsFor (IfThenElse _ _ _ _) subtraces = labelIf subtraces
   where
     labelIf [] = []
-    labelIf [_] = [EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }]
+    labelIf [_] = [EdgeConfig (Just "IF") True]
     labelIf (condTrace:branchTraces) =
       let branchLabel = case traceBoolValue condTrace of
-                          Just True -> "THEN"
-                          Just False -> "ELSE"
-                          _ -> "branch"
-      in EdgeConfig { edgeLabel = Just "IF", edgeReversed = True }
-         : replicate (length branchTraces) (EdgeConfig { edgeLabel = Just branchLabel, edgeReversed = False })
-edgeConfigsFor _ subtraces = replicate (length subtraces) (EdgeConfig Nothing False)
+            Just True -> "THEN"
+            Just False -> "ELSE"
+            _ -> "branch"
+      in EdgeConfig (Just "IF") True
+         : replicate (length branchTraces) (EdgeConfig (Just branchLabel) False)
+
+edgeConfigsFor (Consider _ _ branches) subtraces =
+  let branchLabels = map branchLabel branches
+      labelFor idx = listToMaybe $ drop idx branchLabels
+  in defaultEdgeConfig : map (\lbl -> EdgeConfig (Just lbl) False) (catMaybes [labelFor i | i <- [0..length subtraces - 2]])
+  where
+    branchLabel (MkBranch _ lhs _) = case lhs of
+      When _ pat -> "when " <> prettyLayout pat
+      Otherwise _ -> "otherwise"
+
+edgeConfigsFor _ subtraces =
+  replicate (length subtraces) defaultEdgeConfig
+
+-- ============================================================================
+-- Formatting helpers
+-- ============================================================================
+
+formatTraceLabel :: GraphVizOptions -> Maybe Resolved -> [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> Text
+formatTraceLabel opts mlabel steps result =
+  let labelText = maybe "" (\lbl -> prettyLayout lbl <> "\n") mlabel
+      exprText = case steps of
+        [] -> ""
+        (expr, _):_ -> firstLine (prettyLayout expr)
+      resultText = if opts.includeValues
+        then case result of
+          Right nf -> "\n────────────────\n" <> firstLine (prettyLayout nf)
+          Left _ -> "\n────────────────\n<error>"
+        else ""
+  in labelText <> exprText <> resultText
+
+firstLine :: Text -> Text
+firstLine = Text.takeWhile (/= '\n')
 
 traceBoolValue :: EvalTrace -> Maybe Bool
-traceBoolValue (Trace _ _ (Right nf)) =
-  case nfToBool nf of
-    Just b -> Just b
-    Nothing -> nfToBoolFromText nf
+traceBoolValue (Trace _ _ (Right nf)) = nfToBool nf
 traceBoolValue _ = Nothing
 
 nfToBool :: NF -> Maybe Bool
 nfToBool (MkNF val) = boolView val
 nfToBool Omitted = Nothing
 
-nfToBoolFromText :: NF -> Maybe Bool
-nfToBoolFromText nf =
-  let txt = Text.toUpper (prettyLayout nf)
-  in if "TRUE" `Text.isInfixOf` txt then Just True
-     else if "FALSE" `Text.isInfixOf` txt then Just False
-     else Nothing
+isRight :: Either a b -> Bool
+isRight (Right _) = True
+isRight (Left _) = False
 
-formatNodeLabel :: Maybe Resolved -> [(Expr Resolved, [EvalTrace])] -> Text
-formatNodeLabel mlabel steps =
-  let exprText = case steps of
-        [] -> "<no steps>"
-        (firstExpr, _) : _ -> Text.take 50 (prettyLayout firstExpr)
-      labelText = maybe "" (\lbl -> Text.take 50 (prettyLayout lbl) <> "\n") mlabel
-  in labelText <> exprText
+-- ============================================================================
+-- GraphViz rendering
+-- ============================================================================
 
-formatResult :: Either EvalException NF -> Text
-formatResult (Right nf) = Text.take 50 (prettyLayout nf)
-formatResult (Left _) = "<error>"
-
-getNodeStyle :: [(Expr Resolved, [EvalTrace])] -> Either EvalException NF -> (Text, Text)
-getNodeStyle _ (Right _) = ("filled", "#d0e8f2")
-getNodeStyle _ (Left _) = ("filled", "#ffcccc")
+graphToDot :: EvalGraph -> GV.DotGraph Node
+graphToDot graph =
+  let params = GV.nonClusteredParams
+        { GV.globalAttributes =
+            [ GV.GraphAttrs [GV.RankDir GV.FromTop]
+            , GV.NodeAttrs
+                [ GV.Shape GV.BoxShape
+                , GV.Style [GV.SItem GV.Rounded []]
+                ]
+            ]
+        , GV.fmtNode = \(_, attrs) ->
+            let -- Parse hex color to RGB (simplified - just use fixed colors for now)
+                color = if attrs.fillColor == "#d0e8f2"
+                  then GV.RGB 208 232 242
+                  else if attrs.fillColor == "#e0e0e0"
+                    then GV.RGB 224 224 224
+                    else GV.RGB 255 204 204
+            in [ GV.Label (GV.StrLabel (Text.Lazy.fromStrict attrs.nodeLabel))
+               , GV.FillColor [GV.toWC color]
+               , GV.Style [GV.SItem GV.Filled []]
+               ]
+        , GV.fmtEdge = \(_, _, attrs) ->
+            let color = if attrs.edgeColor == "#2ca02c"
+                  then GV.RGB 44 160 44
+                  else GV.RGB 153 153 153  -- #999999
+                baseAttrs =
+                  [ GV.Color [GV.toWColor color]
+                  , GV.PenWidth 2
+                  , GV.FontSize 10
+                  ]
+                labelAttr = maybe [] (\lbl -> [GV.Label (GV.StrLabel (Text.Lazy.fromStrict lbl))]) attrs.edgeLabel
+                dirAttr = maybe [] (\d -> [GV.Dir (if d == "back" then GV.Back else GV.Forward)]) attrs.edgeDir
+                styleAttr = if attrs.edgeStyle == "dashed"
+                  then [GV.Style [GV.SItem GV.Dashed []]]
+                  else []
+            in baseAttrs ++ labelAttr ++ dirAttr ++ styleAttr
+        }
+  in GV.graphToDot params graph
