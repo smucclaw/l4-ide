@@ -50,7 +50,8 @@ defaultGraphVizOptions = GraphVizOptions
   -- Optimizations disabled by default (show full trace)
   , collapseFunctionLookups = False
   , collapseSimplePaths = False
-  , showFunctionBodies = False
+  -- Function bodies enabled by default (provide context)
+  , showFunctionBodies = True
   }
 
 -- | Node attributes for rendering
