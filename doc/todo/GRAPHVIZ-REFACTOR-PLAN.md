@@ -258,12 +258,40 @@ When we recursively build:
 - [ ] Diff view between two evaluations
 - [ ] Performance optimization for large traces
 
+## Usage
+
+### Basic Usage (stdout)
+```bash
+# Unoptimized (full trace detail)
+cabal run jl4-cli -- --graphviz2 file.l4 | dot -Tpng > output.png
+
+# Optimized (removes function leaf nodes)
+cabal run jl4-cli -- --graphviz2 --optimize-graph file.l4 | dot -Tpng > output.png
+```
+
+### Auto-split to Files (recommended)
+```bash
+# Generate separate .dot and .png files per EVALTRACE
+cabal run jl4-cli -- --graphviz2 --optimize-graph --output-dir doc/images file.l4
+
+# Output:
+#   doc/images/file-eval1.dot
+#   doc/images/file-eval1.png
+#   doc/images/file-eval2.dot
+#   doc/images/file-eval2.png
+```
+
+No more manual `sed` preprocessing needed!
+
 ## References
 
 - FGL tutorial: https://hackage.haskell.org/package/fgl/docs/Data-Graph-Inductive.html
 - graphviz library: https://hackage.haskell.org/package/graphviz
 - Original issue exploration: commit 732ef900
 - This refactor start: commit a910adb1
+- Phase 1 & 2 complete: commit 76b6ecbf
+- Optimization combinators: commit 6279ed4d
+- Auto-split output: commit 9cd1f2eb
 
 ## Notes for Next Session
 

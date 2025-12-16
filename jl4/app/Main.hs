@@ -325,16 +325,19 @@ main = do
               else if options.outputGraphViz2
                 then do
                   -- In graphviz2 mode (new FGL-based)
-                  let gvOpts = GraphViz2.defaultGraphVizOptions
+                  -- Get the typechecked module for AST inspection
+                  let mModule = mtc >>= \tc -> if tc.success then Just tc.module' else Nothing
+                      gvOpts = GraphViz2.defaultGraphVizOptions
                         { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
                         , GraphViz2.collapseSimplePaths = options.graphVizOptimize
+                        , GraphViz2.showFunctionBodies = options.showFunctionBodies
                         }
                   case options.outputDir of
                     Nothing ->
                       -- No output dir: write to stdout (original behavior)
                       for_ evalResults $ \result ->
                         case result.trace of
-                          Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts tr
+                          Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts mModule tr
                           Nothing -> pure ()
                     Just outDir -> do
                       -- Output dir specified: auto-split to separate files
@@ -343,7 +346,7 @@ main = do
                       for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
                         case result.trace of
                           Just tr -> liftIO $ do
-                            let dotContent = GraphViz2.traceToGraphViz gvOpts tr
+                            let dotContent = GraphViz2.traceToGraphViz gvOpts mModule tr
                                 dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
                                 pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
                             -- Write .dot file
@@ -410,6 +413,7 @@ data Options = MkOptions
   , outputGraphViz :: Bool
   , outputGraphViz2 :: Bool
   , graphVizOptimize :: Bool  -- Enable all GraphViz2 optimizations
+  , showFunctionBodies :: Bool  -- Show function bodies in graph nodes
   , outputDir :: Maybe FilePath  -- Directory for auto-split graph files
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
@@ -426,6 +430,7 @@ optionsDescription = MkOptions
   <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
   <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
   <*> switch (long "optimize-graph" <> help "Enable GraphViz2 optimizations (collapse function lookups and simple paths)")
+  <*> switch (long "show-function-bodies" <> help "Show function bodies in graph nodes (inspects AST)")
   <*> optional (Options.strOption (long "output-dir" <> short 'o' <> metavar "DIR" <> help "Output directory for graph files (auto-splits multiple graphs, generates .dot and .png)"))
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))

@@ -19,7 +19,7 @@ import Control.Applicative ((<|>))
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
 import L4.Evaluate.ValueLazy (NF(..))
-import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..))
+import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Module(..), TopDecl(..), Decide(..), Section(..), AppForm(..), LocalDecl(..), Unique, getUnique)
 import L4.Print (prettyLayout)
 
 -- FGL and GraphViz imports
@@ -38,6 +38,7 @@ data GraphVizOptions = GraphVizOptions
   -- Optimization flags
   , collapseFunctionLookups :: Bool
   , collapseSimplePaths :: Bool
+  , showFunctionBodies :: Bool
   } deriving (Eq, Show)
 
 defaultGraphVizOptions :: GraphVizOptions
@@ -49,6 +50,7 @@ defaultGraphVizOptions = GraphVizOptions
   -- Optimizations disabled by default (show full trace)
   , collapseFunctionLookups = False
   , collapseSimplePaths = False
+  , showFunctionBodies = False
   }
 
 -- | Node attributes for rendering
@@ -69,9 +71,9 @@ data EdgeAttrs = EdgeAttrs
 type EvalGraph = FGL.Gr NodeAttrs EdgeAttrs
 
 -- | Main entry point: convert trace to GraphViz DOT format
-traceToGraphViz :: GraphVizOptions -> EvalTrace -> Text
-traceToGraphViz opts evalTrace =
-  let (nodes, edges, _) = buildGraph opts 0 0 evalTrace
+traceToGraphViz :: GraphVizOptions -> Maybe (Module Resolved) -> EvalTrace -> Text
+traceToGraphViz opts mModule evalTrace =
+  let (nodes, edges, _) = buildGraph opts mModule 0 0 evalTrace
       graph = FGL.mkGraph nodes edges
 
       -- Apply local optimizations (graph-to-graph transformations)
@@ -181,12 +183,16 @@ collapseSimplePathsPass graph =
 
 -- | Build FGL graph from trace
 -- Returns (nodes, edges, next available node ID)
-buildGraph :: GraphVizOptions -> Int -> Node -> EvalTrace
+buildGraph :: GraphVizOptions -> Maybe (Module Resolved) -> Int -> Node -> EvalTrace
            -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
-buildGraph opts depth nodeId (Trace mlabel steps result) =
+buildGraph opts mModule depth nodeId (Trace mlabel steps result) =
   let -- Create node for this trace
+      baseLabel = formatTraceLabel opts mlabel steps result
+      enhancedLabel = if opts.showFunctionBodies
+                        then enhanceLabelWithFunctionBody mModule mlabel baseLabel
+                        else baseLabel
       nodeAttrs = NodeAttrs
-        { nodeLabel = formatTraceLabel opts mlabel steps result
+        { nodeLabel = enhancedLabel
         , fillColor = if isRight result then "#d0e8f2" else "#ffcccc"
         , nodeStyle = "filled"
         }
@@ -194,7 +200,7 @@ buildGraph opts depth nodeId (Trace mlabel steps result) =
 
       -- Recursively build nodes/edges for each step
       (childNodes, childEdges, nextId) =
-        buildSteps opts (depth + 1) (nodeId + 1) nodeId steps
+        buildSteps opts mModule (depth + 1) (nodeId + 1) nodeId steps
 
       -- Combine with simple list concatenation
       allNodes = thisNode ++ childNodes
@@ -203,17 +209,17 @@ buildGraph opts depth nodeId (Trace mlabel steps result) =
   in (allNodes, allEdges, nextId)
 
 -- | Build nodes/edges for all steps
-buildSteps :: GraphVizOptions -> Int -> Node -> Node
+buildSteps :: GraphVizOptions -> Maybe (Module Resolved) -> Int -> Node -> Node
            -> [(Expr Resolved, [EvalTrace])]
            -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
-buildSteps _opts _depth nextId _parentId [] = ([], [], nextId)
-buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
+buildSteps _opts _mModule _depth nextId _parentId [] = ([], [], nextId)
+buildSteps opts mModule depth nodeId parentId ((expr, subtraces):rest) =
   let -- Get edge configurations for this expression type
       edgeConfigs = edgeConfigsFor expr subtraces
 
       -- Build nodes/edges for each subtrace
       (subNodes, subEdges, afterSubId) =
-        buildSubtraces opts depth nodeId parentId subtraces edgeConfigs
+        buildSubtraces opts mModule depth nodeId parentId subtraces edgeConfigs
 
       -- Add stub nodes for IF unevaluated branches if needed
       (stubNodes, stubEdges, afterStubId) =
@@ -223,7 +229,7 @@ buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
 
       -- Build remaining sibling steps
       (restNodes, restEdges, finalId) =
-        buildSteps opts depth afterStubId parentId rest
+        buildSteps opts mModule depth afterStubId parentId rest
 
       -- Combine everything with list concatenation
       allNodes = subNodes ++ stubNodes ++ restNodes
@@ -232,13 +238,13 @@ buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
   in (allNodes, allEdges, finalId)
 
 -- | Build nodes/edges for subtraces with edge labels
-buildSubtraces :: GraphVizOptions -> Int -> Node -> Node
+buildSubtraces :: GraphVizOptions -> Maybe (Module Resolved) -> Int -> Node -> Node
                -> [EvalTrace] -> [EdgeConfig]
                -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
-buildSubtraces _opts _depth nodeId _parentId [] _configs = ([], [], nodeId)
-buildSubtraces opts depth nodeId parentId (tr:trs) (cfg:cfgs) =
+buildSubtraces _opts _mModule _depth nodeId _parentId [] _configs = ([], [], nodeId)
+buildSubtraces opts mModule depth nodeId parentId (tr:trs) (cfg:cfgs) =
   let -- Build nodes/edges for this subtrace
-      (subNodes, subEdges, nextId) = buildGraph opts depth nodeId tr
+      (subNodes, subEdges, nextId) = buildGraph opts mModule depth nodeId tr
 
       -- Create edge from parent to this subtrace's root
       edgeAttrs = EdgeAttrs
@@ -251,16 +257,16 @@ buildSubtraces opts depth nodeId parentId (tr:trs) (cfg:cfgs) =
 
       -- Build remaining subtraces
       (restNodes, restEdges, finalId) =
-        buildSubtraces opts depth nextId parentId trs cfgs
+        buildSubtraces opts mModule depth nextId parentId trs cfgs
 
       -- Combine with list concatenation
       allNodes = subNodes ++ restNodes
       allEdges = edge : subEdges ++ restEdges
 
   in (allNodes, allEdges, finalId)
-buildSubtraces opts depth nodeId parentId (tr:trs) [] =
+buildSubtraces opts mModule depth nodeId parentId (tr:trs) [] =
   -- No more configs, use default
-  buildSubtraces opts depth nodeId parentId (tr:trs) [defaultEdgeConfig]
+  buildSubtraces opts mModule depth nodeId parentId (tr:trs) [defaultEdgeConfig]
 
 -- | Build stub nodes for unevaluated branches
 buildStubs :: GraphVizOptions -> Node -> Node -> Expr Resolved -> [EvalTrace]
@@ -374,6 +380,69 @@ edgeConfigsFor (Consider _ _ branches) subtraces =
 
 edgeConfigsFor _ subtraces =
   replicate (length subtraces) defaultEdgeConfig
+
+-- ============================================================================
+-- AST inspection for function bodies
+-- ============================================================================
+
+-- | Enhance node label with function body from AST (if applicable)
+--   Since mlabel is often Nothing, we extract the function name from the base label
+enhanceLabelWithFunctionBody :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
+enhanceLabelWithFunctionBody Nothing _ baseLabel = baseLabel
+enhanceLabelWithFunctionBody _ Nothing baseLabel = baseLabel
+enhanceLabelWithFunctionBody (Just module') (Just resolved) baseLabel =
+  case lookupFunctionBodyAnywhere module' resolved of
+    Just body ->
+      -- Append function body to label (limit to first 2 lines for readability)
+      let bodyLines = take 2 $ Text.lines (prettyLayout body)
+          bodyPreview = Text.intercalate "\n  " bodyLines
+          suffix = if length (Text.lines (prettyLayout body)) > 2 then "\n  ..." else ""
+      in baseLabel <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyPreview <> suffix
+    Nothing -> baseLabel
+
+-- | Look up function body searching both top-level and WHERE clauses
+lookupFunctionBodyAnywhere :: Module Resolved -> Resolved -> Maybe (Expr Resolved)
+lookupFunctionBodyAnywhere (MkModule _ _ (MkSection _ _ _ topDecls)) resolved =
+  let targetUnique = getUnique resolved
+  in findBodyByUnique targetUnique topDecls
+
+-- | Recursively search for function body by unique ID
+findBodyByUnique :: Unique -> [TopDecl Resolved] -> Maybe (Expr Resolved)
+findBodyByUnique targetUnique topDecls =
+  listToMaybe $ catMaybes
+    [ -- Search top-level Decide
+      case topDecl of
+        Decide _ (MkDecide _ _ appForm body) ->
+          if matchesAppForm targetUnique appForm
+            then Just body
+            else searchInExpr targetUnique body
+        _ -> Nothing
+    | topDecl <- topDecls
+    ]
+  where
+    matchesAppForm :: Unique -> AppForm Resolved -> Bool
+    matchesAppForm target (MkAppForm _ name _ _) = getUnique name == target
+
+-- | Recursively search for WHERE bindings in an expression
+searchInExpr :: Unique -> Expr Resolved -> Maybe (Expr Resolved)
+searchInExpr targetUnique expr =
+  case expr of
+    Where _ _body localDecls ->
+      -- Search local declarations
+      listToMaybe $ catMaybes
+        [ case localDecl of
+            LocalDecide _ (MkDecide _ _ appForm body) ->
+              if matchesAppForm targetUnique appForm
+                then Just body
+                else searchInExpr targetUnique body
+            _ -> Nothing
+        | localDecl <- localDecls
+        ]
+    -- Recursively search in other expression types that contain sub-expressions
+    _ -> Nothing
+  where
+    matchesAppForm :: Unique -> AppForm Resolved -> Bool
+    matchesAppForm target (MkAppForm _ name _ _) = getUnique name == target
 
 -- ============================================================================
 -- Formatting helpers
