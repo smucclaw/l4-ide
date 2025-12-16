@@ -17,8 +17,8 @@ import qualified Base.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
-import L4.Evaluate.ValueLazy (NF(..), Value(..))
-import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Unique(..), nameToText, pattern Var)
+import L4.Evaluate.ValueLazy (NF(..))
+import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..))
 import L4.Print (prettyLayout)
 
 -- FGL and GraphViz imports
@@ -27,7 +27,6 @@ import qualified Data.Graph.Inductive.Graph as FGL
 import qualified Data.Graph.Inductive.PatriciaTree as FGL
 import qualified Data.GraphViz as GV
 import qualified Data.GraphViz.Attributes.Complete as GV
-import qualified Data.GraphViz.Printing as GV
 
 -- | Options for controlling GraphViz output
 data GraphVizOptions = GraphVizOptions
@@ -64,9 +63,12 @@ type EvalGraph = FGL.Gr NodeAttrs EdgeAttrs
 
 -- | Main entry point: convert trace to GraphViz DOT format
 traceToGraphViz :: GraphVizOptions -> EvalTrace -> Text
-traceToGraphViz opts trace =
-  let (graph, _) = buildGraph opts 0 0 trace
-      dotGraph = graphToDot graph
+traceToGraphViz opts evalTrace =
+  let (nodes, edges, _) = buildGraph opts 0 0 evalTrace
+      graph = FGL.mkGraph nodes edges
+      -- Identify IF patterns and add invisible ordering edges
+      ifPatterns = identifyIFPatterns graph
+      dotGraph = graphToDot graph ifPatterns
   in Text.Lazy.toStrict $ GV.printDotGraph dotGraph
 
 -- ============================================================================
@@ -74,9 +76,9 @@ traceToGraphViz opts trace =
 -- ============================================================================
 
 -- | Build FGL graph from trace
--- Returns (graph, next available node ID)
+-- Returns (nodes, edges, next available node ID)
 buildGraph :: GraphVizOptions -> Int -> Node -> EvalTrace
-           -> (EvalGraph, Node)
+           -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
 buildGraph opts depth nodeId (Trace mlabel steps result) =
   let -- Create node for this trace
       nodeAttrs = NodeAttrs
@@ -84,29 +86,29 @@ buildGraph opts depth nodeId (Trace mlabel steps result) =
         , fillColor = if isRight result then "#d0e8f2" else "#ffcccc"
         , nodeStyle = "filled"
         }
-      thisNode = (nodeId, nodeAttrs)
+      thisNode = [(nodeId, nodeAttrs)]
 
-      -- Recursively build subgraphs for each step
-      (childGraphs, childEdges, nextId) =
+      -- Recursively build nodes/edges for each step
+      (childNodes, childEdges, nextId) =
         buildSteps opts (depth + 1) (nodeId + 1) nodeId steps
 
-      -- Combine this node with all child graphs
-      graph = FGL.mkGraph [thisNode] [] `FGL.ufold` childGraphs
-      graphWithEdges = FGL.insEdges childEdges graph
+      -- Combine with simple list concatenation
+      allNodes = thisNode ++ childNodes
+      allEdges = childEdges
 
-  in (graphWithEdges, nextId)
+  in (allNodes, allEdges, nextId)
 
--- | Build graphs for all steps
+-- | Build nodes/edges for all steps
 buildSteps :: GraphVizOptions -> Int -> Node -> Node
            -> [(Expr Resolved, [EvalTrace])]
-           -> ([EvalGraph], [LEdge EdgeAttrs], Node)
+           -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
 buildSteps _opts _depth nextId _parentId [] = ([], [], nextId)
 buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
   let -- Get edge configurations for this expression type
       edgeConfigs = edgeConfigsFor expr subtraces
 
-      -- Build subgraphs for each subtrace
-      (subGraphs, subEdges, afterSubId) =
+      -- Build nodes/edges for each subtrace
+      (subNodes, subEdges, afterSubId) =
         buildSubtraces opts depth nodeId parentId subtraces edgeConfigs
 
       -- Add stub nodes for IF unevaluated branches if needed
@@ -116,24 +118,23 @@ buildSteps opts depth nodeId parentId ((expr, subtraces):rest) =
           else ([], [], afterSubId)
 
       -- Build remaining sibling steps
-      (restGraphs, restEdges, finalId) =
+      (restNodes, restEdges, finalId) =
         buildSteps opts depth afterStubId parentId rest
 
-      -- Combine everything
-      stubGraph = FGL.mkGraph stubNodes []
-      allGraphs = subGraphs ++ [stubGraph | not (null stubNodes)] ++ restGraphs
+      -- Combine everything with list concatenation
+      allNodes = subNodes ++ stubNodes ++ restNodes
       allEdges = subEdges ++ stubEdges ++ restEdges
 
-  in (allGraphs, allEdges, finalId)
+  in (allNodes, allEdges, finalId)
 
--- | Build subgraphs for subtraces with edge labels
+-- | Build nodes/edges for subtraces with edge labels
 buildSubtraces :: GraphVizOptions -> Int -> Node -> Node
                -> [EvalTrace] -> [EdgeConfig]
-               -> ([EvalGraph], [LEdge EdgeAttrs], Node)
+               -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
 buildSubtraces _opts _depth nodeId _parentId [] _configs = ([], [], nodeId)
 buildSubtraces opts depth nodeId parentId (tr:trs) (cfg:cfgs) =
-  let -- Build graph for this subtrace
-      (subGraph, nextId) = buildGraph opts depth nodeId tr
+  let -- Build nodes/edges for this subtrace
+      (subNodes, subEdges, nextId) = buildGraph opts depth nodeId tr
 
       -- Create edge from parent to this subtrace's root
       edgeAttrs = EdgeAttrs
@@ -145,10 +146,14 @@ buildSubtraces opts depth nodeId parentId (tr:trs) (cfg:cfgs) =
       edge = (parentId, nodeId, edgeAttrs)
 
       -- Build remaining subtraces
-      (restGraphs, restEdges, finalId) =
+      (restNodes, restEdges, finalId) =
         buildSubtraces opts depth nextId parentId trs cfgs
 
-  in (subGraph : restGraphs, edge : restEdges, finalId)
+      -- Combine with list concatenation
+      allNodes = subNodes ++ restNodes
+      allEdges = edge : subEdges ++ restEdges
+
+  in (allNodes, allEdges, finalId)
 buildSubtraces opts depth nodeId parentId (tr:trs) [] =
   -- No more configs, use default
   buildSubtraces opts depth nodeId parentId (tr:trs) [defaultEdgeConfig]
@@ -156,7 +161,7 @@ buildSubtraces opts depth nodeId parentId (tr:trs) [] =
 -- | Build stub nodes for unevaluated branches
 buildStubs :: GraphVizOptions -> Node -> Node -> Expr Resolved -> [EvalTrace]
            -> ([LNode NodeAttrs], [LEdge EdgeAttrs], Node)
-buildStubs opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
+buildStubs _opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
   case (traceBoolValue <$> listToMaybe subtraces) of
     Just (Just True) ->
       -- THEN taken, stub ELSE
@@ -191,6 +196,43 @@ buildStubs opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
     _ -> ([], [], nodeId)
 
 buildStubs _opts nodeId _parentId _expr _subtraces = ([], [], nodeId)
+
+-- ============================================================================
+-- Phase 2: Visual Optimization - IF/THEN/ELSE grouping
+-- ============================================================================
+
+-- | Pattern representing an IF expression's immediate children
+data IFPattern = IFPattern
+  { ifParentNode :: Node
+  , ifConditionNode :: Node
+  , ifThenNode :: Maybe Node
+  , ifElseNode :: Maybe Node
+  } deriving (Eq, Show)
+
+-- | Identify IF expression patterns in the graph
+identifyIFPatterns :: EvalGraph -> [IFPattern]
+identifyIFPatterns graph =
+  let allEdges = FGL.labEdges graph
+      -- Group edges by source node
+      edgesByParent = groupBy (\(s1,_,_) (s2,_,_) -> s1 == s2)
+                    $ sortBy (\(s1,_,_) (s2,_,_) -> compare s1 s2) allEdges
+  in mapMaybe extractIFPattern edgesByParent
+
+extractIFPattern :: [LEdge EdgeAttrs] -> Maybe IFPattern
+extractIFPattern [] = Nothing
+extractIFPattern edges@((parentNode,_,_):_) =
+  let -- Find edges by label
+      findEdge lbl = find (\(_,_,attrs) -> attrs.edgeLabel == Just lbl) edges
+      condEdge = findEdge "IF"
+      thenEdge = findEdge "THEN"
+      elseEdge = findEdge "ELSE"
+  in case condEdge of
+       Just (_,condNode,_) ->
+         -- We have an IF pattern
+         let thenNode = (\(_,n,_) -> n) <$> thenEdge
+             elseNode = (\(_,n,_) -> n) <$> elseEdge
+         in Just $ IFPattern parentNode condNode thenNode elseNode
+       Nothing -> Nothing
 
 -- ============================================================================
 -- Edge configuration helpers
@@ -265,8 +307,35 @@ isRight (Left _) = False
 -- GraphViz rendering
 -- ============================================================================
 
-graphToDot :: EvalGraph -> GV.DotGraph Node
-graphToDot graph =
+-- | Add invisible ordering edges for IF/THEN/ELSE layout
+addIFOrderingEdges :: [IFPattern] -> [LEdge EdgeAttrs]
+addIFOrderingEdges patterns =
+  concatMap makeOrderingEdges patterns
+  where
+    makeOrderingEdges (IFPattern _ cond mThen mElse) =
+      let -- Create invisible edges to force left-to-right layout: IF -> THEN -> ELSE
+          invisEdgeAttrs = EdgeAttrs
+            { edgeLabel = Nothing
+            , edgeColor = "#000000"
+            , edgeStyle = "invis"
+            , edgeDir = Nothing
+            }
+          -- Chain: condition -> then -> else (only for nodes that exist)
+          edges1 = case mThen of
+            Just thenNode -> [(cond, thenNode, invisEdgeAttrs)]
+            Nothing -> []
+          edges2 = case (mThen, mElse) of
+            (Just thenNode, Just elseNode) -> [(thenNode, elseNode, invisEdgeAttrs)]
+            (Nothing, Just elseNode) -> [(cond, elseNode, invisEdgeAttrs)]
+            _ -> []
+      in edges1 ++ edges2
+
+graphToDot :: EvalGraph -> [IFPattern] -> GV.DotGraph Node
+graphToDot graph ifPatterns =
+  let -- Add invisible ordering edges for IF patterns
+      orderingEdges = addIFOrderingEdges ifPatterns
+      graphWithOrdering = FGL.insEdges orderingEdges graph
+  in
   let params = GV.nonClusteredParams
         { GV.globalAttributes =
             [ GV.GraphAttrs [GV.RankDir GV.FromTop]
@@ -291,15 +360,15 @@ graphToDot graph =
                   then GV.RGB 44 160 44
                   else GV.RGB 153 153 153  -- #999999
                 baseAttrs =
-                  [ GV.Color [GV.toWColor color]
+                  [ GV.Color [GV.toWC color]
                   , GV.PenWidth 2
                   , GV.FontSize 10
                   ]
                 labelAttr = maybe [] (\lbl -> [GV.Label (GV.StrLabel (Text.Lazy.fromStrict lbl))]) attrs.edgeLabel
                 dirAttr = maybe [] (\d -> [GV.Dir (if d == "back" then GV.Back else GV.Forward)]) attrs.edgeDir
-                styleAttr = if attrs.edgeStyle == "dashed"
-                  then [GV.Style [GV.SItem GV.Dashed []]]
+                styleAttr = if attrs.edgeStyle == "dashed" || attrs.edgeStyle == "invis"
+                  then [GV.Style [GV.SItem (if attrs.edgeStyle == "invis" then GV.Invisible else GV.Dashed) []]]
                   else []
             in baseAttrs ++ labelAttr ++ dirAttr ++ styleAttr
         }
-  in GV.graphToDot params graph
+  in GV.graphToDot params graphWithOrdering

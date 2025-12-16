@@ -36,6 +36,7 @@ import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
 import qualified L4.EvaluateLazy.GraphViz as GraphViz
+import qualified L4.EvaluateLazy.GraphViz2 as GraphViz2
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
 import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
@@ -196,7 +197,7 @@ main = do
   baseRecorder <- makeDefaultStderrRecorder Nothing
   let recorder = cmapWithPrio pretty baseRecorder
       -- In graphviz mode, suppress LSP diagnostics to keep output clean
-      oneshotRecorder = if options.outputGraphViz
+      oneshotRecorder = if options.outputGraphViz || options.outputGraphViz2
                           then cmapWithPrio IdeLog mempty  -- Null recorder
                           else cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
@@ -314,16 +315,23 @@ main = do
           forM_ mEval $ \evalResults -> do
             if options.outputGraphViz
               then do
-                -- In graphviz mode, only output DOT format to stdout
+                -- In graphviz mode (original), only output DOT format to stdout
                 for_ evalResults $ \result ->
                   case result.trace of
                     Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
                     Nothing -> pure ()
-              else do
-                -- In normal mode, log evaluation results
-                for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
-                  let rendered = renderEvalOutput options.traceText idx evalResult
-                  logWith recorder Info $ EvalOutput rendered
+              else if options.outputGraphViz2
+                then do
+                  -- In graphviz2 mode (new FGL-based), only output DOT format to stdout
+                  for_ evalResults $ \result ->
+                    case result.trace of
+                      Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz GraphViz2.defaultGraphVizOptions tr
+                      Nothing -> pure ()
+                else do
+                  -- In normal mode, log evaluation results
+                  for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
+                    let rendered = renderEvalOutput options.traceText idx evalResult
+                    logWith recorder Info $ EvalOutput rendered
           case (mtc, mep) of
             (Just tcRes, Just ep)
               | tcRes.success -> do
@@ -337,7 +345,7 @@ main = do
                         logWith recorder Info $ ShowAst (showFn ast)
                       Nothing -> pure ()
                   -- Don't log success message in graphviz mode (keeps output clean)
-                  unless (options.verbose || options.showAst || options.outputGraphViz) $
+                  unless (options.verbose || options.showAst || options.outputGraphViz || options.outputGraphViz2) $
                     logWith recorder Info SuccessOnly
             (_, _)            -> do
               logWith    recorder Error $ CheckFailed uri
@@ -374,6 +382,7 @@ data Options = MkOptions
   , showAst :: Bool
   , traceText :: TraceTextMode
   , outputGraphViz :: Bool
+  , outputGraphViz2 :: Bool
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
@@ -386,7 +395,8 @@ optionsDescription = MkOptions
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
   <*> option traceTextModeReader (long "trace" <> short 't' <> metavar "MODE" <> value TraceTextFull <> showDefaultWith renderTraceTextMode <> help "Trace text output: none | full (default full)")
-  <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format")
+  <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
+  <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
   <*> optional (Options.strOption (long "format" <> short 'f' <> metavar "FORMAT" <> help "Input/output format (json|yaml|csv); required when reading from stdin"))
