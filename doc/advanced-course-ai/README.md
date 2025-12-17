@@ -17,6 +17,7 @@ This course covers the full stack of production L4 development:
 - **Regression testing** and change control
 - **Multi-file architecture** for large projects
 - **Legacy system migration** from Oracle Policy Modeling
+- **LLM-powered semantic parsing** for natural language interfaces [planned]
 
 By the end of this course, you'll be able to build enterprise-grade legal systems that integrate with modern software stacks.
 
@@ -195,23 +196,47 @@ Before starting this course, you should:
 
 ---
 
+### Module A10: LLM-Powered Semantic Parser / Chatbot [PLANNED]
+
+**What you'll learn:**
+
+- Building an LLM-powered interface to the L4 decision service
+- Semantic parsing: converting natural language queries to function calls
+- Function discovery and argument extraction with prompt engineering
+- Displaying evaluation traces and visualizations to users
+- Structured interaction patterns vs. free-form chatbots
+- Error handling, confidence thresholds, and fallback strategies
+- Integration with OpenRouter, OpenAI, or Anthropic APIs
+
+**Key takeaway:** Create an intelligent natural language interface where users can ask questions in plain English and get structured answers from L4 reasoners.
+
+**Status:** Planned module. Related materials exist:
+
+- [README-AI-QUERYING.md](../../README-AI-QUERYING.md) - Shows how L4 can call LLMs (opposite direction)
+- [proposal-jl4-nl-query-mar-24-2025.md](../proposal-jl4-nl-query-mar-24-2025.md) - Design proposal for semantic parser approach
+- Module A4 (Decision Service APIs) and Module A6 (JSON Integration) provide foundational knowledge
+
+**Contributions welcome!** This would be a valuable addition to the course.
+
+---
+
 ## Learning Paths
 
 ### Path 1: Full Stack Legal Engineer (All Modules)
 
 Complete all modules in sequence for comprehensive mastery.
 
-**Timeline:** 4-6 weeks
+**Timeline:** 4-6 weeks (Module A10 adds 1 week when available)
 **Best for:** Developers building enterprise legal systems from scratch
 
 ---
 
-### Path 2: API Integration Specialist (A1, A4, A6)
+### Path 2: API Integration Specialist (A1, A4, A6, A10)
 
-Focus on integrating L4 with existing systems.
+Focus on integrating L4 with existing systems and user interfaces.
 
-**Timeline:** 1-2 weeks
-**Best for:** Backend developers integrating L4 into existing applications
+**Timeline:** 1-2 weeks (+ 1 week for A10 when available)
+**Best for:** Backend developers integrating L4 into existing applications, building chatbots and conversational interfaces
 
 ---
 
@@ -439,6 +464,12 @@ Under the following terms:
 ---
 
 ## Changelog
+
+### Version 1.1 (2025-12-17)
+
+- Added Module A10 (LLM-Powered Semantic Parser / Chatbot) as planned module
+- Updated learning paths to include A10
+- Noted related materials (README-AI-QUERYING.md, proposal document)
 
 ### Version 1.0 (2024-12-01)
 
