@@ -61,6 +61,8 @@ import L4.Syntax
 import qualified L4.TypeCheck as TypeCheck
 import L4.TypeCheck.Types (EntityInfo)
 import L4.EvaluateLazy.ContractFrame
+import L4.TracePolicy (TracePolicy)
+import qualified L4.TracePolicy as TracePolicy
 import L4.Utils.Ratio
 import Text.Read (readMaybe)
 import qualified Data.Scientific as Sci
@@ -167,6 +169,7 @@ data Machine a where
   GetTemporalContext :: Machine TemporalContext
   PutTemporalContext :: TemporalContext -> Machine ()
   GetModuleUri :: Machine NormalizedUri
+  GetTracePolicy :: Machine TracePolicy
   PokeThunk :: Reference
     -> (ThreadId -> Thunk -> (Thunk, a))
     -> Machine a
@@ -2111,16 +2114,28 @@ evalTopDecl _env (Import _ann _import_) =
   pure []
 
 evalDirective :: Environment -> Directive Resolved -> Machine [EvalDirective]
-evalDirective env (LazyEval ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False False expr env]
-evalDirective env (LazyEvalTrace ann expr) =
-  pure [MkEvalDirective (rangeOf ann) True False expr env]
+evalDirective env (LazyEval ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evalDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace False expr env]
+evalDirective env (LazyEvalTrace ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evaltraceDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace False expr env]
 evalDirective _env (Check _ann _expr) =
   pure []
 evalDirective env (Contract ann expr t evs) =
   evalDirective env . LazyEval ann =<< contractToEvalDirective expr t evs
-evalDirective env (Assert ann expr) =
-  pure [MkEvalDirective (rangeOf ann) False True expr env]
+evalDirective env (Assert ann expr) = do
+  tracePolicy <- GetTracePolicy
+  let shouldTrace = case tracePolicy.evalDirectiveTrace of
+        TracePolicy.NoTrace -> False
+        TracePolicy.CollectTrace _ -> True
+  pure [MkEvalDirective (rangeOf ann) shouldTrace True expr env]
 
 contractToEvalDirective :: Expr Resolved -> Expr Resolved -> [Expr Resolved] -> Machine (Expr Resolved)
 contractToEvalDirective contract t evs = do

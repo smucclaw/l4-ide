@@ -50,7 +50,7 @@ behavior (currently tools still use direct option fields).
 -}
 module L4.TracePolicy where
 
-import qualified L4.EvaluateLazy.GraphViz2 as GraphViz2
+import L4.EvaluateLazy.GraphVizOptions (GraphVizOptions)
 
 -- | Unified trace policy that determines when and how to collect/display traces
 data TracePolicy = TracePolicy
@@ -69,7 +69,7 @@ data TraceLevel
 data TraceOptions = TraceOptions
   { outputFormat :: TraceFormat         -- ^ How to format the trace
   , outputDest :: TraceDestination      -- ^ Where to send the output
-  , graphVizOpts :: GraphViz2.GraphVizOptions  -- ^ GraphViz-specific options
+  , graphVizOpts :: GraphVizOptions     -- ^ GraphViz-specific options
   }
   deriving (Eq, Show)
 
@@ -101,7 +101,7 @@ cliDefaultPolicy = TracePolicy
   }
 
 -- | REPL default: Full trace collection for exploration
-replDefaultPolicy :: GraphViz2.GraphVizOptions -> TracePolicy
+replDefaultPolicy :: GraphVizOptions -> TracePolicy
 replDefaultPolicy gvOpts = TracePolicy
   { evalDirectiveTrace = CollectTrace (TraceOptions TextTrace Stdout gvOpts)
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace Stdout gvOpts)
@@ -115,21 +115,21 @@ apiDefaultPolicy = TracePolicy
   }
 
 -- | LSP default: Avoid editor noise
-lspDefaultPolicy :: GraphViz2.GraphVizOptions -> TracePolicy
+lspDefaultPolicy :: GraphVizOptions -> TracePolicy
 lspDefaultPolicy gvOpts = TracePolicy
   { evalDirectiveTrace = NoTrace
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace ApiResponse gvOpts)
   }
 
 -- | Helper: Enable text tracing for EVALTRACE directives
-withTextTrace :: GraphViz2.GraphVizOptions -> TracePolicy
+withTextTrace :: GraphVizOptions -> TracePolicy
 withTextTrace gvOpts = TracePolicy
   { evalDirectiveTrace = NoTrace
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions TextTrace Stdout gvOpts)
   }
 
 -- | Helper: Enable GraphViz output for EVALTRACE directives
-withGraphViz :: TraceFormat -> Maybe FilePath -> GraphViz2.GraphVizOptions -> TracePolicy
+withGraphViz :: TraceFormat -> Maybe FilePath -> GraphVizOptions -> TracePolicy
 withGraphViz format mOutputDir gvOpts = TracePolicy
   { evalDirectiveTrace = NoTrace
   , evaltraceDirectiveTrace = CollectTrace (TraceOptions format dest gvOpts)
@@ -140,7 +140,7 @@ withGraphViz format mOutputDir gvOpts = TracePolicy
       Just dir -> FilesOnly dir
 
 -- | Helper: Trace everything (for debugging)
-traceAll :: TraceFormat -> TraceDestination -> GraphViz2.GraphVizOptions -> TracePolicy
+traceAll :: TraceFormat -> TraceDestination -> GraphVizOptions -> TracePolicy
 traceAll format dest gvOpts =
   let traceOpts = TraceOptions format dest gvOpts
   in TracePolicy

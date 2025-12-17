@@ -19,6 +19,7 @@ import qualified Data.Text.Lazy as Text.Lazy
 import Control.Applicative ((<|>))
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
+import L4.EvaluateLazy.GraphVizOptions (GraphVizOptions(..), defaultGraphVizOptions)
 import L4.Evaluate.ValueLazy (NF(..))
 import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Module(..), TopDecl(..), Decide(..), Section(..), AppForm(..), LocalDecl(..), Unique, getUnique, Desc, getDesc, annDesc)
 import L4.Print (prettyLayout)
@@ -31,29 +32,8 @@ import qualified Data.Graph.Inductive.PatriciaTree as FGL
 import qualified Data.GraphViz as GV
 import qualified Data.GraphViz.Attributes.Complete as GV
 
--- | Options for controlling GraphViz output
-data GraphVizOptions = GraphVizOptions
-  { includeValues :: Bool
-  , showUnevaluated :: Bool
-  , simplifyTrivial :: Bool
-  , maxDepth :: Maybe Int
-  -- Optimization flags
-  , collapseFunctionLookups :: Bool
-  , collapseSimplePaths :: Bool
-  , deduplicateBindings :: Bool  -- Merge nodes for shared WHERE/LET bindings
-  } deriving (Eq, Show)
-
-defaultGraphVizOptions :: GraphVizOptions
-defaultGraphVizOptions = GraphVizOptions
-  { includeValues = True
-  , showUnevaluated = True
-  , simplifyTrivial = False
-  , maxDepth = Nothing
-  -- Optimizations disabled by default (show full trace)
-  , collapseFunctionLookups = False
-  , collapseSimplePaths = False
-  , deduplicateBindings = True  -- Enable by default (safe, rarely triggers)
-  }
+-- GraphVizOptions is now imported from L4.EvaluateLazy.GraphVizOptions
+-- and re-exported above to maintain backward compatibility
 
 -- | Node attributes for rendering
 data NodeAttrs = NodeAttrs

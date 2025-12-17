@@ -13,6 +13,7 @@ import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Machine (EvalException)
 import L4.EvaluateLazy.Trace
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
+import L4.TracePolicy (apiDefaultPolicy)
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
@@ -379,7 +380,8 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 
 typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
 typecheckModule file input moduleContext = do
-  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
@@ -394,7 +396,8 @@ typecheckModule file input moduleContext = do
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
 evaluateModule file input moduleContext = do
-  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp

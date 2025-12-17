@@ -320,22 +320,28 @@ deduplicateBindingsPass graph =
 
 **Commit**: `2621ca69` - Phase 2: Binding deduplication with structural comparison
 
-### Phase 3: REPL & API Alignment (Infrastructure Complete)
+### Phase 3: REPL & API Alignment ✅ **COMPLETED** (2025-12-17)
 - [x] Add REPL commands: `:trace`, `:tr`, `:tracefile` (already implemented)
 - [x] Add REPL commands: `:info`, `:env`, `:reset` (completed 2025-12-17)
 - [x] Create TracePolicy module (L4.TracePolicy) with unified abstraction
 - [x] Add tool-specific default policies (CLI, REPL, API, LSP)
 - [x] Implement Options -> TracePolicy conversion in CLI
-- [ ] Thread TracePolicy through evaluation pipeline (requires EvaluateLazy changes)
-- [ ] Refactor API to construct and use TracePolicy
-- [ ] Update API documentation
-- [ ] Add API integration tests
+- [x] Thread TracePolicy through evaluation pipeline
+- [x] Break module cycle by extracting GraphVizOptions
+- [ ] Refactor API to construct and use TracePolicy (future work)
+- [ ] Update API documentation (future work)
+- [ ] Add API integration tests (future work)
 
-**Commit**: `02220847` - Add unified TracePolicy infrastructure
+**Commits:**
+- `02220847` - Add unified TracePolicy infrastructure
+- Today - Complete TracePolicy integration into evaluation pipeline
 
-**Status:** The TracePolicy type system is complete and CLI creates policies from options.
-The infrastructure is in place but not yet fully integrated into the evaluation pipeline.
-Current behavior is preserved - tools still use direct option fields for trace control.
+**Status:** TracePolicy is now fully integrated into the evaluation pipeline.
+- Created L4.EvaluateLazy.GraphVizOptions to break module cycle
+- Added TracePolicy to EvalConfig and EvalState
+- Added GetTracePolicy constructor to Machine monad
+- Modified evalDirective to consult TracePolicy for trace decisions
+- CLI tested and working: #EVALTRACE respects tracePolicy.evaltraceDirectiveTrace
 
 ### Phase 4: Documentation & Examples (Week 4)
 - [ ] Write comprehensive trace/graphviz user guide

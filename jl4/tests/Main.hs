@@ -9,6 +9,7 @@ import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified L4.Annotation as JL4
 import qualified L4.EvaluateLazy as JL4Lazy
+import L4.TracePolicy (apiDefaultPolicy)
 import L4.Export (ExportedFunction (..))
 import qualified L4.Export as Export
 import L4.JsonSchema (SchemaContext (..))
@@ -49,7 +50,7 @@ main = do
         fromMaybe (error "Internal: invalid fallback timestamp for JL4 tests")
                   (JL4Lazy.parseFixedNow "2025-01-31T15:45:30Z")
   let chosenNow = maybe (Just fallbackNow) Just envFixed
-  evalConfig <- JL4Lazy.resolveEvalConfig chosenNow
+  evalConfig <- JL4Lazy.resolveEvalConfig chosenNow apiDefaultPolicy
   let examplesRoot = dataDir </> "examples"
   okFiles <- sort <$> globDir1 (compile "ok/**/*.l4") examplesRoot
   librariesFiles <- sort <$> globDir1 (compile "*.l4") (dataDirCore </> "libraries")

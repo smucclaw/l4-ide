@@ -31,6 +31,8 @@ import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
+import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
+import L4.TracePolicy (replDefaultPolicy)
 import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
 import L4.Syntax (Module, Resolved, RawName(..), Unique, rawNameToText, Name(..))
@@ -78,7 +80,9 @@ main :: IO ()
 main = do
   opts <- execParser optionsInfo
   curDir <- getCurrentDirectory
-  evalConfig <- resolveEvalConfig Nothing
+  -- REPL default: enable traces for exploration (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  let tracePolicy = replDefaultPolicy defaultGraphVizOptions
+  evalConfig <- resolveEvalConfig Nothing tracePolicy
   baseRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
   let recorder = if opts.verbose
                  then baseRecorder

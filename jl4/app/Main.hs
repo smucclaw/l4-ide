@@ -265,12 +265,10 @@ main = do
                           then cmapWithPrio IdeLog mempty  -- Null recorder
                           else cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
-  evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
 
   -- Create unified TracePolicy from options (TRACE-GRAPHVIZ-ARCHITECTURE.md)
-  -- NOTE: Currently informational - actual behavior still controlled by Option fields
-  -- Future: Thread this through evaluation pipeline for complete unification
-  let _tracePolicy = optionsToTracePolicy options
+  let tracePolicy = optionsToTracePolicy options
+  evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed) tracePolicy
 
   (getErrs, errRecorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
 
