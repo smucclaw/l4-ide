@@ -10,6 +10,7 @@
 When a WHERE (or future LET/IN) binding is referenced from multiple call sites, the current GraphViz visualizer produces **multiple boxes** with **separate arrows** to each box. This obscures the sharing/memoization semantics.
 
 **Current behavior:**
+
 ```
 ┌─────────┐     ┌─────────┐
 │ caller1 │────▶│ shared  │
@@ -21,6 +22,7 @@ When a WHERE (or future LET/IN) binding is referenced from multiple call sites, 
 ```
 
 **Desired behavior:**
+
 ```
 ┌─────────┐
 │ caller1 │───┐
@@ -32,6 +34,7 @@ When a WHERE (or future LET/IN) binding is referenced from multiple call sites, 
 ```
 
 This matters because:
+
 - L4's WHERE and LET/IN have **lazy evaluation with sharing** (memoization)
 - The visual should reflect that the binding is computed **once** and reused
 - Multiple boxes incorrectly suggest multiple evaluations
