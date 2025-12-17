@@ -459,18 +459,15 @@ traceHeaderSchema = mempty
 ### Integration Tests
 
 1. **Result-only response**:
-
    - Send request with `X-L4-Trace: none`
    - Verify response has empty reasoning tree
    - Verify result value is correct
 
 2. **Full trace response**:
-
    - Send request with `X-L4-Trace: full`
    - Verify response has populated reasoning tree
 
 3. **Default behavior**:
-
    - Send request without header
    - Verify response omits reasoning (default TraceNone)
 

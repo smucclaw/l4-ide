@@ -211,6 +211,7 @@ Before starting this course, you should:
 **Key takeaway:** Create an intelligent natural language interface where users can ask questions in plain English and get structured answers from L4 reasoners.
 
 **Status:** Planned module. Related materials exist:
+
 - [README-AI-QUERYING.md](../../README-AI-QUERYING.md) - Shows how L4 can call LLMs (opposite direction)
 - [proposal-jl4-nl-query-mar-24-2025.md](../proposal-jl4-nl-query-mar-24-2025.md) - Design proposal for semantic parser approach
 - Module A4 (Decision Service APIs) and Module A6 (JSON Integration) provide foundational knowledge

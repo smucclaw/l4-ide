@@ -256,14 +256,12 @@ DECIDE `requires GDPR compliance` IF
 Each library should have comprehensive tests covering:
 
 1. **Jurisdiction Library**
-
    - Code validation (alpha-2, alpha-3, ISO 3166-2 format)
    - Code conversion (alpha-2 ↔ alpha-3)
    - Country name lookup
    - Error handling for unknown codes
 
 2. **Currency Library**
-
    - Amount formatting with correct decimal places
    - Arithmetic operations (add, subtract, multiply, divide)
    - Comparison operations
