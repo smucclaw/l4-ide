@@ -1,9 +1,11 @@
 # Unified Trace & GraphViz Architecture
 
-**Status:** Design Proposal
+**Status:** Phases 1-2 Complete, Phases 3-4 Future Work
 **Author:** Claude (Sonnet 4.5) with Meng Wong
 **Date:** 2025-12-17
+**Updated:** 2025-12-17
 **Problem:** Current trace/graphviz functionality has evolved through "random-walk" resulting in inconsistent interfaces across tools
+**Implementation:** PR #696 (mengwong/graphviz-sharing)
 
 ## Current State (The Baroque Situation)
 
@@ -309,17 +311,23 @@ deduplicateBindingsPass graph =
 
 **Commit**: `dbd2d180` - Phase 1: CLI consolidation - unified GraphViz format control
 
-### Phase 2: Binding Deduplication (Week 2)
-- [ ] Implement `deduplicateBindingsPass` in GraphViz2.hs
-- [ ] Add `deduplicateBindings` option to `GraphVizOptions`
-- [ ] Test with WHERE and LET/IN examples
-- [ ] Update visualizations in docs
+### Phase 2: Binding Deduplication ✅ **COMPLETED** (2025-12-17)
+- [x] Implement `deduplicateBindingsPass` in GraphViz2.hs
+- [x] Add `deduplicateBindings` option to `GraphVizOptions` (default: true)
+- [x] Test with WHERE and LET/IN examples (sharing-complex.l4, sharing-recursive.l4, nested-control-flow.l4)
+- [x] Structural comparison ensures correct merging
+- [x] CLI flags: --deduplicate-bindings (default) and --no-deduplicate-bindings
 
-### Phase 3: REPL & API Alignment (Week 3)
-- [ ] Add REPL commands (`:trace`, `:graphviz`, `:output-dir`)
-- [ ] Refactor API to use unified `TracePolicy` internally
-- [ ] Update API documentation
-- [ ] Add API integration tests
+**Commit**: `2621ca69` - Phase 2: Binding deduplication with structural comparison
+
+### Phase 3: REPL & API Alignment (Partially Complete)
+- [x] Add REPL commands: `:trace`, `:tr`, `:tracefile` (already implemented)
+- [x] Add REPL commands: `:info`, `:env`, `:reset` (completed 2025-12-17)
+- [ ] Refactor API to use unified `TracePolicy` internally (TODO)
+- [ ] Update API documentation (TODO)
+- [ ] Add API integration tests (TODO)
+
+**Note:** REPL trace commands are functional but don't yet use a unified TracePolicy abstraction. API still uses ad-hoc trace parameters.
 
 ### Phase 4: Documentation & Examples (Week 4)
 - [ ] Write comprehensive trace/graphviz user guide
