@@ -133,10 +133,40 @@ main = do
           putStrLn "File loaded successfully."
           runRepl newState
 
+-- | Completion function for tab completion
+completeFunc :: ReplState -> CompletionFunc IO
+completeFunc st = completeWord Nothing " \t" $ \word -> do
+  -- Complete commands starting with :
+  if ":" `isPrefixOf` word
+    then do
+      let commands = [":help", ":h", ":quit", ":q", ":load", ":l", ":reload", ":r",
+                      ":reset", ":type", ":t", ":info", ":env", ":e", ":trace", ":tr",
+                      ":import", ":i", ":imports", ":tracefile"]
+          matches = filter (word `isPrefixOf`) commands
+      pure $ map simpleCompletion matches
+    else do
+      -- Complete names from loaded file environment
+      case st.loadedFile of
+        Nothing -> pure []
+        Just fp -> do
+          let contextUri = normalizedFilePathToUri (toNormalizedFilePath fp)
+          [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+          case mTc of
+            Nothing -> pure []
+            Just tc -> do
+              let env = tc.environment
+                  allNames = Map.keys env
+                  nameTexts = map rawNameToText allNames
+                  matches = filter (\n -> Text.pack word `Text.isPrefixOf` n) nameTexts
+              pure $ map (simpleCompletion . Text.unpack) matches
+
 -- | Run the REPL loop
 runRepl :: ReplState -> IO ()
 runRepl replState = do
-  let settings = defaultSettings { historyFile = Just ".jl4_history" }
+  let settings = (defaultSettings :: Settings IO)
+        { historyFile = Just ".jl4_history"
+        , complete = completeFunc replState
+        }
   runInputT settings (loop replState)
   where
     loop :: ReplState -> InputT IO ()
