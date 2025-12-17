@@ -49,6 +49,7 @@ library
     Backend.Api
     Backend.CodeGen
     Backend.DirectiveFilter
+    Backend.GraphVizRender
     Backend.Jl4
     Examples
     Options
@@ -70,6 +71,7 @@ library
     extra,
     directory,
     http-client,
+    http-types,
     filepath,
     jl4-core,
     jl4-lsp,
@@ -79,6 +81,7 @@ library
     openapi3,
     optics,
     optparse-applicative,
+    process,
     scientific,
     servant >=0.20.2 && <0.21,
     servant-client,

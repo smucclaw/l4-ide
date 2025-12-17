@@ -7,38 +7,526 @@ lazytrace.l4:23:1-36:
   ┌ sum OF (everyOther OF example)
   │┌ everyOther OF example
   ││┌ everyOther
-  ││└ <function>
+  ││└ <function>││• <function>
   │├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   ││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   ││                 WHEN EMPTY THEN EMPTY
   │├ x FOLLOWED BY (everyOther OF ys)
   ││┌ everyOther OF ys
   │││┌ everyOther
-  │││└ <function>
+  │││└ <function>│││• <function>
   ││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   │││                 WHEN EMPTY THEN EMPTY
   ││├ x FOLLOWED BY (everyOther OF ys)
   │││┌ everyOther OF ys
   ││││┌ everyOther
-  ││││└ <function>
+  ││││└ <function>││││• <function>
   │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   ││││                 WHEN EMPTY THEN EMPTY
   │││├ x FOLLOWED BY (everyOther OF ys)
   ││││┌ everyOther OF ys
   │││││┌ everyOther
-  │││││└ <function>
+  │││││└ <function>│││││• <function>
   ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
   │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
   │││││                 WHEN EMPTY THEN EMPTY
   ││││├ EMPTY
-  ││││└ EMPTY
-  │││└ LIST 1
-  ││└ LIST 9, 1
-  │└ LIST 25, 9, 1
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││• LIST 9, 1
+  │└ LIST 25, 9, 1│┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││                 WHEN EMPTY THEN EMPTY
+  │├ x FOLLOWED BY (everyOther OF ys)
+  ││┌ everyOther OF ys
+  │││┌ everyOther
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││• LIST 9, 1
+  │└ LIST 25, 9, 1│┌ x FOLLOWED BY (everyOther OF ys)
+  ││┌ everyOther OF ys
+  │││┌ everyOther
+  │││└ <function>│││• <function>
+  ││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││                 WHEN EMPTY THEN EMPTY
+  ││├ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││┌ x FOLLOWED BY (everyOther OF ys)
+  │││┌ everyOther OF ys
+  ││││┌ everyOther
+  ││││└ <function>││││• <function>
+  │││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  ││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  ││││                 WHEN EMPTY THEN EMPTY
+  │││├ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││┌ x FOLLOWED BY (everyOther OF ys)
+  ││││┌ everyOther OF ys
+  │││││┌ everyOther
+  │││││└ <function>│││││• <function>
+  ││││├ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ CONSIDER list WHEN x FOLLOWED BY y FOLLOWED BY ys THEN x FOLLOWED BY (everyOther OF ys),
+  │││││                 WHEN x FOLLOWED BY EMPTY THEN LIST x,
+  │││││                 WHEN EMPTY THEN EMPTY
+  ││││├ EMPTY
+  ││││└ EMPTY││││┌ EMPTY
+  ││││└ EMPTY││││• EMPTY
+  │││└ LIST 1│││• LIST 1
+  ││└ LIST 9, 1││• LIST 9, 1
+  │└ LIST 25, 9, 1│• LIST 25, 9, 1
   │┌ sum
-  │└ <function>
+  │└ <function>│• <function>
   ├   go OF 0, list
   │ WHERE
   │   GIVEN acc
@@ -48,29 +536,190 @@ lazytrace.l4:23:1-36:
   │                  WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF 0, list
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 25
+  │└ 25│• 25
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 34
+  │└ 34│• 34
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ go OF (acc PLUS x), xs
   │┌ acc PLUS x
-  │└ 35
+  │└ 35│• 35
   │┌ go
-  │└ <function>
+  │└ <function>│• <function>
   ├ CONSIDER l WHEN EMPTY THEN acc,
   │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
   ├ acc
-  └ 35
+  └ 35┌   go OF 0, list
+  │ WHERE
+  │   GIVEN acc
+  │         l
+  │   DECIDE go acc l IS
+  │     CONSIDER l WHEN EMPTY THEN acc,
+  │                  WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF 0, list
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 25│• 25
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ go OF 0, list
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 25│• 25
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 25│• 25
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 25│• 25
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 34│• 34
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ go OF (acc PLUS x), xs
+  │┌ acc PLUS x
+  │└ 35│• 35
+  │┌ go
+  │└ <function>│• <function>
+  ├ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ CONSIDER l WHEN EMPTY THEN acc,
+  │              WHEN x FOLLOWED BY xs THEN go OF (acc PLUS x), xs
+  ├ acc
+  └ 35┌ acc
+  └ 35• 35

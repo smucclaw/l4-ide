@@ -8,6 +8,8 @@ module Backend.Api (
 ) where
 
 import Control.Monad.Trans.Except (ExceptT)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.KeyMap as Aeson
@@ -24,6 +26,7 @@ import qualified Data.Vector as V
 import GHC.Generics (Generic)
 import Optics.Cons
 import Servant.API
+import Data.OpenApi (ToSchema)
 
 type FunctionName = Text
 
@@ -95,6 +98,8 @@ newtype RunFunction = RunFunction
       -- If this filter is 'Nothing', we do not filter anything.
       TraceLevel ->
       -- ^ Control whether to return full trace or just result
+      Bool ->
+      -- ^ Include GraphViz DOT output (only meaningful when trace level is full)
       ExceptT EvaluatorError IO ResponseWithReason
   }
 
@@ -112,12 +117,33 @@ data FunctionDeclaration = FunctionDeclaration
   -- ^ How to translate 'short' names to their 'long' counter part.
   }
 
+data GraphVizResponse = GraphVizResponse
+  { dot :: Text
+    -- ^ Raw DOT text for callers who want to render or post-process traces themselves.
+  , png :: Maybe Text
+    -- ^ Relative URL to the PNG endpoint (e.g. @/functions/foo/evaluation/trace.png@).
+    --   The server regenerates the image on every request so evaluation responses stay pure.
+  , svg :: Maybe Text
+    -- ^ Relative URL to the SVG endpoint (same contract as 'png').
+  }
+  deriving (Show, Read, Ord, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 data ResponseWithReason = ResponseWithReason
   { values :: [(Text, FnLiteral)]
   , reasoning :: Reasoning
+  , graphviz :: Maybe GraphVizResponse
   }
   deriving (Show, Read, Ord, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
+newtype PngImage = PngImage {unPngImage :: BS.ByteString}
+
+instance MimeRender OctetStream PngImage where
+  mimeRender _ (PngImage bs) = BL.fromStrict bs
+
+instance MimeUnrender OctetStream PngImage where
+  mimeUnrender _ lbs = Right $ PngImage (BL.toStrict lbs)
 
 -- | Wrap our reasoning into a top-level field.
 newtype Reasoning = Reasoning

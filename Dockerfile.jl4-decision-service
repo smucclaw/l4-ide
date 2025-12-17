@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libgmp10 \
     libffi8 \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -83,7 +83,7 @@ instance Arbitrary ReasoningTree where
         Q.shuffle (first : rest)
 
 instance Arbitrary ResponseWithReason where
-  arbitrary = ResponseWithReason <$> arbitrary <*> pure emptyTree
+  arbitrary = ResponseWithReason <$> arbitrary <*> pure emptyTree <*> pure Nothing  -- Exclude GraphViz from QuickCheck
 
 instance Arbitrary EvaluatorError where
   arbitrary = Q.oneof [InterpreterError <$> arbitrary]
@@ -159,6 +159,7 @@ instance Arbitrary OutputCase where
     OutputCase
       <$> arbitrary
       <*> arbitrary
+      <*> pure Nothing  -- Exclude GraphViz from QuickCheck
 
 instance Arbitrary OutputSummary where
   arbitrary =

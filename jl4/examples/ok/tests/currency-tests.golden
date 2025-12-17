@@ -1,0 +1,153 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+currency-tests.l4:8:1-23:
+  "USD"
+currency-tests.l4:9:1-18:
+  "EUR"
+currency-tests.l4:10:1-27:
+  "GBP"
+currency-tests.l4:11:1-26:
+  "JPY"
+currency-tests.l4:12:1-25:
+  "CHF"
+currency-tests.l4:13:1-29:
+  "CAD"
+currency-tests.l4:14:1-31:
+  "AUD"
+currency-tests.l4:15:1-30:
+  "SGD"
+currency-tests.l4:18:1-27:
+  2
+currency-tests.l4:19:1-22:
+  2
+currency-tests.l4:20:1-30:
+  0
+currency-tests.l4:21:1-34:
+  0
+currency-tests.l4:24:1-42:
+  RIGHT OF 2
+currency-tests.l4:25:1-42:
+  RIGHT OF 2
+currency-tests.l4:26:1-42:
+  RIGHT OF 2
+currency-tests.l4:27:1-42:
+  RIGHT OF 0
+currency-tests.l4:28:1-42:
+  RIGHT OF 2
+currency-tests.l4:29:1-42:
+  LEFT OF "Unknown currency code: XXX"
+currency-tests.l4:32:1-26:
+  RIGHT OF "100.00 USD"
+currency-tests.l4:33:1-25:
+  RIGHT OF "50.00 EUR"
+currency-tests.l4:34:1-25:
+  RIGHT OF "1000 JPY"
+currency-tests.l4:35:1-27:
+  RIGHT OF "1234.56 GBP"
+currency-tests.l4:36:1-23:
+  RIGHT OF "0.99 USD"
+currency-tests.l4:37:1-22:
+  RIGHT OF "0.01 USD"
+currency-tests.l4:38:1-22:
+  RIGHT OF "0.00 USD"
+currency-tests.l4:39:1-26:
+  LEFT OF "Unknown currency code: XXX"
+currency-tests.l4:42:1-26:
+  LEFT OF "Minor units must be an integer"
+currency-tests.l4:45:1-39:
+  RIGHT OF 10000
+currency-tests.l4:46:1-40:
+  RIGHT OF 5050
+currency-tests.l4:47:1-40:
+  RIGHT OF 1000
+currency-tests.l4:48:1-42:
+  RIGHT OF 12345
+currency-tests.l4:51:1-41:
+  RIGHT OF 100
+currency-tests.l4:52:1-40:
+  RIGHT OF 50.5
+currency-tests.l4:53:1-40:
+  RIGHT OF 1000
+currency-tests.l4:54:1-41:
+  RIGHT OF 123.45
+currency-tests.l4:57:1-35:
+  RIGHT OF 15000
+currency-tests.l4:58:1-34:
+  RIGHT OF 3000
+currency-tests.l4:59:1-29:
+  RIGHT OF 100
+currency-tests.l4:62:1-40:
+  RIGHT OF 5000
+currency-tests.l4:63:1-40:
+  RIGHT OF -5000
+currency-tests.l4:64:1-36:
+  RIGHT OF 1
+currency-tests.l4:67:1-37:
+  RIGHT OF 20000
+currency-tests.l4:68:1-39:
+  RIGHT OF 15000
+currency-tests.l4:69:1-39:
+  RIGHT OF 1000
+currency-tests.l4:70:1-40:
+  RIGHT OF 11500
+currency-tests.l4:71:1-38:
+  RIGHT OF 1500
+currency-tests.l4:74:1-35:
+  RIGHT OF 5000
+currency-tests.l4:75:1-35:
+  RIGHT OF 3333
+currency-tests.l4:76:1-33:
+  RIGHT OF 33
+currency-tests.l4:77:1-35:
+  LEFT OF "Cannot divide by zero"
+currency-tests.l4:78:1-34:
+  RIGHT OF 500
+currency-tests.l4:81:1-32:
+  TRUE
+currency-tests.l4:82:1-31:
+  FALSE
+currency-tests.l4:83:1-38:
+  TRUE
+currency-tests.l4:84:1-38:
+  FALSE
+currency-tests.l4:85:1-35:
+  TRUE
+currency-tests.l4:86:1-35:
+  FALSE
+currency-tests.l4:87:1-35:
+  TRUE
+currency-tests.l4:88:1-34:
+  TRUE
+currency-tests.l4:89:1-34:
+  FALSE
+currency-tests.l4:90:1-34:
+  TRUE
+currency-tests.l4:91:1-33:
+  TRUE
+currency-tests.l4:92:1-33:
+  FALSE
+currency-tests.l4:95:1-37:
+  TRUE
+currency-tests.l4:96:1-37:
+  TRUE
+currency-tests.l4:97:1-37:
+  FALSE
+currency-tests.l4:98:1-36:
+  FALSE
+currency-tests.l4:99:1-38:
+  FALSE
+currency-tests.l4:101:1-30:
+  TRUE
+currency-tests.l4:102:1-26:
+  TRUE
+currency-tests.l4:103:1-31:
+  FALSE
+currency-tests.l4:105:1-26:
+  TRUE
+currency-tests.l4:106:1-22:
+  TRUE
+currency-tests.l4:107:1-22:
+  FALSE
+currency-tests.l4:108:1-27:
+  FALSE

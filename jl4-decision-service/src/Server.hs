@@ -54,12 +54,13 @@ module Server (
 import Base
 import Backend.Api as Api
 import qualified Backend.Jl4 as Jl4
+import Backend.GraphVizRender (isGraphVizAvailable, renderPNG, renderSVG)
 
 import qualified Chronos
 import Control.Applicative
 import Control.Concurrent.Async (forConcurrently)
 import Control.Concurrent.STM
-import Control.Exception (evaluate, displayException)
+import Control.Exception (displayException, evaluate)
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey, (.:), (.:?), (.=), (.!=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Combinators.Decode (Decoder)
@@ -67,6 +68,7 @@ import qualified Data.Aeson.Combinators.Decode as ACD
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Fixed
 import Data.Int
 import qualified Data.Map.Strict as Map
@@ -79,6 +81,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Tuple.Extra as Tuple
 import qualified GHC.Clock as Clock
 import GHC.TypeLits
+import qualified Network.HTTP.Types.URI as URI
 import Servant
 import System.Timeout (timeout)
 import Servant.Client.Core.HasClient
@@ -175,9 +178,30 @@ data SingleFunctionApi' mode = SingleFunctionApi
           :> Summary "Evaluate a function with arguments"
           :> Header "X-L4-Trace" Text
           :> QueryParam "trace" Api.TraceLevel
+          :> QueryParam "graphviz" Bool
           :> ReqBody '[JSON] FnArguments
           :> OperationId "evalFunction"
           :> Post '[JSON] SimpleResponse
+  , evalFunctionTracePNG ::
+      mode
+        :- "evaluation"
+          :> "trace.png"
+          :> Summary "Render evaluation trace as PNG"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
+          :> ReqBody '[JSON] FnArguments
+          :> OperationId "evalFunctionTracePng"
+          :> Post '[OctetStream] Api.PngImage
+  , evalFunctionTraceSVG ::
+      mode
+        :- "evaluation"
+          :> "trace.svg"
+          :> Summary "Render evaluation trace as SVG"
+          :> Header "X-L4-Trace" Text
+          :> QueryParam "trace" Api.TraceLevel
+          :> ReqBody '[JSON] FnArguments
+          :> OperationId "evalFunctionTraceSvg"
+          :> Post '[PlainText] Text
   , batchFunction ::
       mode
         :- "batch"
@@ -185,6 +209,7 @@ data SingleFunctionApi' mode = SingleFunctionApi
           :> Description "Evaluate a function with a batch of arguments, conforming to Oracle Intelligent Advisor Batch API"
           :> Header "X-L4-Trace" Text
           :> QueryParam "trace" Api.TraceLevel
+          :> QueryParam "graphviz" Bool
           :> ReqBody '[JSON] BatchRequest
           :> Post '[JSON] BatchResponse
   -- ^ Run a function with a "batch" of parameters.
@@ -316,33 +341,48 @@ handler =
                     postFunctionHandler name
                 , deleteFunction =
                     deleteFunctionHandler name
-                , evalFunction = \mTraceHeader mTraceParam ->
-                    evalFunctionHandler name mTraceHeader mTraceParam
-                , batchFunction = \mTraceHeader mTraceParam ->
-                    batchFunctionHandler name mTraceHeader mTraceParam
+                , evalFunction = \mTraceHeader mTraceParam mGraphViz ->
+                    evalFunctionHandler name mTraceHeader mTraceParam mGraphViz
+                , evalFunctionTracePNG = \mTraceHeader mTraceParam ->
+                    evalFunctionTracePngHandler name mTraceHeader mTraceParam
+                , evalFunctionTraceSVG = \mTraceHeader mTraceParam ->
+                    evalFunctionTraceSvgHandler name mTraceHeader mTraceParam
+                , batchFunction = \mTraceHeader mTraceParam mGraphViz ->
+                    batchFunctionHandler name mTraceHeader mTraceParam mGraphViz
                 }
           }
     }
 
-evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM SimpleResponse
-evalFunctionHandler name' mTraceHeader mTraceParam args = do
+evalFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> FnArguments -> AppM SimpleResponse
+evalFunctionHandler name' mTraceHeader mTraceParam mGraphViz args = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
-  functionsTVar <- asks (.functionDatabase)
-  functions <- liftIO $ readTVarIO functionsTVar
+      includeGraphViz = traceLevel == Api.TraceFull && Maybe.fromMaybe False mGraphViz
   let fnArgs = Map.assocs args.fnArguments
-      eval fnImpl = runEvaluatorFor args.fnEvalBackend fnImpl fnArgs Nothing traceLevel
-  case Map.lookup name functions of
-    Nothing -> withUUIDFunction
-        name
-        eval
-        (\k -> throwError (k err404))
-    Just fnImpl -> eval fnImpl
- where
-  name = Text.pack name'
+      name = Text.pack name'
+  runFunctionEval name args.fnEvalBackend fnArgs traceLevel includeGraphViz
 
-batchFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> BatchRequest -> AppM BatchResponse
-batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
+evalFunctionTracePngHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM Api.PngImage
+evalFunctionTracePngHandler name' mTraceHeader mTraceParam args = do
+  dot <- prepareTraceForImage name' mTraceHeader mTraceParam args
+  ensureGraphVizAvailable
+  result <- liftIO $ renderPNG dot
+  case result of
+    Left err -> throwError err500 {errBody = encodeTextLBS err}
+    Right bytes -> pure (Api.PngImage bytes)
+
+evalFunctionTraceSvgHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM Text
+evalFunctionTraceSvgHandler name' mTraceHeader mTraceParam args = do
+  dot <- prepareTraceForImage name' mTraceHeader mTraceParam args
+  ensureGraphVizAvailable
+  result <- liftIO $ renderSVG dot
+  case result of
+    Left err -> throwError err500 {errBody = encodeTextLBS err}
+    Right svgText -> pure svgText
+
+batchFunctionHandler :: String -> Maybe Text -> Maybe Api.TraceLevel -> Maybe Bool -> BatchRequest -> AppM BatchResponse
+batchFunctionHandler name' mTraceHeader mTraceParam mGraphViz batchArgs = do
   let traceLevel = determineTraceLevel mTraceHeader mTraceParam
+      includeGraphViz = traceLevel == Api.TraceFull && Maybe.fromMaybe False mGraphViz
   functionsTVar <- asks (.functionDatabase)
   functions <- liftIO $ readTVarIO functionsTVar
   case Map.lookup name functions of
@@ -356,7 +396,7 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
           args = Map.assocs $ fmap Just inputCase.attributes
 
         -- Note: runEvaluatorFor is now run concurrently across all cases
-        r <- runAppM env (runEvaluatorFor Nothing fnImpl args outputFilter traceLevel)
+        r <- runAppM env (runEvaluatorFor Nothing fnImpl args outputFilter traceLevel includeGraphViz)
         pure (inputCase.id, r)
 
       -- Check for fatal ServerError exceptions (timeout, missing backend) and propagate them
@@ -367,7 +407,8 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
 
       -- Only process successful responses and per-case evaluation errors
       let
-        responses = [(rid, simpleResp) | (rid, Right simpleResp) <- evalResults]
+        attachLinks = tagGraphVizPaths name
+        responses = [(rid, attachLinks simpleResp) | (rid, Right simpleResp) <- evalResults]
         nCases = length responses
 
         successfulRuns =
@@ -387,6 +428,7 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
               [ OutputCase
                 { id = rid
                 , attributes = Map.fromList response.values
+                , graphviz = response.graphviz
                 }
               | (rid, response) <- successfulRuns
               ]
@@ -415,8 +457,8 @@ batchFunctionHandler name' mTraceHeader mTraceParam batchArgs = do
   nsToS :: Chronos.Timespan -> Centi
   nsToS n = (realToFrac @Int @Centi $ fromIntegral @Int64 @Int (Chronos.getTimespan n)) / 10e9
 
-runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> Api.TraceLevel -> AppM SimpleResponse
-runEvaluatorFor engine validatedFunc args outputFilter traceLevel = do
+runEvaluatorFor :: Maybe EvalBackend -> ValidatedFunction -> [(Text, Maybe FnLiteral)] -> Maybe (Set Text) -> Api.TraceLevel -> Bool -> AppM SimpleResponse
+runEvaluatorFor engine validatedFunc args outputFilter traceLevel includeGraphViz = do
   eval <- evaluationEngine evalBackend validatedFunc
   evaluationResult <-
     timeoutAction $
@@ -425,6 +467,7 @@ runEvaluatorFor engine validatedFunc args outputFilter traceLevel = do
             args
             outputFilter
             traceLevel
+            includeGraphViz
         )
 
   case evaluationResult of
@@ -432,6 +475,83 @@ runEvaluatorFor engine validatedFunc args outputFilter traceLevel = do
     Right r -> pure $ SimpleResponse r
  where
   evalBackend = Maybe.fromMaybe JL4 engine
+
+runFunctionEval :: Text -> Maybe EvalBackend -> [(Text, Maybe FnLiteral)] -> Api.TraceLevel -> Bool -> AppM SimpleResponse
+runFunctionEval name engine fnArgs traceLevel includeGraphViz = do
+  functionsTVar <- asks (.functionDatabase)
+  functions <- liftIO $ readTVarIO functionsTVar
+  let evalFn fnImpl = runEvaluatorFor engine fnImpl fnArgs Nothing traceLevel includeGraphViz
+  case Map.lookup name functions of
+    Nothing ->
+      withUUIDFunction
+        name
+        (\fnImpl -> do
+            resp <- evalFn fnImpl
+            pure (tagGraphVizPaths name resp)
+        )
+        (\k -> throwError (k err404))
+    Just fnImpl -> do
+      resp <- evalFn fnImpl
+      pure (tagGraphVizPaths name resp)
+
+-- | Stamp relative PNG/SVG URLs onto a GraphViz payload so the client knows
+-- where to fetch ready-made images. We intentionally keep these as URLs
+-- instead of embedding image bytes so the main evaluation endpoint stays
+-- side-effect-free; the PNG/SVG routes simply rerun the same evaluation via
+-- their own handlers whenever the client follows the link.
+tagGraphVizPaths :: Text -> SimpleResponse -> SimpleResponse
+tagGraphVizPaths name = \ case
+  SimpleResponse ResponseWithReason{values = vals, reasoning = rsn, graphviz = mGraphViz} ->
+    SimpleResponse
+      ResponseWithReason
+        { values = vals
+        , reasoning = rsn
+        , graphviz = graphVizLinksFor name <$> mGraphViz
+        }
+  err -> err
+
+graphVizLinksFor :: Text -> Api.GraphVizResponse -> Api.GraphVizResponse
+graphVizLinksFor name resp =
+  resp
+    { png = Just (graphVizRelativeLink name "trace.png")
+    , svg = Just (graphVizRelativeLink name "trace.svg")
+    }
+
+graphVizRelativeLink :: Text -> Text -> Text
+graphVizRelativeLink name suffix =
+  "/functions/" <> encodePathSegment name <> "/evaluation/" <> suffix
+
+encodePathSegment :: Text -> Text
+encodePathSegment =
+  Text.decodeUtf8 . URI.urlEncode False . Text.encodeUtf8
+
+prepareTraceForImage :: String -> Maybe Text -> Maybe Api.TraceLevel -> FnArguments -> AppM Text
+prepareTraceForImage name' mTraceHeader mTraceParam args = do
+  let requestedTrace = determineTraceLevel mTraceHeader mTraceParam
+  requireFullTrace requestedTrace
+  let name = Text.pack name'
+      fnArgs = Map.assocs args.fnArguments
+  simpleResp <- runFunctionEval name args.fnEvalBackend fnArgs Api.TraceFull True
+  case simpleResp of
+    SimpleError evalErr -> throwError err500 {errBody = Aeson.encode evalErr}
+    SimpleResponse resp ->
+      case resp.graphviz of
+        Nothing -> throwError err500 {errBody = encodeTextLBS "Trace data unavailable"}
+        Just gv -> pure gv.dot
+
+requireFullTrace :: Api.TraceLevel -> AppM ()
+requireFullTrace lvl =
+  when (lvl /= Api.TraceFull) $
+    throwError err400 {errBody = encodeTextLBS "GraphViz rendering endpoints require trace=full"}
+
+ensureGraphVizAvailable :: AppM ()
+ensureGraphVizAvailable = do
+  available <- liftIO isGraphVizAvailable
+  unless available $
+    throwError err503 {errBody = encodeTextLBS "GraphViz 'dot' command not found in PATH. Install graphviz to enable image rendering."}
+
+encodeTextLBS :: Text -> LBS.ByteString
+encodeTextLBS = LBS.fromStrict . Text.encodeUtf8
 
 deleteFunctionHandler :: String -> AppM ()
 deleteFunctionHandler name' = do
@@ -941,6 +1061,7 @@ data InputCase = InputCase
 data OutputCase = OutputCase
   { id :: Id
   , attributes :: Map Text FnLiteral
+  , graphviz :: Maybe Api.GraphVizResponse
   }
   deriving stock (Show, Eq, Ord)
 
@@ -1055,9 +1176,37 @@ casesDecoder :: Decoder OutputCase
 casesDecoder = do
   caseId <- ACD.key "@id" ACD.int
   attributes <- ACD.mapStrict fnLiteralDecoder
+  graphvizTrace <- parseGraphviz attributes
   let
-    attributes' = Map.delete "@id" attributes
-  pure $ OutputCase caseId attributes'
+    attributes' =
+      Map.delete "@graphviz" $
+        Map.delete "@id" attributes
+  pure $ OutputCase caseId attributes' graphvizTrace
+ where
+  parseGraphviz attrs = case Map.lookup "@graphviz" attrs of
+    Nothing -> pure Nothing
+    Just literal -> parseGraphvizLiteral literal
+
+  parseGraphvizLiteral (FnLitString dot) =
+    pure $ Just Api.GraphVizResponse {dot, png = Nothing, svg = Nothing}
+  parseGraphvizLiteral (FnObject fields) = do
+    dotText <- requireTextField "dot" fields
+    let pngText = optionalTextField "png" fields
+        svgText = optionalTextField "svg" fields
+    pure $ Just Api.GraphVizResponse {dot = dotText, png = pngText, svg = svgText}
+  parseGraphvizLiteral other =
+    fail $ "Expected @graphviz to be an object, but got " <> show other
+
+  requireTextField label fields =
+    case lookup label fields of
+      Just (FnLitString t) -> pure t
+      Just v -> fail $ "Expected @graphviz." <> Text.unpack label <> " to be a string, but got " <> show v
+      Nothing -> fail $ "Missing @graphviz." <> Text.unpack label
+
+  optionalTextField label fields =
+    case lookup label fields of
+      Just (FnLitString t) -> Just t
+      _ -> Nothing
 
 summaryDecoder :: Decoder OutputSummary
 summaryDecoder =
@@ -1096,6 +1245,7 @@ outputCaseEncoder oc =
   Aeson.object $
     [ "@id" .= oc.id
     ]
+      <> maybe [] (\dot -> ["@graphviz" .= dot]) oc.graphviz
       <> [ (Aeson.fromText k .= v)
          | (k, v) <- Map.assocs oc.attributes
          ]

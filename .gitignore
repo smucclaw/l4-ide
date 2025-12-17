@@ -58,6 +58,7 @@ yarn-error.log*
 
 # Misc
 .DS_Store
+\.jl4_history
 *.pem
 *~
 *.personalnotes

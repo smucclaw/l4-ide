@@ -29,11 +29,30 @@ type ServerName = Text
 
 serverOpenApi :: Maybe ServerName -> OpenApi
 serverOpenApi serverName =
-  toOpenApi (Proxy :: Proxy Api)
-    & info . title .~ "JL4 Function API"
-    & info . version .~ "1.0"
-    & info . description ?~ "API for invoking JL4 functions"
-    & servers .~ Maybe.maybeToList ((\sName -> Server sName mempty mempty) <$> serverName)
+  annotateGraphVizParams $
+    toOpenApi (Proxy :: Proxy Api)
+      & info . title .~ "JL4 Function API"
+      & info . version .~ "1.0"
+      & info . description ?~ "API for invoking JL4 functions"
+      & servers .~ Maybe.maybeToList ((\sName -> Server sName mempty mempty) <$> serverName)
+ where
+  annotateGraphVizParams =
+    allOperations . parameters %~ fmap annotateParam
+
+  annotateParam (Inline param)
+    | param ^. name == "graphviz" =
+        Inline $
+          param
+            & description
+              ?~ "Set to true to include GraphViz DOT traces in the JSON response. Requires `trace=full`; defaults to false."
+            & schema
+              ?~ Inline
+                ( mempty
+                    & type_ ?~ OpenApiBoolean
+                    & default_ ?~ Aeson.Bool False
+                )
+    | otherwise = Inline param
+  annotateParam ref = ref
 
 instance (KnownSymbol desc, HasOpenApi api) => HasOpenApi (OperationId desc :> api) where
   toOpenApi _ =
@@ -102,6 +121,15 @@ instance ToSchema ReasonNode
 -- This is correct, since we don't overwrite the
 -- 'ToJSON' instance yet.
 instance ToSchema FnArguments
+
+instance ToSchema PngImage where
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "PngImage") $
+        mempty
+          & type_ ?~ OpenApiString
+          & format ?~ "binary"
+          & description ?~ "PNG image representing an evaluation trace"
 
 instance ToSchema Function where
   declareNamedSchema _ = do
@@ -321,6 +349,7 @@ instance ToSchema BatchResponse where
             & default_ ?~ Aeson.Number 0
             & example ?~ Aeson.Number 0
     doubleRef <- declareSchemaRef (Proxy @Double)
+    graphvizRef <- declareSchemaRef (Proxy @GraphVizResponse)
     pure $
       NamedSchema (Just "BatchResponse") $
         mempty
@@ -334,12 +363,14 @@ instance ToSchema BatchResponse where
                       & type_ ?~ OpenApiArray
                       & items
                         ?~ OpenApiItemsObject
-                          ( Inline $
-                              mempty
-                                & type_ ?~ OpenApiObject
-                                & additionalProperties ?~ AdditionalPropertiesAllowed True
-                                & properties
-                                  .~ [("@id", intRef)]
+                              ( Inline $
+                                  mempty
+                                    & type_ ?~ OpenApiObject
+                                    & additionalProperties ?~ AdditionalPropertiesAllowed True
+                                    & properties
+                                      .~ [ ("@id", intRef)
+                                         , ("@graphviz", graphvizRef)
+                                         ]
                           )
                  )
                ,

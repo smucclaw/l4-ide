@@ -39,6 +39,10 @@ If `npm ci` fails with sync errors, investigate before running `npm install` - s
   - See the README in `ts-apps/vscode` for more details on working with the VSCode extension.
 - VS Code
   - If running `code` from the command line does nothing, see https://code.visualstudio.com/docs/setup/mac#_launch-vs-code-from-the-command-line
+- GraphViz (`dot`) + xdot
+  - Required for `jl4-cli --graphviz`, REPL `:trace` / `:tracefile`, decision-service PNG/SVG endpoints, and interactive viewing with `xdot`
+  - `brew install graphviz xdot` on macOS, `apt-get install graphviz xdot` on Debian/Ubuntu (or your package manager of choice)
+  - The Nix shell (`nix/shell.nix`), flake-based hosts (`nix/configuration.nix`), and the Docker `jl4-decision-service` image all install `graphviz`/`xdot` automatically so containerized builds can render traces, too.
 - on your system
   - pkgconfig
   - xz (or liblzma dev libraries)
@@ -63,7 +67,7 @@ Other prerequisites which pkgconfig needs to know about:
 sudo apt install pkg-config liblzma-dev libgmp-dev
 ```
 
-Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages.
+Under Nix you can run `nix-shell nix/shell.nix` in the current directory to pick up the above packages (GraphViz included).
 
 ## Tests
 

@@ -34,6 +34,8 @@ executable jl4-cli
     bytestring,
     cassava,
     directory,
+    filepath,
+    process,
     text,
     time,
     lsp-types,

@@ -1,0 +1,108 @@
+IMPORT prelude
+IMPORT jurisdiction
+IMPORT currency
+
+§ `Currency Library Tests`
+
+-- Test currency codes
+#EVAL `US Dollar code`
+#EVAL `Euro code`
+#EVAL `British Pound code`
+#EVAL `Japanese Yen code`
+#EVAL `Swiss Franc code`
+#EVAL `Canadian Dollar code`
+#EVAL `Australian Dollar code`
+#EVAL `Singapore Dollar code`
+
+-- Test decimal places
+#EVAL `US Dollar decimals`
+#EVAL `Euro decimals`
+#EVAL `Japanese Yen decimals`  -- Should be 0
+#EVAL `South Korean Won decimals`  -- Should be 0
+
+-- Test decimal places lookup
+#EVAL `decimal places for currency` "USD"
+#EVAL `decimal places for currency` "EUR"
+#EVAL `decimal places for currency` "GBP"
+#EVAL `decimal places for currency` "JPY"
+#EVAL `decimal places for currency` "CHF"
+#EVAL `decimal places for currency` "XXX"  -- Unknown currency
+
+-- Test Money formatting
+#EVAL `Money` 10000 "USD"  -- $100.00
+#EVAL `Money` 5000 "EUR"   -- €50.00
+#EVAL `Money` 1000 "JPY"   -- ¥1000 (no decimals)
+#EVAL `Money` 123456 "GBP" -- £1234.56
+#EVAL `Money` 99 "USD"     -- $0.99
+#EVAL `Money` 1 "USD"      -- $0.01
+#EVAL `Money` 0 "USD"      -- $0.00
+#EVAL `Money` 10000 "XXX"  -- Unknown currency
+
+-- Test integer validation
+#EVAL `Money` 100.5 "USD"  -- Should fail (not an integer)
+
+-- Test major to minor unit conversion
+#EVAL `major to minor units` 100 "USD"    -- 10000 cents
+#EVAL `major to minor units` 50.5 "USD"   -- 5050 cents
+#EVAL `major to minor units` 1000 "JPY"   -- 1000 (no conversion)
+#EVAL `major to minor units` 123.45 "EUR" -- 12345 cents
+
+-- Test minor to major unit conversion
+#EVAL `minor to major units` 10000 "USD"  -- 100.00
+#EVAL `minor to major units` 5050 "USD"   -- 50.50
+#EVAL `minor to major units` 1000 "JPY"   -- 1000
+#EVAL `minor to major units` 12345 "EUR"  -- 123.45
+
+-- Test arithmetic: addition
+#EVAL `add money` 10000 5000 "USD"  -- 15000 ($150.00)
+#EVAL `add money` 1000 2000 "JPY"   -- 3000 (¥3000)
+#EVAL `add money` 99 1 "USD"        -- 100 ($1.00)
+
+-- Test arithmetic: subtraction
+#EVAL `subtract money` 10000 5000 "USD"  -- 5000 ($50.00)
+#EVAL `subtract money` 5000 10000 "USD"  -- -5000 (-$50.00)
+#EVAL `subtract money` 100 99 "USD"      -- 1 ($0.01)
+
+-- Test arithmetic: multiplication
+#EVAL `multiply money` 10000 2 "USD"      -- 20000 ($200.00)
+#EVAL `multiply money` 10000 1.5 "USD"    -- 15000 ($150.00)
+#EVAL `multiply money` 10000 0.1 "USD"    -- 1000 ($10.00)
+#EVAL `multiply money` 10000 1.15 "USD"   -- 11500 ($115.00)
+#EVAL `multiply money` 1000 1.5 "JPY"     -- 1500 (¥1500)
+
+-- Test arithmetic: division
+#EVAL `divide money` 10000 2 "USD"    -- 5000 ($50.00)
+#EVAL `divide money` 10000 3 "USD"    -- 3333 ($33.33)
+#EVAL `divide money` 100 3 "USD"      -- 33 ($0.33)
+#EVAL `divide money` 10000 0 "USD"    -- Should error
+#EVAL `divide money` 1000 2 "JPY"     -- 500 (¥500)
+
+-- Test comparisons
+#EVAL `money equal` 10000 10000
+#EVAL `money equal` 10000 5000
+#EVAL `money greater than` 10000 5000
+#EVAL `money greater than` 5000 10000
+#EVAL `money less than` 5000 10000
+#EVAL `money less than` 10000 5000
+#EVAL `money at least` 10000 10000
+#EVAL `money at least` 10000 5000
+#EVAL `money at least` 5000 10000
+#EVAL `money at most` 10000 10000
+#EVAL `money at most` 5000 10000
+#EVAL `money at most` 10000 5000
+
+-- Test validation
+#EVAL `is valid currency code` "USD"
+#EVAL `is valid currency code` "EUR"
+#EVAL `is valid currency code` "usd"  -- Should be FALSE (lowercase)
+#EVAL `is valid currency code` "US"   -- Should be FALSE (2 chars)
+#EVAL `is valid currency code` "USDT" -- Should be FALSE (4 chars)
+
+#EVAL `is non-negative` 10000
+#EVAL `is non-negative` 0
+#EVAL `is non-negative` -10000  -- Should be FALSE
+
+#EVAL `is positive` 10000
+#EVAL `is positive` 1
+#EVAL `is positive` 0      -- Should be FALSE
+#EVAL `is positive` -10000 -- Should be FALSE

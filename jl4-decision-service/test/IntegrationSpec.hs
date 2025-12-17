@@ -115,6 +115,7 @@ spec = describe "integration" do
           (api.functionRoutes.singleEntity "the_answer").evalFunction
             Nothing  -- X-L4-Trace header
             Nothing  -- ?trace= query param
+            Nothing  -- ?graphviz= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments = Map.empty  -- No parameters needed
@@ -128,6 +129,7 @@ spec = describe "integration" do
           (api.functionRoutes.singleEntity "compute_qualifies").evalFunction
             Nothing  -- X-L4-Trace header
             Nothing  -- ?trace= query param
+            Nothing  -- ?graphviz= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -146,6 +148,7 @@ spec = describe "integration" do
           (api.functionRoutes.singleEntity "compute_qualifies").evalFunction
             Nothing  -- X-L4-Trace header
             Nothing  -- ?trace= query param
+            Nothing  -- ?graphviz= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -164,6 +167,7 @@ spec = describe "integration" do
           (api.functionRoutes.singleEntity "vermin_and_rodent").evalFunction
             Nothing  -- X-L4-Trace header
             Nothing  -- ?trace= query param
+            Nothing  -- ?graphviz= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -196,6 +200,7 @@ spec = describe "integration" do
           (api.functionRoutes.singleEntity "vermin_and_rodent").evalFunction
             Nothing  -- X-L4-Trace header
             Nothing  -- ?trace= query param
+            Nothing  -- ?graphviz= query param
             FnArguments
               { fnEvalBackend = Just JL4
               , fnArguments =
@@ -238,6 +243,7 @@ spec = describe "integration" do
         r <- (api.functionRoutes.singleEntity "compute_qualifies").batchFunction
           Nothing  -- X-L4-Trace header
           Nothing  -- ?trace= query param
+          Nothing  -- ?graphviz= query param
           BatchRequest
             { cases = cases
             , outcomes = []

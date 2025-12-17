@@ -7,12 +7,16 @@ module Main where
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
-import Data.Text (Text)
+import Data.Time (UTCTime, getCurrentTime)
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Options.Applicative
 import System.Console.Haskeline
-import System.Directory (getCurrentDirectory, makeAbsolute)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory, makeAbsolute)
+import System.FilePath (takeDirectory)
+import Text.Printf (printf)
 
 import Development.IDE.Graph.Database (shakeRunDatabase)
 import Language.LSP.Protocol.Types (toNormalizedFilePath, normalizedFilePathToUri)
@@ -25,6 +29,7 @@ import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
+import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
 
@@ -55,6 +60,12 @@ data ReplState = ReplState
   , recorder   :: Recorder (WithPriority Oneshot.Log)
   , evalCounter :: IORef Int       -- Counter for unique evaluation filenames
   , imports    :: IORef [Text]     -- Accumulated IMPORT statements
+  , traceSink  :: IORef (Maybe TraceSink)
+  }
+
+data TraceSink = TraceSink
+  { sinkPrefix :: FilePath
+  , sinkCounter :: IORef Int
   }
 
 main :: IO ()
@@ -80,6 +91,7 @@ main = do
   counter <- newIORef (0 :: Int)
   -- Create mutable list for accumulated imports
   importsRef <- newIORef ([] :: [Text])
+  traceSinkRef <- newIORef Nothing
 
   let replState = ReplState
         { ideState = state
@@ -89,6 +101,7 @@ main = do
         , recorder = recorder
         , evalCounter = counter
         , imports = importsRef
+        , traceSink = traceSinkRef
         }
 
   -- If files provided, load them first
@@ -150,6 +163,12 @@ processInput st input
   | ":q" == stripped = pure ("", st, True)
   | ":help" `Text.isPrefixOf` stripped = pure (helpText, st, False)
   | ":h" == stripped = pure (helpText, st, False)
+  | ":tracefile" == stripped =
+      pure ("Usage: :tracefile <path|off>", st, False)
+  | ":tracefile " `Text.isPrefixOf` stripped = do
+      let arg = Text.strip $ Text.drop (Text.length (":tracefile " :: Text)) stripped
+      msg <- configureTraceSink st arg
+      pure (msg, st, False)
   | ":load " `Text.isPrefixOf` stripped = do
       let fp = Text.unpack $ Text.strip $ Text.drop 6 stripped
       absPath <- makeAbsolute fp
@@ -187,6 +206,20 @@ processInput st input
         Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
         Just fp -> do
           result <- getExpressionType st fp expr
+          pure (result, st, False)
+  | ":trace " `Text.isPrefixOf` stripped = do
+      let expr = Text.strip $ Text.drop 7 stripped
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- evalWithTrace st fp expr
+          pure (result, st, False)
+  | ":tr " `Text.isPrefixOf` stripped = do
+      let expr = Text.strip $ Text.drop 4 stripped
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- evalWithTrace st fp expr
           pure (result, st, False)
   | ":import " `Text.isPrefixOf` stripped = do
       -- :import <lib> is shorthand for IMPORT <lib>
@@ -291,6 +324,24 @@ evalExpression st contextFile exprText = do
           else pure "(no result)"
         Just results -> pure $ formatResults results
 
+-- | Configure trace sink for saving DOT files
+configureTraceSink :: ReplState -> Text -> IO Text
+configureTraceSink st argInput = do
+  let trimmed = Text.strip argInput
+  if Text.null trimmed
+    then pure "Usage: :tracefile <path|off>"
+    else if Text.toLower trimmed == "off"
+      then do
+        writeIORef st.traceSink Nothing
+        pure "Trace output will be printed to stdout."
+      else do
+        let rawPath = Text.unpack trimmed
+        absPath <- makeAbsolute rawPath
+        createDirectoryIfMissing True (takeDirectory absPath)
+        counterRef <- newIORef 1
+        writeIORef st.traceSink (Just TraceSink {sinkPrefix = absPath, sinkCounter = counterRef})
+        pure $ "Trace output will be saved to " <> Text.pack absPath <> "-NN.dot"
+
 -- | Format evaluation results for display
 formatResults :: [EvalDirectiveResult] -> Text
 formatResults results = Text.unlines $ map formatResult results
@@ -301,6 +352,128 @@ formatResult (MkEvalDirectiveResult _range res _trace) = case res of
   Assertion False -> "False (assertion failed)"
   Reduction (Right nf) -> Print.prettyLayout nf
   Reduction (Left err) -> "Error: " <> Text.unlines (prettyEvalException err)
+
+-- | Evaluate an expression and show its GraphViz trace
+evalWithTrace :: ReplState -> FilePath -> Text -> IO Text
+evalWithTrace st contextFile exprText = do
+  -- Get unique counter
+  evalNum <- atomicModifyIORef' st.evalCounter (\n -> (n + 1, n))
+  
+  -- Build directive (use #EVALTRACE for explicit tracing)
+  let actualExpr = if any (`Text.isPrefixOf` exprText) ["#EVAL", "#EVALTRACE", "#CHECK", "#ASSERT"]
+                   then exprText
+                   else "#EVALTRACE " <> exprText
+  
+  -- Get imports
+  importPreamble <- getImportPreamble st
+  
+  -- Get filtered source
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  originalContent <- case mTc of
+    Just tc -> pure $ Print.prettyLayout (filterIdeDirectives tc.module')
+    Nothing -> do
+      mContent <- Shake.getVirtualFileText st.ideState contextUri
+      case mContent of
+        Just content -> pure content
+        Nothing -> Text.IO.readFile contextFile
+  
+  let replContent = importPreamble <> originalContent <> "\n\n-- REPL trace " <> Text.pack (show evalNum) <> "\n" <> actualExpr <> "\n"
+  
+  -- Create virtual file
+  let replPath = st.curDir <> "/.repl_trace_" <> show evalNum <> ".l4"
+      replNfp = toNormalizedFilePath replPath
+      replUri = normalizedFilePathToUri replNfp
+  
+  _ <- shakeRunDatabase st.ideState.shakeDb [Shake.addVirtualFile replNfp replContent]
+  
+  -- Type check and evaluate
+  [mtc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck replUri]
+  case mtc of
+    Nothing -> pure "Failed to type check expression"
+    Just tc | not tc.success -> do
+      let errors = tc.infos
+      pure $ "Type error:\n" <> Text.unlines (map (Text.pack . show) $ take 3 errors)
+    Just _tc -> do
+      -- Get evaluation results WITH trace
+      [meval] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.EvaluateLazy replUri]
+      case meval of
+        Nothing -> pure "Evaluation failed"
+        Just [] -> pure "(no result)"
+        Just results -> formatTraceResults st exprText actualExpr results
+
+-- | Format evaluation results showing GraphViz DOT trace or save to files
+formatTraceResults :: ReplState -> Text -> Text -> [EvalDirectiveResult] -> IO Text
+formatTraceResults st exprText actualExpr results = do
+  mSink <- readIORef st.traceSink
+  case mSink of
+    Nothing -> pure $ Text.unlines $ map formatTraceResult results
+    Just sink -> do
+      messages <- mapM (saveTraceResult st exprText actualExpr sink) results
+      pure $ Text.unlines messages
+
+formatTraceResult :: EvalDirectiveResult -> Text
+formatTraceResult (MkEvalDirectiveResult _range _res mtrace) = case mtrace of
+  Nothing -> "(no trace available)"
+  Just tr -> GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+
+saveTraceResult :: ReplState -> Text -> Text -> TraceSink -> EvalDirectiveResult -> IO Text
+saveTraceResult st exprText actualExpr sink result@(MkEvalDirectiveResult _ _ mtrace) =
+  case mtrace of
+    Nothing -> pure "(no trace available)"
+    Just tr -> do
+      idx <- atomicModifyIORef' sink.sinkCounter (\n -> (n + 1, n))
+      timestamp <- getCurrentTime
+      importsList <- readIORef st.imports
+      let filePath = printf "%s-%02d.dot" (sink.sinkPrefix) idx
+          dirPath = takeDirectory filePath
+      createDirectoryIfMissing True dirPath
+      fileHeader <- buildTraceHeader st exprText actualExpr importsList timestamp result
+      let dotText = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+          fileContent = fileHeader <> dotText <> "\n"
+      Text.IO.writeFile filePath fileContent
+      pure $ "Saved trace to " <> Text.pack filePath
+
+buildTraceHeader :: ReplState -> Text -> Text -> [Text] -> UTCTime -> EvalDirectiveResult -> IO Text
+buildTraceHeader st exprText actualExpr importsList timestamp result = do
+  let exprLine = inlineSingleLine exprText
+      directiveLine = inlineSingleLine actualExpr
+      timestampLine = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" timestamp
+      loadedLine = maybe "(none)" Text.pack st.loadedFile
+      importsLine =
+        if null importsList
+          then "(none)"
+          else Text.intercalate ", " importsList
+      resultLine = inlineSingleLine (summarizeEvalResult result)
+      headerLines =
+        [ commentLine "Expression" exprLine
+        , commentLine "Directive" directiveLine
+        , commentLine "Timestamp" timestampLine
+        , commentLine "Loaded file" (inlineSingleLine loadedLine)
+        , commentLine "Imports" (inlineSingleLine importsLine)
+        , commentLine "Result" resultLine
+        , ""
+        ]
+  pure $ Text.unlines headerLines
+
+commentLine :: Text -> Text -> Text
+commentLine label content = "// " <> label <> ": " <> content
+
+inlineSingleLine :: Text -> Text
+inlineSingleLine txt =
+  let pieces = map Text.strip (Text.lines txt)
+      nonEmpty = filter (not . Text.null) pieces
+  in if null nonEmpty
+       then ""
+       else Text.intercalate " " nonEmpty
+
+summarizeEvalResult :: EvalDirectiveResult -> Text
+summarizeEvalResult (MkEvalDirectiveResult _range res _trace) = case res of
+  Assertion True  -> "True (assertion passed)"
+  Assertion False -> "False (assertion failed)"
+  Reduction (Right nf) -> Print.prettyLayout nf
+  Reduction (Left err)  ->
+    Text.intercalate "; " ("Error" : prettyEvalException err)
 
 -- | Get the type of an expression without evaluating it
 -- Uses #CHECK directive which reports the type as an info message
@@ -359,6 +532,10 @@ helpText = Text.unlines
   , "  :reload, :r     Reload the current file"
   , "  :type <expr>    Show the type of an expression"
   , "  :t <expr>       Short for :type"
+  , "  :trace <expr>   Show evaluation trace as GraphViz DOT"
+  , "  :tr <expr>      Short for :trace"
+  , "  :tracefile <prefix>  Save traces to <prefix>-NN.dot"
+  , "  :tracefile off       Restore stdout trace output"
   , "  :import <lib>   Import a library (e.g., :import prelude)"
   , "  :i <lib>        Short for :import"
   , "  :imports        Show current imports"
@@ -369,10 +546,13 @@ helpText = Text.unlines
   , "  #ASSERT <expr>  Evaluate boolean expression, report pass/fail"
   , "  #EVALTRACE <expr> Evaluate with trace output"
   , ""
+  , "Trace visualization:"
+  , "  :trace 5 cubed           Show DOT graph"
+  , "  :trace 5 cubed | xdot -  View interactively"
+  , "  Requires GraphViz tools (dot, xdot) installed separately"
+  , ""
   , "Note: #CHECK is a type-checking directive (shows type in IDE) and"
   , "      does not evaluate. Use #ASSERT for runtime boolean checks."
   , ""
   , "Use -v/--verbose for debug output."
   ]
-
-

@@ -1,0 +1,232 @@
+IMPORT prelude
+IMPORT daydate
+IMPORT currency
+IMPORT `legal-persons`
+
+§ `Holdings Library`
+
+-- Library for representing debt and equity ownership
+-- Supports cap table representation with temporal tracking
+-- Inspired by ACTUS Financial Research Foundation (actusfrf.org)
+-- Version 1.0.0 (2024-12-16)
+
+§§ `Version`
+
+`Holdings Library Version` MEANS "1.0.0"
+
+
+§§ `Security Types`
+
+`Common Stock` MEANS "COMMON_STOCK"
+`Preferred Stock` MEANS "PREFERRED_STOCK"
+`Convertible Note` MEANS "CONVERTIBLE_NOTE"
+`SAFE` MEANS "SAFE"  -- Simple Agreement for Future Equity
+`Warrant` MEANS "WARRANT"
+`Stock Option` MEANS "STOCK_OPTION"
+`RSU` MEANS "RSU"  -- Restricted Stock Unit
+
+
+§§ `Debt Types`
+
+`Senior Debt` MEANS "SENIOR_DEBT"
+`Subordinated Debt` MEANS "SUBORDINATED_DEBT"
+`Convertible Debt` MEANS "CONVERTIBLE_DEBT"
+`Bridge Loan` MEANS "BRIDGE_LOAN"
+
+
+§§ `Ownership Calculations`
+
+-- Calculate ownership percentage
+GIVEN sharesOwned IS A NUMBER
+      totalShares IS A NUMBER
+GIVETH A NUMBER
+`ownership percentage` MEANS
+    IF totalShares EQUALS 0
+        THEN 0
+        ELSE (sharesOwned TIMES 100) DIVIDED BY totalShares
+
+-- Check if fully diluted shares needed
+GIVEN securityType IS A STRING
+GIVETH A BOOLEAN
+`is dilutive` MEANS
+    BRANCH
+        IF securityType EQUALS `Convertible Note` THEN TRUE
+        IF securityType EQUALS `SAFE` THEN TRUE
+        IF securityType EQUALS `Warrant` THEN TRUE
+        IF securityType EQUALS `Stock Option` THEN TRUE
+        IF securityType EQUALS `Convertible Debt` THEN TRUE
+        OTHERWISE FALSE
+
+
+§§ `Preference Calculations`
+
+-- Calculate liquidation preference amount
+GIVEN investmentAmount IS A NUMBER
+      preferenceMultiple IS A NUMBER
+GIVETH A NUMBER
+`liquidation preference` MEANS
+    investmentAmount TIMES preferenceMultiple
+
+-- Check if participating preferred
+GIVEN isParticipating IS A BOOLEAN
+      liquidationValue IS A NUMBER
+      preferenceAmount IS A NUMBER
+      ownershipPct IS A NUMBER
+GIVETH A NUMBER
+`preferred payout` MEANS
+    IF isParticipating
+        THEN preferenceAmount PLUS proRataShare
+        ELSE IF preferenceAmount GREATER THAN proRataShare
+            THEN preferenceAmount
+            ELSE proRataShare
+    WHERE
+        proRataShare MEANS (liquidationValue TIMES ownershipPct) DIVIDED BY 100
+
+
+§§ `Vesting Calculations`
+
+-- Calculate vested shares
+GIVEN totalShares IS A NUMBER
+      vestingStartDate IS A DATE
+      cliffMonths IS A NUMBER
+      vestingMonths IS A NUMBER
+      currentDate IS A DATE
+GIVETH A NUMBER
+`vested shares` MEANS
+    IF monthsElapsed LESS THAN cliffMonths
+        THEN 0
+    ELSE IF monthsElapsed AT LEAST vestingMonths
+        THEN totalShares
+        ELSE FLOOR ((totalShares TIMES monthsElapsed) DIVIDED BY vestingMonths)
+    WHERE
+        monthsElapsed MEANS `approximate months since` vestingStartDate currentDate
+
+-- Approximate months between dates
+GIVEN startDate IS A DATE
+      endDate IS A DATE
+GIVETH A NUMBER
+`approximate months since` MEANS
+    ((DATE_YEAR endDate MINUS DATE_YEAR startDate) TIMES 12)
+        PLUS (DATE_MONTH endDate MINUS DATE_MONTH startDate)
+
+
+§§ `Conversion Calculations`
+
+-- Calculate shares from convertible note
+GIVEN principalAmount IS A NUMBER
+      interestRate IS A NUMBER
+      issueDate IS A DATE
+      conversionDate IS A DATE
+      conversionPrice IS A NUMBER
+      discountPct IS A NUMBER
+GIVETH A NUMBER
+`shares from convertible` MEANS
+    IF conversionPrice EQUALS 0
+        THEN 0
+        ELSE FLOOR (totalAmount DIVIDED BY effectivePrice)
+    WHERE
+        daysElapsed MEANS Day conversionDate MINUS Day issueDate
+        interest MEANS (principalAmount TIMES interestRate TIMES daysElapsed) DIVIDED BY 36500
+        totalAmount MEANS principalAmount PLUS interest
+        discountedPrice MEANS conversionPrice MINUS ((conversionPrice TIMES discountPct) DIVIDED BY 100)
+        effectivePrice MEANS discountedPrice
+
+-- Calculate shares from SAFE
+GIVEN investmentAmount IS A NUMBER
+      valuationCap IS A NUMBER
+      discountPct IS A NUMBER
+      pricePerShare IS A NUMBER
+GIVETH A NUMBER
+`shares from SAFE` MEANS
+    IF effectivePrice EQUALS 0
+        THEN 0
+        ELSE FLOOR (investmentAmount DIVIDED BY effectivePrice)
+    WHERE
+        capPrice MEANS
+            IF valuationCap EQUALS 0
+                THEN pricePerShare
+                ELSE valuationCap DIVIDED BY 1000000
+        discountedPrice MEANS pricePerShare MINUS ((pricePerShare TIMES discountPct) DIVIDED BY 100)
+        effectivePrice MEANS
+            IF capPrice LESS THAN discountedPrice
+                THEN capPrice
+                ELSE discountedPrice
+
+
+§§ `Debt Service Calculations`
+
+-- Calculate accrued interest
+GIVEN principalAmount IS A NUMBER
+      annualRate IS A NUMBER
+      issueDate IS A DATE
+      currentDate IS A DATE
+GIVETH A NUMBER
+`accrued interest` MEANS
+    (principalAmount TIMES annualRate TIMES daysElapsed) DIVIDED BY 36500
+    WHERE
+        daysElapsed MEANS Day currentDate MINUS Day issueDate
+
+-- Calculate debt service coverage ratio
+GIVEN operatingIncome IS A NUMBER
+      debtPayment IS A NUMBER
+GIVETH A NUMBER
+`debt service coverage` MEANS
+    IF debtPayment EQUALS 0
+        THEN 0
+        ELSE operatingIncome DIVIDED BY debtPayment
+
+
+§§ `Cap Table Aggregations`
+
+-- Sum shares by class
+GIVEN sharesList IS A LIST OF NUMBER
+GIVETH A NUMBER
+`total shares` MEANS
+    CONSIDER sharesList
+    WHEN EMPTY THEN 0
+    WHEN x FOLLOWED BY xs THEN x PLUS `total shares` xs
+
+-- Calculate fully diluted shares
+GIVEN commonShares IS A NUMBER
+      preferredShares IS A NUMBER
+      optionPoolShares IS A NUMBER
+      convertibleShares IS A NUMBER
+GIVETH A NUMBER
+`fully diluted shares` MEANS
+    commonShares PLUS preferredShares PLUS optionPoolShares PLUS convertibleShares
+
+
+§§ `Valuation Calculations`
+
+-- Calculate post-money valuation
+GIVEN pricePerShare IS A NUMBER
+      fullyDilutedShares IS A NUMBER
+GIVETH A NUMBER
+`post-money valuation` MEANS
+    pricePerShare TIMES fullyDilutedShares
+
+-- Calculate pre-money valuation
+GIVEN postMoneyValuation IS A NUMBER
+      investmentAmount IS A NUMBER
+GIVETH A NUMBER
+`pre-money valuation` MEANS
+    postMoneyValuation MINUS investmentAmount
+
+
+§§ `Temporal Tracking Helpers`
+
+-- Check if holding is active at date
+GIVEN issuanceDate IS A DATE
+      maturityDate IS A DATE
+      checkDate IS A DATE
+GIVETH A BOOLEAN
+`is active at` MEANS
+    checkDate AT LEAST issuanceDate
+    AND checkDate AT MOST maturityDate
+
+-- Check if holding has matured
+GIVEN maturityDate IS A DATE
+      checkDate IS A DATE
+GIVETH A BOOLEAN
+`has matured` MEANS
+    checkDate GREATER THAN maturityDate

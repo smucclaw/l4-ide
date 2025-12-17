@@ -27,6 +27,16 @@ Decision Logic Visualization as a ladder diagram circuit
 
 ![Syntax Highlighting Example](./doc/images/bna-viz.png)
 
+## Trace Visualization
+
+Curious how an L4 decision actually unfolded? Every tool in this repo can show you the evaluation trace as a GraphViz diagram:
+
+- **CLI:** `jl4-cli --graphviz myfile.l4 > trace.dot`, then render with `dot -Tsvg trace.dot > trace.svg`.
+- **REPL:** Load a file, run `:trace your expression`, or turn on `:tracefile traces/session` to capture numbered `.dot` files with timestamps, imports, and the final result right in the header.
+- **Decision Service:** Call `POST /functions/<name>/evaluation?trace=full&graphviz=true` to get a `graphviz` object containing the DOT plus relative PNG/SVG URLs, or hit `/evaluation/trace.png` / `/trace.svg` directly for ready-to-share images. Batch requests set `graphviz=true` to attach an `@graphviz` blob (same `{dot,png,svg}` shape) per case.
+
+These traces act like explainability receipts for deterministic logic: you can follow each node from the top-level question down to the exact condition or branch that determined the answer. Install GraphViz (`brew install graphviz` or `apt-get install graphviz`) to unlock the PNG/SVG outputs.
+
 ## Status (25 Feb 2025)
 
 - ✅ Basic language features (functional core, layout parsing)

@@ -1,0 +1,125 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+jurisdiction-tests.l4:7:1-30:
+  "US"
+jurisdiction-tests.l4:8:1-31:
+  "GB"
+jurisdiction-tests.l4:9:1-23:
+  "CA"
+jurisdiction-tests.l4:10:1-22:
+  "JP"
+jurisdiction-tests.l4:11:1-26:
+  "SG"
+jurisdiction-tests.l4:14:1-30:
+  "USA"
+jurisdiction-tests.l4:15:1-24:
+  "DEU"
+jurisdiction-tests.l4:16:1-26:
+  "AUS"
+jurisdiction-tests.l4:19:1-30:
+  840
+jurisdiction-tests.l4:20:1-31:
+  826
+jurisdiction-tests.l4:21:1-22:
+  392
+jurisdiction-tests.l4:24:1-28:
+  "EU"
+jurisdiction-tests.l4:25:1-19:
+  "ASEAN"
+jurisdiction-tests.l4:28:1-24:
+  "US-CA"
+jurisdiction-tests.l4:29:1-22:
+  "US-NY"
+jurisdiction-tests.l4:30:1-22:
+  "US-DE"
+jurisdiction-tests.l4:31:1-19:
+  "US-TX"
+jurisdiction-tests.l4:34:1-21:
+  "CA-ON"
+jurisdiction-tests.l4:35:1-20:
+  "CA-QC"
+jurisdiction-tests.l4:36:1-30:
+  "CA-BC"
+jurisdiction-tests.l4:39:1-21:
+  "GB-ENG"
+jurisdiction-tests.l4:40:1-22:
+  "GB-SCT"
+jurisdiction-tests.l4:41:1-19:
+  "GB-WLS"
+jurisdiction-tests.l4:44:1-41:
+  TRUE
+jurisdiction-tests.l4:45:1-42:
+  FALSE
+jurisdiction-tests.l4:46:1-41:
+  FALSE
+jurisdiction-tests.l4:48:1-42:
+  TRUE
+jurisdiction-tests.l4:49:1-41:
+  FALSE
+jurisdiction-tests.l4:50:1-42:
+  FALSE
+jurisdiction-tests.l4:52:1-36:
+  TRUE
+jurisdiction-tests.l4:53:1-36:
+  TRUE
+jurisdiction-tests.l4:54:1-37:
+  TRUE
+jurisdiction-tests.l4:55:1-38:
+  FALSE
+jurisdiction-tests.l4:58:1-39:
+  RIGHT OF "United States"
+jurisdiction-tests.l4:59:1-39:
+  RIGHT OF "United Kingdom"
+jurisdiction-tests.l4:60:1-39:
+  RIGHT OF "Canada"
+jurisdiction-tests.l4:61:1-39:
+  RIGHT OF "Japan"
+jurisdiction-tests.l4:62:1-39:
+  RIGHT OF "Singapore"
+jurisdiction-tests.l4:63:1-39:
+  RIGHT OF "Germany"
+jurisdiction-tests.l4:64:1-39:
+  LEFT OF "Unknown country code: ZZ"
+jurisdiction-tests.l4:66:1-40:
+  RIGHT OF "United States"
+jurisdiction-tests.l4:67:1-40:
+  RIGHT OF "United Kingdom"
+jurisdiction-tests.l4:68:1-40:
+  RIGHT OF "Canada"
+jurisdiction-tests.l4:69:1-40:
+  RIGHT OF "Japan"
+jurisdiction-tests.l4:70:1-40:
+  LEFT OF "Unknown country code: ZZZ"
+jurisdiction-tests.l4:73:1-32:
+  RIGHT OF "USA"
+jurisdiction-tests.l4:74:1-32:
+  RIGHT OF "GBR"
+jurisdiction-tests.l4:75:1-32:
+  RIGHT OF "CAN"
+jurisdiction-tests.l4:76:1-32:
+  RIGHT OF "JPN"
+jurisdiction-tests.l4:77:1-32:
+  RIGHT OF "SGP"
+jurisdiction-tests.l4:78:1-32:
+  RIGHT OF "DEU"
+jurisdiction-tests.l4:79:1-32:
+  RIGHT OF "FRA"
+jurisdiction-tests.l4:80:1-32:
+  LEFT OF "Cannot convert unknown alpha-2 code: ZZ"
+jurisdiction-tests.l4:82:1-33:
+  RIGHT OF "US"
+jurisdiction-tests.l4:83:1-33:
+  RIGHT OF "GB"
+jurisdiction-tests.l4:84:1-33:
+  RIGHT OF "CA"
+jurisdiction-tests.l4:85:1-33:
+  RIGHT OF "JP"
+jurisdiction-tests.l4:86:1-33:
+  RIGHT OF "SG"
+jurisdiction-tests.l4:87:1-33:
+  RIGHT OF "DE"
+jurisdiction-tests.l4:88:1-33:
+  RIGHT OF "FR"
+jurisdiction-tests.l4:89:1-33:
+  LEFT OF "Cannot convert unknown alpha-3 code: ZZZ"
