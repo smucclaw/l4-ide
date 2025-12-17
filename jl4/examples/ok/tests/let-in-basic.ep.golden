@@ -1,0 +1,45 @@
+-- LET...IN basic tests: simple bindings without parameters
+
+-- Single binding
+DECIDE testSingleBinding IS
+  LET x IS 5
+  IN x
+
+-- Multiple bindings
+DECIDE testMultipleBindings IS
+  LET
+    x IS 5
+    y IS 10
+  IN x PLUS y
+
+-- Forward reference (y references x)
+DECIDE testForwardRef IS
+  LET
+    x IS 5
+    y IS x TIMES 2
+  IN y
+
+-- Nested arithmetic
+DECIDE testNestedArith IS
+  LET
+    a IS 1
+    b IS 2
+    c IS 3
+  IN a PLUS b TIMES c
+
+-- Using = operator
+DECIDE testEqualsOperator IS
+  LET
+    x = 42
+    y = x PLUS 8
+  IN y
+
+-- Using different binding keywords
+DECIDE testBindingKeywords IS
+  LET
+    a IS 1
+    b BE 2
+    c MEAN 3
+    d MEANS 4
+    e = 5
+  IN a PLUS b PLUS c PLUS d PLUS e

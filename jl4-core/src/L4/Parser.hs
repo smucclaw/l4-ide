@@ -472,6 +472,19 @@ letAppForm current =
       <*> annoHole (lmany (const (indented name current)))
       <*> annoHole (pure Nothing)  -- No AKA for LET bindings
 
+-- | Parse a Decide for use in LET bindings
+-- Returns a Decide with proper source range annotations (required by type checker)
+letDecide :: Pos -> Parser (Decide Name)
+letDecide current =
+  attachAnno $
+    MkDecide emptyAnno
+      <$> annoHole (pure emptyTypeSig)
+      <*> annoHole (letAppForm current)
+      <*  annoLexeme letBindingKeyword
+      <*> annoHole (indentedExpr current)
+  where
+    emptyTypeSig = MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing
+
 -- | Parse a local declaration in a LET block
 -- Supports both simple bindings and parameterized function bindings:
 --   - Simple: "x IS 5"
@@ -482,15 +495,8 @@ letAppForm current =
 letLocalDecl :: Parser (LocalDecl Name)
 letLocalDecl = do
   current <- Lexer.indentLevel
-  attachAnno $ do
-    bindingForm <- annoHole (letAppForm current)
-    _ <- annoLexeme letBindingKeyword
-    body <- annoHole (indentedExpr current)
-    -- Create a Decide with no explicit type signature
-    -- The type checker will infer types for all parameters
-    -- The attachAnno above will capture any @desc annotations after the expression
-    let emptyTypeSig = MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing
-    pure $ LocalDecide emptyAnno (MkDecide emptyAnno emptyTypeSig bindingForm body)
+  attachAnno $
+    LocalDecide emptyAnno <$> annoHole (letDecide current)
 
 -- | Parse a LET...IN expression
 letInExpr :: Parser (Expr Name)
