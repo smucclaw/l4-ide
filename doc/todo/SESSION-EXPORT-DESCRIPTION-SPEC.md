@@ -190,6 +190,7 @@ let description = fnMetadata >>= getDescription
 ### Phase 1: Research (1-2 hours)
 
 1. **Locate EXPORT parsing code**
+
    - Search for "EXPORT" in codebase
    - Find where `Examples.loadL4File` extracts descriptions
    - Determine if EXPORT directives are in the AST
@@ -326,10 +327,12 @@ DEF broken (x : Int) : Int = x
 Once description extraction is working, consider:
 
 1. **Support for other EXPORT metadata**
+
    - REF annotations for cross-references
    - TAG annotations for categorization
 
 2. **Web IDE integration**
+
    - Display function descriptions in autocomplete
    - Show descriptions in hover tooltips
 
