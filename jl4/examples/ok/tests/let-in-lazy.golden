@@ -1,0 +1,49 @@
+Parsing successful
+Typechecking successful
+Evaluation successful
+let-in-lazy.l4:31:1-23:
+  2000000
+  ─────
+  ┌ testSharing
+  └ 2000000• 2000000
+let-in-lazy.l4:32:1-29:
+  20100
+  ─────
+  ┌ testNestedSharing
+  └ 20100• 20100
+let-in-lazy.l4:33:1-33:
+  150
+  ─────
+  ┌ testFunctionSharing OF 5
+  │┌ testFunctionSharing
+  │└ <function>│• <function>
+  ├ LET
+  │   
+  │   DECIDE squared IS
+  │     n TIMES n
+  │ 
+  │   DECIDE cubed IS
+  │     squared TIMES n
+  │ IN
+  │   squared PLUS cubed
+  │┌ n TIMES n
+  │└ 25│• 25
+  │┌ squared TIMES n
+  │└ 125│• 125
+  ├ squared PLUS cubed
+  └ 150┌ LET
+  │   
+  │   DECIDE squared IS
+  │     n TIMES n
+  │ 
+  │   DECIDE cubed IS
+  │     squared TIMES n
+  │ IN
+  │   squared PLUS cubed
+  │┌ n TIMES n
+  │└ 25│• 25
+  │┌ squared TIMES n
+  │└ 125│• 125
+  ├ squared PLUS cubed
+  └ 150┌ squared PLUS cubed
+  └ 150• 150
