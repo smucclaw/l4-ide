@@ -68,6 +68,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 ## Status (December 2025)
 
 ### Core Language Features ✅
+
 - ✅ Functional core with layout-sensitive parsing
 - ✅ LET...IN expressions with Haskell-style recursive bindings
 - ✅ Mixfix and postfix operators for domain-specific syntax
@@ -82,12 +83,14 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - ✅ Temporal logic with multi-temporal evaluation contexts
 
 ### Application Libraries ✅
+
 - ✅ Jurisdiction library (ISO 3166 country/region codes, US states, Canadian provinces)
 - ✅ Currency library (ISO 4217 codes with integer minor unit storage)
 - ✅ Legal persons library (individuals, corporations, partnerships)
 - ✅ Holdings library (ownership structures and percentages)
 
 ### IDE & Developer Tools ✅
+
 - ✅ VS Code extension with syntax highlighting, type checking, and inline evaluation
 - ✅ LSP server with hover support for @desc annotations
 - ✅ Interactive REPL (jl4-repl) for live code exploration
@@ -95,6 +98,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - ✅ CLI tool (jl4-cli) with unified GraphViz output control
 
 ### Trace Visualization & Explainability ✅
+
 - ✅ GraphViz evaluation trace visualization (Phase 1 complete)
 - ✅ Function body display with @desc semantic annotations
 - ✅ Conditional trace collection (controlled via CLI flags and API parameters)
@@ -103,6 +107,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - 🚧 Binding deduplication for shared WHERE/LET clauses (WIP)
 
 ### Decision Service & APIs ✅
+
 - ✅ REST API for decision evaluation with OpenAPI/Swagger
 - ✅ @export syntax for declaring API-exposed functions (no separate YAML needed)
 - ✅ Batch evaluation with parallel processing
@@ -111,6 +116,7 @@ L4 provides audit-grade explainability and observability. Textual decision trace
 - ✅ Websessions integration with auto-push to decision service
 
 ### In Development 🚧
+
 - 🚧 Boolean minimization for default logic reasoning
 - 🚧 TYPICALLY keyword for rebuttable presumptions
 - 🚧 Runtime input state model for partial information handling
@@ -128,6 +134,7 @@ jl4-repl
 ```
 
 The REPL provides:
+
 - Live evaluation of L4 expressions
 - Trace visualization controls (`:trace on/off/all`, `:graphviz on/png/svg`)
 - Module loading and reloading (`:load myfile.l4`)
