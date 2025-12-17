@@ -30,8 +30,8 @@ let-in-lazy.l4:43:1-33:
   │┌ testFunctionSharing
   │└ <function>│• <function>
   ├ LET
-  │   squared IS n TIMES n
-  │   cubed IS squared TIMES n
+  │   squared BE n TIMES n
+  │   cubed BE squared TIMES n
   │ IN
   │   squared PLUS cubed
   │┌ n TIMES n
@@ -40,8 +40,8 @@ let-in-lazy.l4:43:1-33:
   │└ 125│• 125
   ├ squared PLUS cubed
   └ 150┌ LET
-  │   squared IS n TIMES n
-  │   cubed IS squared TIMES n
+  │   squared BE n TIMES n
+  │   cubed BE squared TIMES n
   │ IN
   │   squared PLUS cubed
   │┌ n TIMES n

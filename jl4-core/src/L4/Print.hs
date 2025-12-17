@@ -375,10 +375,11 @@ instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
       printWithLayout name <+> "IS" <+> printWithLayout e
 
 -- | Print a LocalDecl in LET context (without DECIDE keyword and without type signature)
+-- Uses "BE" as the binding keyword in honour of The Beatles' "Let It Be"
 printLetBinding :: LayoutPrinterWithName a => LocalDecl a -> Doc ann
 printLetBinding = \ case
   LocalDecide _ (MkDecide _ _tySig appForm expr) ->
-    Prettyprinter.group $ printWithLayout appForm <+> "IS" <+> Prettyprinter.align (printWithLayout expr)
+    Prettyprinter.group $ printWithLayout appForm <+> "BE" <+> Prettyprinter.align (printWithLayout expr)
   LocalAssume _ t -> printWithLayout t
 
 instance LayoutPrinterWithName a => LayoutPrinter (LocalDecl a) where
