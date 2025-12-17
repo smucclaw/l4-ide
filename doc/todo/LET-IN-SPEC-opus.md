@@ -95,11 +95,13 @@ We considered a simpler implementation: parse `LET...IN` and immediately desugar
 ### 1. Syntactic Position Incompatibility
 
 WHERE is a **postfix** operator attached to declarations:
+
 ```
 DECIDE foo IS expr WHERE bindings
 ```
 
 LET...IN is a **prefix** standalone expression:
+
 ```
 (LET bindings IN expr) TIMES other_expr
 ```
@@ -118,6 +120,7 @@ DECIDE foo x IS
 ```
 
 Hoisting would merge into one flat scope:
+
 ```
 DECIDE foo x IS (temp PLUS temp) TIMES (temp MINUS 1)
 WHERE
@@ -138,11 +141,13 @@ The following was verified by examining the actual codebase:
 ### Lexer (`jl4-core/src/L4/Lexer.hs`)
 
 **Existing tokens (lines 130-202):**
+
 - `TKWhere` exists (line 157)
 - `TKIs` exists (line 147)
 - `TKMeans` exists (line 145)
 
 **Keywords map (lines 204-276):**
+
 ```haskell
 keywords :: Map Text TKeywords
 keywords = Map.fromList
@@ -158,6 +163,7 @@ keywords = Map.fromList
 ### AST (`jl4-core/src/L4/Syntax.hs`)
 
 **Expr data type (lines 194-236):**
+
 ```haskell
 data Expr n =
     And        Anno (Expr n) (Expr n)
@@ -167,6 +173,7 @@ data Expr n =
 ```
 
 **LocalDecl type (lines 325-329):**
+
 ```haskell
 data LocalDecl n =
     LocalDecide Anno (Decide n)
@@ -178,6 +185,7 @@ LET bindings will wrap `Decide` values in `LocalDecide`.
 ### Parser (`jl4-core/src/L4/Parser.hs`)
 
 **localdecl (lines 448-453):**
+
 ```haskell
 localdecl :: Parser (LocalDecl Name)
 localdecl =
@@ -188,6 +196,7 @@ localdecl =
 ```
 
 **whereExpr (lines 783-788):** - This is a **postfix** operator returning `Expr -> Expr`:
+
 ```haskell
 whereExpr :: Pos -> Parser (Expr Name -> Expr Name)
 whereExpr p =
@@ -204,6 +213,7 @@ whereExpr p =
 ### TypeChecker (`jl4-core/src/L4/TypeCheck.hs`)
 
 **checkExpr for WHERE (lines 1001-1014):**
+
 ```haskell
 checkExpr ec (Where ann e ds) t = softprune $ do
   let
@@ -224,6 +234,7 @@ checkExpr ec (Where ann e ds) t = softprune $ do
 ### Evaluator (`jl4-core/src/L4/EvaluateLazy/Machine.hs`)
 
 **forwardExpr for WHERE (lines 369-372):**
+
 ```haskell
 Where _ann e ds -> do
   env' <- evalRecLocalDecls env ds
@@ -236,6 +247,7 @@ Where _ann e ds -> do
 ### Pretty Printer (`jl4-core/src/L4/Print.hs`)
 
 **printWithLayout for WHERE (lines 314-319):**
+
 ```haskell
 Where      _ e1 decls ->
   vcat
@@ -248,6 +260,7 @@ Where      _ e1 decls ->
 ### Desugarer (`jl4-core/src/L4/Desugar.hs`)
 
 **carameliseExpr for WHERE (line 53):**
+
 ```haskell
 Where      ann e ds -> Where ann (carameliseExpr e) (fmap carameliseLocalDecl ds)
 ```
@@ -413,6 +426,7 @@ grep -r "Where.*ann.*e.*ds" jl4-core/src/L4/
 ```
 
 Files to check:
+
 - `L4/ExactPrint.hs`
 - `L4/Annotation.hs`
 - Any other expression traversals
@@ -421,30 +435,30 @@ Files to check:
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `jl4-core/src/L4/Lexer.hs` | Add `TKLet`, `TKIn`, `TKBe`, `TKMean` to `TKeywords` and `keywords` map |
-| `jl4-core/src/L4/Syntax.hs` | Add `LetIn` constructor to `Expr` |
-| `jl4-core/src/L4/Parser.hs` | Add `letInExpr`, `letLocalDecl`, `letBindingKeyword` |
-| `jl4-core/src/L4/TypeCheck.hs` | Add `checkExpr` and `inferExpr` cases |
-| `jl4-core/src/L4/EvaluateLazy/Machine.hs` | Add `forwardExpr` case |
-| `jl4-core/src/L4/Print.hs` | Add pretty-printer case |
-| `jl4-core/src/L4/Desugar.hs` | Add desugarer case |
+| File                                      | Changes                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `jl4-core/src/L4/Lexer.hs`                | Add `TKLet`, `TKIn`, `TKBe`, `TKMean` to `TKeywords` and `keywords` map |
+| `jl4-core/src/L4/Syntax.hs`               | Add `LetIn` constructor to `Expr`                                       |
+| `jl4-core/src/L4/Parser.hs`               | Add `letInExpr`, `letLocalDecl`, `letBindingKeyword`                    |
+| `jl4-core/src/L4/TypeCheck.hs`            | Add `checkExpr` and `inferExpr` cases                                   |
+| `jl4-core/src/L4/EvaluateLazy/Machine.hs` | Add `forwardExpr` case                                                  |
+| `jl4-core/src/L4/Print.hs`                | Add pretty-printer case                                                 |
+| `jl4-core/src/L4/Desugar.hs`              | Add desugarer case                                                      |
 
 ---
 
 ## Comparison: LET...IN vs WHERE
 
-| Aspect | WHERE | LET...IN |
-|--------|-------|----------|
-| Syntactic role | Suffix to declarations | Standalone expression |
-| Parser type | Postfix (`Expr -> Expr`) | Prefix (standalone `Expr`) |
-| Position in code | End of definition only | Anywhere in expression context |
-| AST structure | `Where Anno (Expr n) [LocalDecl n]` | `LetIn Anno [LocalDecl n] (Expr n)` |
-| Binding keywords | Standard DECIDE/MEANS syntax | IS/BE/MEAN/MEANS |
-| Recursive bindings | Yes | Yes |
-| Sharing/memoization | Yes | Yes |
-| Evaluation mechanism | `evalRecLocalDecls` | `evalRecLocalDecls` (same) |
+| Aspect               | WHERE                               | LET...IN                            |
+| -------------------- | ----------------------------------- | ----------------------------------- |
+| Syntactic role       | Suffix to declarations              | Standalone expression               |
+| Parser type          | Postfix (`Expr -> Expr`)            | Prefix (standalone `Expr`)          |
+| Position in code     | End of definition only              | Anywhere in expression context      |
+| AST structure        | `Where Anno (Expr n) [LocalDecl n]` | `LetIn Anno [LocalDecl n] (Expr n)` |
+| Binding keywords     | Standard DECIDE/MEANS syntax        | IS/BE/MEAN/MEANS                    |
+| Recursive bindings   | Yes                                 | Yes                                 |
+| Sharing/memoization  | Yes                                 | Yes                                 |
+| Evaluation mechanism | `evalRecLocalDecls`                 | `evalRecLocalDecls` (same)          |
 
 ---
 
