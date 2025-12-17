@@ -200,20 +200,19 @@ Production-grade L4 development for enterprise systems. Covers professional work
 - [Default Logic](./doc/default-logic.md) and `Optional` types with the `Maybe` monad
 - [Automatically Building User-Facing Apps](doc/apps.md)
 
-## Language Reference
+## Language Reference & Theory
 
-- Decision Logic
+For an in-depth exploration of L4's theoretical foundations, design philosophy, and language features, see the [**L4 Language Reference**](doc/README.md).
 
-- State Transitions
+This comprehensive guide covers:
 
-- Functional and Logical Paradigms
+- **Boolean logic** and data types for legal reasoning
+- **Default logic** and ternary reasoning (unknown values)
+- **Constitutive rules** as first-order predicate logic (decision functions)
+- **Regulative rules** as labeled state transition systems (contracts, obligations)
+- **Multi-temporal logic** for reasoning about time-dependent rules
+- **Deontics** as property assertions (must, may, shall)
+- **Design principles** and the theory behind L4's syntax
+- Comparison with related languages (Catala, Blawx, Logical English, etc.)
 
-- Source Citations and Versioning
-
-- Multi-Temporal Logic
-
-  - a remark on "shall" as an unfortunate consequence of negotiation-time vs run-time interpretation
-
-- Operationalization to Web and Mobile Apps
-
-- Natural Language Generation: exporting to Word and PDF
+The reference also links to detailed documents on specific topics including mixfix operators, scope and modifiers, and the semantic foundations of legal computation.
