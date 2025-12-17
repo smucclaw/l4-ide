@@ -2,6 +2,7 @@
 dist-newstyle/
 cabal.project.local
 cabal.project.local~
+.cabal
 
 ## golden actual files
 *.actual

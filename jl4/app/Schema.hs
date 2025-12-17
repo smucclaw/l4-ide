@@ -18,6 +18,7 @@ import LSP.L4.Oneshot (oneshotL4Action)
 import LSP.Logger
 
 import L4.EvaluateLazy (resolveEvalConfig)
+import L4.TracePolicy (apiDefaultPolicy)
 import L4.Export (ExportedFunction (..), getExportedFunctions)
 import L4.JsonSchema (SchemaContext (..), emptyContext, generateJsonSchema)
 import L4.Syntax (TopDecl (..), Declare (..), Module (..), Resolved, Section (..), AppForm (..), rawNameToText, rawName, getActual)
@@ -49,7 +50,7 @@ main = do
   options <- execParser optionsConfig
   curDir <- getCurrentDirectory
   recorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
-  evalConfig <- resolveEvalConfig Nothing
+  evalConfig <- resolveEvalConfig Nothing apiDefaultPolicy
 
   result <- oneshotL4Action recorder evalConfig curDir \_ -> do
     let nfp = toNormalizedFilePath options.file

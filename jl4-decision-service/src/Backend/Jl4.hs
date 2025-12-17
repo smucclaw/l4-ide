@@ -12,7 +12,8 @@ import qualified L4.Evaluate.ValueLazy as Eval
 import qualified L4.EvaluateLazy as Eval
 import L4.EvaluateLazy.Machine (EvalException)
 import L4.EvaluateLazy.Trace
-import qualified L4.EvaluateLazy.GraphViz as GraphViz
+import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
+import L4.TracePolicy (apiDefaultPolicy)
 import L4.Names
 import L4.Print
 import qualified L4.Print as Print
@@ -123,7 +124,7 @@ evaluateWithCompiled filepath fnDecl compiled params traceLevel includeGraphViz 
   case mEvalRes of
     Nothing -> throwError $ InterpreterError (mconcat errs)
     Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz
+      handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz compiled.compiledModule
     Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
     Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
 
@@ -204,7 +205,7 @@ createFunction filepath fnDecl fnImpl moduleContext = do
                 case mEvalRes of
                   Nothing -> throwError $ InterpreterError (mconcat errs)
                   Just [Eval.MkEvalDirectiveResult{result, trace}] ->
-                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz
+                    handleEvalResult result trace genCode.decodeFailedSentinel traceLevel includeGraphViz tcRes.module'
                   Just [] -> throwError $ InterpreterError "L4: No #EVAL found in the program."
                   Just _xs -> throwError $ InterpreterError "L4: More than ONE #EVAL found in the program."
             }
@@ -250,8 +251,9 @@ handleEvalResult
   -> Text
   -> TraceLevel
   -> Bool
+  -> Module Resolved
   -> ExceptT EvaluatorError IO ResponseWithReason
-handleEvalResult result trace _sentinel traceLevel includeGraphViz = case result of
+handleEvalResult result trace _sentinel traceLevel includeGraphViz mModule = case result of
   Eval.Assertion _ -> throwError $ InterpreterError "L4: Got an assertion instead of a normal result."
   Eval.Reduction (Left evalExc) -> throwError $ InterpreterError $ Text.show evalExc
   Eval.Reduction (Right val) -> do
@@ -285,7 +287,7 @@ handleEvalResult result trace _sentinel traceLevel includeGraphViz = case result
               fmap
                 ( \tr ->
                     GraphVizResponse
-                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+                      { dot = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
                       , png = Nothing
                       , svg = Nothing
                       }
@@ -378,7 +380,8 @@ listToFnLiteral _acc (Eval.MkNF _)                   =
 
 typecheckModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe Rules.TypeCheckResult)
 typecheckModule file input moduleContext = do
-  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp
@@ -393,7 +396,8 @@ typecheckModule file input moduleContext = do
 
 evaluateModule :: (MonadIO m) => FilePath -> Text -> ModuleContext -> m ([Text], Maybe [Eval.EvalDirectiveResult])
 evaluateModule file input moduleContext = do
-  evalConfig <- liftIO $ Eval.resolveEvalConfig =<< Eval.readFixedNowEnv
+  fixedNow <- liftIO Eval.readFixedNowEnv
+  evalConfig <- liftIO $ Eval.resolveEvalConfig fixedNow apiDefaultPolicy
   liftIO $ oneshotL4ActionAndErrors evalConfig file \nfp -> do
     let
       uri = normalizedFilePathToUri nfp

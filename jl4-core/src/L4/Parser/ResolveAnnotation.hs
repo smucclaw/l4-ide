@@ -479,6 +479,10 @@ instance (HasSrcRange n, HasNlg n) => HasNlg (Expr n) where
       e' <- addNlg e
       lcl' <- traverse addNlg lcl
       pure $ Where ann e' lcl'
+    LetIn ann lcl e -> do
+      lcl' <- traverse addNlg lcl
+      e' <- addNlg e
+      pure $ LetIn ann lcl' e'
     Event ann e -> Event ann <$> addNlg e
     Fetch ann e -> Fetch ann <$> addNlg e
     Env ann e -> Env ann <$> addNlg e

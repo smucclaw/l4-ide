@@ -1012,6 +1012,18 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     -- brings new bindings into scope.
     nlgExpr re
   setAnnResolvedType t Nothing (Where ann re rds)
+checkExpr ec (LetIn ann ds e) t = softprune $ do
+  let
+    preScanDecl = mapMaybeM scanTyDeclLocalDecl
+    scanDecl = mapMaybeM inferTyDeclLocalDecl
+    scanFuns = mapMaybeM scanFunSigLocalDecl
+
+  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
+     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+  re <- extendKnownMany (concat extends) do
+    re <- checkExpr ec e t
+    nlgExpr re
+  setAnnResolvedType t Nothing (LetIn ann rds re)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
   expect ec t rt
@@ -1282,6 +1294,16 @@ inferExpr' g =
         unzip <$> traverse inferLocalDecl ds
       (re, t) <- extendKnownMany (concat extends) $ inferExpr e
       pure (Where ann re rds, t)
+    LetIn ann ds e -> do
+      let
+        preScanDecl = mapMaybeM scanTyDeclLocalDecl
+        scanDecl = mapMaybeM inferTyDeclLocalDecl
+        scanFuns = mapMaybeM scanFunSigLocalDecl
+
+      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
+        unzip <$> traverse inferLocalDecl ds
+      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      pure (LetIn ann rds re, t)
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
       pure (Event ann ev', ty)

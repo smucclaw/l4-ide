@@ -7,6 +7,7 @@ module Main where
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef
+import Data.List (sortOn, isPrefixOf)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text.IO
@@ -15,11 +16,11 @@ import Data.Time.Format (defaultTimeLocale, formatTime)
 import Options.Applicative
 import System.Console.Haskeline
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, makeAbsolute)
-import System.FilePath (takeDirectory)
+import System.FilePath (takeDirectory, takeBaseName)
 import Text.Printf (printf)
 
 import Development.IDE.Graph.Database (shakeRunDatabase)
-import Language.LSP.Protocol.Types (toNormalizedFilePath, normalizedFilePathToUri)
+import Language.LSP.Protocol.Types (toNormalizedFilePath, normalizedFilePathToUri, fromNormalizedUri, NormalizedUri)
 
 import LSP.Logger (makeDefaultStderrRecorder, cmapWithPrio, cfilter, pretty, Recorder, WithPriority(..), Priority(..))
 import L4.TypeCheck.Types (CheckError(..), CheckErrorWithContext(..))
@@ -29,9 +30,16 @@ import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
-import qualified L4.EvaluateLazy.GraphViz as GraphViz
+import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
+import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
+import L4.TracePolicy (replDefaultPolicy)
 import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
+import L4.Syntax (Module, Resolved, RawName(..), Unique, rawNameToText, Name(..))
+import L4.Annotation (Anno_(..))
+import L4.Parser.SrcSpan (SrcRange(..), SrcPos(..))
+import L4.TypeCheck.Types (CheckEntity(..), EntityInfo)
+import qualified Base.Map as Map
 
 -- | Command line options
 data Options = Options
@@ -72,7 +80,9 @@ main :: IO ()
 main = do
   opts <- execParser optionsInfo
   curDir <- getCurrentDirectory
-  evalConfig <- resolveEvalConfig Nothing
+  -- REPL default: enable traces for exploration (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  let tracePolicy = replDefaultPolicy defaultGraphVizOptions
+  evalConfig <- resolveEvalConfig Nothing tracePolicy
   baseRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
   let recorder = if opts.verbose
                  then baseRecorder
@@ -235,6 +245,29 @@ processInput st input
       if null currentImports
         then pure ("No imports.", st, False)
         else pure (Text.unlines currentImports, st, False)
+  | ":info " `Text.isPrefixOf` stripped = do
+      let nameText = Text.strip $ Text.drop 6 stripped
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- getNameInfo st fp nameText
+          pure (result, st, False)
+  | ":env" `Text.isPrefixOf` stripped || ":e" == stripped = do
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- listEnvironment st fp
+          pure (result, st, False)
+  | ":reset" `Text.isPrefixOf` stripped = do
+      -- Reset by reloading all files and clearing imports
+      writeIORef st.imports []
+      case st.loadedFile of
+        Nothing -> pure ("REPL reset. No files loaded.", st, False)
+        Just fp -> do
+          result <- loadFile st fp
+          case result of
+            Left err -> pure ("Error reloading: " <> err, st, False)
+            Right _ -> pure ("REPL reset. Reloaded: " <> Text.pack fp, st, False)
   | ":" `Text.isPrefixOf` stripped =
       pure ("Unknown command: " <> stripped, st, False)
   | "IMPORT " `Text.isPrefixOf` stripped = do
@@ -394,31 +427,31 @@ evalWithTrace st contextFile exprText = do
     Just tc | not tc.success -> do
       let errors = tc.infos
       pure $ "Type error:\n" <> Text.unlines (map (Text.pack . show) $ take 3 errors)
-    Just _tc -> do
+    Just tc -> do
       -- Get evaluation results WITH trace
       [meval] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.EvaluateLazy replUri]
       case meval of
         Nothing -> pure "Evaluation failed"
         Just [] -> pure "(no result)"
-        Just results -> formatTraceResults st exprText actualExpr results
+        Just results -> formatTraceResults st exprText actualExpr tc.module' results
 
 -- | Format evaluation results showing GraphViz DOT trace or save to files
-formatTraceResults :: ReplState -> Text -> Text -> [EvalDirectiveResult] -> IO Text
-formatTraceResults st exprText actualExpr results = do
+formatTraceResults :: ReplState -> Text -> Text -> Module Resolved -> [EvalDirectiveResult] -> IO Text
+formatTraceResults st exprText actualExpr mModule results = do
   mSink <- readIORef st.traceSink
   case mSink of
-    Nothing -> pure $ Text.unlines $ map formatTraceResult results
+    Nothing -> pure $ Text.unlines $ map (formatTraceResult mModule) results
     Just sink -> do
-      messages <- mapM (saveTraceResult st exprText actualExpr sink) results
+      messages <- mapM (saveTraceResult st exprText actualExpr mModule sink) results
       pure $ Text.unlines messages
 
-formatTraceResult :: EvalDirectiveResult -> Text
-formatTraceResult (MkEvalDirectiveResult _range _res mtrace) = case mtrace of
+formatTraceResult :: Module Resolved -> EvalDirectiveResult -> Text
+formatTraceResult mModule (MkEvalDirectiveResult _range _res mtrace) = case mtrace of
   Nothing -> "(no trace available)"
-  Just tr -> GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+  Just tr -> GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
 
-saveTraceResult :: ReplState -> Text -> Text -> TraceSink -> EvalDirectiveResult -> IO Text
-saveTraceResult st exprText actualExpr sink result@(MkEvalDirectiveResult _ _ mtrace) =
+saveTraceResult :: ReplState -> Text -> Text -> Module Resolved -> TraceSink -> EvalDirectiveResult -> IO Text
+saveTraceResult st exprText actualExpr mModule sink result@(MkEvalDirectiveResult _ _ mtrace) =
   case mtrace of
     Nothing -> pure "(no trace available)"
     Just tr -> do
@@ -429,7 +462,7 @@ saveTraceResult st exprText actualExpr sink result@(MkEvalDirectiveResult _ _ mt
           dirPath = takeDirectory filePath
       createDirectoryIfMissing True dirPath
       fileHeader <- buildTraceHeader st exprText actualExpr importsList timestamp result
-      let dotText = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+      let dotText = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
           fileContent = fileHeader <> dotText <> "\n"
       Text.IO.writeFile filePath fileContent
       pure $ "Saved trace to " <> Text.pack filePath
@@ -474,6 +507,93 @@ summarizeEvalResult (MkEvalDirectiveResult _range res _trace) = case res of
   Reduction (Right nf) -> Print.prettyLayout nf
   Reduction (Left err)  ->
     Text.intercalate "; " ("Error" : prettyEvalException err)
+
+-- | Get information about a name (type and definition)
+getNameInfo :: ReplState -> FilePath -> Text -> IO Text
+getNameInfo st contextFile nameText = do
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  case mTc of
+    Nothing -> pure "Failed to type check file"
+    Just tc -> do
+      let rn = NormalName nameText  -- Convert Text to RawName
+          env = tc.environment
+          ei = tc.entityInfo
+      case Map.lookup rn env of
+        Nothing -> pure $ "Not in scope: " <> nameText
+        Just uniques -> do
+          let results = [ formatNameInfo n ce | u <- uniques
+                        , Just (n, ce) <- [Map.lookup u ei]
+                        ]
+          if null results
+            then pure $ "No information found for: " <> nameText
+            else pure $ Text.intercalate "\n\n" results
+  where
+    formatNameInfo n ce =
+      let nText = rawNameToText (rawName' n)
+          location = formatLocation n
+      in case ce of
+        KnownType _kind _params _mty ->
+          nText <> " :: TYPE" <> location
+        KnownTerm ty _termKind ->
+          nText <> " :: " <> Print.prettyLayout ty <> location
+        KnownSection _sec ->
+          nText <> " :: SECTION" <> location
+        KnownTypeVariable ->
+          nText <> " :: TYPE VARIABLE" <> location
+
+    rawName' (MkName _ rn) = rn
+
+    formatLocation (MkName (Anno _extra mrange _payload) _) = case mrange of
+      Nothing -> ""
+      Just (MkSrcRange start _end _len uri) ->
+        let (MkSrcPos lineNum _col) = start
+            -- Extract filename from file:// URI
+            uriStr = Text.unpack $ getUriText uri
+            filename = takeBaseName $ if "file://" `isPrefixOf` uriStr
+                                      then drop 7 uriStr
+                                      else uriStr
+        in "\n  -- Defined in " <> Text.pack filename <> " at line " <> Text.pack (show lineNum)
+
+    -- Helper to extract URI text (works around NoFieldSelectors)
+    getUriText :: NormalizedUri -> Text
+    getUriText nuri =
+      let uri = fromNormalizedUri nuri
+      in case uri of
+           _ -> Text.pack (show uri)  -- Fallback to show if we can't access getUri
+
+-- | List all names in scope
+listEnvironment :: ReplState -> FilePath -> IO Text
+listEnvironment st contextFile = do
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  case mTc of
+    Nothing -> pure "Failed to type check file"
+    Just tc -> do
+      let env = tc.environment
+          ei = tc.entityInfo
+          allNames = Map.toList env
+          formatted = [ formatEnvEntry rn uniques ei | (rn, uniques) <- sortOn (rawNameToText . fst) allNames ]
+          grouped = Text.unlines
+            [ "-- Names in scope:"
+            , Text.unlines formatted
+            ]
+      pure grouped
+  where
+    formatEnvEntry :: RawName -> [Unique] -> EntityInfo -> Text
+    formatEnvEntry rn uniques ei =
+      let infos = [ formatShortInfo n ce | u <- uniques
+                  , Just (n, ce) <- [Map.lookup u ei]
+                  ]
+      in if null infos
+         then rawNameToText rn <> " (no info)"
+         else rawNameToText rn <> ": " <> Text.intercalate ", " infos
+
+    formatShortInfo _n ce = case ce of
+      KnownType _ _ _ -> "TYPE"
+      KnownTerm ty _ -> Print.prettyLayout ty
+      KnownSection _ -> "SECTION"
+      KnownTypeVariable -> "TYPE_VAR"
 
 -- | Get the type of an expression without evaluating it
 -- Uses #CHECK directive which reports the type as an info message
@@ -525,26 +645,37 @@ getExpressionType st contextFile exprText = do
 helpText :: Text
 helpText = Text.unlines
   [ "Available commands:"
-  , "  :help, :h       Show this help"
-  , "  :quit, :q       Exit the REPL"
-  , "  :load <file>    Load an L4 file"
-  , "  :l <file>       Short for :load"
-  , "  :reload, :r     Reload the current file"
-  , "  :type <expr>    Show the type of an expression"
-  , "  :t <expr>       Short for :type"
-  , "  :trace <expr>   Show evaluation trace as GraphViz DOT"
-  , "  :tr <expr>      Short for :trace"
-  , "  :tracefile <prefix>  Save traces to <prefix>-NN.dot"
-  , "  :tracefile off       Restore stdout trace output"
-  , "  :import <lib>   Import a library (e.g., :import prelude)"
-  , "  :i <lib>        Short for :import"
-  , "  :imports        Show current imports"
+  , "  :help, :h          Show this help"
+  , "  :quit, :q          Exit the REPL"
+  , ""
+  , "File management:"
+  , "  :load <file>       Load an L4 file"
+  , "  :l <file>          Short for :load"
+  , "  :reload, :r        Reload the current file"
+  , "  :reset             Reset REPL (clear imports, reload file)"
+  , ""
+  , "Inspection:"
+  , "  :type <expr>       Show the type of an expression"
+  , "  :t <expr>          Short for :type"
+  , "  :info <name>       Show definition and type of a name"
+  , "  :env, :e           List all names in scope"
+  , ""
+  , "Tracing:"
+  , "  :trace <expr>      Show evaluation trace as GraphViz DOT"
+  , "  :tr <expr>         Short for :trace"
+  , "  :tracefile <path>  Save traces to <path>-NN.dot"
+  , "  :tracefile off     Restore stdout trace output"
+  , ""
+  , "Imports:"
+  , "  :import <lib>      Import a library (e.g., :import prelude)"
+  , "  :i <lib>           Short for :import"
+  , "  :imports           Show current imports"
   , ""
   , "Expression syntax:"
-  , "  <expr>          Evaluate expression (implicit #EVAL)"
-  , "  #EVAL <expr>    Evaluate expression and show result"
-  , "  #ASSERT <expr>  Evaluate boolean expression, report pass/fail"
-  , "  #EVALTRACE <expr> Evaluate with trace output"
+  , "  <expr>             Evaluate expression (implicit #EVAL)"
+  , "  #EVAL <expr>       Evaluate expression and show result"
+  , "  #ASSERT <expr>     Evaluate boolean expression, report pass/fail"
+  , "  #EVALTRACE <expr>  Evaluate with trace output"
   , ""
   , "Trace visualization:"
   , "  :trace 5 cubed           Show DOT graph"

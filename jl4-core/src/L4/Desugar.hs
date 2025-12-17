@@ -51,6 +51,7 @@ carameliseExpr = carameliseNode >>> \ case
   Percent    ann e -> Percent ann (carameliseExpr e)
   List       ann es -> List ann (fmap carameliseExpr es)
   Where      ann e ds -> Where ann (carameliseExpr e) (fmap carameliseLocalDecl ds)
+  LetIn      ann ds e -> LetIn ann (fmap carameliseLocalDecl ds) (carameliseExpr e)
   Event      ann ev -> Event ann (carameliseEvent ev)
   Fetch      ann e -> Fetch ann (carameliseExpr e)
   Env        ann e -> Env ann (carameliseExpr e)

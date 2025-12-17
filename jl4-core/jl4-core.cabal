@@ -85,8 +85,8 @@ library
     L4.EvaluateLazy
     L4.EvaluateLazy.Machine
     L4.EvaluateLazy.ContractFrame
-    L4.EvaluateLazy.GraphViz
     L4.EvaluateLazy.GraphViz2
+    L4.EvaluateLazy.GraphVizOptions
     L4.EvaluateLazy.Trace
     L4.ExactPrint
     L4.Export
@@ -104,6 +104,7 @@ library
     L4.Syntax
     L4.TemporalContext
     L4.TemporalGit
+    L4.TracePolicy
     L4.Transform
     L4.TypeCheck
     L4.TypeCheck.Annotation

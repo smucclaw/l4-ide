@@ -18,7 +18,7 @@ import qualified Data.Yaml as Yaml
 import qualified Data.Vector as Vector
 import qualified Data.HashMap.Strict as HashMap
 import Data.Text.Encoding (decodeUtf8)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust, fromMaybe)
 import Options.Applicative (ReadM, eitherReader, fullDesc, header, footer, helper, info, metavar, option, optional, strArgument, help, short, long, switch, progDesc, value, showDefaultWith)
 import qualified Options.Applicative as Options
 import System.Directory (getCurrentDirectory, createDirectoryIfMissing)
@@ -37,13 +37,14 @@ import LSP.L4.Oneshot (oneshotL4Action, oneshotL4ActionAndErrors)
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
-import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz2
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
 import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
 import L4.DirectiveFilter (filterIdeDirectives)
 import L4.Parser.SrcSpan (prettySrcRange)
+import qualified L4.TracePolicy as TracePolicy
+import L4.TracePolicy (TracePolicy(..), TraceLevel(..), TraceOptions(..), TraceDestination(..))
 import Data.Time (UTCTime)
 import qualified Data.List as List
 
@@ -177,6 +178,7 @@ data Log
   | SuccessOnly
   | BatchProcessing !Text
   | EvalOutput !Text
+  | CliMessage !Text  -- General CLI messages (info, warnings)
 
 instance Pretty Log where
   pretty = \ case
@@ -187,10 +189,66 @@ instance Pretty Log where
     SuccessOnly -> "Checking succeeded."
     BatchProcessing msg -> "Batch:" <+> pretty msg
     EvalOutput txt -> pretty txt
+    CliMessage msg -> pretty msg  -- No prefix for general CLI messages
 
 ----------------------------------------------------------------------------
 -- Main
 ----------------------------------------------------------------------------
+
+-- | Convert CLI options to unified TracePolicy
+-- Implements the CLI behavior from TRACE-GRAPHVIZ-ARCHITECTURE.md
+--
+-- NOTE: This function creates a TracePolicy representing the unified architecture.
+-- Currently this is informational - the actual trace behavior is still controlled
+-- by the direct Option fields (traceText, graphvizFormat, outputDir).
+-- Future work: Thread TracePolicy through the evaluation pipeline to fully unify
+-- trace behavior across CLI/REPL/API.
+optionsToTracePolicy :: Options -> TracePolicy
+optionsToTracePolicy opts =
+  let gvOpts = GraphViz2.GraphVizOptions
+        { GraphViz2.includeValues = True
+        , GraphViz2.showUnevaluated = True
+        , GraphViz2.simplifyTrivial = opts.graphVizOptimize
+        , GraphViz2.maxDepth = Nothing
+        , GraphViz2.collapseFunctionLookups = opts.graphVizOptimize
+        , GraphViz2.collapseSimplePaths = opts.graphVizOptimize
+        , GraphViz2.deduplicateBindings = not opts.noDeduplicateBindings
+        }
+
+      -- Determine trace level for #EVALTRACE directives
+      evaltraceLevel = case (opts.traceText, opts.graphvizFormat) of
+        (TraceTextNone, Nothing) -> NoTrace
+        (TraceTextFull, Nothing) -> CollectTrace (TraceOptions TracePolicy.TextTrace dest gvOpts)
+        (_, Just format) -> CollectTrace (TraceOptions (graphVizFormatToTraceFormat format) dest gvOpts)
+
+      -- Destination based on output directory
+      dest = case opts.outputDir of
+        Nothing -> Stdout
+        Just dir -> FilesOnly dir
+
+      -- CLI default: #EVAL directives don't produce traces (author's hint respected)
+      evalLevel = NoTrace
+
+  in TracePolicy
+       { evalDirectiveTrace = evalLevel
+       , evaltraceDirectiveTrace = evaltraceLevel
+       }
+
+graphVizFormatToTraceFormat :: GraphVizFormat -> TracePolicy.TraceFormat
+graphVizFormatToTraceFormat DotFormat = TracePolicy.DotFormat
+graphVizFormatToTraceFormat PngFormat = TracePolicy.PngFormat
+graphVizFormatToTraceFormat SvgFormat = TracePolicy.SvgFormat
+
+-- | Check if graphviz output is enabled (old or new way) and emit deprecation warnings
+isGraphVizEnabled :: Options -> Recorder (WithPriority Log) -> IO Bool
+isGraphVizEnabled opts recorder = do
+  when opts.outputGraphViz $ do
+    logWith recorder Warning $ CliMessage
+      "WARNING: --graphviz is deprecated. Use --graphviz-format=dot instead."
+  when opts.outputGraphViz2 $ do
+    logWith recorder Warning $ CliMessage
+      "WARNING: --graphviz2 is deprecated. Use --graphviz-format=dot instead."
+  pure $ opts.outputGraphViz || opts.outputGraphViz2 || isJust opts.graphvizFormat
 
 main :: IO ()
 main = do
@@ -198,12 +256,19 @@ main = do
   options  <- Options.execParser optionsConfig
   baseRecorder <- makeDefaultStderrRecorder Nothing
   let recorder = cmapWithPrio pretty baseRecorder
-      -- In graphviz mode, suppress LSP diagnostics to keep output clean
-      oneshotRecorder = if options.outputGraphViz || options.outputGraphViz2
+
+  -- Check if graphviz is enabled and emit deprecation warnings
+  graphvizEnabled <- isGraphVizEnabled options recorder
+
+  let -- In graphviz mode, suppress LSP diagnostics to keep output clean
+      oneshotRecorder = if graphvizEnabled
                           then cmapWithPrio IdeLog mempty  -- Null recorder
                           else cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
-  evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
+
+  -- Create unified TracePolicy from options (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  let tracePolicy = optionsToTracePolicy options
+  evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed) tracePolicy
 
   (getErrs, errRecorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
 
@@ -315,47 +380,59 @@ main = do
           mEval <- Shake.use Rules.EvaluateLazy uri
           mep <- Shake.use Rules.ExactPrint uri
           forM_ mEval $ \evalResults -> do
-            if options.outputGraphViz
+            if graphvizEnabled
               then do
-                -- In graphviz mode (original), only output DOT format to stdout
-                for_ evalResults $ \result ->
-                  case result.trace of
-                    Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
-                    Nothing -> pure ()
-              else if options.outputGraphViz2
-                then do
-                  -- In graphviz2 mode (new FGL-based)
-                  -- Get the typechecked module for AST inspection
-                  let mModule = mtc >>= \tc -> if tc.success then Just tc.module' else Nothing
-                      gvOpts = GraphViz2.defaultGraphVizOptions
-                        { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
-                        , GraphViz2.collapseSimplePaths = options.graphVizOptimize
-                        , GraphViz2.showFunctionBodies = options.showFunctionBodies
-                        }
-                  case options.outputDir of
-                    Nothing ->
-                      -- No output dir: write to stdout (original behavior)
-                      for_ evalResults $ \result ->
-                        case result.trace of
-                          Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts mModule tr
-                          Nothing -> pure ()
-                    Just outDir -> do
-                      -- Output dir specified: auto-split to separate files
-                      liftIO $ createDirectoryIfMissing True outDir
-                      let baseName = takeBaseName fp
-                      for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
-                        case result.trace of
-                          Just tr -> liftIO $ do
-                            let dotContent = GraphViz2.traceToGraphViz gvOpts mModule tr
-                                dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
-                                pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
-                            -- Write .dot file
-                            Text.IO.writeFile dotFile dotContent
-                            -- Generate .png using dot command
-                            callCommand $ "dot -Tpng " <> dotFile <> " > " <> pngFile
-                            logWith recorder Info $ BatchProcessing $
-                              "Generated: " <> Text.pack dotFile <> " and " <> Text.pack pngFile
-                          Nothing -> pure ()
+                -- GraphViz mode - generate trace visualizations
+                let mModule = mtc >>= \tc -> if tc.success then Just tc.module' else Nothing
+                    gvOpts = GraphViz2.defaultGraphVizOptions
+                      { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
+                      , GraphViz2.collapseSimplePaths = options.graphVizOptimize
+                      , GraphViz2.deduplicateBindings = not options.noDeduplicateBindings
+                      }
+                    -- Determine format: new flag takes precedence, fallback to DOT for old flags
+                    format = fromMaybe DotFormat options.graphvizFormat
+
+                case (options.outputDir, format) of
+                  (Nothing, DotFormat) ->
+                    -- No output dir, DOT format: write to stdout
+                    for_ evalResults $ \result ->
+                      case result.trace of
+                        Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts mModule tr
+                        Nothing -> pure ()
+
+                  (Just outDir, _) -> do
+                    -- Output dir specified: write files based on format
+                    liftIO $ createDirectoryIfMissing True outDir
+                    let baseName = takeBaseName fp
+                    for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
+                      case result.trace of
+                        Just tr -> liftIO $ do
+                          let dotContent = GraphViz2.traceToGraphViz gvOpts mModule tr
+                              dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
+                          -- Always write .dot file
+                          Text.IO.writeFile dotFile dotContent
+                          -- Generate additional formats if requested
+                          case format of
+                            DotFormat -> do
+                              logWith recorder Info $ BatchProcessing $
+                                "Generated: " <> Text.pack dotFile
+                            PngFormat -> do
+                              let pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
+                              callCommand $ "dot -Tpng " <> dotFile <> " > " <> pngFile
+                              logWith recorder Info $ BatchProcessing $
+                                "Generated: " <> Text.pack dotFile <> " and " <> Text.pack pngFile
+                            SvgFormat -> do
+                              let svgFile = outDir </> baseName <> "-eval" <> show idx <> ".svg"
+                              callCommand $ "dot -Tsvg " <> dotFile <> " > " <> svgFile
+                              logWith recorder Info $ BatchProcessing $
+                                "Generated: " <> Text.pack dotFile <> " and " <> Text.pack svgFile
+                        Nothing -> pure ()
+
+                  (Nothing, _) -> do
+                    -- PNG/SVG without output dir doesn't make sense
+                    liftIO $ logWith recorder Error $ BatchProcessing
+                      "Error: --graphviz-format=png/svg requires --output-dir to be specified"
+                    liftIO exitFailure
                 else do
                   -- In normal mode, log evaluation results
                   for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
@@ -405,16 +482,32 @@ traceTextModeReader = eitherReader \input ->
     "ascii" -> Right TraceTextFull
     other -> Left $ "Invalid trace MODE: " <> Text.unpack other <> " (expected none|full)"
 
+-- | Output format for graphviz traces
+data GraphVizFormat
+  = DotFormat  -- ^ Output DOT format to stdout
+  | PngFormat  -- ^ Generate PNG files
+  | SvgFormat  -- ^ Generate SVG files
+  deriving (Eq, Show)
+
+graphVizFormatReader :: ReadM GraphVizFormat
+graphVizFormatReader = eitherReader \input ->
+  case Text.toLower (Text.pack input) of
+    "dot" -> Right DotFormat
+    "png" -> Right PngFormat
+    "svg" -> Right SvgFormat
+    other -> Left $ "Invalid format: " <> Text.unpack other <> " (expected dot|png|svg)"
+
 data Options = MkOptions
   { files :: NonEmpty FilePath
   , verbose :: Bool
   , showAst :: Bool
   , traceText :: TraceTextMode
-  , outputGraphViz :: Bool
-  , outputGraphViz2 :: Bool
-  , graphVizOptimize :: Bool  -- Enable all GraphViz2 optimizations
-  , showFunctionBodies :: Bool  -- Show function bodies in graph nodes
-  , outputDir :: Maybe FilePath  -- Directory for auto-split graph files
+  , outputGraphViz :: Bool          -- DEPRECATED: old v1
+  , outputGraphViz2 :: Bool         -- DEPRECATED: use graphvizFormat instead
+  , graphvizFormat :: Maybe GraphVizFormat  -- NEW: unified format control
+  , graphVizOptimize :: Bool        -- Enable GraphViz2 optimizations (collapse trivial nodes)
+  , noDeduplicateBindings :: Bool   -- DISABLE binding deduplication (enabled by default)
+  , outputDir :: Maybe FilePath     -- Directory for auto-split graph files
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
   , batchFormat :: Maybe Text
@@ -427,10 +520,11 @@ optionsDescription = MkOptions
   <*> switch (long "verbose" <> short 'v' <> help "Enable verbose output: reformats and prints the input files")
   <*> switch (long "ast" <> short 'a' <> help "Show abstract syntax tree")
   <*> option traceTextModeReader (long "trace" <> short 't' <> metavar "MODE" <> value TraceTextFull <> showDefaultWith renderTraceTextMode <> help "Trace text output: none | full (default full)")
-  <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
-  <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
-  <*> switch (long "optimize-graph" <> help "Enable GraphViz2 optimizations (collapse function lookups and simple paths)")
-  <*> fmap not (switch (long "hide-function-bodies" <> help "Hide function bodies in graph nodes (shown by default)"))
+  <*> switch (long "graphviz" <> short 'g' <> help "[DEPRECATED: use --graphviz-format=dot] Output as GraphViz DOT (old v1)")
+  <*> switch (long "graphviz2" <> help "[DEPRECATED: use --graphviz-format=dot] Output as GraphViz DOT (v2)")
+  <*> optional (option graphVizFormatReader (long "graphviz-format" <> metavar "FORMAT" <> help "Output GraphViz trace (enables tracing): dot | png | svg"))
+  <*> switch (long "optimize" <> help "Enable GraphViz optimizations (collapse function lookups and simple paths)")
+  <*> switch (long "no-deduplicate-bindings" <> help "Disable binding deduplication (enabled by default to show shared WHERE/LET bindings)")
   <*> optional (Options.strOption (long "output-dir" <> short 'o' <> metavar "DIR" <> help "Output directory for graph files (auto-splits multiple graphs, generates .dot and .png)"))
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))

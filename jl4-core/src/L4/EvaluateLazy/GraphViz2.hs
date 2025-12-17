@@ -13,11 +13,13 @@ module L4.EvaluateLazy.GraphViz2 (
 ) where
 
 import Base
+import qualified Base.Map as Map
 import qualified Base.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import Control.Applicative ((<|>))
 import L4.EvaluateLazy.Trace (EvalTrace(..))
 import L4.EvaluateLazy.Machine (EvalException, boolView)
+import L4.EvaluateLazy.GraphVizOptions (GraphVizOptions(..), defaultGraphVizOptions)
 import L4.Evaluate.ValueLazy (NF(..))
 import L4.Syntax (Expr(..), Resolved, Branch(..), BranchLhs(..), Module(..), TopDecl(..), Decide(..), Section(..), AppForm(..), LocalDecl(..), Unique, getUnique, Desc, getDesc, annDesc)
 import L4.Print (prettyLayout)
@@ -30,36 +32,15 @@ import qualified Data.Graph.Inductive.PatriciaTree as FGL
 import qualified Data.GraphViz as GV
 import qualified Data.GraphViz.Attributes.Complete as GV
 
--- | Options for controlling GraphViz output
-data GraphVizOptions = GraphVizOptions
-  { includeValues :: Bool
-  , showUnevaluated :: Bool
-  , simplifyTrivial :: Bool
-  , maxDepth :: Maybe Int
-  -- Optimization flags
-  , collapseFunctionLookups :: Bool
-  , collapseSimplePaths :: Bool
-  , showFunctionBodies :: Bool
-  } deriving (Eq, Show)
-
-defaultGraphVizOptions :: GraphVizOptions
-defaultGraphVizOptions = GraphVizOptions
-  { includeValues = True
-  , showUnevaluated = True
-  , simplifyTrivial = False
-  , maxDepth = Nothing
-  -- Optimizations disabled by default (show full trace)
-  , collapseFunctionLookups = False
-  , collapseSimplePaths = False
-  -- Function bodies enabled by default (provide context)
-  , showFunctionBodies = True
-  }
+-- GraphVizOptions is now imported from L4.EvaluateLazy.GraphVizOptions
+-- and re-exported above to maintain backward compatibility
 
 -- | Node attributes for rendering
 data NodeAttrs = NodeAttrs
   { nodeLabel :: Text
   , fillColor :: Text
   , nodeStyle :: Text
+  , bindingId :: Maybe Resolved  -- For deduplication: identifies shared bindings
   } deriving (Eq, Show)
 
 -- | Edge attributes for rendering
@@ -96,6 +77,7 @@ applyOptimizations opts graph =
   graph
     |> applyIf opts.collapseFunctionLookups collapseFunctionLookupsPass
     |> applyIf opts.collapseSimplePaths collapseSimplePathsPass
+    |> applyIf opts.deduplicateBindings deduplicateBindingsPass
   where
     applyIf :: Bool -> (a -> a) -> (a -> a)
     applyIf True f = f
@@ -179,6 +161,79 @@ collapseSimplePathsPass graph =
           in FGL.insEdge newEdge grWithoutTrivial
         _ -> gr  -- Not a simple path, don't collapse
 
+-- | Optimization: Deduplicate nodes representing shared bindings
+--   Pattern: Multiple nodes with same binding identity, same result, AND same evaluation path
+--   Result:  Single node with multiple incoming edges (visualizes sharing/memoization)
+--
+--   This addresses the issue described in GRAPHVIZ-SHARING-LETIN-WHERE.md where
+--   a shared binding referenced from multiple call sites creates duplicate boxes.
+--
+--   IMPORTANT: Only merges true duplicates (same binding + same subgraph structure).
+--   Two evaluations that produce the same value for DIFFERENT REASONS are kept separate.
+deduplicateBindingsPass :: EvalGraph -> EvalGraph
+deduplicateBindingsPass graph =
+  let -- Find all pairs of nodes that are structural duplicates
+      allNodes = FGL.labNodes graph
+      duplicatePairs = findDuplicatePairs graph allNodes
+      -- Build merge plan: map each duplicate to its canonical node
+      mergeMap = buildMergeMap duplicatePairs
+      -- Apply all merges
+      deduplicatedGraph = foldl' (\g (dup, canon) -> mergeNode canon dup g) graph (Map.toList mergeMap)
+  in deduplicatedGraph
+  where
+    -- Find pairs of nodes that are true duplicates (same binding, same subgraph)
+    findDuplicatePairs :: EvalGraph -> [LNode NodeAttrs] -> [(Node, Node)]
+    findDuplicatePairs gr nodes =
+      [ (n1, n2)
+      | (n1, attrs1) <- nodes
+      , (n2, attrs2) <- nodes
+      , n1 < n2  -- Avoid comparing same node and avoid (n1,n2) and (n2,n1)
+      , isJust attrs1.bindingId
+      , attrs1.bindingId == attrs2.bindingId
+      , attrs1.nodeLabel == attrs2.nodeLabel  -- Same result
+      , sameSubgraph gr n1 n2  -- Same evaluation path
+      ]
+
+    -- Check if two nodes have the same subgraph structure (same children, recursively)
+    sameSubgraph :: EvalGraph -> Node -> Node -> Bool
+    sameSubgraph gr n1 n2 =
+      let children1 = FGL.suc gr n1
+          children2 = FGL.suc gr n2
+      in length children1 == length children2
+         && all (\(c1, c2) -> nodesEqual gr c1 c2) (zip (sort children1) (sort children2))
+
+    -- Check if two nodes are equal (same label and same children)
+    nodesEqual :: EvalGraph -> Node -> Node -> Bool
+    nodesEqual gr n1 n2 =
+      case (FGL.lab gr n1, FGL.lab gr n2) of
+        (Just attrs1, Just attrs2) ->
+          attrs1.nodeLabel == attrs2.nodeLabel && sameSubgraph gr n1 n2
+        _ -> False
+
+    -- Build a map from duplicate nodes to their canonical representatives
+    buildMergeMap :: [(Node, Node)] -> Map Node Node
+    buildMergeMap pairs =
+      -- For each duplicate pair (n1, n2), map n2 -> n1 (keep lower node ID as canonical)
+      Map.fromList [(n2, n1) | (n1, n2) <- pairs]
+
+    -- Merge duplicate node into canonical node
+    mergeNode :: Node -> Node -> EvalGraph -> EvalGraph
+    mergeNode canonical duplicate gr =
+      let -- Get all edges involving the duplicate
+          incomingEdges = [ (src, duplicate, attrs) | (src, tgt, attrs) <- FGL.labEdges gr, tgt == duplicate, src /= canonical ]
+          outgoingEdges = [ (duplicate, tgt, attrs) | (src, tgt, attrs) <- FGL.labEdges gr, src == duplicate, tgt /= canonical ]
+
+          -- Create new edges pointing to canonical instead
+          newIncoming = [ (src, canonical, attrs) | (src, _, attrs) <- incomingEdges ]
+          newOutgoing = [ (canonical, tgt, attrs) | (_, tgt, attrs) <- outgoingEdges ]
+
+          -- Delete duplicate node
+          grWithoutDup = FGL.delNode duplicate gr
+
+          -- Add redirected edges (avoid creating duplicates)
+          grWithNew = foldl' (\g e -> if FGL.hasLEdge g e then g else FGL.insEdge e g) grWithoutDup (newIncoming ++ newOutgoing)
+      in grWithNew
+
 -- ============================================================================
 -- Pure recursive graph building - follows inductive structure
 -- ============================================================================
@@ -190,13 +245,13 @@ buildGraph :: GraphVizOptions -> Maybe (Module Resolved) -> Int -> Node -> EvalT
 buildGraph opts mModule depth nodeId (Trace mlabel steps result) =
   let -- Create node for this trace
       baseLabel = formatTraceLabel opts mlabel steps result
-      enhancedLabel = if opts.showFunctionBodies
-                        then enhanceLabelWithFunctionBody mModule mlabel baseLabel
-                        else baseLabel
+      -- Always enhance with @desc annotation if available
+      enhancedLabel = enhanceLabelWithDesc mModule mlabel baseLabel
       nodeAttrs = NodeAttrs
         { nodeLabel = enhancedLabel
         , fillColor = if isRight result then "#d0e8f2" else "#ffcccc"
         , nodeStyle = "filled"
+        , bindingId = mlabel  -- Store binding identity for deduplication
         }
       thisNode = [(nodeId, nodeAttrs)]
 
@@ -281,6 +336,7 @@ buildStubs _opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
             { nodeLabel = Text.take 50 (prettyLayout elseE)
             , fillColor = "#e0e0e0"
             , nodeStyle = "filled,dashed"
+            , bindingId = Nothing  -- Stub nodes have no binding identity
             })
           elseEdge = (parentId, nodeId, EdgeAttrs
             { edgeLabel = Just "ELSE"
@@ -296,6 +352,7 @@ buildStubs _opts nodeId parentId (IfThenElse _ _ thenE elseE) subtraces =
             { nodeLabel = Text.take 50 (prettyLayout thenE)
             , fillColor = "#e0e0e0"
             , nodeStyle = "filled,dashed"
+            , bindingId = Nothing  -- Stub nodes have no binding identity
             })
           thenEdge = (parentId, nodeId, EdgeAttrs
             { edgeLabel = Just "THEN"
@@ -387,39 +444,27 @@ edgeConfigsFor _ subtraces =
 -- AST inspection for function bodies
 -- ============================================================================
 
--- | Enhance node label with function body from AST (if applicable)
---   Skip if function body would be redundant with what's already shown
-enhanceLabelWithFunctionBody :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
-enhanceLabelWithFunctionBody Nothing _ baseLabel = baseLabel
-enhanceLabelWithFunctionBody _ Nothing baseLabel = baseLabel
-enhanceLabelWithFunctionBody (Just module') (Just resolved) baseLabel =
+-- | Enhance node label with @desc annotation from AST (if applicable)
+--   Replaces the expression line with the @desc text for better semantic clarity
+--   Graph is a map (high-level flow), not territory (implementation details)
+enhanceLabelWithDesc :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
+enhanceLabelWithDesc Nothing _ baseLabel = baseLabel
+enhanceLabelWithDesc _ Nothing baseLabel = baseLabel
+enhanceLabelWithDesc (Just module') (Just resolved) baseLabel =
   case lookupFunctionInfo module' resolved of
-    Just (mDesc, body) ->
-      let -- If @desc exists, show it instead of the expression line
-          baseLabelWithDesc = case mDesc of
-            Just desc ->
-              let descText = getDesc desc
-                  wrapped = wrapText 60 descText
-                  -- Replace the expression line with @desc
-                  lines' = Text.lines baseLabel
-              in case lines' of
-                   (nameLine:_exprLine:rest) ->
-                     -- Replace expr line with @desc
-                     Text.unlines (nameLine : ("@desc: " <> wrapped) : rest)
-                   _ -> baseLabel  -- Keep as-is if structure unexpected
-            Nothing -> baseLabel
-
-          -- Check if we should show function body
-          bodyPreview = prettyLayout body
-          bodyLines = take 2 $ Text.lines bodyPreview
-          bodyShort = Text.intercalate "\n  " bodyLines
-          suffix = if length (Text.lines bodyPreview) > 2 then "\n  ..." else ""
-          bodyFirstLine = firstLine bodyPreview
-          isDuplicate = bodyFirstLine `Text.isInfixOf` baseLabelWithDesc
-
-      in if isDuplicate
-           then baseLabelWithDesc  -- Skip redundant function body
-           else baseLabelWithDesc <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyShort <> suffix
+    Just (mDesc, _body) ->
+      case mDesc of
+        Just desc ->
+          let descText = getDesc desc
+              wrapped = wrapText 60 descText
+              -- Replace the expression line with @desc
+              lines' = Text.lines baseLabel
+          in case lines' of
+               (nameLine:_exprLine:rest) ->
+                 -- Replace expr line with @desc
+                 Text.unlines (nameLine : ("@desc: " <> wrapped) : rest)
+               _ -> baseLabel  -- Keep as-is if structure unexpected
+        Nothing -> baseLabel
     Nothing -> baseLabel
 
 -- | Look up function @desc and body searching both top-level and WHERE clauses

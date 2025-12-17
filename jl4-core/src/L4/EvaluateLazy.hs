@@ -32,6 +32,7 @@ import L4.Print
 import L4.Syntax
 import L4.TypeCheck.Types (EntityInfo)
 import L4.TemporalContext (EvalClause, TemporalContext, applyEvalClauses, initialTemporalContext)
+import L4.TracePolicy (TracePolicy)
 
 import Control.Concurrent
 import Data.Time (UTCTime, getCurrentTime)
@@ -51,16 +52,20 @@ data EvalState =
     , entityInfo :: !EntityInfo    -- type information for constructors/records
     , evalTime   :: !UTCTime
     , temporalContext :: !(IORef TemporalContext)
+    , tracePolicy :: !TracePolicy  -- controls trace collection and output
     }
 
 data EvalConfig = EvalConfig
   { evalTime :: !UTCTime
+  , tracePolicy :: !TracePolicy
   }
 
-resolveEvalConfig :: Maybe UTCTime -> IO EvalConfig
-resolveEvalConfig = \case
-  Nothing -> EvalConfig <$> getCurrentTime
-  Just t -> pure (EvalConfig t)
+resolveEvalConfig :: Maybe UTCTime -> TracePolicy -> IO EvalConfig
+resolveEvalConfig mTime tracePolicy = case mTime of
+  Nothing -> do
+    time <- getCurrentTime
+    pure (EvalConfig time tracePolicy)
+  Just time -> pure (EvalConfig time tracePolicy)
 
 parseFixedNow :: Text -> Maybe UTCTime
 parseFixedNow = ISO8601.iso8601ParseM . Text.unpack
@@ -215,6 +220,8 @@ interpMachine = \ case
     interpMachine $ pure conf
   GetEvalTime ->
     asks (.evalTime)
+  GetTracePolicy ->
+    asks (.tracePolicy)
   Bind act k -> interpMachine act >>= interpMachine . k
   LiftIO m -> liftIO m >>= interpMachine . pure
   PushFrame f -> do
@@ -418,7 +425,7 @@ execEvalModuleWithEnv evalConfig entityInfo env m@(MkModule _ moduleUri _) = do
       let temporalCtx = initialTemporalContext evalConfig.evalTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri
@@ -467,7 +474,7 @@ execEvalModuleWithJSON evalConfig entityInfo json m@(MkModule _ moduleUri _) = d
       let temporalCtx = initialTemporalContext evalConfig.evalTime
       temporalContext <- newIORef temporalCtx
       let evalTrace = Nothing
-      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext}
+      r <- f MkEvalState {moduleUri, stack, supply, evalTrace, entityInfo, evalTime = evalConfig.evalTime, temporalContext, tracePolicy = evalConfig.tracePolicy}
       case r of
         Left exc -> do
           hPutStrLn stderr $ "Eval failure in module: " <> show moduleUri

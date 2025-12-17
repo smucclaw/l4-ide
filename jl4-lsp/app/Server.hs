@@ -24,6 +24,8 @@ import LSP.L4.LanguageServer (runLanguageServer, Communication (..))
 import qualified LSP.L4.LanguageServer as LanguageServer
 import qualified LSP.L4.Rules as Rules
 import qualified L4.EvaluateLazy as EvaluateLazy
+import L4.TracePolicy (lspDefaultPolicy)
+import L4.EvaluateLazy.GraphVizOptions (defaultGraphVizOptions)
 
 import Control.Concurrent.Strict
     ( newEmptyMVar, putMVar, tryReadMVar, withNumCapabilities, writeChan, newChan, readChan )
@@ -191,7 +193,9 @@ getDefaultArguments recorder = do
     { communication, cwd } <- Opa.execParser parseComm
   projectRoot <- maybe getCurrentDirectory pure cwd
   fixedNow <- EvaluateLazy.readFixedNowEnv
-  evalConfig <- EvaluateLazy.resolveEvalConfig fixedNow
+  -- LSP default: avoid editor noise (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  let tracePolicy = lspDefaultPolicy defaultGraphVizOptions
+  evalConfig <- EvaluateLazy.resolveEvalConfig fixedNow tracePolicy
   logWith recorder Debug $ LogWorkingDirectory projectRoot
   pure Arguments
     { projectRoot
