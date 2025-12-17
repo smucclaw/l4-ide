@@ -19,17 +19,14 @@ L4 provides temporal logic features to handle these scenarios correctly.
 Legal computation involves multiple temporal dimensions:
 
 1. **Valid Time (tcValidTime)** — When is something true in the real world?
-
    - "Alice's age on January 1, 2025"
    - "The company's revenue in Q4 2024"
 
 2. **System Time (tcSystemTime)** — When did the system learn about it?
-
    - "Document uploaded on March 15, 2025"
    - "Application submitted on February 1, 2025"
 
 3. **Rule Version Time (tcRuleVersionTime)** — When were the rules in effect?
-
    - "Under the 2015 amendment to the Act..."
    - "Before the 2020 regulations came into force..."
 
