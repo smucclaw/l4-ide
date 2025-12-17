@@ -452,28 +452,45 @@ localdecl =
     <|> LocalAssume    emptyAnno <$> annoHole (assume sig)
   )
 
--- | Keywords accepted for bindings in LET...IN blocks: IS, BE, MEAN, MEANS
+-- | Keywords and operators accepted for bindings in LET...IN blocks: IS, BE, MEAN, MEANS, =
 letBindingKeyword :: Parser (Lexeme PosToken)
 letBindingKeyword = spacedKeyword_ TKIs
                 <|> spacedKeyword_ TKBe
                 <|> spacedKeyword_ TKMean
                 <|> spacedKeyword_ TKMeans
+                <|> spacedToken_ (TOperators TEquals)
 
--- | Parse a local declaration in a LET block: "name IS/BE/MEAN/MEANS expr [@desc ...]"
+-- | Parse an application form for LET bindings
+-- Parses: name followed by optional parameters
+-- Example: "even n" or "factorial n" or just "x" (no parameters)
+-- Similar to appForm but without the OF keyword alternative and without AKA
+letAppForm :: Pos -> Parser (AppForm Name)
+letAppForm current =
+  attachAnno $
+    MkAppForm emptyAnno
+      <$> annoHole name
+      <*> annoHole (lmany (const (indented name current)))
+      <*> annoHole (pure Nothing)  -- No AKA for LET bindings
+
+-- | Parse a local declaration in a LET block
+-- Supports both simple bindings and parameterized function bindings:
+--   - Simple: "x IS 5"
+--   - Parameterized: "double n IS n TIMES 2"
+--   - Multiple params: "add x y IS x PLUS y"
 -- Supports @desc annotations both inline and as line annotations.
 -- Example: "LET foo BE 1 @desc foo is the loneliest number IN ..."
 letLocalDecl :: Parser (LocalDecl Name)
 letLocalDecl = do
   current <- Lexer.indentLevel
   attachAnno $ do
-    n <- annoHole name
+    bindingForm <- annoHole (letAppForm current)
     _ <- annoLexeme letBindingKeyword
     body <- annoHole (indentedExpr current)
-    -- Create a simple Decide with no type signature and no parameters
+    -- Create a Decide with no explicit type signature
+    -- The type checker will infer types for all parameters
     -- The attachAnno above will capture any @desc annotations after the expression
     let emptyTypeSig = MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing
-        simpleAppForm = MkAppForm emptyAnno n [] Nothing
-    pure $ LocalDecide emptyAnno (MkDecide emptyAnno emptyTypeSig simpleAppForm body)
+    pure $ LocalDecide emptyAnno (MkDecide emptyAnno emptyTypeSig bindingForm body)
 
 -- | Parse a LET...IN expression
 letInExpr :: Parser (Expr Name)
