@@ -1,9 +1,9 @@
 # Unified Trace & GraphViz Architecture
 
-**Status:** Phases 1-2 Complete, Phases 3-4 Future Work
+**Status:** Phases 1-2 Complete, Phase 3 Infrastructure Complete, Full Integration Pending
 **Author:** Claude (Sonnet 4.5) with Meng Wong
 **Date:** 2025-12-17
-**Updated:** 2025-12-17
+**Updated:** 2025-12-17 (Phase 3 infrastructure added)
 **Problem:** Current trace/graphviz functionality has evolved through "random-walk" resulting in inconsistent interfaces across tools
 **Implementation:** PR #696 (mengwong/graphviz-sharing)
 
@@ -320,14 +320,22 @@ deduplicateBindingsPass graph =
 
 **Commit**: `2621ca69` - Phase 2: Binding deduplication with structural comparison
 
-### Phase 3: REPL & API Alignment (Partially Complete)
+### Phase 3: REPL & API Alignment (Infrastructure Complete)
 - [x] Add REPL commands: `:trace`, `:tr`, `:tracefile` (already implemented)
 - [x] Add REPL commands: `:info`, `:env`, `:reset` (completed 2025-12-17)
-- [ ] Refactor API to use unified `TracePolicy` internally (TODO)
-- [ ] Update API documentation (TODO)
-- [ ] Add API integration tests (TODO)
+- [x] Create TracePolicy module (L4.TracePolicy) with unified abstraction
+- [x] Add tool-specific default policies (CLI, REPL, API, LSP)
+- [x] Implement Options -> TracePolicy conversion in CLI
+- [ ] Thread TracePolicy through evaluation pipeline (requires EvaluateLazy changes)
+- [ ] Refactor API to construct and use TracePolicy
+- [ ] Update API documentation
+- [ ] Add API integration tests
 
-**Note:** REPL trace commands are functional but don't yet use a unified TracePolicy abstraction. API still uses ad-hoc trace parameters.
+**Commit**: `02220847` - Add unified TracePolicy infrastructure
+
+**Status:** The TracePolicy type system is complete and CLI creates policies from options.
+The infrastructure is in place but not yet fully integrated into the evaluation pipeline.
+Current behavior is preserved - tools still use direct option fields for trace control.
 
 ### Phase 4: Documentation & Examples (Week 4)
 - [ ] Write comprehensive trace/graphviz user guide
