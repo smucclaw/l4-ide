@@ -320,7 +320,7 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
     LetIn _ decls e1 ->
       vcat
         [ "LET"
-        , indent 2 (vsep $ fmap printWithLayout decls)
+        , indent 2 (vsep $ fmap printLetBinding decls)
         , "IN"
         , indent 2 (printWithLayout e1)
         ]
@@ -373,6 +373,13 @@ instance LayoutPrinterWithName a => LayoutPrinter (NamedExpr a) where
   printWithLayout = \ case
     MkNamedExpr _ name e ->
       printWithLayout name <+> "IS" <+> printWithLayout e
+
+-- | Print a LocalDecl in LET context (without DECIDE keyword and without type signature)
+printLetBinding :: LayoutPrinterWithName a => LocalDecl a -> Doc ann
+printLetBinding = \ case
+  LocalDecide _ (MkDecide _ _tySig appForm expr) ->
+    Prettyprinter.group $ printWithLayout appForm <+> "IS" <+> Prettyprinter.align (printWithLayout expr)
+  LocalAssume _ t -> printWithLayout t
 
 instance LayoutPrinterWithName a => LayoutPrinter (LocalDecl a) where
   printWithLayout = \ case

@@ -1,2 +1,35 @@
 Parsing successful
 Typechecking successful
+Evaluation successful
+let-in-functions.l4:9:1-24:
+  10
+let-in-functions.l4:10:1-24:
+  0
+let-in-functions.l4:18:1-24:
+  10
+let-in-functions.l4:19:1-28:
+  300
+let-in-functions.l4:28:1-30:
+  25
+let-in-functions.l4:29:1-31:
+  50
+let-in-functions.l4:38:1-26:
+  11
+let-in-functions.l4:39:1-27:
+  21
+let-in-functions.l4:47:1-22:
+  1
+let-in-functions.l4:48:1-22:
+  1
+let-in-functions.l4:49:1-22:
+  120
+let-in-functions.l4:50:1-22:
+  720
+let-in-functions.l4:58:1-22:
+  0
+let-in-functions.l4:59:1-22:
+  1
+let-in-functions.l4:60:1-22:
+  8
+let-in-functions.l4:61:1-23:
+  55

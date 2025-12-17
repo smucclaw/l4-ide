@@ -7,6 +7,8 @@ DECIDE testPolyIdentity IS
     id x IS x
   IN (id 42) PLUS (id 10)
 
+#EVAL testPolyIdentity
+
 -- Polymorphic function applied to different argument types
 DECIDE testPolyApply IS
   LET
@@ -14,11 +16,15 @@ DECIDE testPolyApply IS
     double n IS n TIMES 2
   IN apply double 21
 
+#EVAL testPolyApply
+
 -- Const function (returns first argument, ignores second)
 DECIDE testPolyConst IS
   LET
     const x y IS x
   IN const 42 0
+
+#EVAL testPolyConst
 
 -- Compose two functions
 DECIDE testPolyCompose IS
@@ -27,3 +33,5 @@ DECIDE testPolyCompose IS
     addOne n IS n PLUS 1
     double n IS n TIMES 2
   IN compose addOne double 10
+
+#EVAL testPolyCompose

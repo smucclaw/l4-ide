@@ -7,12 +7,16 @@ DECIDE testSharing IS
     expensive IS 1000 TIMES 1000
   IN expensive PLUS expensive
 
+#EVAL testSharing
+
 -- Nested sharing: inner binding referenced multiple times
 DECIDE testNestedSharing IS
   LET
     base IS 100
     derived IS base TIMES base
   IN derived PLUS derived PLUS base
+
+#EVAL testNestedSharing
 
 -- Function with sharing
 DECIDE testFunctionSharing n IS
@@ -21,11 +25,17 @@ DECIDE testFunctionSharing n IS
     cubed IS squared TIMES n
   IN squared PLUS cubed
 
+#EVAL testFunctionSharing 5
+#EVAL testFunctionSharing 10
+
 -- Recursive function with shared base case
 DECIDE testRecursiveSharing n IS
   LET
     fib x IS IF x EQUALS 0 THEN 0 ELSE IF x EQUALS 1 THEN 1 ELSE fib (x MINUS 1) PLUS fib (x MINUS 2)
   IN fib n
+
+#EVAL testRecursiveSharing 6
+#EVAL testRecursiveSharing 10
 
 -- Use #EVALTRACE to verify sharing behavior
 #EVALTRACE testSharing
