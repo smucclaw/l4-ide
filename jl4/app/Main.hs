@@ -338,6 +338,7 @@ main = do
                     gvOpts = GraphViz2.defaultGraphVizOptions
                       { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
                       , GraphViz2.collapseSimplePaths = options.graphVizOptimize
+                      , GraphViz2.deduplicateBindings = not options.noDeduplicateBindings
                       }
                     -- Determine format: new flag takes precedence, fallback to DOT for old flags
                     format = fromMaybe DotFormat options.graphvizFormat
@@ -455,7 +456,8 @@ data Options = MkOptions
   , outputGraphViz :: Bool          -- DEPRECATED: old v1
   , outputGraphViz2 :: Bool         -- DEPRECATED: use graphvizFormat instead
   , graphvizFormat :: Maybe GraphVizFormat  -- NEW: unified format control
-  , graphVizOptimize :: Bool        -- Enable all GraphViz2 optimizations
+  , graphVizOptimize :: Bool        -- Enable GraphViz2 optimizations (collapse trivial nodes)
+  , noDeduplicateBindings :: Bool   -- DISABLE binding deduplication (enabled by default)
   , outputDir :: Maybe FilePath     -- Directory for auto-split graph files
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
@@ -473,6 +475,7 @@ optionsDescription = MkOptions
   <*> switch (long "graphviz2" <> help "[DEPRECATED: use --graphviz-format=dot] Output as GraphViz DOT (v2)")
   <*> optional (option graphVizFormatReader (long "graphviz-format" <> metavar "FORMAT" <> help "Output GraphViz trace (enables tracing): dot | png | svg"))
   <*> switch (long "optimize" <> help "Enable GraphViz optimizations (collapse function lookups and simple paths)")
+  <*> switch (long "no-deduplicate-bindings" <> help "Disable binding deduplication (enabled by default to show shared WHERE/LET bindings)")
   <*> optional (Options.strOption (long "output-dir" <> short 'o' <> metavar "DIR" <> help "Output directory for graph files (auto-splits multiple graphs, generates .dot and .png)"))
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))
