@@ -141,7 +141,7 @@ completeFunc st = completeWord Nothing " \t" $ \word -> do
     then do
       let commands = [":help", ":h", ":quit", ":q", ":load", ":l", ":reload", ":r",
                       ":reset", ":type", ":t", ":info", ":env", ":e", ":trace", ":tr",
-                      ":import", ":i", ":imports", ":tracefile"]
+                      ":traceascii", ":tra", ":import", ":i", ":imports", ":tracefile"]
           matches = filter (word `isPrefixOf`) commands
       pure $ map simpleCompletion matches
     else do
@@ -260,6 +260,20 @@ processInput st input
         Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
         Just fp -> do
           result <- evalWithTrace st fp expr
+          pure (result, st, False)
+  | ":traceascii " `Text.isPrefixOf` stripped = do
+      let expr = Text.strip $ Text.drop 12 stripped
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- evalWithTraceAscii st fp expr
+          pure (result, st, False)
+  | ":tra " `Text.isPrefixOf` stripped = do
+      let expr = Text.strip $ Text.drop 5 stripped
+      case st.loadedFile of
+        Nothing -> pure ("No file loaded. Use :load <file> first.", st, False)
+        Just fp -> do
+          result <- evalWithTraceAscii st fp expr
           pure (result, st, False)
   | ":import " `Text.isPrefixOf` stripped = do
       -- :import <lib> is shorthand for IMPORT <lib>
@@ -464,6 +478,70 @@ evalWithTrace st contextFile exprText = do
         Nothing -> pure "Evaluation failed"
         Just [] -> pure "(no result)"
         Just results -> formatTraceResults st exprText actualExpr tc.module' results
+
+-- | Evaluate an expression and show its ASCII trace
+evalWithTraceAscii :: ReplState -> FilePath -> Text -> IO Text
+evalWithTraceAscii st contextFile exprText = do
+  -- Get unique counter
+  evalNum <- atomicModifyIORef' st.evalCounter (\n -> (n + 1, n))
+
+  -- Build directive (use #EVALTRACE for explicit tracing)
+  let actualExpr = if any (`Text.isPrefixOf` exprText) ["#EVAL", "#EVALTRACE", "#CHECK", "#ASSERT"]
+                   then exprText
+                   else "#EVALTRACE " <> exprText
+
+  -- Get imports
+  importPreamble <- getImportPreamble st
+
+  -- Get filtered source
+  let contextUri = normalizedFilePathToUri (toNormalizedFilePath contextFile)
+  [mTc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck contextUri]
+  originalContent <- case mTc of
+    Just tc -> pure $ Print.prettyLayout (filterIdeDirectives tc.module')
+    Nothing -> do
+      mContent <- Shake.getVirtualFileText st.ideState contextUri
+      case mContent of
+        Just content -> pure content
+        Nothing -> Text.IO.readFile contextFile
+
+  let replContent = importPreamble <> originalContent <> "\n\n-- REPL trace " <> Text.pack (show evalNum) <> "\n" <> actualExpr <> "\n"
+
+  -- Create virtual file
+  let replPath = st.curDir <> "/.repl_trace_ascii_" <> show evalNum <> ".l4"
+      replNfp = toNormalizedFilePath replPath
+      replUri = normalizedFilePathToUri replNfp
+
+  _ <- shakeRunDatabase st.ideState.shakeDb [Shake.addVirtualFile replNfp replContent]
+
+  -- Type check and evaluate
+  [mtc] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.SuccessfulTypeCheck replUri]
+  case mtc of
+    Nothing -> pure "Failed to type check expression"
+    Just tc | not tc.success -> do
+      let errors = tc.infos
+      pure $ "Type error:\n" <> Text.unlines (map (Text.pack . show) $ take 3 errors)
+    Just _tc -> do
+      -- Get evaluation results WITH trace
+      [meval] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.EvaluateLazy replUri]
+      case meval of
+        Nothing -> pure "Evaluation failed"
+        Just [] -> pure "(no result)"
+        Just results -> pure $ formatAsciiTraceResults results
+
+-- | Format evaluation results showing ASCII trace
+formatAsciiTraceResults :: [EvalDirectiveResult] -> Text
+formatAsciiTraceResults results = Text.unlines $ map formatAsciiTraceResult results
+
+formatAsciiTraceResult :: EvalDirectiveResult -> Text
+formatAsciiTraceResult (MkEvalDirectiveResult _range res mtrace) =
+  let resultText = case res of
+        Assertion True  -> "Result: True (assertion passed)"
+        Assertion False -> "Result: False (assertion failed)"
+        Reduction (Right nf) -> "Result: " <> Print.prettyLayout nf
+        Reduction (Left err) -> "Error: " <> Text.unlines (prettyEvalException err)
+  in case mtrace of
+    Nothing -> resultText <> "\n(no trace available)"
+    Just tr -> resultText <> "\n\nTrace:\n" <> Print.prettyLayout tr
 
 -- | Format evaluation results showing GraphViz DOT trace or save to files
 formatTraceResults :: ReplState -> Text -> Text -> Module Resolved -> [EvalDirectiveResult] -> IO Text
@@ -693,6 +771,8 @@ helpText = Text.unlines
   , "Tracing:"
   , "  :trace <expr>      Show evaluation trace as GraphViz DOT"
   , "  :tr <expr>         Short for :trace"
+  , "  :traceascii <expr> Show evaluation trace as ASCII tree"
+  , "  :tra <expr>        Short for :traceascii"
   , "  :tracefile <path>  Save traces to <path>-NN.dot"
   , "  :tracefile off     Restore stdout trace output"
   , ""
