@@ -43,6 +43,8 @@ import L4.Syntax (Type'(..), Resolved, Module(..))
 import L4.Print (prettyLayout)
 import L4.DirectiveFilter (filterIdeDirectives)
 import L4.Parser.SrcSpan (prettySrcRange)
+import qualified L4.TracePolicy as TracePolicy
+import L4.TracePolicy (TracePolicy(..), TraceLevel(..), TraceOptions(..), TraceDestination(..))
 import Data.Time (UTCTime)
 import qualified Data.List as List
 
@@ -193,6 +195,50 @@ instance Pretty Log where
 -- Main
 ----------------------------------------------------------------------------
 
+-- | Convert CLI options to unified TracePolicy
+-- Implements the CLI behavior from TRACE-GRAPHVIZ-ARCHITECTURE.md
+--
+-- NOTE: This function creates a TracePolicy representing the unified architecture.
+-- Currently this is informational - the actual trace behavior is still controlled
+-- by the direct Option fields (traceText, graphvizFormat, outputDir).
+-- Future work: Thread TracePolicy through the evaluation pipeline to fully unify
+-- trace behavior across CLI/REPL/API.
+optionsToTracePolicy :: Options -> TracePolicy
+optionsToTracePolicy opts =
+  let gvOpts = GraphViz2.GraphVizOptions
+        { GraphViz2.includeValues = True
+        , GraphViz2.showUnevaluated = True
+        , GraphViz2.simplifyTrivial = opts.graphVizOptimize
+        , GraphViz2.maxDepth = Nothing
+        , GraphViz2.collapseFunctionLookups = opts.graphVizOptimize
+        , GraphViz2.collapseSimplePaths = opts.graphVizOptimize
+        , GraphViz2.deduplicateBindings = not opts.noDeduplicateBindings
+        }
+
+      -- Determine trace level for #EVALTRACE directives
+      evaltraceLevel = case (opts.traceText, opts.graphvizFormat) of
+        (TraceTextNone, Nothing) -> NoTrace
+        (TraceTextFull, Nothing) -> CollectTrace (TraceOptions TracePolicy.TextTrace dest gvOpts)
+        (_, Just format) -> CollectTrace (TraceOptions (graphVizFormatToTraceFormat format) dest gvOpts)
+
+      -- Destination based on output directory
+      dest = case opts.outputDir of
+        Nothing -> Stdout
+        Just dir -> FilesOnly dir
+
+      -- CLI default: #EVAL directives don't produce traces (author's hint respected)
+      evalLevel = NoTrace
+
+  in TracePolicy
+       { evalDirectiveTrace = evalLevel
+       , evaltraceDirectiveTrace = evaltraceLevel
+       }
+
+graphVizFormatToTraceFormat :: GraphVizFormat -> TracePolicy.TraceFormat
+graphVizFormatToTraceFormat DotFormat = TracePolicy.DotFormat
+graphVizFormatToTraceFormat PngFormat = TracePolicy.PngFormat
+graphVizFormatToTraceFormat SvgFormat = TracePolicy.SvgFormat
+
 -- | Check if graphviz output is enabled (old or new way) and emit deprecation warnings
 isGraphVizEnabled :: Options -> Recorder (WithPriority Log) -> IO Bool
 isGraphVizEnabled opts recorder = do
@@ -220,6 +266,11 @@ main = do
                           else cmapWithPrio IdeLog recorder
   envFixed <- readFixedNowEnv
   evalConfig <- resolveEvalConfig (options.fixedNow <|> envFixed)
+
+  -- Create unified TracePolicy from options (TRACE-GRAPHVIZ-ARCHITECTURE.md)
+  -- NOTE: Currently informational - actual behavior still controlled by Option fields
+  -- Future: Thread this through evaluation pipeline for complete unification
+  let _tracePolicy = optionsToTracePolicy options
 
   (getErrs, errRecorder) <- fmap (cmapWithPrio pretty) <$> makeRefRecorder
 

@@ -103,6 +103,7 @@ library
     L4.Syntax
     L4.TemporalContext
     L4.TemporalGit
+    L4.TracePolicy
     L4.Transform
     L4.TypeCheck
     L4.TypeCheck.Annotation
