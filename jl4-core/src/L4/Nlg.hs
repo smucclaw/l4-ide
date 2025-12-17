@@ -254,6 +254,12 @@ instance Linearize (Expr Resolved) where
       , text "where"
       , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
       ]
+    LetIn _ lcl e -> hcat
+      [ text "let"
+      , enumerate (punctuate ",") (spaced $ text "and") (fmap lin lcl)
+      , text "in"
+      , lin e
+      ]
     Event _ ev -> lin ev
     Fetch _ e -> hcat [ text "fetch", lin e ]
     Env _ e -> hcat [ text "environment variable", lin e ]

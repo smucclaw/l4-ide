@@ -370,6 +370,10 @@ forwardExpr env = \ case
     env' <- evalRecLocalDecls env ds
     let combinedEnv = Map.union env' env
     ForwardExpr combinedEnv e
+  LetIn _ann ds e -> do
+    env' <- evalRecLocalDecls env ds
+    let combinedEnv = Map.union env' env
+    ForwardExpr combinedEnv e
   Regulative _ann (MkObligation _ party action due followup lest) ->
     Backward (ValObligation env (Left party) action (Left due) (fromMaybe fulfilExpr followup) lest)
   Event _ann ev ->

@@ -452,6 +452,40 @@ localdecl =
     <|> LocalAssume    emptyAnno <$> annoHole (assume sig)
   )
 
+-- | Keywords accepted for bindings in LET...IN blocks: IS, BE, MEAN, MEANS
+letBindingKeyword :: Parser (Lexeme PosToken)
+letBindingKeyword = spacedKeyword_ TKIs
+                <|> spacedKeyword_ TKBe
+                <|> spacedKeyword_ TKMean
+                <|> spacedKeyword_ TKMeans
+
+-- | Parse a local declaration in a LET block: "name IS/BE/MEAN/MEANS expr [@desc ...]"
+-- Supports @desc annotations both inline and as line annotations.
+-- Example: "LET foo BE 1 @desc foo is the loneliest number IN ..."
+letLocalDecl :: Parser (LocalDecl Name)
+letLocalDecl = do
+  current <- Lexer.indentLevel
+  attachAnno $ do
+    n <- annoHole name
+    _ <- annoLexeme letBindingKeyword
+    body <- annoHole (indentedExpr current)
+    -- Create a simple Decide with no type signature and no parameters
+    -- The attachAnno above will capture any @desc annotations after the expression
+    let emptyTypeSig = MkTypeSig emptyAnno (MkGivenSig emptyAnno []) Nothing
+        simpleAppForm = MkAppForm emptyAnno n [] Nothing
+    pure $ LocalDecide emptyAnno (MkDecide emptyAnno emptyTypeSig simpleAppForm body)
+
+-- | Parse a LET...IN expression
+letInExpr :: Parser (Expr Name)
+letInExpr = do
+  current <- Lexer.indentLevel
+  attachAnno $
+    LetIn emptyAnno
+      <$  annoLexeme (spacedKeyword_ TKLet)
+      <*> annoHole (many (indented letLocalDecl current))
+      <*  annoLexeme (spacedKeyword_ TKIn)
+      <*> annoHole (indentedExpr current)
+
 withTypeSig :: (TypeSig Name -> Parser (d Name)) -> Parser (d Name)
 withTypeSig p = do
   sig <- typeSig
@@ -1232,6 +1266,7 @@ baseExpr' =
   <|> app
   <|> lit
   <|> list
+  <|> letInExpr
   <|> paren expr
 
 event :: Parser (Expr Name)

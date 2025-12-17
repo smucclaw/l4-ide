@@ -170,6 +170,11 @@ nlgExpr = \ case
       -- scope, we have to resolve the annotations when checking the 'Where'
       -- case. Thus, we don't need to traverse it here again.
       pure $ Where ann e lcl
+    LetIn ann lcl e -> do
+      -- Since the bindings in the 'LocalDecl' bring new variables into
+      -- scope, we have to resolve the annotations when checking the 'LetIn'
+      -- case. Thus, we don't need to traverse it here again.
+      pure $ LetIn ann lcl e
     Event ann (MkEvent ann' e e1 e2 atFirst) -> do
       e' <- nlgExpr e
       e1' <- nlgExpr e1

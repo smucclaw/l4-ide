@@ -317,6 +317,13 @@ instance LayoutPrinterWithName a => LayoutPrinter (Expr a) where
         , "WHERE"
         , indent 2 (vsep $ fmap printWithLayout decls)
         ]
+    LetIn _ decls e1 ->
+      vcat
+        [ "LET"
+        , indent 2 (vsep $ fmap printWithLayout decls)
+        , "IN"
+        , indent 2 (printWithLayout e1)
+        ]
     Event _ MkEvent {timestamp, party, action} ->
       vcat
         [ "PARTY" <+> printWithLayout party

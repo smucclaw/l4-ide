@@ -198,6 +198,10 @@ data TKeywords
   | TKEnv
   | TKConcat
   | TKAs
+  | TKLet
+  | TKIn
+  | TKBe
+  | TKMean
   deriving stock (Eq, Generic, Ord, Show)
   deriving anyclass (ToExpr, NFData)
 
@@ -273,6 +277,10 @@ keywords = Map.fromList
   , ("ENV"        , TKEnv        )
   , ("CONCAT"     , TKConcat     )
   , ("AS"         , TKAs         )
+  , ("LET"        , TKLet        )
+  , ("IN"         , TKIn         )
+  , ("BE"         , TKBe         )
+  , ("MEAN"       , TKMean       )
   ]
 
 data TOperators

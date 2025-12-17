@@ -226,6 +226,7 @@ data Expr n =
   | Percent    Anno (Expr n)
   | List       Anno [Expr n] -- list literal
   | Where      Anno (Expr n) [LocalDecl n]
+  | LetIn      Anno [LocalDecl n] (Expr n) -- LET bindings IN body (bindings-first, unlike Where)
   | Event      Anno (Event n)
   | Fetch      Anno (Expr n)
   | Env        Anno (Expr n)  -- environment variable name
