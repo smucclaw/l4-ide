@@ -1,0 +1,33 @@
+-- LET...IN lazy evaluation with sharing
+-- Test case 7 from spec: Expensive computation referenced multiple times should only evaluate once
+
+-- Simple sharing test: x is referenced twice but should only compute once
+DECIDE testSharing IS
+  LET
+    expensive IS 1000 TIMES 1000
+  IN expensive PLUS expensive
+
+-- Nested sharing: inner binding referenced multiple times
+DECIDE testNestedSharing IS
+  LET
+    base IS 100
+    derived IS base TIMES base
+  IN derived PLUS derived PLUS base
+
+-- Function with sharing
+DECIDE testFunctionSharing n IS
+  LET
+    squared IS n TIMES n
+    cubed IS squared TIMES n
+  IN squared PLUS cubed
+
+-- Recursive function with shared base case
+DECIDE testRecursiveSharing n IS
+  LET
+    fib x IS IF x EQUALS 0 THEN 0 ELSE IF x EQUALS 1 THEN 1 ELSE fib (x MINUS 1) PLUS fib (x MINUS 2)
+  IN fib n
+
+-- Use #EVALTRACE to verify sharing behavior
+#EVALTRACE testSharing
+#EVALTRACE testNestedSharing
+#EVALTRACE testFunctionSharing 5

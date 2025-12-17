@@ -1,0 +1,34 @@
+-- LET...IN inside other expression contexts
+-- Test case 5 from spec: LET...IN inside IF, CONSIDER, function arguments
+
+-- LET inside IF condition
+DECIDE testLetInIfCondition x IS
+  IF (LET threshold IS 10 IN x GREATER THAN threshold)
+  THEN 1
+  ELSE 0
+
+-- LET inside IF branches
+DECIDE testLetInIfBranches x IS
+  IF x GREATER THAN 0
+  THEN (LET doubled IS x TIMES 2 IN doubled)
+  ELSE (LET negated IS 0 MINUS x IN negated)
+
+-- LET inside both condition and branches
+DECIDE testLetInIfAll x IS
+  IF (LET limit IS 5 IN x GREATER THAN limit)
+  THEN (LET bonus IS 100 IN x PLUS bonus)
+  ELSE (LET penalty IS 50 IN x MINUS penalty)
+
+-- LET as function argument
+DECIDE helper x IS x TIMES 2
+
+DECIDE testLetAsFunctionArg IS
+  helper (LET base IS 21 IN base)
+
+-- Nested function calls with LET
+DECIDE testNestedFunctionWithLet IS
+  helper (LET a IS 5 IN helper (LET b IS a IN b))
+
+-- LET inside arithmetic expression
+DECIDE testLetInArithmetic x IS
+  x PLUS (LET offset IS 10 IN offset) TIMES (LET scale IS 2 IN scale)
