@@ -1,0 +1,24 @@
+-- LET...IN inline expression tests
+-- Tests that LET expressions work correctly within parentheses on a single line
+-- (Codex Issue 1 claimed these would fail due to indentation - this was incorrect)
+
+-- Simple inline LET
+DECIDE testInline1 IS (LET x IS 5 IN x)
+
+-- Inline LET with arithmetic
+DECIDE testInline2 IS (LET x IS 5 IN x PLUS x)
+
+-- Inline LET in larger expression
+DECIDE testInline3 IS 10 PLUS (LET y IS 3 IN y TIMES 2)
+
+-- Multiple inline LETs in one expression
+DECIDE testInline4 IS (LET a IS 2 IN a) PLUS (LET b IS 3 IN b)
+
+-- Nested inline LETs
+DECIDE testInline5 IS (LET x IS (LET y IS 5 IN y) IN x TIMES 2)
+
+-- Inline LET with parameterized function
+DECIDE testInline6 IS (LET double n IS n TIMES 2 IN double 7)
+
+-- Deeply nested inline
+DECIDE testInline7 IS (LET a IS (LET b IS (LET c IS 3 IN c) IN b TIMES 2) IN a PLUS 1)
