@@ -37,7 +37,6 @@ import LSP.L4.Oneshot (oneshotL4Action, oneshotL4ActionAndErrors)
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (parseFixedNow, readFixedNowEnv, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
-import qualified L4.EvaluateLazy.GraphViz as GraphViz
 import qualified L4.EvaluateLazy.GraphViz2 as GraphViz2
 import L4.Export (getExportedFunctions, getDefaultFunction, ExportedFunction(..), ExportedParam(..))
 import L4.Syntax (Type'(..), Resolved, Module(..))
@@ -315,47 +314,39 @@ main = do
           mEval <- Shake.use Rules.EvaluateLazy uri
           mep <- Shake.use Rules.ExactPrint uri
           forM_ mEval $ \evalResults -> do
-            if options.outputGraphViz
+            if options.outputGraphViz || options.outputGraphViz2
               then do
-                -- In graphviz mode (original), only output DOT format to stdout
-                for_ evalResults $ \result ->
-                  case result.trace of
-                    Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
-                    Nothing -> pure ()
-              else if options.outputGraphViz2
-                then do
-                  -- In graphviz2 mode (new FGL-based)
-                  -- Get the typechecked module for AST inspection
-                  let mModule = mtc >>= \tc -> if tc.success then Just tc.module' else Nothing
-                      gvOpts = GraphViz2.defaultGraphVizOptions
-                        { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
-                        , GraphViz2.collapseSimplePaths = options.graphVizOptimize
-                        , GraphViz2.showFunctionBodies = options.showFunctionBodies
-                        }
-                  case options.outputDir of
-                    Nothing ->
-                      -- No output dir: write to stdout (original behavior)
-                      for_ evalResults $ \result ->
-                        case result.trace of
-                          Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts mModule tr
-                          Nothing -> pure ()
-                    Just outDir -> do
-                      -- Output dir specified: auto-split to separate files
-                      liftIO $ createDirectoryIfMissing True outDir
-                      let baseName = takeBaseName fp
-                      for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
-                        case result.trace of
-                          Just tr -> liftIO $ do
-                            let dotContent = GraphViz2.traceToGraphViz gvOpts mModule tr
-                                dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
-                                pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
-                            -- Write .dot file
-                            Text.IO.writeFile dotFile dotContent
-                            -- Generate .png using dot command
-                            callCommand $ "dot -Tpng " <> dotFile <> " > " <> pngFile
-                            logWith recorder Info $ BatchProcessing $
-                              "Generated: " <> Text.pack dotFile <> " and " <> Text.pack pngFile
-                          Nothing -> pure ()
+                -- In graphviz mode (new FGL-based)
+                -- Get the typechecked module for AST inspection
+                let mModule = mtc >>= \tc -> if tc.success then Just tc.module' else Nothing
+                    gvOpts = GraphViz2.defaultGraphVizOptions
+                      { GraphViz2.collapseFunctionLookups = options.graphVizOptimize
+                      , GraphViz2.collapseSimplePaths = options.graphVizOptimize
+                      }
+                case options.outputDir of
+                  Nothing ->
+                    -- No output dir: write to stdout (original behavior)
+                    for_ evalResults $ \result ->
+                      case result.trace of
+                        Just tr -> liftIO $ Text.IO.putStrLn $ GraphViz2.traceToGraphViz gvOpts mModule tr
+                        Nothing -> pure ()
+                  Just outDir -> do
+                    -- Output dir specified: auto-split to separate files
+                    liftIO $ createDirectoryIfMissing True outDir
+                    let baseName = takeBaseName fp
+                    for_ (zip [1 :: Int ..] evalResults) $ \(idx, result) ->
+                      case result.trace of
+                        Just tr -> liftIO $ do
+                          let dotContent = GraphViz2.traceToGraphViz gvOpts mModule tr
+                              dotFile = outDir </> baseName <> "-eval" <> show idx <> ".dot"
+                              pngFile = outDir </> baseName <> "-eval" <> show idx <> ".png"
+                          -- Write .dot file
+                          Text.IO.writeFile dotFile dotContent
+                          -- Generate .png using dot command
+                          callCommand $ "dot -Tpng " <> dotFile <> " > " <> pngFile
+                          logWith recorder Info $ BatchProcessing $
+                            "Generated: " <> Text.pack dotFile <> " and " <> Text.pack pngFile
+                        Nothing -> pure ()
                 else do
                   -- In normal mode, log evaluation results
                   for_ (zip [1 :: Int ..] evalResults) $ \(idx, evalResult) -> do
@@ -413,7 +404,6 @@ data Options = MkOptions
   , outputGraphViz :: Bool
   , outputGraphViz2 :: Bool
   , graphVizOptimize :: Bool  -- Enable all GraphViz2 optimizations
-  , showFunctionBodies :: Bool  -- Show function bodies in graph nodes
   , outputDir :: Maybe FilePath  -- Directory for auto-split graph files
   , fixedNow :: Maybe UTCTime
   , batchFile :: Maybe FilePath
@@ -430,7 +420,6 @@ optionsDescription = MkOptions
   <*> switch (long "graphviz" <> short 'g' <> help "Output evaluation trace as GraphViz DOT format (original)")
   <*> switch (long "graphviz2" <> help "Output evaluation trace as GraphViz DOT format (new FGL-based)")
   <*> switch (long "optimize-graph" <> help "Enable GraphViz2 optimizations (collapse function lookups and simple paths)")
-  <*> fmap not (switch (long "hide-function-bodies" <> help "Hide function bodies in graph nodes (shown by default)"))
   <*> optional (Options.strOption (long "output-dir" <> short 'o' <> metavar "DIR" <> help "Output directory for graph files (auto-splits multiple graphs, generates .dot and .png)"))
   <*> optional (option fixedNowReader (long "fixed-now" <> metavar "ISO8601" <> help "Pin evaluation clock (e.g. 2025-01-31T15:45:30Z) so NOW/TODAY stay deterministic"))
   <*> optional (Options.strOption (long "batch" <> short 'b' <> metavar "BATCH_FILE" <> help "Batch input file (JSON/YAML/CSV); use '-' for stdin"))

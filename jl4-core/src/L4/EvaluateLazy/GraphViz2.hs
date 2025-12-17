@@ -39,7 +39,6 @@ data GraphVizOptions = GraphVizOptions
   -- Optimization flags
   , collapseFunctionLookups :: Bool
   , collapseSimplePaths :: Bool
-  , showFunctionBodies :: Bool
   } deriving (Eq, Show)
 
 defaultGraphVizOptions :: GraphVizOptions
@@ -51,8 +50,6 @@ defaultGraphVizOptions = GraphVizOptions
   -- Optimizations disabled by default (show full trace)
   , collapseFunctionLookups = False
   , collapseSimplePaths = False
-  -- Function bodies enabled by default (provide context)
-  , showFunctionBodies = True
   }
 
 -- | Node attributes for rendering
@@ -190,9 +187,8 @@ buildGraph :: GraphVizOptions -> Maybe (Module Resolved) -> Int -> Node -> EvalT
 buildGraph opts mModule depth nodeId (Trace mlabel steps result) =
   let -- Create node for this trace
       baseLabel = formatTraceLabel opts mlabel steps result
-      enhancedLabel = if opts.showFunctionBodies
-                        then enhanceLabelWithFunctionBody mModule mlabel baseLabel
-                        else baseLabel
+      -- Always enhance with @desc annotation if available
+      enhancedLabel = enhanceLabelWithDesc mModule mlabel baseLabel
       nodeAttrs = NodeAttrs
         { nodeLabel = enhancedLabel
         , fillColor = if isRight result then "#d0e8f2" else "#ffcccc"
@@ -387,39 +383,27 @@ edgeConfigsFor _ subtraces =
 -- AST inspection for function bodies
 -- ============================================================================
 
--- | Enhance node label with function body from AST (if applicable)
---   Skip if function body would be redundant with what's already shown
-enhanceLabelWithFunctionBody :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
-enhanceLabelWithFunctionBody Nothing _ baseLabel = baseLabel
-enhanceLabelWithFunctionBody _ Nothing baseLabel = baseLabel
-enhanceLabelWithFunctionBody (Just module') (Just resolved) baseLabel =
+-- | Enhance node label with @desc annotation from AST (if applicable)
+--   Replaces the expression line with the @desc text for better semantic clarity
+--   Graph is a map (high-level flow), not territory (implementation details)
+enhanceLabelWithDesc :: Maybe (Module Resolved) -> Maybe Resolved -> Text -> Text
+enhanceLabelWithDesc Nothing _ baseLabel = baseLabel
+enhanceLabelWithDesc _ Nothing baseLabel = baseLabel
+enhanceLabelWithDesc (Just module') (Just resolved) baseLabel =
   case lookupFunctionInfo module' resolved of
-    Just (mDesc, body) ->
-      let -- If @desc exists, show it instead of the expression line
-          baseLabelWithDesc = case mDesc of
-            Just desc ->
-              let descText = getDesc desc
-                  wrapped = wrapText 60 descText
-                  -- Replace the expression line with @desc
-                  lines' = Text.lines baseLabel
-              in case lines' of
-                   (nameLine:_exprLine:rest) ->
-                     -- Replace expr line with @desc
-                     Text.unlines (nameLine : ("@desc: " <> wrapped) : rest)
-                   _ -> baseLabel  -- Keep as-is if structure unexpected
-            Nothing -> baseLabel
-
-          -- Check if we should show function body
-          bodyPreview = prettyLayout body
-          bodyLines = take 2 $ Text.lines bodyPreview
-          bodyShort = Text.intercalate "\n  " bodyLines
-          suffix = if length (Text.lines bodyPreview) > 2 then "\n  ..." else ""
-          bodyFirstLine = firstLine bodyPreview
-          isDuplicate = bodyFirstLine `Text.isInfixOf` baseLabelWithDesc
-
-      in if isDuplicate
-           then baseLabelWithDesc  -- Skip redundant function body
-           else baseLabelWithDesc <> "\n┄┄┄┄┄┄┄┄\n  " <> bodyShort <> suffix
+    Just (mDesc, _body) ->
+      case mDesc of
+        Just desc ->
+          let descText = getDesc desc
+              wrapped = wrapText 60 descText
+              -- Replace the expression line with @desc
+              lines' = Text.lines baseLabel
+          in case lines' of
+               (nameLine:_exprLine:rest) ->
+                 -- Replace expr line with @desc
+                 Text.unlines (nameLine : ("@desc: " <> wrapped) : rest)
+               _ -> baseLabel  -- Keep as-is if structure unexpected
+        Nothing -> baseLabel
     Nothing -> baseLabel
 
 -- | Look up function @desc and body searching both top-level and WHERE clauses

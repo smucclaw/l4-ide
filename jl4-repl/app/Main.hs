@@ -29,9 +29,10 @@ import qualified LSP.L4.Rules as Rules
 import qualified LSP.L4.Oneshot as Oneshot
 
 import L4.EvaluateLazy (EvalConfig, resolveEvalConfig, EvalDirectiveResult(..), EvalDirectiveValue(..), prettyEvalException)
-import qualified L4.EvaluateLazy.GraphViz as GraphViz
+import qualified L4.EvaluateLazy.GraphViz2 as GraphViz
 import L4.DirectiveFilter (filterIdeDirectives)
 import qualified L4.Print as Print
+import L4.Syntax (Module, Resolved)
 
 -- | Command line options
 data Options = Options
@@ -394,31 +395,31 @@ evalWithTrace st contextFile exprText = do
     Just tc | not tc.success -> do
       let errors = tc.infos
       pure $ "Type error:\n" <> Text.unlines (map (Text.pack . show) $ take 3 errors)
-    Just _tc -> do
+    Just tc -> do
       -- Get evaluation results WITH trace
       [meval] <- shakeRunDatabase st.ideState.shakeDb [Shake.use Rules.EvaluateLazy replUri]
       case meval of
         Nothing -> pure "Evaluation failed"
         Just [] -> pure "(no result)"
-        Just results -> formatTraceResults st exprText actualExpr results
+        Just results -> formatTraceResults st exprText actualExpr tc.module' results
 
 -- | Format evaluation results showing GraphViz DOT trace or save to files
-formatTraceResults :: ReplState -> Text -> Text -> [EvalDirectiveResult] -> IO Text
-formatTraceResults st exprText actualExpr results = do
+formatTraceResults :: ReplState -> Text -> Text -> Module Resolved -> [EvalDirectiveResult] -> IO Text
+formatTraceResults st exprText actualExpr mModule results = do
   mSink <- readIORef st.traceSink
   case mSink of
-    Nothing -> pure $ Text.unlines $ map formatTraceResult results
+    Nothing -> pure $ Text.unlines $ map (formatTraceResult mModule) results
     Just sink -> do
-      messages <- mapM (saveTraceResult st exprText actualExpr sink) results
+      messages <- mapM (saveTraceResult st exprText actualExpr mModule sink) results
       pure $ Text.unlines messages
 
-formatTraceResult :: EvalDirectiveResult -> Text
-formatTraceResult (MkEvalDirectiveResult _range _res mtrace) = case mtrace of
+formatTraceResult :: Module Resolved -> EvalDirectiveResult -> Text
+formatTraceResult mModule (MkEvalDirectiveResult _range _res mtrace) = case mtrace of
   Nothing -> "(no trace available)"
-  Just tr -> GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+  Just tr -> GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
 
-saveTraceResult :: ReplState -> Text -> Text -> TraceSink -> EvalDirectiveResult -> IO Text
-saveTraceResult st exprText actualExpr sink result@(MkEvalDirectiveResult _ _ mtrace) =
+saveTraceResult :: ReplState -> Text -> Text -> Module Resolved -> TraceSink -> EvalDirectiveResult -> IO Text
+saveTraceResult st exprText actualExpr mModule sink result@(MkEvalDirectiveResult _ _ mtrace) =
   case mtrace of
     Nothing -> pure "(no trace available)"
     Just tr -> do
@@ -429,7 +430,7 @@ saveTraceResult st exprText actualExpr sink result@(MkEvalDirectiveResult _ _ mt
           dirPath = takeDirectory filePath
       createDirectoryIfMissing True dirPath
       fileHeader <- buildTraceHeader st exprText actualExpr importsList timestamp result
-      let dotText = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions tr
+      let dotText = GraphViz.traceToGraphViz GraphViz.defaultGraphVizOptions (Just mModule) tr
           fileContent = fileHeader <> dotText <> "\n"
       Text.IO.writeFile filePath fileContent
       pure $ "Saved trace to " <> Text.pack filePath

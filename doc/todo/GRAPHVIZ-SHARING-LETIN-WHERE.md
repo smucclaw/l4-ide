@@ -41,7 +41,7 @@ This matters because:
 
 ## Scope
 
-This work is **out of scope** for the LET/IN implementation. It requires:
+This work requires:
 
 1. The GraphViz module to receive additional information about binding identity
 2. A mechanism to detect when the same binding is referenced multiple times
