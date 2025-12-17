@@ -103,6 +103,7 @@ This ensures that two nodes are only merged if they represent **the same computa
 ### Test Cases
 
 Verified with:
+
 - `sharing-complex.l4` - Binding referenced 3 times (sum + product + difference)
 - `sharing-recursive.l4` - WHERE binding in recursive function
 - `nested-control-flow.l4` - Complex IF/THEN/ELSE with CONSIDER

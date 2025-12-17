@@ -71,6 +71,7 @@ cabal test all 2>&1 | tee /tmp/test-output.txt
 ```
 
 Then you can:
+
 - Check summary: `tail -50 /tmp/test-output.txt`
 - Search for failures: `grep -i "fail\|error" /tmp/test-output.txt`
 - Check specific tests: `grep "ok/factorial" /tmp/test-output.txt`

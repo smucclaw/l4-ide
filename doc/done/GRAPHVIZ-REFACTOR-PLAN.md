@@ -362,26 +362,31 @@ The current implementation is **correct, working, and demonstrates the clean rec
 ### ✅ All Core Phases Complete
 
 **Phase 1: Pure Recursive Building** - COMPLETE
+
 - FGL-based graph construction
 - Clean recursive architecture with no special cases
 - Follows trace structure inductively
 
-**Phase 2: IF/THEN/ELSE Visual Optimization** - COMPLETE  
+**Phase 2: IF/THEN/ELSE Visual Optimization** - COMPLETE
+
 - Invisible ordering edges force left-to-right layout
 - Spatial grouping of condition, then-branch, else-branch
 - Configurable via GraphVizOptions
 
 **Phase 2b: Binding Deduplication** - COMPLETE (PR #696)
+
 - Single boxes with multiple arrows for shared WHERE/LET bindings
 - Structural comparison ensures correct merging
 - Default enabled with --no-deduplicate-bindings opt-out
 
 **Phase 3: Switchover** - COMPLETE
+
 - All tools migrated to GraphViz2 (CLI, REPL, Decision Service)
 - Old GraphViz.hs module removed
 - Unified --graphviz-format flag consolidates legacy flags
 
 **Phase 6: Production Readiness** - COMPLETE
+
 - GraphViz2 is the default and only implementation
 - Comprehensive testing with real L4 programs
 - Auto-split output to files with --output-dir
@@ -389,6 +394,7 @@ The current implementation is **correct, working, and demonstrates the clean rec
 ### Current State
 
 GraphViz2 provides:
+
 - ✅ Clean FGL-based architecture
 - ✅ Pure recursive graph building
 - ✅ IF/THEN/ELSE visual grouping
@@ -400,7 +406,7 @@ GraphViz2 provides:
 ### Files
 
 - **Core:** `jl4-core/src/L4/EvaluateLazy/GraphViz2.hs`
-- **CLI:** `jl4/app/Main.hs` 
+- **CLI:** `jl4/app/Main.hs`
 - **REPL:** `jl4-repl/app/Main.hs`
 - **Decision Service:** `jl4-decision-service/src/Backend/Jl4.hs`
 
