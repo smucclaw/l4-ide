@@ -11,6 +11,16 @@ examples and legal idioms as a point of reference. Along the way we
 show how L4 borrows ideas from software engineering to improve
 drafting and help end-users make sense of legal situations.
 
+## Learning Resources
+
+**New to L4?** Start with the hands-on courses:
+
+- **[Foundation Course](foundation-course-ai/README.md)** - Complete introduction for legal professionals and developers. Learn to write legal rules as executable code through 7 practical modules.
+
+- **[Advanced Course](advanced-course-ai/README.md)** - Production-grade L4 development covering professional workflows, system architecture, testing, and enterprise integration across 10 modules.
+
+This Language Reference document provides the theoretical foundations and design philosophy behind L4's features. The courses teach you how to use those features in practice.
+
 ## Basic data types: true/false, numbers, strings, and records
 
 Laws and contracts must reduce shades of grey to a black
@@ -197,6 +207,11 @@ Roadmap: see the Github Issues and the [Future Features](./future-features.md) d
 Legal drafters may also appreciate VS Code's native "jump to definition" and "jump to references" features, available with a right-click on an expression of interest.
 
 ## See Also
+
+### Learning Paths
+
+- **[Foundation Course](foundation-course-ai/README.md)** - Learn L4 through hands-on modules
+- **[Advanced Course](advanced-course-ai/README.md)** - Production-grade development and enterprise integration
 
 ### Design Principles
 
