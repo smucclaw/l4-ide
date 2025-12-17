@@ -64,6 +64,18 @@ cabal test all
 
 The test suite should pass before creating a git commit.
 
+**Note:** The test output is extensive (hundreds of examples). For easier analysis, pipe to a file:
+
+```bash
+cabal test all 2>&1 | tee /tmp/test-output.txt
+```
+
+Then you can:
+- Check summary: `tail -50 /tmp/test-output.txt`
+- Search for failures: `grep -i "fail\|error" /tmp/test-output.txt`
+- Check specific tests: `grep "ok/factorial" /tmp/test-output.txt`
+- Read incrementally: `less /tmp/test-output.txt`
+
 Also before committing changes, run `npm run format` so that Github's CI doesn't fail PRs on formatting errors.
 
 #### Golden Files
