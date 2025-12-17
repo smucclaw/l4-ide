@@ -299,11 +299,15 @@ deduplicateBindingsPass graph =
 
 ## Migration Path
 
-### Phase 1: CLI Consolidation (Week 1)
-- [ ] Add `--trace`, `--trace-all`, `--format` flags to jl4-cli
-- [ ] Deprecate `--graphviz`, `--graphviz2` (keep for compatibility, warn)
-- [ ] Update documentation and help text
-- [ ] Add integration tests
+### Phase 1: CLI Consolidation ✅ **COMPLETED** (2025-12-17)
+- [x] Add `--graphviz-format=dot|png|svg` flag to jl4-cli
+- [x] Deprecate `--graphviz`, `--graphviz2` (keep for compatibility, emit warnings)
+- [x] Update help text with clear deprecation messages
+- [x] Add `CliMessage` log type for cleaner warnings (no "Batch:" prefix)
+- [x] Test all formats: DOT to stdout, DOT/PNG/SVG to files
+- [x] Backward compatibility verified with warnings
+
+**Commit**: `dbd2d180` - Phase 1: CLI consolidation - unified GraphViz format control
 
 ### Phase 2: Binding Deduplication (Week 2)
 - [ ] Implement `deduplicateBindingsPass` in GraphViz2.hs
