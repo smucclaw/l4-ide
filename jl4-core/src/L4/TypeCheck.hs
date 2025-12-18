@@ -177,17 +177,33 @@ doCheckProgramWithDependencies checkState checkEnv program =
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
 checkProgram module' = do
-  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' do
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \_ -> do
     inferProgram module'
 
 withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
-    , mixfixRegistry = buildMixfixRegistry rdecides
+    , mixfixRegistry = Map.union (buildMixfixRegistry rdecides) s.mixfixRegistry
     }
   where
     topDecides = fmap (.name) rdecides
+
+withExtraMixfix :: MixfixRegistry -> Check a -> Check a
+withExtraMixfix mixfixAdds =
+  local \s -> s { mixfixRegistry = Map.union mixfixAdds s.mixfixRegistry }
+
+dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
+dedupCheckInfos = go Set.empty []
+  where
+    go _ acc [] = reverse acc
+    go seen acc (ci:cis) =
+      let ciNames = ci.names
+          overlaps = any (`Set.member` seen) ciNames
+          seen' = List.foldl' (flip Set.insert) seen ciNames
+      in if overlaps
+          then go seen acc cis
+          else go seen' (ci:acc) cis
 
 -- | Build the mixfix registry from a list of FunTypeSigs.
 -- The registry maps from the first keyword of each mixfix function to the list
@@ -1004,13 +1020,17 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    -- We have to immediately resolve 'Nlg' annotations, as 'ds'
-    -- brings new bindings into scope.
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds do
+    let knownExtends = dedupCheckInfos (concat extends)
+    re <- extendKnownMany knownExtends do
+      re <- checkExpr ec e t
+      -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+      -- brings new bindings into scope.
+      nlgExpr re
+    pure re
   setAnnResolvedType t Nothing (Where ann re rds)
 checkExpr ec (LetIn ann ds e) t = softprune $ do
   let
@@ -1018,11 +1038,13 @@ checkExpr ec (LetIn ann ds e) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds $
+    extendKnownMany (dedupCheckInfos (concat extends)) do
+      re <- checkExpr ec e t
+      nlgExpr re
   setAnnResolvedType t Nothing (LetIn ann rds re)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
@@ -1291,9 +1313,11 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (Where ann re rds, t)
     LetIn ann ds e -> do
       let
@@ -1301,9 +1325,11 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (LetIn ann rds re, t)
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
@@ -1847,14 +1873,14 @@ withScanTypeAndSigEnvironment ::
   (a -> Check [DeclChecked DeclareOrAssume]) ->
   (a -> Check [FunTypeSig]) ->
   a ->
-  Check b ->
+  ([FunTypeSig] -> Check b) ->
   Check b
 withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
   rdeclares <- scanDeclares preScanDecls scanDecl a
   withDeclares rdeclares do
     rdecides <- scanTySig a
     withDecides rdecides $ do
-      act
+      act rdecides
 
 -- | @'withQualified' rs ce@ takes a list of 'Resolved' names and creates
 -- a 'CheckInfo' of @rs@ pointing to the @ce@ 'CheckInfo'.

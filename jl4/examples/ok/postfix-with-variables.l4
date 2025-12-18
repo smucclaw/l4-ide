@@ -65,3 +65,17 @@ test3_workaround2 MEANS
 #EVAL test3_workaround2
 -- Expected: 25
 -- Actual: 25 ✓
+
+-- TEST 4: Postfix helper defined inside WHERE
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+`circle area using where` radius MEANS
+  LET pi BE 3
+  IN radius `squared locally` TIMES pi
+  WHERE
+    GIVEN r IS A NUMBER
+    r `squared locally` MEANS r * r
+
+#EVAL `circle area using where` OF 2
+-- Expected: 12
+-- Actual: 12 ✓

@@ -51,6 +51,39 @@ testLetIn MEANS
 
 These cases are locked in by `jl4/examples/ok/postfix-with-variables.l4`.
 
+### Local Helpers Regression (2025-12-18)
+
+Moving the postfix helper into a `WHERE` block exposed another failure mode:
+
+```l4
+IMPORT prelude
+
+GIVEN radius IS A NUMBER
+GIVETH A NUMBER
+area radius MEANS
+  LET pi BE 3
+  IN radius squared TIMES pi
+  WHERE
+    n squared MEANS n TIMES n
+
+#EVAL area OF 2
+```
+
+This still raised “radius … is not a function” plus “could not find a definition for `squared`”. The parser produced `App radius [squared]`, but when the type checker tried to reinterpret it, the mixfix registry only contained top-level operators.
+
+**Root cause**:
+
+1. `withScanTypeAndSigEnvironment` scanned `WHERE` declarations, then exited before type-checking the block body. The registry therefore reverted to its outer state and forgot the local postfix definitions.
+2. Even inside the scanning scope, `withDecides` replaced the registry instead of extending it, so local scopes could not see both global and local mixfix operators simultaneously.
+
+**Fix (Dec 19, 2025)**:
+
+- Type-check both the local declarations _and_ the enclosing body while still inside `withScanTypeAndSigEnvironment`, keeping the local mixfix registry alive for `reinterpretPostfixAppIfNeeded`.
+- Change `withDecides` so it merges (`Map.unionWith (<>)`) new entries into the outer registry rather than replacing it.
+- Add the `circle area using where` regression plus `#EVAL` directives to `jl4/examples/ok/postfix-with-variables.l4` (and regenerate the goldens).
+
+Now postfix/mixfix helpers defined inside `WHERE` behave exactly like their top-level counterparts.
+
 ## Root Cause
 
 The `app` parser (jl4-core/src/L4/Parser.hs:1404-1412) consumes same-line bare identifiers as function arguments before the postfix operator parser gets a chance to run.
@@ -202,6 +235,7 @@ They remain valid syntax but should no longer be required in day-to-day L4.
 ## Recommendation
 
 - **Shipped**: Type-checker reinterpretation (`reinterpretPostfixAppIfNeeded`) fixes postfix-with-variables without changing the parser or requiring backticks.
+- **2025-12**: Local scopes extend (rather than replace) the mixfix registry, so `WHERE` helpers remain visible to the postfix rewriter.
 - **Future**: Pursue Solution A (parser lookahead/registry) when we can afford a deeper parser refactor so the safety net becomes unnecessary.
 
 ### Implemented Fix (2025-12-18)
@@ -216,7 +250,7 @@ They remain valid syntax but should no longer be required in day-to-day L4.
 
 Regression files:
 
-- `jl4/examples/ok/postfix-with-variables.l4` (pure postfix coverage)
+- `jl4/examples/ok/postfix-with-variables.l4` (pure postfix coverage, including the `WHERE` helper regression)
 - `jl4/examples/ok/mixfix-with-variables.l4` (binary/ternary mixfix coverage)
 
 Both demonstrate:
