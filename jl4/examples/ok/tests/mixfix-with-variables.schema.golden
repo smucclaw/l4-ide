@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "left": {
+            "$ref": "#/$defs/NUMBER"
+        },
+        "right": {
+            "$ref": "#/$defs/NUMBER"
+        }
+    },
+    "required": [
+        "left",
+        "right"
+    ],
+    "title": "mixadd",
+    "type": "object"
+}
