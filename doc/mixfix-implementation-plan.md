@@ -1,18 +1,28 @@
 # Mixfix Operators - Implementation Plan
 
-## Current Status
+## Current Status (2025-12)
 
 ### Completed
 
-- ✅ Written specification (doc/mixfix-operators.md)
-- ✅ Created branch `mengwong/mixfix`
-- ✅ Added `TUnderscore` token to lexer (Lexer.hs) (subsequently reverted)
+- ✅ `doc/mixfix-operators.md` specification kept current with regression coverage
+- ✅ Type-checker reinterpretation for multi-operand mixfix calls (`tryMatchMixfixCall`, Dec 2024; see `doc/done/MIXFIX-USAGE-SPAN-FIX.md`)
+- ✅ Type-checker reinterpretation for postfix mixfix calls with bare variables (`reinterpretPostfixAppIfNeeded`, Dec 2025; see `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`)
+- ✅ Regression programs `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
 
 ### In Progress
 
-- 🔄 Extending AST and parser to handle underscore patterns
+- 🔄 Parser-level mixfix awareness (lookahead + registry) per the plan below; current implementation still relies on the type-checker safety net
+- 🔄 Optional underscore-oriented AST sugar (no user-facing syntax yet)
 
 ## Implementation Phases
+
+> **Historical plan** — The sections below capture the aspirational parser-first implementation. They remain useful design notes even though today's production solution relies on the type-checker rewrite.
+
+### Production Safety Net (Shipped)
+
+- `tryMatchMixfixCall` (Dec 2024) rewrites greedy parses such as `App alice [kw, arg, ...]` so multi-operand mixfix expressions match their declared patterns.
+- `reinterpretPostfixAppIfNeeded` (Dec 2025) flips `App operand [keyword]` when the trailing identifier is a registered postfix keyword and the operand is not callable, enabling `x squared` style calls.
+- The regression suite (`jl4/examples/ok/postfix-with-variables.l4`, `jl4/examples/ok/mixfix-with-variables.l4`) prevents regressions for both postfix and general mixfix cases.
 
 ### Phase 1: AST and Lexer Changes
 

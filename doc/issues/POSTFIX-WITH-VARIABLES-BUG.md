@@ -25,7 +25,7 @@ Before the fix, postfix operators (mixfix operators without parameters after the
 
 This keeps regular function application (`f x`) untouched while making `x squared` and LET/IN variants behave the same as literal operands.
 
-## Example
+## Example (Now Passing)
 
 ```l4
 IMPORT prelude
@@ -33,21 +33,23 @@ IMPORT prelude
 GIVEN n IS A NUMBER
 n squared MEANS n * n
 
--- ✓ Works: literal
-test1 MEANS 5 squared
-#EVAL test1  -- Result: 25
+-- Formerly only literals worked:
+testLiteral MEANS 5 squared
+#EVAL testLiteral  -- Result: 25
 
--- ✗ Fails: bare variable
+-- After the Dec 2025 fix, bare variables now pass type checking:
 GIVEN x IS A NUMBER
-test2 MEANS x squared
-#EVAL test2 OF 5  -- TYPE ERROR: "x is not a function"
+testVariable MEANS x squared
+#EVAL testVariable OF 5  -- Result: 25
 
--- ✗ Fails: LET...IN with variable
-test3 MEANS
+-- LET/IN bindings also behave:
+testLetIn MEANS
   LET y BE 5
   IN y squared
-#EVAL test3  -- TYPE ERROR: "y is not a function"
+#EVAL testLetIn  -- Result: 25
 ```
+
+These cases are locked in by `jl4/examples/ok/postfix-with-variables.l4`.
 
 ## Root Cause
 
@@ -123,43 +125,18 @@ The `app` parser (jl4-core/src/L4/Parser.hs:1404-1412) consumes same-line bare i
 - **No tests with bare variables:** `x percent` ✗
 - **Bug was never caught by test suite**
 
-## Workarounds
+## Historical Workarounds (Pre-Fix)
 
-### 1. Use Prefix Notation with Backticks
+The following mitigations were necessary before the type-checker rewrite and are documented here only for archeology. Modern code does **not** need them:
 
-```l4
-GIVEN x IS A NUMBER
-test MEANS `squared` x
+1. Rewrite postfix calls using prefix notation with backticks.
+2. Wrap operands in parentheses: `(x) squared`.
+3. Create intermediate LET bindings (`ySquared BE `squared` y`).
+4. Stick to literal operands (`5 squared`).
 
-#EVAL test OF 5  -- ✓ Works: 25
-```
+They remain valid syntax but should no longer be required in day-to-day L4.
 
-### 2. Use Parentheses
-
-```l4
-test MEANS (x) squared
-```
-
-**Status**: Works
-
-### 3. For LET...IN: Create Intermediate Binding
-
-```l4
-test MEANS
-  LET y BE 5
-      ySquared BE `squared` y
-  IN ySquared
-
-#EVAL test  -- ✓ Works: 25
-```
-
-### 4. Keep Operand as Literal
-
-```l4
-test MEANS 5 squared  -- ✓ Works
-```
-
-## Proposed Solutions
+## Solutions Considered (Historical)
 
 ### Solution A: Fix `app` Parser with Proper Lookahead (Complex)
 
@@ -180,9 +157,9 @@ test MEANS 5 squared  -- ✓ Works
 
 **Estimated effort**: 1-2 days of expert parser work
 
-### Solution B: Require Backticks for Ambiguous Cases (Simple)
+### Solution B: Require Backticks for Ambiguous Cases (Simple, Superseded)
 
-**Approach**: Document that postfix operators require backticks when applied to variables
+**Approach**: Document that postfix operators require backticks when applied to variables. Ultimately rejected once the type-checker rewrite landed—we prefer not to encode semantic meaning into backticks.
 
 **Changes**:
 
@@ -224,9 +201,8 @@ test MEANS 5 squared  -- ✓ Works
 
 ## Recommendation
 
-**Short term**: Solution B - Document the limitation and require backticks for variables
-
-**Long term**: Solution A - Fix the parser once we have bandwidth for careful parser work
+- **Shipped**: Type-checker reinterpretation (`reinterpretPostfixAppIfNeeded`) fixes postfix-with-variables without changing the parser or requiring backticks.
+- **Future**: Pursue Solution A (parser lookahead/registry) when we can afford a deeper parser refactor so the safety net becomes unnecessary.
 
 ### Implemented Fix (2025-12-18)
 
@@ -270,8 +246,7 @@ The fact that literals work is actually somewhat accidental - it's because the `
 
 ## Next Steps
 
-1. ✓ Document bug in this file
-2. ✓ Create test case in `jl4/examples/not-ok/tc/`
-3. Add better error message when this pattern is detected
-4. Update user documentation with backtick guidelines
-5. Consider Solution A when we have parser expertise available
+1. ✓ Document the bug and resolution here (ongoing updates welcome)
+2. ✓ Promote regression coverage to `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
+3. ◻ Consider parser-level lookahead (Solution A) so the safety net can eventually be removed
+4. ◻ Keep IDE and user-facing docs synced whenever mixfix semantics evolve

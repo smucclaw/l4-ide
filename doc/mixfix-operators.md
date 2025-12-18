@@ -34,6 +34,25 @@ The parser recognizes this as a mixfix pattern by identifying which names in the
 
 **Note**: Underscores (`_`) only appear in the **internal representation** of the function pattern (e.g., `_ copulated with _ to make _`). Users never write underscores - they write natural patterns using parameter names and keywords.
 
+### Backticks Are Lexical, Not Semantic
+
+Backticks simply allow identifiers to contain whitespace or punctuation; they do **not** tell the parser that something is an operator. When a parameter or keyword is a single word you may omit the backticks entirely:
+
+```l4
+salary exceedsMinimumFor category
+n squared
+```
+
+Reserve backticks for identifiers whose spelling would otherwise be invalid:
+
+```l4
+`salary` `exceeds minimum for` `category`
+interestRate `percent`
+alice `copulated with` bob `to make` charlie
+```
+
+Multi-word keywords still require backticks because each keyword is scanned as a single identifier token.
+
 ### Key Design Decisions
 
 1. **Parameters in pattern** - Use actual parameter names from GIVEN clause in the pattern
@@ -93,6 +112,8 @@ amount `percent` MEANS amount / 100
 
 Call: `50 `percent``
 
+Since December 2025 the type checker reinterprets misparsed `App operand [keyword]` fragments, so `x percent` and `LET y BE 5 IN y percent` type-check without any extra parentheses or backticks. See `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4` for regression coverage.
+
 #### Prefix (unary)
 
 ```l4
@@ -134,6 +155,8 @@ argument `keyword` argument `keyword` argument
 ```
 
 All identifiers may use backticks (standard L4 syntax for identifiers with whitespace).
+
+Operands can be bare variables, literals, or expressions. Parentheses are only needed for grouping, not to convince the parser that a postfix interpretation is allowed.
 
 ## Precedence and Disambiguation
 
@@ -197,6 +220,10 @@ mummy `copulated with` daddy `to make` baby MEANS ...
    - After last keyword (index 4-5): `charlie`
 3. Type check: `alice : Person`, `bob : Person`, `charlie : Person` ✓
 4. Apply: `copulated_with_to_make alice bob charlie`
+
+### Postfix Reinterpretation Safety Net
+
+The surface parser still prefers prefix application, so `x squared` initially arrives as `App x [squared]`. Before running the general mixfix matcher, the type checker (`jl4-core/src/L4/TypeCheck.hs`, `reinterpretPostfixAppIfNeeded`) detects this shape whenever `squared` (or any registered postfix keyword) expects a single operand. It then rewrites the AST to `App squared [x]`, preserving annotations so IDE tooling highlights the operator rather than the operand as the callee. This guarantees that bare variables, LET-bound names, and other expressions can participate in postfix mixfix calls without extra syntax.
 
 Perhaps the internal representations will be some combination of the following, for lookup and matching purposes:
 

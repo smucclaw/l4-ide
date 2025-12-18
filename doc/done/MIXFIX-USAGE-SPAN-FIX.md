@@ -8,6 +8,12 @@
 
 **Solution**: Implemented Option 3 (post-parsing resolution) in the typechecker to detect and rewrite mis-parsed mixfix expressions.
 
+## 2025 Follow-Up — Postfix Variables
+
+- `reinterpretPostfixAppIfNeeded` (Dec 2025) extends the same idea to postfix mixfix operators so `x squared` and LET-bound variants work without parentheses or backticks.
+- Regression files `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4` guard against regressions.
+- See `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md` for the investigation timeline and rationale.
+
 ## The Bug
 
 ```l4
