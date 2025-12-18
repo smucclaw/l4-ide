@@ -1,0 +1,67 @@
+§ `Postfix Operators With Variables`
+
+-- Regression test for doc/issues/POSTFIX-WITH-VARIABLES-BUG.md.
+-- Ensures postfix mixfix operators (e.g., `squared`) work for bare variables
+-- in top-level declarations and within LET...IN blocks.
+
+IMPORT prelude
+
+GIVEN n IS A NUMBER
+n squared MEANS n * n
+
+-- TEST 1: Postfix works with literals (this works)
+test1 MEANS 5 squared
+
+#EVAL test1
+-- Expected: 25
+-- Actual: 25 ✓
+
+-- TEST 2: Bare variable operands
+GIVEN x IS A NUMBER
+test2 MEANS x squared
+
+#EVAL test2 OF 5
+-- Expected: 25
+-- Actual: 25 ✓
+
+-- TEST 3: Bare variable inside LET...IN
+test3 MEANS
+  LET y BE 5
+  IN y squared
+
+#EVAL test3
+-- Expected: 25
+-- Actual: 25 ✓
+
+-- WORKAROUND 1: Use prefix notation with backticks
+test2_workaround MEANS `squared` 5
+
+#EVAL test2_workaround
+-- Expected: 25
+-- Actual: 25 ✓
+
+GIVEN x2 IS A NUMBER
+test2_workaround2 MEANS `squared` x2
+
+#EVAL test2_workaround2 OF 5
+-- Expected: 25
+-- Actual: 25 ✓
+
+-- WORKAROUND 2: Use parentheses around the expression
+test3_workaround MEANS
+  LET y BE 5
+  IN (y) squared
+
+#EVAL test3_workaround
+-- Expected: 25
+-- Actual: 25 ✓
+
+-- WORKAROUND 3: For LET...IN, use BE to create a temporary
+test3_workaround2 MEANS
+  LET y BE 5
+      ySquared BE `squared` y
+  IN ySquared
+
+#EVAL test3_workaround2
+-- Expected: 25
+-- Actual: 25 ✓

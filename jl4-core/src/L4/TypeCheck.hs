@@ -1198,6 +1198,7 @@ inferExpr' g =
         pure (nlgRe, te, rgivens)
       pure (Lam ann rgivens re, fun_ rargts te)
     App ann n es -> do
+      (initialFuncName, initialArgs, rewrotePostfix) <- reinterpretPostfixAppIfNeeded n es
       -- We want good type error messages. Therefore, we pursue the
       -- following strategy:
       --
@@ -1219,16 +1220,16 @@ inferExpr' g =
       -- If the function is a registered mixfix and the args contain the expected
       -- keywords, restructure the args to remove the keywords.
       -- For param-first patterns, this also returns the correct function name.
-      mMixfixMatch <- tryMatchMixfixCall n es
+      mMixfixMatch <- tryMatchMixfixCall initialFuncName initialArgs
       let (actualFuncName, actualArgs, needsAnnoRebuild, mMixfixError) = case mMixfixMatch of
-            Nothing -> (n, es, False, Nothing)  -- Not a mixfix call, use original
+            Nothing -> (initialFuncName, initialArgs, rewrotePostfix, Nothing)  -- Not a mixfix call, use original
             Just (funcRawName, restructuredArgs, mErr) ->
               -- Create a Name with the correct function name, preserving the annotation
-              let MkName nameAnno _ = n
+              let MkName nameAnno _ = initialFuncName
                   newName = MkName nameAnno funcRawName
                   -- We need to rebuild annotation if args were restructured
                   -- (i.e., keyword placeholders were removed)
-                  argsChanged = length restructuredArgs /= length es
+                  argsChanged = length restructuredArgs /= length initialArgs || rewrotePostfix
               in (newName, restructuredArgs, argsChanged, mErr)
 
       -- Report any mixfix matching errors (e.g., wrong keyword, typo)
@@ -2231,6 +2232,36 @@ getExprName :: Expr Name -> Maybe Name
 getExprName (Var _ n) = Just n
 getExprName (App _ n []) = Just n
 getExprName _ = Nothing
+
+-- | Reinterpret a mis-parsed postfix application of the form:
+--   App operand [keyword]
+-- into the expected form:
+--   App keyword [operand]
+-- when keyword is a registered postfix mixfix operator and operand is not callable.
+reinterpretPostfixAppIfNeeded :: Name -> [Expr Name] -> Check (Name, [Expr Name], Bool)
+reinterpretPostfixAppIfNeeded operandName args =
+  case args of
+    [kwExpr]
+      | Just kwName <- getExprName kwExpr -> do
+          registry <- asks (.mixfixRegistry)
+          let kwRaw = rawName kwName
+          case Map.lookup kwRaw registry of
+            Just sigs | any isPostfixMixfix sigs -> do
+              funcNameInScope <- lookupRawNameInEnvironment (rawName operandName)
+              let isCallable = any isCallableEntity funcNameInScope
+              if isCallable
+                then pure (operandName, args, False)
+                else do
+                  let operandExpr = App (getAnno operandName) operandName []
+                  pure (kwName, [operandExpr], True)
+            _ -> pure (operandName, args, False)
+    _ -> pure (operandName, args, False)
+
+-- | Detects mixfix signatures that define pure postfix operators
+-- of the shape: <param> <keyword>
+isPostfixMixfix :: FunTypeSig -> Bool
+isPostfixMixfix MkFunTypeSig {mixfixInfo = Just MkMixfixInfo {pattern = [MixfixParam _, MixfixKeyword _], arity = 1}} = True
+isPostfixMixfix _ = False
 
 -- | Check if a CheckEntity is callable (function, constructor, etc.)
 -- This is used to determine if a name can be applied to arguments.
