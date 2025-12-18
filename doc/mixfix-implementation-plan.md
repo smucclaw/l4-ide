@@ -24,6 +24,18 @@
 - `reinterpretPostfixAppIfNeeded` (Dec 2025) flips `App operand [keyword]` when the trailing identifier is a registered postfix keyword and the operand is not callable, enabling `x squared` style calls.
 - The regression suite (`jl4/examples/ok/postfix-with-variables.l4`, `jl4/examples/ok/mixfix-with-variables.l4`) prevents regressions for both postfix and general mixfix cases.
 
+### Parser Refactor Roadmap (Planned)
+
+We still want the parser itself to recognize mixfix/postfix patterns so the type-checker rewrite becomes optional. Proposed steps:
+
+1. **Parser Recon** — Re-audit `mixfixChainExpr`, `baseExpr`, and `app` (with a focus on the `AnnoParser` vs `Parser` boundary) and document where safe lookahead can occur without losing annotations. Deliverable: a diagram plus notes describing each combinator’s responsibilities.
+2. **Registry Bridging** — Determine when mixfix signatures become available. If necessary, introduce a lightweight first pass that only records keyword spans/arity so later parser stages can consult the registry while still streaming tokens once.
+3. **Prototype Lookahead** — Teach `app` to peek at the next same-line token; if it matches a registered postfix/mixfix keyword, defer consumption so `mixfixChainExpr` can interpret it. Keep this behavior behind a flag so we can compare against the current rewrite during testing.
+4. **Golden + Property Coverage** — Extend `jl4/examples/ok/*.l4` plus parser round-trip/property tests to ensure AST annotations and IDE ranges remain stable across literals, bare variables, LET bindings, and multi-line mixfix chains.
+5. **Migration & Cleanup** — After confidence is high, remove the type-checker reinterpreters, refresh golden files, and update documentation to reflect a parser-native solution.
+
+Risks include the brittle AnnoParser lookahead rules and multi-line patterns still confusing the parser. Mitigation: gate the new path, fall back to today’s safety net whenever ambiguity remains, and rely on the expanded regression suite to detect regressions early.
+
 ### Phase 1: AST and Lexer Changes
 
 #### 1.1 Lexer (NO CHANGES NEEDED)
