@@ -92,6 +92,7 @@ import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo)
 
 import Control.Applicative
 import Data.Monoid
@@ -177,17 +178,33 @@ doCheckProgramWithDependencies checkState checkEnv program =
 
 checkProgram :: Module Name -> Check (Module Resolved, [CheckInfo])
 checkProgram module' = do
-  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' do
+  withScanTypeAndSigEnvironment scanTyDeclModule inferTyDeclModule scanFunSigModule module' \_ -> do
     inferProgram module'
 
 withDecides :: [FunTypeSig] -> Check a -> Check a
 withDecides rdecides =
   extendKnownMany topDecides . local \s -> s
     { functionTypeSigs = Map.fromList $ mapMaybe (\d -> (,d) <$> rangeOf d.anno) rdecides
-    , mixfixRegistry = buildMixfixRegistry rdecides
+    , mixfixRegistry = Map.union (buildMixfixRegistry rdecides) s.mixfixRegistry
     }
   where
     topDecides = fmap (.name) rdecides
+
+withExtraMixfix :: MixfixRegistry -> Check a -> Check a
+withExtraMixfix mixfixAdds =
+  local \s -> s { mixfixRegistry = Map.union mixfixAdds s.mixfixRegistry }
+
+dedupCheckInfos :: [CheckInfo] -> [CheckInfo]
+dedupCheckInfos = go Set.empty []
+  where
+    go _ acc [] = reverse acc
+    go seen acc (ci:cis) =
+      let ciNames = ci.names
+          overlaps = any (`Set.member` seen) ciNames
+          seen' = List.foldl' (flip Set.insert) seen ciNames
+      in if overlaps
+          then go seen acc cis
+          else go seen' (ci:acc) cis
 
 -- | Build the mixfix registry from a list of FunTypeSigs.
 -- The registry maps from the first keyword of each mixfix function to the list
@@ -1004,13 +1021,17 @@ checkExpr ec (Where ann e ds) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    -- We have to immediately resolve 'Nlg' annotations, as 'ds'
-    -- brings new bindings into scope.
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds do
+    let knownExtends = dedupCheckInfos (concat extends)
+    re <- extendKnownMany knownExtends do
+      re <- checkExpr ec e t
+      -- We have to immediately resolve 'Nlg' annotations, as 'ds'
+      -- brings new bindings into scope.
+      nlgExpr re
+    pure re
   setAnnResolvedType t Nothing (Where ann re rds)
 checkExpr ec (LetIn ann ds e) t = softprune $ do
   let
@@ -1018,11 +1039,13 @@ checkExpr ec (LetIn ann ds e) t = softprune $ do
     scanDecl = mapMaybeM inferTyDeclLocalDecl
     scanFuns = mapMaybeM scanFunSigLocalDecl
 
-  (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-     unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
-  re <- extendKnownMany (concat extends) do
-    re <- checkExpr ec e t
-    nlgExpr re
+  (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+    (rds, extends) <- unzip <$> traverse (firstM nlgLocalDecl <=< inferLocalDecl) ds
+    pure (rds, extends, buildMixfixRegistry rdecides)
+  re <- withExtraMixfix mixfixAdds $
+    extendKnownMany (dedupCheckInfos (concat extends)) do
+      re <- checkExpr ec e t
+      nlgExpr re
   setAnnResolvedType t Nothing (LetIn ann rds re)
 checkExpr ec e t = softprune $ errorContext (WhileCheckingExpression e) do
   (re, rt) <- inferExpr e
@@ -1291,9 +1314,11 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (Where ann re rds, t)
     LetIn ann ds e -> do
       let
@@ -1301,9 +1326,11 @@ inferExpr' g =
         scanDecl = mapMaybeM inferTyDeclLocalDecl
         scanFuns = mapMaybeM scanFunSigLocalDecl
 
-      (rds, extends) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds do
-        unzip <$> traverse inferLocalDecl ds
-      (re, t) <- extendKnownMany (concat extends) $ inferExpr e
+      (rds, extends, mixfixAdds) <- withScanTypeAndSigEnvironment preScanDecl scanDecl scanFuns ds \rdecides -> do
+        (rds, extends) <- unzip <$> traverse inferLocalDecl ds
+        pure (rds, extends, buildMixfixRegistry rdecides)
+      (re, t) <- withExtraMixfix mixfixAdds $
+        extendKnownMany (dedupCheckInfos (concat extends)) $ inferExpr e
       pure (LetIn ann rds re, t)
     Event ann ev -> do
       (ev', ty) <- inferEvent ev
@@ -1847,14 +1874,14 @@ withScanTypeAndSigEnvironment ::
   (a -> Check [DeclChecked DeclareOrAssume]) ->
   (a -> Check [FunTypeSig]) ->
   a ->
-  Check b ->
+  ([FunTypeSig] -> Check b) ->
   Check b
 withScanTypeAndSigEnvironment preScanDecls scanDecl scanTySig a act = do
   rdeclares <- scanDeclares preScanDecls scanDecl a
   withDeclares rdeclares do
     rdecides <- scanTySig a
     withDecides rdecides $ do
-      act
+      act rdecides
 
 -- | @'withQualified' rs ce@ takes a list of 'Resolved' names and creates
 -- a 'CheckInfo' of @rs@ pointing to the @ce@ 'CheckInfo'.
@@ -2031,82 +2058,6 @@ scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
       }
 scanTyDeclAssume _ = do
   pure Nothing
-
--- ----------------------------------------------------------------------------
--- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
--- ----------------------------------------------------------------------------
-
--- | Extract mixfix pattern information by comparing the AppForm against
--- the GIVEN parameters in the TypeSig.
---
--- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
--- For example:
---   GIVEN person IS A Person, program IS A Program
---   person `is eligible for` program MEANS ...
---
--- Here the AppForm is [person, is eligible for, program], and the GIVEN params
--- are [person, program]. Since 'person' and 'program' are GIVEN params, this
--- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
---
-extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
-extractMixfixInfo tysig appForm =
-  let
-    -- Get the GIVEN parameter names as a set for fast lookup
-    givenParams :: Set RawName
-    givenParams = Set.fromList $ givenParamNames tysig
-
-    -- Get all tokens from the AppForm (head + args)
-    appFormTokens :: [Name]
-    appFormTokens = appFormHead' : appFormArgs'
-      where
-        MkAppForm _ appFormHead' appFormArgs' _ = appForm
-
-    -- Classify each token as either a parameter or a keyword
-    classifyToken :: Name -> MixfixPatternToken
-    classifyToken n
-      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
-      | otherwise                          = MixfixKeyword (rawName n)
-
-    -- Build the pattern
-    patternTokens :: [MixfixPatternToken]
-    patternTokens = map classifyToken appFormTokens
-
-    -- Extract just the keywords
-    extractKeyword :: MixfixPatternToken -> Maybe RawName
-    extractKeyword (MixfixKeyword k) = Just k
-    extractKeyword (MixfixParam _)   = Nothing
-
-    keywordList :: [RawName]
-    keywordList = mapMaybe extractKeyword patternTokens
-
-    -- Count parameters
-    paramCount :: Int
-    paramCount = length $ filter isParam patternTokens
-
-    isParam :: MixfixPatternToken -> Bool
-    isParam (MixfixParam _)   = True
-    isParam (MixfixKeyword _) = False
-
-  in
-    -- Only return MixfixInfo if there's at least one param in non-head position
-    -- (i.e., if the first token is a param, this is mixfix)
-    -- OR if there are keywords between params
-    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
-       then Just MkMixfixInfo
-              { pattern = patternTokens
-              , keywords = keywordList
-              , arity = paramCount
-              }
-       else Nothing
-
--- | Extract parameter names from a TypeSig's GIVEN clause.
-givenParamNames :: TypeSig Name -> [RawName]
-givenParamNames (MkTypeSig _ givenSig _) =
-  case givenSig of
-    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
-  where
-    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
-    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
 
 -- ----------------------------------------------------------------------------
 -- Call-site Mixfix Pattern Matching

@@ -7,11 +7,15 @@ module L4.Parser (
   -- * Public API
   parseFile,
   execParser,
+  execParserWithHints,
   execParserForTokens,
+  execParserForTokensWithHints,
   module',
   PError (..),
   mkPError,
   PState (..),
+  MixfixHintRegistry,
+  buildMixfixHintRegistry,
 
   -- * Debug combinators
   expr,
@@ -20,6 +24,9 @@ module L4.Parser (
   -- * High-level JL4 parser
   execProgramParser,
   execProgramParserForTokens,
+  execProgramParserWithHints,
+  execProgramParserForTokensWithHints,
+  execProgramParserWithHintPass,
 ) where
 
 import Base
@@ -47,15 +54,16 @@ import qualified L4.Syntax
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 import L4.Parser.Anno
+import L4.Parser.MixfixRegistry
 
 type Parser = ReaderT Env (StateT PState (Parsec Void TokenStream))
 
-newtype Env = Env
+data Env = Env
   { moduleUri :: NormalizedUri
+  , mixfixHints :: MixfixHintRegistry
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (SOP.Generic)
-
 data PState = PState
   { comments :: [Comment]
   , nlgs :: [Nlg]
@@ -1077,15 +1085,51 @@ currentLine = sourceLine <$> getSourcePos
 expressionCont :: Pos -> Parser (Cont Expr)
 expressionCont = cont operator baseExpr
 
+data ExprLineInfo =
+  MkExprLineInfo
+    { exprEndLine :: !Int
+    , exprIndentColumn :: !(Maybe Int)
+    }
+  deriving stock (Eq, Show)
+
+defaultExprLineInfo :: ExprLineInfo
+defaultExprLineInfo = MkExprLineInfo 0 Nothing
+
+mkExprLineInfo :: SrcRange -> ExprLineInfo
+mkExprLineInfo MkSrcRange{start = MkSrcPos{column}, end = MkSrcPos{line}} =
+  MkExprLineInfo
+    { exprEndLine = line
+    , exprIndentColumn = Just column
+    }
+
+exprLineInfoWithFallback :: ExprLineInfo -> Maybe SrcRange -> Maybe Int -> ExprLineInfo
+exprLineInfoWithFallback fallback Nothing fallbackIndent =
+  fallback {exprIndentColumn = fallback.exprIndentColumn <|> fallbackIndent}
+exprLineInfoWithFallback _ (Just rng) _ = mkExprLineInfo rng
+
+isQuotedIdentifierToken :: PosToken -> Bool
+isQuotedIdentifierToken MkPosToken{payload = L.TIdentifiers (L.TQuoted _)} = True
+isQuotedIdentifierToken _ = False
+
+keywordAlignedWith :: Bool -> ExprLineInfo -> SrcPos -> Bool
+keywordAlignedWith allowNextLine MkExprLineInfo{..} MkSrcPos{line = tokLine, column = tokColumn} =
+  tokLine == exprEndLine
+    || (allowNextLine
+        && maybe False
+            (\ indent ->
+               tokColumn == indent
+                 && (exprEndLine == 0 || tokLine == exprEndLine + 1))
+            exprIndentColumn)
+
 -- | Like 'postfixP' but passes the ending line of the parsed expression to
 -- a line-aware postfix parser. This is used for mixfix postfix operators
 -- which must be on the same line as the base expression.
-postfixPWithLine :: (HasAnno a, HasSrcRange a) => (Int -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
+postfixPWithLine :: (HasAnno a, HasSrcRange a) => (ExprLineInfo -> Parser (a -> a)) -> Parser (a -> a) -> Parser a -> Parser a
 postfixPWithLine lineAwareOps regularOps p = do
   a <- p
   let exprRange = rangeOf a <|> (getAnno a).range
-      exprEndLine = maybe 0 (.end.line) exprRange
-  mf <- optional (try (lineAwareOps exprEndLine) <|> try regularOps)
+      exprInfo = exprLineInfoWithFallback defaultExprLineInfo exprRange Nothing
+  mf <- optional (try (lineAwareOps exprInfo) <|> try regularOps)
   case mf of
     Nothing -> pure a
     Just f -> pure $ f a
@@ -1139,21 +1183,37 @@ regularPostfixOperator =
 -- if the postfix operator is on the same line.
 -- e.g., `50 `percent`` becomes `App anno percent [50]`
 -- We use `try` because if this is actually a binary operator (followed by
--- another expression), we want to backtrack and let the infix parser handle it.
-mixfixPostfixOp :: Int -> Parser (Expr Name -> Expr Name)
-mixfixPostfixOp exprEndLine = hidden $ try $ do
+mixfixPostfixOp :: ExprLineInfo -> Parser (Expr Name -> Expr Name)
+mixfixPostfixOp exprLineInfo = hidden $ try $ do
+  hints <- asks (.mixfixHints)
+  let allowNextLine = hasMixfixHints hints
   -- Peek at the next token to check its line number
-  nextTok <- lookAhead anySingle
-  -- Only proceed if the backticked name is on the same line as where the expression ended
-  guard (exprEndLine == nextTok.range.start.line)
+  nextTok <- lookAhead (spaceOrAnnotations *> anySingle)
+  let allowWithToken = allowNextLine || isQuotedIdentifierToken nextTok
+      tokStart = nextTok.range.start
+      sameLine = tokStart.line == exprLineInfo.exprEndLine
+  -- Only proceed if the keyword is on the same line or aligned with the
+  -- previous operand's indentation on the next line.
+  guard (keywordAlignedWith allowWithToken exprLineInfo tokStart)
   -- Accept both backticked names (`cubed`) and bare identifiers (cubed)
   -- The typechecker will validate if the identifier is a registered mixfix operator
   eN <- (MkName emptyAnno . NormalName) <<$>>
     (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
      <|> spacedToken (#_TIdentifiers % #_TIdentifier) "postfix identifier")
+  let candidateRaw = rawName eN.payload
+  when (hasMixfixHints hints) $
+    guard (isKnownMixfixKeyword candidateRaw hints)
+  unless sameLine $ do
+    nextAfterKeyword <- optional (lookAhead (spaceOrAnnotations *> anySingle))
+    let allowsPostfixNewline =
+          case (exprLineInfo.exprIndentColumn, nextAfterKeyword) of
+            (_, Nothing) -> True
+            (Just indent, Just peekTok) -> peekTok.range.start.column < indent
+            _ -> False
+    guard allowsPostfixNewline
   -- Check that this is NOT followed by an expression ON THE SAME LINE
   -- (which would make it infix). Expressions on subsequent lines don't count.
-  notFollowedBy (sameLineExpr exprEndLine)
+  notFollowedBy (sameLineExpr exprLineInfo.exprEndLine)
   let funcName = eN.payload
       op = mkSimpleEpaAnno eN
   pure $ \l -> App (fixAnnoSrcRange $ mkHoleAnnoFor l <> op) funcName [l]
@@ -1196,19 +1256,32 @@ baseExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator baseExpr'
 -- 3. Extract the actual arguments [a, b, c]
 --
 -- The curried representation means partial application works naturally.
+peekNextTokenLayout :: Parser ExprLineInfo
+peekNextTokenLayout = do
+  tok <- lookAhead (spaceOrAnnotations *> anySingle)
+  pure $
+    MkExprLineInfo
+      { exprEndLine = tok.range.start.line
+      , exprIndentColumn = Just tok.range.start.column
+      }
+
 mixfixChainExpr :: Parser (Expr Name)
 mixfixChainExpr = do
+  hints <- asks (.mixfixHints)
+  let allowNextLine = hasMixfixHints hints
+  firstLayoutHint <- peekNextTokenLayout
   firstExpr <- baseExpr
-  -- Get the ending line of the first expression to enforce same-line constraint
+  -- Compute end-line + indentation info for alignment-aware keywords.
   -- Try multiple fallbacks because rangeOf can return Nothing for some expression types:
   -- 1. rangeOf firstExpr - standard approach (fails for App with empty args)
   -- 2. (getAnno firstExpr).range - direct access to cached range
   -- 3. exprNameRange - extract range from name inside App/Var
-  let exprRange = rangeOf firstExpr <|> (getAnno firstExpr).range <|> exprNameRange firstExpr
-      firstExprEndLine = maybe 0 (.end.line) exprRange
+  let exprRange = exprRangeWithName firstExpr
+      firstExprInfo =
+        exprLineInfoWithFallback firstLayoutHint exprRange Nothing
   -- Try to parse a mixfix chain starting with a backticked keyword
-  -- The keyword must be on the same line as the first expression
-  mChain <- optional $ try (mixfixChainCont firstExprEndLine)
+  -- The keyword must be on the same line or aligned with the first expression
+  mChain <- optional $ try (mixfixChainCont allowNextLine hints firstExprInfo)
   case mChain of
     Nothing -> pure firstExpr
     Just (firstKeyword, firstArg, moreKwArgs) ->
@@ -1230,27 +1303,42 @@ mixfixChainExpr = do
     -- Parse: `keyword` expr (`keyword` expr)*
     -- Returns: (firstKeyword, firstArg, [(kw2, arg2), (kw3, arg3), ...])
     -- The keyword MUST be on the given line (same line as previous expression)
-    mixfixChainCont :: Int -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
-    mixfixChainCont prevLine = do
-      firstKw <- mixfixKeywordOnLine prevLine
+    mixfixChainCont :: Bool -> MixfixHintRegistry -> ExprLineInfo -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
+    mixfixChainCont allowNextLine hints prevInfo = do
+      firstKw <- mixfixKeywordAligned allowNextLine hints prevInfo
+      firstArgLayout <- peekNextTokenLayout
       firstArg <- baseExpr
-      let firstArgEndLine = maybe prevLine (.end.line) (rangeOf firstArg)
-      rest <- many $ try $ do
-        kw <- mixfixKeywordOnLine firstArgEndLine
-        e <- baseExpr
-        pure (kw, e)
+      let firstArgInfo = advanceInfo firstArgLayout firstArg
+      rest <- gatherChain allowNextLine hints firstArgInfo
       pure (firstKw, firstArg, rest)
 
-    -- Parse a mixfix keyword only if it's on the specified line
+    gatherChain :: Bool -> MixfixHintRegistry -> ExprLineInfo -> Parser [(Epa Name, Expr Name)]
+    gatherChain allowNextLine hints info = do
+      mNext <- optional . try $ do
+        kw <- mixfixKeywordAligned allowNextLine hints info
+        argLayout <- peekNextTokenLayout
+        arg <- baseExpr
+        let nextInfo = advanceInfo argLayout arg
+        pure ((kw, arg), nextInfo)
+      case mNext of
+        Nothing -> pure []
+        Just ((kw, arg), nextInfo) ->
+          ((kw, arg) :) <$> gatherChain allowNextLine hints nextInfo
+
+    -- Parse a mixfix keyword only if it's aligned with the specified anchor.
     -- Accepts both backticked names (`plus`) and bare identifiers (plus)
     -- The typechecker will validate if the identifier is a registered mixfix
-    mixfixKeywordOnLine :: Int -> Parser (Epa Name)
-    mixfixKeywordOnLine expectedLine = do
-      tok <- lookAhead anySingle
-      guard (tok.range.start.line == expectedLine)
-      (MkName emptyAnno . NormalName) <<$>>
+    mixfixKeywordAligned :: Bool -> MixfixHintRegistry -> ExprLineInfo -> Parser (Epa Name)
+    mixfixKeywordAligned allowNextLine hints anchorInfo = do
+      tok <- lookAhead (spaceOrAnnotations *> anySingle)
+      let allowWithToken = allowNextLine || isQuotedIdentifierToken tok
+      guard (keywordAlignedWith allowWithToken anchorInfo tok.range.start)
+      kw <- (MkName emptyAnno . NormalName) <<$>>
         (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
          <|> spacedToken (#_TIdentifiers % #_TIdentifier) "infix identifier")
+      when (hasMixfixHints hints) $
+        guard (isKnownMixfixKeyword (rawName kw.payload) hints)
+      pure kw
 
     -- Convert (keyword, expr) pair to [Var keyword, expr]
     -- These are the "additional" keywords beyond the first one
@@ -1266,6 +1354,14 @@ mixfixChainExpr = do
     -- Extract range from name inside App/Var expressions
     -- Used as fallback when rangeOf on the App itself returns Nothing
     -- Uses .range directly to bypass visibility filtering in rangeOf
+    advanceInfo :: ExprLineInfo -> Expr Name -> ExprLineInfo
+    advanceInfo layout exprNode =
+      exprLineInfoWithFallback layout (exprRangeWithName exprNode) Nothing
+
+    exprRangeWithName :: Expr Name -> Maybe SrcRange
+    exprRangeWithName e =
+      rangeOf e <|> (getAnno e).range <|> exprNameRange e
+
     exprNameRange :: Expr Name -> Maybe SrcRange
     exprNameRange (App _ n _) = (getAnno n).range
     exprNameRange (AppNamed _ n _ _) = (getAnno n).range
@@ -1378,12 +1474,55 @@ stringLit =
 app :: Parser (Expr Name)
 app = do
   current <- Lexer.indentLevel
-  attachAnno $
-    App emptyAnno
-    <$> annoHole name
-    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
-        <|> annoHole (lmany (const (indented atomicExpr' current)))
-        )
+  attachAnno do
+    fname <- annoHole name
+    args <-
+      ( annoLexeme (spacedKeyword_ TKOf)
+          *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma))
+      )
+        <|> annoHole (parseAppArgs current fname)
+    pure (App emptyAnno fname args)
+
+parseAppArgs :: Pos -> Name -> Parser [Expr Name]
+parseAppArgs current fname = go True
+  where
+    funcLine = nameEndLine fname
+
+    go allowBreak = do
+      mArg <- optional $ try $ parseOne allowBreak
+      case mArg of
+        Nothing -> pure []
+        Just arg -> (arg :) <$> go False
+
+    parseOne allowBreak = do
+      when allowBreak $ guardMixfixKeyword funcLine
+      indented atomicExpr' current
+
+guardMixfixKeyword :: Maybe Int -> Parser ()
+guardMixfixKeyword Nothing = pure ()
+guardMixfixKeyword (Just line) = do
+  hints <- asks (.mixfixHints)
+  if hasMixfixHints hints
+    then do
+      shouldBlock <- mixfixKeywordAhead hints line
+      when shouldBlock Applicative.empty
+    else pure ()
+
+mixfixKeywordAhead :: MixfixHintRegistry -> Int -> Parser Bool
+mixfixKeywordAhead hints line = do
+  nextTok <- lookAhead anySingle
+  if nextTok.range.start.line /= line
+    then pure False
+    else do
+      mName <- optional $ lookAhead (try name)
+      case mName of
+        Just kwName -> pure (isKnownMixfixKeyword (rawName kwName) hints)
+        Nothing -> pure False
+
+nameEndLine :: Name -> Maybe Int
+nameEndLine n =
+  fmap (.end.line) $
+    rangeOf n <|> (getAnno n).range
 
 namedApp :: Parser (Expr Name)
 namedApp = do
@@ -1835,6 +1974,7 @@ execNlgParserForTokens p uri input ts =
   where
     env = Env
       { moduleUri = uri
+      , mixfixHints = emptyMixfixHintRegistry
       }
     st = PState
       { nlgs = []
@@ -1849,14 +1989,19 @@ execNlgParserForTokens p uri input ts =
 -- ----------------------------------------------------------------------------
 
 execParser :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
-execParser p uri input =
+execParser = execParserWithHints mempty
+
+execParserWithHints :: (Resolve.HasNlg a, Resolve.HasDesc a) => MixfixHintRegistry -> Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserWithHints hints p uri input =
   case execLexer uri input of
     Left errs -> Left errs
-    -- TODO: we should probably push in the uri even further.
-    Right ts -> execParserForTokens p uri input ts
+    Right ts -> execParserForTokensWithHints hints p uri input ts
 
 execParserForTokens :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
-execParserForTokens p file input ts =
+execParserForTokens = execParserForTokensWithHints mempty
+
+execParserForTokensWithHints :: (Resolve.HasNlg a, Resolve.HasDesc a) => MixfixHintRegistry -> Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserForTokensWithHints hints p file input ts =
   case runJl4Parser env st p (showNormalizedUri file) stream  of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right (a, pstate)  ->
@@ -1868,6 +2013,7 @@ execParserForTokens p file input ts =
   where
     env = Env
       { moduleUri = file
+      , mixfixHints = hints
       }
     st = PState
       { nlgs = []
@@ -1896,6 +2042,31 @@ execProgramParserForTokens uri input ts =
   forgetPState $  execParserForTokens (module' uri) uri input ts
   where
     forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+execProgramParserWithHints :: MixfixHintRegistry -> NormalizedUri -> Text -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParserWithHints hints uri input =
+  forgetPState $ execParserWithHints hints (module' uri) uri input
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+execProgramParserForTokensWithHints :: MixfixHintRegistry -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParserForTokensWithHints hints uri input ts =
+  forgetPState $ execParserForTokensWithHints hints (module' uri) uri input ts
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+-- | Two-pass parser helper: first parse without hints to collect mixfix keywords,
+-- then re-run the parser with the discovered hints so later phases can rely on them.
+execProgramParserWithHintPass ::
+  NormalizedUri ->
+  Text ->
+  Either (NonEmpty PError) (Module Name, MixfixHintRegistry, [Resolve.Warning])
+execProgramParserWithHintPass uri input = do
+  ts <- execLexer uri input
+  (firstModule, _) <- execProgramParserForTokens uri input ts
+  let hints = buildMixfixHintRegistry firstModule
+  (finalModule, finalWarnings) <- execProgramParserForTokensWithHints hints uri input ts
+  pure (finalModule, hints, finalWarnings)
 
 -- ----------------------------------------------------------------------------
 -- Debug helpers
