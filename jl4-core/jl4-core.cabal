@@ -127,10 +127,13 @@ test-suite jl4-core-test
   other-modules:
     Paths_jl4_core
     TemporalContextSpec
+    MixfixParserSpec
   build-tool-depends:
     hspec-discover:hspec-discover
   build-depends:
     base,
     hspec,
     jl4-core,
+    template-haskell,
+    text,
     time

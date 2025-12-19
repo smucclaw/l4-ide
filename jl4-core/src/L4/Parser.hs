@@ -1210,6 +1210,7 @@ baseExpr = postfixPWithLine mixfixPostfixOp regularPostfixOperator baseExpr'
 -- The curried representation means partial application works naturally.
 mixfixChainExpr :: Parser (Expr Name)
 mixfixChainExpr = do
+  hints <- asks (.mixfixHints)
   firstExpr <- baseExpr
   -- Get the ending line of the first expression to enforce same-line constraint
   -- Try multiple fallbacks because rangeOf can return Nothing for some expression types:
@@ -1220,7 +1221,7 @@ mixfixChainExpr = do
       firstExprEndLine = maybe 0 (.end.line) exprRange
   -- Try to parse a mixfix chain starting with a backticked keyword
   -- The keyword must be on the same line as the first expression
-  mChain <- optional $ try (mixfixChainCont firstExprEndLine)
+  mChain <- optional $ try (mixfixChainCont hints firstExprEndLine)
   case mChain of
     Nothing -> pure firstExpr
     Just (firstKeyword, firstArg, moreKwArgs) ->
@@ -1242,13 +1243,13 @@ mixfixChainExpr = do
     -- Parse: `keyword` expr (`keyword` expr)*
     -- Returns: (firstKeyword, firstArg, [(kw2, arg2), (kw3, arg3), ...])
     -- The keyword MUST be on the given line (same line as previous expression)
-    mixfixChainCont :: Int -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
-    mixfixChainCont prevLine = do
-      firstKw <- mixfixKeywordOnLine prevLine
+    mixfixChainCont :: MixfixHintRegistry -> Int -> Parser (Epa Name, Expr Name, [(Epa Name, Expr Name)])
+    mixfixChainCont hints prevLine = do
+      firstKw <- mixfixKeywordOnLine hints prevLine
       firstArg <- baseExpr
       let firstArgEndLine = maybe prevLine (.end.line) (rangeOf firstArg)
       rest <- many $ try $ do
-        kw <- mixfixKeywordOnLine firstArgEndLine
+        kw <- mixfixKeywordOnLine hints firstArgEndLine
         e <- baseExpr
         pure (kw, e)
       pure (firstKw, firstArg, rest)
@@ -1256,13 +1257,16 @@ mixfixChainExpr = do
     -- Parse a mixfix keyword only if it's on the specified line
     -- Accepts both backticked names (`plus`) and bare identifiers (plus)
     -- The typechecker will validate if the identifier is a registered mixfix
-    mixfixKeywordOnLine :: Int -> Parser (Epa Name)
-    mixfixKeywordOnLine expectedLine = do
+    mixfixKeywordOnLine :: MixfixHintRegistry -> Int -> Parser (Epa Name)
+    mixfixKeywordOnLine hints expectedLine = do
       tok <- lookAhead anySingle
       guard (tok.range.start.line == expectedLine)
-      (MkName emptyAnno . NormalName) <<$>>
+      kw <- (MkName emptyAnno . NormalName) <<$>>
         (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix keyword"
          <|> spacedToken (#_TIdentifiers % #_TIdentifier) "infix identifier")
+      when (hasMixfixHints hints) $
+        guard (isKnownMixfixKeyword (rawName kw.payload) hints)
+      pure kw
 
     -- Convert (keyword, expr) pair to [Var keyword, expr]
     -- These are the "additional" keywords beyond the first one
@@ -1390,12 +1394,55 @@ stringLit =
 app :: Parser (Expr Name)
 app = do
   current <- Lexer.indentLevel
-  attachAnno $
-    App emptyAnno
-    <$> annoHole name
-    <*> (   annoLexeme (spacedKeyword_ TKOf) *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma)) -- (withIndent EQ current $ \ _ -> spacedToken_ TKAnd))
-        <|> annoHole (lmany (const (indented atomicExpr' current)))
-        )
+  attachAnno do
+    fname <- annoHole name
+    args <-
+      ( annoLexeme (spacedKeyword_ TKOf)
+          *> annoHole (lsepBy1 (const (indentedExpr current)) (spacedSymbol_ TComma))
+      )
+        <|> annoHole (parseAppArgs current fname)
+    pure (App emptyAnno fname args)
+
+parseAppArgs :: Pos -> Name -> Parser [Expr Name]
+parseAppArgs current fname = go True
+  where
+    funcLine = nameEndLine fname
+
+    go allowBreak = do
+      mArg <- optional $ try $ parseOne allowBreak
+      case mArg of
+        Nothing -> pure []
+        Just arg -> (arg :) <$> go False
+
+    parseOne allowBreak = do
+      when allowBreak $ guardMixfixKeyword funcLine
+      indented atomicExpr' current
+
+guardMixfixKeyword :: Maybe Int -> Parser ()
+guardMixfixKeyword Nothing = pure ()
+guardMixfixKeyword (Just line) = do
+  hints <- asks (.mixfixHints)
+  if hasMixfixHints hints
+    then do
+      shouldBlock <- mixfixKeywordAhead hints line
+      when shouldBlock Applicative.empty
+    else pure ()
+
+mixfixKeywordAhead :: MixfixHintRegistry -> Int -> Parser Bool
+mixfixKeywordAhead hints line = do
+  nextTok <- lookAhead anySingle
+  if nextTok.range.start.line /= line
+    then pure False
+    else do
+      mName <- optional $ lookAhead (try name)
+      case mName of
+        Just kwName -> pure (isKnownMixfixKeyword (rawName kwName) hints)
+        Nothing -> pure False
+
+nameEndLine :: Name -> Maybe Int
+nameEndLine n =
+  fmap (.end.line) $
+    rangeOf n <|> (getAnno n).range
 
 namedApp :: Parser (Expr Name)
 namedApp = do

@@ -9,6 +9,7 @@
 - ✅ Type-checker reinterpretation for postfix mixfix calls with bare variables (`reinterpretPostfixAppIfNeeded`, Dec 2025; see `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`)
 - ✅ Regression programs `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
 - ✅ Parser hint scaffolding (`L4.Parser.MixfixRegistry`, Dec 2025) builds a mixfix keyword registry before the second parse so syntax/IDE layers can opt into registry-aware parsing
+- ✅ `mixfixChainExpr` now consults the hint registry for every keyword that appears in a chain (Dec 2025), preventing unrelated identifiers on the same line from being misinterpreted as part of a multi-token operator whenever hints are supplied.
 
 ### In Progress
 
@@ -177,6 +178,8 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = do
 - Implemented `L4.Parser.MixfixRegistry`, which traverses a parsed `Module Name` and aggregates every mixfix `Decide`/`Assume` into a `MixfixHintRegistry` (first-keyword lookup map + keyword universe set).
 - `L4.Parser` now exports hint-aware entry points (`execParserWithHints`, `execProgramParserWithHints`, `execProgramParserWithHintPass`, etc.) and stores the registry on the parser `Env`, so downstream combinators (e.g., `mixfixPostfixOp`) can consult authoritative keyword membership whenever hints are supplied.
 - The LSP `GetParsedAst` rule runs a two-pass parse: first pass builds hints, second pass parses with hints, ensuring IDE clients benefit immediately without waiting for the parser refactor.
+- Prefix application now checks the hint registry before consuming the first positional argument: if the upcoming same-line token is a declared mixfix keyword we bail out, letting `mixfixPostfixOp` / `mixfixChainExpr` reinterpret `x squared` without relying on the type-checker rewrite.
+- Edge case: a deliberate attempt to call a function with the same spelling as a keyword (e.g. `n percent` where `percent` is a regular 1-ary function) will now need parentheses/backticks or a line break before the argument; we consider this a pathological scenario and can revisit if it shows up in real code.
 
 ### Phase 4: Type Checker Pattern Matching
 
