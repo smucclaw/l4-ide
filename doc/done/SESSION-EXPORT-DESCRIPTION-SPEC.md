@@ -1,13 +1,32 @@
 # Session Function EXPORT Description Support
 
-**Status:** Partial Implementation (Implicit exports done, session description extraction TODO)  
-**Priority:** Medium  
-**Affects:** jl4-decision-service, jl4-websessions  
+**Status:** ✅ COMPLETED (December 1, 2025)
+**Priority:** Medium
+**Affects:** jl4-decision-service, jl4-websessions
 **Related Issues:** N/A
+**Implementation Commit:** ff3c13e443439d11099e377f53355f5f642856c9
 
-## Recent Changes (December 2024)
+## Implementation Summary
 
-**Implicit Default Export Logic** has been implemented in `jl4-core/src/L4/Export.hs`:
+**Session-based description extraction** has been fully implemented! Session-based functions now properly extract and display descriptions from `@export` annotations, achieving parity with file-based functions.
+
+## Recent Changes
+
+### December 2025: Description Extraction Implementation
+
+**Commit ff3c13e4** ("Add desc-driven export plumbing") implemented Option 3 (Extract from AST Annotations) from the proposed solutions below. The implementation adds:
+
+1. **`fillMetadataFromAnnotations`** - Checks if function already has user-provided metadata (description, parameters)
+2. **`deriveFunctionFromSource`** - Typechecks L4 source and extracts export annotations including descriptions
+3. **`selectExport`** - Intelligently selects the appropriate export (by name, by default flag, or first available)
+4. **`exportToFunction`** - Converts export metadata to Function with description from `export.exportDescription`
+5. **`chooseField`** - Prefers user-provided values but falls back to derived values when empty
+
+The solution leverages `L4.Export.getExportedFunctions` to extract metadata from the type-checked module, providing robust parsing through the compiler's AST rather than text-based parsing.
+
+### December 2024: Implicit Default Export Logic
+
+**Implicit Default Export Logic** was implemented in `jl4-core/src/L4/Export.hs`:
 
 1. **No explicit exports**: Files without `@export` annotations now automatically export their topmost function as the default export
 2. **Exports without explicit default**: When a file has `@export` annotations but none marked with `default`, the topmost exported function is automatically marked as default
@@ -20,13 +39,11 @@ This allows simple files like `jl4/experiments/cubed-postfix.l4` to be exportabl
 - `jl4/examples/ok/export-no-explicit-default.l4` - Tests auto-selection of topmost export as default
 - `jl4/examples/ok/export-explicit-default.l4` - Tests explicit default is respected
 
-**Remaining work:** Session-based description extraction (below)
-
 ## Problem Statement
 
 When L4 code is shared via the web IDE (using UUID-based sessions), the decision service API displays an empty `description` field for exported functions. This makes it difficult for API consumers to understand what a shared function does without reading the source code.
 
-### Current Behavior
+### Previous Behavior (Before December 1, 2025)
 
 **File-based examples (working):**
 
@@ -56,12 +73,12 @@ $ curl http://localhost:8001/functions/4a504093-d615-4875-acb5-acfb38b4f981
 ]
 ```
 
-### Root Cause
+### Root Cause (Now Fixed)
 
-Located in `jl4-decision-service/src/Server.hs:675-701`:
+Previously located in `jl4-decision-service/src/Server.hs`:
 
 ```haskell
--- File-based examples: description comes from Examples.loadL4File
+-- OLD CODE: description was hardcoded to empty string
 makeSessionFunctions :: Maybe Text -> ProgramSource -> ExceptT Text IO (Examples.L4File)
 makeSessionFunctions sessionIdMay (ProgramSource progSource) = do
   -- ...
@@ -72,13 +89,24 @@ makeSessionFunctions sessionIdMay (ProgramSource progSource) = do
     })
 ```
 
-**Why file-based examples work:**
+**Why file-based examples worked:**
 
-The `Examples.loadL4File` function in `jl4-decision-service/src/Examples.hs` properly parses EXPORT directives from `.l4` files and extracts the DESCRIPTION annotation.
+The `Examples.loadL4File` function in `jl4-decision-service/src/Examples.hs` properly parsed EXPORT directives from `.l4` files and extracted the DESCRIPTION annotation.
 
-**Why session-based functions don't:**
+**Why session-based functions didn't work:**
 
-The `makeSessionFunctions` function receives only the raw L4 source text and doesn't perform any EXPORT directive parsing.
+The function validation code didn't extract metadata from export annotations in the source text.
+
+### Current Behavior (After Fix)
+
+Both file-based and session-based functions now properly extract descriptions from `@export` annotations. The implementation in `Server.hs:503-709` now:
+
+1. Calls `fillMetadataFromAnnotations` during function validation
+2. Typechecks the source to get the resolved module AST
+3. Extracts export metadata using `L4.Export.getExportedFunctions`
+4. Populates the function description from `export.exportDescription`
+
+Session-based functions now work identically to file-based functions!
 
 ## Expected Behavior
 
@@ -316,11 +344,13 @@ DEF broken (x : Int) : Int = x
 
 ## Success Criteria
 
-- [ ] Session-based functions display descriptions in API responses
-- [ ] Descriptions match those in EXPORT DESCRIPTION annotations
-- [ ] Existing file-based examples continue to work
-- [ ] Tests pass for all scenarios (with/without descriptions, multiple exports)
-- [ ] Swagger UI displays descriptions for shared functions
+- [x] Session-based functions display descriptions in API responses ✅
+- [x] Descriptions match those in EXPORT DESCRIPTION annotations ✅
+- [x] Existing file-based examples continue to work ✅
+- [x] Tests pass for all scenarios (with/without descriptions, multiple exports) ✅
+- [x] Swagger UI displays descriptions for shared functions ✅
+
+All success criteria have been met as of December 1, 2025.
 
 ## Follow-Up Work
 
