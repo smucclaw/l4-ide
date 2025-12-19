@@ -801,8 +801,26 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           hPutStrLn stderr $ displayException err'
         err (\e -> e {errBody = "uuid not present on remote backend: " <> UUID.toLazyASCIIBytes uuid})
       Right prog -> do
+        -- Derive actual function name from exports if not specified in UUID
+        actualFunName <- if Text.null (Text.strip funNameFromUUID)
+          then do
+            let fileName = Text.unpack muuid <> ".l4"
+            (errs, mTcRes) <- liftIO $ Jl4.typecheckModule fileName prog Map.empty
+            case mTcRes of
+              Nothing -> do
+                unless (null errs) $
+                  liftIO $ putStrLn $ "Failed to derive function name from exports: " <> Text.unpack (Text.intercalate "; " errs)
+                throwError err500 {errBody = "could not determine function name from exports"}
+              Just Rules.TypeCheckResult{module' = resolvedModule} -> do
+                let exports = getExportedFunctions resolvedModule
+                    dummyFn = Function "" "" MkParameters{parameterMap = Map.empty, required = []} []
+                case selectExport dummyFn exports of
+                  Nothing -> throwError err500 {errBody = "no exported functions found in session"}
+                  Just exported -> pure exported.exportName
+          else pure funNameFromUUID
+
         -- Directive filtering happens at the AST level in Jl4.evaluateWrapperInContext
-        let fnImpl = mkSessionFunction funName MkParameters {parameterMap = Map.empty, required = []} prog
+        let fnImpl = mkSessionFunction actualFunName MkParameters {parameterMap = Map.empty, required = []} prog
             fnDecl = toDecl fnImpl
 
         decide <- liftIO (runExceptT (Jl4.buildFunDecide prog fnDecl))
@@ -812,7 +830,7 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
             throwError err500 {errBody = "evaluator failed"}
             ) pure
 
-        (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack funName <> ".l4") fnDecl prog Map.empty
+        (runFn, mCompiled) <- liftIO $ Jl4.createFunction (Text.unpack actualFunName <> ".l4") fnDecl prog Map.empty
 
         k ValidatedFunction
           { fnImpl = fnImpl { parameters = parametersOfDecide decide }
@@ -820,7 +838,7 @@ withUUIDFunction uuidAndFun k err = case UUID.fromText muuid of
           , fnCompiled = mCompiled
           }
   where
-   (muuid, funName) = T.drop 1 <$> T.breakOn ":" uuidAndFun
+   (muuid, funNameFromUUID) = T.drop 1 <$> T.breakOn ":" uuidAndFun
 
 parametersOfDecide :: Decide Resolved -> Parameters
 parametersOfDecide (MkDecide _ (MkTypeSig _ (MkGivenSig _ typedNames) _) (MkAppForm _ _ args _) _)  =
