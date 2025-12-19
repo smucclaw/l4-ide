@@ -10,6 +10,7 @@ import L4.Parser.SrcSpan (SrcRange(..), SrcPos)
 import L4.Syntax
 import L4.TypeCheck.With
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..))
 
 import Control.Applicative
 import qualified Data.Map.Strict as Map
@@ -181,14 +182,6 @@ instance HasSrcRange CheckError where
 
 -- | A token in a mixfix pattern, representing either a keyword (part of the function name)
 -- or a parameter slot.
-data MixfixPatternToken
-  = MixfixKeyword RawName
-    -- ^ A keyword part of the function name (e.g., "is eligible for")
-  | MixfixParam RawName
-    -- ^ A parameter slot, with the original parameter name for documentation
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | Errors that can occur during mixfix pattern matching.
 -- These provide detailed information for user-friendly error messages.
 data MixfixMatchError
@@ -240,17 +233,6 @@ data MixfixArgMatch a
 -- | Information about a mixfix function pattern.
 -- A mixfix function is one where the function name is interspersed with parameters,
 -- like @person `is eligible for` program@ instead of @isEligibleFor person program@.
-data MixfixInfo = MkMixfixInfo
-  { pattern :: [MixfixPatternToken]
-    -- ^ The complete pattern, e.g., [Param "person", Keyword "is eligible for", Param "program"]
-  , keywords :: [RawName]
-    -- ^ Just the keyword parts, for quick lookup (e.g., ["is eligible for"])
-  , arity :: Int
-    -- ^ Number of parameters (parameter slots in the pattern)
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (NFData)
-
 -- | A checked function signature.
 data FunTypeSig = MkFunTypeSig
   { anno :: Anno

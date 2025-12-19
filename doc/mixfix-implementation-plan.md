@@ -8,6 +8,7 @@
 - ✅ Type-checker reinterpretation for multi-operand mixfix calls (`tryMatchMixfixCall`, Dec 2024; see `doc/done/MIXFIX-USAGE-SPAN-FIX.md`)
 - ✅ Type-checker reinterpretation for postfix mixfix calls with bare variables (`reinterpretPostfixAppIfNeeded`, Dec 2025; see `doc/issues/POSTFIX-WITH-VARIABLES-BUG.md`)
 - ✅ Regression programs `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
+- ✅ Parser hint scaffolding (`L4.Parser.MixfixRegistry`, Dec 2025) builds a mixfix keyword registry before the second parse so syntax/IDE layers can opt into registry-aware parsing
 
 ### In Progress
 
@@ -170,6 +171,12 @@ scanFunSigDecide d@(MkDecide _ tysig appForm _) = do
 
   pure funSig
 ```
+
+### Parser Hint Pass (Dec 2025)
+
+- Implemented `L4.Parser.MixfixRegistry`, which traverses a parsed `Module Name` and aggregates every mixfix `Decide`/`Assume` into a `MixfixHintRegistry` (first-keyword lookup map + keyword universe set).
+- `L4.Parser` now exports hint-aware entry points (`execParserWithHints`, `execProgramParserWithHints`, `execProgramParserWithHintPass`, etc.) and stores the registry on the parser `Env`, so downstream combinators (e.g., `mixfixPostfixOp`) can consult authoritative keyword membership whenever hints are supplied.
+- The LSP `GetParsedAst` rule runs a two-pass parse: first pass builds hints, second pass parses with hints, ensuring IDE clients benefit immediately without waiting for the parser refactor.
 
 ### Phase 4: Type Checker Pattern Matching
 

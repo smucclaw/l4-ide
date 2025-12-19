@@ -273,14 +273,17 @@ jl4Rules evalConfig rootDirectory recorder = do
     (tokens, contents) <- use_ GetLexTokens uri
     case Parser.execProgramParserForTokens uri contents tokens of
       Left errs -> do
-        let
-          diags = toList $ fmap mkParseErrorDiagnostic errs
+        let diags = toList $ fmap mkParseErrorDiagnostic errs
         pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
-      Right (prog, warns) -> do
-        let
-          diags = fmap mkNlgWarning warns
-
-        pure (fmap (mkSimpleFileDiagnostic uri) diags, Just prog)
+      Right (firstProg, _) -> do
+        let hints = Parser.buildMixfixHintRegistry firstProg
+        case Parser.execProgramParserForTokensWithHints hints uri contents tokens of
+          Left errs -> do
+            let diags = toList $ fmap mkParseErrorDiagnostic errs
+            pure (fmap (mkSimpleFileDiagnostic uri) diags , Nothing)
+          Right (finalProg, warns) -> do
+            let diags = fmap mkNlgWarning warns
+            pure (fmap (mkSimpleFileDiagnostic uri) diags, Just finalProg)
 
   define shakeRecorder $ \GetImports uri -> do
     let -- NOTE: we curently don't allow any relative or absolute file paths, just bare module names

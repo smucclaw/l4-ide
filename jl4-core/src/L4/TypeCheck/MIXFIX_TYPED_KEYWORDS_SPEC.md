@@ -289,8 +289,8 @@ test2 MEANS sixDivBy 3  -- Should be True
 | prettyMixfixMatchError      | L4/TypeCheck.hs             | 2813-2845          |
 | Fuzzy matching utilities    | L4/TypeCheck.hs             | 2312-2347          |
 | Keyword built-in            | L4/TypeCheck/Environment.hs | 25, 96-98, 282-285 |
-| MixfixInfo type             | L4/TypeCheck/Types.hs       | 240-250            |
-| MixfixPatternToken          | L4/TypeCheck/Types.hs       | 178-186            |
+| MixfixInfo type             | L4/Mixfix.hs                | 29-63              |
+| MixfixPatternToken          | L4/Mixfix.hs                | 17-27              |
 
 ## Notes for Implementer
 

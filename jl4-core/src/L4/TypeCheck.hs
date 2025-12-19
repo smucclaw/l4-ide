@@ -92,6 +92,7 @@ import L4.TypeCheck.Types as X
 import L4.TypeCheck.Unify
 import L4.TypeCheck.With as X
 import qualified L4.Utils.IntervalMap as IV
+import L4.Mixfix (MixfixInfo(..), MixfixPatternToken(..), extractMixfixInfo)
 
 import Control.Applicative
 import Data.Monoid
@@ -2057,82 +2058,6 @@ scanTyDeclAssume (MkAssume ann tysig appForm (Just (Type _tann))) = do
       }
 scanTyDeclAssume _ = do
   pure Nothing
-
--- ----------------------------------------------------------------------------
--- Phase 2: Scan Function Declarations (DECIDE & ASSUME)
--- ----------------------------------------------------------------------------
-
--- | Extract mixfix pattern information by comparing the AppForm against
--- the GIVEN parameters in the TypeSig.
---
--- A function is mixfix if any of its AppForm tokens match GIVEN parameter names.
--- For example:
---   GIVEN person IS A Person, program IS A Program
---   person `is eligible for` program MEANS ...
---
--- Here the AppForm is [person, is eligible for, program], and the GIVEN params
--- are [person, program]. Since 'person' and 'program' are GIVEN params, this
--- is a mixfix pattern: [Param "person", Keyword "is eligible for", Param "program"]
---
-extractMixfixInfo :: TypeSig Name -> AppForm Name -> Maybe MixfixInfo
-extractMixfixInfo tysig appForm =
-  let
-    -- Get the GIVEN parameter names as a set for fast lookup
-    givenParams :: Set RawName
-    givenParams = Set.fromList $ givenParamNames tysig
-
-    -- Get all tokens from the AppForm (head + args)
-    appFormTokens :: [Name]
-    appFormTokens = appFormHead' : appFormArgs'
-      where
-        MkAppForm _ appFormHead' appFormArgs' _ = appForm
-
-    -- Classify each token as either a parameter or a keyword
-    classifyToken :: Name -> MixfixPatternToken
-    classifyToken n
-      | rawName n `Set.member` givenParams = MixfixParam (rawName n)
-      | otherwise                          = MixfixKeyword (rawName n)
-
-    -- Build the pattern
-    patternTokens :: [MixfixPatternToken]
-    patternTokens = map classifyToken appFormTokens
-
-    -- Extract just the keywords
-    extractKeyword :: MixfixPatternToken -> Maybe RawName
-    extractKeyword (MixfixKeyword k) = Just k
-    extractKeyword (MixfixParam _)   = Nothing
-
-    keywordList :: [RawName]
-    keywordList = mapMaybe extractKeyword patternTokens
-
-    -- Count parameters
-    paramCount :: Int
-    paramCount = length $ filter isParam patternTokens
-
-    isParam :: MixfixPatternToken -> Bool
-    isParam (MixfixParam _)   = True
-    isParam (MixfixKeyword _) = False
-
-  in
-    -- Only return MixfixInfo if there's at least one param in non-head position
-    -- (i.e., if the first token is a param, this is mixfix)
-    -- OR if there are keywords between params
-    if paramCount > 0 && (maybe False isParam (listToMaybe patternTokens) || paramCount < length patternTokens)
-       then Just MkMixfixInfo
-              { pattern = patternTokens
-              , keywords = keywordList
-              , arity = paramCount
-              }
-       else Nothing
-
--- | Extract parameter names from a TypeSig's GIVEN clause.
-givenParamNames :: TypeSig Name -> [RawName]
-givenParamNames (MkTypeSig _ givenSig _) =
-  case givenSig of
-    MkGivenSig _ otns -> map optionallyTypedNameToRawName otns
-  where
-    optionallyTypedNameToRawName :: OptionallyTypedName Name -> RawName
-    optionallyTypedNameToRawName (MkOptionallyTypedName _ n _) = rawName n
 
 -- ----------------------------------------------------------------------------
 -- Call-site Mixfix Pattern Matching

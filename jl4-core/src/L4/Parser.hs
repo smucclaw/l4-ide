@@ -7,11 +7,15 @@ module L4.Parser (
   -- * Public API
   parseFile,
   execParser,
+  execParserWithHints,
   execParserForTokens,
+  execParserForTokensWithHints,
   module',
   PError (..),
   mkPError,
   PState (..),
+  MixfixHintRegistry,
+  buildMixfixHintRegistry,
 
   -- * Debug combinators
   expr,
@@ -20,6 +24,9 @@ module L4.Parser (
   -- * High-level JL4 parser
   execProgramParser,
   execProgramParserForTokens,
+  execProgramParserWithHints,
+  execProgramParserForTokensWithHints,
+  execProgramParserWithHintPass,
 ) where
 
 import Base
@@ -47,15 +54,16 @@ import qualified L4.Syntax
 import L4.Parser.SrcSpan
 import qualified Generics.SOP as SOP
 import L4.Parser.Anno
+import L4.Parser.MixfixRegistry
 
 type Parser = ReaderT Env (StateT PState (Parsec Void TokenStream))
 
-newtype Env = Env
+data Env = Env
   { moduleUri :: NormalizedUri
+  , mixfixHints :: MixfixHintRegistry
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (SOP.Generic)
-
 data PState = PState
   { comments :: [Comment]
   , nlgs :: [Nlg]
@@ -1142,6 +1150,7 @@ regularPostfixOperator =
 -- another expression), we want to backtrack and let the infix parser handle it.
 mixfixPostfixOp :: Int -> Parser (Expr Name -> Expr Name)
 mixfixPostfixOp exprEndLine = hidden $ try $ do
+  hints <- asks (.mixfixHints)
   -- Peek at the next token to check its line number
   nextTok <- lookAhead anySingle
   -- Only proceed if the backticked name is on the same line as where the expression ended
@@ -1151,6 +1160,9 @@ mixfixPostfixOp exprEndLine = hidden $ try $ do
   eN <- (MkName emptyAnno . NormalName) <<$>>
     (spacedToken (#_TIdentifiers % #_TQuoted) "mixfix postfix operator"
      <|> spacedToken (#_TIdentifiers % #_TIdentifier) "postfix identifier")
+  let candidateRaw = rawName eN.payload
+  when (hasMixfixHints hints) $
+    guard (isKnownMixfixKeyword candidateRaw hints)
   -- Check that this is NOT followed by an expression ON THE SAME LINE
   -- (which would make it infix). Expressions on subsequent lines don't count.
   notFollowedBy (sameLineExpr exprEndLine)
@@ -1835,6 +1847,7 @@ execNlgParserForTokens p uri input ts =
   where
     env = Env
       { moduleUri = uri
+      , mixfixHints = emptyMixfixHintRegistry
       }
     st = PState
       { nlgs = []
@@ -1849,14 +1862,19 @@ execNlgParserForTokens p uri input ts =
 -- ----------------------------------------------------------------------------
 
 execParser :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
-execParser p uri input =
+execParser = execParserWithHints mempty
+
+execParserWithHints :: (Resolve.HasNlg a, Resolve.HasDesc a) => MixfixHintRegistry -> Parser a -> NormalizedUri -> Text -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserWithHints hints p uri input =
   case execLexer uri input of
     Left errs -> Left errs
-    -- TODO: we should probably push in the uri even further.
-    Right ts -> execParserForTokens p uri input ts
+    Right ts -> execParserForTokensWithHints hints p uri input ts
 
 execParserForTokens :: (Resolve.HasNlg a, Resolve.HasDesc a) => Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
-execParserForTokens p file input ts =
+execParserForTokens = execParserForTokensWithHints mempty
+
+execParserForTokensWithHints :: (Resolve.HasNlg a, Resolve.HasDesc a) => MixfixHintRegistry -> Parser a -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (a, [Resolve.Warning], PState)
+execParserForTokensWithHints hints p file input ts =
   case runJl4Parser env st p (showNormalizedUri file) stream  of
     Left err -> Left (fmap (mkPError "parser") $ errorBundleToErrorMessages err)
     Right (a, pstate)  ->
@@ -1868,6 +1886,7 @@ execParserForTokens p file input ts =
   where
     env = Env
       { moduleUri = file
+      , mixfixHints = hints
       }
     st = PState
       { nlgs = []
@@ -1896,6 +1915,31 @@ execProgramParserForTokens uri input ts =
   forgetPState $  execParserForTokens (module' uri) uri input ts
   where
     forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+execProgramParserWithHints :: MixfixHintRegistry -> NormalizedUri -> Text -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParserWithHints hints uri input =
+  forgetPState $ execParserWithHints hints (module' uri) uri input
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+execProgramParserForTokensWithHints :: MixfixHintRegistry -> NormalizedUri -> Text -> [PosToken] -> Either (NonEmpty PError) (Module Name, [Resolve.Warning])
+execProgramParserForTokensWithHints hints uri input ts =
+  forgetPState $ execParserForTokensWithHints hints (module' uri) uri input ts
+  where
+    forgetPState = fmap (\(p, warns, _) -> (p, warns))
+
+-- | Two-pass parser helper: first parse without hints to collect mixfix keywords,
+-- then re-run the parser with the discovered hints so later phases can rely on them.
+execProgramParserWithHintPass ::
+  NormalizedUri ->
+  Text ->
+  Either (NonEmpty PError) (Module Name, MixfixHintRegistry, [Resolve.Warning])
+execProgramParserWithHintPass uri input = do
+  ts <- execLexer uri input
+  (firstModule, _) <- execProgramParserForTokens uri input ts
+  let hints = buildMixfixHintRegistry firstModule
+  (finalModule, finalWarnings) <- execProgramParserForTokensWithHints hints uri input ts
+  pure (finalModule, hints, finalWarnings)
 
 -- ----------------------------------------------------------------------------
 -- Debug helpers
