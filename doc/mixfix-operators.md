@@ -158,6 +158,33 @@ All identifiers may use backticks (standard L4 syntax for identifiers with white
 
 Operands can be bare variables, literals, or expressions. Parentheses are only needed for grouping, not to convince the parser that a postfix interpretation is allowed.
 
+### Multiline Layout
+
+Mixfix keywords and postfix operators may now move to the following line as long as they stay aligned with the previous operand's indentation (similar to how `IF/THEN/ELSE` line up):
+
+```l4
+demo_multiline_mixfix MEANS
+  base
+  `raised to`
+  exponent
+
+demo_multiline_postfix MEANS
+  radius
+  `squared`
+```
+
+Each keyword (`` `raised to` `` and `` `squared` ``) sits in the same column as the operand directly above it, so the parser treats the block as a single mixfix chain. This works for longer chains as well:
+
+```l4
+payer
+`remits`
+payee
+`to settle`
+ledger
+```
+
+The hint-aware parser only consumes registered keywords, so identifiers that merely happen to align but are not declared as mixfix parts remain regular expressions. See `jl4/examples/ok/mixfix-multiline.l4` for executable regressions.
+
 ## Precedence and Disambiguation
 
 **No implicit precedence rules.** When multiple mixfix patterns could apply, require explicit grouping. This is made easy by L4's indentation conventions.

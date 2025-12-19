@@ -10,6 +10,7 @@
 - ✅ Regression programs `jl4/examples/ok/postfix-with-variables.l4` and `jl4/examples/ok/mixfix-with-variables.l4`
 - ✅ Parser hint scaffolding (`L4.Parser.MixfixRegistry`, Dec 2025) builds a mixfix keyword registry before the second parse so syntax/IDE layers can opt into registry-aware parsing
 - ✅ `mixfixChainExpr` now consults the hint registry for every keyword that appears in a chain (Dec 2025), preventing unrelated identifiers on the same line from being misinterpreted as part of a multi-token operator whenever hints are supplied.
+- ✅ Mixfix postfix/chains honor indentation-aligned keywords on the following line (Jan 2026), unlocking IF/THEN-style vertical layouts and regression coverage in `jl4/examples/ok/mixfix-multiline.l4`.
 
 ### In Progress
 

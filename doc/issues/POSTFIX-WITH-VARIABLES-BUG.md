@@ -51,6 +51,20 @@ testLetIn MEANS
 
 These cases are locked in by `jl4/examples/ok/postfix-with-variables.l4`.
 
+### Follow-up: Multiline Layout (Jan 2026)
+
+While re-validating the regression file we noticed that splitting the call across multiple lines still failed:
+
+```l4
+demo_multiline_postfix MEANS
+  radius
+  `squared`
+```
+
+`mixfixPostfixOp` and `mixfixChainExpr` only accepted keywords that lived on the **same line** as the preceding operand. A newline forced `` `squared` `` (or any mixfix keyword) to be parsed as the start of a new expression, yielding “radius is not a function”.
+
+The parser now tracks each operand’s end line and starting column. Mixfix keywords/postfix operators are accepted either (a) on the same line, or (b) on the immediately following line **and** aligned with the operand’s indentation (mirroring `IF/THEN/ELSE`). Hint checks still gate which identifiers count as keywords, so accidental captures remain impossible. See `jl4/examples/ok/mixfix-multiline.l4` plus the `MixfixParserSpec` additions for coverage of postfix, binary, and ternary vertical layouts.
+
 ### Local Helpers Regression (2025-12-18)
 
 Moving the postfix helper into a `WHERE` block exposed another failure mode:
