@@ -134,6 +134,5 @@ test-suite jl4-core-test
     base,
     hspec,
     jl4-core,
-    template-haskell,
     text,
     time

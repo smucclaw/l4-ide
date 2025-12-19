@@ -1,15 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
 module MixfixParserSpec (spec) where
 
-import Base hiding (lift, listToMaybe)
+import Base hiding (listToMaybe)
 import Data.Maybe (listToMaybe)
 import qualified Data.Text as T
-import Language.Haskell.TH.Syntax (lift, runIO)
 import L4.Parser (buildMixfixHintRegistry, execProgramParserWithHintPass)
 import L4.Syntax (AppForm (..), Decide (..), Expr (..), Module (..), Name, Section (..), TopDecl (..), pattern Var, rawName, rawNameToText)
-import Test.Hspec hiding (runIO)
+import Test.Hspec
 
 spec :: Spec
 spec =
@@ -95,10 +93,71 @@ rawNameText = rawNameToText . rawName
 
 mixfixFixture :: T.Text
 mixfixFixture =
-  T.pack
-    $(do
-        contents <- runIO (readFile "../jl4/examples/ok/mixfix-with-variables.l4")
-        lift contents)
+  T.unlines
+    [ "§ `Mixfix Operators With Variables`"
+    , ""
+    , "-- Regression tests ensuring mixfix operators (beyond pure postfix) accept bare"
+    , "-- variables as operands, both at top level and within LET...IN blocks."
+    , "--"
+    , "-- These tests complement postfix coverage in postfix-with-variables.l4."
+    , ""
+    , "IMPORT prelude"
+    , ""
+    , "-- Simple binary mixfix operator."
+    , "GIVEN left IS A NUMBER, right IS A NUMBER"
+    , "left `mixadd` right MEANS left + right"
+    , ""
+    , "-- Ternary mixfix operator with two keywords."
+    , "GIVEN base IS A NUMBER, delta IS A NUMBER, cap IS A NUMBER"
+    , "base `climb` delta `toward` cap MEANS base + delta + cap"
+    , ""
+    , "-- Another ternary operator whose keywords can be written without backticks."
+    , "GIVEN start IS A NUMBER, pivot IS A NUMBER, finish IS A NUMBER"
+    , "start `via` pivot `onto` finish MEANS start + pivot + finish"
+    , ""
+    , "-- ====================================================================="
+    , "-- Tests: binary mixfix with bare variables"
+    , "-- ====================================================================="
+    , ""
+    , "GIVEN x IS A NUMBER"
+    , "mixfixVarInfixBacktick MEANS x `mixadd` 5"
+    , ""
+    , "#EVAL mixfixVarInfixBacktick OF 7"
+    , "-- Expected: 12"
+    , ""
+    , "-- Mixfix analogue of the original postfix bug:"
+    , "-- Previously, bare variables like `x mixadd 5` could be mis-parsed similarly to `x squared`."
+    , "GIVEN x_bug IS A NUMBER"
+    , "mixfixOriginalShape MEANS x_bug mixadd 5"
+    , ""
+    , "#EVAL mixfixOriginalShape OF 3"
+    , "-- Expected: 8"
+    , ""
+    , "-- LET...IN scope still sees bare variables."
+    , "GIVEN z IS A NUMBER"
+    , "mixfixVarInfixLet MEANS"
+    , "  LET tmp BE z + 1"
+    , "  IN tmp mixadd 2"
+    , ""
+    , "#EVAL mixfixVarInfixLet OF 4"
+    , "-- Expected: 7"
+    , ""
+    , "-- ====================================================================="
+    , "-- Tests: ternary mixfix with bare variables"
+    , "-- ====================================================================="
+    , ""
+    , "GIVEN a IS A NUMBER, b IS A NUMBER"
+    , "mixfixVarMultiBacktick MEANS a `climb` b `toward` 10"
+    , ""
+    , "#EVAL mixfixVarMultiBacktick OF 2, 3"
+    , "-- Expected: 15"
+    , ""
+    , "GIVEN c IS A NUMBER, d IS A NUMBER"
+    , "mixfixVarMultiBare MEANS c via d onto 1"
+    , ""
+    , "#EVAL mixfixVarMultiBare OF 5, 6"
+    , "-- Expected: 12"
+    ]
 
 multilineFixture :: T.Text
 multilineFixture =
