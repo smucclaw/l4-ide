@@ -10,11 +10,13 @@
 This spec defines a UI/UX layer for visualizing **progressive partial evaluation** as users incrementally provide input data to boolean decision functions. As the user provides more information, the system will:
 
 1. **Classify parameters** into three buckets:
+
    - **Not Asked Yet** - parameters that haven't been assigned values
    - **Still Needed** - parameters that could affect the outcome (relevant)
    - **Don't Care** - parameters that can't affect the outcome (irrelevant)
 
 2. **Visually gray out** subtrees that have been minimized away through:
+
    - Short-circuit evaluation (e.g., `False AND x` makes `x` irrelevant)
    - Cofactoring (substituting known values and simplifying)
    - Don't-care detection (where `f|_{x=T} = f|_{x=F}`)
@@ -59,24 +61,29 @@ User sets: married = false
 ✅ **Already Have:**
 
 1. **Three-valued logic** (`ts-shared/l4-ladder-visualizer/src/lib/eval/type.ts`)
+
    - `TrueVal`, `FalseVal`, `UnknownVal`
    - Proper Kleene logic semantics
 
 2. **Evaluator with short-circuit logic** (`src/lib/eval/eval.ts`)
+
    - `evalAndChain`: short-circuits on False
    - `evalOrChain`: short-circuits on True
    - Tracks intermediate results in `Map<IRId, UBoolVal>`
 
 3. **Interactive value assignment** (`ubool-var.svelte:68-73`)
+
    - Click to cycle through True/False/Unknown
    - Updates flow through `submitNewBinding`
 
 4. **Svelte Flow visualization** (`flow.svelte`, `flow-base.svelte`)
+
    - Graph rendering with custom nodes
    - Custom edge styling
    - Node selection and context menus
 
 5. **Value indicators** (`value-indicator.svelte`)
+
    - Visual checkmarks (✓) and crosses (✗) on nodes
    - Color-coded backgrounds (green/red/gray)
 
@@ -90,22 +97,26 @@ User sets: married = false
 ❌ **Need to Build:**
 
 1. **Relevance Analyzer**
+
    - Cofactor operation (substitute variable with constant)
    - Don't-care detection (test if `f|_{x=T} = f|_{x=F}`)
    - Short-circuit tracking (which subtrees were eliminated)
    - Expression simplification (constant folding)
 
 2. **Parameter Buckets Component**
+
    - Three-column view: Not Asked / Still Needed / Don't Care
    - Click to focus parameter in graph
    - Drag-and-drop to assign values (stretch goal)
 
 3. **Simplified Expression View**
+
    - Show original expression
    - Show cofactored/simplified expression
    - Highlight eliminated terms
 
 4. **Enhanced Node Styling**
+
    - Gray out irrelevant nodes
    - Strike-through short-circuited nodes
    - Dim/fade irrelevant edges
@@ -146,10 +157,10 @@ User sets: married = false
 
 ```typescript
 interface ParameterBucketsProps {
-  analysis: RelevanceAnalysis
-  assignment: Assignment
-  onParamClick: (unique: string) => void
-  onParamAssign?: (unique: string, value: UBoolVal) => void
+  analysis: RelevanceAnalysis;
+  assignment: Assignment;
+  onParamClick: (unique: string) => void;
+  onParamAssign?: (unique: string, value: UBoolVal) => void;
 }
 ```
 
@@ -173,9 +184,7 @@ interface ParameterBucketsProps {
   <!-- Bucket 2: Still Needed (Relevant) -->
   <div class="bucket relevant">
     <h3>Still Needed</h3>
-    <p class="bucket-description">
-      These parameters could affect the outcome
-    </p>
+    <p class="bucket-description">These parameters could affect the outcome</p>
     <ul>
       <li class="relevant-param">
         <button>spousal_approval</button>
@@ -207,11 +216,13 @@ interface ParameterBucketsProps {
 ```
 
 **Interactions:**
+
 - Click parameter name → focus/highlight in graph, scroll into view
 - Click T/F/? buttons → assign value, trigger re-evaluation
 - Drag parameter to graph node → assign value (stretch goal)
 
 **Styling:**
+
 ```css
 .bucket {
   padding: 1rem;
@@ -248,20 +259,20 @@ interface ParameterBucketsProps {
 
 ```typescript
 export type NodeRelevanceStatus =
-  | 'unknown'          // Not yet analyzed
-  | 'relevant'         // Could affect outcome
-  | 'irrelevant'       // Don't care (cofactor test showed no impact)
-  | 'short-circuited'  // Eliminated by short-circuit eval
-  | 'determined'       // Value is known (True/False)
+  | "unknown" // Not yet analyzed
+  | "relevant" // Could affect outcome
+  | "irrelevant" // Don't care (cofactor test showed no impact)
+  | "short-circuited" // Eliminated by short-circuit eval
+  | "determined"; // Value is known (True/False)
 ```
 
 **New CSS Classes:**
 
 ```typescript
 // Add to node-styles.ts
-export const RelevantNodeCSSClass = 'relevant-node'
-export const IrrelevantNodeCSSClass = 'irrelevant-node'
-export const ShortCircuitedNodeCSSClass = 'short-circuited-node'
+export const RelevantNodeCSSClass = "relevant-node";
+export const IrrelevantNodeCSSClass = "irrelevant-node";
+export const ShortCircuitedNodeCSSClass = "short-circuited-node";
 ```
 
 ```css
@@ -292,7 +303,7 @@ export const ShortCircuitedNodeCSSClass = 'short-circuited-node'
 }
 
 .short-circuited-node::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 0;
@@ -391,9 +402,9 @@ export const ShortCircuitedNodeCSSClass = 'short-circuited-node'
 
 ```typescript
 interface SimplifiedExpressionViewProps {
-  originalExpr: Expr
-  analysis: RelevanceAnalysis
-  assignment: Assignment
+  originalExpr: Expr;
+  analysis: RelevanceAnalysis;
+  assignment: Assignment;
 }
 ```
 
@@ -404,8 +415,10 @@ interface SimplifiedExpressionViewProps {
   <!-- Original Expression -->
   <div class="expr-section">
     <h3>Original Expression</h3>
-    <pre class="expr-display">(age ≥ 21 ∧ (¬married ∨ spousal_approval ∨ beer_only))
-∨ (age < 21 ∧ (parental_approval ∨ emancipated))</pre>
+    <pre class="expr-display">
+(age ≥ 21 ∧ (¬married ∨ spousal_approval ∨ beer_only))
+∨ (age < 21 ∧ (parental_approval ∨ emancipated))</pre
+    >
   </div>
 
   <!-- Current Assignments -->
@@ -466,7 +479,7 @@ Evaluates to: <strong class="result-true">TRUE</strong>
 }
 
 .expr-display {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 0.85rem;
   line-height: 1.6;
   padding: 0.75rem;
@@ -517,48 +530,48 @@ Evaluates to: <strong class="result-true">TRUE</strong>
 **File:** `ts-shared/l4-ladder-visualizer/src/lib/eval/relevance.ts`
 
 ```typescript
-import type { Expr, UBoolVal } from './type.js'
-import type { Assignment } from './assignment.js'
-import type { IRId } from '@repo/viz-expr'
-import { Evaluator, type EvalResult } from './eval.js'
-import { TrueVal, FalseVal, UnknownVal } from './type.js'
-import { match } from 'ts-pattern'
+import type { Expr, UBoolVal } from "./type.js";
+import type { Assignment } from "./assignment.js";
+import type { IRId } from "@repo/viz-expr";
+import { Evaluator, type EvalResult } from "./eval.js";
+import { TrueVal, FalseVal, UnknownVal } from "./type.js";
+import { match } from "ts-pattern";
 
 /**
  * Relevance status of a variable or expression node
  */
 export type RelevanceStatus =
-  | 'unknown'          // Not yet analyzed
-  | 'relevant'         // Could affect the outcome
-  | 'irrelevant'       // Don't care - can't affect outcome
-  | 'short-circuited'  // Eliminated by short-circuit evaluation
-  | 'determined'       // Has a known value
+  | "unknown" // Not yet analyzed
+  | "relevant" // Could affect the outcome
+  | "irrelevant" // Don't care - can't affect outcome
+  | "short-circuited" // Eliminated by short-circuit evaluation
+  | "determined"; // Has a known value
 
 /**
  * Result of relevance analysis
  */
 export interface RelevanceAnalysis {
   // Maps variable unique ID to its relevance status
-  variableRelevance: Map<string, RelevanceStatus>
+  variableRelevance: Map<string, RelevanceStatus>;
 
   // Maps expression IR ID to its relevance status
-  nodeRelevance: Map<IRId, RelevanceStatus>
+  nodeRelevance: Map<IRId, RelevanceStatus>;
 
   // The cofactored (simplified) expression given current assignments
   // Null if expression is fully determined
-  simplifiedExpr: Expr | null
+  simplifiedExpr: Expr | null;
 
   // Overall result if determinable
-  overallResult: UBoolVal
+  overallResult: UBoolVal;
 
   // Was the result fully determined?
-  isDetermined: boolean
+  isDetermined: boolean;
 
   // Which variables were consulted during evaluation?
-  consultedVars: Set<string>
+  consultedVars: Set<string>;
 
   // Which subtrees were short-circuited?
-  shortCircuitedNodes: Set<IRId>
+  shortCircuitedNodes: Set<IRId>;
 }
 
 /**
@@ -582,30 +595,30 @@ export class RelevanceAnalyzer {
     expr: Expr,
     assignment: Assignment,
     l4connection: L4Connection,
-    verDocId: VersionedDocId
+    verDocId: VersionedDocId,
   ): Promise<RelevanceAnalysis> {
     // 1. Evaluate expression with current assignments
     const evalResult = await Evaluator.eval(
       l4connection,
       verDocId,
       expr,
-      assignment
-    )
+      assignment,
+    );
 
-    const isDetermined = this.isFullyDetermined(evalResult.result)
+    const isDetermined = this.isFullyDetermined(evalResult.result);
 
     // 2. If fully determined, all unassigned variables are irrelevant
     if (isDetermined) {
-      const unassignedVars = this.getUnassignedVars(expr, assignment)
-      const variableRelevance = new Map<string, RelevanceStatus>()
+      const unassignedVars = this.getUnassignedVars(expr, assignment);
+      const variableRelevance = new Map<string, RelevanceStatus>();
 
       for (const varUnique of unassignedVars) {
-        variableRelevance.set(varUnique, 'irrelevant')
+        variableRelevance.set(varUnique, "irrelevant");
       }
 
       // Mark all assigned vars as determined
       for (const varUnique of assignment.keys()) {
-        variableRelevance.set(varUnique, 'determined')
+        variableRelevance.set(varUnique, "determined");
       }
 
       return {
@@ -616,12 +629,12 @@ export class RelevanceAnalyzer {
         isDetermined: true,
         consultedVars: evalResult.consultedVars ?? new Set(),
         shortCircuitedNodes: evalResult.shortCircuited ?? new Set(),
-      }
+      };
     }
 
     // 3. For each unassigned variable, perform don't-care test
-    const unassignedVars = this.getUnassignedVars(expr, assignment)
-    const variableRelevance = new Map<string, RelevanceStatus>()
+    const unassignedVars = this.getUnassignedVars(expr, assignment);
+    const variableRelevance = new Map<string, RelevanceStatus>();
 
     for (const varUnique of unassignedVars) {
       const isRelevant = await this.isDontCare(
@@ -629,31 +642,28 @@ export class RelevanceAnalyzer {
         varUnique,
         assignment,
         l4connection,
-        verDocId
-      )
+        verDocId,
+      );
 
-      variableRelevance.set(
-        varUnique,
-        isRelevant ? 'irrelevant' : 'relevant'
-      )
+      variableRelevance.set(varUnique, isRelevant ? "irrelevant" : "relevant");
     }
 
     // Mark all assigned vars as determined
     for (const varUnique of assignment.keys()) {
-      variableRelevance.set(varUnique, 'determined')
+      variableRelevance.set(varUnique, "determined");
     }
 
     // 4. Simplify expression by substituting known values
     const simplifiedExpr = this.simplify(
-      this.cofactorMultiple(expr, assignment)
-    )
+      this.cofactorMultiple(expr, assignment),
+    );
 
     // 5. Build node relevance map
     const nodeRelevance = this.buildNodeRelevanceMap(
       expr,
       variableRelevance,
-      evalResult.shortCircuited ?? new Set()
-    )
+      evalResult.shortCircuited ?? new Set(),
+    );
 
     return {
       variableRelevance,
@@ -663,7 +673,7 @@ export class RelevanceAnalyzer {
       isDetermined: false,
       consultedVars: evalResult.consultedVars ?? new Set(),
       shortCircuitedNodes: evalResult.shortCircuited ?? new Set(),
-    }
+    };
   }
 
   /**
@@ -677,41 +687,35 @@ export class RelevanceAnalyzer {
     varUnique: string,
     assignment: Assignment,
     l4connection: L4Connection,
-    verDocId: VersionedDocId
+    verDocId: VersionedDocId,
   ): Promise<boolean> {
     // Cofactor with x=True
     const exprWithTrue = this.simplify(
-      this.cofactorMultiple(
-        this.cofactor(expr, varUnique, true),
-        assignment
-      )
-    )
+      this.cofactorMultiple(this.cofactor(expr, varUnique, true), assignment),
+    );
 
     // Cofactor with x=False
     const exprWithFalse = this.simplify(
-      this.cofactorMultiple(
-        this.cofactor(expr, varUnique, false),
-        assignment
-      )
-    )
+      this.cofactorMultiple(this.cofactor(expr, varUnique, false), assignment),
+    );
 
     // Evaluate both
     const resultTrue = await Evaluator.eval(
       l4connection,
       verDocId,
       exprWithTrue,
-      assignment
-    )
+      assignment,
+    );
 
     const resultFalse = await Evaluator.eval(
       l4connection,
       verDocId,
       exprWithFalse,
-      assignment
-    )
+      assignment,
+    );
 
     // If results are the same, variable is don't-care
-    return this.equalValues(resultTrue.result, resultFalse.result)
+    return this.equalValues(resultTrue.result, resultFalse.result);
   }
 
   /**
@@ -724,55 +728,67 @@ export class RelevanceAnalyzer {
    */
   private cofactor(expr: Expr, varUnique: string, value: boolean): Expr {
     return match(expr)
-      .with({ $type: 'UBoolVar' }, (v): Expr => {
+      .with({ $type: "UBoolVar" }, (v): Expr => {
         if (v.name.unique === varUnique) {
           // Replace variable with constant
           return value
-            ? { $type: 'TrueE', id: v.id }
-            : { $type: 'FalseE', id: v.id }
+            ? { $type: "TrueE", id: v.id }
+            : { $type: "FalseE", id: v.id };
         }
-        return v
+        return v;
       })
-      .with({ $type: 'TrueE' }, (e) => e)
-      .with({ $type: 'FalseE' }, (e) => e)
-      .with({ $type: 'Not' }, (not): Expr => ({
-        ...not,
-        negand: this.cofactor(not.negand, varUnique, value),
-      }))
-      .with({ $type: 'And' }, (and): Expr => ({
-        ...and,
-        args: and.args.map(arg => this.cofactor(arg, varUnique, value)),
-      }))
-      .with({ $type: 'Or' }, (or): Expr => ({
-        ...or,
-        args: or.args.map(arg => this.cofactor(arg, varUnique, value)),
-      }))
-      .with({ $type: 'App' }, (app): Expr => ({
-        ...app,
-        args: app.args.map(arg => this.cofactor(arg, varUnique, value)),
-      }))
-      .exhaustive()
+      .with({ $type: "TrueE" }, (e) => e)
+      .with({ $type: "FalseE" }, (e) => e)
+      .with(
+        { $type: "Not" },
+        (not): Expr => ({
+          ...not,
+          negand: this.cofactor(not.negand, varUnique, value),
+        }),
+      )
+      .with(
+        { $type: "And" },
+        (and): Expr => ({
+          ...and,
+          args: and.args.map((arg) => this.cofactor(arg, varUnique, value)),
+        }),
+      )
+      .with(
+        { $type: "Or" },
+        (or): Expr => ({
+          ...or,
+          args: or.args.map((arg) => this.cofactor(arg, varUnique, value)),
+        }),
+      )
+      .with(
+        { $type: "App" },
+        (app): Expr => ({
+          ...app,
+          args: app.args.map((arg) => this.cofactor(arg, varUnique, value)),
+        }),
+      )
+      .exhaustive();
   }
 
   /**
    * Cofactor multiple variables at once using an Assignment
    */
   private cofactorMultiple(expr: Expr, assignment: Assignment): Expr {
-    let result = expr
+    let result = expr;
 
     for (const [varUnique, value] of assignment.entries()) {
       const boolValue = match(value)
-        .with({ $type: 'TrueV' }, () => true)
-        .with({ $type: 'FalseV' }, () => false)
-        .with({ $type: 'UnknownV' }, () => null)
-        .exhaustive()
+        .with({ $type: "TrueV" }, () => true)
+        .with({ $type: "FalseV" }, () => false)
+        .with({ $type: "UnknownV" }, () => null)
+        .exhaustive();
 
       if (boolValue !== null) {
-        result = this.cofactor(result, varUnique, boolValue)
+        result = this.cofactor(result, varUnique, boolValue);
       }
     }
 
-    return result
+    return result;
   }
 
   /**
@@ -789,60 +805,70 @@ export class RelevanceAnalyzer {
    */
   private simplify(expr: Expr): Expr {
     return match(expr)
-      .with({ $type: 'TrueE' }, (e) => e)
-      .with({ $type: 'FalseE' }, (e) => e)
-      .with({ $type: 'UBoolVar' }, (e) => e)
-      .with({ $type: 'Not' }, (not): Expr => {
-        const simplified = this.simplify(not.negand)
+      .with({ $type: "TrueE" }, (e) => e)
+      .with({ $type: "FalseE" }, (e) => e)
+      .with({ $type: "UBoolVar" }, (e) => e)
+      .with({ $type: "Not" }, (not): Expr => {
+        const simplified = this.simplify(not.negand);
 
         return match(simplified)
-          .with({ $type: 'TrueE' }, () => ({ $type: 'FalseE', id: not.id } as Expr))
-          .with({ $type: 'FalseE' }, () => ({ $type: 'TrueE', id: not.id } as Expr))
-          .with({ $type: 'Not' }, (inner) => this.simplify(inner.negand)) // ¬¬x → x
-          .otherwise(() => ({ ...not, negand: simplified }))
+          .with(
+            { $type: "TrueE" },
+            () => ({ $type: "FalseE", id: not.id }) as Expr,
+          )
+          .with(
+            { $type: "FalseE" },
+            () => ({ $type: "TrueE", id: not.id }) as Expr,
+          )
+          .with({ $type: "Not" }, (inner) => this.simplify(inner.negand)) // ¬¬x → x
+          .otherwise(() => ({ ...not, negand: simplified }));
       })
-      .with({ $type: 'And' }, (and): Expr => {
-        const simplifiedArgs = and.args.map(arg => this.simplify(arg))
+      .with({ $type: "And" }, (and): Expr => {
+        const simplifiedArgs = and.args.map((arg) => this.simplify(arg));
 
         // If any arg is False, whole AND is False
-        if (simplifiedArgs.some(arg => arg.$type === 'FalseE')) {
-          return { $type: 'FalseE', id: and.id }
+        if (simplifiedArgs.some((arg) => arg.$type === "FalseE")) {
+          return { $type: "FalseE", id: and.id };
         }
 
         // Filter out True args (True ∧ x = x)
-        const nonTrueArgs = simplifiedArgs.filter(arg => arg.$type !== 'TrueE')
+        const nonTrueArgs = simplifiedArgs.filter(
+          (arg) => arg.$type !== "TrueE",
+        );
 
         if (nonTrueArgs.length === 0) {
-          return { $type: 'TrueE', id: and.id }
+          return { $type: "TrueE", id: and.id };
         }
         if (nonTrueArgs.length === 1) {
-          return nonTrueArgs[0]
+          return nonTrueArgs[0];
         }
 
-        return { ...and, args: nonTrueArgs }
+        return { ...and, args: nonTrueArgs };
       })
-      .with({ $type: 'Or' }, (or): Expr => {
-        const simplifiedArgs = or.args.map(arg => this.simplify(arg))
+      .with({ $type: "Or" }, (or): Expr => {
+        const simplifiedArgs = or.args.map((arg) => this.simplify(arg));
 
         // If any arg is True, whole OR is True
-        if (simplifiedArgs.some(arg => arg.$type === 'TrueE')) {
-          return { $type: 'TrueE', id: or.id }
+        if (simplifiedArgs.some((arg) => arg.$type === "TrueE")) {
+          return { $type: "TrueE", id: or.id };
         }
 
         // Filter out False args (False ∨ x = x)
-        const nonFalseArgs = simplifiedArgs.filter(arg => arg.$type !== 'FalseE')
+        const nonFalseArgs = simplifiedArgs.filter(
+          (arg) => arg.$type !== "FalseE",
+        );
 
         if (nonFalseArgs.length === 0) {
-          return { $type: 'FalseE', id: or.id }
+          return { $type: "FalseE", id: or.id };
         }
         if (nonFalseArgs.length === 1) {
-          return nonFalseArgs[0]
+          return nonFalseArgs[0];
         }
 
-        return { ...or, args: nonFalseArgs }
+        return { ...or, args: nonFalseArgs };
       })
-      .with({ $type: 'App' }, (app) => app) // Can't simplify App without evaluation
-      .exhaustive()
+      .with({ $type: "App" }, (app) => app) // Can't simplify App without evaluation
+      .exhaustive();
   }
 
   /**
@@ -851,119 +877,129 @@ export class RelevanceAnalyzer {
   private buildNodeRelevanceMap(
     expr: Expr,
     variableRelevance: Map<string, RelevanceStatus>,
-    shortCircuited: Set<IRId>
+    shortCircuited: Set<IRId>,
   ): Map<IRId, RelevanceStatus> {
-    const nodeRelevance = new Map<IRId, RelevanceStatus>()
+    const nodeRelevance = new Map<IRId, RelevanceStatus>();
 
     const traverse = (e: Expr): RelevanceStatus => {
       // Check if this node was short-circuited
       if (shortCircuited.has(e.id)) {
-        nodeRelevance.set(e.id, 'short-circuited')
-        return 'short-circuited'
+        nodeRelevance.set(e.id, "short-circuited");
+        return "short-circuited";
       }
 
       const status = match(e)
-        .with({ $type: 'UBoolVar' }, (v) => {
-          return variableRelevance.get(v.name.unique) ?? 'unknown'
+        .with({ $type: "UBoolVar" }, (v) => {
+          return variableRelevance.get(v.name.unique) ?? "unknown";
         })
-        .with({ $type: 'TrueE' }, () => 'determined' as RelevanceStatus)
-        .with({ $type: 'FalseE' }, () => 'determined' as RelevanceStatus)
-        .with({ $type: 'Not' }, (not) => traverse(not.negand))
-        .with({ $type: 'And' }, (and) => {
-          const childStatuses = and.args.map(traverse)
+        .with({ $type: "TrueE" }, () => "determined" as RelevanceStatus)
+        .with({ $type: "FalseE" }, () => "determined" as RelevanceStatus)
+        .with({ $type: "Not" }, (not) => traverse(not.negand))
+        .with({ $type: "And" }, (and) => {
+          const childStatuses = and.args.map(traverse);
 
           // If any child is relevant, the AND is relevant
-          if (childStatuses.some(s => s === 'relevant')) {
-            return 'relevant'
+          if (childStatuses.some((s) => s === "relevant")) {
+            return "relevant";
           }
           // If all children are irrelevant/short-circuited, AND is irrelevant
-          if (childStatuses.every(s => s === 'irrelevant' || s === 'short-circuited')) {
-            return 'irrelevant'
+          if (
+            childStatuses.every(
+              (s) => s === "irrelevant" || s === "short-circuited",
+            )
+          ) {
+            return "irrelevant";
           }
-          return 'unknown'
+          return "unknown";
         })
-        .with({ $type: 'Or' }, (or) => {
-          const childStatuses = or.args.map(traverse)
+        .with({ $type: "Or" }, (or) => {
+          const childStatuses = or.args.map(traverse);
 
-          if (childStatuses.some(s => s === 'relevant')) {
-            return 'relevant'
+          if (childStatuses.some((s) => s === "relevant")) {
+            return "relevant";
           }
-          if (childStatuses.every(s => s === 'irrelevant' || s === 'short-circuited')) {
-            return 'irrelevant'
+          if (
+            childStatuses.every(
+              (s) => s === "irrelevant" || s === "short-circuited",
+            )
+          ) {
+            return "irrelevant";
           }
-          return 'unknown'
+          return "unknown";
         })
-        .with({ $type: 'App' }, (app) => {
-          const childStatuses = app.args.map(traverse)
+        .with({ $type: "App" }, (app) => {
+          const childStatuses = app.args.map(traverse);
 
-          if (childStatuses.some(s => s === 'relevant')) {
-            return 'relevant'
+          if (childStatuses.some((s) => s === "relevant")) {
+            return "relevant";
           }
-          if (childStatuses.every(s => s === 'irrelevant' || s === 'determined')) {
-            return 'irrelevant'
+          if (
+            childStatuses.every((s) => s === "irrelevant" || s === "determined")
+          ) {
+            return "irrelevant";
           }
-          return 'unknown'
+          return "unknown";
         })
-        .exhaustive()
+        .exhaustive();
 
-      nodeRelevance.set(e.id, status)
-      return status
-    }
+      nodeRelevance.set(e.id, status);
+      return status;
+    };
 
-    traverse(expr)
-    return nodeRelevance
+    traverse(expr);
+    return nodeRelevance;
   }
 
   /**
    * Get all unique variable IDs that aren't assigned
    */
   private getUnassignedVars(expr: Expr, assignment: Assignment): Set<string> {
-    const allVars = this.getAllVars(expr)
-    const unassigned = new Set<string>()
+    const allVars = this.getAllVars(expr);
+    const unassigned = new Set<string>();
 
     for (const varUnique of allVars) {
       if (!assignment.has(varUnique)) {
-        unassigned.add(varUnique)
+        unassigned.add(varUnique);
       }
     }
 
-    return unassigned
+    return unassigned;
   }
 
   /**
    * Get all variable unique IDs in an expression
    */
   private getAllVars(expr: Expr): Set<string> {
-    const vars = new Set<string>()
+    const vars = new Set<string>();
 
     const traverse = (e: Expr) => {
       match(e)
-        .with({ $type: 'UBoolVar' }, (v) => {
-          vars.add(v.name.unique)
+        .with({ $type: "UBoolVar" }, (v) => {
+          vars.add(v.name.unique);
         })
-        .with({ $type: 'Not' }, (not) => traverse(not.negand))
-        .with({ $type: 'And' }, (and) => and.args.forEach(traverse))
-        .with({ $type: 'Or' }, (or) => or.args.forEach(traverse))
-        .with({ $type: 'App' }, (app) => app.args.forEach(traverse))
-        .otherwise(() => {})
-    }
+        .with({ $type: "Not" }, (not) => traverse(not.negand))
+        .with({ $type: "And" }, (and) => and.args.forEach(traverse))
+        .with({ $type: "Or" }, (or) => or.args.forEach(traverse))
+        .with({ $type: "App" }, (app) => app.args.forEach(traverse))
+        .otherwise(() => {});
+    };
 
-    traverse(expr)
-    return vars
+    traverse(expr);
+    return vars;
   }
 
   /**
    * Check if a value is fully determined (not Unknown)
    */
   private isFullyDetermined(value: UBoolVal): boolean {
-    return value.$type === 'TrueV' || value.$type === 'FalseV'
+    return value.$type === "TrueV" || value.$type === "FalseV";
   }
 
   /**
    * Check if two UBoolVals are equal
    */
   private equalValues(v1: UBoolVal, v2: UBoolVal): boolean {
-    return v1.$type === v2.$type
+    return v1.$type === v2.$type;
   }
 }
 ```
@@ -1084,53 +1120,56 @@ function evalOrChain(
 **File:** `ts-shared/l4-ladder-visualizer/src/lib/layout-ir/ladder-graph/ladder.svelte.ts`
 
 ```typescript
-import { RelevanceAnalyzer, type RelevanceAnalysis } from '$lib/eval/relevance.js'
+import {
+  RelevanceAnalyzer,
+  type RelevanceAnalysis,
+} from "$lib/eval/relevance.js";
 
 export class NNFLadderGraphLirNode extends LadderGraphLirNode {
   // ... existing code ...
 
   // NEW: Store current relevance analysis
-  private relevanceAnalysis: RelevanceAnalysis | null = $state(null)
+  private relevanceAnalysis: RelevanceAnalysis | null = $state(null);
 
   // NEW: Recompute relevance analysis when assignment changes
   private async updateRelevanceAnalysis(context: Context) {
-    const analyzer = new RelevanceAnalyzer()
-    const expr = this.getExpr(context)
+    const analyzer = new RelevanceAnalyzer();
+    const expr = this.getExpr(context);
 
     this.relevanceAnalysis = await analyzer.analyze(
       expr,
       this.assignment,
       this.ladderEnv.getL4Connection(),
-      this.ladderEnv.getVersionedTextDocIdentifier()
-    )
+      this.ladderEnv.getVersionedTextDocIdentifier(),
+    );
 
-    console.log('Relevance analysis updated:', this.relevanceAnalysis)
+    console.log("Relevance analysis updated:", this.relevanceAnalysis);
   }
 
   // NEW: Public getter for relevance analysis
   getRelevanceAnalysis(): RelevanceAnalysis | null {
-    return this.relevanceAnalysis
+    return this.relevanceAnalysis;
   }
 
   // NEW: Get relevance status for a specific variable
   getRelevanceStatus(context: Context, node: UBoolVarLirNode): RelevanceStatus {
-    const unique = node.getUnique(context)
-    return this.relevanceAnalysis?.variableRelevance.get(unique) ?? 'unknown'
+    const unique = node.getUnique(context);
+    return this.relevanceAnalysis?.variableRelevance.get(unique) ?? "unknown";
   }
 
   // NEW: Get relevance status for an expression node by ID
   getNodeRelevanceStatus(nodeId: IRId): RelevanceStatus {
-    return this.relevanceAnalysis?.nodeRelevance.get(nodeId) ?? 'unknown'
+    return this.relevanceAnalysis?.nodeRelevance.get(nodeId) ?? "unknown";
   }
 
   // OVERRIDE: submitNewBinding to trigger relevance update
   override submitNewBinding(context: Context, binding: Binding) {
-    super.submitNewBinding(context, binding)
+    super.submitNewBinding(context, binding);
 
     // Trigger relevance analysis update (async)
-    this.updateRelevanceAnalysis(context).catch(err => {
-      console.error('Error updating relevance analysis:', err)
-    })
+    this.updateRelevanceAnalysis(context).catch((err) => {
+      console.error("Error updating relevance analysis:", err);
+    });
   }
 
   // ... rest of existing code ...
@@ -1925,24 +1964,27 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
 ### Unit Tests
 
 1. **Cofactor operation** (`relevance.test.ts`)
+
    ```typescript
-   test('cofactor substitutes variable with constant', () => {
-     const expr = And([Var('x'), Var('y')])
-     const cofactored = cofactor(expr, 'x', true)
-     expect(cofactored).toEqual(Var('y'))
-   })
+   test("cofactor substitutes variable with constant", () => {
+     const expr = And([Var("x"), Var("y")]);
+     const cofactored = cofactor(expr, "x", true);
+     expect(cofactored).toEqual(Var("y"));
+   });
    ```
 
 2. **Simplification** (`relevance.test.ts`)
+
    ```typescript
-   test('simplify: True AND x = x', () => {
-     const expr = And([TrueE(), Var('x')])
-     const simplified = simplify(expr)
-     expect(simplified).toEqual(Var('x'))
-   })
+   test("simplify: True AND x = x", () => {
+     const expr = And([TrueE(), Var("x")]);
+     const simplified = simplify(expr);
+     expect(simplified).toEqual(Var("x"));
+   });
    ```
 
 3. **Don't-care detection** (`relevance.test.ts`)
+
    ```typescript
    test('detects don't-care variable', async () => {
      // (x AND y) OR (NOT x AND y) → y is relevant, x is don't-care
@@ -1960,6 +2002,7 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
 ### Integration Tests
 
 1. **Alcohol example scenarios** (`alcohol.integration.test.ts`)
+
    - No inputs → all parameters relevant
    - age=30 → parental/emancipated irrelevant
    - age=30, married=False → all other params irrelevant, result=True
@@ -1971,15 +2014,16 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
 ### End-to-End Tests
 
 1. **User interaction flow** (`e2e.spec.ts`)
+
    ```typescript
-   test('parameter buckets update as values assigned', async () => {
-     await page.click('[data-testid="age-param"]')
-     await page.click('[data-testid="assign-true"]')
+   test("parameter buckets update as values assigned", async () => {
+     await page.click('[data-testid="age-param"]');
+     await page.click('[data-testid="assign-true"]');
 
      // Check that parental_approval moved to "Don't Care" bucket
-     const dontCare = await page.locator('.bucket.irrelevant .param-item')
-     await expect(dontCare).toContainText('parental_approval')
-   })
+     const dontCare = await page.locator(".bucket.irrelevant .param-item");
+     await expect(dontCare).toContainText("parental_approval");
+   });
    ```
 
 ## Future Enhancements
@@ -1991,6 +2035,7 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
 [Grisette](https://hackage.haskell.org/package/grisette) is a Haskell library for symbolic evaluation that could significantly enhance our backend implementation:
 
 **What Grisette Provides:**
+
 - Symbolic evaluation with union types (handling multiple execution paths)
 - SMT solver integration (Z3, Yices, Boolector, etc.)
 - Symbolic reasoning about program behavior
@@ -2000,11 +2045,13 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
 **Potential Benefits:**
 
 1. **More Rigorous Symbolic Evaluation**
+
    - Instead of manual cofactoring in TypeScript, use Grisette's symbolic evaluation
    - Let SMT solver determine satisfiability and relevance
    - Handle complex expressions more reliably
 
 2. **Better Don't-Care Detection**
+
    ```haskell
    import Grisette
 
@@ -2024,6 +2071,7 @@ export class NNFLadderGraphLirNode extends LadderGraphLirNode {
    ```
 
 3. **Automatic Simplification**
+
    - Grisette's merge strategies automatically simplify symbolic expressions
    - No need to manually implement constant folding
 
@@ -2072,23 +2120,25 @@ checkDontCare expr var = do
 
 **Trade-offs:**
 
-| Aspect | Manual Implementation (TypeScript) | Grisette (Haskell Backend) |
-|--------|-----------------------------------|---------------------------|
-| Complexity | Higher (implement cofactor, simplify) | Lower (library handles it) |
-| Performance | Good for simple cases | Excellent (SMT solver optimized) |
-| Correctness | Risk of bugs in manual logic | More reliable (proven solver) |
-| Latency | Very low (client-side) | Network round-trip to backend |
-| Scalability | Limited by browser | Handles complex expressions |
+| Aspect      | Manual Implementation (TypeScript)    | Grisette (Haskell Backend)       |
+| ----------- | ------------------------------------- | -------------------------------- |
+| Complexity  | Higher (implement cofactor, simplify) | Lower (library handles it)       |
+| Performance | Good for simple cases                 | Excellent (SMT solver optimized) |
+| Correctness | Risk of bugs in manual logic          | More reliable (proven solver)    |
+| Latency     | Very low (client-side)                | Network round-trip to backend    |
+| Scalability | Limited by browser                    | Handles complex expressions      |
 
 **Recommendation:**
 
 Start with **hybrid approach**:
+
 1. **Phase 1-6:** Implement client-side cofactoring for MVP (fast, no latency)
 2. **Phase 7:** Add Grisette backend as optional enhancement
 3. Use client-side for simple expressions, backend for complex ones
 4. Compare results to validate client-side implementation
 
 **Backend Tasks:**
+
 - [ ] Add Grisette dependency to `jl4.cabal`
 - [ ] Implement L4 → Grisette expression conversion
 - [ ] Create `/partial-evaluation` endpoint using Grisette
@@ -2117,17 +2167,20 @@ Start with **hybrid approach**:
 ## Metrics & Success Criteria
 
 **Must Have:**
+
 - ✅ Relevance analysis completes in <500ms for typical rules
 - ✅ Visual updates in <100ms after assignment
 - ✅ Correctly identifies irrelevant params in alcohol example
 - ✅ No false positives (marking relevant params as irrelevant)
 
 **Should Have:**
+
 - ✅ Works with expressions up to 20 parameters
 - ✅ Handles nested boolean expressions 5+ levels deep
 - ✅ Mobile-responsive layout
 
 **Nice to Have:**
+
 - ✅ Animations smooth (60fps)
 - ✅ Keyboard navigation support
 - ✅ Export/share feature
