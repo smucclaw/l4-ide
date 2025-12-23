@@ -255,6 +255,18 @@ that a node might have (e.g., the darker background of (the 'function part' of) 
   opacity: var(--opacity-ladder-nonviable);
 }
 
+@utility irrelevant-ladder-element {
+  opacity: 0.35;
+  filter: grayscale(80%);
+}
+
+@utility short-circuited-ladder-element {
+  opacity: 0.25;
+  text-decoration-line: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--color-destructive, #dc2626);
+}
+
 @utility bool-lit-node-border {
   border: var(--ladder-node-border-width) solid var(--ladder-node-border-color);
   border-radius: 2px;

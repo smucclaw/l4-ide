@@ -22,6 +22,7 @@
   } from './svelteflow-types.js'
   import { ladderGraphToSFGraph } from './ladder-lir-to-sf.js'
   import PathsList from '../paths-list.svelte'
+  import PartialEvalSidebar from '$lib/displayers/partial-eval/partial-eval-sidebar.svelte'
 
   import { Collapsible } from 'bits-ui'
   import List from 'lucide-svelte/icons/list'
@@ -189,6 +190,8 @@
     resultMessage = `evaluates to ${ladderGraph.getResult(context).toPretty()}`
   }
 
+  let showPartialEvalSidebar = $state(false)
+
   /*********************************************
         LadderGraph event listener
   **********************************************/
@@ -334,29 +337,44 @@ Misc SF UI TODOs:
     class="flow-container transition-opacity"
     style={`opacity: ${flowOpacity}`}
   >
-    <SvelteFlow
-      bind:nodes={NODES}
-      bind:edges={EDGES}
-      nodeTypes={sfNodeTypes}
-      edgeTypes={sfEdgeTypes}
-      minZoom={sfVisualOptions.smallestThatCanZoomOutTo}
-      fitView
-      connectionLineType={ConnectionLineType.Bezier}
-      defaultEdgeOptions={{ type: 'bezier', animated: false }}
-      onnodedragstop={onNodeDragStop}
-      proOptions={{
-        hideAttribution: true,
-      }}
-    >
-      <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
-      <Controls position="bottom-right" showLock={false}>
-        <ControlButton onclick={() => ladderGraph.toggleZenModeStatus(context)}>
-          <!-- TODO: Make our own menu to get more real estate and use a Switch component -->
-          <div class="text-[0.7rem] p-1">Zen</div>
-        </ControlButton>
-      </Controls>
-      <Background />
-    </SvelteFlow>
+    <div class="flow-row">
+      {#if showPartialEvalSidebar}
+        <PartialEvalSidebar {context} {ladderGraph} />
+      {/if}
+      <div class="flow-main">
+        <SvelteFlow
+          bind:nodes={NODES}
+          bind:edges={EDGES}
+          nodeTypes={sfNodeTypes}
+          edgeTypes={sfEdgeTypes}
+          minZoom={sfVisualOptions.smallestThatCanZoomOutTo}
+          fitView
+          connectionLineType={ConnectionLineType.Bezier}
+          defaultEdgeOptions={{ type: 'bezier', animated: false }}
+          onnodedragstop={onNodeDragStop}
+          proOptions={{
+            hideAttribution: true,
+          }}
+        >
+          <!-- disabling show lock because it didn't seem to do anything for me --- might need to adjust some other setting too -->
+          <Controls position="bottom-right" showLock={false}>
+            <ControlButton
+              onclick={() => ladderGraph.toggleZenModeStatus(context)}
+            >
+              <div class="text-[0.7rem] p-1">Zen</div>
+            </ControlButton>
+            <ControlButton
+              onclick={() => (showPartialEvalSidebar = !showPartialEvalSidebar)}
+            >
+              <div class="text-[0.7rem] p-1">
+                {showPartialEvalSidebar ? 'Hide' : 'Inputs'}
+              </div>
+            </ControlButton>
+          </Controls>
+          <Background />
+        </SvelteFlow>
+      </div>
+    </div>
   </div>
   <!-- Paths Section -->
   <!-- TODO: Move the following into a lin paths container component -->
@@ -414,6 +432,19 @@ Misc SF UI TODOs:
   .flow-container {
     flex: 1 1 auto;
     min-height: 0; /* Prevents overflow */
+  }
+
+  .flow-row {
+    display: flex;
+    gap: 8px;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .flow-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
   }
 
   .paths-container {

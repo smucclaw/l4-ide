@@ -47,6 +47,7 @@ library
   exposed-modules:
     Application
     Backend.Api
+    Backend.BooleanDecisionQuery
     Backend.CodeGen
     Backend.DirectiveFilter
     Backend.GraphVizRender
@@ -121,6 +122,7 @@ test-suite jl4-decision-service-test
   main-is: Spec.hs
   other-modules:
     Paths_jl4_decision_service
+    BooleanDecisionQuerySpec
     IntegrationSpec
     SchemaSpec
     TestData
